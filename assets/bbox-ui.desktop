@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=bbox-ui
+GenericName=Black box design kit
+Comment=Playground for the bbox-ui primitives, on stock tldraw
+Exec=/home/bam/bbox-ui/scripts/bbox-ui-launch.sh
+Icon=bbox-ui
+Terminal=false
+Categories=Development;
+StartupWMClass=bbox-ui
+StartupNotify=true
