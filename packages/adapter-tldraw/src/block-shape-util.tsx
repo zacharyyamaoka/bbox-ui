@@ -18,11 +18,12 @@ import {
   BlockTitle,
   BlockType,
   PORT_DIAMETERS,
+  PORT_DOT_CENTER_TRANSFORM,
   PortDot,
   PortLabel,
   SIMPLE_BLOCK,
-  portAnchor,
-  portLabelGap,
+  portDotPlacement,
+  portLabelPlacement,
   type BlockSide,
   type PortSize,
   type PortState,
@@ -112,23 +113,6 @@ const portValidator: T.Validator<BBoxShapePort> = T.object({
   t: T.number,
 });
 
-function labelPlacement(layout: PortTextLayout, diameter: number) {
-  const gap = portLabelGap(layout);
-  const out = `${diameter / 2 + gap}px`;
-  switch (layout) {
-    case "right":
-    case "right-offset":
-      return { left: out, top: "50%", transform: "translateY(-50%)" } as const;
-    case "left":
-    case "left-offset":
-      return { right: out, top: "50%", transform: "translateY(-50%)" } as const;
-    case "top":
-      return { bottom: out, left: "50%", transform: "translateX(-50%)" } as const;
-    case "bot":
-      return { top: out, left: "50%", transform: "translateX(-50%)" } as const;
-  }
-}
-
 /**
  * tldraw host adapter. The same presentational core renders inside
  * `HTMLContainer`, but here `props.w`/`props.h` on the shape record are
@@ -197,7 +181,12 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
           )}
           {props.blockType !== "" && <BlockType>{props.blockType}</BlockType>}
           {props.ports.map((port) => {
-            const anchor = portAnchor(port.side, port.t, props.w, props.h);
+            const placement = portDotPlacement(
+              port.side,
+              port.t,
+              props.w,
+              props.h,
+            );
             const state: PortState = received[`${shape.id}:${port.id}`]
               ? "received"
               : port.state;
@@ -207,17 +196,13 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
                 key={port.id}
                 data-port-id={port.id}
                 className="absolute"
-                style={{
-                  left: anchor.x,
-                  top: anchor.y,
-                  transform: "translate(-50%, -50%)",
-                }}
+                style={{ ...placement, transform: PORT_DOT_CENTER_TRANSFORM }}
               >
                 <PortDot state={state} size={port.size} className="block" />
                 {port.label !== "" && (
                   <PortLabel
                     className="absolute"
-                    style={labelPlacement(port.textLayout, diameter)}
+                    style={portLabelPlacement(port.textLayout, diameter)}
                   >
                     {port.label}
                   </PortLabel>

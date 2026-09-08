@@ -1,18 +1,20 @@
 {
-  "name": "demo-tldraw",
+  "name": "demo-compare",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "build": "vite build",
-    "dev": "vite --port 5189 --strictPort",
-    "preview": "vite preview --port 5189 --strictPort"
+    "dev": "vite --port 5191 --strictPort",
+    "preview": "vite preview --port 5191 --strictPort"
   },
   "dependencies": {
+    "@bbox-ui/adapter-reactflow": "workspace:*",
     "@bbox-ui/adapter-tldraw": "workspace:*",
     "@bbox-ui/core": "workspace:*",
     "@bbox-ui/demo-scene": "workspace:*",
+    "@xyflow/react": "^12.8.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tldraw": "5.3.2"

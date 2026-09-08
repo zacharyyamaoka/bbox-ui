@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   Handle,
   Position,
@@ -15,10 +15,15 @@ import {
   BlockTitle,
   BlockType,
   PORT_DIAMETERS,
+  PORT_DOT_CENTER_TRANSFORM,
+  PORT_RING_PX,
   PortLabel,
   cn,
+  inwardTextLayout,
   portDotClass,
-  portLabelGap,
+  portDotPlacement,
+  portLabelPlacement,
+  portSideForDirection,
   wiredInnerPx,
   type PortSize,
   type PortState,
@@ -56,26 +61,6 @@ export type BBoxBlockData = {
 
 export type BBoxBlockNodeType = Node<BBoxBlockData, "bboxBlock">;
 
-function labelPlacement(
-  layout: PortTextLayout,
-  diameter: number,
-): CSSProperties {
-  const gap = portLabelGap(layout);
-  const out = `${diameter + gap}px`;
-  switch (layout) {
-    case "right":
-    case "right-offset":
-      return { left: out, top: "50%", transform: "translateY(-50%)" };
-    case "left":
-    case "left-offset":
-      return { right: out, top: "50%", transform: "translateY(-50%)" };
-    case "top":
-      return { bottom: out, left: "50%", transform: "translateX(-50%)" };
-    case "bot":
-      return { top: out, left: "50%", transform: "translateX(-50%)" };
-  }
-}
-
 /**
  * A React Flow custom node wrapping the presentational core. Each port is a
  * real `<Handle>` DOM element painted with the shared port-dot classes, so
@@ -102,20 +87,30 @@ export function BBoxBlockNode({ data }: NodeProps<BBoxBlockNodeType>) {
         const state = port.state ?? "empty";
         const size = port.size ?? "md";
         const diameter = PORT_DIAMETERS[size];
-        const textLayout =
-          port.textLayout ?? (port.direction === "input" ? "right" : "left");
+        const side = portSideForDirection(port.direction);
+        const textLayout = port.textLayout ?? inwardTextLayout(side);
+        // WHY px + an explicit transform, not the stylesheet's `top: %`:
+        // React Flow's handle CSS resolves percentages against the block's
+        // *padding* box, which drifted the dot off the tldraw host's anchor
+        // by the border width. portDotPlacement is the one shared answer.
+        const placement = portDotPlacement(side, port.t ?? 0.5);
         return (
           <Handle
             key={port.id}
             id={port.id}
             type={port.direction === "input" ? "target" : "source"}
-            position={port.direction === "input" ? Position.Left : Position.Right}
+            position={side === "left" ? Position.Left : Position.Right}
             data-state={state}
             // WHY "absolute": portDotClass carries "relative" for the core's
             // standalone dot; the Handle must keep React Flow's absolute
             // positioning or it falls into the block's flex flow.
             className={cn(portDotClass(state), "absolute overflow-visible")}
-            style={{ width: diameter, height: diameter, top: `${(port.t ?? 0.5) * 100}%` }}
+            style={{
+              width: diameter,
+              height: diameter,
+              ...placement,
+              transform: PORT_DOT_CENTER_TRANSFORM,
+            }}
           >
             {state === "wired" && (
               <span
@@ -128,7 +123,9 @@ export function BBoxBlockNode({ data }: NodeProps<BBoxBlockNodeType>) {
               <PortLabel
                 textSize={port.textSize ?? "md"}
                 className="pointer-events-none absolute"
-                style={labelPlacement(textLayout, diameter)}
+                // WHY PORT_RING_PX: the Handle IS the bordered dot, so the
+                // label's containing box sits a ring-width inside the circle.
+                style={portLabelPlacement(textLayout, diameter, PORT_RING_PX)}
               >
                 {port.label}
               </PortLabel>

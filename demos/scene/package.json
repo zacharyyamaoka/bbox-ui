@@ -1,0 +1,26 @@
+{
+  "name": "@bbox-ui/demo-scene",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The one demo scene (Camera / Detect / Track / cm_clock), host-neutral, plus per-host converters. Every demo and the compare harness consume this module so the hosts can never drift in content.",
+  "exports": {
+    ".": "./src/scene.ts",
+    "./reactflow": "./src/reactflow.ts",
+    "./tldraw": "./src/tldraw.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bbox-ui/adapter-reactflow": "workspace:*",
+    "@bbox-ui/adapter-tldraw": "workspace:*",
+    "@bbox-ui/core": "workspace:*",
+    "@xyflow/react": "^12.8.0",
+    "tldraw": "5.3.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

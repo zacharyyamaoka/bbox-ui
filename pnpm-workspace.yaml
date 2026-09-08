@@ -2,6 +2,8 @@ packages:
   - packages/*
   - demos/reactflow
   - demos/tldraw
+  - demos/scene
+  - demos/compare
 allowBuilds:
   esbuild: true
   msw: false

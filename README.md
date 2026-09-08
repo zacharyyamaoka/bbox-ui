@@ -82,7 +82,7 @@ export function BBoxBlockNode(
           id={p.id}
           position={Position.Left}
           className={portDotClass(p.state)}
-          style={{ top: `${p.t * 100}%` }}
+          style={portDotPlacement("left", p.t)} // ← core places the dot
         />
       ))}
     </Block>
@@ -112,10 +112,10 @@ class BBoxBlockShapeUtil
           </BlockHeader>
           <BlockType>{props.blockType}</BlockType>
           {props.ports.map((p) => {
-            const a = portAnchor(p.side, p.t,
-              props.w, props.h);             // ← port is a geometry point
-            return <PortDot state={p.state}
-              style={{ left: a.x, top: a.y }} />;
+            const a = portDotPlacement(p.side,
+              p.t, props.w, props.h);        // ← port is a geometry point,
+            return <PortDot state={p.state}   //   placed by the same core fn
+              style={{ left: a.left, top: a.top }} />;
           })}
         </Block>
       </HTMLContainer>
@@ -131,6 +131,22 @@ The full line is drawn in [ARCHITECTURE.md](ARCHITECTURE.md): layout geometry
 is portable and lives in the core; interaction geometry (hit-testing,
 snapping, z-order, drag) is host-owned and never travels.
 
+## Compare harness
+
+`demos/compare` (port 5191) renders the one shared scene
+([`demos/scene`](demos/scene)) in both hosts at a pinned, identical camera and
+lets you flip between **Split** / **React Flow** / **tldraw** / **Overlay**.
+Overlay stacks the two canvases with `mix-blend-mode: difference` — matching
+pixels cancel to black, so any divergence is the only thing that lights up
+(toggle to a 50% alpha cross-fade, with an opacity slider for the top layer) —
+and a readout panel reports block bounding boxes and port-dot centres compared
+numerically from the DOM, per block and port, in screen px.
+
+```bash
+pnpm demo:compare      # http://127.0.0.1:5191  (#split #reactflow #tldraw #overlay)
+node demos/drive-compare.mjs   # headless: walks all four modes, screenshots, asserts <0.5px
+```
+
 ## Registry
 
 `registry.json` follows the
@@ -144,10 +160,13 @@ snapping, z-order, drag) is host-owned and never travels.
 pnpm install
 pnpm test              # layout unit tests (icon ratio, states, layouts)
 pnpm build             # typecheck everything + build both demos
+pnpm demo             # all three demos: React Flow 5183, tldraw 5189, compare 5191
 pnpm demo:reactflow    # http://127.0.0.1:5183
 pnpm demo:tldraw       # http://127.0.0.1:5189
+pnpm demo:compare      # http://127.0.0.1:5191
 node demos/drive.mjs reactflow http://127.0.0.1:5183   # headless assert + screenshot
 node demos/drive.mjs tldraw    http://127.0.0.1:5189
+node demos/drive-compare.mjs                           # all four compare modes
 ```
 
 > **tldraw licence note**: tldraw's SDK licence forbids production use

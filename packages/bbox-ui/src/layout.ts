@@ -173,6 +173,8 @@ export const CHIP = {
 
 export type BlockSide = "left" | "right" | "top" | "bottom";
 
+export type PortDirection = "input" | "output";
+
 /**
  * Point on the boundary of a `width × height` rectangle where a port dot
  * centers. `t` runs 0→1 along the side (top→bottom for left/right,
@@ -195,5 +197,120 @@ export function portAnchor(
       return { x: t * width, y: 0 };
     case "bottom":
       return { x: t * width, y: height };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Port placement — dot on the boundary, label off the dot            */
+/* ------------------------------------------------------------------ */
+
+/*
+ * WHY this section exists — the governing rule: any quantity or mapping
+ * that appears in both adapters is a bug. If both hosts had to answer the
+ * same question ("where does the dot sit on the border?", "which way and
+ * how far does the label flow from the dot?"), the core should have
+ * answered it once. Each adapter grew a private copy of the
+ * layout→left/right/top/bottom/transform switch, the copies drifted, and
+ * port labels sat clear of the container border in React Flow while
+ * crowding and crossing it in tldraw. Everything below is that answer,
+ * given once.
+ */
+
+/**
+ * Stroke width of the Block container border (`border-2` on `Block`) and of
+ * the port dot's ring (`border-2` in `portDotClass`). CSS absolute
+ * positioning resolves against a *padding* box, so both strokes shift a
+ * host's coordinate origin; the placement functions below compensate so no
+ * adapter has to know.
+ */
+export const BLOCK_BORDER_PX = 2;
+export const PORT_RING_PX = 2;
+
+/**
+ * Which container side a port lands on when only its direction is known:
+ * inputs enter on the left, outputs leave on the right.
+ */
+export function portSideForDirection(direction: PortDirection): BlockSide {
+  return direction === "input" ? "left" : "right";
+}
+
+/**
+ * Which way the label flows from the dot by default: inward, into the
+ * block's interior, away from whatever the port connects to outside.
+ */
+export function inwardTextLayout(side: BlockSide): PortTextLayout {
+  switch (side) {
+    case "left":
+      return "right";
+    case "right":
+      return "left";
+    case "top":
+      return "bot";
+    case "bottom":
+      return "top";
+  }
+}
+
+/** Pair with `portDotPlacement` to centre the dot's box on the anchor. */
+export const PORT_DOT_CENTER_TRANSFORM = "translate(-50%, -50%)";
+
+/**
+ * CSS `left`/`top` (px) that centre a port dot ON the container boundary —
+ * half in, half out. For an absolutely positioned element inside `Block`,
+ * whose containing box is the Block's *padding* box (inset `BLOCK_BORDER_PX`
+ * from the outer boundary `portAnchor` speaks in — compensated here, once).
+ * Combine with `PORT_DOT_CENTER_TRANSFORM`.
+ */
+export function portDotPlacement(
+  side: BlockSide,
+  t: number,
+  width: number = SIMPLE_BLOCK.width,
+  height: number = SIMPLE_BLOCK.height,
+): { left: number; top: number } {
+  const anchor = portAnchor(side, t, width, height);
+  return { left: anchor.x - BLOCK_BORDER_PX, top: anchor.y - BLOCK_BORDER_PX };
+}
+
+/**
+ * CSS offsets for a label absolutely positioned inside the dot's box.
+ * Plain data — spreads into any host's style object.
+ */
+export interface PortLabelPlacement {
+  left?: string;
+  right?: string;
+  top?: string;
+  bottom?: string;
+  transform: string;
+}
+
+/**
+ * Where the label sits relative to the dot: its near edge lands
+ * `portLabelGap(layout)` px clear of the dot's outer edge — the same
+ * geometry the core `Port`'s flex row produces, so a host-positioned label
+ * and a flex-flowed one agree to the pixel.
+ *
+ * `boxInsetPx` is how far the positioning context is inset from the dot's
+ * border box: React Flow's `Handle` IS the bordered dot, so its padding box
+ * sits `PORT_RING_PX` inside; tldraw's unbordered wrapper passes 0. The
+ * cross-axis `50%` needs no compensation — a symmetric ring keeps the
+ * padding-box centre on the dot centre.
+ */
+export function portLabelPlacement(
+  layout: PortTextLayout,
+  diameterPx: number,
+  boxInsetPx: number = 0,
+): PortLabelPlacement {
+  const out = `${diameterPx + portLabelGap(layout) - boxInsetPx}px`;
+  switch (layout) {
+    case "right":
+    case "right-offset":
+      return { left: out, top: "50%", transform: "translateY(-50%)" };
+    case "left":
+    case "left-offset":
+      return { right: out, top: "50%", transform: "translateY(-50%)" };
+    case "top":
+      return { bottom: out, left: "50%", transform: "translateX(-50%)" };
+    case "bot":
+      return { top: out, left: "50%", transform: "translateX(-50%)" };
   }
 }

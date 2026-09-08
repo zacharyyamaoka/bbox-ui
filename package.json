@@ -10,7 +10,9 @@
     "registry:build": "shadcn build",
     "demo:reactflow": "pnpm --filter demo-reactflow run dev",
     "demo:tldraw": "pnpm --filter demo-tldraw run dev",
-    "demo:drive": "node demos/drive.mjs"
+    "demo:drive": "node demos/drive.mjs",
+    "demo": "pnpm --parallel --filter demo-reactflow --filter demo-tldraw --filter demo-compare run dev",
+    "demo:compare": "pnpm --filter demo-compare run dev"
   },
   "devDependencies": {
     "shadcn": "^3.0.0",
