@@ -4,6 +4,9 @@
    overlay renders a React Flow pane. */
 @import "@xyflow/react/dist/style.css" layer(base);
 @import "@bbox-ui/core/theme.css";
+/* The styling lab's chrome: shadcn tokens + the .tl-container theme bridge,
+   the inspector variant palettes, and the menu-zone board-name styles. */
+@import "@bbox-ui/inspector/styles.css";
 
 @source "../../../packages";
 

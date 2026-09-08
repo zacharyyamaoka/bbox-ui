@@ -1,0 +1,531 @@
+/* The styling lab's app.css + host.css, merged for a host that already runs
+   Tailwind. The lab imported Tailwind's theme/utilities layers itself (layers
+   only, no preflight — its pixel gate measured preflight shifting tldraw's own
+   text geometry ~11.5-12.25%); here the host app owns the `tailwindcss` import,
+   so this file carries only the additions. NOTE the playground imports FULL
+   tailwindcss, preflight included — a deliberate deviation from the lab (the
+   playground's existing chrome was built against preflight, and it has no
+   stock-pixel gate to protect), and the components below carry their own
+   `appearance-none border-0` resets so they render the same either way. */
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+/* WHY `.tl-theme__dark` joins `.dark` here rather than getting its own rule:
+   tldraw flips `.tl-theme__dark` on `.tl-container` itself when a person (or
+   `editor.user.updateUserPreferences({ colorScheme: 'dark' })`) switches
+   themes — it never touches `.dark`, which is shadcn's own convention and
+   nothing here sets. Inspector.tsx's shadcn parts use `dark:` classes
+   (Switch, Toggle, ToggleGroup, Popover…), and the `.tl-container` bridge
+   above already flips the *values* those classes' tokens resolve to; without
+   this the `dark:` variant itself would just never match, so the classes
+   would still resolve to their light-mode token values inside a dark canvas. */
+@custom-variant dark (&:is(.dark *, .tl-theme__dark *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Fallback tokens for shadcn chrome OUTSIDE the tldraw canvas (e.g. before the
+   canvas mounts, or any future non-canvas page furniture). Literal output of
+   `shadcn init -b base -p nova`, unedited. */
+:root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* WHY on .tl-container and not :root: tldraw declares --tl-* only from .tl-container
+   down, so an alias on :root is guaranteed-invalid there and children inherit the
+   invalid value. Every --tl-* name below is grepped against node_modules/tldraw/
+   tldraw.css (tests/theme_bridge.test.ts asserts it), so chrome INSIDE the canvas
+   (a shadcn popover mounted over the style panel, say) follows tldraw's own theme,
+   light and dark, instead of the static shadcn fallback above. */
+.tl-container {
+  --background: var(--tl-color-panel);
+  --foreground: var(--tl-color-text);
+  --card: var(--tl-color-panel-contrast);
+  --card-foreground: var(--tl-color-text);
+  --popover: var(--tl-color-panel);
+  --popover-foreground: var(--tl-color-text);
+  --primary: var(--tl-color-selected);
+  --primary-foreground: var(--tl-color-selected-contrast);
+  --secondary: var(--tl-color-low);
+  --secondary-foreground: var(--tl-color-text-1);
+  --muted: var(--tl-color-muted-2);
+  --muted-foreground: var(--tl-color-text-3);
+  --accent: var(--tl-color-low);
+  --accent-foreground: var(--tl-color-text);
+  --border: var(--tl-color-divider);
+  --input: var(--tl-color-low-border);
+  --ring: var(--tl-color-focus);
+
+}
+
+/* WHY no `@layer base { html { @apply font-sans } body { @apply bg-background
+   text-foreground } * { @apply border-border } }` block: `shadcn init` generated
+   one, and it is functionally a second preflight — it globally resets html's
+   font-family and body's colors the same way Tailwind's own preflight does, which
+   is exactly the mechanism the layers-only import above exists to avoid (see the
+   top-of-file WHY). `.tl-container` sets no font-family of its own, so that reset
+   would cascade into the canvas and reintroduce the shape-geometry drift the pixel
+   gate (tests/stock_pixels.mjs) is built to catch. Chrome that wants these tokens
+   applies them locally via shadcn's per-component classes instead of a global
+   reset — see docs/log.md's M1 entry for the measured deviation from the brief. */
+
+/* WHY this one narrow exception, added in M2: Base UI's `Popover`/`Tooltip`
+   portal their popup content to a sibling of `#root` under `<body>` by default
+   (`node_modules/@base-ui/react/popover/portal/PopoverPortal.d.ts`: "By default,
+   the portal element is appended to `<body>`"), so it is NOT a DOM descendant of
+   the Inspector dock — the dock's own `font-sans` class (Inspector.tsx) cannot
+   cascade to it, and without this it rendered in the browser's serif fallback
+   instead of the app font. This targets the popup's own `data-slot` rather than
+   `body` itself specifically so it cannot touch `.tl-container` or the canvas —
+   the exact mechanism the block above protects — and never matches anything
+   present during tests/stock_pixels.mjs's captures, which never open a popover.
+   M4 adds the sibling `sheet-content` slot for the same reason: Base UI's
+   `Dialog` (shadcn's `Sheet` is built on it, src/components/ui/sheet.tsx) also
+   portals to `<body>` by default, so the Stock check report rendered in the
+   browser's serif fallback until this line covered it too — same fix, same
+   scope, still never present during the pixel gate's captures. */
+[data-slot="popover-content"],
+[data-slot="tooltip-content"],
+[data-slot="sheet-content"] {
+  font-family: var(--font-sans);
+}
+
+/* -------------------------------------------------------------------------
+   Inspector variants (docs/log.md's variants entry has the full rationale).
+
+   WHY these override the shadcn TOKENS (`--background`/`--foreground`/…)
+   rather than hand-editing every `bg-background`/`text-foreground` class in
+   Inspector.tsx/ThemePanel.tsx: both files already speak exclusively in
+   those tokens (the M1-M3 milestones built them that way on purpose, to
+   follow `.tl-container`'s own tl-* bridge above), so re-pointing the
+   tokens at a `--v-*` palette one level more specific than `.tl-container`'s
+   own block retheme the WHOLE dock — Inspect tab and Theme tab alike, with
+   zero markup changes — the same reason the M1 bridge itself works. Scoped
+   to `[data-testid="inspector"]` (the one div both tabs mount inside, see
+   Inspector.tsx), never `:root` — a `:root` override would also leak into
+   whatever non-canvas shadcn chrome a later milestone adds outside the dock.
+
+   WHY `--v-*` exists as an indirection instead of writing `--background`
+   directly per variant: `kit.tsx`'s hand-rolled parts (the resize handle,
+   the list-row swatch, the segmented control's `data-[state=on]` background)
+   need colours shadcn's own token set has no name for at all (open-pencil's
+   `panel-field`/`panel-field-hover`/`hover` are three different surfaces
+   where shadcn only has one `accent`) — `--v-*` carries the full open-pencil
+   naming so those parts don't have to invent their own aliases too. */
+[data-testid="inspector"][data-variant='1'],
+[data-testid="inspector"][data-variant='3'],
+/* Round 2 (V4/V5/V6, "Figma rows"/"Icon strips"/"Summary accordions"):
+   Zach's own brief — "Palette: V1's open-pencil palette (light+dark) for
+   all three — round two varies STRUCTURE, not colour." Same rule V3 already
+   established for round 1: a variant's own brief has to name a SECOND
+   palette before one gets invented; round 2's brief explicitly does not. */
+[data-testid="inspector"][data-variant='4'],
+[data-testid="inspector"][data-variant='5'],
+[data-testid="inspector"][data-variant='6'] {
+  /* V1 "Verbatim" / V3 "Inline" share one literal palette — open-pencil's
+     own light values (src/app.css in the measured clone). V3's brief only
+     specifies a DENSER LAYOUT, never a second palette, so it inherits V1's
+     rather than inventing an unspecified third one. */
+  --v-panel: #ffffff;
+  --v-panel-secondary: #f7f8fa;
+  --v-field: #f0f1f3;
+  --v-field-hover: #e4e7ea;
+  --v-focus: #2563eb;
+  --v-border: #d8dce3;
+  --v-hover: #eef1f5;
+  --v-accent: #2563eb;
+  --v-surface: #1f2328;
+  --v-muted: #6b7280;
+}
+.tl-theme__dark :is(
+  [data-testid="inspector"][data-variant='1'],
+  [data-testid="inspector"][data-variant='3'],
+  [data-testid="inspector"][data-variant='4'],
+  [data-testid="inspector"][data-variant='5'],
+  [data-testid="inspector"][data-variant='6']
+) {
+  --v-panel: #2a2a2a;
+  --v-panel-secondary: #242424;
+  --v-field: #383838;
+  --v-field-hover: #404040;
+  --v-focus: #3b82f6;
+  --v-border: #3a3a3a;
+  --v-hover: #353535;
+  --v-accent: #3b82f6;
+  --v-surface: #f0f0f0;
+  --v-muted: #888888;
+}
+/* V2 "Canvas-native": no literal hex at all — every role points at the SAME
+   tldraw tokens `.tl-container`'s own bridge already uses above, so this
+   panel repaints exactly when tldraw's own style panel would, in both
+   themes, with no separate dark block (`--tl-color-*` already flips under
+   `.tl-theme__dark`, one level up). `tests/theme_bridge.test.ts` greps every
+   `var(--tl-*)` reference in this file, this block included. */
+[data-testid="inspector"][data-variant='2'] {
+  --v-panel: var(--tl-color-panel);
+  --v-panel-secondary: var(--tl-color-panel-contrast);
+  --v-field: var(--tl-color-low);
+  --v-field-hover: var(--tl-color-low-border);
+  --v-focus: var(--tl-color-focus);
+  --v-border: var(--tl-color-divider);
+  --v-hover: var(--tl-color-hint);
+  --v-accent: var(--tl-color-selected);
+  --v-surface: var(--tl-color-text);
+  --v-muted: var(--tl-color-text-3);
+}
+/* ---------------------------------------------------------------- V7 ---
+   "Figma exact" (round 3). The ONLY variant with its own palette, and the
+   only one entitled to one: every other variant repaints open-pencil's or
+   tldraw's colours because its brief varies structure. V7's brief is "try
+   to achieve a pixel for pixel copy of figma", so the colours ARE part of
+   the target and are sampled from Figma's own ui3 surfaces rather than
+   approximated from a neighbouring design system.
+
+   Names mirror Figma's own CSS custom properties (`--color-bg`,
+   `--color-text-secondary`, `--color-icon-tertiary`, …) so a future
+   comparison against a fresh DOM dump is a rename away, not a re-derivation.
+   `--fig-*` rather than `--v-*` on purpose: these do NOT feed the shadcn
+   re-point below, because V7 draws none of the shadcn-shaped controls the
+   other six share. */
+[data-testid="inspector"][data-variant='7'] {
+  --fig-bg: #ffffff;
+  --fig-border: #e6e6e6;
+  --fig-text: #000000;
+  --fig-text-secondary: #666666;
+  --fig-icon: #333333;
+  --fig-icon-tertiary: #b3b3b3;
+  --fig-field-border: #d9d9d9;
+  --fig-hover: #f0f0f0;
+  --fig-selected-bg: #e5e5e5;
+  --fig-focus: #0d99ff;
+
+  /* V7 still needs the shadcn names for the ONE shared control it reuses:
+     `ColorPickerPopover` (the swatch + react-colorful popup). Everything
+     else in the panel is `figmaExact/`'s own markup reading `--fig-*`. */
+  --v-panel: var(--fig-bg);
+  --v-panel-secondary: var(--fig-bg);
+  --v-field: transparent;
+  --v-field-hover: var(--fig-hover);
+  --v-focus: var(--fig-focus);
+  --v-border: var(--fig-border);
+  --v-hover: var(--fig-hover);
+  --v-accent: var(--fig-focus);
+  --v-surface: var(--fig-text);
+  --v-muted: var(--fig-text-secondary);
+}
+.tl-theme__dark [data-testid="inspector"][data-variant='7'] {
+  --fig-bg: #2c2c2c;
+  --fig-border: #383838;
+  --fig-text: #ffffff;
+  --fig-text-secondary: #b3b3b3;
+  --fig-icon: #ffffff;
+  --fig-icon-tertiary: #8c8c8c;
+  --fig-field-border: #545454;
+  --fig-hover: #383838;
+  --fig-selected-bg: #383838;
+  --fig-focus: #0d99ff;
+}
+
+/* The re-point: every variant feeds its --v-* palette back into the shadcn
+   token names the existing markup already reads. */
+[data-testid="inspector"][data-variant] {
+  --background: var(--v-panel);
+  --foreground: var(--v-surface);
+  --card: var(--v-panel-secondary);
+  --card-foreground: var(--v-surface);
+  --popover: var(--v-panel);
+  --popover-foreground: var(--v-surface);
+  --secondary: var(--v-field);
+  --secondary-foreground: var(--v-surface);
+  --muted: var(--v-field);
+  --muted-foreground: var(--v-muted);
+  --accent: var(--v-hover);
+  --accent-foreground: var(--v-surface);
+  --border: var(--v-border);
+  --input: var(--v-border);
+  --ring: var(--v-focus);
+  --primary: var(--v-accent);
+  --primary-foreground: var(--v-panel);
+
+}
+
+/* WHY explicit ink on every raw control rather than trusting inheritance:
+   a `<button>`/`<input>` never inherits `color` from an ancestor — the UA
+   stylesheet gives each its own `ButtonText`/`FieldText` system colour,
+   `color-scheme`-dependent — the exact bug `TileGroup`'s own WHY in
+   Inspector.tsx already names for the geometry tiles. Mandatory behaviour
+   #3 in the variants brief generalizes that fix to every control kit.tsx
+   draws: swatch buttons, segment items, list-row buttons, both field kinds.
+
+   WHY wrapped in `:where(...)` AND inside `@layer utilities`, not either
+   alone: this rule's own job is to be the FALLBACK, not the answer —
+   kit.tsx's `segmentItemClass` deliberately paints an UNPRESSED segment
+   `text-[var(--v-muted)]`, distinct from this rule's surface default.
+   `:where()` alone was not enough — a plain, UNLAYERED rule beats every
+   Tailwind utility regardless of specificity, `:where()` included, because
+   this file imports Tailwind's own utilities into `layer(utilities)` (top
+   of file) and cascade layers settle precedence BEFORE specificity even gets
+   compared: any unlayered rule always outranks a layered one. Measured with
+   only `:where()`: still every unpressed segment read as pressed, because
+   this rule sat outside every layer. Moving it into the SAME `utilities`
+   layer Tailwind's own classes occupy is what lets `:where()`'s zero
+   specificity actually mean "lowest priority" instead of "unconditional
+   winner" — the two fixes address different axes of the cascade and neither
+   alone was sufficient. */
+@layer utilities {
+  :where([data-testid="inspector"][data-variant]) :where(button, input) {
+    color: var(--v-surface);
+  }
+}
+
+/* The resize handle (open-pencil's splitter.ts): a 1px divider at rest,
+   accent on hover/drag — `data-active` is set by ResizeHandle in kit.tsx
+   for the duration of a drag so releasing the mouse outside the handle
+   still shows the accent stripe. */
+[data-testid="inspector-resize-handle"] {
+  background: transparent;
+}
+[data-testid="inspector-resize-handle"]:hover::after,
+[data-testid="inspector-resize-handle"][data-active="true"]::after {
+  background: var(--v-accent);
+}
+[data-testid="inspector-resize-handle"]::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--v-border);
+}
+
+/* The menu zone's own chrome.
+ *
+ * WHY these live in CSS rather than as Tailwind utilities on the elements:
+ * they have to match tldraw's OWN buttons, which are styled by tldraw.css from
+ * `--tl-*` tokens. Zach, looking at the bar: "its formatting is not correct.
+ * Also, please do just a quick styling change on that top left menu to make it
+ * look more modern and match kind of the the look and feel of the bottom
+ * toolbar and right menus."
+ *
+ * The formatting bug was concrete: the name button was `h-6` (24px) sitting in
+ * a row of 40px tldraw buttons, so it floated above the baseline of "Page 1"
+ * beside it. Matching tldraw's own control height fixes the alignment rather
+ * than nudging it. */
+.lab-name-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  height: 40px;
+  /* `min(240px, 34vw)`: a long board name must not be what pushes the row off a
+     narrow screen. Measured at a 360px viewport with a 39-character name — the
+     row overflowed by 184px before the breakpoint gate came back, and by 4px
+     after, which is this cap's job to absorb. */
+  max-width: min(240px, 34vw);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: var(--tl-radius-2);
+  color: var(--tl-color-text-1);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  pointer-events: auto;
+}
+
+.lab-name-button:hover {
+  background: var(--tl-color-hint);
+}
+
+.lab-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lab-name-input {
+  /* `align-self: center`: the row sizes its children to the 40px button height,
+     so a 28px input pinned to the top of that box sat 6px HIGH — measured, the
+     button's midline is y=20 and the input's was y=14, so the name visibly
+     jumped the moment you clicked to rename it. */
+  align-self: center;
+  height: 28px;
+  width: 160px;
+  padding: 0 8px;
+  border-radius: var(--tl-radius-2);
+  border: 1px solid var(--tl-color-selected);
+  background: var(--tl-color-panel);
+  color: var(--tl-color-text-1);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  pointer-events: auto;
+}
+
+/* A hairline between the board and the page/actions group — the grouping his
+ * sketch draws, using tldraw's own divider colour so it reads as part of the
+ * bar rather than a decoration added on top of it. */
+.lab-menu-divider {
+  width: 1px;
+  align-self: center;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--tl-color-divider);
+  flex: 0 0 auto;
+}
+
+/*
+ * The one thing a HOST must give tldraw, loaded by every entry — including
+ * `bare.tsx`, the pixel gate's control.
+ *
+ * WHY this is not part of the chrome stack, and therefore not something the
+ * gate should be catching: tldraw.css declares `font-family: inherit` on its
+ * UI rules — menus, buttons, panels, the toolbar, the zoom readout — because
+ * it expects the embedding page to have set a UI font. Tailwind's preflight
+ * normally does that, and this project deliberately loads layers only (see
+ * app.css's own WHY: preflight resets the canvas out from under tldraw). With
+ * neither, the inheritance chain ended at the UA default and the ENTIRE tldraw
+ * UI rendered in Times New Roman — measured on body, on `.tl-container`, and
+ * on the main menu. The inspector escaped it only because its own elements
+ * carry explicit `font-sans` classes, which is exactly why nobody noticed: the
+ * half of the UI we look at most was already fine.
+ *
+ * WHY `bare.tsx` loads it too, which means changing the pixel gate's CONTROL —
+ * a thing to do carefully and never silently. That gate proves "the chrome
+ * stack (Tailwind + shadcn + Base UI) changes zero pixels of what tldraw
+ * paints", and a control rendering in Times is not stock tldraw; it is tldraw
+ * in an unstyled document, a state no real embedding is ever in. Putting the
+ * host font on BOTH sides keeps the comparison honest about what it actually
+ * tests — our component stack — instead of scoring a host responsibility as
+ * chrome drift. Everything else about the control is untouched, and the gate's
+ * own mutation check (bare vs index+preflight, which must still differ) is
+ * what proves it did not go blind.
+ *
+ * WHY a SYSTEM stack and not the app's own Geist: the control must be able to
+ * render this identically, and Geist is a webfont that only the chrome bundle
+ * loads. Pointing this at `--font-sans` made index paint Geist while `bare.tsx`
+ * fell back — the gate caught that immediately, 640 changed pixels in the
+ * toolbar and zoom readout. A system stack needs no font file, so both sides
+ * paint the same glyphs and the gate stays strict about everything else. The
+ * cost is that tldraw's chrome does not match the inspector's Geist; that is a
+ * deliberate trade for keeping the control honest, and it is one line to change
+ * if the consistency is worth loading the webfont into the control.
+ *
+ * Scoped to `.tl-container`, not `body`: the canvas lives in here too, but
+ * shape text never inherits this — tldraw sets `--tl-font-draw` and friends
+ * explicitly on shape labels. The diff that failed this rule the first time
+ * showed changes ONLY in tldraw's toolbar, page menu and zoom readout, with
+ * every shape on the board pixel-identical.
+ */
+.tl-container {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}

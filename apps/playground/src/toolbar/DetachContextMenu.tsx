@@ -29,6 +29,7 @@ import {
   selectedDetachableIds,
   selectedRebuildableIds,
 } from "@bbox-ui/adapter-tldraw";
+import { ShowAsStockMenuItems } from "@bbox-ui/inspector";
 
 import { ReliableContextMenu } from "./ReliableContextMenu";
 
@@ -83,6 +84,13 @@ export function PlaygroundContextMenu(props: TLUiContextMenuProps) {
   return (
     <ReliableContextMenu {...props}>
       <DetachMenuItems />
+      {/* "Show as stock" (strip meta.primitiveOverride paint) is a different
+          operation from "Detach to primitives" (lower a Block into stock
+          shapes) — two features, two labels, one menu. The item composes into
+          THIS root; mounting the lab's LabContextMenu as components.ContextMenu
+          would reintroduce the stock two-owners-of-open bug ReliableContextMenu
+          exists to fix. */}
+      <ShowAsStockMenuItems />
       <DefaultContextMenuContent />
     </ReliableContextMenu>
   );

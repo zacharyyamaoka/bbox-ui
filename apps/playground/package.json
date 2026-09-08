@@ -15,6 +15,7 @@
     "@bbox-ui/compare-view": "workspace:*",
     "@bbox-ui/core": "workspace:*",
     "@bbox-ui/demo-scene": "workspace:*",
+    "@bbox-ui/inspector": "workspace:*",
     "@xyflow/react": "^12.8.0",
     "radix-ui": "1.6.7",
     "react": "^19.0.0",
