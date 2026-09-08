@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   BLOCK_BORDER_PX,
+  BLOCK_PADDING_X,
   CHIP,
+  CHIP_INSET_RIGHT,
+  CHIP_RIGHT_IN_HEADER_PX,
+  CHIP_TITLE_GAP,
+  HEADER_CHIP_RESERVED_PX,
   ICON_RATIO,
   META_FONT_PX,
   PERSISTABLE_PORT_STATES,
@@ -16,6 +21,7 @@ import {
   SIMPLE_BLOCK,
   TEXT_SIZES,
   glyphPx,
+  headerContentWidth,
   inwardTextLayout,
   isOffsetLayout,
   portAnchor,
@@ -137,6 +143,77 @@ describe("Simple View block geometry", () => {
   it("anchors scale with an explicit size (tldraw's w/h are authoritative)", () => {
     expect(portAnchor("right", 0.5, 500, 300)).toEqual({ x: 500, y: 150 });
     expect(portAnchor("left", 0, 500, 300)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("header + chip — the chip reserves a region", () => {
+  it("names the measured chip insets", () => {
+    // Board: container right 4915, chip 4785→4887, title right 4775.
+    expect(CHIP_INSET_RIGHT).toBe(28);
+    expect(CHIP_TITLE_GAP).toBe(10);
+    expect(BLOCK_PADDING_X).toBe(16);
+  });
+
+  it("available width without a chip is the normal padded width", () => {
+    expect(headerContentWidth()).toBe(
+      SIMPLE_BLOCK.width - 2 * (BLOCK_BORDER_PX + BLOCK_PADDING_X),
+    );
+    expect(headerContentWidth()).toBe(348);
+    expect(headerContentWidth(500)).toBe(464);
+  });
+
+  it("available width with a chip ends before the reserved chip region", () => {
+    expect(headerContentWidth(SIMPLE_BLOCK.width, true)).toBe(
+      SIMPLE_BLOCK.width - CHIP_INSET_RIGHT - CHIP.minWidth - CHIP_TITLE_GAP,
+    );
+    expect(headerContentWidth(SIMPLE_BLOCK.width, true)).toBe(244);
+    // The board's own x-spans: container left 4531, title right edge 4775.
+    expect(4531 + headerContentWidth(384, true)).toBe(4775);
+  });
+
+  it("the CSS reservation and the named width agree, at any width", () => {
+    for (const width of [300, SIMPLE_BLOCK.width, 500, 1000]) {
+      const headerLeft = BLOCK_BORDER_PX + BLOCK_PADDING_X;
+      const headerRight = width - headerLeft;
+      // Content's right limit under the header's chip padding, measured
+      // from the container's left edge, is exactly headerContentWidth.
+      expect(headerRight - HEADER_CHIP_RESERVED_PX).toBe(
+        headerContentWidth(width, true),
+      );
+    }
+  });
+
+  it("title box and chip box never intersect — even for an over-long title", () => {
+    for (const width of [300, SIMPLE_BLOCK.width, 500]) {
+      // Container coordinates, mirroring the DOM: the header spans the
+      // padding box; with a chip it carries HEADER_CHIP_RESERVED_PX of
+      // right padding, and the truncating title clamps to the content box.
+      const contentLeft = BLOCK_BORDER_PX + BLOCK_PADDING_X;
+      const contentRight = width - contentLeft - HEADER_CHIP_RESERVED_PX;
+      const chipRight = width - CHIP_INSET_RIGHT;
+      const chipLeft = chipRight - CHIP.minWidth;
+      for (const naturalTitleWidth of [10, 133, 226, 1000, 10000]) {
+        const titleWidth = Math.min(
+          naturalTitleWidth,
+          contentRight - contentLeft,
+        );
+        const centre = (contentLeft + contentRight) / 2;
+        const titleLeft = centre - titleWidth / 2;
+        const titleRight = centre + titleWidth / 2;
+        // no intersection, and the full measured gap survives
+        expect(titleRight).toBeLessThanOrEqual(chipLeft - CHIP_TITLE_GAP);
+        expect(titleLeft).toBeGreaterThanOrEqual(contentLeft);
+        expect(chipRight).toBeLessThanOrEqual(width - CHIP_INSET_RIGHT);
+      }
+    }
+  });
+
+  it("re-expresses the container-edge inset in the header's frame", () => {
+    // Chip right edge: header padding-box edge + CHIP_RIGHT_IN_HEADER_PX
+    // from the container's right edge must equal CHIP_INSET_RIGHT.
+    expect(
+      BLOCK_BORDER_PX + BLOCK_PADDING_X + CHIP_RIGHT_IN_HEADER_PX,
+    ).toBe(CHIP_INSET_RIGHT);
   });
 });
 

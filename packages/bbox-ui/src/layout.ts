@@ -167,6 +167,80 @@ export const CHIP = {
   height: 39,
 } as const;
 
+/**
+ * Stroke width of the Block container border (`border-2` on `Block`) and of
+ * the port dot's ring (`border-2` in `portDotClass`). CSS absolute
+ * positioning resolves against a *padding* box, so both strokes shift a
+ * host's coordinate origin; the placement functions below compensate so no
+ * adapter has to know.
+ */
+export const BLOCK_BORDER_PX = 2;
+export const PORT_RING_PX = 2;
+
+/* ------------------------------------------------------------------ */
+/* Header + chip — the chip reserves a region, it is not just aligned  */
+/* ------------------------------------------------------------------ */
+
+/** Horizontal padding inside the Block container (`px-4` on `Block`). */
+export const BLOCK_PADDING_X = 16;
+
+/**
+ * Chip inset from the container's right edge, measured: container right
+ * 4915, chip oval right 4887 → 28.
+ */
+export const CHIP_INSET_RIGHT = 28;
+
+/**
+ * Clear gap between the title's right edge and the chip's left edge,
+ * measured: chip left 4785, title right 4775 → 10.
+ */
+export const CHIP_TITLE_GAP = 10;
+
+/**
+ * Width available to the header's content (glyph + title).
+ *
+ * Without a chip: the normal padded width — container border and `px-4`
+ * padding off both sides.
+ *
+ * With a chip: `containerWidth − CHIP_INSET_RIGHT − CHIP.minWidth −
+ * CHIP_TITLE_GAP`. WHY: on the board the chip is not merely right-aligned —
+ * it RESERVES its region, and the title's room ends before it. The earlier
+ * out-of-flow chip kept a centred title from shifting when a tag appeared,
+ * but traded a shift for a collision (the chip painted over the title's
+ * last letters), and a collision is worse. A title that no longer fits
+ * truncates with a visible ellipsis, never a silent clip.
+ */
+export function headerContentWidth(
+  containerWidth: number = SIMPLE_BLOCK.width,
+  hasChip: boolean = false,
+): number {
+  if (hasChip) {
+    return containerWidth - CHIP_INSET_RIGHT - CHIP.minWidth - CHIP_TITLE_GAP;
+  }
+  return containerWidth - 2 * (BLOCK_BORDER_PX + BLOCK_PADDING_X);
+}
+
+/**
+ * CSS `right` for the chip, absolutely positioned inside the header. The
+ * header spans the Block's *padding* box (already `BLOCK_BORDER_PX +
+ * BLOCK_PADDING_X` inside the container edge), so the container-edge inset
+ * is re-expressed in that frame here, once.
+ */
+export const CHIP_RIGHT_IN_HEADER_PX =
+  CHIP_INSET_RIGHT - BLOCK_BORDER_PX - BLOCK_PADDING_X;
+
+/**
+ * CSS `padding-right` the header takes on while it hosts a chip: the chip's
+ * span plus both clearances, in the header's own frame. This is what makes
+ * the chip a *reservation* — the flexed title can never extend into it, so
+ * the title's box and the chip's box cannot intersect, whatever the title
+ * says. For any container width, the header content's right limit under
+ * this padding lands exactly `headerContentWidth(width, true)` from the
+ * container's left edge.
+ */
+export const HEADER_CHIP_RESERVED_PX =
+  CHIP_RIGHT_IN_HEADER_PX + CHIP.minWidth + CHIP_TITLE_GAP;
+
 /* ------------------------------------------------------------------ */
 /* Port anchors on a block boundary (for hosts)                        */
 /* ------------------------------------------------------------------ */
@@ -215,16 +289,6 @@ export function portAnchor(
  * crowding and crossing it in tldraw. Everything below is that answer,
  * given once.
  */
-
-/**
- * Stroke width of the Block container border (`border-2` on `Block`) and of
- * the port dot's ring (`border-2` in `portDotClass`). CSS absolute
- * positioning resolves against a *padding* box, so both strokes shift a
- * host's coordinate origin; the placement functions below compensate so no
- * adapter has to know.
- */
-export const BLOCK_BORDER_PX = 2;
-export const PORT_RING_PX = 2;
 
 /**
  * Which container side a port lands on when only its direction is known:

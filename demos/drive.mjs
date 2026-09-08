@@ -129,7 +129,7 @@ while (Date.now() < deadline) {
   blockCount = await evaluate(
     `document.querySelectorAll('[data-slot="block"]').length`,
   );
-  if (blockCount >= 4) break;
+  if (blockCount >= 5) break;
   await new Promise((r) => setTimeout(r, 250));
 }
 
@@ -170,8 +170,16 @@ try {
 }
 
 const failures = [];
-if (summary.blocks < 4) failures.push(`expected 4 blocks, got ${summary.blocks}`);
-for (const title of ["Camera", "Detect", "Track", "cm_clock"]) {
+if (summary.blocks < 5) failures.push(`expected 5 blocks, got ${summary.blocks}`);
+for (const title of [
+  "Camera",
+  "Detect",
+  "Track",
+  "cm_clock",
+  // The over-long title arrives in full via textContent even when the paint
+  // ellipsizes it — truncation is presentation-only, never a data edit.
+  "Detect Objects In Frame",
+]) {
   if (!summary.titles.includes(title)) failures.push(`missing title ${title}`);
 }
 for (const type of ["Source", "dataflow", "Clock"]) {
@@ -182,6 +190,7 @@ if (!summary.descriptions.includes("blackbox modelling")) {
 }
 if (summary.glyphs < 3) failures.push(`expected >=3 glyphs, got ${summary.glyphs}`);
 if (!summary.chips.includes("Draft 1")) failures.push("missing Draft 1 chip");
+if (!summary.chips.includes("Draft 2")) failures.push("missing Draft 2 chip");
 const states = [...summary.dotStates, ...summary.handleStates];
 for (const state of ["empty", "default", "wired", "received"]) {
   if (!states.includes(state)) failures.push(`no port in state ${state}`);

@@ -186,9 +186,9 @@ function assertLinked(label, agreement) {
   }
 }
 
-// Both panes render the same 4-block scene → 8 blocks in the DOM.
+// Both panes render the same 5-block scene → 10 blocks in the DOM.
 await waitFor(
-  `document.querySelectorAll('[data-slot="block"]').length >= 8`,
+  `document.querySelectorAll('[data-slot="block"]').length >= 10`,
   "both panes to paint",
 );
 await waitFor(
@@ -231,8 +231,8 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
     failures.push(`${mode}: react flow pane visible=${state.rfVisible}`);
   if (state.tlVisible !== expectTl)
     failures.push(`${mode}: tldraw pane visible=${state.tlVisible}`);
-  if (state.rfBlocks !== 4) failures.push(`${mode}: rf blocks ${state.rfBlocks}`);
-  if (state.tlBlocks !== 4) failures.push(`${mode}: tl blocks ${state.tlBlocks}`);
+  if (state.rfBlocks !== 5) failures.push(`${mode}: rf blocks ${state.rfBlocks}`);
+  if (state.tlBlocks !== 5) failures.push(`${mode}: tl blocks ${state.tlBlocks}`);
   if (state.panel !== (mode === "overlay"))
     failures.push(`${mode}: divergence panel shown=${state.panel}`);
 
@@ -282,16 +282,16 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
     // Each framing keeps real blocks on screen — tldraw culls shapes fully
     // outside the viewport, and a culled block is dropped from the reading,
     // so a framing showing nothing would measure nothing. `minBlocks` is
-    // the honest denominator: how many of the 4 blocks the reading must
+    // the honest denominator: how many of the 5 blocks the reading must
     // actually have compared.
     const framings = [
-      ["zoom 0.25", { x: 50, y: 90, zoom: 0.25 }, 4],
-      ["zoom 0.45", { x: 50, y: 90, zoom: 0.45 }, 4],
-      ["zoom 1.00", { x: 50, y: 90, zoom: 1 }, 4],
+      ["zoom 0.25", { x: 50, y: 90, zoom: 0.25 }, 5],
+      ["zoom 0.45", { x: 50, y: 90, zoom: 0.45 }, 5],
+      ["zoom 1.00", { x: 50, y: 90, zoom: 1 }, 5],
       // Zoomed to 2× onto the Detect/cm_clock column (world x 560); Camera
       // and Track land offscreen and are culled out of the comparison.
-      ["zoom 2.00", { x: -320, y: 60, zoom: 2 }, 2],
-      ["panned @ zoom 1", { x: -260, y: -180, zoom: 1 }, 3],
+      ["zoom 2.00", { x: -320, y: 60, zoom: 2 }, 3],
+      ["panned @ zoom 1", { x: -260, y: -180, zoom: 1 }, 5],
     ];
     results.divergenceByZoom = {};
     for (const [label, viewport, minBlocks] of framings) {

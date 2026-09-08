@@ -1,8 +1,10 @@
-import type { ComponentProps } from "react";
+import { Children, isValidElement, type ComponentProps } from "react";
 
 import { cn } from "./lib/utils";
 import {
   CHIP,
+  CHIP_RIGHT_IN_HEADER_PX,
+  HEADER_CHIP_RESERVED_PX,
   META_FONT_PX,
   SIMPLE_BLOCK,
   TEXT_SIZES,
@@ -55,23 +57,53 @@ export interface BlockHeaderProps extends ComponentProps<"header"> {
  * Header band: Glyph + Title, with an optional Chip out of flow on the
  * right. `vertical` stacks the Glyph above the Title (the board's
  * icon-above-title variant).
+ *
+ * When a Chip is among the children, the header reserves the chip's region
+ * (`HEADER_CHIP_RESERVED_PX` of right padding) and lets the title truncate
+ * with a visible ellipsis inside what remains.
+ * WHY: the chip used to be purely out of flow so a centred title never
+ * shifted when a tag appeared — but that traded a shift for a collision
+ * (the chip painted over the title's last letters), and a collision is
+ * worse. The board's own geometry says the chip RESERVES its span: title
+ * right edge 10px clear of the chip, chip 28px in from the container edge.
  */
 export function BlockHeader({
   orientation = "horizontal",
   className,
+  style,
+  children,
   ...props
 }: BlockHeaderProps) {
+  // WHY detect the chip instead of taking a `hasChip` prop: adapters already
+  // state "chip present" by rendering <BlockChip>; a flag would be the same
+  // fact answered a second time in every adapter (the layout.ts rule: any
+  // mapping that appears in both adapters is a bug).
+  const hasChip = Children.toArray(children).some(
+    (child) => isValidElement(child) && child.type === BlockChip,
+  );
   return (
     <header
       data-slot="block-header"
       data-orientation={orientation}
+      data-has-chip={hasChip || undefined}
       className={cn(
         "relative flex w-full items-center justify-center gap-2",
         orientation === "vertical" && "flex-col gap-1",
+        // min-w-0 lets the flexed title actually shrink below its text;
+        // truncate ellipsizes it — never a silent clip, never text under
+        // the chip. Scoped to chip-bearing headers so a chipless block
+        // renders exactly as before.
+        hasChip &&
+          "[&>[data-slot=block-title]]:min-w-0 [&>[data-slot=block-title]]:truncate",
         className,
       )}
+      style={
+        hasChip ? { paddingRight: HEADER_CHIP_RESERVED_PX, ...style } : style
+      }
       {...props}
-    />
+    >
+      {children}
+    </header>
   );
 }
 
@@ -115,6 +147,8 @@ export function BlockTitle({
   size = "xl",
   className,
   style,
+  title,
+  children,
   ...props
 }: BlockTitleProps) {
   return (
@@ -123,25 +157,35 @@ export function BlockTitle({
       data-size={size}
       className={cn("select-none font-medium leading-tight", className)}
       style={{ fontSize: TEXT_SIZES[size], ...style }}
+      // WHY: constrained geometry (a chip-bearing header) may ellipsize the
+      // rendered title; the title attribute keeps the complete authored
+      // string immediately discoverable. Presentation only — the data is
+      // never shortened.
+      title={title ?? (typeof children === "string" ? children : undefined)}
       {...props}
-    />
+    >
+      {children}
+    </h3>
   );
 }
 
 /**
  * Chip — the oval tag ("Warning Tags go here to the right", e.g. `Draft 1`).
- * Out of flow against the container's right edge so the centered title never
- * shifts when a tag appears.
+ * Out of flow, inset `CHIP_INSET_RIGHT` from the container's right edge.
+ * Its region is reserved by `BlockHeader` (see there), so the title centres
+ * in the space that remains instead of running underneath.
  */
 export function BlockChip({ className, style, ...props }: ComponentProps<"span">) {
   return (
     <span
       data-slot="block-chip"
       className={cn(
-        "absolute right-0 top-1/2 flex -translate-y-1/2 items-center justify-center whitespace-nowrap rounded-full border-2 border-foreground px-3",
+        "absolute top-1/2 flex -translate-y-1/2 items-center justify-center whitespace-nowrap rounded-full border-2 border-foreground px-3",
         className,
       )}
       style={{
+        // The measured 28px container-edge inset, in the header's frame.
+        right: CHIP_RIGHT_IN_HEADER_PX,
         minWidth: CHIP.minWidth,
         height: CHIP.height,
         fontSize: META_FONT_PX,

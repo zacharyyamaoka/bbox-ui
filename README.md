@@ -44,6 +44,14 @@ Anatomy (the API vocabulary): **Container** (`Block`), **Header band**
 The Glyph and Title always go next to each other, and the glyph resizes with
 the title rung at **0.9 ×** the title font size (44→40, 36→32, 24→22).
 
+The Chip **reserves** its region rather than merely right-aligning: it sits
+28px in from the container's right edge and the title's room ends 10px
+before it (`CHIP_INSET_RIGHT`, `CHIP_TITLE_GAP`, `headerContentWidth()` in
+`layout.ts` — all measured off the board). A title that no longer fits
+truncates with a visible ellipsis and keeps the complete string on the
+element's `title` attribute — presentation only, the stored data is never
+shortened, and the chip is never painted over live text.
+
 ```tsx
 <Block>
   <BlockHeader>

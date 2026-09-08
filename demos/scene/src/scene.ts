@@ -169,6 +169,33 @@ export const SCENE: Scene = {
       ],
     },
     {
+      // WHY this block exists: its title is deliberately wider than the
+      // chip-constrained header, so the truncation path (visible ellipsis,
+      // full string on the title attribute) shows in both hosts' demos and
+      // screenshots rather than only in unit tests.
+      id: "detect-frame",
+      x: 1120,
+      y: 420,
+      title: "Detect Objects In Frame",
+      blockType: "dataflow",
+      icon: "🎯",
+      tag: "Draft 2",
+      ports: [
+        {
+          id: "image",
+          direction: "input",
+          state: "empty",
+          size: "md",
+          label: "image",
+          textLayout: "right",
+          side: "left",
+          // Below the header band — at 0.5 the inward label would sit on
+          // the (truncated) title itself.
+          t: 0.75,
+        },
+      ],
+    },
+    {
       id: "clock",
       x: 560,
       y: 420,
