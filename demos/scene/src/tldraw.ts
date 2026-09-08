@@ -3,12 +3,12 @@
  * else is data.
  */
 import { createShapeId, type TLShapeId, type TLShapePartial } from "tldraw";
-import type { BBoxBlockShape } from "@bbox-ui/adapter-tldraw";
+import type { BBoxBlockShape, BBoxPortShape } from "@bbox-ui/adapter-tldraw";
 
-import { SCENE } from "./scene";
+import { SCENE, type Scene } from "./scene";
 
 export interface TldrawScene {
-  shapes: TLShapePartial<BBoxBlockShape>[];
+  shapes: TLShapePartial<BBoxBlockShape | BBoxPortShape>[];
   /**
    * Ports the scene lights up as "received" — handed back separately
    * because the shape record must never carry that state (the adapter's
@@ -18,33 +18,55 @@ export interface TldrawScene {
   receivedPorts: { shapeId: TLShapeId; portId: string }[];
 }
 
-export function sceneToTldrawShapes(): TldrawScene {
-  const shapes: TLShapePartial<BBoxBlockShape>[] = SCENE.blocks.map((block) => ({
-    id: createShapeId(block.id),
-    type: "bbox-block" as const,
-    x: block.x,
-    y: block.y,
-    props: {
-      title: block.title,
-      titleSize: block.titleSize ?? "xl",
-      blockType: block.blockType ?? "",
-      description: block.description ?? "",
-      icon: block.icon ?? "",
-      tag: block.tag ?? "",
-      orientation: block.orientation ?? "horizontal",
-      ports: block.ports.map((port) => ({
-        id: port.id,
-        direction: port.direction,
+export function sceneToTldrawShapes(scene: Scene = SCENE): TldrawScene {
+  const shapes: TLShapePartial<BBoxBlockShape | BBoxPortShape>[] =
+    scene.blocks.map((block) => ({
+      id: createShapeId(block.id),
+      type: "bbox-block" as const,
+      x: block.x,
+      y: block.y,
+      props: {
+        // Explicit size only when the scene carries one (a derived scene may
+        // have resized blocks); otherwise the shape's defaults apply.
+        ...(block.w != null && block.h != null
+          ? { w: block.w, h: block.h }
+          : {}),
+        title: block.title,
+        titleSize: block.titleSize ?? "xl",
+        blockType: block.blockType ?? "",
+        description: block.description ?? "",
+        icon: block.icon ?? "",
+        tag: block.tag ?? "",
+        orientation: block.orientation ?? "horizontal",
+        ports: block.ports.map((port) => ({
+          id: port.id,
+          direction: port.direction,
+          state: port.state,
+          size: port.size,
+          label: port.label,
+          textLayout: port.textLayout,
+          side: port.side,
+          t: port.t,
+        })),
+      },
+    }));
+  for (const port of scene.standalonePorts ?? []) {
+    shapes.push({
+      id: createShapeId(port.id),
+      type: "bbox-port" as const,
+      x: port.x,
+      y: port.y,
+      props: {
+        w: port.w,
+        h: port.h,
         state: port.state,
         size: port.size,
         label: port.label,
         textLayout: port.textLayout,
-        side: port.side,
-        t: port.t,
-      })),
-    },
-  }));
-  const receivedPorts = SCENE.blocks.flatMap((block) =>
+      },
+    });
+  }
+  const receivedPorts = scene.blocks.flatMap((block) =>
     block.ports
       .filter((port) => port.receivedAtRuntime)
       .map((port) => ({ shapeId: createShapeId(block.id), portId: port.id })),

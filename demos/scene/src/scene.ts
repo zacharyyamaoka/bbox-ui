@@ -41,6 +41,16 @@ export interface SceneBlock {
   id: string;
   x: number;
   y: number;
+  /**
+   * Explicit container size, for scenes derived from an authored board where
+   * a block may have been resized. Absent (the fixed demo scene) both hosts
+   * fall back to their defaults: tldraw to SIMPLE_BLOCK, React Flow to
+   * hug-contents — which agree for an unresized block. A host that cannot
+   * honour an explicit size (React Flow hugs) will show the difference in
+   * the divergence readout rather than hiding it.
+   */
+  w?: number;
+  h?: number;
   title: string;
   titleSize?: TextSize;
   blockType?: string;
@@ -59,9 +69,30 @@ export interface SceneEdge {
   targetPort: string;
 }
 
+/**
+ * A Port placed on the canvas without a Block — the playground's standalone
+ * `bbox-port` shape. React Flow has no host concept for it (handles belong
+ * to nodes there), so the comparison wraps each one in a minimal chrome-less
+ * node at the same world point; the wrapper is disclosed in the readout, not
+ * hidden.
+ */
+export interface SceneStandalonePort {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  state: "empty" | "default" | "wired";
+  size: PortSize;
+  label: string;
+  textLayout: PortTextLayout;
+}
+
 export interface Scene {
   blocks: SceneBlock[];
   edges: SceneEdge[];
+  /** Absent means none — the fixed demo scene predates standalone ports. */
+  standalonePorts?: SceneStandalonePort[];
 }
 
 export const SCENE: Scene = {

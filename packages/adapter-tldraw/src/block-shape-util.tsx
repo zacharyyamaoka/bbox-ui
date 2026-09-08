@@ -168,7 +168,9 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
     const received = receivedPorts.get();
     return (
       <HTMLContainer style={{ overflow: "visible" }}>
-        <Block width={props.w} height={props.h}>
+        {/* data-block-id lets the compare harness pair this block with its
+            React Flow twin by id (titles are user text and can repeat). */}
+        <Block width={props.w} height={props.h} data-block-id={shape.id}>
           <BlockHeader orientation={props.orientation}>
             {props.icon !== "" && (
               <BlockGlyph size={props.titleSize}>{props.icon}</BlockGlyph>

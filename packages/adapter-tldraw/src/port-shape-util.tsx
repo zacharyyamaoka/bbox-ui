@@ -100,6 +100,9 @@ export class BBoxPortShapeUtil extends ShapeUtil<BBoxPortShape> {
     return (
       <HTMLContainer style={{ overflow: "visible" }}>
         <div
+          // The compare harness pairs this dot with its React Flow wrapper
+          // node by id — see BBoxPortNode in the React Flow adapter.
+          data-standalone-port-id={shape.id}
           className="relative"
           style={{ width: props.w, height: props.h }}
         >

@@ -68,10 +68,14 @@ export type BBoxBlockNodeType = Node<BBoxBlockData, "bboxBlock">;
  * node from the DOM into `node.measured.width/height` — hug-contents is free
  * in this host.
  */
-export function BBoxBlockNode({ data }: NodeProps<BBoxBlockNodeType>) {
+export function BBoxBlockNode({ id, data }: NodeProps<BBoxBlockNodeType>) {
   const titleSize = data.titleSize ?? "xl";
   return (
-    <Block>
+    // WHY data-block-id: the compare harness pairs each block with its twin
+    // in the other host by id, not by title — titles are user text and can
+    // repeat on an authored board, and a title collision would mispair the
+    // measurement.
+    <Block data-block-id={id}>
       <BlockHeader orientation={data.orientation}>
         {data.icon != null && (
           <BlockGlyph size={titleSize}>{data.icon}</BlockGlyph>

@@ -13,8 +13,5 @@ body,
   margin: 0;
 }
 
-/* WHY: overlay comparison needs both hosts on an identical ground — the
-   difference blend turns any background mismatch into permanent glow. */
-.tl-background {
-  background-color: #ffffff !important;
-}
+/* The white .tl-background the overlay comparison needs ships with the view
+   itself (compare-view.css), scoped under .bbox-compare-view. */

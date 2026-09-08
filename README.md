@@ -142,7 +142,9 @@ snapping, z-order, drag) is host-owned and never travels.
 ## Compare harness
 
 `demos/compare` (port 5191) renders the one shared scene
-([`demos/scene`](demos/scene)) in both hosts and lets you flip between
+([`demos/scene`](demos/scene)) through the reusable comparison view
+([`demos/compare-view`](demos/compare-view)) — the same view the playground's
+Compare button runs over a live board — and lets you flip between
 **Split** / **React Flow** / **tldraw** / **Overlay**. Both panes are **live**:
 pan (drag) and zoom (scroll) in either one and the other follows — the cameras
 are linked bidirectionally, SystemSketch's `useLinkedCameras` pattern bridged
@@ -183,10 +185,33 @@ remembered in `localStorage`. The tools themselves live in
 `@bbox-ui/adapter-tldraw` (`BBoxBlockTool`, `BBoxPortTool`, and a minimal
 standalone `bbox-port` shape painted by the same core `PortDot`).
 
+**⇄ Compare** (top right) runs the React Flow ⟷ tldraw comparison over
+whatever is on the board right now: the live shapes are projected into the
+host-neutral scene (`sceneFromEditor` in [`demos/scene`](demos/scene)) and
+handed to the same `CompareView` the fixed harness uses — Split / fullscreen /
+Overlay, linked cameras, numeric divergence readout, and a Back button to
+return to authoring. The tldraw pane in compare mode is a second, read-only
+editor seeded from the derived scene, so the authoring board is never
+disturbed. The counting is honest about its denominator:
+
+- Stock tldraw shapes (rectangles, arrows, text, notes…) have no React Flow
+  counterpart. They are **counted, not dropped** — the readout says e.g.
+  `comparing 2 of 3 shapes — 1 stock tldraw shape (geo ×1) has no React Flow
+  counterpart`.
+- A standalone `bbox-port` has no natural React Flow equivalent (handles
+  belong to nodes there), so it rides in a minimal chrome-less wrapper node at
+  the same world point — and the readout **discloses the wrapper**.
+- A board with zero bbox-ui shapes shows an explicit empty state, never
+  `max |Δ| = 0.00 px` — zero things compared is not agreement.
+
 ```bash
 pnpm demo:playground   # http://127.0.0.1:5193
 node demos/drive-playground.mjs   # headless: family select-and-open, menu pick,
                                   # B/P shortcuts, shape creation, reload memory
+node demos/drive-playground-compare.mjs  # headless: empty-board empty state, author
+                                         # Block+Port+rectangle, enter compare, assert
+                                         # "2 of 3" denominator + 0.00px divergence,
+                                         # authoring board undisturbed, exit
 ```
 
 ## Registry
@@ -202,6 +227,7 @@ node demos/drive-playground.mjs   # headless: family select-and-open, menu pick,
 pnpm install
 pnpm test              # unit tests: core layout (icon ratio, states, layouts)
                        # + compare camera bridge (tldraw ↔ React Flow round-trip)
+                       # + sceneFromEditor (bbox shapes kept, stock counted, empty board)
 pnpm build             # typecheck everything + build every demo/app
 pnpm demo             # all demos + the playground: React Flow 5183, tldraw 5189,
                       # compare 5191, playground 5193
@@ -213,6 +239,7 @@ node demos/drive.mjs reactflow http://127.0.0.1:5183   # headless assert + scree
 node demos/drive.mjs tldraw    http://127.0.0.1:5189
 node demos/drive-compare.mjs                           # all four compare modes
 node demos/drive-playground.mjs                        # toolbar + tools journey
+node demos/drive-playground-compare.mjs                # live-board compare journey
 ```
 
 > **tldraw licence note**: tldraw's SDK licence forbids production use

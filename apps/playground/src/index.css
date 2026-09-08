@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Layered so Tailwind utilities (the port-dot classes on <Handle>) win over
+   React Flow's own unlayered .react-flow__handle defaults — the compare
+   overlay renders a React Flow pane. */
+@import "@xyflow/react/dist/style.css" layer(base);
 @import "@bbox-ui/core/theme.css";
 
 @source "../../../packages";

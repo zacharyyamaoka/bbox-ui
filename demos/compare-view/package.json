@@ -1,18 +1,20 @@
 {
-  "name": "bbox-playground",
+  "name": "@bbox-ui/compare-view",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "The reusable host-comparison view: Split / fullscreen / Overlay modes, linked cameras across the tldraw and React Flow camera models, and the numeric divergence readout — over any Scene. demos/compare feeds it the fixed demo scene; the playground feeds it a scene derived from its live board.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "build": "vite build",
-    "dev": "vite --port 5193 --strictPort",
-    "preview": "vite preview --port 5193 --strictPort"
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@bbox-ui/adapter-reactflow": "workspace:*",
     "@bbox-ui/adapter-tldraw": "workspace:*",
-    "@bbox-ui/compare-view": "workspace:*",
     "@bbox-ui/core": "workspace:*",
     "@bbox-ui/demo-scene": "workspace:*",
     "@xyflow/react": "^12.8.0",
@@ -21,13 +23,9 @@
     "tldraw": "5.3.2"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.3.0",
-    "tailwindcss": "^4.0.0",
     "typescript": "^5.6.0",
-    "vite": "^6.0.0",
     "vitest": "^3.0.0"
   }
 }

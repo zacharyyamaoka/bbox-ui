@@ -1,0 +1,7 @@
+/* WHY: overlay comparison needs both hosts on an identical ground — the
+   difference blend turns any background mismatch into permanent glow.
+   Scoped to the view so a host app's own tldraw canvas keeps its stock
+   background. */
+.bbox-compare-view .tl-background {
+  background-color: #ffffff !important;
+}

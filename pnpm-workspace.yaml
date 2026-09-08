@@ -5,6 +5,7 @@ packages:
   - demos/tldraw
   - demos/scene
   - demos/compare
+  - demos/compare-view
 allowBuilds:
   esbuild: true
   msw: false
