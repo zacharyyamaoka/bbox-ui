@@ -81,6 +81,35 @@ export function stockTextStyle(px: number): {
   return { size: base.size, scale: px / base.px };
 }
 
+/**
+ * `text` shortened with a trailing ellipsis until it measures within
+ * `maxW` — the stock-primitive equivalent of CSS `text-overflow: ellipsis`.
+ * Splits on code points (`[...text]`), never through a surrogate pair, so
+ * an emoji is dropped whole or kept whole.
+ */
+export function truncateToWidth(
+  text: string,
+  px: number,
+  maxW: number,
+  weight = 400,
+): string {
+  if (measureText(text, px, weight) <= maxW) return text;
+  const ELLIPSIS = "…";
+  const chars = [...text];
+  // Binary search the longest prefix whose "prefix…" still fits.
+  let low = 0;
+  let high = chars.length - 1;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (measureText(chars.slice(0, mid).join("") + ELLIPSIS, px, weight) <= maxW) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return chars.slice(0, low).join("") + ELLIPSIS;
+}
+
 export interface TextAtOptions {
   text: string;
   px: number;

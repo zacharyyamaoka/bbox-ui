@@ -1,10 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PORT_DIAMETERS, portAnchor } from "@bbox-ui/core";
+import { PORT_DIAMETERS, TEXT_SIZES, layoutSimpleBlock, portAnchor } from "@bbox-ui/core";
 
 import type { BBoxBlockShapeProps } from "../src/block-shape-util";
 import * as portPrimitivesModule from "../src/detach/portPrimitives";
-import { primitivesForBlock } from "../src/detach/blockPrimitives";
+import { primitivesForBlock, type BlockPrimitives } from "../src/detach/blockPrimitives";
+import { measureText } from "../src/detach/stockPartials";
+
+/** Plain text of the title primitive (the first text shape after the card). */
+function titleTextOf(built: BlockPrimitives): string {
+  const collectText = (node: unknown): string => {
+    if (typeof node !== "object" || node === null) return "";
+    const record = node as Record<string, unknown>;
+    const own = typeof record.text === "string" ? record.text : "";
+    const children = Array.isArray(record.content)
+      ? record.content.map(collectText).join("")
+      : "";
+    return own + children;
+  };
+  const texts = built.shapes.filter((partial) => partial.type === "text");
+  // Glyph (when present) precedes the title in paint order; skip it by its
+  // single-glyph content matching the icon.
+  const title = texts.find((partial) => {
+    const text = collectText((partial.props as { richText?: unknown }).richText);
+    return text !== "🔍";
+  });
+  return collectText((title?.props as { richText?: unknown })?.richText);
+}
 
 // Spy on the real module: the assertion below is that Block's reduction
 // INVOKES Port's through the shared function — not that it happens to
@@ -106,6 +128,38 @@ describe("primitivesForBlock", () => {
     // wired + label → ring, core, label; empty + label → ring, label.
     expect(built.portRows[0].shapeIds).toHaveLength(3);
     expect(built.portRows[1].shapeIds).toHaveLength(2);
+  });
+
+  it("ellipsizes a title that outgrows the header, like the live component", () => {
+    const longTitle = "W".repeat(40);
+    const props = blockProps({ title: longTitle, tag: "Draft 1", titleSize: "xl" });
+    const built = primitivesForBlock(props, { x: 0, y: 0 });
+    const emitted = titleTextOf(built);
+    // Explicit ellipsis, never the full string wrapped over the card…
+    expect(emitted).not.toBe(longTitle);
+    expect(emitted.endsWith("…")).toBe(true);
+    expect(longTitle.startsWith(emitted.slice(0, -1))).toBe(true);
+    // …and the shortened string actually fits the room the chip leaves.
+    const layout = layoutSimpleBlock({
+      width: props.w,
+      height: props.h,
+      title: props.title,
+      titleSize: props.titleSize,
+      icon: props.icon,
+      tag: props.tag,
+      description: props.description,
+      blockType: props.blockType,
+      orientation: props.orientation,
+      measure: measureText,
+    });
+    expect(measureText(emitted, TEXT_SIZES.xl, 500)).toBeLessThanOrEqual(
+      layout.title!.w,
+    );
+  });
+
+  it("a title that fits is emitted verbatim, ellipsis-free", () => {
+    const built = primitivesForBlock(blockProps(), { x: 0, y: 0 });
+    expect(titleTextOf(built)).toBe("Detect");
   });
 
   it("a chipless, portless, bare-title block still has its card and title", () => {

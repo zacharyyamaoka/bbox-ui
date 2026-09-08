@@ -23,7 +23,7 @@ import {
 } from "@bbox-ui/core";
 
 import type { BBoxBlockShapeProps } from "../block-shape-util";
-import { geoAt, measureText, textAt } from "./stockPartials";
+import { geoAt, measureText, textAt, truncateToWidth } from "./stockPartials";
 import { primitivesForPort } from "./portPrimitives";
 
 export interface BlockPortRow {
@@ -78,10 +78,21 @@ export function primitivesForBlock(
     );
   }
   if (layout.title) {
+    const titlePx = TEXT_SIZES[props.titleSize];
     shapes.push(
       textAt({
-        text: props.title,
-        px: TEXT_SIZES[props.titleSize],
+        // The live component ellipsizes a title that outgrows the header
+        // (`truncate` in BlockHeader); the detached picture shows the same
+        // visibly-truncated string, never the full text wrapped onto extra
+        // lines that would overflow the card.
+        // WHY the ellipsis is allowed here: truthful rendering demands that
+        // constrained geometry abbreviate with an EXPLICIT ellipsis while
+        // the complete raw value stays discoverable — and it does: the
+        // untruncated title survives verbatim in `meta.bboxUi.props`, which
+        // is what rebuild reads. Do not "restore" the full string here; the
+        // overflow it paints is the bug, not the fix.
+        text: truncateToWidth(props.title, titlePx, layout.title.w, 500),
+        px: titlePx,
         box: layout.title,
         origin,
         color: "black",

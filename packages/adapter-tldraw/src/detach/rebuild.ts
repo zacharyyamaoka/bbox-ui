@@ -21,6 +21,7 @@
 import { createShapeId } from "tldraw";
 import type { Editor, TLShapeId } from "tldraw";
 
+import { rekeyReceivedPorts } from "../block-shape-util";
 import {
   isDetachedAnchor,
   readRebuildableRecord,
@@ -85,10 +86,17 @@ export function rebuildDetachedShapes(editor: Editor): RebuildResult {
       // A single-primitive fallback carries the record itself and is its
       // own anchor.
       const anchorId = anchorIdWithin(editor, carrierId) ?? carrierId;
-      const anchorPagePoint = editor
-        .getShapePageTransform(anchorId)
-        .applyToPoint({ x: 0, y: 0 });
+      const anchorTransform = editor.getShapePageTransform(anchorId);
+      const anchorPagePoint = anchorTransform.applyToPoint({ x: 0, y: 0 });
       const local = editor.getPointInParentSpace(carrierId, anchorPagePoint);
+      // The anchor primitive carried the original's rotation through the
+      // detach (see lowerToGroup), and any rotation the user gave the
+      // detached group composes into its page transform — so the anchor's
+      // page rotation, re-expressed in the parent's frame, is the rotation
+      // the rebuilt shape stands at.
+      const rotation =
+        anchorTransform.rotation() -
+        editor.getShapeParentTransform(carrierId).rotation();
 
       const shapeId = createShapeId();
       editor.createShape({
@@ -97,8 +105,12 @@ export function rebuildDetachedShapes(editor: Editor): RebuildResult {
         parentId: carrier.parentId,
         x: local.x,
         y: local.y,
+        rotation,
         props: record.props,
       });
+      // Hand the runtime `received` flags from the carrier to the minted id
+      // (in memory only) so a port that is receiving right now stays lit.
+      rekeyReceivedPorts(carrierId, shapeId);
       editor.deleteShape(carrierId);
       createdIds.push(shapeId);
     }

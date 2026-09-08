@@ -29,6 +29,16 @@ export interface PortPrimitiveInput {
   /** The dot's box — the standalone shape's `w`/`h`, or a Block port's diameter. */
   w: number;
   h: number;
+  /**
+   * WHY `received` is excluded — a deliberate rejection, not an oversight:
+   * `received` is runtime-only by Zach's ruling (see `PortState` in the
+   * core layout module), and a detached group is persisted document state.
+   * Detaching a currently-lit port must paint its PERSISTED state, never
+   * bake a green dot into every saved board that would be a lie after
+   * reload. The runtime flag instead survives the round trip in memory —
+   * `rekeyReceivedPorts` follows the id changes through detach and rebuild.
+   * Do not re-litigate this into "detach should show the green dot".
+   */
   state: Exclude<PortState, "received">;
   size: PortSize;
   label: string;

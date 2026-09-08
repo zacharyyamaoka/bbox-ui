@@ -94,6 +94,32 @@ export function setPortReceived(
   }));
 }
 
+/**
+ * Move every runtime `received` flag keyed under one shape id to another.
+ *
+ * WHY: detach and rebuild both replace a shape with a freshly minted id, and
+ * a flag keyed to the dead id would leave a port that is receiving right now
+ * dark after the swap. The hand-off stays entirely in this runtime atom —
+ * the flags never travel through `meta` or props, so nothing about
+ * "received" ever reaches the persisted document.
+ */
+export function rekeyReceivedPorts(fromShapeId: string, toShapeId: string) {
+  receivedPorts.update((current) => {
+    const fromPrefix = `${fromShapeId}:`;
+    let moved = false;
+    const next: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(current)) {
+      if (key.startsWith(fromPrefix)) {
+        next[`${toShapeId}:${key.slice(fromPrefix.length)}`] = value;
+        moved = true;
+      } else {
+        next[key] = value;
+      }
+    }
+    return moved ? next : current;
+  });
+}
+
 const portValidator: T.Validator<BBoxShapePort> = T.object({
   id: T.string,
   direction: T.literalEnum("input", "output"),

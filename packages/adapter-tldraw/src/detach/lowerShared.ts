@@ -7,6 +7,7 @@
 import { createShapeId } from "tldraw";
 import type { Editor, TLShape, TLShapeId, TLShapePartial } from "tldraw";
 
+import { rekeyReceivedPorts } from "../block-shape-util";
 import type { LoweredNode } from "./detachableKind";
 import {
   DETACH_FORMAT_VERSION,
@@ -29,16 +30,36 @@ export interface LowerToGroupInput {
 /**
  * Replace `shape` with its grouped primitives. The primitives are created
  * in the original's parent at the original's local coordinates, so the page
- * pose is unchanged. (Rotation is not carried over: the bbox tools never
- * rotate a shape, and a rotated group of stock primitives could not be
- * unpeeled back into axis-aligned parts.)
+ * pose is unchanged. A rotated original rotates every primitive with it:
+ * each part keeps its axis-aligned box in the original's local frame and
+ * carries the original's `rotation`, with its origin swung around the
+ * original's transform origin — the same picture the live shape painted.
  */
 export function lowerToGroup(
   editor: Editor,
   input: LowerToGroupInput,
 ): LoweredNode {
   const { shape } = input;
-  const shapes = [...input.shapes];
+  let shapes = [...input.shapes];
+
+  // The kind builders lay parts out unrotated in the parent frame (origin =
+  // shape.x/y). tldraw's shape transform is translate(x, y) then rotate, so
+  // a part at local offset (dx, dy) lands at origin + R·(dx, dy) with the
+  // shape's own rotation applied to itself.
+  if (shape.rotation !== 0) {
+    const cos = Math.cos(shape.rotation);
+    const sin = Math.sin(shape.rotation);
+    shapes = shapes.map((partial) => {
+      const dx = (partial.x ?? 0) - shape.x;
+      const dy = (partial.y ?? 0) - shape.y;
+      return {
+        ...partial,
+        x: shape.x + dx * cos - dy * sin,
+        y: shape.y + dx * sin + dy * cos,
+        rotation: shape.rotation,
+      };
+    });
+  }
   // The anchor is marked so a rebuild can find the original's origin inside
   // the group without storing an id — ids are re-minted by copy, paste and
   // duplicate, and `meta` is not.
@@ -82,6 +103,11 @@ export function lowerToGroup(
     editor.groupShapes(topLevelIds, { groupId, select: false });
     if (editor.getShape(groupId)) {
       editor.updateShape({ id: groupId, type: "group", meta: detachMeta(input.record) });
+      // The runtime `received` flags follow the identity onto the carrier
+      // (in memory only — never into `meta`), so a later rebuild can hand
+      // them on to the shape it mints and a lit port stays lit across the
+      // round trip.
+      rekeyReceivedPorts(shape.id, groupId);
       return { selectionId: groupId, rootIds: [groupId] };
     }
   }
@@ -93,6 +119,7 @@ export function lowerToGroup(
   const sole = editor.getShape(soleId);
   if (sole) {
     editor.updateShape({ id: soleId, type: sole.type, meta: detachMeta(input.record) });
+    rekeyReceivedPorts(shape.id, soleId);
   }
   return { selectionId: soleId ?? null, rootIds: soleId ? [soleId] : [] };
 }
