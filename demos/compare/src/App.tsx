@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ReactFlow } from "@xyflow/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ReactFlow, type Viewport } from "@xyflow/react";
 import { Tldraw, type Editor } from "tldraw";
 
 import { BBoxBlockNode } from "@bbox-ui/adapter-reactflow";
@@ -7,49 +7,35 @@ import { BBoxBlockShapeUtil, setPortReceived } from "@bbox-ui/adapter-tldraw";
 import { sceneToReactFlowNodes } from "@bbox-ui/demo-scene/reactflow";
 import { sceneToTldrawShapes } from "@bbox-ui/demo-scene/tldraw";
 
+import {
+  camerasAgree,
+  reactFlowToTldraw,
+  tldrawToReactFlow,
+  viewportsAgree,
+} from "./cameraBridge";
+
 /**
  * Side-by-side / fullscreen / overlay comparison of the two hosts rendering
  * the ONE shared scene (demos/scene). The point of the harness: any visible
  * or measured difference is adapter drift, never content drift.
  *
- * WHY the cameras are pinned: React Flow maps world→screen as
- * `world * zoom + viewport.xy`; tldraw as `(page + camera.xy) * z`. Locking
- * both to the same zoom and the same world origin
- * (viewport = ORIGIN, camera = ORIGIN / zoom) makes the two canvases
- * pixel-commensurable, which is what gives the overlay's difference blend
- * meaning — without it the modes would compare camera policy, not the kit.
- * All interaction is disabled for the same reason: one pan would silently
- * de-calibrate the comparison.
+ * WHY the cameras are linked, not pinned: both panes are live — pan and
+ * zoom in either one and the other follows. Without the link the Overlay
+ * slider is meaningless — crossfading two boards framed differently shows
+ * the framing changing, not the board. It matters in Split too, which is
+ * why Simulink ships a "Linked Scrolling" checkbox turned on by default.
+ * The world→screen bridge between the two camera models (and the
+ * zoom-dependent compensation it must recompute on every change) lives in
+ * `cameraBridge.ts`.
  */
 const ZOOM = 0.45;
 const ORIGIN = { x: 50, y: 90 };
 
-/**
- * The tldraw camera that puts world (0,0) exactly at screen ORIGIN.
- *
- * WHY not simply ORIGIN / ZOOM: tldraw's `getHtmlLayerTransform` renders the
- * HTML shape layer as `scale(z) translate(x + offset, y + offset)` where
- * `offset` is a zoom-dependent nudge (modulated [0.1,1]→[-2,0.125] below
- * z=1, [1,8]→[0.125,0.5] above), and the 1×1 layer element scales about its
- * own centre, adding another 0.5·(1−z). Left uncompensated the two hosts
- * disagree by a constant whole-scene 0.25px at z=0.45 — measured before
- * this correction, 0.00px after. Both terms are deterministic in z, so the
- * harness cancels them here rather than shipping a silently misaligned
- * overlay.
- */
-function tldrawCameraFor(origin: { x: number; y: number }, zoom: number) {
-  const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
-  const layerOffset =
-    zoom >= 1
-      ? 0.125 + clamp01((zoom - 1) / 7) * (0.5 - 0.125)
-      : -2 + clamp01((zoom - 0.1) / 0.9) * (0.125 - -2);
-  const originShift = 0.5 * (1 - zoom);
-  return {
-    x: (origin.x - originShift) / zoom - layerOffset,
-    y: (origin.y - originShift) / zoom - layerOffset,
-    z: zoom,
-  };
-}
+// tldraw clamps its camera to its zoomSteps' extremes [0.05, 8]; React Flow
+// is pinned to the same bounds so neither host can zoom where the other
+// cannot follow — a one-sided clamp would silently break the link.
+const MIN_ZOOM = 0.05;
+const MAX_ZOOM = 8;
 
 const nodeTypes = { bboxBlock: BBoxBlockNode };
 const shapeUtils = [BBoxBlockShapeUtil];
@@ -59,6 +45,18 @@ const shapeUtils = [BBoxBlockShapeUtil];
 // blend forever without saying anything about the shared components.
 const nodes = sceneToReactFlowNodes();
 const { shapes, receivedPorts } = sceneToTldrawShapes();
+
+/**
+ * The slice of a React Flow instance the camera link needs. WHY not
+ * `ReactFlowInstance`: that type is generic over the node type and
+ * invariant in it, so the instance `onInit` hands over (typed to the
+ * scene's node) refuses to assign to a plainly-typed slot. The viewport
+ * helpers are the only part the link touches and they carry no generics.
+ */
+interface ViewportHost {
+  getViewport(): Viewport;
+  setViewport(viewport: Viewport): Promise<unknown>;
+}
 
 const MODES = ["split", "reactflow", "tldraw", "overlay"] as const;
 type Mode = (typeof MODES)[number];
@@ -90,6 +88,8 @@ interface BlockDelta {
 interface Divergence {
   rows: BlockDelta[];
   maxAbs: number;
+  /** The live camera zoom the reading was taken at. */
+  zoom: number | null;
   measuredAt: number;
 }
 
@@ -110,6 +110,13 @@ function measurePane(pane: HTMLElement): Record<string, HostBlockGeometry> {
       blockEl.querySelector('[data-slot="block-title"]')?.textContent?.trim() ??
       "?";
     const rect = blockEl.getBoundingClientRect();
+    // WHY skip empty rects: tldraw CULLS shapes fully outside the viewport
+    // (display: none), so a block panned far offscreen measures as a rect
+    // at (0,0) and would register thousands of px of fake divergence.
+    // React Flow renders everything, so the diff below simply drops blocks
+    // the other host is not painting; `rows.length` is the honest count of
+    // blocks a reading actually compared.
+    if (rect.width === 0 || rect.height === 0) continue;
     const ports: Record<string, { cx: number; cy: number }> = {};
     const portEls = blockEl.querySelectorAll<HTMLElement>(
       "[data-port-id], .react-flow__handle",
@@ -171,43 +178,90 @@ function measureDivergence(): Divergence | null {
     });
   }
   if (rows.length === 0) return null;
-  return { rows, maxAbs, measuredAt: Date.now() };
+  return {
+    rows,
+    maxAbs,
+    zoom: window.reactFlow?.getViewport().zoom ?? null,
+    measuredAt: Date.now(),
+  };
 }
 
 declare global {
   interface Window {
+    editor?: Editor;
+    reactFlow?: ViewportHost;
     __bboxCompare?: Divergence | null;
+    /** Force a fresh reading now — the headless driver's hook. */
+    __bboxMeasureNow?: () => Divergence | null;
+    /** The pure camera maths, exposed so the driver can frame exact zooms. */
+    __bboxBridge?: {
+      reactFlowToTldraw: typeof reactFlowToTldraw;
+      tldrawToReactFlow: typeof tldrawToReactFlow;
+    };
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Linked cameras                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Keep the two hosts' cameras in agreement, in BOTH directions, so either
+ * pane can lead. Ported from SystemSketch's `useLinkedCameras`: an
+ * `applying` re-entrancy flag so a sync does not echo back, compare before
+ * writing and only write when the camera actually differs, one sync on
+ * mount to bring the panes into agreement immediately, and a cleanup that
+ * removes the listener. The one structural difference: React Flow has no
+ * store to listen to, so its direction is the `onMove` handler this hook
+ * returns for the caller to wire as a prop.
+ */
+function useLinkedHostCameras(
+  tldrawEditor: Editor | null,
+  reactFlow: ViewportHost | null,
+  onSynced?: () => void,
+) {
+  const applyingRef = useRef(false);
+  const onSyncedRef = useRef(onSynced);
+  onSyncedRef.current = onSynced;
+
+  // tldraw → React Flow. The camera is a session-scope store record, so one
+  // listener sees every pan, zoom and resize adjustment.
+  useEffect(() => {
+    if (!tldrawEditor || !reactFlow) return;
+    const sync = () => {
+      if (applyingRef.current) return;
+      applyingRef.current = true;
+      const viewport = tldrawToReactFlow(tldrawEditor.getCamera());
+      if (!viewportsAgree(viewport, reactFlow.getViewport())) {
+        void reactFlow.setViewport(viewport);
+        onSyncedRef.current?.();
+      }
+      applyingRef.current = false;
+    };
+    const stop = tldrawEditor.store.listen(sync, { scope: "session" });
+    sync();
+    return stop;
+  }, [tldrawEditor, reactFlow]);
+
+  // React Flow → tldraw.
+  return useCallback(
+    (_event: unknown, viewport: Viewport) => {
+      if (!tldrawEditor || applyingRef.current) return;
+      applyingRef.current = true;
+      const camera = reactFlowToTldraw(viewport);
+      if (!camerasAgree(camera, tldrawEditor.getCamera())) {
+        tldrawEditor.setCamera(camera, { immediate: true });
+        onSyncedRef.current?.();
+      }
+      applyingRef.current = false;
+    },
+    [tldrawEditor],
+  );
 }
 
 /* ------------------------------------------------------------------ */
 /* App                                                                 */
 /* ------------------------------------------------------------------ */
-
-function handleTldrawMount(editor: Editor) {
-  (window as { editor?: Editor }).editor = editor;
-  editor.createShapes(shapes);
-  // Runtime-only "Data Recived" paint — never written into the document.
-  for (const { shapeId, portId } of receivedPorts) {
-    setPortReceived(shapeId, portId, true);
-  }
-  editor.updateInstanceState({ isReadonly: true });
-  const applyCamera = () =>
-    editor.setCamera(tldrawCameraFor(ORIGIN, ZOOM), {
-      immediate: true,
-      force: true,
-    });
-  applyCamera();
-  editor.setCameraOptions({ isLocked: true });
-  // WHY re-assert: tldraw preserves the viewport CENTRE when its container
-  // resizes (including the resize it sees while mounting), nudging the
-  // camera off the pinned origin — measured 0.25px of whole-scene offset
-  // against React Flow. Snap back after layout settles and on every pane
-  // resize (mode switches change the pane width); `force` bypasses the lock.
-  requestAnimationFrame(applyCamera);
-  const observer = new ResizeObserver(() => requestAnimationFrame(applyCamera));
-  observer.observe(editor.getContainer());
-}
 
 const paneBase: React.CSSProperties = {
   position: "absolute",
@@ -233,9 +287,24 @@ const badgeStyle: React.CSSProperties = {
 
 export function App() {
   const [mode, setMode] = useState<Mode>(modeFromHash);
-  const [blend, setBlend] = useState<"difference" | "alpha">("difference");
-  const [topOpacity, setTopOpacity] = useState(100);
+  /**
+   * How the overlay composites, crossfade being what opens.
+   *
+   * WHY crossfade is the default: it is what SystemSketch's Compare screen
+   * does — a plain opacity fade between the two panes, no `mix-blend-mode`
+   * — and this harness clones that screen's conventions. The difference
+   * blend stays one toggle away because it is the thing that PROVES
+   * convergence: matching pixels cancel to black, so any divergence is
+   * literally the only thing that lights up.
+   */
+  const [blendMode, setBlendMode] = useState<"crossfade" | "difference">(
+    "crossfade",
+  );
+  /** 0 shows React Flow (the bottom pane), 100 shows tldraw (the top). */
+  const [blend, setBlend] = useState(100);
   const [divergence, setDivergence] = useState<Divergence | null>(null);
+  const [tldrawEditor, setTldrawEditor] = useState<Editor | null>(null);
+  const [reactFlow, setReactFlow] = useState<ViewportHost | null>(null);
 
   useEffect(() => {
     const onHashChange = () => setMode(modeFromHash());
@@ -243,41 +312,124 @@ export function App() {
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
+  const measureNow = useCallback(() => {
+    const measured = measureDivergence();
+    window.__bboxCompare = measured;
+    setDivergence(measured);
+    return measured;
+  }, []);
+
+  // A camera sync can fire many times per frame mid-gesture; coalesce the
+  // DOM measurement to one reading per painted frame.
+  const measureQueued = useRef(false);
+  const scheduleMeasure = useCallback(() => {
+    if (measureQueued.current) return;
+    measureQueued.current = true;
+    requestAnimationFrame(() => {
+      measureQueued.current = false;
+      measureNow();
+    });
+  }, [measureNow]);
+
   useEffect(() => {
-    const tick = () => {
-      const measured = measureDivergence();
-      window.__bboxCompare = measured;
-      setDivergence(measured);
-    };
-    tick();
-    const interval = window.setInterval(tick, 500);
+    window.__bboxMeasureNow = measureNow;
+    window.__bboxBridge = { reactFlowToTldraw, tldrawToReactFlow };
+  }, [measureNow]);
+
+  // The readout updates on every camera change (via `scheduleMeasure`
+  // below); this slow tick only covers changes with no camera event, like
+  // fonts settling after load.
+  useEffect(() => {
+    measureNow();
+    const interval = window.setInterval(measureNow, 500);
     return () => window.clearInterval(interval);
-  }, [mode]);
+  }, [mode, measureNow]);
+
+  const onReactFlowMove = useLinkedHostCameras(
+    tldrawEditor,
+    reactFlow,
+    scheduleMeasure,
+  );
+
+  const handleTldrawMount = useCallback((editor: Editor) => {
+    window.editor = editor;
+    editor.createShapes(shapes);
+    // Runtime-only "Data Recived" paint — never written into the document.
+    for (const { shapeId, portId } of receivedPorts) {
+      setPortReceived(shapeId, portId, true);
+    }
+    // A comparison is looked at, not drawn on — but it IS panned and
+    // zoomed, so the camera stays unlocked and the hand tool makes
+    // left-drag pan, matching React Flow's `panOnDrag`.
+    editor.updateInstanceState({ isReadonly: true });
+    editor.setCurrentTool("hand");
+    // WHY wheelBehavior zoom: React Flow's default is zoom-on-scroll;
+    // leaving tldraw on its pan-on-scroll default would give the two panes
+    // different gestures for the same intent.
+    editor.setCameraOptions({ wheelBehavior: "zoom" });
+    editor.setCamera(reactFlowToTldraw({ x: ORIGIN.x, y: ORIGIN.y, zoom: ZOOM }), {
+      immediate: true,
+    });
+    setTldrawEditor(editor);
+  }, []);
 
   const pickMode = (next: Mode) => {
     window.location.hash = next;
     setMode(next);
   };
 
+  // WHY visibility and not display: `display: none` collapses tldraw's
+  // container to 0×0, its resize handling re-centres the camera on the way
+  // out AND back, and the link would faithfully copy both detours into
+  // React Flow. `visibility: hidden` keeps layout, so neither host ever
+  // sees a zero-sized viewport.
   const rfStyle: React.CSSProperties = {
     ...paneBase,
     left: 0,
     width: mode === "split" ? "50%" : "100%",
-    display: mode === "tldraw" ? "none" : "block",
+    visibility: mode === "tldraw" ? "hidden" : "visible",
   };
   const tlStyle: React.CSSProperties = {
     ...paneBase,
     left: mode === "split" ? "50%" : 0,
     width: mode === "split" ? "50%" : "100%",
-    display: mode === "reactflow" ? "none" : "block",
-    // WHY difference blending: pixels the two hosts agree on cancel to
-    // black, so any divergence is literally the only thing that lights up.
+    visibility: mode === "reactflow" ? "hidden" : "visible",
     mixBlendMode:
-      mode === "overlay" && blend === "difference" ? "difference" : "normal",
-    opacity: mode === "overlay" ? topOpacity / 100 : 1,
+      mode === "overlay" && blendMode === "difference" ? "difference" : "normal",
+    // The top layer is what the slider fades; the bottom one always paints.
+    opacity: mode === "overlay" && blendMode === "crossfade" ? blend / 100 : 1,
     borderLeft: mode === "split" ? "2px solid #334155" : "none",
     zIndex: mode === "overlay" ? 10 : "auto",
   };
+
+  /*
+   * The crossfade control, built ONCE and placed into the slot the mode
+   * needs — SystemSketch's rule, kept for its reason: a slider that gained
+   * a step size in one placement and not the other would be a bug nobody
+   * would see until they scrubbed in the wrong mode.
+   */
+  const blendControl = (
+    <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span>React Flow</span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={blend}
+        data-testid="compare-blend"
+        aria-label="Crossfade React Flow to tldraw"
+        onChange={(event) => setBlend(Number(event.target.value))}
+      />
+      <span>tldraw</span>
+      <output
+        data-testid="compare-blend-value"
+        style={{ minWidth: 38, fontVariantNumeric: "tabular-nums" }}
+      >
+        {blend}%
+      </output>
+    </label>
+  );
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#ffffff" }}>
@@ -289,13 +441,16 @@ export function App() {
           defaultNodes={nodes}
           nodeTypes={nodeTypes}
           defaultViewport={{ x: ORIGIN.x, y: ORIGIN.y, zoom: ZOOM }}
-          minZoom={ZOOM}
-          maxZoom={ZOOM}
-          panOnDrag={false}
-          panOnScroll={false}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
-          zoomOnDoubleClick={false}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          onInit={(instance) => {
+            window.reactFlow = instance;
+            setReactFlow(instance);
+          }}
+          onMove={onReactFlowMove}
+          // WHY the nodes stay frozen while the camera roams: content
+          // parity is the harness's point — a node dragged in one pane
+          // would be adapter drift faked by hand.
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
@@ -331,6 +486,7 @@ export function App() {
           <button
             key={candidate}
             data-mode={candidate}
+            data-testid={`compare-mode-${candidate}`}
             onClick={() => pickMode(candidate)}
             style={{
               padding: "4px 10px",
@@ -354,11 +510,11 @@ export function App() {
             <span style={{ width: 1, height: 20, background: "#334155" }} />
             <button
               data-blend-toggle
-              onClick={() => {
-                const next = blend === "difference" ? "alpha" : "difference";
-                setBlend(next);
-                setTopOpacity(next === "alpha" ? 50 : 100);
-              }}
+              onClick={() =>
+                setBlendMode(
+                  blendMode === "crossfade" ? "difference" : "crossfade",
+                )
+              }
               style={{
                 padding: "4px 10px",
                 borderRadius: 6,
@@ -368,24 +524,18 @@ export function App() {
                 color: "#38bdf8",
               }}
             >
-              {blend === "difference" ? "difference" : "50% alpha"}
+              {blendMode}
             </button>
-            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              top
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={topOpacity}
-                onChange={(event) => setTopOpacity(Number(event.target.value))}
-              />
-              {topOpacity}%
-            </label>
+            {/* Difference composites both panes at full strength, so the
+                slider is absent rather than inert. */}
+            {blendMode === "crossfade" && blendControl}
           </>
         )}
       </div>
 
-      {/* Divergence readout — a number that can go to zero beats a picture */}
+      {/* Divergence readout — a number that can go to zero beats a picture.
+          It updates on every camera sync, so it can be watched live while
+          panning and zooming. */}
       {mode === "overlay" && (
         <div
           data-compare-panel
@@ -420,6 +570,12 @@ export function App() {
                 }}
               >
                 max |Δ| = {divergence.maxAbs.toFixed(2)} px
+                {divergence.zoom != null && (
+                  <span style={{ color: "#94a3b8" }}>
+                    {" "}
+                    @ zoom {divergence.zoom.toFixed(2)}
+                  </span>
+                )}
               </div>
               {divergence.rows.map((row) => (
                 <div key={row.title} style={{ marginBottom: 4 }}>

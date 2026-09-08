@@ -134,17 +134,28 @@ snapping, z-order, drag) is host-owned and never travels.
 ## Compare harness
 
 `demos/compare` (port 5191) renders the one shared scene
-([`demos/scene`](demos/scene)) in both hosts at a pinned, identical camera and
-lets you flip between **Split** / **React Flow** / **tldraw** / **Overlay**.
-Overlay stacks the two canvases with `mix-blend-mode: difference` — matching
-pixels cancel to black, so any divergence is the only thing that lights up
-(toggle to a 50% alpha cross-fade, with an opacity slider for the top layer) —
-and a readout panel reports block bounding boxes and port-dot centres compared
-numerically from the DOM, per block and port, in screen px.
+([`demos/scene`](demos/scene)) in both hosts and lets you flip between
+**Split** / **React Flow** / **tldraw** / **Overlay**. Both panes are **live**:
+pan (drag) and zoom (scroll) in either one and the other follows — the cameras
+are linked bidirectionally, SystemSketch's `useLinkedCameras` pattern bridged
+across the two camera models (`demos/compare/src/cameraBridge.ts` converts
+tldraw `{x,y,z}` ↔ React Flow `{x,y,zoom}`, recomputing tldraw's
+zoom-dependent HTML-layer compensation on every change; unit-tested
+round-trip).
+
+Overlay is an **opacity crossfade** by default — SystemSketch's Compare
+screen shape, a `React Flow ⟷ tldraw` slider fading the top pane — with the
+`mix-blend-mode: difference` proof one toggle away: matching pixels cancel to
+black, so any divergence is the only thing that lights up. A readout panel
+reports block bounding boxes and port-dot centres compared numerically from
+the DOM, per block and port, in screen px, updating live as you pan and zoom.
+Measured divergence: **0.00 px** at zooms 0.25 / 0.45 / 1.0 / 2.0 and after a
+pan (blocks tldraw culls offscreen are dropped from the reading and counted).
 
 ```bash
 pnpm demo:compare      # http://127.0.0.1:5191  (#split #reactflow #tldraw #overlay)
-node demos/drive-compare.mjs   # headless: walks all four modes, screenshots, asserts <0.5px
+node demos/drive-compare.mjs   # headless: modes, blend, real pan/zoom gestures in each
+                               # pane (asserting the other follows), divergence per zoom
 ```
 
 ## Registry
@@ -158,7 +169,8 @@ node demos/drive-compare.mjs   # headless: walks all four modes, screenshots, as
 
 ```bash
 pnpm install
-pnpm test              # layout unit tests (icon ratio, states, layouts)
+pnpm test              # unit tests: core layout (icon ratio, states, layouts)
+                       # + compare camera bridge (tldraw ↔ React Flow round-trip)
 pnpm build             # typecheck everything + build both demos
 pnpm demo             # all three demos: React Flow 5183, tldraw 5189, compare 5191
 pnpm demo:reactflow    # http://127.0.0.1:5183

@@ -6,7 +6,7 @@
   "scripts": {
     "typecheck": "pnpm -r run typecheck",
     "build": "pnpm -r run typecheck && pnpm -r run build",
-    "test": "pnpm --filter @bbox-ui/core run test",
+    "test": "pnpm -r run test",
     "registry:build": "shadcn build",
     "demo:reactflow": "pnpm --filter demo-reactflow run dev",
     "demo:tldraw": "pnpm --filter demo-tldraw run dev",
