@@ -1,0 +1,30 @@
+{
+  "name": "@bbox-ui/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Presentational components for black-box design: Port and Block (Simple View). Zero canvas assumptions — props in, DOM out.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./layout": "./src/layout.ts",
+    "./theme.css": "./src/theme.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

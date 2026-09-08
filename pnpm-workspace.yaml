@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+  - demos/reactflow
+  - demos/tldraw
+allowBuilds:
+  esbuild: true
+  msw: false

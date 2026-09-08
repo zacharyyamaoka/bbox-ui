@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@import "@bbox-ui/core/theme.css";
+
+@source "../../../packages";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
