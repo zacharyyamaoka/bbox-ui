@@ -13,6 +13,7 @@ import {
   type SceneExtraction,
 } from "@bbox-ui/demo-scene/fromEditor";
 
+import { PlaygroundContextMenu } from "./toolbar/DetachContextMenu";
 import { PlaygroundToolbar } from "./toolbar/PlaygroundToolbar";
 import { playgroundUiOverrides } from "./toolbar/overrides";
 
@@ -77,6 +78,7 @@ export function App() {
   const components = useMemo(
     () => ({
       Toolbar: PlaygroundToolbar,
+      ContextMenu: PlaygroundContextMenu,
       SharePanel: () => (
         <div style={{ pointerEvents: "all", padding: 8 }}>
           <button

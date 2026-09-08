@@ -5,12 +5,15 @@ One presentational core, two host adapters that share nothing with each other.
 ```
 packages/bbox-ui              the core: props in, DOM out
 ├── src/layout.ts             pure geometry — no React, no canvas engine
+├── src/blockLayout.ts        the Simple View's flex CSS restated as pure
+│                             arithmetic (box per part) — detach's authority
 ├── src/port.tsx              Port / PortDot / PortLabel
 └── src/block.tsx             Block / BlockHeader / BlockGlyph / BlockTitle /
                               BlockChip / BlockDescription / BlockType
 
 packages/adapter-reactflow    React Flow custom node wrapping the core
 packages/adapter-tldraw       tldraw ShapeUtil wrapping the core
+└── src/detach/               detach-to-primitives + rebuild (tldraw-only)
 ```
 
 ## The line
@@ -56,6 +59,37 @@ ports identically in both hosts. Interactive resizing is host-owned
 into `data.w/h` + `style` so the node round-trips as if the scene had carried
 the size all along. The compare panes never enable it — they are read-only by
 design, and a resize mid-measurement would de-calibrate the readout.
+
+## Detach to primitives
+
+A bbox-ui shape can leave the kit: **Detach to primitives** (tldraw only —
+stock shapes are tldraw's vocabulary) replaces it with the closest stock
+approximation, grouped, and **Rebuild** brings it back. Three rules hold it
+together (`packages/adapter-tldraw/src/detach/`):
+
+- **Hierarchy through a contract, not recursion.** Each kind declares how it
+  reduces itself and which phase it runs in (`detachableKind.ts`); a phased
+  sweep runs `leaf` kinds before `container` kinds in one global order
+  (`detachPlan.ts` / `detachSweep.ts`). A composite never enumerates child
+  kinds: Block's picture invokes `primitivesForPort` per port — the same
+  reduction the standalone Port kind uses — and each port becomes a nested
+  group inside the Block group, so unpeeling top-down lands on sensible
+  units. WHY not naive depth-first recursion: it breaks two invariants once
+  edges and containers exist (an edge must lower while both endpoints still
+  stand; a container reduces only after its contents), and breaking either
+  corrupts rebuild fidelity — SystemSketch tried and rejected it.
+- **Geometry from the layout authority.** The detached picture derives from
+  `layout.ts` + `blockLayout.ts` — the same numbers the live renderer
+  paints from — never from re-measured DOM, never hand-typed offsets.
+- **The group remembers.** The replacement group's `meta.bboxUi`
+  (`detachModel.ts`, pure) carries a versioned record with the complete
+  original props; a reader that meets a newer version declines rather than
+  guessing. `meta` survives save/load/copy/paste and stock tldraw ignores
+  it, so a `.tldr` opens as plain shapes anywhere and rebuilds here. On
+  rebuild, props come from the record verbatim; position comes from where
+  the marked anchor primitive (card / ring) is now, so a moved group
+  rebuilds where the user left it. Ungrouping by hand discards the record —
+  that is the honest meaning of taking the thing apart.
 
 ## Why `received` is runtime-only
 

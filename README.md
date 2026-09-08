@@ -222,6 +222,26 @@ node demos/drive-playground-compare.mjs  # headless: empty-board empty state, au
                                          # resized box), authoring board undisturbed
 ```
 
+**Detach to primitives** (right-click a selection): every bbox-ui shape
+converts to its closest stock-tldraw approximation — geo rectangle/ellipse
+for card and dots, text for labels, oval for the chip — grouped, with one
+**nested** group per port (dot + label move as one unit), so the result
+unpeels top-down one grouping at a time. The group's `meta.bboxUi` carries
+the complete original props; **Rebuild Block/Port** (same menu) reads it
+back into the real shape, props identical — the detached `.tldr` opens as
+plain shapes on tldraw.com and comes back to life here. The hierarchy is
+real, not repeated: Block's reduction invokes Port's through one shared
+contract (`packages/adapter-tldraw/src/detach/`), and the detached picture's
+geometry comes from the same core layout modules the live renderer uses.
+See [ARCHITECTURE.md](ARCHITECTURE.md#detach-to-primitives).
+
+```bash
+node demos/drive-playground-detach.mjs  # headless: seed Block+Port, detach via the
+                                        # real context menu, assert stock-only types +
+                                        # nested port groups + meta records, rebuild,
+                                        # assert props deep-equal the originals
+```
+
 ## Registry
 
 `registry.json` follows the
@@ -249,6 +269,7 @@ node demos/drive.mjs tldraw    http://127.0.0.1:5189
 node demos/drive-compare.mjs                           # all four compare modes
 node demos/drive-playground.mjs                        # toolbar + tools journey
 node demos/drive-playground-compare.mjs                # live-board compare journey
+node demos/drive-playground-detach.mjs                 # detach → stock shapes → rebuild
 ```
 
 > **tldraw licence note**: tldraw's SDK licence forbids production use
