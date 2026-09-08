@@ -153,6 +153,27 @@ async function click(x, y) {
   await new Promise((r) => setTimeout(r, 300));
 }
 
+// A real drag — press, a run of intermediate moves, release — the same
+// event stream a person's mouse produces on a tldraw selection handle.
+async function drag(fromX, fromY, toX, toY, steps = 12) {
+  await send("Input.dispatchMouseEvent", {
+    type: "mousePressed", x: fromX, y: fromY, button: "left", buttons: 1, clickCount: 1,
+  });
+  for (let i = 1; i <= steps; i++) {
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: fromX + ((toX - fromX) * i) / steps,
+      y: fromY + ((toY - fromY) * i) / steps,
+      button: "left", buttons: 1,
+    });
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  await send("Input.dispatchMouseEvent", {
+    type: "mouseReleased", x: toX, y: toY, button: "left", buttons: 0, clickCount: 1,
+  });
+  await new Promise((r) => setTimeout(r, 300));
+}
+
 async function pressKey(key, code) {
   await send("Input.dispatchKeyEvent", {
     type: "keyDown", key, code, text: key,
@@ -248,6 +269,39 @@ assert(
   `board holds bbox-block + bbox-port + geo (got ${JSON.stringify(authored.types)})`,
 );
 
+/* ---- 2b. Resize the Block with a real selection-handle drag ------------ */
+// WHY this step exists: tldraw honoured a resize while the React Flow pane
+// kept rendering the default 384×258 box, so compare mode reported a real
+// Δsize. The scene carries w/h; both hosts must paint exactly that box.
+
+const beforeResize = await evaluate(`(() => {
+  const editor = window.playgroundEditor;
+  const block = editor.getCurrentPageShapes().find((s) => s.type === "bbox-block");
+  editor.setCurrentTool("select");
+  editor.setSelectedShapes([block.id]);
+  return { w: block.props.w, h: block.props.h };
+})()`);
+const cornerHandle = await evaluate(`(() => {
+  const editor = window.playgroundEditor;
+  const bounds = editor.getSelectionPageBounds();
+  const corner = editor.pageToScreen({ x: bounds.maxX, y: bounds.maxY });
+  return { x: corner.x, y: corner.y };
+})()`);
+await drag(cornerHandle.x, cornerHandle.y, cornerHandle.x + 140, cornerHandle.y + 100);
+const afterResize = await evaluate(`(() => {
+  const block = window.playgroundEditor
+    .getCurrentPageShapes()
+    .find((s) => s.type === "bbox-block");
+  return { w: block.props.w, h: block.props.h };
+})()`);
+assert(
+  afterResize.w > beforeResize.w + 50 && afterResize.h > beforeResize.h + 30,
+  `handle drag resized the block (${beforeResize.w}×${beforeResize.h} → ` +
+    `${afterResize.w.toFixed(1)}×${afterResize.h.toFixed(1)})`,
+);
+// Deselect so compare mode starts from a quiet board.
+await evaluate(`(window.playgroundEditor.selectNone(), null)`);
+
 /* ---- 3. Enter compare: denominator, panes, divergence ------------------ */
 
 await clickSelector(COMPARE_BUTTON);
@@ -317,7 +371,20 @@ if (divergence != null) {
     divergence.maxAbs < 0.5,
     `bbox shapes agree across hosts (max |Δ| = ${divergence.maxAbs.toFixed(4)}px)`,
   );
-  console.log(`  measured: max |Δ| = ${divergence.maxAbs}px @ zoom ${divergence.zoom}`);
+  // The resized block specifically: React Flow must paint the SAME box
+  // tldraw does — Δsize 0.00, not merely "small". If this residual is not
+  // zero the size contract is broken; report it, never widen the tolerance.
+  const sizeDelta = divergence.rows[0]
+    ? Math.max(Math.abs(divergence.rows[0].dw), Math.abs(divergence.rows[0].dh))
+    : Infinity;
+  assert(
+    sizeDelta < 0.005,
+    `resized block's Δsize is 0.00 in both hosts (|Δw|,|Δh| max = ${sizeDelta.toFixed(4)}px)`,
+  );
+  console.log(
+    `  measured: max |Δ| = ${divergence.maxAbs}px, block Δw=${divergence.rows[0]?.dw}px ` +
+      `Δh=${divergence.rows[0]?.dh}px @ zoom ${divergence.zoom}`,
+  );
 }
 const overlayShot = await screenshot("playground-compare-overlay.png");
 

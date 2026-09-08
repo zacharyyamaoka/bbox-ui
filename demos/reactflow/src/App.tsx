@@ -11,7 +11,16 @@ const nodeTypes = { bboxBlock: BBoxBlockNode };
 // The one shared scene — see demos/scene. Both hosts (and the compare
 // harness) render exactly this content, so a visual difference is always
 // adapter drift, never content drift.
-const nodes = sceneToReactFlowNodes();
+//
+// This is the INTERACTIVE React Flow surface, so blocks opt into the
+// adapter's NodeResizer — parity with stock tldraw resizing a bbox-block.
+// The compare panes never set `resizable`: they are read-only by design
+// (linked cameras + divergence measurement assume no interaction).
+const nodes = sceneToReactFlowNodes().map((node) =>
+  node.type === "bboxBlock"
+    ? { ...node, data: { ...node.data, resizable: true } }
+    : node,
+);
 const edges = sceneToReactFlowEdges();
 
 export function App() {

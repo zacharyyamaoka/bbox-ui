@@ -45,9 +45,9 @@ export interface SceneBlock {
    * Explicit container size, for scenes derived from an authored board where
    * a block may have been resized. Absent (the fixed demo scene) both hosts
    * fall back to their defaults: tldraw to SIMPLE_BLOCK, React Flow to
-   * hug-contents — which agree for an unresized block. A host that cannot
-   * honour an explicit size (React Flow hugs) will show the difference in
-   * the divergence readout rather than hiding it.
+   * hug-contents — which agree for an unresized block. Present, both hosts
+   * honour it exactly: tldraw as props.w/h, React Flow as CSS on the node.
+   * See explicitBlockSize below for the contract.
    */
   w?: number;
   h?: number;
@@ -59,6 +59,22 @@ export interface SceneBlock {
   tag?: string;
   orientation?: "horizontal" | "vertical";
   ports: ScenePort[];
+}
+
+/**
+ * The one size contract, stated once so no adapter re-derives it (the
+ * layout.ts rule: any mapping that appears in both adapters is a bug):
+ * **explicit size when the scene carries one; hug contents when it does
+ * not.** tldraw takes the pair as `props.w/h`; React Flow takes it as CSS
+ * (`style: { width, height }` on the node — its `width`/`height` fields are
+ * where React Flow *stores* what it measured, not an input) with the core
+ * `Block` filling that box. Both dimensions or neither: a half-specified
+ * size has no meaning in either host.
+ */
+export function explicitBlockSize(
+  block: SceneBlock,
+): { w: number; h: number } | null {
+  return block.w != null && block.h != null ? { w: block.w, h: block.h } : null;
 }
 
 export interface SceneEdge {

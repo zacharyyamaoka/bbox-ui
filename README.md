@@ -96,8 +96,9 @@ export function BBoxBlockNode(
     </Block>
   );
 }
-// size: React Flow measures the DOM
-// into node.measured.width/height
+// size: React Flow measures the DOM into
+// node.measured.width/height (hug), or an
+// explicit size arrives as CSS on the node
 ```
 
 </td><td>
@@ -137,7 +138,12 @@ class BBoxBlockShapeUtil
 
 The full line is drawn in [ARCHITECTURE.md](ARCHITECTURE.md): layout geometry
 is portable and lives in the core; interaction geometry (hit-testing,
-snapping, z-order, drag) is host-owned and never travels.
+snapping, z-order, drag) is host-owned and never travels. One consequence is
+the size contract — *explicit size when the scene carries one, hug contents
+when it does not* — so a block resized in either host paints the exact same
+box in the other. The React Flow demo resizes through the adapter's opt-in
+`<NodeResizer>` (select a block, drag a handle), tldraw through its stock
+selection handles.
 
 ## Compare harness
 
@@ -209,9 +215,11 @@ pnpm demo:playground   # http://127.0.0.1:5193
 node demos/drive-playground.mjs   # headless: family select-and-open, menu pick,
                                   # B/P shortcuts, shape creation, reload memory
 node demos/drive-playground-compare.mjs  # headless: empty-board empty state, author
-                                         # Block+Port+rectangle, enter compare, assert
-                                         # "2 of 3" denominator + 0.00px divergence,
-                                         # authoring board undisturbed, exit
+                                         # Block+Port+rectangle, RESIZE the block by a
+                                         # real handle drag, enter compare, assert
+                                         # "2 of 3" denominator + 0.00px divergence
+                                         # (Δsize included — both hosts paint the
+                                         # resized box), authoring board undisturbed
 ```
 
 ## Registry
@@ -228,6 +236,7 @@ pnpm install
 pnpm test              # unit tests: core layout (icon ratio, states, layouts)
                        # + compare camera bridge (tldraw ↔ React Flow round-trip)
                        # + sceneFromEditor (bbox shapes kept, stock counted, empty board)
+                       # + the size contract (explicit w/h → CSS on the RF node; hug otherwise)
 pnpm build             # typecheck everything + build every demo/app
 pnpm demo             # all demos + the playground: React Flow 5183, tldraw 5189,
                       # compare 5191, playground 5193

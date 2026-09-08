@@ -5,7 +5,7 @@
 import { createShapeId, type TLShapeId, type TLShapePartial } from "tldraw";
 import type { BBoxBlockShape, BBoxPortShape } from "@bbox-ui/adapter-tldraw";
 
-import { SCENE, type Scene } from "./scene";
+import { SCENE, explicitBlockSize, type Scene } from "./scene";
 
 export interface TldrawScene {
   shapes: TLShapePartial<BBoxBlockShape | BBoxPortShape>[];
@@ -27,10 +27,9 @@ export function sceneToTldrawShapes(scene: Scene = SCENE): TldrawScene {
       y: block.y,
       props: {
         // Explicit size only when the scene carries one (a derived scene may
-        // have resized blocks); otherwise the shape's defaults apply.
-        ...(block.w != null && block.h != null
-          ? { w: block.w, h: block.h }
-          : {}),
+        // have resized blocks); otherwise the shape's defaults apply. The
+        // contract is stated once, on explicitBlockSize.
+        ...(explicitBlockSize(block) ?? {}),
         title: block.title,
         titleSize: block.titleSize ?? "xl",
         blockType: block.blockType ?? "",
