@@ -166,6 +166,29 @@ node demos/drive-compare.mjs   # headless: modes, blend, real pan/zoom gestures 
                                # pane (asserting the other follows), divergence per zoom
 ```
 
+## Playground
+
+`apps/playground` (port 5193) is the **editable** tldraw canvas — place
+bbox-ui primitives from the toolbar, adjust them, iterate. (`demos/tldraw`
+stays a deterministic read-only pane for the compare harness; this is the one
+you draw on. What you draw persists across reloads via `persistenceKey`.)
+
+Everything goes through stock tldraw seams, cloning SystemSketch's toolbar
+conventions: the stock tools are compacted into **family slots** (shapes,
+drawing), and a new **Black box** family holds the bbox-ui primitives —
+**Block** (`B`) and **Port** (`P`) today; adding a primitive later is one
+menu entry plus one tool registration. A family button both selects the
+family's current tool and opens its menu; the last-used tool per family is
+remembered in `localStorage`. The tools themselves live in
+`@bbox-ui/adapter-tldraw` (`BBoxBlockTool`, `BBoxPortTool`, and a minimal
+standalone `bbox-port` shape painted by the same core `PortDot`).
+
+```bash
+pnpm demo:playground   # http://127.0.0.1:5193
+node demos/drive-playground.mjs   # headless: family select-and-open, menu pick,
+                                  # B/P shortcuts, shape creation, reload memory
+```
+
 ## Registry
 
 `registry.json` follows the
@@ -179,14 +202,17 @@ node demos/drive-compare.mjs   # headless: modes, blend, real pan/zoom gestures 
 pnpm install
 pnpm test              # unit tests: core layout (icon ratio, states, layouts)
                        # + compare camera bridge (tldraw ↔ React Flow round-trip)
-pnpm build             # typecheck everything + build both demos
-pnpm demo             # all three demos: React Flow 5183, tldraw 5189, compare 5191
+pnpm build             # typecheck everything + build every demo/app
+pnpm demo             # all demos + the playground: React Flow 5183, tldraw 5189,
+                      # compare 5191, playground 5193
 pnpm demo:reactflow    # http://127.0.0.1:5183
 pnpm demo:tldraw       # http://127.0.0.1:5189
 pnpm demo:compare      # http://127.0.0.1:5191
+pnpm demo:playground   # http://127.0.0.1:5193  (the editable one)
 node demos/drive.mjs reactflow http://127.0.0.1:5183   # headless assert + screenshot
 node demos/drive.mjs tldraw    http://127.0.0.1:5189
 node demos/drive-compare.mjs                           # all four compare modes
+node demos/drive-playground.mjs                        # toolbar + tools journey
 ```
 
 > **tldraw licence note**: tldraw's SDK licence forbids production use

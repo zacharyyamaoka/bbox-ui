@@ -1,5 +1,6 @@
 packages:
   - packages/*
+  - apps/playground
   - demos/reactflow
   - demos/tldraw
   - demos/scene
