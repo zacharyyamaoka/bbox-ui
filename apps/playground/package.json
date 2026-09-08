@@ -16,6 +16,7 @@
     "@bbox-ui/core": "workspace:*",
     "@bbox-ui/demo-scene": "workspace:*",
     "@xyflow/react": "^12.8.0",
+    "radix-ui": "1.6.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tldraw": "5.3.2"

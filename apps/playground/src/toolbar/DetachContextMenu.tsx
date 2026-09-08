@@ -3,15 +3,18 @@
  * holding bbox-ui shapes, "Rebuild Block/Port" on one holding detached
  * groups that still remember what they were.
  *
- * WHY the selection reads live inside a child of DefaultContextMenu rather
- * than in the wrapper: the ContextMenu component override WRAPS the canvas
- * (tldraw renders the canvas inside the menu trigger), so a subscription in
- * the wrapper body would re-render the whole canvas subtree on every
- * selection change. Menu content only mounts while the menu is open, which
- * is exactly the window the read needs to be fresh in.
+ * WHY the selection reads live inside a child of the menu rather than in
+ * the wrapper: the ContextMenu component override WRAPS the canvas (tldraw
+ * renders the canvas inside the menu trigger), so a subscription in the
+ * wrapper body would re-render the whole canvas subtree on every selection
+ * change. ReliableContextMenu mounts its portal content only while the menu
+ * is open, which is exactly the window the read needs to be fresh in.
+ *
+ * WHY ReliableContextMenu and not DefaultContextMenu: the stock menu's
+ * open state has two owners and a canvas pointer-down desyncs them, after
+ * which right-click stops working — see ReliableContextMenu.tsx.
  */
 import {
-  DefaultContextMenu,
   DefaultContextMenuContent,
   TldrawUiMenuGroup,
   TldrawUiMenuItem,
@@ -26,6 +29,8 @@ import {
   selectedDetachableIds,
   selectedRebuildableIds,
 } from "@bbox-ui/adapter-tldraw";
+
+import { ReliableContextMenu } from "./ReliableContextMenu";
 
 function DetachMenuItems() {
   const editor = useEditor();
@@ -76,9 +81,9 @@ function DetachMenuItems() {
 
 export function PlaygroundContextMenu(props: TLUiContextMenuProps) {
   return (
-    <DefaultContextMenu {...props}>
+    <ReliableContextMenu {...props}>
       <DetachMenuItems />
       <DefaultContextMenuContent />
-    </DefaultContextMenu>
+    </ReliableContextMenu>
   );
 }
