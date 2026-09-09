@@ -4,6 +4,7 @@ export * from "./port";
 export * from "./block";
 export * from "./caretGeometry";
 export * from "./codeField";
+export * from "./codeFieldGuards";
 export * from "./codeFieldRows";
 export * from "./codeGrammar";
 export * from "./fieldGesture";

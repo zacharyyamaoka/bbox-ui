@@ -13,15 +13,33 @@ export interface CodeFieldRowsProps {
   lines: CodeFieldLine[];
   resolveReference?(name: string): CodeFieldReference | null;
   /**
-   * A row (or the blank space below the last one) was clicked. Reports the
-   * source line and an approximate column within it — `caretOffsetFromPoint`
-   * against the row's own rendered spans, same caveat as that function's:
-   * exact when a row's segments concatenate back to its raw source
-   * spacing, approximate otherwise. Compose with `lineStartOffset` (in
-   * `caretGeometry.ts`) against the field's `value` for a flat offset to
-   * hand `CodeField`'s `cursorAt`.
+   * A row (or the blank space below the last one) was clicked. `line` is
+   * the row's own line INDEX and `column` an approximate offset within it
+   * (`caretOffsetFromPoint` against the row's rendered spans — exact when
+   * a row's segments concatenate back to its raw source spacing,
+   * approximate otherwise). `owner` is `undefined` for a top-level row —
+   * `line`/`column` are then straight into this field's own `value`,
+   * compose with `lineStartOffset` for a flat offset. For a row that came
+   * from a reference's `expandLines()`, `owner` carries THAT reference's
+   * own owner token (`CodeFieldReference.owner`, defaulting to the
+   * resolved segment's text) — `line`/`column` are into THAT source, not
+   * this field's, and the host must resolve `owner` to open its source
+   * (the donor's rule: a foreign row jumps to its real owner, never opens
+   * this field's own document at an unrelated line).
    */
-  onOpenSource?(line: number, column: number): void;
+  onOpenSource?(line: number, column: number, owner?: unknown): void;
+  /**
+   * Which rows are expanded, keyed by path (`"3"`, `"3/1"`, …). Controlled
+   * — pass this alongside `onToggleExpanded` to keep expansion state alive
+   * across whatever remounts `CodeFieldRows` (`CodeField` does this across
+   * its own `mode` toggle: `CodeFieldRows` itself unmounts every trip
+   * through Source, so state living only here reset on every round trip —
+   * the donor's `TypeBabbleV1` lifts this same state for the same reason).
+   * Omit both to manage it internally instead (an uncontrolled default,
+   * fine for a caller that never round-trips through another mode).
+   */
+  expandedPaths?: ReadonlySet<string>;
+  onToggleExpanded?(path: string): void;
   className?: string;
   testId?: string;
 }
@@ -34,15 +52,26 @@ export interface CodeFieldRowsProps {
  * caret. `CodeField` mounts this in place of CodeMirror while `mode ===
  * "rendered"`; it never runs alongside the live document.
  */
-export function CodeFieldRows({ lines, resolveReference, onOpenSource, className, testId }: CodeFieldRowsProps) {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const toggle = (path: string) =>
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
+export function CodeFieldRows({
+  lines,
+  resolveReference,
+  onOpenSource,
+  expandedPaths,
+  onToggleExpanded,
+  className,
+  testId,
+}: CodeFieldRowsProps) {
+  const [uncontrolledExpanded, setUncontrolledExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const expanded = expandedPaths ?? uncontrolledExpanded;
+  const toggle =
+    onToggleExpanded ??
+    ((path: string) =>
+      setUncontrolledExpanded((current) => {
+        const next = new Set(current);
+        if (next.has(path)) next.delete(path);
+        else next.add(path);
+        return next;
+      }));
 
   const last = lines[lines.length - 1];
   return (
@@ -64,6 +93,7 @@ export function CodeFieldRows({ lines, resolveReference, onOpenSource, className
           key={line.line}
           line={line}
           path={String(line.line)}
+          owner={undefined}
           resolveReference={resolveReference}
           onOpenSource={onOpenSource}
           expandedPaths={expanded}
@@ -77,6 +107,7 @@ export function CodeFieldRows({ lines, resolveReference, onOpenSource, className
 function CodeFieldRow({
   line,
   path,
+  owner,
   resolveReference,
   onOpenSource,
   expandedPaths,
@@ -84,8 +115,10 @@ function CodeFieldRow({
 }: {
   line: CodeFieldLine;
   path: string;
+  /** The owner of THIS row's own source — `undefined` at the top level, the enclosing reference's owner once nested inside its `expandLines()`. */
+  owner: unknown;
   resolveReference?(name: string): CodeFieldReference | null;
-  onOpenSource?(line: number, column: number): void;
+  onOpenSource?(line: number, column: number, owner?: unknown): void;
   expandedPaths: ReadonlySet<string>;
   togglePath(path: string): void;
 }) {
@@ -99,10 +132,14 @@ function CodeFieldRow({
   const activateRow = (event: ReactMouseEvent<HTMLElement>) => {
     if (!onOpenSource) return;
     const column = caretOffsetFromPoint(event.currentTarget, event.clientX, event.clientY);
-    onOpenSource(line.line, Math.min(column, rowText(line).length));
+    onOpenSource(line.line, Math.min(column, rowText(line).length), owner);
   };
 
   const children = isOpen && resolved?.expandLines ? resolved.expandLines() : null;
+  // The owner every row inside THIS reference's expansion carries: the
+  // reference's own declared token, or (the common case — `expandLines`
+  // alone is enough to mark rows as foreign) the resolved segment's text.
+  const childOwner = resolved ? resolved.owner ?? line.segments[referenceIndex]!.text : owner;
 
   return (
     <div className="bbox-code-field-row" data-slot="code-field-row" data-depth={path.split("/").length - 1}>
@@ -158,6 +195,7 @@ function CodeFieldRow({
               key={child.line}
               line={child}
               path={`${path}/${child.line}`}
+              owner={childOwner}
               resolveReference={resolveReference}
               onOpenSource={onOpenSource}
               expandedPaths={expandedPaths}

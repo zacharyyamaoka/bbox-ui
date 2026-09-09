@@ -230,6 +230,7 @@ export function signaturePatch(
   const patch: Partial<SignatureValue> = {};
   if (parsed.name !== current.name) patch.name = parsed.name;
   if (parsed.type !== current.type) patch.type = parsed.type;
-  if (parsed.defaultValue !== current.defaultValue) patch.defaultValue = parsed.defaultValue;
+  const nextDefault = parsed.defaultValue === "" ? undefined : parsed.defaultValue;
+  if (nextDefault !== current.defaultValue) patch.defaultValue = nextDefault;
   return Object.keys(patch).length === 0 ? null : patch;
 }

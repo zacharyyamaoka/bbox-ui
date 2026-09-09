@@ -98,6 +98,23 @@
         "@lezer/highlight"
       ],
       "registryDependencies": ["utils"],
+      "cssVars": {
+        "theme": {
+          "--color-bbox-danger": "var(--bbox-danger)",
+          "--color-bbox-warning": "var(--bbox-warning)",
+          "--color-bbox-success": "var(--bbox-success)"
+        },
+        "light": {
+          "--bbox-danger": "oklch(0.6 0.22 25)",
+          "--bbox-warning": "oklch(0.75 0.16 75)",
+          "--bbox-success": "oklch(0.65 0.19 145)"
+        },
+        "dark": {
+          "--bbox-danger": "oklch(0.68 0.2 25)",
+          "--bbox-warning": "oklch(0.8 0.15 80)",
+          "--bbox-success": "oklch(0.7 0.17 145)"
+        }
+      },
       "files": [
         {
           "path": "packages/bbox-ui/src/codeField.tsx",
@@ -112,17 +129,22 @@
         {
           "path": "packages/bbox-ui/src/codeGrammar.ts",
           "type": "registry:lib",
-          "target": "lib/bbox/codeGrammar.ts"
+          "target": "components/bbox/codeGrammar.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeFieldGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeFieldGuards.ts"
         },
         {
           "path": "packages/bbox-ui/src/fieldGesture.ts",
           "type": "registry:lib",
-          "target": "lib/bbox/fieldGesture.ts"
+          "target": "components/bbox/fieldGesture.ts"
         },
         {
           "path": "packages/bbox-ui/src/caretGeometry.ts",
           "type": "registry:lib",
-          "target": "lib/bbox/caretGeometry.ts"
+          "target": "components/bbox/caretGeometry.ts"
         },
         {
           "path": "packages/bbox-ui/src/codeField.css",
@@ -147,12 +169,12 @@
         {
           "path": "packages/bbox-ui/src/signature.ts",
           "type": "registry:lib",
-          "target": "lib/bbox/signature.ts"
+          "target": "components/bbox/signature.ts"
         },
         {
           "path": "packages/bbox-ui/src/signatureGrammar.ts",
           "type": "registry:lib",
-          "target": "lib/bbox/signatureGrammar.ts"
+          "target": "components/bbox/signatureGrammar.ts"
         }
       ]
     }

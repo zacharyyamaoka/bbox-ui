@@ -1,4 +1,4 @@
-import { completionStatus } from "@codemirror/autocomplete";
+import { acceptCompletion, completionStatus } from "@codemirror/autocomplete";
 import {
   copyLineDown,
   copyLineUp,
@@ -27,10 +27,12 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
 
+import { singleLineGuard } from "./codeFieldGuards";
 import { grammarExtensions, type CodeFieldGrammar } from "./codeGrammar";
 import { CodeFieldRows } from "./codeFieldRows";
 import { FieldGesture } from "./fieldGesture";
@@ -100,11 +102,23 @@ export interface CodeFieldProps {
   onModeChange?(mode: "rendered" | "source"): void;
   /**
    * A rendered row (or the blank space below the last one) was clicked.
-   * Only meaningful with `mode` set — the host typically responds by
-   * setting `mode="source"` and computing `cursorAt` from `line`/`column`
-   * (see `caretGeometry.ts`'s `lineStartOffset`).
+   * Only meaningful with `mode` set. `owner` is `undefined` for a row from
+   * this field's own `value` — the host typically responds by setting
+   * `mode="source"` and computing `cursorAt` from `line`/`column` (see
+   * `caretGeometry.ts`'s `lineStartOffset`) against `value` itself. `owner`
+   * is set for a row that came from a reference's `expandLines()` (see
+   * `CodeFieldReference.owner`) — `line`/`column` are into THAT source, not
+   * this field's `value`, and the host must resolve `owner` to open it.
    */
-  onOpenSource?(line: number, column: number): void;
+  onOpenSource?(line: number, column: number, owner?: unknown): void;
+  /**
+   * Where the completion popup (and any other CodeMirror tooltip) is
+   * parented. Takes priority over an ancestor `[data-tooltip-host]`; both
+   * are host opt-ins, so the core stays free of any specific canvas
+   * engine's name. A function is called once per mount. Defaults to the
+   * nearest `[data-tooltip-host]` ancestor, else `document.body`.
+   */
+  tooltipParent?: HTMLElement | (() => HTMLElement | null);
 }
 
 /**
@@ -125,15 +139,33 @@ export interface CodeFieldProps {
  * two never coexist — leaving rendered mode unmounts the row tree exactly
  * as `CodeFieldSourceView` unmounts when rendered mode takes over — so a
  * grammar with no `lines()` still works fine as an always-source field.
+ *
+ * WHY expansion state lives HERE and not inside `CodeFieldRows`: `CodeField`
+ * itself is the one component instance that survives the `mode` toggle (only
+ * its RETURNED subtree switches between the row tree and the live document);
+ * `CodeFieldRows` fully unmounts every trip through Source. State that lived
+ * only there reset to all-collapsed on every round trip even when nothing
+ * was edited — the donor (`TypeBabbleV1.tsx`) lifts the same state for the
+ * same reason, above its own UI/Source split.
  */
 export function CodeField(props: CodeFieldProps) {
   const { mode, grammar, value, onOpenSource, ariaLabel, className, testId } = props;
+  const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleExpanded = (path: string) =>
+    setExpandedPaths((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
   if (mode === "rendered") {
     return (
       <CodeFieldRows
         lines={grammar?.lines?.(value) ?? []}
         resolveReference={grammar?.resolveReference}
         onOpenSource={onOpenSource}
+        expandedPaths={expandedPaths}
+        onToggleExpanded={toggleExpanded}
         className={className}
         testId={testId}
       />
@@ -189,6 +221,7 @@ function CodeFieldSourceView({
   onEnter,
   onEscape,
   onViewReady,
+  tooltipParent,
 }: CodeFieldProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -259,24 +292,38 @@ function CodeFieldSourceView({
           // keydown would otherwise reach a host's own document listener
           // with nothing focused — a canvas host that re-enters editing on
           // Enter, or clears a selection on Escape, would immediately undo
-          // the exit. A completion popup gets first refusal — its own
-          // keymap runs at a higher precedence and reports when it consumed
-          // the key.
+          // the exit. A completion popup gets first refusal on a BARE
+          // Enter/Escape — its own keymap (Prec.highest inside
+          // `autocompletion()`) accepts or closes it. The MODIFIER form
+          // (Ctrl/Cmd+Enter) is our own dedicated exit and must never fall
+          // through to it: `defaultKeymap`'s Mod-Enter is `insertBlankLine`,
+          // which used to run whenever a popup happened to be open, leaving
+          // a newline in even a single-line field. Accept-or-close the
+          // popup ourselves first, then exit.
           Prec.high(
             EditorView.domEventHandlers({
               keydown: (event, target) => {
                 if (event.isComposing) return false;
                 if (event.key !== "Enter" && event.key !== "Escape") return false;
-                if (completionStatus(target.state) === "active") return false;
-                // In a lane a bare Enter is a new line; only the modifier form exits.
-                if (
-                  event.key === "Enter" &&
-                  latest.current.multiline &&
-                  !event.ctrlKey &&
-                  !event.metaKey
-                ) {
+                const completionActive = completionStatus(target.state) === "active";
+                const modifierEnter = event.key === "Enter" && (event.ctrlKey || event.metaKey);
+                if (completionActive && !modifierEnter) {
+                  // A bare Enter accepts the popup, Escape closes it —
+                  // CodeMirror's own completion keymap runs independently of
+                  // native DOM bubbling, so returning `false` here still lets
+                  // it fire. But native bubbling itself must still be cut:
+                  // a host's OWN document-level keydown listener (tldraw
+                  // cancels the whole editing session on Escape, with no
+                  // shortcuts gate) would otherwise see the same event and
+                  // react to it too, on top of the popup closing.
+                  event.stopPropagation();
                   return false;
                 }
+                // In a lane a bare Enter is a new line; only the modifier form exits.
+                if (event.key === "Enter" && latest.current.multiline && !modifierEnter) {
+                  return false;
+                }
+                if (completionActive && modifierEnter) acceptCompletion(target);
                 event.preventDefault();
                 event.stopPropagation();
                 const exit = event.key === "Enter" ? latest.current.onEnter : latest.current.onEscape;
@@ -286,6 +333,12 @@ function CodeFieldSourceView({
               },
             }),
           ),
+          // The transaction-level backstop for the single-line contract
+          // above: whatever inserts a newline — typed/pasted text (caught
+          // below by the input handler too), or a COMMAND like
+          // `insertBlankLine` reached via the fallback this same keydown
+          // handler used to allow — never survives in a non-multiline field.
+          singleLineGuard(() => latest.current.multiline),
           // A lane is a small IDE buffer, so the line keys people reach for
           // all work: CodeMirror's own Alt+↑/↓ and Shift+Alt+↑/↓, plus the
           // Ctrl forms for anyone whose window manager eats Alt+arrows.
@@ -302,16 +355,22 @@ function CodeFieldSourceView({
           editableCompartment.current.of(EditorView.editable.of(!disabled)),
           placeholderCompartment.current.of(placeholder ? placeholderExtension(placeholder) : []),
           metricsCompartment.current.of(metrics()),
-          // The completion popup is parented to the nearest declared tooltip
-          // host (a modal, a canvas layer — anything that must keep the
-          // popup inside its own stacking context), else the document body.
-          // WHY only `[data-tooltip-host]` and not a specific engine's
-          // container class: the field stays host-agnostic — a host opts in
-          // by putting the attribute on its own wrapper rather than the
-          // field special-casing a canvas library by name.
+          // The completion popup is parented to an explicit `tooltipParent`
+          // if the caller gave one, else the nearest declared tooltip host
+          // (`[data-tooltip-host]` — a modal, a canvas layer, anything that
+          // must keep the popup inside its own stacking context), else the
+          // document body. WHY the ancestor lookup exists at all, beside the
+          // prop: a host mounting many fields (every row of a canvas) can
+          // opt every one of them in at once by tagging a single container,
+          // rather than threading `tooltipParent` through each — the field
+          // stays host-agnostic either way, since neither path names a
+          // specific canvas engine.
           tooltips({
             position: "absolute",
-            parent: host.closest<HTMLElement>("[data-tooltip-host]") ?? document.body,
+            parent:
+              (typeof tooltipParent === "function" ? tooltipParent() : tooltipParent) ??
+              host.closest<HTMLElement>("[data-tooltip-host]") ??
+              document.body,
           }),
           // One line: a typed or pasted newline is dropped rather than
           // growing the field. A lane keeps its newlines — they are its rows.
@@ -445,6 +504,23 @@ function CodeFieldSourceView({
     document.addEventListener("pointerdown", handlePointerDown, true);
     return () => document.removeEventListener("pointerdown", handlePointerDown, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A canvas host typically wires wheel on an ancestor for its own pan/zoom
+  // (tldraw on its container, React Flow on its pane), which fires from a
+  // wheel over ANY of its children including this one — scrolling inside a
+  // focused field would otherwise zoom or pan the whole canvas underneath
+  // it. `{ passive: false }` + a real listener (not React's synthetic wheel,
+  // which React attaches passively by default and cannot stop natively)
+  // is what actually keeps the native event from bubbling past us.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const handleWheel = (event: WheelEvent) => {
+      if (viewRef.current?.hasFocus) event.stopPropagation();
+    };
+    host.addEventListener("wheel", handleWheel, { passive: false });
+    return () => host.removeEventListener("wheel", handleWheel);
   }, []);
 
   // Unmount is an end boundary like any other — the one the browser refuses

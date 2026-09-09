@@ -63,9 +63,15 @@ export interface CodeFieldSegment {
 
 /** One row of the RENDERED-mode tree — `grammar.lines`' unit of output. */
 export interface CodeFieldLine {
-  /** 0-based index into the document's lines. */
+  /** 0-based index into the SOURCE this line came from — the field's own `value` for a top-level row, or the reference's own text for a row from `expandLines()`. This is what a `CodeFieldRows` click reports as `onOpenSource`'s `line` argument. */
   line: number;
-  /** Absolute character offset of the line's own start — what `onOpenSource` reports. */
+  /**
+   * Absolute character offset of the line's own start, within that SAME
+   * source. NOT what `onOpenSource` reports (it reports `line`, the index,
+   * so the host can place it against whichever source `owner` names) —
+   * this is metadata on the row itself, e.g. for a grammar that wants to
+   * report offsets without re-deriving them from `line` and the source text.
+   */
   lineStart: number;
   /** Nesting depth. 0 for every row `lines()` returns directly; a reference's `expandLines()` returns its own rows at `parentDepth + 1`, applied by the renderer, not stamped here. */
   indent: number;
@@ -86,6 +92,23 @@ export interface CodeFieldReference {
    * once per keystroke anywhere on the field.
    */
   expandLines?(): CodeFieldLine[] | null;
+  /**
+   * Identifies this reference as the owner of every row `expandLines()`
+   * returns — an opaque token the grammar defines (a block id, a type
+   * name, anything `onOpenSource`'s caller can recognise). A row inside an
+   * expansion is NOT part of the field's own document — it's a preview of
+   * something else's — so clicking one must report that it belongs to a
+   * different source, not silently misapply its line number against the
+   * top-level `value` (the donor's rule: a foreign row jumps to its real
+   * owner and opens SOURCE there, at that row's own line — never "this
+   * field's source at some unrelated line").
+   *
+   * Defaults to the resolved segment's own text (e.g. `"Pose"`) when
+   * omitted, so `expandLines` alone is already enough to mark its rows as
+   * foreign; set this explicitly for a richer token (an actual block
+   * reference) a host can act on directly.
+   */
+  owner?: unknown;
 }
 
 /**
@@ -238,6 +261,25 @@ class CodeFieldEllipsisWidget extends WidgetType {
   }
 }
 
+/**
+ * The UTF-16 offset `maxCodePoints` *code points* into `text` — never
+ * inside a surrogate pair. `for...of` (and the spread below) iterates by
+ * code point, so a two-unit character (most emoji) always counts as one
+ * and is never split; a naive `text.slice(0, maxChars)` on code UNITS can
+ * land between a high and low surrogate, leaving a lone unpaired
+ * surrogate on screen (renders as a replacement glyph, sometimes worse).
+ */
+function codePointOffset(text: string, maxCodePoints: number): number {
+  let count = 0;
+  let offset = 0;
+  for (const char of text) {
+    if (count >= maxCodePoints) break;
+    offset += char.length;
+    count += 1;
+  }
+  return offset;
+}
+
 function foldExtension(maxChars: number): Extension {
   return EditorView.decorations.compute(["doc", "selection"], (state): DecorationSet => {
     const builder = new RangeSetBuilder<Decoration>();
@@ -248,9 +290,9 @@ function foldExtension(maxChars: number): Extension {
     }
     for (let number = 1; number <= state.doc.lines; number += 1) {
       const line = state.doc.line(number);
-      if (active.has(number) || line.length <= maxChars) continue;
+      if (active.has(number) || [...line.text].length <= maxChars) continue;
       builder.add(
-        line.from + maxChars,
+        line.from + codePointOffset(line.text, maxChars),
         line.to,
         Decoration.replace({ widget: new CodeFieldEllipsisWidget() }),
       );

@@ -28,6 +28,23 @@
   border-color: var(--color-primary);
 }
 
+/*
+ * CodeMirror parents its tooltips (the completion popup) onto whatever
+ * `tooltipParent`/`[data-tooltip-host]` names — document.body by default,
+ * NOT a descendant of `.bbox-code-field`, so this deliberately is not a
+ * `.bbox-code-field .cm-tooltip` descendant selector (it would never
+ * match). A host mounting the field inside its own stacked canvas content
+ * (a tldraw `HTMLContainer` shape, a React Flow node) can paint a LATER
+ * shape or node on top of an EARLIER one at any DOM depth; this is the
+ * floor that beats it regardless of what the host's own shapes use — the
+ * donor's own value, max signed 32-bit, "it needs to go to maximum z
+ * level" (Zach's call, ported). A consumer with other unrelated CodeMirror
+ * instances on the page should scope this rule tighter after install.
+ */
+.cm-tooltip {
+  z-index: 2147483647;
+}
+
 .bbox-code-field .cm-editor {
   outline: none;
   background: transparent;

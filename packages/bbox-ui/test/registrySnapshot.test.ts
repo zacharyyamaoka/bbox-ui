@@ -49,6 +49,8 @@ describe("registry payloads (public/r) vs the sources they snapshot", () => {
       "block",
       "block-node-reactflow",
       "block-shape-tldraw",
+      "code-field",
+      "code-field-signature",
     ]) {
       expect(names).toContain(required);
     }

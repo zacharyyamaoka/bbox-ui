@@ -134,6 +134,14 @@ describe("signaturePatch — the single-record write seam", () => {
 
   it("clears a default rather than storing an empty string", () => {
     const patch = signaturePatch({ name: "x", type: "int", defaultValue: "5" }, "x: int");
-    expect(patch).toEqual({ defaultValue: "" });
+    expect(patch).toEqual({ defaultValue: undefined });
+    expect(patch).toHaveProperty("defaultValue", undefined);
+  });
+
+  it("never patches a default that was already absent", () => {
+    // Round-tripping a value that never had one must stay byte-identical —
+    // `undefined !== ""` would have re-triggered a patch every time.
+    const patch = signaturePatch({ name: "x", type: "int", defaultValue: undefined as unknown as string }, "x: int");
+    expect(patch).toBeNull();
   });
 });
