@@ -5,6 +5,7 @@ import {
   T,
   atom,
   resizeBox,
+  type Editor,
   type TLBaseShape,
   type TLResizeInfo,
 } from "tldraw";
@@ -88,10 +89,54 @@ export function setPortReceived(
   portId: string,
   received: boolean,
 ) {
-  receivedPorts.update((current) => ({
-    ...current,
-    [`${shapeId}:${portId}`]: received,
-  }));
+  receivedPorts.update((current) => {
+    const key = `${shapeId}:${portId}`;
+    // A false flag IS the absence of a flag — storing it would grow the map
+    // by one dead entry per delivery, forever.
+    if (!received) {
+      if (!(key in current)) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    }
+    return { ...current, [key]: true };
+  });
+}
+
+/** Drop every runtime `received` flag keyed under one shape id. */
+export function clearReceivedPorts(shapeId: string) {
+  receivedPorts.update((current) => {
+    const prefix = `${shapeId}:`;
+    let dropped = false;
+    const next: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(current)) {
+      if (key.startsWith(prefix)) {
+        dropped = true;
+      } else {
+        next[key] = value;
+      }
+    }
+    return dropped ? next : current;
+  });
+}
+
+/**
+ * Prune the runtime `received` flags of any shape the moment it leaves the
+ * document. Returns the unsubscribe function.
+ *
+ * WHY: the atom is keyed by shape id and nothing else ever deletes — a
+ * received flow, a detach (which rekeys onto the carrier group) and then a
+ * plain delete of that carrier left `${carrierId}:p1` in the map forever,
+ * and repeated flows grew it without bound. The handler covers every owner
+ * of a flag — live bbox shapes AND the stock carrier groups detach mints —
+ * which is why it hangs off the editor, not off one shape util. Detach and
+ * rebuild both hand flags to the replacement id BEFORE deleting the old
+ * shape, so this pruning never races the rekey.
+ */
+export function registerReceivedPortCleanup(editor: Editor): () => void {
+  return editor.sideEffects.registerAfterDeleteHandler("shape", (shape) => {
+    clearReceivedPorts(shape.id);
+  });
 }
 
 /**
@@ -230,7 +275,7 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
                 {port.label !== "" && (
                   <PortLabel
                     className="absolute"
-                    style={portLabelPlacement(port.textLayout, diameter)}
+                    style={portLabelPlacement(port.textLayout, diameter, diameter)}
                   >
                     {port.label}
                   </PortLabel>

@@ -47,7 +47,7 @@ export function BBoxPortNode({ id, data }: NodeProps<BBoxPortNodeType>) {
       {data.label !== "" && (
         <PortLabel
           className="absolute"
-          style={portLabelPlacement(data.textLayout, data.w)}
+          style={portLabelPlacement(data.textLayout, data.w, data.h)}
         >
           {data.label}
         </PortLabel>

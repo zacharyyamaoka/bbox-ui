@@ -1,6 +1,10 @@
 import { Tldraw, type Editor } from "tldraw";
 
-import { BBoxBlockShapeUtil, setPortReceived } from "@bbox-ui/adapter-tldraw";
+import {
+  BBoxBlockShapeUtil,
+  registerReceivedPortCleanup,
+  setPortReceived,
+} from "@bbox-ui/adapter-tldraw";
 import { sceneToTldrawShapes } from "@bbox-ui/demo-scene/tldraw";
 
 const shapeUtils = [BBoxBlockShapeUtil];
@@ -12,6 +16,8 @@ const { shapes, receivedPorts } = sceneToTldrawShapes();
 
 function handleMount(editor: Editor) {
   (window as { editor?: Editor }).editor = editor;
+  // Deleting a shape must drop its runtime `received` flags with it.
+  registerReceivedPortCleanup(editor);
   editor.createShapes(shapes);
   // Runtime-only: light ports up as "Data Recived" without ever writing
   // it into the document.

@@ -123,6 +123,10 @@ export function primitivesForBlock(
         origin,
         color: "grey",
         align: "middle",
+        // The live <p> wraps; the box is already the wrapped height and the
+        // primitive re-wraps at the same width, so hand the count through
+        // for the line-grid centering.
+        lines: layout.descriptionLines,
       }),
     );
   }

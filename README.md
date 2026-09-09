@@ -270,6 +270,8 @@ node demos/drive-compare.mjs                           # all four compare modes
 node demos/drive-playground.mjs                        # toolbar + tools journey
 node demos/drive-playground-compare.mjs                # live-board compare journey
 node demos/drive-playground-detach.mjs                 # detach → stock shapes → rebuild
+node demos/drive-playground-truncation.mjs             # detached-title ellipsis vs the
+                                                       # browser's own DOM measurement
 ```
 
 > **tldraw licence note**: tldraw's SDK licence forbids production use

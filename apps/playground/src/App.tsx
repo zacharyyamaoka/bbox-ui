@@ -6,6 +6,7 @@ import {
   BBoxBlockTool,
   BBoxPortShapeUtil,
   BBoxPortTool,
+  registerReceivedPortCleanup,
 } from "@bbox-ui/adapter-tldraw";
 import { CompareView } from "@bbox-ui/compare-view";
 import {
@@ -109,6 +110,9 @@ export function App() {
     setEditor(editor);
     window.playgroundEditor = editor;
     (window as { editor?: Editor }).editor = editor;
+    // Deleting a shape (a live Block, or the carrier group a detach minted)
+    // must drop its runtime `received` flags, or the atom grows forever.
+    registerReceivedPortCleanup(editor);
   }, []);
 
   const enterCompare = useCallback(() => {

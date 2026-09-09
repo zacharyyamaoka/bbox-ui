@@ -115,7 +115,7 @@ export class BBoxPortShapeUtil extends ShapeUtil<BBoxPortShape> {
           {props.label !== "" && (
             <PortLabel
               className="absolute"
-              style={portLabelPlacement(props.textLayout, props.w)}
+              style={portLabelPlacement(props.textLayout, props.w, props.h)}
             >
               {props.label}
             </PortLabel>

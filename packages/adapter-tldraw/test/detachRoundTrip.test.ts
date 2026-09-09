@@ -23,6 +23,7 @@ import {
 } from "../src/index";
 import {
   receivedPorts,
+  registerReceivedPortCleanup,
   setPortReceived,
   type BBoxBlockShapeProps,
   type BBoxShapePort,
@@ -82,6 +83,9 @@ let editor: Editor;
 
 beforeEach(() => {
   editor = createHeadlessEditor();
+  // The same wiring every host app does on mount — the leak tests below
+  // exercise it, and the round-trip tests prove it never races the rekey.
+  registerReceivedPortCleanup(editor);
   receivedPorts.set({});
 });
 
@@ -258,6 +262,112 @@ describe("detach → rebuild: rotation", () => {
     expect(rebuilt.props).toEqual(original.props);
     expectSamePose(original, rebuilt);
   });
+
+  /** Angle equality on the circle: a − b ≡ 0 (mod 2π). */
+  function expectSameAngle(actual: number, expected: number) {
+    const TAU = Math.PI * 2;
+    const difference = ((actual - expected) % TAU + TAU + Math.PI) % TAU - Math.PI;
+    expect(difference).toBeCloseTo(0, 6);
+  }
+
+  it("rotations beyond 2π (and large negative ones) survive the round trip", () => {
+    for (const angle of [Math.PI * 2 + Math.PI / 3, -Math.PI * 2.5]) {
+      const id = createShapeId();
+      editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
+      editor.rotateShapesBy([id], angle);
+      const original = editor.getShape(id)!;
+      const originalPage = editor.getShapePageTransform(id);
+      const originalPoint = originalPage.applyToPoint({ x: 0, y: 0 });
+
+      runDetachSweep(editor, [id], DETACHABLE_KINDS);
+      const { createdIds } = rebuildDetachedShapes(editor);
+      expect(createdIds).toHaveLength(1);
+      const rebuilt = editor.getShape(createdIds[0])!;
+      expect(rebuilt.props).toEqual(original.props);
+      const rebuiltPage = editor.getShapePageTransform(rebuilt.id);
+      const rebuiltPoint = rebuiltPage.applyToPoint({ x: 0, y: 0 });
+      expect(rebuiltPoint.x).toBeCloseTo(originalPoint.x, 6);
+      expect(rebuiltPoint.y).toBeCloseTo(originalPoint.y, 6);
+      // The stored number may normalize onto (−π, π]; the page POSE is what
+      // must match, so compare on the circle, not the raw prop.
+      expectSameAngle(rebuiltPage.rotation(), originalPage.rotation());
+      editor.deleteShape(rebuilt.id);
+    }
+  });
+
+  it("a block nested inside a rotated parent group keeps its page pose through the round trip", () => {
+    const blockId = createShapeId();
+    const buddyId = createShapeId();
+    editor.createShape({ id: blockId, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
+    editor.createShape({ id: buddyId, type: "geo", x: 700, y: 600, props: { w: 50, h: 50 } });
+    const parentGroupId = createShapeId();
+    editor.groupShapes([blockId, buddyId], { groupId: parentGroupId });
+    editor.rotateShapesBy([parentGroupId], Math.PI / 5);
+
+    const originalProps = editor.getShape(blockId)!.props;
+    const originalPage = editor.getShapePageTransform(blockId);
+    const originalPoint = originalPage.applyToPoint({ x: 0, y: 0 });
+    const originalRotation = originalPage.rotation();
+
+    runDetachSweep(editor, [blockId], DETACHABLE_KINDS);
+    expect(editor.getShape(blockId)).toBeUndefined();
+    // Every leaf primitive's PAGE rotation composes the parent's rotation.
+    const leafIds: TLShapeId[] = [];
+    const collect = (id: TLShapeId) => {
+      const childIds = editor.getSortedChildIdsForParent(id);
+      if (childIds.length === 0) leafIds.push(id);
+      for (const childId of childIds) collect(childId);
+    };
+    for (const shape of editor.getCurrentPageShapes()) collect(shape.id);
+    const primitiveLeafIds = leafIds.filter((id) => id !== buddyId);
+    expect(primitiveLeafIds.length).toBeGreaterThan(3);
+    for (const leafId of primitiveLeafIds) {
+      expectSameAngle(editor.getShapePageTransform(leafId).rotation(), originalRotation);
+    }
+
+    const { createdIds } = rebuildDetachedShapes(editor);
+    expect(createdIds).toHaveLength(1);
+    const rebuilt = editor.getShape(createdIds[0])!;
+    expect(rebuilt.props).toEqual(originalProps);
+    const rebuiltPage = editor.getShapePageTransform(rebuilt.id);
+    const rebuiltPoint = rebuiltPage.applyToPoint({ x: 0, y: 0 });
+    expect(rebuiltPoint.x).toBeCloseTo(originalPoint.x, 6);
+    expect(rebuiltPoint.y).toBeCloseTo(originalPoint.y, 6);
+    expectSameAngle(rebuiltPage.rotation(), originalRotation);
+  });
+
+  it("rotating the detached group before rebuilding lands the shape at the rotated pose", () => {
+    const id = createShapeId();
+    editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
+    const originalProps = editor.getShape(id)!.props;
+    runDetachSweep(editor, [id], DETACHABLE_KINDS);
+    const carrier = editor
+      .getCurrentPageShapes()
+      .find((shape) => (shape.meta as any)?.[BBOX_UI_META_KEY]?.props)!;
+    editor.rotateShapesBy([carrier.id], Math.PI / 3);
+
+    // The anchor card's pose after the user's rotation is where the rebuilt
+    // block must stand.
+    const anchor = editor
+      .getCurrentPageShapes()
+      .flatMap((shape) => [shape, ...editor.getSortedChildIdsForParent(shape.id).map((childId) => editor.getShape(childId)!)])
+      .find((shape) => (shape.meta as any)?.[BBOX_UI_META_KEY]?.kind === "block-card")!;
+    const anchorPage = editor.getShapePageTransform(anchor.id);
+    const anchorPoint = anchorPage.applyToPoint({ x: 0, y: 0 });
+    const anchorRotation = anchorPage.rotation();
+    expectSameAngle(anchorRotation, Math.PI / 3);
+
+    editor.setSelectedShapes([carrier.id]);
+    const { createdIds } = rebuildDetachedShapes(editor);
+    expect(createdIds).toHaveLength(1);
+    const rebuilt = editor.getShape(createdIds[0])!;
+    expect(rebuilt.props).toEqual(originalProps);
+    const rebuiltPage = editor.getShapePageTransform(rebuilt.id);
+    const rebuiltPoint = rebuiltPage.applyToPoint({ x: 0, y: 0 });
+    expect(rebuiltPoint.x).toBeCloseTo(anchorPoint.x, 6);
+    expect(rebuiltPoint.y).toBeCloseTo(anchorPoint.y, 6);
+    expectSameAngle(rebuiltPage.rotation(), anchorRotation);
+  });
 });
 
 describe("detach → rebuild: runtime received flag", () => {
@@ -285,5 +395,51 @@ describe("detach → rebuild: runtime received flag", () => {
     // …and still absent from persisted props.
     expect((rebuilt.props as BBoxBlockShapeProps).ports[0].state).toBe("wired");
     expect(JSON.stringify(rebuilt.props)).not.toContain("received");
+  });
+
+  it("a false delivery prunes the entry instead of storing false", () => {
+    const id = createShapeId();
+    editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
+    setPortReceived(id, "p1", true);
+    expect(receivedPorts.get()).toEqual({ [`${id}:p1`]: true });
+    setPortReceived(id, "p1", false);
+    expect(receivedPorts.get()).toEqual({});
+  });
+
+  it("deleting a live block drops its flags", () => {
+    const id = createShapeId();
+    editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
+    setPortReceived(id, "p1", true);
+    editor.deleteShape(id);
+    expect(receivedPorts.get()).toEqual({});
+  });
+
+  it("deleting a detached carrier WITHOUT rebuilding drops the rekeyed flags", () => {
+    // The escaped leak: receive → detach → delete the carrier. Nothing ever
+    // rebuilt, so nothing ever rekeyed the entry away — it lived forever.
+    const id = createShapeId();
+    editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
+    setPortReceived(id, "p1", true);
+    runDetachSweep(editor, [id], DETACHABLE_KINDS);
+    const carrier = editor
+      .getCurrentPageShapes()
+      .find((shape) => (shape.meta as any)?.[BBOX_UI_META_KEY]?.props)!;
+    expect(receivedPorts.get()[`${carrier.id}:p1`]).toBe(true);
+    editor.deleteShape(carrier.id);
+    expect(receivedPorts.get()).toEqual({});
+  });
+
+  it("repeated receive → detach → delete flows never grow the map", () => {
+    for (let flow = 0; flow < 5; flow++) {
+      const id = createShapeId();
+      editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
+      setPortReceived(id, "p1", true);
+      runDetachSweep(editor, [id], DETACHABLE_KINDS);
+      const carrier = editor
+        .getCurrentPageShapes()
+        .find((shape) => (shape.meta as any)?.[BBOX_UI_META_KEY]?.props)!;
+      editor.deleteShape(carrier.id);
+    }
+    expect(receivedPorts.get()).toEqual({});
   });
 });

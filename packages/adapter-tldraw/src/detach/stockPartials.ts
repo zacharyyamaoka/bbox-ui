@@ -81,11 +81,33 @@ export function stockTextStyle(px: number): {
   return { size: base.size, scale: px / base.px };
 }
 
+let graphemeSegmenter: Intl.Segmenter | null | undefined;
+
+/**
+ * `text` split on grapheme-cluster boundaries via `Intl.Segmenter`, so a
+ * ZWJ emoji family, a flag pair or a base-plus-combining-mark is one unit.
+ * Code points (`[...text]`) are the fallback where the segmenter is missing
+ * — still never through a surrogate pair, but blind to joins.
+ */
+export function splitGraphemes(text: string): string[] {
+  if (graphemeSegmenter === undefined) {
+    graphemeSegmenter =
+      typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+        ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
+        : null;
+  }
+  if (graphemeSegmenter) {
+    return Array.from(graphemeSegmenter.segment(text), (part) => part.segment);
+  }
+  return [...text];
+}
+
 /**
  * `text` shortened with a trailing ellipsis until it measures within
  * `maxW` — the stock-primitive equivalent of CSS `text-overflow: ellipsis`.
- * Splits on code points (`[...text]`), never through a surrogate pair, so
- * an emoji is dropped whole or kept whole.
+ * The cut lands on a GRAPHEME boundary, never inside one: splitting on code
+ * points kept surrogate pairs whole but could still leave a dangling ZWJ
+ * from an emoji family or strip a combining mark off its base letter.
  */
 export function truncateToWidth(
   text: string,
@@ -95,19 +117,21 @@ export function truncateToWidth(
 ): string {
   if (measureText(text, px, weight) <= maxW) return text;
   const ELLIPSIS = "…";
-  const chars = [...text];
+  const graphemes = splitGraphemes(text);
   // Binary search the longest prefix whose "prefix…" still fits.
   let low = 0;
-  let high = chars.length - 1;
+  let high = graphemes.length - 1;
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
-    if (measureText(chars.slice(0, mid).join("") + ELLIPSIS, px, weight) <= maxW) {
+    if (
+      measureText(graphemes.slice(0, mid).join("") + ELLIPSIS, px, weight) <= maxW
+    ) {
       low = mid;
     } else {
       high = mid - 1;
     }
   }
-  return chars.slice(0, low).join("") + ELLIPSIS;
+  return graphemes.slice(0, low).join("") + ELLIPSIS;
 }
 
 export interface TextAtOptions {
@@ -118,11 +142,19 @@ export interface TextAtOptions {
   origin: { x: number; y: number };
   color: TLDefaultColorStyle;
   align: "start" | "middle" | "end";
+  /**
+   * How many lines the live DOM wrapped this string onto inside `box`
+   * (default 1). The primitive re-wraps at the same width, so centering
+   * its line grid inside the box needs the count — one line's worth of
+   * compensation applied to a wrapped paragraph would pin it to the top.
+   */
+  lines?: number;
 }
 
 /** A stock text primitive centered in the live line box. */
 export function textAt(options: TextAtOptions): TLShapePartial {
   const stock = stockTextStyle(options.px);
+  const lines = options.lines ?? 1;
   // TextShapeUtil floors a fixed width before measuring; reserve the same
   // +1 tldraw itself uses for auto-sized labels, plus DOM tolerance, so the
   // final glyph never wraps out of the box.
@@ -140,7 +172,7 @@ export function textAt(options: TextAtOptions): TLShapePartial {
     y:
       options.origin.y +
       options.box.y +
-      (options.box.h - options.px * TLDRAW_TEXT_LINE) / 2,
+      (options.box.h - lines * options.px * TLDRAW_TEXT_LINE) / 2,
     props: {
       richText: toRichText(options.text),
       color: options.color,

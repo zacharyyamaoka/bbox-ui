@@ -75,7 +75,13 @@ export function lowerToGroup(
   editor.createShapes(
     shapes.map((partial) => ({ ...partial, parentId: shape.parentId })),
   );
-  editor.deleteShape(shape.id);
+  // The original is deleted AFTER its runtime `received` flags are handed to
+  // the carrier (below) — `registerReceivedPortCleanup` prunes a deleted
+  // shape's flags, and deleting first would wipe them before the rekey.
+  const replaceOriginal = (carrierId: TLShapeId) => {
+    rekeyReceivedPorts(shape.id, carrierId);
+    editor.deleteShape(shape.id);
+  };
 
   // A subgroup per row: the parts move as one editable unit, and unpeeling
   // the outer group one level lands on sensible units (Zach's "unpeel the
@@ -107,7 +113,7 @@ export function lowerToGroup(
       // (in memory only — never into `meta`), so a later rebuild can hand
       // them on to the shape it mints and a lit port stays lit across the
       // round trip.
-      rekeyReceivedPorts(shape.id, groupId);
+      replaceOriginal(groupId);
       return { selectionId: groupId, rootIds: [groupId] };
     }
   }
@@ -119,7 +125,9 @@ export function lowerToGroup(
   const sole = editor.getShape(soleId);
   if (sole) {
     editor.updateShape({ id: soleId, type: sole.type, meta: detachMeta(input.record) });
-    rekeyReceivedPorts(shape.id, soleId);
+    replaceOriginal(soleId);
+  } else {
+    editor.deleteShape(shape.id);
   }
   return { selectionId: soleId ?? null, rootIds: soleId ? [soleId] : [] };
 }

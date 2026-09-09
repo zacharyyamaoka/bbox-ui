@@ -26,7 +26,7 @@ import {
   META_FONT_PX,
   TEXT_SIZES,
   glyphPx,
-  portLabelGap,
+  portLabelOut,
   type PortTextLayout,
   type TextSize,
 } from "./layout";
@@ -59,6 +59,36 @@ export const BLOCK_TYPE_BOTTOM = 12;
 /** Measured width of `text` at `fontPx` with CSS weight `weight`. */
 export type TextMeasure = (text: string, fontPx: number, weight: number) => number;
 
+/**
+ * `text` broken into the lines CSS normal wrapping produces in a `maxW`
+ * box: whitespace collapsed, greedy fill, breaks only at spaces — a single
+ * word wider than the box overflows on its own line rather than splitting,
+ * exactly as `overflow-wrap: normal` behaves.
+ */
+export function wrapTextLines(
+  text: string,
+  maxW: number,
+  fontPx: number,
+  weight: number,
+  measure: TextMeasure,
+): string[] {
+  const words = text.split(/\s+/).filter((word) => word !== "");
+  if (words.length === 0) return [];
+  const lines: string[] = [];
+  let line = words[0];
+  for (const word of words.slice(1)) {
+    const candidate = `${line} ${word}`;
+    if (measure(candidate, fontPx, weight) <= maxW) {
+      line = candidate;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  lines.push(line);
+  return lines;
+}
+
 export interface SimpleBlockLayoutInput {
   width: number;
   height: number;
@@ -84,6 +114,14 @@ export interface SimpleBlockLayout {
   /** The chip's text line box, centered inside the oval. */
   chipText: LayoutBox | null;
   description: LayoutBox | null;
+  /**
+   * How many lines the description wraps onto inside `description.w` — the
+   * live `<p>` has no nowrap/truncate, so a long description wraps and the
+   * whole flex stack re-centres around the wrapped height. Callers emitting
+   * a text primitive need the count to centre their own line grid inside
+   * the box. 0 when there is no description.
+   */
+  descriptionLines: number;
   blockType: LayoutBox | null;
 }
 
@@ -115,11 +153,19 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
     ? glyphSize + (hasIcon && titleLineH > 0 ? HEADER_ITEM_GAP_VERTICAL : 0) + titleLineH
     : Math.max(glyphSize, titleLineH);
 
-  const descLineH = input.description === "" ? 0 : Math.round(META_FONT_PX * LEADING_BASE);
+  // The live description is a plain wrapping <p>: a long description takes
+  // several 27px lines and the flex stack re-centres around the wrapped
+  // height, so the layout must count the lines, not assume one.
+  const descLineH = Math.round(META_FONT_PX * LEADING_BASE);
+  const descLines =
+    input.description === ""
+      ? []
+      : wrapTextLines(input.description, contentW, META_FONT_PX, 400, measure);
+  const descH = descLines.length * descLineH;
 
   // The container's vertical centering: in-flow children are the header and
   // the description; the type label is out of flow.
-  const flowHeights = [headerH, descLineH].filter((h) => h > 0);
+  const flowHeights = [headerH, descH].filter((h) => h > 0);
   const stackH =
     flowHeights.reduce((sum, h) => sum + h, 0) +
     BLOCK_STACK_GAP * Math.max(0, flowHeights.length - 1);
@@ -198,13 +244,19 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
   }
 
   let description: LayoutBox | null = null;
-  if (descLineH > 0) {
-    const descW = Math.min(measure(input.description, META_FONT_PX, 400), contentW);
+  if (descLines.length > 0) {
+    // One line keeps its measured width (a shrink-to-fit flex item); a
+    // wrapped description fills the content width — that width is what
+    // decided the line breaks, so it is the box the lines centre in.
+    const descW =
+      descLines.length === 1
+        ? Math.min(measure(input.description, META_FONT_PX, 400), contentW)
+        : contentW;
     description = {
       x: contentX + (contentW - descW) / 2,
       y: stackTop + (headerH > 0 ? headerH + BLOCK_STACK_GAP : 0),
       w: descW,
-      h: descLineH,
+      h: descH,
     };
   }
 
@@ -222,7 +274,16 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
     };
   }
 
-  return { header, glyph, title, chip, chipText, description, blockType };
+  return {
+    header,
+    glyph,
+    title,
+    chip,
+    chipText,
+    description,
+    descriptionLines: descLines.length,
+    blockType,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -243,23 +304,25 @@ export interface PortLabelBoxInput {
 /**
  * Where the label's line box sits relative to the dot's box — the same
  * geometry `portLabelPlacement` produces in CSS, as a rectangle. The near
- * edge lands `portLabelGap(layout)` px clear of the dot; cross-axis centered.
+ * edge lands `portLabelGap(layout)` px clear of the dot; cross-axis
+ * centered. The along-axis distance comes from the shared `portLabelOut`,
+ * the one place that quantity is computed — see its WHY.
  */
 export function portLabelBox(input: PortLabelBoxInput): LayoutBox {
   const { dotW, dotH, layout, fontPx } = input;
-  const gap = portLabelGap(layout);
+  const out = portLabelOut(layout, dotW, dotH);
   const w = input.measure(input.label, fontPx, 400);
   const h = Math.round(fontPx * LEADING_TIGHT);
   switch (layout) {
     case "right":
     case "right-offset":
-      return { x: dotW + gap, y: dotH / 2 - h / 2, w, h };
+      return { x: out, y: dotH / 2 - h / 2, w, h };
     case "left":
     case "left-offset":
-      return { x: -gap - w, y: dotH / 2 - h / 2, w, h };
+      return { x: dotW - out - w, y: dotH / 2 - h / 2, w, h };
     case "top":
-      return { x: dotW / 2 - w / 2, y: -gap - h, w, h };
+      return { x: dotW / 2 - w / 2, y: dotH - out - h, w, h };
     case "bot":
-      return { x: dotW / 2 - w / 2, y: dotH + gap, w, h };
+      return { x: dotW / 2 - w / 2, y: out, w, h };
   }
 }

@@ -348,10 +348,33 @@ export interface PortLabelPlacement {
 }
 
 /**
+ * How far the label's near edge sits from the dot box's near edge, measured
+ * from the box's origin-side edge along the label's own axis: the dot's span
+ * ALONG THAT AXIS plus the gap — `w` for left/right labels, `h` for top/bot.
+ *
+ * WHY one shared function: this is the quantity the live CSS placement
+ * (`portLabelPlacement`) and the detach geometry (`portLabelBox`) both need,
+ * and when each computed its own copy they drifted — the live path used the
+ * width for every orientation, so a resized 100×25 standalone port floated
+ * its top label 75px too high while the detached picture placed it off the
+ * height. Both paths now read this number, so they cannot disagree.
+ */
+export function portLabelOut(
+  layout: PortTextLayout,
+  dotW: number,
+  dotH: number,
+): number {
+  const alongAxis = layout === "top" || layout === "bot" ? dotH : dotW;
+  return alongAxis + portLabelGap(layout);
+}
+
+/**
  * Where the label sits relative to the dot: its near edge lands
  * `portLabelGap(layout)` px clear of the dot's outer edge — the same
  * geometry the core `Port`'s flex row produces, so a host-positioned label
- * and a flex-flowed one agree to the pixel.
+ * and a flex-flowed one agree to the pixel. `dotH` matters for top/bot
+ * labels on a resized (non-square) dot; a round dot passes its diameter
+ * twice.
  *
  * `boxInsetPx` is how far the positioning context is inset from the dot's
  * border box: React Flow's `Handle` IS the bordered dot, so its padding box
@@ -361,10 +384,11 @@ export interface PortLabelPlacement {
  */
 export function portLabelPlacement(
   layout: PortTextLayout,
-  diameterPx: number,
+  dotW: number,
+  dotH: number,
   boxInsetPx: number = 0,
 ): PortLabelPlacement {
-  const out = `${diameterPx + portLabelGap(layout) - boxInsetPx}px`;
+  const out = `${portLabelOut(layout, dotW, dotH) - boxInsetPx}px`;
   switch (layout) {
     case "right":
     case "right-offset":

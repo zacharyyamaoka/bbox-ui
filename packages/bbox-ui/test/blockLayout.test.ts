@@ -16,6 +16,8 @@ import {
   glyphPx,
   layoutSimpleBlock,
   portLabelBox,
+  portLabelPlacement,
+  wrapTextLines,
   type SimpleBlockLayoutInput,
 } from "../src";
 
@@ -53,11 +55,51 @@ describe("layoutSimpleBlock", () => {
     const layout = layoutSimpleBlock(input({ description: "blackbox modelling" }));
     const descH = Math.round(META_FONT_PX * LEADING_BASE);
     expect(layout.description).not.toBeNull();
+    expect(layout.descriptionLines).toBe(1);
     expect(layout.description!.y).toBeCloseTo(layout.header.y + layout.header.h + 4);
     expect(layout.description!.h).toBe(descH);
     // The stack as a whole is centered.
     const stackH = layout.header.h + 4 + descH;
     expect(layout.header.y).toBeCloseTo((SIMPLE_BLOCK.height - stackH) / 2);
+  });
+
+  it("a long description wraps and the whole stack re-centres around its height", () => {
+    // The live <p> has no nowrap/truncate: it wraps at the content width and
+    // the flex column centres around the WRAPPED height — a layout that
+    // assumed one 27px line pushed the header down and crowded the type.
+    const description = "blackbox modelling ".repeat(20).trim();
+    const layout = layoutSimpleBlock(input({ description }));
+    const contentX = BLOCK_BORDER_PX + 16;
+    const contentW = SIMPLE_BLOCK.width - 2 * contentX;
+    const lineH = Math.round(META_FONT_PX * LEADING_BASE);
+    const lines = wrapTextLines(description, contentW, META_FONT_PX, 400, measure);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(layout.descriptionLines).toBe(lines.length);
+    // The box is the full wrapped paragraph…
+    expect(layout.description!.h).toBe(lines.length * lineH);
+    expect(layout.description!.w).toBe(contentW);
+    // …and the header sits where centering the taller stack puts it.
+    const stackH = layout.header.h + 4 + lines.length * lineH;
+    expect(layout.header.y).toBeCloseTo((SIMPLE_BLOCK.height - stackH) / 2);
+    expect(layout.description!.y).toBeCloseTo(layout.header.y + layout.header.h + 4);
+  });
+
+  it("wrapTextLines breaks greedily at spaces, like CSS normal wrapping", () => {
+    // 10 chars fit per line at width 50 (measure = len × 10 × 0.5).
+    expect(wrapTextLines("aaa bbb cc", 50, 10, 400, measure)).toEqual(["aaa bbb cc"]);
+    expect(wrapTextLines("aaa bbb ccc", 50, 10, 400, measure)).toEqual([
+      "aaa bbb",
+      "ccc",
+    ]);
+    // Collapsed whitespace, and a too-long word overflows on its own line
+    // rather than splitting (overflow-wrap: normal).
+    expect(wrapTextLines("  aa   bb  ", 50, 10, 400, measure)).toEqual(["aa bb"]);
+    expect(wrapTextLines("aa indivisible bb", 50, 10, 400, measure)).toEqual([
+      "aa",
+      "indivisible",
+      "bb",
+    ]);
+    expect(wrapTextLines("", 50, 10, 400, measure)).toEqual([]);
   });
 
   it("rides the glyph beside the title at the derived 0.9 ratio", () => {
@@ -141,5 +183,26 @@ describe("portLabelBox", () => {
     expect(top.x + top.w / 2).toBeCloseTo(12.5);
     expect(top.y + top.h).toBeCloseTo(-PORT_LABEL_GAP);
     expect(bot.y).toBe(25 + PORT_LABEL_GAP);
+  });
+
+  it("a resized dot's top/bot label clears the HEIGHT and agrees with the live placement", () => {
+    // The 100×25 reproducer: the live renderer and the detach geometry used
+    // to answer this differently (w-based vs h-based, 75px apart). Both now
+    // read portLabelOut, so the boxes and the CSS offsets must coincide.
+    const resized = { ...base, dotW: 100, dotH: 25 };
+    const top = portLabelBox({ ...resized, layout: "top" });
+    const bot = portLabelBox({ ...resized, layout: "bot" });
+    expect(top.y + top.h).toBeCloseTo(-PORT_LABEL_GAP);
+    expect(bot.y).toBe(25 + PORT_LABEL_GAP);
+    expect(top.x + top.w / 2).toBeCloseTo(50);
+    // The CSS placement resolves to the same near edge: bottom offset is
+    // measured up from the 25px-tall wrapper's bottom.
+    const cssTop = portLabelPlacement("top", 100, 25);
+    expect(25 - parseFloat(cssTop.bottom!)).toBeCloseTo(top.y + top.h);
+    const cssBot = portLabelPlacement("bot", 100, 25);
+    expect(parseFloat(cssBot.top!)).toBeCloseTo(bot.y);
+    // Left/right still key off the width.
+    const right = portLabelBox({ ...resized, layout: "right" });
+    expect(right.x).toBe(100 + PORT_LABEL_GAP);
   });
 });
