@@ -290,17 +290,71 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
     // R2's 75px top-label defect. The fixed scene holds 8 labelled block
     // ports plus the labelled standalone port; framings that cull shapes
     // state the reduced honest minimum.
+    //
+    // Each framing also names the exact label identities ("owner/port=text")
+    // the reading must have compared. WHY identities and not just counts: a
+    // regression that removes one port's label while adding one to a
+    // normally-blank port keeps every count intact — only the names catch
+    // the swap.
+    const ALL_LABELS = [
+      "camera/frame=frame",
+      "clock/tick=tick",
+      "detect-frame/image=image",
+      "detect/boxes=boxes",
+      "detect/image=image",
+      "detect/threshold=threshold",
+      "sensor-bus=sensor bus",
+      "track/config=config",
+      "track/detections=detections",
+    ];
     const framings = [
-      ["zoom 0.25", { x: 50, y: 90, zoom: 0.25 }, 5, 1, 9],
-      ["zoom 0.45", { x: 50, y: 90, zoom: 0.45 }, 5, 1, 9],
-      ["zoom 1.00", { x: 50, y: 90, zoom: 1 }, 5, 1, 9],
+      ["zoom 0.25", { x: 50, y: 90, zoom: 0.25 }, 5, 1, 9, ALL_LABELS],
+      ["zoom 0.45", { x: 50, y: 90, zoom: 0.45 }, 5, 1, 9, ALL_LABELS],
+      ["zoom 1.00", { x: 50, y: 90, zoom: 1 }, 5, 1, 9, ALL_LABELS],
       // Zoomed to 2× onto the Detect/cm_clock column (world x 560); Camera,
       // Track and the standalone port land offscreen and are culled out.
-      ["zoom 2.00", { x: -320, y: 60, zoom: 2 }, 3, 0, 4],
-      ["panned @ zoom 1", { x: -260, y: -180, zoom: 1 }, 5, 0, 8],
+      // Whatever tldraw's culling slack keeps painted must at least include
+      // this column's own labels; every extra must still be a real one.
+      [
+        "zoom 2.00",
+        { x: -320, y: 60, zoom: 2 },
+        3,
+        0,
+        4,
+        ["clock/tick=tick", "detect/boxes=boxes", "detect/image=image", "detect/threshold=threshold"],
+      ],
+      [
+        "panned @ zoom 1",
+        { x: -260, y: -180, zoom: 1 },
+        5,
+        0,
+        8,
+        ALL_LABELS.filter((entry) => entry !== "sensor-bus=sensor bus"),
+      ],
     ];
     results.divergenceByZoom = {};
-    for (const [label, viewport, minBlocks, minStandalone, minLabels] of framings) {
+    // Required ⊆ measured ⊆ ALL_LABELS: a culled framing may keep a few
+    // extra labels painted (tldraw's culling slack), but every extra must
+    // still be a genuine scene label with its authored text.
+    const assertLabelIdentities = (label, divergence, requiredLabels) => {
+      const measured = divergence.labels ?? [];
+      for (const required of requiredLabels) {
+        if (!measured.includes(required)) {
+          failures.push(`overlay ${label}: expected label pair missing: ${required}`);
+        }
+      }
+      for (const entry of measured) {
+        if (!ALL_LABELS.includes(entry)) {
+          failures.push(`overlay ${label}: unexpected label pair: ${entry}`);
+        }
+      }
+      if (divergence.labelTextMismatches?.length > 0) {
+        failures.push(
+          `overlay ${label}: hosts paint different label text: ${divergence.labelTextMismatches.join(", ")}`,
+        );
+      }
+    };
+    for (const [label, viewport, minBlocks, minStandalone, minLabels, requiredLabels] of framings) {
       await evaluate(`(() => {
         window.editor.setCamera(
           window.__bboxBridge.reactFlowToTldraw(${JSON.stringify(viewport)}),
@@ -319,7 +373,9 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
             blocks: divergence.rows.length,
             standalonePorts: divergence.standalonePorts.length,
             labels: divergence.labelCount,
+            labelIdentities: divergence.labels,
             labelMismatches: divergence.labelMismatches,
+            labelTextMismatches: divergence.labelTextMismatches,
           }
         : null;
       if (divergence == null) {
@@ -350,6 +406,7 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
             `overlay ${label}: label painted in one host only: ${divergence.labelMismatches.join(", ")}`,
           );
         }
+        assertLabelIdentities(label, divergence, requiredLabels);
       }
     }
     // Leave the original framing for the mode screenshot.
@@ -372,6 +429,8 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
       failures.push(
         `overlay: label painted in one host only: ${results.divergence.labelMismatches.join(", ")}`,
       );
+    } else {
+      assertLabelIdentities("final framing", results.divergence, ALL_LABELS);
     }
   }
 

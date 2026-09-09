@@ -83,12 +83,31 @@ const SOFT_HYPHEN = "\u00ad";
 const NBSP_RUN = /^\u00a0+$/;
 
 /**
+ * Characters CSS allows a break AFTER inside a space-free run (UAX #14
+ * classes HY and BA): hyphen-minus and the typographic hyphens/dashes.
+ * Deliberately NOT "/", ".", ":", "#", "_" or "@" - a URL, a dotted
+ * domain or a snake_case identifier is one unbreakable run under
+ * `overflow-wrap: normal`, which is why long URLs famously overflow
+ * their containers.
+ */
+const BREAK_AFTER_CHAR = /[-\u2010\u2012\u2013\u2014]$/;
+
+/**
  * One character CSS treats as its own line-break unit (UAX #14 class ID
  * and Hangul): a break is allowed between any two of them, dictionary
  * words or not — which is why a CJK run wraps with no spaces at all.
  */
 const CJK_BREAK_CHAR =
   /^[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]$/u;
+
+/**
+ * Scripts written without spaces whose line breaks come from dictionary
+ * word boundaries (CSS/ICU "South East Asian" line breaking). Unlike CJK
+ * there is no break between arbitrary characters — the segmenter's word
+ * boundary IS the break opportunity, so a boundary touching one of these
+ * characters keeps its break.
+ */
+const SEA_BREAK_CHAR = /^[\p{sc=Thai}\p{sc=Lao}\p{sc=Khmer}\p{sc=Myanmar}]$/u;
 
 let wordSegmenter: Intl.Segmenter | null = null;
 
@@ -116,12 +135,18 @@ function splitCjkCharacters(segment: string): string[] {
  * which CSS allows a line break.
  *
  * Segmenter path: `Intl.Segmenter` word boundaries are the candidate
- * opportunities, adjusted three ways to match line breaking rather than
+ * opportunities, adjusted four ways to match line breaking rather than
  * word counting — a non-word-like segment (punctuation) glues backward so
  * "hello," never sheds its comma to the next line, an NBSP glues BOTH of
- * its neighbours (it exists to forbid the break), and a CJK word is
- * re-split per character because CSS breaks between ideographs the
- * dictionary would keep together.
+ * its neighbours (it exists to forbid the break), a CJK word is re-split
+ * per character because CSS breaks between ideographs the dictionary
+ * would keep together, and a word-like segment glues backward too unless
+ * the run behind it actually ends at a CSS break opportunity (a hyphen or
+ * a CJK character) or the segment itself begins with one. That last rule
+ * is what keeps "https://internal.example.com/pipelines" one atom: the
+ * segmenter sees word boundaries at every "/" and ".", but CSS under
+ * `overflow-wrap: normal` breaks after hyphens, not after URL punctuation
+ * — which is exactly why long URLs overflow their boxes in browsers.
  *
  * Fallback (no Segmenter — documented and tested): break around each CJK
  * character and nowhere else. Spaces and soft hyphens were already handled
@@ -150,7 +175,21 @@ function atomizePiece(piece: string): string[] {
   let glueNext = false;
   for (const part of segmenter.segment(piece)) {
     const isNbsp = NBSP_RUN.test(part.segment);
-    const glue = glueNext || isNbsp || !part.isWordLike;
+    const previous = atoms[atoms.length - 1];
+    // A word boundary is only a LINE-break opportunity when the text on
+    // either side of it says so: the run behind ends breakably (hyphen,
+    // CJK, or a dictionary-broken SEA script) or the incoming segment
+    // starts with a CJK/SEA character.
+    const previousEnd = previous === undefined ? "" : ([...previous].at(-1) ?? "");
+    const segmentStart = [...part.segment][0] ?? "";
+    const boundaryBreaks =
+      previous !== undefined &&
+      (BREAK_AFTER_CHAR.test(previous) ||
+        CJK_BREAK_CHAR.test(previousEnd) ||
+        SEA_BREAK_CHAR.test(previousEnd) ||
+        CJK_BREAK_CHAR.test(segmentStart) ||
+        SEA_BREAK_CHAR.test(segmentStart));
+    const glue = glueNext || isNbsp || !part.isWordLike || !boundaryBreaks;
     const units = splitCjkCharacters(part.segment);
     if (glue && atoms.length > 0) {
       atoms[atoms.length - 1] += units[0];
@@ -176,7 +215,7 @@ interface WrapToken {
  * box: whitespace collapsed (via `collapseWhitespace`), greedy fill,
  * breaks at real line-break opportunities. Those are spaces (consumed at
  * the break), the boundaries `atomizePiece` finds — between CJK
- * characters, after trailing punctuation — and soft hyphens, which are
+ * characters, after hyphens, at SEA dictionary words — and soft hyphens, which are
  * invisible until used and render a "-" at the line end when the break is
  * taken. An NBSP never breaks. A single unbreakable run wider than the box
  * overflows on its own line rather than splitting, exactly as
@@ -266,6 +305,16 @@ export interface SimpleBlockLayout {
    * the box. 0 when there is no description.
    */
   descriptionLines: number;
+  /**
+   * The wrapped lines themselves, exactly as the live `<p>` paints them
+   * (soft-hyphen breaks already rendered as "-"). Emitters that hand the
+   * description to a renderer with a DIFFERENT wrapping model (tldraw's
+   * rich text uses `overflow-wrap: break-word`, the live `<p>` uses
+   * `normal`) must emit these lines verbatim rather than letting that
+   * renderer re-wrap — re-wrapping split a long URL the live component
+   * painted as one overflowing line. Empty when there is no description.
+   */
+  descriptionTextLines: string[];
   blockType: LayoutBox | null;
 }
 
@@ -433,6 +482,7 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
     chipText,
     description,
     descriptionLines: descLines.length,
+    descriptionTextLines: descLines,
     blockType,
   };
 }

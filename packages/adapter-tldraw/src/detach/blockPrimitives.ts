@@ -136,10 +136,11 @@ export function primitivesForBlock(
         origin,
         color: "grey",
         align: "middle",
-        // The live <p> wraps; the box is already the wrapped height and the
-        // primitive re-wraps at the same width, so hand the count through
-        // for the line-grid centering.
-        lines: layout.descriptionLines,
+        // The live <p> wraps with `overflow-wrap: normal`; hand the exact
+        // painted lines through so the stock text (whose rich text wraps
+        // with `break-word`) can never re-wrap them differently — see
+        // TextAtOptions.hardLines.
+        hardLines: layout.descriptionTextLines,
       }),
     );
   }

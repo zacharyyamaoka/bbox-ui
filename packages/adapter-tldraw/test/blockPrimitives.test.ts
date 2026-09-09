@@ -171,4 +171,95 @@ describe("primitivesForBlock", () => {
     expect(built.shapes[1].type).toBe("text");
     expect(built.portRows).toEqual([]);
   });
+
+  // The live description wraps with `overflow-wrap: normal` — an
+  // unbreakable run (URL, snake_case identifier) overflows on ONE line —
+  // while tldraw's rich text wraps with `break-word`, which would split
+  // that run mid-token. The emission must therefore carry the exact
+  // painted lines as hard breaks in a box wide enough that tldraw never
+  // re-wraps.
+  describe("description wrap parity with the live renderer", () => {
+    /** The description text shape and its rich-text paragraph strings. */
+    function descriptionShapeOf(built: BlockPrimitives, needle: string) {
+      const paragraphsOf = (richText: unknown): string[] => {
+        const doc = richText as { content?: Array<Record<string, unknown>> };
+        return (doc.content ?? []).map((paragraph) => {
+          const children = Array.isArray(paragraph.content)
+            ? (paragraph.content as Array<{ text?: string }>)
+            : [];
+          return children.map((child) => child.text ?? "").join("");
+        });
+      };
+      const shape = built.shapes.find(
+        (partial) =>
+          partial.type === "text" &&
+          paragraphsOf((partial.props as { richText?: unknown }).richText)
+            .join("\n")
+            .includes(needle),
+      );
+      expect(shape).toBeDefined();
+      return {
+        shape: shape!,
+        paragraphs: paragraphsOf(
+          (shape!.props as { richText?: unknown }).richText,
+        ),
+      };
+    }
+
+    function wrappedLinesFor(props: BBoxBlockShapeProps): string[] {
+      return layoutSimpleBlock({
+        width: props.w,
+        height: props.h,
+        title: props.title,
+        titleSize: props.titleSize,
+        icon: props.icon,
+        tag: props.tag,
+        description: props.description,
+        blockType: props.blockType,
+        orientation: props.orientation,
+        measure: measureText,
+      }).descriptionTextLines;
+    }
+
+    it.each([
+      [
+        "a long URL",
+        "docs at https://internal.example.com/pipelines/detect/thresholds/v2#calibration",
+        "https://",
+      ],
+      [
+        "a long snake_case identifier",
+        "reads shared_frame_buffer_pool_high_watermark_bytes from the runtime config",
+        "shared_frame",
+      ],
+    ])(
+      "%s is emitted as the live component's own lines, never re-wrapped",
+      (_name, description, needle) => {
+        const props = blockProps({ description });
+        const built = primitivesForBlock(props, { x: 0, y: 0 });
+        const lines = wrappedLinesFor(props);
+        expect(lines.length).toBeGreaterThan(1);
+        // One paragraph per painted line — hard breaks, not re-wrapping.
+        const { shape, paragraphs } = descriptionShapeOf(built, needle);
+        expect(paragraphs).toEqual(lines);
+        // …and the box out-measures the widest line so tldraw's
+        // `break-word` can never fire even in its own font metrics.
+        const widest = Math.max(
+          ...lines.map((line) => measureText(line, 18, 400)),
+        );
+        const shapeProps = shape.props as { w: number; scale: number };
+        expect(shapeProps.w * shapeProps.scale).toBeGreaterThanOrEqual(widest);
+      },
+    );
+
+    it("an ordinary wrapping description also carries its painted lines", () => {
+      const props = blockProps({
+        description: "blackbox modelling of the detection stage pipeline",
+      });
+      const built = primitivesForBlock(props, { x: 0, y: 0 });
+      const lines = wrappedLinesFor(props);
+      const { paragraphs } = descriptionShapeOf(built, "blackbox");
+      expect(paragraphs).toEqual(lines);
+    });
+  });
 });

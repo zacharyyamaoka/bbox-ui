@@ -351,6 +351,126 @@ assert(
 );
 const rebuiltShot = await screenshot("playground-detach-rebuilt.png");
 
+// ---------------------------------------- unbreakable-run wrap parity --
+// The live description wraps with `overflow-wrap: normal` — a long URL or
+// snake_case identifier is ONE overflowing line — while tldraw's rich text
+// wraps with `break-word`. The emission hands tldraw pre-wrapped hard lines
+// so the two renderers cannot disagree; this section proves it against the
+// BROWSER's paint, not the formula: live line count measured off the DOM,
+// detached line count measured off the emitted shape's painted bounds.
+const URL_DESC =
+  "docs at https://internal.example.com/pipelines/detect/thresholds/v2#calibration";
+const SNAKE_DESC =
+  "reads shared_frame_buffer_pool_high_watermark_bytes from the runtime config";
+await evaluate(`(() => {
+  const editor = window.playgroundEditor;
+  editor.run(() => {
+    editor.deleteShapes(editor.getCurrentPageShapes().map((s) => s.id));
+  });
+  const mk = (id, y, description) => editor.createShape({
+    id, type: "bbox-block", x: 160, y,
+    props: {
+      w: 384, h: 258, title: "Detect", titleSize: "xl",
+      blockType: "dataflow", description,
+      icon: "🔍", tag: "Draft 1", orientation: "horizontal", ports: [],
+    },
+  });
+  mk("shape:wrap_url", 60, ${JSON.stringify(URL_DESC)});
+  mk("shape:wrap_snake", 380, ${JSON.stringify(SNAKE_DESC)});
+  editor.setCamera({ x: 120, y: 40, z: 1 });
+  return true;
+})()`);
+// Let React paint the new blocks before reading their DOM.
+await new Promise((r) => setTimeout(r, 600));
+const liveWrap = await evaluate(`(() => {
+  const lines = {};
+  for (const el of document.querySelectorAll('[data-slot="block-description"]')) {
+    const rect = el.getBoundingClientRect();
+    const lineH = parseFloat(getComputedStyle(el).lineHeight);
+    const shapeEl = el.closest("[data-shape-id]");
+    lines[shapeEl?.dataset.shapeId ?? "?"] = Math.round(rect.height / lineH);
+  }
+  return lines;
+})()`);
+assert(
+  liveWrap["shape:wrap_url"] === 2,
+  `live URL description paints 2 lines (got ${liveWrap["shape:wrap_url"]})`,
+);
+assert(
+  liveWrap["shape:wrap_snake"] === 3,
+  `live snake_case description paints 3 lines (got ${liveWrap["shape:wrap_snake"]})`,
+);
+
+await evaluate(`(() => {
+  const editor = window.playgroundEditor;
+  editor.setCurrentTool("select");
+  editor.setSelectedShapes(["shape:wrap_url", "shape:wrap_snake"]);
+  return true;
+})()`);
+const wrapScreen = await evaluate(`(() => {
+  const p = window.playgroundEditor.pageToViewport({ x: 300, y: 180 });
+  return { x: p.x, y: p.y };
+})()`);
+await click(wrapScreen.x, wrapScreen.y, "right");
+const wrapDetachItem = await evaluate(`(() => {
+  const item = [...document.querySelectorAll('[data-testid="context-menu"] .tlui-button, .tlui-menu button')]
+    .find((el) => el.textContent.includes("Detach"));
+  if (!item) return null;
+  const r = item.getBoundingClientRect();
+  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+})()`);
+assert(wrapDetachItem !== null, "context menu offers Detach on the wrap fixtures");
+if (wrapDetachItem) await click(wrapDetachItem.x, wrapDetachItem.y);
+
+const wrapEmitted = await evaluate(`(() => {
+  const editor = window.playgroundEditor;
+  // tldraw's own text line height is 1.35; the description is 18px.
+  const LINE_PX = 18 * 1.35;
+  const plainParagraphs = (rt) =>
+    (rt.content ?? []).map((p) =>
+      (Array.isArray(p.content) ? p.content : []).map((c) => c.text ?? "").join(""));
+  const texts = editor.getCurrentPageShapes().filter((s) => s.type === "text");
+  const find = (needle) => {
+    const shape = texts.find((s) =>
+      plainParagraphs(s.props.richText).join("\\n").includes(needle));
+    if (!shape) return null;
+    const bounds = editor.getShapePageBounds(shape.id);
+    return {
+      paragraphs: plainParagraphs(shape.props.richText),
+      paintedLines: Math.round(bounds.h / LINE_PX),
+    };
+  };
+  return { url: find("https://"), snake: find("shared_frame") };
+})()`);
+assert(wrapEmitted.url !== null, "detached URL description text found");
+assert(wrapEmitted.snake !== null, "detached snake_case description text found");
+if (wrapEmitted.url) {
+  assert(
+    wrapEmitted.url.paintedLines === liveWrap["shape:wrap_url"],
+    `detached URL description paints the live line count (live ${liveWrap["shape:wrap_url"]}, detached ${wrapEmitted.url.paintedLines})`,
+  );
+  assert(
+    wrapEmitted.url.paragraphs.some(
+      (line) => line.startsWith("https://") && line.endsWith("#calibration"),
+    ),
+    `the URL stays one unbroken line (got ${JSON.stringify(wrapEmitted.url.paragraphs)})`,
+  );
+}
+if (wrapEmitted.snake) {
+  assert(
+    wrapEmitted.snake.paintedLines === liveWrap["shape:wrap_snake"],
+    `detached snake_case description paints the live line count (live ${liveWrap["shape:wrap_snake"]}, detached ${wrapEmitted.snake.paintedLines})`,
+  );
+  assert(
+    wrapEmitted.snake.paragraphs.includes(
+      "shared_frame_buffer_pool_high_watermark_bytes",
+    ),
+    `the identifier stays one unbroken line (got ${JSON.stringify(wrapEmitted.snake.paragraphs)})`,
+  );
+}
+const wrapShot = await screenshot("playground-detach-url-wrap.png");
+console.log(`             ${wrapShot}`);
+
 const journeyErrors = consoleErrors.filter(
   (line) => !line.includes("License") && !line.includes("watermark"),
 );

@@ -197,16 +197,49 @@ export interface TextAtOptions {
    * compensation applied to a wrapped paragraph would pin it to the top.
    */
   lines?: number;
+  /**
+   * The exact painted lines, when the live DOM wrapped this string. When
+   * given, they are emitted as hard line breaks and the shape is made wide
+   * enough that tldraw can never re-wrap them.
+   *
+   * WHY: the live slot wraps with `overflow-wrap: normal` — an unbreakable
+   * run (a URL, a snake_case identifier) overflows on ONE line — but
+   * tldraw renders rich text with `overflow-wrap: break-word`, which
+   * splits that same run mid-token into extra lines the live component
+   * never painted. Handing tldraw the pre-wrapped lines and a box that
+   * fits the widest one takes its wrapping model out of the picture, so
+   * the two renderers cannot disagree.
+   */
+  hardLines?: string[];
+  /** CSS font weight the string is measured at (default 400). */
+  weight?: number;
 }
 
 /** A stock text primitive centered in the live line box. */
 export function textAt(options: TextAtOptions): TLShapePartial {
   const stock = stockTextStyle(options.px);
-  const lines = options.lines ?? 1;
+  const hardLines =
+    options.hardLines != null && options.hardLines.length > 0
+      ? options.hardLines
+      : null;
+  const lines = hardLines ? hardLines.length : (options.lines ?? 1);
   // TextShapeUtil floors a fixed width before measuring; reserve the same
   // +1 tldraw itself uses for auto-sized labels, plus DOM tolerance, so the
   // final glyph never wraps out of the box.
-  const width = Math.max(1, Math.ceil(options.box.w) + 8);
+  let width = Math.max(1, Math.ceil(options.box.w) + 8);
+  if (hardLines) {
+    // The widest painted line, with 10% headroom on top of the +8: tldraw
+    // measures in its own bundled sans font, not the system UI font this
+    // measurer uses, and `break-word` fires the moment ITS measurement of
+    // an unbreakable line exceeds the box. Extra width is invisible — the
+    // text has no fill and every line stays centered on the same axis.
+    const widest = Math.max(
+      ...hardLines.map((line) =>
+        measureText(line, options.px, options.weight ?? 400),
+      ),
+    );
+    width = Math.max(width, Math.ceil(widest * 1.1) + 8);
+  }
   const x =
     options.align === "end"
       ? options.box.x + options.box.w - width
@@ -222,7 +255,9 @@ export function textAt(options: TextAtOptions): TLShapePartial {
       options.box.y +
       (options.box.h - lines * options.px * TLDRAW_TEXT_LINE) / 2,
     props: {
-      richText: toRichText(options.text),
+      // `toRichText` turns each "\n" into its own paragraph — one painted
+      // line per entry, margin-free, exactly `lines` of them.
+      richText: toRichText(hardLines ? hardLines.join("\n") : options.text),
       color: options.color,
       size: stock.size,
       font: "sans",

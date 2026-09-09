@@ -76,6 +76,9 @@ describe("layoutSimpleBlock", () => {
     const lines = wrapTextLines(description, contentW, META_FONT_PX, 400, measure);
     expect(lines.length).toBeGreaterThan(1);
     expect(layout.descriptionLines).toBe(lines.length);
+    // The painted lines themselves ride along, for emitters whose target
+    // renderer wraps by a different model (tldraw's break-word).
+    expect(layout.descriptionTextLines).toEqual(lines);
     // The box is the full wrapped paragraph…
     expect(layout.description!.h).toBe(lines.length * lineH);
     expect(layout.description!.w).toBe(contentW);
@@ -153,6 +156,36 @@ describe("layoutSimpleBlock", () => {
     expect(wrapTextLines(hyphenated, 30, 10, 400, measure)).toEqual([
       "aaaa-",
       "bbbb",
+    ]);
+  });
+
+  it("a long URL is ONE unbreakable run — segmenter word boundaries at '/' are not CSS breaks", () => {
+    // Measured against the real DOM (url-desc probe, 2026-09-09): Chrome
+    // keeps "https://…#calibration" on one overflowing line under
+    // overflow-wrap: normal. The segmenter sees word boundaries at every
+    // "/", "." and "#", so gluing word-like segments backward is what
+    // keeps the model honest here.
+    const url = "https://internal.example.com/pipelines/detect/thresholds/v2#calibration";
+    expect(wrapTextLines(`docs at ${url}`, 50, 10, 400, measure)).toEqual([
+      "docs at",
+      url,
+    ]);
+  });
+
+  it("a long snake_case identifier is one unbreakable run too", () => {
+    const identifier = "shared_frame_buffer_pool_high_watermark_bytes";
+    expect(wrapTextLines(`reads ${identifier} now`, 50, 10, 400, measure)).toEqual([
+      "reads",
+      identifier,
+      "now",
+    ]);
+  });
+
+  it("a hard hyphen keeps its break-after opportunity", () => {
+    // 10 chars fit per line at width 50; browsers break after "-".
+    expect(wrapTextLines("state-of-the-art", 50, 10, 400, measure)).toEqual([
+      "state-of-",
+      "the-art",
     ]);
   });
 

@@ -6,6 +6,7 @@ import { BBoxBlockNode, BBoxPortNode } from "@bbox-ui/adapter-reactflow";
 import {
   BBoxBlockShapeUtil,
   BBoxPortShapeUtil,
+  registerReceivedPortCleanup,
   setPortReceived,
 } from "@bbox-ui/adapter-tldraw";
 import type { Scene } from "@bbox-ui/demo-scene";
@@ -84,6 +85,9 @@ interface LabelBox {
   y: number;
   w: number;
   h: number;
+  /** The painted label string — identity, so a swapped or reworded label
+   * can never masquerade as agreement just by keeping the pair count. */
+  text: string;
 }
 
 /** The label's box compared corner-and-size, not just a centre. */
@@ -123,8 +127,18 @@ interface Divergence {
   standalonePorts: PortDelta[];
   /** How many label boxes this reading actually compared (both hosts). */
   labelCount: number;
+  /**
+   * The identity of every compared label, sorted: "owner/port=text" for a
+   * block port, "port=text" for a standalone one. WHY identities and not
+   * just the count: a regression that removes one port's label while
+   * adding one to a normally-blank port keeps the count intact — only the
+   * names catch the swap.
+   */
+  labels: string[];
   /** Ports whose label painted in one host but not the other. */
   labelMismatches: string[];
+  /** Ports whose two hosts painted DIFFERENT label strings. */
+  labelTextMismatches: string[];
   maxAbs: number;
   /** The live camera zoom the reading was taken at. */
   zoom: number | null;
@@ -178,6 +192,7 @@ function measurePane(pane: HTMLElement): PaneGeometry {
             y: labelRect.top - paneRect.top,
             w: labelRect.width,
             h: labelRect.height,
+            text: labelEl?.textContent?.trim() ?? "",
           }
         : null;
     return {
@@ -241,15 +256,29 @@ function measureDivergence(): Divergence | null {
   const rows: BlockDelta[] = [];
   let maxAbs = 0;
   let labelCount = 0;
+  const labels: string[] = [];
   const labelMismatches: string[] = [];
+  const labelTextMismatches: string[] = [];
   const track = (value: number) => {
     maxAbs = Math.max(maxAbs, Math.abs(value));
     return value;
   };
-  const diffPort = (id: string, rfPort: HostPortGeometry, tlPort: HostPortGeometry): PortDelta => {
+  const diffPort = (
+    id: string,
+    qualifiedId: string,
+    rfPort: HostPortGeometry,
+    tlPort: HostPortGeometry,
+  ): PortDelta => {
     let label: LabelDelta | null = null;
     if (rfPort.label && tlPort.label) {
       labelCount += 1;
+      labels.push(`${qualifiedId}=${rfPort.label.text}`);
+      if (rfPort.label.text !== tlPort.label.text) {
+        // Same port, two different strings — geometry cannot express it.
+        labelTextMismatches.push(
+          `${qualifiedId} rf="${rfPort.label.text}" tl="${tlPort.label.text}"`,
+        );
+      }
       label = {
         dx: track(rfPort.label.x - tlPort.label.x),
         dy: track(rfPort.label.y - tlPort.label.y),
@@ -259,7 +288,7 @@ function measureDivergence(): Divergence | null {
     } else if (rfPort.label || tlPort.label) {
       // One host painted a label the other did not — worse than a big
       // delta, and a delta cannot express it, so it is reported by name.
-      labelMismatches.push(id);
+      labelMismatches.push(qualifiedId);
     }
     return {
       id,
@@ -275,7 +304,7 @@ function measureDivergence(): Divergence | null {
     for (const [portId, rfPort] of Object.entries(rfBlock.ports)) {
       const tlPort = tlBlock.ports[portId];
       if (!tlPort) continue;
-      ports.push(diffPort(portId, rfPort, tlPort));
+      ports.push(diffPort(portId, `${blockId}/${portId}`, rfPort, tlPort));
     }
     rows.push({
       title: rfBlock.title,
@@ -290,14 +319,17 @@ function measureDivergence(): Divergence | null {
   for (const [portId, rfPort] of Object.entries(rf.standalonePorts)) {
     const tlPort = tl.standalonePorts[portId];
     if (!tlPort) continue;
-    standalonePorts.push(diffPort(portId, rfPort, tlPort));
+    standalonePorts.push(diffPort(portId, portId, rfPort, tlPort));
   }
   if (rows.length === 0 && standalonePorts.length === 0) return null;
+  labels.sort();
   return {
     rows,
     standalonePorts,
     labelCount,
+    labels,
     labelMismatches,
+    labelTextMismatches,
     maxAbs,
     zoom: window.reactFlow?.getViewport().zoom ?? null,
     measuredAt: Date.now(),
@@ -503,6 +535,11 @@ export function CompareView({
   const handleTldrawMount = useCallback(
     (editor: Editor) => {
       window.editor = editor;
+      // Deleting a shape must drop its runtime `received` flags with it,
+      // and disposing the editor must drop its whole per-editor table —
+      // the compare view seeds flags like any other host, so it registers
+      // like any other host.
+      registerReceivedPortCleanup(editor);
       editor.createShapes(tldrawScene.shapes);
       // Runtime-only "Data Recived" paint — never written into the document.
       for (const { shapeId, portId } of tldrawScene.receivedPorts) {
@@ -822,6 +859,11 @@ export function CompareView({
               {divergence.labelMismatches.length > 0 && (
                 <div style={{ marginBottom: 6, color: "#f87171" }}>
                   label in one host only: {divergence.labelMismatches.join(", ")}
+                </div>
+              )}
+              {divergence.labelTextMismatches.length > 0 && (
+                <div style={{ marginBottom: 6, color: "#f87171" }}>
+                  label text differs: {divergence.labelTextMismatches.join(", ")}
                 </div>
               )}
               {summary && (
