@@ -11,9 +11,10 @@
     "demo:reactflow": "pnpm --filter demo-reactflow run dev",
     "demo:tldraw": "pnpm --filter demo-tldraw run dev",
     "demo:drive": "node demos/drive.mjs",
-    "demo": "pnpm --parallel --filter demo-reactflow --filter demo-tldraw --filter demo-compare --filter bbox-playground run dev",
+    "demo": "node scripts/demo.mjs",
     "demo:compare": "pnpm --filter demo-compare run dev",
-    "demo:playground": "pnpm --filter bbox-playground run dev"
+    "demo:playground": "pnpm --filter bbox-playground run dev",
+    "demo:all": "pnpm --parallel --filter demo-reactflow --filter demo-tldraw --filter demo-compare --filter bbox-playground run dev"
   },
   "devDependencies": {
     "shadcn": "^3.0.0",
