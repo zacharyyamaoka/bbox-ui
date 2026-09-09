@@ -6,6 +6,8 @@ import {
   sceneToReactFlowNodes,
 } from "@bbox-ui/demo-scene/reactflow";
 
+import { CodeFieldDemo } from "./CodeFieldDemo";
+
 const nodeTypes = { bboxBlock: BBoxBlockNode, bboxStandalonePort: BBoxPortNode };
 
 // The one shared scene — see demos/scene. Both hosts (and the compare
@@ -34,6 +36,7 @@ export function App() {
       >
         <Background />
       </ReactFlow>
+      <CodeFieldDemo />
     </div>
   );
 }

@@ -16,6 +16,10 @@
   --border: oklch(0.87 0 0);
   --ring: oklch(0.63 0 0);
   --bbox-received: oklch(0.65 0.19 145);
+  /* CodeField's syntax palette: string/success, number/warning, error tokens. */
+  --bbox-success: oklch(0.65 0.19 145);
+  --bbox-warning: oklch(0.75 0.16 75);
+  --bbox-danger: oklch(0.6 0.22 25);
 }
 
 @theme inline {
@@ -30,4 +34,19 @@
   --color-border: var(--border);
   --color-ring: var(--ring);
   --color-bbox-received: var(--bbox-received);
+  --color-bbox-success: var(--bbox-success);
+  --color-bbox-warning: var(--bbox-warning);
+  --color-bbox-danger: var(--bbox-danger);
+}
+
+/*
+ * Dark mode, shadcn's own `.dark` convention. The rest of the palette
+ * (background/foreground/card/…) has no dark variant yet — Port and Block
+ * predate this — so only the tokens CodeField introduces are covered here;
+ * extending the base palette to dark is a separate piece of work.
+ */
+.dark {
+  --bbox-success: oklch(0.7 0.17 145);
+  --bbox-warning: oklch(0.8 0.15 80);
+  --bbox-danger: oklch(0.68 0.2 25);
 }

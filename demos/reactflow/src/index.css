@@ -3,6 +3,8 @@
    React Flow's own unlayered .react-flow__handle defaults. */
 @import "@xyflow/react/dist/style.css" layer(base);
 @import "@bbox-ui/core/theme.css";
+@import "@bbox-ui/core/code-tokens.css";
+@import "@bbox-ui/core/code-field.css";
 
 @source "../../../packages";
 
@@ -11,4 +13,36 @@ body,
 #root {
   height: 100%;
   margin: 0;
+}
+
+/* Demo-only chrome for CodeFieldDemo.tsx — a floating panel over the
+   canvas, not part of the reusable component. */
+.bbox-code-field-demo {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 280px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-foreground) 12%, transparent);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  /* Above tldraw's own UI chrome (style panel, toolbar), which otherwise
+     covers this fixed top-right corner. */
+  z-index: 10000;
+}
+
+.bbox-code-field-demo section + section {
+  margin-top: 12px;
+}
+
+.bbox-code-field-demo h2 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
 }

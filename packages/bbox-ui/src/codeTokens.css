@@ -1,0 +1,83 @@
+/*
+ * The one syntax palette for every `CodeField`. `classHighlighter`
+ * (`@lezer/highlight`) emits stable `tok-*` classes with no baked-in
+ * colour — any grammar that mounts a language (`grammar.language`) gets
+ * real syntax highlighting for free, and every field reads the same
+ * palette rather than each grammar inventing its own. Colours are bbox-ui's
+ * `--color-*` tokens (see theme.css), so this follows the surrounding
+ * theme automatically. Optional: a plain-text field (no `grammar.language`)
+ * never needs this file.
+ */
+
+.bbox-code-tokens .tok-keyword,
+.bbox-code-tokens .tok-operatorKeyword,
+.bbox-code-tokens .tok-controlKeyword,
+.bbox-code-tokens .tok-definitionKeyword,
+.bbox-code-tokens .tok-moduleKeyword {
+  color: color-mix(in srgb, var(--color-primary) 78%, var(--color-foreground));
+  font-weight: 600;
+}
+
+.bbox-code-tokens .tok-string,
+.bbox-code-tokens .tok-docString,
+.bbox-code-tokens .tok-character,
+.bbox-code-tokens .tok-attributeValue {
+  color: color-mix(in srgb, var(--bbox-success) 62%, var(--color-foreground));
+}
+
+.bbox-code-tokens .tok-number,
+.bbox-code-tokens .tok-integer,
+.bbox-code-tokens .tok-float,
+.bbox-code-tokens .tok-bool,
+.bbox-code-tokens .tok-atom,
+.bbox-code-tokens .tok-null,
+.bbox-code-tokens .tok-unit {
+  color: color-mix(in srgb, var(--bbox-warning) 58%, var(--color-foreground));
+}
+
+.bbox-code-tokens .tok-comment,
+.bbox-code-tokens .tok-lineComment,
+.bbox-code-tokens .tok-blockComment,
+.bbox-code-tokens .tok-meta {
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
+.bbox-code-tokens .tok-typeName,
+.bbox-code-tokens .tok-className,
+.bbox-code-tokens .tok-namespace {
+  color: color-mix(in srgb, var(--color-primary) 55%, var(--color-foreground));
+}
+
+/* A bare name is the token a code field most needs to read at a glance as
+ * "this references something", so it gets the accent at full strength —
+ * unlike every other token's muted mix. */
+.bbox-code-tokens .tok-variableName,
+.bbox-code-tokens .tok-variableName2,
+.bbox-code-tokens .tok-definition,
+.bbox-code-tokens .tok-self {
+  color: var(--color-primary);
+}
+
+.bbox-code-tokens .tok-propertyName,
+.bbox-code-tokens .tok-attributeName,
+.bbox-code-tokens .tok-labelName {
+  color: color-mix(in srgb, var(--bbox-danger) 42%, var(--color-foreground));
+}
+
+.bbox-code-tokens .tok-function,
+.bbox-code-tokens .tok-macroName {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.bbox-code-tokens .tok-operator,
+.bbox-code-tokens .tok-punctuation,
+.bbox-code-tokens .tok-separator,
+.bbox-code-tokens .tok-bracket {
+  color: var(--color-muted-foreground);
+}
+
+.bbox-code-tokens .tok-invalid {
+  color: var(--bbox-danger);
+}

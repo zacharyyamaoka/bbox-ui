@@ -83,6 +83,78 @@
           "target": "components/bbox/block-shape-util.tsx"
         }
       ]
+    },
+    {
+      "name": "code-field",
+      "type": "registry:component",
+      "title": "Code Field",
+      "description": "A code text box — one line or a multi-line lane of real CodeMirror 6, grammar-agnostic. Plug in a `grammar` (slots, marks, completions, an optional rendered tree) or use it as a plain code line. Zero canvas assumptions.",
+      "dependencies": [
+        "@codemirror/autocomplete",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight"
+      ],
+      "registryDependencies": ["utils"],
+      "files": [
+        {
+          "path": "packages/bbox-ui/src/codeField.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeField.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeFieldRows.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeFieldRows.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeGrammar.ts",
+          "type": "registry:lib",
+          "target": "lib/bbox/codeGrammar.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/fieldGesture.ts",
+          "type": "registry:lib",
+          "target": "lib/bbox/fieldGesture.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/caretGeometry.ts",
+          "type": "registry:lib",
+          "target": "lib/bbox/caretGeometry.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeField.css",
+          "type": "registry:file",
+          "target": "components/bbox/codeField.css"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeTokens.css",
+          "type": "registry:file",
+          "target": "components/bbox/codeTokens.css"
+        }
+      ]
+    },
+    {
+      "name": "code-field-signature",
+      "type": "registry:component",
+      "title": "Code Field — signature grammar",
+      "description": "`CodeField`'s first grammar: `name: Type = default`, the way Python already spells a parameter. One line is a port row, several lines are a lane — pass `types`/`values` for completions, `resolveReference` for a clickable/expandable rendered tree.",
+      "dependencies": ["@codemirror/lang-python"],
+      "registryDependencies": ["utils", "code-field"],
+      "files": [
+        {
+          "path": "packages/bbox-ui/src/signature.ts",
+          "type": "registry:lib",
+          "target": "lib/bbox/signature.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/signatureGrammar.ts",
+          "type": "registry:lib",
+          "target": "lib/bbox/signatureGrammar.ts"
+        }
+      ]
     }
   ]
 }

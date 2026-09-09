@@ -8,6 +8,8 @@ import {
 } from "@bbox-ui/adapter-tldraw";
 import { sceneToTldrawShapes } from "@bbox-ui/demo-scene/tldraw";
 
+import { CodeFieldDemo } from "./CodeFieldDemo";
+
 const shapeUtils = [BBoxBlockShapeUtil, BBoxPortShapeUtil];
 
 // The one shared scene — see demos/scene. Both hosts (and the compare
@@ -37,6 +39,7 @@ export function App() {
   return (
     <div style={{ position: "fixed", inset: 0 }}>
       <Tldraw shapeUtils={shapeUtils} onMount={handleMount} />
+      <CodeFieldDemo />
     </div>
   );
 }

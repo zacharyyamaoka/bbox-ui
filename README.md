@@ -64,6 +64,66 @@ shortened, and the chip is never painted over live text.
 </Block>
 ```
 
+### Code Field
+
+A code text box: one line, or a multi-line lane, of real CodeMirror 6 —
+grammar-agnostic. `CodeField` knows nothing about ports, types, or Python;
+what it knows is a live-commit contract (`FieldGesture`, one write policy:
+every keystroke round-trips into `value`) and a declarative `grammar` prop
+that turns plain text into slot decorations, a completion source, and
+(optionally) a RENDERED tree the field can also show in place of the live
+document.
+
+```tsx
+<CodeField
+  value={source}
+  onWrite={setSource}
+  grammar={signatureGrammar({ types: TYPES, values: VALUES })}
+/>
+```
+
+- **`grammar`** (`CodeFieldGrammar`, all hooks optional — `{}` is the plain
+  code text box): `language` (a CodeMirror language extension), `slotAt`
+  (which named region the caret sits in), `decorate` (marks, by CSS class),
+  `complete` (a completion source, dispatched by slot), `lines` (the
+  RENDERED-mode tree — role-tagged segments per source line), and
+  `resolveReference` (what a segment marked `isReference` resolves to: a
+  click target and/or more rows to show in place).
+- **`multiline`**: several lines, one per thing — a port *lane*. A single
+  field stays a port *row*. `foldInactiveLinesAfter` (on the grammar) folds
+  every line but the caret's own past N characters, live-preview style.
+- **`mode`** (`"rendered" | "source"`, controlled): the "code block
+  overlay" — a pretty tree by default, the live document only where the
+  caret is. `onOpenSource(line, column)` fires when a rendered row is
+  clicked; a host typically responds by setting `mode="source"` and a
+  `cursorAt` computed via `lineStartOffset`. `CodeFieldModeToggle` is an
+  optional `[Rendered | Source]` switch; a host may drive `mode` from its
+  own chrome instead.
+- Enter/Escape end the gesture (never discarded — Ctrl+Z retracts); a lane
+  keeps Enter as "new line" and exits on Ctrl/Cmd+Enter instead. A pasted or
+  typed newline is stripped on a single-line field, kept on a `multiline`
+  one.
+
+The `signature` grammar (`signatureGrammar`) ships as the first grammar:
+`name: Type = default`, the way Python already spells a parameter — a free
+label with nothing typed is a legal name, nothing lints it. Pass `types` /
+`values` for slot-dispatched completions (nothing offered while a `name` is
+being typed — free text must never be interrupted), `resolveReference` for
+a clickable/expandable rendered tree, `kindLabels` for the completion
+tooltip's kind pill.
+
+```tsx
+<CodeField
+  value="pose: Pose = None"
+  onWrite={setValue}
+  grammar={signatureGrammar({
+    types: [{ label: "Pose", kind: "known" }, { label: "int", kind: "primitive" }],
+    values: [{ label: "None" }],
+    resolveReference: (name) => knownTypes[name] ? { kind: "known", expandLines: () => fieldsOf(name) } : null,
+  })}
+/>
+```
+
 ## One core, two hosts — the adapter diff
 
 The presentational core never imports a canvas engine. Each host wraps the
@@ -247,7 +307,8 @@ node demos/drive-playground-detach.mjs  # headless: seed Block+Port, detach via 
 `registry.json` follows the
 [shadcn registry schema](https://ui.shadcn.com/docs/registry/registry-json);
 `pnpm registry:build` (shadcn `build`) emits servable items to `public/r/`:
-`port`, `block`, `bbox-layout`, `block-node-reactflow`, `block-shape-tldraw`.
+`port`, `block`, `bbox-layout`, `block-node-reactflow`, `block-shape-tldraw`,
+`code-field`, `code-field-signature`.
 
 ## Develop
 
@@ -257,6 +318,9 @@ pnpm test              # unit tests: core layout (icon ratio, states, layouts)
                        # + compare camera bridge (tldraw ↔ React Flow round-trip)
                        # + sceneFromEditor (bbox shapes kept, stock counted, empty board)
                        # + the size contract (explicit w/h → CSS on the RF node; hug otherwise)
+                       # + Code Field: FieldGesture commit contract, the signature grammar
+                       #   (round trip, brackets/quotes, slots, rendered-tree segments), and
+                       #   the grammar→CodeMirror decoration/fold bridge
 pnpm build             # typecheck everything + build every demo/app
 pnpm demo             # all demos + the playground: React Flow 5183, tldraw 5189,
                       # compare 5191, playground 5193
@@ -266,6 +330,9 @@ pnpm demo:compare      # http://127.0.0.1:5191
 pnpm demo:playground   # http://127.0.0.1:5193  (the editable one)
 node demos/drive.mjs reactflow http://127.0.0.1:5183   # headless assert + screenshot
 node demos/drive.mjs tldraw    http://127.0.0.1:5189
+node demos/drive-code-field.mjs reactflow http://127.0.0.1:5183  # CodeFieldDemo panel: port
+node demos/drive-code-field.mjs tldraw    http://127.0.0.1:5189  # row/lane, rendered<->source,
+                                                                  # reference click + expand
 node demos/drive-compare.mjs                           # all four compare modes
 node demos/drive-playground.mjs                        # toolbar + tools journey
 node demos/drive-playground-compare.mjs                # live-board compare journey
