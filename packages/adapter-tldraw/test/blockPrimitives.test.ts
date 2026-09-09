@@ -221,6 +221,20 @@ describe("primitivesForBlock", () => {
       }).descriptionTextLines;
     }
 
+    // WHY the renderer's own measurer, not `measureText`: the live DOM
+    // measures in the system sans stack, but tldraw paints `font: "sans"`
+    // in its OWN bundled font (IBM Plex Sans), and the two disagree per
+    // glyph — "JJJ" at 18px is 14.74px in the system font and 28.35px in
+    // Plex (measured in Chrome). A box sized from the source font can be
+    // too narrow in the renderer's metrics, and `break-word` then splits a
+    // painted line the live component never wrapped. This stub renderer
+    // font is systematically wider than the source font — the same
+    // relationship, exaggerated — so a box that was merely estimated from
+    // the source font fails, and only one derived from the renderer's
+    // measurement passes.
+    const rendererMeasure = (line: string, fontPx: number) =>
+      measureText(line, fontPx, 400) * 2;
+
     it.each([
       [
         "a long URL",
@@ -236,21 +250,37 @@ describe("primitivesForBlock", () => {
       "%s is emitted as the live component's own lines, never re-wrapped",
       (_name, description, needle) => {
         const props = blockProps({ description });
-        const built = primitivesForBlock(props, { x: 0, y: 0 });
+        const built = primitivesForBlock(
+          props,
+          { x: 0, y: 0 },
+          { measureRendered: rendererMeasure },
+        );
         const lines = wrappedLinesFor(props);
         expect(lines.length).toBeGreaterThan(1);
         // One paragraph per painted line — hard breaks, not re-wrapping.
         const { shape, paragraphs } = descriptionShapeOf(built, needle);
         expect(paragraphs).toEqual(lines);
-        // …and the box out-measures the widest line so tldraw's
-        // `break-word` can never fire even in its own font metrics.
+        // …and the box out-measures the widest line IN THE RENDERER'S OWN
+        // FONT METRICS, so tldraw's `break-word` can never fire.
         const widest = Math.max(
-          ...lines.map((line) => measureText(line, 18, 400)),
+          ...lines.map((line) => rendererMeasure(line, 18)),
         );
         const shapeProps = shape.props as { w: number; scale: number };
         expect(shapeProps.w * shapeProps.scale).toBeGreaterThanOrEqual(widest);
       },
     );
+
+    it("without a renderer measurer the fallback still covers the source font's widest line", () => {
+      const description =
+        "docs at https://internal.example.com/pipelines/detect/thresholds/v2#calibration";
+      const props = blockProps({ description });
+      const built = primitivesForBlock(props, { x: 0, y: 0 });
+      const lines = wrappedLinesFor(props);
+      const { shape } = descriptionShapeOf(built, "https://");
+      const widest = Math.max(...lines.map((line) => measureText(line, 18, 400)));
+      const shapeProps = shape.props as { w: number; scale: number };
+      expect(shapeProps.w * shapeProps.scale).toBeGreaterThanOrEqual(widest);
+    });
 
     it("an ordinary wrapping description also carries its painted lines", () => {
       const props = blockProps({

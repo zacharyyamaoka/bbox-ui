@@ -54,6 +54,30 @@ describe("registry payloads (public/r) vs the sources they snapshot", () => {
     }
   });
 
+  // WHY the published index is asserted too: `npx shadcn add` consumers
+  // resolve items through `public/r/registry.json`, not the root file. A
+  // root edit without a rebuild would leave the two indexes disagreeing —
+  // consumers keep receiving the OLD item shape while the suite, checking
+  // only the root, stays green.
+  it("the published index (public/r/registry.json) mirrors the source registry.json", () => {
+    const published = JSON.parse(
+      readFileSync(path.join(repoRoot, "public", "r", "registry.json"), "utf8"),
+    ) as { items: RegistryItem[] };
+    const projected = (items: RegistryItem[]) =>
+      items.map((item) => ({
+        name: item.name,
+        files: item.files.map(({ path: filePath, type, target }) => ({
+          path: filePath,
+          type,
+          target,
+        })),
+      }));
+    expect(
+      projected(published.items),
+      "public/r/registry.json disagrees with registry.json — run `pnpm registry:build` and commit public/r",
+    ).toEqual(projected(registry.items));
+  });
+
   for (const item of registry.items) {
     it(`${item.name}: every payload file matches its source verbatim`, () => {
       const payloadPath = path.join(repoRoot, "public", "r", `${item.name}.json`);
@@ -72,6 +96,22 @@ describe("registry payloads (public/r) vs the sources they snapshot", () => {
           `${payloadPath} is stale for ${fileRef.path} — run \`pnpm registry:build\` and commit public/r`,
         ).toBe(true);
       }
+    });
+
+    // WHY exact sets and not just coverage: checking only "every source ref
+    // has a fresh entry" leaves a hole — drop a file from registry.json and
+    // its old `content` entry keeps shipping in the payload forever, staler
+    // with every source edit, while the coverage loop above no longer looks
+    // at it. The file SETS must match in both directions.
+    it(`${item.name}: the payload carries exactly the declared file set — no stale extras`, () => {
+      const payloadPath = path.join(repoRoot, "public", "r", `${item.name}.json`);
+      const payload = JSON.parse(readFileSync(payloadPath, "utf8")) as {
+        files: Array<RegistryFileRef & { content?: string }>;
+      };
+      expect(
+        [...payload.files.map((f) => f.path)].sort(),
+        `${payloadPath} ships a different file set than registry.json declares — run \`pnpm registry:build\` and commit public/r`,
+      ).toEqual([...item.files.map((f) => f.path)].sort());
     });
   }
 });

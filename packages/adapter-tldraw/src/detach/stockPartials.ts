@@ -13,8 +13,13 @@
  *   bg-muted (the default-state wash)            → fill "solid"
  *   border-2                                     → size "s" (2px stroke)
  */
-import { createShapeId, toRichText } from "tldraw";
-import type { TLDefaultColorStyle, TLDefaultSizeStyle, TLShapePartial } from "tldraw";
+import { createShapeId, getFontFamily, toRichText } from "tldraw";
+import type {
+  Editor,
+  TLDefaultColorStyle,
+  TLDefaultSizeStyle,
+  TLShapePartial,
+} from "tldraw";
 
 import type { LayoutBox } from "@bbox-ui/core";
 
@@ -79,6 +84,42 @@ export function stockTextStyle(px: number): {
     STOCK_TEXT_BASES.find((candidate) => px <= candidate.px) ??
     STOCK_TEXT_BASES[STOCK_TEXT_BASES.length - 1];
   return { size: base.size, scale: px / base.px };
+}
+
+/**
+ * Width of one line measured by the renderer that will PAINT it — for the
+ * detach emission, tldraw's own text engine. `fontPx` is the shape's
+ * unscaled font size (a stock rung: 18/24/36/44).
+ *
+ * WHY this type exists at all: `measureText` above measures in the live
+ * DOM font (the system sans stack), but tldraw renders `font: "sans"` in
+ * its OWN bundled font — IBM Plex Sans via 'tldraw_sans' — and the two
+ * fonts' advance widths differ per glyph ("JJJ" at 18px: 14.74px system,
+ * 28.35px Plex, measured in Chrome). The two must never be conflated: any
+ * guarantee about what tldraw will or will not re-wrap has to be DERIVED
+ * from tldraw's measurement, never estimated from the live font plus a
+ * fudge factor.
+ */
+export type RenderedLineMeasure = (line: string, fontPx: number) => number;
+
+/**
+ * The renderer-truth measurer for a live tldraw editor: the same
+ * `editor.textMeasure` + font resolution the text shape's own layout uses
+ * (TextShapeUtil measures with `getFontFamily(theme, font)` at the
+ * unscaled font size), so a width returned here is exactly the width
+ * tldraw's `break-word` decision will see.
+ */
+export function renderedLineMeasureFor(editor: Editor): RenderedLineMeasure {
+  return (line, fontPx) =>
+    editor.textMeasure.measureText(line, {
+      fontStyle: "normal",
+      fontWeight: "normal",
+      fontFamily: getFontFamily(editor.getCurrentTheme(), "sans"),
+      fontSize: fontPx,
+      lineHeight: TLDRAW_TEXT_LINE,
+      maxWidth: null,
+      padding: "0px",
+    }).w;
 }
 
 let graphemeSegmenter: Intl.Segmenter | null = null;
@@ -213,6 +254,13 @@ export interface TextAtOptions {
   hardLines?: string[];
   /** CSS font weight the string is measured at (default 400). */
   weight?: number;
+  /**
+   * Measures a line in the font the emitting renderer paints — see
+   * `RenderedLineMeasure`. When given, the `hardLines` box width is
+   * DERIVED from it, making the no-rewrap guarantee exact; without it the
+   * box falls back to a live-font estimate (headless/no-editor callers).
+   */
+  measureRendered?: RenderedLineMeasure;
 }
 
 /** A stock text primitive centered in the live line box. */
@@ -228,17 +276,37 @@ export function textAt(options: TextAtOptions): TLShapePartial {
   // final glyph never wraps out of the box.
   let width = Math.max(1, Math.ceil(options.box.w) + 8);
   if (hardLines) {
-    // The widest painted line, with 10% headroom on top of the +8: tldraw
-    // measures in its own bundled sans font, not the system UI font this
-    // measurer uses, and `break-word` fires the moment ITS measurement of
-    // an unbreakable line exceeds the box. Extra width is invisible — the
-    // text has no fill and every line stays centered on the same axis.
-    const widest = Math.max(
-      ...hardLines.map((line) =>
-        measureText(line, options.px, options.weight ?? 400),
-      ),
-    );
-    width = Math.max(width, Math.ceil(widest * 1.1) + 8);
+    // The box must out-measure the widest painted line IN THE RENDERER'S
+    // OWN METRICS, or tldraw's `break-word` splits a line the live
+    // component never wrapped. Extra width is invisible — the text has no
+    // fill and every line stays centered on the same axis.
+    //
+    // WHY two measurement paths: the live DOM font (the system sans stack
+    // `measureText` uses) and tldraw's `font: "sans"` (its bundled IBM
+    // Plex Sans) are DIFFERENT fonts with different advance widths —
+    // "JJJ" at 18px is 14.74px in one and 28.35px in the other — and they
+    // must never be conflated. With an editor in hand the width is derived
+    // from tldraw's own measurement, at the shape's unscaled font size and
+    // against the unscaled `w` (which is where TextShapeUtil applies
+    // `maxWidth: floor(w)`), so the guarantee is exact. Without one
+    // (headless tests, editor-less callers) the live-font estimate plus
+    // 10% headroom remains as a documented approximation only.
+    if (options.measureRendered) {
+      const basePx = options.px / stock.scale;
+      const widestRendered = Math.max(
+        ...hardLines.map((line) => options.measureRendered!(line, basePx)),
+      );
+      // floor(w/scale) is what tldraw compares against; ceil + 8 keeps the
+      // same DOM-tolerance slack as the non-hard-lines path.
+      width = Math.max(width, (Math.ceil(widestRendered) + 8) * stock.scale);
+    } else {
+      const widest = Math.max(
+        ...hardLines.map((line) =>
+          measureText(line, options.px, options.weight ?? 400),
+        ),
+      );
+      width = Math.max(width, Math.ceil(widest * 1.1) + 8);
+    }
   }
   const x =
     options.align === "end"

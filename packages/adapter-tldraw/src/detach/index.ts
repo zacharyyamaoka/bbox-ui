@@ -36,7 +36,13 @@ export {
 export { orderNodes, planDetach, type NodeParticipant, type PlanReader } from "./detachPlan";
 export { runDetachSweep, type DetachSweepOptions, type DetachSweepResult } from "./detachSweep";
 export { primitivesForPort, type PortPrimitiveInput, type PortPrimitives } from "./portPrimitives";
-export { primitivesForBlock, type BlockPortRow, type BlockPrimitives } from "./blockPrimitives";
+export {
+  primitivesForBlock,
+  type BlockPortRow,
+  type BlockPrimitiveOptions,
+  type BlockPrimitives,
+} from "./blockPrimitives";
+export { renderedLineMeasureFor, type RenderedLineMeasure } from "./stockPartials";
 export { blockDetachableKind } from "./blockDetachable";
 export { portDetachableKind } from "./portDetachable";
 export { rebuildDetachedShapes, selectedRebuildableIds, type RebuildResult } from "./rebuild";

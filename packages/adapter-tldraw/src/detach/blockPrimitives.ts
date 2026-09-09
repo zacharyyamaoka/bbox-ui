@@ -24,7 +24,13 @@ import {
 } from "@bbox-ui/core";
 
 import type { BBoxBlockShapeProps } from "../block-shape-util";
-import { geoAt, measureText, textAt, truncateToWidth } from "./stockPartials";
+import {
+  geoAt,
+  measureText,
+  textAt,
+  truncateToWidth,
+  type RenderedLineMeasure,
+} from "./stockPartials";
 import { primitivesForPort } from "./portPrimitives";
 
 export interface BlockPortRow {
@@ -41,9 +47,20 @@ export interface BlockPrimitives {
   portRows: BlockPortRow[];
 }
 
+export interface BlockPrimitiveOptions {
+  /**
+   * tldraw's own line measurer (`renderedLineMeasureFor(editor)`), used to
+   * size the description's no-rewrap box in the font tldraw will actually
+   * paint. Optional so headless/editor-less callers keep working on the
+   * documented live-font fallback — see `TextAtOptions.measureRendered`.
+   */
+  measureRendered?: RenderedLineMeasure;
+}
+
 export function primitivesForBlock(
   props: BBoxBlockShapeProps,
   origin: { x: number; y: number },
+  options: BlockPrimitiveOptions = {},
 ): BlockPrimitives {
   // Emit what the live DOM PAINTS, not the raw prop: every text slot
   // collapses white space (`white-space: normal`/`nowrap`), so a raw "\n"
@@ -141,6 +158,7 @@ export function primitivesForBlock(
         // with `break-word`) can never re-wrap them differently — see
         // TextAtOptions.hardLines.
         hardLines: layout.descriptionTextLines,
+        measureRendered: options.measureRendered,
       }),
     );
   }

@@ -539,7 +539,7 @@ export function CompareView({
       // and disposing the editor must drop its whole per-editor table —
       // the compare view seeds flags like any other host, so it registers
       // like any other host.
-      registerReceivedPortCleanup(editor);
+      const unregisterCleanup = registerReceivedPortCleanup(editor);
       editor.createShapes(tldrawScene.shapes);
       // Runtime-only "Data Recived" paint — never written into the document.
       for (const { shapeId, portId } of tldrawScene.receivedPorts) {
@@ -559,6 +559,14 @@ export function CompareView({
         { immediate: true },
       );
       setTldrawEditor(editor);
+      // WHY the teardown is returned: tldraw's mount lifecycle can invoke
+      // onMount twice on the same editor (React StrictMode in dev), and a
+      // registration without its unsubscribe stacks a second delete
+      // handler each time. Clearing is idempotent today, so the leak is
+      // benign — but "benign today" is how leaks start.
+      return () => {
+        unregisterCleanup();
+      };
     },
     [tldrawScene],
   );

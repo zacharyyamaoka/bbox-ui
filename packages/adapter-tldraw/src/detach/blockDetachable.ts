@@ -12,6 +12,7 @@ import type { DetachableKind } from "./detachableKind";
 import { DETACH_FORMAT_VERSION } from "./detachModel";
 import { lowerToGroup } from "./lowerShared";
 import { primitivesForBlock } from "./blockPrimitives";
+import { renderedLineMeasureFor } from "./stockPartials";
 import type { BBoxBlockShape } from "../block-shape-util";
 
 function isBBoxBlockShape(shape: TLShape): shape is BBoxBlockShape {
@@ -24,7 +25,14 @@ export const blockDetachableKind: DetachableKind = {
   matches: isBBoxBlockShape,
   lowerNode(editor, shape) {
     if (!isBBoxBlockShape(shape)) return null;
-    const built = primitivesForBlock(shape.props, { x: shape.x, y: shape.y });
+    // The description's no-rewrap box is sized by tldraw's OWN measurer —
+    // the live DOM font and tldraw's bundled font differ, and only the
+    // renderer's measurement can guarantee its `break-word` stays silent.
+    const built = primitivesForBlock(
+      shape.props,
+      { x: shape.x, y: shape.y },
+      { measureRendered: renderedLineMeasureFor(editor) },
+    );
     return lowerToGroup(editor, {
       shape,
       shapes: built.shapes,

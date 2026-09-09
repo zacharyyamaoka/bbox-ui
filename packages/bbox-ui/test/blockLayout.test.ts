@@ -181,6 +181,57 @@ describe("layoutSimpleBlock", () => {
     ]);
   });
 
+  // The break-after set below is MEASURED Chrome behaviour (headless
+  // Chrome 2026-09, `overflow-wrap: normal`), not UAX #14 read off the
+  // page: Chrome breaks after "…" and "?" inside a space-free run, and
+  // does NOT break after ".", "..." runs, ",", ")", ":", ";", "!", "/",
+  // quotes or apostrophes. The live <p> paints what Chrome decides, so the
+  // wrap model must copy the engine, not the standard.
+  it("a break is allowed AFTER an ellipsis — the live renderer splits there", () => {
+    expect(wrapTextLines("wait…supercalifragilistic", 50, 10, 400, measure)).toEqual([
+      "wait…",
+      "supercalifragilistic",
+    ]);
+    // A run of ellipses breaks after the last one, like Chrome.
+    expect(wrapTextLines("wait……supercalifragilistic", 50, 10, 400, measure)).toEqual([
+      "wait……",
+      "supercalifragilistic",
+    ]);
+  });
+
+  it("a run of full stops is NOT an ellipsis break — Chrome keeps it glued", () => {
+    expect(wrapTextLines("wait...keepstogether", 50, 10, 400, measure)).toEqual([
+      "wait...keepstogether",
+    ]);
+    // …and a single dotted joint stays unbreakable too (the URL rule).
+    expect(wrapTextLines("wait.keepstogetherxx", 50, 10, 400, measure)).toEqual([
+      "wait.keepstogetherxx",
+    ]);
+  });
+
+  it("a question mark keeps its break-after opportunity, like Chrome", () => {
+    expect(wrapTextLines("why?thenmoretextgoes", 50, 10, 400, measure)).toEqual([
+      "why?",
+      "thenmoretextgoes",
+    ]);
+  });
+
+  it("trailing punctuation glues backward without making the run breakable", () => {
+    // Comma, closing bracket, colon, semicolon, bang, quotes: no break.
+    expect(wrapTextLines("a,b)c:d;e!fgggggg", 20, 10, 400, measure)).toEqual([
+      "a,b)c:d;e!fgggggg",
+    ]);
+  });
+
+  it("ordinary punctuated prose still wraps at its spaces", () => {
+    expect(wrapTextLines('hello, world (yes) — "ok"', 35, 10, 400, measure)).toEqual([
+      "hello,",
+      "world",
+      "(yes) —",
+      '"ok"',
+    ]);
+  });
+
   it("a hard hyphen keeps its break-after opportunity", () => {
     // 10 chars fit per line at width 50; browsers break after "-".
     expect(wrapTextLines("state-of-the-art", 50, 10, 400, measure)).toEqual([

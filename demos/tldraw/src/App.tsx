@@ -18,7 +18,7 @@ const { shapes, receivedPorts } = sceneToTldrawShapes();
 function handleMount(editor: Editor) {
   (window as { editor?: Editor }).editor = editor;
   // Deleting a shape must drop its runtime `received` flags with it.
-  registerReceivedPortCleanup(editor);
+  const unregisterCleanup = registerReceivedPortCleanup(editor);
   editor.createShapes(shapes);
   // Runtime-only: light ports up as "Data Recived" without ever writing
   // it into the document.
@@ -27,6 +27,10 @@ function handleMount(editor: Editor) {
   }
   editor.zoomToFit({ immediate: true });
   editor.updateInstanceState({ isReadonly: false });
+  // WHY the teardown is returned: onMount can run twice on one editor
+  // (React StrictMode in dev); without the unsubscribe each pass stacks
+  // another delete handler.
+  return () => unregisterCleanup();
 }
 
 export function App() {

@@ -83,14 +83,24 @@ const SOFT_HYPHEN = "\u00ad";
 const NBSP_RUN = /^\u00a0+$/;
 
 /**
- * Characters CSS allows a break AFTER inside a space-free run (UAX #14
- * classes HY and BA): hyphen-minus and the typographic hyphens/dashes.
- * Deliberately NOT "/", ".", ":", "#", "_" or "@" - a URL, a dotted
- * domain or a snake_case identifier is one unbreakable run under
- * `overflow-wrap: normal`, which is why long URLs famously overflow
- * their containers.
+ * Characters the live renderer allows a break AFTER inside a space-free
+ * run: hyphen-minus, the typographic hyphens/dashes, the horizontal
+ * ellipsis (U+2026) and the question mark.
+ *
+ * WHY this exact set: it is MEASURED Chrome behaviour (headless Chrome,
+ * `overflow-wrap: normal`, 2026-09), not UAX #14 read off the page \u2014 the
+ * live `<p>` paints whatever the engine decides, so the wrap model copies
+ * the engine. Chrome breaks after "\u2026" and "?" ("wait\u2026|super", "no?|break")
+ * but deliberately NOT after "/", ".", ":", ";", ",", "!", ")", "#", "_",
+ * "@", quotes or a "..." run of full stops \u2014 a URL, a dotted domain or a
+ * snake_case identifier stays one unbreakable run, which is why long URLs
+ * famously overflow their containers. Backward-gluing punctuation onto the
+ * run before it must therefore also KEEP these break-after opportunities:
+ * an earlier version glued "wait\u2026supercalifragilistic" into one atom and a
+ * narrow detached description overflowed its card where the live one
+ * wrapped.
  */
-const BREAK_AFTER_CHAR = /[-\u2010\u2012\u2013\u2014]$/;
+const BREAK_AFTER_CHAR = /[-\u2010\u2012\u2013\u2014\u2026?]$/;
 
 /**
  * One character CSS treats as its own line-break unit (UAX #14 class ID
@@ -141,18 +151,21 @@ function splitCjkCharacters(segment: string): string[] {
  * its neighbours (it exists to forbid the break), a CJK word is re-split
  * per character because CSS breaks between ideographs the dictionary
  * would keep together, and a word-like segment glues backward too unless
- * the run behind it actually ends at a CSS break opportunity (a hyphen or
- * a CJK character) or the segment itself begins with one. That last rule
- * is what keeps "https://internal.example.com/pipelines" one atom: the
- * segmenter sees word boundaries at every "/" and ".", but CSS under
- * `overflow-wrap: normal` breaks after hyphens, not after URL punctuation
- * — which is exactly why long URLs overflow their boxes in browsers.
+ * the run behind it actually ends at a real break opportunity (a
+ * `BREAK_AFTER_CHAR` — hyphen, ellipsis, "?" — or a CJK character) or the
+ * segment itself begins with one. That last rule is what keeps
+ * "https://internal.example.com/pipelines" one atom: the segmenter sees
+ * word boundaries at every "/" and ".", but Chrome under
+ * `overflow-wrap: normal` breaks only after the `BREAK_AFTER_CHAR` set,
+ * not after URL punctuation — which is exactly why long URLs overflow
+ * their boxes in browsers.
  *
  * Fallback (no Segmenter — documented and tested): break around each CJK
- * character and nowhere else. Spaces and soft hyphens were already handled
- * by the caller, and an NBSP simply stays inside its run, so it can never
- * break. Coarser than the segmenter for long Latin words, identical for
- * the space-separated and CJK text this layout actually meets.
+ * character and after each `BREAK_AFTER_CHAR`, nowhere else. Spaces and
+ * soft hyphens were already handled by the caller, and an NBSP simply
+ * stays inside its run, so it can never break. Coarser than the segmenter
+ * for long Latin words, identical for the space-separated and CJK text
+ * this layout actually meets.
  */
 function atomizePiece(piece: string): string[] {
   const segmenter = getWordSegmenter();
@@ -164,6 +177,11 @@ function atomizePiece(piece: string): string[] {
         if (run !== "") atoms.push(run);
         run = "";
         atoms.push(character);
+      } else if (BREAK_AFTER_CHAR.test(character)) {
+        // The break-after characters (hyphens, ellipsis, "?") end their
+        // run and open a break opportunity, same as the segmenter path.
+        atoms.push(run + character);
+        run = "";
       } else {
         run += character;
       }
@@ -215,7 +233,8 @@ interface WrapToken {
  * box: whitespace collapsed (via `collapseWhitespace`), greedy fill,
  * breaks at real line-break opportunities. Those are spaces (consumed at
  * the break), the boundaries `atomizePiece` finds — between CJK
- * characters, after hyphens, at SEA dictionary words — and soft hyphens, which are
+ * characters, after hyphens/ellipses/question marks, at SEA dictionary
+ * words — and soft hyphens, which are
  * invisible until used and render a "-" at the line end when the break is
  * taken. An NBSP never breaks. A single unbreakable run wider than the box
  * overflows on its own line rather than splitting, exactly as

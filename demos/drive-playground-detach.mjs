@@ -471,6 +471,148 @@ if (wrapEmitted.snake) {
 const wrapShot = await screenshot("playground-detach-url-wrap.png");
 console.log(`             ${wrapShot}`);
 
+// ------------------------------------- renderer-font + ellipsis parity --
+// Two regressions the source-font formula could not see:
+//   1. tldraw paints `font: "sans"` in its OWN bundled font (IBM Plex
+//      Sans), not the system font the live DOM measures in. A narrow box
+//      sized from the system font ("JJJ" is 14.7px there, ~28.3px in
+//      Plex) re-wraps in tldraw even though the live <p> painted one
+//      line — the no-rewrap box must be DERIVED from tldraw's own
+//      measurement (editor.textMeasure), never estimated with a fudge.
+//   2. Chrome breaks lines after an ellipsis ("wait…" | "super…") under
+//      `overflow-wrap: normal`; the wrap model must predict that break or
+//      the emitted hard lines disagree with the live paint.
+const NARROW_DESC = "JJJ JJJ";
+const ELLIPSIS_DESC = "wait…supercalifragilisticexpialidociousandthensomemore";
+await evaluate(`(() => {
+  const editor = window.playgroundEditor;
+  editor.run(() => {
+    editor.deleteShapes(editor.getCurrentPageShapes().map((s) => s.id));
+  });
+  editor.createShape({
+    id: "shape:wrap_narrow", type: "bbox-block", x: 160, y: 60,
+    props: {
+      w: 54, h: 258, title: "J", titleSize: "md",
+      blockType: "", description: ${JSON.stringify(NARROW_DESC)},
+      icon: "", tag: "", orientation: "horizontal", ports: [],
+    },
+  });
+  editor.createShape({
+    id: "shape:wrap_ellipsis", type: "bbox-block", x: 300, y: 60,
+    props: {
+      w: 384, h: 258, title: "Wait", titleSize: "xl",
+      blockType: "", description: ${JSON.stringify(ELLIPSIS_DESC)},
+      icon: "", tag: "", orientation: "horizontal", ports: [],
+    },
+  });
+  editor.setCamera({ x: -60, y: 40, z: 1 });
+  return true;
+})()`);
+await new Promise((r) => setTimeout(r, 600));
+const fontLive = await evaluate(`(() => {
+  const lines = {};
+  for (const el of document.querySelectorAll('[data-slot="block-description"]')) {
+    const rect = el.getBoundingClientRect();
+    const lineH = parseFloat(getComputedStyle(el).lineHeight);
+    const shapeEl = el.closest("[data-shape-id]");
+    lines[shapeEl?.dataset.shapeId ?? "?"] = Math.round(rect.height / lineH);
+  }
+  return lines;
+})()`);
+assert(
+  fontLive["shape:wrap_narrow"] === 2,
+  `live narrow JJJ description paints 2 lines (got ${fontLive["shape:wrap_narrow"]})`,
+);
+assert(
+  fontLive["shape:wrap_ellipsis"] === 2,
+  `live ellipsis description paints 2 lines — Chrome breaks after "…" (got ${fontLive["shape:wrap_ellipsis"]})`,
+);
+const fontBeforeShot = await screenshot("playground-detach-font-before.png");
+
+await evaluate(`(() => {
+  const editor = window.playgroundEditor;
+  editor.setCurrentTool("select");
+  editor.setSelectedShapes(["shape:wrap_narrow", "shape:wrap_ellipsis"]);
+  return true;
+})()`);
+const fontScreen = await evaluate(`(() => {
+  const p = window.playgroundEditor.pageToViewport({ x: 490, y: 180 });
+  return { x: p.x, y: p.y };
+})()`);
+await click(fontScreen.x, fontScreen.y, "right");
+const fontDetachItem = await evaluate(`(() => {
+  const item = [...document.querySelectorAll('[data-testid="context-menu"] .tlui-button, .tlui-menu button')]
+    .find((el) => el.textContent.includes("Detach"));
+  if (!item) return null;
+  const r = item.getBoundingClientRect();
+  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+})()`);
+assert(fontDetachItem !== null, "context menu offers Detach on the font fixtures");
+if (fontDetachItem) await click(fontDetachItem.x, fontDetachItem.y);
+
+const fontEmitted = await evaluate(`(() => {
+  const editor = window.playgroundEditor;
+  const LINE_PX = 18 * 1.35;
+  const plainParagraphs = (rt) =>
+    (rt.content ?? []).map((p) =>
+      (Array.isArray(p.content) ? p.content : []).map((c) => c.text ?? "").join(""));
+  const texts = editor.getCurrentPageShapes().filter((s) => s.type === "text");
+  const find = (needle) => {
+    const shape = texts.find((s) =>
+      plainParagraphs(s.props.richText).join("\\n").includes(needle));
+    if (!shape) return null;
+    const bounds = editor.getShapePageBounds(shape.id);
+    return {
+      paragraphs: plainParagraphs(shape.props.richText),
+      paintedLines: Math.round(bounds.h / LINE_PX),
+      boxW: shape.props.w * shape.props.scale,
+    };
+  };
+  // The renderer's own metric for the widest narrow line — what the box
+  // must out-measure for tldraw's break-word to stay silent.
+  const plexJJJ = editor.textMeasure.measureText("JJJ", {
+    fontStyle: "normal", fontWeight: "normal",
+    fontFamily: "'tldraw_sans', sans-serif",
+    fontSize: 18, lineHeight: 1.35, maxWidth: null, padding: "0px",
+  }).w;
+  return { narrow: find("JJJ"), ellipsis: find("wait…"), plexJJJ };
+})()`);
+assert(fontEmitted.narrow !== null, "detached narrow JJJ description text found");
+assert(fontEmitted.ellipsis !== null, "detached ellipsis description text found");
+console.log(
+  `  info: tldraw (IBM Plex) width of "JJJ" @18px = ${fontEmitted.plexJJJ?.toFixed(2)}px; emitted narrow box = ${fontEmitted.narrow?.boxW?.toFixed(2)}px`,
+);
+if (fontEmitted.narrow) {
+  assert(
+    JSON.stringify(fontEmitted.narrow.paragraphs) === JSON.stringify(["JJJ", "JJJ"]),
+    `narrow description carries the live lines verbatim (got ${JSON.stringify(fontEmitted.narrow.paragraphs)})`,
+  );
+  assert(
+    fontEmitted.narrow.paintedLines === 2,
+    `tldraw paints the narrow description on 2 lines, never re-wrapped (got ${fontEmitted.narrow.paintedLines})`,
+  );
+  assert(
+    fontEmitted.narrow.boxW >= fontEmitted.plexJJJ,
+    `the emitted box out-measures tldraw's own metric for "JJJ" (box ${fontEmitted.narrow.boxW?.toFixed(2)}px vs Plex ${fontEmitted.plexJJJ?.toFixed(2)}px)`,
+  );
+}
+if (fontEmitted.ellipsis) {
+  assert(
+    fontEmitted.ellipsis.paragraphs.length === fontLive["shape:wrap_ellipsis"],
+    `detached ellipsis description carries the live line count (live ${fontLive["shape:wrap_ellipsis"]}, emitted ${fontEmitted.ellipsis.paragraphs.length})`,
+  );
+  assert(
+    fontEmitted.ellipsis.paragraphs[0]?.endsWith("wait…"),
+    `the break lands AFTER the ellipsis (got ${JSON.stringify(fontEmitted.ellipsis.paragraphs)})`,
+  );
+  assert(
+    fontEmitted.ellipsis.paintedLines === fontEmitted.ellipsis.paragraphs.length,
+    `tldraw paints exactly the emitted ellipsis lines (paragraphs ${fontEmitted.ellipsis.paragraphs.length}, painted ${fontEmitted.ellipsis.paintedLines})`,
+  );
+}
+const fontAfterShot = await screenshot("playground-detach-font-after.png");
+console.log(`             ${fontBeforeShot}\n             ${fontAfterShot}`);
+
 const journeyErrors = consoleErrors.filter(
   (line) => !line.includes("License") && !line.includes("watermark"),
 );

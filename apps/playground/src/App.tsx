@@ -112,7 +112,11 @@ export function App() {
     (window as { editor?: Editor }).editor = editor;
     // Deleting a shape (a live Block, or the carrier group a detach minted)
     // must drop its runtime `received` flags, or the atom grows forever.
-    registerReceivedPortCleanup(editor);
+    const unregisterCleanup = registerReceivedPortCleanup(editor);
+    // WHY the teardown is returned: onMount can run twice on one editor
+    // (React StrictMode in dev); without the unsubscribe each pass stacks
+    // another delete handler.
+    return () => unregisterCleanup();
   }, []);
 
   const enterCompare = useCallback(() => {
