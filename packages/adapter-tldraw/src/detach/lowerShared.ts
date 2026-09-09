@@ -79,7 +79,7 @@ export function lowerToGroup(
   // the carrier (below) — `registerReceivedPortCleanup` prunes a deleted
   // shape's flags, and deleting first would wipe them before the rekey.
   const replaceOriginal = (carrierId: TLShapeId) => {
-    rekeyReceivedPorts(shape.id, carrierId);
+    rekeyReceivedPorts(editor, shape.id, carrierId);
     editor.deleteShape(shape.id);
   };
 

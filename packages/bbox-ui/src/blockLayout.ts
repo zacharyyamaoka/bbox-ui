@@ -60,10 +60,133 @@ export const BLOCK_TYPE_BOTTOM = 12;
 export type TextMeasure = (text: string, fontPx: number, weight: number) => number;
 
 /**
+ * `text` with CSS `white-space: normal` collapsing applied: runs of
+ * document white space (space, tab, LF, CR, FF) become one space, and
+ * leading/trailing runs vanish (the browser removes them at line edges).
+ *
+ * WHY not `\s` or `trim()`: JS `\s` (and `String.trim`) also match NBSP,
+ * which CSS never collapses — an NBSP is glue between words, not a
+ * separator, so it must survive normalisation untouched.
+ *
+ * WHY exported: this is the ONE normalisation shared by layout (the line
+ * counting in `wrapTextLines`) and by emission (the detach builders that
+ * turn a prop into a stock text primitive). A live `<p>` shows the
+ * collapsed text — a raw `\n` handed to a rich-text builder becomes a
+ * second paragraph the live DOM never painted — so anything standing in
+ * for the live paint must run the same function, never its own copy.
+ */
+export function collapseWhitespace(text: string): string {
+  return text.replace(/[\t\n\f\r ]+/g, " ").replace(/^ | $/g, "");
+}
+
+const SOFT_HYPHEN = "\u00ad";
+const NBSP_RUN = /^\u00a0+$/;
+
+/**
+ * One character CSS treats as its own line-break unit (UAX #14 class ID
+ * and Hangul): a break is allowed between any two of them, dictionary
+ * words or not — which is why a CJK run wraps with no spaces at all.
+ */
+const CJK_BREAK_CHAR =
+  /^[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]$/u;
+
+let wordSegmenter: Intl.Segmenter | null = null;
+
+/** Availability is re-checked per call so tests can stub the segmenter away. */
+function getWordSegmenter(): Intl.Segmenter | null {
+  if (typeof Intl === "undefined" || typeof Intl.Segmenter !== "function") {
+    return null;
+  }
+  if (!wordSegmenter) {
+    wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
+  }
+  return wordSegmenter;
+}
+
+/** Per-character atoms for a CJK segment, the segment itself otherwise. */
+function splitCjkCharacters(segment: string): string[] {
+  const characters = [...segment];
+  return characters.length > 1 && characters.every((c) => CJK_BREAK_CHAR.test(c))
+    ? characters
+    : [segment];
+}
+
+/**
+ * Split one space-free, soft-hyphen-free piece into the atoms between
+ * which CSS allows a line break.
+ *
+ * Segmenter path: `Intl.Segmenter` word boundaries are the candidate
+ * opportunities, adjusted three ways to match line breaking rather than
+ * word counting — a non-word-like segment (punctuation) glues backward so
+ * "hello," never sheds its comma to the next line, an NBSP glues BOTH of
+ * its neighbours (it exists to forbid the break), and a CJK word is
+ * re-split per character because CSS breaks between ideographs the
+ * dictionary would keep together.
+ *
+ * Fallback (no Segmenter — documented and tested): break around each CJK
+ * character and nowhere else. Spaces and soft hyphens were already handled
+ * by the caller, and an NBSP simply stays inside its run, so it can never
+ * break. Coarser than the segmenter for long Latin words, identical for
+ * the space-separated and CJK text this layout actually meets.
+ */
+function atomizePiece(piece: string): string[] {
+  const segmenter = getWordSegmenter();
+  if (!segmenter) {
+    const atoms: string[] = [];
+    let run = "";
+    for (const character of piece) {
+      if (CJK_BREAK_CHAR.test(character)) {
+        if (run !== "") atoms.push(run);
+        run = "";
+        atoms.push(character);
+      } else {
+        run += character;
+      }
+    }
+    if (run !== "") atoms.push(run);
+    return atoms;
+  }
+  const atoms: string[] = [];
+  let glueNext = false;
+  for (const part of segmenter.segment(piece)) {
+    const isNbsp = NBSP_RUN.test(part.segment);
+    const glue = glueNext || isNbsp || !part.isWordLike;
+    const units = splitCjkCharacters(part.segment);
+    if (glue && atoms.length > 0) {
+      atoms[atoms.length - 1] += units[0];
+      atoms.push(...units.slice(1));
+    } else {
+      atoms.push(...units);
+    }
+    glueNext = isNbsp;
+  }
+  return atoms;
+}
+
+/** How a token may separate from the one before it on the same line. */
+type WrapBreak = "space" | "opportunity" | "soft-hyphen";
+
+interface WrapToken {
+  text: string;
+  breakBefore: WrapBreak;
+}
+
+/**
  * `text` broken into the lines CSS normal wrapping produces in a `maxW`
- * box: whitespace collapsed, greedy fill, breaks only at spaces — a single
- * word wider than the box overflows on its own line rather than splitting,
- * exactly as `overflow-wrap: normal` behaves.
+ * box: whitespace collapsed (via `collapseWhitespace`), greedy fill,
+ * breaks at real line-break opportunities. Those are spaces (consumed at
+ * the break), the boundaries `atomizePiece` finds — between CJK
+ * characters, after trailing punctuation — and soft hyphens, which are
+ * invisible until used and render a "-" at the line end when the break is
+ * taken. An NBSP never breaks. A single unbreakable run wider than the box
+ * overflows on its own line rather than splitting, exactly as
+ * `overflow-wrap: normal` behaves.
+ *
+ * WHY the opportunity model and not `split(/\s+/)`: the split saw a 40-
+ * ideograph description as one unbreakable word and counted one 27px line
+ * where the live `<p>` painted two or more — and every line miscounted
+ * moves the whole centred stack. It also broke at NBSP (JS `\s` matches
+ * it; CSS does not) and ignored soft hyphens entirely.
  */
 export function wrapTextLines(
   text: string,
@@ -72,17 +195,38 @@ export function wrapTextLines(
   weight: number,
   measure: TextMeasure,
 ): string[] {
-  const words = text.split(/\s+/).filter((word) => word !== "");
-  if (words.length === 0) return [];
+  const collapsed = collapseWhitespace(text);
+  if (collapsed === "") return [];
+  const tokens: WrapToken[] = [];
+  for (const chunk of collapsed.split(" ")) {
+    for (const [pieceIndex, piece] of chunk.split(SOFT_HYPHEN).entries()) {
+      // The soft hyphens themselves are delimiters: invisible when the
+      // line runs through them, so they never reach a token's text.
+      const atoms = atomizePiece(piece);
+      for (const [atomIndex, atom] of atoms.entries()) {
+        tokens.push({
+          text: atom,
+          breakBefore:
+            atomIndex > 0
+              ? "opportunity"
+              : pieceIndex > 0
+                ? "soft-hyphen"
+                : "space",
+        });
+      }
+    }
+  }
+  if (tokens.length === 0) return [];
   const lines: string[] = [];
-  let line = words[0];
-  for (const word of words.slice(1)) {
-    const candidate = `${line} ${word}`;
+  let line = tokens[0].text;
+  for (const token of tokens.slice(1)) {
+    const joiner = token.breakBefore === "space" ? " " : "";
+    const candidate = line + joiner + token.text;
     if (measure(candidate, fontPx, weight) <= maxW) {
       line = candidate;
     } else {
-      lines.push(line);
-      line = word;
+      lines.push(token.breakBefore === "soft-hyphen" ? `${line}-` : line);
+      line = token.text;
     }
   }
   lines.push(line);
@@ -140,8 +284,15 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
   const hasChip = input.tag !== "";
   const hasIcon = input.icon !== "";
 
+  // Measure what the DOM renders: every text slot collapses white space
+  // (`white-space: normal` and `nowrap` both do), so a raw `\n` or tab in a
+  // prop is a single space on screen — never a measurement unit.
+  const titleText = collapseWhitespace(input.title);
+  const tagText = collapseWhitespace(input.tag);
+  const blockTypeText = collapseWhitespace(input.blockType);
+
   const titleFontPx = TEXT_SIZES[input.titleSize];
-  const titleLineH = input.title === "" ? 0 : Math.round(titleFontPx * LEADING_TIGHT);
+  const titleLineH = titleText === "" ? 0 : Math.round(titleFontPx * LEADING_TIGHT);
   const glyphSize = hasIcon ? glyphPx(input.titleSize) : 0;
 
   // The room the header's in-flow content actually has (the chip reserves
@@ -185,7 +336,7 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
       };
     }
     if (titleLineH > 0) {
-      const titleW = Math.min(measure(input.title, titleFontPx, 500), headerAvailW);
+      const titleW = Math.min(measure(titleText, titleFontPx, 500), headerAvailW);
       title = {
         x: contentX + (headerAvailW - titleW) / 2,
         y: header.y + headerH - titleLineH,
@@ -199,7 +350,7 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
     const gap = hasIcon ? HEADER_ITEM_GAP : 0;
     const titleMaxW = Math.max(0, headerAvailW - (hasIcon ? glyphSize + gap : 0));
     const titleW =
-      titleLineH > 0 ? Math.min(measure(input.title, titleFontPx, 500), titleMaxW) : 0;
+      titleLineH > 0 ? Math.min(measure(titleText, titleFontPx, 500), titleMaxW) : 0;
     const rowW = (hasIcon ? glyphSize + gap : 0) + titleW;
     const rowX = contentX + (headerAvailW - rowW) / 2;
     if (hasIcon) {
@@ -223,7 +374,7 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
   let chip: LayoutBox | null = null;
   let chipText: LayoutBox | null = null;
   if (hasChip) {
-    const textW = measure(input.tag, META_FONT_PX, 400);
+    const textW = measure(tagText, META_FONT_PX, 400);
     const chipW = Math.max(
       CHIP.minWidth,
       textW + 2 * CHIP_PADDING_X + 2 * CHIP_BORDER_PX,
@@ -250,7 +401,7 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
     // decided the line breaks, so it is the box the lines centre in.
     const descW =
       descLines.length === 1
-        ? Math.min(measure(input.description, META_FONT_PX, 400), contentW)
+        ? Math.min(measure(descLines[0], META_FONT_PX, 400), contentW)
         : contentW;
     description = {
       x: contentX + (contentW - descW) / 2,
@@ -263,7 +414,7 @@ export function layoutSimpleBlock(input: SimpleBlockLayoutInput): SimpleBlockLay
   let blockType: LayoutBox | null = null;
   if (input.blockType !== "") {
     const typeH = Math.round(META_FONT_PX * LEADING_BASE);
-    const typeW = measure(input.blockType, META_FONT_PX, 400);
+    const typeW = measure(blockTypeText, META_FONT_PX, 400);
     blockType = {
       // left-1/2 -translate-x-1/2 in the padding box lands on width/2 exactly
       // (the border insets cancel).
@@ -310,7 +461,7 @@ export interface PortLabelBoxInput {
  */
 export function portLabelBox(input: PortLabelBoxInput): LayoutBox {
   const { dotW, dotH, layout, fontPx } = input;
-  const out = portLabelOut(layout, dotW, dotH);
+  const out = portLabelOut(layout, { w: dotW, h: dotH });
   const w = input.measure(input.label, fontPx, 400);
   const h = Math.round(fontPx * LEADING_TIGHT);
   switch (layout) {

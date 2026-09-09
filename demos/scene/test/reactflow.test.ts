@@ -41,7 +41,13 @@ describe("sceneToReactFlowNodes — the explicit-size contract", () => {
   });
 
   it("omits the size entirely when the scene carries none — hug contents", () => {
-    for (const node of sceneToReactFlowNodes(SCENE)) {
+    // Blocks only: a standalone port's wrapper node ALWAYS carries w/h —
+    // there is no content for a chrome-less dot wrapper to hug.
+    const blocks = sceneToReactFlowNodes(SCENE).filter(
+      (node) => node.type === "bboxBlock",
+    );
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const node of blocks) {
       expect(node.style).toBeUndefined();
       expect(node.data).not.toHaveProperty("w");
       expect(node.data).not.toHaveProperty("h");

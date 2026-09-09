@@ -5,6 +5,7 @@ import {
   T,
   atom,
   resizeBox,
+  type Atom,
   type Editor,
   type TLBaseShape,
   type TLResizeInfo,
@@ -37,7 +38,7 @@ import {
  * only "empty" | "default" | "wired".
  * WHY: `received` is a RUNTIME prop, never persisted document state — a
  * .tldr file that recorded "data arrived here" would be lying after reload.
- * Runtime delivery goes through `receivedPorts` instead.
+ * Runtime delivery goes through the per-editor received-ports table instead.
  */
 export interface BBoxShapePort {
   id: string;
@@ -73,70 +74,103 @@ declare module "@tldraw/tlschema" {
 
 export type BBoxBlockShape = TLBaseShape<"bbox-block", BBoxBlockShapeProps>;
 
+/** Runtime `received` flags: shape id → port id → lit. */
+export type ReceivedPortFlags = Record<string, Record<string, true>>;
+
 /**
- * Runtime-only "data received" flags, keyed `${shapeId}:${portId}`. A tldraw
- * atom so `component()` (which is reactive) repaints when a flag flips.
+ * Runtime-only "data received" flags, one table PER EDITOR. A tldraw atom
+ * so `component()` (which is reactive) repaints when a flag flips.
+ *
  * WHY a side table and not a shape prop: shape props are the persisted
  * document; `received` must never survive a save/load. See BBoxShapePort.
+ *
+ * WHY per editor and not module-global: `editor.dispose()` drops a document
+ * WITHOUT deleting its shapes, so no delete handler ever fires — a global
+ * table outlived the editor, and a later editor opening a different
+ * document that reuses a shape id (and port id) painted a port received
+ * that never received anything. The WeakMap scopes each table to its
+ * editor and lets a disposed editor's flags be collected with it.
+ *
+ * WHY nested keys and not `${shapeId}:${portId}`: both ids may contain
+ * ":", so the flat key was ambiguous — `shape:a` + `b:c` and `shape:a:b` +
+ * `c` collided on one flag, lighting and clearing each other.
  */
-export const receivedPorts = atom<Record<string, boolean>>(
-  "bbox received ports",
-  {},
-);
+const receivedPortsByEditor = new WeakMap<Editor, Atom<ReceivedPortFlags>>();
+
+export function receivedPortsAtom(editor: Editor): Atom<ReceivedPortFlags> {
+  let flags = receivedPortsByEditor.get(editor);
+  if (!flags) {
+    flags = atom<ReceivedPortFlags>("bbox received ports", {});
+    receivedPortsByEditor.set(editor, flags);
+  }
+  return flags;
+}
 
 export function setPortReceived(
+  editor: Editor,
   shapeId: string,
   portId: string,
   received: boolean,
 ) {
-  receivedPorts.update((current) => {
-    const key = `${shapeId}:${portId}`;
+  receivedPortsAtom(editor).update((current) => {
+    const forShape = current[shapeId];
     // A false flag IS the absence of a flag — storing it would grow the map
     // by one dead entry per delivery, forever.
     if (!received) {
-      if (!(key in current)) return current;
+      if (!forShape || !(portId in forShape)) return current;
+      const nextShape = { ...forShape };
+      delete nextShape[portId];
       const next = { ...current };
-      delete next[key];
+      if (Object.keys(nextShape).length === 0) {
+        delete next[shapeId];
+      } else {
+        next[shapeId] = nextShape;
+      }
       return next;
     }
-    return { ...current, [key]: true };
+    if (forShape?.[portId]) return current;
+    return { ...current, [shapeId]: { ...forShape, [portId]: true } };
   });
 }
 
 /** Drop every runtime `received` flag keyed under one shape id. */
-export function clearReceivedPorts(shapeId: string) {
-  receivedPorts.update((current) => {
-    const prefix = `${shapeId}:`;
-    let dropped = false;
-    const next: Record<string, boolean> = {};
-    for (const [key, value] of Object.entries(current)) {
-      if (key.startsWith(prefix)) {
-        dropped = true;
-      } else {
-        next[key] = value;
-      }
-    }
-    return dropped ? next : current;
+export function clearReceivedPorts(editor: Editor, shapeId: string) {
+  receivedPortsAtom(editor).update((current) => {
+    if (!(shapeId in current)) return current;
+    const next = { ...current };
+    delete next[shapeId];
+    return next;
   });
 }
 
 /**
  * Prune the runtime `received` flags of any shape the moment it leaves the
- * document. Returns the unsubscribe function.
+ * document, and drop the whole table when the editor is disposed. Returns
+ * the unsubscribe function.
  *
- * WHY: the atom is keyed by shape id and nothing else ever deletes — a
- * received flow, a detach (which rekeys onto the carrier group) and then a
- * plain delete of that carrier left `${carrierId}:p1` in the map forever,
- * and repeated flows grew it without bound. The handler covers every owner
- * of a flag — live bbox shapes AND the stock carrier groups detach mints —
- * which is why it hangs off the editor, not off one shape util. Detach and
- * rebuild both hand flags to the replacement id BEFORE deleting the old
- * shape, so this pruning never races the rekey.
+ * WHY the delete handler: the table is keyed by shape id and nothing else
+ * ever deletes — a received flow, a detach (which rekeys onto the carrier
+ * group) and then a plain delete of that carrier left the carrier's flags
+ * in the map forever, and repeated flows grew it without bound. The handler
+ * covers every owner of a flag — live bbox shapes AND the stock carrier
+ * groups detach mints — which is why it hangs off the editor, not off one
+ * shape util. Detach and rebuild both hand flags to the replacement id
+ * BEFORE deleting the old shape, so this pruning never races the rekey.
+ *
+ * WHY the disposable: `dispose()` tears the document down without deleting
+ * its shapes, so the delete handler never fires for them; dropping the
+ * table with the editor keeps a dead document's deliveries out of memory.
  */
 export function registerReceivedPortCleanup(editor: Editor): () => void {
-  return editor.sideEffects.registerAfterDeleteHandler("shape", (shape) => {
-    clearReceivedPorts(shape.id);
+  const stop = editor.sideEffects.registerAfterDeleteHandler("shape", (shape) => {
+    clearReceivedPorts(editor, shape.id);
   });
+  const dropTable = () => receivedPortsByEditor.delete(editor);
+  editor.disposables.add(dropTable);
+  return () => {
+    stop();
+    editor.disposables.delete(dropTable);
+  };
 }
 
 /**
@@ -148,20 +182,18 @@ export function registerReceivedPortCleanup(editor: Editor): () => void {
  * the flags never travel through `meta` or props, so nothing about
  * "received" ever reaches the persisted document.
  */
-export function rekeyReceivedPorts(fromShapeId: string, toShapeId: string) {
-  receivedPorts.update((current) => {
-    const fromPrefix = `${fromShapeId}:`;
-    let moved = false;
-    const next: Record<string, boolean> = {};
-    for (const [key, value] of Object.entries(current)) {
-      if (key.startsWith(fromPrefix)) {
-        next[`${toShapeId}:${key.slice(fromPrefix.length)}`] = value;
-        moved = true;
-      } else {
-        next[key] = value;
-      }
-    }
-    return moved ? next : current;
+export function rekeyReceivedPorts(
+  editor: Editor,
+  fromShapeId: string,
+  toShapeId: string,
+) {
+  receivedPortsAtom(editor).update((current) => {
+    const moving = current[fromShapeId];
+    if (!moving) return current;
+    const next = { ...current };
+    delete next[fromShapeId];
+    next[toShapeId] = { ...next[toShapeId], ...moving };
+    return next;
   });
 }
 
@@ -236,7 +268,7 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
 
   override component(shape: BBoxBlockShape) {
     const { props } = shape;
-    const received = receivedPorts.get();
+    const received = receivedPortsAtom(this.editor).get();
     return (
       <HTMLContainer style={{ overflow: "visible" }}>
         {/* data-block-id lets the compare harness pair this block with its
@@ -260,7 +292,7 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
               props.w,
               props.h,
             );
-            const state: PortState = received[`${shape.id}:${port.id}`]
+            const state: PortState = received[shape.id]?.[port.id]
               ? "received"
               : port.state;
             const diameter = PORT_DIAMETERS[port.size];
@@ -275,7 +307,10 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
                 {port.label !== "" && (
                   <PortLabel
                     className="absolute"
-                    style={portLabelPlacement(port.textLayout, diameter, diameter)}
+                    style={portLabelPlacement(port.textLayout, {
+                      w: diameter,
+                      h: diameter,
+                    })}
                   >
                     {port.label}
                   </PortLabel>

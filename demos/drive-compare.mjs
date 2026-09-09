@@ -284,17 +284,23 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
     // so a framing showing nothing would measure nothing. `minBlocks` is
     // the honest denominator: how many of the 5 blocks the reading must
     // actually have compared.
+    // Alongside the block minimum, each framing states how many standalone
+    // ports and port-label boxes the reading MUST have compared — a reading
+    // that silently measured zero labels reported 0.00px straight through
+    // R2's 75px top-label defect. The fixed scene holds 8 labelled block
+    // ports plus the labelled standalone port; framings that cull shapes
+    // state the reduced honest minimum.
     const framings = [
-      ["zoom 0.25", { x: 50, y: 90, zoom: 0.25 }, 5],
-      ["zoom 0.45", { x: 50, y: 90, zoom: 0.45 }, 5],
-      ["zoom 1.00", { x: 50, y: 90, zoom: 1 }, 5],
-      // Zoomed to 2× onto the Detect/cm_clock column (world x 560); Camera
-      // and Track land offscreen and are culled out of the comparison.
-      ["zoom 2.00", { x: -320, y: 60, zoom: 2 }, 3],
-      ["panned @ zoom 1", { x: -260, y: -180, zoom: 1 }, 5],
+      ["zoom 0.25", { x: 50, y: 90, zoom: 0.25 }, 5, 1, 9],
+      ["zoom 0.45", { x: 50, y: 90, zoom: 0.45 }, 5, 1, 9],
+      ["zoom 1.00", { x: 50, y: 90, zoom: 1 }, 5, 1, 9],
+      // Zoomed to 2× onto the Detect/cm_clock column (world x 560); Camera,
+      // Track and the standalone port land offscreen and are culled out.
+      ["zoom 2.00", { x: -320, y: 60, zoom: 2 }, 3, 0, 4],
+      ["panned @ zoom 1", { x: -260, y: -180, zoom: 1 }, 5, 0, 8],
     ];
     results.divergenceByZoom = {};
-    for (const [label, viewport, minBlocks] of framings) {
+    for (const [label, viewport, minBlocks, minStandalone, minLabels] of framings) {
       await evaluate(`(() => {
         window.editor.setCamera(
           window.__bboxBridge.reactFlowToTldraw(${JSON.stringify(viewport)}),
@@ -307,7 +313,14 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
       assertLinked(`overlay ${label}`, agreement);
       const divergence = await evaluate(`window.__bboxMeasureNow()`);
       results.divergenceByZoom[label] = divergence
-        ? { maxAbs: divergence.maxAbs, zoom: divergence.zoom, blocks: divergence.rows.length }
+        ? {
+            maxAbs: divergence.maxAbs,
+            zoom: divergence.zoom,
+            blocks: divergence.rows.length,
+            standalonePorts: divergence.standalonePorts.length,
+            labels: divergence.labelCount,
+            labelMismatches: divergence.labelMismatches,
+          }
         : null;
       if (divergence == null) {
         failures.push(`overlay ${label}: no divergence measurement`);
@@ -320,6 +333,21 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
         if (divergence.rows.length < minBlocks) {
           failures.push(
             `overlay ${label}: only ${divergence.rows.length}/${minBlocks} blocks measurable`,
+          );
+        }
+        if (divergence.standalonePorts.length < minStandalone) {
+          failures.push(
+            `overlay ${label}: only ${divergence.standalonePorts.length}/${minStandalone} standalone ports measurable`,
+          );
+        }
+        if (divergence.labelCount < minLabels) {
+          failures.push(
+            `overlay ${label}: only ${divergence.labelCount}/${minLabels} port labels measurable`,
+          );
+        }
+        if (divergence.labelMismatches.length > 0) {
+          failures.push(
+            `overlay ${label}: label painted in one host only: ${divergence.labelMismatches.join(", ")}`,
           );
         }
       }
@@ -339,6 +367,10 @@ for (const mode of ["split", "reactflow", "tldraw", "overlay"]) {
     } else if (results.divergence.maxAbs > 0.5) {
       failures.push(
         `overlay: hosts diverge by ${results.divergence.maxAbs.toFixed(2)}px`,
+      );
+    } else if (results.divergence.labelMismatches.length > 0) {
+      failures.push(
+        `overlay: label painted in one host only: ${results.divergence.labelMismatches.join(", ")}`,
       );
     }
   }

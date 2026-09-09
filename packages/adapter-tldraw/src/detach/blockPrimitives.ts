@@ -17,6 +17,7 @@ import {
   META_FONT_PX,
   PORT_DIAMETERS,
   TEXT_SIZES,
+  collapseWhitespace,
   glyphPx,
   layoutSimpleBlock,
   portAnchor,
@@ -44,6 +45,18 @@ export function primitivesForBlock(
   props: BBoxBlockShapeProps,
   origin: { x: number; y: number },
 ): BlockPrimitives {
+  // Emit what the live DOM PAINTS, not the raw prop: every text slot
+  // collapses white space (`white-space: normal`/`nowrap`), so a raw "\n"
+  // shows as one space live — but handed to `toRichText` it would become a
+  // second stock paragraph, two visible lines positioned as one. The same
+  // `collapseWhitespace` drives the layout's measurements, so geometry and
+  // emitted text can never disagree. The raw strings survive verbatim in
+  // `meta.bboxUi.props`, which is what rebuild reads — presentation only,
+  // never a data edit.
+  const title = collapseWhitespace(props.title);
+  const tag = collapseWhitespace(props.tag);
+  const description = collapseWhitespace(props.description);
+  const blockType = collapseWhitespace(props.blockType);
   const layout = layoutSimpleBlock({
     width: props.w,
     height: props.h,
@@ -91,7 +104,7 @@ export function primitivesForBlock(
         // untruncated title survives verbatim in `meta.bboxUi.props`, which
         // is what rebuild reads. Do not "restore" the full string here; the
         // overflow it paints is the bug, not the fix.
-        text: truncateToWidth(props.title, titlePx, layout.title.w, 500),
+        text: truncateToWidth(title, titlePx, layout.title.w, 500),
         px: titlePx,
         box: layout.title,
         origin,
@@ -105,7 +118,7 @@ export function primitivesForBlock(
     shapes.push(geoAt(origin, layout.chip, { geo: "oval", color: "black", fill: "none" }));
     shapes.push(
       textAt({
-        text: props.tag,
+        text: tag,
         px: META_FONT_PX,
         box: layout.chipText,
         origin,
@@ -117,7 +130,7 @@ export function primitivesForBlock(
   if (layout.description) {
     shapes.push(
       textAt({
-        text: props.description,
+        text: description,
         px: META_FONT_PX,
         box: layout.description,
         origin,
@@ -133,7 +146,7 @@ export function primitivesForBlock(
   if (layout.blockType) {
     shapes.push(
       textAt({
-        text: props.blockType,
+        text: blockType,
         px: META_FONT_PX,
         box: layout.blockType,
         origin,

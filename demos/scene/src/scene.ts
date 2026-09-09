@@ -281,4 +281,22 @@ export const SCENE: Scene = {
       targetPort: "detections",
     },
   ],
+  standalonePorts: [
+    {
+      // WHY this port exists: the R2 escaped defect was a RESIZED (100×25)
+      // standalone port whose top label floated 75px off its dot — and the
+      // fixed scene had no standalone port at all, so the compare harness
+      // measured straight through it. This is that reproducer, kept in the
+      // regression net: non-square dot, label on the short axis.
+      id: "sensor-bus",
+      x: 40,
+      y: 620,
+      w: 100,
+      h: 25,
+      state: "wired",
+      size: "md",
+      label: "sensor bus",
+      textLayout: "top",
+    },
+  ],
 };

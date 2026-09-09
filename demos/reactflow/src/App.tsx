@@ -1,12 +1,12 @@
 import { Background, ReactFlow } from "@xyflow/react";
 
-import { BBoxBlockNode } from "@bbox-ui/adapter-reactflow";
+import { BBoxBlockNode, BBoxPortNode } from "@bbox-ui/adapter-reactflow";
 import {
   sceneToReactFlowEdges,
   sceneToReactFlowNodes,
 } from "@bbox-ui/demo-scene/reactflow";
 
-const nodeTypes = { bboxBlock: BBoxBlockNode };
+const nodeTypes = { bboxBlock: BBoxBlockNode, bboxStandalonePort: BBoxPortNode };
 
 // The one shared scene — see demos/scene. Both hosts (and the compare
 // harness) render exactly this content, so a visual difference is always

@@ -258,7 +258,7 @@ describe("port placement — dot on the boundary, label off the dot", () => {
     diameter: number,
     boxInsetPx: number,
   ): number {
-    const placement = portLabelPlacement(layout, diameter, diameter, boxInsetPx);
+    const placement = portLabelPlacement(layout, { w: diameter, h: diameter }, boxInsetPx);
     const radius = diameter / 2;
     const flowEdge =
       layout === "top" ? "bottom" : layout === "bot" ? "top" : undefined;
@@ -296,10 +296,11 @@ describe("port placement — dot on the boundary, label off the dot", () => {
     // float w−h = 75px too high off the 100px width (the shipped defect).
     const w = 100;
     const h = 25;
-    expect(portLabelPlacement("top", w, h).bottom).toBe(`${h + PORT_LABEL_GAP}px`);
-    expect(portLabelPlacement("bot", w, h).top).toBe(`${h + PORT_LABEL_GAP}px`);
-    expect(portLabelPlacement("right", w, h).left).toBe(`${w + PORT_LABEL_GAP}px`);
-    expect(portLabelPlacement("left", w, h).right).toBe(`${w + PORT_LABEL_GAP}px`);
+    const dot = { w, h };
+    expect(portLabelPlacement("top", dot).bottom).toBe(`${h + PORT_LABEL_GAP}px`);
+    expect(portLabelPlacement("bot", dot).top).toBe(`${h + PORT_LABEL_GAP}px`);
+    expect(portLabelPlacement("right", dot).left).toBe(`${w + PORT_LABEL_GAP}px`);
+    expect(portLabelPlacement("left", dot).right).toBe(`${w + PORT_LABEL_GAP}px`);
   });
 
   const flowSide: Record<PortTextLayout, keyof PortLabelPlacement> = {
@@ -321,7 +322,10 @@ describe("port placement — dot on the boundary, label off the dot", () => {
       expect(Number.isFinite(dot.left)).toBe(true);
       expect(Number.isFinite(dot.top)).toBe(true);
       for (const layout of PORT_TEXT_LAYOUTS) {
-        const placement = portLabelPlacement(layout, PORT_DIAMETERS.md, PORT_DIAMETERS.md);
+        const placement = portLabelPlacement(layout, {
+          w: PORT_DIAMETERS.md,
+          h: PORT_DIAMETERS.md,
+        });
         // exactly one flow-axis offset, on the expected edge…
         const offsets = (["left", "right", "top", "bottom"] as const).filter(
           (edge) => placement[edge] !== undefined && placement[edge] !== "50%",

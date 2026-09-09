@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BLOCK_BORDER_PX,
@@ -13,6 +13,7 @@ import {
   PORT_LABEL_OFFSET_GAP,
   SIMPLE_BLOCK,
   TEXT_SIZES,
+  collapseWhitespace,
   glyphPx,
   layoutSimpleBlock,
   portLabelBox,
@@ -102,6 +103,78 @@ describe("layoutSimpleBlock", () => {
     expect(wrapTextLines("", 50, 10, 400, measure)).toEqual([]);
   });
 
+  it("collapseWhitespace folds document white space and keeps NBSP", () => {
+    expect(collapseWhitespace(" a \t\n b\r\fc ")).toBe("a b c");
+    expect(collapseWhitespace("north\nsouth")).toBe("north south");
+    // NBSP is glue, not a separator — trim()/\s would have eaten it.
+    expect(collapseWhitespace("\u00a0a\u00a0b\u00a0")).toBe("\u00a0a\u00a0b\u00a0");
+    expect(collapseWhitespace("   ")).toBe("");
+  });
+
+  it("an explicit newline collapses to a space before wrapping, as white-space: normal does", () => {
+    expect(wrapTextLines("north\nsouth", 200, 10, 400, measure)).toEqual([
+      "north south",
+    ]);
+  });
+
+  it("breaks inside an unspaced CJK run, like the live <p> does", () => {
+    // The R3 reproducer: split(/\s+/) saw 40 ideographs as ONE word and
+    // counted one line — half the wrapped height, a 13.5px stack shift.
+    // 10 chars fit per line at width 50.
+    expect(wrapTextLines("測".repeat(40), 50, 10, 400, measure)).toEqual([
+      "測".repeat(10),
+      "測".repeat(10),
+      "測".repeat(10),
+      "測".repeat(10),
+    ]);
+    // Mixed: the Latin word stays whole, the CJK run breaks per character.
+    expect(wrapTextLines("ab 測測測測測測測測測", 50, 10, 400, measure)).toEqual([
+      "ab 測測測測測測測",
+      "測測",
+    ]);
+  });
+
+  it("never breaks at a no-break space", () => {
+    // 17 chars at width 50: an ordinary space would wrap; NBSP must not —
+    // the pair overflows as one unbreakable line, exactly like the DOM.
+    const glued = `${"a".repeat(8)}\u00a0${"b".repeat(8)}`;
+    expect(wrapTextLines(glued, 50, 10, 400, measure)).toEqual([glued]);
+    expect(wrapTextLines(glued.replace("\u00a0", " "), 50, 10, 400, measure)).toEqual([
+      "a".repeat(8),
+      "b".repeat(8),
+    ]);
+  });
+
+  it("a soft hyphen is invisible until used, then renders a hyphen at the break", () => {
+    const hyphenated = "aaaa\u00adbbbb";
+    // Fits on one line: the soft hyphen vanishes (8 chars ≤ 10).
+    expect(wrapTextLines(hyphenated, 50, 10, 400, measure)).toEqual(["aaaabbbb"]);
+    // Forced to break: the line ends with a visible hyphen.
+    expect(wrapTextLines(hyphenated, 30, 10, 400, measure)).toEqual([
+      "aaaa-",
+      "bbbb",
+    ]);
+  });
+
+  it("a wrapped CJK description re-centres the stack around all its lines", () => {
+    const layout = layoutSimpleBlock(input({ description: "測".repeat(40) }));
+    const contentW = SIMPLE_BLOCK.width - 2 * (BLOCK_BORDER_PX + 16);
+    const perLine = Math.floor(contentW / (META_FONT_PX * 0.5));
+    const expectedLines = Math.ceil(40 / perLine);
+    expect(expectedLines).toBeGreaterThan(1);
+    expect(layout.descriptionLines).toBe(expectedLines);
+    const lineH = Math.round(META_FONT_PX * LEADING_BASE);
+    const stackH = layout.header.h + 4 + expectedLines * lineH;
+    expect(layout.header.y).toBeCloseTo((SIMPLE_BLOCK.height - stackH) / 2);
+  });
+
+  it("a newline description measures as the single line the DOM paints", () => {
+    const layout = layoutSimpleBlock(input({ description: "north\nsouth" }));
+    expect(layout.descriptionLines).toBe(1);
+    // Width is the collapsed "north south" (11 chars), not the raw string's.
+    expect(layout.description!.w).toBeCloseTo(measure("north south", META_FONT_PX));
+  });
+
   it("rides the glyph beside the title at the derived 0.9 ratio", () => {
     const layout = layoutSimpleBlock(input({ icon: "🔍" }));
     expect(layout.glyph).not.toBeNull();
@@ -157,6 +230,51 @@ describe("layoutSimpleBlock", () => {
   });
 });
 
+describe("wrapTextLines fallback (Intl.Segmenter absent)", () => {
+  // A fallback nothing exercises is a fallback that is wrong (the R2 lesson
+  // from splitGraphemes) — so stub the segmenter away and run the same
+  // break-opportunity cases through the documented CJK-and-spaces model.
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubSegmenterAway() {
+    vi.stubGlobal(
+      "Intl",
+      Object.create(Intl, { Segmenter: { value: undefined } }),
+    );
+  }
+
+  it("still wraps spaces, CJK runs, NBSP and soft hyphens", () => {
+    stubSegmenterAway();
+    expect(wrapTextLines("aaa bbb ccc", 50, 10, 400, measure)).toEqual([
+      "aaa bbb",
+      "ccc",
+    ]);
+    expect(wrapTextLines("測".repeat(40), 50, 10, 400, measure)).toEqual([
+      "測".repeat(10),
+      "測".repeat(10),
+      "測".repeat(10),
+      "測".repeat(10),
+    ]);
+    const glued = `${"a".repeat(8)}\u00a0${"b".repeat(8)}`;
+    expect(wrapTextLines(glued, 50, 10, 400, measure)).toEqual([glued]);
+    expect(wrapTextLines("aaaa\u00adbbbb", 30, 10, 400, measure)).toEqual([
+      "aaaa-",
+      "bbbb",
+    ]);
+    expect(wrapTextLines("aa indivisible bb", 50, 10, 400, measure)).toEqual([
+      "aa",
+      "indivisible",
+      "bb",
+    ]);
+  });
+
+  it("layoutSimpleBlock still counts a CJK description's wrapped lines", () => {
+    stubSegmenterAway();
+    const layout = layoutSimpleBlock(input({ description: "測".repeat(40) }));
+    expect(layout.descriptionLines).toBe(2);
+  });
+});
+
 describe("portLabelBox", () => {
   const base = { dotW: 25, dotH: 25, label: "tick", fontPx: 24, measure };
   const w = measure("tick", 24);
@@ -197,9 +315,9 @@ describe("portLabelBox", () => {
     expect(top.x + top.w / 2).toBeCloseTo(50);
     // The CSS placement resolves to the same near edge: bottom offset is
     // measured up from the 25px-tall wrapper's bottom.
-    const cssTop = portLabelPlacement("top", 100, 25);
+    const cssTop = portLabelPlacement("top", { w: 100, h: 25 });
     expect(25 - parseFloat(cssTop.bottom!)).toBeCloseTo(top.y + top.h);
-    const cssBot = portLabelPlacement("bot", 100, 25);
+    const cssBot = portLabelPlacement("bot", { w: 100, h: 25 });
     expect(parseFloat(cssBot.top!)).toBeCloseTo(bot.y);
     // Left/right still key off the width.
     const right = portLabelBox({ ...resized, layout: "right" });

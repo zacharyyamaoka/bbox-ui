@@ -2,12 +2,13 @@ import { Tldraw, type Editor } from "tldraw";
 
 import {
   BBoxBlockShapeUtil,
+  BBoxPortShapeUtil,
   registerReceivedPortCleanup,
   setPortReceived,
 } from "@bbox-ui/adapter-tldraw";
 import { sceneToTldrawShapes } from "@bbox-ui/demo-scene/tldraw";
 
-const shapeUtils = [BBoxBlockShapeUtil];
+const shapeUtils = [BBoxBlockShapeUtil, BBoxPortShapeUtil];
 
 // The one shared scene — see demos/scene. Both hosts (and the compare
 // harness) render exactly this content, so a visual difference is always
@@ -22,7 +23,7 @@ function handleMount(editor: Editor) {
   // Runtime-only: light ports up as "Data Recived" without ever writing
   // it into the document.
   for (const { shapeId, portId } of receivedPorts) {
-    setPortReceived(shapeId, portId, true);
+    setPortReceived(editor, shapeId, portId, true);
   }
   editor.zoomToFit({ immediate: true });
   editor.updateInstanceState({ isReadonly: false });

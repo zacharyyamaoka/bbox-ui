@@ -15,6 +15,7 @@ import type { TLShapeId, TLShapePartial } from "tldraw";
 
 import {
   TEXT_SIZES,
+  collapseWhitespace,
   portLabelBox,
   wiredInnerPx,
   type PortSize,
@@ -89,13 +90,18 @@ export function primitivesForPort(
     );
   }
 
-  if (input.label !== "") {
+  // The live PortLabel collapses white space (whitespace-nowrap), so the
+  // primitive carries the collapsed text — a raw "\n" would become a second
+  // stock paragraph the live span never painted. Same shared function as
+  // the Block builder; the raw label survives in `meta.bboxUi.props`.
+  const label = collapseWhitespace(input.label);
+  if (label !== "") {
     // PortLabel's default rung is md (24px) in both adapters.
     const fontPx = TEXT_SIZES.md;
     const box = portLabelBox({
       dotW: input.w,
       dotH: input.h,
-      label: input.label,
+      label,
       layout: input.textLayout,
       fontPx,
       measure: measureText,
@@ -110,7 +116,7 @@ export function primitivesForPort(
           : "start";
     shapes.push(
       textAt({
-        text: input.label,
+        text: label,
         px: fontPx,
         box,
         origin,

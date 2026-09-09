@@ -79,10 +79,33 @@ function modeFromHash(): Mode {
 /* Divergence measurement — numbers, not eyeballs                      */
 /* ------------------------------------------------------------------ */
 
+interface LabelBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** The label's box compared corner-and-size, not just a centre. */
+interface LabelDelta {
+  dx: number;
+  dy: number;
+  dw: number;
+  dh: number;
+}
+
 interface PortDelta {
   id: string;
   dx: number;
   dy: number;
+  /**
+   * The port label's box, when both hosts painted one. Measured since R3 —
+   * the harness compared only dot centres, so a label floating 75px off its
+   * dot still read "0.00px". `null` when the port has no label; a label
+   * painted by only ONE host is recorded in `labelMismatches` instead of
+   * silently dropped.
+   */
+  label: LabelDelta | null;
 }
 
 interface BlockDelta {
@@ -98,10 +121,20 @@ interface Divergence {
   rows: BlockDelta[];
   /** Standalone port dots, paired across hosts by id. */
   standalonePorts: PortDelta[];
+  /** How many label boxes this reading actually compared (both hosts). */
+  labelCount: number;
+  /** Ports whose label painted in one host but not the other. */
+  labelMismatches: string[];
   maxAbs: number;
   /** The live camera zoom the reading was taken at. */
   zoom: number | null;
   measuredAt: number;
+}
+
+interface HostPortGeometry {
+  cx: number;
+  cy: number;
+  label: LabelBox | null;
 }
 
 interface HostBlockGeometry {
@@ -110,12 +143,12 @@ interface HostBlockGeometry {
   y: number;
   w: number;
   h: number;
-  ports: Record<string, { cx: number; cy: number }>;
+  ports: Record<string, HostPortGeometry>;
 }
 
 interface PaneGeometry {
   blocks: Record<string, HostBlockGeometry>;
-  standalonePorts: Record<string, { cx: number; cy: number }>;
+  standalonePorts: Record<string, HostPortGeometry>;
 }
 
 /**
@@ -127,9 +160,32 @@ interface PaneGeometry {
  */
 const pairingId = (raw: string) => raw.replace(/^shape:/, "");
 
-/** Block and port-dot geometry in screen px relative to the pane's origin. */
+/** Block, port-dot and port-label geometry in screen px relative to the pane's origin. */
 function measurePane(pane: HTMLElement): PaneGeometry {
   const paneRect = pane.getBoundingClientRect();
+  // The dot's centre plus the label's whole box. Both hosts render the
+  // label as the core PortLabel ([data-slot="port-label"]) inside the port
+  // element, so one selector covers a React Flow Handle and a tldraw
+  // wrapper alike.
+  const measurePort = (portEl: HTMLElement, dotEl: HTMLElement): HostPortGeometry => {
+    const dotRect = dotEl.getBoundingClientRect();
+    const labelEl = portEl.querySelector<HTMLElement>('[data-slot="port-label"]');
+    const labelRect = labelEl?.getBoundingClientRect();
+    const label =
+      labelRect && labelRect.width > 0 && labelRect.height > 0
+        ? {
+            x: labelRect.left - paneRect.left,
+            y: labelRect.top - paneRect.top,
+            w: labelRect.width,
+            h: labelRect.height,
+          }
+        : null;
+    return {
+      cx: (dotRect.left + dotRect.right) / 2 - paneRect.left,
+      cy: (dotRect.top + dotRect.bottom) / 2 - paneRect.top,
+      label,
+    };
+  };
   const blocks: Record<string, HostBlockGeometry> = {};
   for (const blockEl of pane.querySelectorAll<HTMLElement>('[data-slot="block"]')) {
     const title =
@@ -143,7 +199,7 @@ function measurePane(pane: HTMLElement): PaneGeometry {
     // the other host is not painting; `rows.length` is the honest count of
     // blocks a reading actually compared.
     if (rect.width === 0 || rect.height === 0) continue;
-    const ports: Record<string, { cx: number; cy: number }> = {};
+    const ports: Record<string, HostPortGeometry> = {};
     const portEls = blockEl.querySelectorAll<HTMLElement>(
       "[data-port-id], .react-flow__handle",
     );
@@ -152,11 +208,7 @@ function measurePane(pane: HTMLElement): PaneGeometry {
       const dotEl = portEl.matches(".react-flow__handle")
         ? portEl
         : portEl.querySelector<HTMLElement>('[data-slot="port-dot"]') ?? portEl;
-      const dotRect = dotEl.getBoundingClientRect();
-      ports[id] = {
-        cx: (dotRect.left + dotRect.right) / 2 - paneRect.left,
-        cy: (dotRect.top + dotRect.bottom) / 2 - paneRect.top,
-      };
+      ports[id] = measurePort(portEl, dotEl);
     }
     blocks[pairingId(blockEl.dataset.blockId ?? title)] = {
       title,
@@ -167,18 +219,15 @@ function measurePane(pane: HTMLElement): PaneGeometry {
       ports,
     };
   }
-  const standalonePorts: Record<string, { cx: number; cy: number }> = {};
+  const standalonePorts: Record<string, HostPortGeometry> = {};
   for (const portEl of pane.querySelectorAll<HTMLElement>(
     "[data-standalone-port-id]",
   )) {
     const dotEl =
       portEl.querySelector<HTMLElement>('[data-slot="port-dot"]') ?? portEl;
-    const dotRect = dotEl.getBoundingClientRect();
-    if (dotRect.width === 0 || dotRect.height === 0) continue; // culled
-    standalonePorts[pairingId(portEl.dataset.standalonePortId ?? "?")] = {
-      cx: (dotRect.left + dotRect.right) / 2 - paneRect.left,
-      cy: (dotRect.top + dotRect.bottom) / 2 - paneRect.top,
-    };
+    if (dotEl.getBoundingClientRect().width === 0) continue; // culled
+    standalonePorts[pairingId(portEl.dataset.standalonePortId ?? "?")] =
+      measurePort(portEl, dotEl);
   }
   return { blocks, standalonePorts };
 }
@@ -191,9 +240,33 @@ function measureDivergence(): Divergence | null {
   const tl = measurePane(tlPane);
   const rows: BlockDelta[] = [];
   let maxAbs = 0;
+  let labelCount = 0;
+  const labelMismatches: string[] = [];
   const track = (value: number) => {
     maxAbs = Math.max(maxAbs, Math.abs(value));
     return value;
+  };
+  const diffPort = (id: string, rfPort: HostPortGeometry, tlPort: HostPortGeometry): PortDelta => {
+    let label: LabelDelta | null = null;
+    if (rfPort.label && tlPort.label) {
+      labelCount += 1;
+      label = {
+        dx: track(rfPort.label.x - tlPort.label.x),
+        dy: track(rfPort.label.y - tlPort.label.y),
+        dw: track(rfPort.label.w - tlPort.label.w),
+        dh: track(rfPort.label.h - tlPort.label.h),
+      };
+    } else if (rfPort.label || tlPort.label) {
+      // One host painted a label the other did not — worse than a big
+      // delta, and a delta cannot express it, so it is reported by name.
+      labelMismatches.push(id);
+    }
+    return {
+      id,
+      dx: track(rfPort.cx - tlPort.cx),
+      dy: track(rfPort.cy - tlPort.cy),
+      label,
+    };
   };
   for (const [blockId, rfBlock] of Object.entries(rf.blocks)) {
     const tlBlock = tl.blocks[blockId];
@@ -202,11 +275,7 @@ function measureDivergence(): Divergence | null {
     for (const [portId, rfPort] of Object.entries(rfBlock.ports)) {
       const tlPort = tlBlock.ports[portId];
       if (!tlPort) continue;
-      ports.push({
-        id: portId,
-        dx: track(rfPort.cx - tlPort.cx),
-        dy: track(rfPort.cy - tlPort.cy),
-      });
+      ports.push(diffPort(portId, rfPort, tlPort));
     }
     rows.push({
       title: rfBlock.title,
@@ -221,16 +290,14 @@ function measureDivergence(): Divergence | null {
   for (const [portId, rfPort] of Object.entries(rf.standalonePorts)) {
     const tlPort = tl.standalonePorts[portId];
     if (!tlPort) continue;
-    standalonePorts.push({
-      id: portId,
-      dx: track(rfPort.cx - tlPort.cx),
-      dy: track(rfPort.cy - tlPort.cy),
-    });
+    standalonePorts.push(diffPort(portId, rfPort, tlPort));
   }
   if (rows.length === 0 && standalonePorts.length === 0) return null;
   return {
     rows,
     standalonePorts,
+    labelCount,
+    labelMismatches,
     maxAbs,
     zoom: window.reactFlow?.getViewport().zoom ?? null,
     measuredAt: Date.now(),
@@ -439,7 +506,7 @@ export function CompareView({
       editor.createShapes(tldrawScene.shapes);
       // Runtime-only "Data Recived" paint — never written into the document.
       for (const { shapeId, portId } of tldrawScene.receivedPorts) {
-        setPortReceived(shapeId, portId, true);
+        setPortReceived(editor, shapeId, portId, true);
       }
       // A comparison is looked at, not drawn on — but it IS panned and
       // zoomed, so the camera stays unlocked and the hand tool makes
@@ -747,7 +814,16 @@ export function CompareView({
                     @ zoom {divergence.zoom.toFixed(2)}
                   </span>
                 )}
+                <span style={{ color: "#94a3b8" }}>
+                  {" "}
+                  · {divergence.labelCount} labels
+                </span>
               </div>
+              {divergence.labelMismatches.length > 0 && (
+                <div style={{ marginBottom: 6, color: "#f87171" }}>
+                  label in one host only: {divergence.labelMismatches.join(", ")}
+                </div>
+              )}
               {summary && (
                 <div style={{ marginBottom: 6, color: "#94a3b8" }}>
                   {summary.headline}
@@ -765,6 +841,14 @@ export function CompareView({
                   {row.ports.map((port) => (
                     <div key={port.id} style={{ paddingLeft: 12 }}>
                       ○ {port.id}: Δ ({port.dx.toFixed(2)}, {port.dy.toFixed(2)})
+                      {port.label && (
+                        <span>
+                          {" "}
+                          label Δpos ({port.label.dx.toFixed(2)},{" "}
+                          {port.label.dy.toFixed(2)}) Δsize (
+                          {port.label.dw.toFixed(2)}, {port.label.dh.toFixed(2)})
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -773,6 +857,14 @@ export function CompareView({
                 <div key={port.id}>
                   <span style={{ color: "#93c5fd" }}>○ port {port.id}</span>: Δ (
                   {port.dx.toFixed(2)}, {port.dy.toFixed(2)})
+                  {port.label && (
+                    <span>
+                      {" "}
+                      label Δpos ({port.label.dx.toFixed(2)},{" "}
+                      {port.label.dy.toFixed(2)}) Δsize ({port.label.dw.toFixed(2)},{" "}
+                      {port.label.dh.toFixed(2)})
+                    </span>
+                  )}
                 </div>
               ))}
             </>

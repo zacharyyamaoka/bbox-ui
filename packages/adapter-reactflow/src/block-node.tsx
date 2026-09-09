@@ -196,7 +196,11 @@ export function BBoxBlockNode({
                   className="pointer-events-none absolute"
                   // WHY PORT_RING_PX: the Handle IS the bordered dot, so the
                   // label's containing box sits a ring-width inside the circle.
-                  style={portLabelPlacement(textLayout, diameter, diameter, PORT_RING_PX)}
+                  style={portLabelPlacement(
+                    textLayout,
+                    { w: diameter, h: diameter },
+                    PORT_RING_PX,
+                  )}
                 >
                   {port.label}
                 </PortLabel>

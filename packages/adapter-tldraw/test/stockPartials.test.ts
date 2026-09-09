@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { measureText, splitGraphemes, truncateToWidth } from "../src/detach/stockPartials";
 
@@ -61,5 +61,45 @@ describe("truncateToWidth cuts on grapheme clusters", () => {
     expect(splitGraphemes("A👩‍❤️‍💋‍👩B")).toEqual(["A", "👩‍❤️‍💋‍👩", "B"]);
     expect(splitGraphemes("e\u0301x")).toEqual(["e\u0301", "x"]);
     expect(splitGraphemes("🇨🇦🇯🇵")).toEqual(["🇨🇦", "🇯🇵"]);
+  });
+});
+
+describe("splitGraphemes fallback (Intl.Segmenter absent)", () => {
+  // The R2 fallback was `[...text]` — exactly the ZWJ/mark-cutting defect
+  // the segmenter path had just removed, and nothing exercised it. These
+  // run the same cases with the segmenter stubbed away, so the fallback
+  // path is red on its own when it regresses.
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubSegmenterAway() {
+    vi.stubGlobal(
+      "Intl",
+      Object.create(Intl, { Segmenter: { value: undefined } }),
+    );
+  }
+
+  it("keeps ZWJ families, combining marks, surrogates and flags whole", () => {
+    stubSegmenterAway();
+    expect(splitGraphemes("A👩‍❤️‍💋‍👩B")).toEqual([
+      "A",
+      "👩‍❤️‍💋‍👩",
+      "B",
+    ]);
+    expect(splitGraphemes("e\u0301x")).toEqual(["e\u0301", "x"]);
+    expect(splitGraphemes("🇨🇦🇯🇵")).toEqual(["🇨🇦", "🇯🇵"]);
+    // Surrogate pairs stay whole; a third regional indicator starts a new
+    // cluster instead of gluing onto a finished flag.
+    expect(splitGraphemes("𝒳y")).toEqual(["𝒳", "y"]);
+    expect(splitGraphemes("🇨🇦🇯")).toEqual(["🇨🇦", "🇯"]);
+    // Skin tone modifier and variation selector extend their base.
+    expect(splitGraphemes("👍🏽!")).toEqual(["👍🏽", "!"]);
+    expect(splitGraphemes("❤️x")).toEqual(["❤️", "x"]);
+  });
+
+  it("truncateToWidth still cuts on those boundaries", () => {
+    stubSegmenterAway();
+    expectCleanCutsEverywhere("A👩‍❤️‍💋‍👩 followed by a long title");
+    expectCleanCutsEverywhere("de\u0301tection re\u0301sume\u0301 nai\u0308ve");
+    expectCleanCutsEverywhere("🇨🇦🇯🇵🇧🇷 flags in a title");
   });
 });

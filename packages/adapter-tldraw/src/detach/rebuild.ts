@@ -110,7 +110,7 @@ export function rebuildDetachedShapes(editor: Editor): RebuildResult {
       });
       // Hand the runtime `received` flags from the carrier to the minted id
       // (in memory only) so a port that is receiving right now stays lit.
-      rekeyReceivedPorts(carrierId, shapeId);
+      rekeyReceivedPorts(editor, carrierId, shapeId);
       editor.deleteShape(carrierId);
       createdIds.push(shapeId);
     }

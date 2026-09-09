@@ -81,25 +81,73 @@ export function stockTextStyle(px: number): {
   return { size: base.size, scale: px / base.px };
 }
 
-let graphemeSegmenter: Intl.Segmenter | null | undefined;
+let graphemeSegmenter: Intl.Segmenter | null = null;
+
+/** Availability is re-checked per call so tests can stub the segmenter away. */
+function getGraphemeSegmenter(): Intl.Segmenter | null {
+  if (typeof Intl === "undefined" || typeof Intl.Segmenter !== "function") {
+    return null;
+  }
+  if (!graphemeSegmenter) {
+    graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  }
+  return graphemeSegmenter;
+}
+
+const ZWJ = "\u200d";
+
+function isRegionalIndicator(codePoint: number): boolean {
+  return codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff;
+}
+
+/** Code points that always extend the cluster before them. */
+function extendsPreviousCluster(codePoint: number, point: string): boolean {
+  return (
+    /^\p{M}$/u.test(point) || // combining marks
+    codePoint === 0x200d || // zero-width joiner
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) || // variation selectors
+    (codePoint >= 0xe0100 && codePoint <= 0xe01ef) || // VS supplement
+    (codePoint >= 0x1f3fb && codePoint <= 0x1f3ff) // emoji skin tones
+  );
+}
 
 /**
  * `text` split on grapheme-cluster boundaries via `Intl.Segmenter`, so a
  * ZWJ emoji family, a flag pair or a base-plus-combining-mark is one unit.
- * Code points (`[...text]`) are the fallback where the segmenter is missing
- * — still never through a surrogate pair, but blind to joins.
+ *
+ * The fallback (no Segmenter — tested with the global stubbed away)
+ * clusters code points by the joins a truncation cut must never land
+ * inside: combining marks, ZWJ sequences, variation selectors, skin-tone
+ * modifiers and regional-indicator pairs. Not full UAX #29 (it skips e.g.
+ * Hangul jamo composition), but `[...text]` — the previous fallback — cut
+ * emoji families mid-join and stripped marks off their base, which was
+ * exactly the defect the segmenter path had just removed.
  */
 export function splitGraphemes(text: string): string[] {
-  if (graphemeSegmenter === undefined) {
-    graphemeSegmenter =
-      typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
-        ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
-        : null;
+  const segmenter = getGraphemeSegmenter();
+  if (segmenter) {
+    return Array.from(segmenter.segment(text), (part) => part.segment);
   }
-  if (graphemeSegmenter) {
-    return Array.from(graphemeSegmenter.segment(text), (part) => part.segment);
+  const clusters: string[] = [];
+  let pendingRegionalIndicator = false;
+  for (const point of text) {
+    const codePoint = point.codePointAt(0)!;
+    const previous = clusters[clusters.length - 1];
+    const regional = isRegionalIndicator(codePoint);
+    const joins =
+      previous !== undefined &&
+      (extendsPreviousCluster(codePoint, point) ||
+        previous.endsWith(ZWJ) ||
+        (regional && pendingRegionalIndicator));
+    if (joins) {
+      clusters[clusters.length - 1] = previous + point;
+      pendingRegionalIndicator = false;
+    } else {
+      clusters.push(point);
+      pendingRegionalIndicator = regional;
+    }
   }
-  return [...text];
+  return clusters;
 }
 
 /**

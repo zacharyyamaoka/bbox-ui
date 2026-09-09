@@ -22,7 +22,7 @@ import {
   runDetachSweep,
 } from "../src/index";
 import {
-  receivedPorts,
+  receivedPortsAtom,
   registerReceivedPortCleanup,
   setPortReceived,
   type BBoxBlockShapeProps,
@@ -85,13 +85,14 @@ beforeEach(() => {
   editor = createHeadlessEditor();
   // The same wiring every host app does on mount — the leak tests below
   // exercise it, and the round-trip tests prove it never races the rekey.
+  // No manual receivedPorts reset here: the flags are scoped per editor,
+  // and a reset would mask exactly the cross-editor leak the disposal
+  // tests below assert against.
   registerReceivedPortCleanup(editor);
-  receivedPorts.set({});
 });
 
 afterEach(() => {
   editor.dispose();
-  receivedPorts.set({});
 });
 
 /** Create → detach → rebuild; returns the rebuilt shape. */
@@ -374,15 +375,15 @@ describe("detach → rebuild: runtime received flag", () => {
   it("stays lit across the round trip and never reaches persisted state", () => {
     const id = createShapeId();
     editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
-    setPortReceived(id, "p1", true);
+    setPortReceived(editor, id, "p1", true);
 
     runDetachSweep(editor, [id], DETACHABLE_KINDS);
     const carrier = editor
       .getCurrentPageShapes()
       .find((shape) => (shape.meta as any)?.[BBOX_UI_META_KEY]?.props)!;
     // The flag followed the identity onto the carrier, in memory only.
-    expect(receivedPorts.get()[`${carrier.id}:p1`]).toBe(true);
-    expect(receivedPorts.get()[`${id}:p1`]).toBeUndefined();
+    expect(receivedPortsAtom(editor).get()[carrier.id]?.p1).toBe(true);
+    expect(receivedPortsAtom(editor).get()[id]).toBeUndefined();
     // Nothing about `received` is in the persisted record or any primitive.
     expect(JSON.stringify(editor.getCurrentPageShapes())).not.toContain("received");
 
@@ -390,8 +391,8 @@ describe("detach → rebuild: runtime received flag", () => {
     expect(createdIds).toHaveLength(1);
     const rebuilt = editor.getShape(createdIds[0])!;
     // Still lit at runtime under the minted id…
-    expect(receivedPorts.get()[`${rebuilt.id}:p1`]).toBe(true);
-    expect(receivedPorts.get()[`${carrier.id}:p1`]).toBeUndefined();
+    expect(receivedPortsAtom(editor).get()[rebuilt.id]?.p1).toBe(true);
+    expect(receivedPortsAtom(editor).get()[carrier.id]).toBeUndefined();
     // …and still absent from persisted props.
     expect((rebuilt.props as BBoxBlockShapeProps).ports[0].state).toBe("wired");
     expect(JSON.stringify(rebuilt.props)).not.toContain("received");
@@ -400,18 +401,18 @@ describe("detach → rebuild: runtime received flag", () => {
   it("a false delivery prunes the entry instead of storing false", () => {
     const id = createShapeId();
     editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
-    setPortReceived(id, "p1", true);
-    expect(receivedPorts.get()).toEqual({ [`${id}:p1`]: true });
-    setPortReceived(id, "p1", false);
-    expect(receivedPorts.get()).toEqual({});
+    setPortReceived(editor, id, "p1", true);
+    expect(receivedPortsAtom(editor).get()).toEqual({ [id]: { p1: true } });
+    setPortReceived(editor, id, "p1", false);
+    expect(receivedPortsAtom(editor).get()).toEqual({});
   });
 
   it("deleting a live block drops its flags", () => {
     const id = createShapeId();
     editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
-    setPortReceived(id, "p1", true);
+    setPortReceived(editor, id, "p1", true);
     editor.deleteShape(id);
-    expect(receivedPorts.get()).toEqual({});
+    expect(receivedPortsAtom(editor).get()).toEqual({});
   });
 
   it("deleting a detached carrier WITHOUT rebuilding drops the rekeyed flags", () => {
@@ -419,27 +420,70 @@ describe("detach → rebuild: runtime received flag", () => {
     // rebuilt, so nothing ever rekeyed the entry away — it lived forever.
     const id = createShapeId();
     editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
-    setPortReceived(id, "p1", true);
+    setPortReceived(editor, id, "p1", true);
     runDetachSweep(editor, [id], DETACHABLE_KINDS);
     const carrier = editor
       .getCurrentPageShapes()
       .find((shape) => (shape.meta as any)?.[BBOX_UI_META_KEY]?.props)!;
-    expect(receivedPorts.get()[`${carrier.id}:p1`]).toBe(true);
+    expect(receivedPortsAtom(editor).get()[carrier.id]?.p1).toBe(true);
     editor.deleteShape(carrier.id);
-    expect(receivedPorts.get()).toEqual({});
+    expect(receivedPortsAtom(editor).get()).toEqual({});
   });
 
   it("repeated receive → detach → delete flows never grow the map", () => {
     for (let flow = 0; flow < 5; flow++) {
       const id = createShapeId();
       editor.createShape({ id, type: "bbox-block", x: 160, y: 140, props: makeBlockProps() });
-      setPortReceived(id, "p1", true);
+      setPortReceived(editor, id, "p1", true);
       runDetachSweep(editor, [id], DETACHABLE_KINDS);
       const carrier = editor
         .getCurrentPageShapes()
         .find((shape) => (shape.meta as any)?.[BBOX_UI_META_KEY]?.props)!;
       editor.deleteShape(carrier.id);
     }
-    expect(receivedPorts.get()).toEqual({});
+    expect(receivedPortsAtom(editor).get()).toEqual({});
+  });
+
+  it("a disposed editor's flags never light the same ids in a later editor", () => {
+    // The escaped leak: `dispose()` drops the document WITHOUT deleting its
+    // shapes, so no delete handler fires — and a module-global table let a
+    // NEW editor opening a different document that reuses the shape id (and
+    // port id) paint a port received that never received anything. Two real
+    // editors in one process, no manual reset anywhere.
+    const sharedId = createShapeId("shared");
+    editor.createShape({
+      id: sharedId, type: "bbox-block", x: 160, y: 140, props: makeBlockProps(),
+    });
+    setPortReceived(editor, sharedId, "p1", true);
+    expect(receivedPortsAtom(editor).get()[sharedId]?.p1).toBe(true);
+    editor.dispose();
+
+    const editorB = createHeadlessEditor();
+    try {
+      registerReceivedPortCleanup(editorB);
+      editorB.createShape({
+        id: sharedId, type: "bbox-block", x: 160, y: 140, props: makeBlockProps(),
+      });
+      // Same shape id, same port id, no delivery in THIS editor: dark.
+      expect(receivedPortsAtom(editorB).get()).toEqual({});
+      expect(receivedPortsAtom(editorB).get()[sharedId]).toBeUndefined();
+      // And the disposed editor's table is gone, not lingering in memory.
+      expect(receivedPortsAtom(editor).get()).toEqual({});
+    } finally {
+      editorB.dispose();
+    }
+  });
+
+  it("shape and port ids containing ':' cannot collide on one flag", () => {
+    // `${shapeId}:${portId}` was ambiguous: "shape:a" + "b:c" and
+    // "shape:a:b" + "c" both flattened to "shape:a:b:c" — receiving on one
+    // lit the other, clearing one cleared both. The nested table keeps them
+    // distinct.
+    setPortReceived(editor, "shape:a", "b:c", true);
+    expect(receivedPortsAtom(editor).get()["shape:a:b"]).toBeUndefined();
+    setPortReceived(editor, "shape:a:b", "c", true);
+    setPortReceived(editor, "shape:a", "b:c", false);
+    expect(receivedPortsAtom(editor).get()["shape:a:b"]).toEqual({ c: true });
+    expect(receivedPortsAtom(editor).get()["shape:a"]).toBeUndefined();
   });
 });
