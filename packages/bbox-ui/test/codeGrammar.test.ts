@@ -98,6 +98,38 @@ describe("grammarExtensions — fold (foldInactiveLinesAfter)", () => {
     const grammar: CodeFieldGrammar = {};
     expect(grammarExtensions(grammar)).toEqual([]);
   });
+
+  it("cuts at a code-point boundary, never inside a surrogate pair (finding 10)", () => {
+    // 🎉 is a two-UTF-16-unit code point. `maxChars: 8` on a raw code-unit
+    // slice would land inside it (index 8 sits between the surrogate
+    // halves of the emoji at unit offsets 7-8), leaving a lone unpaired
+    // surrogate on screen — asserted by measuring the ACTUAL replaced
+    // range never starts strictly inside a `\ud800`-`\udbff` high
+    // surrogate.
+    const line = "label: 🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉"; // 7 ASCII + 10 emoji code points
+    const grammar: CodeFieldGrammar = { foldInactiveLinesAfter: 8 };
+    // The caret sits on line 1 ("x"), so line 2 (the emoji line) is
+    // INACTIVE and folds — the scenario finding 10 reported.
+    const state = EditorState.create({
+      doc: `x\n${line}`,
+      extensions: grammarExtensions(grammar),
+      selection: { anchor: 0 },
+    });
+    let cutOffset = -1;
+    for (const decorations of state.facet(EditorView.decorations)) {
+      const set = typeof decorations === "function" ? decorations(null as never) : decorations;
+      set.between(2, state.doc.length, (from) => {
+        cutOffset = from;
+      });
+    }
+    expect(cutOffset).toBeGreaterThan(-1);
+    const cutChar = state.doc.sliceString(cutOffset, cutOffset + 1);
+    // A low surrogate (\udc00-\udfff) at the cut point would mean the cut
+    // landed one unit INSIDE a pair, splitting it — the high half was left
+    // dangling just before `cutOffset`.
+    const code = cutChar.charCodeAt(0);
+    expect(code >= 0xdc00 && code <= 0xdfff).toBe(false);
+  });
 });
 
 describe("grammarExtensions — which extensions get mounted", () => {

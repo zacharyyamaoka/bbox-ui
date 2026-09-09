@@ -94,15 +94,36 @@ document.
   every line but the caret's own past N characters, live-preview style.
 - **`mode`** (`"rendered" | "source"`, controlled): the "code block
   overlay" — a pretty tree by default, the live document only where the
-  caret is. `onOpenSource(line, column)` fires when a rendered row is
-  clicked; a host typically responds by setting `mode="source"` and a
-  `cursorAt` computed via `lineStartOffset`. `CodeFieldModeToggle` is an
-  optional `[Rendered | Source]` switch; a host may drive `mode` from its
-  own chrome instead.
+  caret is. `onOpenSource(line, column, owner?)` fires when a rendered row
+  is clicked; a host typically responds by setting `mode="source"` and a
+  `cursorAt` computed via `lineStartOffset`. `owner` is `undefined` for a
+  row from the field's own `value` — for a row that came from a
+  reference's `expandLines()` (`CodeFieldReference.owner`), `line`/`column`
+  are into THAT source, not this field's, and the host resolves `owner` to
+  open it (a foreign row jumps to its real owner, never opens this field's
+  own document at an unrelated line — see `code-field-attrs`/`code-field-pose`
+  in `demos/*/src/CodeFieldDemo.tsx`). Row expansion state is owned by
+  `CodeField` itself so it survives the `mode` round trip. `CodeFieldModeToggle`
+  is an optional `[Rendered | Source]` switch; a host may drive `mode` from
+  its own chrome instead.
 - Enter/Escape end the gesture (never discarded — Ctrl+Z retracts); a lane
   keeps Enter as "new line" and exits on Ctrl/Cmd+Enter instead. A pasted or
   typed newline is stripped on a single-line field, kept on a `multiline`
-  one.
+  one — enforced at the transaction level (`codeFieldGuards.ts`), not just
+  on typed/pasted input, so no command can leave one behind either.
+- **`tooltipParent`** (`HTMLElement | (() => HTMLElement | null)`): where the
+  completion popup is parented — takes priority over an ancestor
+  `[data-tooltip-host]`, else `document.body`. A host stacking content of
+  its own (a tldraw shape, a React Flow node) should set one — see
+  `demos/tldraw/src/App.tsx`'s `handleMount`, which tags `.tl-container`
+  with `data-tooltip-host` so every field under it opts in at once.
+  `.cm-tooltip` ships at `z-index: 2147483647` so the popup wins over a
+  later, overlapping shape/node regardless of where it's parented.
+- **Mounting inside a React Flow node**: give the field's wrapper the
+  `nodrag nowheel` classes React Flow recognises natively, or a drag
+  starting inside the field's text moves the node instead of placing the
+  caret, and scrolling over it zooms the canvas instead of doing nothing —
+  see `demos/reactflow/src/CodeFieldHostNode.tsx`.
 
 The `signature` grammar (`signatureGrammar`) ships as the first grammar:
 `name: Type = default`, the way Python already spells a parameter — a free
@@ -310,6 +331,17 @@ node demos/drive-playground-detach.mjs  # headless: seed Block+Port, detach via 
 `port`, `block`, `bbox-layout`, `block-node-reactflow`, `block-shape-tldraw`,
 `code-field`, `code-field-signature`.
 
+`code-field` and `code-field-signature`'s files all target `components/bbox/`
+— one directory, not split `lib/bbox/` + `components/bbox/` the way
+`port`/`block`/`bbox-layout` are. WHY: their sources import each other by
+relative path (`./codeGrammar`, `./signature`), and shadcn copies each file
+to its own declared `target` verbatim, with no import-path rewriting for
+relative imports — a split target directory leaves those imports dangling
+after `npx shadcn add`. `port`/`block` have the same defect (their `./layout`
+import doesn't survive being split from `lib/bbox/layout.ts` either); it's
+called out here rather than fixed there, since fixing it is a breaking
+change to an already-shipped item's file layout.
+
 ## Develop
 
 ```bash
@@ -330,9 +362,13 @@ pnpm demo:compare      # http://127.0.0.1:5191
 pnpm demo:playground   # http://127.0.0.1:5193  (the editable one)
 node demos/drive.mjs reactflow http://127.0.0.1:5183   # headless assert + screenshot
 node demos/drive.mjs tldraw    http://127.0.0.1:5189
-node demos/drive-code-field.mjs reactflow http://127.0.0.1:5183  # CodeFieldDemo panel: port
-node demos/drive-code-field.mjs tldraw    http://127.0.0.1:5189  # row/lane, rendered<->source,
-                                                                  # reference click + expand
+node demos/drive-code-field.mjs reactflow http://127.0.0.1:5183  # CodeFieldDemo panel (row/lane,
+node demos/drive-code-field.mjs tldraw    http://127.0.0.1:5189  # rendered<->source, sticky
+                                                                  # expansion, owner-aware foreign-
+                                                                  # row jump, Ctrl+Enter) PLUS the
+                                                                  # real in-host mount (completion
+                                                                  # z-index over a later shape/node,
+                                                                  # Escape focus, wheel, drag)
 node demos/drive-compare.mjs                           # all four compare modes
 node demos/drive-playground.mjs                        # toolbar + tools journey
 node demos/drive-playground-compare.mjs                # live-board compare journey
