@@ -21,9 +21,15 @@ body,
   position: fixed;
   top: 12px;
   right: 12px;
-  width: 280px;
+  width: 300px;
   max-height: calc(100% - 24px);
+  /* WHY the completion popup no longer clips or grows a horizontal
+     scrollbar here: it isn't parented inside this panel any more (the
+     panel dropped `data-tooltip-host`, so CodeField's own default —
+     document.body — takes over), so `overflow-y: auto` only ever
+     clips/scrolls the panel's OWN section list now, never a popover. */
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
