@@ -38,11 +38,27 @@
  * shape or node on top of an EARLIER one at any DOM depth; this is the
  * floor that beats it regardless of what the host's own shapes use — the
  * donor's own value, max signed 32-bit, "it needs to go to maximum z
- * level" (Zach's call, ported). A consumer with other unrelated CodeMirror
- * instances on the page should scope this rule tighter after install.
+ * level" (Zach's call, ported).
+ *
+ * WHY `.cm-tooltip.bbox-code-completion` + `!important`, not a bare
+ * `.cm-tooltip` rule: CodeMirror's own base theme injects a same-stylesheet
+ * rule shaped like `.ͼ1 .cm-tooltip { z-index: 500 }` — two class selectors,
+ * specificity (0,2,0). A bare `.cm-tooltip` is (0,1,0) and loses outright,
+ * source order never even gets consulted. Measured: computed z-index 500
+ * in both host demos with round 1's rule in place, beaten by anything at
+ * z ≥ 501 anywhere on the page (a tldraw `--layer-header-footer` panel at
+ * 999, an ordinary body sibling at 600). `.bbox-code-completion` is a class
+ * `codeGrammar.ts` adds to EVERY CodeField completion popup via
+ * `autocompletion`'s `tooltipClass`, so pairing it with `.cm-tooltip`
+ * reaches the same (0,2,0) specificity as CodeMirror's own rule — a tie
+ * this stylesheet's load order is not guaranteed to win — so `!important`
+ * (the donor's own choice: `.tl-container .cm-tooltip.TypeNameAutocomplete-cm
+ * { z-index: 2147483647 !important }`) is what actually decides it.
+ * A consumer with other unrelated CodeMirror instances on the page should
+ * scope this rule tighter after install.
  */
-.cm-tooltip {
-  z-index: 2147483647;
+.cm-tooltip.bbox-code-completion {
+  z-index: 2147483647 !important;
 }
 
 .bbox-code-field .cm-editor {

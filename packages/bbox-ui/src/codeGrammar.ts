@@ -223,26 +223,35 @@ function completionExtension(grammar: CodeFieldGrammar): Extension {
       })),
     };
   };
-  if (!grammar.completionBadge) return autocompletion({ override: [source], icons: false });
+  // WHY `tooltipClass` is set unconditionally (not only when a badge is
+  // configured): `.bbox-code-completion` is the class `codeField.css`'s
+  // z-index rule targets. Without it every plain CodeField (no
+  // `completionBadge`) got a popup with only CodeMirror's own default
+  // classes — the bare `.cm-tooltip` selector round 1 shipped never had
+  // enough specificity to beat CodeMirror's base theme rule either way,
+  // but this is what makes the round-2 fix apply to EVERY completion
+  // popup, not only the ones with a kind pill.
   const badge = grammar.completionBadge;
   return autocompletion({
     override: [source],
     icons: false,
     tooltipClass: () => "bbox-code-completion",
-    addToOptions: [
-      {
-        position: 20,
-        render: (completion) => {
-          const label = completion.type ? badge(completion.type) : null;
-          if (!label) return null;
-          const pill = document.createElement("span");
-          pill.className = "bbox-code-completion-pill";
-          pill.dataset.kind = completion.type;
-          pill.textContent = label;
-          return pill;
+    ...(badge && {
+      addToOptions: [
+        {
+          position: 20,
+          render: (completion) => {
+            const label = completion.type ? badge(completion.type) : null;
+            if (!label) return null;
+            const pill = document.createElement("span");
+            pill.className = "bbox-code-completion-pill";
+            pill.dataset.kind = completion.type;
+            pill.textContent = label;
+            return pill;
+          },
         },
-      },
-    ],
+      ],
+    }),
   });
 }
 

@@ -10,7 +10,6 @@ import {
 } from "@codemirror/commands";
 import { syntaxHighlighting } from "@codemirror/language";
 import {
-  Annotation,
   Compartment,
   EditorState,
   Prec,
@@ -32,13 +31,10 @@ import {
   type ReactNode,
 } from "react";
 
-import { singleLineGuard } from "./codeFieldGuards";
+import { externalSync, singleLineGuard } from "./codeFieldGuards";
 import { grammarExtensions, type CodeFieldGrammar } from "./codeGrammar";
 import { CodeFieldRows } from "./codeFieldRows";
 import { FieldGesture } from "./fieldGesture";
-
-/** Marks the field's own imperative doc swaps so the change listener never echoes them back as typing. */
-const externalSync = Annotation.define<boolean>();
 
 export interface CodeFieldProps {
   /** The value. The field follows it whenever nobody is editing. */
