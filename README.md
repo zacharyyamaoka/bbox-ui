@@ -117,8 +117,17 @@ document.
   its own (a tldraw shape, a React Flow node) should set one — see
   `demos/tldraw/src/App.tsx`'s `handleMount`, which tags `.tl-container`
   with `data-tooltip-host` so every field under it opts in at once.
-  `.cm-tooltip` ships at `z-index: 2147483647` so the popup wins over a
-  later, overlapping shape/node regardless of where it's parented.
+  Every CodeField completion popup carries the `bbox-code-completion`
+  class (`codeGrammar.ts`'s `tooltipClass`); `.cm-tooltip.bbox-code-completion`
+  ships at `z-index: 2147483647 !important` — class-scoped and `!important`
+  on purpose, since CodeMirror's own base theme injects a same-specificity
+  `.ͼ1 .cm-tooltip { z-index: 500 }` rule a bare `.cm-tooltip` selector
+  cannot beat regardless of source order. This wins over a later,
+  overlapping shape/node in a normal document flow; a host whose OWN
+  wrapper establishes a stacking context above the popup's parent (e.g. a
+  `position: fixed` panel with its own z-index sitting over `.tl-container`)
+  can still paint over it — a structural fact about that host's DOM, not
+  something a bigger z-index number on the popup itself can reach.
 - **Mounting inside a React Flow node**: give the field's wrapper the
   `nodrag nowheel` classes React Flow recognises natively, or a drag
   starting inside the field's text moves the node instead of placing the

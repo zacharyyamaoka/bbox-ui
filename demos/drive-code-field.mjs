@@ -97,6 +97,14 @@ const { targetId } = await send("Target.createTarget", { url: "about:blank" }, f
 
 await send("Runtime.enable");
 await send("Page.enable");
+// Needed for a REAL clipboard paste (finding A's drive proof) — a CDP
+// `Input.insertText` alone doesn't reproduce it: Chromium classifies it as
+// plain `insertText`, the same native input type as typing, so CodeMirror
+// groups it with adjacent keystrokes exactly like ordinary typing would —
+// correct behaviour, not the bug. Only an actual `document.execCommand`-
+// free Ctrl+V against a real clipboard write triggers the distinct
+// `insertFromPaste` input type finding A is actually about.
+await send("Browser.grantPermissions", { permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"] }, false);
 await send("Page.navigate", { url });
 
 async function evaluate(expression) {
@@ -180,6 +188,13 @@ async function pressKey(key, { ctrl = false, code = key, windowsVirtualKeyCode }
 
 async function insertText(text) {
   await send("Input.insertText", { text });
+}
+
+/** A REAL Ctrl+V against an actual clipboard write — see the `Browser.grantPermissions` comment above for why this, not `insertText`, is what finding A needs. `charCodes` avoids ferrying a literal newline through this script's own template-literal escaping. */
+async function pasteFromClipboard(charCodes) {
+  await evaluate(`navigator.clipboard.writeText(String.fromCharCode(${charCodes.join(",")}))`);
+  await pressKey("v", { ctrl: true, code: "KeyV", windowsVirtualKeyCode: 86 });
+  await new Promise((r) => setTimeout(r, 150));
 }
 
 /** Which `.cm-line` (0-based) the real DOM selection currently sits in, inside `fieldSelector`'s CodeMirror content — proves WHERE the caret landed, not just that source mode opened. */
@@ -339,6 +354,37 @@ const rowFinalText = await evaluate(`document.querySelector('[data-testid="code-
 check(rowLineCount === 1, `Ctrl+Enter with the popup open left ${rowLineCount} lines in a single-line field (text: ${JSON.stringify(rowFinalText)})`);
 check(!/[\r\n]/.test(rowFinalText), `single-line field's text contains a newline: ${JSON.stringify(rowFinalText)}`);
 check(rowFinalText.startsWith("t: Pose") || rowFinalText === "t: Po", `unexpected accept result: ${JSON.stringify(rowFinalText)}`);
+
+// --- finding A (round 3): a real paste right after typing stays its own
+// undo step — losing CodeMirror's named annotations (userEvent,
+// addToHistory, time) on a rebuilt transaction merged it into whatever
+// edit was already open, so one Ctrl+Z discarded both -------------------
+
+// The Ctrl+Enter test above exits (blurs) the field on accept — re-focus it.
+await click('[data-testid="code-field-row"] .cm-content');
+await new Promise((r) => setTimeout(r, 100));
+check(
+  await evaluate(`document.activeElement?.closest('[data-testid="code-field-row"]') != null`),
+  "re-focusing code-field-row before the paste-after-typing test did not take focus",
+);
+await pressKey("End", { code: "End" });
+const beforePaste = await evaluate(`document.querySelector('[data-testid="code-field-row"] .cm-content').textContent`);
+await insertText("X");
+await new Promise((r) => setTimeout(r, 100));
+check(
+  (await evaluate(`document.querySelector('[data-testid="code-field-row"] .cm-content').textContent`)) === `${beforePaste}X`,
+  `typing X did not register before the paste (beforePaste=${JSON.stringify(beforePaste)})`,
+);
+await pasteFromClipboard([97, 10, 98]); // "a\nb"
+const afterPaste = await evaluate(`document.querySelector('[data-testid="code-field-row"] .cm-content').textContent`);
+check(afterPaste === `${beforePaste}Xab`, `paste after typing produced unexpected text: ${JSON.stringify(afterPaste)}`);
+await pressKey("z", { ctrl: true, code: "KeyZ", windowsVirtualKeyCode: 90 });
+await new Promise((r) => setTimeout(r, 100));
+const afterOneUndo = await evaluate(`document.querySelector('[data-testid="code-field-row"] .cm-content').textContent`);
+check(
+  afterOneUndo === `${beforePaste}X`,
+  `one Ctrl+Z after a paste-right-after-typing discarded more than the paste — expected ${JSON.stringify(`${beforePaste}X`)}, got ${JSON.stringify(afterOneUndo)}`,
+);
 
 // --- finding 5 (round 2): a foreign-row jump when the owner is ALREADY
 // in Source must move the caret there, not silently do nothing ---------
