@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import {
   CodeField,
   CodeFieldModeToggle,
   lineStartOffset,
   signatureGrammar,
+  type CodeFieldHandle,
   type CodeFieldReference,
 } from "@bbox-ui/core";
 
@@ -42,7 +43,12 @@ export function CodeFieldDemo() {
   const [lane, setLane] = useState(
     "pose: Pose = None\nwindow: int = 5\ntemperature sensor readings",
   );
-  const [attrs, setAttrs] = useState("origin: Pose\nsamples: int = 10\nlabel: str = \"cam\"");
+  // A SECOND expandable row ("target", also a Pose) beside "origin" —
+  // needed to prove finding 6 (expansion keyed by line index migrates to
+  // the wrong row after an insert shifts everything down).
+  const [attrs, setAttrs] = useState(
+    "origin: Pose\nsamples: int = 10\nlabel: str = \"cam\"\ntarget: Pose",
+  );
   const [mode, setMode] = useState<"rendered" | "source">("rendered");
   const [cursorAt, setCursorAt] = useState<number | undefined>(undefined);
   const [jumpedTo, setJumpedTo] = useState<string | null>(null);
@@ -55,6 +61,13 @@ export function CodeFieldDemo() {
   const [poseSource, setPoseSource] = useState("x: float = 0.0\ny: float = 0.0\ntheta: float = 0.0");
   const [poseMode, setPoseMode] = useState<"rendered" | "source">("rendered");
   const [poseCursorAt, setPoseCursorAt] = useState<number | undefined>(undefined);
+  // WHY a ref alongside `mode`/`cursorAt`: those two only place the caret
+  // on MOUNT (the `autoFocus` next-frame retry) — if Pose is ALREADY open
+  // in Source when a second foreign row is clicked, changing `cursorAt`
+  // again does nothing (no remount to consume it). The donor's
+  // `useSourceToggleEditor.enterSourceAt` hits the identical case ("already
+  // open … place the caret on the live view directly") via `setCaret`.
+  const poseFieldRef = useRef<CodeFieldHandle>(null);
 
   const rowGrammar = useMemo(
     () => signatureGrammar({ types: TYPES, values: VALUES, kindLabels: KIND_LABELS }),
@@ -130,8 +143,13 @@ export function CodeFieldDemo() {
             // Pose's OWN source at that line — never this field's source
             // at `line`'s (unrelated) index into `attrs`.
             if (owner === "Pose") {
-              setPoseCursorAt(lineStartOffset(poseSource, line) + column);
-              setPoseMode("source");
+              const offset = lineStartOffset(poseSource, line) + column;
+              if (poseMode === "source") {
+                poseFieldRef.current?.setCaret(offset);
+              } else {
+                setPoseCursorAt(offset);
+                setPoseMode("source");
+              }
               return;
             }
             setCursorAt(lineStartOffset(attrs, line) + column);
@@ -144,6 +162,7 @@ export function CodeFieldDemo() {
         <h2>Pose (referenced board type)</h2>
         <CodeFieldModeToggle mode={poseMode} onModeChange={setPoseMode} />
         <CodeField
+          ref={poseFieldRef}
           value={poseSource}
           onWrite={setPoseSource}
           grammar={poseGrammar}

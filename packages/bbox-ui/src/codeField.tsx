@@ -23,7 +23,9 @@ import {
 } from "@codemirror/view";
 import { classHighlighter } from "@lezer/highlight";
 import {
+  forwardRef,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useRef,
   useState,
@@ -144,7 +146,23 @@ export interface CodeFieldProps {
  * was edited — the donor (`TypeBabbleV1.tsx`) lifts the same state for the
  * same reason, above its own UI/Source split.
  */
-export function CodeField(props: CodeFieldProps) {
+export interface CodeFieldHandle {
+  /**
+   * Move the caret to `offset` and focus the live document — the seam an
+   * ALREADY-MOUNTED-in-Source field needs. `cursorAt` only places the
+   * caret once, in the mount effect (`autoFocus`'s own next-frame retry);
+   * a host whose owner field is already open in Source when a foreign row
+   * is clicked has no prop change to hand it, since `cursorAt` changing
+   * while mounted does nothing — the donor's `useSourceToggleEditor`
+   * solves the identical problem with `enterSourceAt`'s "already open …
+   * place the caret on the live view directly" branch. A no-op while
+   * `mode === "rendered"` (no live document to place a caret in).
+   */
+  setCaret(offset: number): void;
+  focus(): void;
+}
+
+export const CodeField = forwardRef<CodeFieldHandle, CodeFieldProps>(function CodeField(props, ref) {
   const { mode, grammar, value, onOpenSource, ariaLabel, className, testId } = props;
   const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(() => new Set());
   const toggleExpanded = (path: string) =>
@@ -154,6 +172,11 @@ export function CodeField(props: CodeFieldProps) {
       else next.add(path);
       return next;
     });
+  const sourceRef = useRef<CodeFieldHandle | null>(null);
+  useImperativeHandle(ref, () => ({
+    setCaret: (offset) => sourceRef.current?.setCaret(offset),
+    focus: () => sourceRef.current?.focus(),
+  }), []);
   if (mode === "rendered") {
     return (
       <CodeFieldRows
@@ -167,8 +190,8 @@ export function CodeField(props: CodeFieldProps) {
       />
     );
   }
-  return <CodeFieldSourceView {...props} ariaLabel={ariaLabel} />;
-}
+  return <CodeFieldSourceView {...props} ariaLabel={ariaLabel} ref={sourceRef} />;
+});
 
 /** Two-button `[Rendered | Source]` switch — the chrome `CodeField`'s `mode` toggle needs, matching how it looks on the field this was extracted from. Entirely optional: a host may drive `mode` from its own UI instead. */
 export function CodeFieldModeToggle({
@@ -192,7 +215,7 @@ export function CodeFieldModeToggle({
   );
 }
 
-function CodeFieldSourceView({
+const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function CodeFieldSourceView({
   value,
   onWrite,
   beginEdit,
@@ -218,7 +241,7 @@ function CodeFieldSourceView({
   onEscape,
   onViewReady,
   tooltipParent,
-}: CodeFieldProps) {
+}, ref) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const grammarCompartment = useRef(new Compartment());
@@ -274,6 +297,17 @@ function CodeFieldSourceView({
     view.contentDOM.blur();
     gesture.commit();
   };
+
+  useImperativeHandle(ref, () => ({
+    setCaret: (offset) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const anchor = Math.max(0, Math.min(offset, view.state.doc.length));
+      view.dispatch({ selection: { anchor } });
+      view.focus();
+    },
+    focus: () => viewRef.current?.focus(),
+  }), []);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -542,4 +576,4 @@ function CodeFieldSourceView({
       {trailing}
     </div>
   );
-}
+});

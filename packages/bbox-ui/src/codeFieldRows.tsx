@@ -8,6 +8,27 @@ function rowText(line: CodeFieldLine): string {
   return line.segments.map((segment) => segment.text).join("");
 }
 
+/**
+ * A row's identity for expansion/React-key purposes: its line index PLUS
+ * its own name segment, `${line}:${name}` — the donor's own scheme
+ * (`typeAttributes.ts`'s `id: \`${line}:${match[1]}\``). WHY not the line
+ * index alone (round 2's finding): inserting a line above shifts every
+ * later index down by one, so a path keyed on the index alone silently
+ * reassigns "expanded" to whatever row now happens to sit at that number
+ * — expand only `target`, insert a line above it, and `origin` (now at
+ * `target`'s old index) opens while `target` (now one index further down)
+ * closes. Keying on the pair means an index shift changes the key, so the
+ * row that moved simply drops out of `expandedPaths` (closes) instead of
+ * a DIFFERENT row silently inheriting its open state — closing on an
+ * unrelated edit is an acceptable rough edge; reassigning to the wrong
+ * row is not. Falls back to the row's full text when no segment is
+ * marked `role: "name"` (a grammar with no name concept at all).
+ */
+function rowIdentity(line: CodeFieldLine): string {
+  const name = line.segments.find((segment) => segment.role === "name")?.text ?? rowText(line);
+  return `${line.line}:${name}`;
+}
+
 export interface CodeFieldRowsProps {
   /** `grammar.lines(value)` — the top-level rows. */
   lines: CodeFieldLine[];
@@ -90,9 +111,9 @@ export function CodeFieldRows({
     >
       {lines.map((line) => (
         <CodeFieldRow
-          key={line.line}
+          key={rowIdentity(line)}
           line={line}
-          path={String(line.line)}
+          path={rowIdentity(line)}
           owner={undefined}
           resolveReference={resolveReference}
           onOpenSource={onOpenSource}
@@ -192,9 +213,9 @@ function CodeFieldRow({
         <div className="bbox-code-field-preview">
           {children.map((child) => (
             <CodeFieldRow
-              key={child.line}
+              key={rowIdentity(child)}
               line={child}
-              path={`${path}/${child.line}`}
+              path={`${path}/${rowIdentity(child)}`}
               owner={childOwner}
               resolveReference={resolveReference}
               onOpenSource={onOpenSource}
