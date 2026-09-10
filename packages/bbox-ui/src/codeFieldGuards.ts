@@ -1,4 +1,10 @@
-import { Annotation, EditorState, type Extension } from "@codemirror/state";
+import {
+  Annotation,
+  EditorState,
+  Transaction,
+  type AnnotationType,
+  type Extension,
+} from "@codemirror/state";
 
 /**
  * Marks `CodeField`'s own imperative doc swaps (the `value`-prop sync) so
@@ -10,6 +16,38 @@ import { Annotation, EditorState, type Extension } from "@codemirror/state";
  * ones a filter can honestly preserve are ones it knows about by name.
  */
 export const externalSync = Annotation.define<boolean>();
+
+/**
+ * The named annotations this guard knows how to detect and re-apply on a
+ * transaction it has to rebuild: CodeMirror's own `Transaction.time` /
+ * `userEvent` / `addToHistory` / `remote`, plus `externalSync` above.
+ *
+ * WHY this matters beyond bookkeeping: `userEvent` and `addToHistory` are
+ * what `history()` groups undo steps by. Losing them made a rebuilt
+ * transaction look like an ORDINARY edit with no origin and no history
+ * opinion — inside CodeMirror's 500ms `newGroupDelay`, that merged
+ * silently into whatever adjacent edit was already open. Type `P`, then
+ * paste `a\nb` (copying a lane line with an empty selection is linewise
+ * and carries a trailing `\n`, so this is common here): one Ctrl+Z used to
+ * discard the typing AND the paste together, leaving `t: ` instead of
+ * undoing the paste alone. `time` matters too — it feeds the SAME grouping
+ * window, so a rebuilt transaction stamped with a fresh `Date.now()`
+ * instead of the original's timestamp can drift outside the window the
+ * original edit was actually inside.
+ */
+function knownAnnotations(tr: Transaction): Annotation<unknown>[] {
+  const carried: Annotation<unknown>[] = [];
+  function add<T>(type: AnnotationType<T>): void {
+    const value = tr.annotation(type);
+    if (value !== undefined) carried.push(type.of(value));
+  }
+  add(Transaction.time);
+  add(Transaction.userEvent);
+  add(Transaction.addToHistory);
+  add(Transaction.remote);
+  add(externalSync);
+  return carried;
+}
 
 /** How many `\r`/`\n` characters sit in `text` before `pos` — the amount a position must shift left to land on the equivalent spot once those characters are removed. */
 function newlinesBefore(text: string, pos: number): number {
@@ -32,23 +70,26 @@ function newlinesBefore(text: string, pos: number): number {
  * of what produced it, so this is the actual guarantee, not a best effort
  * at the input layer.
  *
- * Three things a first pass at this got wrong, all fixed here:
+ * Things earlier passes at this got wrong, all fixed here:
  *
  * - The caret was clamped to the CLEANED text's length instead of shifted
- *   by how many stripped characters sat ahead of it — pasting `"a\nb"` at
- *   the start of `"t: Po"` produced `"abt: Po"` with the caret landing
- *   after the whole clamp (position 3, mid-word) instead of position 2
- *   (right after "ab", where the paste actually ended).
- * - The replacement spec silently dropped the incoming transaction's
- *   annotations and effects. Concretely: the `value`-prop sync dispatches
- *   with `externalSync.of(true)` so the update listener knows not to treat
- *   it as typing; if that sync happened to carry a newline (a host writing
- *   multi-line text into a field that just became single-line, say), the
- *   annotation vanished, the listener mistook the correction for a
- *   keystroke, and `onWrite` fired with text the host never typed.
- * - A transaction that, once cleaned, changes nothing (e.g. pasting a bare
- *   `"\n"`) still dispatched a full document-replace — a no-op edit that
- *   still burns an undo step.
+ *   by how many stripped characters sat ahead of it.
+ * - The replacement spec silently dropped every annotation and effect —
+ *   `externalSync` (an external value-sync misread as typing) and, worse,
+ *   CodeMirror's OWN `userEvent`/`addToHistory`/`time` (undo-grouping
+ *   corruption — see `knownAnnotations`'s doc). `effects` are forwarded
+ *   unconditionally (a plain array on `Transaction`, unlike annotations,
+ *   which have no generic enumerable list); `scrollIntoView` likewise.
+ * - A transaction that, once cleaned, changes the DOCUMENT not at all
+ *   (pasting a bare `"\n"`, or pasting text that survives cleaning back to
+ *   exactly what a replaced selection already said) either dispatched a
+ *   pointless full document-replace (a dead undo step) or, at the other
+ *   extreme, dropped the transaction so completely that a REPLACED
+ *   SELECTION was left standing open instead of collapsed to where the
+ *   paste actually ended — the very next keystroke would have overwritten
+ *   the pasted text a second time. Both are handled by always computing
+ *   the corrected selection and only including `changes` when the doc
+ *   actually differs.
  */
 export function singleLineGuard(isMultiline: () => boolean): Extension {
   return EditorState.transactionFilter.of((tr) => {
@@ -56,15 +97,26 @@ export function singleLineGuard(isMultiline: () => boolean): Extension {
     const text = tr.newDoc.toString();
     if (!/[\r\n]/.test(text)) return tr;
     const cleaned = text.replace(/[\r\n]+/g, "");
-    if (cleaned === tr.startState.doc.toString()) return []; // a true no-op: nothing left to apply
     const { anchor, head } = tr.newSelection.main;
     const shift = (pos: number) => Math.max(0, Math.min(pos - newlinesBefore(text, pos), cleaned.length));
-    const sync = tr.annotation(externalSync);
+    const selection = { anchor: shift(anchor), head: shift(head) };
+    const preserved = {
+      effects: tr.effects,
+      annotations: knownAnnotations(tr),
+      scrollIntoView: tr.scrollIntoView,
+    };
+    if (cleaned === tr.startState.doc.toString()) {
+      // Nothing textual changes, but the selection still has to land where
+      // a real edit would have — a paste that replaced a selection with
+      // (once cleaned) the same text it already held must still collapse
+      // the selection to the end of the paste, not leave the old range
+      // standing open for the next keystroke to clobber.
+      return { selection, ...preserved };
+    }
     return {
       changes: { from: 0, to: tr.startState.doc.length, insert: cleaned },
-      selection: { anchor: shift(anchor), head: shift(head) },
-      effects: tr.effects,
-      annotations: sync === undefined ? undefined : externalSync.of(sync),
+      selection,
+      ...preserved,
     };
   });
 }

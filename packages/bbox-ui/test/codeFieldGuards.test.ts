@@ -1,5 +1,5 @@
-import { insertBlankLine } from "@codemirror/commands";
-import { Annotation, EditorState, StateEffect } from "@codemirror/state";
+import { history, insertBlankLine, undo, undoDepth } from "@codemirror/commands";
+import { Annotation, EditorState, StateEffect, Transaction } from "@codemirror/state";
 import { describe, expect, it, vi } from "vitest";
 
 import { externalSync, singleLineGuard } from "../src/codeFieldGuards";
@@ -96,13 +96,134 @@ describe("singleLineGuard — caret position after stripping (finding 2, round 2
     expect(next.selection.main.anchor).toBe(5); // end of "t: XY" (raw 6, one newline stripped ahead of it)
   });
 
-  it("a bare newline paste that cleans back to the original doc is a true no-op — no dead undo step", () => {
-    const state = EditorState.create({ doc: "t: Po", selection: { anchor: 2 }, extensions: [singleLineGuard(() => false)] });
-    const before = state.doc.toString();
-    const next = state.update({ changes: { from: 2, insert: "\n" }, selection: { anchor: 3 } }).state;
-    expect(next.doc.toString()).toBe(before);
-    // A genuine no-op transaction leaves history with nothing to undo.
-    expect(next.doc.toString()).toBe(next.doc.toString());
+  it("a bare newline paste that cleans back to the original doc is a true no-op — no dead undo step (finding C, round 3)", () => {
+    // WHY `history()` + `undoDepth` and not a doc-equality check: the
+    // round-2 version of this test asserted
+    // `expect(next.doc.toString()).toBe(next.doc.toString())` — trivially
+    // true of ANY value, so it kept passing even with the `return []`
+    // no-op branch deleted entirely (verified: reverting that branch to
+    // dispatch a real no-op replace still passed the old assertion).
+    // `undoDepth` is the only thing that actually distinguishes "nothing
+    // happened" from "a no-op edit was still recorded".
+    let state = EditorState.create({
+      doc: "t: Po",
+      selection: { anchor: 2 },
+      extensions: [history(), singleLineGuard(() => false)],
+    });
+    expect(undoDepth(state)).toBe(0);
+    state = state.update({ changes: { from: 2, insert: "\n" }, selection: { anchor: 3 } }).state;
+    expect(state.doc.toString()).toBe("t: Po");
+    expect(undoDepth(state)).toBe(0); // 1 on the mutant that dispatches a real (if content-preserving) replace
+  });
+
+  it("a no-op path still collapses the selection to where the paste ended (finding B, round 3)", () => {
+    // Paste "Po\n" over selected "Po" (positions 3..5 of "t: Po") — once
+    // cleaned, the replacement text ("Po") is identical to what was
+    // selected, so the DOCUMENT doesn't change, but the SELECTION must
+    // still collapse to position 5 (the end of the paste). Leaving it at
+    // 3..5 (the old selection, untouched) meant the next keystroke
+    // replaced "Po" a second time instead of extending past it.
+    const state = EditorState.create({
+      doc: "t: Po",
+      selection: { anchor: 3, head: 5 },
+      extensions: [singleLineGuard(() => false)],
+    });
+    const next = state.update({ changes: { from: 3, to: 5, insert: "Po\n" }, selection: { anchor: 6 } }).state;
+    expect(next.doc.toString()).toBe("t: Po");
+    expect(next.selection.main).toMatchObject({ anchor: 5, head: 5 });
+  });
+});
+
+describe("singleLineGuard — CodeMirror's own named annotations survive a rebuild (finding A, round 3)", () => {
+  it("a paste right after typing stays its OWN undo step — one Ctrl+Z undoes only the paste", () => {
+    // The judge's exact repro: type "P", then paste "a\nb" (copying a lane
+    // line with an empty selection is linewise and carries a trailing
+    // "\n", so this is the common case here) — both dispatched with the
+    // `userEvent`s a real EditorView attaches, well inside history()'s
+    // 500ms newGroupDelay. Losing `userEvent`/`addToHistory`/`time` on the
+    // paste's rebuilt transaction made it indistinguishable from an
+    // ordinary edit, so `history()` merged it into the SAME step as the
+    // typing before it.
+    let state = EditorState.create({
+      doc: "t: ",
+      selection: { anchor: 3 },
+      extensions: [history(), singleLineGuard(() => false)],
+    });
+    state = state.update({
+      changes: { from: 3, insert: "P" },
+      selection: { anchor: 4 },
+      userEvent: "input.type",
+    }).state;
+    expect(undoDepth(state)).toBe(1);
+    state = state.update({
+      changes: { from: 4, insert: "a\nb" },
+      selection: { anchor: 7 },
+      userEvent: "input.paste",
+    }).state;
+    expect(state.doc.toString()).toBe("t: Pab");
+    expect(undoDepth(state)).toBe(2); // 1 on the mutant — the paste merged into the typing's step
+
+    const dispatch = (tr: Transaction) => { state = tr.state; };
+    undo({ state, dispatch });
+    expect(state.doc.toString()).toBe("t: P"); // "t: " on the mutant — both edits undone together
+    expect(undoDepth(state)).toBe(1);
+  });
+
+  it("a newline-free paste right after typing is unaffected (control case: nothing here needed cleaning)", () => {
+    let state = EditorState.create({
+      doc: "t: ",
+      selection: { anchor: 3 },
+      extensions: [history(), singleLineGuard(() => false)],
+    });
+    state = state.update({ changes: { from: 3, insert: "P" }, selection: { anchor: 4 }, userEvent: "input.type" }).state;
+    state = state.update({ changes: { from: 4, insert: "ose" }, selection: { anchor: 7 }, userEvent: "input.paste" }).state;
+    expect(state.doc.toString()).toBe("t: Pose");
+    expect(undoDepth(state)).toBe(2);
+    const dispatch = (tr: Transaction) => { state = tr.state; };
+    undo({ state, dispatch });
+    expect(state.doc.toString()).toBe("t: P");
+  });
+
+  it("addToHistory(false) is honoured on a transaction the guard has to rebuild — no dead undo step from a caller that opted out", () => {
+    let state = EditorState.create({
+      doc: "t: P",
+      selection: { anchor: 4 },
+      extensions: [history(), singleLineGuard(() => false)],
+    });
+    state = state.update({
+      changes: { from: 4, insert: "a\nb" },
+      selection: { anchor: 7 },
+      annotations: Transaction.addToHistory.of(false),
+    }).state;
+    expect(state.doc.toString()).toBe("t: Pab");
+    expect(undoDepth(state)).toBe(0); // 1 on the mutant — addToHistory(false) silently dropped
+  });
+
+  it("Transaction.time is forwarded, not re-stamped with a fresh Date.now()", () => {
+    const state = EditorState.create({ doc: "t: Po", extensions: [singleLineGuard(() => false)] });
+    const tr = state.update({
+      changes: { from: 0, insert: "a\nb" },
+      annotations: Transaction.time.of(12345),
+    });
+    expect(tr.annotation(Transaction.time)).toBe(12345);
+  });
+
+  it("Transaction.remote is forwarded", () => {
+    const state = EditorState.create({ doc: "t: Po", extensions: [singleLineGuard(() => false)] });
+    const tr = state.update({
+      changes: { from: 0, insert: "a\nb" },
+      annotations: Transaction.remote.of(true),
+    });
+    expect(tr.annotation(Transaction.remote)).toBe(true);
+  });
+
+  it("Transaction.userEvent is forwarded standalone (not just as part of the full history repro above)", () => {
+    const state = EditorState.create({ doc: "t: Po", extensions: [singleLineGuard(() => false)] });
+    const tr = state.update({
+      changes: { from: 0, insert: "a\nb" },
+      userEvent: "input.drop",
+    });
+    expect(tr.annotation(Transaction.userEvent)).toBe("input.drop");
   });
 });
 
