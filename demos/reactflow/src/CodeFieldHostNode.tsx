@@ -11,12 +11,15 @@ import type { Node, NodeProps } from "@xyflow/react";
  * node content, subject to RF's own drag-to-move-node and
  * wheel-to-zoom-canvas gestures on everything else in the pane.
  *
- * WHY `nodrag nowheel`: React Flow recognises these two class names on any
- * element inside a node's own content and skips its own drag/zoom handling
- * for pointer/wheel events that start there — no prop wiring needed, just
- * the class. Without them, a drag that starts inside the field's own text
- * moves the node instead of placing the caret, and scrolling over it zooms
- * the whole canvas instead of doing nothing where a plain `<input>` would.
+ * WHY `nodrag nowheel` sit on the FIELD'S OWN WRAPPER, not the node root:
+ * React Flow recognises these two class names on any element inside a
+ * node's content and skips its own drag/zoom handling for pointer/wheel
+ * events that START there — no prop wiring needed, just the class. Putting
+ * them on the node root (round 2's finding) over-scopes the opt-out to the
+ * WHOLE node: the node stops being draggable from its own label/chrome at
+ * all, and wheel goes dead over the entire card, not just the field. Only
+ * the field itself needs the exemption; the label above it is ordinary
+ * node content and should drag/zoom exactly like the rest of the card.
  */
 export type CodeFieldHostNodeData = { value: string };
 export type CodeFieldHostNodeType = Node<CodeFieldHostNodeData, "codeFieldHost">;
@@ -30,9 +33,11 @@ export function CodeFieldHostNode({ data }: NodeProps<CodeFieldHostNodeType>) {
   const [value, setValue] = useState(data.value);
   const grammar = signatureGrammar({ types: TYPES });
   return (
-    <div className="nodrag nowheel" style={{ width: 220, padding: 8, background: "var(--color-card, #fff)", border: "1px solid var(--color-border, #ccc)", borderRadius: 8 }}>
-      <div style={{ fontSize: 10, marginBottom: 4, color: "var(--color-muted-foreground, #888)" }}>CodeField in a React Flow node</div>
-      <CodeField value={value} onWrite={setValue} grammar={grammar} testId="code-field-in-rf-node" />
+    <div style={{ width: 220, padding: 8, background: "var(--color-card, #fff)", border: "1px solid var(--color-border, #ccc)", borderRadius: 8 }}>
+      <div data-testid="code-field-in-rf-node-label" style={{ fontSize: 10, marginBottom: 4, color: "var(--color-muted-foreground, #888)" }}>CodeField in a React Flow node</div>
+      <div className="nodrag nowheel">
+        <CodeField value={value} onWrite={setValue} grammar={grammar} testId="code-field-in-rf-node" />
+      </div>
     </div>
   );
 }

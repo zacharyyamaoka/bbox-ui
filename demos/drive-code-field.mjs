@@ -213,7 +213,21 @@ async function dragFrom(selector, dx, dy) {
   const rect = await rectOf(selector);
   if (!rect) throw new Error(`drag target not found: ${selector}`);
   await send("Input.dispatchMouseEvent", { type: "mousePressed", x: rect.cx, y: rect.cy, button: "left", clickCount: 1 });
-  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.cx + dx, y: rect.cy + dy, buttons: 1 });
+  // React Flow's own drag handling (XYDrag) only starts tracking once it
+  // sees real incremental movement past a small threshold — a single big
+  // jump from press to release can land inside that threshold's window
+  // and never register as a drag at all. A handful of intermediate steps
+  // is what a real mouse drag actually looks like.
+  const steps = 6;
+  for (let i = 1; i <= steps; i += 1) {
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: rect.cx + (dx * i) / steps,
+      y: rect.cy + (dy * i) / steps,
+      buttons: 1,
+    });
+    await new Promise((r) => setTimeout(r, 20));
+  }
   await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: rect.cx + dx, y: rect.cy + dy, button: "left" });
 }
 
@@ -326,8 +340,77 @@ check(rowLineCount === 1, `Ctrl+Enter with the popup open left ${rowLineCount} l
 check(!/[\r\n]/.test(rowFinalText), `single-line field's text contains a newline: ${JSON.stringify(rowFinalText)}`);
 check(rowFinalText.startsWith("t: Pose") || rowFinalText === "t: Po", `unexpected accept result: ${JSON.stringify(rowFinalText)}`);
 
+// --- finding 5 (round 2): a foreign-row jump when the owner is ALREADY
+// in Source must move the caret there, not silently do nothing ---------
+
+// "origin" is still expanded from the earlier finding-1/2 tests. theta is
+// its nested row index 2.
+await clickNth('[data-testid="code-field-attrs"] .bbox-code-field-preview .bbox-code-field-row-content', 2);
+await new Promise((r) => setTimeout(r, 200));
+check(
+  await evaluate(`document.querySelector('[data-testid="code-field-pose"] .cm-editor') != null`),
+  "opening theta did not put Pose into source mode",
+);
+let poseCaretLine2 = await caretLineIndex('[data-testid="code-field-pose"]');
+check(poseCaretLine2 === 2, `expected the first jump to land on theta (line 2), got ${poseCaretLine2}`);
+
+// Now click "y" (nested index 1) while Pose is ALREADY in Source — round
+// 1's `cursorAt` only applies at mount, and Pose never remounts here.
+await clickNth('[data-testid="code-field-attrs"] .bbox-code-field-preview .bbox-code-field-row-content', 1);
+await new Promise((r) => setTimeout(r, 200));
+poseCaretLine2 = await caretLineIndex('[data-testid="code-field-pose"]');
+check(
+  poseCaretLine2 === 1,
+  `foreign-row jump did nothing when the owner was already in Source — expected the caret on y (line 1), got ${poseCaretLine2}`,
+);
+check(
+  await evaluate(`document.activeElement?.closest('[data-testid="code-field-pose"]') != null`),
+  "focus did not land in the owner field that was already open in Source",
+);
+await clickByText('[data-testid="code-field-demo"] section:nth-of-type(4) .bbox-code-field-toggle button', "UI");
+
+// --- finding 6 (round 2): expansion keyed by line index migrates to the
+// WRONG row after an edit shifts every later line down -----------------
+
+// Collapse origin (still open), then expand ONLY "target" (the 4th
+// top-level row, also a Pose) — a clean single-expansion state.
+await click('[data-testid="code-field-attrs"] > .bbox-code-field-row:nth-of-type(1) .bbox-code-field-chevron[role="button"]');
+await new Promise((r) => setTimeout(r, 150));
+check(
+  (await evaluate(`document.querySelectorAll('[data-testid="code-field-attrs"] .bbox-code-field-preview').length`)) === 0,
+  "collapsing origin's chevron did not close its expansion",
+);
+await click('[data-testid="code-field-attrs"] > .bbox-code-field-row:nth-of-type(4) .bbox-code-field-chevron[role="button"]');
+await new Promise((r) => setTimeout(r, 150));
+check(
+  (await evaluate(
+    `document.querySelectorAll('[data-testid="code-field-attrs"] > .bbox-code-field-row:nth-of-type(4) .bbox-code-field-preview').length`,
+  )) === 1,
+  "expanding target's chevron did not open its expansion",
+);
+
+// Insert a new line ABOVE everything, in Source — shifts every later
+// line's index down by one, "target" (was line 3) included.
+await clickByText('[data-testid="code-field-demo"] section:nth-of-type(3) .bbox-code-field-toggle button', "Source");
+await new Promise((r) => setTimeout(r, 200));
+await click('[data-testid="code-field-attrs"] .cm-content');
+await pressKey("Home", { ctrl: true, code: "Home", windowsVirtualKeyCode: 36 });
+await insertText("extra: int = 1\n");
+await clickByText('[data-testid="code-field-demo"] section:nth-of-type(3) .bbox-code-field-toggle button', "UI");
+await new Promise((r) => setTimeout(r, 200));
+
+const originExpandedAfterShift = await evaluate(`(() => {
+  const rows = [...document.querySelectorAll('[data-testid="code-field-attrs"] > .bbox-code-field-row')];
+  const originRow = rows.find((r) => r.querySelector('.bbox-code-field-row-content')?.textContent.includes('origin'));
+  return originRow ? originRow.querySelector('.bbox-code-field-preview') != null : null;
+})()`);
+check(
+  originExpandedAfterShift === false,
+  `finding 6 regressed: origin incorrectly shows expanded after an insert-above shifted line indices (was ${originExpandedAfterShift})`,
+);
+
 // ---------------------------------------------------------------------
-// In-host mount (finding 6): completion z-index, Escape focus retention,
+// In-host mount: completion z-index, Escape focus retention,
 // wheel not panning/zooming, drag not moving the node/shape
 // ---------------------------------------------------------------------
 
@@ -371,12 +454,38 @@ if (name === "reactflow") {
   const viewportAfter = await evaluate(`document.querySelector('.react-flow__viewport')?.style.transform`);
   check(viewportAfter === viewportBefore, `wheel over the field zoomed/panned React Flow: ${viewportBefore} -> ${viewportAfter}`);
 
-  // A drag starting inside the field's text must not move the node.
+  // A drag starting inside the field's text must not move the node —
+  // `nodrag` is scoped to the field's own wrapper only (finding 4, round 2:
+  // it used to sit on the whole node, killing the node's own draggability).
   const nodeStyleBefore = await evaluate(`document.querySelector('[data-id="code-field-host"]')?.style.transform`);
   await dragFrom(`${hostSelector} .cm-content`, 60, 40);
   await new Promise((r) => setTimeout(r, 150));
-  const nodeStyleAfter = await evaluate(`document.querySelector('[data-id="code-field-host"]')?.style.transform`);
-  check(nodeStyleAfter === nodeStyleBefore, `a drag inside the field moved the RF node: ${nodeStyleBefore} -> ${nodeStyleAfter}`);
+  const nodeStyleAfterFieldDrag = await evaluate(`document.querySelector('[data-id="code-field-host"]')?.style.transform`);
+  check(
+    nodeStyleAfterFieldDrag === nodeStyleBefore,
+    `a drag inside the field moved the RF node: ${nodeStyleBefore} -> ${nodeStyleAfterFieldDrag}`,
+  );
+
+  // A drag starting on the node's OWN chrome (the label, outside the
+  // nodrag-scoped field wrapper) must still move the node normally.
+  await dragFrom('[data-testid="code-field-in-rf-node-label"]', 80, 60);
+  await new Promise((r) => setTimeout(r, 150));
+  const nodeStyleAfterLabelDrag = await evaluate(`document.querySelector('[data-id="code-field-host"]')?.style.transform`);
+  check(
+    nodeStyleAfterLabelDrag !== nodeStyleBefore,
+    `dragging the node's own label did not move it — nodrag is over-scoped: ${nodeStyleBefore} -> ${nodeStyleAfterLabelDrag}`,
+  );
+
+  // Wheel over the label (outside the nowheel-scoped field wrapper) must
+  // still zoom the canvas normally — nowheel is not swallowing the whole node.
+  const viewportBeforeLabelWheel = await evaluate(`document.querySelector('.react-flow__viewport')?.style.transform`);
+  await wheel('[data-testid="code-field-in-rf-node-label"]', 120);
+  await new Promise((r) => setTimeout(r, 150));
+  const viewportAfterLabelWheel = await evaluate(`document.querySelector('.react-flow__viewport')?.style.transform`);
+  check(
+    viewportAfterLabelWheel !== viewportBeforeLabelWheel,
+    `wheel over the node's own label did not zoom React Flow — nowheel is over-scoped: ${viewportBeforeLabelWheel} -> ${viewportAfterLabelWheel}`,
+  );
 }
 
 if (name === "tldraw") {
