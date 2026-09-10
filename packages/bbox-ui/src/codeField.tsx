@@ -35,7 +35,7 @@ import {
 
 import { externalSync, singleLineGuard } from "./codeFieldGuards";
 import { grammarExtensions, type CodeFieldGrammar } from "./codeGrammar";
-import { CodeFieldRows } from "./codeFieldRows";
+import { CodeFieldRows, pruneExpandedPaths, rowIdentity } from "./codeFieldRows";
 import { FieldGesture } from "./fieldGesture";
 
 export interface CodeFieldProps {
@@ -172,6 +172,13 @@ export const CodeField = forwardRef<CodeFieldHandle, CodeFieldProps>(function Co
       else next.add(path);
       return next;
     });
+  const lines = grammar?.lines?.(value) ?? [];
+  // Prune expansion keys an edit has deleted outright — see
+  // `pruneExpandedPaths`'s own doc for what this does and does not fix.
+  useEffect(() => {
+    setExpandedPaths((current) => pruneExpandedPaths(current, lines));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines.map(rowIdentity).join(",")]);
   const sourceRef = useRef<CodeFieldHandle | null>(null);
   useImperativeHandle(ref, () => ({
     setCaret: (offset) => sourceRef.current?.setCaret(offset),
@@ -180,7 +187,7 @@ export const CodeField = forwardRef<CodeFieldHandle, CodeFieldProps>(function Co
   if (mode === "rendered") {
     return (
       <CodeFieldRows
-        lines={grammar?.lines?.(value) ?? []}
+        lines={lines}
         resolveReference={grammar?.resolveReference}
         onOpenSource={onOpenSource}
         expandedPaths={expandedPaths}
@@ -303,7 +310,11 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
       const view = viewRef.current;
       if (!view) return;
       const anchor = Math.max(0, Math.min(offset, view.state.doc.length));
-      view.dispatch({ selection: { anchor } });
+      // WHY the scrollIntoView effect, not just a selection dispatch: on a
+      // multi-line lane taller than its scroll host, an owner-jump can
+      // land the caret well below the visible viewport (measured: y 557
+      // in a 40px-tall host) with nothing on screen to show it happened.
+      view.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor) });
       view.focus();
     },
     focus: () => viewRef.current?.focus(),

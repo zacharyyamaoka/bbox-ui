@@ -24,9 +24,40 @@ function rowText(line: CodeFieldLine): string {
  * row is not. Falls back to the row's full text when no segment is
  * marked `role: "name"` (a grammar with no name concept at all).
  */
-function rowIdentity(line: CodeFieldLine): string {
+export function rowIdentity(line: CodeFieldLine): string {
   const name = line.segments.find((segment) => segment.role === "name")?.text ?? rowText(line);
   return `${line.line}:${name}`;
+}
+
+/**
+ * Drops any `expandedPaths` entry whose TOP-LEVEL `line:name` no longer
+ * appears among the current top-level `lines` — an edit that deletes an
+ * expanded row (not just shifts it, `rowIdentity`'s own job) would
+ * otherwise leave that key sitting there forever. `CodeField` calls this
+ * on every `lines()` recompute.
+ *
+ * WHY this is a narrowing, not a full fix: a stale key can still
+ * coincidentally match a DIFFERENT row that lands on the exact same line
+ * index under the exact same name (insert `origin: int` above an expanded
+ * `origin: Pose` — the new row at line 0 is ALSO named "origin", so the
+ * stale `"0:origin"` key remains "valid" for it even though it belongs to
+ * a row nobody ever expanded). Resolving that needs a stable identity per
+ * row that survives edits, which this line-oriented, reparsed-on-every-
+ * keystroke design does not carry — the donor's own `${line}:${name}`
+ * scheme has the identical limitation.
+ */
+export function pruneExpandedPaths(
+  expandedPaths: ReadonlySet<string>,
+  lines: readonly CodeFieldLine[],
+): ReadonlySet<string> {
+  const currentTopLevel = new Set(lines.map(rowIdentity));
+  let changed = false;
+  const next = new Set<string>();
+  for (const path of expandedPaths) {
+    if (currentTopLevel.has(path.split("/")[0]!)) next.add(path);
+    else changed = true;
+  }
+  return changed ? next : expandedPaths;
 }
 
 export interface CodeFieldRowsProps {
