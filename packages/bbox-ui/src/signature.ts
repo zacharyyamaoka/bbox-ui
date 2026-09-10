@@ -32,7 +32,19 @@ export interface SignatureSpan {
 export interface SignatureValue {
   name: string;
   type: string;
-  defaultValue: string;
+  /**
+   * Optional, matching the donor's own `formatPortSignature`'s
+   * `defaultValue?: string` — a stored record with no default should be
+   * able to simply OMIT the key rather than being forced to carry `""`.
+   * WHY this matters beyond style: `signaturePatch` normalises a parsed
+   * empty default to `undefined` (see below), so a `current` whose type
+   * REQUIRED `defaultValue: string` had no legal way to represent "never
+   * had one" except `""` — comparing that against the parser's `undefined`
+   * made `signaturePatch` return a spurious `{ defaultValue: undefined }`
+   * patch on every single keystroke of a value that never had a default
+   * at all.
+   */
+  defaultValue?: string;
 }
 
 export interface ParsedSignature extends SignatureValue {
@@ -221,6 +233,16 @@ function leadingSpaceEnd(text: string, from: number): number {
  * stays byte-identical after a rename. This is the single-record half of
  * the write seam; reconciling several lane lines back into a list of
  * records with stable identity is the host's job (see `parseSignatureLines`).
+ *
+ * WHY both sides of the default comparison are normalised (`''` treated
+ * the same as `undefined`), not just the freshly-parsed one: `current` is
+ * typed as `SignatureValue`, and a `ParsedSignature` (the shape
+ * `parseSignature` itself returns — spans included) is a legal
+ * `SignatureValue` too, since its own `defaultValue` is a concrete `''`
+ * rather than an omitted key. Comparing `undefined` against a bare `''`
+ * on that side made this return a spurious `{ defaultValue: undefined }`
+ * patch on every call for a record that never had a default at all —
+ * `signaturePatch(parseSignature("x: int"), "x: int")` is the repro.
  */
 export function signaturePatch(
   current: SignatureValue,
@@ -231,6 +253,7 @@ export function signaturePatch(
   if (parsed.name !== current.name) patch.name = parsed.name;
   if (parsed.type !== current.type) patch.type = parsed.type;
   const nextDefault = parsed.defaultValue === "" ? undefined : parsed.defaultValue;
-  if (nextDefault !== current.defaultValue) patch.defaultValue = nextDefault;
+  const currentDefault = current.defaultValue === "" ? undefined : current.defaultValue;
+  if (nextDefault !== currentDefault) patch.defaultValue = nextDefault;
   return Object.keys(patch).length === 0 ? null : patch;
 }

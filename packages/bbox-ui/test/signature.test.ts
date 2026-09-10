@@ -138,10 +138,23 @@ describe("signaturePatch — the single-record write seam", () => {
     expect(patch).toHaveProperty("defaultValue", undefined);
   });
 
-  it("never patches a default that was already absent", () => {
+  it("never patches a default that was already absent (the key simply omitted, not typed as `undefined`)", () => {
     // Round-tripping a value that never had one must stay byte-identical —
-    // `undefined !== ""` would have re-triggered a patch every time.
-    const patch = signaturePatch({ name: "x", type: "int", defaultValue: undefined as unknown as string }, "x: int");
+    // `undefined !== ""` would have re-triggered a patch every time
+    // `defaultValue` was a REQUIRED string (round 2's finding 7): a real
+    // caller with no default had no legal way to say so except `""`.
+    const patch = signaturePatch({ name: "x", type: "int" }, "x: int");
     expect(patch).toBeNull();
+  });
+
+  it("a parser-built record never re-patches itself, keystroke after keystroke (finding 7's exact repro)", () => {
+    // `parseSignature`'s own output is a legitimate `SignatureValue` — the
+    // triple a real field would hold between keystrokes. Before this fix,
+    // `signaturePatch(parseSignature("x: int"), "x: int")` returned
+    // `{ defaultValue: undefined }` on every call, because `parsed.defaultValue`
+    // (a concrete `""`) could never equal a REQUIRED-string `current.defaultValue`
+    // typed as `undefined` only via a cast.
+    const current = parseSignature("x: int");
+    expect(signaturePatch(current, "x: int")).toBeNull();
   });
 });
