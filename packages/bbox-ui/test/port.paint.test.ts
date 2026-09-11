@@ -58,7 +58,7 @@ describe("portDotStyle — tone modulates hue, state owns presence (R12)", () =>
   it("a non-neutral tone still changes the hue actually painted (tone isn't a no-op), and leads the blend", () => {
     const neutralWired = portDotStyle({ state: "wired", tone: "neutral" });
     const dangerWired = portDotStyle({ state: "wired", tone: "danger" });
-    expect(neutralWired.background).toBe("var(--primary)");
+    expect(neutralWired.background).toBe("var(--bbox-primary, var(--primary))");
     expect(dangerWired.background).not.toBe(neutralWired.background);
     expect(dangerWired.background).toContain("--bbox-danger) 70%");
   });

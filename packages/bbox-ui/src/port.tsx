@@ -7,6 +7,7 @@ import {
   type AppearanceState,
   type Lens,
   type Tone,
+  paintVar,
 } from "./appearance";
 import {
   PORT_DIAMETERS,
@@ -98,8 +99,8 @@ export function portDotClass(): string {
  */
 function toneColor(base: string | null, toneToken: string | null): string | null {
   if (base == null) return null;
-  if (toneToken == null) return `var(--${base})`;
-  return `color-mix(in srgb, var(--${toneToken}) 70%, var(--${base}) 30%)`;
+  if (toneToken == null) return paintVar(base);
+  return `color-mix(in srgb, ${paintVar(toneToken)} 70%, ${paintVar(base)} 30%)`;
 }
 
 /**
@@ -129,8 +130,8 @@ export function portDotStyle({
 }: PortDotPaintInput): CSSProperties {
   const toneToken = TONE_TOKENS[tone];
   const { ring, fill } = STATE_TOKENS[state];
-  const ringColor = hinting ? "var(--primary)" : toneColor(ring, toneToken);
-  const fillColor = hinting ? "var(--primary)" : toneColor(fill, toneToken);
+  const ringColor = hinting ? paintVar("primary") : toneColor(ring, toneToken);
+  const fillColor = hinting ? paintVar("primary") : toneColor(fill, toneToken);
 
   const layers: string[] = [];
   if (ringColor != null) {
@@ -139,10 +140,10 @@ export function portDotStyle({
     layers.push(`0 0 0 ${PORT_SURFACE_RING_PX + stateRingPx}px ${ringColor}`);
   }
   if (hinting) {
-    layers.push("0 0 0 9px color-mix(in srgb, var(--primary) 38%, transparent)");
+    layers.push("0 0 0 9px color-mix(in srgb, var(--bbox-primary, var(--primary)) 38%, transparent)");
   } else {
     if (eligible) {
-      layers.push("0 0 0 7px color-mix(in srgb, var(--primary) 26%, transparent)");
+      layers.push("0 0 0 7px color-mix(in srgb, var(--bbox-primary, var(--primary)) 26%, transparent)");
     }
     if (dragging) {
       layers.push("0 0 0 7px color-mix(in srgb, var(--ring) 30%, transparent)");

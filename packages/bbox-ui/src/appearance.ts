@@ -141,3 +141,21 @@ export const LENS_LABELS: Record<Lens, string> = {
   error: "Error",
   warning: "Warning",
 };
+
+/**
+ * A paint token name → the CSS that paints it.
+ *
+ * WHY "primary" is special-cased and everything else is `var(--<token>)`:
+ * "wired" paints with the design system's own accent, not with whatever the
+ * HOST uses for its buttons. Inside bbox-ui.com, shadcn's neutral --primary is
+ * near-black, so a wired Pill became a black capsule with dark ink on it and
+ * a wired Port dot went black. --bbox-primary is ours; the fallback keeps a
+ * host that defines only --primary looking exactly as before.
+ *
+ * Both Pill's paint map and Port's tone blend go through here — a second
+ * template string building `var(--${token})` is how the Port kept the bug an
+ * hour after the Pill lost it.
+ */
+export function paintVar(token: string): string {
+  return token === "primary" ? "var(--bbox-primary, var(--primary))" : `var(--${token})`;
+}

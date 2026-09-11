@@ -228,7 +228,7 @@ describe("BlockChip — a thin wrapper around the real Pill (T1-SPEC.md §4.8 po
   it("an explicit lineColor override reaches past the state preset on BlockChip too, the §1.4 worked example composed one level up", () => {
     const rendered = renderedChip({ state: "wired", lineColor: "bbox-danger" });
     expect(rendered.props.style.borderColor).toBe("var(--bbox-danger)");
-    expect(rendered.props.style.background).toBe("var(--primary)");
+    expect(rendered.props.style.background).toBe("var(--bbox-primary, var(--primary))");
   });
 
   it("tone recolours the chip exactly as it recolours a bare Pill", () => {

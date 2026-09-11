@@ -2,7 +2,7 @@ import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { governedFieldIds, resolveField } from "@bbox-ui/schema";
 
 import { cn } from "./lib/utils";
-import { toneOverride, type AppearanceState, type Lens, type Tone } from "./appearance";
+import { toneOverride, type AppearanceState, type Lens, type Tone, paintVar } from "./appearance";
 import {
   PILL_PAINT_FIELDS,
   type PaintToken,
@@ -111,7 +111,7 @@ const FILL_STYLE_ALPHA: Record<PillFillStyle, number> = { none: 0, semi: 0.35, s
 const PAINT_TOKEN_VALUE: Record<PaintToken, string> = {
   foreground: "var(--foreground)",
   "muted-foreground": "var(--muted-foreground)",
-  primary: "var(--primary)",
+  primary: paintVar("primary"),
   "bbox-received": "var(--bbox-received)",
   "bbox-warning": "var(--bbox-warning)",
   "bbox-success": "var(--bbox-success)",

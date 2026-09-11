@@ -251,8 +251,8 @@ describe("Pill — the real component reached through the same cascade the trace
 
   it("state:'wired' paints the primary line and fill", () => {
     const wired = pillElement({ state: "wired" });
-    expect(wired.props.style.borderColor).toBe("var(--primary)");
-    expect(wired.props.style.background).toBe("var(--primary)");
+    expect(wired.props.style.borderColor).toBe("var(--bbox-primary, var(--primary))");
+    expect(wired.props.style.background).toBe("var(--bbox-primary, var(--primary))");
   });
 
   it("state:'hidden' paints nothing — borderStyle none, fully transparent", () => {
@@ -265,7 +265,7 @@ describe("Pill — the real component reached through the same cascade the trace
     const overridden = pillElement({ state: "wired", lineColor: "bbox-danger" });
     expect(overridden.props.style.borderColor).toBe("var(--bbox-danger)");
     // The fill is untouched — only the one overridden field moved.
-    expect(overridden.props.style.background).toBe("var(--primary)");
+    expect(overridden.props.style.background).toBe("var(--bbox-primary, var(--primary))");
   });
 
   it("tone overrides the two COLOUR fields, reaching past whatever state's preset would have supplied — the SHAPE (lineStyle/fillStyle) still comes from state, since a token string is not a legal lineStyle/fillStyle value", () => {

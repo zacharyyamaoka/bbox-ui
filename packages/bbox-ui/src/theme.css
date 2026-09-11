@@ -10,6 +10,15 @@
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.19 0 0);
   --primary: oklch(0.65 0.19 48);           /* was 0.71 — see T1-SPEC.md §3.1 */
+  /* WHY a bbox-owned accent beside --primary: "wired" paints with the design
+     system's accent, not with whatever the HOST uses for its buttons. Inside
+     bbox-ui.com, shadcn's neutral --primary is near-black, so a wired Pill
+     became a black capsule with dark ink on it. Components read
+     var(--bbox-primary, var(--primary)) — the fallback keeps any host that
+     defines only --primary looking as it did. Zach: "there is a good visual
+     colour grammar that takes thinking to get right and we should ship good
+     defaults." */
+  --bbox-primary: oklch(0.65 0.19 48);
   --primary-foreground: oklch(0.99 0 0);
   --muted: oklch(0.92 0 0);
   --muted-foreground: oklch(0.51 0 0);
@@ -56,6 +65,7 @@
     --card: oklch(0.205 0 0);
     --card-foreground: oklch(0.98 0 0);
     --primary: oklch(0.78 0.17 48);
+    --bbox-primary: oklch(0.78 0.17 48);
     --primary-foreground: oklch(0.145 0 0);
     --muted: oklch(0.269 0 0);
     --muted-foreground: oklch(0.708 0 0);
@@ -75,6 +85,7 @@
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.98 0 0);
   --primary: oklch(0.78 0.17 48);
+  --bbox-primary: oklch(0.78 0.17 48);
   --primary-foreground: oklch(0.145 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
