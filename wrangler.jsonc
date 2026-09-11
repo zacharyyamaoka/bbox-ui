@@ -1,0 +1,17 @@
+{
+  // Cloudflare Workers Static Assets — the successor to Pages, and what the
+  // current "Create an app" flow deploys with `npx wrangler deploy`.
+  //
+  // WHY assets-only, with no `main`: bbox-ui.com is a fully static export
+  // (apps/docs/next.config.mjs sets output: "export"). There is no server
+  // code to run, so the Worker is a pure asset server. That is what keeps the
+  // site portable — the build output is a folder of files that any host can
+  // serve, and leaving Cloudflare means copying that folder elsewhere.
+  "name": "bbox-ui",
+  "compatibility_date": "2026-09-10",
+  "assets": {
+    "directory": "./apps/docs/out",
+    // Next's export writes 404.html; serve it rather than a bare Worker error.
+    "not_found_handling": "404-page"
+  }
+}

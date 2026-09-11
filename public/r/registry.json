@@ -7,7 +7,7 @@
       "name": "bbox-layout",
       "type": "registry:lib",
       "title": "bbox layout",
-      "description": "Portable layout geometry for black-box design components. Pure module — no React, no canvas engine.",
+      "description": "Portable layout geometry for black-box design components. Pure module \u2014 no React, no canvas engine.",
       "files": [
         {
           "path": "packages/bbox-ui/src/layout.ts",
@@ -21,7 +21,6 @@
       "type": "registry:component",
       "title": "Port",
       "description": "A circle with a text slot. Four states (Empty / Default Value / Wired / Data Recived), six text layouts, three diameters, three text rungs.",
-      "registryDependencies": ["utils"],
       "files": [
         {
           "path": "packages/bbox-ui/src/port.tsx",
@@ -31,16 +30,24 @@
         {
           "path": "packages/bbox-ui/src/layout.ts",
           "type": "registry:lib",
-          "target": "lib/bbox/layout.ts"
+          "target": "components/bbox/layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/lib/utils.ts"
         }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
       ]
     },
     {
       "name": "block",
       "type": "registry:component",
       "title": "Block (Simple View)",
-      "description": "The black-box Block in Simple View: Container, Header band, Glyph, Text slots, Chip. Icon rides the title rung at 0.9×.",
-      "registryDependencies": ["utils"],
+      "description": "The black-box Block in Simple View: Container, Header band, Glyph, Text slots, Chip. Icon rides the title rung at 0.9\u00d7.",
       "files": [
         {
           "path": "packages/bbox-ui/src/block.tsx",
@@ -50,17 +57,30 @@
         {
           "path": "packages/bbox-ui/src/layout.ts",
           "type": "registry:lib",
-          "target": "lib/bbox/layout.ts"
+          "target": "components/bbox/layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/lib/utils.ts"
         }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
       ]
     },
     {
       "name": "block-node-reactflow",
       "type": "registry:component",
       "title": "Block node (React Flow adapter)",
-      "description": "React Flow custom node wrapping the Block; ports emit <Handle> DOM elements painted with the shared port-dot classes.",
-      "dependencies": ["@xyflow/react"],
-      "registryDependencies": ["utils"],
+      "description": "React Flow custom node wrapping the Block; ports emit <Handle> DOM elements painted with the shared port-dot classes. NOTE: currently imports @bbox-ui/core, which is not yet published to npm \u2014 install the `block` item and repoint the import until it is.",
+      "dependencies": [
+        "@xyflow/react"
+      ],
+      "registryDependencies": [
+        "utils"
+      ],
       "files": [
         {
           "path": "packages/adapter-reactflow/src/block-node.tsx",
@@ -73,9 +93,13 @@
       "name": "block-shape-tldraw",
       "type": "registry:component",
       "title": "Block ShapeUtil (tldraw adapter)",
-      "description": "tldraw ShapeUtil rendering the Block inside HTMLContainer; shape w/h are authoritative and port anchors are geometry points.",
-      "dependencies": ["tldraw@5.3.2"],
-      "registryDependencies": ["utils"],
+      "description": "tldraw ShapeUtil rendering the Block inside HTMLContainer; shape w/h are authoritative and port anchors are geometry points. NOTE: currently imports @bbox-ui/core, which is not yet published to npm \u2014 install the `block` item and repoint the import until it is.",
+      "dependencies": [
+        "tldraw@5.3.2"
+      ],
+      "registryDependencies": [
+        "utils"
+      ],
       "files": [
         {
           "path": "packages/adapter-tldraw/src/block-shape-util.tsx",

@@ -2,7 +2,7 @@
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
   "name": "block-shape-tldraw",
   "title": "Block ShapeUtil (tldraw adapter)",
-  "description": "tldraw ShapeUtil rendering the Block inside HTMLContainer; shape w/h are authoritative and port anchors are geometry points.",
+  "description": "tldraw ShapeUtil rendering the Block inside HTMLContainer; shape w/h are authoritative and port anchors are geometry points. NOTE: currently imports @bbox-ui/core, which is not yet published to npm — install the `block` item and repoint the import until it is.",
   "dependencies": [
     "tldraw@5.3.2"
   ],

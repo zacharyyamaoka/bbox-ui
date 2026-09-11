@@ -2,6 +2,7 @@ packages:
   - packages/*
   - apps/playground
   - apps/storybook
+  - apps/docs
   - demos/reactflow
   - demos/tldraw
   - demos/scene

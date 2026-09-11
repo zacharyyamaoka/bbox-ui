@@ -1,0 +1,99 @@
+{
+  "name": "shadcn-registry-docs-template/ui",
+  "homepage": "https://shadcn-registry-docs-template.pages.dev/",
+  "items": [
+    {
+      "name": "index",
+      "type": "registry:style",
+      "dependencies": [
+        "class-variance-authority",
+        "lucide-react"
+      ],
+      "devDependencies": [
+        "tw-animate-css"
+      ],
+      "registryDependencies": [
+        "utils"
+      ],
+      "files": []
+    },
+    {
+      "name": "style",
+      "type": "registry:style",
+      "dependencies": [
+        "class-variance-authority",
+        "lucide-react"
+      ],
+      "devDependencies": [
+        "tw-animate-css"
+      ],
+      "registryDependencies": [
+        "utils"
+      ],
+      "files": []
+    },
+    {
+      "name": "button",
+      "type": "registry:ui",
+      "dependencies": [
+        "@base-ui/react"
+      ],
+      "files": [
+        {
+          "path": "src/registry/new-york-v4/ui/button.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "port-demo",
+      "type": "registry:example",
+      "files": [
+        {
+          "path": "src/registry/new-york-v4/examples/port-demo.tsx",
+          "type": "registry:example"
+        }
+      ]
+    },
+    {
+      "name": "port-layouts",
+      "type": "registry:example",
+      "files": [
+        {
+          "path": "src/registry/new-york-v4/examples/port-layouts.tsx",
+          "type": "registry:example"
+        }
+      ]
+    },
+    {
+      "name": "port-sizes",
+      "type": "registry:example",
+      "files": [
+        {
+          "path": "src/registry/new-york-v4/examples/port-sizes.tsx",
+          "type": "registry:example"
+        }
+      ]
+    },
+    {
+      "name": "block-demo",
+      "type": "registry:example",
+      "files": [
+        {
+          "path": "src/registry/new-york-v4/examples/block-demo.tsx",
+          "type": "registry:example"
+        }
+      ]
+    },
+    {
+      "name": "block-with-ports",
+      "type": "registry:example",
+      "files": [
+        {
+          "path": "src/registry/new-york-v4/examples/block-with-ports.tsx",
+          "type": "registry:example"
+        }
+      ]
+    }
+  ]
+}
