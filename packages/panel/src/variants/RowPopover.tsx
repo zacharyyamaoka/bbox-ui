@@ -598,7 +598,7 @@ function formatValue(field: FieldSpec, value: FieldValue | undefined): string {
 const panelStyle: CSSProperties = {
   width: 320,
   padding: 16,
-  border: "1px solid #ddd",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 8,
   display: "flex",
   flexDirection: "column",
@@ -609,26 +609,26 @@ const panelStyle: CSSProperties = {
   overflowY: "auto",
   position: "relative",
 };
-const headerStyle: CSSProperties = { fontWeight: 600, color: "#666" };
+const headerStyle: CSSProperties = { fontWeight: 600, color: "var(--bbox-panel-fg-muted, #666)" };
 
 const presetSectionStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 4,
   padding: "8px 10px",
-  background: "#f5f3ff",
-  border: "1px solid #ddd6fe",
+  background: "var(--bbox-panel-override-bg, #f5f3ff)",
+  border: "1px solid var(--bbox-panel-override-ring, #ddd6fe)",
   borderRadius: 6,
 };
 const presetLabelStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
-  color: "#6d28d9",
+  color: "var(--bbox-panel-override, #6d28d9)",
   textTransform: "uppercase",
   letterSpacing: 0.4,
 };
 const presetRowStyle: CSSProperties = { display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" };
-const mixedNoteStyle: CSSProperties = { fontSize: 11, color: "#b45309" };
+const mixedNoteStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-warn, #b45309)" };
 
 // AMENDMENT point 3 — the preset row's own "modified" report: a tinted
 // tag plus one reset, not a per-field diff list. Amber matches the same
@@ -639,16 +639,16 @@ const presetModifiedRowStyle: CSSProperties = { display: "flex", alignItems: "ce
 const presetModifiedTagStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
-  color: "#b45309",
-  background: "#fef3c7",
+  color: "var(--bbox-panel-warn, #b45309)",
+  background: "var(--bbox-panel-warn-bg, #fef3c7)",
   borderRadius: 4,
   padding: "2px 7px",
 };
 const presetModifiedResetStyle: CSSProperties = {
   fontSize: 11,
-  color: "#6d28d9",
+  color: "var(--bbox-panel-override, #6d28d9)",
   background: "none",
-  border: "1px solid #c4b5fd",
+  border: "1px solid var(--bbox-panel-override-ring, #c4b5fd)",
   borderRadius: 4,
   padding: "2px 7px",
   cursor: "pointer",
@@ -660,9 +660,9 @@ function presetButtonStyle(selected: boolean): CSSProperties {
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 600,
-    border: selected ? "1px solid #6d28d9" : "1px solid #c4b5fd",
-    background: selected ? "#6d28d9" : "white",
-    color: selected ? "white" : "#6d28d9",
+    border: selected ? "1px solid var(--bbox-panel-override, #6d28d9)" : "1px solid var(--bbox-panel-override-ring, #c4b5fd)",
+    background: selected ? "var(--bbox-panel-override, #6d28d9)" : "white",
+    color: selected ? "white" : "var(--bbox-panel-override, #6d28d9)",
     cursor: "pointer",
   };
 }
@@ -677,14 +677,14 @@ const rowStyle: CSSProperties = {
   alignItems: "center",
   gap: 8,
   height: ROW_HEIGHT,
-  borderBottom: "1px solid #eee",
+  borderBottom: "1px solid var(--bbox-panel-border-soft, #eee)",
 };
 
 function rowLabelStyle(governed: boolean): CSSProperties {
   return {
     fontSize: 12.5,
     fontWeight: 500,
-    color: governed ? "#888" : "#111",
+    color: governed ? "var(--bbox-panel-fg-faint, #888)" : "var(--bbox-panel-fg, #111)",
     flex: "1 1 auto",
     minWidth: 0,
     overflow: "hidden",
@@ -700,8 +700,8 @@ function rowValueButtonStyle(open: boolean): CSSProperties {
     gap: 5,
     maxWidth: 168,
     flex: "0 0 auto",
-    border: `1px solid ${open ? "#6d28d9" : "transparent"}`,
-    background: open ? "#f5f3ff" : "transparent",
+    border: `1px solid ${open ? "var(--bbox-panel-override, #6d28d9)" : "transparent"}`,
+    background: open ? "var(--bbox-panel-override-bg, #f5f3ff)" : "transparent",
     borderRadius: 5,
     padding: "3px 6px",
     cursor: "pointer",
@@ -714,19 +714,19 @@ function rowValueButtonStyle(open: boolean): CSSProperties {
 // component default. One dot, no badge row, per the amendment's "costs
 // almost no space" instruction.
 function valueDotStyle(winner: Layer | null): CSSProperties {
-  const fill = winner === "override" ? "#6d28d9" : winner === "preset" ? "#1d4ed8" : "transparent";
+  const fill = winner === "override" ? "var(--bbox-panel-override, #6d28d9)" : winner === "preset" ? "var(--bbox-panel-preset, #1d4ed8)" : "transparent";
   return {
     width: 6,
     height: 6,
     borderRadius: "50%",
     flexShrink: 0,
     background: fill,
-    border: winner === "override" || winner === "preset" ? "none" : "1px solid #bbb",
+    border: winner === "override" || winner === "preset" ? "none" : "1px solid var(--bbox-panel-fg-faint, #bbb)",
   };
 }
 
 function valueTextStyle(winner: Layer | null): CSSProperties {
-  const color = winner === "override" ? "#111" : winner === "preset" ? "#1d4ed8" : "#777";
+  const color = winner === "override" ? "var(--bbox-panel-fg, #111)" : winner === "preset" ? "var(--bbox-panel-preset, #1d4ed8)" : "var(--bbox-panel-fg-muted, #777)";
   return {
     fontSize: 12.5,
     fontWeight: winner === "override" ? 600 : 400,
@@ -741,7 +741,7 @@ function valueTextStyle(winner: Layer | null): CSSProperties {
 const mixedTextStyle: CSSProperties = {
   fontSize: 12.5,
   fontStyle: "italic",
-  color: "#b45309",
+  color: "var(--bbox-panel-warn, #b45309)",
 };
 
 // A quiet dot, not a sentence — the row has no room for prose. The real
@@ -752,14 +752,14 @@ const paintedDotStyle: CSSProperties = {
   width: 6,
   height: 6,
   borderRadius: "50%",
-  background: "#f59e0b",
+  background: "var(--bbox-panel-warn-soft, #f59e0b)",
   flexShrink: 0,
 };
 
 const popoverBaseStyle: CSSProperties = {
   zIndex: 1000,
   background: "white",
-  border: "1px solid #ddd",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 8,
   boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
   padding: 12,
@@ -770,9 +770,9 @@ const popoverBaseStyle: CSSProperties = {
 };
 
 const popoverHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
-const popoverTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 600, color: "#111" };
+const popoverTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--bbox-panel-fg, #111)" };
 function popoverGovernedTagStyle(winner: Layer | null): CSSProperties {
-  const palette = winner === "override" ? { fg: "#b45309", bg: "#fef3c7" } : { fg: "#1d4ed8", bg: "#dbeafe" };
+  const palette = winner === "override" ? { fg: "var(--bbox-panel-warn, #b45309)", bg: "var(--bbox-panel-warn-bg, #fef3c7)" } : { fg: "var(--bbox-panel-preset, #1d4ed8)", bg: "var(--bbox-panel-preset-bg, #dbeafe)" };
   return {
     fontSize: 10,
     color: palette.fg,
@@ -783,21 +783,21 @@ function popoverGovernedTagStyle(winner: Layer | null): CSSProperties {
 }
 const popoverDoneStyle: CSSProperties = {
   fontSize: 11,
-  border: "1px solid #ccc",
+  border: "1px solid var(--bbox-panel-border, #ccc)",
   background: "white",
   borderRadius: 4,
   padding: "2px 8px",
   cursor: "pointer",
 };
-const popoverHintStyle: CSSProperties = { fontSize: 11, color: "#888", lineHeight: 1.4 };
+const popoverHintStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-faint, #888)", lineHeight: 1.4 };
 const popoverControlStyle: CSSProperties = { padding: "2px 0" };
 
 const popoverClearStyle: CSSProperties = {
   alignSelf: "flex-start",
   fontSize: 11,
-  color: "#b91c1c",
+  color: "var(--bbox-panel-danger, #b91c1c)",
   background: "none",
-  border: "1px solid #fca5a5",
+  border: "1px solid var(--bbox-panel-danger-ring, #fca5a5)",
   borderRadius: 4,
   padding: "2px 7px",
   cursor: "pointer",
@@ -805,9 +805,9 @@ const popoverClearStyle: CSSProperties = {
 
 const popoverPaintedNoteStyle: CSSProperties = {
   fontSize: 11,
-  color: "#92400e",
-  background: "#fffbeb",
-  border: "1px solid #fde68a",
+  color: "var(--bbox-panel-warn, #92400e)",
+  background: "var(--bbox-panel-warn-bg, #fffbeb)",
+  border: "1px solid var(--bbox-panel-warn-ring, #fde68a)",
   borderRadius: 4,
   padding: "5px 7px",
   lineHeight: 1.4,
@@ -818,9 +818,9 @@ const chainStyle: CSSProperties = {
   flexDirection: "column",
   gap: 3,
   padding: "6px 8px",
-  background: "#fafafa",
+  background: "var(--bbox-panel-surface-2, #fafafa)",
   borderRadius: 4,
-  border: "1px solid #eee",
+  border: "1px solid var(--bbox-panel-border-soft, #eee)",
 };
 
 function candidateStyle(winner: boolean): CSSProperties {
@@ -830,7 +830,7 @@ function candidateStyle(winner: boolean): CSSProperties {
     gap: 6,
     fontSize: 11.5,
     fontWeight: winner ? 600 : 400,
-    color: winner ? "#111" : "#888",
+    color: winner ? "var(--bbox-panel-fg, #111)" : "var(--bbox-panel-fg-faint, #888)",
   };
 }
 function candidateDotStyle(winner: boolean): CSSProperties {
@@ -838,8 +838,8 @@ function candidateDotStyle(winner: boolean): CSSProperties {
     width: 6,
     height: 6,
     borderRadius: "50%",
-    background: winner ? "#111" : "transparent",
-    border: winner ? "none" : "1px solid #ccc",
+    background: winner ? "var(--bbox-panel-fg, #111)" : "transparent",
+    border: winner ? "none" : "1px solid var(--bbox-panel-border, #ccc)",
     flexShrink: 0,
   };
 }
@@ -861,7 +861,7 @@ function splitOptionLabel(label: string): [string, string | null] {
 const menuStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  border: "1px solid #eee",
+  border: "1px solid var(--bbox-panel-border-soft, #eee)",
   borderRadius: 6,
   overflow: "hidden",
 };
@@ -874,35 +874,35 @@ function menuRowStyle(active: boolean): CSSProperties {
     width: "100%",
     padding: "6px 10px",
     border: "none",
-    borderBottom: "1px solid #f2f2f2",
-    background: active ? "#f5f3ff" : "white",
+    borderBottom: "1px solid var(--bbox-panel-surface-2, #f2f2f2)",
+    background: active ? "var(--bbox-panel-override-bg, #f5f3ff)" : "white",
     cursor: "pointer",
     textAlign: "left",
     fontFamily: "inherit",
   };
 }
 
-const menuTickStyle: CSSProperties = { width: 14, fontSize: 12, color: "#6d28d9", flexShrink: 0 };
-const menuNameStyle: CSSProperties = { flex: 1, fontSize: 12.5, color: "#111" };
-const menuMagnitudeStyle: CSSProperties = { fontSize: 11.5, color: "#888", fontFamily: "monospace", flexShrink: 0 };
+const menuTickStyle: CSSProperties = { width: 14, fontSize: 12, color: "var(--bbox-panel-override, #6d28d9)", flexShrink: 0 };
+const menuNameStyle: CSSProperties = { flex: 1, fontSize: 12.5, color: "var(--bbox-panel-fg, #111)" };
+const menuMagnitudeStyle: CSSProperties = { fontSize: 11.5, color: "var(--bbox-panel-fg-faint, #888)", fontFamily: "monospace", flexShrink: 0 };
 
-const toggleLabelStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "#111" };
+const toggleLabelStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--bbox-panel-fg, #111)" };
 
 const numberControlStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
 const sliderStyle: CSSProperties = { flex: 1, minWidth: 100 };
-const unitStyle: CSSProperties = { fontSize: 11, color: "#888" };
+const unitStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-faint, #888)" };
 
 function numberInputStyle(): CSSProperties {
-  return { width: 64, padding: "4px 6px", border: "1px solid #ccc", borderRadius: 4, fontSize: 12.5, color: "#111" };
+  return { width: 64, padding: "4px 6px", border: "1px solid var(--bbox-panel-border, #ccc)", borderRadius: 4, fontSize: 12.5, color: "var(--bbox-panel-fg, #111)" };
 }
 
 const textInputStyle: CSSProperties = {
   width: "100%",
   padding: "5px 7px",
-  border: "1px solid #ccc",
+  border: "1px solid var(--bbox-panel-border, #ccc)",
   borderRadius: 4,
   fontSize: 12.5,
-  color: "#111",
+  color: "var(--bbox-panel-fg, #111)",
 };
 
 /* ------------------------------------------------------------------ */

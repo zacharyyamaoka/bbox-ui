@@ -91,7 +91,7 @@ export function ComponentInspector({ entry, subjects, onChange, onClearOverride 
 const panelStyle: CSSProperties = {
   width: 320,
   padding: 16,
-  border: "1px solid #ddd",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 8,
   display: "flex",
   flexDirection: "column",
@@ -101,19 +101,19 @@ const panelStyle: CSSProperties = {
   maxHeight: "calc(100vh - 64px)",
   overflowY: "auto",
 };
-const headerStyle: CSSProperties = { fontWeight: 600, color: "#666" };
+const headerStyle: CSSProperties = { fontWeight: 600, color: "var(--bbox-panel-fg-muted, #666)" };
 const presetSectionStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 4,
   padding: "8px 10px",
-  background: "#f5f3ff",
-  border: "1px solid #ddd6fe",
+  background: "var(--bbox-panel-override-bg, #f5f3ff)",
+  border: "1px solid var(--bbox-panel-override-ring, #ddd6fe)",
   borderRadius: 6,
 };
-const presetLabelStyle: CSSProperties = { fontSize: 11, fontWeight: 600, color: "#6d28d9", textTransform: "uppercase", letterSpacing: 0.4 };
+const presetLabelStyle: CSSProperties = { fontSize: 11, fontWeight: 600, color: "var(--bbox-panel-override, #6d28d9)", textTransform: "uppercase", letterSpacing: 0.4 };
 const presetRowStyle: CSSProperties = { display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" };
-const mixedNote: CSSProperties = { fontSize: 11, color: "#b45309" };
+const mixedNote: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-warn, #b45309)" };
 
 function presetButtonStyle(selected: boolean): CSSProperties {
   return {
@@ -121,9 +121,9 @@ function presetButtonStyle(selected: boolean): CSSProperties {
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 600,
-    border: selected ? "1px solid #6d28d9" : "1px solid #c4b5fd",
-    background: selected ? "#6d28d9" : "white",
-    color: selected ? "white" : "#6d28d9",
+    border: selected ? "1px solid var(--bbox-panel-override, #6d28d9)" : "1px solid var(--bbox-panel-override-ring, #c4b5fd)",
+    background: selected ? "var(--bbox-panel-override, #6d28d9)" : "white",
+    color: selected ? "white" : "var(--bbox-panel-override, #6d28d9)",
     cursor: "pointer",
   };
 }

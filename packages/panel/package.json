@@ -6,7 +6,8 @@
   "description": "The inspector panel engine: one field-resolution model, one tier rule, and the panel designs that render them. Host-neutral \u2014 no Vite, no Next, no Storybook. Consumed by demos/inspector and by the bbox-ui.com create page, so the two can never drift.",
   "exports": {
     ".": "./src/index.ts",
-    "./variants": "./src/variants/index.ts"
+    "./variants": "./src/variants/index.ts",
+    "./panel.css": "./src/panel.css"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

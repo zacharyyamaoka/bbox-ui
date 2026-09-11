@@ -405,7 +405,7 @@ const rowStyle: CSSProperties = {
   flexDirection: "column",
   gap: 4,
   padding: "6px 0",
-  borderBottom: "1px solid #eee",
+  borderBottom: "1px solid var(--bbox-panel-border-soft, #eee)",
 };
 const headerRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6 };
 const controlRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, paddingLeft: 18 };
@@ -416,14 +416,14 @@ function disclosureStyle(enabled: boolean): CSSProperties {
     border: "none",
     background: "transparent",
     cursor: enabled ? "pointer" : "default",
-    color: enabled ? "#666" : "#ccc",
+    color: enabled ? "var(--bbox-panel-fg-muted, #666)" : "var(--bbox-panel-border, #ccc)",
     fontSize: 11,
     padding: 0,
   };
 }
 
 function labelStyle(governed: boolean): CSSProperties {
-  return { fontWeight: 500, color: governed ? "#888" : "#111", fontSize: 13 };
+  return { fontWeight: 500, color: governed ? "var(--bbox-panel-fg-faint, #888)" : "var(--bbox-panel-fg, #111)", fontSize: 13 };
 }
 
 // A quiet note, not a badge: the row's own layers are the story, and this
@@ -441,9 +441,9 @@ function optionMenuTriggerStyle(secondary?: boolean): CSSProperties {
     fontSize: 12,
     lineHeight: 1.2,
     borderRadius: 6,
-    border: "1px solid #d4d4d8",
-    background: secondary ? "#fafafa" : "#fff",
-    color: "#18181b",
+    border: "1px solid var(--bbox-panel-border, #d4d4d8)",
+    background: secondary ? "var(--bbox-panel-surface-2, #fafafa)" : "var(--bbox-panel-surface, #fff)",
+    color: "var(--bbox-panel-fg, #18181b)",
     cursor: "pointer",
     textAlign: "left",
   };
@@ -465,8 +465,8 @@ const optionMenuStyle: CSSProperties = {
   minWidth: "100%",
   padding: 4,
   borderRadius: 8,
-  border: "1px solid #d4d4d8",
-  background: "#fff",
+  border: "1px solid var(--bbox-panel-border, #d4d4d8)",
+  background: "var(--bbox-panel-surface, #fff)",
   boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
 };
 
@@ -481,14 +481,14 @@ function optionMenuItemStyle(active: boolean): CSSProperties {
     fontSize: 12,
     borderRadius: 5,
     border: "none",
-    background: active ? "#f4f4f5" : "transparent",
-    color: "#18181b",
+    background: active ? "var(--bbox-panel-surface-2, #f4f4f5)" : "transparent",
+    color: "var(--bbox-panel-fg, #18181b)",
     cursor: "pointer",
     textAlign: "left",
   };
 }
 
-const optionMenuTickStyle: CSSProperties = { fontSize: 10, color: "#18181b" };
+const optionMenuTickStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-fg, #18181b)" };
 const optionMenuNameStyle: CSSProperties = { whiteSpace: "nowrap" };
 const optionMenuDetailStyle: CSSProperties = { fontSize: 11, opacity: 0.5, whiteSpace: "nowrap" };
 
@@ -502,7 +502,7 @@ const optionMenuCustomStyle: CSSProperties = {
   paddingLeft: 8,
   paddingRight: 8,
   paddingBottom: 2,
-  borderTop: "1px solid #ececef",
+  borderTop: "1px solid var(--bbox-panel-border-soft, #ececef)",
 };
 
 const optionMenuCustomInputStyle: CSSProperties = {
@@ -510,7 +510,7 @@ const optionMenuCustomInputStyle: CSSProperties = {
   padding: "3px 6px",
   fontSize: 12,
   borderRadius: 5,
-  border: "1px solid #d4d4d8",
+  border: "1px solid var(--bbox-panel-border, #d4d4d8)",
   textAlign: "right",
 };
 
@@ -523,17 +523,17 @@ const paintedElsewhereStyle: CSSProperties = {
 
 const mixedBadgeStyle: CSSProperties = {
   fontSize: 11,
-  color: "#b45309",
-  background: "#fef3c7",
+  color: "var(--bbox-panel-warn, #b45309)",
+  background: "var(--bbox-panel-warn-bg, #fef3c7)",
   borderRadius: 4,
   padding: "1px 6px",
 };
 
 function winnerBadgeStyle(winner: "override" | "preset" | "default"): CSSProperties {
   const palette: Record<typeof winner, { bg: string; fg: string }> = {
-    override: { bg: "#ede9fe", fg: "#6d28d9" },
-    preset: { bg: "#dbeafe", fg: "#1d4ed8" },
-    default: { bg: "#f3f4f6", fg: "#6b7280" },
+    override: { bg: "var(--bbox-panel-override-bg, #ede9fe)", fg: "var(--bbox-panel-override, #6d28d9)" },
+    preset: { bg: "var(--bbox-panel-preset-bg, #dbeafe)", fg: "var(--bbox-panel-preset, #1d4ed8)" },
+    default: { bg: "var(--bbox-panel-surface-2, #f3f4f6)", fg: "var(--bbox-panel-fg-muted, #6b7280)" },
   };
   const { bg, fg } = palette[winner];
   return {
@@ -550,9 +550,9 @@ function winnerBadgeStyle(winner: "override" | "preset" | "default"): CSSPropert
 
 const clearOverrideStyle: CSSProperties = {
   fontSize: 11,
-  color: "#b91c1c",
+  color: "var(--bbox-panel-danger, #b91c1c)",
   background: "none",
-  border: "1px solid #fca5a5",
+  border: "1px solid var(--bbox-panel-danger-ring, #fca5a5)",
   borderRadius: 4,
   padding: "1px 6px",
   cursor: "pointer",
@@ -564,9 +564,9 @@ const chainStyle: CSSProperties = {
   gap: 2,
   marginLeft: 18,
   padding: "4px 8px",
-  background: "#fafafa",
+  background: "var(--bbox-panel-surface-2, #fafafa)",
   borderRadius: 4,
-  border: "1px solid #eee",
+  border: "1px solid var(--bbox-panel-border-soft, #eee)",
 };
 
 function candidateStyle(winner: boolean): CSSProperties {
@@ -576,7 +576,7 @@ function candidateStyle(winner: boolean): CSSProperties {
     gap: 6,
     fontSize: 12,
     fontWeight: winner ? 600 : 400,
-    color: winner ? "#111" : "#888",
+    color: winner ? "var(--bbox-panel-fg, #111)" : "var(--bbox-panel-fg-faint, #888)",
   };
 }
 function candidateDotStyle(winner: boolean): CSSProperties {
@@ -584,8 +584,8 @@ function candidateDotStyle(winner: boolean): CSSProperties {
     width: 6,
     height: 6,
     borderRadius: "50%",
-    background: winner ? "#111" : "transparent",
-    border: winner ? "none" : "1px solid #ccc",
+    background: winner ? "var(--bbox-panel-fg, #111)" : "transparent",
+    border: winner ? "none" : "1px solid var(--bbox-panel-border, #ccc)",
     flexShrink: 0,
   };
 }
@@ -599,9 +599,9 @@ function segmentButtonStyle(selected: boolean, secondary?: boolean): CSSProperti
     padding: "3px 8px",
     borderRadius: 4,
     fontSize: 12,
-    border: selected ? `1px solid ${secondary ? "#999" : "#111"}` : "1px solid #ccc",
-    background: selected ? (secondary ? "#eee" : "#111") : "white",
-    color: selected ? (secondary ? "#333" : "white") : "#111",
+    border: selected ? `1px solid ${secondary ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-fg, #111)"}` : "1px solid var(--bbox-panel-border, #ccc)",
+    background: selected ? (secondary ? "var(--bbox-panel-border-soft, #eee)" : "var(--bbox-panel-fg, #111)") : "white",
+    color: selected ? (secondary ? "var(--bbox-panel-fg, #333)" : "white") : "var(--bbox-panel-fg, #111)",
     cursor: "pointer",
     opacity: secondary && !selected ? 0.7 : 1,
   };
@@ -613,7 +613,7 @@ function toggleLabelStyle(secondary?: boolean): CSSProperties {
     alignItems: "center",
     gap: 4,
     fontSize: 12,
-    color: secondary ? "#888" : "#111",
+    color: secondary ? "var(--bbox-panel-fg-faint, #888)" : "var(--bbox-panel-fg, #111)",
   };
 }
 
@@ -621,10 +621,10 @@ function numberInputStyle(secondary?: boolean): CSSProperties {
   return {
     width: 64,
     padding: "3px 6px",
-    border: `1px solid ${secondary ? "#ddd" : "#ccc"}`,
+    border: `1px solid ${secondary ? "var(--bbox-panel-border, #ddd)" : "var(--bbox-panel-border, #ccc)"}`,
     borderRadius: 4,
     fontSize: 12,
-    color: secondary ? "#888" : "#111",
+    color: secondary ? "var(--bbox-panel-fg-faint, #888)" : "var(--bbox-panel-fg, #111)",
   };
 }
 
@@ -633,9 +633,9 @@ function textInputStyle(secondary?: boolean): CSSProperties {
     flex: 1,
     minWidth: 80,
     padding: "3px 6px",
-    border: `1px solid ${secondary ? "#ddd" : "#ccc"}`,
+    border: `1px solid ${secondary ? "var(--bbox-panel-border, #ddd)" : "var(--bbox-panel-border, #ccc)"}`,
     borderRadius: 4,
     fontSize: 12,
-    color: secondary ? "#888" : "#111",
+    color: secondary ? "var(--bbox-panel-fg-faint, #888)" : "var(--bbox-panel-fg, #111)",
   };
 }

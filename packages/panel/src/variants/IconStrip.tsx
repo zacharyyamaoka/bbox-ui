@@ -87,9 +87,9 @@ type Winner = "override" | "preset" | "default";
  * ring borrows it instead of a separate badge, since there is no label
  * line here to put a badge on. */
 const WINNER_COLOR: Record<Winner, { ring: string; bg: string }> = {
-  override: { ring: "#6d28d9", bg: "#ede9fe" },
-  preset: { ring: "#1d4ed8", bg: "#dbeafe" },
-  default: { ring: "#52525b", bg: "#f4f4f5" },
+  override: { ring: "var(--bbox-panel-override, #6d28d9)", bg: "var(--bbox-panel-override-bg, #ede9fe)" },
+  preset: { ring: "var(--bbox-panel-preset, #1d4ed8)", bg: "var(--bbox-panel-preset-bg, #dbeafe)" },
+  default: { ring: "var(--bbox-panel-fg-muted, #52525b)", bg: "var(--bbox-panel-surface-2, #f4f4f5)" },
 };
 
 /**
@@ -235,10 +235,10 @@ function IconBtn({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        border: `1.5px solid ${palette ? palette.ring : "#d4d4d8"}`,
+        border: `1.5px solid ${palette ? palette.ring : "var(--bbox-panel-border, #d4d4d8)"}`,
         borderRadius: 6,
         background: palette ? palette.bg : "white",
-        color: palette ? palette.ring : "#3f3f46",
+        color: palette ? palette.ring : "var(--bbox-panel-fg, #3f3f46)",
         cursor: "pointer",
         padding: 0,
         flexShrink: 0,
@@ -671,7 +671,7 @@ function StateSwatchIcon({ value }: { value: string }) {
  * handoff rather than claimed as a drawn icon. */
 function LensGlyph({ value }: { value: string }) {
   const spec: Record<string, { char: string; color: string }> = {
-    normal: { char: "•", color: "#71717a" },
+    normal: { char: "•", color: "var(--bbox-panel-fg-muted, #71717a)" },
     added: { char: "+", color: "var(--bbox-success)" },
     removed: { char: "−", color: "var(--bbox-danger)" },
     changed: { char: "~", color: "var(--bbox-accent)" },
@@ -1126,7 +1126,7 @@ export const ICON_STRIP: PanelVariant = {
 const panelStyle: CSSProperties = {
   width: 320,
   padding: 14,
-  border: "1px solid #ddd",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 8,
   display: "flex",
   flexDirection: "column",
@@ -1136,23 +1136,23 @@ const panelStyle: CSSProperties = {
   maxHeight: "calc(100vh - 64px)",
   overflowY: "auto",
 };
-const headerStyle: CSSProperties = { fontWeight: 600, color: "#666" };
+const headerStyle: CSSProperties = { fontWeight: 600, color: "var(--bbox-panel-fg-muted, #666)" };
 const legendStyle: CSSProperties = {
   fontSize: 10,
-  color: "#9ca3af",
+  color: "var(--bbox-panel-fg-faint, #9ca3af)",
   lineHeight: 1.4,
   paddingBottom: 4,
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--bbox-panel-surface-2, #f0f0f0)",
 };
 const legendMixedDotStyle: CSSProperties = {
   display: "inline-block",
   width: 7,
   height: 7,
   borderRadius: "50%",
-  background: "#f59e0b",
+  background: "var(--bbox-panel-warn-soft, #f59e0b)",
   verticalAlign: "middle",
 };
-const legendModifiedInlineStyle: CSSProperties = { fontWeight: 700, color: "#92400e" };
+const legendModifiedInlineStyle: CSSProperties = { fontWeight: 700, color: "var(--bbox-panel-warn, #92400e)" };
 const legendClearDotStyle: CSSProperties = {
   display: "inline-flex",
   width: 12,
@@ -1160,8 +1160,8 @@ const legendClearDotStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   borderRadius: "50%",
-  background: "#fee2e2",
-  color: "#b91c1c",
+  background: "var(--bbox-panel-danger-bg, #fee2e2)",
+  color: "var(--bbox-panel-danger, #b91c1c)",
   fontSize: 9,
   verticalAlign: "middle",
 };
@@ -1174,9 +1174,9 @@ function presetButtonStyle(selected: boolean): CSSProperties {
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 600,
-    border: selected ? "1px solid #6d28d9" : "1px solid #c4b5fd",
-    background: selected ? "#6d28d9" : "white",
-    color: selected ? "white" : "#6d28d9",
+    border: selected ? "1px solid var(--bbox-panel-override, #6d28d9)" : "1px solid var(--bbox-panel-override-ring, #c4b5fd)",
+    background: selected ? "var(--bbox-panel-override, #6d28d9)" : "white",
+    color: selected ? "white" : "var(--bbox-panel-override, #6d28d9)",
     cursor: "pointer",
     display: "inline-flex",
     alignItems: "center",
@@ -1189,7 +1189,7 @@ const presetChipWrapStyle: CSSProperties = { display: "inline-flex", alignItems:
 const presetModifiedTagStyle: CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
-  color: "#fde68a",
+  color: "var(--bbox-panel-warn-ring, #fde68a)",
 };
 const presetResetBtnStyle: CSSProperties = {
   width: 18,
@@ -1197,10 +1197,10 @@ const presetResetBtnStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  border: "1px solid #fcd34d",
+  border: "1px solid var(--bbox-panel-warn-ring, #fcd34d)",
   borderRadius: "50%",
-  background: "#fffbeb",
-  color: "#92400e",
+  background: "var(--bbox-panel-warn-bg, #fffbeb)",
+  color: "var(--bbox-panel-warn, #92400e)",
   fontSize: 11,
   cursor: "pointer",
   padding: 0,
@@ -1213,7 +1213,7 @@ const rowStyle: CSSProperties = {
   gap: 10,
   flexWrap: "wrap",
   padding: "4px 0",
-  borderBottom: "1px solid #f4f4f5",
+  borderBottom: "1px solid var(--bbox-panel-surface-2, #f4f4f5)",
 };
 
 const clusterWrapStyle: CSSProperties = { position: "relative", display: "inline-flex", flexDirection: "column" };
@@ -1224,7 +1224,7 @@ function mixedRingStyle(mixed: boolean): CSSProperties {
     gap: 2,
     padding: 2,
     borderRadius: 8,
-    border: mixed ? "1.5px dashed #f59e0b" : "1.5px solid transparent",
+    border: mixed ? "1.5px dashed var(--bbox-panel-warn-soft, #f59e0b)" : "1.5px solid transparent",
   };
 }
 const clusterRowStyle: CSSProperties = { display: "flex", gap: 3, flexWrap: "wrap" };
@@ -1233,7 +1233,7 @@ function caretStyle(open: boolean): CSSProperties {
   return {
     border: "none",
     background: "none",
-    color: open ? "#111" : "#a1a1aa",
+    color: open ? "var(--bbox-panel-fg, #111)" : "var(--bbox-panel-fg-faint, #a1a1aa)",
     fontSize: 10,
     cursor: "pointer",
     padding: "0 2px",
@@ -1248,7 +1248,7 @@ const mixedDotStyle: CSSProperties = {
   width: 8,
   height: 8,
   borderRadius: "50%",
-  background: "#f59e0b",
+  background: "var(--bbox-panel-warn-soft, #f59e0b)",
   border: "1.5px solid white",
 };
 const paintedDotStyle: CSSProperties = {
@@ -1258,7 +1258,7 @@ const paintedDotStyle: CSSProperties = {
   width: 7,
   height: 7,
   borderRadius: "50%",
-  background: "#0d9488",
+  background: "var(--bbox-panel-accent, #0d9488)",
   border: "1.5px solid white",
 };
 const clearDotStyle: CSSProperties = {
@@ -1268,9 +1268,9 @@ const clearDotStyle: CSSProperties = {
   width: 15,
   height: 15,
   borderRadius: "50%",
-  border: "1px solid #fca5a5",
-  background: "#fee2e2",
-  color: "#b91c1c",
+  border: "1px solid var(--bbox-panel-danger-ring, #fca5a5)",
+  background: "var(--bbox-panel-danger-bg, #fee2e2)",
+  color: "var(--bbox-panel-danger, #b91c1c)",
   fontSize: 10,
   lineHeight: 1,
   display: "flex",
@@ -1291,12 +1291,12 @@ const chainPopoverStyle: CSSProperties = {
   gap: 2,
   padding: "4px 8px",
   background: "white",
-  border: "1px solid #e4e4e7",
+  border: "1px solid var(--bbox-panel-border-soft, #e4e4e7)",
   borderRadius: 6,
   boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
   minWidth: 150,
 };
-const chainLabelStyle: CSSProperties = { fontSize: 10, fontWeight: 700, color: "#71717a", textTransform: "uppercase", letterSpacing: 0.3 };
+const chainLabelStyle: CSSProperties = { fontSize: 10, fontWeight: 700, color: "var(--bbox-panel-fg-muted, #71717a)", textTransform: "uppercase", letterSpacing: 0.3 };
 function chainRowStyle(winner: boolean): CSSProperties {
   return {
     display: "flex",
@@ -1304,7 +1304,7 @@ function chainRowStyle(winner: boolean): CSSProperties {
     gap: 10,
     fontSize: 11,
     fontWeight: winner ? 700 : 400,
-    color: winner ? "#111" : "#a1a1aa",
+    color: winner ? "var(--bbox-panel-fg, #111)" : "var(--bbox-panel-fg-faint, #a1a1aa)",
     whiteSpace: "nowrap",
   };
 }
@@ -1317,27 +1317,27 @@ function scaleMenuRowStyle(active: boolean): CSSProperties {
     alignItems: "center",
     gap: 6,
     border: "none",
-    background: active ? "#f4f4f5" : "transparent",
+    background: active ? "var(--bbox-panel-surface-2, #f4f4f5)" : "transparent",
     borderRadius: 4,
     padding: "3px 4px",
     fontSize: 11,
     fontWeight: active ? 700 : 400,
-    color: active ? "#111" : "#52525b",
+    color: active ? "var(--bbox-panel-fg, #111)" : "var(--bbox-panel-fg-muted, #52525b)",
     cursor: "pointer",
     textAlign: "left",
     whiteSpace: "nowrap",
   };
 }
-const scaleMenuTickStyle: CSSProperties = { width: 11, color: "#6d28d9", fontSize: 11, flexShrink: 0 };
+const scaleMenuTickStyle: CSSProperties = { width: 11, color: "var(--bbox-panel-override, #6d28d9)", fontSize: 11, flexShrink: 0 };
 
 function wordChipStyle(active: boolean, palette: { ring: string; bg: string } | undefined): CSSProperties {
   return {
     padding: "3px 7px",
     borderRadius: 5,
     fontSize: 11,
-    border: `1px solid ${active && palette ? palette.ring : "#d4d4d8"}`,
+    border: `1px solid ${active && palette ? palette.ring : "var(--bbox-panel-border, #d4d4d8)"}`,
     background: active && palette ? palette.bg : "white",
-    color: active && palette ? palette.ring : "#52525b",
+    color: active && palette ? palette.ring : "var(--bbox-panel-fg-muted, #52525b)",
     cursor: "pointer",
     whiteSpace: "nowrap",
   };
@@ -1347,7 +1347,7 @@ const stepperStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 3,
-  border: "1px solid #d4d4d8",
+  border: "1px solid var(--bbox-panel-border, #d4d4d8)",
   borderRadius: 6,
   padding: "1px 3px",
   height: 24,
@@ -1356,23 +1356,23 @@ const stepperStyle: CSSProperties = {
 const stepperBtnStyle: CSSProperties = {
   border: "none",
   background: "none",
-  color: "#52525b",
+  color: "var(--bbox-panel-fg-muted, #52525b)",
   fontSize: 12,
   width: 14,
   cursor: "pointer",
   padding: 0,
   lineHeight: 1,
 };
-const stepperValueStyle: CSSProperties = { fontSize: 10, fontFamily: "monospace", minWidth: 22, textAlign: "center", color: "#111" };
+const stepperValueStyle: CSSProperties = { fontSize: 10, fontFamily: "monospace", minWidth: 22, textAlign: "center", color: "var(--bbox-panel-fg, #111)" };
 
 const textFieldWrapStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 1, minWidth: 88 };
-const textFieldLabelStyle: CSSProperties = { fontSize: 9, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: 0.3 };
+const textFieldLabelStyle: CSSProperties = { fontSize: 9, color: "var(--bbox-panel-fg-faint, #a1a1aa)", textTransform: "uppercase", letterSpacing: 0.3 };
 const textFieldInputStyle: CSSProperties = {
   padding: "3px 6px",
-  border: "1px solid #d4d4d8",
+  border: "1px solid var(--bbox-panel-border, #d4d4d8)",
   borderRadius: 5,
   fontSize: 12,
-  color: "#111",
+  color: "var(--bbox-panel-fg, #111)",
   width: "100%",
   boxSizing: "border-box",
 };

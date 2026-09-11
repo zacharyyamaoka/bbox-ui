@@ -1,0 +1,113 @@
+/**
+ * The panel's semantic palette.
+ *
+ * WHY variables with the old literal still inlined as each one's fallback:
+ * the panel is ~240 inline `CSSProperties` colours, and Zach's requirement is
+ * "as we change the site from dark to white, our create page should adapt
+ * accordingly". Inline styles cannot answer a media query, but they can read
+ * a custom property. Keeping the literal as the fallback means a consumer
+ * that imports nothing looks exactly as it did before.
+ *
+ * A consumer with its own theme (bbox-ui.com) overrides these from its own
+ * tokens rather than importing this file, which is why every value here is a
+ * plain colour and not a reference to some other variable.
+ */
+:root {
+  --bbox-panel-fg: #16161a;
+  --bbox-panel-fg-muted: #5c5c66;
+  --bbox-panel-fg-faint: #9a9aa4;
+  --bbox-panel-border: #d4d4d8;
+  --bbox-panel-border-soft: #e7e7ec;
+  --bbox-panel-surface: #ffffff;
+  --bbox-panel-surface-2: #f6f6f8;
+  --bbox-panel-surface-3: #f0f0f4;
+
+  --bbox-panel-override: #6d28d9;
+  --bbox-panel-override-soft: #8b5cf6;
+  --bbox-panel-override-ring: #c4b5fd;
+  --bbox-panel-override-bg: #f5f3ff;
+
+  --bbox-panel-preset: #1d4ed8;
+  --bbox-panel-preset-soft: #3b82f6;
+  --bbox-panel-preset-bg: #dbeafe;
+
+  --bbox-panel-warn: #b45309;
+  --bbox-panel-warn-soft: #f59e0b;
+  --bbox-panel-warn-ring: #fde68a;
+  --bbox-panel-warn-bg: #fffbeb;
+
+  --bbox-panel-danger: #b91c1c;
+  --bbox-panel-danger-ring: #fca5a5;
+  --bbox-panel-danger-bg: #fee2e2;
+
+  --bbox-panel-accent: #0d9488;
+}
+
+/* Three selectors, because three different consumers say "dark" three ways:
+ * the OS preference (the Vite demo has no switch), a `data-theme` attribute,
+ * and next-themes' `.dark` class, which is what bbox-ui.com uses. Defining
+ * the palette once and re-pointing it here keeps every literal in one block. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not(.light) {
+    --bbox-panel-fg: #f4f4f5;
+    --bbox-panel-fg-muted: #a1a1aa;
+    --bbox-panel-fg-faint: #71717a;
+    --bbox-panel-border: #3f3f46;
+    --bbox-panel-border-soft: #27272a;
+    --bbox-panel-surface: #18181b;
+    --bbox-panel-surface-2: #1f1f23;
+    --bbox-panel-surface-3: #26262b;
+
+    --bbox-panel-override: #c4b5fd;
+    --bbox-panel-override-soft: #a78bfa;
+    --bbox-panel-override-ring: #5b21b6;
+    --bbox-panel-override-bg: #2e1065;
+
+    --bbox-panel-preset: #93c5fd;
+    --bbox-panel-preset-soft: #60a5fa;
+    --bbox-panel-preset-bg: #1e3a8a;
+
+    --bbox-panel-warn: #fcd34d;
+    --bbox-panel-warn-soft: #f59e0b;
+    --bbox-panel-warn-ring: #78350f;
+    --bbox-panel-warn-bg: #2a1c06;
+
+    --bbox-panel-danger: #fca5a5;
+    --bbox-panel-danger-ring: #7f1d1d;
+    --bbox-panel-danger-bg: #2b0f0f;
+
+    --bbox-panel-accent: #2dd4bf;
+  }
+}
+
+:root[data-theme="dark"],
+.dark {
+  --bbox-panel-fg: #f4f4f5;
+  --bbox-panel-fg-muted: #a1a1aa;
+  --bbox-panel-fg-faint: #71717a;
+  --bbox-panel-border: #3f3f46;
+  --bbox-panel-border-soft: #27272a;
+  --bbox-panel-surface: #18181b;
+  --bbox-panel-surface-2: #1f1f23;
+  --bbox-panel-surface-3: #26262b;
+
+  --bbox-panel-override: #c4b5fd;
+  --bbox-panel-override-soft: #a78bfa;
+  --bbox-panel-override-ring: #5b21b6;
+  --bbox-panel-override-bg: #2e1065;
+
+  --bbox-panel-preset: #93c5fd;
+  --bbox-panel-preset-soft: #60a5fa;
+  --bbox-panel-preset-bg: #1e3a8a;
+
+  --bbox-panel-warn: #fcd34d;
+  --bbox-panel-warn-soft: #f59e0b;
+  --bbox-panel-warn-ring: #78350f;
+  --bbox-panel-warn-bg: #2a1c06;
+
+  --bbox-panel-danger: #fca5a5;
+  --bbox-panel-danger-ring: #7f1d1d;
+  --bbox-panel-danger-bg: #2b0f0f;
+
+  --bbox-panel-accent: #2dd4bf;
+}

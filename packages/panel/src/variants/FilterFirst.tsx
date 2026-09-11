@@ -76,25 +76,25 @@ type RowState = "mixed" | "driven" | "overridden" | "default";
 function dotColor(state: RowState): string {
   switch (state) {
     case "mixed":
-      return "#b45309";
+      return "var(--bbox-panel-warn, #b45309)";
     case "overridden":
-      return "#6d28d9";
+      return "var(--bbox-panel-override, #6d28d9)";
     case "driven":
-      return "#1d4ed8";
+      return "var(--bbox-panel-preset, #1d4ed8)";
     default:
-      return "#d1d5db";
+      return "var(--bbox-panel-border, #d1d5db)";
   }
 }
 function valueColor(state: RowState): string {
   switch (state) {
     case "mixed":
-      return "#b45309";
+      return "var(--bbox-panel-warn, #b45309)";
     case "overridden":
-      return "#111";
+      return "var(--bbox-panel-fg, #111)";
     case "driven":
-      return "#1d4ed8";
+      return "var(--bbox-panel-preset, #1d4ed8)";
     default:
-      return "#999";
+      return "var(--bbox-panel-fg-faint, #999)";
   }
 }
 
@@ -456,7 +456,7 @@ export const FILTER_FIRST: PanelVariant = {
 const panelStyle: CSSProperties = {
   width: 320,
   padding: 16,
-  border: "1px solid #ddd",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 8,
   display: "flex",
   flexDirection: "column",
@@ -466,42 +466,42 @@ const panelStyle: CSSProperties = {
   maxHeight: "calc(100vh - 64px)",
   overflowY: "auto",
 };
-const headerStyle: CSSProperties = { fontWeight: 600, color: "#666" };
+const headerStyle: CSSProperties = { fontWeight: 600, color: "var(--bbox-panel-fg-muted, #666)" };
 
 const presetsSectionStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 4,
   padding: "8px 10px",
-  background: "#f5f3ff",
-  border: "1px solid #ddd6fe",
+  background: "var(--bbox-panel-override-bg, #f5f3ff)",
+  border: "1px solid var(--bbox-panel-override-ring, #ddd6fe)",
   borderRadius: 6,
 };
 const presetRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
 const presetLabelStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
-  color: "#6d28d9",
+  color: "var(--bbox-panel-override, #6d28d9)",
   textTransform: "uppercase",
   letterSpacing: 0.4,
 };
 const presetButtonsRowStyle: CSSProperties = { display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" };
-const mixedNoteStyle: CSSProperties = { fontSize: 11, color: "#b45309" };
+const mixedNoteStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-warn, #b45309)" };
 const modifiedNoteStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 4,
   fontSize: 11,
   fontWeight: 600,
-  color: "#b45309",
-  background: "#fef3c7",
+  color: "var(--bbox-panel-warn, #b45309)",
+  background: "var(--bbox-panel-warn-bg, #fef3c7)",
   borderRadius: 4,
   padding: "1px 6px",
 };
 const modifiedResetStyle: CSSProperties = {
   fontSize: 10,
   fontWeight: 400,
-  color: "#b45309",
+  color: "var(--bbox-panel-warn, #b45309)",
   background: "none",
   border: "none",
   textDecoration: "underline",
@@ -515,9 +515,9 @@ function presetButtonStyle(selected: boolean): CSSProperties {
     borderRadius: 6,
     fontSize: 12,
     fontWeight: 600,
-    border: selected ? "1px solid #6d28d9" : "1px solid #c4b5fd",
-    background: selected ? "#6d28d9" : "white",
-    color: selected ? "white" : "#6d28d9",
+    border: selected ? "1px solid var(--bbox-panel-override, #6d28d9)" : "1px solid var(--bbox-panel-override-ring, #c4b5fd)",
+    background: selected ? "var(--bbox-panel-override, #6d28d9)" : "white",
+    color: selected ? "white" : "var(--bbox-panel-override, #6d28d9)",
     cursor: "pointer",
   };
 }
@@ -526,11 +526,11 @@ const filterRowStyle: CSSProperties = { display: "flex", alignItems: "center", g
 const filterInputStyle: CSSProperties = {
   flex: 1,
   padding: "6px 10px",
-  border: "1px solid #ccc",
+  border: "1px solid var(--bbox-panel-border, #ccc)",
   borderRadius: 6,
   fontSize: 13,
 };
-const scopeStyle: CSSProperties = { fontSize: 11, color: "#999", whiteSpace: "nowrap" };
+const scopeStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-faint, #999)", whiteSpace: "nowrap" };
 
 const fieldListStyle: CSSProperties = { display: "flex", flexDirection: "column" };
 
@@ -538,7 +538,7 @@ const fieldListStyle: CSSProperties = { display: "flex", flexDirection: "column"
 const summaryRowWrapStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid var(--bbox-panel-surface-2, #f0f0f0)",
 };
 const summaryRowStyle: CSSProperties = {
   display: "flex",
@@ -561,7 +561,7 @@ function dotStyle(state: RowState): CSSProperties {
     flexShrink: 0,
   };
 }
-const summaryLabelStyle: CSSProperties = { fontSize: 13, color: "#111", flexShrink: 0 };
+const summaryLabelStyle: CSSProperties = { fontSize: 13, color: "var(--bbox-panel-fg, #111)", flexShrink: 0 };
 function summaryValueStyle(state: RowState): CSSProperties {
   return {
     fontSize: 12,
@@ -586,8 +586,8 @@ const editingWrapStyle: CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
   gap: 4,
-  borderBottom: "1px solid #f0f0f0",
-  background: "#fafafa",
+  borderBottom: "1px solid var(--bbox-panel-surface-2, #f0f0f0)",
+  background: "var(--bbox-panel-surface-2, #fafafa)",
 };
 const collapseRowButtonStyle: CSSProperties = {
   width: 16,
@@ -595,7 +595,7 @@ const collapseRowButtonStyle: CSSProperties = {
   border: "none",
   background: "transparent",
   cursor: "pointer",
-  color: "#666",
+  color: "var(--bbox-panel-fg-muted, #666)",
   fontSize: 11,
   padding: 0,
   flexShrink: 0,
@@ -608,9 +608,9 @@ const expandButtonStyle: CSSProperties = {
   borderRadius: 6,
   fontSize: 12,
   fontWeight: 600,
-  border: "1px solid #ccc",
-  background: "#fafafa",
-  color: "#333",
+  border: "1px solid var(--bbox-panel-border, #ccc)",
+  background: "var(--bbox-panel-surface-2, #fafafa)",
+  color: "var(--bbox-panel-fg, #333)",
   cursor: "pointer",
 };
 const collapseButtonStyle: CSSProperties = {
@@ -620,14 +620,14 @@ const collapseButtonStyle: CSSProperties = {
   fontSize: 12,
   border: "1px solid transparent",
   background: "transparent",
-  color: "#888",
+  color: "var(--bbox-panel-fg-faint, #888)",
   cursor: "pointer",
 };
-const filteredNoteStyle: CSSProperties = { fontSize: 11, color: "#888" };
+const filteredNoteStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-faint, #888)" };
 const hiddenOverrideStyle: CSSProperties = {
   fontSize: 11,
-  color: "#b45309",
-  background: "#fef3c7",
+  color: "var(--bbox-panel-warn, #b45309)",
+  background: "var(--bbox-panel-warn-bg, #fef3c7)",
   borderRadius: 4,
   padding: "2px 6px",
   alignSelf: "flex-start",

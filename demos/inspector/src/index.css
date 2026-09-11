@@ -1,3 +1,4 @@
+@import "@bbox-ui/panel/panel.css";
 @import "tailwindcss";
 @import "@bbox-ui/core/theme.css";
 /* WHY: Tailwind v4 scans only this app's own tree by default, so the utility

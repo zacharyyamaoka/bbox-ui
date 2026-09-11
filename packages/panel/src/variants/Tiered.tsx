@@ -76,10 +76,10 @@ function formatResolvedValue(field: FieldSpec, value: FieldValue | undefined): s
 type Mark = "driven" | "overridden" | "default" | "mixed";
 
 const MARK_COLOR: Record<Mark, { fg: string; dot: string }> = {
-  driven: { fg: "#1d4ed8", dot: "#1d4ed8" },
-  overridden: { fg: "#6d28d9", dot: "#6d28d9" },
-  default: { fg: "#888", dot: "#ccc" },
-  mixed: { fg: "#b45309", dot: "#b45309" },
+  driven: { fg: "var(--bbox-panel-preset, #1d4ed8)", dot: "var(--bbox-panel-preset, #1d4ed8)" },
+  overridden: { fg: "var(--bbox-panel-override, #6d28d9)", dot: "var(--bbox-panel-override, #6d28d9)" },
+  default: { fg: "var(--bbox-panel-fg-faint, #888)", dot: "var(--bbox-panel-border, #ccc)" },
+  mixed: { fg: "var(--bbox-panel-warn, #b45309)", dot: "var(--bbox-panel-warn, #b45309)" },
 };
 
 /**
@@ -400,7 +400,7 @@ export const TIERED: PanelVariant = {
 const panelStyle: CSSProperties = {
   width: 300,
   padding: 12,
-  border: "1px solid #e2e2e2",
+  border: "1px solid var(--bbox-panel-border-soft, #e2e2e2)",
   borderRadius: 8,
   display: "flex",
   flexDirection: "column",
@@ -412,12 +412,12 @@ const panelStyle: CSSProperties = {
 };
 
 const headerRowStyle: CSSProperties = { display: "flex", alignItems: "baseline", justifyContent: "space-between" };
-const headerTitleStyle: CSSProperties = { fontWeight: 600, color: "#333", fontSize: 13 };
-const headerCountStyle: CSSProperties = { fontSize: 11, color: "#999" };
+const headerTitleStyle: CSSProperties = { fontWeight: 600, color: "var(--bbox-panel-fg, #333)", fontSize: 13 };
+const headerCountStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-faint, #999)" };
 
 const switcherStyle: CSSProperties = {
   display: "flex",
-  border: "1px solid #ddd",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 6,
   overflow: "hidden",
 };
@@ -429,18 +429,18 @@ function tierButtonStyle(active: boolean): CSSProperties {
     fontSize: 11,
     fontWeight: 600,
     border: "none",
-    borderRight: "1px solid #ddd",
-    background: active ? "#333" : "white",
-    color: active ? "white" : "#666",
+    borderRight: "1px solid var(--bbox-panel-border, #ddd)",
+    background: active ? "var(--bbox-panel-fg, #333)" : "white",
+    color: active ? "white" : "var(--bbox-panel-fg-muted, #666)",
     cursor: "pointer",
   };
 }
 
 const hiddenNoteStyle: CSSProperties = {
   fontSize: 11,
-  color: "#92400e",
-  background: "#fffbeb",
-  border: "1px solid #fde68a",
+  color: "var(--bbox-panel-warn, #92400e)",
+  background: "var(--bbox-panel-warn-bg, #fffbeb)",
+  border: "1px solid var(--bbox-panel-warn-ring, #fde68a)",
   borderRadius: 4,
   padding: "4px 8px",
   textAlign: "left",
@@ -451,7 +451,7 @@ const presetRowStyle: CSSProperties = { display: "flex", alignItems: "center", g
 const presetLabelStyle: CSSProperties = {
   fontSize: 10,
   fontWeight: 600,
-  color: "#999",
+  color: "var(--bbox-panel-fg-faint, #999)",
   textTransform: "uppercase",
   letterSpacing: 0.4,
   width: 40,
@@ -459,7 +459,7 @@ const presetLabelStyle: CSSProperties = {
 };
 const presetPillsStyle: CSSProperties = { display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" };
 const presetPillGroupStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: 2 };
-const mixedNoteStyle: CSSProperties = { fontSize: 11, color: "#b45309" };
+const mixedNoteStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-warn, #b45309)" };
 
 function presetPillButtonStyle(selected: boolean, modified?: boolean): CSSProperties {
   return {
@@ -467,9 +467,9 @@ function presetPillButtonStyle(selected: boolean, modified?: boolean): CSSProper
     borderRadius: 5,
     fontSize: 11,
     fontWeight: 600,
-    border: modified ? "1px solid #d97706" : selected ? "1px solid #333" : "1px solid #ccc",
-    background: modified ? "#fffbeb" : selected ? "#333" : "white",
-    color: modified ? "#92400e" : selected ? "white" : "#555",
+    border: modified ? "1px solid var(--bbox-panel-warn-soft, #d97706)" : selected ? "1px solid var(--bbox-panel-fg, #333)" : "1px solid var(--bbox-panel-border, #ccc)",
+    background: modified ? "var(--bbox-panel-warn-bg, #fffbeb)" : selected ? "var(--bbox-panel-fg, #333)" : "white",
+    color: modified ? "var(--bbox-panel-warn, #92400e)" : selected ? "white" : "var(--bbox-panel-fg-muted, #555)",
     cursor: "pointer",
   };
 }
@@ -478,9 +478,9 @@ const presetResetStyle: CSSProperties = {
   padding: "2px 5px",
   borderRadius: 5,
   fontSize: 11,
-  border: "1px solid #d97706",
+  border: "1px solid var(--bbox-panel-warn-soft, #d97706)",
   background: "white",
-  color: "#92400e",
+  color: "var(--bbox-panel-warn, #92400e)",
   cursor: "pointer",
   lineHeight: 1,
 };
@@ -493,7 +493,7 @@ const governedRowWrapStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 4,
-  borderBottom: "1px solid #eee",
+  borderBottom: "1px solid var(--bbox-panel-border-soft, #eee)",
 };
 
 const governedSummaryStyle: CSSProperties = {
@@ -510,16 +510,16 @@ const governedSummaryStyle: CSSProperties = {
 };
 
 const dotStyle: CSSProperties = { width: 6, height: 6, borderRadius: "50%", flexShrink: 0 };
-const governedLabelStyle: CSSProperties = { fontWeight: 500, color: "#111", fontSize: 13 };
+const governedLabelStyle: CSSProperties = { fontWeight: 500, color: "var(--bbox-panel-fg, #111)", fontSize: 13 };
 const governedValueTextStyle: CSSProperties = { fontSize: 12, fontFamily: "monospace", whiteSpace: "nowrap" };
 const paintedElsewhereMiniStyle: CSSProperties = { fontSize: 10, opacity: 0.65, fontStyle: "italic", whiteSpace: "nowrap" };
-const caretStyle: CSSProperties = { color: "#999", fontSize: 11, width: 10, flexShrink: 0 };
+const caretStyle: CSSProperties = { color: "var(--bbox-panel-fg-faint, #999)", fontSize: 11, width: 10, flexShrink: 0 };
 
 const quickClearStyle: CSSProperties = {
   fontSize: 11,
-  color: "#b91c1c",
+  color: "var(--bbox-panel-danger, #b91c1c)",
   background: "none",
-  border: "1px solid #fca5a5",
+  border: "1px solid var(--bbox-panel-danger-ring, #fca5a5)",
   borderRadius: 4,
   padding: "1px 6px",
   cursor: "pointer",
@@ -529,7 +529,7 @@ const quickClearStyle: CSSProperties = {
 const collapseLinkStyle: CSSProperties = {
   display: "block",
   fontSize: 11,
-  color: "#666",
+  color: "var(--bbox-panel-fg-muted, #666)",
   background: "none",
   border: "none",
   padding: "4px 0",
