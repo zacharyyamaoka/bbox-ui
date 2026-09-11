@@ -129,21 +129,27 @@ export function TldrawHost({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // WHY this watches for a canvas that never paints: tldraw 5.x refuses to
-  // render on a production domain without a purchased licence key. On
-  // localhost it draws and adds a watermark; on the published site it mounts
-  // its container, logs "No tldraw license key provided!", and leaves an
-  // EMPTY canvas — no `.tl-html-layer`, no shapes. A blank rectangle reads as
-  // "this build is broken", which is the one thing it is not, so say what
-  // actually happened instead. Deliberately a DOM probe rather than a check
-  // for a licence key: it catches any reason the canvas fails to paint, and
-  // it stays silent the moment tldraw does render.
+  // WHY this POLLS instead of checking once: tldraw 5.x renders only in a
+  // development environment without a purchased licence key, and the way it
+  // enforces that is not a refusal to start — it mounts, paints a perfectly
+  // normal canvas, logs "No tldraw license key provided!", and then REMOVES
+  // the canvas a few seconds later. Measured on the published site: the
+  // `.tl-html-layer` is present at 1.5s and 3s and gone by 5s. A single probe
+  // at 2.5s therefore sees a healthy canvas and reports nothing, which is how
+  // the first version of this check passed locally and still left a blank
+  // rectangle in production. A blank rectangle reads as "this build is
+  // broken", which is the one thing it is not.
+  //
+  // Polling rather than a licence-key check keeps this honest about any other
+  // reason the canvas stops painting, and it is bidirectional: the notice
+  // disappears by itself the moment a real canvas comes back.
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const check = () => {
       const frame = frameRef.current;
-      setUnpainted(Boolean(frame) && !frame!.querySelector(".tl-html-layer"));
-    }, 2500);
-    return () => clearTimeout(timer);
+      setUnpainted(frame !== null && frame.querySelector(".tl-html-layer") === null);
+    };
+    const timer = setInterval(check, 1000);
+    return () => clearInterval(timer);
   }, []);
 
   const shapeUtils = useMemo(() => SHAPE_UTILS, []);
@@ -165,7 +171,13 @@ export function TldrawHost({ children }: { children: ReactNode }) {
               justifyContent: "center",
               textAlign: "center",
               padding: 24,
-              background: "var(--color-panel, white)",
+              // WHY literal colours rather than tokens: this panel replaces a
+              // tldraw canvas that is always light-themed, and it sits inside
+              // a Storybook iframe whose own theme may be dark, so a token
+              // would resolve against the wrong surface and paint the story
+              // beneath it in an unreadable colour.
+              background: "#fcfcfc",
+              color: "#1d1d1d",
               font: "14px/1.5 system-ui, sans-serif",
             }}
           >
@@ -175,7 +187,17 @@ export function TldrawHost({ children }: { children: ReactNode }) {
               host is blank here and works on localhost. The story itself is fine — try the Plain
               DOM or React Flow host, or run this Storybook locally.
             </span>
-            <span data-slot="tldraw-unlicensed-story" style={{ marginTop: 8 }}>
+            <span
+              data-slot="tldraw-unlicensed-story"
+              style={{
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: "1px solid #e4e4e4",
+                width: "100%",
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
               {children}
             </span>
           </div>
