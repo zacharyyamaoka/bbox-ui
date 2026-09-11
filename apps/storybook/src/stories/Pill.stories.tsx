@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { controlNames, defaultArgs, presetArgs, toArgTypes, governedFieldIds } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, toArgTypes, governedFieldIds } from "@bbox-ui/schema";
 import {
   Pill,
   PILL_FIELDS,
@@ -82,7 +82,19 @@ export const Presets: Story = {
   render: (args) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
       {PILL_PRESETS.map((preset) => (
-        <Pill key={preset.id} {...(presetArgs(PILL_FIELDS, preset, PILL_PRESETS) as ComponentProps<typeof Pill>)}>
+        // WHY `...args` and not `presetArgs(...)`: this story fixes only the
+        // SELECTOR per row; everything else has to come from the Controls
+        // panel, which is Zach's own rule for a gallery ("sweep one field,
+        // take the rest from args"). Building each row from defaults instead
+        // left seven live controls — tone, lens, lensBefore, line thickness,
+        // both opacities, the label — moving nothing at all, which is the
+        // same "a control that does nothing reads as broken" complaint that
+        // started this thread.
+        <Pill
+          key={preset.id}
+          {...(args as ComponentProps<typeof Pill>)}
+          {...({ [preset.selector]: preset.id } as ComponentProps<typeof Pill>)}
+        >
           {preset.label}
         </Pill>
       ))}

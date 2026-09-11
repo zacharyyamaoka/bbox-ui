@@ -168,7 +168,7 @@ describe("presetArgs", () => {
   };
 
   it("starts from defaultArgs, then sets the selector to the preset id", () => {
-    expect(presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET])).toMatchObject({
+    expect(presetArgs(FIELDS, [WIRED_PRESET], "wired")).toMatchObject({
       state: "wired",
       visible: true,
       label: "Port",
@@ -181,18 +181,18 @@ describe("presetArgs", () => {
   // left the output byte-identical. The story must leave the governed field
   // ABSENT so the selector actually selects.
   it("leaves the preset's governed fields absent, so the preset layer resolves them", () => {
-    const args = presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]);
+    const args = presetArgs(FIELDS, [WIRED_PRESET], "wired");
     expect("count" in args).toBe(false);
   });
 
   it("is not merely omitting everything — the selector and ungoverned fields survive", () => {
-    const args = presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]);
+    const args = presetArgs(FIELDS, [WIRED_PRESET], "wired");
     expect(args.state).toBe("wired");
     expect(args.label).toBe("Port");
   });
 
   it("leaves ungoverned fields at their plain component default", () => {
-    const args = presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]);
+    const args = presetArgs(FIELDS, [WIRED_PRESET], "wired");
     expect(args.visible).toBe(true);
     expect(args.label).toBe("Port");
   });
@@ -205,7 +205,7 @@ describe("presetArgs", () => {
       governs: ["count", "visible"],
       values: { count: 3, visible: false },
     };
-    expect(presetArgs(FIELDS, multi, [multi])).toEqual({
+    expect(presetArgs(FIELDS, [multi], "wired")).toEqual({
       state: "wired",
       label: "Port",
     });
@@ -216,15 +216,40 @@ describe("presetArgs", () => {
   // preset's value, tagged as coming from the preset layer rather than from
   // an override.
   it("a governed field left absent really resolves through the preset layer", () => {
-    const args = presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]);
+    const args = presetArgs(FIELDS, [WIRED_PRESET], "wired");
     const countField = FIELDS.find((f) => f.id === "count")!;
     const trace = resolveField(countField, args, [WIRED_PRESET]);
     expect(trace.resolved).toBe(7);
     expect(trace.winner).toBe("preset");
   });
 
+  // The shape that used to compile and quietly re-arm the bug: a component
+  // with two preset families, where passing only one family's preset left the
+  // OTHER family's governed fields materialised as explicit defaults, killing
+  // its preset layer. Passing the whole array is now the only way to call it.
+  it("a second preset family on another selector keeps its own preset layer", () => {
+    const LOUD: PresetSpec = {
+      id: "loud",
+      label: "Loud",
+      selector: "variant",
+      governs: ["label"],
+      values: { label: "LOUD" },
+    };
+    const all = [WIRED_PRESET, LOUD];
+    const args = presetArgs(FIELDS, all, "wired");
+    expect("label" in args).toBe(false);
+    const labelField = FIELDS.find((f) => f.id === "label")!;
+    const trace = resolveField(labelField, { ...args, variant: "loud" }, all);
+    expect(trace.resolved).toBe("LOUD");
+    expect(trace.winner).toBe("preset");
+  });
+
+  it("rejects an id that names no preset, instead of silently doing nothing", () => {
+    expect(() => presetArgs(FIELDS, [WIRED_PRESET], "nope")).toThrow(/no preset with id "nope"/);
+  });
+
   it("and an explicit arg still beats the preset, so the escape hatch survives", () => {
-    const args = { ...presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]), count: 99 };
+    const args = { ...presetArgs(FIELDS, [WIRED_PRESET], "wired"), count: 99 };
     const countField = FIELDS.find((f) => f.id === "count")!;
     const trace = resolveField(countField, args, [WIRED_PRESET]);
     expect(trace.resolved).toBe(99);

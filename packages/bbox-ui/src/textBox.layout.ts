@@ -26,18 +26,34 @@ export const TEXT_BOX_FONT_STACKS: Record<TextBoxFont, string> = {
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
 };
 
+type FlexPlacement = "flex-start" | "center" | "flex-end";
+
+// WHY total Records rather than the ternaries these replace: deriving the
+// union from the array made widening it reach the panel automatically, which
+// is what we wanted — but a ternary has a fall-through, so a new member
+// arrived as a live segment that silently rendered `center`, typecheck clean
+// and every test green. A total Record is what makes the array the real
+// source: adding a member is a compile error until someone says where it
+// lays out. The same shape as TEXT_BOX_FONT_STACKS, which is why `font`
+// already failed loudly and these two did not.
 export const TEXT_BOX_VERTICAL_ALIGNS = ["top", "middle", "bottom"] as const;
 export type TextBoxVerticalAlign = (typeof TEXT_BOX_VERTICAL_ALIGNS)[number];
-export function textBoxAlignItems(
-  align: TextBoxVerticalAlign,
-): "flex-start" | "center" | "flex-end" {
-  return align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
+export const TEXT_BOX_ALIGN_ITEMS: Record<TextBoxVerticalAlign, FlexPlacement> = {
+  top: "flex-start",
+  middle: "center",
+  bottom: "flex-end",
+};
+export function textBoxAlignItems(align: TextBoxVerticalAlign): FlexPlacement {
+  return TEXT_BOX_ALIGN_ITEMS[align];
 }
 
 export const TEXT_BOX_HORIZONTAL_ALIGNS = ["left", "middle", "right"] as const;
 export type TextBoxHorizontalAlign = (typeof TEXT_BOX_HORIZONTAL_ALIGNS)[number];
-export function textBoxJustifyContent(
-  justify: TextBoxHorizontalAlign,
-): "flex-start" | "center" | "flex-end" {
-  return justify === "left" ? "flex-start" : justify === "right" ? "flex-end" : "center";
+export const TEXT_BOX_JUSTIFY_CONTENT: Record<TextBoxHorizontalAlign, FlexPlacement> = {
+  left: "flex-start",
+  middle: "center",
+  right: "flex-end",
+};
+export function textBoxJustifyContent(justify: TextBoxHorizontalAlign): FlexPlacement {
+  return TEXT_BOX_JUSTIFY_CONTENT[justify];
 }

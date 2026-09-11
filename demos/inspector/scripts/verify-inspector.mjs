@@ -702,6 +702,40 @@ async function verifyCascadeOnPill(client, { screenshotDir }) {
     }
   }
 
+  // --- TONE: the check whose absence let the panel contradict the pixels.
+  // `tone` is sugar that writes the OVERRIDE layer before resolution, so a
+  // non-neutral tone must show up in the trace as an override and the control
+  // must name the colour actually on screen. Neither verify script mentioned
+  // `tone` at all, and the panel was resolving raw props: with a tone set it
+  // reported the state preset winning with `primary` while the pill painted
+  // the tone's colour, and the Line Color control sat live but inert.
+  const toneRow = (panel) => panel.rows.find((r) => r.field === "tone");
+  const lineColorRow = (panel) => panel.rows.find((r) => r.field === "lineColor");
+  const panelBeforeTone = await client.evaluate(READ_PANEL);
+  if (toneRow(panelBeforeTone)) {
+    const paintBeforeTone = await client.evaluate(readPillPaintExpr(pillA.id));
+    const toned = await client.evaluate(clickDifferentSegment("tone"));
+    if (toned?.ok) {
+      await waitFor(async () => true, { timeoutMs: 300, intervalMs: 150 }).catch(() => {});
+      const paintAfterTone = await client.evaluate(readPillPaintExpr(pillA.id));
+      const panelAfterTone = await client.evaluate(READ_PANEL);
+      const row = lineColorRow(panelAfterTone);
+      if (paintAfterTone?.borderColor === paintBeforeTone?.borderColor) {
+        failures.push(
+          `cascade/Pill tone: setting a tone did not change the painted border (${paintAfterTone?.borderColor})`,
+        );
+      } else if (!row) {
+        failures.push('cascade/Pill tone: no field-trace-row for "lineColor" after setting a tone');
+      } else if (row.winnerBadgeText !== "override") {
+        failures.push(
+          `cascade/Pill tone: a tone writes the OVERRIDE layer, so "lineColor" should read winner "override"; ` +
+            `the panel says "${row.winnerBadgeText}" while the pill paints ${paintAfterTone?.borderColor}. ` +
+            `The trace is describing a subject the component does not resolve against.`,
+        );
+      }
+    }
+  }
+
   return failures;
 }
 

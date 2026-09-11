@@ -98,16 +98,24 @@ export function controlNames(fields: FieldSpec[], ids: string[]): string[] {
  */
 export function presetArgs(
   fields: FieldSpec[],
-  preset: PresetSpec,
-  // WHY this is REQUIRED rather than defaulting to `[preset]`: the default
-  // sees only this one preset, so on a component with two preset families on
-  // different selectors — which `assertDisjointPresets` allows, since it only
-  // forbids two selectors claiming the same FIELD — the other family's
-  // governed fields get materialised as explicit defaults and that family's
-  // preset layer dies exactly the way this function was fixed to stop. A
-  // required parameter makes the safe call the only call that compiles.
+  // WHY the WHOLE list plus an id, rather than a preset plus a list: making
+  // the third parameter merely required only forced callers to type
+  // something, and the obvious thing to type is `[preset]`. That is the
+  // unsafe call — with one component carrying two preset families on
+  // different selectors (legal; only two selectors claiming the same FIELD
+  // are forbidden) the other family's governed fields get materialised as
+  // explicit defaults and its preset layer dies, which is the very bug this
+  // function was fixed to stop. Taking the full array and selecting inside
+  // makes a partial list unrepresentable rather than merely discouraged.
   presets: PresetSpec[],
+  presetId: string,
 ): Record<string, FieldValue> {
+  const preset = presets.find((candidate) => candidate.id === presetId);
+  if (!preset) {
+    throw new Error(
+      `presetArgs: no preset with id "${presetId}" (have: ${presets.map((p) => p.id).join(", ") || "none"})`,
+    );
+  }
   // WHY the preset's own values are NOT spread in: doing so stored the
   // resolved paint as instance overrides, so every row of a Presets story
   // looked right while being produced entirely by the override layer. The

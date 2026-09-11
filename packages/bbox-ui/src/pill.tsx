@@ -41,6 +41,28 @@ const GOVERNED_PAINT_FIELD_IDS = governedFieldIds(PILL_PRESETS);
  */
 const PILL_TONE_COLOR_FIELD_IDS = ["lineColor", "fillColor"];
 
+/**
+ * The subject a Pill's paint is resolved against — raw props with `tone`
+ * folded in as an override.
+ *
+ * WHY this is EXPORTED rather than inlined in the component: `tone` is sugar
+ * that writes the override layer (appearance.ts's own contract), never a
+ * second preset family, since two families claiming the same paint fields is
+ * what `assertDisjointPresets` forbids. Anything that wants to know what a
+ * Pill will paint has to apply the same transform, and the product inspector
+ * did not: it resolved raw props, so with any tone set its trace reported the
+ * state preset winning with `primary` while the pill painted the tone's
+ * colour, and the Line Color control sat live but inert, claiming an override
+ * that was not on screen. One exported function is what stops the panel and
+ * the pixels drifting apart again.
+ */
+export function pillResolutionSubject(
+  props: Record<string, unknown>,
+): Record<string, unknown> {
+  const tone = (props.tone as Tone | undefined) ?? "neutral";
+  return { ...props, ...toneOverride(tone, PILL_TONE_COLOR_FIELD_IDS) };
+}
+
 /** Border width per rung — `med` (2px) matches the existing `border-2`
  * convention `Block`'s container and `Port`'s ring already use, so a
  * `state:"empty"` Pill reads as the same weight of line as everything
@@ -131,18 +153,7 @@ export function Pill({
   children,
   ...props
 }: PillProps) {
-  // `tone` is sugar that WRITES the override layer (appearance.ts's own
-  // contract) — applied to the subject BEFORE resolution, never as a
-  // second preset family (that would double-govern these same fields,
-  // which `assertDisjointPresets` correctly forbids).
-  const subject = {
-    state,
-    lineStyle,
-    lineColor,
-    fillStyle,
-    fillColor,
-    ...toneOverride(tone, PILL_TONE_COLOR_FIELD_IDS),
-  };
+  const subject = pillResolutionSubject({ state, tone, lineStyle, lineColor, fillStyle, fillColor });
 
   const lineStyleResolved = resolveField(PAINT_FIELD_BY_ID.lineStyle, subject, PILL_PRESETS)
     .resolved as PillLineStyle;

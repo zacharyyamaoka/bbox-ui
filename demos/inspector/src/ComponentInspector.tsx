@@ -35,10 +35,17 @@ export function ComponentInspector({ entry, subjects, onChange, onClearOverride 
 
       {selectors.map((selector) => {
         const presetsForSelector = entry.presets.filter((p) => p.selector === selector);
-        const reading = readFields(
-          [{ id: selector, label: selector, kind: "segments", defaultValue: "" }],
-          subjects.map((s) => s.props),
-        )[0];
+        // WHY the real field rather than a fabricated one: a synthetic spec
+        // with `defaultValue: ""` makes a subject that has never set the
+        // selector resolve to "", so no preset button highlights while the
+        // component is painting its default preset perfectly happily.
+        const selectorField = entry.fields.find((f) => f.id === selector) ?? {
+          id: selector,
+          label: selector,
+          kind: "segments" as const,
+          defaultValue: "",
+        };
+        const reading = readFields([selectorField], subjects.map((s) => s.props))[0];
         const current = reading.value === MIXED ? undefined : String(reading.value);
         return (
           <div key={selector} data-slot="preset-picker" data-selector={selector} style={presetSectionStyle}>
@@ -66,6 +73,7 @@ export function ComponentInspector({ entry, subjects, onChange, onClearOverride 
       <div data-slot="field-trace-list" style={fieldListStyle}>
         {entry.fields.map((field) => (
           <FieldTraceRow
+              toSubject={entry.toSubject}
             key={field.id}
             field={field}
             subjects={subjects}

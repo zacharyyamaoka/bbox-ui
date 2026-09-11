@@ -12,6 +12,8 @@ export interface Subject {
 }
 
 export interface FieldTraceRowProps {
+  /** See ComponentEntry.toSubject — identity when a component needs none. */
+  toSubject?: (props: Record<string, unknown>) => Record<string, unknown>;
   field: FieldSpec;
   subjects: Subject[];
   presets: PresetSpec[];
@@ -41,6 +43,7 @@ export function FieldTraceRow({
   governed,
   onChange,
   onClearOverride,
+  toSubject,
 }: FieldTraceRowProps) {
   const [expanded, setExpanded] = useState(false);
   const isGoverned = governed.has(field.id);
@@ -56,11 +59,14 @@ export function FieldTraceRow({
   // MIXED is decided on the RESOLVED values for the same reason: two pills
   // that visibly disagree must read as Mixed, and two that resolve alike must
   // not, even when one of them gets there through an override.
-  const resolved = subjects.map((s) => resolveField(field, s.props, presets).resolved);
+  // Resolve against the subject the COMPONENT resolves against, not the raw
+  // stored props — see ComponentEntry.toSubject.
+  const asSubject = toSubject ?? ((props: Record<string, unknown>) => props);
+  const resolved = subjects.map((s) => resolveField(field, asSubject(s.props), presets).resolved);
   const isMixed = resolved.length > 1 && resolved.some((v) => v !== resolved[0]);
   const single = subjects.length === 1 ? subjects[0] : null;
-  const trace = single ? resolveField(field, single.props, presets) : null;
-  const hasOwnOverride = single ? single.props[field.id] !== undefined : false;
+  const trace = single ? resolveField(field, asSubject(single.props), presets) : null;
+  const hasOwnOverride = single ? asSubject(single.props)[field.id] !== undefined : false;
   const collapsedValue: FieldValue | undefined =
     isMixed || resolved.length === 0 ? undefined : (resolved[0] as FieldValue);
 

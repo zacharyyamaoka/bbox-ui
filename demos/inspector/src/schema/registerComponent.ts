@@ -19,6 +19,18 @@ export interface ComponentEntry {
    * array) so this file never imports a specific component type.
    */
   render: (props: Record<string, unknown>) => ReactNode;
+  /**
+   * Turn a subject's raw stored props into the subject its component
+   * actually resolves against, when those differ.
+   *
+   * WHY this exists: a component may fold sugar into the override layer
+   * before resolving — Pill's `tone` does exactly that. The panel resolved
+   * raw props instead, so with a tone set the trace claimed the state preset
+   * had won while the pill painted the tone's colour, and Mixed read
+   * "not mixed" for two pills that visibly differed. The component exports
+   * the transform; this is where the panel picks it up. Defaults to identity.
+   */
+  toSubject?: (props: Record<string, unknown>) => Record<string, unknown>;
 }
 
 export function registerComponent(entry: ComponentEntry): ComponentEntry {

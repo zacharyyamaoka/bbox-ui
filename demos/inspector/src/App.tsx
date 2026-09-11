@@ -14,6 +14,7 @@ import {
   GLYPH_FIELDS,
   GLYPH_PRESETS,
   Pill,
+  pillResolutionSubject,
   PILL_FIELDS,
   PILL_PRESETS,
   Port,
@@ -141,6 +142,10 @@ const REGISTRY: ComponentEntry[] = [
     name: "Pill",
     fields: PILL_FIELDS,
     presets: PILL_PRESETS,
+    // Pill folds `tone` into the override layer before resolving, so the
+    // panel has to resolve against the same subject or its trace disagrees
+    // with the pixels. Imported, not reimplemented.
+    toSubject: pillResolutionSubject,
     render: (props) => <Pill {...(props as Record<string, never>)} />,
   }),
   registerComponent({

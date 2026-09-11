@@ -1,5 +1,28 @@
 # T1 — Six components, a rebuilt Port and Block, and the cascade underneath all of them. Pinned implementation spec.
 
+> [!IMPORTANT] AMENDMENTS SINCE PINNING — read before copying any code below.
+> Three adversarial judge rounds found defects whose reference implementations
+> are written into this document. The CODE IN THE REPOSITORY IS THE CONTRACT
+> where they disagree; the passages below are kept as the record of what was
+> believed when it was pinned.
+>
+> 1. **`presetArgs` takes the WHOLE preset array and an id**, not a single
+>    preset: `presetArgs(fields, PRESETS, preset.id)`. It must NOT spread
+>    `preset.values` — doing so stores the resolved paint as instance
+>    overrides, so the gallery looked right while the cascade was decorative
+>    and deleting every preset changed nothing.
+> 2. **`defaultArgs` takes the presets too**: `defaultArgs(FIELDS, PRESETS)`.
+>    The one-argument form still compiles and re-materialises every governed
+>    field as an explicit arg, which is the override layer, so the preset
+>    layer becomes unreachable and changing a component's state repaints
+>    nothing.
+> 3. **`controls.exclude` needs `controlNames`**, never raw field ids:
+>    Storybook matches exclusions against an argType's `name`, which is the
+>    human label, so ids silently match nothing and the control stays live.
+> 4. **A gallery story takes everything but the swept axis from `args`.**
+>    Building rows from defaults leaves every other control moving nothing.
+
+
 Status: **pinned**. Every export name, file path, and signature below is final.
 Lanes implement against this document without reading each other's code or
 coordinating live — that is the whole point of writing it down first.

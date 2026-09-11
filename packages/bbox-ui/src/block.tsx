@@ -1,4 +1,11 @@
-import { Children, isValidElement, type ComponentProps } from "react";
+import {
+  Children,
+  Fragment,
+  isValidElement,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 
 import { cn } from "./lib/utils";
 import {
@@ -62,6 +69,28 @@ const HEADER_ORIENTATION_CLASS: Record<BlockOrientation, string> = {
   vertical: "flex-col gap-1",
 };
 
+/**
+ * Is there a BlockChip anywhere in this header's children?
+ *
+ * WHY it recurses: `Children.toArray` flattens arrays but does NOT descend
+ * into Fragments, so a chip wrapped in one went undetected, the header
+ * skipped the space it reserves for it, and the chip painted over the
+ * title's last letters — exactly the collision the reservation exists to
+ * prevent. No shipped caller hits it today, but this is the last site of the
+ * same class that made PortEdge's cascade land on a Fragment and reach no
+ * Port at all.
+ */
+function containsChip(children: ReactNode): boolean {
+  return Children.toArray(children).some((child) => {
+    if (!isValidElement(child)) return false;
+    if (child.type === BlockChip) return true;
+    if (child.type === Fragment) {
+      return containsChip((child as ReactElement<{ children?: ReactNode }>).props.children);
+    }
+    return false;
+  });
+}
+
 export interface BlockHeaderProps extends ComponentProps<"header"> {
   orientation?: BlockOrientation;
 }
@@ -91,9 +120,7 @@ export function BlockHeader({
   // state "chip present" by rendering <BlockChip>; a flag would be the same
   // fact answered a second time in every adapter (the layout.ts rule: any
   // mapping that appears in both adapters is a bug).
-  const hasChip = Children.toArray(children).some(
-    (child) => isValidElement(child) && child.type === BlockChip,
-  );
+  const hasChip = containsChip(children);
   return (
     <header
       data-slot="block-header"

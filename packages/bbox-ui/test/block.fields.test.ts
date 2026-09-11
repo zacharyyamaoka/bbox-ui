@@ -1,3 +1,4 @@
+import { createElement, Fragment } from "react";
 import { describe, expect, it } from "vitest";
 import { assertDisjointPresets, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
@@ -60,6 +61,35 @@ function field(id: string) {
 const bareBlock = blockElement();
 const bareHeader = headerElement();
 const bareChip = chipElement();
+
+describe("BlockHeader chip reservation", () => {
+  // The header reserves space for a chip so it cannot paint over the title's
+  // last letters. `Children.toArray` flattens arrays but does not descend
+  // into Fragments, so a Fragment-wrapped chip went undetected and the
+  // reservation was skipped — the same class as PortEdge's cascade landing on
+  // a Fragment and reaching no Port.
+  const headerOf = (children: unknown) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (BlockHeader as any)({ children }) as { props: Record<string, unknown> };
+
+  it("sees a chip passed directly", () => {
+    expect(headerOf(createElement(BlockChip, {}, "Draft")).props["data-has-chip"]).toBe(true);
+  });
+
+  it("sees a chip wrapped in a Fragment", () => {
+    expect(
+      headerOf(createElement(Fragment, null, createElement(BlockChip, {}, "Draft"))).props[
+        "data-has-chip"
+      ],
+    ).toBe(true);
+  });
+
+  // The attribute is `hasChip || undefined`, so "no chip" is an ABSENT
+  // attribute rather than "false" — that is what keeps it off the DOM.
+  it("still reports no chip when there genuinely is none", () => {
+    expect(headerOf(createElement("span", {}, "Title")).props["data-has-chip"]).toBeUndefined();
+  });
+});
 
 describe("BLOCK_FIELDS", () => {
   it("is Block's own two props, then orientation, then the shared APPEARANCE_FIELDS bundle — T1-SPEC.md §4.8's pinned row order", () => {
