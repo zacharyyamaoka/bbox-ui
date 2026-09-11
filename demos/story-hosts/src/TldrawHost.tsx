@@ -1,6 +1,6 @@
 import "tldraw/tldraw.css";
 
-import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   HTMLContainer,
   Rectangle2d,
@@ -103,6 +103,8 @@ const SHAPE_UTILS = [StoryHostShapeUtil];
  */
 export function TldrawHost({ children }: { children: ReactNode }) {
   const editorRef = useRef<Editor | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const [unpainted, setUnpainted] = useState(false);
 
   function handleMount(editor: Editor) {
     editorRef.current = editor;
@@ -127,12 +129,57 @@ export function TldrawHost({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // WHY this watches for a canvas that never paints: tldraw 5.x refuses to
+  // render on a production domain without a purchased licence key. On
+  // localhost it draws and adds a watermark; on the published site it mounts
+  // its container, logs "No tldraw license key provided!", and leaves an
+  // EMPTY canvas — no `.tl-html-layer`, no shapes. A blank rectangle reads as
+  // "this build is broken", which is the one thing it is not, so say what
+  // actually happened instead. Deliberately a DOM probe rather than a check
+  // for a licence key: it catches any reason the canvas fails to paint, and
+  // it stays silent the moment tldraw does render.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const frame = frameRef.current;
+      setUnpainted(Boolean(frame) && !frame!.querySelector(".tl-html-layer"));
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const shapeUtils = useMemo(() => SHAPE_UTILS, []);
 
   return (
     <StoryContentContext.Provider value={children}>
-      <div data-host="tldraw" style={{ position: "relative", width: "100%", height: 420 }}>
+      <div ref={frameRef} data-host="tldraw" style={{ position: "relative", width: "100%", height: 420 }}>
         <Tldraw shapeUtils={shapeUtils} onMount={handleMount} />
+        {unpainted ? (
+          <div
+            data-slot="tldraw-unlicensed"
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              padding: 24,
+              background: "var(--color-panel, white)",
+              font: "14px/1.5 system-ui, sans-serif",
+            }}
+          >
+            <strong>The tldraw canvas needs a licence key on a public domain.</strong>
+            <span style={{ opacity: 0.7, maxWidth: 420 }}>
+              tldraw 5 renders only in a development environment without a purchased key, so this
+              host is blank here and works on localhost. The story itself is fine — try the Plain
+              DOM or React Flow host, or run this Storybook locally.
+            </span>
+            <span data-slot="tldraw-unlicensed-story" style={{ marginTop: 8 }}>
+              {children}
+            </span>
+          </div>
+        ) : null}
       </div>
     </StoryContentContext.Provider>
   );
