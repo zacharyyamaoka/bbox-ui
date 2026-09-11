@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import type { FieldValue } from "@bbox-ui/schema";
+import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
   Block,
   BlockChip,
@@ -209,39 +209,131 @@ const REGISTRY: ComponentEntry[] = [
   }),
 ];
 
-/** One seeded instance per component, plus a second for Pill/Port so
- * multi-selection/MIXED has something real to show out of the box. */
-function seedInstances(name: string): Subject[] {
-  switch (name) {
-    case "Port":
-      return [
-        { id: "port-a", props: { state: "empty", diameter: "md", textLayout: "right", children: "Port A" } },
-        { id: "port-b", props: { state: "wired", diameter: "md", textLayout: "right", children: "Port B" } },
-      ];
-    case "Pill":
-      return [
-        { id: "pill-a", props: { state: "wired", children: "Wired" } },
-        { id: "pill-b", props: { state: "valueSet", children: "Default" } },
-      ];
-    case "Glyph":
-      return [
-        { id: "glyph-a", props: { size: "xl", children: "🔍" } },
-        { id: "glyph-b", props: { size: "lg", children: "⚙️" } },
-      ];
-    case "TextBox":
-      return [{ id: "textbox-a", props: { size: "md", children: "Text Box" } }];
-    case "RowContainer":
-      return [{ id: "row-a", props: {} }];
-    case "Stack":
-      return [{ id: "stack-a", props: {} }];
-    case "PortEdge":
-      return [{ id: "edge-a", props: { edge: "left" } }];
-    case "Block":
-      return [{ id: "block-a", props: { state: "wired", tone: "neutral" } }];
-    default:
-      return [];
-  }
+/**
+ * Seed props per component, as a LIST of genuinely different variations.
+ *
+ * WHY a list rather than one instance: the bench's whole purpose is checking
+ * what a panel does when a selection disagrees — "it's good being able to
+ * check the logic of what happens when you click multiple mixed instances".
+ * If instance 2 were a copy of instance 1, nothing would ever read Mixed and
+ * the bench would prove nothing. So each variation differs in at least one
+ * field the panel actually shows.
+ *
+ * WHY the bench nonetheless opens with ONE: two instances and a pair of
+ * checkboxes on first load reads as a puzzle rather than a primitive —
+ * Zach, 2026-09-11: "I kinda wanted to see the primitive in isolation
+ * first." Isolation is the default; disagreement is one click away.
+ */
+const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
+  Port: [
+    { state: "empty", diameter: "md", textLayout: "right", children: "Port A" },
+    { state: "wired", diameter: "md", textLayout: "right", children: "Port B" },
+    { state: "received", diameter: "lg", textLayout: "right", children: "Port C" },
+    { state: "valueSet", diameter: "sm", textLayout: "below", children: "Port D" },
+  ],
+  Pill: [
+    { state: "wired", children: "Wired" },
+    { state: "valueSet", children: "Default" },
+    { state: "empty", children: "Empty" },
+    { state: "outOfFocus", children: "Dimmed" },
+  ],
+  Glyph: [
+    { size: "xl", children: "🔍" },
+    { size: "lg", children: "⚙️" },
+    { size: "md", children: "◆" },
+  ],
+  TextBox: [
+    { size: "md", children: "Text Box" },
+    { size: "lg", children: "Bigger text" },
+    { size: "sm", children: "Small print" },
+  ],
+  RowContainer: [{}, { gap: "lg" }, { align: "center" }],
+  Stack: [{}, { gap: "lg" }],
+  PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],
+  Block: [
+    { state: "wired", tone: "neutral" },
+    { state: "empty", tone: "accent" },
+    { state: "received", tone: "neutral" },
+  ],
+};
+
+interface Instance extends Subject {
+  /** Which registered component this instance is. Always the active component
+   *  in a focused bench; the whole point of the mixed bench is that it varies. */
+  type: string;
 }
+
+function makeInstance(type: string, index: number, uid: number): Instance {
+  const variants = SEED_VARIANTS[type] ?? [{}];
+  return {
+    id: `${type.toLowerCase()}-${uid}`,
+    type,
+    props: { ...variants[index % variants.length] },
+  };
+}
+
+/**
+ * The cross-type bench. Zach, 2026-09-11: "a free flowing one where you can
+ * add instances of any types of primitives so that you're able to check the
+ * logic of what happens when you multiselect on various different types...
+ * to see what are the things that you're able to update across all of them."
+ */
+const MIXED_BENCH = "Mixed bench";
+
+/**
+ * The fields a panel may show when the selection spans several components.
+ *
+ * Intersection by id is not enough. Two components can both call a field
+ * `size` and mean different option sets, and offering one control over both
+ * would write a value that is legal for one and nonsense for the other. So a
+ * field survives only when its id, kind AND option set all agree; anything
+ * that merely shares a name is reported as excluded rather than silently
+ * dropped, because "what can I edit across all of these" is the question the
+ * bench exists to answer and a quiet omission is a wrong answer to it.
+ */
+function sharedFields(entries: ComponentEntry[]): { fields: FieldSpec[]; excluded: string[] } {
+  if (entries.length === 0) return { fields: [], excluded: [] };
+  const [first, ...rest] = entries;
+  const signature = (f: FieldSpec) =>
+    `${f.kind}|${(f.options ?? []).map((o) => String(o.value)).join(",")}`;
+
+  const fields: FieldSpec[] = [];
+  const excluded: string[] = [];
+
+  for (const field of first.fields) {
+    // WHY two separate reasons and not one: "Stack has no State field" and
+    // "Glyph's Size means something else" are different facts, and collapsing
+    // them into one phrase told the reader the opposite of the truth in the
+    // common case. A bench that explains why a field is missing has to
+    // explain it correctly or it is worse than saying nothing.
+    const absentFrom = rest.filter((e) => !e.fields.some((o) => o.id === field.id));
+    const differsOn = rest.filter((e) =>
+      e.fields.some((o) => o.id === field.id && signature(o) !== signature(field)),
+    );
+    if (absentFrom.length === 0 && differsOn.length === 0) fields.push(field);
+    else if (differsOn.length > 0)
+      excluded.push(`${field.label} (different options on ${differsOn.map((e) => e.name).join(", ")})`);
+    else excluded.push(`${field.label} (not on ${absentFrom.map((e) => e.name).join(", ")})`);
+  }
+
+  const firstIds = new Set(first.fields.map((f) => f.id));
+  const seen = new Set(excluded);
+  for (const entry of rest) {
+    for (const field of entry.fields) {
+      if (firstIds.has(field.id)) continue;
+      const line = `${field.label} (only on ${entry.name})`;
+      if (!seen.has(line)) {
+        seen.add(line);
+        excluded.push(line);
+      }
+    }
+  }
+  return { fields, excluded };
+}
+
+/** The excluded list is for orientation, not for reading end to end — Port and
+ *  Pill alone already produce seven entries. Show enough to see the shape. */
+const EXCLUDED_SHOWN = 5;
 
 /** WHY localStorage and not a URL flag: a prototype gated behind a query
  * string Zach has to remember and type is one he will not switch to, and it
@@ -283,15 +375,37 @@ function useMeasuredHeight<T extends HTMLElement>() {
   return { ref, height };
 }
 
+/** Every focused bench opens with exactly ONE instance. The mixed bench opens
+ *  with two DIFFERENT components, because a bench of one type is just the
+ *  focused view and would say nothing about the cross-type question it exists
+ *  to answer. Both pieces of state read from this one seed, so the selection
+ *  can never start out pointing at an instance that is not there. */
+const INITIAL_BENCHES: Record<string, Instance[]> = (() => {
+  const seeded: Record<string, Instance[]> = {};
+  let n = 0;
+  for (const entry of REGISTRY) seeded[entry.name] = [makeInstance(entry.name, 0, n++)];
+  seeded[MIXED_BENCH] = [makeInstance("Port", 0, n++), makeInstance("Pill", 0, n++)];
+  return seeded;
+})();
+
+const INITIAL_UID = Object.values(INITIAL_BENCHES).reduce((n, list) => n + list.length, 0);
+
 export default function App() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
   const [variantId, setVariantId] = useState<string>(() => findVariant(readStoredVariant()).id);
-  const [instancesByComponent, setInstancesByComponent] = useState<Record<string, Subject[]>>(() =>
-    Object.fromEntries(REGISTRY.map((entry) => [entry.name, seedInstances(entry.name)])),
-  );
-  const [selectedByComponent, setSelectedByComponent] = useState<Record<string, Set<string>>>(() =>
+  const uid = useRef(INITIAL_UID);
+
+  const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
-      REGISTRY.map((entry) => [entry.name, new Set(seedInstances(entry.name).map((s) => s.id))]),
+      Object.entries(INITIAL_BENCHES).map(([name, list]) => [
+        name,
+        list.map((i) => ({ ...i, props: { ...i.props } })),
+      ]),
+    ),
+  );
+  const [selectedIdsByBench, setSelectedIdsByBench] = useState<Record<string, Set<string>>>(() =>
+    Object.fromEntries(
+      Object.entries(INITIAL_BENCHES).map(([name, list]) => [name, new Set(list.map((i) => i.id))]),
     ),
   );
 
@@ -306,13 +420,31 @@ export default function App() {
     }
   }, [variantId]);
 
-  const entry = REGISTRY.find((e) => e.name === activeName)!;
-  const instances = instancesByComponent[activeName];
-  const selectedIds = selectedByComponent[activeName];
+  const isMixed = activeName === MIXED_BENCH;
+  const instances = benches[activeName] ?? [];
+  const selectedIds = selectedIdsByBench[activeName] ?? new Set<string>();
   const selected = instances.filter((i) => selectedIds.has(i.id));
 
+  const entryFor = (name: string) => REGISTRY.find((e) => e.name === name)!;
+  const selectedTypes = Array.from(new Set(selected.map((i) => i.type)));
+  const selectedEntries = selectedTypes.map(entryFor);
+
+  // One type selected — even inside the mixed bench — behaves exactly like the
+  // focused view: full fields, its own presets, its own resolution subject.
+  // Only a genuine multi-type selection narrows to the shared set.
+  const single = selectedEntries.length === 1 ? selectedEntries[0] : null;
+  const shared = selectedEntries.length > 1 ? sharedFields(selectedEntries) : null;
+  const panelFields: FieldSpec[] = single ? single.fields : (shared?.fields ?? []);
+  const panelPresets = single ? single.presets : [];
+  const panelToSubject = single ? single.toSubject : undefined;
+  const panelName = isMixed
+    ? selectedTypes.length === 0
+      ? MIXED_BENCH
+      : selectedTypes.join(" + ")
+    : activeName;
+
   function toggleSelected(id: string) {
-    setSelectedByComponent((prev) => {
+    setSelectedIdsByBench((prev) => {
       const next = new Set(prev[activeName]);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -320,8 +452,36 @@ export default function App() {
     });
   }
 
+  function addInstance(type: string) {
+    const id = `${type.toLowerCase()}-${uid.current}`;
+    setBenches((prev) => {
+      const bench = prev[activeName] ?? [];
+      const sameType = bench.filter((i) => i.type === type).length;
+      return { ...prev, [activeName]: [...bench, makeInstance(type, sameType, uid.current)] };
+    });
+    // A newly added instance arrives SELECTED. Adding one is how you ask for a
+    // multi-selection; making you then tick it would be a second step for the
+    // thing you just asked for.
+    setSelectedIdsByBench((prev) => ({ ...prev, [activeName]: new Set([...(prev[activeName] ?? []), id]) }));
+    uid.current += 1;
+  }
+
+  function removeLastInstance() {
+    const bench = benches[activeName] ?? [];
+    if (bench.length <= 1) return;
+    const doomed = bench[bench.length - 1];
+    setBenches((prev) => ({ ...prev, [activeName]: prev[activeName].slice(0, -1) }));
+    setSelectedIdsByBench((prev) => {
+      const next = new Set(prev[activeName]);
+      next.delete(doomed.id);
+      // Never leave the panel with nothing selected because a row vanished.
+      if (next.size === 0 && bench.length >= 2) next.add(bench[bench.length - 2].id);
+      return { ...prev, [activeName]: next };
+    });
+  }
+
   function applyToSelected(fieldId: string, value: FieldValue) {
-    setInstancesByComponent((prev) => ({
+    setBenches((prev) => ({
       ...prev,
       [activeName]: prev[activeName].map((instance) =>
         selectedIds.has(instance.id)
@@ -332,7 +492,7 @@ export default function App() {
   }
 
   function clearOverride(fieldId: string) {
-    setInstancesByComponent((prev) => ({
+    setBenches((prev) => ({
       ...prev,
       [activeName]: prev[activeName].map((instance) => {
         if (!selectedIds.has(instance.id)) return instance;
@@ -342,6 +502,11 @@ export default function App() {
       }),
     }));
   }
+
+  // WHY the checkbox is conditional: with one instance there is nothing to
+  // choose between, so a tickbox is a control whose only reachable state is
+  // the one it is already in. It appears the moment a second instance does.
+  const showCheckboxes = instances.length > 1;
 
   return (
     <div data-slot="product-inspector-demo" style={rootStyle}>
@@ -359,6 +524,7 @@ export default function App() {
                 {e.name}
               </option>
             ))}
+            <option value={MIXED_BENCH}>{MIXED_BENCH} —</option>
           </select>
         </label>
 
@@ -389,29 +555,126 @@ export default function App() {
 
       <div style={mainRowStyle}>
         <div style={previewColumnStyle}>
-          <div style={previewHeaderStyle}>Instances</div>
+          <div style={previewHeaderStyle}>
+            {isMixed ? "Bench" : "Instances"}
+          </div>
+
           {instances.map((instance) => (
-            <label key={instance.id} data-slot="subject-row" data-subject-id={instance.id} style={subjectRowStyle}>
-              <input
-                type="checkbox"
-                checked={selectedIds.has(instance.id)}
-                onChange={() => toggleSelected(instance.id)}
-              />
-              <div style={previewBoxStyle}>{entry.render(instance.props)}</div>
+            <label
+              key={instance.id}
+              data-slot="subject-row"
+              data-subject-id={instance.id}
+              data-subject-type={instance.type}
+              style={subjectRowStyle}
+            >
+              {showCheckboxes && (
+                <input
+                  type="checkbox"
+                  data-slot="subject-checkbox"
+                  checked={selectedIds.has(instance.id)}
+                  onChange={() => toggleSelected(instance.id)}
+                />
+              )}
+              {isMixed && <span style={typeTagStyle}>{instance.type}</span>}
+              <div style={previewBoxStyle}>{entryFor(instance.type).render(instance.props)}</div>
             </label>
           ))}
+
+          {isMixed ? (
+            <div data-slot="bench-adder" style={adderRowStyle}>
+              {REGISTRY.map((e) => (
+                <button
+                  key={e.name}
+                  type="button"
+                  data-slot="add-type"
+                  data-type={e.name}
+                  onClick={() => addInstance(e.name)}
+                  style={adderChipStyle}
+                  title={`Add a ${e.name} to the bench`}
+                >
+                  + {e.name}
+                </button>
+              ))}
+              {instances.length > 1 && (
+                <button type="button" data-slot="instance-minus" onClick={removeLastInstance} style={stepperButtonStyle} title="Remove the last one">
+                  −
+                </button>
+              )}
+            </div>
+          ) : (
+            <div data-slot="instance-stepper" style={stepperRowStyle}>
+              <button
+                type="button"
+                data-slot="instance-minus"
+                onClick={removeLastInstance}
+                disabled={instances.length <= 1}
+                style={stepperButtonStyle}
+              >
+                −
+              </button>
+              <span data-slot="instance-count" style={stepperCountStyle}>
+                {instances.length} {instances.length === 1 ? "instance" : "instances"}
+              </span>
+              <button
+                type="button"
+                data-slot="instance-plus"
+                onClick={() => addInstance(activeName)}
+                style={stepperButtonStyle}
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
 
-        <div ref={panelRef} data-slot="panel-variant-host" data-variant={variant.id}>
-          <variant.Panel
-            componentName={entry.name}
-            fields={entry.fields}
-            presets={entry.presets}
-            subjects={selected}
-            toSubject={entry.toSubject}
-            onChange={applyToSelected}
-            onClearOverride={clearOverride}
-          />
+        <div style={panelColumnStyle}>
+          {shared && (
+            <div data-slot="shared-field-note" style={sharedNoteStyle}>
+              <strong>{selectedTypes.join(" + ")}</strong> —{" "}
+              {shared.fields.length === 0 ? (
+                <>nothing can be edited across all {selected.length}: these types have no field in common.</>
+              ) : (
+                <>
+                  {shared.fields.length} field{shared.fields.length === 1 ? "" : "s"} can be edited
+                  across all {selected.length}.
+                </>
+              )}
+              {shared.excluded.length > 0 && (
+                <span style={{ color: "#8a6a3a" }}>
+                  {" "}
+                  Not shared: {shared.excluded.slice(0, EXCLUDED_SHOWN).join(", ")}
+                  {shared.excluded.length > EXCLUDED_SHOWN
+                    ? `, and ${shared.excluded.length - EXCLUDED_SHOWN} more.`
+                    : "."}
+                </span>
+              )}
+            </div>
+          )}
+          <div ref={panelRef} data-slot="panel-variant-host" data-variant={variant.id}>
+            {selected.length > 0 && panelFields.length === 0 ? (
+              // WHY its own card rather than the panel rendering an empty list:
+              // a bordered box with a header and nothing under it reads as a
+              // bug. The bench's answer to "what can I change across these?"
+              // is sometimes "nothing", and it has to say so out loud.
+              <div data-slot="no-shared-fields" style={emptyPanelStyle}>
+                <strong>{selectedTypes.join(" + ")}</strong>
+                <p style={{ margin: "6px 0 0" }}>
+                  No field is common to all {selected.length} selected instances, so there is
+                  nothing a single control could write. Deselect a type to get a panel back.
+                </p>
+              </div>
+            ) : (
+            <variant.Panel
+              componentName={panelName}
+              fields={panelFields}
+              presets={panelPresets}
+              subjects={selected}
+              toSubject={panelToSubject}
+              onChange={applyToSelected}
+              onClearOverride={clearOverride}
+            />
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -425,6 +688,15 @@ const selectStyle: CSSProperties = { padding: "6px 10px", borderRadius: 6, borde
 const heightBadgeStyle: CSSProperties = { marginLeft: "auto", alignSelf: "flex-end", fontSize: 12, fontFamily: "ui-monospace, monospace", color: "#666", border: "1px solid #ddd", borderRadius: 999, padding: "4px 10px" };
 const blurbStyle: CSSProperties = { margin: 0, maxWidth: 760, fontSize: 13, lineHeight: 1.5, color: "#555" };
 const mainRowStyle: CSSProperties = { display: "flex", gap: 32, alignItems: "flex-start" };
+const panelColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 10 };
+const emptyPanelStyle: CSSProperties = { width: 420, border: "1px solid #e0e0e6", borderRadius: 10, background: "#fff", padding: "18px 20px", fontSize: 13, color: "#555", lineHeight: 1.55 };
+const sharedNoteStyle: CSSProperties = { maxWidth: 460, fontSize: 12, lineHeight: 1.5, color: "#555", background: "#fbf7f0", border: "1px solid #efe2cf", borderRadius: 8, padding: "8px 12px" };
+const stepperRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, marginTop: 4 };
+const adderRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 8, maxWidth: 260 };
+const adderChipStyle: CSSProperties = { border: "1px dashed #c8c8d0", background: "transparent", color: "#555", borderRadius: 999, padding: "3px 9px", fontSize: 11, cursor: "pointer" };
+const stepperButtonStyle: CSSProperties = { width: 24, height: 24, lineHeight: "20px", borderRadius: 6, border: "1px solid #ccc", background: "#fff", cursor: "pointer", fontSize: 15, padding: 0 };
+const stepperCountStyle: CSSProperties = { fontSize: 12, color: "#666", minWidth: 74, textAlign: "center" };
+const typeTagStyle: CSSProperties = { fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#999", minWidth: 62 };
 const previewColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 12, minWidth: 260 };
 const previewHeaderStyle: CSSProperties = { fontWeight: 600, color: "#666", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 };
 const subjectRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 12 };
