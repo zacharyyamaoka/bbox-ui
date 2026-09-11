@@ -33,6 +33,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter bbox-storybook run build-storybook
+      - run: pnpm --filter demo-port-inspector run build
+      # The inspector demo ships beside the Storybook, at /inspector/.
+      - run: cp -r demos/port-inspector/dist apps/storybook/storybook-static/inspector
       # Storybook is a Vite bundle with `_`-prefixed asset paths; without this
       # GitHub runs it through Jekyll and those assets 404.
       - run: touch apps/storybook/storybook-static/.nojekyll
