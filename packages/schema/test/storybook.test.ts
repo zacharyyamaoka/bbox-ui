@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { defaultArgs, toArgTypes } from "../src/storybook";
+import { defaultArgs, presetArgs, toArgTypes } from "../src/storybook";
 import type { FieldSpec } from "../src/field";
+import type { PresetSpec } from "../src/resolve";
 
 const FIELDS: FieldSpec[] = [
   {
@@ -42,6 +43,50 @@ describe("defaultArgs", () => {
       state: "empty",
       count: 1,
       visible: true,
+      label: "Port",
+    });
+  });
+});
+
+describe("presetArgs", () => {
+  const WIRED_PRESET: PresetSpec = {
+    id: "wired",
+    label: "Wired",
+    selector: "state",
+    governs: ["count"],
+    values: { count: 7 },
+  };
+
+  it("starts from defaultArgs, then sets the selector to the preset id", () => {
+    expect(presetArgs(FIELDS, WIRED_PRESET)).toMatchObject({
+      state: "wired",
+      visible: true,
+      label: "Port",
+    });
+  });
+
+  it("spells out the preset's governed values explicitly, overriding the default", () => {
+    expect(presetArgs(FIELDS, WIRED_PRESET).count).toBe(7);
+  });
+
+  it("leaves ungoverned fields at their plain component default", () => {
+    const args = presetArgs(FIELDS, WIRED_PRESET);
+    expect(args.visible).toBe(true);
+    expect(args.label).toBe("Port");
+  });
+
+  it("a preset governing multiple fields sets all of them", () => {
+    const multi: PresetSpec = {
+      id: "wired",
+      label: "Wired",
+      selector: "state",
+      governs: ["count", "visible"],
+      values: { count: 3, visible: false },
+    };
+    expect(presetArgs(FIELDS, multi)).toEqual({
+      state: "wired",
+      count: 3,
+      visible: false,
       label: "Port",
     });
   });
