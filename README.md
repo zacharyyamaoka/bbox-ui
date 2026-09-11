@@ -269,12 +269,30 @@ node demos/drive-playground-detach.mjs  # headless: seed Block+Port, detach via 
                                         # assert props deep-equal the originals
 ```
 
-## Registry
+## Registry — the only distribution channel
+
+**bbox-ui is not published to npm, and will not be.** There is no
+`npm install bbox-ui` and no `@bbox-ui/core` on the registry. You copy the
+source into your project and own it outright — that is the whole point, and it
+is why `packages/*` are all `private: true`.
+
+```bash
+npx shadcn@latest add https://bbox-ui.com/r/port.json   # from the site
+npx shadcn@latest add zacharyyamaoka/bbox-ui/port       # or straight from GitHub
+```
 
 `registry.json` follows the
 [shadcn registry schema](https://ui.shadcn.com/docs/registry/registry-json);
 `pnpm registry:build` (shadcn `build`) emits servable items to `public/r/`:
 `port`, `block`, `bbox-layout`, `block-node-reactflow`, `block-shape-tldraw`.
+
+Installed components ship `layout.ts` and `lib/utils.ts` as siblings, so they
+compile with no further wiring. Only `clsx` and `tailwind-merge` are runtime
+dependencies.
+
+**Known gap:** `block-node-reactflow` and `block-shape-tldraw` are in the
+registry but not installable — they import `@bbox-ui/core` as a package, which
+is unpublished. They are reference implementations until that is resolved.
 
 ## Develop
 

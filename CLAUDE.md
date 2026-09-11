@@ -21,6 +21,12 @@ afternoon instead of a fork.
 
 ## The registry is the product
 
+**There is exactly one distribution channel, and npm is not it.** Every
+`packages/*` is `private: true` on purpose. Never add an `npm install` line for
+bbox-ui to docs, llms.txt, or a component page — it would be a lie. If
+publishing ever becomes the right call it is Zach's decision, not a convenience
+fix for the adapters.
+
 `registry.json` at the root is how people consume this. `npx shadcn@latest add
 zacharyyamaoka/bbox-ui/port` works today with no website at all — shadcn takes a
 GitHub repo as a registry directly.
@@ -45,9 +51,16 @@ exiting 0 proves nothing — this repo already shipped a registry that installed
 cleanly and then failed to compile.
 
 **The two adapters cannot be installed by anyone.** `block-node-reactflow` and
-`block-shape-tldraw` import `@bbox-ui/core`, which is `private: true` and has
-never been published. Retargeting cannot fix it; it needs the package on npm or
-a source change. That is Zach's call — do not paper over it.
+`block-shape-tldraw` import `@bbox-ui/core`, which is `private: true` and
+unpublished. Retargeting cannot fix it — shadcn copies source verbatim, so the
+import has to already say something a consumer can resolve.
+
+With npm ruled out, the only remaining fix is a **source change**: have the
+adapters import the copied siblings (`./block`) rather than the workspace
+package, and declare `block` as a `registryDependency` so it lands beside them.
+That needs the repo to resolve the same specifier, so it is real work, not a
+registry.json tweak. Until then they are reference implementations, and the docs
+say so. Do not paper over it.
 
 ## The website — apps/docs
 
