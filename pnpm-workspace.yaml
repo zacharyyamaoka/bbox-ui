@@ -1,11 +1,13 @@
 packages:
   - packages/*
   - apps/playground
+  - apps/storybook
   - demos/reactflow
   - demos/tldraw
   - demos/scene
   - demos/compare
   - demos/compare-view
+  - demos/story-hosts
 allowBuilds:
   esbuild: true
   msw: false
