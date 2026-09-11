@@ -27,6 +27,16 @@ export type StackMemberWidth = (typeof STACK_MEMBER_WIDTHS)[number];
 export const STACK_INSET_BACKGROUNDS = ["white", "soft-gray"] as const;
 export type StackInsetBackground = (typeof STACK_INSET_BACKGROUNDS)[number];
 
+const MEMBER_WIDTH_CLASS: Record<StackMemberWidth, string> = {
+  fill: "",
+  own: "items-start",
+};
+
+const INSET_BACKGROUND_CLASS: Record<StackInsetBackground, string> = {
+  white: "",
+  "soft-gray": "bg-muted",
+};
+
 export interface StackProps extends ComponentProps<"div"> {
   gap?: number;
   gutter?: number;
@@ -57,10 +67,14 @@ export function Stack({
       data-inset-background={insetBackground}
       className={cn(
         "flex w-full flex-col",
-        // "fill" is flexbox's own default cross-axis stretch — "own" opts
-        // a member back out to its intrinsic width.
-        memberWidth === "own" && "items-start",
-        insetBackground === "soft-gray" && "bg-muted",
+        // WHY total lookups and not `=== "own" && …`: a boolean branch renders
+        // every unknown member as the default, so widening either union ships
+        // a live panel segment that silently does nothing, typecheck clean.
+        // A Record is a compile error until someone says what the new member
+        // paints. "fill" is flexbox's own default cross-axis stretch; "own"
+        // opts a member back out to its intrinsic width.
+        MEMBER_WIDTH_CLASS[memberWidth],
+        INSET_BACKGROUND_CLASS[insetBackground],
         className,
       )}
       style={{ gap, padding: gutter, ...style }}

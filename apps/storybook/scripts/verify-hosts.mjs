@@ -407,6 +407,46 @@ async function verifyCascadePresetsStory({ screenshotDir }) {
       );
     }
 
+    // --- 2b. An UNGOVERNED control must move every row of the gallery.
+    // Reverting this story to build each row from defaults instead of `args`
+    // left seven live controls moving nothing, and every other assertion here
+    // still passed — the summary line asserted "Controls drove every one of
+    // them live" while it was false. Driving one ungoverned control and
+    // comparing the painted rows is what makes that claim mean something.
+    const borderWidths = async () =>
+      JSON.parse(
+        await client.evaluate(`(() => {
+          const doc = document.querySelector('#storybook-preview-iframe').contentDocument;
+          return JSON.stringify(
+            Array.from(doc.querySelectorAll('[data-slot="pill"]')).map(
+              (el) => doc.defaultView.getComputedStyle(el).borderWidth,
+            ),
+          );
+        })()`),
+      );
+    const widthsBefore = await borderWidths();
+    await client.send("Page.navigate", {
+      url: `http://127.0.0.1:${PORT}/?path=/story/${storyId}&globals=host:dom&viewMode=story&args=lineThickness:thick`,
+    });
+    await waitFor(async () =>
+      (await client.evaluate(`(() => {
+        const doc = document.querySelector('#storybook-preview-iframe')?.contentDocument;
+        return doc ? doc.querySelectorAll('[data-slot="pill"]').length : 0;
+      })()`)) || 0,
+    );
+    const widthsAfter = await borderWidths();
+    const movedRows = widthsAfter.filter((w, i) => w !== widthsBefore[i]).length;
+    // The `hidden` preset paints no border at all, so it legitimately cannot
+    // move; every other row must.
+    if (movedRows < widthsBefore.length - 1) {
+      failures.push(
+        `presets story: an UNGOVERNED control (lineThickness) moved only ${movedRows} of ` +
+          `${widthsBefore.length} rows (${JSON.stringify(widthsBefore)} -> ${JSON.stringify(widthsAfter)}). ` +
+          `A gallery must take everything but its swept axis from args; rows built from defaults ` +
+          `leave every other control live and inert.`,
+      );
+    }
+
     // --- 3. THE CHECK THAT WOULD HAVE CAUGHT THE SHIPPED DEFECT.
     // Everything above passes even when the cascade is dead, because it only
     // compares presets against each other. Until this was added, the story

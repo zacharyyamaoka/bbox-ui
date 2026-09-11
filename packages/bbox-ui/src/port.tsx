@@ -138,6 +138,22 @@ export function portDotStyle({
 /* own measured boxes, re-expressed as real DOM (see the module doc).  */
 /* ------------------------------------------------------------------ */
 
+// WHY total lookups and not ternaries: a ternary has a fall-through, so
+// widening either union ships a live panel segment that renders exactly like
+// the default, typecheck clean and every test green. A Record over the real
+// union is a compile error until someone says what the new member looks like.
+const REVEAL_CLASS: Record<PortReveal, string> = {
+  always: "",
+  onHover: "opacity-0 transition-opacity hover:opacity-100 focus-within:opacity-100",
+};
+
+type VariadicCollar = { ink: string; borderStyle: "solid" | "dotted"; opacity: number };
+const VARIADIC_COLLAR: Record<Exclude<PortDecoration, "none" | "mutates">, VariadicCollar> = {
+  "variadic-positional": { ink: "var(--bbox-success)", borderStyle: "solid", opacity: 0.5 },
+  "variadic-keyword": { ink: "var(--bbox-warning)", borderStyle: "solid", opacity: 0.5 },
+  "variadic-bundled": { ink: "var(--bbox-success)", borderStyle: "dotted", opacity: 0.78 },
+};
+
 function PortDecorationRing({
   decoration,
 }: {
@@ -163,9 +179,7 @@ function PortDecorationRing({
   // single pseudo-element for exactly this reason). Positional reads as
   // the plain collar; keyword swaps the ink to warning; bundled dots the
   // stroke and lifts the opacity — PORT-SPEC.md §3f's donor table.
-  const ink = decoration === "variadic-keyword" ? "var(--bbox-warning)" : "var(--bbox-success)";
-  const borderStyle = decoration === "variadic-bundled" ? "dotted" : "solid";
-  const opacity = decoration === "variadic-bundled" ? 0.78 : 0.5;
+  const { ink, borderStyle, opacity } = VARIADIC_COLLAR[decoration];
   return (
     <span
       data-slot="port-dot-decoration"
@@ -574,7 +588,7 @@ export function Port({
         // triggered by what the port IS). Standing in for "the container
         // is hovered" with self-hover, since a standalone specimen has
         // no outer container to key off.
-        reveal === "onHover" && "opacity-0 transition-opacity hover:opacity-100 focus-within:opacity-100",
+        REVEAL_CLASS[reveal],
         className,
       )}
       style={{ ...flexStyle, ...style }}

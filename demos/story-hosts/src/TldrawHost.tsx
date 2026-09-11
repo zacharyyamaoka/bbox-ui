@@ -1,4 +1,5 @@
 import "tldraw/tldraw.css";
+import "./TldrawHost.css";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -161,6 +162,7 @@ export function TldrawHost({ children }: { children: ReactNode }) {
         {unpainted ? (
           <div
             data-slot="tldraw-unlicensed"
+            className="bbox-tldraw-unlicensed"
             style={{
               position: "absolute",
               inset: 0,
@@ -171,18 +173,7 @@ export function TldrawHost({ children }: { children: ReactNode }) {
               justifyContent: "center",
               textAlign: "center",
               padding: 24,
-              // WHY the SAME tokens the story's own ink uses: an earlier
-              // version pinned this light (#fcfcfc on #1d1d1d) reasoning that
-              // it replaces an always-light tldraw canvas. But the canvas is
-              // GONE by the time this paints, and the story rendered below
-              // still takes its ink from these tokens, which follow
-              // prefers-color-scheme. Pinning only the background left near
-              // white ink on a near white panel — measured 1.04:1, against a
-              // 4.5:1 floor, with the Empty, Out of Focus and Hidden pills
-              // simply invisible. The panel's whole message is that the story
-              // is fine, so the story has to be the readable part.
-              background: "var(--color-background, #fcfcfc)",
-              color: "var(--color-foreground, #1d1d1d)",
+              // Colours live in TldrawHost.css — see its header for why.
               font: "14px/1.5 system-ui, sans-serif",
             }}
           >
@@ -194,10 +185,11 @@ export function TldrawHost({ children }: { children: ReactNode }) {
             </span>
             <span
               data-slot="tldraw-unlicensed-story"
+              className="bbox-tldraw-unlicensed__rule"
               style={{
                 marginTop: 16,
                 paddingTop: 16,
-                borderTop: "1px solid var(--color-border, #e4e4e4)",
+
                 width: "100%",
                 display: "flex",
                 justifyContent: "center",

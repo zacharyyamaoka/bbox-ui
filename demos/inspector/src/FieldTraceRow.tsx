@@ -66,7 +66,15 @@ export function FieldTraceRow({
   const isMixed = resolved.length > 1 && resolved.some((v) => v !== resolved[0]);
   const single = subjects.length === 1 ? subjects[0] : null;
   const trace = single ? resolveField(field, asSubject(single.props), presets) : null;
-  const hasOwnOverride = single ? asSubject(single.props)[field.id] !== undefined : false;
+  // WHY the RAW props and not the transformed subject: the clear button
+  // deletes a STORED override, and the store holds raw props. Reading the
+  // transformed subject made a tone's synthesised value look like a stored
+  // one, so the row offered "✕ override" for a value the user never typed —
+  // clicking it changed nothing, and when they HAD stored an override it
+  // silently deleted that instead, with the tone still painting so the row
+  // looked unchanged. The read path has to agree with the write path; only
+  // resolution uses the transformed subject.
+  const hasOwnOverride = single ? single.props[field.id] !== undefined : false;
   const collapsedValue: FieldValue | undefined =
     isMixed || resolved.length === 0 ? undefined : (resolved[0] as FieldValue);
 

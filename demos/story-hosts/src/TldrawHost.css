@@ -1,0 +1,38 @@
+/*
+ * The unlicensed-tldraw panel's own colours.
+ *
+ * WHY a real stylesheet with a media query instead of inline styles: the
+ * previous attempt set `background: var(--color-background)` inline and was a
+ * complete no-op. Those custom properties do not exist at that element —
+ * bbox-ui declares them inside Tailwind v4's `@theme inline`, which does not
+ * emit runtime custom properties, and tldraw's own copies live under
+ * `.tl-container`, while this panel is a SIBLING of <Tldraw>. Both fallbacks
+ * therefore won every time, the panel stayed pinned light, and dark mode
+ * measured 1.04:1 with the Empty, Out of Focus and Hidden pills unreadable.
+ * The fix before that pinned literal light colours and had the same effect.
+ *
+ * A stylesheet can answer `prefers-color-scheme` directly, which is the one
+ * thing an inline style cannot do, and the story's own ink follows exactly
+ * that query. `color-scheme` is set too so form controls and scrollbars match.
+ */
+.bbox-tldraw-unlicensed {
+  background: #fcfcfc;
+  color: #1d1d1d;
+  color-scheme: light;
+}
+
+.bbox-tldraw-unlicensed .bbox-tldraw-unlicensed__rule {
+  border-top: 1px solid #e4e4e4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .bbox-tldraw-unlicensed {
+    background: #1c1c1c;
+    color: #f2f2f2;
+    color-scheme: dark;
+  }
+
+  .bbox-tldraw-unlicensed .bbox-tldraw-unlicensed__rule {
+    border-top: 1px solid #3a3a3a;
+  }
+}

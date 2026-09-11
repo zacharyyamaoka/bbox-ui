@@ -147,11 +147,19 @@ export const AllTextLayouts: Story = {
 };
 
 /**
- * The cascade's whole point, made visible: two Ports take PortEdge's
- * default (derived from `edge`); the middle one sets its own `textLayout`
- * and always wins.
+ * The cascade's whole point, made visible: two Ports take whatever PortEdge
+ * is cascading; the middle one sets its own `textLayout` and always wins.
+ *
+ * Two corrections against what this said before. It hard-coded `edge="top"`
+ * AFTER spreading `args`, so the Edge control was live and moved nothing —
+ * the only such site in the eight story files. And its claim that the two
+ * outer Ports show the edge-DERIVED default was untrue: `textLayout` is an
+ * ordinary arg with a default of "right", so `{...args}` always passes one
+ * and the derivation never ran. Edge is swept here, so it leaves the panel
+ * like every other gallery's swept axis, and Text Layout is what you drive.
  */
 export const TextLayoutOverride: Story = {
+  parameters: { controls: { exclude: controlNames(PORT_EDGE_FIELDS, ["edge"]) } },
   render: (args) => (
     <PortEdge {...args} edge="top">
       <Port state="empty">follows cascade</Port>
