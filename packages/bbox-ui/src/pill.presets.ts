@@ -19,12 +19,19 @@
  * report for the flag.
  */
 import type { PresetSpec } from "@bbox-ui/schema";
-import { APPEARANCE_STATE_LABELS, APPEARANCE_STATES } from "./appearance";
+import { APPEARANCE_STATE_LABELS, APPEARANCE_STATES, type AppearanceState } from "./appearance";
 
 const GOVERNS = ["lineStyle", "lineColor", "fillStyle", "fillColor"];
 
+// WHY `AppearanceState` and not `string`: a loose index signature makes this
+// table non-total, so adding a seventh state satisfies every other Record in
+// the codebase, typechecks clean, and then throws at runtime — the preset is
+// built with `values: undefined` and both `Pill` and the product inspector
+// die reading `lineStyle` off it. That is a harder failure than the silent
+// fallback the same fix removed from `block.tsx`, in the one file where the
+// cascade actually has presets.
 const PRESET_PAINT: Record<
-  string,
+  AppearanceState,
   { lineStyle: string; lineColor: string; fillStyle: string; fillColor: string }
 > = {
   empty: { lineStyle: "solid", lineColor: "foreground", fillStyle: "none", fillColor: "transparent" },

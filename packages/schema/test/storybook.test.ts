@@ -107,6 +107,57 @@ describe("defaultArgs", () => {
   });
 });
 
+describe("defaultArgs with presets", () => {
+  const WIRED: PresetSpec = {
+    id: "wired",
+    label: "Wired",
+    selector: "state",
+    governs: ["count"],
+    values: { count: 7 },
+  };
+
+  // WHY these live here and not only under presetArgs: the shipped defect was
+  // in `meta.args`, which every story builds with `defaultArgs`, and the whole
+  // previous round's coverage sat under `presetArgs`. Moving the omission out
+  // of this function and into that one re-ships the bug with the suite green.
+  it("omits a governed field, so the preset layer can reach it", () => {
+    const args = defaultArgs(FIELDS, [WIRED]);
+    expect("count" in args).toBe(false);
+  });
+
+  it("keeps every ungoverned field at its component default", () => {
+    const args = defaultArgs(FIELDS, [WIRED]);
+    expect(args.label).toBe("Port");
+    expect(args.visible).toBe(true);
+  });
+
+  it("with no presets it is exactly the old one-argument behaviour", () => {
+    expect(defaultArgs(FIELDS, [])).toEqual(defaultArgs(FIELDS));
+  });
+
+  it("a field governed by ANY of several presets is omitted", () => {
+    const other: PresetSpec = {
+      id: "empty",
+      label: "Empty",
+      selector: "state",
+      governs: ["visible"],
+      values: { visible: false },
+    };
+    const args = defaultArgs(FIELDS, [WIRED, other]);
+    expect("count" in args).toBe(false);
+    expect("visible" in args).toBe(false);
+    expect(args.label).toBe("Port");
+  });
+
+  it("what a story's meta.args actually produces resolves through the preset", () => {
+    const metaArgs = defaultArgs(FIELDS, [WIRED]);
+    const countField = FIELDS.find((f) => f.id === "count")!;
+    const trace = resolveField(countField, { ...metaArgs, state: "wired" }, [WIRED]);
+    expect(trace.resolved).toBe(7);
+    expect(trace.winner).toBe("preset");
+  });
+});
+
 describe("presetArgs", () => {
   const WIRED_PRESET: PresetSpec = {
     id: "wired",
@@ -117,7 +168,7 @@ describe("presetArgs", () => {
   };
 
   it("starts from defaultArgs, then sets the selector to the preset id", () => {
-    expect(presetArgs(FIELDS, WIRED_PRESET)).toMatchObject({
+    expect(presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET])).toMatchObject({
       state: "wired",
       visible: true,
       label: "Port",
@@ -130,18 +181,18 @@ describe("presetArgs", () => {
   // left the output byte-identical. The story must leave the governed field
   // ABSENT so the selector actually selects.
   it("leaves the preset's governed fields absent, so the preset layer resolves them", () => {
-    const args = presetArgs(FIELDS, WIRED_PRESET);
+    const args = presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]);
     expect("count" in args).toBe(false);
   });
 
   it("is not merely omitting everything — the selector and ungoverned fields survive", () => {
-    const args = presetArgs(FIELDS, WIRED_PRESET);
+    const args = presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]);
     expect(args.state).toBe("wired");
     expect(args.label).toBe("Port");
   });
 
   it("leaves ungoverned fields at their plain component default", () => {
-    const args = presetArgs(FIELDS, WIRED_PRESET);
+    const args = presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]);
     expect(args.visible).toBe(true);
     expect(args.label).toBe("Port");
   });
@@ -154,7 +205,7 @@ describe("presetArgs", () => {
       governs: ["count", "visible"],
       values: { count: 3, visible: false },
     };
-    expect(presetArgs(FIELDS, multi)).toEqual({
+    expect(presetArgs(FIELDS, multi, [multi])).toEqual({
       state: "wired",
       label: "Port",
     });
@@ -165,7 +216,7 @@ describe("presetArgs", () => {
   // preset's value, tagged as coming from the preset layer rather than from
   // an override.
   it("a governed field left absent really resolves through the preset layer", () => {
-    const args = presetArgs(FIELDS, WIRED_PRESET);
+    const args = presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]);
     const countField = FIELDS.find((f) => f.id === "count")!;
     const trace = resolveField(countField, args, [WIRED_PRESET]);
     expect(trace.resolved).toBe(7);
@@ -173,7 +224,7 @@ describe("presetArgs", () => {
   });
 
   it("and an explicit arg still beats the preset, so the escape hatch survives", () => {
-    const args = { ...presetArgs(FIELDS, WIRED_PRESET), count: 99 };
+    const args = { ...presetArgs(FIELDS, WIRED_PRESET, [WIRED_PRESET]), count: 99 };
     const countField = FIELDS.find((f) => f.id === "count")!;
     const trace = resolveField(countField, args, [WIRED_PRESET]);
     expect(trace.resolved).toBe(99);

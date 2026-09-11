@@ -99,7 +99,14 @@ export function controlNames(fields: FieldSpec[], ids: string[]): string[] {
 export function presetArgs(
   fields: FieldSpec[],
   preset: PresetSpec,
-  presets: PresetSpec[] = [preset],
+  // WHY this is REQUIRED rather than defaulting to `[preset]`: the default
+  // sees only this one preset, so on a component with two preset families on
+  // different selectors — which `assertDisjointPresets` allows, since it only
+  // forbids two selectors claiming the same FIELD — the other family's
+  // governed fields get materialised as explicit defaults and that family's
+  // preset layer dies exactly the way this function was fixed to stop. A
+  // required parameter makes the safe call the only call that compiles.
+  presets: PresetSpec[],
 ): Record<string, FieldValue> {
   // WHY the preset's own values are NOT spread in: doing so stored the
   // resolved paint as instance overrides, so every row of a Presets story

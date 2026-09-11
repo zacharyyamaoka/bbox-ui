@@ -67,8 +67,18 @@ export const Primary: Story = {
  * edits to this file.
  */
 const GOVERNED = controlNames(PILL_FIELDS, governedFieldIds(PILL_PRESETS));
+// The SELECTOR is excluded too, not just the fields the presets govern. This
+// story paints one row per preset and sets `state` per row, so a live State
+// control moved nothing — the same "a control that does nothing reads as
+// broken" complaint that started this whole thread, one level along. Every
+// gallery story here excludes the axis it is sweeping; this one sweeps the
+// selector itself.
+const PRESET_SELECTORS = controlNames(
+  PILL_FIELDS,
+  Array.from(new Set(PILL_PRESETS.map((preset) => preset.selector))),
+);
 export const Presets: Story = {
-  parameters: { controls: { exclude: GOVERNED } },
+  parameters: { controls: { exclude: [...GOVERNED, ...PRESET_SELECTORS] } },
   render: (args) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
       {PILL_PRESETS.map((preset) => (

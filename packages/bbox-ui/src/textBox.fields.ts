@@ -16,7 +16,10 @@
 import type { FieldSpec, PresetSpec } from "@bbox-ui/schema";
 
 import {
+  TEXT_BOX_FONTS,
+  TEXT_BOX_HORIZONTAL_ALIGNS,
   TEXT_BOX_SIZES,
+  TEXT_BOX_VERTICAL_ALIGNS,
   type TextBoxVerticalAlign,
   type TextBoxFont,
   type TextBoxHorizontalAlign,
@@ -38,9 +41,9 @@ const SIZE_OPTIONS = SIZE_ORDER.map((size) => ({
 // shipped a segment that renders `fontFamily: undefined` and silently falls
 // back to the inherited font. The annotation is what makes the schema unable
 // to lie about its component.
-const FONT_ORDER: TextBoxFont[] = ["sans", "sketch", "mono"];
-const ALIGN_ORDER: TextBoxVerticalAlign[] = ["top", "middle", "bottom"];
-const JUSTIFY_ORDER: TextBoxHorizontalAlign[] = ["left", "middle", "right"];
+const FONT_ORDER: readonly TextBoxFont[] = TEXT_BOX_FONTS;
+const ALIGN_ORDER: readonly TextBoxVerticalAlign[] = TEXT_BOX_VERTICAL_ALIGNS;
+const JUSTIFY_ORDER: readonly TextBoxHorizontalAlign[] = TEXT_BOX_HORIZONTAL_ALIGNS;
 
 const FONT_OPTIONS = FONT_ORDER.map((v) => ({ value: v, label: v }));
 const ALIGN_OPTIONS = ALIGN_ORDER.map((v) => ({ value: v, label: v }));

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { assertDisjointPresets, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import { PADDING_FIELDS, TEXT_BOX_FIELDS, TEXT_BOX_PRESETS } from "../src/textBox.fields";
 import { TextBox } from "../src/textBox";
-import { TEXT_BOX_SIZES } from "../src/textBox.layout";
+import { TEXT_BOX_SIZES ,
+  TEXT_BOX_FONTS,
+  TEXT_BOX_HORIZONTAL_ALIGNS,
+  TEXT_BOX_VERTICAL_ALIGNS,} from "../src/textBox.layout";
 
 /**
  * `TextBox` uses no hooks — calling it directly, as a plain function,
@@ -26,6 +29,30 @@ function field(id: string) {
 const bare = textBoxElement();
 
 describe("TEXT_BOX_FIELDS", () => {
+  // WHY these pin options to the runtime arrays rather than to retyped
+  // literals: the annotation alone only stops the schema advertising a value
+  // the component cannot render. It does not stop the COMPONENT growing past
+  // the schema — widening the font union and adding its stack left the panel
+  // silently offering three of four fonts with every test green. Comparing
+  // against the same array the type is derived from catches both directions.
+  it("font's options are exactly the real TextBoxFont union", () => {
+    expect(TEXT_BOX_FIELDS.find((f) => f.id === "font")?.options?.map((o) => o.value)).toEqual([
+      ...TEXT_BOX_FONTS,
+    ]);
+  });
+
+  it("align's options are exactly the real vertical-align union", () => {
+    expect(TEXT_BOX_FIELDS.find((f) => f.id === "align")?.options?.map((o) => o.value)).toEqual([
+      ...TEXT_BOX_VERTICAL_ALIGNS,
+    ]);
+  });
+
+  it("justify's options are exactly the real horizontal-align union", () => {
+    expect(TEXT_BOX_FIELDS.find((f) => f.id === "justify")?.options?.map((o) => o.value)).toEqual([
+      ...TEXT_BOX_HORIZONTAL_ALIGNS,
+    ]);
+  });
+
   it("has exactly TextBox's real props, in panel order", () => {
     expect(TEXT_BOX_FIELDS.map((f) => f.id)).toEqual([
       "size",
