@@ -234,6 +234,7 @@ const READ_PANEL = `(() => {
     mixed: !!row.querySelector('[data-slot="field-trace-mixed"]'),
     winnerBadgeText: row.querySelector('[data-slot="field-trace-winner-badge"]')?.textContent ?? null,
     hasClearOverride: !!row.querySelector('[data-slot="field-trace-clear-override"]'),
+    paintedElsewhere: row.querySelector('[data-slot="field-trace-painted-elsewhere"]')?.textContent ?? null,
     segmentOptions: Array.from(row.querySelectorAll('button[data-selected]')).map((b) => ({
       text: b.textContent,
       selected: b.getAttribute('data-selected') === 'true',
@@ -726,11 +727,20 @@ async function verifyCascadeOnPill(client, { screenshotDir }) {
         );
       } else if (!row) {
         failures.push('cascade/Pill tone: no field-trace-row for "lineColor" after setting a tone');
-      } else if (row.winnerBadgeText !== "override") {
+      } else if (!row.paintedElsewhere) {
+        // WHY this assertion changed: it used to demand the badge read
+        // "override" whenever a tone was set, which forced the whole row to
+        // describe the PAINTED subject — and that is what made the control
+        // and the chain show a value the store did not hold, hiding a real
+        // stored override and deleting it invisibly. The row now describes
+        // the STORE (so with no stored value the badge correctly reads
+        // "preset") and states the deviation separately. What must be true is
+        // that the deviation is SAID, not that the badge lies about it.
         failures.push(
-          `cascade/Pill tone: a tone writes the OVERRIDE layer, so "lineColor" should read winner "override"; ` +
-            `the panel says "${row.winnerBadgeText}" while the pill paints ${paintAfterTone?.borderColor}. ` +
-            `The trace is describing a subject the component does not resolve against.`,
+          `cascade/Pill tone: a tone is painting ${paintAfterTone?.borderColor} but the "lineColor" row ` +
+            `says nothing about it — the badge reads "${row.winnerBadgeText}" (the store's own truth) and ` +
+            `there is no "painting …" note. A surface that paints one thing and reports another is the ` +
+            `defect this gate exists for.`,
         );
       }
     }

@@ -59,13 +59,32 @@ export function FieldTraceRow({
   // MIXED is decided on the RESOLVED values for the same reason: two pills
   // that visibly disagree must read as Mixed, and two that resolve alike must
   // not, even when one of them gets there through an override.
-  // Resolve against the subject the COMPONENT resolves against, not the raw
-  // stored props — see ComponentEntry.toSubject.
+  // TWO resolutions, because two different questions are being asked, and
+  // answering both with one of them is what three judge rounds kept finding.
+  //
+  //   storedTrace  — resolve the RAW props. This is what the store holds, and
+  //                  the store is what this row's control edits and what its
+  //                  clear button deletes.
+  //   paintedTrace — resolve the subject the COMPONENT resolves (see
+  //                  ComponentEntry.toSubject). This is what is on screen.
+  //
+  // They diverge whenever a component folds sugar into the override layer —
+  // Pill's `tone` does. Showing the painted value in the control made the row
+  // claim a value the store did not hold: with a tone set and `primary`
+  // stored, the panel highlighted the tone's colour, the chain's override row
+  // printed the tone's colour, and the value the user had actually stored
+  // appeared nowhere. Clearing then deleted it with no visible change.
+  //
+  // So the chain and the control describe the STORE, and the deviation is
+  // stated outright rather than silently substituted. The component's own
+  // Tone row is where that sugar is edited, so this row does not have to
+  // explain it — only to stop lying about it.
   const asSubject = toSubject ?? ((props: Record<string, unknown>) => props);
-  const resolved = subjects.map((s) => resolveField(field, asSubject(s.props), presets).resolved);
-  const isMixed = resolved.length > 1 && resolved.some((v) => v !== resolved[0]);
   const single = subjects.length === 1 ? subjects[0] : null;
-  const trace = single ? resolveField(field, asSubject(single.props), presets) : null;
+  const trace = single ? resolveField(field, single.props, presets) : null;
+  const paintedTrace = single ? resolveField(field, asSubject(single.props), presets) : null;
+  const paintedElsewhere =
+    trace && paintedTrace && paintedTrace.resolved !== trace.resolved ? paintedTrace.resolved : null;
   // WHY the RAW props and not the transformed subject: the clear button
   // deletes a STORED override, and the store holds raw props. Reading the
   // transformed subject made a tone's synthesised value look like a stored
@@ -74,9 +93,17 @@ export function FieldTraceRow({
   // silently deleted that instead, with the tone still painting so the row
   // looked unchanged. The read path has to agree with the write path; only
   // resolution uses the transformed subject.
-  const hasOwnOverride = single ? single.props[field.id] !== undefined : false;
+  // Mixed is about what THIS row edits, so it compares the stored resolutions.
+  // Two subjects with different stored overrides must read Mixed even when a
+  // tone currently paints them alike, because writing here overwrites both.
+  const storedResolved = subjects.map((s) => resolveField(field, s.props, presets).resolved);
+  const isMixed = storedResolved.length > 1 && storedResolved.some((v) => v !== storedResolved[0]);
+  // Any selected subject holding its own value can be cleared. Restricting
+  // this to a single selection left a multi-selection override permanently
+  // unclearable.
+  const hasOwnOverride = subjects.some((s) => s.props[field.id] !== undefined);
   const collapsedValue: FieldValue | undefined =
-    isMixed || resolved.length === 0 ? undefined : (resolved[0] as FieldValue);
+    isMixed || storedResolved.length === 0 ? undefined : (storedResolved[0] as FieldValue);
 
   return (
     <div data-slot="field-trace-row" data-field={field.id} data-governed={isGoverned} style={rowStyle}>
@@ -111,6 +138,11 @@ export function FieldTraceRow({
                 : trace.winner}
             </button>
           )
+        )}
+        {paintedElsewhere !== null && (
+          <span data-slot="field-trace-painted-elsewhere" style={paintedElsewhereStyle}>
+            painting {String(paintedElsewhere)}
+          </span>
         )}
       </div>
 
@@ -265,6 +297,15 @@ function disclosureStyle(enabled: boolean): CSSProperties {
 function labelStyle(governed: boolean): CSSProperties {
   return { fontWeight: 500, color: governed ? "#888" : "#111", fontSize: 13 };
 }
+
+// A quiet note, not a badge: the row's own layers are the story, and this
+// says only that something outside them is painting right now.
+const paintedElsewhereStyle: CSSProperties = {
+  fontSize: 10,
+  opacity: 0.65,
+  fontStyle: "italic",
+  whiteSpace: "nowrap",
+};
 
 const mixedBadgeStyle: CSSProperties = {
   fontSize: 11,
