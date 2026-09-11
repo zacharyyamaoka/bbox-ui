@@ -3,3 +3,7 @@ dist/
 *.log
 .vite/
 .chrome-profile-*/
+
+# generated report media (captures, heavy pages) — never tracked
+reports/media/
+__pycache__/

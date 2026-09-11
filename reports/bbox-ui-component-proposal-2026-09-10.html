@@ -1,0 +1,854 @@
+<title>bbox-ui Component Proposal</title>
+<style>
+:root{
+  --ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sketch: "Comic Sans MS", "Bradley Hand", var(--ui);
+  --paper:#ffffff; --ink:#15171c; --muted:#646c7a; --hair:#c6ccd6; --faint:#eef1f5;
+  --rule:#e2e6ec; --code:#f5f7fa; --accent:#6d4bd8; --warn:#a8560a; --ok:#1d6b3f;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#14161b; --ink:#e7e9ee; --muted:#99a1af; --hair:#454c58; --faint:#1d2128;
+  --rule:#2a2f38; --code:#191d24; --accent:#b8a3ff; --warn:#e0a85c; --ok:#6fcf97;
+}}
+:root[data-theme="dark"]{
+  --paper:#14161b; --ink:#e7e9ee; --muted:#99a1af; --hair:#454c58; --faint:#1d2128;
+  --rule:#2a2f38; --code:#191d24; --accent:#b8a3ff; --warn:#e0a85c; --ok:#6fcf97;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--ui);line-height:1.55;margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:20px;padding-block:36px 96px}
+h1{font-size:clamp(26px,4.2vw,40px);line-height:1.12;letter-spacing:-.02em;margin:0 0 6px}
+h2{font-size:clamp(19px,2.6vw,25px);letter-spacing:-.01em;margin:56px 0 6px;padding-top:18px;border-top:1px solid var(--rule)}
+h3{font-size:16px;margin:28px 0 8px;letter-spacing:-.005em}
+h4{font-size:13.5px;margin:20px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+p,li{font-size:14.5px}
+a{color:var(--accent)}
+.sub{color:var(--muted);font-size:15px;margin:0 0 4px}
+.meta{color:var(--muted);font-size:12.5px;font-family:var(--mono);margin:14px 0 0}
+.lede{font-size:16.5px;line-height:1.6;border-left:3px solid var(--accent);padding-left:14px;margin:22px 0}
+code{font-family:var(--mono);font-size:.9em;background:var(--code);padding:1px 5px;border-radius:4px}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.5;background:var(--code);border:1px solid var(--rule);
+    border-radius:8px;padding:12px 14px;overflow-x:auto}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0 4px}
+.scroll{overflow-x:auto;margin:10px 0 4px}
+th,td{border:1px solid var(--rule);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--faint);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+td code{white-space:nowrap}
+.new{color:var(--warn);font-weight:600}
+.have{color:var(--ok);font-weight:600}
+.note{background:var(--faint);border:1px solid var(--rule);border-radius:8px;padding:12px 16px;margin:16px 0;font-size:14px}
+.note b:first-child{display:block;margin-bottom:4px}
+.rec{border-left:3px solid var(--ok);background:var(--faint);padding:10px 14px;margin:14px 0;font-size:14.5px;border-radius:0 8px 8px 0}
+.kill{border-left:3px solid var(--warn)}
+ul.tight{margin:8px 0;padding-left:20px}
+ul.tight li{margin:3px 0}
+
+/* ---------- gallery ---------- */
+.row{border:1px solid var(--rule);border-radius:10px;margin:18px 0;overflow:hidden}
+.row > .rh{background:var(--faint);padding:9px 14px;border-bottom:1px solid var(--rule)}
+.row > .rh b{font-size:14.5px}
+.row > .rh span{color:var(--muted);font-size:12.5px;margin-left:8px}
+.cells{display:grid;grid-template-columns:1fr 1fr;gap:0}
+@media (max-width:760px){.cells{grid-template-columns:1fr}}
+.cell{padding:12px 14px;min-width:0}
+.cell + .cell{border-left:1px solid var(--rule)}
+@media (max-width:760px){.cell + .cell{border-left:0;border-top:1px solid var(--rule)}}
+.cell > h5{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.cell img{width:100%;height:auto;display:block;border:1px solid var(--rule);border-radius:6px}
+.nodonor{color:var(--muted);font-size:13px;font-style:italic;border:1px dashed var(--hair);border-radius:6px;
+         padding:22px 12px;text-align:center}
+.props{font-size:12px;table-layout:fixed}
+.props td,.props th{padding:4px 7px;word-break:break-word}
+.props td code{white-space:normal}
+.props col.c1{width:26%}.props col.c2{width:36%}.props col.c3{width:17%}.props col.c4{width:21%}
+
+/* ---------- unstyled mock kit ---------- */
+.strip{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.sp{margin:0;display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.sp-b{display:flex;align-items:flex-end;gap:8px;min-height:26px}
+.sp figcaption{font-size:10.5px;color:var(--muted);letter-spacing:.02em}
+.mk-glyph{color:var(--hair);flex:none}
+.mk-tb{display:inline-flex;border:1px solid var(--hair);color:var(--ink);line-height:1.25;box-sizing:border-box}
+.mk-pill{display:inline-flex;align-items:center;border:1px solid var(--hair);border-radius:999px;
+         padding:1px 9px;font-size:11px;white-space:nowrap}
+.mk-dot{display:inline-flex;align-items:center;justify-content:center;border:1.5px solid var(--hair);
+        border-radius:50%;flex:none;color:var(--ink)}
+.mk-dot i{display:block}
+.mk-hidden{color:var(--muted);font-size:11px;font-family:var(--mono)}
+.mk-lab{font-size:10.5px;color:var(--muted)}
+
+.bk{border:1px solid var(--hair);border-radius:5px;background:var(--paper);display:flex;flex-direction:column;
+    font-size:11px;position:relative;flex:none}
+.bk-h{padding:4px 7px;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:5px}
+.bk-h.no-rule{border-bottom:0}
+.bk-b{flex:1;padding:5px 7px;min-height:26px}
+.bk-f{padding:4px 7px;border-top:1px solid var(--hair);text-align:right;color:var(--muted);min-height:19px}
+.bk-f.no-rule{border-top:0}
+.bk-title{font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bk-title.sm{font-size:11px}
+.bk-type{color:var(--muted);font-size:10px;margin-left:auto;white-space:nowrap}
+.bk-type.sm{font-size:9.5px}
+.bk-desc{color:var(--muted);font-size:10px}
+.bk.simple{padding:7px;align-items:stretch;min-height:74px;justify-content:space-between}
+.bk.simple .ctr{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;padding:6px 0}
+.bk.simple .bk-foot{text-align:center;color:var(--muted);font-size:10px}
+.bk-badges{position:absolute;top:5px;right:6px;display:flex;gap:3px}
+.bk-tools{position:absolute;top:5px;left:6px;color:var(--hair)}
+.prs{display:flex;flex-direction:column;gap:3px}
+.prline{display:flex;justify-content:space-between;gap:6px}
+.pr{display:flex;align-items:center;gap:4px;min-height:15px}
+.pr.r{justify-content:flex-end}
+.pr.off{margin-left:-9px}
+.pr.r.off{margin-right:-9px}
+.pr-n{font-family:var(--mono);font-size:9.5px}
+.pr-t{font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+.more{font-size:9px;color:var(--muted);font-style:italic;padding-left:18px}
+.dots{font-size:11px;color:var(--hair)}
+.chev{font-size:8px;color:var(--muted)}
+.edge-demo{position:relative;height:92px;width:150px;border:1px solid var(--hair);border-radius:5px}
+.edge-demo .mk-dot{position:absolute;transform:translate(-50%,-50%)}
+.ports-in-edge{display:flex;flex-direction:column;gap:3px}
+.stackdemo{display:flex;flex-direction:column;gap:4px;padding:4px;border:1px dashed var(--hair);border-radius:4px}
+.free{position:relative;height:104px}
+.free .bk{position:absolute}
+.tree{font-family:var(--mono);font-size:12px;line-height:1.7;white-space:pre;overflow-x:auto;
+      background:var(--code);border:1px solid var(--rule);border-radius:8px;padding:14px}
+svg.diagram{width:100%;height:auto;display:block;margin:14px 0;border:1px solid var(--rule);border-radius:8px;
+            background:var(--paper)}
+svg.diagram text{font-family:var(--ui);fill:var(--ink)}
+svg.diagram .mut{fill:var(--muted)}
+svg.diagram rect,svg.diagram line,svg.diagram path{stroke:var(--hair)}
+svg.diagram .fillfaint{fill:var(--faint)}
+.toc{columns:2;column-gap:28px;font-size:13.5px;margin:18px 0 0;padding:0;list-style:none}
+@media (max-width:640px){.toc{columns:1}}
+.toc li{margin:3px 0;break-inside:avoid}
+.score td:first-child{font-weight:600}
+.ev{margin:18px 0;border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.ev img{width:100%;height:auto;display:block;border-bottom:1px solid var(--rule)}
+.ev figcaption{font-size:13px;padding:9px 14px;color:var(--muted)}
+.win{background:var(--faint)}
+</style>
+<div class="wrap">
+
+<h1>bbox-ui — the component family, the schema, and one storybook in three hosts</h1>
+<p class="sub">A proposal, not an implementation. Drawn from
+<code>bbox-ui-v3-2pm-sep-10-2026.systemsketch</code> · 2026-09-10 · light edition — no captures</p>
+<p class="meta">Every <b>real SystemSketch capture</b> lives in the media edition: <code>/home/bam/bbox-ui/reports/media/bbox-ui-component-proposal-2026-09-10.html</code></p>
+
+<p class="lede">Your board is not a drawing of eleven components. It is a drawing of
+<b>one schema</b> — 653 shapes, of which 282 are text labels and
+231 are plain rectangles standing in for components that do not exist yet.
+Every band on it — Glyph <i>size</i>, TextBox <i>padding</i>, Port <i>state</i>, Block <i>view</i> — is a
+field with a closed set of values. The nine “Simple View variants” are not nine components; they are nine
+<b>arg bundles</b> of one. So the first thing to build is not a component. It is the field vocabulary —
+and you already own two thirds of it.</p>
+
+<ul class="toc">
+<li><a href="#f">§1 · The family, named and leveled</a></li>
+<li><a href="#c">§2 · How they come together</a></li>
+<li><a href="#g">§3 · The gallery — board · real capture · unstyled mock</a></li>
+<li><a href="#s">§4 · The schema decision</a></li>
+<li><a href="#h">§5 · One storybook, three hosts</a></li>
+<li><a href="#n">§6 · What you are not seeing</a></li>
+<li><a href="#l">§7 · The ladder</a></li>
+<li><a href="#d">§8 · Decisions</a></li>
+<li><a href="#e">Appendix · the rest of the evidence</a></li>
+</ul>
+
+<div class="note"><b>Measured, not remembered.</b>
+Board: <b>677</b> records, <b>653</b> shapes — <code>text</code>&nbsp;282 · <code>geo</code>&nbsp;231 · <code>floating-port</code>&nbsp;69 · <code>line</code>&nbsp;45 · <code>image</code>&nbsp;12 · <code>arrow</code>&nbsp;8 · <code>group</code>&nbsp;3 · <code>block</code>&nbsp;2 · <code>connection</code>&nbsp;1.
+Only <b>71</b> of them are real SystemSketch objects; the rest is hand-drawn.
+bbox-ui: <b>5</b> registry items (<code>bbox-layout</code>, <code>port</code>, <code>block</code>, <code>block-node-reactflow</code>, <code>block-shape-tldraw</code>),
+<b>10</b> exported core components, <b>42</b> exports in <code>layout.ts</code>,
+plus <b>2</b> more items waiting on <code>claude/code-field</code>.
+SystemSketch: Block has <b>41</b> props and <b>4</b> views
+(<code>simple</code>, <code>port</code>, <code>expanded</code>, <code>value</code>); <code>BlockPort</code> has
+<b>19</b> fields. Evidence: 21 real captures, driven headlessly through <code>tests/browser_harness.mjs</code> against SystemSketch main.</div>
+
+<h2 id="f">§1 · The family, named and leveled</h2>
+<p>Eleven things, in four levels plus a data layer, plus a firm list of what stays a host adapter.
+The <b>status</b> column is the honest one: less is new than it looks.</p>
+<div class="scroll"><table>
+<tr><th></th><th>component</th><th>what it is</th><th>status</th><th>evidence / donor</th></tr>
+<tr><td><b>L0</b></td><td><b>Glyph</b></td><td>square icon slot, 4 rungs, padding</td><td><span class='new'>new</span></td><td>board Glyph band; <code>ICON_RATIO</code> + <code>glyphPx()</code> exist in <code>layout.ts</code>; <code>systemsketch-icon</code> shape shipped on SS main 2026-09-10</td></tr><tr><td><b>L0</b></td><td><b>TextBox</b></td><td>size · font · align · justify · per-side padding</td><td><span class='new'>new</span></td><td><code>BlockTitle</code>/<code>BlockDescription</code>/<code>BlockType</code> are three hard-coded instances of it today</td></tr><tr><td><b>L0</b></td><td><b>Pill / Badge</b></td><td>rounded TextBox + Appearance</td><td><span class='new'>new</span> (shadcn <code>Badge</code>)</td><td><code>BlockChip</code> exists; SS's “Draft N” chip and the <code>value</code> view are both this</td></tr><tr><td><b>L0</b></td><td><b>CodeField</b></td><td>CodeMirror 6, grammar-agnostic</td><td><span class='have'>branch</span></td><td><code>claude/code-field</code> — 19 props, 2 registry items, judge PASS, not merged</td></tr><tr><td><b>L1</b></td><td><b>RowContainer</b></td><td>flexbox with five names</td><td><span class='new'>new</span></td><td>every header/footer/port row is one; today it is inline CSS in <code>block.tsx</code></td></tr><tr><td><b>L1</b></td><td><b>Stack</b></td><td>vertical member stack, gap/gutter/width</td><td><span class='new'>new</span></td><td>SS <code>memberStack.ts</code> + <code>memberGap/memberGutter/memberWidth</code> is the donor</td></tr><tr><td><b>L1</b></td><td><b>PortEdge (lane)</b></td><td>n ports on one box edge, evenly or custom</td><td><span class='new'>new</span></td><td>SS <code>layoutBlock.ts</code> lanes + <code>edgePortPoint()</code>; dnd-kit reorder is host-side</td></tr><tr><td><b>L2</b></td><td><b>Port</b></td><td>dot + label + placement + state</td><td><span class='have'>ships</span></td><td><code>port.tsx</code>, registry item <code>port</code>; SS <code>BlockPort</code> has 19 fields, most of them semantics not presentation</td></tr><tr><td><b>L3</b></td><td><b>Block</b></td><td>Header / Body / Footer, 4 views, members</td><td><span class='have'>partial</span></td><td><code>block.tsx</code> ships Simple View only (10 exported parts); SS Block has 41 props and 4 views</td></tr><tr><td><b>L4</b></td><td><b>Presets</b></td><td>Type · Function · Type Mapping · Class · Component · System · For · While · Conditional</td><td><span class='new'>data, not components</span></td><td>SS has 6 <i>stock blocks</i> and 3 tools, none of them these nine — the nine are new</td></tr><tr><td><b>—</b></td><td><b>Edges / cables</b></td><td>two anchors + a router</td><td><span class='have'>host adapter</span></td><td>React Flow edge type · tldraw binding. Never enters the core. <code>ARCHITECTURE.md</code> already rules it</td></tr><tr><td><b>—</b></td><td><b>drag · hit-test · z-order · wheel · dnd-kit reorder</b></td><td>interaction geometry</td><td><span class='have'>host adapter</span></td><td>same rule, same file</td></tr>
+</table></div>
+<p class="mk-lab">Per-component props, with the board variant each maps to and its control type, are in
+the gallery (§3) — one table per component, beside its mock.</p>
+
+<h2 id="c">§2 · How they come together</h2>
+
+<svg class="diagram" viewBox="0 0 900 420" role="img" aria-label="Block composition tree">
+  <rect x="14" y="14" width="300" height="392" rx="8" fill="none"/>
+  <text x="28" y="40" font-size="15" font-weight="700">Block</text>
+  <text x="28" y="58" font-size="11" class="mut">one anatomy, four views, recursive</text>
+
+  <rect x="30" y="74" width="268" height="62" rx="5" class="fillfaint"/>
+  <text x="42" y="94" font-size="12" font-weight="600">Header</text>
+  <text x="42" y="110" font-size="10.5" class="mut">RowContainer( slot-left · slot-centre · slot-right )</text>
+  <text x="42" y="126" font-size="10.5" class="mut">Glyph · TextBox · Pill* · Tool* · fold chevron</text>
+
+  <rect x="30" y="146" width="268" height="140" rx="5" class="fillfaint"/>
+  <text x="42" y="166" font-size="12" font-weight="600">Body — exactly one of:</text>
+  <text x="54" y="184" font-size="10.5" class="mut">PortEdge × n        (view = port)</text>
+  <text x="54" y="200" font-size="10.5" class="mut">MemberStack&lt;Block&gt;   (bodyLayout = stack)</text>
+  <text x="54" y="216" font-size="10.5" class="mut">free children       (bodyLayout = free / region)</text>
+  <text x="54" y="232" font-size="10.5" class="mut">CodeField           (python dev mode)</text>
+  <text x="54" y="248" font-size="10.5" class="mut">centred TextBox     (view = simple)</text>
+  <text x="42" y="272" font-size="10.5" class="mut">↳ every member is itself a Block</text>
+
+  <rect x="30" y="296" width="268" height="52" rx="5" class="fillfaint"/>
+  <text x="42" y="316" font-size="12" font-weight="600">Footer</text>
+  <text x="42" y="332" font-size="10.5" class="mut">RowContainer( slot-left · slot-right · ⋮ )</text>
+
+  <text x="42" y="378" font-size="10.5" class="mut">Appearance{line, fill} — accepted here,</text>
+  <text x="42" y="393" font-size="10.5" class="mut">inherited by every descendant unless overridden</text>
+
+  <line x1="330" y1="105" x2="392" y2="105"/><path d="M386 100 L394 105 L386 110 Z"/>
+  <line x1="330" y1="215" x2="392" y2="215"/><path d="M386 210 L394 215 L386 220 Z"/>
+  <line x1="330" y1="322" x2="392" y2="322"/><path d="M386 317 L394 322 L386 327 Z"/>
+
+  <rect x="400" y="20" width="228" height="176" rx="8" fill="none"/>
+  <text x="414" y="42" font-size="13" font-weight="700">Primitives (L0)</text>
+  <text x="414" y="64" font-size="11">Glyph</text><text x="560" y="64" font-size="10" class="mut">new</text>
+  <text x="414" y="84" font-size="11">TextBox</text><text x="560" y="84" font-size="10" class="mut">new</text>
+  <text x="414" y="104" font-size="11">Pill / Badge</text><text x="560" y="104" font-size="10" class="mut">shadcn</text>
+  <text x="414" y="124" font-size="11">CodeField</text><text x="560" y="124" font-size="10" class="mut">branch</text>
+  <text x="414" y="152" font-size="13" font-weight="700">Layout (L1)</text>
+  <text x="414" y="174" font-size="11">RowContainer · Stack · PortEdge</text>
+
+  <rect x="400" y="212" width="228" height="92" rx="8" fill="none"/>
+  <text x="414" y="234" font-size="13" font-weight="700">Port (L2)</text>
+  <text x="414" y="254" font-size="11">PortDot + PortLabel + placement</text>
+  <text x="414" y="274" font-size="10.5" class="mut">ships today in port.tsx</text>
+  <text x="414" y="292" font-size="10.5" class="mut">a lane of them is a PortEdge</text>
+
+  <rect x="400" y="320" width="228" height="86" rx="8" fill="none"/>
+  <text x="414" y="342" font-size="13" font-weight="700">Presets (L4) — data</text>
+  <text x="414" y="362" font-size="10.5" class="mut">Type · Function · Type Mapping · Class</text>
+  <text x="414" y="378" font-size="10.5" class="mut">Component · System · For · While · Cond.</text>
+  <text x="414" y="396" font-size="10.5" class="mut">named arg bundles, not components</text>
+
+  <rect x="648" y="20" width="238" height="386" rx="8" fill="none"/>
+  <text x="662" y="42" font-size="13" font-weight="700">Host adapter — never core</text>
+  <text x="662" y="66" font-size="11">drag · resize · snap · z-order</text>
+  <text x="662" y="86" font-size="11">hit-testing &amp; selection</text>
+  <text x="662" y="106" font-size="11">wheel / camera</text>
+  <text x="662" y="126" font-size="11">dnd-kit port reorder</text>
+  <text x="662" y="146" font-size="11">edges / cables / routing</text>
+  <text x="662" y="166" font-size="11">persistence &amp; undo</text>
+  <text x="662" y="196" font-size="10.5" class="mut">React Flow: Handle, NodeResizer,</text>
+  <text x="662" y="212" font-size="10.5" class="mut">edge types, LabeledHandle (copy it)</text>
+  <text x="662" y="236" font-size="10.5" class="mut">tldraw: ShapeUtil, bindings,</text>
+  <text x="662" y="252" font-size="10.5" class="mut">getGeometry, detach/rebuild</text>
+  <text x="662" y="288" font-size="11" font-weight="600">The one thing that crosses:</text>
+  <text x="662" y="308" font-size="10.5" class="mut">portAnchor(side, t, w, h) — the</text>
+  <text x="662" y="324" font-size="10.5" class="mut">anchor point, not the cable.</text>
+  <text x="662" y="352" font-size="11" font-weight="600">The cost nobody counts:</text>
+  <text x="662" y="372" font-size="10.5" class="mut">every component also needs a pure</text>
+  <text x="662" y="388" font-size="10.5" class="mut">box fn in blockLayout.ts, or it</text>
+  <text x="662" y="400" font-size="10.5" class="mut">cannot detach. See §6f.</text>
+</svg>
+
+
+<h3>The slot model — seven “header layouts” are three slots and two enums</h3>
+<p>The board names seven header layouts (type compact, title badge, other tools/text, centered, folding
+left, folding right, play button + 15.1ms). Modelling those as a seven-way enum would be a mistake: the
+eighth one arrives next week. They are all the same <code>RowContainer</code> with three slots filled
+differently, plus two genuine enums.</p>
+<pre><code>&lt;Block.Header size="m" align="left" foldSide="left"&gt;
+  &lt;Block.HeaderLeft&gt;   &lt;Glyph/&gt; &lt;TextBox rung="title"/&gt; &lt;/Block.HeaderLeft&gt;
+  &lt;Block.HeaderCentre&gt; ...optional... &lt;/Block.HeaderCentre&gt;
+  &lt;Block.HeaderRight&gt;  &lt;Pill&gt;Draft 1&lt;/Pill&gt; &lt;TextBox rung="type"/&gt; &lt;Tool icon="play"/&gt; &lt;/Block.HeaderRight&gt;
+&lt;/Block.Header&gt;
+
+// board "w/ play button + text 15.1ms"  ==  HeaderRight={&lt;&gt;&lt;TextBox&gt;15.1ms&lt;/TextBox&gt;&lt;Tool icon="play"/&gt;&lt;/&gt;}
+// board "centered"                      ==  align="center"
+// board "w/ folding right"              ==  foldSide="right"</code></pre>
+
+<h3>The style model — one <code>Appearance</code>, not seven props on eleven components</h3>
+<p>Your board note asks for tldraw/Excalidraw’s Line (style, colour, thickness, opacity) and Fill (style,
+colour, opacity) “for all the shapes”. That is seven controls. Repeating them as props on every component
+is 77 props and seven chances to diverge. One object, accepted at every level and inherited downward,
+is seven <code>FieldSpec</code>s written once:</p>
+<pre><code>interface Appearance {
+  line?: { style?: 'solid'|'dashed'|'dotted'|'none'; width?: 'thin'|'med'|'thick';
+           color?: string; opacity?: number }
+  fill?: { style?: 'none'|'semi'|'solid'|'pattern'; color?: string; opacity?: number }
+}
+// every bbox-ui component takes `appearance?: Appearance` and puts it on a CSS custom-property
+// scope, so a child inherits unless it overrides.  `color` defaults to `currentColor`, which is
+// how a token and a per-shape override are the same mechanism (§6e).</code></pre>
+
+<h2 id="g">§3 · The gallery</h2>
+<p>Each row: what the board says · what SystemSketch paints <b>today</b> (real capture, driven headlessly,
+every one looked at before it was embedded) · the unstyled mock, as real DOM so it is the seed of the
+future story · the proposed props.</p>
+<section class="row">
+  <div class="rh"><b>Glyph</b><span>board: Size XL/L/M/S · Padding · “Always a square”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>13-icon-primitive.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><svg class="mk-glyph" width="44" height="44" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg></div><figcaption>xl 44</figcaption></figure><figure class="sp"><div class="sp-b"><svg class="mk-glyph" width="36" height="36" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg></div><figcaption>lg 36</figcaption></figure><figure class="sp"><div class="sp-b"><svg class="mk-glyph" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg></div><figcaption>md 24</figcaption></figure><figure class="sp"><div class="sp-b"><svg class="mk-glyph" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg></div><figcaption>sm 18</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="padding:8px"><svg class="mk-glyph" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg></span></div><figcaption>padded</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>size</code></td><td><code>'sm'|'md'|'lg'|'xl'</code></td><td><code>'md'</code></td><td>inline-radio</td></tr><tr><td><code>padding</code></td><td><code>number</code></td><td><code>0</code></td><td>range 0–24</td></tr><tr><td><code>name</code></td><td><code>string</code></td><td><code>—</code></td><td>text (Lucide id)</td></tr><tr><td><code>src</code></td><td><code>string</code></td><td><code>—</code></td><td>text / file</td></tr></table></div><p class='mk-lab'>Square is invariant, not a prop. Rung sizes ride the title at <code>ICON_RATIO 0.9</code> — already in <code>layout.ts</code>.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>TextBox</b><span>board: text size · padding per side · style sans/sketch/mono · alignment · justification</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>07-header-sizes.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:30px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Text Box</span></div><figcaption>xl 44</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:22px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Text Box</span></div><figcaption>lg 36</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:15px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Text Box</span></div><figcaption>md 24</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Text Box</span></div><figcaption>sm</figcaption></figure></div><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:12px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Text Box</span></div><figcaption>sans</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:12px;padding:6px 10px;font-family:var(--sketch);align-items:center;justify-content:center;width:auto;height:auto">Text Box</span></div><figcaption>sketch</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:12px;padding:6px 10px;font-family:var(--mono);align-items:center;justify-content:center;width:auto;height:auto">Text Box</span></div><figcaption>mono</figcaption></figure></div><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:flex-start;justify-content:flex-start;width:86px;height:46px">Text Box</span></div><figcaption>top · left</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:86px;height:46px">Text Box</span></div><figcaption>middle · center</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:flex-end;justify-content:flex-end;width:86px;height:46px">Text Box</span></div><figcaption>bottom · right</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:11px;padding:16px 6px 4px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Text Box</span></div><figcaption>pad top 16</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>size</code></td><td><code>'sm'|'md'|'lg'|'xl'</code></td><td><code>'md'</code></td><td>inline-radio</td></tr><tr><td><code>font</code></td><td><code>'sans'|'sketch'|'mono'</code></td><td><code>'sans'</code></td><td>inline-radio</td></tr><tr><td><code>align</code></td><td><code>'top'|'middle'|'bottom'</code></td><td><code>'middle'</code></td><td>inline-radio</td></tr><tr><td><code>justify</code></td><td><code>'left'|'middle'|'right'</code></td><td><code>'left'</code></td><td>inline-radio</td></tr><tr><td><code>padding</code></td><td><code>number | [t,r,b,l]</code></td><td><code>0</code></td><td>4-up number</td></tr><tr><td><code>children</code></td><td><code>ReactNode</code></td><td><code>—</code></td><td>text</td></tr></table></div></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>CodeField <span class='new'>(exists, on a branch)</span></b><span>board: “Single line mode / Python Dev Mode” · ports as one line of code</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>14-code-block.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:12px;padding:6px 10px;font-family:var(--mono);align-items:center;justify-content:center;width:auto;height:auto"><span style='font-family:var(--mono)'>pose: Pose = None</span></span></div><figcaption>one line, signature grammar</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--mono);align-items:center;justify-content:center;width:auto;height:auto"><span style='font-family:var(--mono)'>def greet(name: str) -&gt; str:</span></span></div><figcaption>multiline, python grammar</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>value</code></td><td><code>string</code></td><td><code>required</code></td><td>text</td></tr><tr><td><code>grammar</code></td><td><code>CodeFieldGrammar</code></td><td><code>plain</code></td><td>select</td></tr><tr><td><code>multiline</code></td><td><code>boolean</code></td><td><code>false</code></td><td>boolean</td></tr><tr><td><code>align</code></td><td><code>'left'|'right'</code></td><td><code>'left'</code></td><td>inline-radio</td></tr><tr><td><code>mode</code></td><td><code>'rendered'|'source'</code></td><td><code>'rendered'</code></td><td>inline-radio</td></tr><tr><td><code>…</code></td><td><code>19 props total</code></td><td><code>—</code></td><td>see <code>codeField.tsx</code></td></tr></table></div><p class='mk-lab'>Already built on <code>claude/code-field</code> as registry items <code>code-field</code> + <code>code-field-signature</code>. Not merged.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Pill / Badge</b><span>board: “It’s a text box with a rounded outside” · line style · line colour · fill style · “we can use shadcn badge here”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>11-value-pill.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-pill" style="border-style:solid;background:transparent">Draft 1</span></div><figcaption>solid</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-pill" style="border-style:dashed;background:transparent">Draft 1</span></div><figcaption>dashed</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-pill" style="border-style:dotted;background:transparent">Draft 1</span></div><figcaption>dotted</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-pill" style="border-style:solid;background:var(--faint)">Draft 1</span></div><figcaption>fill semi</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-pill" style="border-style:solid;background:var(--hair)">Draft 1</span></div><figcaption>fill solid</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-pill" style="border-style:solid;background:var(--faint)">= 0.85</span></div><figcaption>value pill</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>variant</code></td><td><code>'default'|'secondary'|'outline'</code></td><td><code>'outline'</code></td><td>inline-radio</td></tr><tr><td><code>line</code></td><td><code>Appearance['line']</code></td><td><code>inherit</code></td><td>group (below)</td></tr><tr><td><code>fill</code></td><td><code>Appearance['fill']</code></td><td><code>inherit</code></td><td>group (below)</td></tr><tr><td><code>children</code></td><td><code>ReactNode</code></td><td><code>—</code></td><td>text</td></tr></table></div><p class='mk-lab'>Line/fill are <b>not</b> Pill props — they are the shared <code>Appearance</code> group every component accepts. Pill itself is shadcn <code>Badge</code> + that group.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>RowContainer</b><span>board: “basically like a flexbox” · height · reading direction LTR/RTL · alignment · evenly spaced</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>03-port-inline.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-tb" style="padding:3px;gap:0"><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">var</span><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Type</span><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">value</span></span></div><figcaption>LTR</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="padding:3px;gap:0;direction:rtl"><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">var</span><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Type</span><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">value</span></span></div><figcaption>RTL</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="padding:3px;width:220px;justify-content:space-between"><svg class="mk-glyph" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Title</span><span class="mk-tb" style="font-size:11px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">Type</span></span></div><figcaption>evenly spaced</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>direction</code></td><td><code>'ltr'|'rtl'</code></td><td><code>'ltr'</code></td><td>inline-radio</td></tr><tr><td><code>justify</code></td><td><code>'start'|'center'|'end'|'between'</code></td><td><code>'start'</code></td><td>inline-radio</td></tr><tr><td><code>align</code></td><td><code>'start'|'center'|'end'</code></td><td><code>'center'</code></td><td>inline-radio</td></tr><tr><td><code>height</code></td><td><code>number | 'hug'</code></td><td><code>'hug'</code></td><td>number</td></tr><tr><td><code>gap</code></td><td><code>number</code></td><td><code>8</code></td><td>range 0–24</td></tr></table></div><p class='mk-lab'>This is CSS flexbox with five names. It is a <b>layout</b> item in the registry, not a component — one file, no React needed for the geometry.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Port</b><span>board: states empty/out-of-focus/w-value/wired/data-received/hidden · diameter L/M/S/exact · selection diameter · polarity N/E/S/W</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>12-floating-ports.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px"></span></div><figcaption>empty</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px;opacity:.4"></span></div><figcaption>out of focus</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px"><i style="width:14px;height:14px;background:var(--hair);border-radius:50%"></i></span></div><figcaption>w/ value</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px"><i style="width:7px;height:7px;background:currentColor;border-radius:50%"></i></span></div><figcaption>wired</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px"><i style="width:7px;height:7px;background:currentColor;border-radius:50%;outline:3px solid var(--faint)"></i></span></div><figcaption>data received</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-hidden" title="removed from layout, not hit-testable">—</span></div><figcaption>hidden</figcaption></figure></div><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:30px;height:30px"></span></div><figcaption>lg 36</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:21px;height:21px"></span></div><figcaption>md 25</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:13px;height:13px"></span></div><figcaption>sm 14</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:17px;height:17px"></span></div><figcaption>exact</figcaption></figure></div><div class="strip"><figure class="sp"><div class="sp-b"><span class="mk-lab">↑</span><span class="mk-dot" style="width:14px;height:14px"></span></div><figcaption>N</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px"></span><span class="mk-lab">→</span></div><figcaption>E</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px"></span><span class="mk-lab">↓</span></div><figcaption>S</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-lab">←</span><span class="mk-dot" style="width:14px;height:14px"></span></div><figcaption>W</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>state</code></td><td><code>'empty'|'blurred'|'value'|'wired'|'received'</code></td><td><code>'empty'</code></td><td>inline-radio</td></tr><tr><td><code>size</code></td><td><code>'sm'|'md'|'lg'</code></td><td><code>'md'</code></td><td>inline-radio</td></tr><tr><td><code>diameter</code></td><td><code>number</code></td><td><code>—</code></td><td>number (overrides size)</td></tr><tr><td><code>hitRadius</code></td><td><code>number</code></td><td><code>12</code></td><td>range 6–32</td></tr><tr><td><code>polarity</code></td><td><code>'n'|'e'|'s'|'w'</code></td><td><code>derived</code></td><td><span class='new'>see §6c</span></td></tr><tr><td><code>visible</code></td><td><code>boolean</code></td><td><code>true</code></td><td><span class='new'>structural, not appearance</span></td></tr><tr><td><code>children</code></td><td><code>ReactNode</code></td><td><code>—</code></td><td>text (the label slot)</td></tr></table></div><p class='mk-lab'><code>PORT_DIAMETERS</code> and the four non-received states already ship in <code>port.tsx</code>. <code>19</code>-field <code>BlockPort</code> in SystemSketch is the superset — most of it is document semantics, not presentation.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Port placement</b><span>board: Row Container Placement — bot/top/right/left + right-offset/left-offset</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>04-port-offset.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div style="text-align:center"><span class="mk-tb" style="font-size:10px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">label</span><br><span class="mk-dot" style="width:14px;height:14px"></span></div></div><figcaption>top</figcaption></figure><figure class="sp"><div class="sp-b"><div style="text-align:center"><span class="mk-dot" style="width:14px;height:14px"></span><br><span class="mk-tb" style="font-size:10px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">label</span></div></div><figcaption>bot</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:10px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">label</span><span class="mk-dot" style="width:14px;height:14px"></span></div><figcaption>left</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px"></span><span class="mk-tb" style="font-size:10px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">label</span></div><figcaption>right</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-dot" style="width:14px;height:14px"></span><span style="display:inline-block;width:18px"></span><span class="mk-tb" style="font-size:10px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">label</span></div><figcaption>right-offset</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-tb" style="font-size:10px;padding:6px 10px;font-family:var(--ui);align-items:center;justify-content:center;width:auto;height:auto">label</span><span style="display:inline-block;width:18px"></span><span class="mk-dot" style="width:14px;height:14px"></span></div><figcaption>left-offset</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>placement</code></td><td><code>'top'|'bot'|'left'|'right'|'left-offset'|'right-offset'</code></td><td><code>'right'</code></td><td>select</td></tr><tr><td><code>labelGap</code></td><td><code>number</code></td><td><code>8</code></td><td>range 0–40</td></tr></table></div><p class='mk-lab'>All six already exist in <code>port.tsx</code> as <code>textLayout</code>; renaming to the board's word is the only change.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>PortEdge (lane)</b><span>board: box edge left/right/top/bottom · layout evenly-spaced/custom · “they act like kanban cards in a row, use dnd-kit”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>05-hidden-ports.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div class="ports-in-edge"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">port</span> <span class="pr-t">Any</span></div><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">port</span> <span class="pr-t">Any</span></div><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">port</span> <span class="pr-t">Any</span></div></div></div><figcaption>left edge</figcaption></figure><figure class="sp"><div class="sp-b"><div class="edge-demo"><span class="mk-dot" style="width:12px;height:12px;left:25%;top:0"></span><span class="mk-dot" style="width:12px;height:12px;left:50%;top:0"></span><span class="mk-dot" style="width:12px;height:12px;left:75%;top:0"></span></div></div><figcaption>top edge (evenly)</figcaption></figure><figure class="sp"><div class="sp-b"><div class="edge-demo"><span class="mk-dot" style="width:12px;height:12px;left:0;top:14%"></span><span class="mk-dot" style="width:12px;height:12px;left:0;top:26%"></span><span class="mk-dot" style="width:12px;height:12px;left:0;top:70%"></span><span class="mk-dot" style="width:12px;height:12px;left:0;top:82%"></span></div></div><figcaption>custom</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>edge</code></td><td><code>'left'|'right'|'top'|'bottom'</code></td><td><code>'left'</code></td><td>inline-radio</td></tr><tr><td><code>layout</code></td><td><code>'evenly'|'custom'</code></td><td><code>'evenly'</code></td><td>inline-radio</td></tr><tr><td><code>ports</code></td><td><code>PortSpec[]</code></td><td><code>[]</code></td><td>object (array)</td></tr><tr><td><code>onReorder</code></td><td><code>(from,to)=&gt;void</code></td><td><code>—</code></td><td><span class='new'>host</span></td></tr></table></div><p class='mk-lab'>The lane <b>positions</b>; the drag that reorders it is host-owned (dnd-kit), exactly as PEP 0013 already rules in SystemSketch.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Block — Simple View (all nine board variants)</b><span>board: title · w/type · w/type&desc · w/…&icon · w/badge · w/many badges · w/tool items · icon centered · type centered</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>01-simple-ladder.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="ctr"><b class="bk-title">Title</b></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>title only</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="ctr"><b class="bk-title">Title</b></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div><figcaption>w/ type</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="ctr"><b class="bk-title">Title</b><span class="bk-desc">Description</span></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div><figcaption>w/ type & description</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="ctr"><svg class="mk-glyph" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title">Title</b><span class="bk-desc">Description</span></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div><figcaption>w/ …& icon</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="bk-badges"><span class="mk-pill" style="border-style:solid;background:transparent">Draft 1</span></div><div class="ctr"><svg class="mk-glyph" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title">Title</b><span class="bk-desc">Description</span></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div><figcaption>w/ badge</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="bk-badges"><span class="mk-pill" style="border-style:solid;background:transparent">Draft 1</span><span class="mk-pill" style="border-style:solid;background:transparent">Draft 1</span></div><div class="ctr"><svg class="mk-glyph" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title">Title</b><span class="bk-desc">Description</span></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div><figcaption>w/ many badges</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="bk-badges"><span class="mk-pill" style="border-style:solid;background:transparent">Draft 1</span><span class="mk-pill" style="border-style:solid;background:transparent">Draft 1</span></div><div class="bk-tools"><svg class="mk-glyph" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg></div><div class="ctr"><svg class="mk-glyph" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title">Title</b><span class="bk-desc">Description</span></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div><figcaption>w/ tool items</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="ctr"><svg class="mk-glyph" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg><b class="bk-title">Title</b></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>icon centered</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:170px"><div class="ctr"><b class="bk-title">Title</b><span class="bk-type">Type</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>type centered</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>view</code></td><td><code>'simple'|'port'|'expanded'|'region'</code></td><td><code>'simple'</code></td><td>inline-radio</td></tr><tr><td><code>title</code></td><td><code>string</code></td><td><code>''</code></td><td>text</td></tr><tr><td><code>type</code></td><td><code>string</code></td><td><code>''</code></td><td>text</td></tr><tr><td><code>description</code></td><td><code>string</code></td><td><code>''</code></td><td>text</td></tr><tr><td><code>icon</code></td><td><code>string</code></td><td><code>—</code></td><td>text</td></tr><tr><td><code>centre</code></td><td><code>'none'|'icon'|'type'</code></td><td><code>'none'</code></td><td>inline-radio</td></tr><tr><td><code>badges</code></td><td><code>Badge[]</code></td><td><code>[]</code></td><td>object (array)</td></tr><tr><td><code>tools</code></td><td><code>ToolItem[]</code></td><td><code>[]</code></td><td>object (array)</td></tr></table></div></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Block — Port View</b><span>board: header + body + footer with ⋮ · ports inline vs offset · header ports “scoped region…”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>03-port-inline.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div class="bk " style="width:210px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"><div class="prs"><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">image</span> <span class="pr-t">Image</span></div><div class="pr r"><span class="pr-n">boxes</span> <span class="pr-t">list[Box]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">threshold</span> <span class="pr-t">float</span></div><div class="pr r"><span class="pr-n">scores</span> <span class="pr-t">list[f]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">model</span> <span class="pr-t">Model</span></div><div class="pr r"></div></div></div></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>inline</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:210px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"><div class="prs"><div class="prline"><div class="pr off"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">image</span> <span class="pr-t">Image</span></div><div class="pr r off"><span class="pr-n">boxes</span> <span class="pr-t">list[Box]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr off"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">threshold</span> <span class="pr-t">float</span></div><div class="pr r off"><span class="pr-n">scores</span> <span class="pr-t">list[f]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr off"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">model</span> <span class="pr-t">Model</span></div><div class="pr r"></div></div></div></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>offset</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:210px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span style="margin-left:4px"><span class="mk-dot" style="width:9px;height:9px"></span></span><span class="bk-type sm">Type</span></div><div class="bk-b"><div class="prs"><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">image</span> <span class="pr-t">Image</span></div><div class="pr r"><span class="pr-n">boxes</span> <span class="pr-t">list[Box]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">threshold</span> <span class="pr-t">float</span></div><div class="pr r"><span class="pr-n">scores</span> <span class="pr-t">list[f]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">model</span> <span class="pr-t">Model</span></div><div class="pr r"></div></div></div></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>1× header port</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>inputs</code></td><td><code>PortSpec[]</code></td><td><code>[]</code></td><td>object (array)</td></tr><tr><td><code>outputs</code></td><td><code>PortSpec[]</code></td><td><code>[]</code></td><td>object (array)</td></tr><tr><td><code>portLayout</code></td><td><code>'inline'|'offset'</code></td><td><code>'inline'</code></td><td>inline-radio</td></tr><tr><td><code>headerPorts</code></td><td><code>PortSpec[]</code></td><td><code>[]</code></td><td>object (array)</td></tr><tr><td><code>footer</code></td><td><code>ReactNode</code></td><td><code>—</code></td><td>slot</td></tr></table></div></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Block — header size &amp; header layouts</b><span>board: Size of Header S/M/L/XL · type compact · title badge · other tools/text · centered · folding left/right · play button + “15.1ms”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>07-header-sizes.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div class="bk " style="width:150px"><div class="bk-h"><svg class="mk-glyph" width="9" height="9" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title" style="font-size:9px">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"></div></div></div><figcaption>S</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:150px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"></div></div></div><figcaption>M</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:150px"><div class="bk-h"><svg class="mk-glyph" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title" style="font-size:14px">Title</b><span class="bk-type">Type</span></div><div class="bk-b"></div></div></div><figcaption>L</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><svg class="mk-glyph" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title" style="font-size:17px">Title</b><span class="bk-type">Type</span></div><div class="bk-b"></div></div></div><figcaption>XL</figcaption></figure></div><div class="strip"><figure class="sp"><div class="sp-b"><div class="bk " style="width:150px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b> <span class="bk-type sm" style="margin-left:3px">Type</span></div><div class="bk-b"></div></div></div><figcaption>type compact</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:170px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b> <span class="mk-pill" style="border-style:solid;background:transparent">Draft 1</span><span class="bk-type sm">Type</span></div><div class="bk-b"></div></div></div><figcaption>title badge</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:180px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span><svg class="mk-glyph" width="9" height="9" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg><svg class="mk-glyph" width="9" height="9" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg><svg class="mk-glyph" width="9" height="9" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg></div><div class="bk-b"></div></div></div><figcaption>w/ tools</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><span style="margin:auto;display:flex;gap:4px;align-items:center"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b> <span class="bk-type sm">Type</span></span></div><div class="bk-b"></div></div></div><figcaption>centered</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><span class="chev">▾</span><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"></div></div></div><figcaption>folding left</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span><span class="chev">▾</span></div><div class="bk-b"></div></div></div><figcaption>folding right</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:180px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span> <span class="mk-lab">15.1ms</span> <span class="chev">▶</span></div><div class="bk-b"></div></div></div><figcaption>play + 15.1ms</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>headerSize</code></td><td><code>'s'|'m'|'l'|'xl'</code></td><td><code>'m'</code></td><td>inline-radio</td></tr><tr><td><code>headerAlign</code></td><td><code>'left'|'center'</code></td><td><code>'left'</code></td><td>inline-radio</td></tr><tr><td><code>headerLeft / headerRight</code></td><td><code>ReactNode</code></td><td><code>—</code></td><td>slot</td></tr><tr><td><code>foldControlSide</code></td><td><code>'left'|'right'|'none'</code></td><td><code>'none'</code></td><td>inline-radio</td></tr></table></div><p class='mk-lab'>Every “header layout” on the board is a <b>slot arrangement</b>, not an enum. Seven named layouts collapse to three slots + two enums — see §2.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Block — folding, visibility, hidden ports</b><span>board: Folding down/up · No header line · No footer line · No header · No footer · Hidden ports “+3 more”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>08-visibility.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><span class="chev">▾</span><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"><div class="prs"><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">image</span> <span class="pr-t">Image</span></div><div class="pr r"><span class="pr-n">boxes</span> <span class="pr-t">list[Box]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">threshold</span> <span class="pr-t">float</span></div><div class="pr r"></div></div></div></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>fold down</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><span class="chev">▸</span><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>fold up</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h no-rule"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"><div class="prs"><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">image</span> <span class="pr-t">Image</span></div><div class="pr r"><span class="pr-n">boxes</span> <span class="pr-t">list[Box]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">threshold</span> <span class="pr-t">float</span></div><div class="pr r"></div></div></div></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>no header rule</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"><div class="prs"><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">image</span> <span class="pr-t">Image</span></div><div class="pr r"><span class="pr-n">boxes</span> <span class="pr-t">list[Box]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">threshold</span> <span class="pr-t">float</span></div><div class="pr r"></div></div></div></div><div class="bk-f no-rule"><span class='dots'>⋮</span></div></div></div><figcaption>no footer rule</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Title</b><span class="bk-type sm">Type</span></div><div class="bk-b"><div class="prs"><div class="prline"><div class="pr"><span class="mk-dot" style="width:14px;height:14px"></span><span class="pr-n">image</span> <span class="pr-t">Image</span></div><div class="pr r"><span class="pr-n">boxes</span> <span class="pr-t">list[Box]</span><span class="mk-dot" style="width:14px;height:14px"></span></div></div><div class="prline"><div class="pr"><span class="more">+3 more</span></div><div class="pr r"></div></div></div></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>+3 more</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>folded</code></td><td><code>boolean</code></td><td><code>false</code></td><td>boolean</td></tr><tr><td><code>showHeaderRule</code></td><td><code>boolean</code></td><td><code>true</code></td><td>boolean</td></tr><tr><td><code>showFooterRule</code></td><td><code>boolean</code></td><td><code>true</code></td><td>boolean</td></tr><tr><td><code>showHeader / showFooter</code></td><td><code>boolean</code></td><td><code>true</code></td><td>boolean</td></tr><tr><td><code>hiddenSummary</code></td><td><code>'inline'|'footer'|'off'</code></td><td><code>'inline'</code></td><td>inline-radio</td></tr></table></div><p class='mk-lab'>“Hidden” on a port is <b>structural</b> — it removes the row and reflows the block. It is not an opacity. See §6b.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Block — members (Stack vs Free), Expanded, Region</b><span>board: “each block can add other blocks as children… children stacked vertically… the width of the largest child drives the width… everything is a block”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>09-members-stack.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div class="bk " style="width:160px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Pipeline</b><span class="bk-type sm">system</span></div><div class="bk-b"><div class="stackdemo"><div class="bk simple" style="width:128px"><div class="ctr"><b class="bk-title">Grab</b></div><div class="bk-foot"><span class="bk-type">Type</span></div></div><div class="bk simple" style="width:128px"><div class="bk-badges"><span class="mk-pill" style="border-style:solid;background:transparent">Draft 1</span></div><div class="ctr"><b class="bk-title">Detect</b></div><div class="bk-foot"><span class="bk-type">Type</span></div></div><div class="bk simple" style="width:128px"><div class="ctr"><b class="bk-title">Track</b></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>stack (width: fill)</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:180px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Pipeline</b><span class="bk-type sm">system</span></div><div class="bk-b"><div class="free"><div style="position:absolute;left:2px;top:2px"><div class="bk simple" style="width:128px"><div class="ctr"><b class="bk-title">Grab</b></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div><div style="position:absolute;left:26px;top:42px"><div class="bk simple" style="width:128px"><div class="ctr"><b class="bk-title">Detect</b></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div></div></div><div class="bk-f"><span class='dots'>⋮</span></div></div></div><figcaption>free (cables inside)</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk " style="width:180px"><div class="bk-h"><svg class="mk-glyph" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" fill="none" stroke="currentColor"/><path d="M1 1 L23 23 M23 1 L1 23" stroke="currentColor" fill="none"/></svg> <b class="bk-title sm">Region</b><span class="bk-type sm">Type</span> <span style="border:1px solid var(--hair);width:9px;height:9px;display:inline-block"></span></div><div class="bk-b"><div class="free"><div style="position:absolute;left:4px;top:6px"><div class="bk simple" style="width:128px"><div class="ctr"><b class="bk-title">Child</b></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div><div style="position:absolute;left:48px;top:50px"><div class="bk simple" style="width:128px"><div class="ctr"><b class="bk-title">Child</b></div><div class="bk-foot"><span class="bk-type">Type</span></div></div></div></div></div></div></div><figcaption>region, black-box OFF</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:140px"><div class="ctr"><b class="bk-title">Title</b><span class="bk-type">Type</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>region, black-box ON</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>bodyLayout</code></td><td><code>'free'|'stack'</code></td><td><code>'free'</code></td><td>inline-radio</td></tr><tr><td><code>memberGap</code></td><td><code>number</code></td><td><code>8</code></td><td>range 0–40</td></tr><tr><td><code>memberGutter</code></td><td><code>number</code></td><td><code>12</code></td><td>range 0–40</td></tr><tr><td><code>memberWidth</code></td><td><code>'fill'|'own'</code></td><td><code>'fill'</code></td><td>inline-radio</td></tr><tr><td><code>blackBox</code></td><td><code>boolean</code></td><td><code>false</code></td><td>boolean</td></tr><tr><td><code>members</code></td><td><code>BlockProps[]</code></td><td><code>[]</code></td><td><span class='new'>recursive — see §6d</span></td></tr></table></div><p class='mk-lab'>Black-box ON is not a separate view: it renders the same Block in <code>view='simple'</code>. One prop, no new component.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Presets</b><span>board: Type · Function · Type Mapping · Class · Component · System · For Loop · While Loop · Conditional</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>15-branch-region.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">Type</b><span class="bk-type">type</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>Type</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">Function</b><span class="bk-type">function</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>Function</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">Type Mapping</b><span class="bk-type">type-mapping</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>Type Mapping</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">Class</b><span class="bk-type">class</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>Class</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">Component</b><span class="bk-type">component</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>Component</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">System</b><span class="bk-type">system</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>System</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">For Loop</b><span class="bk-type">for-loop</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>For Loop</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">While Loop</b><span class="bk-type">while-loop</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>While Loop</figcaption></figure><figure class="sp"><div class="sp-b"><div class="bk simple" style="width:118px"><div class="ctr"><b class="bk-title">Conditional</b><span class="bk-type">conditional</span></div><div class="bk-foot">&nbsp;</div></div></div><figcaption>Conditional</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>preset</code></td><td><code>'type'|'function'|…</code></td><td><code>—</code></td><td>select</td></tr></table></div><p class='mk-lab'>A preset sets nothing new. It is a <b>named bundle of the props above</b> — the same object a Storybook story's <code>args</code> is. See §6a; this is the single highest-leverage idea in the proposal.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Edges / cables <span class='have'>(host adapter, never a bbox-ui component)</span></b><span>board: dragging interactions — edge out to nowhere · edge to edge of expanded · reorganising ports by dragging · auto spacing</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>18-edge.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="note"><b>Deliberately absent from the component family.</b>An edge is two anchors plus a router, and both anchors are engine coordinates. React Flow owns it as an edge type; tldraw owns it as a binding. <code>ARCHITECTURE.md</code> already draws this line — “interaction geometry is host-owned and never travels”. bbox-ui ships the <b>anchor</b> (<code>portAnchor()</code>), not the cable.</div></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>Appearance — the tldraw-style Line/Fill menu</b><span>board: thin/med/thick · solid/dashed/dotted/async/none · colour swatches · “same control we have in tldraw/excalidraw”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>20-appearance-menu.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="strip"><figure class="sp"><div class="sp-b"><div class="strip"><figure class="sp"><div class="sp-b"><span style="display:block;width:30px;border-top:1px solid var(--ink)"></span></div><figcaption>thin</figcaption></figure><figure class="sp"><div class="sp-b"><span style="display:block;width:30px;border-top:2px solid var(--ink)"></span></div><figcaption>med</figcaption></figure><figure class="sp"><div class="sp-b"><span style="display:block;width:30px;border-top:3.5px solid var(--ink)"></span></div><figcaption>thick</figcaption></figure></div></div><figcaption>thickness</figcaption></figure><figure class="sp"><div class="sp-b"><div class="strip"><figure class="sp"><div class="sp-b"><span style="display:block;width:30px;border-top:2px solid var(--ink)"></span></div><figcaption>solid</figcaption></figure><figure class="sp"><div class="sp-b"><span style="display:block;width:30px;border-top:2px dashed var(--ink)"></span></div><figcaption>dashed</figcaption></figure><figure class="sp"><div class="sp-b"><span style="display:block;width:30px;border-top:2px dotted var(--ink)"></span></div><figcaption>dotted</figcaption></figure><figure class="sp"><div class="sp-b"><span class="mk-lab">∅</span></div><figcaption>none</figcaption></figure></div></div><figcaption>style</figcaption></figure></div><div class="scroll"><table class="props"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup><tr><th>prop</th><th>type</th><th>default</th><th>control</th></tr><tr><td><code>line.style</code></td><td><code>'solid'|'dashed'|'dotted'|'none'</code></td><td><code>'solid'</code></td><td>inline-radio</td></tr><tr><td><code>line.width</code></td><td><code>'thin'|'med'|'thick'</code></td><td><code>'med'</code></td><td>inline-radio</td></tr><tr><td><code>line.color</code></td><td><code>string</code></td><td><code>'currentColor'</code></td><td>swatches + color</td></tr><tr><td><code>line.opacity</code></td><td><code>number 0–1</code></td><td><code>1</code></td><td>range</td></tr><tr><td><code>fill.style</code></td><td><code>'none'|'semi'|'solid'|'pattern'</code></td><td><code>'none'</code></td><td>inline-radio</td></tr><tr><td><code>fill.color</code></td><td><code>string</code></td><td><code>—</code></td><td>swatches + color</td></tr><tr><td><code>fill.opacity</code></td><td><code>number 0–1</code></td><td><code>1</code></td><td>range</td></tr></table></div><p class='mk-lab'>One <code>Appearance</code> object, accepted by every component, seven controls. Not seven props on each of eleven components.</p></div>
+  </div>
+</section>
+<section class="row">
+  <div class="rh"><b>The inspector you already have <span class='have'>(twice)</span></b><span>board note: “I want a developer inspector panel that basically allows me to make all of these customizations”</span></div>
+  <div class="cells">
+    <div class="cell"><h5>SystemSketch today</h5><div class="nodonor">real capture <code>19-selected-chrome.png</code><br>lives in the media edition of this page</div></div>
+    <div class="cell"><h5>Proposed component — unstyled</h5><div class="note"><b>This is the finding that changes the plan.</b><code>packages/inspector</code> is 71 TS/TSX files. <code>inspectorModel.ts</code> (1398 lines) already declares a schema — <code>InspectorControl</code> with 18 fields and 7 control kinds (<code>swatches</code>, <code>segments</code>, <code>tiles</code>, <code>number</code>, <code>toggle</code>, <code>color</code>, <code>text</code>) — and <code>Inspector.tsx</code> (1238 lines) is, in its own words, “deliberately dumb”. It has a drag-scrub number field, a colour well, segmented controls and swatch rows. It is keyed to <b>tldraw shapes</b>. Re-keying it to <b>components</b> is the whole job.</div></div>
+  </div>
+</section>
+
+<h2 id="s">§4 · The schema decision</h2>
+<p>One schema per component has to drive five surfaces: TypeScript props, Storybook
+<code>argTypes</code>/Controls, the right-hand inspector inside the demos, Autodocs, and the registry
+item’s documentation. Criteria first.</p>
+
+<div class="scroll"><table>
+<tr><th>criterion</th><th>weight</th></tr><tr><td>One source of truth — props, Storybook controls, in-product inspector, Autodocs, registry docs</td><td style='text-align:center'><b>×5</b></td></tr><tr><td>Code is the living spec (no parallel corpus that can drift)</td><td style='text-align:center'><b>×5</b></td></tr><tr><td>Stock parts over hand-rolled</td><td style='text-align:center'><b>×4</b></td></tr><tr><td>Host neutrality — core must stay free of React, engines and the DOM where possible</td><td style='text-align:center'><b>×4</b></td></tr><tr><td>Controls exactly like tldraw’s style menu (swatch rows, segmented tiles, drag-scrub, <i>mixed</i>)</td><td style='text-align:center'><b>×4</b></td></tr><tr><td>Speed to a first working page</td><td style='text-align:center'><b>×3</b></td></tr><tr><td>Runs headless in CI</td><td style='text-align:center'><b>×3</b></td></tr></table></div>
+
+<div class="scroll"><table class="score">
+<tr><th>option</th><th>truth</th><th>spec</th><th>stock</th><th>neutral</th><th>tldraw-like</th><th>speed</th><th>CI</th><th>score</th></tr>
+<tr class=''><td>A · CVA variants + argTypes overlay</td><td style='text-align:center'>2</td><td style='text-align:center'>3</td><td style='text-align:center'>4</td><td style='text-align:center'>3</td><td style='text-align:center'>1</td><td style='text-align:center'>4</td><td style='text-align:center'>3</td><td style='text-align:center'>68</td></tr><tr class=''><td>B · zod → argTypes + RJSF inspector</td><td style='text-align:center'>4</td><td style='text-align:center'>4</td><td style='text-align:center'>3</td><td style='text-align:center'>2</td><td style='text-align:center'>2</td><td style='text-align:center'>2</td><td style='text-align:center'>3</td><td style='text-align:center'>78</td></tr><tr class=''><td>C · hand-written JSON Schema + RJSF</td><td style='text-align:center'>3</td><td style='text-align:center'>2</td><td style='text-align:center'>3</td><td style='text-align:center'>3</td><td style='text-align:center'>2</td><td style='text-align:center'>1</td><td style='text-align:center'>3</td><td style='text-align:center'>66</td></tr><tr class=''><td>D · Storybook argTypes only</td><td style='text-align:center'>2</td><td style='text-align:center'>3</td><td style='text-align:center'>4</td><td style='text-align:center'>1</td><td style='text-align:center'>1</td><td style='text-align:center'>5</td><td style='text-align:center'>3</td><td style='text-align:center'>62</td></tr><tr class='win'><td>E · FieldSpec split out of the inspector you already have</td><td style='text-align:center'>5</td><td style='text-align:center'>5</td><td style='text-align:center'>4</td><td style='text-align:center'>5</td><td style='text-align:center'>5</td><td style='text-align:center'>4</td><td style='text-align:center'>4</td><td style='text-align:center'><b>125</b></td></tr></table></div>
+
+<div class="rec"><b>Recommendation — E.</b> Not because the others are bad, but because
+<b>you already wrote it</b>. <code>packages/inspector/src/inspector/inspectorModel.ts</code>
+(1398 lines) opens with: “Everything a stock tldraw primitive can be told, as one
+list of fields. The panel that renders this is deliberately dumb.” Its <code>InspectorControl</code> has
+<b>18</b> fields and <b>7</b> control kinds
+(<code>swatches</code>, <code>segments</code>, <code>tiles</code>, <code>number</code>, <code>toggle</code>, <code>color</code>, <code>text</code>). That is a superset of Storybook’s <code>argTypes</code> on every axis except one.</div>
+
+<h3>What <code>InspectorControl</code> already has that <code>argTypes</code> does not</h3>
+<div class="scroll"><table>
+<tr><th>Storybook <code>argTypes</code></th><th>bbox-ui <code>InspectorControl</code></th><th></th></tr>
+<tr><td><code>name</code></td><td><code>label</code></td><td>same</td></tr>
+<tr><td><code>control.type</code></td><td><code>kind</code></td><td>same, 9 vs 7 kinds</td></tr>
+<tr><td><code>options</code></td><td><code>options[{value,label,swatch,path}]</code></td><td>ours carries the swatch colour and the tile’s SVG path</td></tr>
+<tr><td><code>control.{min,max,step}</code></td><td><code>min/max/step</code> + <code>unit</code> + <code>glyph</code> + <code>fallback</code></td><td>ours knows the scrub origin and the unit</td></tr>
+<tr><td><code>table.category</code></td><td><code>caption</code> + group</td><td>two levels, Figma-shaped</td></tr>
+<tr><td><code>description</code></td><td><code>hint</code></td><td>same</td></tr>
+<tr><td><code>if: {arg, eq}</code></td><td><span class="new">missing</span></td><td>the one thing to steal back</td></tr>
+<tr><td>—</td><td><code>value: … | null</code></td><td><b>mixed</b> across a multi-selection. Storybook has no concept of this and never will</td></tr>
+<tr><td>—</td><td><code>unset</code> · <code>overridden</code> · <code>disabled</code></td><td>“auto”, “overriding the engine”, “engine-derived”</td></tr>
+<tr><td>—</td><td><code>source: style, prop, paint</code></td><td>where the write goes</td></tr>
+</table></div>
+
+<div class="note"><b>The bug hiding in that table.</b> <code>InspectorControl</code> conflates a
+<i>declaration</i> (label, kind, options, min/max) with a <i>reading</i> (value, unset, overridden,
+mixed). That is why it can only be produced by <code>getPrimitiveInspectorModel(editor)</code> — a
+function that needs a live tldraw editor. Split the two and the declaration half becomes portable,
+static, and exactly the shape <code>argTypes</code> wants. <b>That split is the entire proposal’s
+load-bearing move.</b></div>
+
+<pre><code>// packages/schema/src/field.ts — zero dependencies, no React, no engine.
+// A FieldSpec is the DECLARATION.  It never carries a value.
+export type FieldKind =
+  | 'segments' | 'swatches' | 'tiles' | 'number' | 'range'
+  | 'toggle' | 'color' | 'text' | 'object'
+
+export interface FieldOption { value: string; label: string; swatch?: string; path?: string }
+
+export interface FieldSpec&lt;T = unknown&gt; {
+  id: string                 // must be a real prop key — one test asserts it
+  label: string
+  kind: FieldKind
+  group?: string             // 'Layout' | 'Appearance' | 'Behaviour'   (Shopify section)
+  caption?: string           // Figma's second level, already in InspectorControl
+  options?: FieldOption[]
+  min?: number; max?: number; step?: number; unit?: string
+  glyph?: string; paired?: boolean; fallback?: number
+  hint?: string
+  default: T
+  structural?: true          // changes layout, so it is NOT an appearance control (§6b)
+}
+
+// A READING is a FieldSpec plus what the current subject(s) actually say.
+// Storybook is the degenerate case: one subject, `mixed` can never happen.
+export interface FieldReading extends FieldSpec {
+  value: string | number | boolean | null   // null === mixed
+  unset?: boolean; overridden?: boolean; disabled?: boolean
+}</code></pre>
+<pre><code>// packages/bbox-ui/src/port.fields.ts — beside port.tsx, shipped in the registry item.
+import type { FieldSpec } from '@bbox-ui/schema'
+import { PORT_DIAMETERS } from './layout'
+
+export const portFields = [
+  { id: 'state', label: 'State', kind: 'segments', group: 'Content',
+    options: [
+      { value: 'empty',    label: 'Empty' },
+      { value: 'blurred',  label: 'Out of focus' },
+      { value: 'value',    label: 'w/ value set' },
+      { value: 'wired',    label: 'Wired' },
+      { value: 'received', label: 'Data received' },
+    ],
+    default: 'empty' },
+  { id: 'size', label: 'Diameter', kind: 'segments', group: 'Layout',
+    options: Object.keys(PORT_DIAMETERS).map((k) =&gt; ({ value: k, label: k })),
+    default: 'md' },
+  { id: 'diameter', label: 'Exact', kind: 'number', group: 'Layout',
+    min: 6, max: 64, step: 1, unit: 'px', fallback: 25, default: PORT_DIAMETERS.md },
+  { id: 'hitRadius', label: 'Selection', kind: 'range', group: 'Layout',
+    min: 6, max: 32, step: 1, unit: 'px', default: 12 },
+  { id: 'placement', label: 'Label', kind: 'segments', group: 'Layout',
+    options: ['top','bot','left','right','left-offset','right-offset']
+      .map((v) =&gt; ({ value: v, label: v })), default: 'right' },
+  { id: 'polarity', label: 'Polarity', kind: 'segments', group: 'Layout',
+    options: ['n','e','s','w'].map((v) =&gt; ({ value: v, label: v.toUpperCase() })),
+    default: 'e', hint: 'Authored. The host may compute one and pass it in — the core never detects.' },
+  { id: 'visible', label: 'Visible', kind: 'toggle', group: 'Behaviour',
+    default: true, structural: true,
+    hint: 'false removes the row and reflows the block. Not an opacity.' },
+] as const satisfies readonly FieldSpec[]</code></pre>
+<pre><code>// packages/schema/src/storybook.ts — 1 pure function, unit-testable, no Storybook import.
+const CONTROL: Record&lt;FieldKind, string&gt; = {
+  segments: 'inline-radio', swatches: 'select', tiles: 'radio', number: 'number',
+  range: 'range', toggle: 'boolean', color: 'color', text: 'text', object: 'object',
+}
+
+export function toArgTypes(fields: readonly FieldSpec[]) {
+  return Object.fromEntries(fields.map((f) =&gt; [f.id, {
+    name: f.label,
+    description: f.hint,
+    options: f.options?.map((o) =&gt; o.value),
+    control: { type: CONTROL[f.kind], min: f.min, max: f.max, step: f.step },
+    table: { category: f.group, defaultValue: { summary: String(f.default) } },
+  }]))
+}
+
+export function defaultArgs(fields: readonly FieldSpec[]) {
+  return Object.fromEntries(fields.map((f) =&gt; [f.id, f.default]))
+}</code></pre>
+<pre><code>// packages/bbox-ui/src/Port.stories.tsx — CSF3.  The SAME array as the inspector.
+import type { Meta, StoryObj } from '@storybook/react-vite'
+import { expect, userEvent, within } from 'storybook/test'
+import { toArgTypes, defaultArgs } from '@bbox-ui/schema/storybook'
+import { Port } from './port'
+import { portFields } from './port.fields'
+import { PORT_PRESETS } from './presets'
+
+const meta = {
+  title: 'Primitives/Port',
+  component: Port,
+  argTypes: toArgTypes(portFields),      // &lt;- one source of truth
+  args: { ...defaultArgs(portFields), children: 'image' },
+  parameters: { layout: 'centered' },
+} satisfies Meta&lt;typeof Port&gt;
+export default meta
+type Story = StoryObj&lt;typeof meta&gt;
+
+// The board's six states are six stories — and the SAME objects the
+// inspector offers as presets.  See §6a: a preset file is a story file.
+export const Empty:    Story = { args: PORT_PRESETS.empty }
+export const Blurred:  Story = { args: PORT_PRESETS.blurred }
+export const WithValue:Story = { args: PORT_PRESETS.value }
+export const Wired:    Story = { args: PORT_PRESETS.wired }
+export const Received: Story = { args: PORT_PRESETS.received }
+export const Hidden:   Story = { args: PORT_PRESETS.hidden }
+
+// hidden is STRUCTURAL: prove it leaves no hit target behind (§6b).
+export const HiddenLeavesNoTarget: Story = {
+  args: PORT_PRESETS.hidden,
+  play: async ({ canvasElement, step }) =&gt; {
+    const canvas = within(canvasElement)
+    await step('no dot is painted', async () =&gt; {
+      await expect(canvas.queryByTestId('port-dot')).toBeNull()
+    })
+    await step('and nothing under the cursor claims the click', async () =&gt; {
+      const hit = document.elementFromPoint(10, 10)
+      await expect(hit?.getAttribute('data-testid')).not.toBe('port-dot')
+    })
+  },
+}</code></pre>
+<pre><code>// demos/playground/src/InspectorPane.tsx — the SAME array, the product panel.
+import { Inspector } from '@bbox-ui/inspector'
+import { readFields } from '@bbox-ui/schema'
+import { portFields } from '@bbox-ui/core/port.fields'
+
+export function InspectorPane({ selection, write }) {
+  //           declaration      +  subjects  -&gt;  readings (value | null for mixed)
+  const readings = readFields(portFields, selection.map((s) =&gt; s.props))
+  return &lt;Inspector readings={readings} onWrite={(id, v) =&gt; write(selection, id, v)} /&gt;
+}
+// Storybook's Controls addon renders `argTypes` for ONE subject.
+// This renders the SAME fields for N subjects, with tldraw's `mixed`.
+// Same declaration, two readers.  Neither is a fork of the other.</code></pre>
+
+<h3>Why not the other four</h3>
+<ul class="tight">
+<li><b>CVA</b> — it is a <code>className</code> builder. <code>VariantProps&lt;typeof x&gt;</code> is genuinely
+useful for types, but a cva config carries no label, no caption, no unit, no min/max, no swatch colour, no
+ordering, and no <i>mixed</i>. In this repo cva appears only inside shadcn’s vendored
+<code>components/ui/*</code> (button, tabs, toggle, sidebar, field, input-group) — it is boilerplate that
+arrived with the CLI, not an authoring pattern. Leave it there; do not promote it.</li>
+<li><b>zod → JSON Schema → RJSF</b> — good runtime validation, but a swatch row, a tile grid of SVG paths,
+a drag-scrub with a <code>fallback</code> origin and a <code>unit</code> are not expressible in JSON Schema
+without a <code>uiSchema</code> sidecar — which is a second schema, i.e. the thing you are trying to
+avoid. And it adds a runtime dependency to a package whose whole pitch is that it has two.</li>
+<li><b>hand-written JSON Schema</b> — same sidecar problem, minus the type inference.</li>
+<li><b>argTypes only</b> — lives in story files, so the product inspector cannot import it without
+importing Storybook into the product.</li>
+</ul>
+<p><b>Keep TypeScript as the source of <i>types</i>, and the fields array as the source of
+<i>controls</i>.</b> react-docgen already feeds Autodocs from the props interface; the
+<code>as const satisfies readonly FieldSpec[]</code> plus one test asserting every <code>field.id</code>
+is a real prop key is what stops the two drifting.</p>
+
+<h3>Stock part mapping</h3>
+<div class="scroll"><table>
+<tr><th>element</th><th>today</th><th>off-the-shelf part (exact name)</th><th>behaviour that must survive</th></tr>
+<tr><td>Segmented control (S/M/L/XL, Left/Center, Show/Hide)</td><td>hand-rolled <code>SegmentedControl</code> in <code>variants/kit.tsx</code></td><td>Base UI <code>ToggleGroup</code> (already a dep: <code>@base-ui/react@1.8.0</code>)</td><td>tldraw’s <i>mixed</i> third state; keyboard arrow nav; the tile grid with SVG paths</td></tr><tr><td>Drag-scrub number</td><td><code>ScrubNumber.tsx</code>, 430 lines, hand-rolled pointer maths</td><td><span class='have'>keep hand-rolled</span> — Base UI <code>NumberField</code> is already its root; no library ships Figma-style scrub</td><td>the 2px threshold, <code>ew-resize</code>, expression parsing (<code>100/2</code>, <code>+6</code>), the <code>fallback</code> origin</td></tr><tr><td>Colour well</td><td><code>react-colorful</code> <code>HexAlphaColorPicker</code></td><td>unchanged (stock seam)</td><td>alpha; the swatch row stays ours because the palette is tldraw’s</td></tr><tr><td>Badge / Pill</td><td><code>BlockChip</code> + hand CSS</td><td>shadcn <code>Badge</code> (Base UI variant)</td><td>the reserved chip region — <code>CHIP_INSET_RIGHT</code>/<code>CHIP_TITLE_GAP</code>; the chip must never paint over live title text</td></tr><tr><td>Variant → className</td><td>template strings + <code>cn()</code></td><td><code>cva</code> — <b>only</b> where shadcn already vendored it (<code>components/ui/*</code>)</td><td>do <b>not</b> promote cva to the schema: it carries no label, caption, unit, min/max, swatch or <i>mixed</i></td></tr><tr><td>Component catalogue + controls</td><td><code>apps/playground</code> + <code>demos/compare</code></td><td>Storybook 9 (<code>@storybook/react-vite</code>) + <code>@storybook/addon-vitest</code></td><td>the playground stays — it is the <i>authoring</i> canvas, not a catalogue; compare stays, it measures 0.00px divergence</td></tr><tr><td>Interaction test</td><td><code>demos/drive-*.mjs</code> CDP journeys</td><td><code>play</code> + <code>storybook/test</code> (<code>userEvent</code>, <code>expect</code>), run in real Chromium by the Vitest addon</td><td>the journeys keep everything needing a real camera, two hosts at once, or detach/rebuild</td></tr><tr><td>Port label + dot in React Flow</td><td><code>portDotClass()</code> + <code>&lt;Handle&gt;</code> in <code>adapter-reactflow</code></td><td>React Flow UI <code>LabeledHandle</code> — <code>npx shadcn@latest add https://ui.reactflow.dev/labeled-handle</code></td><td>our six placements and five states; copy theirs for the handle plumbing only, inside the adapter</td></tr><tr><td>Everything under <code>ARCHITECTURE.md</code>’s line</td><td>—</td><td><b>unchanged (stock seam)</b></td><td>layout geometry portable in core; interaction geometry host-owned. No part of this proposal moves that line.</td></tr></table></div>
+
+<h2 id="h">§5 · One storybook, three hosts</h2>
+<p>You asked to see every component live inside a React Flow and a tldraw whiteboard, with the same
+controls. Storybook has exactly the seam for it: a <b>global</b> declared in <code>globalTypes</code>
+gives you a toolbar dropdown, and a <b>global decorator</b> reads <code>context.globals</code> and
+decides what tree the story mounts inside. One global, one decorator, every story — including ones
+written next year — becomes viewable in all three hosts for free.</p>
+<pre><code>// .storybook/preview.tsx — one global, one decorator, three hosts.
+import type { Preview } from '@storybook/react-vite'
+import { DomHost, ReactFlowHost, TldrawHost } from '../demos/story-hosts'
+
+const HOSTS = { dom: DomHost, reactflow: ReactFlowHost, tldraw: TldrawHost }
+
+const preview: Preview = {
+  globalTypes: {
+    host: {
+      description: 'Render this story in a plain div, a React Flow node, or a tldraw shape',
+      toolbar: {
+        title: 'Host',
+        icon: 'component',
+        items: [
+          { value: 'dom',       title: 'DOM' },
+          { value: 'reactflow', title: 'React Flow' },
+          { value: 'tldraw',    title: 'tldraw' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+  },
+  initialGlobals: { host: 'dom' },
+  decorators: [
+    (Story, context) =&gt; {
+      const Host = HOSTS[context.globals.host as keyof typeof HOSTS] ?? HOSTS.dom
+      return &lt;Host&gt;&lt;Story /&gt;&lt;/Host&gt;     // the story is the node's / shape's body
+    },
+  ],
+}
+export default preview</code></pre>
+<pre><code>// demos/story-hosts/TldrawHost.tsx — lives in demos/, so core keeps zero engine imports.
+// The ShapeUtil is defined ONCE at module scope; a per-story class re-registers
+// the shape on every render and tldraw throws.
+class StoryShapeUtil extends ShapeUtil&lt;StoryShape&gt; {
+  static override type = 'story' as const
+  getDefaultProps() { return { w: 320, h: 200 } }
+  getGeometry(s) { return new Rectangle2d({ width: s.props.w, height: s.props.h, isFilled: true }) }
+  component() { return &lt;HTMLContainer&gt;{useStoryBody()}&lt;/HTMLContainer&gt; }   // ← the story
+  indicator(s) { return &lt;rect width={s.props.w} height={s.props.h} /&gt; }
+}</code></pre>
+<ul class="tight">
+<li>The three host wrappers live in <code>demos/story-hosts/</code>. <b>Never in the core</b> — the
+moment <code>packages/bbox-ui</code> imports tldraw, the one rule that makes a third host a
+150-line afternoon is gone.</li>
+<li>The tldraw host needs a fixed-height container and the shape registered once at module scope.
+A <code>ShapeUtil</code> class created per render re-registers the shape and tldraw throws.</li>
+<li>A story that reads <code>context.globals.host</code> itself is a smell — the story should not know.
+Only the decorator knows.</li>
+</ul>
+
+<h3>Do <code>play</code> functions replace <code>drive-*.mjs</code>?</h3>
+<p><b>No — they have different oracles, and collapsing them would lose the one that matters.</b></p>
+<div class="scroll"><table>
+<tr><th></th><th><code>play</code> (+ Vitest addon)</th><th><code>demos/drive-*.mjs</code></th></tr>
+<tr><td>asserts</td><td>the <i>component’s</i> contract — DOM, roles, keyboard, state transitions</td>
+    <td>the <i>integration</i> — real pointer gestures, camera, two hosts at once, detach → stock → rebuild, 0.00px divergence</td></tr>
+<tr><td>runs in</td><td>real Chromium via Playwright (the addon is browser-mode, not jsdom) — Vite frameworks only, which bbox-ui is</td><td>headless Chrome over CDP, against a real vite + host app</td></tr>
+<tr><td>keep?</td><td><b>add</b></td><td><b>keep all of them</b></td></tr>
+</table></div>
+<p><b>Recommendation:</b> <code>play</code> takes over the DOM-shaped assertions currently buried in the
+drive scripts; the drive scripts keep everything a Storybook iframe structurally cannot do — a camera, a
+second engine, a right-click context menu, a real resize handle, a pixel comparison. Two suites, no
+overlap, and the drive scripts get shorter.</p>
+
+<h3>“A storybook-like inspector panel on the right” — which one is it?</h3>
+<p><b>Both, and that is fine, because they render the same array.</b></p>
+<ul class="tight">
+<li><b>Inside Storybook</b> it is the stock <b>Controls addon</b>, fed <code>toArgTypes(fields)</code>.
+Do not replace it — you would lose Autodocs, the args URL state and the reset-to-default plumbing for free.</li>
+<li><b>Inside the demos and, later, the product</b> it is a copy-in <code>&lt;Inspector&gt;</code> —
+the one in <code>packages/inspector</code>, 71 files, which already has the drag-scrub
+field, the colour well, the segmented tiles and the swatch rows — fed
+<code>readFields(fields, selection)</code>.</li>
+<li>The product panel is the <b>harder</b> of the two: it must handle N subjects and render <i>mixed</i>.
+Storybook’s Controls is its degenerate single-subject case. Build the product one; Storybook’s comes free.</li>
+</ul>
+
+<h2 id="n">§6 · What you are not seeing</h2>
+
+<h3>a · The schema is the product; the panel is a consequence</h3>
+<p>The Shopify insight you pointed at is not the panel — it is that a section’s <code>settings</code>
+<b>and</b> its <code>presets</code> are data in the same file, and the editor is generated from them.
+Your nine presets (Type, Function, Type Mapping, Class, Component, System, For, While, Conditional) are
+precisely Shopify presets: <i>named bundles of setting values</i>. And a Storybook story is also a named
+bundle of arg values. <b>They are the same object.</b> One <code>presets.ts</code> can be all three: the
+stories’ <code>args</code>, the inspector’s preset picker, and the toolbar’s “new Block of kind X”
+defaults. Write it early, not last.</p>
+<p class="mk-lab">Novelty check: the vault has <b>zero</b> references to Shopify’s theme editor or
+settings_schema.json, and Storybook appears twice in passing (a 2026-07-16 deep-research citation about
+docs tabs, and a note that Penpot’s design system uses it) with no analysis and no decision. This is new
+ground, not a restatement.</p>
+
+<h3>b · <code>hidden</code> is structural — so it cannot be an appearance control</h3>
+<p>Your board is emphatic: “Completely remove it, we don’t want it to be selectable either. If you just
+set 0 opacity, it could not be there but still capture mouse clicks.” Right — and the consequence goes
+further than hit-testing. Removing a port row <b>reflows the block</b>, which changes what
+<code>blockLayout.ts</code> returns, which changes what <b>detach</b> draws and what the compare harness
+measures. A <code>visible</code> toggle filed under Appearance would be a bug that only surfaces at
+detach time, in the other host. Mark it <code>structural: true</code> in the <code>FieldSpec</code> and
+keep it out of the <code>Appearance</code> group. SystemSketch already models it correctly —
+<code>visible: boolean</code> on <code>BlockPort</code>, with <code>hiddenPortSummaries()</code> doing
+the reflow and the “+N more” line.</p>
+
+<h3>c · “Detect polarity dynamically” contradicts the rule the repo rests on</h3>
+<p>If polarity is derived from what is connected, the core has to know about edges. It must not —
+<code>ARCHITECTURE.md</code>: “interaction geometry is host-owned and never travels”, and the core has
+“zero imports of tldraw, zero imports of React Flow”. Resolution: <b>polarity is authored</b>, with a
+default derived from which array the port sits in (inputs → W, outputs → E). A host that <i>can</i>
+compute a better one from its own edge graph passes it down as a prop. The direction of the flow is
+decided at the landing, by the host — which is already your ruling for cables.</p>
+
+<h3>d · “Everything is a Block” collides with Storybook’s per-component story tree</h3>
+<p>If members are Blocks, a Block story’s <code>members</code> arg is an array of Block args, and
+Storybook’s <code>object</code> control renders that as a raw JSON editor — technically correct,
+practically unusable. The stock answer is <code>argTypes.mapping</code>: the control offers short option
+strings and the mapping holds the real complex values.</p>
+<pre><code>argTypes: {
+  members: {
+    control: 'select',
+    options: ['none', 'three', 'nested'],       // what you click
+    mapping: {                                  // what the component receives
+      none:   [],
+      three:  [PRESETS.component, PRESETS.component, PRESETS.component],
+      nested: [{ ...PRESETS.system, members: [PRESETS.component] }],
+    },
+  },
+}</code></pre>
+<p>And the recursion does not need a “member story tree”: a member is a Block, so
+<code>Block.stories.tsx</code> covers it. What you <i>do</i> want is one story per <b>containment
+rule</b> — stack vs free, fill vs own width, black-box on vs off — because those are the rules that break.</p>
+
+<h3>e · Unstyled now, styled later — which rows are tokens and which are props</h3>
+<p>The rule that survives: <b>if two blocks on one board may legitimately differ, it is a prop; if they
+must agree for the board to look like one product, it is a token.</b></p>
+<div class="scroll"><table>
+<tr><th>token (<code>theme.css</code>, <code>--bbox-*</code>)</th><th>prop (<code>FieldSpec</code>)</th></tr>
+<tr><td>the rung <i>scale</i> itself — {   md: 24,   lg: 36,   xl: 44, }</td><td><i>which</i> rung: <code>size: 'sm'|'md'|'lg'|'xl'</code></td></tr>
+<tr><td>port diameters {   sm: 14,   md: 25,   lg: 36, } and <code>ICON_RATIO 0.9</code></td><td><code>size</code>, and <code>diameter</code> for an exact override</td></tr>
+<tr><td>hairline colour, radius, default gap/gutter, the sans/sketch/mono families</td><td><code>font</code>, <code>align</code>, <code>justify</code>, <code>padding</code></td></tr>
+<tr><td>line <i>thickness scale</i> (thin/med/thick → px)</td><td><code>line.width</code> — which rung</td></tr>
+</table></div>
+<p><b>The trap is line colour.</b> The board lists it under Line, i.e. a prop — but nine times in ten you
+want the token. Make <code>line.color</code> default to <code>currentColor</code>: it inherits the theme
+unless someone overrides it, so the token and the per-shape override are one mechanism rather than two
+that fight.</p>
+
+<h3>f · The real cost per component is not the component</h3>
+<p><code>ARCHITECTURE.md</code>’s second detach rule: “Geometry from the layout authority — the detached
+picture derives from <code>layout.ts</code> + <code>blockLayout.ts</code>, never from re-measured DOM,
+never hand-typed offsets.” So <b>every new component needs a pure box function</b>, or it cannot detach,
+cannot rebuild, and cannot be compared across the two hosts at 0.00px. The honest per-component cost is
+six artefacts:</p>
+<p class="tree">component.tsx  +  component.fields.ts  +  layoutComponent()  +  DetachableKind  +  registry item  +  Component.stories.tsx</p>
+<p>Eleven components × six is the budget. That is why §7 starts with <i>one</i> component all the way
+through rather than eleven components half way.</p>
+
+<h3>g · React Flow UI already ships some of these — copy, do not design</h3>
+<div class="scroll"><table>
+<tr><th>theirs</th><th>your band</th><th>verdict</th></tr><tr><td><code>LabeledHandle</code></td><td>Port + label</td><td><b>Copy it</b> — but only into <code>adapter-reactflow</code>; it imports <code>@xyflow/react</code></td></tr><tr><td><code>BaseNode</code></td><td>Block container</td><td>Read, don’t copy. It is a Tailwind card; bbox-ui’s Block is far more specified</td></tr><tr><td><code>LabeledGroupNode</code></td><td>Region view</td><td><b>Read it before designing Region.</b> Same problem, already solved once</td></tr><tr><td><code>NodeAppendix</code></td><td>the ⋮ footer</td><td>Read it. May be the whole footer</td></tr><tr><td><code>NodeStatusIndicator</code></td><td><code>received</code> / running chrome</td><td>Read before inventing a “running” state</td></tr><tr><td><code>BaseHandle</code> · <code>ButtonHandle</code></td><td>PortDot variants</td><td>Read; ours is stricter (5 states, 3 diameters)</td></tr><tr><td><code>NodeTooltip</code> · <code>NodeSearch</code> · <code>ZoomSlider</code> · <code>DevTools</code></td><td>chrome</td><td>Not our problem — host chrome</td></tr><tr><td><code>DataEdge</code> · <code>ButtonEdge</code> · <code>AnimatedSvgEdge</code></td><td>cables</td><td>Host-owned by our own rule. Use theirs in the React Flow demo</td></tr></table></div>
+<p class="mk-lab">Installed by the same CLI you already use
+(<code>npx shadcn@latest add https://ui.reactflow.dev/&lt;name&gt;</code>) and they require React 19 +
+Tailwind 4 — which this repo already is. Every one of them imports <code>@xyflow/react</code>, so they
+can only live in <code>packages/adapter-reactflow</code>.</p>
+
+<h3>h · Registry granularity</h3>
+<p>shadcn resolves <code>registryDependencies</code>, so <b>one item per primitive, plus one composite
+<code>block</code> item that depends on them</b>, is the CLI-native shape and the only one that honours
+“copy-paste components you own” — someone can take just <code>port</code>. Today’s
+5 items already have exactly this shape, with <code>bbox-layout</code> as the shared
+lib dependency. Keep it; add <code>glyph</code>, <code>text-box</code>, <code>pill</code>,
+<code>row-container</code>, <code>port-edge</code> as siblings rather than folding them into
+<code>block</code>.</p>
+
+<h3>i · Storybook’s weight, honestly</h3>
+<ul class="tight">
+<li><b>Ladle</b> is a genuine alternative: CSF-compatible, ~250KB of assets against Storybook 6.4’s
+5.1MB by its own README. Its documented controls are boolean, number, range, select, multi-select, radio,
+inline-radio, check, inline-check — with <b>no</b> documented colour control, <b>no</b> object/array
+control, <b>no</b> <code>mapping</code>, <b>no</b> custom global toolbar, and <b>no</b> play functions.
+Those absences are precisely the three features this plan needs.</li>
+<li><b>Tailwind v4 + Storybook 9 + Vite has real friction</b>, all documented in the open:
+<code>@tailwindcss/vite</code> is not picked up by Storybook’s own Vite instance;
+<code>ERR_PACKAGE_PATH_NOT_EXPORTED</code> on <code>@tailwindcss/vite/package.json</code>; a crash when
+<code>mergeConfig</code> is imported at the top of <code>main.ts</code> on SB 9.1.1 / Vite 7.1.1.
+The fix is known and small: add the plugin inside <code>viteFinal</code>, with a dynamic import.
+Budget an hour, not a day.</li>
+<li>The tldraw host inside Storybook is the one genuinely unproven piece of this plan. It should be the
+<i>first</i> thing T0 builds, not the last — if it does not work, the three-host toolbar becomes a
+two-host toolbar and the rest of the plan is unchanged.</li>
+</ul>
+
+<h2 id="l">§7 · The ladder</h2>
+<div class="scroll"><table>
+<tr><th></th><th>rung</th><th>what it is</th><th>why this order</th></tr><tr><td><b>T0</b></td><td><b>Port, end to end</b> — the tracer bullet</td><td><code>packages/schema</code> (FieldSpec + toArgTypes + readFields, zero deps) · <code>port.fields.ts</code> · <code>Port.stories.tsx</code> with 6 state stories and one <code>play</code> · <code>.storybook/preview.tsx</code> with the <code>host</code> toolbar and the three-host decorator · the playground inspector fed by the same array.</td><td><b>Done when</b> one <code>Port</code> story renders in DOM, in a React Flow node and in a tldraw shape from one toolbar, and <code>state</code> changed in Storybook Controls and in the demo inspector do the identical thing.</td></tr><tr><td><b>T1</b></td><td>The <code>Appearance</code> group</td><td>7 shared fields (line ×4, fill ×3) applied to Port + Pill; one <code>appearanceFields</code> array reused, not copied.</td><td>Proves the group composes before eleven components depend on it.</td></tr><tr><td><b>T2</b></td><td>Glyph · TextBox · Pill</td><td>three components, three <code>*.fields.ts</code>, three story files. Autodocs now has something to document.</td><td>First point at which the gallery in this report is real code.</td></tr><tr><td><b>T3</b></td><td>RowContainer + PortEdge</td><td>lane geometry in the core; dnd-kit reorder in the <i>demo</i>, never in the core (PEP 0013).</td><td>Proves the host/core line survives a gesture.</td></tr><tr><td><b>T4</b></td><td><code>presets.ts</code> + Block Simple View’s nine variants</td><td>each preset used twice: story <code>args</code> and the inspector’s preset picker.</td><td>This is where the Shopify idea pays — see §6a.</td></tr><tr><td><b>T5</b></td><td>Block Port View</td><td>header slots, header sizes, folding, the four visibility flags, hidden-port summary.</td><td>Now the board’s biggest band is code.</td></tr><tr><td><b>T6</b></td><td>Members · Expanded · Region · black-box</td><td>recursion + the <code>mapping</code> trick for member arrays in Controls (§6d).</td><td>The recursive claim gets tested, not asserted.</td></tr><tr><td><b>T7</b></td><td>Merge <code>claude/code-field</code> into the family</td><td>CodeField becomes TextBox’s big brother; the signature grammar becomes the Port label’s editor.</td><td>Closes the “a port is one line of code” arc.</td></tr></table></div>
+
+<h3>What to copy from SystemSketch first</h3>
+<ul class="tight">
+<li><code>layoutBlock.ts</code> → <code>hiddenPortSummaries()</code>’s reflow rule and the “+N more” placement.</li>
+<li>The rung <i>names</i>: <code>titleSize</code>/<code>titleFont</code>/<code>titleAlign</code> already use
+the board’s own words. Do not invent new ones.</li>
+<li><code>src/appearance/strokeMeta.ts</code>’s option sets — thin/medium/thick and
+solid/dashed/dotted/async — so the two products offer the identical vocabulary.</li>
+<li><code>memberStack.ts</code>’s <code>fill | own</code> width rule, which is the whole of “the width of
+the largest child drives the width”.</li>
+</ul>
+<h3>What never moves into bbox-ui</h3>
+<p>Most of SystemSketch’s Block is <b>meaning</b>, not presentation. Of its 41 props,
+the ones that must stay behind include <code>definitionId</code>, <code>definitionKey</code>,
+<code>fieldDiffs</code>, <code>priorPose</code>, <code>draftOrdinal</code>, <code>attributeSource</code>,
+<code>stockConfig</code>, <code>expandedWeights</code>; and of <code>BlockPort</code>’s
+19 fields, <code>semanticRoleDerived</code>, <code>semanticRoleAuthored</code>,
+<code>link</code>, <code>variadic</code>, <code>mutates</code>, <code>effect</code>,
+<code>stateBefore</code>. Also staying: cables and bindings, autosave and board files, connection routing,
+the behaviour-tree XML canon. <b>bbox-ui is presentation. SystemSketch keeps the meaning.</b></p>
+
+<h2 id="d">§8 · Decisions</h2>
+<p>Six. Each carries the reversible default I will take if you say nothing.</p>
+<div class="scroll"><table>
+<tr><th></th><th>decision</th><th>recommendation</th><th>default if you say nothing</th></tr><tr><td><b>1</b></td><td><b>Where the schema lives</b></td><td>New <code>packages/schema</code> — <code>FieldSpec</code> (declaration) + <code>FieldReading</code> (declaration + value/mixed), <code>toArgTypes()</code>, <code>readFields()</code>. Zero deps, no React.</td><td>Create it. It is ~120 lines and it is the hinge of everything else.</td></tr><tr><td><b>2</b></td><td><b>Storybook or Ladle</b></td><td>Storybook 9 (<code>@storybook/react-vite</code>) + <code>@storybook/addon-vitest</code>. Ladle is ~20× lighter and CSF-compatible, but its docs cover neither a custom global toolbar nor <code>object</code>/<code>mapping</code> controls nor play functions — and those three are exactly what makes the three-host plan and the recursive <code>members</code> control work.</td><td>Storybook, with the Tailwind v4 plugin added inside <code>viteFinal</code> (documented friction, documented fix). Revisit only if install weight actually hurts.</td></tr><tr><td><b>3</b></td><td><b>One inspector or two</b></td><td>Keep <code>packages/inspector</code>. Add a second entry point that takes <code>FieldReading[]</code> instead of a tldraw <code>Editor</code>. Do not fork, do not rewrite, do not try to embed Storybook’s Controls panel in the product.</td><td>Extend in place behind a new export. The existing tldraw-shape mode keeps working untouched.</td></tr><tr><td><b>4</b></td><td><b>Where presets live</b></td><td><code>packages/bbox-ui/src/presets.ts</code> — in the <i>core</i>, not in <code>.storybook</code>. Stories import them; the inspector’s preset picker imports them; the toolbar’s “new Block” imports them.</td><td>Core. A preset in a story file can only ever be a story.</td></tr><tr><td><b>5</b></td><td><b>React Flow UI</b></td><td>Copy <code>LabeledHandle</code> into <code>adapter-reactflow</code>. Read <code>LabeledGroupNode</code>, <code>NodeAppendix</code> and <code>NodeStatusIndicator</code> before designing Region, the footer, and any running-state chrome. Design nothing that already exists there.</td><td>Copy the one, read the three, design none of them.</td></tr><tr><td><b>6</b></td><td><b>Polarity</b></td><td>Authored <code>'n'|'e'|'s'|'w'</code> with a default derived from which array the port sits in (inputs → W, outputs → E). The <i>host</i> may compute a better one and pass it down as a prop. The core never inspects edges.</td><td>Ship it authored. “Detect it dynamically” would put edge knowledge in the core and break the one rule the repo rests on.</td></tr></table></div>
+
+<div class="note"><b>What would change my mind.</b> (1) If the tldraw <code>ShapeUtil</code> will not
+mount cleanly inside a Storybook iframe, the three-host toolbar drops to two and the React Flow host
+carries the “see it in a whiteboard” requirement alone — everything else stands. (2) If you want the
+inspector to ship <i>inside SystemSketch</i> rather than inside bbox-ui demos, the schema package needs
+to be publishable separately and the decision-3 “extend in place” answer flips to a real extraction.
+(3) If Storybook’s install weight actually bites in this monorepo, Ladle plus a hand-rolled host
+dropdown is a real fallback — the <code>FieldSpec</code> layer is unchanged either way, which is the
+point of putting it in its own package.</div>
+
+<div class="note"><b>What I could not verify.</b> tldraw mounted inside a Storybook iframe (not
+attempted — no implementation in this task). The exact Storybook 9 install weight in this pnpm workspace.
+Whether <code>@storybook/addon-vitest</code> and the pinned <code>vitest@3</code> here agree without a
+bump. The React Flow UI components were read from their published docs, not installed.</div>
+
+<h2 id="e">Appendix · the rest of the evidence</h2>
+<p>Six more captures from the same headless run, each one looked at before it was embedded.</p>
+<p>The remaining captures — folded blocks, free members, the real Loop and Behaviour-Tree shapes, and SystemSketch's read-only stock-style panel — are in the media edition.</p>
+
+<p class="meta">Built by <code>docs/build_component_proposal.py</code> · every number above measured from
+the tree at build time · branch <code>claude/component-proposal</code> · 2026-09-10</p>
+</div>
