@@ -198,7 +198,7 @@ export function TldrawCanvas(p: Props) {
             };
           }}
         />
-        <span className="pointer-events-none absolute bottom-2 right-2 z-10 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">tldraw</span>
+        <span className="pointer-events-none absolute bottom-2 left-2 z-10 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">tldraw</span>
       </div>
     </BenchContext.Provider>
   );
