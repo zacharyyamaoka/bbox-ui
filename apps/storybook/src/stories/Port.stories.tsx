@@ -24,7 +24,7 @@ import type { ComponentProps } from "react";
  * `port.fields.test.ts` is what actually proves the values line up.
  */
 const meta = {
-  title: "T0 Spike/Port",
+  title: "Components/Port",
   component: Port,
   args: defaultArgs(PORT_FIELDS) as Partial<ComponentProps<typeof Port>>,
   argTypes: toArgTypes(PORT_FIELDS),

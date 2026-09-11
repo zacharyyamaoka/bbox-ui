@@ -29,7 +29,7 @@ import path from "node:path";
 
 const STORYBOOK_DIR = path.resolve(import.meta.dirname, "..");
 const PORT = Number(process.env.SB_VERIFY_PORT ?? 5430);
-const STORY_ID = "t0-spike-port--primary";
+const STORY_ID = "components-port--primary";
 const SCREENSHOT_DIR = process.env.SB_VERIFY_SCREENSHOT_DIR ?? path.join(tmpdir(), "bbox-verify-hosts");
 mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
