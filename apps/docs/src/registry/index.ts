@@ -1,6 +1,6 @@
 import type { Registry } from "shadcn/schema";
-import { examples } from "./registry-examples";
-import { ui } from "./registry-ui";
+import { examples } from "./registry-examples.ts";
+import { ui } from "./registry-ui.ts";
 
 // Shared between index and style for backward compatibility.
 export const TEMPLATE_STYLE = {

@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { rimraf } from "rimraf";
-import { registry } from "../registry";
+import { registry } from "../registry/index.ts";
 
 async function buildRegistryIndex() {
   let index = `/* eslint-disable @typescript-eslint/ban-ts-comment */

@@ -3,14 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "bun run registry:build && next build",
+    "build": "node scripts-copy-registry.mjs && node --experimental-strip-types ./src/scripts/build-registry.mts && next build",
     "dev": "next dev --port=4100",
     "start": "serve out",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",
     "postinstall": "fumadocs-mdx",
     "lint": "biome check",
     "format": "biome format --write",
-    "registry:build": "bun ./src/scripts/build-registry.mts"
+    "registry:build": "node --experimental-strip-types ./src/scripts/build-registry.mts",
+    "registry:copy": "node scripts-copy-registry.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -47,5 +48,6 @@
     "serve": "^14.2.6",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
-  }
+  },
+  "type": "module"
 }
