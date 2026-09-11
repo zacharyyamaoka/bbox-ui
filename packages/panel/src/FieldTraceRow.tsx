@@ -600,8 +600,8 @@ function segmentButtonStyle(selected: boolean, secondary?: boolean): CSSProperti
     borderRadius: 4,
     fontSize: 12,
     border: selected ? `1px solid ${secondary ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-fg, #111)"}` : "1px solid var(--bbox-panel-border, #ccc)",
-    background: selected ? (secondary ? "var(--bbox-panel-border-soft, #eee)" : "var(--bbox-panel-fg, #111)") : "white",
-    color: selected ? (secondary ? "var(--bbox-panel-fg, #333)" : "white") : "var(--bbox-panel-fg, #111)",
+    background: selected ? (secondary ? "var(--bbox-panel-border-soft, #eee)" : "var(--bbox-panel-fg, #111)") : "var(--bbox-panel-surface, white)",
+    color: selected ? (secondary ? "var(--bbox-panel-fg, #333)" : "var(--bbox-panel-surface, white)") : "var(--bbox-panel-fg, #111)",
     cursor: "pointer",
     opacity: secondary && !selected ? 0.7 : 1,
   };

@@ -430,8 +430,8 @@ function tierButtonStyle(active: boolean): CSSProperties {
     fontWeight: 600,
     border: "none",
     borderRight: "1px solid var(--bbox-panel-border, #ddd)",
-    background: active ? "var(--bbox-panel-fg, #333)" : "white",
-    color: active ? "white" : "var(--bbox-panel-fg-muted, #666)",
+    background: active ? "var(--bbox-panel-fg, #333)" : "var(--bbox-panel-surface, white)",
+    color: active ? "var(--bbox-panel-surface, white)" : "var(--bbox-panel-fg-muted, #666)",
     cursor: "pointer",
   };
 }
@@ -468,8 +468,8 @@ function presetPillButtonStyle(selected: boolean, modified?: boolean): CSSProper
     fontSize: 11,
     fontWeight: 600,
     border: modified ? "1px solid var(--bbox-panel-warn-soft, #d97706)" : selected ? "1px solid var(--bbox-panel-fg, #333)" : "1px solid var(--bbox-panel-border, #ccc)",
-    background: modified ? "var(--bbox-panel-warn-bg, #fffbeb)" : selected ? "var(--bbox-panel-fg, #333)" : "white",
-    color: modified ? "var(--bbox-panel-warn, #92400e)" : selected ? "white" : "var(--bbox-panel-fg-muted, #555)",
+    background: modified ? "var(--bbox-panel-warn-bg, #fffbeb)" : selected ? "var(--bbox-panel-fg, #333)" : "var(--bbox-panel-surface, white)",
+    color: modified ? "var(--bbox-panel-warn, #92400e)" : selected ? "var(--bbox-panel-surface, white)" : "var(--bbox-panel-fg-muted, #555)",
     cursor: "pointer",
   };
 }
@@ -479,7 +479,7 @@ const presetResetStyle: CSSProperties = {
   borderRadius: 5,
   fontSize: 11,
   border: "1px solid var(--bbox-panel-warn-soft, #d97706)",
-  background: "white",
+  background: "var(--bbox-panel-surface, white)",
   color: "var(--bbox-panel-warn, #92400e)",
   cursor: "pointer",
   lineHeight: 1,

@@ -661,8 +661,8 @@ function presetButtonStyle(selected: boolean): CSSProperties {
     fontSize: 12,
     fontWeight: 600,
     border: selected ? "1px solid var(--bbox-panel-override, #6d28d9)" : "1px solid var(--bbox-panel-override-ring, #c4b5fd)",
-    background: selected ? "var(--bbox-panel-override, #6d28d9)" : "white",
-    color: selected ? "white" : "var(--bbox-panel-override, #6d28d9)",
+    background: selected ? "var(--bbox-panel-override, #6d28d9)" : "var(--bbox-panel-surface, white)",
+    color: selected ? "var(--bbox-panel-surface, white)" : "var(--bbox-panel-override, #6d28d9)",
     cursor: "pointer",
   };
 }
@@ -758,7 +758,7 @@ const paintedDotStyle: CSSProperties = {
 
 const popoverBaseStyle: CSSProperties = {
   zIndex: 1000,
-  background: "white",
+  background: "var(--bbox-panel-surface, white)",
   border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 8,
   boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
@@ -784,7 +784,7 @@ function popoverGovernedTagStyle(winner: Layer | null): CSSProperties {
 const popoverDoneStyle: CSSProperties = {
   fontSize: 11,
   border: "1px solid var(--bbox-panel-border, #ccc)",
-  background: "white",
+  background: "var(--bbox-panel-surface, white)",
   borderRadius: 4,
   padding: "2px 8px",
   cursor: "pointer",
@@ -875,7 +875,7 @@ function menuRowStyle(active: boolean): CSSProperties {
     padding: "6px 10px",
     border: "none",
     borderBottom: "1px solid var(--bbox-panel-surface-2, #f2f2f2)",
-    background: active ? "var(--bbox-panel-override-bg, #f5f3ff)" : "white",
+    background: active ? "var(--bbox-panel-override-bg, #f5f3ff)" : "var(--bbox-panel-surface, white)",
     cursor: "pointer",
     textAlign: "left",
     fontFamily: "inherit",

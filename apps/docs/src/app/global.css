@@ -8,6 +8,43 @@
    @source adds that package to the scan. */
 @source "../../../../packages/bbox-ui/src";
 
+/* The inspector panel (@bbox-ui/panel) is inline-styled and reads these roles
+   instead of literal colours. Mapping them onto the site's own tokens is what
+   makes /create follow the site's light/dark switch. The panel's own
+   panel.css is deliberately NOT imported here: it would carry a second, fixed
+   palette that disagrees with this one in dark mode. */
+:root,
+.dark {
+  --bbox-panel-fg: var(--foreground);
+  --bbox-panel-fg-muted: var(--muted-foreground);
+  --bbox-panel-fg-faint: color-mix(in oklch, var(--muted-foreground) 65%, transparent);
+  --bbox-panel-border: var(--input);
+  --bbox-panel-border-soft: var(--border);
+  --bbox-panel-surface: var(--background);
+  --bbox-panel-surface-2: var(--muted);
+  --bbox-panel-surface-3: var(--accent);
+  --bbox-panel-override: oklch(0.55 0.22 295);
+  --bbox-panel-override-soft: oklch(0.65 0.2 295);
+  --bbox-panel-override-ring: oklch(0.8 0.1 295);
+  --bbox-panel-override-bg: color-mix(in oklch, oklch(0.55 0.22 295) 12%, var(--background));
+  --bbox-panel-preset: oklch(0.55 0.2 260);
+  --bbox-panel-preset-soft: oklch(0.65 0.18 260);
+  --bbox-panel-preset-bg: color-mix(in oklch, oklch(0.55 0.2 260) 14%, var(--background));
+  --bbox-panel-warn: oklch(0.6 0.16 65);
+  --bbox-panel-warn-soft: oklch(0.72 0.17 70);
+  --bbox-panel-warn-ring: color-mix(in oklch, oklch(0.72 0.17 70) 45%, var(--background));
+  --bbox-panel-warn-bg: color-mix(in oklch, oklch(0.72 0.17 70) 12%, var(--background));
+  --bbox-panel-danger: var(--destructive);
+  --bbox-panel-danger-ring: color-mix(in oklch, var(--destructive) 45%, var(--background));
+  --bbox-panel-danger-bg: color-mix(in oklch, var(--destructive) 12%, var(--background));
+  --bbox-panel-accent: oklch(0.6 0.12 180);
+}
+.dark {
+  --bbox-panel-override: oklch(0.78 0.14 295);
+  --bbox-panel-preset: oklch(0.78 0.12 260);
+  --bbox-panel-warn: oklch(0.82 0.15 80);
+}
+
 :root {
   --radius: 0.65rem;
   --bbox-received: oklch(0.65 0.19 145);

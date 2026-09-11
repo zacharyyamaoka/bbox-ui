@@ -516,8 +516,8 @@ function presetButtonStyle(selected: boolean): CSSProperties {
     fontSize: 12,
     fontWeight: 600,
     border: selected ? "1px solid var(--bbox-panel-override, #6d28d9)" : "1px solid var(--bbox-panel-override-ring, #c4b5fd)",
-    background: selected ? "var(--bbox-panel-override, #6d28d9)" : "white",
-    color: selected ? "white" : "var(--bbox-panel-override, #6d28d9)",
+    background: selected ? "var(--bbox-panel-override, #6d28d9)" : "var(--bbox-panel-surface, white)",
+    color: selected ? "var(--bbox-panel-surface, white)" : "var(--bbox-panel-override, #6d28d9)",
     cursor: "pointer",
   };
 }

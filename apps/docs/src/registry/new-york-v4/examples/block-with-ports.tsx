@@ -11,8 +11,8 @@ export default function BlockWithPorts() {
   return (
     <div className="flex items-center justify-center gap-8 py-10">
       <div className="flex flex-col gap-6">
-        <Port state="wired" size="md" textLayout="left">image</Port>
-        <Port state="default" size="md" textLayout="left">threshold</Port>
+        <Port state="wired" diameter="md" textLayout="left">image</Port>
+        <Port state="valueSet" diameter="md" textLayout="left">threshold</Port>
       </div>
       <Block>
         <BlockHeader>
@@ -21,7 +21,7 @@ export default function BlockWithPorts() {
         </BlockHeader>
         <BlockType>dataflow</BlockType>
       </Block>
-      <Port state="wired" size="md" textLayout="right">boxes</Port>
+      <Port state="wired" diameter="md" textLayout="right">boxes</Port>
     </div>
   );
 }

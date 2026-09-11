@@ -243,18 +243,18 @@ function FigmaDensePanel({
 }
 
 const controlBarStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid var(--fd-line, #e7e7ec)" };
-const tierGroupStyle: CSSProperties = { display: "flex", border: "1px solid #d6d6de", borderRadius: 6, overflow: "hidden" };
-const filterInputStyle: CSSProperties = { flex: 1, minWidth: 0, fontSize: 11, padding: "3px 7px", border: "1px solid #d6d6de", borderRadius: 6, background: "#fff", color: "#222" };
-const noteStyle: CSSProperties = { fontSize: 11, color: "#6a6a75", padding: "5px 10px" };
-const hiddenButSetStyle: CSSProperties = { display: "block", width: "100%", textAlign: "left", fontSize: 11, color: "#8a5a12", background: "#fdf6ec", border: "none", borderBottom: "1px solid #f0e2cc", padding: "5px 10px", cursor: "pointer" };
+const tierGroupStyle: CSSProperties = { display: "flex", border: "1px solid var(--bbox-panel-border, #d6d6de)", borderRadius: 6, overflow: "hidden" };
+const filterInputStyle: CSSProperties = { flex: 1, minWidth: 0, fontSize: 11, padding: "3px 7px", border: "1px solid var(--bbox-panel-border, #d6d6de)", borderRadius: 6, background: "var(--bbox-panel-surface, #fff)", color: "var(--bbox-panel-fg, #222)" };
+const noteStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-muted, #6a6a75)", padding: "5px 10px" };
+const hiddenButSetStyle: CSSProperties = { display: "block", width: "100%", textAlign: "left", fontSize: 11, color: "var(--bbox-panel-warn, #8a5a12)", background: "var(--bbox-panel-warn-bg, #fdf6ec)", border: "none", borderBottom: "1px solid var(--bbox-panel-warn-ring, #f0e2cc)", padding: "5px 10px", cursor: "pointer" };
 function tierButtonStyle(active: boolean, dimmed: boolean): CSSProperties {
   return {
     fontSize: 11,
     padding: "3px 9px",
     border: "none",
-    borderRight: "1px solid #e4e4ea",
-    background: active && !dimmed ? "#1d1d22" : "transparent",
-    color: active && !dimmed ? "#fff" : "#5c5c66",
+    borderRight: "1px solid var(--bbox-panel-border-soft, #e4e4ea)",
+    background: active && !dimmed ? "var(--bbox-panel-fg, #1d1d22)" : "transparent",
+    color: active && !dimmed ? "var(--bbox-panel-surface, #fff)" : "var(--bbox-panel-fg-muted, #5c5c66)",
     opacity: dimmed ? 0.45 : 1,
     cursor: "pointer",
   };
@@ -998,7 +998,7 @@ function NamedDropdown({
 const panelStyle: CSSProperties = {
   width: 280,
   padding: "10px 12px",
-  border: "1px solid #ddd",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 8,
   display: "flex",
   flexDirection: "column",
@@ -1012,15 +1012,15 @@ const headerStyle: CSSProperties = {
   alignItems: "baseline",
   justifyContent: "space-between",
   padding: "2px 2px 8px",
-  borderBottom: "1px solid #eee",
+  borderBottom: "1px solid var(--bbox-panel-border-soft, #eee)",
   marginBottom: 6,
 };
-const headerNameStyle: CSSProperties = { fontWeight: 600, fontSize: 12, color: "#111" };
-const headerCountStyle: CSSProperties = { fontSize: 10, color: "#999" };
+const headerNameStyle: CSSProperties = { fontWeight: 600, fontSize: 12, color: "var(--bbox-panel-fg, #111)" };
+const headerCountStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-fg-faint, #999)" };
 
 const presetRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, padding: "3px 2px" };
-const presetLabelStyle: CSSProperties = { width: 92, flexShrink: 0, fontSize: 10, color: "#6d28d9", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 };
-const mixedNoteStyle: CSSProperties = { fontSize: 10, color: "#b45309" };
+const presetLabelStyle: CSSProperties = { width: 92, flexShrink: 0, fontSize: 10, color: "var(--bbox-panel-override, #6d28d9)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 };
+const mixedNoteStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-warn, #b45309)" };
 
 const fieldListStyle: CSSProperties = { display: "flex", flexDirection: "column" };
 
@@ -1040,7 +1040,7 @@ const pairedCellStyle: CSSProperties = { display: "flex", flexDirection: "column
 function labelTextStyle(governed: boolean, scrubbable: boolean): CSSProperties {
   return {
     fontSize: 11,
-    color: governed ? "#999" : "#444",
+    color: governed ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-fg, #444)",
     fontWeight: 400,
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -1052,12 +1052,12 @@ function labelTextStyle(governed: boolean, scrubbable: boolean): CSSProperties {
 
 function dotButtonStyle(mixed: boolean, winner: FieldTrace["winner"] | undefined, expanded: boolean): CSSProperties {
   const palette: Record<"override" | "preset" | "default" | "mixed", string> = {
-    override: "#8b5cf6",
-    preset: "#3b82f6",
-    default: "#d1d5db",
-    mixed: "#f59e0b",
+    override: "var(--bbox-panel-override-soft, #8b5cf6)",
+    preset: "var(--bbox-panel-preset-soft, #3b82f6)",
+    default: "var(--bbox-panel-border, #d1d5db)",
+    mixed: "var(--bbox-panel-warn-soft, #f59e0b)",
   };
-  const color = mixed ? palette.mixed : winner ? palette[winner] : "#e5e7eb";
+  const color = mixed ? palette.mixed : winner ? palette[winner] : "var(--bbox-panel-border-soft, #e5e7eb)";
   return {
     width: 6,
     height: 6,
@@ -1083,9 +1083,9 @@ const paintedElsewhereStyle: CSSProperties = {
 const clearButtonStyle: CSSProperties = {
   fontSize: 10,
   lineHeight: 1,
-  color: "#b91c1c",
+  color: "var(--bbox-panel-danger, #b91c1c)",
   background: "none",
-  border: "1px solid #fca5a5",
+  border: "1px solid var(--bbox-panel-danger-ring, #fca5a5)",
   borderRadius: 4,
   width: 16,
   height: 16,
@@ -1102,9 +1102,9 @@ const chainStyle: CSSProperties = {
   marginTop: 2,
   marginBottom: 2,
   padding: "3px 6px",
-  background: "#fafafa",
+  background: "var(--bbox-panel-surface-2, #fafafa)",
   borderRadius: 4,
-  border: "1px solid #eee",
+  border: "1px solid var(--bbox-panel-border-soft, #eee)",
 };
 
 function candidateRowStyle(winner: boolean): CSSProperties {
@@ -1114,7 +1114,7 @@ function candidateRowStyle(winner: boolean): CSSProperties {
     gap: 5,
     fontSize: 10,
     fontWeight: winner ? 600 : 400,
-    color: winner ? "#111" : "#999",
+    color: winner ? "var(--bbox-panel-fg, #111)" : "var(--bbox-panel-fg-faint, #999)",
   };
 }
 function candidateDotStyle(winner: boolean): CSSProperties {
@@ -1122,8 +1122,8 @@ function candidateDotStyle(winner: boolean): CSSProperties {
     width: 5,
     height: 5,
     borderRadius: "50%",
-    background: winner ? "#111" : "transparent",
-    border: winner ? "none" : "1px solid #ccc",
+    background: winner ? "var(--bbox-panel-fg, #111)" : "transparent",
+    border: winner ? "none" : "1px solid var(--bbox-panel-border, #ccc)",
     flexShrink: 0,
   };
 }
@@ -1138,9 +1138,9 @@ function segmentButtonStyle(selected: boolean, secondary?: boolean): CSSProperti
     borderRadius: 4,
     fontSize: 10,
     lineHeight: "16px",
-    border: selected ? `1px solid ${secondary ? "#aaa" : "#111"}` : "1px solid #ddd",
-    background: selected ? (secondary ? "#eee" : "#111") : "white",
-    color: selected ? (secondary ? "#333" : "white") : "#444",
+    border: selected ? `1px solid ${secondary ? "var(--bbox-panel-fg-faint, #aaa)" : "var(--bbox-panel-fg, #111)"}` : "1px solid var(--bbox-panel-border, #ddd)",
+    background: selected ? (secondary ? "var(--bbox-panel-border-soft, #eee)" : "var(--bbox-panel-fg, #111)") : "var(--bbox-panel-surface, white)",
+    color: selected ? (secondary ? "var(--bbox-panel-fg, #333)" : "var(--bbox-panel-surface, white)") : "var(--bbox-panel-fg, #444)",
     cursor: "pointer",
     whiteSpace: "nowrap",
   };
@@ -1152,7 +1152,7 @@ const segmentedControlGroupStyle: CSSProperties = { display: "flex", alignItems:
 // marks "inherited" — never a second badge.
 const drivenSuffixStyle: CSSProperties = {
   fontSize: 10,
-  color: "#999",
+  color: "var(--bbox-panel-fg-faint, #999)",
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -1164,8 +1164,8 @@ const drivenSuffixStyle: CSSProperties = {
 const modifiedNoteStyle: CSSProperties = {
   fontSize: 10,
   fontWeight: 600,
-  color: "#b45309",
-  background: "#fef3c7",
+  color: "var(--bbox-panel-warn, #b45309)",
+  background: "var(--bbox-panel-warn-bg, #fef3c7)",
   borderRadius: 4,
   padding: "1px 5px",
   whiteSpace: "nowrap",
@@ -1184,10 +1184,10 @@ function dropdownTriggerStyle(secondary?: boolean): CSSProperties {
     height: 22,
     padding: "0 6px",
     borderRadius: 4,
-    border: `1px solid ${secondary ? "#e5e5e5" : "#ddd"}`,
-    background: "white",
+    border: `1px solid ${secondary ? "var(--bbox-panel-border-soft, #e5e5e5)" : "var(--bbox-panel-border, #ddd)"}`,
+    background: "var(--bbox-panel-surface, white)",
     fontSize: 11,
-    color: secondary ? "#999" : "#222",
+    color: secondary ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-fg, #222)",
     cursor: "pointer",
     textAlign: "left",
   };
@@ -1206,8 +1206,8 @@ const dropdownMenuStyle: CSSProperties = {
   zIndex: 20,
   display: "flex",
   flexDirection: "column",
-  background: "white",
-  border: "1px solid #ddd",
+  background: "var(--bbox-panel-surface, white)",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 6,
   boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
   padding: 3,
@@ -1223,15 +1223,15 @@ function dropdownRowStyle(active: boolean): CSSProperties {
     padding: "3px 6px",
     borderRadius: 4,
     border: "none",
-    background: active ? "#f5f3ff" : "transparent",
+    background: active ? "var(--bbox-panel-override-bg, #f5f3ff)" : "transparent",
     cursor: "pointer",
     textAlign: "left",
     width: "100%",
   };
 }
-const dropdownRowTickStyle: CSSProperties = { width: 12, flexShrink: 0, fontSize: 10, color: "#6d28d9" };
-const dropdownRowLabelStyle: CSSProperties = { flex: 1, minWidth: 0, fontSize: 11, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-const dropdownRowSublabelStyle: CSSProperties = { fontSize: 10, color: "#999", fontFamily: "monospace", flexShrink: 0 };
+const dropdownRowTickStyle: CSSProperties = { width: 12, flexShrink: 0, fontSize: 10, color: "var(--bbox-panel-override, #6d28d9)" };
+const dropdownRowLabelStyle: CSSProperties = { flex: 1, minWidth: 0, fontSize: 11, color: "var(--bbox-panel-fg, #222)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const dropdownRowSublabelStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-fg-faint, #999)", fontFamily: "monospace", flexShrink: 0 };
 
 function dropdownCustomRowStyle(active: boolean): CSSProperties {
   return {
@@ -1240,16 +1240,16 @@ function dropdownCustomRowStyle(active: boolean): CSSProperties {
     gap: 6,
     padding: "3px 6px",
     marginTop: 2,
-    borderTop: "1px solid #eee",
-    background: active ? "#f5f3ff" : "transparent",
+    borderTop: "1px solid var(--bbox-panel-border-soft, #eee)",
+    background: active ? "var(--bbox-panel-override-bg, #f5f3ff)" : "transparent",
     borderRadius: 4,
   };
 }
-const dropdownCustomLabelStyle: CSSProperties = { flex: 1, fontSize: 11, color: "#666" };
+const dropdownCustomLabelStyle: CSSProperties = { flex: 1, fontSize: 11, color: "var(--bbox-panel-fg-muted, #666)" };
 const dropdownCustomInputStyle: CSSProperties = {
   width: 48,
   height: 18,
-  border: "1px solid #ddd",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 3,
   fontSize: 11,
   padding: "0 4px",
@@ -1261,7 +1261,7 @@ function toggleLabelStyle(secondary?: boolean): CSSProperties {
     alignItems: "center",
     gap: 4,
     fontSize: 11,
-    color: secondary ? "#999" : "#333",
+    color: secondary ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-fg, #333)",
   };
 }
 
@@ -1273,8 +1273,8 @@ function numberBoxStyle(secondary?: boolean): CSSProperties {
     minWidth: 0,
     height: 22,
     borderRadius: 4,
-    border: `1px solid ${secondary ? "#e5e5e5" : "#ddd"}`,
-    background: "white",
+    border: `1px solid ${secondary ? "var(--bbox-panel-border-soft, #e5e5e5)" : "var(--bbox-panel-border, #ddd)"}`,
+    background: "var(--bbox-panel-surface, white)",
     padding: "0 2px 0 6px",
   };
 }
@@ -1287,7 +1287,7 @@ const numberInputStyle: CSSProperties = {
   padding: "0 2px",
   background: "transparent",
 };
-const numberUnitStyle: CSSProperties = { fontSize: 10, color: "#999", flexShrink: 0, paddingRight: 4 };
+const numberUnitStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-fg-faint, #999)", flexShrink: 0, paddingRight: 4 };
 
 function textInputStyle(secondary?: boolean): CSSProperties {
   return {
@@ -1295,9 +1295,9 @@ function textInputStyle(secondary?: boolean): CSSProperties {
     minWidth: 0,
     height: 22,
     padding: "0 6px",
-    border: `1px solid ${secondary ? "#e5e5e5" : "#ddd"}`,
+    border: `1px solid ${secondary ? "var(--bbox-panel-border-soft, #e5e5e5)" : "var(--bbox-panel-border, #ddd)"}`,
     borderRadius: 4,
     fontSize: 11,
-    color: secondary ? "#999" : "#222",
+    color: secondary ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-fg, #222)",
   };
 }
