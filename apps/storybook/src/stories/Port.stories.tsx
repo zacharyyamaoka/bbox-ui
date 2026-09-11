@@ -59,13 +59,25 @@ export const Primary: Story = {
   },
 };
 
+/**
+ * A gallery story sweeps ONE field and takes every other field from `args`,
+ * so the Controls panel still drives it live. The swept field's own control
+ * is disabled, because a story that paints all four states at once cannot
+ * honour a single `state` and a control that silently does nothing reads as
+ * broken (Zach, 2026-09-10: "the controls didn't work for the other things").
+ */
+const sweep = (fieldId: string) => ({
+  controls: { exclude: [fieldId] },
+});
+
 /** Every real PortState, side by side — including runtime-only `received`. */
 export const AllStates: Story = {
-  render: () => (
+  parameters: sweep("state"),
+  render: (args) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {STATE_FIELD.options!.map((option) => (
-        <Port key={option.value} state={option.value as PortState}>
-          {option.label}
+        <Port {...args} key={option.value} state={option.value as PortState}>
+          {args.children ?? option.label}
         </Port>
       ))}
     </div>
@@ -74,11 +86,12 @@ export const AllStates: Story = {
 
 /** Every real PortSize (the three diameters — 14 / 25 / 36px). */
 export const AllSizes: Story = {
-  render: () => (
+  parameters: sweep("size"),
+  render: (args) => (
     <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
       {SIZE_FIELD.options!.map((option) => (
-        <Port key={option.value} state="wired" size={option.value as PortSize}>
-          {option.label}
+        <Port {...args} key={option.value} size={option.value as PortSize}>
+          {args.children ?? option.label}
         </Port>
       ))}
     </div>
@@ -87,11 +100,12 @@ export const AllSizes: Story = {
 
 /** Every real PortTextLayout (top/bot/right/left/right-offset/left-offset). */
 export const AllTextLayouts: Story = {
-  render: () => (
+  parameters: sweep("textLayout"),
+  render: (args) => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 32, padding: 24 }}>
       {LAYOUT_FIELD.options!.map((option) => (
-        <Port key={option.value} state="default" textLayout={option.value as PortTextLayout}>
-          {option.label}
+        <Port {...args} key={option.value} textLayout={option.value as PortTextLayout}>
+          {args.children ?? option.label}
         </Port>
       ))}
     </div>
@@ -100,11 +114,12 @@ export const AllTextLayouts: Story = {
 
 /** Every real TextSize rung (md/lg/xl). */
 export const AllTextSizes: Story = {
-  render: () => (
+  parameters: sweep("textSize"),
+  render: (args) => (
     <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
       {TEXT_SIZE_FIELD.options!.map((option) => (
-        <Port key={option.value} state="wired" textSize={option.value as TextSize}>
-          {option.label}
+        <Port {...args} key={option.value} textSize={option.value as TextSize}>
+          {args.children ?? option.label}
         </Port>
       ))}
     </div>

@@ -41,10 +41,15 @@ const preview: Preview = {
       description: "Where the story is mounted",
       toolbar: {
         icon: "browser",
+        // WHY each title repeats the word "Host": `dynamicTitle` replaces the
+        // toolbar button's label with the SELECTED item's title, so a bare
+        // "Plain DOM" reads as a status badge rather than a switcher and the
+        // control goes unnoticed (Zach, 2026-09-10: "I don't see the option to
+        // switch between RawDOM, Reactflow, or tldraw shapes").
         items: [
-          { value: "dom", title: "Plain DOM" },
-          { value: "reactflow", title: "React Flow node" },
-          { value: "tldraw", title: "tldraw shape" },
+          { value: "dom", title: "Host: Plain DOM" },
+          { value: "reactflow", title: "Host: React Flow node" },
+          { value: "tldraw", title: "Host: tldraw shape" },
         ],
         dynamicTitle: true,
       },
