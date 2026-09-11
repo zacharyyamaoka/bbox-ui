@@ -20,7 +20,7 @@ if (!hostName || !portArg) {
   process.exit(2);
 }
 const port = Number(portArg);
-const storyId = "t0-spike-port--primary";
+const storyId = "components-port--primary";
 const url = `http://127.0.0.1:${port}/iframe.html?id=${storyId}&viewMode=story&globals=host:${hostName}`;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
