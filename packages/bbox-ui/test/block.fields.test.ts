@@ -100,7 +100,10 @@ describe("BLOCK_FIELDS", () => {
       "state",
       "tone",
       "lens",
-      "lensBefore",
+    // WHY no "lensBefore" here: the field is declared in
+    // appearance.fields.ts but deliberately NOT in APPEARANCE_FIELDS —
+    // nothing renders it, so shipping it put a live control into 27 story
+    // panels that moved nothing. See its docblock for the one-line undo.
     ]);
   });
 
@@ -155,7 +158,9 @@ describe("BLOCK_FIELDS", () => {
     for (const id of ["orientation", "state", "tone", "lens"]) {
       expect(argTypes[id].control).toBe("select");
     }
-    expect(argTypes.lensBefore.control).toBe("text");
+    // Inverted deliberately: an argType for a field nothing renders IS the
+    // defect. A control that moves nothing reads as broken.
+    expect(argTypes).not.toHaveProperty("lensBefore");
   });
 
   it("has no `children`/`bodyLayout`/paint entries — Block's body-layout and own paint are explicitly deferred (T1-SPEC.md §4.8, §10)", () => {

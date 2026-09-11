@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   resolveField,
   type FieldSpec,
@@ -81,10 +81,32 @@ export function FieldTraceRow({
   // explain it — only to stop lying about it.
   const asSubject = toSubject ?? ((props: Record<string, unknown>) => props);
   const single = subjects.length === 1 ? subjects[0] : null;
-  const trace = single ? resolveField(field, single.props, presets) : null;
-  const paintedTrace = single ? resolveField(field, asSubject(single.props), presets) : null;
+
+  // WHY provenance is computed for EVERY subject and not only for a single
+  // one: gating it on `single` left the multi-selection path holding the very
+  // defect the single path had just been fixed for. With two pills selected
+  // and a tone set, the badge, the chain and the "painting …" note all went
+  // silent while the control kept highlighting a value neither pill painted —
+  // and "✕ override" still deleted a stored value with nothing changing on
+  // screen. Uncheck one subject and the panel told the truth; check it and it
+  // stopped. A selection of two is not a state where honesty is optional.
+  const traces = subjects.map((s) => resolveField(field, s.props, presets));
+  const paintedTraces = subjects.map((s) => resolveField(field, asSubject(s.props), presets));
+  // The chain and the badge describe one subject's layers, so they still need
+  // agreement across the selection to mean anything. When every selected
+  // subject resolves the same way, that shared answer IS each one's answer.
+  const agreeing = <T,>(list: T[], key: (item: T) => unknown): T | null => {
+    if (list.length === 0) return null;
+    const first = key(list[0]!);
+    return list.every((item) => key(item) === first) ? list[0]! : null;
+  };
+  const trace = single ? traces[0]! : agreeing(traces, (t) => `${t.winner}:${String(t.resolved)}`);
+  const paintedAgreed = agreeing(paintedTraces, (t) => String(t.resolved));
+  const storedAgreed = agreeing(traces, (t) => String(t.resolved));
   const paintedElsewhere =
-    trace && paintedTrace && paintedTrace.resolved !== trace.resolved ? paintedTrace.resolved : null;
+    storedAgreed && paintedAgreed && paintedAgreed.resolved !== storedAgreed.resolved
+      ? paintedAgreed.resolved
+      : null;
   // WHY the RAW props and not the transformed subject: the clear button
   // deletes a STORED override, and the store holds raw props. Reading the
   // transformed subject made a tone's synthesised value look like a stored
@@ -96,7 +118,7 @@ export function FieldTraceRow({
   // Mixed is about what THIS row edits, so it compares the stored resolutions.
   // Two subjects with different stored overrides must read Mixed even when a
   // tone currently paints them alike, because writing here overwrites both.
-  const storedResolved = subjects.map((s) => resolveField(field, s.props, presets).resolved);
+  const storedResolved = traces.map((t) => t.resolved);
   const isMixed = storedResolved.length > 1 && storedResolved.some((v) => v !== storedResolved[0]);
   // Any selected subject holding its own value can be cleared. Restricting
   // this to a single selection left a multi-selection override permanently
@@ -154,7 +176,13 @@ export function FieldTraceRow({
           secondary={isGoverned}
           onChange={(value) => onChange(field.id, value)}
         />
-        {isGoverned && hasOwnOverride && (
+        {/* WHY not `isGoverned && …`: gating the way out on "a preset governs
+            this field" meant 60 of the library's 64 field rows could enter the
+            override layer and never leave it. One click on a control already
+            showing its own default writes that value into the store
+            permanently, which is the stored-vector-is-the-semantic-choice
+            ruling inverted. Anything stored can be cleared. */}
+        {hasOwnOverride && (
           <button
             type="button"
             data-slot="field-trace-clear-override"
@@ -197,6 +225,149 @@ export function FieldTraceRow({
 /* One control per FieldKind — segments/number/toggle/text             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Past this many options a segmented control wraps; use a menu instead.
+ *
+ * Two, not three, and it was measured rather than guessed: Port's Diameter
+ * has exactly three options and still wrapped onto two rows, because its
+ * labels carry their pixel values ("Medium · 12px"). Only a genuine pair —
+ * Input/Output, on/off — reliably fits one line, and for a pair a menu would
+ * cost a click to save nothing.
+ */
+const SEGMENT_MENU_THRESHOLD = 2;
+
+/**
+ * Split an option label of the form "Medium · 24px" into its name and its
+ * value, so the menu can show the name on the left and the value in a muted
+ * right column.
+ *
+ * WHY parse the label rather than add a field to FieldSpec: the two halves
+ * are already both in there, written by whoever authored the field array, and
+ * a second declaration is a second thing to keep in sync. A label with no
+ * separator simply has no right column, which is the correct rendering for an
+ * option that is only a name.
+ */
+function splitOptionLabel(label: string): { name: string; detail: string | null } {
+  const at = label.indexOf(" · ");
+  if (at === -1) return { name: label, detail: null };
+  return { name: label.slice(0, at), detail: label.slice(at + 3) };
+}
+
+/**
+ * The control Zach drew: named options down the left, their resolved values
+ * in a muted right column, a tick on the active one, and — where the field is
+ * scalar-backed — a "Custom [ ] unit" row at the foot of the same menu.
+ *
+ * It is one row of height whatever the option count, and it shows the
+ * semantic name and the concrete value at the same time, which is the thing
+ * a wrapped row of buttons cannot do. Deliberately hand-built: this demo has
+ * no headless-UI dependency and adding one for a menu is not worth it, so
+ * Escape, outside-click and focus return are handled here.
+ */
+function OptionMenu({
+  field,
+  value,
+  placeholder,
+  secondary,
+  onChange,
+}: {
+  field: FieldSpec;
+  value: FieldValue | undefined;
+  placeholder?: string;
+  secondary?: boolean;
+  onChange: (value: FieldValue) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onDocPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onDocPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [open]);
+
+  const active = field.options?.find((option) => String(value) === option.value);
+  // A scalar-backed field can take a value outside its named stops. Only then
+  // does a Custom row make sense; offering one on a pure enum would be a lie.
+  const scalar = field.unit !== undefined || field.min !== undefined || field.max !== undefined;
+  const triggerLabel = placeholder ?? active?.label ?? (value === undefined ? "—" : String(value));
+
+  return (
+    <div ref={rootRef} style={optionMenuRootStyle}>
+      <button
+        ref={triggerRef}
+        type="button"
+        data-slot="option-menu-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        style={optionMenuTriggerStyle(secondary)}
+      >
+        <span style={optionMenuTriggerLabelStyle}>{triggerLabel}</span>
+        <span aria-hidden style={optionMenuCaretStyle}>▾</span>
+      </button>
+      {open && (
+        <div data-slot="option-menu" role="listbox" style={optionMenuStyle}>
+          {field.options?.map((option) => {
+            const isActive = String(value) === option.value;
+            const { name, detail } = splitOptionLabel(option.label);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={isActive}
+                data-selected={isActive}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                  triggerRef.current?.focus();
+                }}
+                style={optionMenuItemStyle(isActive)}
+              >
+                <span style={optionMenuTickStyle}>{isActive ? "✓" : ""}</span>
+                <span style={optionMenuNameStyle}>{name}</span>
+                <span style={optionMenuDetailStyle}>{detail ?? ""}</span>
+              </button>
+            );
+          })}
+          {scalar && (
+            <div data-slot="option-menu-custom" style={optionMenuCustomStyle}>
+              <span style={optionMenuNameStyle}>Custom</span>
+              <input
+                type="number"
+                min={field.min}
+                max={field.max}
+                step={field.step}
+                defaultValue={active ? undefined : (value as number | undefined)}
+                onChange={(e) => {
+                  if (e.target.value === "") return;
+                  onChange(Number(e.target.value));
+                }}
+                style={optionMenuCustomInputStyle}
+              />
+              {field.unit && <span style={optionMenuDetailStyle}>{field.unit}</span>}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FieldControl({
   field,
   value,
@@ -211,6 +382,23 @@ function FieldControl({
   onChange: (value: FieldValue) => void;
 }) {
   if (field.kind === "segments") {
+    // WHY a menu past four options, and buttons at or below it: a segmented
+    // control with six options wraps onto three rows, and rows are what make
+    // this panel too tall — Zach's words, "you don't end up getting these
+    // multiple rows of things". Two or three options genuinely fit on one
+    // line and a menu would cost a click for nothing, so the split is by
+    // count rather than by taste.
+    if ((field.options?.length ?? 0) > SEGMENT_MENU_THRESHOLD) {
+      return (
+        <OptionMenu
+          field={field}
+          value={value}
+          placeholder={placeholder}
+          secondary={secondary}
+          onChange={onChange}
+        />
+      );
+    }
     return (
       <div style={segmentsStyle}>
         {field.options?.map((option) => {
@@ -300,6 +488,92 @@ function labelStyle(governed: boolean): CSSProperties {
 
 // A quiet note, not a badge: the row's own layers are the story, and this
 // says only that something outside them is painting right now.
+const optionMenuRootStyle: CSSProperties = { position: "relative", flex: 1, minWidth: 0 };
+
+function optionMenuTriggerStyle(secondary?: boolean): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+    width: "100%",
+    padding: "4px 8px",
+    fontSize: 12,
+    lineHeight: 1.2,
+    borderRadius: 6,
+    border: "1px solid #d4d4d8",
+    background: secondary ? "#fafafa" : "#fff",
+    color: "#18181b",
+    cursor: "pointer",
+    textAlign: "left",
+  };
+}
+
+const optionMenuTriggerLabelStyle: CSSProperties = {
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const optionMenuCaretStyle: CSSProperties = { fontSize: 9, opacity: 0.55 };
+
+const optionMenuStyle: CSSProperties = {
+  position: "absolute",
+  zIndex: 30,
+  top: "calc(100% + 4px)",
+  left: 0,
+  minWidth: "100%",
+  padding: 4,
+  borderRadius: 8,
+  border: "1px solid #d4d4d8",
+  background: "#fff",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+};
+
+function optionMenuItemStyle(active: boolean): CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: "14px 1fr auto",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    padding: "5px 8px",
+    fontSize: 12,
+    borderRadius: 5,
+    border: "none",
+    background: active ? "#f4f4f5" : "transparent",
+    color: "#18181b",
+    cursor: "pointer",
+    textAlign: "left",
+  };
+}
+
+const optionMenuTickStyle: CSSProperties = { fontSize: 10, color: "#18181b" };
+const optionMenuNameStyle: CSSProperties = { whiteSpace: "nowrap" };
+const optionMenuDetailStyle: CSSProperties = { fontSize: 11, opacity: 0.5, whiteSpace: "nowrap" };
+
+const optionMenuCustomStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr auto auto",
+  alignItems: "center",
+  gap: 8,
+  marginTop: 4,
+  paddingTop: 6,
+  paddingLeft: 8,
+  paddingRight: 8,
+  paddingBottom: 2,
+  borderTop: "1px solid #ececef",
+};
+
+const optionMenuCustomInputStyle: CSSProperties = {
+  width: 62,
+  padding: "3px 6px",
+  fontSize: 12,
+  borderRadius: 5,
+  border: "1px solid #d4d4d8",
+  textAlign: "right",
+};
+
 const paintedElsewhereStyle: CSSProperties = {
   fontSize: 10,
   opacity: 0.65,

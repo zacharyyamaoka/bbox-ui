@@ -18,6 +18,7 @@ import {
 import { PILL_PRESETS } from "../src/pill.presets";
 import { Pill } from "../src/pill";
 import { APPEARANCE_STATES, LENSES, TONES } from "../src/appearance";
+import { APPEARANCE_FIELDS } from "../src/appearance.fields";
 
 /**
  * `Pill` uses no hooks — calling it directly, as a plain function, returns
@@ -44,7 +45,10 @@ describe("PILL_FIELDS", () => {
       "state",
       "tone",
       "lens",
-      "lensBefore",
+    // WHY no "lensBefore" here: the field is declared in
+    // appearance.fields.ts but deliberately NOT in APPEARANCE_FIELDS —
+    // nothing renders it, so shipping it put a live control into 27 story
+    // panels that moved nothing. See its docblock for the one-line undo.
       "lineStyle",
       "lineColor",
       "lineThickness",
@@ -63,11 +67,14 @@ describe("PILL_FIELDS", () => {
   });
 
   it("PILL_PAINT_FIELDS + PILL_CHILDREN_FIELD are exactly the non-bundle tail of PILL_FIELDS", () => {
-    expect(PILL_FIELDS.slice(4)).toEqual([...PILL_PAINT_FIELDS, PILL_CHILDREN_FIELD]);
+    // Derived, not the literal 4 that used to sit here: the bundle's length
+    // is a fact of APPEARANCE_FIELDS, and hardcoding it made this test fail
+    // for the wrong reason the day a field left the bundle.
+    expect(PILL_FIELDS.slice(APPEARANCE_FIELDS.length)).toEqual([...PILL_PAINT_FIELDS, PILL_CHILDREN_FIELD]);
   });
 });
 
-describe("PILL_FIELDS — bundle fields (state/tone/lens/lensBefore)", () => {
+describe("PILL_FIELDS — bundle fields (state/tone/lens)", () => {
   it("state's declared default equals Pill's real default", () => {
     expect(field("state").defaultValue).toBe("empty");
     expect(bare.props["data-state"]).toBe(field("state").defaultValue);
@@ -163,7 +170,9 @@ describe("PILL_FIELDS — children", () => {
     }
     expect(argTypes.lineOpacity.control).toBe("number");
     expect(argTypes.fillOpacity.control).toBe("number");
-    expect(argTypes.lensBefore.control).toBe("text");
+    // Inverted deliberately: an argType for a field nothing renders IS the
+    // defect. A control that moves nothing reads as broken.
+    expect(argTypes).not.toHaveProperty("lensBefore");
     expect(argTypes.children.control).toBe("text");
   });
 });

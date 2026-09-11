@@ -75,7 +75,10 @@ describe("PORT_FIELDS", () => {
       "state",
       "tone",
       "lens",
-      "lensBefore",
+    // WHY no "lensBefore" here: the field is declared in
+    // appearance.fields.ts but deliberately NOT in APPEARANCE_FIELDS —
+    // nothing renders it, so shipping it put a live control into 27 story
+    // panels that moved nothing. See its docblock for the one-line undo.
       "eligible",
       "hinting",
       "dragging",
@@ -138,11 +141,12 @@ describe("PORT_FIELDS", () => {
     expect(labelElement.props.textSize).toBe("sm");
   });
 
-  it("includes the shared APPEARANCE_FIELDS bundle verbatim (state/tone/lens/lensBefore) — spread, never nested under an `appearance` key (Zach's flat-property-space ruling)", () => {
+  it("includes the shared APPEARANCE_FIELDS bundle verbatim (state/tone/lens) — spread, never nested under an `appearance` key (Zach's flat-property-space ruling)", () => {
     expect(field("state").defaultValue).toBe("empty");
     expect(field("tone").defaultValue).toBe("neutral");
     expect(field("lens").defaultValue).toBe("normal");
-    expect(field("lensBefore").defaultValue).toBe("");
+    // lensBefore is intentionally out of the bundle; see appearance.fields.ts.
+    expect(PORT_FIELDS.some((f) => f.id === "lensBefore")).toBe(false);
     expect(dotElement.props.state).toBe("empty");
     expect(dotElement.props.tone).toBe("neutral");
     expect(bareRoot.props["data-state"]).toBe("empty");

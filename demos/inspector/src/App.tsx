@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { FieldValue } from "@bbox-ui/schema";
 import {
   Block,
@@ -37,7 +37,7 @@ import {
   type Lens,
 } from "@bbox-ui/core";
 import { registerComponent, type ComponentEntry } from "./schema/registerComponent";
-import { ComponentInspector } from "./ComponentInspector";
+import { PANEL_VARIANTS, findVariant } from "./variants";
 import type { Subject } from "./FieldTraceRow";
 
 /**
@@ -243,8 +243,49 @@ function seedInstances(name: string): Subject[] {
   }
 }
 
+/** WHY localStorage and not a URL flag: a prototype gated behind a query
+ * string Zach has to remember and type is one he will not switch to, and it
+ * forgets his choice on every reload. Rated Bad on 2026-09-09 for exactly
+ * that (`?portLanes=1`). The switcher lives in the app and the app remembers. */
+const VARIANT_STORAGE_KEY = "bbox-ui.inspector.panelVariant";
+
+function readStoredVariant(): string | null {
+  try {
+    return window.localStorage.getItem(VARIANT_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Live panel height, so "more compact" is a number in the app rather than a
+ * claim in a report. Measures the rendered subtree, re-measuring on every
+ * resize — variants change height when a disclosure opens, and a number taken
+ * once at mount would quietly describe the wrong state. */
+function useMeasuredHeight<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [height, setHeight] = useState<number | null>(null);
+
+  const measure = useCallback(() => {
+    const node = ref.current;
+    if (node) setHeight(Math.round(node.getBoundingClientRect().height));
+  }, []);
+
+  useLayoutEffect(measure);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [measure]);
+
+  return { ref, height };
+}
+
 export default function App() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
+  const [variantId, setVariantId] = useState<string>(() => findVariant(readStoredVariant()).id);
   const [instancesByComponent, setInstancesByComponent] = useState<Record<string, Subject[]>>(() =>
     Object.fromEntries(REGISTRY.map((entry) => [entry.name, seedInstances(entry.name)])),
   );
@@ -253,6 +294,17 @@ export default function App() {
       REGISTRY.map((entry) => [entry.name, new Set(seedInstances(entry.name).map((s) => s.id))]),
     ),
   );
+
+  const variant = findVariant(variantId);
+  const { ref: panelRef, height: panelHeight } = useMeasuredHeight<HTMLDivElement>();
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VARIANT_STORAGE_KEY, variantId);
+    } catch {
+      /* private browsing; the switcher still works, it just forgets. */
+    }
+  }, [variantId]);
 
   const entry = REGISTRY.find((e) => e.name === activeName)!;
   const instances = instancesByComponent[activeName];
@@ -309,7 +361,31 @@ export default function App() {
             ))}
           </select>
         </label>
+
+        <label style={pickerLabelStyle}>
+          Panel design
+          <select
+            data-slot="variant-picker"
+            value={variantId}
+            onChange={(e) => setVariantId(e.target.value)}
+            style={selectStyle}
+          >
+            {PANEL_VARIANTS.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div data-slot="variant-height" style={heightBadgeStyle}>
+          {panelHeight === null ? "measuring…" : `${panelHeight}px tall`}
+        </div>
       </div>
+
+      <p data-slot="variant-blurb" style={blurbStyle}>
+        {variant.blurb}
+      </p>
 
       <div style={mainRowStyle}>
         <div style={previewColumnStyle}>
@@ -326,12 +402,17 @@ export default function App() {
           ))}
         </div>
 
-        <ComponentInspector
-          entry={entry}
-          subjects={selected}
-          onChange={applyToSelected}
-          onClearOverride={clearOverride}
-        />
+        <div ref={panelRef} data-slot="panel-variant-host" data-variant={variant.id}>
+          <variant.Panel
+            componentName={entry.name}
+            fields={entry.fields}
+            presets={entry.presets}
+            subjects={selected}
+            toSubject={entry.toSubject}
+            onChange={applyToSelected}
+            onClearOverride={clearOverride}
+          />
+        </div>
       </div>
     </div>
   );
@@ -341,6 +422,8 @@ const rootStyle: CSSProperties = { display: "flex", flexDirection: "column", gap
 const pickerRowStyle: CSSProperties = { display: "flex", gap: 12, alignItems: "center" };
 const pickerLabelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontWeight: 600, color: "#666" };
 const selectStyle: CSSProperties = { padding: "6px 10px", borderRadius: 6, border: "1px solid #ccc", fontSize: 14 };
+const heightBadgeStyle: CSSProperties = { marginLeft: "auto", alignSelf: "flex-end", fontSize: 12, fontFamily: "ui-monospace, monospace", color: "#666", border: "1px solid #ddd", borderRadius: 999, padding: "4px 10px" };
+const blurbStyle: CSSProperties = { margin: 0, maxWidth: 760, fontSize: 13, lineHeight: 1.5, color: "#555" };
 const mainRowStyle: CSSProperties = { display: "flex", gap: 32, alignItems: "flex-start" };
 const previewColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 12, minWidth: 260 };
 const previewHeaderStyle: CSSProperties = { fontWeight: 600, color: "#666", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 };

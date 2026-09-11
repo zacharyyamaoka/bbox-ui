@@ -157,9 +157,13 @@ describe("Lens — the diff/lint overlay", () => {
 /* ------------------------------------------------------------------ */
 
 describe("APPEARANCE_FIELDS — the shared bundle", () => {
-  it("is exactly state, tone, lens, lensBefore, in that order", () => {
-    expect(APPEARANCE_FIELDS.map((f) => f.id)).toEqual(["state", "tone", "lens", "lensBefore"]);
-    expect(APPEARANCE_FIELDS).toEqual([STATE_FIELD, TONE_FIELD, LENS_FIELD, LENS_BEFORE_FIELD]);
+  it("is exactly state, tone, lens, in that order — lensBefore is declared but not bundled", () => {
+    expect(APPEARANCE_FIELDS.map((f) => f.id)).toEqual(["state", "tone", "lens"]);
+    // LENS_BEFORE_FIELD is deliberately absent: nothing renders it, so
+    // including it put a dead control into 27 story panels. See its own
+    // docblock in appearance.fields.ts.
+    expect(APPEARANCE_FIELDS).toEqual([STATE_FIELD, TONE_FIELD, LENS_FIELD]);
+    expect(APPEARANCE_FIELDS).not.toContain(LENS_BEFORE_FIELD);
   });
 
   it("STATE_FIELD defaults to 'empty' and offers every AppearanceState as an option", () => {

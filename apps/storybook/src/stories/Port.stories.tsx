@@ -305,7 +305,10 @@ export const AllReveals: Story = {
  */
 export const CustomLabel: Story = {
   args: { name: "unused", type: "unused", defaultValue: "unused" },
-  render: (args) => <Port {...args}>name: Type = default</Port>,
+  // `args.children ?? …` and not a bare JSX child: a literal child shadows
+  // the Label control, which then sits live in the panel moving nothing —
+  // the same defect already fixed in Pill's presets gallery.
+  render: (args) => <Port {...args}>{args.children ?? "name: Type = default"}</Port>,
 };
 
 /** `producers >= 2` shows the many-to-one count badge. */

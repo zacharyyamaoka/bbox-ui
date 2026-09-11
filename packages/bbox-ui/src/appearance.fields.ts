@@ -49,6 +49,20 @@ export const LENS_FIELD: FieldSpec = {
   options: LENS_OPTIONS,
 };
 
+/**
+ * NOT in APPEARANCE_FIELDS, deliberately.
+ *
+ * `lensBefore` is a real prop — Pill and Port both accept it — but neither
+ * renders it, and Block forwards it to a chip that drops it. Declaring it
+ * put a live control into 27 story panels that moved nothing at all, which
+ * is precisely the "a control that does nothing reads as broken" complaint
+ * this library exists to answer. A field array is a promise that changing a
+ * row changes the component; a field with no visual consequence breaks that
+ * promise wholesale.
+ *
+ * It stays exported so the declaration is ready the day a lens actually
+ * paints a before-value, and so removing it is one line to undo.
+ */
 export const LENS_BEFORE_FIELD: FieldSpec = {
   id: "lensBefore",
   label: "Lens: Before Value",
@@ -67,5 +81,4 @@ export const APPEARANCE_FIELDS: FieldSpec[] = [
   STATE_FIELD,
   TONE_FIELD,
   LENS_FIELD,
-  LENS_BEFORE_FIELD,
 ];
