@@ -1,93 +1,150 @@
 /**
  * packages/bbox-ui/src/port.fields.ts
  *
- * `Port`'s controllable props as data — the declaration half of the
- * schema-driven loop (T0). Every `id` below is a REAL `PortProps` key (see
- * `./port.tsx`); `readFields`/`toArgTypes` look subjects up by that key
- * directly, so there is no separate id-to-prop mapping to keep in sync.
- * Every enum and default mirrors `./layout.ts` — this file adds no new
- * vocabulary, it only describes the vocabulary that already exists.
- *
- * WHY these five fields only: the component-proposal's Section 3 gallery
- * sketched a richer future Port (`diameter` override, `hitRadius`,
- * `polarity`, `visible`) — none of those props exist on the real `Port`
- * component today. T0 describes the component that exists, not the one
- * imagined; see docs/T0-SPEC.md §9 for the explicit scope cut.
+ * `Port`'s controllable props as data — the rebuilt shape, pinned by
+ * docs/T1-SPEC.md §4.7 (superseding `PORT-SPEC.md §3`'s own table where
+ * the two disagree: `APPEARANCE_FIELDS` no longer carries `textSize` —
+ * every text-bearing component gets its own ladder, T1-SPEC.md §2.1 —
+ * and `tone` resolves via `toneOverride`, not a second preset family).
+ * ONE FLAT PROPERTY SPACE (Zach's ruling): `APPEARANCE_FIELDS` is spread
+ * directly into `PORT_FIELDS` rather than nested under an `appearance`
+ * key. Every `id` below is a real `PortProps` key (see `./port.tsx`);
+ * `readFields`/`resolveField` look subjects up by that key directly.
+ * `test/port.fields.test.ts` pins every default/option against the real
+ * component and layout module — never a retyped literal.
  */
 import type { FieldOption, FieldSpec } from "@bbox-ui/schema";
 
+import { APPEARANCE_FIELDS } from "./appearance.fields";
 import {
+  BLOCK_SIDES,
+  BLOCK_SIDE_LABELS,
+  PORT_DECORATIONS,
+  PORT_DECORATION_LABELS,
+  PORT_DIAMETER_LABELS,
   PORT_DIAMETERS,
-  PORT_STATE_LABELS,
-  PORT_STATES,
+  PORT_DIRECTION_LABELS,
+  PORT_DIRECTIONS,
+  PORT_REVEAL_LABELS,
+  PORT_REVEALS,
+  PORT_ROLE_LABELS,
+  PORT_ROLES,
+  PORT_TEXT_LAYOUT_LABELS,
   PORT_TEXT_LAYOUTS,
-  TEXT_SIZE_NAMES,
-  TEXT_SIZES,
-  type PortSize,
-  type PortState,
-  type PortTextLayout,
-  type TextSize,
-} from "./layout";
+  PORT_TEXT_SIZE_LABELS,
+  PORT_TEXT_SIZES,
+  type PortTextSize,
+} from "./port.layout";
 
-const STATE_OPTIONS: FieldOption[] = PORT_STATES.map((state) => ({
-  value: state,
-  label: PORT_STATE_LABELS[state as PortState],
+const DIRECTION_OPTIONS: FieldOption[] = PORT_DIRECTIONS.map((direction) => ({
+  value: direction,
+  label: PORT_DIRECTION_LABELS[direction],
 }));
 
-const SIZE_OPTIONS: FieldOption[] = (Object.keys(PORT_DIAMETERS) as PortSize[]).map(
-  (size) => ({ value: size, label: `${size} · ${PORT_DIAMETERS[size]}px` }),
-);
+const EDGE_OPTIONS: FieldOption[] = BLOCK_SIDES.map((side) => ({
+  value: side,
+  label: BLOCK_SIDE_LABELS[side],
+}));
 
-/**
- * Board labels (see `layout.ts`'s own `PortTextLayout` comment: "Top",
- * "Bot", "Right", "Left", "Right (Offset)", "Left Offset"). No exported
- * labels record exists there yet, so this is the one place that names them
- * for a panel.
- */
-const TEXT_LAYOUT_LABELS: Record<PortTextLayout, string> = {
-  top: "Top",
-  bot: "Bot",
-  right: "Right",
-  left: "Left",
-  "right-offset": "Right (Offset)",
-  "left-offset": "Left Offset",
-};
+const DIAMETER_OPTIONS: FieldOption[] = (
+  Object.keys(PORT_DIAMETERS) as (keyof typeof PORT_DIAMETERS)[]
+).map((size) => ({
+  value: size,
+  label: `${PORT_DIAMETER_LABELS[size]} · ${PORT_DIAMETERS[size]}px`,
+}));
+
+const ROLE_OPTIONS: FieldOption[] = PORT_ROLES.map((role) => ({
+  value: role,
+  label: PORT_ROLE_LABELS[role],
+}));
+
+const DECORATION_OPTIONS: FieldOption[] = PORT_DECORATIONS.map((decoration) => ({
+  value: decoration,
+  label: PORT_DECORATION_LABELS[decoration],
+}));
 
 const TEXT_LAYOUT_OPTIONS: FieldOption[] = PORT_TEXT_LAYOUTS.map((layout) => ({
   value: layout,
-  label: TEXT_LAYOUT_LABELS[layout],
+  label: PORT_TEXT_LAYOUT_LABELS[layout],
 }));
 
-const TEXT_SIZE_OPTIONS: FieldOption[] = (Object.keys(TEXT_SIZES) as TextSize[]).map(
-  (size) => ({ value: size, label: TEXT_SIZE_NAMES[size] }),
-);
+const TEXT_SIZE_OPTIONS: FieldOption[] = (
+  Object.keys(PORT_TEXT_SIZES) as PortTextSize[]
+).map((size) => ({
+  value: size,
+  label: `${PORT_TEXT_SIZE_LABELS[size]} · ${PORT_TEXT_SIZES[size]}px`,
+}));
+
+const REVEAL_OPTIONS: FieldOption[] = PORT_REVEALS.map((reveal) => ({
+  value: reveal,
+  label: PORT_REVEAL_LABELS[reveal],
+}));
 
 /**
- * `Port`'s five controllable props, in the order a panel should draw them.
- * Every `defaultValue` equals that prop's real default in `port.tsx` —
- * `test/port.fields.test.ts` pins this so the two files cannot drift.
- *
- * The one exception is `children` (see its own comment below): `port.tsx`
- * destructures `state`, `size`, `textLayout` and `textSize` with real
- * `= "..."` defaults, but `children` has none — omitting it renders the
- * bare dot with no label at all (`children != null && <PortLabel>...`),
- * not the literal string "Port".
+ * `Port`'s full field list, in panel order (docs/T1-SPEC.md §4.7's own
+ * table order): identity/own fields, then the shared `APPEARANCE_FIELDS`
+ * bundle (this is what colours the dot — `state`, `tone`, plus `lens`/
+ * `lensBefore`), then the host-computed interaction axis, then the
+ * `children` escape hatch.
  */
 export const PORT_FIELDS: FieldSpec[] = [
   {
-    id: "state",
-    label: "State",
-    kind: "segments",
-    defaultValue: "empty",
-    options: STATE_OPTIONS,
-    hint: "`received` is runtime-only — never persisted (see PERSISTABLE_PORT_STATES).",
+    id: "name",
+    label: "Name",
+    kind: "text",
+    defaultValue: "",
   },
   {
-    id: "size",
-    label: "Size",
+    id: "type",
+    label: "Type",
+    kind: "text",
+    defaultValue: "",
+    hint: "Muted type text beside the name — tints nothing. Colour comes from `state`, not from this (Zach, 2026-09-10 ruling).",
+  },
+  {
+    id: "defaultValue",
+    label: "Default Value",
+    kind: "text",
+    defaultValue: "",
+    hint: "The `= v` chip's content, capped at 88px with a visible ellipsis.",
+  },
+  {
+    id: "direction",
+    label: "Direction",
+    kind: "segments",
+    defaultValue: "input",
+    options: DIRECTION_OPTIONS,
+  },
+  {
+    id: "edge",
+    label: "Edge",
+    kind: "segments",
+    defaultValue: "left",
+    options: EDGE_OPTIONS,
+  },
+  {
+    id: "diameter",
+    label: "Diameter",
     kind: "segments",
     defaultValue: "md",
-    options: SIZE_OPTIONS,
+    options: DIAMETER_OPTIONS,
+    hint: 'A free-numeric "Exact" 4th branch is deferred — no FieldKind combines segments+number today, see docs/T1-SPEC.md §10.',
+  },
+  {
+    id: "role",
+    label: "Role",
+    kind: "segments",
+    defaultValue: "data",
+    options: ROLE_OPTIONS,
+    hint: 'Non-"data" roles show only as a small text cue above the dot — the colour channel is spoken for by `state` (PORT-SPEC.md §1.3.3).',
+  },
+  {
+    id: "decoration",
+    label: "Decoration",
+    kind: "segments",
+    defaultValue: "none",
+    options: DECORATION_OPTIONS,
+    hint: "`mutates` and every `variadic-*` paint through one shared ring — mutually exclusive by construction, one enum instead of two booleans.",
   },
   {
     id: "textLayout",
@@ -95,28 +152,65 @@ export const PORT_FIELDS: FieldSpec[] = [
     kind: "segments",
     defaultValue: "right",
     options: TEXT_LAYOUT_OPTIONS,
+    hint: 'Sensible default is `inwardTextLayout(edge)`; this table default is that function\'s value at `edge: "left"`.',
   },
   {
     id: "textSize",
     label: "Text Size",
     kind: "segments",
-    defaultValue: "md",
+    defaultValue: "sm",
     options: TEXT_SIZE_OPTIONS,
+  },
+  ...APPEARANCE_FIELDS,
+  {
+    id: "eligible",
+    label: "Eligible",
+    kind: "toggle",
+    defaultValue: false,
+    hint: "Host-computed drag-time state — never persisted.",
+  },
+  {
+    id: "hinting",
+    label: "Hinting",
+    kind: "toggle",
+    defaultValue: false,
+    hint: "Host-computed drag-time state — never persisted. Previews becoming `wired`: wears `wired`'s ink regardless of the resting `state`.",
+  },
+  {
+    id: "dragging",
+    label: "Dragging",
+    kind: "toggle",
+    defaultValue: false,
+    hint: "Host-computed drag-time state — never persisted.",
+  },
+  {
+    id: "reveal",
+    label: "Reveal",
+    kind: "segments",
+    defaultValue: "always",
+    options: REVEAL_OPTIONS,
+    hint: "Host-computed visibility policy — never persisted.",
+  },
+  {
+    id: "producers",
+    label: "Producers",
+    kind: "number",
+    defaultValue: 0,
+    min: 0,
+    max: 9,
+    step: 1,
+    hint: "Host-computed many-to-one count — never persisted. 2 or more shows the count badge.",
   },
   {
     id: "children",
     label: "Label",
     kind: "text",
-    // NOTE (deviation, see docs/T0-SPEC.md §3 discussion): `Port` has no
-    // real destructured default for `children` — passing none yields
-    // `undefined` and the component renders the bare dot with no label
-    // (the `NoLabel` story's exact case). `FieldValue` has no way to
-    // express "undefined" for a `kind: "text"` control, so "Port" is a
-    // deliberate demoable placeholder chosen for Storybook/inspector
-    // ergonomics, not a literal reproduction of port.tsx's own
-    // destructuring. `port.fields.test.ts` asserts this consciously
-    // instead of asserting it equals a "real default" that does not exist.
-    defaultValue: "Port",
-    hint: "The text slot. Empty renders the bare dot — see the `NoLabel` story.",
+    // NOT a deviation (unlike Glyph's/T0 Port's own `children` field):
+    // `PortLabel` treats an empty string exactly like an omitted prop
+    // (`children || ordered`, ./port.tsx) — both fall through to the
+    // three-span name/type/default-chip rendering — so "" IS Port's real
+    // resolved behavior at this default, not a demoable stand-in for one.
+    defaultValue: "",
+    hint: "Escape hatch: when non-empty, REPLACES the name/type/default-chip rendering wholesale (a CodeMirror mount, a `name: Type = default` one-liner).",
   },
 ];
