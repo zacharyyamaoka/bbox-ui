@@ -441,7 +441,7 @@ export const FILTER_FIRST: PanelVariant = {
   label: "Filter First",
   blurb:
     "Opens with only the preset selector and fields you've already touched — 4 rows " +
-    "for Port's 20-field set, 1 row for Pill's fully-preset-governed paint fields — " +
+    "for Port's 19-field set, 1 row for Pill's fully-preset-governed paint fields — " +
     "then grows by typing a live label/id filter or clicking the honest \"N more\" " +
     "count. Every resting row is one line: a driven/overridden/default dot plus " +
     "\"preset · value\", and the preset row itself flags \"+N\" the moment anything " +

@@ -125,7 +125,7 @@ present with different options.</p>
 HTML = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Inspector panel — five proposals · {DATE}</title>
+<title>Inspector panel — decided: Figma Dense · {DATE}</title>
 <style>
   :root {{
     --ink:#16161a; --muted:#65656f; --line:#e3e3e8; --bg:#fbfbfc; --card:#fff;
@@ -183,7 +183,7 @@ HTML = f"""<!doctype html>
 </style></head><body><main>
 
 <p class="lede">bbox-ui</p>
-<h1>The inspector panel, five ways</h1>
+<h1>The inspector panel: decided</h1>
 <p class="stamp">{DATE} · branch <code>claude/port-t0</code> · every height below measured
 in headless Chrome against the deployed site, not estimated</p>
 
@@ -196,6 +196,10 @@ expert view.”</p>
 what do you do when you have presets that could potentially drive a number of the
 individual panels? Definitely having some type of indication saying whether it's driven
 or default.”</p>
+<p>“I'm definitely leaning towards essentially the Figma dense design. I think we can
+always basically be clever enough to get controls within the single row that give us the
+control that we want. You can even have presets and a custom button all on the same
+thing… It's decided. We're going forward with Figma Dense.”</p>
 <p>“I kinda wanted to see the primitive in isolation first… maybe by default we just have
 one. But then you just have a little sticker there that allows you to adjust the number of
 them. As soon as you start to add more than one, then you add the checkbox too… I can even
@@ -208,11 +212,37 @@ to see what are the things that you're able to update across all of them.”</p>
     <source src="{data_uri(MEDIA / 'hero.mp4', 'video/mp4')}" type="video/mp4">
   </video>
   <noscript><img src="{data_uri(MEDIA / 'hero.gif', 'image/gif')}" alt="Switching between the six panel designs"></noscript>
-  <p class="cap">Driven on the live site, in order: one Port on its own, a second and a third
-  added from the stepper, one removed, then the mixed bench with a Glyph joining Port and
-  Pill, then the same Pill selection through all six panel designs. The badge top-right is
-  the panel's live height.</p>
+  <p class="cap">Driven on the deployed site, in order: one Port on its own at Simple, then
+  Advanced and Expert, then a filter typed from Simple reaching a field two tiers up, then a
+  second instance and three rolls of Randomize, then the mixed bench with a Glyph joining Port
+  and Pill. The badge top-right is the panel's live height.</p>
 </div>
+
+<div class="box">
+<h3>The decision</h3>
+<p><strong>Figma Dense</strong> is now the default panel. One row per field: label left,
+control right, provenance dot in the gutter. Label-above-control was rejected as wasteful,
+Row + Popover as too verbose — “the menu pop out, not as fast as I'd like”.</p>
+<p>Tiered and Filter First are not competitors and are no longer separate designs. Their two
+ideas — Simple / Advanced / Expert, and a live filter — now sit <em>on</em> the chosen panel,
+because “those are just nice presets for doing filtering… helpful regardless of whatever
+you're doing”. Both hide fields; neither hides logic.</p>
+<p>The other five panels stay in the switcher as the record of what was compared. Deleting
+them would make the decision unreviewable.</p>
+</div>
+
+<h3>What the chosen panel gained</h3>
+<ul>
+<li><strong>Simple / Advanced / Expert</strong>, persisted, inferred from the field
+declarations rather than hand-listed — an eighth component tiers itself the day it ships.
+Port shows 2 rows at Simple, 13 at Advanced, 19 at Expert.</li>
+<li><strong>A filter that outranks the tier.</strong> Typing searches every tier. Being told
+nothing matched because the match was two tiers up is the one thing a filter must never do.</li>
+<li><strong>A count of hidden fields you have actually set</strong>, with one tap to Expert.
+Hiding a value someone set is worse than the verbosity a tier exists to cut.</li>
+<li><strong>Randomize.</strong> Values come from each field's own declaration, so they are
+always legal and there is no per-component table to rot.</li>
+</ul>
 
 {BENCH_SECTION}
 
@@ -223,8 +253,10 @@ The choice is remembered across reloads, and it is a control in the app — neve
 <ul>{BLURB_LIST}</ul>
 
 <h2>How much shorter</h2>
-<p>Pill has 12 fields, Port has 20. Both rendered with two instances selected, so the
-Mixed reading is live in every capture.</p>
+<p>Pill has 12 fields, Port has 19. Both rendered with two instances selected, so the Mixed
+reading is live in every capture, and every panel that has a tier is set to <strong>Expert</strong>
+so all of them are showing the same fields. That is why Tiered reads taller than the baseline
+here: at Expert it expands every preset-governed row, which is exactly what it is for.</p>
 <table>
   <thead><tr><th>Panel</th><th>Pill · 12 fields</th><th>Port · 20 fields</th></tr></thead>
   <tbody>{HEIGHT_TABLE}</tbody>
@@ -306,17 +338,26 @@ shipped a cheaper panel that was also a lesser product:</p>
 <li>Every field is reachable. Hiding is allowed; losing is not.</li>
 </ul>
 
-<h2>Recommendation</h2>
-<p><strong>Row + Popover as the default, Tiered as the mode switch on top of it.</strong>
-Row + Popover is the design closest to Figma's actual inspector and the only one whose height
-is independent of what each field's control needs — a six-option enum and a bare toggle cost
-the same inch, so the list never jumps as you change values. Figma Dense is a close second and
-is shorter, but it pays for that with a grid that reflows when a control is wider than its
-column. Tiered is not really a competitor: its Simple/Advanced/Expert idea composes with any
-of the others, and it is the cheapest way to get the long tail out of sight. Icon Strip is
-the most fun to use and the hardest to read cold — worth keeping for the canvas toolbar
-rather than the side panel.</p>
-<p>Nothing is locked in. Switch panels in the app and the choice sticks.</p>
+<h2>One model, not six</h2>
+<p>Building five panels against one field array surfaced the project's own dominant defect at
+a six-times multiplier. Each panel had re-derived the question “what does this field read,
+and where did it come from?”, and the six files gave <strong>four different answers</strong>.
+Three carried a single-subject gate that had already been fixed in the fourth an hour
+earlier: select two subjects and the panel went quiet about a value nothing had stored.</p>
+<p>There is one implementation now, and the inspector demo — which had no test script at all,
+so none of those six files were ever loaded by the test run — has nine behavioural tests, each
+naming the defect it would have caught, plus a structural gate asserting the implementation
+count is one. Behavioural tests cannot catch six copies; each copy passes its own. The gate is
+mutation-tested inside its own suite, because a gate that cries wolf gets deleted.</p>
+
+<h2>What is still open</h2>
+<ul>
+<li><strong>The Custom row cannot be made true yet.</strong> No field kind combines named
+stops with a free scalar, so there is nowhere to store 13px. This is the one thing standing
+between the toolbar pattern and a real implementation.</li>
+<li><strong>Port has no preset-governed property</strong>, so nothing is ever “driven” on
+Port in any panel. A property of the schema, not of a design.</li>
+</ul>
 
 </main></body></html>
 """
