@@ -14,7 +14,10 @@ import sys
 
 DATE = "2026-09-11"
 NAME = f"inspector-variants-{DATE}"
-REPO = pathlib.Path(__file__).resolve().parent.parent
+# The main checkout, never the worktree this may be running from: a report
+# written into a worktree dies when the worktree is swept, so the file:// link
+# is gone a day later.
+REPO = pathlib.Path("/home/bam/bbox-ui")
 MEDIA = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "reports" / "media" / NAME
 OUT = REPO / "reports" / "media" / f"{NAME}.html"
 LIVE = "https://zacharyyamaoka.github.io/bbox-ui/inspector/"
@@ -85,6 +88,40 @@ BLURB_LIST = "\n".join(
     f'<li><strong>{labels[v]}</strong> — {blurbs[v]}</li>' for v in order if v != "current"
 )
 
+BENCH_SECTION = """<h2>The bench</h2>
+<p>It used to open with two instances and two checkboxes, which reads as a puzzle rather than
+a primitive. It now opens with <strong>one</strong>. A stepper adds more, and the checkboxes
+appear the moment a second instance does — a tickbox whose only reachable state is the one it
+is already in is not a control.</p>
+
+<div class="grid three">
+  <figure class="card"><figcaption><span class="name">One, isolated</span></figcaption>
+    <img src="{b1}" alt="The bench with a single Port instance and no checkbox"></figure>
+  <figure class="card"><figcaption><span class="name">Two, disagreeing</span></figcaption>
+    <img src="{b2}" alt="Two Port instances with checkboxes and Mixed readings"></figure>
+  <figure class="card"><figcaption><span class="name">Mixed types</span></figcaption>
+    <img src="{b3}" alt="Port and Pill in one bench with four shared fields"></figure>
+</div>
+
+<p>The seeds became a list of genuinely different variations per component, so instance two
+actually disagrees with instance one. A copy would mean nothing ever reads Mixed, and the
+bench would prove nothing.</p>
+
+<h3>The mixed bench answers “what can I change across all of these?”</h3>
+<p>A <strong>Mixed bench</strong> holds instances of different components at once, added from
+a row of type chips. The panel then shows only the fields the selection genuinely has in
+common. Port and Pill leave four editable fields. Add a Stack and the answer is none — said
+out loud, rather than shown as an empty box.</p>
+<p>A field survives that intersection only when its id, its kind <em>and</em> its option set
+all agree. Two components can both call a field <code>size</code> and mean different options,
+and one control over both would write a value that is legal for one and nonsense for the
+other. Everything excluded is named with the reason it was excluded: absent from a type, or
+present with different options.</p>
+
+""".format(
+    b1=png("bench-1-single.png"), b2=png("bench-2-two.png"), b3=png("bench-3-mixed.png")
+)
+
 HTML = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -123,6 +160,7 @@ HTML = f"""<!doctype html>
   .d {{ font:12px ui-monospace,Menlo,monospace; color:var(--win) }}
   tr.baseline .d {{ color:var(--muted) }}
   .grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:20px; margin:20px 0 }}
+  .grid.three {{ grid-template-columns:repeat(auto-fit,minmax(440px,1fr)) }}
   .card {{ margin:0; background:var(--card); border:1px solid var(--line); border-radius:10px;
     padding:12px; display:flex; flex-direction:column; gap:10px }}
   .card.base {{ border-color:#cfcfd8; background:#f6f6f8 }}
@@ -158,6 +196,11 @@ expert view.”</p>
 what do you do when you have presets that could potentially drive a number of the
 individual panels? Definitely having some type of indication saying whether it's driven
 or default.”</p>
+<p>“I kinda wanted to see the primitive in isolation first… maybe by default we just have
+one. But then you just have a little sticker there that allows you to adjust the number of
+them. As soon as you start to add more than one, then you add the checkbox too… I can even
+imagine having a free flowing one where you can add instances of any types of primitives…
+to see what are the things that you're able to update across all of them.”</p>
 </blockquote>
 
 <div class="hero">
@@ -165,9 +208,13 @@ or default.”</p>
     <source src="{data_uri(MEDIA / 'hero.mp4', 'video/mp4')}" type="video/mp4">
   </video>
   <noscript><img src="{data_uri(MEDIA / 'hero.gif', 'image/gif')}" alt="Switching between the six panel designs"></noscript>
-  <p class="cap">The switcher, driven on the live site: the same Port selection rendered by
-  each of the six panels in turn. The badge top-right is the panel's live height.</p>
+  <p class="cap">Driven on the live site, in order: one Port on its own, a second and a third
+  added from the stepper, one removed, then the mixed bench with a Glyph joining Port and
+  Pill, then the same Pill selection through all six panel designs. The badge top-right is
+  the panel's live height.</p>
 </div>
+
+{BENCH_SECTION}
 
 <h2>What is different</h2>
 <p>Six panels now render the same field array over the same subjects. The one that shipped
