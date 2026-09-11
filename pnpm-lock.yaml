@@ -23,6 +23,12 @@ importers:
       '@bbox-ui/core':
         specifier: workspace:*
         version: link:../../packages/bbox-ui
+      '@bbox-ui/panel':
+        specifier: workspace:*
+        version: link:../../packages/panel
+      '@bbox-ui/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@fumadocs/satteri':
         specifier: 0.x.x
         version: 0.5.0(a671072270448c0a56682a128df5e75f)
@@ -32,6 +38,9 @@ importers:
       '@takumi-rs/image-response':
         specifier: ^2.9.2
         version: 2.13.7(csstype@3.2.3)(react@19.3.0)
+      '@xyflow/react':
+        specifier: ^12.8.0
+        version: 12.11.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -80,6 +89,9 @@ importers:
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
+      tldraw:
+        specifier: 5.3.2
+        version: 5.3.2(@floating-ui/dom@1.8.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       ts-morph:
         specifier: ^28.0.0
         version: 28.0.0
@@ -90,6 +102,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
+      '@tldraw/tlschema':
+        specifier: 5.3.2
+        version: 5.3.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@types/mdx':
         specifier: ^2.0.14
         version: 2.0.14
