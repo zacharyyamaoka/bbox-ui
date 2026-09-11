@@ -11,6 +11,7 @@ import {
   glyphPx,
   type TextSize,
 } from "./layout";
+import { Pill, type PillProps } from "./pill";
 
 /**
  * Block anatomy (Zach's vocabulary — the component API uses these names):
@@ -169,20 +170,44 @@ export function BlockTitle({
   );
 }
 
+export interface BlockChipProps extends PillProps {}
+
 /**
  * Chip — the oval tag ("Warning Tags go here to the right", e.g. `Draft 1`).
  * Out of flow, inset `CHIP_INSET_RIGHT` from the container's right edge.
  * Its region is reserved by `BlockHeader` (see there), so the title centres
  * in the space that remains instead of running underneath.
+ *
+ * T1-SPEC.md §4.8: a thin wrapper around the real `<Pill>` — the one
+ * concrete reuse every per-component doc that touched `BlockChip`
+ * independently recommended — so `state`/`tone` reach the chip through the
+ * SAME cascade `Pill` already runs (`resolveField` against `PILL_PRESETS`)
+ * rather than a second, parallel colour system living here. Geometry
+ * (`CHIP`, `CHIP_RIGHT_IN_HEADER_PX`, `blockLayout.ts`'s box for it) is
+ * untouched — only the painted shell changes. Defaulting to `state:
+ * "empty"` reproduces the exact look this chip always had (a hollow
+ * `foreground` outline, no fill), so every existing caller (the tldraw and
+ * React Flow adapters, both of which render a bare `<BlockChip>{tag}</BlockChip>`
+ * with no state/tone) is visually unchanged.
  */
-export function BlockChip({ className, style, ...props }: ComponentProps<"span">) {
+export function BlockChip({
+  state = "empty",
+  tone = "neutral",
+  className,
+  style,
+  children,
+  ...props
+}: BlockChipProps) {
   return (
-    <span
+    <Pill
+      // WHY set explicitly (and BEFORE `...props`, so an explicit caller
+      // override still wins): this chip is a real, external DOM contract
+      // (`demos/drive.mjs` selects `[data-slot="block-chip"]`) — `Pill`'s
+      // own default `data-slot="pill"` would silently break that selector.
       data-slot="block-chip"
-      className={cn(
-        "absolute top-1/2 flex -translate-y-1/2 items-center justify-center whitespace-nowrap rounded-full border-2 border-foreground px-3",
-        className,
-      )}
+      state={state}
+      tone={tone}
+      className={cn("absolute top-1/2 -translate-y-1/2", className)}
       style={{
         // The measured 28px container-edge inset, in the header's frame.
         right: CHIP_RIGHT_IN_HEADER_PX,
@@ -192,7 +217,9 @@ export function BlockChip({ className, style, ...props }: ComponentProps<"span">
         ...style,
       }}
       {...props}
-    />
+    >
+      {children}
+    </Pill>
   );
 }
 
