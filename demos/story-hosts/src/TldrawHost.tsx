@@ -171,13 +171,18 @@ export function TldrawHost({ children }: { children: ReactNode }) {
               justifyContent: "center",
               textAlign: "center",
               padding: 24,
-              // WHY literal colours rather than tokens: this panel replaces a
-              // tldraw canvas that is always light-themed, and it sits inside
-              // a Storybook iframe whose own theme may be dark, so a token
-              // would resolve against the wrong surface and paint the story
-              // beneath it in an unreadable colour.
-              background: "#fcfcfc",
-              color: "#1d1d1d",
+              // WHY the SAME tokens the story's own ink uses: an earlier
+              // version pinned this light (#fcfcfc on #1d1d1d) reasoning that
+              // it replaces an always-light tldraw canvas. But the canvas is
+              // GONE by the time this paints, and the story rendered below
+              // still takes its ink from these tokens, which follow
+              // prefers-color-scheme. Pinning only the background left near
+              // white ink on a near white panel — measured 1.04:1, against a
+              // 4.5:1 floor, with the Empty, Out of Focus and Hidden pills
+              // simply invisible. The panel's whole message is that the story
+              // is fine, so the story has to be the readable part.
+              background: "var(--color-background, #fcfcfc)",
+              color: "var(--color-foreground, #1d1d1d)",
               font: "14px/1.5 system-ui, sans-serif",
             }}
           >
@@ -192,7 +197,7 @@ export function TldrawHost({ children }: { children: ReactNode }) {
               style={{
                 marginTop: 16,
                 paddingTop: 16,
-                borderTop: "1px solid #e4e4e4",
+                borderTop: "1px solid var(--color-border, #e4e4e4)",
                 width: "100%",
                 display: "flex",
                 justifyContent: "center",

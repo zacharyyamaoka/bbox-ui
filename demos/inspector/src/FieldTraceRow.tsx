@@ -1,7 +1,5 @@
 import { useState, type CSSProperties } from "react";
 import {
-  MIXED,
-  readFields,
   resolveField,
   type FieldSpec,
   type FieldValue,
@@ -46,12 +44,25 @@ export function FieldTraceRow({
 }: FieldTraceRowProps) {
   const [expanded, setExpanded] = useState(false);
   const isGoverned = governed.has(field.id);
-  const reading = readFields([field], subjects.map((s) => s.props))[0];
-  const isMixed = reading.value === MIXED;
+  // WHY every subject goes through `resolveField` rather than `readFields`:
+  // `readFields` is the raw reading, `subject[id] ?? defaultValue`, and it
+  // never consults the preset layer. Using it here made the control disagree
+  // with the pixels beside it — on a wired Pill the border painted `primary`
+  // while the segmented control highlighted `foreground`, so clicking the
+  // segment that was ALREADY highlighted silently repainted the component and
+  // created an override, with nothing on screen explaining it. Twelve rows
+  // across five of Pill's six states were wrong this way.
+  //
+  // MIXED is decided on the RESOLVED values for the same reason: two pills
+  // that visibly disagree must read as Mixed, and two that resolve alike must
+  // not, even when one of them gets there through an override.
+  const resolved = subjects.map((s) => resolveField(field, s.props, presets).resolved);
+  const isMixed = resolved.length > 1 && resolved.some((v) => v !== resolved[0]);
   const single = subjects.length === 1 ? subjects[0] : null;
   const trace = single ? resolveField(field, single.props, presets) : null;
   const hasOwnOverride = single ? single.props[field.id] !== undefined : false;
-  const collapsedValue: FieldValue | undefined = isMixed ? undefined : (reading.value as FieldValue);
+  const collapsedValue: FieldValue | undefined =
+    isMixed || resolved.length === 0 ? undefined : (resolved[0] as FieldValue);
 
   return (
     <div data-slot="field-trace-row" data-field={field.id} data-governed={isGoverned} style={rowStyle}>

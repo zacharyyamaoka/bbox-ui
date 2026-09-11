@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, Fragment } from "react";
 import { describe, expect, it } from "vitest";
 import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
 
@@ -79,6 +79,35 @@ describe("PORT_EDGE_FIELDS", () => {
   it('textLayout\'s declared default ("right") is the real cascade value AT this table\'s own default edge ("left") — a child with no textLayout of its own reads it', () => {
     const cloned = mappedChild();
     expect(cloned.props.textLayout).toBe(field("textLayout").defaultValue);
+  });
+
+  // The gate that was missing while the bug shipped. Every test above wraps
+  // its child directly, which is the one arrangement that worked; BOTH real
+  // callers in this repo wrap their ports in a Fragment, and a Fragment
+  // satisfies `isValidElement`, so the cascade landed on the Fragment and no
+  // Port ever saw it. Driven on the deployed inspector, setting Text Layout
+  // to Top, Bot, Right or Left left all three child ports painting "right".
+  it("reaches a child wrapped in a Fragment — the arrangement both real callers use", () => {
+    const el = portEdgeElement({
+      edge: "top",
+      children: createElement(Fragment, null, createElement("span", {}), createElement("span", {})),
+    });
+    const mapped = el.props.children[0] as unknown[];
+    const flattened = mapped.flat(Infinity) as Array<{ props: Record<string, unknown> }>;
+    expect(flattened).toHaveLength(2);
+    for (const child of flattened) {
+      expect(child.props.textLayout).toBe("bot");
+    }
+  });
+
+  it("a Fragment-wrapped child that sets its own textLayout still wins", () => {
+    const el = portEdgeElement({
+      edge: "top",
+      children: createElement(Fragment, null, createElement("span", { textLayout: "left" })),
+    });
+    const mapped = el.props.children[0] as unknown[];
+    const flattened = mapped.flat(Infinity) as Array<{ props: Record<string, unknown> }>;
+    expect(flattened[0]!.props.textLayout).toBe("left");
   });
 
   it("a child that sets its own textLayout always wins over the cascade", () => {

@@ -1,8 +1,11 @@
 import {
   Children,
   cloneElement,
+  Fragment,
   isValidElement,
   type ComponentProps,
+  type ReactElement,
+  type ReactNode,
 } from "react";
 
 import { cn } from "./lib/utils";
@@ -23,6 +26,37 @@ import type { PortEdgeLayout } from "./portEdge.fields";
  */
 function edgeFlexDirection(edge: BlockSide): "column" | "row" {
   return edge === "left" || edge === "right" ? "column" : "row";
+}
+
+/**
+ * Hand `textLayout` down to every Port inside the lane, looking THROUGH
+ * Fragments on the way.
+ *
+ * WHY the recursion: a Fragment satisfies `isValidElement`, so a flat
+ * `Children.map` + `cloneElement` put the prop on the Fragment itself, where
+ * React warns in dev and no Port ever saw it. Both callers in this repo wrap
+ * their ports in a Fragment, so the cascade was inert exactly where it was
+ * used — setting a PortEdge's Text Layout to Top, Bot, Right or Left left
+ * every child painting `right`.
+ *
+ * A Port that sets its own `textLayout` still wins, because the cascade is
+ * only applied when the child's own prop is undefined. Known limit, stated
+ * rather than hidden: an element that is neither a Port nor a Fragment (a
+ * wrapping `div`, say) still stops the cascade at itself. Context would pass
+ * through anything, but Port is deliberately callable as a plain function so
+ * its tests can read real defaults off the returned tree, and a hook would
+ * end that.
+ */
+function cascadeInto(children: ReactNode, textLayout: PortTextLayout): ReactNode {
+  return Children.map(children, (child) => {
+    if (!isValidElement(child)) return child;
+    if (child.type === Fragment) {
+      const fragment = child as ReactElement<{ children?: ReactNode }>;
+      return cascadeInto(fragment.props.children, textLayout);
+    }
+    const element = child as ReactElement<{ textLayout?: PortTextLayout }>;
+    return cloneElement(element, { textLayout: element.props.textLayout ?? textLayout });
+  });
 }
 
 export interface PortEdgeProps extends ComponentProps<"div"> {
@@ -79,13 +113,7 @@ export function PortEdge({
       style={style}
       {...props}
     >
-      {Children.map(children, (child) =>
-        isValidElement<{ textLayout?: PortTextLayout }>(child)
-          ? cloneElement(child, {
-              textLayout: child.props.textLayout ?? cascadeTextLayout,
-            })
-          : child,
-      )}
+      {cascadeInto(children, cascadeTextLayout)}
       {hiddenCount > 0 && (
         <span
           data-slot="port-edge-more"
