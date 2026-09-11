@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@bbox-ui/core": "workspace:*",
+    "@bbox-ui/schema": "workspace:*",
     "@bbox-ui/story-hosts": "workspace:*",
     "@xyflow/react": "^12.8.0",
     "react": "^19.0.0",
