@@ -1,0 +1,101 @@
+---
+title: Block
+description: The black-box Block in Simple View — container, header band, glyph, text slots and chip.
+---
+
+<ComponentPreview name="block-demo" />
+
+## Installation
+
+<CodeTabs>
+
+<TabsList>
+  <TabsTrigger value="cli">Command</TabsTrigger>
+  <TabsTrigger value="manual">Manual</TabsTrigger>
+</TabsList>
+<TabsContent value="cli">
+
+<CodeBlockCommand command="npx shadcn@latest add zacharyyamaoka/bbox-ui/block" />
+
+</TabsContent>
+
+<TabsContent value="manual">
+
+<Steps className="mb-0 pt-2">
+
+<Step>Install the following dependencies:</Step>
+
+<CodeBlockCommand command="npm install clsx tailwind-merge" />
+
+<Step>Copy and paste the following code into your project.</Step>
+
+<ComponentSource
+  src="../../packages/bbox-ui/src/block.tsx"
+  title="components/bbox/block.tsx"
+/>
+
+<Step>Update the import paths to match your project setup.</Step>
+
+</Steps>
+
+</TabsContent>
+
+</CodeTabs>
+
+## Features
+
+- The anatomy *is* the API vocabulary: `Block`, `BlockHeader`, `BlockGlyph`, `BlockTitle`, `BlockChip`, `BlockDescription`, `BlockType`.
+- The glyph always sits beside the title and resizes with the title rung at **0.9×** — 44→40, 36→32, 24→22.
+- The chip **reserves** its region rather than merely right-aligning, so a long title truncates with a visible ellipsis instead of being painted over.
+- A truncated title keeps its complete string on the element's `title` attribute. Presentation shortens; the stored data never does.
+
+## Usage
+
+```tsx
+import {
+  Block,
+  BlockHeader,
+  BlockGlyph,
+  BlockTitle,
+  BlockChip,
+  BlockDescription,
+  BlockType,
+} from "@/components/bbox/block";
+```
+
+```tsx
+<Block>
+  <BlockHeader>
+    <BlockGlyph>🔍</BlockGlyph>
+    <BlockTitle>Detect</BlockTitle>
+    <BlockChip>Draft 1</BlockChip>
+  </BlockHeader>
+  <BlockDescription>blackbox modelling</BlockDescription>
+  <BlockType>dataflow</BlockType>
+</Block>
+```
+
+## Examples
+
+### With ports on the boundary
+
+`Port` and `Block` know nothing about each other. A host adapter places the
+dots; the core only supplies the geometry through `portAnchor()`.
+
+<ComponentPreview name="block-with-ports" />
+
+## Reference
+
+### Anatomy
+
+<ApiRefTable
+  props={[
+    { name: "Block", type: "Container", defaultValue: "384 × 258" },
+    { name: "BlockHeader", type: "Header band", defaultValue: "—" },
+    { name: "BlockGlyph", type: "Glyph, 0.9× the title rung", defaultValue: "—" },
+    { name: "BlockTitle", type: "Text slot, truncates under the chip", defaultValue: "—" },
+    { name: "BlockChip", type: "Chip, reserves its region", defaultValue: "—" },
+    { name: "BlockDescription", type: "Text slot", defaultValue: "—" },
+    { name: "BlockType", type: "Text slot", defaultValue: "—" },
+  ]}
+/>

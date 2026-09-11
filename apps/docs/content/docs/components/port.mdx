@@ -1,0 +1,102 @@
+---
+title: Port
+description: A circle with a text slot. The component does not define what goes in the slot.
+---
+
+<ComponentPreview name="port-demo" />
+
+## Installation
+
+<CodeTabs>
+
+<TabsList>
+  <TabsTrigger value="cli">Command</TabsTrigger>
+  <TabsTrigger value="manual">Manual</TabsTrigger>
+</TabsList>
+<TabsContent value="cli">
+
+<CodeBlockCommand command="npx shadcn@latest add zacharyyamaoka/bbox-ui/port" />
+
+</TabsContent>
+
+<TabsContent value="manual">
+
+<Steps className="mb-0 pt-2">
+
+<Step>Install the following dependencies:</Step>
+
+<CodeBlockCommand command="npm install clsx tailwind-merge" />
+
+<Step>Copy and paste the following code into your project.</Step>
+
+<ComponentSource
+  src="../../packages/bbox-ui/src/port.tsx"
+  title="components/bbox/port.tsx"
+/>
+
+<Step>Update the import paths to match your project setup.</Step>
+
+</Steps>
+
+</TabsContent>
+
+</CodeTabs>
+
+## Features
+
+- Four states — `empty` (hollow ring), `default` (filled neutral), `wired` (accent dot inside the ring), and `received`, a **runtime** flag that is never persisted as document state.
+- Six text layouts placing the slot relative to the dot, including two offset variants for a dot that hangs outside a block edge.
+- Three diameters and three text rungs, all measured off the source wireframe rather than chosen by eye.
+- Zero canvas assumptions — no pointer listeners, no self-measurement, no z-index.
+
+## Usage
+
+```tsx
+import { Port } from "@/components/bbox/port";
+```
+
+```tsx
+<Port state="wired" size="md" textLayout="right">image</Port>
+```
+
+## Examples
+
+### Text layout
+
+Where the slot sits relative to the dot. The `-offset` variants push the label
+further out, for a dot painted on a block's boundary.
+
+<ComponentPreview name="port-layouts" />
+
+### Diameter
+
+<ComponentPreview name="port-sizes" />
+
+## Reference
+
+### Props
+
+<ApiRefTable
+  props={[
+    {
+      name: "state",
+      type: '"empty" | "default" | "wired" | "received"',
+      defaultValue: '"empty"',
+    },
+    {
+      name: "size",
+      type: '"sm" | "md" | "lg"',
+      defaultValue: '"md"',
+    },
+    {
+      name: "textLayout",
+      type: '"top" | "bot" | "right" | "left" | "right-offset" | "left-offset"',
+      defaultValue: '"right"',
+    },
+    {
+      name: "textSize",
+      type: '"md" | "lg" | "xl"',
+      defaultValue: '"md"',
+    },
+  ]}
+/>

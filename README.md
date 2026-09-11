@@ -14,6 +14,30 @@ Both demos, same components, two hosts:
 |---|---|
 | ![React Flow demo](demos/screenshots/reactflow.png) | ![tldraw demo](demos/screenshots/tldraw.png) |
 
+## The website
+
+The public site is **bbox-ui.com** — `apps/docs`, a Fumadocs + Next.js app that
+static-exports to Cloudflare Pages. Full notes in
+[`apps/docs/README.md`](apps/docs/README.md).
+
+```bash
+pnpm docs:dev      # http://localhost:4100
+pnpm docs:build    # -> apps/docs/out/
+```
+
+### Reference sites — copy these, do not invent
+
+The site is deliberately unoriginal. Before designing any page or interaction,
+look at how these solved it:
+
+| Site | What to take from it |
+|---|---|
+| [Kibo UI](https://www.kibo-ui.com/components/avatar-stack) · [`shadcnblocks/kibo`](https://github.com/shadcnblocks/kibo) (MIT) | The canonical component page — hero preview, Preview/Code tabs, install command, features, per-variant examples. `content/docs/components/port.mdx` follows its shape. |
+| [ReUI](https://reui.io) · [`keenthemes/reui`](https://github.com/keenthemes/reui) (MIT) | Landing-page craft, and a clean branding seam. |
+| [React Flow UI](https://reactflow.dev/ui) (closed source) | The canvas pattern: it iframes a separate app rather than inlining live previews. Do the same for anything hosting tldraw or React Flow. |
+| [shadcn/ui](https://ui.shadcn.com) · [`shadcn-ui/ui`](https://github.com/shadcn-ui/ui) (MIT) | The registry contract — `registry.json`, `shadcn build`, `/r/*.json`. |
+| [Fumadocs](https://fumadocs.dev) (MIT) | The framework under `apps/docs`. Check its docs before hand-rolling anything. |
+
 ## Components
 
 ### Port
