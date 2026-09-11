@@ -34,10 +34,11 @@ function edgeFlexDirection(edge: BlockSide): "column" | "row" {
  *
  * WHY the recursion: a Fragment satisfies `isValidElement`, so a flat
  * `Children.map` + `cloneElement` put the prop on the Fragment itself, where
- * React warns in dev and no Port ever saw it. Both callers in this repo wrap
- * their ports in a Fragment, so the cascade was inert exactly where it was
- * used — setting a PortEdge's Text Layout to Top, Bot, Right or Left left
- * every child painting `right`.
+ * React warns in dev and no Port ever saw it. Only `demos/inspector` wraps
+ * its ports in a Fragment; the Storybook gallery wraps them in a real
+ * `ThreePorts` component instead, which this function deliberately does NOT
+ * look through (see that component's own comment) — a component boundary
+ * stops the cascade there by design, a Fragment stops it by omission.
  *
  * A Port that sets its own `textLayout` still wins, because the cascade is
  * only applied when the child's own prop is undefined. Known limit, stated

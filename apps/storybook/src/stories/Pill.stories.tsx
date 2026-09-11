@@ -95,7 +95,13 @@ export const Presets: Story = {
           {...(args as ComponentProps<typeof Pill>)}
           {...({ [preset.selector]: preset.id } as ComponentProps<typeof Pill>)}
         >
-          {preset.label}
+          {/* WHY `args.children ?? preset.label`, not a bare `{preset.label}`:
+              rendering the preset label unconditionally as children left the
+              Label/children control live but moving nothing — exactly the
+              class of defect this story's own WHY comment above complains
+              about. Falling back to the preset's name keeps every row
+              readable by default while letting the control drive it. */}
+          {args.children ?? preset.label}
         </Pill>
       ))}
     </div>

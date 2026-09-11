@@ -91,18 +91,21 @@ const sweep = (fieldId: string) => ({
   controls: { exclude: controlNames(ROW_CONTAINER_FIELDS, [fieldId]) },
 });
 
-/** Every real RowJustify value, one row per option. */
+/**
+ * Every real RowJustify value, one row per option.
+ *
+ * WHY no hardcoded `height` here: the fix for the dead Height control was
+ * to stop setting `height` AFTER `{...args}` — that shadowed the args
+ * value on every render regardless of what the control said. Justify
+ * (main-axis spacing) reads fine at the default hug-contents height, so
+ * unlike AllAlign below there's no honest reason to override it.
+ */
 export const AllJustify: Story = {
   parameters: sweep("justify"),
   render: (args) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {JUSTIFY_FIELD.options!.map((option) => (
-        <RowContainer
-          {...args}
-          key={option.value}
-          justify={option.value as RowJustify}
-          height={64}
-        >
+        <RowContainer {...args} key={option.value} justify={option.value as RowJustify}>
           {swatch("A", 40)}
           {swatch("B", 40)}
         </RowContainer>
@@ -111,13 +114,22 @@ export const AllJustify: Story = {
   ),
 };
 
-/** Every real RowAlign value — needs a tall row for the difference to read. */
+/**
+ * Every real RowAlign value — needs a tall row for the difference to read.
+ *
+ * WHY `height: 80` lives in this story's own `args` rather than hardcoded
+ * on the element after `{...args}`: the latter shadowed whatever the
+ * Height control was set to, so the control was live but moved nothing.
+ * Putting it in `args` instead makes 80 the honest starting value AND
+ * keeps the control driving it.
+ */
 export const AllAlign: Story = {
+  args: { height: 80 },
   parameters: sweep("align"),
   render: (args) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {ALIGN_FIELD.options!.map((option) => (
-        <RowContainer {...args} key={option.value} align={option.value as RowAlign} height={80}>
+        <RowContainer {...args} key={option.value} align={option.value as RowAlign}>
           {swatch("A", 32)}
           {swatch("B", 32)}
         </RowContainer>

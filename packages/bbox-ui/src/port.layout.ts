@@ -109,9 +109,22 @@ export const BLOCK_SIDE_LABELS: Record<BlockSide, string> = {
 /**
  * Which container side a port lands on when only its direction is known:
  * inputs enter on the left, outputs leave on the right.
+ *
+ * WHY a total lookup and not a ternary: `PortDirection` has exactly two
+ * members today, so the ternary produces the right output right now — but
+ * a ternary has no way to fail if a third direction is ever added, and it
+ * would silently fall through to "right" instead of failing to compile.
+ * `port.tsx` and `stack.tsx` already made this call for their own unions;
+ * this was the last ternary/`===` chain in the file consuming a closed
+ * union without one.
  */
+const SIDE_FOR_DIRECTION: Record<PortDirection, BlockSide> = {
+  input: "left",
+  output: "right",
+};
+
 export function portSideForDirection(direction: PortDirection): BlockSide {
-  return direction === "input" ? "left" : "right";
+  return SIDE_FOR_DIRECTION[direction];
 }
 
 /**

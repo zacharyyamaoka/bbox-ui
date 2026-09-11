@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { governedFieldIds, resolveField } from "@bbox-ui/schema";
 
 import { cn } from "./lib/utils";
@@ -73,6 +73,22 @@ const LINE_THICKNESS_PX: Record<PillLineThickness, number> = {
   thick: 3,
 };
 
+// WHY a total Record and not passing `lineStyleResolved` straight through
+// to CSS `borderStyle`: it typechecked and painted correctly only because
+// every current `PillLineStyle` member happens to spell a real CSS
+// border-style keyword. React's own `CSSProperties["borderStyle"]` type
+// accepts an arbitrary string, so a future member that ISN'T valid CSS
+// (or that means something bbox-ui-specific, the way a future line style
+// might) would still typecheck, ship, and silently paint no border at
+// all. A `Record` over the real union forces every member to state its
+// real CSS value at the definition site.
+const BORDER_STYLE_CSS: Record<PillLineStyle, NonNullable<CSSProperties["borderStyle"]>> = {
+  solid: "solid",
+  dashed: "dashed",
+  dotted: "dotted",
+  none: "none",
+};
+
 /**
  * `fillStyle`'s baked-in coverage before the freely-editable `fillOpacity`
  * further scales it — WHY two separate knobs: `fillStyle` is the governed,
@@ -83,13 +99,34 @@ const LINE_THICKNESS_PX: Record<PillLineThickness, number> = {
  */
 const FILL_STYLE_ALPHA: Record<PillFillStyle, number> = { none: 0, semi: 0.35, solid: 1 };
 
+// WHY a total Record and not the `var(--${token})` template it replaces:
+// the template typechecked for any `PaintToken` and was byte-correct only
+// because every existing token name happens to equal its CSS custom
+// property's name. A future token whose CSS variable is spelled
+// differently (or that isn't a `var()` reference at all, the way
+// `"transparent"` already isn't) would still typecheck and silently paint
+// nothing — same class of defect as `PillLineStyle` below. A `Record`
+// over the real union makes a new member a compile error until someone
+// states what it resolves to.
+const PAINT_TOKEN_VALUE: Record<PaintToken, string> = {
+  foreground: "var(--foreground)",
+  "muted-foreground": "var(--muted-foreground)",
+  primary: "var(--primary)",
+  "bbox-received": "var(--bbox-received)",
+  "bbox-warning": "var(--bbox-warning)",
+  "bbox-success": "var(--bbox-success)",
+  "bbox-danger": "var(--bbox-danger)",
+  "bbox-accent": "var(--bbox-accent)",
+  transparent: "transparent",
+};
+
 /** A resolved `PaintToken` → a real CSS colour, honouring `alpha` (0-1)
  * via `color-mix` rather than the element's own `opacity` (which would
  * also fade the label text and border together). `"transparent"` is a
  * real token (§4.3), never treated as "no value". */
 function paintColor(token: PaintToken, alpha: number): string {
-  if (token === "transparent" || alpha <= 0) return "transparent";
-  const value = `var(--${token})`;
+  const value = PAINT_TOKEN_VALUE[token];
+  if (value === "transparent" || alpha <= 0) return "transparent";
   return alpha >= 1 ? value : `color-mix(in oklch, ${value} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
@@ -179,7 +216,7 @@ export function Pill({
         className,
       )}
       style={{
-        borderStyle: hollow ? "none" : lineStyleResolved,
+        borderStyle: hollow ? "none" : BORDER_STYLE_CSS[lineStyleResolved],
         borderWidth: hollow ? 0 : LINE_THICKNESS_PX[lineThickness],
         borderColor: paintColor(lineColorResolved, lineOpacity),
         background: paintColor(fillColorResolved, FILL_STYLE_ALPHA[fillStyleResolved] * fillOpacity),

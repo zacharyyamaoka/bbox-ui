@@ -75,6 +75,13 @@ const HOSTS = [
   { name: "tldraw", expectHostAttr: "tldraw" },
 ];
 
+/** React's dev-mode `act(...)` warning, matched on its own two known
+ * phrasings — see the WHY at the `consoleAPICalled` handler that calls
+ * this. Everything else stays fatal. */
+function isReactActWarning(text) {
+  return text.includes("not wrapped in act(") || text.includes("not configured to support act(");
+}
+
 /**
  * The one table of per-component knowledge this file cannot infer from
  * Storybook's own index: which marker slot is "the component painted,"
@@ -147,7 +154,19 @@ async function launchChrome() {
       );
     }
     if (message.method === "Runtime.consoleAPICalled" && message.params.type === "error") {
-      consoleErrors.push(message.params.args.map((a) => a.value ?? a.description ?? "").join(" "));
+      const text = message.params.args.map((a) => a.value ?? a.description ?? "").join(" ");
+      // WHY this one console.error is filtered and nothing else is: React
+      // logs its `act(...)` warning ("not wrapped in act(...)" /
+      // "not configured to support act(...)") whenever a story's state
+      // update lands outside its own test harness's `act` call — true of
+      // EVERY story this script drives, since it isn't React Testing
+      // Library. Measured: a byte-identical pristine checkout produced 41
+      // failures from this alone under a cold Vite cache, none of them a
+      // real defect. Treating any console message as fatal is how a gate
+      // that cries wolf on correct code lets real defects through — every
+      // OTHER console.error still fails the run.
+      if (isReactActWarning(text)) return;
+      consoleErrors.push(text);
     }
   };
 

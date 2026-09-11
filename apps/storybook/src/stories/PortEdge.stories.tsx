@@ -46,14 +46,32 @@ const sweep = (fieldId: string) => ({
   controls: { exclude: controlNames(PORT_EDGE_FIELDS, [fieldId]) },
 });
 
-/** Three real `<Port>` children, none setting their own `textLayout` —
- * every one of them reads whatever PortEdge's cascade supplies. */
-function ThreePorts() {
+/**
+ * Three real `<Port>` children, none setting their own `textLayout` — each
+ * reads whatever `textLayout` this component itself is handed.
+ *
+ * WHY it forwards the prop instead of just rendering a Fragment:
+ * `cascadeInto` in portEdge.tsx only unwraps `child.type === Fragment` on
+ * its way down — a real component like `ThreePorts` is opaque to it and the
+ * clone stops here, so the three `<Port>`s below never saw PortEdge's
+ * cascade (measured: `--primary`, `--all-edges`, `--all-layouts` and
+ * `--hidden-count` all painted `[right,right,right]` regardless of the Text
+ * Layout control). PortEdge still clones `textLayout` onto `<ThreePorts>`
+ * itself, so accepting and forwarding it here is enough — no change to
+ * `cascadeInto`'s Fragment-only rule, which is deliberate.
+ */
+function ThreePorts({ textLayout }: { textLayout?: PortTextLayout }) {
   return (
     <>
-      <Port state="empty">alpha</Port>
-      <Port state="wired">beta</Port>
-      <Port state="received">gamma</Port>
+      <Port state="empty" textLayout={textLayout}>
+        alpha
+      </Port>
+      <Port state="wired" textLayout={textLayout}>
+        beta
+      </Port>
+      <Port state="received" textLayout={textLayout}>
+        gamma
+      </Port>
     </>
   );
 }
