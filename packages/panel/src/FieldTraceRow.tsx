@@ -416,7 +416,17 @@ function disclosureStyle(enabled: boolean): CSSProperties {
     border: "none",
     background: "transparent",
     cursor: enabled ? "pointer" : "default",
-    color: enabled ? "var(--bbox-panel-fg-muted, #666)" : "var(--bbox-panel-border, #ccc)",
+    // WHY fg-muted for both states, not `--bbox-panel-border` for the disabled
+    // one: a border token is calibrated for a 1px hairline, not text. Reused
+    // as the disabled "·" glyph (shown when a field is Mixed across the
+    // selection and has no single trace to disclose) it measured 1.26:1 in
+    // light and 1.47:1 in dark against the panel surface — both under the
+    // 3:1 floor — so the row read as having lost its disclosure affordance
+    // rather than showing a deliberately quiet one. fg-muted is the same role
+    // the enabled chevron already uses one line below, and clears >4.7:1
+    // light / >5.8:1 dark here, so the placeholder stays legible without a
+    // new token.
+    color: "var(--bbox-panel-fg-muted, #666)",
     fontSize: 11,
     padding: 0,
   };
@@ -576,7 +586,16 @@ function candidateStyle(winner: boolean): CSSProperties {
     gap: 6,
     fontSize: 12,
     fontWeight: winner ? 600 : 400,
-    color: winner ? "var(--bbox-panel-fg, #111)" : "var(--bbox-panel-fg-faint, #888)",
+    // WHY fg-muted, not fg-faint, for the losing candidates: fg-faint is
+    // defined (apps/docs/src/app/global.css) as muted-foreground at a fixed
+    // 65% alpha, and that fixed alpha composites against this chain's
+    // surface-2 background to only 2.39:1 in light mode — below the 3:1
+    // floor — even though the identical token stack happens to clear it in
+    // dark, because --muted-foreground itself is lighter there. fg-muted has
+    // no alpha baked in and reads at ~4.35:1 (light) / ~5.86:1 (dark) against
+    // the same chain background, so "override —" / "preset —" stay readable
+    // in both themes once a row is expanded.
+    color: winner ? "var(--bbox-panel-fg, #111)" : "var(--bbox-panel-fg-muted, #666)",
   };
 }
 function candidateDotStyle(winner: boolean): CSSProperties {
@@ -599,9 +618,16 @@ function segmentButtonStyle(selected: boolean, secondary?: boolean): CSSProperti
     padding: "3px 8px",
     borderRadius: 4,
     fontSize: 12,
-    border: selected ? `1px solid ${secondary ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-fg, #111)"}` : "1px solid var(--bbox-panel-border, #ccc)",
-    background: selected ? (secondary ? "var(--bbox-panel-border-soft, #eee)" : "var(--bbox-panel-fg, #111)") : "var(--bbox-panel-surface, white)",
-    color: selected ? (secondary ? "var(--bbox-panel-fg, #333)" : "var(--bbox-panel-surface, white)") : "var(--bbox-panel-fg, #111)",
+    // WHY: the primary selected fill/border/text uses `emphasis`/`emphasis-fg`,
+    // not `fg`/`surface` — `fg` is the theme's ink colour, near-white in dark
+    // mode, so filling a chip with it (rather than using it as text) inverted
+    // into a near-white segmented button on an otherwise dark panel. `emphasis`
+    // is tuned per-theme on its own so the chip stays a solid, legible fill in
+    // both directions instead of riding the ink/paper flip. The secondary
+    // (tinted) branch is unaffected — it never fills with `fg`.
+    border: selected ? `1px solid ${secondary ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-emphasis, #111)"}` : "1px solid var(--bbox-panel-border, #ccc)",
+    background: selected ? (secondary ? "var(--bbox-panel-border-soft, #eee)" : "var(--bbox-panel-emphasis, #111)") : "var(--bbox-panel-surface, white)",
+    color: selected ? (secondary ? "var(--bbox-panel-fg, #333)" : "var(--bbox-panel-emphasis-fg, white)") : "var(--bbox-panel-fg, #111)",
     cursor: "pointer",
     opacity: secondary && !selected ? 0.7 : 1,
   };

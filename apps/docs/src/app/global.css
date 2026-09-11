@@ -38,8 +38,16 @@
   --bbox-panel-danger-ring: color-mix(in oklch, var(--destructive) 45%, var(--background));
   --bbox-panel-danger-bg: color-mix(in oklch, var(--destructive) 12%, var(--background));
   --bbox-panel-accent: oklch(0.6 0.12 180);
+  /* A solid "selected chip" fill and its text (tier tabs, segmented buttons).
+     Deliberately NOT fg/surface: those are ink and paper and swap wholesale
+     between themes, so a chip filled with fg turned into a near-white pill in
+     dark mode. Tuned per theme on its own. */
+  --bbox-panel-emphasis: var(--primary);
+  --bbox-panel-emphasis-fg: var(--primary-foreground);
 }
 .dark {
+  --bbox-panel-emphasis: oklch(0.42 0 0);
+  --bbox-panel-emphasis-fg: var(--foreground);
   --bbox-panel-override: oklch(0.78 0.14 295);
   --bbox-panel-preset: oklch(0.78 0.12 260);
   --bbox-panel-warn: oklch(0.82 0.15 80);

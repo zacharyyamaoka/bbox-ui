@@ -413,13 +413,34 @@ const panelStyle: CSSProperties = {
 
 const headerRowStyle: CSSProperties = { display: "flex", alignItems: "baseline", justifyContent: "space-between" };
 const headerTitleStyle: CSSProperties = { fontWeight: 600, color: "var(--bbox-panel-fg, #333)", fontSize: 13 };
-const headerCountStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-faint, #999)" };
+// WHY fg-muted and not fg-faint: bbox-ui.com maps fg-faint to
+// color-mix(muted-foreground 65%, transparent) — composited over the light
+// theme's white inspector surface that measures 2.5:1, under the 3:1 floor
+// (fg-faint's own panel.css DEFAULT, an opaque #9a9aa4, is fine; it's the
+// site's token override that thins it). fg-muted maps to muted-foreground at
+// full opacity (already used above for the inactive tab-tab label) and
+// measures 4.74:1 in the same theme, so this header count reads as quiet
+// metadata without failing contrast.
+const headerCountStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-muted, #666)" };
 
 const switcherStyle: CSSProperties = {
   display: "flex",
   border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 6,
   overflow: "hidden",
+  // WHY flexShrink: 0 — `overflow: hidden` above (needed only to clip the
+  // tab buttons to these rounded corners) also gives this flex item, per
+  // spec, an automatic MIN size of 0 on the flex (column) axis, unlike its
+  // siblings (header, field list), which keep their content-based floor
+  // because their own overflow stays 'visible'. Without this, a tall field
+  // list (e.g. Port at Expert, 19 rows) makes `panelStyle`'s
+  // maxHeight/overflowY:auto column ask something to shrink, and this is
+  // the only child ABLE to — so it eats the entire deficit and the
+  // Simple/Advanced/Expert switcher (this variant's whole pitch) collapses
+  // to a ~2px sliver instead of the panel just scrolling. Pinning
+  // flex-shrink to 0 removes the switcher as a shrink target entirely, so
+  // the overflow lands on overflowY: auto (a scrollbar) as intended.
+  flexShrink: 0,
 };
 
 function tierButtonStyle(active: boolean): CSSProperties {
@@ -430,8 +451,13 @@ function tierButtonStyle(active: boolean): CSSProperties {
     fontWeight: 600,
     border: "none",
     borderRight: "1px solid var(--bbox-panel-border, #ddd)",
-    background: active ? "var(--bbox-panel-fg, #333)" : "var(--bbox-panel-surface, white)",
-    color: active ? "var(--bbox-panel-surface, white)" : "var(--bbox-panel-fg-muted, #666)",
+    // WHY: fill/text is `emphasis`/`emphasis-fg`, not `fg`/`surface` — `fg` is the
+    // theme's ink colour, which is near-white in dark mode, so using it as a FILL
+    // (rather than as text) inverted into a near-white active tab on an otherwise
+    // dark panel. `emphasis` is tuned per-theme on its own so the tab stays a
+    // solid, legible chip in both directions instead of riding the ink/paper flip.
+    background: active ? "var(--bbox-panel-emphasis, #333)" : "var(--bbox-panel-surface, white)",
+    color: active ? "var(--bbox-panel-emphasis-fg, white)" : "var(--bbox-panel-fg-muted, #666)",
     cursor: "pointer",
   };
 }

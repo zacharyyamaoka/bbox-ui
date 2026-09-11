@@ -242,7 +242,13 @@ function FigmaDensePanel({
   );
 }
 
-const controlBarStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid var(--fd-line, #e7e7ec)" };
+// WHY --bbox-panel-border-soft and not the old `--fd-line`: `--fd-line` was
+// never defined anywhere in the codebase, so it silently always fell back to
+// its literal — a hardcoded light-gray hairline under the dark header even
+// in dark theme. The fallback literal already matched border-soft's own
+// light-theme value exactly, so this was a stray/typo'd token name, not a
+// deliberate one-off colour.
+const controlBarStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid var(--bbox-panel-border-soft, #e7e7ec)" };
 const tierGroupStyle: CSSProperties = { display: "flex", border: "1px solid var(--bbox-panel-border, #d6d6de)", borderRadius: 6, overflow: "hidden" };
 const filterInputStyle: CSSProperties = { flex: 1, minWidth: 0, fontSize: 11, padding: "3px 7px", border: "1px solid var(--bbox-panel-border, #d6d6de)", borderRadius: 6, background: "var(--bbox-panel-surface, #fff)", color: "var(--bbox-panel-fg, #222)" };
 const noteStyle: CSSProperties = { fontSize: 11, color: "var(--bbox-panel-fg-muted, #6a6a75)", padding: "5px 10px" };
@@ -253,8 +259,12 @@ function tierButtonStyle(active: boolean, dimmed: boolean): CSSProperties {
     padding: "3px 9px",
     border: "none",
     borderRight: "1px solid var(--bbox-panel-border-soft, #e4e4ea)",
-    background: active && !dimmed ? "var(--bbox-panel-fg, #1d1d22)" : "transparent",
-    color: active && !dimmed ? "var(--bbox-panel-surface, #fff)" : "var(--bbox-panel-fg-muted, #5c5c66)",
+    // WHY emphasis and not fg/surface: fg is ink and flips near-white in dark
+    // mode, so a chip filled with it became a bright pill in an all-dark bar.
+    // Tiered.tsx and FieldTraceRow.tsx were fixed for the same class an hour
+    // before this private copy was — the third copy of one style function.
+    background: active && !dimmed ? "var(--bbox-panel-emphasis, #16161a)" : "transparent",
+    color: active && !dimmed ? "var(--bbox-panel-emphasis-fg, #ffffff)" : "var(--bbox-panel-fg-muted, #5c5c66)",
     opacity: dimmed ? 0.45 : 1,
     cursor: "pointer",
   };
@@ -1016,7 +1026,13 @@ const headerStyle: CSSProperties = {
   marginBottom: 6,
 };
 const headerNameStyle: CSSProperties = { fontWeight: 600, fontSize: 12, color: "var(--bbox-panel-fg, #111)" };
-const headerCountStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-fg-faint, #999)" };
+// WHY fg-muted, not fg-faint: fg-faint is defined site-wide as the muted
+// foreground blended to 65% alpha over the panel background — fine for a
+// decorative unit label sitting right beside its own value, but this span is
+// the only place the subject count lives, and on the site's light theme that
+// blend measures ~2.5:1 against white, under the 3:1 floor. fg-muted is the
+// same colour without the alpha cut, comfortably clearing it in both themes.
+const headerCountStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-fg-muted, #5c5c66)" };
 
 const presetRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, padding: "3px 2px" };
 const presetLabelStyle: CSSProperties = { width: 92, flexShrink: 0, fontSize: 10, color: "var(--bbox-panel-override, #6d28d9)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.3 };

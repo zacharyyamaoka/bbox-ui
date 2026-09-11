@@ -22,6 +22,15 @@
   --bbox-panel-surface-2: #f6f6f8;
   --bbox-panel-surface-3: #f0f0f4;
 
+  /* A dedicated fill/text pair for a solid "selected chip" (tier tabs, segmented
+   * buttons) — deliberately NOT `fg`/`surface`. Those two are ink and paper and
+   * swap wholesale between themes, so a fill borrowed from `fg` mechanically
+   * inverts into a near-white pill once dark mode makes ink near-white. This
+   * pair is tuned per-theme on its own so the chip stays a solid, legible fill
+   * in both directions instead of riding the ink/paper flip. */
+  --bbox-panel-emphasis: #16161a;
+  --bbox-panel-emphasis-fg: #ffffff;
+
   --bbox-panel-override: #6d28d9;
   --bbox-panel-override-soft: #8b5cf6;
   --bbox-panel-override-ring: #c4b5fd;
@@ -58,6 +67,12 @@
     --bbox-panel-surface-2: #1f1f23;
     --bbox-panel-surface-3: #26262b;
 
+    /* Own value, not a mirror of `--bbox-panel-fg` (see the :root comment) — a
+     * mid charcoal that reads as a filled chip against the dark panel surfaces
+     * above without ever approaching the near-white `fg` uses as text here. */
+    --bbox-panel-emphasis: #52525b;
+    --bbox-panel-emphasis-fg: #f4f4f5;
+
     --bbox-panel-override: #c4b5fd;
     --bbox-panel-override-soft: #a78bfa;
     --bbox-panel-override-ring: #5b21b6;
@@ -90,6 +105,12 @@
   --bbox-panel-surface: #18181b;
   --bbox-panel-surface-2: #1f1f23;
   --bbox-panel-surface-3: #26262b;
+
+  /* Same pair as the @media dark block above, kept in sync for the
+   * data-theme/.dark consumers — see the :root comment for why this isn't
+   * just `--bbox-panel-fg` again. */
+  --bbox-panel-emphasis: #52525b;
+  --bbox-panel-emphasis-fg: #f4f4f5;
 
   --bbox-panel-override: #c4b5fd;
   --bbox-panel-override-soft: #a78bfa;
