@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
-import { Glyph, GLYPH_FIELDS, type GlyphSize } from "@bbox-ui/core";
+import { Glyph, GLYPH_FIELDS, GLYPH_PRESETS, type GlyphSize } from "@bbox-ui/core";
 import type { ComponentProps } from "react";
 
 /**
@@ -21,7 +21,7 @@ import type { ComponentProps } from "react";
 const meta = {
   title: "Components/Glyph",
   component: Glyph,
-  args: defaultArgs(GLYPH_FIELDS) as Partial<ComponentProps<typeof Glyph>>,
+  args: defaultArgs(GLYPH_FIELDS, GLYPH_PRESETS) as Partial<ComponentProps<typeof Glyph>>,
   argTypes: toArgTypes(GLYPH_FIELDS),
 } satisfies Meta<typeof Glyph>;
 

@@ -8,7 +8,7 @@
  */
 
 import type { FieldKind, FieldSpec, FieldValue } from "./field";
-import type { PresetSpec } from "./resolve";
+import { governedFieldIds, type PresetSpec } from "./resolve";
 
 const CONTROL: Record<FieldKind, "select" | "number" | "boolean" | "text"> = {
   segments: "select",
@@ -45,9 +45,25 @@ export function toArgTypes(fields: FieldSpec[]): Record<string, StorybookArgType
 }
 
 /** One entry per field, keyed by `field.id` — matches a CSF `Meta.args`. */
-export function defaultArgs(fields: FieldSpec[]): Record<string, FieldValue> {
+export function defaultArgs(
+  fields: FieldSpec[],
+  presets: PresetSpec[] = [],
+): Record<string, FieldValue> {
+  // WHY governed fields are OMITTED rather than defaulted: a Storybook arg is
+  // an explicit value on the subject, and `resolveField` reads any present
+  // subject value as the INSTANCE OVERRIDE layer, which outranks the preset.
+  // Materialising every field therefore pinned each governed field to its
+  // default paint and made the preset layer unreachable: on the published
+  // site, switching Pill's State control between empty, wired and received
+  // left borderColor at oklch(0.98 0 0) and the background transparent every
+  // time. Leaving a governed field absent is what lets the selector actually
+  // select. Storybook still shows the control (it comes from `argTypes`, not
+  // from `args`), so a reader can still reach past the preset deliberately —
+  // which is the escape hatch, not the default path.
+  const governed = new Set(governedFieldIds(presets));
   const result: Record<string, FieldValue> = {};
   for (const field of fields) {
+    if (governed.has(field.id)) continue;
     result[field.id] = field.defaultValue;
   }
   return result;
@@ -83,10 +99,17 @@ export function controlNames(fields: FieldSpec[], ids: string[]): string[] {
 export function presetArgs(
   fields: FieldSpec[],
   preset: PresetSpec,
+  presets: PresetSpec[] = [preset],
 ): Record<string, FieldValue> {
+  // WHY the preset's own values are NOT spread in: doing so stored the
+  // resolved paint as instance overrides, so every row of a Presets story
+  // looked right while being produced entirely by the override layer. The
+  // cascade was decorative — deleting every preset left the rendered output
+  // byte-identical. Setting only the SELECTOR is the whole point: the
+  // component resolves the paint itself, so the story proves the middle
+  // layer works instead of bypassing it.
   return {
-    ...defaultArgs(fields),
+    ...defaultArgs(fields, presets),
     [preset.selector]: preset.id,
-    ...(preset.values as Record<string, FieldValue>),
   };
 }

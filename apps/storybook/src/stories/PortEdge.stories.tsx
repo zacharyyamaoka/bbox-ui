@@ -5,6 +5,7 @@ import {
   Port,
   PortEdge,
   PORT_EDGE_FIELDS,
+  PORT_EDGE_PRESETS,
   type BlockSide,
   type PortTextLayout,
 } from "@bbox-ui/core";
@@ -23,7 +24,7 @@ import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 const meta = {
   title: "Components/PortEdge",
   component: PortEdge,
-  args: defaultArgs(PORT_EDGE_FIELDS) as Partial<ComponentProps<typeof PortEdge>>,
+  args: defaultArgs(PORT_EDGE_FIELDS, PORT_EDGE_PRESETS) as Partial<ComponentProps<typeof PortEdge>>,
   argTypes: toArgTypes(PORT_EDGE_FIELDS),
 } satisfies Meta<typeof PortEdge>;
 

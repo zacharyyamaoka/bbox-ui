@@ -407,6 +407,55 @@ async function verifyCascadePresetsStory({ screenshotDir }) {
       );
     }
 
+    // --- 3. THE CHECK THAT WOULD HAVE CAUGHT THE SHIPPED DEFECT.
+    // Everything above passes even when the cascade is dead, because it only
+    // compares presets against each other. Until this was added, the story
+    // spread each preset's values in as explicit args, so the rows differed
+    // by OVERRIDE and deleting every preset left the paint byte-identical.
+    // What actually has to be true is that changing ONLY the selector on the
+    // plain story repaints it — the user-visible promise ("set State to Wired
+    // in Controls and the pill turns orange"), which was false on the
+    // published site while every other assertion here stayed green.
+    const paintFor = async (stateId) => {
+      await client.send("Page.navigate", {
+        url: `http://127.0.0.1:${PORT}/?path=/story/components-pill--primary&globals=host:dom&viewMode=story&args=state:${stateId}`,
+      });
+      const painted = await waitFor(async () =>
+        (await client.evaluate(`(() => {
+          const doc = document.querySelector('#storybook-preview-iframe')?.contentDocument;
+          const el = doc?.querySelector('[data-slot="pill"]');
+          return el && el.getAttribute("data-state") === ${JSON.stringify(stateId)} ? 1 : 0;
+        })()`)) || 0,
+      );
+      if (!painted) return null;
+      return JSON.parse(
+        await client.evaluate(`(() => {
+          const doc = document.querySelector('#storybook-preview-iframe').contentDocument;
+          const el = doc.querySelector('[data-slot="pill"]');
+          const cs = doc.defaultView.getComputedStyle(el);
+          return JSON.stringify({
+            state: el.getAttribute("data-state"),
+            border: cs.borderColor,
+            background: cs.backgroundColor,
+          });
+        })()`),
+      );
+    };
+    const emptyPaint = await paintFor("empty");
+    const wiredPaint = await paintFor("wired");
+    if (!emptyPaint || !wiredPaint) {
+      failures.push("cascade: the pill never painted for one of the two states under test");
+    } else if (
+      emptyPaint.border === wiredPaint.border &&
+      emptyPaint.background === wiredPaint.background
+    ) {
+      failures.push(
+        `cascade: changing ONLY the state selector did not repaint — empty and wired both render ` +
+          `border=${wiredPaint.border} background=${wiredPaint.background}. The preset layer is being ` +
+          `outranked by a stored override, so the middle layer of the cascade is dead.`,
+      );
+    }
+
     if (client.consoleErrors.length > 0) {
       failures.push(`presets story: console errors: ${client.consoleErrors.join(" | ")}`);
     }

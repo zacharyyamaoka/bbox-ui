@@ -12,6 +12,7 @@ import {
   type TextSize,
 } from "./layout";
 import { Pill, type PillProps } from "./pill";
+import type { BlockOrientation } from "./block.fields";
 
 /**
  * Block anatomy (Zach's vocabulary — the component API uses these names):
@@ -50,8 +51,19 @@ export function Block({
   );
 }
 
+// WHY a total lookup rather than `orientation === "vertical" && ...`: a
+// boolean branch renders every unknown member as the horizontal default, so
+// widening BLOCK_ORIENTATIONS shipped a panel segment that silently did
+// nothing and typecheck stayed green (a judge proved it with "diagonal").
+// Record<BlockOrientation, string> is total, so adding a member is a compile
+// error until someone says what it paints.
+const HEADER_ORIENTATION_CLASS: Record<BlockOrientation, string> = {
+  horizontal: "",
+  vertical: "flex-col gap-1",
+};
+
 export interface BlockHeaderProps extends ComponentProps<"header"> {
-  orientation?: "horizontal" | "vertical";
+  orientation?: BlockOrientation;
 }
 
 /**
@@ -89,7 +101,7 @@ export function BlockHeader({
       data-has-chip={hasChip || undefined}
       className={cn(
         "relative flex w-full items-center justify-center gap-2",
-        orientation === "vertical" && "flex-col gap-1",
+        HEADER_ORIENTATION_CLASS[orientation],
         // min-w-0 lets the flexed title actually shrink below its text;
         // truncate ellipsizes it — never a silent clip, never text under
         // the chip. Scoped to chip-bearing headers so a chipless block

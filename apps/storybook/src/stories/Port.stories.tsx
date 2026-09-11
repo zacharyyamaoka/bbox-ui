@@ -4,6 +4,7 @@ import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
   Port,
   PORT_FIELDS,
+  PORT_PRESETS,
   type AppearanceState,
   type BlockSide,
   type Lens,
@@ -39,7 +40,7 @@ import type { ComponentProps } from "react";
 const meta = {
   title: "Components/Port",
   component: Port,
-  args: defaultArgs(PORT_FIELDS) as Partial<ComponentProps<typeof Port>>,
+  args: defaultArgs(PORT_FIELDS, PORT_PRESETS) as Partial<ComponentProps<typeof Port>>,
   argTypes: toArgTypes(PORT_FIELDS),
 } satisfies Meta<typeof Port>;
 

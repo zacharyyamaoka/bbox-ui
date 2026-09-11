@@ -4,6 +4,7 @@ import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
   RowContainer,
   ROW_CONTAINER_FIELDS,
+  ROW_CONTAINER_PRESETS,
   type RowAlign,
   type RowJustify,
 } from "@bbox-ui/core";
@@ -40,7 +41,7 @@ function swatch(label: string, size = 56) {
 const meta = {
   title: "Components/RowContainer",
   component: RowContainer,
-  args: defaultArgs(ROW_CONTAINER_FIELDS) as Partial<ComponentProps<typeof RowContainer>>,
+  args: defaultArgs(ROW_CONTAINER_FIELDS, ROW_CONTAINER_PRESETS) as Partial<ComponentProps<typeof RowContainer>>,
   argTypes: toArgTypes(ROW_CONTAINER_FIELDS),
   render: (args) => (
     <RowContainer {...args}>

@@ -4,6 +4,7 @@ import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
   TextBox,
   TEXT_BOX_FIELDS,
+  TEXT_BOX_PRESETS,
   type TextBoxFont,
   type TextBoxHorizontalAlign,
   type TextBoxSize,
@@ -29,7 +30,7 @@ import type { ComponentProps } from "react";
 const meta = {
   title: "Components/TextBox",
   component: TextBox,
-  args: defaultArgs(TEXT_BOX_FIELDS) as Partial<ComponentProps<typeof TextBox>>,
+  args: defaultArgs(TEXT_BOX_FIELDS, TEXT_BOX_PRESETS) as Partial<ComponentProps<typeof TextBox>>,
   argTypes: toArgTypes(TEXT_BOX_FIELDS),
 } satisfies Meta<typeof TextBox>;
 

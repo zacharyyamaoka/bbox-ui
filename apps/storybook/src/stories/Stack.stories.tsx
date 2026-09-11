@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
-import { Stack, STACK_FIELDS, type StackInsetBackground, type StackMemberWidth } from "@bbox-ui/core";
+import { Stack, STACK_FIELDS, STACK_PRESETS, type StackInsetBackground, type StackMemberWidth } from "@bbox-ui/core";
 import type { ComponentProps } from "react";
 
 /**
@@ -17,7 +17,7 @@ import type { ComponentProps } from "react";
 const meta = {
   title: "Components/Stack",
   component: Stack,
-  args: defaultArgs(STACK_FIELDS) as Partial<ComponentProps<typeof Stack>>,
+  args: defaultArgs(STACK_FIELDS, STACK_PRESETS) as Partial<ComponentProps<typeof Stack>>,
   argTypes: toArgTypes(STACK_FIELDS),
 } satisfies Meta<typeof Stack>;
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { controlNames, defaultArgs, presetArgs, toArgTypes } from "../src/storybook";
 import type { FieldSpec } from "../src/field";
+import { resolveField } from "../src/resolve";
 import type { PresetSpec } from "../src/resolve";
 
 /**
@@ -123,8 +124,20 @@ describe("presetArgs", () => {
     });
   });
 
-  it("spells out the preset's governed values explicitly, overriding the default", () => {
-    expect(presetArgs(FIELDS, WIRED_PRESET).count).toBe(7);
+  // WHY this reverses what it used to assert: spelling the governed values
+  // out stored them as instance OVERRIDES, which outrank the preset, so every
+  // Presets row was painted by the override layer and deleting all presets
+  // left the output byte-identical. The story must leave the governed field
+  // ABSENT so the selector actually selects.
+  it("leaves the preset's governed fields absent, so the preset layer resolves them", () => {
+    const args = presetArgs(FIELDS, WIRED_PRESET);
+    expect("count" in args).toBe(false);
+  });
+
+  it("is not merely omitting everything — the selector and ungoverned fields survive", () => {
+    const args = presetArgs(FIELDS, WIRED_PRESET);
+    expect(args.state).toBe("wired");
+    expect(args.label).toBe("Port");
   });
 
   it("leaves ungoverned fields at their plain component default", () => {
@@ -133,7 +146,7 @@ describe("presetArgs", () => {
     expect(args.label).toBe("Port");
   });
 
-  it("a preset governing multiple fields sets all of them", () => {
+  it("a preset governing multiple fields leaves all of them to the cascade", () => {
     const multi: PresetSpec = {
       id: "wired",
       label: "Wired",
@@ -143,9 +156,27 @@ describe("presetArgs", () => {
     };
     expect(presetArgs(FIELDS, multi)).toEqual({
       state: "wired",
-      count: 3,
-      visible: false,
       label: "Port",
     });
+  });
+
+  // The gate that would have caught the shipped defect: with the governed
+  // field absent, resolution must actually reach the preset and return the
+  // preset's value, tagged as coming from the preset layer rather than from
+  // an override.
+  it("a governed field left absent really resolves through the preset layer", () => {
+    const args = presetArgs(FIELDS, WIRED_PRESET);
+    const countField = FIELDS.find((f) => f.id === "count")!;
+    const trace = resolveField(countField, args, [WIRED_PRESET]);
+    expect(trace.resolved).toBe(7);
+    expect(trace.winner).toBe("preset");
+  });
+
+  it("and an explicit arg still beats the preset, so the escape hatch survives", () => {
+    const args = { ...presetArgs(FIELDS, WIRED_PRESET), count: 99 };
+    const countField = FIELDS.find((f) => f.id === "count")!;
+    const trace = resolveField(countField, args, [WIRED_PRESET]);
+    expect(trace.resolved).toBe(99);
+    expect(trace.winner).toBe("override");
   });
 });

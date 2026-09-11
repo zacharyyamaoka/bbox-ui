@@ -26,7 +26,7 @@ import type { ComponentProps } from "react";
 const meta = {
   title: "Components/Pill",
   component: Pill,
-  args: defaultArgs(PILL_FIELDS) as Partial<ComponentProps<typeof Pill>>,
+  args: defaultArgs(PILL_FIELDS, PILL_PRESETS) as Partial<ComponentProps<typeof Pill>>,
   argTypes: toArgTypes(PILL_FIELDS),
 } satisfies Meta<typeof Pill>;
 
@@ -72,7 +72,7 @@ export const Presets: Story = {
   render: (args) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
       {PILL_PRESETS.map((preset) => (
-        <Pill key={preset.id} {...(presetArgs(PILL_FIELDS, preset) as ComponentProps<typeof Pill>)}>
+        <Pill key={preset.id} {...(presetArgs(PILL_FIELDS, preset, PILL_PRESETS) as ComponentProps<typeof Pill>)}>
           {preset.label}
         </Pill>
       ))}

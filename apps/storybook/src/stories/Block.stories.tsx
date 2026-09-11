@@ -10,6 +10,7 @@ import {
   BlockTitle,
   BlockType,
   BLOCK_FIELDS,
+  BLOCK_PRESETS,
   type AppearanceState,
   type BlockOrientation,
   type Lens,
@@ -85,7 +86,7 @@ function renderBlock(args: BlockStoryArgs) {
 const meta = {
   title: "Components/Block",
   component: Block as unknown as ComponentType<BlockStoryArgs>,
-  args: defaultArgs(BLOCK_FIELDS) as unknown as BlockStoryArgs,
+  args: defaultArgs(BLOCK_FIELDS, BLOCK_PRESETS) as unknown as BlockStoryArgs,
   argTypes: toArgTypes(BLOCK_FIELDS),
   render: renderBlock,
 } satisfies Meta<BlockStoryArgs>;
