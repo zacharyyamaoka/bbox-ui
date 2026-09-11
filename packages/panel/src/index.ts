@@ -34,3 +34,4 @@ export {
   sharedFields,
   type Instance,
 } from "./bench";
+export { groupRows, type FieldRow } from "./fieldGroups";

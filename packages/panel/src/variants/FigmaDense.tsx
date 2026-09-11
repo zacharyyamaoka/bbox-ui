@@ -11,6 +11,7 @@ import {
 import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 import { readFieldRow } from "../fieldModel";
+import { groupRows } from "../fieldGroups";
 import {
   classifyField,
   loadStoredTier,
@@ -135,19 +136,11 @@ function FigmaDensePanel({
   // tier exists to cut, so the panel says how many and offers one tap out.
   const hiddenButSet = hidden.filter((f) => subjects.some((s) => s.props[f.id] !== undefined));
 
-  // Pair up consecutive number fields (Block's width/height; nothing in
-  // Pill matches, so Pill renders one row per field, unpaired).
-  const rows: (FieldSpec | [FieldSpec, FieldSpec])[] = [];
-  for (let i = 0; i < visible.length; i++) {
-    const field = visible[i];
-    const next = visible[i + 1];
-    if (field.kind === "number" && next?.kind === "number") {
-      rows.push([field, next]);
-      i++;
-    } else {
-      rows.push(field);
-    }
-  }
+  // WHY rows come from a declared group and never from adjacency: Zach asked
+  // "how are you specifying that?" about Gap beside Gutter, and the honest
+  // answer was that nothing did — any two consecutive numbers paired. That is
+  // luck, not a rule; see FieldSpec.group and groupRows.
+  const rows = groupRows(visible);
 
   return (
     <div data-slot="figma-dense-panel" style={panelStyle}>

@@ -52,10 +52,10 @@ const JUSTIFY_OPTIONS = JUSTIFY_ORDER.map((v) => ({ value: v, label: v }));
 /** Reusable per-side padding bundle — see this file's own header comment
  * on why it lives here rather than its own file for T1. */
 export const PADDING_FIELDS: FieldSpec[] = [
-  { id: "paddingTop", label: "Padding: Top", kind: "number", defaultValue: 0, min: 0, step: 1, unit: "px" },
-  { id: "paddingBot", label: "Padding: Bottom", kind: "number", defaultValue: 0, min: 0, step: 1, unit: "px" },
-  { id: "paddingLeft", label: "Padding: Left", kind: "number", defaultValue: 0, min: 0, step: 1, unit: "px" },
-  { id: "paddingRight", label: "Padding: Right", kind: "number", defaultValue: 0, min: 0, step: 1, unit: "px" },
+  { group: "padding", id: "paddingTop", label: "Padding: Top", kind: "number", defaultValue: 0, min: 0, step: 1, unit: "px" },
+  { group: "padding", id: "paddingBot", label: "Padding: Bottom", kind: "number", defaultValue: 0, min: 0, step: 1, unit: "px" },
+  { group: "padding", id: "paddingLeft", label: "Padding: Left", kind: "number", defaultValue: 0, min: 0, step: 1, unit: "px" },
+  { group: "padding", id: "paddingRight", label: "Padding: Right", kind: "number", defaultValue: 0, min: 0, step: 1, unit: "px" },
 ];
 
 /**

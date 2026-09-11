@@ -53,6 +53,9 @@ export const STACK_FIELDS: FieldSpec[] = [
     min: 0,
     unit: "px",
     hint: "Space between members.",
+    // Gap and gutter are the two spacing knobs of one well, in the same unit,
+    // and read together the way Figma's auto-layout gap and padding do.
+    group: "spacing",
   },
   {
     id: "gutter",
@@ -62,6 +65,7 @@ export const STACK_FIELDS: FieldSpec[] = [
     min: 0,
     unit: "px",
     hint: "Inset of the well from its own edges.",
+    group: "spacing",
   },
   {
     id: "memberWidth",

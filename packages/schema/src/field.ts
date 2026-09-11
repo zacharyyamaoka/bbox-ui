@@ -51,6 +51,20 @@ export interface FieldSpec<TValue = FieldValue> {
   step?: number;
   unit?: string;
   hint?: string;
+  /**
+   * Fields sharing a group are declared to belong together, and a panel may
+   * render them on one row: Block's width and height, TextBox's four
+   * paddings, Stack's gap and gutter.
+   *
+   * WHY this is declared and not inferred: the first panel to pair fields
+   * did it by adjacency — any two consecutive numbers shared a row. That
+   * put RowContainer's height beside its gap, which are not a pair, and
+   * would have put Pill's line opacity beside its fill opacity had they been
+   * neighbours. Figma pairs X with Y because they are one value, not because
+   * they are adjacent. A pairing is a fact about the fields, so it lives on
+   * the fields. Absent means "own row", which stays the default.
+   */
+  group?: string;
 }
 
 /**

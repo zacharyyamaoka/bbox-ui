@@ -26,6 +26,7 @@ export const WIDTH_FIELD: FieldSpec = {
   kind: "number",
   defaultValue: SIMPLE_BLOCK.width,
   unit: "px",
+  group: "size",
 };
 
 export const HEIGHT_FIELD: FieldSpec = {
@@ -34,6 +35,7 @@ export const HEIGHT_FIELD: FieldSpec = {
   kind: "number",
   defaultValue: SIMPLE_BLOCK.height,
   unit: "px",
+  group: "size",
 };
 
 export const BLOCK_ORIENTATIONS = ["horizontal", "vertical"] as const;
