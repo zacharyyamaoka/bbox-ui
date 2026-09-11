@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { defaultArgs, toArgTypes, type FieldValue } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, toArgTypes, type FieldValue } from "@bbox-ui/schema";
 import {
   Block,
   BlockChip,
@@ -137,7 +137,7 @@ export const Primary: Story = {
 };
 
 const sweep = (fieldId: string) => ({
-  controls: { exclude: [fieldId] },
+  controls: { exclude: controlNames(BLOCK_FIELDS, [fieldId]) },
 });
 
 /** Both header layouts, side by side — the one non-bundle segments field. */

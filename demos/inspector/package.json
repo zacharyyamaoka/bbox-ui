@@ -1,11 +1,11 @@
 {
-  "name": "demo-port-inspector",
+  "name": "demo-inspector",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "T0: PORT_FIELDS driving a hand-rolled product-side inspector panel — multi-select and mixed values, the thing Storybook's Controls addon cannot show.",
+  "description": "T1: a generic product inspector over every registered component — a picker, per-field cascade trace (override/preset/default, winner marked), presets as the primary path, multi-select and Mixed.",
   "scripts": {
-    "dev": "vite --port 5421 --strictPort",
+    "dev": "vite --port 5422 --strictPort",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json"
   },

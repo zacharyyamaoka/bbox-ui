@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import { Glyph, GLYPH_FIELDS, type GlyphSize } from "@bbox-ui/core";
 import type { ComponentProps } from "react";
 
@@ -62,7 +62,7 @@ export const Primary: Story = {
  * things").
  */
 const sweep = (fieldId: string) => ({
-  controls: { exclude: [fieldId] },
+  controls: { exclude: controlNames(GLYPH_FIELDS, [fieldId]) },
 });
 
 /** Every real GlyphSize (18 / 24 / 36 / 44px). */

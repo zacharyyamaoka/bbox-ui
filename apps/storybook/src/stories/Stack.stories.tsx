@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import { Stack, STACK_FIELDS, type StackInsetBackground, type StackMemberWidth } from "@bbox-ui/core";
 import type { ComponentProps } from "react";
 
@@ -86,7 +86,7 @@ export const Primary: Story = {
  * didn't work for the other things").
  */
 const sweep = (fieldId: string) => ({
-  controls: { exclude: [fieldId] },
+  controls: { exclude: controlNames(STACK_FIELDS, [fieldId]) },
 });
 
 /** Every real StackMemberWidth (fill/own), side by side. */

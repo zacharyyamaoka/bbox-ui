@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
-import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
   Port,
   PORT_FIELDS,
@@ -96,7 +96,7 @@ export const Primary: Story = {
  * still reads as doing something.
  */
 const sweep = (fieldId: string) => ({
-  controls: { exclude: [fieldId] },
+  controls: { exclude: controlNames(PORT_FIELDS, [fieldId]) },
 });
 
 const galleryRow = { display: "flex", flexDirection: "column" as const, gap: 16 };

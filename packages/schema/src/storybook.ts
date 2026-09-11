@@ -54,6 +54,24 @@ export function defaultArgs(fields: FieldSpec[]): Record<string, FieldValue> {
 }
 
 /**
+ * Field ids -> the STRING `parameters.controls.{include,exclude}` must
+ * actually contain to hit those fields' rows.
+ *
+ * WHY this exists: Storybook 10's own `filterArgTypes` (preview-api) reads
+ * `let name = argType.name || key` and matches include/exclude against
+ * that `name` — never against the argTypes object key. `toArgTypes` above
+ * sets `name` to the human `field.label` ("Line Color") for display, so a
+ * raw field id ("lineColor") in `exclude` silently matches nothing and the
+ * governed control stays live. Every caller building `controls.exclude`
+ * from ids (`governedFieldIds`, a single swept field) must route through
+ * this bridge rather than pass ids straight through.
+ */
+export function controlNames(fields: FieldSpec[], ids: string[]): string[] {
+  const labelById = new Map(fields.map((field) => [field.id, field.label]));
+  return ids.map((id) => labelById.get(id) ?? id);
+}
+
+/**
  * The args a story renders with to MATERIALIZE one preset: the
  * component's plain defaults, with the selector field set to the
  * preset's own id, plus the preset's governed values spelled out

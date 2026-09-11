@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
   TextBox,
   TEXT_BOX_FIELDS,
@@ -79,7 +79,7 @@ export const Primary: Story = {
  * things").
  */
 const sweep = (fieldId: string) => ({
-  controls: { exclude: [fieldId] },
+  controls: { exclude: controlNames(TEXT_BOX_FIELDS, [fieldId]) },
 });
 
 /** Every real TextBoxSize, board's own descending order (44/36/24/18px). */

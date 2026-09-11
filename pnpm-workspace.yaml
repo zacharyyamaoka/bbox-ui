@@ -9,6 +9,7 @@ packages:
   - demos/compare-view
   - demos/story-hosts
   - demos/port-inspector
+  - demos/inspector
 allowBuilds:
   esbuild: true
   msw: false

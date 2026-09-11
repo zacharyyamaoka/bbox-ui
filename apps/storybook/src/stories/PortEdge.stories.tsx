@@ -8,7 +8,7 @@ import {
   type BlockSide,
   type PortTextLayout,
 } from "@bbox-ui/core";
-import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 
 /**
  * T1 Lane E: PortEdge. `argTypes`/`args` below are GENERATED from
@@ -42,7 +42,7 @@ const TEXT_LAYOUT_FIELD = PORT_EDGE_FIELDS.find((f) => f.id === "textLayout")!;
  * (Zach, 2026-09-10: "the controls didn't work for the other things").
  */
 const sweep = (fieldId: string) => ({
-  controls: { exclude: [fieldId] },
+  controls: { exclude: controlNames(PORT_EDGE_FIELDS, [fieldId]) },
 });
 
 /** Three real `<Port>` children, none setting their own `textLayout` —

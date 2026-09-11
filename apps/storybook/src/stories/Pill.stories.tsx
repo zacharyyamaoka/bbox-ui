@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { defaultArgs, presetArgs, toArgTypes, governedFieldIds } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, presetArgs, toArgTypes, governedFieldIds } from "@bbox-ui/schema";
 import {
   Pill,
   PILL_FIELDS,
@@ -66,7 +66,7 @@ export const Primary: Story = {
  * excluded controls, AND the product inspector's preset picker, with zero
  * edits to this file.
  */
-const GOVERNED = governedFieldIds(PILL_PRESETS);
+const GOVERNED = controlNames(PILL_FIELDS, governedFieldIds(PILL_PRESETS));
 export const Presets: Story = {
   parameters: { controls: { exclude: GOVERNED } },
   render: (args) => (
@@ -81,7 +81,7 @@ export const Presets: Story = {
 };
 
 const sweep = (fieldId: string) => ({
-  controls: { exclude: [fieldId] },
+  controls: { exclude: controlNames(PILL_FIELDS, [fieldId]) },
 });
 
 /** Every real Tone, including `neutral` (state drives the paint). */

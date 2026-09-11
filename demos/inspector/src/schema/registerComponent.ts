@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { FieldSpec, PresetSpec } from "@bbox-ui/schema";
 
 /**
- * demos/port-inspector/src/schema/registerComponent.ts
+ * demos/inspector/src/schema/registerComponent.ts
  *
  * T1-SPEC.md §7.1's Lane-D engine file: knows nothing about `Port`/`Pill`/
  * any component by name. `resolveFields`/`FieldSpec`/`PresetSpec` are

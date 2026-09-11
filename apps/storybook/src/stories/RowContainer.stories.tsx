@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
-import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
+import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
   RowContainer,
   ROW_CONTAINER_FIELDS,
@@ -87,7 +87,7 @@ export const Primary: Story = {
  * does nothing reads as broken (T1-SPEC.md §6, T0's own precedent).
  */
 const sweep = (fieldId: string) => ({
-  controls: { exclude: [fieldId] },
+  controls: { exclude: controlNames(ROW_CONTAINER_FIELDS, [fieldId]) },
 });
 
 /** Every real RowJustify value, one row per option. */
