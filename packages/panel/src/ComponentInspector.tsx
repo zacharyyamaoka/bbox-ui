@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { MIXED, governedFieldIds, readFields, type FieldValue } from "@bbox-ui/schema";
-import type { ComponentEntry } from "./schema/registerComponent";
+import type { ComponentEntry } from "./registerComponent";
 import { FieldTraceRow, type Subject } from "./FieldTraceRow";
 
 export interface ComponentInspectorProps {

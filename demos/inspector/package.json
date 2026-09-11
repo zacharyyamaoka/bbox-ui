@@ -7,14 +7,14 @@
   "scripts": {
     "dev": "vite --port 5422 --strictPort",
     "build": "vite build",
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@bbox-ui/core": "workspace:*",
     "@bbox-ui/schema": "workspace:*",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@bbox-ui/panel": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

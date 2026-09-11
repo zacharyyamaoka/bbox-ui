@@ -316,6 +316,9 @@ importers:
       '@bbox-ui/core':
         specifier: workspace:*
         version: link:../../packages/bbox-ui
+      '@bbox-ui/panel':
+        specifier: workspace:*
+        version: link:../../packages/panel
       '@bbox-ui/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -652,6 +655,28 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.15.0(@types/node@22.20.2)(typescript@5.9.3))(yaml@2.9.0)
+
+  packages/panel:
+    dependencies:
+      '@bbox-ui/core':
+        specifier: workspace:*
+        version: link:../bbox-ui
+      '@bbox-ui/schema':
+        specifier: workspace:*
+        version: link:../schema
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.15.0(@types/node@26.5.1)(typescript@5.9.3))(yaml@2.9.0)
 
   packages/schema:
     devDependencies:
