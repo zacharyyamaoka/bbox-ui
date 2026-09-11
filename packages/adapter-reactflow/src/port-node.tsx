@@ -22,7 +22,10 @@ import {
 export type BBoxPortNodeData = {
   w: number;
   h: number;
-  state: "empty" | "default" | "wired";
+  // INTEGRATION (docs/T1-SPEC.md §2): "default" was Lane P's old, now-
+  // deleted `PortState` label — the rebuilt Port's `AppearanceState` names
+  // the same resting-value-set state "valueSet".
+  state: "empty" | "valueSet" | "wired";
   size: PortSize;
   label: string;
   textLayout: PortTextLayout;
@@ -40,7 +43,7 @@ export function BBoxPortNode({ id, data }: NodeProps<BBoxPortNodeType>) {
     >
       <PortDot
         state={data.state}
-        size={data.size}
+        diameter={data.size}
         className="block"
         style={{ width: "100%", height: "100%" }}
       />

@@ -2,6 +2,18 @@
 /**
  * T0 Lane V — verify-inspector.mjs
  *
+ * STALE as of T1 (docs/T1-SPEC.md §7): App.tsx is no longer the T0
+ * Port-only panel this script drives — it is now a generic, 8-component
+ * `ComponentInspector` (component picker, per-field trace disclosure,
+ * a presets picker) with a different DOM (`[data-slot="component-picker"]`,
+ * `[data-slot="subject-row"]`, `[data-slot="field-trace-row"]`, …) and a
+ * six-member `AppearanceState` in place of the old four-member `PortState`
+ * this script's `STATE_BUTTON_INDEX` hard-codes. Not wired into any
+ * package.json script or CI — `pnpm -r run typecheck/test/build` never run
+ * it — so it was left red rather than rewritten in the same pass that
+ * rewrote its target; a real CDP journey against the new panel is real,
+ * separate follow-up work, not a mechanical seam fix.
+ *
  * Definition of done, §13 (docs/T0-SPEC.md): two subjects with differing
  * `state` selected together render the state row as `Mixed`
  * (`data-mixed="true"`); editing that row writes the new value to BOTH

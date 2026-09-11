@@ -26,10 +26,18 @@ import {
   META_FONT_PX,
   TEXT_SIZES,
   glyphPx,
-  portLabelOut,
-  type PortTextLayout,
   type TextSize,
 } from "./layout";
+// INTEGRATION (docs/T1-SPEC.md §0): `portLabelOut`/`PortTextLayout` moved
+// to the rebuilt `port.layout.ts` with Lane P's Port rebuild — narrowed
+// from six text-layout members to four (the "-offset" variants were a
+// deliberate redesign, not carried forward; see `port.layout.ts`'s own
+// PORT_TEXT_LAYOUTS and `test/port.layout.test.ts`'s note). Nothing in
+// the rebuilt Port can ever produce "right-offset"/"left-offset" anymore
+// (no field, preset, or story sets it), so `portLabelBox` below drops
+// those two case labels rather than keep an unreachable, untestable
+// branch alive under a second, hand-widened type.
+import { portLabelOut, type PortTextLayout } from "./port.layout";
 
 /** A rectangle in block-local coordinates (0,0 = container top-left). */
 export interface LayoutBox {
@@ -535,10 +543,8 @@ export function portLabelBox(input: PortLabelBoxInput): LayoutBox {
   const h = Math.round(fontPx * LEADING_TIGHT);
   switch (layout) {
     case "right":
-    case "right-offset":
       return { x: out, y: dotH / 2 - h / 2, w, h };
     case "left":
-    case "left-offset":
       return { x: dotW - out - w, y: dotH / 2 - h / 2, w, h };
     case "top":
       return { x: dotW / 2 - w / 2, y: dotH - out - h, w, h };

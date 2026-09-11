@@ -196,7 +196,7 @@ describe("detach → rebuild: content edge cases", () => {
   it("round-trips an unlabeled standalone port (single-primitive fallback)", () => {
     const { original, rebuilt } = roundTrip(
       "bbox-port",
-      makePortProps({ state: "default", label: "" }),
+      makePortProps({ state: "valueSet", label: "" }),
     );
     expect(rebuilt.props).toEqual(original.props);
     expectSamePose(original, rebuilt);

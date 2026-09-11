@@ -204,8 +204,16 @@ export const PORT_REVEAL_LABELS: Record<PortReveal, string> = {
  * Stroke width of the Block container border. Re-declared here (not
  * imported) because the placement math needs it and `layout.ts` is
  * frozen for the whole of T1 — see this file's own header.
+ *
+ * INTEGRATION: kept file-local (not exported) — `layout.ts` also exports
+ * a `BLOCK_BORDER_PX` (frozen, §0's "keeps exactly what it exports"
+ * list), and re-exporting both of equal name through the barrel
+ * (`packages/bbox-ui/src/index.ts`) is an ambiguous `export *` collision
+ * TypeScript refuses to resolve. Nothing outside this file imports this
+ * copy (verified: only `layout.ts`'s is imported elsewhere), so dropping
+ * `export` here is the whole fix — nothing else needs to change.
  */
-export const BLOCK_BORDER_PX = 2;
+const BLOCK_BORDER_PX = 2;
 
 /**
  * Point on the boundary of a `width × height` rectangle where a port dot

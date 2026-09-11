@@ -110,7 +110,6 @@ describe("primitivesForBlock", () => {
     });
     expect(spy.mock.calls[0][0]).toMatchObject({
       state: first.state,
-      size: first.size,
       label: first.label,
       textLayout: first.textLayout,
     });
@@ -125,8 +124,12 @@ describe("primitivesForBlock", () => {
       expect(row.shapeIds.length).toBeGreaterThan(0);
       for (const id of row.shapeIds) expect(allIds.has(id)).toBe(true);
     }
-    // wired + label → ring, core, label; empty + label → ring, label.
-    expect(built.portRows[0].shapeIds).toHaveLength(3);
+    // INTEGRATION (docs/T1-SPEC.md §2): the rebuilt Port paints `wired` as
+    // ONE fully-filled disc (ring token === fill token) rather than a
+    // hollow ring plus a separate small accent core — every labeled port
+    // is ring + label now, wired included. See portPrimitives.ts's
+    // STATE_STOCK_RING and its own test's "single solid orange disc" case.
+    expect(built.portRows[0].shapeIds).toHaveLength(2);
     expect(built.portRows[1].shapeIds).toHaveLength(2);
   });
 
