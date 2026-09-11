@@ -390,6 +390,40 @@ const INITIAL_BENCHES: Record<string, Instance[]> = (() => {
 
 const INITIAL_UID = Object.values(INITIAL_BENCHES).reduce((n, list) => n + list.length, 0);
 
+/** Label words for randomising a text field. Randomising a name to a UUID is
+ *  noise; randomising it to a word keeps the preview readable, which is the
+ *  point of the button. */
+const RANDOM_WORDS = ["alpha", "beta", "gamma", "delta", "signal", "frame", "pose", "goal", "mask", "tick"];
+
+/**
+ * A random legal value for one field, from the field's OWN declaration.
+ *
+ * WHY it reads the FieldSpec rather than a per-component table: a table would
+ * be an eighth place that has to learn about a new component, and would go
+ * stale silently the first time an option set changed. The schema already
+ * says exactly what is legal here.
+ */
+function randomValue(field: FieldSpec, roll: () => number): FieldValue | undefined {
+  switch (field.kind) {
+    case "segments": {
+      const options = field.options ?? [];
+      if (options.length === 0) return undefined;
+      return options[Math.floor(roll() * options.length)]!.value;
+    }
+    case "toggle":
+      return roll() < 0.5;
+    case "number": {
+      const min = field.min ?? 0;
+      const max = field.max ?? min + 10;
+      const step = field.step ?? 1;
+      const steps = Math.max(1, Math.round((max - min) / step));
+      return Math.round((min + Math.floor(roll() * (steps + 1)) * step) * 1000) / 1000;
+    }
+    case "text":
+      return RANDOM_WORDS[Math.floor(roll() * RANDOM_WORDS.length)]!;
+  }
+}
+
 export default function App() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
   const [variantId, setVariantId] = useState<string>(() => findVariant(readStoredVariant()).id);
@@ -478,6 +512,33 @@ export default function App() {
       if (next.size === 0 && bench.length >= 2) next.add(bench[bench.length - 2].id);
       return { ...prev, [activeName]: next };
     });
+  }
+
+  /**
+   * Zach, 2026-09-11: "I really like this where you add new instances, it kind
+   * of gives it a random configuration, that's really fun just to explore
+   * different things. I think there could also be a button that just says do
+   * something random or randomize everything."
+   *
+   * It randomises the SELECTED instances, or all of them when nothing is
+   * selected, and each instance rolls independently — a shared roll would
+   * make every instance identical, which is the opposite of exploring.
+   */
+  function randomizeInstances() {
+    const roll = () => Math.random();
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: prev[activeName].map((instance) => {
+        const targeted = selectedIds.size === 0 || selectedIds.has(instance.id);
+        if (!targeted) return instance;
+        const props: Record<string, unknown> = {};
+        for (const field of entryFor(instance.type).fields) {
+          const value = randomValue(field, roll);
+          if (value !== undefined) props[field.id] = value;
+        }
+        return { ...instance, props };
+      }),
+    }));
   }
 
   function applyToSelected(fieldId: string, value: FieldValue) {
@@ -600,6 +661,15 @@ export default function App() {
                   −
                 </button>
               )}
+              <button
+                type="button"
+                data-slot="randomize"
+                onClick={randomizeInstances}
+                style={randomizeStyle}
+                title="Give every selected instance a random legal value for every field"
+              >
+                🎲 Randomize
+              </button>
             </div>
           ) : (
             <div data-slot="instance-stepper" style={stepperRowStyle}>
@@ -622,6 +692,15 @@ export default function App() {
                 style={stepperButtonStyle}
               >
                 +
+              </button>
+              <button
+                type="button"
+                data-slot="randomize"
+                onClick={randomizeInstances}
+                style={randomizeStyle}
+                title="Give every selected instance a random legal value for every field"
+              >
+                🎲 Randomize
               </button>
             </div>
           )}
@@ -695,6 +774,7 @@ const stepperRowStyle: CSSProperties = { display: "flex", alignItems: "center", 
 const adderRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 8, maxWidth: 260 };
 const adderChipStyle: CSSProperties = { border: "1px dashed #c8c8d0", background: "transparent", color: "#555", borderRadius: 999, padding: "3px 9px", fontSize: 11, cursor: "pointer" };
 const stepperButtonStyle: CSSProperties = { width: 24, height: 24, lineHeight: "20px", borderRadius: 6, border: "1px solid #ccc", background: "#fff", cursor: "pointer", fontSize: 15, padding: 0 };
+const randomizeStyle: CSSProperties = { border: "1px solid #d8d8e0", background: "#fff", borderRadius: 999, padding: "3px 10px", fontSize: 11, color: "#555", cursor: "pointer", whiteSpace: "nowrap" };
 const stepperCountStyle: CSSProperties = { fontSize: 12, color: "#666", minWidth: 74, textAlign: "center" };
 const typeTagStyle: CSSProperties = { fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#999", minWidth: 62 };
 const previewColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 12, minWidth: 260 };

@@ -3,13 +3,13 @@ import {
   MIXED,
   governedFieldIds,
   readFields,
-  resolveField,
   type FieldSpec,
   type FieldTrace,
   type FieldValue,
   type Layer,
   type PresetSpec,
 } from "@bbox-ui/schema";
+import { readFieldRow, type FieldRowModel } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
 /**
@@ -72,25 +72,27 @@ type FieldWinner = {
   resolved: FieldValue | undefined;
 };
 
-function fieldWinner(field: FieldSpec, subjects: Subject[], presets: PresetSpec[]): FieldWinner {
-  if (subjects.length === 0) {
+// WHY: sourced from readFieldRow's `traces`/`isMixed` (../fieldModel.ts)
+// instead of a second resolveField pass — same per-subject material the
+// shared model already computed, just re-prioritized into the three
+// states this row/popover pair renders.
+function fieldWinner(field: FieldSpec, row: FieldRowModel): FieldWinner {
+  const { isMixed, traces, collapsedValue } = row;
+  if (traces.length === 0) {
     return { isMixed: false, winner: "default", resolved: field.defaultValue };
   }
-  const traces = subjects.map((s) => resolveField(field, s.props, presets));
-  const resolved = traces.map((t) => t.resolved);
-  const isMixed = resolved.length > 1 && resolved.some((v) => v !== resolved[0]);
   if (isMixed) return { isMixed: true, winner: null, resolved: undefined };
   // Any subject holding its OWN value marks the field overridden even if,
   // by coincidence, a sibling subject reaches the same number through the
   // preset — writing here would still stomp that subject's own value.
   if (traces.some((t) => t.winner === "override")) {
-    return { isMixed: false, winner: "override", resolved: resolved[0] };
+    return { isMixed: false, winner: "override", resolved: collapsedValue };
   }
   const presetTrace = traces.find((t) => t.winner === "preset");
   if (presetTrace) {
-    return { isMixed: false, winner: "preset", presetId: presetTrace.winningPresetId, resolved: resolved[0] };
+    return { isMixed: false, winner: "preset", presetId: presetTrace.winningPresetId, resolved: collapsedValue };
   }
-  return { isMixed: false, winner: "default", resolved: resolved[0] };
+  return { isMixed: false, winner: "default", resolved: collapsedValue };
 }
 
 function presetLabelFor(presetId: string | undefined, presets: PresetSpec[]): string {
@@ -252,18 +254,20 @@ function RowPopoverPanel({
       <div data-slot="row-list" style={rowListStyle}>
         {fields.map((field) => {
           const isGoverned = governed.has(field.id);
-          const single = subjects.length === 1 ? subjects[0] : null;
-          const trace = single ? resolveField(field, single.props, presets) : null;
-          const paintedTrace = single ? resolveField(field, asSubject(single.props), presets) : null;
-          const paintedElsewhere =
-            trace && paintedTrace && paintedTrace.resolved !== trace.resolved ? paintedTrace.resolved : null;
+          // WHY: shared field-resolution model (../fieldModel.ts) — the
+          // "painting X" note used to be gated on exactly one subject
+          // selected and went silent the moment a second one joined the
+          // selection, while the control kept showing a value nothing
+          // painted.
+          const row = readFieldRow(field, subjects, presets, toSubject);
+          const paintedElsewhere = row.paintedElsewhere;
           // Three states, one shared computation (`fieldWinner`) so the row
           // and the popover header can never disagree: "override" reads
           // bold/dark with a filled purple dot (this instance's own
           // value); "preset" reads blue, `<preset> · <value>`, with a
           // filled blue dot — name and value together, on one line, per
           // the amendment; "default" reads muted grey with a hollow dot.
-          const state = fieldWinner(field, subjects, presets);
+          const state = fieldWinner(field, row);
           const rowText =
             state.winner === "preset" && isGoverned
               ? `${presetLabelFor(state.presetId, presets)} · ${formatValue(field, state.resolved)}`
@@ -374,14 +378,16 @@ function FieldPopoverBody({
   onDone: () => void;
 }) {
   const isGoverned = governed.has(field.id);
-  const single = subjects.length === 1 ? subjects[0] : null;
-  const trace: FieldTrace | null = single ? resolveField(field, single.props, presets) : null;
-  const paintedTrace = single ? resolveField(field, asSubject(single.props), presets) : null;
-  const paintedElsewhere =
-    trace && paintedTrace && paintedTrace.resolved !== trace.resolved ? paintedTrace.resolved : null;
+  // WHY: shared field-resolution model (../fieldModel.ts) — the chain and
+  // painted-elsewhere note used to require exactly one subject selected;
+  // now both track the same subjects/presets/toSubject the collapsed row
+  // resolved, so a multi-selection that agrees still gets a real answer.
+  const row = readFieldRow(field, subjects, presets, asSubject);
+  const trace: FieldTrace | null = row.trace;
+  const paintedElsewhere = row.paintedElsewhere;
   // Same three-state computation the collapsed row used, so the popover
   // header can never tell a different story than the row it opened from.
-  const state = fieldWinner(field, subjects, presets);
+  const state = fieldWinner(field, row);
   const isMixed = state.isMixed;
   const hasOwnOverride = state.winner === "override";
   const value: FieldValue | undefined = state.resolved;
@@ -458,7 +464,7 @@ function FieldPopoverBody({
         </div>
       ) : (
         <div style={popoverHintStyle}>
-          {subjects.length === 0 ? "No subject selected." : "Select exactly one subject to see the cascade."}
+          {subjects.length === 0 ? "No subject selected." : "Selected subjects don't agree on this field yet."}
         </div>
       )}
     </>

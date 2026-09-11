@@ -77,14 +77,39 @@ export function portDotClass(): string {
 }
 
 /**
- * The dot's paint, resolved from the cascade's two token lookups. `tone`
- * reaches past `state` by substituting its token for BOTH ring and fill
- * before either is read — exactly what `toneOverride` (appearance.ts)
- * means by "sugar that writes the override layer": Port has no separate
- * settable paint field for an override to land on (see `port.presets.ts`
- * for why `PORT_PRESETS` is empty), so this function IS that override,
- * computed directly rather than through `resolveFields` against a
- * governed property that doesn't exist.
+ * Resolves ONE paint channel (ring or fill) to a real CSS colour value —
+ * or `null`, meaning "state says this channel does not paint at all".
+ *
+ * `base` is the STATE_TOKENS token for this channel at the current state;
+ * `null` there is authoritative and wins outright, before `tone` is even
+ * consulted — this is "state owns the presence/fill bit" (Judge round 6,
+ * finding R12). When `base` DOES paint and a non-neutral tone is set, the
+ * tone's hue leads via `color-mix` but is blended WITH the state's own
+ * base colour rather than replacing it outright: a flat substitution
+ * (tried first, see the fix's git history) collapses every state that
+ * shares a base token's "shape" — `empty`'s hollow `foreground` ring and
+ * `outOfFocus`'s hollow `muted-foreground` ring, or `wired`'s solid
+ * `primary` and `received`'s solid `bbox-received` — into one identical
+ * tone-coloured circle, re-breaking the same "State control goes inert"
+ * bug one level down. Blending keeps the tone recognisably dominant while
+ * the state's own hue still shows through enough that all five states
+ * stay distinguishable under any single tone (verified by
+ * `test/port.paint.test.ts`).
+ */
+function toneColor(base: string | null, toneToken: string | null): string | null {
+  if (base == null) return null;
+  if (toneToken == null) return `var(--${base})`;
+  return `color-mix(in srgb, var(--${toneToken}) 70%, var(--${base}) 30%)`;
+}
+
+/**
+ * The dot's paint, resolved from the cascade's two token lookups via
+ * `toneColor` above. `tone` is sugar that writes the override layer
+ * (`toneOverride`, appearance.ts) — Port has no separate settable paint
+ * field for an override to land on (see `port.presets.ts` for why
+ * `PORT_PRESETS` is empty), so this function IS that override, computed
+ * directly rather than through `resolveFields` against a governed
+ * property that doesn't exist.
  *
  * The interaction axis composes OVER the resting paint (PORT-SPEC.md
  * §1.3.2), never replacing it, with one deliberate exception: `hinting`
@@ -104,14 +129,14 @@ export function portDotStyle({
 }: PortDotPaintInput): CSSProperties {
   const toneToken = TONE_TOKENS[tone];
   const { ring, fill } = STATE_TOKENS[state];
-  const ringToken = hinting ? "primary" : (toneToken ?? ring);
-  const fillToken = hinting ? "primary" : (toneToken ?? fill);
+  const ringColor = hinting ? "var(--primary)" : toneColor(ring, toneToken);
+  const fillColor = hinting ? "var(--primary)" : toneColor(fill, toneToken);
 
   const layers: string[] = [];
-  if (ringToken != null) {
+  if (ringColor != null) {
     const stateRingPx = hinting ? 4 : PORT_STATE_RING_PX;
     layers.push(`0 0 0 ${PORT_SURFACE_RING_PX}px var(--card)`);
-    layers.push(`0 0 0 ${PORT_SURFACE_RING_PX + stateRingPx}px var(--${ringToken})`);
+    layers.push(`0 0 0 ${PORT_SURFACE_RING_PX + stateRingPx}px ${ringColor}`);
   }
   if (hinting) {
     layers.push("0 0 0 9px color-mix(in srgb, var(--primary) 38%, transparent)");
@@ -126,7 +151,7 @@ export function portDotStyle({
 
   return {
     boxShadow: layers.length > 0 ? layers.join(", ") : undefined,
-    background: fillToken ? `var(--${fillToken})` : "transparent",
+    background: fillColor ?? "transparent",
     transform: hinting ? "scale(1.18)" : undefined,
   };
 }

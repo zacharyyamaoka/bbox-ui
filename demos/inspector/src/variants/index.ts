@@ -10,15 +10,23 @@ export type { PanelVariant, PanelVariantProps } from "./contract";
 export { VARIANT_CONTRACT } from "./contract";
 
 /**
- * Switcher order: the incumbent first so the panel you already know is what
- * loads cold, then the five proposals roughly by how far each departs from it.
- * Ignoring the switcher entirely therefore costs nothing and changes nothing —
- * the default-is-the-status-quo half of "ship N variants plus a low-friction
- * pick surface".
+ * FIGMA_DENSE is first, and therefore the default.
+ *
+ * Zach picked it on 2026-09-11 after comparing all six live: "I'm definitely
+ * leaning towards essentially the Figma dense design... we can always be
+ * clever enough to get controls within the single row that give us the
+ * control that we want. You can even have presets and a custom button all on
+ * the same thing... It's decided. We're going forward with figma dense."
+ *
+ * The other five stay in the switcher as the record of what was compared —
+ * deleting them would make the decision unreviewable and the report's
+ * captures unreproducible. Tiered and Filter First are additionally the
+ * origin of the tier switch and filter that FIGMA_DENSE now carries itself;
+ * they are kept as the isolated demonstration of each idea.
  */
 export const PANEL_VARIANTS: PanelVariant[] = [
-  CURRENT,
   FIGMA_DENSE,
+  CURRENT,
   ROW_POPOVER,
   TIERED,
   FILTER_FIRST,

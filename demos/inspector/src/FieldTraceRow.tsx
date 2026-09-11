@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import {
-  resolveField,
-  type FieldSpec,
-  type FieldValue,
-  type PresetSpec,
-} from "@bbox-ui/schema";
+import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
+import { readFieldRow } from "./fieldModel";
 
-export interface Subject {
-  id: string;
-  props: Record<string, unknown>;
-}
+// `Subject` lives in fieldModel.ts — the model owns the shape it resolves —
+// and is re-exported here because every panel already imports it from this
+// file. Moving it also broke the import cycle the two files would otherwise
+// have formed.
+export type { Subject } from "./fieldModel";
+import type { Subject } from "./fieldModel";
 
 export interface FieldTraceRowProps {
   /** See ComponentEntry.toSubject — identity when a component needs none. */
@@ -57,75 +55,17 @@ export function FieldTraceRow({
   // across five of Pill's six states were wrong this way.
   //
   // MIXED is decided on the RESOLVED values for the same reason: two pills
-  // that visibly disagree must read as Mixed, and two that resolve alike must
-  // not, even when one of them gets there through an override.
-  // TWO resolutions, because two different questions are being asked, and
-  // answering both with one of them is what three judge rounds kept finding.
-  //
-  //   storedTrace  — resolve the RAW props. This is what the store holds, and
-  //                  the store is what this row's control edits and what its
-  //                  clear button deletes.
-  //   paintedTrace — resolve the subject the COMPONENT resolves (see
-  //                  ComponentEntry.toSubject). This is what is on screen.
-  //
-  // They diverge whenever a component folds sugar into the override layer —
-  // Pill's `tone` does. Showing the painted value in the control made the row
-  // claim a value the store did not hold: with a tone set and `primary`
-  // stored, the panel highlighted the tone's colour, the chain's override row
-  // printed the tone's colour, and the value the user had actually stored
-  // appeared nowhere. Clearing then deleted it with no visible change.
-  //
-  // So the chain and the control describe the STORE, and the deviation is
-  // stated outright rather than silently substituted. The component's own
-  // Tone row is where that sugar is edited, so this row does not have to
-  // explain it — only to stop lying about it.
-  const asSubject = toSubject ?? ((props: Record<string, unknown>) => props);
-  const single = subjects.length === 1 ? subjects[0] : null;
-
-  // WHY provenance is computed for EVERY subject and not only for a single
-  // one: gating it on `single` left the multi-selection path holding the very
-  // defect the single path had just been fixed for. With two pills selected
-  // and a tone set, the badge, the chain and the "painting …" note all went
-  // silent while the control kept highlighting a value neither pill painted —
-  // and "✕ override" still deleted a stored value with nothing changing on
-  // screen. Uncheck one subject and the panel told the truth; check it and it
-  // stopped. A selection of two is not a state where honesty is optional.
-  const traces = subjects.map((s) => resolveField(field, s.props, presets));
-  const paintedTraces = subjects.map((s) => resolveField(field, asSubject(s.props), presets));
-  // The chain and the badge describe one subject's layers, so they still need
-  // agreement across the selection to mean anything. When every selected
-  // subject resolves the same way, that shared answer IS each one's answer.
-  const agreeing = <T,>(list: T[], key: (item: T) => unknown): T | null => {
-    if (list.length === 0) return null;
-    const first = key(list[0]!);
-    return list.every((item) => key(item) === first) ? list[0]! : null;
-  };
-  const trace = single ? traces[0]! : agreeing(traces, (t) => `${t.winner}:${String(t.resolved)}`);
-  const paintedAgreed = agreeing(paintedTraces, (t) => String(t.resolved));
-  const storedAgreed = agreeing(traces, (t) => String(t.resolved));
-  const paintedElsewhere =
-    storedAgreed && paintedAgreed && paintedAgreed.resolved !== storedAgreed.resolved
-      ? paintedAgreed.resolved
-      : null;
-  // WHY the RAW props and not the transformed subject: the clear button
-  // deletes a STORED override, and the store holds raw props. Reading the
-  // transformed subject made a tone's synthesised value look like a stored
-  // one, so the row offered "✕ override" for a value the user never typed —
-  // clicking it changed nothing, and when they HAD stored an override it
-  // silently deleted that instead, with the tone still painting so the row
-  // looked unchanged. The read path has to agree with the write path; only
-  // resolution uses the transformed subject.
-  // Mixed is about what THIS row edits, so it compares the stored resolutions.
-  // Two subjects with different stored overrides must read Mixed even when a
-  // tone currently paints them alike, because writing here overwrites both.
-  const storedResolved = traces.map((t) => t.resolved);
-  const isMixed = storedResolved.length > 1 && storedResolved.some((v) => v !== storedResolved[0]);
-  // Any selected subject holding its own value can be cleared. Restricting
-  // this to a single selection left a multi-selection override permanently
-  // unclearable.
-  const hasOwnOverride = subjects.some((s) => s.props[field.id] !== undefined);
-  const collapsedValue: FieldValue | undefined =
-    isMixed || storedResolved.length === 0 ? undefined : (storedResolved[0] as FieldValue);
+  // WHY every one of these comes from `readFieldRow` and not from local
+  // arithmetic: six panels used to answer this question four different ways,
+  // and a fix applied to this file left three of the others holding the
+  // identical defect. The model is shared so that cannot happen again — see
+  // fieldModel.ts, which carries the reasoning for each decision.
+  const { trace, isMixed, hasOwnOverride, collapsedValue, paintedElsewhere, traces } = readFieldRow(
+    field,
+    subjects,
+    presets,
+    toSubject,
+  );
 
   return (
     <div data-slot="field-trace-row" data-field={field.id} data-governed={isGoverned} style={rowStyle}>

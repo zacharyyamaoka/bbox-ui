@@ -3,7 +3,6 @@ import {
   MIXED,
   governedFieldIds,
   readFields,
-  resolveField,
   type FieldSpec,
   type FieldTrace,
   type FieldValue,
@@ -11,6 +10,17 @@ import {
 } from "@bbox-ui/schema";
 import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
+import { readFieldRow } from "../fieldModel";
+import {
+  classifyField,
+  loadStoredTier,
+  matchesFilter,
+  storeTier,
+  TIER_META,
+  TIER_ORDER,
+  TIER_RANK,
+  type Tier,
+} from "../fieldTiers";
 
 /**
  * FIGMA-DENSE — Zach's own words: "the gold standard here is something more
@@ -102,12 +112,35 @@ function FigmaDensePanel({
   const governed = new Set(governedFieldIds(presets));
   const selectors = Array.from(new Set(presets.map((p) => p.selector)));
 
+  // WHY tiering and filtering live HERE, on the chosen row design, rather
+  // than in a panel of their own: Zach, 2026-09-11 — "the tiered design of
+  // just hiding things, and also filter first, those are things I can support
+  // regardless... just because it's a lot of controls as well." They are
+  // filters over the field array, orthogonal to how a row is drawn, so they
+  // compose with the single-row layout instead of competing with it.
+  const [tier, setTier] = useState<Tier>(loadStoredTier);
+  const [filter, setFilter] = useState("");
+  useEffect(() => storeTier(tier), [tier]);
+
+  const searching = filter.trim() !== "";
+  const matched = fields.filter((f) => matchesFilter(f, filter));
+  const tierOf = (f: FieldSpec) => classifyField(f, presets, governed);
+  // A typed query outranks the tier. Searching for a field and being told
+  // nothing matched, because the match was two tiers up, is the one outcome a
+  // filter must never produce.
+  const visible = searching ? matched : matched.filter((f) => TIER_RANK[tierOf(f)] <= TIER_RANK[tier]);
+  const hidden = matched.filter((f) => !visible.includes(f));
+
+  // Hiding a field the user has actually SET is worse than the verbosity the
+  // tier exists to cut, so the panel says how many and offers one tap out.
+  const hiddenButSet = hidden.filter((f) => subjects.some((s) => s.props[f.id] !== undefined));
+
   // Pair up consecutive number fields (Block's width/height; nothing in
   // Pill matches, so Pill renders one row per field, unpaired).
   const rows: (FieldSpec | [FieldSpec, FieldSpec])[] = [];
-  for (let i = 0; i < fields.length; i++) {
-    const field = fields[i];
-    const next = fields[i + 1];
+  for (let i = 0; i < visible.length; i++) {
+    const field = visible[i];
+    const next = visible[i + 1];
     if (field.kind === "number" && next?.kind === "number") {
       rows.push([field, next]);
       i++;
@@ -124,6 +157,54 @@ function FigmaDensePanel({
           {subjects.length === 0 ? "no subject" : subjects.length === 1 ? "1 selected" : `${subjects.length} selected`}
         </span>
       </div>
+
+      <div data-slot="figma-dense-controls" style={controlBarStyle}>
+        <div role="group" aria-label="Detail level" style={tierGroupStyle}>
+          {TIER_ORDER.map((t) => (
+            <button
+              key={t}
+              type="button"
+              data-slot="tier-button"
+              data-tier={t}
+              data-active={t === tier && !searching}
+              onClick={() => setTier(t)}
+              title={TIER_META[t].hint}
+              style={tierButtonStyle(t === tier, searching)}
+            >
+              {TIER_META[t].label}
+            </button>
+          ))}
+        </div>
+        <input
+          data-slot="field-filter"
+          type="search"
+          value={filter}
+          placeholder="Filter…"
+          aria-label="Filter fields"
+          onChange={(e) => setFilter(e.target.value)}
+          style={filterInputStyle}
+        />
+      </div>
+
+      {searching && (
+        <div data-slot="filter-note" style={noteStyle}>
+          {visible.length === 0
+            ? `Nothing matches “${filter.trim()}”.`
+            : `${visible.length} of ${fields.length} fields match “${filter.trim()}” — all tiers searched.`}
+        </div>
+      )}
+
+      {!searching && hiddenButSet.length > 0 && (
+        <button
+          type="button"
+          data-slot="hidden-but-set"
+          onClick={() => setTier("expert")}
+          style={hiddenButSetStyle}
+        >
+          {hiddenButSet.length} hidden field{hiddenButSet.length === 1 ? " is" : "s are"} set —
+          show Expert
+        </button>
+      )}
 
       {selectors.map((selector) => (
         <PresetPicker
@@ -168,11 +249,29 @@ function FigmaDensePanel({
   );
 }
 
+const controlBarStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid var(--fd-line, #e7e7ec)" };
+const tierGroupStyle: CSSProperties = { display: "flex", border: "1px solid #d6d6de", borderRadius: 6, overflow: "hidden" };
+const filterInputStyle: CSSProperties = { flex: 1, minWidth: 0, fontSize: 11, padding: "3px 7px", border: "1px solid #d6d6de", borderRadius: 6, background: "#fff", color: "#222" };
+const noteStyle: CSSProperties = { fontSize: 11, color: "#6a6a75", padding: "5px 10px" };
+const hiddenButSetStyle: CSSProperties = { display: "block", width: "100%", textAlign: "left", fontSize: 11, color: "#8a5a12", background: "#fdf6ec", border: "none", borderBottom: "1px solid #f0e2cc", padding: "5px 10px", cursor: "pointer" };
+function tierButtonStyle(active: boolean, dimmed: boolean): CSSProperties {
+  return {
+    fontSize: 11,
+    padding: "3px 9px",
+    border: "none",
+    borderRight: "1px solid #e4e4ea",
+    background: active && !dimmed ? "#1d1d22" : "transparent",
+    color: active && !dimmed ? "#fff" : "#5c5c66",
+    opacity: dimmed ? 0.45 : 1,
+    cursor: "pointer",
+  };
+}
+
 export const FIGMA_DENSE: PanelVariant = {
   id: "figma-dense",
   label: "Figma Dense",
   blurb:
-    "Label-left/control-right grid, dropdown enums, inline units — the density model of this repo's own Figma-exact panel, without its dependencies.",
+    "The chosen design. One row per field: label left, control right, provenance dot in the gutter. Simple/Advanced/Expert and a filter sit on top of the same rows — they hide fields, never logic.",
   Panel: FigmaDensePanel,
 };
 
@@ -289,34 +388,32 @@ interface RowData {
   drivenPresetId: string | undefined;
 }
 
-/** Same computation `FieldTraceRow.tsx` does — see its own WHY comments for
- *  why stored and painted are two separate resolutions. Reused as logic,
- *  not as a component, since the presentation here is a different shape. */
+/**
+ * WHY this is four lines over `readFieldRow` and not the twelve it used to
+ * be: this file carried its own copy of the resolution model, gated on
+ * `subjects.length === 1`. With two subjects selected the "painting …" note
+ * went silent while the control kept showing a value nothing painted — the
+ * identical defect that had already been fixed in the canonical row. Six
+ * files, four answers. The model is shared now; see fieldModel.ts.
+ */
 function readRow(
   field: FieldSpec,
   subjects: Subject[],
   presets: PresetSpec[],
   toSubject: ((props: Record<string, unknown>) => Record<string, unknown>) | undefined,
 ): RowData {
-  const asSubject = toSubject ?? ((props: Record<string, unknown>) => props);
-  const single = subjects.length === 1 ? subjects[0] : null;
-  const trace = single ? resolveField(field, single.props, presets) : null;
-  const paintedTrace = single ? resolveField(field, asSubject(single.props), presets) : null;
-  const paintedElsewhere =
-    trace && paintedTrace && paintedTrace.resolved !== trace.resolved ? paintedTrace.resolved : null;
-
-  const perSubjectTraces = subjects.map((s) => resolveField(field, s.props, presets));
-  const storedResolved = perSubjectTraces.map((t) => t.resolved);
-  const isMixed = storedResolved.length > 1 && storedResolved.some((v) => v !== storedResolved[0]);
-  const hasOwnOverride = subjects.some((s) => s.props[field.id] !== undefined);
-  const collapsedValue: FieldValue | undefined =
-    isMixed || storedResolved.length === 0 ? undefined : (storedResolved[0] as FieldValue);
-
-  const allDrivenByPreset = perSubjectTraces.length > 0 && perSubjectTraces.every((t) => t.winner === "preset");
-  const presetIds = perSubjectTraces.map((t) => t.winningPresetId);
-  const drivenPresetId = allDrivenByPreset && presetIds.every((id) => id === presetIds[0]) ? presetIds[0] : undefined;
-
-  return { trace, paintedElsewhere, isMixed, hasOwnOverride, collapsedValue, drivenPresetId };
+  const row = readFieldRow(field, subjects, presets, toSubject);
+  return {
+    trace: row.trace,
+    paintedElsewhere: row.paintedElsewhere,
+    isMixed: row.isMixed,
+    hasOwnOverride: row.hasOwnOverride,
+    collapsedValue: row.collapsedValue,
+    // This panel's render path reads `undefined` for "no single preset drives
+    // every selected subject"; the model says `null`. One conversion here,
+    // rather than a second definition of the rule.
+    drivenPresetId: row.drivenPresetId ?? undefined,
+  };
 }
 
 /** The option whose `value` matches, or a bare stringified fallback for a
@@ -635,10 +732,19 @@ function DenseControl({
   if (field.kind === "segments") {
     const options = field.options ?? [];
     // The one thing named outright: a wrapped row of buttons for a
-    // multi-option enum is what he's replacing. 2-3 stays segmented —
-    // that's a single line either way — everything past it becomes a
-    // dropdown so the row never wraps.
-    if (options.length <= 3) {
+    // multi-option enum is what he's replacing. A short strip stays
+    // segmented — that is a single line either way — everything wider
+    // becomes a dropdown so the row never wraps.
+    //
+    // WHY the budget is measured in CHARACTERS and not in options: a count
+    // says "Small · 8px / Medium · 12px / Large · 18px" is three options and
+    // therefore fine, and it is not — at 37 characters it overflowed the
+    // control column and clipped its third option off the panel edge, in the
+    // design Zach had just chosen. What overflows a fixed column is total
+    // label width, so that is what the rule reads. Direction (Input/Output,
+    // 11 chars) and Line Thickness (thin/med/thick, 13) still segment.
+    const stripWidth = options.reduce((n, o) => n + o.label.length + SEGMENT_PADDING_CHARS, 0);
+    if (options.length <= 3 && stripWidth <= SEGMENT_CHAR_BUDGET) {
       return (
         <div style={segmentedControlGroupStyle}>
           <div style={segmentedGroupStyle}>
@@ -769,6 +875,15 @@ function DenseControl({
 }
 
 /* ------------------------------------------------------------------ */
+/**
+ * How much label a segmented strip may carry before it becomes a dropdown.
+ * Derived from the control column: ~190px at ~6.2px per character at 11px,
+ * minus the borders each segment costs. Measured against the real panel, not
+ * guessed — `dense_check.mjs` asserts no row overflows its column.
+ */
+const SEGMENT_CHAR_BUDGET = 26;
+const SEGMENT_PADDING_CHARS = 2;
+
 /* NamedDropdown — Case A: named stops + muted resolved value + tick +  */
 /* an optional Custom row, all in one line of resting height            */
 /* ------------------------------------------------------------------ */

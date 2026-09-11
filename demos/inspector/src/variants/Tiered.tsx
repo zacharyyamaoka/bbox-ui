@@ -3,13 +3,22 @@ import {
   MIXED,
   governedFieldIds,
   readFields,
-  resolveField,
   type FieldSpec,
   type FieldValue,
   type PresetSpec,
 } from "@bbox-ui/schema";
 import { FieldTraceRow, type Subject } from "../FieldTraceRow";
+import { readFieldRow } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
+import {
+  classifyField,
+  loadStoredTier,
+  storeTier,
+  TIER_META,
+  TIER_ORDER,
+  TIER_RANK,
+  type Tier,
+} from "../fieldTiers";
 
 /**
  * demos/inspector/src/variants/Tiered.tsx
@@ -39,108 +48,15 @@ import type { PanelVariant, PanelVariantProps } from "./contract";
  * preset. See `GovernedFieldRow` and the tier rule below.
  */
 
-type Tier = "simple" | "advanced" | "expert";
-const TIER_ORDER: Tier[] = ["simple", "advanced", "expert"];
-const TIER_RANK: Record<Tier, number> = { simple: 0, advanced: 1, expert: 2 };
-const TIER_META: Record<Tier, { label: string; hint: string }> = {
-  simple: { label: "Simple", hint: "Only what changes constantly — the preset and this field's own plain name." },
-  advanced: { label: "Advanced", hint: "Everything with a closed, meaningful set of values." },
-  expert: { label: "Expert", hint: "Everything — preset-driven fields, raw paint tokens, opacities, diff-lens." },
-};
-
-/* ------------------------------------------------------------------ */
-/* Where a field's tier comes from                                     */
-/* ------------------------------------------------------------------ */
-
 /**
- * The tier is INFERRED from the same `FieldSpec`/`PresetSpec` shape every
- * component already exports — never a hand-typed id table, so this rule
- * applies to Pill's 8 fields and Port's 20 without a per-component branch.
- * Signals, in priority order:
+ * Tier rule, storage and filter all come from `../fieldTiers`.
  *
- * 1. SIMPLE — the preset SELECTOR (`presets.some(p => p.selector === id)`,
- *    almost always `"state"` per resolve.ts's own doc comment — and
- *    `"state"` is checked by id even when a component's own `presets`
- *    array is empty, e.g. Port, because `state` is still the one field
- *    the whole design system agrees is the highest-leverage control: one
- *    click swaps a governed set at once). ALSO simple: a plain, un-hinted
- *    `kind: "text"` field (Port's `name` — a field whose own author
- *    didn't think it needed an explanatory `hint` is the "just type a
- *    name" field), and a `children` field UNLESS its hint says it's an
- *    escape hatch (Pill's `children` IS the label — "the preset selector
- *    and the label", Zach's own example; Port's `children` REPLACES the
- *    normal rendering wholesale and is correctly rare, not Simple).
- *
- * 2. EXPERT, first reason — GOVERNED BY A PRESET (post-amendment; this
- *    now runs BEFORE the raw-token check and is the primary reason, not
- *    a coincidence of one). Zach's own framing: "a field governed by a
- *    preset is Advanced because the preset is the Simple way to set it"
- *    proves too much read literally — the preset already IS the control
- *    at Simple, so the raw field underneath isn't a second, softer way
- *    to reach the same decision, it's the escape hatch BELOW the
- *    semantic layer entirely. `governedFieldIds(presets)` (the same set
- *    `ComponentInspector`/`FieldTraceRow` already call "governed") is a
- *    real structural fact off the schema, not a table this file
- *    maintains — so a governed field is Expert, full stop, and renders
- *    through `GovernedFieldRow` (below), never the plain row.
- * 3. EXPERT, remaining reasons, for fields no preset governs — a raw
- *    design-TOKEN field (`kind: "segments"` whose options carry no gloss,
- *    `value === label`, e.g. Pill's own `lineThickness` — governed
- *    fields are already caught by #2, so this now only catches
- *    ungoverned raw fields), any `kind: "number"` field (continuous, so
- *    never "a closed set of meaningful values" — Pill's opacities), any
- *    field whose `hint` says "never persisted" (Port's host-computed
- *    drag-time/reveal/producer fields), and the diff-lens pair
- *    (`lens`/`lensBefore`) by id.
- * 4. ADVANCED — everything left: an ungoverned field with a real closed,
- *    human-labelled set of values (Port's `diameter`, `role`,
- *    `textLayout`...; Pill's `tone`, which no preset governs).
- *
- * Tiers are CUMULATIVE (Prusa's own model): Advanced shows Simple's rows
- * too, Expert shows everything. So "every field reachable" is trivially
- * true, and reaching any hidden field is never more than one direct tap.
- */
-function classifyField(field: FieldSpec, presets: PresetSpec[], governed: Set<string>): Tier {
-  const isSelector = field.id === "state" || presets.some((p) => p.selector === field.id);
-  const isEscapeHatch = /escape hatch/i.test(field.hint ?? "");
-  const isPlainName = field.kind === "text" && !field.hint;
-  const isBareLabel = field.id === "children" && !isEscapeHatch;
-  if (isSelector || isPlainName || isBareLabel) return "simple";
-
-  if (governed.has(field.id)) return "expert";
-
-  const isRawToken =
-    field.kind === "segments" && (field.options?.length ?? 0) > 0 && field.options!.every((o) => o.value === o.label);
-  const isContinuous = field.kind === "number";
-  const isRuntimeOnly = /never persisted/i.test(field.hint ?? "");
-  const isDiffLens = field.id === "lens" || field.id === "lensBefore";
-  if (isRawToken || isContinuous || isRuntimeOnly || isDiffLens) return "expert";
-
-  return "advanced";
-}
-
-/* ------------------------------------------------------------------ */
-/* Persisted mode — one key, guarded (a private window throws)         */
-/* ------------------------------------------------------------------ */
-
-const TIER_STORAGE_KEY = "bbox-ui:inspector-tier";
-
-function loadStoredTier(): Tier {
-  try {
-    const raw = window.localStorage.getItem(TIER_STORAGE_KEY);
-    if (raw === "simple" || raw === "advanced" || raw === "expert") return raw;
-  } catch {
-    // Private window / storage disabled — fall back to the default below.
-  }
-  return "simple";
-}
-
-function storeTier(tier: Tier): void {
-  try {
-    window.localStorage.setItem(TIER_STORAGE_KEY, tier);
-  } catch {
-    // Same as above — persistence is a nicety, not a requirement.
-  }
+ * WHY not the local copy this file used to carry: the chosen panel
+ * (FigmaDense) now offers the same Simple/Advanced/Expert switch, because
+ * Zach's call on 2026-09-11 was that tiering "can be helpful regardless of
+ * whatever you're doing". Two copies of the classifier would drift the first
+ * time a field's tier was reconsidered, and this repo has just spent six
+ * judge rounds on exactly that shape of bug.
 }
 
 /* ------------------------------------------------------------------ */
@@ -223,15 +139,10 @@ function GovernedFieldRow({
     );
   }
 
-  const asSubject = toSubject ?? ((props: Record<string, unknown>) => props);
-  const storedResolved = subjects.map((s) => resolveField(field, s.props, presets).resolved);
-  const isMixed = storedResolved.length > 1 && storedResolved.some((v) => v !== storedResolved[0]);
-  const hasOwnOverride = subjects.some((s) => s.props[field.id] !== undefined);
-  const reference = subjects[0];
-  const trace = reference ? resolveField(field, reference.props, presets) : null;
-  const paintedTrace = reference ? resolveField(field, asSubject(reference.props), presets) : null;
-  const paintedElsewhere =
-    !isMixed && trace && paintedTrace && paintedTrace.resolved !== trace.resolved ? paintedTrace.resolved : null;
+  // WHY: shared field-resolution model (../fieldModel.ts) — prevents this row
+  // from re-deriving Mixed/override/painted-elsewhere off a single reference
+  // subject and drifting from the other panels' answer to the same question.
+  const { isMixed, hasOwnOverride, trace, paintedElsewhere } = readFieldRow(field, subjects, presets, toSubject);
 
   let mark: Mark;
   let valueText: string;

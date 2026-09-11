@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "T1: a generic product inspector over every registered component — a picker, per-field cascade trace (override/preset/default, winner marked), presets as the primary path, multi-select and Mixed.",
+  "description": "T1: a generic product inspector over every registered component \u2014 a picker, per-field cascade trace (override/preset/default, winner marked), presets as the primary path, multi-select and Mixed.",
   "scripts": {
     "dev": "vite --port 5422 --strictPort",
     "build": "vite build",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@bbox-ui/core": "workspace:*",
@@ -22,6 +23,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
   }
 }

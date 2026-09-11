@@ -3,11 +3,11 @@ import {
   MIXED,
   governedFieldIds,
   readFields,
-  resolveField,
   type FieldSpec,
   type FieldValue,
 } from "@bbox-ui/schema";
 import { FieldTraceRow } from "../FieldTraceRow";
+import { readFieldRow } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
 /**
@@ -131,21 +131,13 @@ function FieldSummaryRow({
   onChange,
   onClearOverride,
 }: FieldSummaryRowProps) {
-  const asSubject = toSubject ?? ((props: Record<string, unknown>) => props);
-  // Mixed is decided on stored resolutions across every selected subject —
-  // same rule FieldTraceRow itself uses, because writing here overwrites
-  // all of them regardless of what currently paints alike.
-  const storedResolved = subjects.map((s) => resolveField(field, s.props, presets).resolved);
-  const isMixed = storedResolved.length > 1 && storedResolved.some((v) => v !== storedResolved[0]);
-  // "Which layer won" is only asked of a single subject (T1-SPEC.md §7.2's
-  // own scope line, the same one FieldTraceRow's chain honours) — with
-  // several subjects that agree, the first is representative.
-  const representative = subjects[0];
-  const trace = representative ? resolveField(field, representative.props, presets) : null;
-  const paintedTrace = representative ? resolveField(field, asSubject(representative.props), presets) : null;
-  const paintedElsewhere =
-    trace && paintedTrace && paintedTrace.resolved !== trace.resolved ? paintedTrace.resolved : null;
-  const hasOwnOverride = hasStoredOverride(field, subjects);
+  // WHY: shared field-resolution model (../fieldModel.ts) — this row used
+  // to resolve "which layer won" and "is anything painting elsewhere"
+  // against subjects[0] as a stand-in for the whole selection, which could
+  // show a driven/overridden state and a resolved value that no other
+  // selected subject actually carries. The shared model only reports a
+  // trace/painted-elsewhere note when the whole selection agrees.
+  const { isMixed, trace, paintedElsewhere, hasOwnOverride } = readFieldRow(field, subjects, presets, toSubject);
 
   const state: RowState = isMixed
     ? "mixed"

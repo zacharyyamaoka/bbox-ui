@@ -3,11 +3,12 @@ import {
   governedFieldIds,
   MIXED,
   readFields,
-  resolveField,
   type FieldSpec,
+  type FieldTrace,
   type FieldValue,
 } from "@bbox-ui/schema";
 import { STATE_TOKENS, TONE_TOKENS, type AppearanceState, type Tone } from "@bbox-ui/core";
+import { readFieldRow } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
 /**
@@ -57,29 +58,27 @@ import type { PanelVariant, PanelVariantProps } from "./contract";
  * This copy is intentionally the same logic, condensed.
  */
 interface Resolution {
-  trace: ReturnType<typeof resolveField> | null;
+  trace: FieldTrace | null;
   isMixed: boolean;
   hasOwnOverride: boolean;
   collapsed: FieldValue | undefined;
   paintedElsewhere: FieldValue | null;
 }
 
+// WHY: shared field-resolution model (../fieldModel.ts) — this strip used to
+// gate the painted-elsewhere ring on exactly one subject selected, going
+// silent on a real multi-selection while the active glyph kept ringing a
+// value nothing painted.
 function resolve(field: FieldSpec, panel: PanelVariantProps): Resolution {
   const { subjects, presets, toSubject } = panel;
-  const asSubject = toSubject ?? ((p: Record<string, unknown>) => p);
-  const single = subjects.length === 1 ? subjects[0] : null;
-  const trace = single ? resolveField(field, single.props, presets) : null;
-  const paintedTrace = single ? resolveField(field, asSubject(single.props), presets) : null;
-  const paintedElsewhere =
-    trace && paintedTrace && paintedTrace.resolved !== trace.resolved
-      ? (paintedTrace.resolved as FieldValue)
-      : null;
-  const storedResolved = subjects.map((s) => resolveField(field, s.props, presets).resolved);
-  const isMixed = storedResolved.length > 1 && storedResolved.some((v) => v !== storedResolved[0]);
-  const hasOwnOverride = subjects.some((s) => s.props[field.id] !== undefined);
-  const collapsed: FieldValue | undefined =
-    isMixed || storedResolved.length === 0 ? undefined : (storedResolved[0] as FieldValue);
-  return { trace, isMixed, hasOwnOverride, collapsed, paintedElsewhere };
+  const row = readFieldRow(field, subjects, presets, toSubject);
+  return {
+    trace: row.trace,
+    isMixed: row.isMixed,
+    hasOwnOverride: row.hasOwnOverride,
+    collapsed: row.collapsedValue,
+    paintedElsewhere: row.paintedElsewhere,
+  };
 }
 
 type Winner = "override" | "preset" | "default";

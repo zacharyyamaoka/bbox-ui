@@ -9,19 +9,47 @@ name: Deploy Storybook to Pages
 
 on:
   push:
-    branches: [main]
+  pull_request:
   workflow_dispatch: {}
 
 permissions:
   contents: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
-  build-and-publish:
+  # WHY a separate job instead of extra steps in build-and-publish: this gate
+  # must run on every push (any branch) and every PR, but the publish job may
+  # only ever run for `main` or workflow_dispatch (R13). Splitting them lets
+  # the gate's trigger stay wide open while `build-and-publish`'s `if:` keeps
+  # publishing narrow, without duplicating the trigger logic per step.
+  gate:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run typecheck
+      - run: pnpm -r run test
+
+  build-and-publish:
+    needs: gate
+    # `needs:` alone does not imply success() once this job declares its own
+    # `if:` — omitting success() here would let a failed/skipped gate through
+    # whenever the event-type check passed, i.e. a red tree would still
+    # publish on every push to main. Both conditions are required.
+    if: >-
+      success() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
