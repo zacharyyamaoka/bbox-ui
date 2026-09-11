@@ -3,3 +3,14 @@ dist/
 *.log
 .vite/
 .chrome-profile-*/
+
+# Agent scratch. The skills symlink is tracked so the repo's own skill is
+# discoverable on clone; everything else here is machine-local.
+.claude/*
+!.claude/skills
+
+# wrangler local state
+.wrangler/
+
+# Reports: the page is tracked, the captures it inlines are not.
+reports/media/

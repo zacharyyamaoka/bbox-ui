@@ -25,6 +25,10 @@ pnpm docs:dev      # http://localhost:4100
 pnpm docs:build    # -> apps/docs/out/
 ```
 
+Agents working on the site should load the repo skill
+[`skills/bbox-ui-site`](skills/bbox-ui-site/SKILL.md) first — it carries the
+build gate, the registry rules, and the traps that have already cost time here.
+
 ### Reference sites — copy these, do not invent
 
 The site is deliberately unoriginal. Before designing any page or interaction,
