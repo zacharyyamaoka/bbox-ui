@@ -1,7 +1,7 @@
 "use client";
 
-import type { ComponentEntry, Instance, PanelVariant } from "@bbox-ui/panel";
-import { MIXED_BENCH } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance, MembersControl, PanelVariant } from "@bbox-ui/panel";
+import { MIXED_BENCH, depthOf, typeGlyph } from "@bbox-ui/panel";
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +28,9 @@ interface BenchSidebarProps {
   variants: PanelVariant[];
   variantId: string;
   onVariantChange: (id: string) => void;
+  membersControls: MembersControl[];
+  membersControlId: string;
+  onMembersControlChange: (id: string) => void;
   entryFor: (name: string) => ComponentEntry;
 }
 
@@ -84,14 +87,26 @@ export function BenchSidebar(p: BenchSidebarProps) {
         <SidebarGroup>
           <SidebarGroupLabel>{p.isMixed ? "Bench" : "Instances"}</SidebarGroupLabel>
           <SidebarGroupContent className="flex flex-col gap-1.5 px-2">
-            {p.instances.map((inst) => (
+            {p.instances.map((inst) => {
+              // A member is listed under its parent, indented one step per
+              // level, with its type glyph as the tree mark. The list is
+              // already in tree order (see Workbench's `treeOrder`).
+              const depth = depthOf(p.instances, inst.id);
+              return (
               <label
                 key={inst.id}
                 data-slot="subject-row"
                 data-subject-id={inst.id}
                 data-subject-type={inst.type}
+                data-depth={depth}
+                style={{ marginLeft: depth * 14 }}
                 className="flex flex-wrap items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-sidebar-accent"
               >
+                {depth > 0 && (
+                  <span data-slot="subject-tree-mark" className="text-[10px] text-muted-foreground" title={`${inst.type}, inside its parent`}>
+                    {typeGlyph(inst.type)}
+                  </span>
+                )}
                 {showCheckboxes && (
                   <input
                     type="checkbox"
@@ -104,9 +119,23 @@ export function BenchSidebar(p: BenchSidebarProps) {
                 {p.isMixed && (
                   <span className="w-14 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{inst.type}</span>
                 )}
-                <div data-slot="subject-preview" className="flex min-h-6 min-w-0 max-w-full items-center overflow-visible [&>*]:max-w-full">{p.entryFor(inst.type).render(inst.props)}</div>
+                <div data-slot="subject-preview" className="flex min-h-6 min-w-0 max-w-full items-center overflow-visible [&>*]:max-w-full">
+                  {/* A parent's row does not repaint its members (they have
+                      rows of their own right below); it says how many it
+                      holds, so the well never shows placeholder members that
+                      are not there. */}
+                  {p.entryFor(inst.type).render(
+                    inst.props,
+                    inst.members && inst.members.length > 0 ? (
+                      <span data-slot="subject-member-count" className="text-[10px] text-muted-foreground">
+                        {inst.members.length} {inst.members.length === 1 ? "member" : "members"}
+                      </span>
+                    ) : undefined,
+                  )}
+                </div>
               </label>
-            ))}
+              );
+            })}
 
             {p.isMixed ? (
               <div data-slot="bench-adder" className="mt-1 flex flex-wrap gap-1">
@@ -149,6 +178,24 @@ export function BenchSidebar(p: BenchSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
+        {/* The Members-control babble switch. Zach's rule: a prototype
+            variant is picked live in the app, never by a URL flag. Same
+            control as the panel-design picker under it. */}
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Members control
+          <select
+            data-slot="members-control-picker"
+            value={p.membersControlId}
+            onChange={(e) => p.onMembersControlChange(e.target.value)}
+            className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
+          >
+            {p.membersControls.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Panel design
           <select

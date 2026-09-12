@@ -92,16 +92,27 @@ export function Viewport(p: ViewportProps) {
 
 function Body(p: ViewportProps) {
   if (p.view === "code") {
-    return <CodeView render={p.render} entries={p.entries} instances={p.instances} selectedIds={p.selectedIds} positions={p.positions} />;
+    return <CodeView render={p.render} entries={p.entries} instances={p.instances} roots={p.roots} selectedIds={p.selectedIds} positions={p.positions} />;
   }
   switch (p.render) {
     case "dom":
-      return <DomPreview entries={p.entries} instances={p.instances} selectedIds={p.selectedIds} onSelectionChange={p.onSelectionChange} />;
+      return (
+        <DomPreview
+          entries={p.entries}
+          instances={p.instances}
+          roots={p.roots}
+          selectedIds={p.selectedIds}
+          onSelectionChange={p.onSelectionChange}
+          onSelectInstance={p.onSelectInstance}
+        />
+      );
     case "reactflow":
       return (
         <ReactFlowCanvas
           entries={p.entries}
           instances={p.instances}
+          roots={p.roots}
+          onSelectInstance={p.onSelectInstance}
           selectedIds={p.selectedIds}
           positions={p.positions}
           onSelectionChange={p.onSelectionChange}
@@ -113,6 +124,8 @@ function Body(p: ViewportProps) {
         <TldrawCanvas
           entries={p.entries}
           instances={p.instances}
+          roots={p.roots}
+          onSelectInstance={p.onSelectInstance}
           selectedIds={p.selectedIds}
           positions={p.positions}
           onSelectionChange={p.onSelectionChange}

@@ -3,8 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
+  addMemberTo,
+  findMembersControl,
   findVariant,
   makeInstance,
+  MEMBERS_CONTROLS,
+  moveMember,
+  parentMap,
+  removeMember,
+  subtreeIds,
+  topLevel,
   randomValue,
   sharedFields,
   EXCLUDED_SHOWN,
@@ -23,6 +31,7 @@ import { Viewport } from "./viewport";
 import { defaultPosition, type CanvasPosition, type Render, type View } from "./contract";
 
 const VARIANT_KEY = "bbox-ui.create.panelVariant";
+const MEMBERS_CONTROL_KEY = "bbox-ui.create.membersControl";
 const RENDER_KEY = "bbox-ui.create.render";
 const VIEW_KEY = "bbox-ui.create.view";
 // The single-strip key from before the two-axis split; read once to migrate.
@@ -48,6 +57,7 @@ function readStored(key: string): string | null {
 export function Workbench() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
   const [variantId, setVariantId] = useState(() => PANEL_VARIANTS[0].id);
+  const [membersControlId, setMembersControlId] = useState(() => MEMBERS_CONTROLS[0]!.id);
   const [render, setRender] = useState<Render>("dom");
   const [view, setView] = useState<View>("preview");
   const uid = useRef(INITIAL_UID);
@@ -66,6 +76,8 @@ export function Workbench() {
   useEffect(() => {
     const v = readStored(VARIANT_KEY);
     if (v) setVariantId(findVariant(v).id);
+    const mc = readStored(MEMBERS_CONTROL_KEY);
+    if (mc) setMembersControlId(findMembersControl(mc).id);
     const r = readStored(RENDER_KEY);
     if (r === "dom" || r === "reactflow" || r === "tldraw") setRender(r);
     const vw = readStored(VIEW_KEY);
@@ -83,13 +95,14 @@ export function Workbench() {
     if (!restored) return;
     try {
       window.localStorage.setItem(VARIANT_KEY, variantId);
+      window.localStorage.setItem(MEMBERS_CONTROL_KEY, membersControlId);
       window.localStorage.setItem(RENDER_KEY, render);
       window.localStorage.setItem(VIEW_KEY, view);
       window.localStorage.removeItem(LEGACY_TAB_KEY);
     } catch {
       /* private window: the choice still works, it just forgets */
     }
-  }, [restored, variantId, render, view]);
+  }, [restored, variantId, membersControlId, render, view]);
 
   const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
@@ -102,8 +115,17 @@ export function Workbench() {
   const [positions, setPositions] = useState<Record<string, CanvasPosition>>({});
 
   const variant = findVariant(variantId);
+  const membersControl = findMembersControl(membersControlId);
   const isMixed = activeName === MIXED_BENCH;
   const instances = benches[activeName] ?? [];
+  // Roots for the renders; tree order for the sidebar, so a member lists
+  // right under its parent. Both derive from the one stored fact, the
+  // parent's `members` list — nothing here stores a parent pointer.
+  const roots = useMemo(() => topLevel(instances), [instances]);
+  const treeOrder = useMemo(() => {
+    const byId = new Map(instances.map((i) => [i.id, i]));
+    return roots.flatMap((r) => subtreeIds(instances, r.id)).map((id) => byId.get(id)!).filter(Boolean);
+  }, [instances, roots]);
   const selectedIds = selectedIdsByBench[activeName] ?? new Set<string>();
   const selected = instances.filter((i) => selectedIds.has(i.id));
   // One stable array per selection, not one per render: the canvases key
@@ -119,7 +141,13 @@ export function Workbench() {
   const panelFields: FieldSpec[] = single ? single.fields : (shared?.fields ?? []);
   const panelPresets = single ? single.presets : [];
   const panelToSubject = single ? single.toSubject : undefined;
-  const panelName = isMixed ? (selectedTypes.length === 0 ? MIXED_BENCH : selectedTypes.join(" + ")) : activeName;
+  // WHY the header names the selected TYPE and not the bench: a focused
+  // bench used to hold one type only, so the two were the same word. A
+  // Stack bench now holds Ports and Pills as members, and the inspector
+  // showing a Port's fields under the heading "Stack" is the exact
+  // confusion the click-into-a-child rule must never produce.
+  const panelName =
+    selectedTypes.length === 1 ? selectedTypes[0]! : selectedTypes.length > 1 ? selectedTypes.join(" + ") : isMixed ? MIXED_BENCH : activeName;
 
   // Every instance has a canvas position, placed the first time it is seen so
   // a fresh bench reads as a column rather than a pile at the origin.
@@ -151,14 +179,18 @@ export function Workbench() {
     uid.current += 1;
   }
   function removeLastInstance() {
+    // "Last" means the last ROOT; its members go with it. Counting members
+    // as instances here would let − take a Port out of a Stack while the
+    // sidebar says "2 instances".
     const bench = benches[activeName] ?? [];
-    if (bench.length <= 1) return;
-    const doomed = bench[bench.length - 1];
-    setBenches((prev) => ({ ...prev, [activeName]: prev[activeName].slice(0, -1) }));
+    const rootList = topLevel(bench);
+    if (rootList.length <= 1) return;
+    const doomed = rootList[rootList.length - 1]!;
+    const gone = new Set(subtreeIds(bench, doomed.id));
+    setBenches((prev) => ({ ...prev, [activeName]: removeMember(prev[activeName], doomed.id) }));
     setSelectedIdsByBench((prev) => {
-      const next = new Set(prev[activeName]);
-      next.delete(doomed.id);
-      if (next.size === 0 && bench.length >= 2) next.add(bench[bench.length - 2].id);
+      const next = new Set(Array.from(prev[activeName]).filter((id) => !gone.has(id)));
+      if (next.size === 0) next.add(rootList[rootList.length - 2]!.id);
       return { ...prev, [activeName]: next };
     });
   }
@@ -178,6 +210,43 @@ export function Workbench() {
       }),
     }));
   }
+  /**
+   * Members. Add appends a fresh instance of `type` to the parent's list and
+   * selects it — the inspector jumps to the new child, which is the whole
+   * point of adding it. Remove takes the subtree with it. Move is the pure
+   * reorder from @bbox-ui/panel. None of these touch positions: a member
+   * has no canvas position of its own, it sits inside its parent.
+   */
+  function addMember(parentId: string, type: string) {
+    const child = makeInstance(type, 0, uid.current);
+    uid.current += 1;
+    setBenches((prev) => ({ ...prev, [activeName]: addMemberTo(prev[activeName] ?? [], parentId, child) }));
+    setSelection([child.id]);
+  }
+  function removeMemberById(id: string) {
+    const bench = benches[activeName] ?? [];
+    const parent = parentMap(bench).get(id);
+    const gone = new Set(subtreeIds(bench, id));
+    setBenches((prev) => ({ ...prev, [activeName]: removeMember(prev[activeName] ?? [], id) }));
+    // A selection pointing at what was just removed lands on the parent, so
+    // the inspector never goes blank mid-edit.
+    const remaining = Array.from(selectedIds).filter((s) => !gone.has(s));
+    setSelection(remaining.length > 0 ? remaining : parent ? [parent] : []);
+  }
+  function moveMemberInParent(parentId: string, from: number, to: number) {
+    setBenches((prev) => ({ ...prev, [activeName]: moveMember(prev[activeName] ?? [], parentId, from, to) }));
+  }
+  function selectInstance(id: string, additive = false) {
+    if (!additive) {
+      setSelection([id]);
+      return;
+    }
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelection(Array.from(next));
+  }
+
   function applyToSelected(fieldId: string, value: FieldValue) {
     setBenches((prev) => ({
       ...prev,
@@ -217,7 +286,7 @@ export function Workbench() {
         activeName={activeName}
         onActiveNameChange={setActiveName}
         isMixed={isMixed}
-        instances={instances}
+        instances={treeOrder}
         selectedIds={selectedIds}
         onToggleSelected={toggleSelected}
         onAdd={addInstance}
@@ -226,6 +295,9 @@ export function Workbench() {
         variants={PANEL_VARIANTS}
         variantId={variantId}
         onVariantChange={setVariantId}
+        membersControls={MEMBERS_CONTROLS}
+        membersControlId={membersControlId}
+        onMembersControlChange={setMembersControlId}
         entryFor={entryFor}
       />
       <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">
@@ -233,6 +305,8 @@ export function Workbench() {
           <Viewport
             entries={REGISTRY}
             instances={instances}
+            roots={roots}
+            onSelectInstance={selectInstance}
             selectedIds={selectedIdList}
             positions={placedPositions}
             onSelectionChange={setSelection}
@@ -256,6 +330,14 @@ export function Workbench() {
           selectedTypes={selectedTypes}
           selectedCount={selected.length}
           excludedShown={EXCLUDED_SHOWN}
+          membersControl={membersControl}
+          entries={REGISTRY}
+          instances={instances}
+          subject={selected.length === 1 ? selected[0]! : null}
+          onAddMember={addMember}
+          onRemoveMember={removeMemberById}
+          onMoveMember={moveMemberInParent}
+          onSelectInstance={(id) => selectInstance(id)}
         />
       </div>
     </SidebarProvider>

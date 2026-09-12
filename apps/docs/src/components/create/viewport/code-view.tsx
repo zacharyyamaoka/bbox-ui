@@ -37,12 +37,30 @@ function jsxAttr(key: string, raw: unknown): string {
   return `${key}={${JSON.stringify(raw)}}`;
 }
 
-export function instanceToJsx(entry: ComponentEntry, inst: Instance): string {
+/**
+ * One instance as JSX. Members print NESTED, one per line and indented, the
+ * way a person would write a Stack of Blocks — `members` is never printed as
+ * an attribute, because it is not a prop (members/contract.ts).
+ */
+export function instanceToJsx(entry: ComponentEntry, inst: Instance, byId?: Map<string, Instance>, entries?: ComponentEntry[], indent = ""): string {
   const props = ownProps(entry, inst);
-  const children = "children" in props ? String(props.children) : null;
+  const text = "children" in props ? String(props.children) : null;
   delete props.children;
   const head = [entry.name, ...Object.entries(props).map(([k, v]) => jsxAttr(k, v))].join(" ");
-  return children === null ? `<${head} />` : `<${head}>${children}</${entry.name}>`;
+  const memberIds = entry.members ? (inst.members ?? []) : [];
+  const nested = memberIds
+    .map((id) => byId?.get(id))
+    .filter((c): c is Instance => !!c)
+    .map((c) => {
+      const e = entries?.find((x) => x.name === c.type);
+      return e ? instanceToJsx(e, c, byId, entries, indent + "  ") : null;
+    })
+    .filter((l): l is string => l !== null);
+  if (nested.length > 0) {
+    const inner = text === null ? nested : [`${indent}  ${text}`, ...nested];
+    return `${indent}<${head}>\n${inner.join("\n")}\n${indent}</${entry.name}>`;
+  }
+  return text === null ? `${indent}<${head} />` : `${indent}<${head}>${text}</${entry.name}>`;
 }
 
 function literal(value: unknown, indent: string): string {
@@ -58,7 +76,7 @@ function literal(value: unknown, indent: string): string {
  * other component rides a generic content node, and the code says so out
  * loud rather than inventing a node type that does not exist.
  */
-function reactFlowCode(entries: ComponentEntry[], shown: Instance[], positions: Record<string, CanvasPosition>): string {
+function reactFlowCode(entries: ComponentEntry[], shown: Instance[], positions: Record<string, CanvasPosition>, byId: Map<string, Instance>): string {
   const hasPort = shown.some((i) => i.type === "Port");
   const others = Array.from(new Set(shown.filter((i) => i.type !== "Port").map((i) => i.type))).sort();
   const nodes = shown.map((inst) => {
@@ -74,7 +92,7 @@ function reactFlowCode(entries: ComponentEntry[], shown: Instance[], positions: 
       };
       return `  { id: ${JSON.stringify(inst.id)}, type: "bboxStandalonePort", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: ${literal(data, "  ")} },`;
     }
-    return `  { id: ${JSON.stringify(inst.id)}, type: "bench", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: { element: ${instanceToJsx(entry, inst)} } },`;
+    return `  { id: ${JSON.stringify(inst.id)}, type: "bench", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: { element: ${instanceToJsx(entry, inst, byId, entries).replace(/\n/g, "\n    ")} } },`;
   });
   const lines = [
     `import { ReactFlow, Background } from "@xyflow/react";`,
@@ -103,7 +121,7 @@ function reactFlowCode(entries: ComponentEntry[], shown: Instance[], positions: 
  * shown as the generic bench shape the canvas actually uses, with the
  * element they render, so the code matches the pixels.
  */
-function tldrawCode(entries: ComponentEntry[], shown: Instance[], positions: Record<string, CanvasPosition>): string {
+function tldrawCode(entries: ComponentEntry[], shown: Instance[], positions: Record<string, CanvasPosition>, byId: Map<string, Instance>): string {
   const hasPort = shown.some((i) => i.type === "Port");
   const shapes = shown.map((inst) => {
     const entry = entries.find((e) => e.name === inst.type)!;
@@ -118,7 +136,7 @@ function tldrawCode(entries: ComponentEntry[], shown: Instance[], positions: Rec
       };
       return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-port", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: ${literal(p, "  ")} },`;
     }
-    return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-bench", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: { instanceId: ${JSON.stringify(inst.id)} } }, // renders ${instanceToJsx(entry, inst)}`;
+    return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-bench", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: { instanceId: ${JSON.stringify(inst.id)} } }, // renders ${instanceToJsx(entry, inst, byId, entries).replace(/\n\s*/g, " ")}`;
   });
   const lines = [
     `import { Tldraw, createShapeId } from "tldraw";`,
@@ -136,9 +154,20 @@ function tldrawCode(entries: ComponentEntry[], shown: Instance[], positions: Rec
   return lines.filter((l): l is string => l !== null).join("\n");
 }
 
-function domCode(entries: ComponentEntry[], shown: Instance[]): string {
-  const imports = Array.from(new Set(shown.map((i) => i.type))).sort();
-  const lines = shown.map((inst) => instanceToJsx(entries.find((e) => e.name === inst.type)!, inst));
+function domCode(entries: ComponentEntry[], shown: Instance[], byId: Map<string, Instance>, all: Instance[]): string {
+  // Imports cover every type that will print, members included.
+  const printed = new Set<string>();
+  const walk = (i: Instance) => {
+    printed.add(i.type);
+    for (const id of i.members ?? []) {
+      const c = byId.get(id);
+      if (c) walk(c);
+    }
+  };
+  shown.forEach(walk);
+  void all;
+  const imports = Array.from(printed).sort();
+  const lines = shown.map((inst) => instanceToJsx(entries.find((e) => e.name === inst.type)!, inst, byId, entries));
   return [`import { ${imports.join(", ")} } from "@/components/bbox-ui";`, "", ...lines].join("\n");
 }
 
@@ -146,19 +175,24 @@ export function CodeView({
   render,
   entries,
   instances,
+  roots,
   selectedIds,
   positions,
 }: {
   render: Render;
   entries: ComponentEntry[];
   instances: Instance[];
+  roots: Instance[];
   selectedIds: string[];
   positions: Record<string, CanvasPosition>;
 }) {
   const [copied, setCopied] = useState(false);
-  const shown = selectedIds.length > 0 ? instances.filter((i) => selectedIds.includes(i.id)) : instances;
+  const byId = new Map(instances.map((i) => [i.id, i]));
+  // A selected MEMBER prints on its own, as the thing you are looking at;
+  // otherwise the roots print with their members nested.
+  const shown = selectedIds.length > 0 ? instances.filter((i) => selectedIds.includes(i.id)) : roots;
   const code =
-    render === "dom" ? domCode(entries, shown) : render === "reactflow" ? reactFlowCode(entries, shown, positions) : tldrawCode(entries, shown, positions);
+    render === "dom" ? domCode(entries, shown, byId, instances) : render === "reactflow" ? reactFlowCode(entries, shown, positions, byId) : tldrawCode(entries, shown, positions, byId);
 
   return (
     <div data-slot="code-view" data-render={render} className="relative h-full min-h-0 overflow-auto">
@@ -181,8 +215,8 @@ export function CodeView({
       <pre className="m-0 p-6 font-mono text-[12.5px] leading-relaxed text-foreground">
         <code data-slot="code-text">{code}</code>
       </pre>
-      {selectedIds.length > 0 && selectedIds.length < instances.length && (
-        <div className="px-6 pb-4 text-[11px] text-muted-foreground">Showing the {selectedIds.length} selected of {instances.length}. Clear the selection to see all.</div>
+      {selectedIds.length > 0 && selectedIds.length < roots.length && (
+        <div className="px-6 pb-4 text-[11px] text-muted-foreground">Showing the {selectedIds.length} selected of {roots.length}. Clear the selection to see all.</div>
       )}
     </div>
   );

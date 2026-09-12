@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { MembersSpec } from "./members/contract";
 
 /**
  * demos/inspector/src/schema/registerComponent.ts
@@ -18,7 +19,15 @@ export interface ComponentEntry {
    * resolved plain prop bag (never a FieldTrace, never the FieldSpec
    * array) so this file never imports a specific component type.
    */
-  render: (props: Record<string, unknown>) => ReactNode;
+  render: (props: Record<string, unknown>, children?: ReactNode) => ReactNode;
+  /**
+   * Declared when the component holds other instances. The inspector then
+   * adds the standard Members control for it automatically, and every
+   * render passes the members, rendered, as `children`. Absent means the
+   * component is a leaf. See ./members/contract.ts for why this is not a
+   * FieldSpec row.
+   */
+  members?: MembersSpec;
   /**
    * Turn a subject's raw stored props into the subject its component
    * actually resolves against, when those differ.

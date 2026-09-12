@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
+import { renderInstance } from "../render-instance";
 
 /**
  * Plain DOM. The components exactly as they render with no host around them,
@@ -10,18 +12,22 @@ import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 export function DomPreview({
   entries,
   instances,
+  roots,
   selectedIds,
   onSelectionChange,
+  onSelectInstance,
 }: {
   entries: ComponentEntry[];
   instances: Instance[];
+  roots: Instance[];
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
+  onSelectInstance: (id: string, additive: boolean) => void;
 }) {
-  const entryFor = (t: string) => entries.find((e) => e.name === t)!;
+  const byId = useMemo(() => new Map(instances.map((i) => [i.id, i])), [instances]);
   return (
     <div data-slot="dom-preview" className="flex h-full min-h-0 flex-wrap content-start items-start gap-6 overflow-auto p-6">
-      {instances.map((inst) => {
+      {roots.map((inst) => {
         const on = selectedIds.includes(inst.id);
         return (
           <button
@@ -38,7 +44,7 @@ export function DomPreview({
             className="rounded-md p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-ring"
             title={`${inst.type} · ${inst.id}`}
           >
-            {entryFor(inst.type).render(inst.props)}
+            {renderInstance(entries, byId, inst, selectedIds, onSelectInstance)}
           </button>
         );
       })}

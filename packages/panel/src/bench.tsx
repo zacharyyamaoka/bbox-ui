@@ -47,6 +47,22 @@ import {
 } from "@bbox-ui/core";
 import { registerComponent, type ComponentEntry } from "./registerComponent";
 import type { Subject } from "./fieldModel";
+import type { MembersSpec } from "./members/contract";
+
+/**
+ * Which components hold others, and what. `accepts` is closed on purpose:
+ * a PortEdge is a lane of Ports and nothing else; a Stack is a column of
+ * block-shaped things; a Block's body takes one layout container or a few
+ * leaves; a RowContainer takes leaves. Widening a set is a one-line edit
+ * here, and the Members control offers exactly this list.
+ */
+const LEAVES = ["Port", "Pill", "Glyph", "TextBox"];
+export const MEMBER_SPECS: Record<string, MembersSpec> = {
+  RowContainer: { accepts: LEAVES },
+  Stack: { accepts: ["Block", "Stack", "RowContainer", ...LEAVES] },
+  PortEdge: { accepts: ["Port"], label: "Ports" },
+  Block: { accepts: ["Stack", "RowContainer", ...LEAVES], label: "Body" },
+};
 
 function swatch(label: string): ReactNode {
   return (
@@ -103,7 +119,7 @@ interface BlockRenderProps {
   lensBefore?: string;
 }
 
-function renderBlock(props: Record<string, unknown>): ReactNode {
+function renderBlock(props: Record<string, unknown>, children?: ReactNode): ReactNode {
   const p = props as BlockRenderProps;
   return (
     <Block width={p.width} height={p.height}>
@@ -115,6 +131,13 @@ function renderBlock(props: Record<string, unknown>): ReactNode {
         </BlockChip>
       </BlockHeader>
       <BlockDescription>Description</BlockDescription>
+      {/* The body: whatever the Block holds, laid down the column between
+          the description and the pinned type line. */}
+      {children !== undefined && (
+        <div data-slot="block-body" style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6, width: "100%" }}>
+          {children}
+        </div>
+      )}
       <BlockType>Type</BlockType>
     </Block>
   );
@@ -157,12 +180,20 @@ export const REGISTRY: ComponentEntry[] = [
     name: "RowContainer",
     fields: ROW_CONTAINER_FIELDS,
     presets: ROW_CONTAINER_PRESETS,
-    render: (props) => (
+    members: MEMBER_SPECS.RowContainer,
+    // WHY placeholders when there are no members: a container with nothing
+    // in it paints nothing, and a blank 320px well on the bench reads as a
+    // bug. The swatches stand in until a member is added, then step aside.
+    render: (props, children) => (
       <div style={{ width: 320, border: "1px dashed #ccc" }}>
         <RowContainer {...(props as Record<string, never>)}>
-          {swatch("A")}
-          {swatch("B")}
-          {swatch("C")}
+          {children ?? (
+            <>
+              {swatch("A")}
+              {swatch("B")}
+              {swatch("C")}
+            </>
+          )}
         </RowContainer>
       </div>
     ),
@@ -171,11 +202,16 @@ export const REGISTRY: ComponentEntry[] = [
     name: "Stack",
     fields: STACK_FIELDS,
     presets: STACK_PRESETS,
-    render: (props) => (
+    members: MEMBER_SPECS.Stack,
+    render: (props, children) => (
       <div style={{ width: 240, border: "1px dashed #ccc" }}>
         <Stack {...(props as Record<string, never>)}>
-          {stackMember("Member A")}
-          {stackMember("Member B")}
+          {children ?? (
+            <>
+              {stackMember("Member A")}
+              {stackMember("Member B")}
+            </>
+          )}
         </Stack>
       </div>
     ),
@@ -184,9 +220,10 @@ export const REGISTRY: ComponentEntry[] = [
     name: "PortEdge",
     fields: PORT_EDGE_FIELDS,
     presets: PORT_EDGE_PRESETS,
-    render: (props) => (
+    members: MEMBER_SPECS.PortEdge,
+    render: (props, children) => (
       <div style={{ position: "relative", width: 260, height: 160, border: "1px dashed #ccc" }}>
-        <PortEdge {...(props as Record<string, never>)}>{threePorts()}</PortEdge>
+        <PortEdge {...(props as Record<string, never>)}>{children ?? threePorts()}</PortEdge>
       </div>
     ),
   }),
@@ -194,6 +231,7 @@ export const REGISTRY: ComponentEntry[] = [
     name: "Block",
     fields: BLOCK_FIELDS,
     presets: BLOCK_PRESETS,
+    members: MEMBER_SPECS.Block,
     render: renderBlock,
   }),
 ];
@@ -250,6 +288,14 @@ export interface Instance extends Subject {
   /** Which registered component this instance is. Always the active component
    *  in a focused bench; the whole point of the mixed bench is that it varies. */
   type: string;
+  /**
+   * The ids of the instances this one holds, in order. Only present on an
+   * instance whose component declares `members`. A held instance lives in
+   * the same bench array as everything else — it just is not top-level —
+   * so selecting it puts it in the inspector exactly like any other.
+   * See members/model.ts for every derived fact (parent, depth, subtree).
+   */
+  members?: string[];
 }
 
 export function makeInstance(type: string, index: number, uid: number): Instance {

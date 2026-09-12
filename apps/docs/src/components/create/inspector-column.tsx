@@ -2,7 +2,8 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
-import type { PanelVariant, Subject } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance, MembersControl, PanelVariant, Subject } from "@bbox-ui/panel";
+import { MembersPath, MembersSection } from "./members-section";
 
 interface InspectorColumnProps {
   variant: PanelVariant;
@@ -17,6 +18,14 @@ interface InspectorColumnProps {
   selectedTypes: string[];
   selectedCount: number;
   excludedShown: number;
+  membersControl: MembersControl;
+  entries: ComponentEntry[];
+  instances: Instance[];
+  subject: Instance | null;
+  onAddMember: (parentId: string, type: string) => void;
+  onRemoveMember: (id: string) => void;
+  onMoveMember: (parentId: string, from: number, to: number) => void;
+  onSelectInstance: (id: string) => void;
 }
 
 /**
@@ -63,6 +72,7 @@ export function InspectorColumn(p: InspectorColumnProps) {
           )}
         </div>
       )}
+      <MembersPath instances={p.instances} subject={p.subject} onSelect={p.onSelectInstance} />
       <div ref={scrollRef} data-slot="inspector-scroll" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div data-slot="panel-variant-host" data-variant={p.variant.id} className="[&>*]:!w-full [&>*]:!max-w-none [&>*]:!rounded-none [&>*]:!border-0 [&>*]:!shadow-none">
           {p.subjects.length > 0 && p.fields.length === 0 ? (
@@ -83,6 +93,18 @@ export function InspectorColumn(p: InspectorColumnProps) {
               onClearOverride={p.onClearOverride}
             />
           )}
+          {/* Added automatically for any component whose entry declares
+              `members`; the six panel designs never learn about it. */}
+          <MembersSection
+            control={p.membersControl}
+            entries={p.entries}
+            instances={p.instances}
+            subject={p.subject}
+            onAddMember={p.onAddMember}
+            onRemoveMember={p.onRemoveMember}
+            onMoveMember={p.onMoveMember}
+            onSelect={p.onSelectInstance}
+          />
         </div>
       </div>
     </aside>

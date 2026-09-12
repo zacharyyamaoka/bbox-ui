@@ -35,3 +35,24 @@ export {
   type Instance,
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
+export { MEMBER_SPECS } from "./bench";
+export {
+  MEMBERS_CONTROLS,
+  MEMBERS_CONTRACT,
+  findMembersControl,
+  parentMap,
+  topLevel,
+  subtreeIds,
+  ancestry,
+  depthOf,
+  summarize,
+  addableTypes,
+  moveIndex,
+  addMemberTo,
+  removeMember,
+  moveMember,
+  wouldCycle,
+  typeGlyph,
+  TYPE_GLYPH,
+} from "./members";
+export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary } from "./members";
