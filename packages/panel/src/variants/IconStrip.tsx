@@ -1379,7 +1379,7 @@ const stepperBtnStyle: CSSProperties = {
   padding: 0,
   lineHeight: 1,
 };
-const stepperValueStyle: CSSProperties = { fontSize: 10, fontFamily: "monospace", minWidth: 22, textAlign: "center", color: "var(--bbox-panel-fg, #111)" };
+const stepperValueStyle: CSSProperties = { fontSize: 10, fontFamily: "monospace", width: 40, minWidth: 40, textAlign: "center", color: "var(--bbox-panel-fg, #111)" };
 
 const textFieldWrapStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 1, minWidth: 88 };
 const textFieldLabelStyle: CSSProperties = { fontSize: 9, color: "var(--bbox-panel-fg-faint, #a1a1aa)", textTransform: "uppercase", letterSpacing: 0.3 };

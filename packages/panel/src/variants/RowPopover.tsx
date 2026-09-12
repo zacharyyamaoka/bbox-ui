@@ -390,7 +390,11 @@ function FieldPopoverBody({
   // header can never tell a different story than the row it opened from.
   const state = fieldWinner(field, row);
   const isMixed = state.isMixed;
-  const hasOwnOverride = state.winner === "override";
+  // WHY from the shared model, not from the winner: `fieldWinner` returns no
+  // winner for a Mixed selection, so gating on it made an override permanently
+  // unclearable the moment a second instance was selected. "Something is
+  // stored" is a fact about the store, and the model already answers it.
+  const hasOwnOverride = row.hasOwnOverride;
   const value: FieldValue | undefined = state.resolved;
   const headerTag = isGoverned
     ? state.winner === "preset" && state.presetId
@@ -534,8 +538,16 @@ function PopoverControl({
   if (field.kind === "toggle") {
     return (
       <label style={toggleLabelStyle}>
-        <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} />
-        {value === true ? "On" : "Off"}
+        <input
+          type="checkbox"
+          checked={value === true}
+          // A Mixed toggle is indeterminate, not "Off" under a row saying Mixed.
+          ref={(el) => {
+            if (el) el.indeterminate = value === undefined && placeholder === "Mixed";
+          }}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        {value === undefined && placeholder === "Mixed" ? "Mixed" : value === true ? "On" : "Off"}
       </label>
     );
   }
@@ -543,7 +555,9 @@ function PopoverControl({
     const hasRange = field.min !== undefined && field.max !== undefined;
     return (
       <div style={numberControlStyle}>
-        {hasRange && (
+        {/* No slider for a Mixed or unset value: a range input has no empty
+            state and asserted `min` beside a box that correctly said Mixed. */}
+        {hasRange && value !== undefined && (
           <input
             type="range"
             min={field.min}

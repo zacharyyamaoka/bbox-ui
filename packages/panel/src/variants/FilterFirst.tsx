@@ -48,8 +48,11 @@ function fieldMatchesQuery(field: FieldSpec, query: string): boolean {
   return field.label.toLowerCase().includes(query) || field.id.toLowerCase().includes(query);
 }
 
+/** "Is something stored for this field" is the shared model's answer; this
+ *  is that answer for a field with no row on screen (the tier-hidden count),
+ *  not a second definition of it. */
 function hasStoredOverride(field: FieldSpec, subjects: PanelVariantProps["subjects"]): boolean {
-  return subjects.some((s) => s.props[field.id] !== undefined);
+  return readFieldRow(field, subjects, []).hasOwnOverride;
 }
 
 /** Segments already carry a human label per option (Port's own diameter

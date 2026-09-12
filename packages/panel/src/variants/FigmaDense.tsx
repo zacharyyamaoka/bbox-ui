@@ -12,7 +12,7 @@ import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 import { readFieldRow } from "../fieldModel";
 import { groupRows } from "../fieldGroups";
-import { NumberInput } from "../NumberInput";
+import { NumberInput, clampTo } from "../NumberInput";
 import {
   classifyField,
   loadStoredTier,
@@ -675,8 +675,9 @@ function useLabelScrub(
     }
     const step = field.step ?? 1;
     let next = drag.current.startValue + Math.round(dx / SCRUB_PX_PER_STEP) * step;
-    if (field.min !== undefined) next = Math.max(field.min, next);
-    if (field.max !== undefined) next = Math.min(field.max, next);
+    // One clamp for the box, the spinner and this label: clampTo is the
+    // number box's own rule, so the two can never disagree about the range.
+    next = clampTo(next, field.min, field.max);
     onChange(field.id, Number(next.toFixed(6)));
   }
   function onPointerUp(e: ReactPointerEvent<HTMLSpanElement>) {
