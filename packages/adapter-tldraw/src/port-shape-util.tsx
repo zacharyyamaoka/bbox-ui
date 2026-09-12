@@ -13,7 +13,6 @@ import {
   PortDot,
   PortLabel,
   portLabelPlacement,
-  type PortSize,
   type PortTextLayout,
 } from "@bbox-ui/core";
 
@@ -22,15 +21,21 @@ import {
  * Block. Minimal by design: it exists so a Port can be placed from the
  * toolbar, adjusted, and later detached back to stock shapes.
  *
- * The state validator admits only "empty" | "default" | "wired".
+ * The state validator admits only "empty" | "valueSet" | "wired".
  * WHY: `received` is a RUNTIME prop, never persisted document state — the
  * same rule the Block shape's ports follow. See block-shape-util.tsx.
+ *
+ * INTEGRATION (docs/T1-SPEC.md §2): "default" renamed to "valueSet",
+ * mirroring the identical rename in `BBoxShapePort` (block-shape-util.tsx).
+ * `size` stays the literal three rungs the validator enforces — see
+ * `BBoxShapePort`'s own note on why this is narrower than live Port's
+ * `PortSize`.
  */
 export interface BBoxPortShapeProps {
   w: number;
   h: number;
-  state: "empty" | "default" | "wired";
-  size: PortSize;
+  state: "empty" | "valueSet" | "wired";
+  size: "sm" | "md" | "lg";
   label: string;
   textLayout: PortTextLayout;
 }
@@ -59,17 +64,10 @@ export class BBoxPortShapeUtil extends ShapeUtil<BBoxPortShape> {
     w: T.number,
     h: T.number,
     // Deliberately excludes "received" — see BBoxPortShapeProps.
-    state: T.literalEnum("empty", "default", "wired"),
+    state: T.literalEnum("empty", "valueSet", "wired"),
     size: T.literalEnum("sm", "md", "lg"),
     label: T.string,
-    textLayout: T.literalEnum(
-      "top",
-      "bot",
-      "right",
-      "left",
-      "right-offset",
-      "left-offset",
-    ),
+    textLayout: T.literalEnum("top", "bot", "right", "left"),
   };
 
   override getDefaultProps(): BBoxPortShape["props"] {
@@ -108,7 +106,7 @@ export class BBoxPortShapeUtil extends ShapeUtil<BBoxPortShape> {
         >
           <PortDot
             state={props.state}
-            size={props.size}
+            diameter={props.size}
             className="block"
             style={{ width: "100%", height: "100%" }}
           />

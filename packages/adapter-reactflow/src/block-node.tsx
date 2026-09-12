@@ -18,17 +18,16 @@ import {
   BlockType,
   PORT_DIAMETERS,
   PORT_DOT_CENTER_TRANSFORM,
-  PORT_RING_PX,
   PortLabel,
   cn,
   inwardTextLayout,
   portDotClass,
   portDotPlacement,
+  portDotStyle,
   portLabelPlacement,
   portSideForDirection,
-  wiredInnerPx,
+  type AppearanceState,
   type PortSize,
-  type PortState,
   type PortTextLayout,
   type TextSize,
 } from "@bbox-ui/core";
@@ -38,11 +37,16 @@ import {
  * WHY `state: "received"` is legal here but not in the tldraw adapter's shape
  * props: React Flow node data is React state, not a persisted document — a
  * runtime-only state can live in it without ever being written to disk.
+ *
+ * INTEGRATION (docs/T1-SPEC.md §0/§2): `PortState` (4 members) was Lane P's
+ * old, now-deleted type — the rebuilt Port paints from the shared
+ * `AppearanceState` (6 members, appearance.ts) instead. `state` here keeps
+ * the same field name and now accepts that wider vocabulary.
  */
 export interface BBoxPortSpec {
   id: string;
   direction: "input" | "output";
-  state?: PortState;
+  state?: AppearanceState;
   size?: PortSize;
   label?: string;
   textLayout?: PortTextLayout;
@@ -146,7 +150,11 @@ export function BBoxBlockNode({
         {(data.ports ?? []).map((port) => {
           const state = port.state ?? "empty";
           const size = port.size ?? "md";
-          const diameter = PORT_DIAMETERS[size];
+          // PortSize is `keyof typeof PORT_DIAMETERS | number` (an "Exact"
+          // escape hatch, port.layout.ts) — mirrors PortDot's own
+          // resolution (port.tsx) so a numeric size behaves identically
+          // here and on the live core component.
+          const diameter = typeof size === "number" ? size : PORT_DIAMETERS[size];
           const side = portSideForDirection(port.direction);
           const textLayout = port.textLayout ?? inwardTextLayout(side);
           // WHY px + an explicit transform, not the stylesheet's `top: %`:
@@ -172,35 +180,31 @@ export function BBoxBlockNode({
               // WHY "absolute": portDotClass carries "relative" for the core's
               // standalone dot; the Handle must keep React Flow's absolute
               // positioning or it falls into the block's flex flow.
-              className={cn(portDotClass(state), "absolute overflow-visible")}
+              className={cn(portDotClass(), "absolute overflow-visible")}
               style={{
                 width: diameter,
                 height: diameter,
                 ...placement,
                 transform: PORT_DOT_CENTER_TRANSFORM,
+                // INTEGRATION (docs/T1-SPEC.md §1.4's own worked model): the
+                // dot's ring/fill paint now comes from the cascade's two
+                // token lookups (portDotStyle, state.ts) rather than a
+                // static Tailwind border class plus a hand-painted "wired
+                // inner dot" span — portDotStyle already resolves every
+                // state (including `wired`'s solid fill) via box-shadow, so
+                // that extra span is retired with it.
+                ...portDotStyle({ state }),
               }}
             >
-              {state === "wired" && (
-                <span
-                  data-slot="port-dot-inner"
-                  className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary"
-                  style={{
-                    width: wiredInnerPx(size),
-                    height: wiredInnerPx(size),
-                  }}
-                />
-              )}
               {port.label != null && (
                 <PortLabel
                   textSize={port.textSize ?? "md"}
                   className="pointer-events-none absolute"
-                  // WHY PORT_RING_PX: the Handle IS the bordered dot, so the
-                  // label's containing box sits a ring-width inside the circle.
-                  style={portLabelPlacement(
-                    textLayout,
-                    { w: diameter, h: diameter },
-                    PORT_RING_PX,
-                  )}
+                  // No boxInsetPx: the new portDotClass paints its rings with
+                  // box-shadow (no CSS border), so unlike T0's bordered
+                  // Handle the padding box already sits on the dot's true
+                  // edge — same as tldraw's always-unbordered wrapper.
+                  style={portLabelPlacement(textLayout, { w: diameter, h: diameter })}
                 >
                   {port.label}
                 </PortLabel>

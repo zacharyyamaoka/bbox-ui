@@ -15,7 +15,6 @@
 import type {
   BlockSide,
   PortDirection,
-  PortSize,
   PortTextLayout,
   TextSize,
 } from "@bbox-ui/core";
@@ -24,13 +23,13 @@ import type {
 export interface ScenePort {
   id: string;
   direction: PortDirection;
-  state: "empty" | "default" | "wired";
+  state: "empty" | "valueSet" | "wired";
   /**
    * Painted as "received" by a live host, never persisted — mirrors the
    * runtime-only rule both adapters enforce (see ARCHITECTURE.md).
    */
   receivedAtRuntime?: boolean;
-  size: PortSize;
+  size: "sm" | "md" | "lg";
   label: string;
   textLayout: PortTextLayout;
   side: BlockSide;
@@ -98,8 +97,8 @@ export interface SceneStandalonePort {
   y: number;
   w: number;
   h: number;
-  state: "empty" | "default" | "wired";
-  size: PortSize;
+  state: "empty" | "valueSet" | "wired";
+  size: "sm" | "md" | "lg";
   label: string;
   textLayout: PortTextLayout;
 }
@@ -157,10 +156,10 @@ export const SCENE: Scene = {
         {
           id: "threshold",
           direction: "input",
-          state: "default",
+          state: "valueSet",
           size: "md",
           label: "threshold",
-          textLayout: "right-offset",
+          textLayout: "right",
           side: "left",
           t: 0.7,
         },

@@ -10,7 +10,6 @@ import {
   LEADING_TIGHT,
   META_FONT_PX,
   PORT_LABEL_GAP,
-  PORT_LABEL_OFFSET_GAP,
   SIMPLE_BLOCK,
   TEXT_SIZES,
   collapseWhitespace,
@@ -372,11 +371,6 @@ describe("portLabelBox", () => {
   it("left: far side, right edge one gap short of the dot", () => {
     const box = portLabelBox({ ...base, layout: "left" });
     expect(box.x + box.w).toBeCloseTo(-PORT_LABEL_GAP);
-  });
-
-  it("offset layouts push the label further out", () => {
-    const box = portLabelBox({ ...base, layout: "right-offset" });
-    expect(box.x).toBe(25 + PORT_LABEL_OFFSET_GAP);
   });
 
   it("top and bot center on the dot", () => {

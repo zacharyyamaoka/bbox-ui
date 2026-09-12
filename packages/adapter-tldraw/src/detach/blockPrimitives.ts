@@ -186,7 +186,6 @@ export function primitivesForBlock(
         w: diameter,
         h: diameter,
         state: port.state,
-        size: port.size,
         label: port.label,
         textLayout: port.textLayout,
       },

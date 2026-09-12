@@ -1,0 +1,84 @@
+# WHY this publishes by pushing a branch instead of actions/deploy-pages:
+# the repo's Pages is configured build_type "legacy", serving the `gh-pages`
+# branch at `/` (that is what is live today). `actions/deploy-pages` only works
+# under build_type "workflow", so the artifact-upload form would fail on its
+# first run, and switching the repo to "workflow" would take the live site down
+# until a run completed. Building and pushing the bundle keeps one mechanism,
+# matches what is already serving, and needs no repository setting changed.
+name: Deploy Storybook to Pages
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  # WHY a separate job instead of extra steps in build-and-publish: this gate
+  # must run on every push (any branch) and every PR, but the publish job may
+  # only ever run for `main` or workflow_dispatch (R13). Splitting them lets
+  # the gate's trigger stay wide open while `build-and-publish`'s `if:` keeps
+  # publishing narrow, without duplicating the trigger logic per step.
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run typecheck
+      - run: pnpm -r run test
+
+  build-and-publish:
+    needs: gate
+    # `needs:` alone does not imply success() once this job declares its own
+    # `if:` — omitting success() here would let a failed/skipped gate through
+    # whenever the event-type check passed, i.e. a red tree would still
+    # publish on every push to main. Both conditions are required.
+    # PAUSED on Zach's instruction, 2026-09-11: "No need to continue
+    # publishing to github io for now - you can launch the server locally, as
+    # we were doing before." The work moved into the bbox-ui.com site's
+    # /create page, which is prototyped locally.
+    #
+    # Deliberately NOT deleted, and deliberately still reachable by hand: the
+    # gh-pages branch is still serving the last published build, so removing
+    # this job would leave a live site with no way to update or take it down.
+    # workflow_dispatch keeps that one lever. To resume automatic publishing,
+    # put the push/main clause back into the condition below.
+    if: >-
+      success() && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter bbox-storybook run build-storybook
+      - run: pnpm --filter demo-inspector run build
+      # The T1 product inspector ships beside the Storybook, at /inspector/.
+      # demos/port-inspector is T0's retired Port-only panel and is not published.
+      - run: cp -r demos/inspector/dist apps/storybook/storybook-static/inspector
+      # Storybook is a Vite bundle with `_`-prefixed asset paths; without this
+      # GitHub runs it through Jekyll and those assets 404.
+      - run: touch apps/storybook/storybook-static/.nojekyll
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: apps/storybook/storybook-static
+          publish_branch: gh-pages
+          force_orphan: true

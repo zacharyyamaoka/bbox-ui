@@ -1,12 +1,17 @@
 packages:
   - packages/*
   - apps/playground
+  - apps/storybook
   - apps/docs
   - demos/reactflow
   - demos/tldraw
   - demos/scene
   - demos/compare
   - demos/compare-view
+  - demos/story-hosts
+  - demos/port-inspector
+  - demos/inspector
+  - demos/dndkit-lab
 allowBuilds:
   esbuild: true
   msw: false

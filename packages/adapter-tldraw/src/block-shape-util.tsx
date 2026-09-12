@@ -26,25 +26,33 @@ import {
   SIMPLE_BLOCK,
   portDotPlacement,
   portLabelPlacement,
+  type AppearanceState,
   type BlockSide,
-  type PortSize,
-  type PortState,
   type PortTextLayout,
   type TextSize,
 } from "@bbox-ui/core";
 
 /**
  * A port stored on the shape record. Note the state validator below admits
- * only "empty" | "default" | "wired".
+ * only "empty" | "valueSet" | "wired".
  * WHY: `received` is a RUNTIME prop, never persisted document state — a
  * .tldr file that recorded "data arrived here" would be lying after reload.
  * Runtime delivery goes through the per-editor received-ports table instead.
+ *
+ * INTEGRATION (docs/T1-SPEC.md §2): "default" renamed to "valueSet" — the
+ * rebuilt Port's `AppearanceState` name for the same resting state. Its two
+ * other new rungs (`outOfFocus`, `hidden`) are not added to this persisted
+ * shape here; see detach/portPrimitives.ts's `DetachablePortState` note.
+ * `size` stays the literal three rungs the validator below enforces — not
+ * the live `Port`'s wider `PortSize` (which also admits an exact numeric
+ * diameter, `port.layout.ts`'s "Exact" escape hatch) — a persisted shape
+ * has never offered that escape hatch and the validator would reject it.
  */
 export interface BBoxShapePort {
   id: string;
   direction: "input" | "output";
-  state: "empty" | "default" | "wired";
-  size: PortSize;
+  state: "empty" | "valueSet" | "wired";
+  size: "sm" | "md" | "lg";
   label: string;
   textLayout: PortTextLayout;
   side: BlockSide;
@@ -201,17 +209,10 @@ const portValidator: T.Validator<BBoxShapePort> = T.object({
   id: T.string,
   direction: T.literalEnum("input", "output"),
   // Deliberately excludes "received" — see BBoxShapePort.
-  state: T.literalEnum("empty", "default", "wired"),
+  state: T.literalEnum("empty", "valueSet", "wired"),
   size: T.literalEnum("sm", "md", "lg"),
   label: T.string,
-  textLayout: T.literalEnum(
-    "top",
-    "bot",
-    "right",
-    "left",
-    "right-offset",
-    "left-offset",
-  ),
+  textLayout: T.literalEnum("top", "bot", "right", "left"),
   side: T.literalEnum("left", "right", "top", "bottom"),
   t: T.number,
 });
@@ -292,7 +293,7 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
               props.w,
               props.h,
             );
-            const state: PortState = received[shape.id]?.[port.id]
+            const state: AppearanceState = received[shape.id]?.[port.id]
               ? "received"
               : port.state;
             const diameter = PORT_DIAMETERS[port.size];
@@ -303,7 +304,7 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
                 className="absolute"
                 style={{ ...placement, transform: PORT_DOT_CENTER_TRANSFORM }}
               >
-                <PortDot state={state} size={port.size} className="block" />
+                <PortDot state={state} diameter={port.size} className="block" />
                 {port.label !== "" && (
                   <PortLabel
                     className="absolute"

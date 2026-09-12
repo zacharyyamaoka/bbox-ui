@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PORT_LABEL_GAP, TEXT_SIZES, wiredInnerPx } from "@bbox-ui/core";
+import { PORT_LABEL_GAP, TEXT_SIZES } from "@bbox-ui/core";
 
 import { primitivesForPort } from "../src/detach/portPrimitives";
 
@@ -9,7 +9,7 @@ const STOCK_TYPES = new Set(["geo", "text", "line", "arrow", "draw", "note", "fr
 describe("primitivesForPort", () => {
   it("produces only stock tldraw shape types", () => {
     const built = primitivesForPort(
-      { w: 25, h: 25, state: "wired", size: "md", label: "image", textLayout: "right" },
+      { w: 25, h: 25, state: "wired", label: "image", textLayout: "right" },
       { x: 0, y: 0 },
     );
     for (const partial of built.shapes) {
@@ -20,7 +20,7 @@ describe("primitivesForPort", () => {
 
   it("an empty unlabeled port is exactly the hollow ring", () => {
     const built = primitivesForPort(
-      { w: 25, h: 25, state: "empty", size: "md", label: "", textLayout: "right" },
+      { w: 25, h: 25, state: "empty", label: "", textLayout: "right" },
       { x: 100, y: 200 },
     );
     expect(built.shapes).toHaveLength(1);
@@ -32,22 +32,29 @@ describe("primitivesForPort", () => {
     expect(built.ringId).toBe(ring.id);
   });
 
-  it("wired adds the accent core at the fixed rung diameter, centered", () => {
+  // INTEGRATION (docs/T1-SPEC.md §2, appearance.ts's STATE_TOKENS): the live
+  // dot now paints `wired` as ONE fully-filled disc (ring token === fill
+  // token) rather than a hollow ring plus a separate small accent core —
+  // there is no second "inner" shape left to assert on; the ring itself
+  // carries the orange fill. See portPrimitives.ts's STATE_STOCK_RING.
+  it("wired is a single solid orange disc, not a ring plus an accent core", () => {
     const built = primitivesForPort(
-      { w: 25, h: 25, state: "wired", size: "md", label: "", textLayout: "right" },
+      { w: 25, h: 25, state: "wired", label: "", textLayout: "right" },
       { x: 0, y: 0 },
     );
-    expect(built.shapes).toHaveLength(2);
-    const inner = built.shapes[1];
-    const dia = wiredInnerPx("md");
-    expect(inner.props).toMatchObject({ geo: "ellipse", w: dia, h: dia, color: "orange" });
-    expect(inner.x).toBeCloseTo(12.5 - dia / 2);
-    expect(inner.y).toBeCloseTo(12.5 - dia / 2);
+    expect(built.shapes).toHaveLength(1);
+    expect(built.shapes[0].props).toMatchObject({
+      geo: "ellipse",
+      w: 25,
+      h: 25,
+      color: "orange",
+      fill: "fill",
+    });
   });
 
-  it("default state is the muted wash, not the hollow ring", () => {
+  it("valueSet state is the muted wash, not the hollow ring", () => {
     const built = primitivesForPort(
-      { w: 25, h: 25, state: "default", size: "md", label: "", textLayout: "right" },
+      { w: 25, h: 25, state: "valueSet", label: "", textLayout: "right" },
       { x: 0, y: 0 },
     );
     expect(built.shapes[0].props).toMatchObject({ color: "grey", fill: "solid" });
@@ -55,7 +62,7 @@ describe("primitivesForPort", () => {
 
   it("places a right-layout label one gap clear of the dot's edge", () => {
     const built = primitivesForPort(
-      { w: 25, h: 25, state: "empty", size: "md", label: "tick", textLayout: "right" },
+      { w: 25, h: 25, state: "empty", label: "tick", textLayout: "right" },
       { x: 0, y: 0 },
     );
     const label = built.shapes.find((partial) => partial.type === "text")!;
@@ -67,7 +74,7 @@ describe("primitivesForPort", () => {
 
   it("a left-layout label ends one gap short of the dot", () => {
     const built = primitivesForPort(
-      { w: 25, h: 25, state: "empty", size: "md", label: "tick", textLayout: "left" },
+      { w: 25, h: 25, state: "empty", label: "tick", textLayout: "left" },
       { x: 0, y: 0 },
     );
     const label = built.shapes.find((partial) => partial.type === "text")!;

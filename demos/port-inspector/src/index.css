@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@import "@bbox-ui/core/theme.css";
+/* WHY: Tailwind v4 scans only this app's own tree by default, so the utility
+   classes that live inside @bbox-ui/core (border-2, rounded-full, bg-primary)
+   would be pruned and every port dot would paint as an invisible 0px-border
+   transparent circle. demos/reactflow/src/index.css and the Storybook preview
+   carry the identical directive for the identical reason. */
+@source "../../../packages";

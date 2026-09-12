@@ -1,0 +1,22 @@
+/*
+ * Same three-import shape every demo uses (see demos/reactflow/src/index.css
+ * and demos/tldraw/src/index.css) — Tailwind v4, then React Flow's own
+ * stylesheet layered UNDER Tailwind so the port-dot utility classes on
+ * <Handle> still win, then the one real @theme inline block that backs
+ * every bbox-ui utility class.
+ */
+@import "tailwindcss";
+@import "@xyflow/react/dist/style.css" layer(base);
+@import "@bbox-ui/core/theme.css";
+
+/* apps/storybook has no components of its own — the Tailwind classes that
+   need generating (portDotClass et al.) live in packages/bbox-ui, three
+   directories up from here, outside Vite's default scan root. */
+@source "../../../packages";
+
+html,
+body,
+#storybook-root {
+  height: 100%;
+  margin: 0;
+}
