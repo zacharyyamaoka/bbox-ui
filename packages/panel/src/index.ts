@@ -37,7 +37,14 @@ export {
   type Instance,
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
-export { isSecondPressToEdit, type TwoClickPointerDown } from "./twoClickEdit";
+export {
+  isSecondPressToEdit,
+  claimInstancePointerDown,
+  isInstancePointerDownClaimed,
+  armEditOnRelease,
+  clearArmedEdit,
+  type TwoClickPointerDown,
+} from "./twoClickEdit";
 export { MEMBER_SPECS } from "./bench";
 export {
   MEMBERS_CONTROLS,

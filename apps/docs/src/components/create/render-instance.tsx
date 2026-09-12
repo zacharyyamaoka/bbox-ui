@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { ComponentEntry, Instance, RenderContext } from "@bbox-ui/panel";
-import { isSecondPressToEdit } from "@bbox-ui/panel";
+import { armEditOnRelease, claimInstancePointerDown, isInstancePointerDownClaimed, isSecondPressToEdit } from "@bbox-ui/panel";
 import type { FieldValue } from "@bbox-ui/schema";
 
 /**
@@ -75,22 +75,37 @@ export function renderInstance(
         data-selected={on}
         className="contents [&>*:first-child]:rounded-sm [&>*:first-child]:outline-offset-2 data-[selected=true]:[&>*:first-child]:outline data-[selected=true]:[&>*:first-child]:outline-2 data-[selected=true]:[&>*:first-child]:outline-ring"
         onPointerDown={(e) => {
-          e.stopPropagation();
-          // WHY: a browser's default action for mousedown on non-form-control
-          // content is to shift focus to the nearest FOCUSABLE ANCESTOR (the
-          // dom-preview root wrapper carries `tabIndex`, for one). Left
-          // alone, that steals focus AWAY FROM the `<input>`/`<textarea>`
-          // this same press is about to mount (via `onRequestEdit`,
-          // immediately below) a moment after it autofocuses, firing the
-          // control's own `onBlur` → `onCommit` → `onEditEnd()` and undoing
-          // the edit before a single keystroke — the two-click rule turned
-          // itself off. `preventDefault()` here is what the control's own
-          // imperative `.focus()` (packages/bbox-ui/src/textBox.tsx) relies
-          // on to actually stick.
-          e.preventDefault();
+          // WHY a claim flag and not `e.stopPropagation()` (what this was):
+          // see `claimInstancePointerDown`'s own doc comment
+          // (packages/panel/src/twoClickEdit.ts) — stopPropagation halts
+          // the NATIVE event too, which silently cancelled every drag that
+          // starts on a member's resting content in both React Flow and
+          // tldraw (docs/TEXTBOX-EDITING-SPEC.md DoD). A shallower ancestor
+          // wrapper (an outer member, or the top-level root in
+          // dom-preview.tsx) still needs to see this exact press bubble to
+          // it — it just needs to know NOT to also select/edit ITS OWN
+          // instance for the identical gesture the innermost wrapper (this
+          // one, since bubbling runs target-to-root) already handled.
+          if (isInstancePointerDownClaimed(e)) return;
+          claimInstancePointerDown(e);
           const additive = e.shiftKey || e.metaKey || e.ctrlKey;
           if (edit && isSecondPressToEdit({ id: child.id, additive, selectedIds, inlineEditable })) {
-            edit.onRequestEdit(child.id);
+            // WHY armed rather than requested immediately: see
+            // `armEditOnRelease`'s own doc comment
+            // (packages/panel/src/twoClickEdit.ts) — this exact press (the
+            // second one on an already-selected, inline-editable instance)
+            // is also precisely the DoD's "a drag that starts on the
+            // resting text ... still moves the node" case, and the
+            // `preventDefault()` this branch used to call immediately (to
+            // protect the fresh control's autofocus from the browser's own
+            // "shift focus to nearest focusable ancestor" default) also
+            // silences the `mousedown` React Flow's node-drag listens for
+            // — so acting on pointer-DOWN made a real drag starting here
+            // impossible. Arming defers the decision to pointer-up, and a
+            // real drag (movement past 4px) cancels it before that ever
+            // fires — no `preventDefault()`, `mousedown` reaches React
+            // Flow untouched, the node moves.
+            armEditOnRelease(e.clientX, e.clientY, () => edit.onRequestEdit(child.id));
             return;
           }
           onSelect(child.id, additive);

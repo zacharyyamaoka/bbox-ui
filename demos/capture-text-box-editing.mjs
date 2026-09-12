@@ -228,14 +228,13 @@ const navRows = () =>
   }))`);
 const rowSel = (id) => `[data-slot="instance-navigator"] [data-slot="nav-row"][data-instance-id="${id}"]`;
 const selectedRows = async () => (await navRows()).filter((r) => r.selected).map((r) => r.id);
-// WHY input OR textarea: only FieldTraceRow.tsx (and IconStrip's generic
-// fallback) grew a real `<textarea>` branch for the new "textarea" kind
-// (docs/TEXTBOX-EDITING-SPEC.md §2's own consumer list). FigmaDense — the
-// DEFAULT inspector variant this journey drives — was deliberately left
-// alone because it already degrades acceptably to a plain `<input>`; a
-// selector that only looked for `textarea` would report this field
-// missing when it is in fact present and working, just via the documented
-// fallback control.
+// FigmaDense — the DEFAULT inspector variant this journey drives — now has
+// a real `<textarea>` branch for the "textarea" kind too (verify-round-1
+// fix for F5: it used to fall through to a single-line `<input>`, which
+// silently strips a committed multi-line value's newline the moment this
+// panel next touches the field). `inspectorTextControl` reads the tag
+// itself so step 6 can assert it directly rather than only reading value.
+const inspectorTextControl = () => evaluate(`document.querySelector('[data-field="children"] textarea, [data-field="children"] input')?.tagName ?? null`);
 const inspectorTextValue = () => evaluate(`(document.querySelector('[data-field="children"] textarea, [data-field="children"] input'))?.value ?? null`);
 const inspectorName = () => evaluate(`document.querySelector('[data-slot="figma-dense-header"] span')?.textContent ?? null`);
 
@@ -450,9 +449,55 @@ for (const renderId of RENDERS) {
   assertStep(6, "rendered on two lines (taller than the single-line box)", multiRect.h > singleLineHeight + 4, `single ${singleLineHeight.toFixed(1)} vs now ${multiRect.h.toFixed(1)}`);
   await screenshot(`${renderId}-5-multiline`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(multiRect.top + multiRect.h - headerClip.top) + 20 });
 
+  // ---- step 6b (verify round 1, F5): the DEFAULT inspector's own Text
+  // field must be a real <textarea> for a "textarea" field, and a further
+  // keystroke made THROUGH that control must not silently drop the
+  // newline the canvas is currently showing (Zach's truthful-rendering
+  // rule; the panel's `<input>` fallback used to sanitize it away). ------
+  const inspectorTag = await inspectorTextControl();
+  assertStep(6, "the Text field's control for kind=textarea is a TEXTAREA (spec §2)", inspectorTag === "TEXTAREA", inspectorTag);
+  const inspectorMultiValue = await inspectorTextValue();
+  assertStep(6, "inspector's Text field shows the newline", typeof inspectorMultiValue === "string" && inspectorMultiValue.includes("\n"), JSON.stringify(inspectorMultiValue));
+  await click('[data-field="children"] textarea');
+  await evaluate(`(() => { const el = document.querySelector('[data-field="children"] textarea'); el.setSelectionRange(el.value.length, el.value.length); })()`);
+  await typeText("!");
+  await sleep(200);
+  const restingAfterInspectorKeystroke = await restingText(textBoxId);
+  assertStep(
+    6,
+    "ONE keystroke in the inspector keeps the newline in the instance",
+    typeof restingAfterInspectorKeystroke === "string" && restingAfterInspectorKeystroke.includes("\n"),
+    JSON.stringify(restingAfterInspectorKeystroke),
+  );
+
   // ---- step 7: reactflow/tldraw only — drag the resting text moves the node
   if (renderId !== "dom") {
     const nodeSel = renderId === "reactflow" ? `[data-slot="rf-instance"]` : `[data-slot="tl-instance"]`;
+
+    // verify-round-1, F2's own repro (React Flow only — this is the
+    // `noDragClassName`/`noPanClassName` class-collision bug, which has no
+    // tldraw equivalent since tldraw's own gesture recognizer never gates
+    // on those classes; tldraw's node geometry also isn't a reliable place
+    // to find truly bare pixels, since its shape is a fixed 180×80
+    // container around Block content that is natively larger and centers
+    // past its edges): a drag starting on the node's BARE padding (no
+    // member at all under the pointer) must still move the node — this is
+    // what isolated the collision from anything member-specific, and it
+    // must never regress silently back to "every drag is refused" the way
+    // this file's ORIGINAL member-only check could not have caught on its
+    // own (that check was ALSO broken by F3, a completely different bug,
+    // at the same time — a false pass by accident of two bugs cancelling
+    // out was never possible here only because both happened to point the
+    // same way, not because either check was actually independent).
+    if (renderId === "reactflow") {
+      const nodeRectForPadding = await rectOf(nodeSel);
+      const paddingPoint = { x: nodeRectForPadding.left + 6, y: nodeRectForPadding.top + 6 };
+      await drag(paddingPoint, { x: paddingPoint.x + 80, y: paddingPoint.y }, 16, 60);
+      const nodeAfterPaddingDrag = await rectOf(nodeSel);
+      const paddingDx = nodeAfterPaddingDrag.left - nodeRectForPadding.left;
+      assertStep(7, "dragging the node's own bare padding (no member) moved it ~80px", Math.abs(paddingDx - 80) <= 12, `dx=${paddingDx.toFixed(1)}`);
+    }
+
     const nodeBefore = await rectOf(nodeSel);
     const textRect = await rectOf(textBoxSel(textBoxId));
     await evaluate(`window.getSelection().removeAllRanges()`);
@@ -463,6 +508,21 @@ for (const renderId of RENDERS) {
     const selectionText = await evaluate(`window.getSelection().toString()`);
     assertStep(7, "no text got selected by the drag", selectionText === "", JSON.stringify(selectionText));
     await screenshot(`${renderId}-6-dragged`);
+
+    // verify-round-1, F3's own repro: a drag starting on a DIFFERENT,
+    // NON-editable member (the still-empty "Header · center" slot's own
+    // Flex placeholder) must ALSO move the node — F3's confirmed root
+    // cause (the member wrapper's own `stopPropagation()`) was never
+    // TextBox-specific, so a check scoped to only the editable member
+    // could not have caught it, and could not catch its return either.
+    const centerPlaceholderSel = `${nodeSel} [data-slot-label="Header · center"] [data-slot="flex-placeholder"]`;
+    await waitFor(centerPlaceholderSel);
+    const nodeBeforeMember = await rectOf(nodeSel);
+    const placeholderRect = await rectOf(centerPlaceholderSel);
+    await drag({ x: placeholderRect.x, y: placeholderRect.y }, { x: placeholderRect.x + 80, y: placeholderRect.y }, 16, 60);
+    const nodeAfterMember = await rectOf(nodeSel);
+    const memberDx = nodeAfterMember.left - nodeBeforeMember.left;
+    assertStep(7, "dragging a DIFFERENT, non-editable member (Header · center placeholder) moved the node ~80px", Math.abs(memberDx - 80) <= 12, `dx=${memberDx.toFixed(1)}`);
   }
 
   manifest.renders[renderId] = { console: takeConsole() };

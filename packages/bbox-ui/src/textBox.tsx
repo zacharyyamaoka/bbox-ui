@@ -140,13 +140,39 @@ function TextBoxControl({
 
   const handleChange = (event: ChangeEvent<ControlElement>) => onChange?.(event.target.value);
 
+  // WHY Escape is handled in the CAPTURE phase, on its own, and calls
+  // `stopPropagation()` — the one key this file stops natively rather than
+  // just calling its own callback: tldraw attaches ITS OWN Escape handling
+  // with a raw `container.addEventListener("keydown", ...)` on
+  // `.tl-container` (installed @tldraw/editor 5.3.2
+  // useDocumentEvents.mjs:117-118, :188) — an ANCESTOR of this control in
+  // every tldraw render. React defers its OWN (bubble-phase) synthetic
+  // dispatch until the native event reaches the root node it delegates
+  // from, which is an ancestor of `.tl-container` too — so tldraw's
+  // container-level listener ALWAYS runs before this control's bubble
+  // `onKeyDown` ever would. tldraw's handler calls `editor.cancel();
+  // container.focus()`, and that `focus()` synchronously blurs this
+  // control — `handleBlur` below fires `onCommit(current)` — before this
+  // control's own Escape branch gets a chance to run, so Escape silently
+  // COMMITTED the typed value instead of reverting it
+  // (docs/TEXTBOX-EDITING-SPEC.md DoD step 5: "Escape cancels"). A
+  // capture-phase handler on THIS element runs during React's simulated
+  // CAPTURE pass (root-to-target, dispatched synchronously from the SAME
+  // native root listener) before the real DOM's native capture sweep ever
+  // reaches `.tl-container`'s bubble-phase listener — calling
+  // `stopPropagation()` here removes the keydown from the event loop
+  // entirely before tldraw (or anything else upstream) ever sees it, in
+  // every host, not only tldraw's.
+  const handleEscapeCapture = (event: KeyboardEvent<ControlElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    onCancel?.();
+  };
+
   const handleKeyDown = (event: KeyboardEvent<ControlElement>) => {
     if (event.nativeEvent.isComposing) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onCancel?.();
-      return;
-    }
     const isCommitKey =
       lines === "single" ? event.key === "Enter" : event.key === "Enter" && (event.metaKey || event.ctrlKey);
     if (isCommitKey) {
@@ -154,7 +180,8 @@ function TextBoxControl({
       onCommit?.(event.currentTarget.value);
     }
     // Plain Enter on multi falls through untouched — the textarea's own
-    // native newline, exactly as the contract asks.
+    // native newline, exactly as the contract asks. Escape is handled
+    // entirely by `handleEscapeCapture`, above, and never reaches here.
   };
 
   const handleBlur = (event: FocusEvent<ControlElement>) => {
@@ -199,6 +226,7 @@ function TextBoxControl({
     maxLength,
     autoFocus: true,
     onChange: handleChange,
+    onKeyDownCapture: handleEscapeCapture,
     onKeyDown: handleKeyDown,
     onFocus: () => setFocused(true),
     onBlur: handleBlur,

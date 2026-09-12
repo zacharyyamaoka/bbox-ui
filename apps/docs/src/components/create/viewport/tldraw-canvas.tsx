@@ -2,7 +2,7 @@
 
 import "tldraw/tldraw.css";
 
-import { createContext, useContext, useEffect, useMemo, useRef } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
 import {
   HTMLContainer,
@@ -15,7 +15,7 @@ import {
   type TLBaseShape,
   type TLShapeId,
 } from "tldraw";
-import type { ComponentEntry, Instance } from "@bbox-ui/panel";
+import { ancestry, type ComponentEntry, type Instance } from "@bbox-ui/panel";
 import type { CanvasPosition } from "../contract";
 import { renderInstance, type EditBundle } from "../render-instance";
 
@@ -86,10 +86,73 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
   override canEdit() {
     return false;
   }
+  // WHY: tldraw's stock select tool has a fallback for double-clicking any
+  // shape whose `canEdit()` is false (installed tldraw 5.3.2
+  // Idle.js's onDoubleClick, `case "shape"`): `handleDoubleClickOnCanvas`,
+  // which CREATES A NEW STOCK TEXT SHAPE at the click point and starts
+  // EDITING IT — a convenience for "double-click a rectangle to label it,"
+  // never asked for here. tldraw tracks double-clicks itself from raw
+  // pointer_down/up dispatches (PointingShape's own `isDoubleClick`), not
+  // from the browser's native `dblclick` event, so this can't be gated by
+  // stopping propagation of any one event type the way the drag/pan fixes
+  // above do — the SAME pointer stream has to reach tldraw for a drag to
+  // still work. Returning a (no-op) shape update here is tldraw's own
+  // sanctioned "this shape handles its own double-click" escape hatch: a
+  // truthy return short-circuits the `canEditShape` fallback entirely
+  // (Idle.js: `if (change) { editor.updateShapes([change]); return; }`).
+  // Measured without this: two of THIS shape's own two-click-to-edit
+  // presses, close enough together for tldraw's internal click counter,
+  // silently spawned a stray "text" shape and entered ITS edit mode
+  // instead of ours — every second press failed identically.
+  override onDoubleClick(shape: BenchShape) {
+    return { id: shape.id, type: shape.type };
+  }
   override component(shape: BenchShape) {
     const { entries, byId, selectedIds, onSelectInstance, edit } = useContext(BenchContext);
     const inst = byId.get(shape.props.instanceId);
     const editor = this.editor;
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    // WHY: `getDefaultProps` guesses 180×80, but a fresh instance can be
+    // anything from a small Pill to a 384×258 Block — content sized by ITS
+    // OWN layout, never by this shape. Left unmeasured, tldraw's hit-test
+    // (`getGeometry`) and selection outline (`getIndicatorPath`, below)
+    // both use the STALE guessed `w`/`h` while the real content renders
+    // wherever it naturally overflows that box — verify-round-1 measured
+    // a Block's real content (384×258) overflowing a 180×80 shape on
+    // every side, so the selection outline drawn around "the shape" never
+    // matched what a person actually sees. (The double-click-spawns-a-
+    // stray-text-shape regression turned out to be a SEPARATE bug, fixed
+    // by `onDoubleClick` above — this effect's own job is purely keeping
+    // tldraw's geometry truthful to the real rendered size.)
+    useLayoutEffect(() => {
+      const el = contentRef.current;
+      if (!el) return;
+      const apply = (w: number, h: number) => {
+        const cur = editor.getShape(shape.id);
+        if (!cur || cur.type !== "bbox-bench") return;
+        if (Math.abs(cur.props.w - w) < 0.5 && Math.abs(cur.props.h - h) < 0.5) return;
+        // WHY `history: "ignore"`: this is the shape correcting its OWN
+        // geometry to match its real content, not a person resizing it
+        // (`canResize()` is false) — it must never show up as an undo step.
+        editor.run(() => editor.updateShape({ id: shape.id, type: "bbox-bench", props: { w, h } }), { history: "ignore" });
+      };
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) apply(rect.width, rect.height);
+      const observer = new ResizeObserver((entries2) => {
+        const entry = entries2[0];
+        if (!entry) return;
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) apply(width, height);
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- `editor` and
+      // `shape.id` are stable for this shape's lifetime; re-running on
+      // every `shape.props` change would fight the very update this effect
+      // itself makes.
+    }, []);
+
     return (
       <HTMLContainer
         data-slot="tl-instance"
@@ -111,7 +174,9 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
           }
         }}
       >
-        {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit) : null}
+        <div ref={contentRef} style={{ display: "inline-flex" }}>
+          {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit) : null}
+        </div>
       </HTMLContainer>
     );
   }
@@ -141,6 +206,43 @@ const shapeUtils = [BenchShapeUtil];
 function shapeBackedSelection(editor: Editor, selectedIds: string[]): string {
   return selectedIds
     .filter((id) => editor.getShape(shapeIdFor(id)))
+    .sort()
+    .join("|");
+}
+
+/**
+ * The ROOT each selected id ultimately belongs to — a member maps to its
+ * top-level ancestor (`ancestry(...)[0]`, empty for a top-level instance,
+ * meaning it already IS a root); a root maps to itself.
+ *
+ * WHY this exists (verify-round-1, the regression F3's own fix introduced):
+ * tldraw has no shape for a member — only a ROOT gets one (`shapeIdFor`
+ * above) — so EVERY press anywhere inside a shape's rendered content,
+ * member or not, resolves at tldraw's OWN geometry-based hit-test to the
+ * SAME root shape. Once render-instance.tsx's member wrapper stopped
+ * calling `stopPropagation()` (so a drag starting on a member can still
+ * reach tldraw's canvas-level pointer handling — that fix is what F3
+ * asked for), tldraw's OWN click machinery started running for every
+ * member press too, and its default click-on-a-shape behavior selects
+ * that root shape — which used to be invisible because stopPropagation
+ * blocked React's OWN bubble from ever reaching `.tl-canvas`'s handler,
+ * not only the native listeners this file's other WHY comments are about.
+ * That reflexive reselection then echoed through the listener below as
+ * "the user selected `block-8`", which read as "different from the
+ * member `textbox-18` that's mid-edit" and ended the edit before a single
+ * keystroke could land — literally every second press failed to enter
+ * editing (measured: `hasControl` false after the second press, every
+ * time). tldraw reporting the CONTAINING root of what the page already
+ * has selected is not new information — it is tldraw's own coarser
+ * granularity catching up, not a different choice by the user — so this
+ * function lets the listener recognize and ignore exactly that case,
+ * distinct from `shapeBackedSelection` (above), which recognizes a
+ * different case entirely: the ECHO of a `setSelectedShapes([])` this
+ * SAME file wrote a moment earlier because a member has no shape.
+ */
+function impliedRootSelection(instances: Instance[], selectedIds: string[]): string {
+  return selectedIds
+    .map((id) => ancestry(instances, id)[0] ?? id)
     .sort()
     .join("|");
 }
@@ -200,7 +302,23 @@ export function TldrawCanvas(p: Props) {
       }
       const selWanted = p.selectedIds.map(shapeIdFor).filter((id) => editor.getShape(id));
       const selCur = editor.getSelectedShapeIds();
-      if ([...selWanted].sort().join("|") !== [...selCur].sort().join("|")) editor.setSelectedShapes(selWanted);
+      // WHY skipped mid-gesture: a press on a member with NO shape (any
+      // member — only roots get one) writes `selWanted = []` here the
+      // instant `onSelect` fires, on the SAME press tldraw's own select
+      // tool may already be tracking as the start of a drag
+      // (`PointingShape`, entered on pointer-down). Calling
+      // `setSelectedShapes([])` while `getIsPointing()` is true clears the
+      // very selection that gesture is mid-way through translating, and
+      // tldraw does not always re-derive it (`startTranslating` only
+      // re-selects when its OWN `didSelectOnEnter` was false) — measured:
+      // a drag starting on a non-editable member with nothing previously
+      // selected moved the node 0px instead of the expected 80. Skipping
+      // the write here only DEFERS it — the next run of this same effect,
+      // once the pointer is up, applies whatever `p.selectedIds` says by
+      // then, so nothing is lost, only delayed past the live gesture.
+      if (!editor.inputs.getIsPointing() && [...selWanted].sort().join("|") !== [...selCur].sort().join("|")) {
+        editor.setSelectedShapes(selWanted);
+      }
     } finally {
       applying.current = false;
     }
@@ -252,7 +370,17 @@ export function TldrawCanvas(p: Props) {
                   .filter((s): s is BenchShape => !!s && s.type === "bbox-bench")
                   .map((s) => s.props.instanceId)
                   .sort();
-                if (ids.join("|") !== shapeBackedSelection(editor, cur.selectedIds)) cur.onSelectionChange(ids);
+                const idsKey = ids.join("|");
+                // Two DIFFERENT reasons to treat this as a no-op, not one:
+                // `shapeBackedSelection` catches an ECHO of a selection
+                // we (the page → editor effect) just wrote; `impliedRootSelection`
+                // catches tldraw's OWN reflexive re-assertion of the root
+                // that already (indirectly, via a selected/editing member)
+                // holds the page's selection — see that function's own
+                // long comment for the regression this closes.
+                if (idsKey !== shapeBackedSelection(editor, cur.selectedIds) && idsKey !== impliedRootSelection(cur.instances, cur.selectedIds)) {
+                  cur.onSelectionChange(ids);
+                }
               },
               { source: "user", scope: "document" },
             );
@@ -266,7 +394,17 @@ export function TldrawCanvas(p: Props) {
                   .filter((s): s is BenchShape => !!s && s.type === "bbox-bench")
                   .map((s) => s.props.instanceId)
                   .sort();
-                if (ids.join("|") !== shapeBackedSelection(editor, cur.selectedIds)) cur.onSelectionChange(ids);
+                const idsKey = ids.join("|");
+                // Two DIFFERENT reasons to treat this as a no-op, not one:
+                // `shapeBackedSelection` catches an ECHO of a selection
+                // we (the page → editor effect) just wrote; `impliedRootSelection`
+                // catches tldraw's OWN reflexive re-assertion of the root
+                // that already (indirectly, via a selected/editing member)
+                // holds the page's selection — see that function's own
+                // long comment for the regression this closes.
+                if (idsKey !== shapeBackedSelection(editor, cur.selectedIds) && idsKey !== impliedRootSelection(cur.instances, cur.selectedIds)) {
+                  cur.onSelectionChange(ids);
+                }
               },
               { source: "user", scope: "session" },
             );
