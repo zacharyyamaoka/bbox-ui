@@ -76,7 +76,12 @@ function reactFlowCode(entries: ComponentEntry[], shown: Instance[], positions: 
         label: String(props.children ?? ""),
         textLayout: (props.textLayout as string) ?? "right",
       };
-      return `  { id: ${JSON.stringify(inst.id)}, type: "bboxStandalonePort", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: ${literal(data, "  ")} },`;
+      // The adapter carries four props. Anything else stored is said out
+      // loud rather than silently dropped: the DOM code shows the whole
+      // store, and one instance must not yield two contradicting codes.
+      const dropped = Object.keys(props).filter((k) => !["state", "diameter", "children", "textLayout"].includes(k));
+      const note = dropped.length ? ` // not carried by bboxStandalonePort: ${dropped.map((k) => jsxAttr(k, props[k])).join(" ")}` : "";
+      return `  { id: ${JSON.stringify(inst.id)}, type: "bboxStandalonePort", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: ${literal(data, "  ")} },${note}`;
     }
     return `  { id: ${JSON.stringify(inst.id)}, type: "bench", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: { element: ${instanceToJsx(entry, inst)} } },`;
   });
@@ -120,7 +125,9 @@ function tldrawCode(entries: ComponentEntry[], shown: Instance[], positions: Rec
         label: String(props.children ?? ""),
         textLayout: (props.textLayout as string) ?? "right",
       };
-      return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-port", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: ${literal(p, "  ")} },`;
+      const dropped = Object.keys(props).filter((k) => !["state", "diameter", "children", "textLayout"].includes(k));
+      const note = dropped.length ? ` // not carried by bbox-port: ${dropped.map((k) => jsxAttr(k, props[k])).join(" ")}` : "";
+      return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-port", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: ${literal(p, "  ")} },${note}`;
     }
     return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-bench", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: { instanceId: ${JSON.stringify(inst.id)} } }, // renders ${instanceToJsx(entry, inst)}`;
   });

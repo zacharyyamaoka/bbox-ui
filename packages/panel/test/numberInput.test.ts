@@ -46,8 +46,19 @@ describe("commitFor / snapTo / clampTo", () => {
     expect(commitFor("0.35", 0, 1, 0.05)).toBe(0.35);
     expect(snapTo(0.3, { min: 0, max: 1, step: 0.1 })).toBe(0.3);
   });
-  it("leaves an unstepped field alone", () => {
-    expect(commitFor("1.5", 0, 24)).toBe(1.5);
+  it("a field with no declared step snaps by 1, because that is the browser's grid for it (round 4)", () => {
+    expect(commitFor("12.5", 0, 24)).toBe(13);
+    expect(commitFor("12.5")).toBe(13);
+  });
+  it("does not round the typed value before dividing: 0.9 on a step-2 grid is 0, not 2 (round 4)", () => {
+    expect(snapTo(0.9, { step: 2 })).toBe(0);
+    expect(snapTo(0.6, { step: 2 })).toBe(0);
+    expect(snapTo(1.1, { step: 2 })).toBe(2);
+  });
+  it("stays ON the grid when max is not: the largest on-grid value below max, as stepDown does (round 4)", () => {
+    expect(snapTo(10, { min: 0.5, max: 10, step: 2 })).toBe(8.5);
+    expect(snapTo(10, { min: 0, max: 10, step: 3 })).toBe(9);
+    expect(snapTo(-3, { min: 0.5, max: 10, step: 2 })).toBe(0.5);
   });
 });
 
@@ -87,16 +98,16 @@ describe("reduceNumberInput — the wiring, as a user drives it", () => {
     expect(r.state.draft).toBe("50");
   });
   it("a Tab through a Mixed box writes nothing", () => {
-    const r = run(undefined, [{ type: "focus", value: undefined }, { type: "blur" }]);
+    const r = run(undefined, [{ type: "focus", value: undefined }, { type: "blur", value: undefined }]);
     expect(r.effects).toEqual([]);
   });
   it("erasing a held value and leaving clears the override", () => {
-    const r = run(8, [{ type: "focus", value: 8 }, { type: "change", next: "" }, { type: "blur" }]);
+    const r = run(8, [{ type: "focus", value: 8 }, { type: "change", next: "" }, { type: "blur", value: undefined }]);
     expect(r.effects).toEqual([{ kind: "clear" }]);
     expect(r.state.draft).toBe("");
   });
   it("a lone '.' into a Mixed box then leaving touches nothing — the originals stay", () => {
-    const r = run(undefined, [{ type: "focus", value: undefined }, { type: "change", next: "" }, { type: "blur" }]);
+    const r = run(undefined, [{ type: "focus", value: undefined }, { type: "change", next: "" }, { type: "blur", value: undefined }]);
     expect(r.effects).toEqual([]);
   });
   it("an outside change replaces the draft only while not focused", () => {
@@ -106,7 +117,20 @@ describe("reduceNumberInput — the wiring, as a user drives it", () => {
     expect(editing.state.draft).toBe("4");
   });
   it("typing past max then leaving shows the stored 24", () => {
-    const r = run(0, [{ type: "focus", value: 0 }, { type: "change", next: "50" }, { type: "blur" }]);
+    const r = run(0, [{ type: "focus", value: 0 }, { type: "change", next: "50" }, { type: "blur", value: 24 }]);
     expect(r.state.draft).toBe("24");
+  });
+  it("a Mixed box that committed while typing and was then erased reads the stored value after blur, not blank (round 4)", () => {
+    // focus on Mixed, type 3 (commits 3 to every subject), erase, leave: the
+    // store now holds 3 and the box must show it.
+    const r = run(undefined, [
+      { type: "focus", value: undefined },
+      { type: "change", next: "3" },
+      { type: "change", next: "" },
+      { type: "blur", value: 3 },
+    ]);
+    expect(r.effects).toEqual([{ kind: "commit", value: 3 }]);
+    expect(r.state.draft).toBe("3");
+    expect(r.state.dirty).toBe(false);
   });
 });

@@ -21,11 +21,18 @@ import { useEffect, useState, type CSSProperties } from "react";
  *     empty; a Tab through it is not an edit.
  *  2. Clearing a displayed value and leaving removes the override (`clear`),
  *     never stores an override equal to the default. A box that showed
- *     nothing at focus (Mixed) and ends empty does nothing on blur: the
- *     only keystroke that can get there without committing is a
- *     non-committing one (a lone "."), and the originals are still intact.
- *  3. Typing respects min, max AND step exactly as the spinner does: 1.5
- *     into a step-1 field commits 2, not a value the arrows can never reach.
+ *     nothing at focus (Mixed) and ends empty does nothing on blur. This is
+ *     NOT a safety promise: typing commits per keystroke, so "3, Backspace,
+ *     leave" has already written 3 to every selected instance and the
+ *     originals are gone. The rule only stops the blur from ALSO clearing.
+ *  3. Typing respects min, max AND step exactly as the spinner does. The
+ *     grid is one declaration read by both: a field that declares no step
+ *     steps by 1 in the browser, so it snaps by 1 here too — round 4 found
+ *     12.5 stored in a step-less field that the arrows could never reach.
+ *  4. After blur the box shows what is stored, whatever route got there. A
+ *     Mixed box that committed while typing and was then erased went blank
+ *     over a stored value because the "nothing to do" outcome skipped the
+ *     resync (round 4).
  *
  * Every panel's number box is this component; a structural test refuses a
  * second controlled `type="number"` anywhere in the panel.
@@ -43,22 +50,27 @@ export function clampTo(n: number, min?: number, max?: number): number {
   return Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
 }
 
-/** Snap to the step grid anchored at `min` (or 0), then clamp — the spinner's
- *  own arithmetic, so typing can never produce a value the arrows cannot. */
+/**
+ * Snap to the step grid anchored at `min` (or 0), staying inside [min, max]
+ * ON the grid — the spinner's own arithmetic, so typing can never produce a
+ * value the arrows cannot.
+ *
+ * Two float traps, both found by judges: 0.35 / 0.1 is 3.4999… so the
+ * midpoint is nudged by an epsilon before rounding; and quantising the typed
+ * value to the step's precision BEFORE dividing rounded 0.9 up to a whole
+ * step of 2, so the division is done on the raw value. When `max` is not on
+ * the grid the largest on-grid value below it wins, as `stepDown` does.
+ */
 export function snapTo(n: number, range: NumberRange): number {
-  const { min, max, step } = range;
-  let v = n;
-  if (step && step > 0) {
-    const base = min ?? 0;
-    // Work in integer units of the step's precision: 0.35 / 0.1 is
-    // 3.4999999999999996 in floating point and rounds the wrong way, while
-    // 35 / 10 is exactly 3.5. Same reason the result is re-rounded below.
-    const decimals = Math.max(0, (String(step).split(".")[1] ?? "").length, (String(base).split(".")[1] ?? "").length);
-    const scale = 10 ** decimals;
-    const k = Math.round(Math.round((v - base) * scale) / Math.round(step * scale));
-    v = Number((base + k * step).toFixed(decimals));
-  }
-  return clampTo(v, min, max);
+  const { min, max } = range;
+  const step = range.step ?? 1;
+  if (!(step > 0)) return clampTo(n, min, max);
+  const base = min ?? 0;
+  let k = Math.round((n - base) / step + 1e-9);
+  if (min !== undefined) k = Math.max(k, 0);
+  if (max !== undefined) k = Math.min(k, Math.floor((max - base) / step + 1e-9));
+  const decimals = Math.max(0, (String(step).split(".")[1] ?? "").length, (String(base).split(".")[1] ?? "").length);
+  return Number((base + k * step).toFixed(decimals));
 }
 
 /** What typing `next` into the box commits, or null for "nothing yet". */
@@ -106,7 +118,7 @@ export interface NumberInputState {
 export type NumberInputEvent =
   | { type: "focus"; value: number | undefined }
   | { type: "change"; next: string }
-  | { type: "blur" }
+  | { type: "blur"; value: number | undefined } // the stored value at that moment
   | { type: "value"; value: number | undefined }; // an outside change
 
 export type NumberInputEffect = { kind: "commit"; value: number } | { kind: "clear" };
@@ -134,10 +146,13 @@ export function reduceNumberInput(
     }
     case "blur": {
       const out = blurOutcome({ ...state, hasClear: ctx.hasClear, defaultValue: ctx.defaultValue, min: ctx.min, max: ctx.max, step: ctx.step });
-      const next: NumberInputState = { ...state, focused: false };
+      const next: NumberInputState = { ...state, focused: false, dirty: false };
       switch (out.kind) {
         case "none":
-          return { state: next, effects: [] };
+          // Resync to the store whatever the route: a Mixed box that
+          // committed while typing and was then erased must read the 3 it
+          // stored, not "" over it.
+          return { state: { ...next, draft: event.value === undefined ? "" : String(event.value) }, effects: [] };
         case "clear":
           return { state: { ...next, draft: "" }, effects: [{ kind: "clear" }] };
         case "commit":
@@ -177,7 +192,10 @@ export function NumberInput({
   "data-slot"?: string;
 }) {
   const [state, setState] = useState(() => initialNumberInput(value));
-  const ctx = { defaultValue, hasClear: !!onClear, min, max, step };
+  // One grid for the DOM attribute and the commit path: the browser steps by
+  // 1 when no step is declared, so the commit path must too.
+  const grid = step ?? 1;
+  const ctx = { defaultValue, hasClear: !!onClear, min, max, step: grid };
 
   function dispatch(event: NumberInputEvent) {
     const { state: next, effects } = reduceNumberInput(state, event, ctx);
@@ -200,20 +218,12 @@ export function NumberInput({
       value={state.draft}
       min={min}
       max={max}
-      step={step ?? 1}
+      step={grid}
       placeholder={placeholder}
       style={style}
       onFocus={() => dispatch({ type: "focus", value })}
       onChange={(e) => dispatch({ type: "change", next: e.target.value })}
-      onBlur={() => {
-        // After blur with nothing typed, resync the draft to whatever is stored.
-        const { state: next, effects } = reduceNumberInput(state, { type: "blur" }, ctx);
-        setState(next.dirty ? next : { ...next, draft: value === undefined ? "" : String(value) });
-        for (const e of effects) {
-          if (e.kind === "commit") onCommit(e.value);
-          else onClear?.();
-        }
-      }}
+      onBlur={() => dispatch({ type: "blur", value })}
       {...rest}
     />
   );

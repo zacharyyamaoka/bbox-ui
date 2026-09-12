@@ -12,7 +12,7 @@ import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 import { readFieldRow } from "../fieldModel";
 import { groupRows } from "../fieldGroups";
-import { NumberInput, clampTo } from "../NumberInput";
+import { NumberInput, clampTo, commitFor } from "../NumberInput";
 import {
   classifyField,
   loadStoredTier,
@@ -850,6 +850,9 @@ function DenseControl({
           }}
           custom={{
             value: typeof value === "number" ? value : undefined,
+            min: field.min,
+            max: field.max,
+            step: field.step,
             unit: field.unit,
             active: !isMixed && !drivenPresetId && value !== undefined,
             onChange: (n) => onChange(n),
@@ -929,6 +932,9 @@ function NamedDropdown({
    *  field this dropdown controls is genuinely numeric. */
   custom?: {
     value: number | undefined;
+    min?: number;
+    max?: number;
+    step?: number;
     unit: string | undefined;
     active: boolean;
     onChange: (value: number) => void;
@@ -989,8 +995,9 @@ function NamedDropdown({
                 data-slot="named-dropdown-custom-input"
                 defaultValue={custom.value ?? ""}
                 onBlur={(e) => {
-                  if (e.target.value === "") return;
-                  custom.onChange(Number(e.target.value));
+                  const n = commitFor(e.target.value, custom.min, custom.max, custom.step);
+                  if (n === null) return;
+                  custom.onChange(n);
                   setOpen(false);
                 }}
                 onKeyDown={(e) => {

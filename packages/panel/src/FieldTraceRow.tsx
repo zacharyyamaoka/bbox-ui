@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
 import { readFieldRow } from "./fieldModel";
-import { NumberInput } from "./NumberInput";
+import { NumberInput, commitFor } from "./NumberInput";
 
 // `Subject` lives in fieldModel.ts — the model owns the shape it resolves —
 // and is re-exported here because every panel already imports it from this
@@ -296,8 +296,10 @@ function OptionMenu({
                 step={field.step}
                 defaultValue={active ? undefined : (value as number | undefined)}
                 onChange={(e) => {
-                  if (e.target.value === "") return;
-                  onChange(Number(e.target.value));
+                  // Same grid rules as every other number box; this row is
+                  // unreachable today and must not be a stale copy tomorrow.
+                  const n = commitFor(e.target.value, field.min, field.max, field.step);
+                  if (n !== null) onChange(n);
                 }}
                 style={optionMenuCustomInputStyle}
               />
