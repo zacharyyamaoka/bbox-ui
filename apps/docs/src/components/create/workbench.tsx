@@ -20,10 +20,13 @@ import { SidebarProvider } from "@/registry/new-york-v4/ui/sidebar";
 import { BenchSidebar } from "./bench-sidebar";
 import { InspectorColumn } from "./inspector-column";
 import { Viewport } from "./viewport";
-import { defaultPosition, type CanvasPosition, type ViewportTab } from "./contract";
+import { defaultPosition, type CanvasPosition, type Render, type View } from "./contract";
 
 const VARIANT_KEY = "bbox-ui.create.panelVariant";
-const TAB_KEY = "bbox-ui.create.viewportTab";
+const RENDER_KEY = "bbox-ui.create.render";
+const VIEW_KEY = "bbox-ui.create.view";
+// The single-strip key from before the two-axis split; read once to migrate.
+const LEGACY_TAB_KEY = "bbox-ui.create.viewportTab";
 
 function readStored(key: string): string | null {
   try {
@@ -45,7 +48,8 @@ function readStored(key: string): string | null {
 export function Workbench() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
   const [variantId, setVariantId] = useState(() => PANEL_VARIANTS[0].id);
-  const [tab, setTab] = useState<ViewportTab>("dom");
+  const [render, setRender] = useState<Render>("dom");
+  const [view, setView] = useState<View>("preview");
   const uid = useRef(INITIAL_UID);
 
   // Persisted choices are read after mount: this is a Next page and the
@@ -62,19 +66,30 @@ export function Workbench() {
   useEffect(() => {
     const v = readStored(VARIANT_KEY);
     if (v) setVariantId(findVariant(v).id);
-    const t = readStored(TAB_KEY);
-    if (t === "dom" || t === "code" || t === "reactflow" || t === "tldraw") setTab(t);
+    const r = readStored(RENDER_KEY);
+    if (r === "dom" || r === "reactflow" || r === "tldraw") setRender(r);
+    const vw = readStored(VIEW_KEY);
+    if (vw === "preview" || vw === "code") setView(vw);
+    // A choice stored under the old single strip maps onto the two axes so a
+    // returning tab lands where it was, then the old key is retired.
+    const legacy = readStored(LEGACY_TAB_KEY);
+    if (legacy && !r && !vw) {
+      if (legacy === "code") { setRender("dom"); setView("code"); }
+      else if (legacy === "reactflow" || legacy === "tldraw" || legacy === "dom") { setRender(legacy); setView("preview"); }
+    }
     setRestored(true);
   }, []);
   useEffect(() => {
     if (!restored) return;
     try {
       window.localStorage.setItem(VARIANT_KEY, variantId);
-      window.localStorage.setItem(TAB_KEY, tab);
+      window.localStorage.setItem(RENDER_KEY, render);
+      window.localStorage.setItem(VIEW_KEY, view);
+      window.localStorage.removeItem(LEGACY_TAB_KEY);
     } catch {
       /* private window: the choice still works, it just forgets */
     }
-  }, [restored, variantId, tab]);
+  }, [restored, variantId, render, view]);
 
   const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
@@ -222,8 +237,10 @@ export function Workbench() {
             positions={placedPositions}
             onSelectionChange={setSelection}
             onPositionsChange={setPositions}
-            tab={tab}
-            onTabChange={setTab}
+            render={render}
+            view={view}
+            onRenderChange={setRender}
+            onViewChange={setView}
           />
         </div>
         <InspectorColumn

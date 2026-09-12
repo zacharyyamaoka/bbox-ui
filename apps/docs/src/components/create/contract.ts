@@ -13,13 +13,28 @@ import type { ComponentEntry, Instance } from "@bbox-ui/panel";
  * A tab that kept its own copy of the selection would make the tabs four
  * different apps that happen to share a header.
  */
-export type ViewportTab = "dom" | "code" | "reactflow" | "tldraw";
+/**
+ * Two axes, not one strip. Zach, 2026-09-11: "3 different renders (DOM,
+ * React Flow, tldraw) on the left side; 2 different views (preview, code) on
+ * the right side — that way you get 6 different views in total."
+ *
+ * WHY that matters beyond layout: Code was a sibling of DOM Preview, which
+ * made it read as "the DOM's code". It is a VIEW of whichever render is
+ * chosen — the JSX for the DOM, the node array for React Flow, the shape
+ * records for tldraw — so it lives on its own axis and applies to all three.
+ */
+export type Render = "dom" | "reactflow" | "tldraw";
+export type View = "preview" | "code";
 
-export const VIEWPORT_TABS: { id: ViewportTab; label: string; canMove: boolean }[] = [
-  { id: "dom", label: "DOM Preview", canMove: false },
-  { id: "code", label: "DOM Code", canMove: false },
+export const RENDERS: { id: Render; label: string; canMove: boolean }[] = [
+  { id: "dom", label: "DOM", canMove: false },
   { id: "reactflow", label: "React Flow", canMove: true },
   { id: "tldraw", label: "tldraw", canMove: true },
+];
+
+export const VIEWS: { id: View; label: string }[] = [
+  { id: "preview", label: "Preview" },
+  { id: "code", label: "Code" },
 ];
 
 /** Where an instance sits on a canvas. Kept OUT of `Instance.props`: position
@@ -40,10 +55,12 @@ export interface ViewportProps {
    *  shift-click reports the resulting set, never a delta. */
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
-  /** Which tab is showing. The page owns it so the choice can be persisted
-   *  and so a deep link can open on a canvas. */
-  tab: ViewportTab;
-  onTabChange: (tab: ViewportTab) => void;
+  /** Which render and which view are showing. The page owns both so the
+   *  choice can be persisted and so a deep link can open on a canvas. */
+  render: Render;
+  view: View;
+  onRenderChange: (render: Render) => void;
+  onViewChange: (view: View) => void;
 }
 
 /** Default position for an instance that has never been placed. Laid out in a
