@@ -244,7 +244,9 @@ export const REGISTRY: ComponentEntry[] = [
         {children ?? (
           <span
             data-slot="flex-placeholder"
-            style={{ display: "inline-flex", alignItems: "center", minHeight: 24, minWidth: 64, padding: "0 8px", border: "1px dashed currentColor", opacity: 0.45, fontSize: 11, whiteSpace: "nowrap", justifyContent: "center", ...(props.direction === "column" ? { alignSelf: "stretch", minHeight: 36 } : {}) }}
+            // A placeholder must never be wider than its slot: inside a
+            // narrow parent three "Header · …" labels overlapped each other.
+            style={{ display: "inline-flex", alignItems: "center", minHeight: 24, minWidth: 0, maxWidth: "100%", padding: "0 8px", border: "1px dashed currentColor", opacity: 0.45, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", justifyContent: "center", ...(props.direction === "column" ? { alignSelf: "stretch", minHeight: 36 } : {}) }}
           >
             {ctx?.slotLabel ?? "Flex"}
           </span>

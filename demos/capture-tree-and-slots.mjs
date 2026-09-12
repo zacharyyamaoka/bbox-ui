@@ -282,9 +282,13 @@ const selectedRows = async () => (await navRows()).filter((r) => r.selected).map
 const rowSel = (id) => `[data-slot="instance-navigator"] [data-slot="nav-row"][data-instance-id="${id}"]`;
 const renderedMemberIds = (root) => evaluate(`Array.from(document.querySelectorAll('${root} [data-slot="member-instance"]')).map(e => e.getAttribute('data-instance-id'))`);
 const pathCrumbs = () => evaluate(`Array.from(document.querySelectorAll('[data-slot="members-path-crumb"]')).map(e => e.textContent.trim())`);
+// The sidebar from its top down to just under the tree — the switcher
+// footer is not what a navigator capture is about.
 const sidebarClip = async () => {
   const r = await rectOf('[data-slot="bench-sidebar"]');
-  return { left: Math.floor(r.left), top: Math.floor(r.top), w: Math.ceil(r.w), h: Math.ceil(r.h) };
+  const nav = await rectOf('[data-slot="navigator-host"]');
+  const bottom = Math.min(r.top + r.h, nav.top + nav.h + 16);
+  return { left: Math.floor(r.left), top: Math.floor(r.top), w: Math.ceil(r.w), h: Math.ceil(bottom - r.top) };
 };
 const inspectorClip = async () => {
   const r = await rectOf('[data-slot="inspector-column"]');
