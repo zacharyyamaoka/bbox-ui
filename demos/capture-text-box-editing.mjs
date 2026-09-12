@@ -16,7 +16,11 @@
  *     newline), "b" → textarea value has a newline; Ctrl+Enter → committed,
  *     rendered on two lines;
  *  7. reactflow/tldraw only: press the resting text and drag 80px → the
- *     node moved, no text selection.
+ *     node moved, no text selection;
+ *  9. (both themes, DOM render, a bare top-level TextBox — polish pass)
+ *     the DOM root wrapper's own two-click gesture opens editing, and the
+ *     control's ring resolves to --bbox-ring/--bbox-accent, not
+ *     currentColor.
  *
  * Every assertion reads the real DOM (getBoundingClientRect, textContent,
  * a control's own .value, computed style) or genuine instance state via the
@@ -39,6 +43,7 @@ if (!url || !outDirArg) {
 }
 const outDir = path.resolve(outDirArg);
 mkdirSync(outDir, { recursive: true });
+mkdirSync(path.join(outDir, "hero"), { recursive: true });
 
 const profile = mkdtempSync(path.join(tmpdir(), "bbox-chrome-tbe-"));
 const chrome = spawn(
@@ -239,6 +244,17 @@ async function screenshot(name, clip) {
   const { data } = await send("Page.captureScreenshot", params);
   writeFileSync(path.join(outDir, `${name}.png`), Buffer.from(data, "base64"));
   return `${name}.png`;
+}
+// WHY a full-viewport frame and not the header clip `screenshot()` above
+// uses everywhere else: the hero clip's whole point (item 1, the polish
+// pass) is showing the tldraw CANVAS around the editing TextBox — the
+// board, the selection outline, the shape — not just the cropped slot
+// content the per-step assertion screenshots already capture. Same
+// full-viewport idiom as demos/capture-tree-and-slots.mjs's own `hero()`.
+let heroFrame = 0;
+async function hero() {
+  const { data } = await send("Page.captureScreenshot", { format: "png" });
+  writeFileSync(path.join(outDir, "hero", `${String(heroFrame++).padStart(3, "0")}.png`), Buffer.from(data, "base64"));
 }
 
 const results = []; // { render, step, name, pass, detail }
@@ -502,10 +518,18 @@ for (const renderId of RENDERS) {
   await selectByTitle("Header · left");
 
   // ---- step 3: click selects, click again edits -------------------------
+  // WHY tldraw only: item 1's hero clip is specifically the DoD's
+  // "click again → editing; type; Enter → commits" beat happening ON THE
+  // CANVAS — the render where a viewer can actually see the tldraw board,
+  // the shape's selection outline and the in-place control together. DOM
+  // and React Flow run the identical assertions with no hero capture.
+  const isHero = renderId === "tldraw";
   const restRect = await rectOf(textBoxSel(textBoxId));
+  if (isHero) await hero(); // frame: deselected, resting text
   await press(textBoxSel(textBoxId));
   const selAfter1 = await selectedRows();
   assertStep(3, "first click selects the TextBox", selAfter1.join() === textBoxId, selAfter1.join());
+  if (isHero) await hero(); // frame: selected, not yet editing
   await press(textBoxSel(textBoxId));
   await sleep(150);
   const hasControl = await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
@@ -521,15 +545,39 @@ for (const renderId of RENDERS) {
     controlRect ? `rest(${restRect.left.toFixed(1)},${restRect.top.toFixed(1)},h${restRect.h.toFixed(1)}) vs control(${controlRect.left.toFixed(1)},${controlRect.top.toFixed(1)},h${controlRect.h.toFixed(1)})` : "no control",
   );
   await screenshot(`${renderId}-2-editing`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+  if (isHero) {
+    await hero(); // frame: second click just landed, control mounted+focused, still empty
+    await hero(); // held a beat longer so the GIF doesn't blink past "editing started"
+  }
 
   // ---- step 4: type, commit, both surfaces read it -----------------------
-  await typeText("Hello slot");
+  // WHY a per-character loop here instead of the shared `typeText` helper,
+  // ONLY for the hero render: a hero clip proving "type" needs to actually
+  // SHOW characters appearing one at a time — calling `typeText` and
+  // capturing a single frame afterward would show a jump-cut from empty to
+  // "Hello slot", not typing. Every other render (and every other typed
+  // string in this file) keeps using the plain `typeText` helper.
+  if (isHero) {
+    for (const ch of "Hello slot") {
+      await send("Input.insertText", { text: ch });
+      await sleep(35);
+      await hero();
+    }
+  } else {
+    await typeText("Hello slot");
+  }
   const midValue = await evaluate(`document.querySelector(${JSON.stringify(controlSel(textBoxId))})?.value ?? null`);
   assertStep(4, "onChange write-through: control reads the typed value", midValue === "Hello slot", midValue);
+  if (isHero) await hero(); // frame: fully typed, still editing, held before Enter
   await key("Enter");
   await sleep(250);
   const controlGoneAfterCommit = !(await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`));
   assertStep(4, "Enter committed: the input is gone", controlGoneAfterCommit, controlGoneAfterCommit);
+  if (isHero) {
+    await hero(); // frame: committed, resting text reads "Hello slot"
+    await hero();
+    await hero(); // held longest — the clip's resting end state
+  }
   const restingAfterCommit = await restingText(textBoxId);
   assertStep(4, "resting text reads Hello slot", restingAfterCommit === "Hello slot", restingAfterCommit);
   const inspectorAfterCommit = await inspectorTextValue();
@@ -806,6 +854,54 @@ for (const renderId of RENDERS) {
   manifest.renders[renderId] = { console: takeConsole() };
 }
 
+// ---- item 3 (polish pass): --bbox-ring resolves to --bbox-accent, not
+// currentColor, in BOTH themes — verified through a BARE top-level TextBox
+// bench (no Block, no slot, no member wrapper), which also exercises item
+// 6's fix: dom-preview.tsx's ROOT wrapper is the only path that can reach
+// an inline-editable instance with no member wrapper in between.
+currentRender = "ring";
+console.log(`\n=== ring (--bbox-ring, both themes) ===`);
+const ROOT_TEXT_BOX_SEL = '[data-slot="dom-instance"] [data-slot="text-box"]';
+const ROOT_CONTROL_SEL = '[data-slot="dom-instance"] [data-slot="text-box-input"]';
+for (const theme of ["dark", "light"]) {
+  await load(theme, "TextBox");
+  await switchRender("dom");
+  await waitFor(ROOT_TEXT_BOX_SEL);
+  // WHY this check before pressing: a fresh bench's default instance may
+  // or may not start pre-selected depending on the picker's own history —
+  // this makes the two-click gesture work either way, rather than
+  // hardcoding "always two presses" and risking the SECOND one landing on
+  // an ALREADY-editing control (which stops its own pointer-down).
+  const alreadySelected = await evaluate(
+    `document.querySelector('[data-slot="dom-instance"]')?.getAttribute('data-selected') === 'true'`,
+  );
+  if (!alreadySelected) await press(ROOT_TEXT_BOX_SEL);
+  await press(ROOT_TEXT_BOX_SEL);
+  await sleep(150);
+  const hasControl = await evaluate(`!!document.querySelector(${JSON.stringify(ROOT_CONTROL_SEL)})`);
+  assertStep(9, `${theme}: the DOM root wrapper's two-click gesture opens editing on a BARE top-level TextBox`, hasControl, hasControl);
+  let colors = null;
+  if (hasControl) {
+    colors = await evaluate(`(() => {
+      const probe = document.createElement("div");
+      probe.style.color = "var(--bbox-accent)";
+      document.body.appendChild(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      const ring = getComputedStyle(document.querySelector(${JSON.stringify(ROOT_CONTROL_SEL)})).outlineColor;
+      return { accent, ring };
+    })()`);
+  }
+  assertStep(
+    9,
+    `${theme}: the editing ring resolves to --bbox-accent, not currentColor`,
+    !!colors && colors.ring === colors.accent,
+    colors ? `accent=${colors.accent} ring=${colors.ring}` : "no control",
+  );
+  const ringRect = await rectOf(ROOT_TEXT_BOX_SEL);
+  await screenshot(`ring-${theme}`, { left: Math.floor(ringRect.left) - 16, top: Math.floor(ringRect.top) - 16, w: Math.ceil(ringRect.w) + 32, h: Math.ceil(ringRect.h) + 32 });
+}
+
 writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify({ results, renders: manifest.renders }, null, 2));
 chrome.kill();
 await new Promise((resolve) => chrome.once("exit", resolve));
@@ -813,7 +909,7 @@ try {
   rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 } catch {}
 const failed = results.filter((r) => !r.pass);
-console.log(`\n${failed.length === 0 ? "PASS" : "FAIL"} — ${results.length - failed.length}/${results.length} assertions across ${RENDERS.length} renders → ${outDir}`);
+console.log(`\n${failed.length === 0 ? "PASS" : "FAIL"} — ${results.length - failed.length}/${results.length} assertions across ${RENDERS.length} renders, ${heroFrame} hero frames → ${outDir}`);
 if (failed.length) {
   console.log("Failures:");
   for (const f of failed) console.log(`  [${f.render}] step ${f.step} — ${f.name}: ${f.detail}`);

@@ -351,7 +351,13 @@ export function TextBox({
   // Truthful truncation (docs/TEXTBOX-EDITING-SPEC.md §1, and Zach's own
   // rendering rule): a single-line box may ellipsize its text visually, but
   // the full, untruncated string stays one hover away rather than vanishing.
-  const title = !isEditingNow && lines === "single" && typeof children === "string" ? children : undefined;
+  // WHY `children !== ""` too, not just `typeof === "string"`: an empty
+  // string IS a string, so without this an empty box got `title=""` — a
+  // real (if invisible) attribute, not "no title", which is a different,
+  // false claim ("hover here, there's truthfully nothing to see") for a box
+  // that in fact has no text at all. Empty text has nothing to truncate, so
+  // it earns no title, exactly like a box with no `children` prop at all.
+  const title = !isEditingNow && lines === "single" && typeof children === "string" && children !== "" ? children : undefined;
 
   let content: ReactNode;
   if (isEditingNow) {
@@ -424,6 +430,14 @@ export function TextBox({
       data-align={align}
       data-justify={justify}
       data-lines={lines}
+      // WHY the raw `editing` prop and not `isEditingNow`: `data-editing` is
+      // a truthful record of what the HOST asked for, not of what actually
+      // rendered — the one case they diverge is `editing=true` with
+      // non-string `children`, where the contract says "ignored" (no
+      // control mounts) but the host's intent to edit this instance is
+      // still real and still worth a probe/CSS hook being able to see.
+      // Hiding that behind the derived, effective value would make this
+      // attribute lie about what was actually passed in.
       data-editing={editing}
       title={title}
       className={cn("inline-flex w-fit leading-tight", className)}

@@ -104,8 +104,10 @@ export function renderInstance(
             // impossible. Arming defers the decision to pointer-up, and a
             // real drag (movement past 4px) cancels it before that ever
             // fires — no `preventDefault()`, `mousedown` reaches React
-            // Flow untouched, the node moves.
-            armEditOnRelease(e.clientX, e.clientY, () => edit.onRequestEdit(child.id));
+            // Flow untouched, the node moves. Passing `e` itself (not just
+            // its coordinates) is what lets `armEditOnRelease` refuse a
+            // right-button press on its own — see its own doc comment.
+            armEditOnRelease(e, () => edit.onRequestEdit(child.id));
             return;
           }
           onSelect(child.id, additive);

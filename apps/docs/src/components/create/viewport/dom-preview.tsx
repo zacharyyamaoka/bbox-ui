@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
-import { claimInstancePointerDown, isInstancePointerDownClaimed, isSecondPressToEdit } from "@bbox-ui/panel";
+import { armEditOnRelease, claimInstancePointerDown, isInstancePointerDownClaimed, isSecondPressToEdit } from "@bbox-ui/panel";
 import { renderInstance, type EditBundle } from "../render-instance";
 
 /**
@@ -73,18 +73,32 @@ export function DomPreview({
               // React Flow's / tldraw's own ancestor drag listeners.
               if (isInstancePointerDownClaimed(e)) return;
               claimInstancePointerDown(e);
-              // See render-instance.tsx's identical comment: this wrapper is
-              // itself focusable (`tabIndex`), so its own default mousedown
-              // focus-shift would steal focus from a freshly-mounted editing
-              // control the instant it autofocuses, one layer up from where
-              // that actually happens for a member — this root is that same
-              // hazard for a top-level instance.
-              e.preventDefault();
               const additive = e.shiftKey || e.metaKey || e.ctrlKey;
               if (isSecondPressToEdit({ id: inst.id, additive, selectedIds, inlineEditable })) {
-                edit.onRequestEdit(inst.id);
+                // WHY armed on release rather than requested immediately,
+                // exactly like render-instance.tsx's member wrapper (see
+                // `armEditOnRelease`'s own doc comment,
+                // packages/panel/src/twoClickEdit.ts): this root wrapper
+                // used to call `onRequestEdit` right here, on pointer-DOWN
+                // — the one place this file's own gesture had drifted from
+                // the member wrapper's. Routing through the SAME helper is
+                // what the DoD's shared two-click rule actually requires:
+                // not just the same DECISION (`isSecondPressToEdit`), but
+                // the same RESOLUTION on pointer-up, so a drag starting
+                // here is exactly as recoverable as one starting on a
+                // member.
+                armEditOnRelease(e, () => edit.onRequestEdit(inst.id));
                 return;
               }
+              // WHY preventDefault only here, on the plain-select branch:
+              // this wrapper IS itself focusable (`tabIndex`), so its own
+              // default mousedown focus-shift would otherwise contend with
+              // normal keyboard/tab flow after an ordinary select. The
+              // edit-arm branch, above, defers everything — including any
+              // such concern — to `armEditOnRelease`, exactly like the
+              // member wrapper (render-instance.tsx), which never calls
+              // `preventDefault()` on pointer-down either.
+              e.preventDefault();
               if (additive) onSelectionChange(on ? selectedIds.filter((x) => x !== inst.id) : [...selectedIds, inst.id]);
               else onSelectionChange([inst.id]);
             }}

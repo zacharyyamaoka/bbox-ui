@@ -136,8 +136,26 @@ let armedEdit: ArmedEdit | null = null;
  * pointer first moves past the click/drag threshold, in which case nothing
  * fires and the press is left to become whatever the host's own drag
  * machinery makes of it.
+ *
+ * Takes the initiating pointer-down event itself (not just its coordinates)
+ * so this one function can also be the SINGLE place that decides which
+ * button gets to arm an edit — see the `button` check below.
  */
-export function armEditOnRelease(x: number, y: number, onEdit: () => void): void {
+export function armEditOnRelease(
+  down: { clientX: number; clientY: number; button: number },
+  onEdit: () => void,
+): void {
+  // WHY checked here, in the one function every "second press" call site
+  // shares, rather than in each host wrapper: a right-button press is a
+  // context-menu request, not a click — arming it as an edit would fire
+  // `onEdit()` on the SAME pointer-up that also opens (or, once tldraw's
+  // own synthetic contextmenu is in play, fails to open) a context menu,
+  // stealing focus into a fresh input right under it. Returning before
+  // touching `armedEdit` at all also means a stray right-button press
+  // during an unrelated LEFT-button arm (edge case, two buttons down at
+  // once) can't cancel that other, legitimate arm.
+  if (down.button !== 0) return;
+  const { clientX: x, clientY: y } = down;
   clearArmedEdit();
   const onMove = (e: PointerEvent) => {
     if (Math.hypot(e.clientX - x, e.clientY - y) > EDIT_ARM_MOVE_THRESHOLD_PX) clearArmedEdit();

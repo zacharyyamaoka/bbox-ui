@@ -91,6 +91,17 @@ describe("TextBox — lines (rest)", () => {
     expect(el.props.children.props["data-slot"]).toBe("text-box-content");
     expect(el.props.children.props.children).toBe(42);
   });
+
+  // WHY its own test, not folded into the placeholder describe block below:
+  // an empty STRING is still `typeof children === "string"`, so without an
+  // explicit `children !== ""` check `title` got set to `""` — a real (if
+  // invisible) attribute, a false "there is truthfully nothing more to see
+  // here" for a box that in fact has no text at all, not the same as no
+  // `title` attribute.
+  it("single with EMPTY string children gets no title, not title=\"\"", () => {
+    expect(textBoxElement({ children: "" }).props.title).toBeUndefined();
+    expect(textBoxElement({ children: "", placeholder: "Type something" }).props.title).toBeUndefined();
+  });
 });
 
 describe("TextBox — editing", () => {

@@ -29,6 +29,12 @@ import pathlib
 from PIL import Image
 
 DATE = "2026-09-12"
+# The polish-pass commit's own short sha — set once, right after committing
+# it, same convention as every "Fixed in verify round N" section above
+# (each hardcodes its own fix commit rather than resolving HEAD at build
+# time, so the report keeps saying what it said even if rebuilt later from
+# a different checkout).
+POLISH_SHA = "pending"
 HERE = pathlib.Path(__file__).resolve().parent.parent  # the worktree root
 MEDIA = HERE / "reports" / "media" / "text-box-editing"
 OUT = HERE / "reports" / "media" / f"text-box-editing-{DATE}.html"
@@ -63,6 +69,7 @@ STEP_LABEL = {
     6: "6 · lines → multi, newline, Ctrl+Enter, then the 6-variant textarea sweep",
     7: "7 · drag the resting text moves the node",
     8: "8 · verify round 2 (tldraw) — shift-select across two members, bare-padding click",
+    9: "9 · polish pass — --bbox-ring resolves to --bbox-accent, both themes",
 }
 
 
@@ -71,6 +78,10 @@ def png(path: pathlib.Path) -> str:
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def data_uri(path: pathlib.Path, mime: str) -> str:
+    return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
 
 def by_render(render: str) -> list[dict]:
@@ -140,6 +151,50 @@ TOTAL = len(RESULTS)
 FAILURES = [r for r in RESULTS if not r["pass"]]
 SECTIONS = "\n".join(render_section(r) for r in RENDER_ORDER)
 
+# ---- the hero clip (item 1, polish pass): steps 3-4 in the tldraw render —
+# second click opens editing, typing appears character by character, Enter
+# commits — assembled from REAL captured frames only (demos/capture-
+# text-box-editing.mjs's own `hero()`, gated to the tldraw render), never a
+# fabricated animation. Same idiom as demos/capture-tree-and-slots.mjs's own
+# hero() + docs/build_tree_and_slots.py's hero.gif/mp4 inlining.
+HERO_GIF = MEDIA / "hero.gif"
+HERO_MP4 = MEDIA / "hero.mp4"
+HERO_HTML = ""
+if HERO_GIF.exists():
+    poster = png(MEDIA / "tldraw-2-editing.png") if (MEDIA / "tldraw-2-editing.png").exists() else data_uri(HERO_GIF, "image/gif")
+    video_html = (
+        f'<video autoplay muted loop playsinline controls poster="{poster}">'
+        f'<source src="{data_uri(HERO_MP4, "video/mp4")}" type="video/mp4">'
+        f'<img src="{data_uri(HERO_GIF, "image/gif")}" alt="tldraw: second click opens editing, Hello slot is typed character by character, Enter commits">'
+        f"</video>"
+        if HERO_MP4.exists()
+        else f'<img src="{data_uri(HERO_GIF, "image/gif")}" alt="tldraw: second click opens editing, Hello slot is typed character by character, Enter commits">'
+    )
+    HERO_HTML = f"""
+<div class="hero">{video_html}</div>
+<p class="meas">tldraw, steps 3&ndash;4, real captured frames (demos/capture-text-box-editing.mjs's <code>hero()</code>) &mdash; muted, looping{", video with a GIF fallback" if HERO_MP4.exists() else ""}.</p>
+"""
+
+# ---- the --bbox-ring capture (item 3, polish pass), both themes, through
+# the DOM root wrapper's own two-click gesture (item 6's fix — the only
+# path that reaches an inline-editable instance with no member wrapper in
+# between).
+RING_RESULTS = by_render("ring")
+RING_PASS = sum(1 for r in RING_RESULTS if r["pass"])
+ring_shots = []
+for theme in ("dark", "light"):
+    p = MEDIA / f"ring-{theme}.png"
+    if p.exists():
+        ring_shots.append(f'<figure class="card"><img src="{png(p)}" alt="{theme} theme: TextBox editing ring"><figcaption>{theme}</figcaption></figure>')
+RING_HTML = f"""
+<div class="bug fixed">
+<h3>--bbox-ring, defined as --bbox-accent (item 3) <span class="meas">{RING_PASS}/{len(RING_RESULTS)}</span></h3>
+<p><code>textBox.tsx</code>'s editing control has always painted its focus ring with <code>var(--bbox-ring, currentColor)</code> — the shadcn ring idiom — but nothing ever DEFINED <code>--bbox-ring</code>, in either <code>packages/bbox-ui/src/theme.css</code> or its copy in <code>apps/docs/src/app/global.css</code> (that file's own WHY: theme.css also sets page-level tokens like <code>--background</code> that would fight this site's own palette, so its paint tokens are copied rather than imported — which meant a token added to ONE and not the other silently never reached this app at all, confirmed live: <code>getComputedStyle(document.documentElement).getPropertyValue('--bbox-ring')</code> read <code>""</code> until both copies got it). The ring always fell through to its fallback, painting in the box's own TEXT color instead of the design system's accent. <strong>Fix:</strong> <code>--bbox-ring: var(--bbox-accent);</code> in both files, light and dark blocks — four definitions, not one, or the two copies drift again the next time either changes alone.</p>
+<div class="shots">{"".join(ring_shots)}</div>
+<table class="assertions"><tbody>{assertion_rows(RING_RESULTS)}</tbody></table>
+</div>
+"""
+
 SCOREBOARD_ROW = "".join(
     f'<div class="score-cell"><div class="score-render">{RENDER_LABEL[r]}</div>'
     f'<div class="score-num {"allpass" if sum(1 for x in by_render(r) if x["pass"]) == len(by_render(r)) else "somefail"}">'
@@ -199,11 +254,14 @@ HTML = f"""<!doctype html>
   .bug.fixed h3 {{ color:var(--win) }}
   .run {{ background:#f1f1f4; border-radius:8px; padding:10px 14px; font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; overflow:auto }}
   details summary {{ cursor:pointer; font-size:12px; color:var(--muted) }}
+  .hero {{ border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#000 }}
+  .hero video, .hero img {{ display:block; width:100%; height:auto }}
 </style></head>
 <body><main>
 
 <h1>TextBox's inline editing half, driven end to end</h1>
 <p class="lede">docs/TEXTBOX-EDITING-SPEC.md §4's proof: add a <code>TextBox</code> to a Block's <em>Header · left</em> slot through the Members control, two-click-to-edit, commit, cancel, switch to multi-line, and (React Flow / tldraw) drag the resting text — for real, in headless Chrome, in each of the three renders. Every assertion below reads the real DOM (a bounding box, a control's own <code>.value</code>, <code>document.activeElement</code>, computed style) or genuine instance state via the inspector — never a screenshot's own claim.</p>
+{HERO_HTML}
 
 <div class="score-strip">{SCOREBOARD_ROW}
   <div class="score-cell"><div class="score-render">Total</div><div class="score-num {"allpass" if TOTAL_PASS == TOTAL else "somefail"}">{TOTAL_PASS}/{TOTAL}</div></div>
@@ -211,7 +269,7 @@ HTML = f"""<!doctype html>
 
 <div class="note">
 {
-  f"<strong>All {TOTAL} assertions pass across all three renders.</strong> Verify round 1 confirmed five defects in this journey's original run, fixed each at its root, swept the sibling paths the same causes reached (a bare-padding drag, a different non-editable member, the default inspector's textarea fallback), and re-ran this exact journey against the fixed tree. A second, independent audit of that fix then confirmed four more (\"Fixed in verify round 2\") — two the fix itself introduced, two it left unswept in five of the panel's six variants. A THIRD, independent audit of round 2's own fix commit then confirmed one more (\"Fixed in verify round 3\"): <code>lines: \"single\"</code>'s rest recipe was declared correctly but painted nothing, because <code>text-overflow</code> never applies to a flex container — every earlier round's own unit test pinned the style OBJECT, never the paint. A FOURTH, independent audit of round 3's own fix commit (7ba431c) then confirmed one more (below, \"Fixed in verify round 4\"): on tldraw only, a right-click on the editing control ended editing and opened tldraw's own context menu instead of leaving the control focused with the browser's native one. Each of these eleven defects is fixed at its root and covered by new permanent assertions (step 2's truncation probe, step 5b's right-click-stays-focused check on all three renders, step 6's 6-variant sweep, step 8's tldraw shift-select and bare-padding checks) so none can return unnoticed. Nothing here is patched to make the number look better, the number is what the fixes produced."
+  f"<strong>All {TOTAL} assertions pass</strong> — across all three renders, plus the polish pass's own <code>--bbox-ring</code> check (both themes, through the DOM root wrapper). Verify round 1 confirmed five defects in this journey's original run, fixed each at its root, swept the sibling paths the same causes reached (a bare-padding drag, a different non-editable member, the default inspector's textarea fallback), and re-ran this exact journey against the fixed tree. A second, independent audit of that fix then confirmed four more (\"Fixed in verify round 2\") — two the fix itself introduced, two it left unswept in five of the panel's six variants. A THIRD, independent audit of round 2's own fix commit then confirmed one more (\"Fixed in verify round 3\"): <code>lines: \"single\"</code>'s rest recipe was declared correctly but painted nothing, because <code>text-overflow</code> never applies to a flex container — every earlier round's own unit test pinned the style OBJECT, never the paint. A FOURTH, independent audit of round 3's own fix commit (7ba431c) then confirmed one more (below, \"Fixed in verify round 4\"): on tldraw only, a right-click on the editing control ended editing and opened tldraw's own context menu instead of leaving the control focused with the browser's native one. Each of these eleven defects is fixed at its root and covered by new permanent assertions (step 2's truncation probe, step 5b's right-click-stays-focused check on all three renders, step 6's 6-variant sweep, step 8's tldraw shift-select and bare-padding checks) so none can return unnoticed. A FIFTH pass ({POLISH_SHA}, \"Fixed in polish pass\" below) then cleared four minors three prior audits kept repeating rather than finding fresh, plus the hero clip and this report's own one-builder consolidation. Nothing here is patched to make the number look better, the number is what the fixes produced."
   if not FAILURES else
   f'<strong>{len(FAILURES)} assertion(s) still fail.</strong> See "What did not pass" below.'
 }
@@ -295,6 +353,27 @@ HTML = f"""<!doctype html>
 <h3>F1 · tldraw: a right-click on the editing control ended editing and opened tldraw's own context menu</h3>
 <p>The control's own <code>onContextMenu</code> stopPropagation (<code>textBox.tsx</code>, unchanged by this fix — it correctly stops the REAL, trusted <code>contextmenu</code> event so the browser's native cut/copy/paste menu can show) was never the whole story on tldraw. Installed <code>@tldraw/editor</code> 5.3.2's <code>useCanvasEvents.mjs</code> attaches a SEPARATE <code>onPointerUp</code> handler to <code>.tl-canvas</code> that reacts to the right button's pointer-UP itself: <code>if (rightClickPanning &amp;&amp; button === 2 &amp;&amp; !wasRightClickPanning)</code> it synthesizes and dispatches a BRAND NEW, untrusted <code>contextmenu</code> event directly on the canvas element — bypassing the control (and its already-correct stopPropagation) entirely, since it never bubbles FROM the control at all. That synthetic event opened tldraw's own <code>ContextMenu</code> (Paste / Copy as / Export as / Select all), and Radix's <code>FocusScope</code> then moved focus onto it, blurring the control — which fired <code>onCommit</code> with whatever had been typed. Reproduced twice over CDP: the untrusted <code>contextmenu</code>'s target was the canvas <code>DIV</code>, not the input, and the installed source's exact branch matched. Marking the earlier pointer-DOWN handled (already done, for drag/marquee suppression) does nothing here — it is a different native event object. <strong>Fix:</strong> the shape's <code>HTMLContainer</code> in <code>tldraw-canvas.tsx</code> now ALSO calls <code>editor.markEventAsHandled(e)</code> on pointer-UP when the target is inside <code>[data-bbox-interactive]</code> — the exact same mechanism already used for pointer-down, on the exact same element (an ANCESTOR of <code>.tl-canvas</code>'s own listener in the bubble path, so it runs first) — so <code>useCanvasEvents</code>'s own <code>wasEventAlreadyHandled</code> guard bails out before it ever synthesizes the fake event. Deliberately NOT fixed by adding a fifth <code>stopPropagation</code> (pointerup) to the shared control in <code>textBox.tsx</code>: tldraw's own doc for <code>markEventAsHandled</code> warns that a blanket <code>stopPropagation()</code> "can impact non-tldraw event handlers set up elsewhere" (this same file's own <code>armEditOnRelease</code> <code>document</code>-level pointerup listener among them) — this fix stays scoped to tldraw's own pipeline, in the file the contract (§3) already assigns this responsibility to, and leaves the core control exactly matching the spec's literal four stopped events (pointerdown, click, dblclick, contextmenu).</p>
 </div>
+
+<h2>Fixed in polish pass ({POLISH_SHA}) <span class="meas">a fifth pass, clearing minors three prior audits kept repeating rather than a new independent audit — hero clip, one report not two, the ring token, truthful-title/data-editing, unit-tested edit-arming, and the DOM root wrapper's own gesture</span></h2>
+
+{RING_HTML}
+
+<div class="bug fixed">
+<h3>TextBox emitted <code>title=""</code> for empty single-line text (item 4)</h3>
+<p>The truncation title (<code>textBox.tsx</code>) checked <code>typeof children === "string"</code> but not whether that string was EMPTY — an empty string still satisfies the type check, so a single-line TextBox with no text at all got a real <code>title=""</code> attribute rather than none: a false "hover here, there's truthfully nothing more to see" for a box that has no text to truncate in the first place. <strong>Fix:</strong> added <code>&amp;&amp; children !== ""</code> to the title condition; pinned by a new <code>textBox.behavior.test.ts</code> case (both with and without a placeholder). <code>data-editing</code> is deliberately left reading the RAW <code>editing</code> prop, not the derived <code>isEditingNow</code> — the one case they diverge (<code>editing=true</code> with non-string <code>children</code>, where the contract says "ignored") is exactly where a host's own intent to edit is still real and worth a probe seeing; a new <code>textBox.tsx</code> WHY comment says so at the seam.</p>
+</div>
+
+<div class="bug fixed">
+<h3>The DOM root wrapper still requested editing on pointer-DOWN (item 6)</h3>
+<p><code>render-instance.tsx</code>'s member wrapper already resolves the two-click gesture on pointer-UP through <code>armEditOnRelease</code> (round 3's own fix, for the drag-vs-edit ambiguity) — but <code>dom-preview.tsx</code>'s ROOT wrapper, the only path that reaches an inline-editable TOP-LEVEL instance with no member wrapper in between, never got the same treatment: it still called <code>edit.onRequestEdit(inst.id)</code> directly inside its <code>isSecondPressToEdit</code> branch, on pointer-down. Two different resolutions for what the spec calls ONE shared gesture. <strong>Fix:</strong> the root wrapper now calls the exact same <code>armEditOnRelease(e, () =&gt; edit.onRequestEdit(inst.id))</code> the member wrapper does, and its own unconditional <code>preventDefault()</code> moved to the plain-select branch only — the edit-arm branch defers everything to <code>armEditOnRelease</code>, exactly like the member wrapper, which never calls <code>preventDefault()</code> on pointer-down either. Proven by step 9's own journey, driven through THIS wrapper on a bare top-level TextBox (no Block, no slot).</p>
+</div>
+
+<div class="bug fixed">
+<h3>A right-button press could arm an edit request (item 5)</h3>
+<p>Neither call site of <code>isSecondPressToEdit</code> (the member wrapper, the root wrapper) ever checked which mouse button went down — a right-click landing on an already-sole-selected, inline-editable instance would arm exactly like a left-click, so its pointer-up (the SAME release a context-menu request needs) could fire <code>onRequestEdit</code>, stealing focus into a fresh input out from under a context-menu press. <strong>Fix:</strong> <code>armEditOnRelease</code> now takes the initiating pointer-down event itself (not just its coordinates) and refuses to arm at all — before touching any existing armed state — unless <code>button === 0</code>. This is also the first PINNED, unit-tested coverage of <code>armEditOnRelease</code>/<code>clearArmedEdit</code> at all: the 4px move threshold (including a real 2D 3-4-5 measurement, not per-axis), pointer-up resolution, cancel-on-move, re-arming cancelling a stale arm, and the button guard (right AND middle) — twelve new cases in <code>packages/panel/test/twoClickEdit.test.ts</code>, run with NO jsdom (a bare <code>EventTarget</code> stands in for <code>document</code> — this package stays dependency-free) since the browser journey already covers the real DOM wiring.</p>
+</div>
+
+<div class="note">Also in this pass: the hero clip at the top of this report (real captured frames, tldraw, steps 3&ndash;4 — no fabricated animation), and this report itself — <code>docs/build_text_box_editing.py</code> is the SINGLE source for TextBox's inline-editing review; the stale <code>text-box-editing-2026-09-11.html</code> this pass found sitting alongside it is deleted, not superseded by a second builder.</div>
 
 {SECTIONS}
 

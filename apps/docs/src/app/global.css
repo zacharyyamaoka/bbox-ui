@@ -67,6 +67,13 @@
   --bbox-success: oklch(0.60 0.19 145);
   --bbox-danger: oklch(0.55 0.19 25);
   --bbox-accent: oklch(0.60 0.19 264);
+  /* Copied from packages/bbox-ui/src/theme.css alongside --bbox-accent
+     itself (this file's own WHY, above) — item 3, polish pass: without
+     it, TextBox's editing ring (textBox.tsx's `var(--bbox-ring,
+     currentColor)`) fell through to the fallback everywhere on THIS site,
+     since a copy that never mentions a token leaves it simply undefined,
+     not "inherited from theme.css". */
+  --bbox-ring: var(--bbox-accent);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -107,6 +114,7 @@
   --bbox-success: oklch(0.78 0.17 145);
   --bbox-danger: oklch(0.72 0.17 25);
   --bbox-accent: oklch(0.70 0.17 264);
+  --bbox-ring: var(--bbox-accent);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
