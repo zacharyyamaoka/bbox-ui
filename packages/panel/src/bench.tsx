@@ -482,6 +482,14 @@ export function randomValue(field: FieldSpec, roll: () => number): FieldValue | 
       return Math.round((min + Math.floor(roll() * (steps + 1)) * step) * 1000) / 1000;
     }
     case "text":
+    // WHY "textarea" shares "text"'s branch rather than getting its own: this
+    // switch has no `default` and returns `FieldValue | undefined`, so a
+    // FieldKind this repo adds later can fall through here with no compile
+    // error and no runtime warning — Randomize would silently no-op for it.
+    // Handling it explicitly (even by reusing "text"'s word pool) is what
+    // makes the omission a choice instead of an oversight; a multi-line
+    // random value would defeat the "keeps the preview readable" point above.
+    case "textarea":
       return RANDOM_WORDS[Math.floor(roll() * RANDOM_WORDS.length)]!;
   }
 }

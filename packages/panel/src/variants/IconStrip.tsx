@@ -555,7 +555,12 @@ function FieldText({
  * Panel. Never dropped (contract point 7): routed by `kind` to the closest
  * generic control, words rather than a guessed icon. */
 function GenericFallback({ field, panel, governed }: { field: FieldSpec; panel: PanelVariantProps; governed: Set<string> }) {
-  if (field.kind === "text") return <FieldText field={field} panel={panel} governed={governed} />;
+  // WHY "textarea" routes here rather than falling to `FieldWords` below:
+  // `FieldWords` renders one button per `field.options`, which a textarea
+  // field never has — an unhandled kind would silently render an empty
+  // `ClusterShell` with no control at all, not merely a degraded one.
+  // `FieldText`'s single-line input at least reads and writes the value.
+  if (field.kind === "text" || field.kind === "textarea") return <FieldText field={field} panel={panel} governed={governed} />;
   if (field.kind === "number") return <FieldStepper field={field} panel={panel} governed={governed} glyph={<GenericGlyph />} />;
   if (field.kind === "toggle") return <FieldToggleIcon field={field} panel={panel} governed={governed} icon={<GenericGlyph />} />;
   return <FieldWords field={field} panel={panel} governed={governed} />;

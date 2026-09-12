@@ -163,7 +163,7 @@ export function FieldTraceRow({
 }
 
 /* ------------------------------------------------------------------ */
-/* One control per FieldKind — segments/number/toggle/text             */
+/* One control per FieldKind — segments/number/toggle/text/textarea    */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -382,6 +382,24 @@ function FieldControl({
         step={field.step}
         onCommit={onChange}
         style={numberInputStyle(secondary)}
+      />
+    );
+  }
+  // WHY a real branch rather than letting "textarea" fall through: the
+  // fallback below renders a single-line `<input>`, which would silently
+  // truncate a multi-line value to its own scrollLeft — a textarea field
+  // (TextBox's `children` once `lines="multi"`) needs to actually show
+  // newlines. `rows={1}` + `fieldSizing: "content"` is the same growable
+  // idiom the editing control itself uses (textBox.tsx) so a one-line value
+  // still looks like a normal text row.
+  if (field.kind === "textarea") {
+    return (
+      <textarea
+        rows={1}
+        value={value === undefined ? "" : String(value)}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ ...textInputStyle(secondary), resize: "none", fontFamily: "inherit", ...({ fieldSizing: "content" } as CSSProperties) }}
       />
     );
   }

@@ -27,13 +27,17 @@ import {
 } from "./textBox.layout";
 
 /** Board's own descending display order — not `Object.keys(TEXT_BOX_SIZES)`,
- * which is ascending (sm/md/lg/xl). */
-const SIZE_ORDER: TextBoxSize[] = ["xl", "lg", "md", "sm"];
+ * which is ascending (sm/md/lg/xl). "custom" is the escape hatch out of the
+ * named ladder (docs/TEXTBOX-EDITING-SPEC.md §1), so it goes last rather
+ * than sorting into the sm..xl run it isn't part of. */
+const SIZE_ORDER: TextBoxSize[] = ["xl", "lg", "md", "sm", "custom"];
 
-const SIZE_OPTIONS = SIZE_ORDER.map((size) => ({
-  value: size,
-  label: `${size} · ${TEXT_BOX_SIZES[size]}px`,
-}));
+// WHY "custom" can't share the `${size} · ${px}px` template the other four
+// use: it has no single px value — that's the whole point of it deferring
+// to `sizePx` — so `TEXT_BOX_SIZES[size]` would be `undefined` for it.
+const SIZE_OPTIONS = SIZE_ORDER.map((size) =>
+  size === "custom" ? { value: size, label: "custom" } : { value: size, label: `${size} · ${TEXT_BOX_SIZES[size]}px` },
+);
 
 // WHY these are annotated rather than bare arrays: an untyped string[] lets a
 // value that the component cannot render reach the panel. A judge added
@@ -48,6 +52,19 @@ const JUSTIFY_ORDER: readonly TextBoxHorizontalAlign[] = TEXT_BOX_HORIZONTAL_ALI
 const FONT_OPTIONS = FONT_ORDER.map((v) => ({ value: v, label: v }));
 const ALIGN_OPTIONS = ALIGN_ORDER.map((v) => ({ value: v, label: v }));
 const JUSTIFY_OPTIONS = JUSTIFY_ORDER.map((v) => ({ value: v, label: v }));
+
+// WHY `lines` gets a plain local array rather than a `TEXT_BOX_LINES`
+// export from `textBox.layout.ts` the way font/align/justify do: those three
+// each have 3+ members AND a second real consumer of the union (the layout
+// helpers `textBoxAlignItems`/`textBoxJustifyContent`). `lines` is two
+// literals consumed nowhere but `textBoxElement`'s own `props.style` branch
+// and this options list — promoting it to shared vocabulary ahead of a
+// second real consumer would be the same pre-emptive-file mistake
+// `PADDING_FIELDS`'s own header comment already declines to make.
+const LINES_OPTIONS = [
+  { value: "single", label: "single" },
+  { value: "multi", label: "multi" },
+];
 
 /** Reusable per-side padding bundle — see this file's own header comment
  * on why it lives here rather than its own file for T1. */
@@ -75,6 +92,23 @@ export const TEXT_BOX_FIELDS: FieldSpec[] = [
     kind: "segments",
     defaultValue: "md",
     options: SIZE_OPTIONS,
+    group: "size",
+  },
+  {
+    // WHY `group: "size"` pairs this with `size` on one panel row (the same
+    // mechanism as Block's WIDTH_FIELD/HEIGHT_FIELD, block.fields.ts): this
+    // field only DOES anything when `size === "custom"` — living beside the
+    // selector that turns it on is what makes that dependency legible on
+    // the panel instead of a numeric field nobody knows the purpose of.
+    id: "sizePx",
+    label: "Size (px)",
+    kind: "number",
+    defaultValue: 24,
+    min: 8,
+    step: 1,
+    unit: "px",
+    group: "size",
+    hint: 'Font size when Size is "custom"; ignored otherwise.',
   },
   ...PADDING_FIELDS,
   {
@@ -99,15 +133,36 @@ export const TEXT_BOX_FIELDS: FieldSpec[] = [
     options: JUSTIFY_OPTIONS,
   },
   {
+    id: "lines",
+    label: "Lines",
+    kind: "segments",
+    defaultValue: "single",
+    options: LINES_OPTIONS,
+    hint: "single: ellipsized one-liner with a title. multi: wraps, edits as a textarea.",
+  },
+  {
+    id: "placeholder",
+    label: "Placeholder",
+    kind: "text",
+    defaultValue: "",
+    hint: "Shown on the control, and at rest (muted) when the text is empty.",
+  },
+  {
     id: "children",
     label: "Text",
-    kind: "text",
+    // WHY "textarea" rather than "text": `children` is the same one flat
+    // property whether `lines` is single or multi — there is no second
+    // "long text" prop — so the FIELD needs the kind that can show and edit
+    // a newline (packages/schema/src/field.ts's own FieldKind, §2). The
+    // inspector renders it as a `<textarea rows={1}>` that looks like a
+    // one-line input until the value actually wraps.
+    kind: "textarea",
     // NOTE (deviation, mirrors port.fields.ts's own `children` comment):
     // `TextBox` has no real destructured default for `children` — passing
     // none renders a truly empty box. `FieldValue` has no way to express
-    // "undefined" for a `kind: "text"` control, so "Text Box" is a
-    // deliberate demoable placeholder for Storybook/inspector ergonomics,
-    // not a literal reproduction of textBox.tsx's own destructuring.
+    // "undefined" for a text-shaped control, so "Text Box" is a deliberate
+    // demoable placeholder for Storybook/inspector ergonomics, not a
+    // literal reproduction of textBox.tsx's own destructuring.
     // `textBox.fields.test.ts` asserts this consciously.
     defaultValue: "Text Box",
     hint: "One text run. Empty renders a truly empty box.",

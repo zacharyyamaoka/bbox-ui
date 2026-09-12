@@ -10,7 +10,20 @@
 
 /** TextBox's own ladder. Values match the board's own Text Size row. */
 export const TEXT_BOX_SIZES = { sm: 18, md: 24, lg: 36, xl: 44 } as const;
-export type TextBoxSize = keyof typeof TEXT_BOX_SIZES;
+// WHY `TextBoxSize` widens by union rather than `TEXT_BOX_SIZES` growing a
+// fifth rung: "custom" has no single px value — it is the ESCAPE from the
+// named ladder into `sizePx`, so it cannot live in a `Record<name, px>` the
+// way sm/md/lg/xl do. `textBoxFontPx` below is the one place that resolves
+// either shape back to a number. See docs/TEXTBOX-EDITING-SPEC.md §1.
+export type TextBoxSize = keyof typeof TEXT_BOX_SIZES | "custom";
+
+/** The font-size in px for a given `size`/`sizePx` pair — the one function
+ * that knows "custom" escapes the named ladder. `sizePx` is ignored for the
+ * four named rungs, exactly like `font`/`align` ignore props that don't
+ * apply to them. */
+export function textBoxFontPx(size: TextBoxSize, sizePx: number): number {
+  return size === "custom" ? sizePx : TEXT_BOX_SIZES[size];
+}
 
 // WHY the array is the source and the type is derived: annotating the field
 // table stopped the SCHEMA advertising a value the component cannot render,

@@ -58,6 +58,7 @@ describe("TEXT_BOX_FIELDS", () => {
   it("has exactly TextBox's real props, in panel order", () => {
     expect(TEXT_BOX_FIELDS.map((f) => f.id)).toEqual([
       "size",
+      "sizePx",
       "paddingTop",
       "paddingBot",
       "paddingLeft",
@@ -65,6 +66,8 @@ describe("TEXT_BOX_FIELDS", () => {
       "font",
       "align",
       "justify",
+      "lines",
+      "placeholder",
       "children",
     ]);
   });
@@ -86,11 +89,37 @@ describe("TEXT_BOX_FIELDS", () => {
     expect(bare.props.style.fontSize).toBe(TEXT_BOX_SIZES[field("size").defaultValue as keyof typeof TEXT_BOX_SIZES]);
   });
 
-  it("size's options are the board's own descending order, not ascending object-key order", () => {
-    expect(field("size").options?.map((o) => o.value)).toEqual(["xl", "lg", "md", "sm"]);
-    expect(field("size").options?.map((o) => o.value).sort()).toEqual(
+  it("size's options are the board's own descending order, not ascending object-key order, plus custom last", () => {
+    expect(field("size").options?.map((o) => o.value)).toEqual(["xl", "lg", "md", "sm", "custom"]);
+    // WHY this no longer compares straight to `Object.keys(TEXT_BOX_SIZES)`:
+    // "custom" is a real, selectable `size` value (docs/TEXTBOX-EDITING-SPEC.md
+    // §1) with no entry in `TEXT_BOX_SIZES` — it has no single px value, that's
+    // the whole point of deferring to `sizePx`. The named four still must be
+    // exactly `TEXT_BOX_SIZES`'s keys.
+    expect(field("size").options?.map((o) => o.value).filter((v) => v !== "custom").sort()).toEqual(
       Object.keys(TEXT_BOX_SIZES).sort(),
     );
+  });
+
+  it("sizePx's declared default equals TextBox's real default (textBox.tsx: sizePx = 24), and is paired with size via `group`", () => {
+    expect(field("sizePx").defaultValue).toBe(bare.props.style.fontSize);
+    expect(field("sizePx").group).toBe("size");
+    expect(field("size").group).toBe("size");
+  });
+
+  it('size === "custom" resolves fontSize from sizePx, via textBoxFontPx', () => {
+    expect(textBoxElement({ size: "custom", sizePx: 51 }).props.style.fontSize).toBe(51);
+    // A named rung still ignores sizePx entirely.
+    expect(textBoxElement({ size: "md", sizePx: 999 }).props.style.fontSize).toBe(TEXT_BOX_SIZES.md);
+  });
+
+  it("lines's declared default equals TextBox's real default (textBox.tsx: lines = \"single\"), and drives data-lines", () => {
+    expect(field("lines").defaultValue).toBe(bare.props["data-lines"]);
+    expect(textBoxElement({ lines: "multi" }).props["data-lines"]).toBe("multi");
+  });
+
+  it("placeholder's declared default equals TextBox's real default (textBox.tsx: placeholder = \"\")", () => {
+    expect(field("placeholder").defaultValue).toBe("");
   });
 
   it("every padding field's declared default equals TextBox's real default (all 0)", () => {
@@ -133,6 +162,7 @@ describe("TEXT_BOX_FIELDS", () => {
   it("defaultArgs mirrors every field's own declared defaultValue, one entry per field", () => {
     expect(defaultArgs(TEXT_BOX_FIELDS)).toEqual({
       size: field("size").defaultValue,
+      sizePx: field("sizePx").defaultValue,
       paddingTop: field("paddingTop").defaultValue,
       paddingBot: field("paddingBot").defaultValue,
       paddingLeft: field("paddingLeft").defaultValue,
@@ -140,6 +170,8 @@ describe("TEXT_BOX_FIELDS", () => {
       font: field("font").defaultValue,
       align: field("align").defaultValue,
       justify: field("justify").defaultValue,
+      lines: field("lines").defaultValue,
+      placeholder: field("placeholder").defaultValue,
       children: field("children").defaultValue,
     });
   });
@@ -154,6 +186,14 @@ describe("TEXT_BOX_FIELDS", () => {
     expect(argTypes.font.control).toBe("select");
     expect(argTypes.align.control).toBe("select");
     expect(argTypes.justify.control).toBe("select");
+    expect(argTypes.sizePx.control).toBe("number");
+    expect(argTypes.lines.control).toBe("select");
+    expect(argTypes.placeholder.control).toBe("text");
+    // `children`'s FIELD kind is "textarea" (packages/schema/src/field.ts §2),
+    // not "text" — but `toArgTypes` maps it to Storybook's own "text" control,
+    // since Storybook ships no distinct multiline control. A value map, not
+    // an identity: see packages/schema/src/storybook.ts's own WHY comment.
+    expect(field("children").kind).toBe("textarea");
     expect(argTypes.children.control).toBe("text");
   });
 

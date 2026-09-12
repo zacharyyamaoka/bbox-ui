@@ -27,6 +27,12 @@ describe("randomValue", () => {
     expect(randomValue(f, roll)).toBe("empty");
   });
 
+  it('rolls a "textarea" field (e.g. TextBox\'s children once lines="multi") — this switch has no default, so a forgotten case would type-check clean and silently return undefined', () => {
+    const f: FieldSpec = { id: "children", label: "Text", kind: "textarea", defaultValue: "" };
+    expect(randomValue(f, roll)).not.toBeUndefined();
+    expect(typeof randomValue(f, roll)).toBe("string");
+  });
+
   it("Port's host-computed fields are all opted out, and nothing else is", () => {
     // The disappearing-instance report: reveal rolled to on-hover. Every
     // field whose hint says "Host-computed" is one the host derives, and must

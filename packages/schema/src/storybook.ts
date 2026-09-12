@@ -15,6 +15,12 @@ const CONTROL: Record<FieldKind, "select" | "number" | "boolean" | "text"> = {
   number: "number",
   toggle: "boolean",
   text: "text",
+  // WHY "textarea" maps to Storybook's own "text" control rather than a new
+  // CONTROL value: Storybook ships no distinct multiline control type, and
+  // this map is a value lookup (kind -> Storybook's control name), not an
+  // identity — `field.kind` stays "textarea" everywhere else, only the
+  // Controls addon sees "text". See docs/TEXTBOX-EDITING-SPEC.md §2.
+  textarea: "text",
 };
 
 export interface StorybookArgType {
