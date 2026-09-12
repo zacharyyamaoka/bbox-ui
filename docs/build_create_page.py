@@ -30,7 +30,8 @@ def png(theme: str, tab: str) -> str:
     return "data:image/png;base64," + base64.b64encode((MEDIA / SET / by[(theme, tab)]).read_bytes()).decode()
 
 
-TABS = [("dom", "DOM Preview"), ("code", "DOM Code"), ("reactflow", "React Flow"), ("tldraw", "tldraw")]
+RENDERS = [("dom", "DOM"), ("reactflow", "React Flow"), ("tldraw", "tldraw")]
+VIEWS = [("preview", "Preview"), ("code", "Code")]
 
 
 def pair(tab: str, label: str) -> str:
@@ -42,6 +43,11 @@ def pair(tab: str, label: str) -> str:
         <figure><img src="{png('dark', tab)}" alt="{label}, dark"><figcaption>dark</figcaption></figure>
       </div>
     </section>"""
+
+
+def grid() -> str:
+    """Three renders by two views, each in light and dark."""
+    return "".join(pair(f"{r}-{v}", f"{rl} · {vl}") for r, rl in RENDERS for v, vl in VIEWS)
 
 
 HTML = f"""<!doctype html>
@@ -71,13 +77,13 @@ HTML = f"""<!doctype html>
 <p class="stamp">{DATE} · branch <code>claude/create-page</code> · capture set <code>{SET}</code> · every image is the live page in headless Chrome</p>
 
 <blockquote>
-<p>“Can you please change the viewport to have 4 tabs: DOM Preview, DOM Code, React Flow, tldraw… so I can seamlessly switch between all of those… those instances are now living in a canvas so you can move them around, and we can get multi-select working as well.”</p>
+<p>“Can you please change the viewport to have 4 tabs… so I can seamlessly switch between all of those… those instances are now living in a canvas so you can move them around, and we can get multi-select working as well.” Then: “Please refactor so we split it: 3 different renders (DOM, React Flow, tldraw) on the left side, 2 different views (preview, code) on the right side — that way you get 6 different views in total.”</p>
 <p>“For the inspector panel please make sure you never have to scroll it up and down while there is still space on the screen.” · “Let's have the sidebar full height top to bottom even if we don't use the full height.” · “As we change the site from dark to white, our create page should adapt accordingly.”</p>
 </blockquote>
 
-<h2>The four tabs, light and dark</h2>
-<p>Two Port instances, both selected, Advanced tier. The same two instances in every image: the page owns them, the tabs only look at them.</p>
-{''.join(pair(t, l) for t, l in TABS)}
+<h2>Three renders by two views, light and dark</h2>
+<p>Two Port instances, both selected, Advanced tier. The same two instances in every image: the page owns them, the tabs only look at them. Code is a view of whichever render is chosen — the JSX for the DOM, the node array for React Flow, the shape records for tldraw — derived from the real instances and their real positions.</p>
+{grid()}
 
 <h2>The mixed bench</h2>
 <div class="two">
@@ -88,7 +94,7 @@ HTML = f"""<!doctype html>
 <h2>What holds it together</h2>
 <div class="box"><ul>
 <li><strong>One engine, two shells.</strong> The field model, the tier rule, the six panel designs, the registry and the bench seeds moved into <code>@bbox-ui/panel</code>. The Vite demo and the site both consume it; a structural test asserts there is exactly one implementation.</li>
-<li><strong>The page owns the state.</strong> Instances, selection and canvas positions live in the page. A node dragged on React Flow is in the same place on tldraw; a shape picked on tldraw ticks the same sidebar checkbox. React Flow's selection is read only from user <code>select</code> changes, because its mount-time report of an empty selection looped the page.</li>
+<li><strong>The page owns the state.</strong> Instances, selection, canvas positions, the render and the view live in the page. A node dragged on React Flow is in the same place on tldraw; a shape picked on tldraw ticks the same sidebar checkbox. React Flow's selection is read only from user <code>select</code> changes, because its mount-time report of an empty selection looped the page.</li>
 <li><strong>No scroll while there is room.</strong> The inspector is a full-height flex column; only its list scrolls, and only once the content is taller than the column. Measured at 900px (no scroll) and 600px (Expert scrolls, Simple does not).</li>
 <li><strong>Theme reaches the panel.</strong> About 300 inline colours, including seven named whites the hex pass missed, are now semantic tokens mapped onto the site's theme. <code>color-scheme</code> is scoped to the workbench so native selects stop painting a white box under light text.</li>
 <li><strong>Side by side is declared.</strong> A field's <code>group</code> decides pairing, never adjacency. Block width/height, Stack gap/gutter and TextBox's four paddings declare theirs; nothing else pairs.</li>
