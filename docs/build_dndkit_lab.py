@@ -75,22 +75,28 @@ FIGURES = [
         "Stage 3 — four containers around a Block, Auto mode",
         "Top/bottom are rows (portrait cards), left/right are columns (landscape cards), "
         "matching how a port's peg is drawn perpendicular to whichever edge it sits on. "
-        "The dashed square is the Block the ports would belong to.",
+        "The dashed square is the Block the ports would belong to. Each card also carries "
+        "an arrow — its polarity — which always points away from the Block: up on top, "
+        "down on bottom, left on the left edge, right on the right edge.",
     ),
     (
         "06-board-cross-container-orientation-flip.png",
         "Stage 3 — P1 dragged from the top edge to the left edge",
         "Cross-container drag via onDragOver/onDragEnd (the standard dnd-kit multi-container "
-        "recipe). P1 lands in the left column and its shape flips from portrait to landscape — "
-        "orientation belongs to the container, not the card. The top row reflows to fill the gap.",
+        "recipe). P1 lands in the left column: its shape flips from portrait to landscape, and "
+        "its polarity arrow flips from pointing up to pointing left — both are derived from "
+        "whichever container currently holds the card, never stored on the card itself, so "
+        "they update the instant it crosses to a different edge. The top row reflows to fill "
+        "the gap.",
     ),
     (
         "07-board-custom-freeform.png",
         "Stage 3 — Custom mode: P3 dropped off-grid, P2/P4 do not reflow",
         "Custom checked. P3 was dragged to a position between P2 and P4 that isn't one of "
         "the flex-evened slots. P2 and P4 hold still — no reflow happens in this mode. "
-        "Cards still cross containers here too; toggling Custom back off re-sorts each "
-        "container by where its cards were left, so Auto doesn't reshuffle them.",
+        "Cards still cross containers (and still repolarize) here too; toggling Custom back "
+        "off re-sorts each container by where its cards were left, so Auto doesn't reshuffle "
+        "them.",
     ),
 ]
 
@@ -144,9 +150,11 @@ HTML = f"""<!doctype html>
     Prototype for the port-drag interaction, from <code>PROJECT - Black Box UI.md</code>
     &rarr; &ldquo;Prototype of dnd kit&rdquo;: a single sortable row, a single sortable column,
     then four containers around a Block that cards move freely between &mdash; with a
-    switchable flex spacing scheme, and a Custom mode where cards stop auto-evening and
-    just sit where you drop them. Plain DOM, <code>@dnd-kit/core</code> +
-    <code>@dnd-kit/sortable</code> &mdash; no React Flow or tldraw.
+    switchable flex spacing scheme, a Custom mode where cards stop auto-evening and just
+    sit where you drop them, and a polarity arrow on each card that always points away
+    from the Block and flips the instant the card crosses to a different edge. Plain DOM,
+    <code>@dnd-kit/core</code> + <code>@dnd-kit/sortable</code> &mdash; no React Flow or
+    tldraw.
   </p>
 
   <div class="meta">

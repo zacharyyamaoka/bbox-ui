@@ -145,7 +145,9 @@ async function click(selector) {
 }
 
 function cardSelector(label) {
-  return `//div[contains(@class,"card") and normalize-space(text())=${JSON.stringify(label)}]`;
+  // The label lives in a nested <span class="card__label"> (the arrow is a
+  // sibling <svg>), so match the label text and walk up to the card div.
+  return `//span[contains(@class,"card__label") and normalize-space(text())=${JSON.stringify(label)}]/parent::div`;
 }
 
 async function rectOfXPath(xpath) {

@@ -18,7 +18,7 @@ import { CardPreview, FreeCard, SortableCard } from "./Card";
 import { Container } from "./Container";
 import { CONTAINER_PADDING, clamp, mainAxisPositions, type Point } from "./layout";
 import { SpacingControl } from "./SpacingControl";
-import type { Orientation, Size, SpacingScheme } from "./types";
+import type { Direction, Orientation, Size, SpacingScheme } from "./types";
 
 type ContainerId = "top" | "right" | "bottom" | "left";
 const CONTAINER_IDS: ContainerId[] = ["top", "right", "bottom", "left"];
@@ -39,6 +39,15 @@ const ORIENTATION: Record<ContainerId, Orientation> = {
   bottom: "portrait",
   left: "landscape",
   right: "landscape",
+};
+
+// The polarity arrow always points away from the center Block, so it's the
+// exact opposite reading of which side of the board a container sits on.
+const DIRECTION: Record<ContainerId, Direction> = {
+  top: "N",
+  right: "E",
+  bottom: "S",
+  left: "W",
 };
 
 const CARD_SIZE: Record<Orientation, Size> = {
@@ -276,9 +285,9 @@ export function PortBoard() {
     }
   }
 
-  const activeOrientation = activeId
-    ? ORIENTATION[findContainer(items, activeId) ?? "top"]
-    : "portrait";
+  const activeContainerId = activeId ? (findContainer(items, activeId) ?? "top") : "top";
+  const activeOrientation = ORIENTATION[activeContainerId];
+  const activeDirection = DIRECTION[activeContainerId];
 
   return (
     <section className="stage">
@@ -288,6 +297,8 @@ export function PortBoard() {
           Drag a card (port) to any of the four edges. In Auto mode the containers evenly
           space their cards as you move things around; turn on Custom and cards stop
           reflowing — they stay exactly where you drop them, and still move between edges.
+          Each card's arrow is its polarity — it always points away from the Block, and
+          flips the instant the card crosses to a different edge.
         </p>
         <div className="controls-row">
           <label className="toggle">
@@ -319,6 +330,7 @@ export function PortBoard() {
                     id={id}
                     label={id}
                     orientation="portrait"
+                    direction={DIRECTION.top}
                     x={freePositions[id]?.x ?? CONTAINER_PADDING}
                     y={freePositions[id]?.y ?? CONTAINER_PADDING}
                   />
@@ -334,7 +346,13 @@ export function PortBoard() {
                 size={CONTAINER_SIZE.top}
               >
                 {items.top.map((id) => (
-                  <SortableCard key={id} id={id} label={id} orientation="portrait" />
+                  <SortableCard
+                    key={id}
+                    id={id}
+                    label={id}
+                    orientation="portrait"
+                    direction={DIRECTION.top}
+                  />
                 ))}
               </Container>
             )}
@@ -349,6 +367,7 @@ export function PortBoard() {
                     id={id}
                     label={id}
                     orientation="landscape"
+                    direction={DIRECTION.left}
                     x={freePositions[id]?.x ?? CONTAINER_PADDING}
                     y={freePositions[id]?.y ?? CONTAINER_PADDING}
                   />
@@ -364,7 +383,13 @@ export function PortBoard() {
                 size={CONTAINER_SIZE.left}
               >
                 {items.left.map((id) => (
-                  <SortableCard key={id} id={id} label={id} orientation="landscape" />
+                  <SortableCard
+                    key={id}
+                    id={id}
+                    label={id}
+                    orientation="landscape"
+                    direction={DIRECTION.left}
+                  />
                 ))}
               </Container>
             )}
@@ -383,6 +408,7 @@ export function PortBoard() {
                     id={id}
                     label={id}
                     orientation="landscape"
+                    direction={DIRECTION.right}
                     x={freePositions[id]?.x ?? CONTAINER_PADDING}
                     y={freePositions[id]?.y ?? CONTAINER_PADDING}
                   />
@@ -398,7 +424,13 @@ export function PortBoard() {
                 size={CONTAINER_SIZE.right}
               >
                 {items.right.map((id) => (
-                  <SortableCard key={id} id={id} label={id} orientation="landscape" />
+                  <SortableCard
+                    key={id}
+                    id={id}
+                    label={id}
+                    orientation="landscape"
+                    direction={DIRECTION.right}
+                  />
                 ))}
               </Container>
             )}
@@ -413,6 +445,7 @@ export function PortBoard() {
                     id={id}
                     label={id}
                     orientation="portrait"
+                    direction={DIRECTION.bottom}
                     x={freePositions[id]?.x ?? CONTAINER_PADDING}
                     y={freePositions[id]?.y ?? CONTAINER_PADDING}
                   />
@@ -428,7 +461,13 @@ export function PortBoard() {
                 size={CONTAINER_SIZE.bottom}
               >
                 {items.bottom.map((id) => (
-                  <SortableCard key={id} id={id} label={id} orientation="portrait" />
+                  <SortableCard
+                    key={id}
+                    id={id}
+                    label={id}
+                    orientation="portrait"
+                    direction={DIRECTION.bottom}
+                  />
                 ))}
               </Container>
             )}
@@ -436,7 +475,9 @@ export function PortBoard() {
         </div>
 
         <DragOverlay>
-          {activeId ? <CardPreview label={activeId} orientation={activeOrientation} /> : null}
+          {activeId ? (
+            <CardPreview label={activeId} orientation={activeOrientation} direction={activeDirection} />
+          ) : null}
         </DragOverlay>
       </DndContext>
     </section>

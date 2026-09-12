@@ -20,6 +20,12 @@ export const SPACING_SCHEMES: { value: SpacingScheme; label: string; hint: strin
 
 export type Orientation = "portrait" | "landscape";
 
+// The card's polarity — which way it faces, always pointing away from the
+// board's center. Derived from whichever container currently holds the card,
+// never stored on the card itself, so it updates the instant the card
+// crosses to a different edge.
+export type Direction = "N" | "E" | "S" | "W";
+
 export interface Size {
   width: number;
   height: number;

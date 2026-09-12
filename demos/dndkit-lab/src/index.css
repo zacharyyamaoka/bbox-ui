@@ -121,8 +121,10 @@ body {
 
 .card {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   border: 2px solid var(--line);
   border-radius: 10px;
   background: #1a1b1f;
@@ -133,6 +135,15 @@ body {
   user-select: none;
   touch-action: none;
   flex-shrink: 0;
+}
+
+.card__arrow {
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.card__label {
+  line-height: 1;
 }
 
 .card--portrait {
