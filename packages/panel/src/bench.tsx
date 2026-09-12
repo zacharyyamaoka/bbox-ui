@@ -227,8 +227,15 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { state: "outOfFocus", children: "Dimmed" },
   ],
   Glyph: [
-    { content: "lucide:search" },
-    { sizePreset: "lg", content: "emoji:⚙️" },
+    // WHY the emoji seed is FIRST and not the lucide one: `makeInstance`
+    // always opens a fresh bench at index 0, and no host in this repo
+    // mounts `GlyphResolverProvider` yet (phase 3's picker package is a
+    // stub) — a lucide-first seed would make the one Glyph every visitor
+    // to /create actually sees paint as an invisible empty square, with
+    // nothing on screen to say why. An emoji renders with zero resolver,
+    // same as v1's bare-emoji default.
+    { content: "emoji:🔍" },
+    { sizePreset: "lg", content: "lucide:search" },
     { sizePreset: "md", content: "text:◆" },
   ],
   TextBox: [
