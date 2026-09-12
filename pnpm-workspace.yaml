@@ -7,6 +7,7 @@ packages:
   - demos/scene
   - demos/compare
   - demos/compare-view
+  - demos/dndkit-lab
 allowBuilds:
   esbuild: true
   msw: false

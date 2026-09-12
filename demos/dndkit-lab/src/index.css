@@ -1,0 +1,277 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0b0d;
+  --panel: #111114;
+  --line: #d9d9de;
+  --line-dim: #4a4a52;
+  --text: #ececed;
+  --text-dim: #9a9aa2;
+  --accent: #7dd3fc;
+  --accent-strong: #38bdf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.app {
+  min-height: 100%;
+  padding: 32px 40px 64px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.app__header h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.app__header p {
+  margin: 0 0 24px;
+  color: var(--text-dim);
+  font-size: 13px;
+  max-width: 640px;
+  line-height: 1.5;
+}
+
+.app__header code {
+  color: var(--text);
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--line-dim);
+  padding-bottom: 12px;
+}
+
+.tabs__tab {
+  background: transparent;
+  border: 1px solid var(--line-dim);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tabs__tab.is-active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(125, 211, 252, 0.08);
+}
+
+.stage__header h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.stage__header p {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin: 0 0 14px;
+  max-width: 620px;
+  line-height: 1.5;
+}
+
+/* Kept in sync by hand with CONTAINER_PADDING in layout.ts. */
+.container {
+  display: flex;
+  align-items: center;
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+  background: var(--panel);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.container--row {
+  flex-direction: row;
+}
+
+.container--column {
+  flex-direction: column;
+}
+
+.container--free {
+  position: relative;
+}
+
+.container.is-over {
+  border-color: var(--accent);
+  background: rgba(125, 211, 252, 0.07);
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: #1a1b1f;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.card--portrait {
+  width: 70px;
+  height: 100px;
+}
+
+.card--landscape {
+  width: 100px;
+  height: 70px;
+}
+
+.card.is-dragging {
+  border-color: var(--accent);
+  cursor: grabbing;
+}
+
+.card--overlay {
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+  border-color: var(--accent-strong);
+  cursor: grabbing;
+}
+
+.spacing-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spacing-control__label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.spacing-control__note {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.spacing-control.is-disabled .segmented {
+  opacity: 0.35;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line-dim);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.segmented__option {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.segmented__option.is-active {
+  background: var(--accent);
+  color: #05202b;
+  font-weight: 600;
+}
+
+.segmented__option:disabled {
+  cursor: not-allowed;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: 240px 560px 240px;
+  grid-template-rows: 180px 460px 180px;
+  gap: 20px;
+  justify-items: center;
+  align-items: center;
+  padding: 8px 0 24px;
+}
+
+.board__top {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.board__left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.board__center {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.board__right {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.board__bottom {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.block {
+  width: 260px;
+  height: 260px;
+  border: 2px dashed var(--line-dim);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
