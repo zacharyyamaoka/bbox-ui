@@ -81,13 +81,16 @@ function resolve(field: FieldSpec, panel: PanelVariantProps): Resolution {
   };
 }
 
-type Winner = "override" | "preset" | "default";
+type Winner = "override" | "inherited" | "preset" | "default";
 
 /** Same palette `FieldTraceRow`'s winner badge uses — an active icon's
  * ring borrows it instead of a separate badge, since there is no label
  * line here to put a badge on. */
 const WINNER_COLOR: Record<Winner, { ring: string; bg: string }> = {
   override: { ring: "var(--bbox-panel-override, #6d28d9)", bg: "var(--bbox-panel-override-bg, #ede9fe)" },
+  // Reuses preset's colours — an inherited value is, like a preset, not
+  // this instance's own choice.
+  inherited: { ring: "var(--bbox-panel-preset, #1d4ed8)", bg: "var(--bbox-panel-preset-bg, #dbeafe)" },
   preset: { ring: "var(--bbox-panel-preset, #1d4ed8)", bg: "var(--bbox-panel-preset-bg, #dbeafe)" },
   default: { ring: "var(--bbox-panel-fg-muted, #52525b)", bg: "var(--bbox-panel-surface-2, #f4f4f5)" },
 };

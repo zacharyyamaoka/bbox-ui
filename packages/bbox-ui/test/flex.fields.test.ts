@@ -17,7 +17,12 @@ const bare = flexElement();
 
 describe("FLEX_FIELDS", () => {
   it("has exactly Flex's six real props, in panel order", () => {
-    expect(FLEX_FIELDS.map((f) => f.id)).toEqual(["direction", "justify", "align", "gap", "padding", "wrap"]);
+    expect(FLEX_FIELDS.map((f) => f.id)).toEqual(["size", "direction", "justify", "align", "gap", "padding", "wrap"]);
+  });
+  it("size is the cascading rung and paints nothing", () => {
+    expect(field("size").cascades).toBe(true);
+    expect(field("size").defaultValue).toBe(bare.props["data-size"]);
+    expect(flexElement({ size: "xl" }).props.style).toEqual(bare.props.style);
   });
   it("every default equals the component's own default", () => {
     expect(field("direction").defaultValue).toBe(bare.props["data-direction"]);

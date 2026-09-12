@@ -10,6 +10,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
+  Bar,
+  BAR_FIELDS,
+  BAR_PRESETS,
   Block,
   BLOCK_FIELDS,
   BLOCK_PRESETS,
@@ -58,37 +61,38 @@ export const MEMBER_SPECS: Record<string, MembersSpec> = {
 };
 
 /**
- * The Block's anatomy, as Zach drew it on 2026-09-11: a header with left /
- * centre / right, a body that is a column of rows, a footer with left /
- * centre / right. "Most of the block things that we basically generate are
- * just gonna be essentially variants on this." Every slot is filled by a
- * Flex; the body's Flex is a column that holds Flex rows, and each row
- * holds leaves. The old fixed header (glyph · title · chip) is now what you
- * COMPOSE into the header slots.
+ * The Block's anatomy, regrouped 2026-09-11 evening: header · body ·
+ * footer. Header and footer are the same component, Bar ("they are
+ * basically the exact same, we will fill them differently"), each with
+ * three slots of its own (left · center · right, filled by Flex); the body
+ * is a Flex column that holds rows. Slots nest: a fill that has slots
+ * brings its own fills, so a Block arrives as 1 + 2 Bars + 6 Flexes + 1
+ * body Flex = 10 instances, and the navigator reads Block › Header ›
+ * Header · left …
  */
-const edge = (region: string, side: "left" | "center" | "right"): SlotSpec => ({
-  id: `${region}.${side}`,
-  label: `${region[0]!.toUpperCase()}${region.slice(1)} · ${side}`,
-  region,
+const cell = (side: "left" | "center" | "right"): SlotSpec => ({
+  id: side,
+  label: side[0]!.toUpperCase() + side.slice(1),
+  region: side,
   fill: "Flex",
   fillProps: { justify: side === "left" ? "start" : side === "right" ? "end" : "center", gap: 6 },
 });
+export const BAR_SLOTS: SlotSpec[] = [cell("left"), cell("center"), cell("right")];
 export const BLOCK_SLOTS: SlotSpec[] = [
-  edge("header", "left"),
-  edge("header", "center"),
-  edge("header", "right"),
+  { id: "header", label: "Header", region: "header", fill: "Bar" },
   { id: "body", label: "Body", region: "body", fill: "Flex", fillProps: { direction: "column", align: "stretch", gap: 6 }, accepts: ["Flex"] },
-  edge("footer", "left"),
-  edge("footer", "center"),
-  edge("footer", "right"),
+  { id: "footer", label: "Footer", region: "footer", fill: "Bar" },
 ];
+
+interface BlockRenderProps {
+  width?: number;
+  height?: number;
+  radius?: number;
+}
 
 function stackMember(label: string): ReactNode {
   return (
-    <div
-      key={label}
-      style={{ border: "2px solid currentColor", padding: "8px 12px", whiteSpace: "nowrap" }}
-    >
+    <div key={label} style={{ border: "2px solid currentColor", padding: "8px 12px", whiteSpace: "nowrap" }}>
       {label}
     </div>
   );
@@ -110,45 +114,26 @@ function threePorts(): ReactNode {
   );
 }
 
-interface BlockRenderProps {
-  width?: number;
-  height?: number;
-}
-
-function slotCell(ctx: RenderContext | undefined, id: string, extra?: CSSProperties): ReactNode {
-  return (
-    <div key={id} data-slot="block-slot" data-slot-id={id} style={{ minWidth: 0, minHeight: 28, display: "flex", alignItems: "center", ...extra }}>
-      {ctx?.slots?.[id] ?? null}
-    </div>
-  );
-}
-
 /**
- * The slotted Block. Header and footer are a 1fr · auto · 1fr grid so the
- * centre slot is truly centred whatever the sides hold; the body is the
- * body slot's Flex (a column of rows). Height hugs unless set; width from
- * the field.
+ * The slotted Block: a Bar above, the body Flex, a Bar below. A hidden
+ * Bar renders its marker only, so the region vanishes; the radius clips
+ * both bars' corners.
  */
 function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?: RenderContext): ReactNode {
   const p = props as BlockRenderProps;
-  const bar = (region: "header" | "footer") => (
-    <div data-slot={`block-${region}`} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8, padding: "6px 10px", minHeight: 40 }}>
-      {slotCell(ctx, `${region}.left`, { justifyContent: "flex-start" })}
-      {slotCell(ctx, `${region}.center`, { justifyContent: "center" })}
-      {slotCell(ctx, `${region}.right`, { justifyContent: "flex-end" })}
-    </div>
-  );
   return (
-    // WHY maxWidth 100%: a Block placed INSIDE a Stack or a Flex row must
-    // not overflow it. The width field still means what it says on a root
-    // Block; inside a narrower parent the parent wins, which is what a
-    // person expects from a member.
-    <Block width={p.width} height={p.height} className="!justify-start !px-0 !text-left" style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 0, height: p.height && p.height > 0 ? p.height : undefined, minHeight: 120, maxWidth: "100%" }}>
-      {bar("header")}
-      <div data-slot="block-body" style={{ flex: 1, borderTop: "1px solid currentColor", borderBottom: "1px solid currentColor", padding: 8, display: "flex", flexDirection: "column" }}>
+    <Block
+      width={p.width}
+      height={p.height}
+      radius={p.radius}
+      className="!justify-start !px-0 !text-left"
+      style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 0, height: p.height && p.height > 0 ? p.height : undefined, minHeight: 120, maxWidth: "100%" }}
+    >
+      {ctx?.slots?.header ?? null}
+      <div data-slot="block-body" style={{ flex: 1, padding: 8, display: "flex", flexDirection: "column" }}>
         {ctx?.slots?.body ?? null}
       </div>
-      {bar("footer")}
+      {ctx?.slots?.footer ?? null}
     </Block>
   );
 }
@@ -240,6 +225,16 @@ export const REGISTRY: ComponentEntry[] = [
     ),
   }),
   registerComponent({
+    name: "Bar",
+    fields: BAR_FIELDS,
+    presets: BAR_PRESETS,
+    slots: BAR_SLOTS,
+    // The edge is not a field: it follows from which slot the Bar fills.
+    render: (props, _children, ctx) => (
+      <Bar {...(props as Record<string, never>)} edge={ctx?.slotId === "footer" ? "top" : "bottom"} left={ctx?.slots?.left} center={ctx?.slots?.center} right={ctx?.slots?.right} />
+    ),
+  }),
+  registerComponent({
     name: "Block",
     fields: BLOCK_FIELDS,
     presets: BLOCK_PRESETS,
@@ -276,19 +271,24 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { state: "empty", children: "Empty" },
     { state: "outOfFocus", children: "Dimmed" },
   ],
+  // WHY the first seed of a sized leaf sets no size: it is the one Add
+  // uses, and an own size would beat whatever a header hands down — the
+  // cascade must be visible on a freshly added member. The other seeds
+  // still disagree, which is what the multi-select bench needs.
   Glyph: [
-    { size: "xl", children: "🔍" },
+    { children: "🔍" },
     { size: "lg", children: "⚙️" },
     { size: "md", children: "◆" },
   ],
   TextBox: [
-    { size: "md", children: "Text Box" },
+    { children: "Text Box" },
     { size: "lg", children: "Bigger text" },
     { size: "sm", children: "Small print" },
   ],
   Stack: [{}, { gap: "lg" }],
   PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],
   Flex: [{}, { justify: "between" }, { direction: "column", align: "stretch" }],
+  Bar: [{}, { size: "lg" }, { line: false }],
   Block: [{}, { width: 320 }, { width: 480, height: 260 }],
 };
 
@@ -331,13 +331,22 @@ export function makeInstanceWithSlots(type: string, index: number, uid: number):
   const self = makeInstance(type, index, uid);
   const slots = REGISTRY.find((e) => e.name === type)?.slots ?? [];
   if (slots.length === 0) return [self];
-  const fills: Instance[] = slots.map((slot, k) => ({
-    id: `${slot.fill.toLowerCase()}-${uid + 1 + k}`,
-    type: slot.fill,
-    props: { ...(slot.fillProps ?? {}) },
-    slot: { id: slot.id, label: slot.label, ...(slot.accepts ? { accepts: slot.accepts } : {}) },
-  }));
-  return [{ ...self, members: fills.map((f) => f.id) }, ...fills];
+  let next = uid + 1;
+  const fills: Instance[] = [];
+  const fillIds: string[] = [];
+  for (const slot of slots) {
+    // A fill may itself have slots (a Bar's three cells): it brings them.
+    const made = makeInstanceWithSlots(slot.fill, 0, next);
+    next += made.length;
+    const fill: Instance = {
+      ...made[0]!,
+      props: { ...(slot.fillProps ?? {}) },
+      slot: { id: slot.id, label: slot.label, ...(slot.accepts ? { accepts: slot.accepts } : {}) },
+    };
+    fillIds.push(fill.id);
+    fills.push(fill, ...made.slice(1));
+  }
+  return [{ ...self, members: fillIds }, ...fills];
 }
 
 /**

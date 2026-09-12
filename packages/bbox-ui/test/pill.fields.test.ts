@@ -14,6 +14,8 @@ import {
   PILL_LINE_STYLES,
   PILL_LINE_THICKNESSES,
   PILL_PAINT_FIELDS,
+  PILL_SIZE_FIELD,
+  PILL_SIZES,
 } from "../src/pill.fields";
 import { PILL_PRESETS } from "../src/pill.presets";
 import { Pill } from "../src/pill";
@@ -56,6 +58,7 @@ describe("PILL_FIELDS", () => {
       "fillStyle",
       "fillColor",
       "fillOpacity",
+      "size",
       "children",
     ]);
   });
@@ -66,11 +69,15 @@ describe("PILL_FIELDS", () => {
     expect(PILL_FIELDS.every((f) => !f.id.startsWith("appearance"))).toBe(true);
   });
 
-  it("PILL_PAINT_FIELDS + PILL_CHILDREN_FIELD are exactly the non-bundle tail of PILL_FIELDS", () => {
+  it("PILL_PAINT_FIELDS + PILL_SIZE_FIELD + PILL_CHILDREN_FIELD are exactly the non-bundle tail of PILL_FIELDS", () => {
     // Derived, not the literal 4 that used to sit here: the bundle's length
     // is a fact of APPEARANCE_FIELDS, and hardcoding it made this test fail
     // for the wrong reason the day a field left the bundle.
-    expect(PILL_FIELDS.slice(APPEARANCE_FIELDS.length)).toEqual([...PILL_PAINT_FIELDS, PILL_CHILDREN_FIELD]);
+    expect(PILL_FIELDS.slice(APPEARANCE_FIELDS.length)).toEqual([
+      ...PILL_PAINT_FIELDS,
+      PILL_SIZE_FIELD,
+      PILL_CHILDREN_FIELD,
+    ]);
   });
 });
 
@@ -151,6 +158,38 @@ describe("PILL_FIELDS — Pill's own paint fields", () => {
   });
 });
 
+describe("PILL_FIELDS — size (a real, ungoverned, cascading prop)", () => {
+  it("size's declared default equals Pill's real default", () => {
+    expect(field("size").defaultValue).toBe("md");
+    expect(bare.props["data-size"]).toBe("md");
+  });
+
+  it("size cascades — a header can hand its rung down the same way it hands one to a Port", () => {
+    expect(field("size").cascades).toBe(true);
+  });
+
+  it("size's options are exactly the four PILL_SIZES rungs", () => {
+    expect(field("size").options?.map((o) => o.value)).toEqual(Object.keys(PILL_SIZES));
+  });
+
+  it("no preset governs size — unlike Port's own size ladder, Pill's is always freely editable", () => {
+    expect(governedFieldIds(PILL_PRESETS)).not.toContain("size");
+  });
+
+  it('a Pill with size:"xl" gets fontSize 16 (PILL_SIZES.xl)', () => {
+    const xl = pillElement({ size: "xl" });
+    expect(xl.props.style.fontSize).toBe(PILL_SIZES.xl);
+    expect(xl.props["data-size"]).toBe("xl");
+  });
+
+  it("a bare Pill's fontSize/padding equal its real \"md\" default, proven by two renders agreeing", () => {
+    const explicit = pillElement({ size: "md" });
+    expect(explicit.props.style.fontSize).toBe(bare.props.style.fontSize);
+    expect(explicit.props.style.padding).toBe(bare.props.style.padding);
+    expect(bare.props.style.fontSize).toBe(PILL_SIZES.md);
+  });
+});
+
 describe("PILL_FIELDS — children", () => {
   it("children's declared default is the demoable placeholder \"Pill\" (control-only — Pill's real prop has no destructured default; omitting it renders the bare shell)", () => {
     expect(field("children").defaultValue).toBe("Pill");
@@ -165,7 +204,7 @@ describe("PILL_FIELDS — children", () => {
 
   it("toArgTypes maps every segments field to a select control, both number fields to number, and children to text", () => {
     const argTypes = toArgTypes(PILL_FIELDS);
-    for (const id of ["state", "tone", "lens", "lineStyle", "lineColor", "lineThickness", "fillStyle", "fillColor"]) {
+    for (const id of ["state", "tone", "lens", "lineStyle", "lineColor", "lineThickness", "fillStyle", "fillColor", "size"]) {
       expect(argTypes[id].control).toBe("select");
     }
     expect(argTypes.lineOpacity.control).toBe("number");
@@ -237,8 +276,11 @@ describe("The §1.4 worked example, executed against the real PILL_PRESETS (Defi
     );
     expect(trace.winner).toBe("override");
     expect(trace.resolved).toBe("bbox-danger");
-    // The losing preset candidate is still visible, unchanged by the override.
-    expect(trace.candidates[1]).toEqual({ layer: "preset", value: "primary", presetId: "wired" });
+    // The losing preset candidate is still visible, unchanged by the
+    // override. Index 2, not 1: `resolve.ts` now carries a 4-layer
+    // candidates array (override, inherited, preset, default) — `lineColor`
+    // doesn't cascade, so candidates[1] is the always-empty inherited slot.
+    expect(trace.candidates[2]).toEqual({ layer: "preset", value: "primary", presetId: "wired" });
   });
 });
 

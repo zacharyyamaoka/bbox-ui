@@ -86,6 +86,10 @@ describe("TEXT_BOX_FIELDS", () => {
     expect(bare.props.style.fontSize).toBe(TEXT_BOX_SIZES[field("size").defaultValue as keyof typeof TEXT_BOX_SIZES]);
   });
 
+  it("size cascades — a header can hand its rung down to TextBox the same way it hands one to a Port", () => {
+    expect(field("size").cascades).toBe(true);
+  });
+
   it("size's options are the board's own descending order, not ascending object-key order", () => {
     expect(field("size").options?.map((o) => o.value)).toEqual(["xl", "lg", "md", "sm"]);
     expect(field("size").options?.map((o) => o.value).sort()).toEqual(

@@ -6,6 +6,7 @@ import {
   governedFieldIds,
   resolveField,
   resolveFields,
+  type InheritedValue,
   type PresetSpec,
 } from "../src/resolve";
 
@@ -38,6 +39,29 @@ const STATE_FIELD: FieldSpec = {
     { value: "wired", label: "Wired" },
   ],
 };
+
+const SIZE_FIELD: FieldSpec = {
+  id: "size",
+  label: "Size",
+  kind: "segments",
+  defaultValue: "md",
+  cascades: true,
+  options: [
+    { value: "sm", label: "Small" },
+    { value: "md", label: "Medium" },
+    { value: "xl", label: "Extra large" },
+  ],
+};
+
+const SIZE_PRESETS: PresetSpec[] = [
+  {
+    id: "wired",
+    label: "Wired",
+    selector: "state",
+    governs: ["size"],
+    values: { size: "sm" },
+  },
+];
 
 const PILL_PRESETS: PresetSpec[] = [
   {
@@ -92,13 +116,13 @@ describe("resolveField — cascade order", () => {
     const trace = resolveField(noPresetFor, { state: "wired" }, PILL_PRESETS);
     expect(trace.winner).toBe("default");
     expect(trace.resolved).toBe("fallback");
-    expect(trace.candidates[1]).toEqual({ layer: "preset", value: undefined });
+    expect(trace.candidates[2]).toEqual({ layer: "preset", value: undefined });
   });
 
   it("subject's selector value matches no preset id: preset candidate stays empty", () => {
     const trace = resolveField(LINE_COLOR_FIELD, { state: "outOfFocus" }, PILL_PRESETS);
     expect(trace.winner).toBe("default");
-    expect(trace.candidates[1]).toEqual({ layer: "preset", value: undefined });
+    expect(trace.candidates[2]).toEqual({ layer: "preset", value: undefined });
   });
 
   it("a falsy override (false) still wins over a truthy preset/default — presence, not truthiness", () => {
@@ -115,12 +139,12 @@ describe("resolveField — cascade order", () => {
     expect(trace.resolved).toBe(false);
   });
 
-  it("candidates array is always exactly 3, in cascade order, regardless of who wins", () => {
+  it("candidates array is always exactly 4, in cascade order, regardless of who wins", () => {
     const trace = resolveField(LINE_COLOR_FIELD, {}, PILL_PRESETS);
-    expect(trace.candidates.map((c) => c.layer)).toEqual(["override", "preset", "default"]);
+    expect(trace.candidates.map((c) => c.layer)).toEqual(["override", "inherited", "preset", "default"]);
   });
 
-  it("§1.4 worked example, executed: preset wins, candidates show all three layers honestly", () => {
+  it("§1.4 worked example, executed: preset wins, candidates show all four layers honestly", () => {
     const trace = resolveField(LINE_COLOR_FIELD, { state: "wired" }, PILL_PRESETS);
     expect(trace).toMatchObject({
       resolved: "primary",
@@ -128,6 +152,7 @@ describe("resolveField — cascade order", () => {
       winningPresetId: "wired",
       candidates: [
         { layer: "override", value: undefined },
+        { layer: "inherited", value: undefined },
         { layer: "preset", value: "primary", presetId: "wired" },
         { layer: "default", value: "foreground" },
       ],
@@ -145,10 +170,64 @@ describe("resolveField — cascade order", () => {
       winner: "override",
       candidates: [
         { layer: "override", value: "bbox-danger" },
+        { layer: "inherited", value: undefined },
         { layer: "preset", value: "primary", presetId: "wired" },
         { layer: "default", value: "foreground" },
       ],
     });
+  });
+});
+
+describe("resolveField — the inherited layer (D1, Zach 2026-09-11)", () => {
+  it("an own override still wins even when an inherited value is present", () => {
+    const inherited: Record<string, InheritedValue> = {
+      size: { value: "xl", from: "bar-1", fromLabel: "Header" },
+    };
+    const trace = resolveField(SIZE_FIELD, { size: "sm" }, SIZE_PRESETS, inherited);
+    expect(trace.winner).toBe("override");
+    expect(trace.resolved).toBe("sm");
+  });
+
+  it("no own value, an inherited value present: inherited wins over a matching preset — this fails if the inherited/preset candidates are swapped in resolve.ts", () => {
+    const inherited: Record<string, InheritedValue> = {
+      size: { value: "xl", from: "bar-1", fromLabel: "Header" },
+    };
+    // "wired" governs size to "sm" — a DIFFERENT value than the inherited
+    // "xl" — so a candidate-order swap that let preset be found first
+    // would flip both `winner` and `resolved` and this assertion would catch it.
+    const trace = resolveField(SIZE_FIELD, { state: "wired" }, SIZE_PRESETS, inherited);
+    expect(trace.winner).toBe("inherited");
+    expect(trace.resolved).toBe("xl");
+    expect(trace.inheritedFrom).toBe("Header");
+    expect(trace.candidates[2]).toMatchObject({ layer: "preset", value: "sm", presetId: "wired" });
+  });
+
+  it("a non-cascading field ignores the inherited bag even when it has a matching id", () => {
+    const inherited: Record<string, InheritedValue> = {
+      lineColor: { value: "bbox-danger", from: "bar-1", fromLabel: "Header" },
+    };
+    // LINE_COLOR_FIELD has no `cascades: true`.
+    const trace = resolveField(LINE_COLOR_FIELD, { state: "wired" }, PILL_PRESETS, inherited);
+    expect(trace.winner).toBe("preset");
+    expect(trace.resolved).toBe("primary");
+    expect(trace.candidates[1]).toEqual({ layer: "inherited", value: undefined });
+  });
+
+  it("absent bag resolves identically to calling resolveField with no 4th argument at all", () => {
+    const withUndefinedBag = resolveField(SIZE_FIELD, { state: "wired" }, SIZE_PRESETS, undefined);
+    const withNoBagArg = resolveField(SIZE_FIELD, { state: "wired" }, SIZE_PRESETS);
+    expect(withUndefinedBag).toEqual(withNoBagArg);
+    expect(withNoBagArg.winner).toBe("preset");
+    expect(withNoBagArg.candidates[1]).toEqual({ layer: "inherited", value: undefined });
+  });
+
+  it("candidates length is 4, in order override, inherited, preset, default", () => {
+    const inherited: Record<string, InheritedValue> = {
+      size: { value: "xl", from: "bar-1", fromLabel: "Header" },
+    };
+    const trace = resolveField(SIZE_FIELD, {}, SIZE_PRESETS, inherited);
+    expect(trace.candidates).toHaveLength(4);
+    expect(trace.candidates.map((c) => c.layer)).toEqual(["override", "inherited", "preset", "default"]);
   });
 });
 

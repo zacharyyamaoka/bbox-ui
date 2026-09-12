@@ -81,6 +81,23 @@ export interface FieldSpec<TValue = FieldValue> {
    * hint that already says "never persisted", rather than inferred from it.
    */
   randomize?: boolean;
+  /**
+   * A field marked `cascades` inherits its value from the nearest ANCESTOR
+   * instance whose component declares a field of the same `id`, and relays
+   * that value on down to its own descendants in turn. Default false.
+   *
+   * WHY this lives on the field and not on the instance or the page: which
+   * fields cascade (a Frame's `padding`, not a Button's `label`) is a fact
+   * about the FIELD's meaning, decided once by whoever authors the
+   * component's schema — same footing as `group`/`randomize` above. The
+   * page assembling the ancestor chain into an `inherited` bag per subject
+   * is a layout-time computation; this module only RESOLVES a bag someone
+   * else built, exactly as it already resolves a `presets` array someone
+   * else built (`resolve.ts`'s own module doc). Declaring it here also
+   * means a non-cascading field costs nothing extra to resolve: `resolveField`
+   * only looks at the inherited bag at all when this is true.
+   */
+  cascades?: boolean;
 }
 
 /**

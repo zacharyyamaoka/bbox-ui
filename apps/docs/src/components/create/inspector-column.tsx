@@ -27,6 +27,7 @@ interface InspectorColumnProps {
   onAddMember: (parentId: string, type: string) => void;
   onRemoveMember: (id: string) => void;
   onMoveMember: (parentId: string, from: number, to: number) => void;
+  onSetProp: (id: string, fieldId: string, value: FieldValue) => void;
   onSelectInstance: (id: string) => void;
 }
 
@@ -106,6 +107,7 @@ export function InspectorColumn(p: InspectorColumnProps) {
               onAddMember: p.onAddMember,
               onRemoveMember: p.onRemoveMember,
               onMoveMember: p.onMoveMember,
+              onSetProp: p.onSetProp,
               onSelect: p.onSelectInstance,
             });
             return <p.layout.Layout subjectName={p.componentName} panel={panel} lists={lists} isSlotFill={isSlotFill(p.subject ?? undefined)} />;

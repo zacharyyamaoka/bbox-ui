@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Instance } from "../src/bench";
-import { BLOCK_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstanceWithSlots } from "../src/bench";
+import { BAR_SLOTS, BLOCK_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstanceWithSlots } from "../src/bench";
 import {
   addMemberTo,
   addableTypes,
   ancestry,
   depthOf,
+  effectiveProps,
+  inheritedFor,
   instanceTree,
   isSlotFill,
   memberSpecFor,
@@ -143,36 +145,71 @@ describe("what a parent may add is declared, closed and capped", () => {
   });
 });
 
-describe("slots — a Block arrives with its anatomy filled", () => {
-  it("makes the instance plus one Flex per slot, in slot order, with the slot's starting props", () => {
+describe("slots — a Block arrives with its anatomy filled, two levels deep", () => {
+  it("makes the Block, a Bar per end, a Flex per Bar cell and the body Flex — ten instances", () => {
     const made = makeInstanceWithSlots("Block", 0, 10);
-    expect(made).toHaveLength(1 + BLOCK_SLOTS.length);
-    expect(made[0]!.members).toEqual(made.slice(1).map((f) => f.id));
-    expect(made.slice(1).map((f) => f.slot?.id)).toEqual(BLOCK_SLOTS.map((s) => s.id));
-    expect(made.slice(1).every((f) => f.type === "Flex")).toBe(true);
-    const right = made.find((f) => f.slot?.id === "header.right")!;
-    expect(right.props.justify).toBe("end");
-    const body = made.find((f) => f.slot?.id === "body")!;
+    expect(made).toHaveLength(10);
+    const block = made[0]!;
+    const byId = new Map(made.map((m) => [m.id, m]));
+    expect(block.members!.map((id) => byId.get(id)!.slot?.id)).toEqual(BLOCK_SLOTS.map((s) => s.id));
+    const header = byId.get(block.members![0]!)!;
+    const body = byId.get(block.members![1]!)!;
+    const footer = byId.get(block.members![2]!)!;
+    expect([header.type, body.type, footer.type]).toEqual(["Bar", "Flex", "Bar"]);
+    expect(header.members!.map((id) => byId.get(id)!.slot?.id)).toEqual(BAR_SLOTS.map((s) => s.id));
+    expect(byId.get(header.members![2]!)!.props.justify).toBe("end");
     expect(body.props.direction).toBe("column");
-    // Ids are drawn from uid upward, so the caller advances uid by the length.
     expect(new Set(made.map((m) => m.id)).size).toBe(made.length);
   });
   it("a leaf makes just itself", () => {
     expect(makeInstanceWithSlots("Port", 0, 3)).toHaveLength(1);
   });
-  it("a slot narrows what its fill accepts; the fill is named after the slot", () => {
+  it("a slot narrows what its fill accepts; a fill is named after its slot", () => {
     const made = makeInstanceWithSlots("Block", 0, 0);
+    const byId = new Map(made.map((m) => [m.id, m]));
     const flex = REGISTRY.find((e) => e.name === "Flex")!;
     const body = made.find((f) => f.slot?.id === "body")!;
-    const left = made.find((f) => f.slot?.id === "header.left")!;
+    const header = byId.get(made[0]!.members![0]!)!;
+    const left = byId.get(header.members![0]!)!;
     expect(memberSpecFor(flex, body)?.accepts).toEqual(["Flex"]);
     expect(memberSpecFor(flex, left)?.accepts).toEqual(MEMBER_SPECS.Flex.accepts);
-    expect(summarize(made, left.id)?.title).toBe("Header · left");
+    expect(summarize(made, header.id)?.title).toBe("Header");
+    expect(summarize(made, left.id)?.title).toBe("Left");
   });
-  it("Block declares slots and no members list of its own; Flex declares members", () => {
+  it("Block and Bar declare slots and no members list; Flex declares members", () => {
     expect(REGISTRY.find((e) => e.name === "Block")?.slots).toBe(BLOCK_SLOTS);
+    expect(REGISTRY.find((e) => e.name === "Bar")?.slots).toBe(BAR_SLOTS);
     expect(REGISTRY.find((e) => e.name === "Block")?.members).toBeUndefined();
     expect(REGISTRY.find((e) => e.name === "Flex")?.members).toBe(MEMBER_SPECS.Flex);
+  });
+});
+
+describe("size cascades down the tree", () => {
+  const made = makeInstanceWithSlots("Block", 0, 0);
+  const byId = new Map(made.map((m) => [m.id, m]));
+  const header = byId.get(made[0]!.members![0]!)!;
+  const left = byId.get(header.members![0]!)!;
+  const glyph = inst("glyph-99", "Glyph", {});
+  const bench = [...made.map((m) => (m.id === left.id ? { ...m, members: [glyph.id] } : m)), glyph];
+
+  it("a header set to xl reaches the Glyph two levels down, naming the header", () => {
+    const withXl = bench.map((m) => (m.id === header.id ? { ...m, props: { ...m.props, size: "xl" } } : m));
+    expect(inheritedFor(withXl, REGISTRY, glyph.id).size).toEqual({ value: "xl", from: header.id, fromLabel: "Header" });
+    expect(effectiveProps(withXl, REGISTRY, glyph).size).toBe("xl");
+  });
+  it("a Flex between them with its own size overrides and relays it", () => {
+    const withBoth = bench.map((m) =>
+      m.id === header.id ? { ...m, props: { ...m.props, size: "xl" } } : m.id === left.id ? { ...m, props: { ...m.props, size: "sm" } } : m,
+    );
+    expect(inheritedFor(withBoth, REGISTRY, glyph.id).size).toMatchObject({ value: "sm", from: left.id });
+  });
+  it("a bar with nothing set relays its default; an own value on the leaf wins in what is drawn", () => {
+    expect(inheritedFor(bench, REGISTRY, glyph.id).size).toMatchObject({ value: "md", from: header.id });
+    const own = bench.map((m) => (m.id === glyph.id ? { ...m, props: { size: "lg" } } : m));
+    expect(effectiveProps(own, REGISTRY, byId.get(glyph.id) ?? own.find((m) => m.id === glyph.id)!).size).toBe("lg");
+  });
+  it("a field that does not cascade is untouched", () => {
+    expect(inheritedFor(bench, REGISTRY, glyph.id).padding).toBeUndefined();
   });
 });
 

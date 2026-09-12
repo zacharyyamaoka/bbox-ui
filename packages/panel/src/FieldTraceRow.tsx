@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
+import type { FieldSpec, FieldValue, Layer, PresetSpec } from "@bbox-ui/schema";
 import { readFieldRow } from "./fieldModel";
 import { NumberInput } from "./NumberInput";
 
@@ -26,7 +26,7 @@ export interface FieldTraceRowProps {
 /**
  * One field's trace, collapsed by default, expandable — T1-SPEC.md §7.2.
  * Collapsed: label, resolved value, a badge naming the winning layer.
- * Expanded: all three candidates in cascade order, winner marked, exactly
+ * Expanded: all four candidates in cascade order, winner marked, exactly
  * the devtools styles-pane model this whole cascade is built on.
  *
  * `MIXED` across a multi-selection is unchanged T0 behaviour (a blanked
@@ -98,7 +98,9 @@ export function FieldTraceRow({
             >
               {trace.winner === "preset"
                 ? `preset: ${presets.find((p) => p.id === trace.winningPresetId)?.label ?? trace.winningPresetId}`
-                : trace.winner}
+                : trace.winner === "inherited"
+                  ? `inherited · ${trace.inheritedFrom ?? ""}`
+                  : trace.winner}
             </button>
           )
         )}
@@ -149,7 +151,11 @@ export function FieldTraceRow({
               <span style={candidateDotStyle(candidate.layer === trace.winner)} />
               <span style={candidateLayerStyle}>
                 {candidate.layer}
-                {candidate.presetId ? ` · ${presets.find((p) => p.id === candidate.presetId)?.label ?? candidate.presetId}` : ""}
+                {candidate.presetId
+                  ? ` · ${presets.find((p) => p.id === candidate.presetId)?.label ?? candidate.presetId}`
+                  : candidate.inheritedFrom
+                    ? ` · ${candidate.inheritedFrom}`
+                    : ""}
               </span>
               <span style={candidateValueStyle}>
                 {candidate.value === undefined ? "—" : String(candidate.value)}
@@ -540,9 +546,14 @@ const mixedBadgeStyle: CSSProperties = {
   padding: "1px 6px",
 };
 
-function winnerBadgeStyle(winner: "override" | "preset" | "default"): CSSProperties {
-  const palette: Record<typeof winner, { bg: string; fg: string }> = {
+function winnerBadgeStyle(winner: Layer): CSSProperties {
+  const palette: Record<Layer, { bg: string; fg: string }> = {
     override: { bg: "var(--bbox-panel-override-bg, #ede9fe)", fg: "var(--bbox-panel-override, #6d28d9)" },
+    // WHY reuse the preset colours rather than invent a fifth: an inherited
+    // value is, like a preset, something OTHER than this instance driving
+    // the pixels — the two-colour language (purple = this instance's own
+    // choice, blue = someone/something else's) already covers it.
+    inherited: { bg: "var(--bbox-panel-preset-bg, #dbeafe)", fg: "var(--bbox-panel-preset, #1d4ed8)" },
     preset: { bg: "var(--bbox-panel-preset-bg, #dbeafe)", fg: "var(--bbox-panel-preset, #1d4ed8)" },
     default: { bg: "var(--bbox-panel-surface-2, #f3f4f6)", fg: "var(--bbox-panel-fg-muted, #6b7280)" },
   };

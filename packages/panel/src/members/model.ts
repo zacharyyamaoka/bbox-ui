@@ -206,3 +206,61 @@ export function isSlotFill(inst: Instance | undefined): boolean {
   return !!inst?.slot;
 }
 
+/**
+ * The values `id` inherits, by field: for every field of its component
+ * marked `cascades`, the nearest ancestor whose component has a field of
+ * the same id contributes what THAT ancestor resolves to — its own stored
+ * value, else what it inherits in turn, else its default. So a header set
+ * to xl reaches a Port three levels down, a row set to sm overrides it for
+ * its own members, and a bar with nothing set still relays its default.
+ *
+ * Only the shape of the tree lives here; the schema's `resolveField` is
+ * what decides that an inherited value loses to an own value and beats a
+ * preset (D1, 2026-09-11).
+ */
+export interface InheritedValueLike {
+  value: string | number | boolean;
+  from: string;
+  fromLabel?: string;
+}
+
+export function inheritedFor(instances: Instance[], entries: ComponentEntry[], id: string): Record<string, InheritedValueLike> {
+  const byId = new Map(instances.map((i) => [i.id, i]));
+  const entryOf = (inst: Instance) => entries.find((e) => e.name === inst.type);
+  const self = byId.get(id);
+  const selfEntry = self && entryOf(self);
+  if (!self || !selfEntry) return {};
+  const wanted = selfEntry.fields.filter((f) => f.cascades).map((f) => f.id);
+  if (wanted.length === 0) return {};
+  const out: Record<string, InheritedValueLike> = {};
+  for (const fieldId of wanted) {
+    for (const ancestorId of [...ancestry(instances, id)].reverse()) {
+      const ancestor = byId.get(ancestorId);
+      const entry = ancestor && entryOf(ancestor);
+      const field = entry?.fields.find((f) => f.id === fieldId && f.cascades);
+      if (!ancestor || !entry || !field) continue;
+      const own = ancestor.props[fieldId];
+      const title = summarize(instances, ancestorId)?.title ?? ancestor.type;
+      if (own !== undefined) {
+        out[fieldId] = { value: own as InheritedValueLike["value"], from: ancestorId, fromLabel: title };
+        break;
+      }
+      // The ancestor only relays: name the ORIGIN, not the relay — "inherited
+      // from Header" is the answer a person wants, not "from Left".
+      const up = inheritedFor(instances, entries, ancestorId)[fieldId];
+      out[fieldId] = up ?? { value: field.defaultValue as InheritedValueLike["value"], from: ancestorId, fromLabel: title };
+      break;
+    }
+  }
+  return out;
+}
+
+/** The props a render should draw: inherited values under the instance's own. */
+export function effectiveProps(instances: Instance[], entries: ComponentEntry[], inst: Instance): Record<string, unknown> {
+  const bag = inheritedFor(instances, entries, inst.id);
+  const merged: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(bag)) merged[k] = v.value;
+  for (const [k, v] of Object.entries(inst.props)) if (v !== undefined) merged[k] = v;
+  return merged;
+}
+

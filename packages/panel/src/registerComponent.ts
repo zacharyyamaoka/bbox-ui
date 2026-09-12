@@ -27,6 +27,9 @@ export interface RenderContext {
   /** When this instance itself fills a slot: the slot's label, so an empty
    *  Flex can say which hole it is. */
   slotLabel?: string;
+  /** …and the slot's id, so a Bar knows whether it is the header (line at
+   *  its bottom) or the footer (line at its top). */
+  slotId?: string;
 }
 
 /**

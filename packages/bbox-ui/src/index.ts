@@ -22,6 +22,10 @@ export * from "./pill";
 export * from "./flex.fields";
 export * from "./flex";
 
+export * from "./bar.presets";
+export * from "./bar.fields";
+export * from "./bar";
+
 export * from "./stack.fields";
 export * from "./stack";
 

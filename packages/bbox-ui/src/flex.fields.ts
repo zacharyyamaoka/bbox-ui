@@ -8,7 +8,7 @@
  */
 import type { FieldOption, FieldSpec, PresetSpec } from "@bbox-ui/schema";
 
-import { FLEX_ALIGN_VALUES, FLEX_DIRECTIONS, FLEX_JUSTIFY_VALUES, type FlexAlign, type FlexDirection, type FlexJustify } from "./flex";
+import { FLEX_ALIGN_VALUES, FLEX_DIRECTIONS, FLEX_JUSTIFY_VALUES, FLEX_SIZES, type FlexAlign, type FlexDirection, type FlexJustify, type FlexSize } from "./flex";
 
 const DIRECTION_LABELS: Record<FlexDirection, string> = { row: "Row", column: "Column" };
 const JUSTIFY_LABELS: Record<FlexJustify, string> = {
@@ -24,7 +24,18 @@ const ALIGN_LABELS: Record<FlexAlign, string> = { start: "Start", center: "Cente
 const opts = <T extends string>(values: readonly T[], labels: Record<T, string>): FieldOption[] =>
   values.map((value) => ({ value, label: labels[value] }));
 
+const SIZE_LABELS: Record<FlexSize, string> = { sm: "Small", md: "Medium", lg: "Large", xl: "Extra Large" };
+
 export const FLEX_FIELDS: FieldSpec[] = [
+  {
+    id: "size",
+    label: "Size",
+    kind: "segments",
+    defaultValue: "md",
+    options: opts(FLEX_SIZES, SIZE_LABELS),
+    cascades: true,
+    hint: "Relayed to the members; the Flex itself paints nothing at any size.",
+  },
   { id: "direction", label: "Direction", kind: "segments", defaultValue: "row", options: opts(FLEX_DIRECTIONS, DIRECTION_LABELS) },
   {
     id: "justify",

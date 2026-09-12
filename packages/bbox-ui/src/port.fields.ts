@@ -29,6 +29,8 @@ import {
   PORT_REVEALS,
   PORT_ROLE_LABELS,
   PORT_ROLES,
+  PORT_SIZE_RUNG_LABELS,
+  PORT_SIZE_RUNGS,
   PORT_TEXT_LAYOUT_LABELS,
   PORT_TEXT_LAYOUTS,
   PORT_TEXT_SIZE_LABELS,
@@ -44,6 +46,11 @@ const DIRECTION_OPTIONS: FieldOption[] = PORT_DIRECTIONS.map((direction) => ({
 const EDGE_OPTIONS: FieldOption[] = BLOCK_SIDES.map((side) => ({
   value: side,
   label: BLOCK_SIDE_LABELS[side],
+}));
+
+const SIZE_OPTIONS: FieldOption[] = PORT_SIZE_RUNGS.map((size) => ({
+  value: size,
+  label: PORT_SIZE_RUNG_LABELS[size],
 }));
 
 const DIAMETER_OPTIONS: FieldOption[] = (
@@ -123,6 +130,15 @@ export const PORT_FIELDS: FieldSpec[] = [
     options: EDGE_OPTIONS,
   },
   {
+    id: "size",
+    label: "Size",
+    kind: "segments",
+    defaultValue: "md",
+    options: SIZE_OPTIONS,
+    cascades: true,
+    hint: "Sets diameter and text size together; the rung a header hands down.",
+  },
+  {
     id: "diameter",
     label: "Diameter",
     kind: "segments",
@@ -158,7 +174,12 @@ export const PORT_FIELDS: FieldSpec[] = [
     id: "textSize",
     label: "Text Size",
     kind: "segments",
-    defaultValue: "sm",
+    // "md" (24px), not textSize's own "sm" rung — kept equal to what a
+    // truly bare `Port` actually renders now that `size` (defaultValue
+    // "md") always cascades a matching preset onto this field (mirrors
+    // pill.fields.ts's own paint-field defaults, engineered to equal the
+    // "empty" preset's output for the identical reason).
+    defaultValue: "md",
     options: TEXT_SIZE_OPTIONS,
   },
   ...APPEARANCE_FIELDS,

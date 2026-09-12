@@ -39,6 +39,10 @@ describe("GLYPH_FIELDS", () => {
     expect(bareGlyph.props.style.fontSize).toBe(GLYPH_SIZES.xl);
   });
 
+  it("size cascades — a header can hand its rung down to Glyph the same way it hands one to a Port", () => {
+    expect(field("size").cascades).toBe(true);
+  });
+
   it("padding's declared default equals Glyph's real default (glyph.tsx: padding = 0)", () => {
     expect(field("padding").defaultValue).toBe(0);
     expect(bareGlyph.props.style.padding).toBe(field("padding").defaultValue);

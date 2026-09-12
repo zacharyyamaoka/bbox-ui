@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { FieldSpec, InheritedValue, PresetSpec } from "@bbox-ui/schema";
 import { readFieldRow, type Subject } from "../src/fieldModel";
 
 /**
@@ -39,6 +39,19 @@ const PRESETS: PresetSpec[] = [
   { id: "wired", label: "Wired", selector: "state", governs: ["lineColor"], values: { lineColor: "primary" } },
   { id: "valueSet", label: "Value set", selector: "state", governs: ["lineColor"], values: { lineColor: "ink" } },
 ];
+
+const SIZE: FieldSpec = {
+  id: "size",
+  label: "Size",
+  kind: "segments",
+  defaultValue: "md",
+  cascades: true,
+  options: [
+    { value: "sm", label: "Small" },
+    { value: "md", label: "Medium" },
+    { value: "xl", label: "Extra large" },
+  ],
+};
 
 const subject = (id: string, props: Record<string, unknown>): Subject => ({ id, props });
 
@@ -81,6 +94,20 @@ describe("readFieldRow — provenance across a selection", () => {
     expect(row.collapsedValue).toBe("ink");
     // They disagree about WHICH layer won, so there is no single chain.
     expect(row.trace).toBeNull();
+  });
+});
+
+describe("readFieldRow — the inherited layer (D1, Zach 2026-09-11)", () => {
+  it("a cascading field with an inherited value reads winner inherited, inheritedFrom set, and offers no clear", () => {
+    const inherited: Record<string, InheritedValue> = {
+      size: { value: "xl", from: "bar-1", fromLabel: "Header" },
+    };
+    const row = readFieldRow(SIZE, [{ id: "a", props: {}, inherited }], PRESETS);
+    expect(row.trace?.winner).toBe("inherited");
+    expect(row.inheritedFrom).toBe("Header");
+    // Nothing is STORED for this subject — the value came from an
+    // ancestor, not from this instance — so there is nothing to clear.
+    expect(row.hasOwnOverride).toBe(false);
   });
 });
 

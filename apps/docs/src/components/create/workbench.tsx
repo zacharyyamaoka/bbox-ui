@@ -5,6 +5,7 @@ import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
   addMemberTo,
   findVariant,
+  inheritedFor,
   instanceTree,
   isSlotFill,
   makeInstanceWithSlots,
@@ -140,7 +141,11 @@ export function Workbench() {
     return roots.flatMap((r) => subtreeIds(instances, r.id)).map((id) => byId.get(id)!).filter(Boolean);
   }, [instances, roots]);
   const selectedIds = selectedIdsByBench[activeName] ?? new Set<string>();
-  const selected = instances.filter((i) => selectedIds.has(i.id));
+  // Each selected subject carries what it inherits (a header's size reaching
+  // the Glyph inside it), so the panel can say "inherited from Header".
+  const selected = instances
+    .filter((i) => selectedIds.has(i.id))
+    .map((i) => ({ ...i, inherited: inheritedFor(instances, REGISTRY, i.id) }));
   // One stable array per selection, not one per render: the canvases key
   // their node lists on it, and a fresh array every render made React Flow
   // rebuild every node on every keystroke in the inspector.
@@ -295,6 +300,14 @@ export function Workbench() {
     setSelection(Array.from(next));
   }
 
+  /** One prop on one instance, from a region row's quick controls. */
+  function setInstanceProp(id: string, fieldId: string, value: FieldValue) {
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: (prev[activeName] ?? []).map((i) => (i.id === id ? { ...i, props: { ...i.props, [fieldId]: value } } : i)),
+    }));
+  }
+
   function applyToSelected(fieldId: string, value: FieldValue) {
     setBenches((prev) => ({
       ...prev,
@@ -389,6 +402,7 @@ export function Workbench() {
           onAddMember={addMember}
           onRemoveMember={removeMemberById}
           onMoveMember={moveMemberInParent}
+          onSetProp={setInstanceProp}
           onSelectInstance={(id) => selectInstance(id)}
         />
       </div>

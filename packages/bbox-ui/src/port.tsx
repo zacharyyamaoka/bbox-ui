@@ -1,4 +1,5 @@
 import type { ComponentProps, CSSProperties } from "react";
+import { resolveField } from "@bbox-ui/schema";
 
 import { cn } from "./lib/utils";
 import {
@@ -9,6 +10,8 @@ import {
   type Tone,
   paintVar,
 } from "./appearance";
+import { PORT_FIELDS } from "./port.fields";
+import { PORT_PRESETS } from "./port.presets";
 import {
   PORT_DIAMETERS,
   PORT_HIT_PX,
@@ -25,9 +28,17 @@ import {
   type PortReveal,
   type PortRole,
   type PortSize,
+  type PortSizeRung,
   type PortTextLayout,
   type PortTextSize,
 } from "./port.layout";
+
+/** The two fields `Port`'s own `size` rung governs — looked up once from
+ * `PORT_FIELDS` (never re-typed) so `resolveField` runs the SAME
+ * computation the product inspector's trace panel reads, exactly
+ * `pill.tsx`'s own `PAINT_FIELD_BY_ID` pattern. */
+const DIAMETER_FIELD = PORT_FIELDS.find((f) => f.id === "diameter")!;
+const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
 
 /**
  * packages/bbox-ui/src/port.tsx — the rebuilt Port (T1 Lane P).
@@ -532,6 +543,10 @@ export interface PortProps extends Omit<ComponentProps<"div">, "role"> {
   defaultValue?: string;
   direction?: PortDirection;
   edge?: BlockSide;
+  /** The cascading rung a header (Bar/Flex) hands down — governs
+   * `diameter`/`textSize` together via `PORT_PRESETS`. An explicit
+   * `diameter`/`textSize` still wins (see `Port`'s own render). */
+  size?: PortSizeRung;
   diameter?: PortSize;
   role?: PortRole;
   decoration?: PortDecoration;
@@ -565,6 +580,10 @@ export interface PortProps extends Omit<ComponentProps<"div">, "role"> {
  * `state`/`tone`) — wiring a concrete lens treatment is left to whichever
  * component's board evidence calls for it first, same status as every
  * other bundle field with no board-driven paint yet.
+ *
+ * `size` (2026-09-11) is the cascading rung `diameter`/`textSize` resolve
+ * through — see the `resolveField` calls in the body below and
+ * `port.presets.ts`'s own `PORT_PRESETS`.
  */
 export function Port({
   name = "",
@@ -572,11 +591,20 @@ export function Port({
   defaultValue = "",
   direction = "input",
   edge = "left",
-  diameter = "md",
+  // `size` DOES take a real JS default ("md", matching `state`/`tone`
+  // above) — it is the cascade's SELECTOR, and a selector must always
+  // have a value for a preset to match against. `diameter`/`textSize`
+  // deliberately do NOT (mirroring `pill.tsx`'s own paint fields): an
+  // explicit value is exactly what makes their OVERRIDE candidate present
+  // in `resolveField` below, so a caller reaching past `size` reads
+  // honestly instead of every Port carrying a materialized diameter/
+  // textSize that silently outranks the preset layer.
+  size = "md",
+  diameter,
   role = "data",
   decoration = "none",
   textLayout,
-  textSize = "sm",
+  textSize,
   state = "empty",
   tone = "neutral",
   lens = "normal",
@@ -597,12 +625,25 @@ export function Port({
     flexDirection: portFlexDirection(resolvedTextLayout),
     gap: portLabelGap(resolvedTextLayout),
   };
+  // `size` cascades `diameter`/`textSize` together through the SAME
+  // cascade the product inspector's trace panel reads — never a
+  // hand-written `size === "xl" ? ... : ...` beside it (`pill.tsx`'s own
+  // `resolveField` calls are the precedent). The subject carries the
+  // RAW `diameter`/`textSize` (undefined unless a caller passed one), so
+  // an explicit prop reaches past `size` honestly instead of always
+  // winning by construction.
+  const sizeSubject = { size, diameter, textSize };
+  const diameterResolved = resolveField(DIAMETER_FIELD, sizeSubject, PORT_PRESETS)
+    .resolved as PortSize;
+  const textSizeResolved = resolveField(TEXT_SIZE_FIELD, sizeSubject, PORT_PRESETS)
+    .resolved as PortTextSize;
   return (
     <div
       data-slot="port"
       data-state={state}
       data-direction={direction}
       data-edge={edge}
+      data-size={size}
       data-text-layout={resolvedTextLayout}
       data-lens={lens !== "normal" ? lens : undefined}
       className={cn(
@@ -623,7 +664,7 @@ export function Port({
       <PortDot
         state={state}
         tone={tone}
-        diameter={diameter}
+        diameter={diameterResolved}
         role={role}
         decoration={decoration}
         producers={producers}
@@ -636,7 +677,7 @@ export function Port({
         type={type}
         defaultValue={defaultValue}
         direction={direction}
-        textSize={textSize}
+        textSize={textSizeResolved}
         state={state}
       >
         {children}

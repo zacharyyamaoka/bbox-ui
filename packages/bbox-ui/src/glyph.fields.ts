@@ -25,6 +25,7 @@ export const GLYPH_FIELDS: FieldSpec[] = [
     kind: "segments",
     defaultValue: "xl",
     options: SIZE_OPTIONS,
+    cascades: true,
   },
   {
     id: "padding",

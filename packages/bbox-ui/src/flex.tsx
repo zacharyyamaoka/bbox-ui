@@ -49,7 +49,17 @@ const ALIGN_ITEMS: Record<FlexAlign, CSSProperties["alignItems"]> = {
   stretch: "stretch",
 };
 
+export const FLEX_SIZES = ["sm", "md", "lg", "xl"] as const;
+export type FlexSize = (typeof FLEX_SIZES)[number];
+
 export interface FlexProps extends ComponentProps<"div"> {
+  /**
+   * The size rung this Flex relays to its members. It paints nothing of
+   * its own (D2, 2026-09-11): a Flex exists to lay members out, and `size`
+   * is here so a row can override the bar above it and hand the new value
+   * down. Read by the page's inheritance walk, echoed as `data-size`.
+   */
+  size?: FlexSize;
   direction?: FlexDirection;
   justify?: FlexJustify;
   align?: FlexAlign;
@@ -67,6 +77,7 @@ export interface FlexProps extends ComponentProps<"div"> {
  * parent; height hugs contents.
  */
 export function Flex({
+  size = "md",
   direction = "row",
   justify = "start",
   align = "center",
@@ -81,6 +92,7 @@ export function Flex({
   return (
     <div
       data-slot="flex"
+      data-size={size}
       data-direction={direction}
       data-justify={justify}
       data-align={align}

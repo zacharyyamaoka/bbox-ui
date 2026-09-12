@@ -474,7 +474,10 @@ function FieldRow({
             drivenPresetId={data.drivenPresetId}
             onChange={(value) => onChange(field.id, value)}
           />
-          {isGoverned && data.hasOwnOverride && (
+          {/* WHY also when an inherited value sits under the own one: the
+              clear is the way back to "inherited from Header"; without it an
+              own size over a cascade could never be undone. */}
+          {(isGoverned || data.trace?.candidates[1]?.value !== undefined) && data.hasOwnOverride && (
             <button
               type="button"
               data-slot="field-clear-override"
@@ -570,7 +573,7 @@ function PairedFieldCell({
           drivenPresetId={data.drivenPresetId}
           onChange={(value) => onChange(field.id, value)}
         />
-        {governed && data.hasOwnOverride && (
+        {(governed || data.trace?.candidates[1]?.value !== undefined) && data.hasOwnOverride && (
           <button
             type="button"
             data-slot="field-clear-override"
@@ -615,7 +618,13 @@ function RowLabel({
   const dotTitle = data.isMixed
     ? "Mixed across selection"
     : data.trace
-      ? `${data.trace.winner === "preset" ? `preset: ${data.trace.winningPresetId ?? ""}` : data.trace.winner} — click to see the cascade`
+      ? `${
+          data.trace.winner === "preset"
+            ? `preset: ${data.trace.winningPresetId ?? ""}`
+            : data.trace.winner === "inherited"
+              ? `inherited · ${data.trace.inheritedFrom ?? ""}`
+              : data.trace.winner
+        } — click to see the cascade`
       : undefined;
 
   return (
@@ -702,7 +711,11 @@ function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec
           <span style={candidateDotStyle(candidate.layer === trace.winner)} />
           <span style={candidateLayerStyle}>
             {candidate.layer}
-            {candidate.presetId ? ` · ${presets.find((p) => p.id === candidate.presetId)?.label ?? candidate.presetId}` : ""}
+            {candidate.presetId
+              ? ` · ${presets.find((p) => p.id === candidate.presetId)?.label ?? candidate.presetId}`
+              : candidate.inheritedFrom
+                ? ` · ${candidate.inheritedFrom}`
+                : ""}
           </span>
           <span style={candidateValueStyle}>{candidate.value === undefined ? "—" : String(candidate.value)}</span>
         </div>
@@ -1068,8 +1081,12 @@ function labelTextStyle(governed: boolean, scrubbable: boolean): CSSProperties {
 }
 
 function dotButtonStyle(mixed: boolean, winner: FieldTrace["winner"] | undefined, expanded: boolean): CSSProperties {
-  const palette: Record<"override" | "preset" | "default" | "mixed", string> = {
+  const palette: Record<"override" | "inherited" | "preset" | "default" | "mixed", string> = {
     override: "var(--bbox-panel-override-soft, #8b5cf6)",
+    // Same preset-soft token as "preset" — an inherited value is, like a
+    // preset, not this instance's own choice; see FieldTraceRow's
+    // winnerBadgeStyle for the identical call.
+    inherited: "var(--bbox-panel-preset-soft, #3b82f6)",
     preset: "var(--bbox-panel-preset-soft, #3b82f6)",
     default: "var(--bbox-panel-border, #d1d5db)",
     mixed: "var(--bbox-panel-warn-soft, #f59e0b)",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
+import type { FieldValue } from "@bbox-ui/schema";
 import type { ComponentEntry, Instance, MembersSpec } from "@bbox-ui/panel";
 import { MEMBERS_CONTROLS, ancestry, memberSpecFor, summarize, typeGlyph } from "@bbox-ui/panel";
 
@@ -9,6 +10,8 @@ export interface MemberListActions {
   onRemoveMember: (id: string) => void;
   onMoveMember: (parentId: string, from: number, to: number) => void;
   onSelect: (id: string) => void;
+  /** Write one prop on one instance — the region row's quick controls. */
+  onSetProp: (id: string, fieldId: string, value: FieldValue) => void;
 }
 
 /**
@@ -25,6 +28,15 @@ export interface MemberList {
   region: string | null;
   count: number;
   node: ReactNode;
+  /**
+   * When the region is filled by a component with fields of its own (a
+   * Bar): the row a layout draws where the region caption would go —
+   * label, the Bar's quick controls (hidden · line · size) and ⚙ to open
+   * it. Set on the FIRST list of the region only.
+   */
+  regionHeader?: ReactNode;
+  /** The region's fill is hidden: a layout may fold its lists away. */
+  regionHidden?: boolean;
 }
 
 /**
@@ -116,21 +128,67 @@ function listFor(
  *  - a component with `members`: its one list;
  *  - anything else: none.
  */
+/**
+ * The quick controls for a region filled by a Bar: hidden · line · size,
+ * bound straight to the Bar instance, and ⚙ to open the Bar itself.
+ * Zach, 2026-09-11: "a key control I then want is hide header, hide
+ * footer … hide the line" — one click from the Block's own inspector.
+ */
+function RegionHeader({ fill, label, actions }: { fill: Instance; label: string; actions: MemberListActions }) {
+  const hidden = fill.props.hidden === true;
+  const line = fill.props.line !== false;
+  const size = typeof fill.props.size === "string" ? fill.props.size : "md";
+  return (
+    <div data-slot="region-header" data-region-fill={fill.id} data-hidden={hidden} className="flex items-center gap-2 px-2 pt-2 text-[10px] uppercase tracking-wide text-muted-foreground/80">
+      <span className="font-semibold">{label}</span>
+      <span className="flex-1" />
+      <label className="flex items-center gap-1 normal-case tracking-normal">
+        <input type="checkbox" data-slot="region-hidden" checked={hidden} onChange={(e) => actions.onSetProp(fill.id, "hidden", e.target.checked)} className="accent-foreground" />
+        hidden
+      </label>
+      <label className="flex items-center gap-1 normal-case tracking-normal">
+        <input type="checkbox" data-slot="region-line" checked={line} onChange={(e) => actions.onSetProp(fill.id, "line", e.target.checked)} className="accent-foreground" />
+        line
+      </label>
+      <select data-slot="region-size" value={size} onChange={(e) => actions.onSetProp(fill.id, "size", e.target.value)} className="rounded border border-input bg-background px-1 py-0 text-[10px] normal-case text-foreground">
+        <option value="sm">sm</option>
+        <option value="md">md</option>
+        <option value="lg">lg</option>
+        <option value="xl">xl</option>
+      </select>
+      <button type="button" data-slot="region-open" title={`Open the ${fill.type} that fills ${label}`} onClick={() => actions.onSelect(fill.id)} className="rounded px-1 text-[11px] hover:bg-muted hover:text-foreground">
+        ⚙
+      </button>
+    </div>
+  );
+}
+
 export function memberListsFor(entries: ComponentEntry[], instances: Instance[], subject: Instance | null, actions: MemberListActions): MemberList[] {
   if (!subject) return [];
   const entry = entries.find((e) => e.name === subject.type);
   if (!entry) return [];
   if (entry.slots) {
     const byId = new Map(instances.map((i) => [i.id, i]));
-    return entry.slots
-      .map((slot) => {
-        const fill = (subject.members ?? []).map((id) => byId.get(id)).find((i) => i?.slot?.id === slot.id);
-        const fillEntry = fill && entries.find((e) => e.name === fill.type);
-        const spec = fill && fillEntry ? memberSpecFor(fillEntry, fill) : undefined;
-        if (!fill || !fillEntry || !spec) return null;
-        return listFor(entries, instances, fill, fillEntry, spec, slot.region, actions, () => actions.onSelect(fill.id));
-      })
-      .filter((l): l is MemberList => l !== null);
+    const out: MemberList[] = [];
+    for (const slot of entry.slots) {
+      const fill = (subject.members ?? []).map((id) => byId.get(id)).find((i) => i?.slot?.id === slot.id);
+      const fillEntry = fill && entries.find((e) => e.name === fill.type);
+      if (!fill || !fillEntry) continue;
+      if (fillEntry.slots) {
+        // A fill with slots of its own (a Bar): its lists, grouped under
+        // ONE region row carrying the Bar's quick controls. No nested
+        // editor beyond that — ⚙ opens the Bar for everything else.
+        const inner = memberListsFor(entries, instances, fill, actions).map((l) => ({ ...l, id: l.id, label: `${slot.label} · ${l.label.toLowerCase()}`, region: slot.region }));
+        if (inner.length === 0) continue;
+        inner[0] = { ...inner[0]!, regionHeader: <RegionHeader fill={fill} label={slot.label} actions={actions} />, regionHidden: fill.props.hidden === true };
+        out.push(...inner);
+        continue;
+      }
+      const spec = memberSpecFor(fillEntry, fill);
+      if (!spec) continue;
+      out.push(listFor(entries, instances, fill, fillEntry, spec, slot.region, actions, () => actions.onSelect(fill.id)));
+    }
+    return out;
   }
   const spec = memberSpecFor(entry, subject);
   if (!spec) return [];

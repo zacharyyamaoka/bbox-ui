@@ -8,6 +8,11 @@
  *   2 · the mouse's back / forward buttons walk the subject history;
  *   3 · an empty member list is never folded — its + is one click away.
  *
+ * Round 3 (same evening, plan approved): the Block is Header · Body ·
+ * Footer with one Bar primitive at each end; hide, line and radius are
+ * fields; a header's `size` cascades to its slots and their members
+ * through the resolver's inherited layer, and a local override wins.
+ *
  * Drives headless Chrome over raw CDP, both themes; every assertion reads
  * the page's own DOM. Writes PNGs + manifest.json for the "picks applied"
  * section of docs/build_tree_and_slots.py.
@@ -225,8 +230,10 @@ for (const theme of ["dark", "light"]) {
   await addVia("Pill", 2);
   assert((await inspectorName()) === "Block", "adding into a slot keeps the Block");
   assert((await listCounts()).join() === "1,0,1,0,0,0,0", `header left and right count one (${(await listCounts()).join()})`);
-  const inSlot = async (slotId) => evaluate(`Array.from(document.querySelectorAll('[data-slot="dom-preview"] [data-slot="block-slot"][data-slot-id="${slotId}"] [data-slot="member-instance"]')).map(e => e.getAttribute('data-instance-type')).slice(1)`);
-  assert((await inSlot("header.left")).join() === "Glyph" && (await inSlot("header.right")).join() === "Pill", "the render put each member in its hole");
+  // The header is a Bar: its left / center / right are the Bar's cells; the
+  // first member-instance inside a cell is the cell's own Flex fill.
+  const inCell = async (edge, cell) => evaluate(`Array.from(document.querySelectorAll('[data-slot="dom-preview"] [data-slot="bar"][data-edge="${edge}"] [data-slot="bar-cell"][data-cell="${cell}"] [data-slot="member-instance"]')).map(e => e.getAttribute('data-instance-type')).slice(1)`);
+  assert((await inCell("bottom", "left")).join() === "Glyph" && (await inCell("bottom", "right")).join() === "Pill", "the render put each member in its hole");
   const blockFilled = await screenshot(`${theme}-6-block-filled`, blockClip);
   const blockPage = await screenshot(`${theme}-6-block-page`);
   // A body row, then a Port in it: two clicks in, two presses back.
@@ -246,7 +253,91 @@ for (const theme of ["dark", "light"]) {
   await sideButton("back");
   assert((await inspectorName()) === "Block", "back: the Block");
   const deep = await screenshot(`${theme}-7-back-twice`, blockClip);
-  manifest.push({ theme, console: Array.from(new Set(consoleErrors)), files: { emptyOpen, stayed, entered, back, blockFresh, blockFilled, blockPage, deep } });
+
+  // ---- Round 3 · Bar, hide / line / radius, the size cascade
+  await load(theme, "Block");
+  // The anatomy: Block › Header (Bar) › Left · Center · Right; Body; Footer (Bar) › …
+  const navRows = () => evaluate(`Array.from(document.querySelectorAll('[data-slot="instance-navigator"] [data-slot="nav-row"]')).map(e => [e.getAttribute('data-instance-type'), Number(e.getAttribute('data-depth')), e.querySelector('[data-slot="nav-title"]')?.textContent.trim()])`);
+  const rows = await navRows();
+  assert(rows.length === 10, `ten rows: Block + 2 Bars + 7 Flex (${rows.length})`);
+  assert(rows[1][0] === "Bar" && rows[1][1] === 1 && rows[1][2] === "Header", `row 1 is the Header Bar (${rows[1]})`);
+  assert(rows[2][0] === "Flex" && rows[2][1] === 2 && rows[2][2] === "Left", `row 2 is the header's Left cell at depth 2 (${rows[2]})`);
+  assert(rows[5][2] === "Body" && rows[6][2] === "Footer", `Body then Footer (${rows[5][2]}, ${rows[6][2]})`);
+  // Two region rows with quick controls; seven lists still one click from +.
+  assert((await evaluate(`document.querySelectorAll('[data-slot="region-header"]').length`)) === 2, "a region row for Header and for Footer");
+  assert((await sectionCount()) === 7, "seven lists: three per bar and the body");
+  const r3clip = await inspectorClip();
+  const r3fresh = await screenshot(`${theme}-8-anatomy`, r3clip);
+  const r3page = await screenshot(`${theme}-8-anatomy-page`);
+  // Fill the header: Glyph left, TextBox centre, Pill right; a Port in the body row.
+  await addVia("Glyph", 0);
+  await addVia("TextBox", 1);
+  await addVia("Pill", 2);
+  assert((await inspectorName()) === "Block", "still on the Block after three adds");
+  const inBar = async (edge, cell) => evaluate(`Array.from(document.querySelectorAll('[data-slot="dom-preview"] [data-slot="bar"][data-edge="${edge}"] [data-slot="bar-cell"][data-cell="${cell}"] [data-slot="member-instance"]')).map(e => e.getAttribute('data-instance-type')).slice(1)`);
+  assert((await inBar("bottom", "left")).join() === "Glyph", "the Glyph is in the header's left cell");
+  assert((await inBar("bottom", "center")).join() === "TextBox", "the TextBox is in the header's centre cell");
+  assert((await inBar("bottom", "right")).join() === "Pill", "the Pill is in the header's right cell");
+  // Size cascade: header → xl reaches the Glyph and the TextBox; Pill too.
+  const glyphSize = () => evaluate(`document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="bottom"] [data-slot="glyph"]')?.getAttribute('data-size')`);
+  const textSize = () => evaluate(`document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="bottom"] [data-slot="text-box"]')?.getAttribute('data-size')`);
+  assert((await glyphSize()) === "md" && (await textSize()) === "md", `before: both md (${await glyphSize()}, ${await textSize()})`);
+  await setSelect('[data-slot="region-header"][data-region-fill] [data-slot="region-size"]', "xl");
+  await sleep(250);
+  assert((await glyphSize()) === "xl", `the header's xl reached the Glyph (${await glyphSize()})`);
+  assert((await textSize()) === "xl", `and the TextBox (${await textSize()})`);
+  assert((await evaluate(`document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="bottom"]')?.getAttribute('data-size')`)) === "xl", "the bar itself is xl");
+  assert((await evaluate(`document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="top"]')?.getAttribute('data-size')`)) === "md", "the footer stays md");
+  const r3xl = await screenshot(`${theme}-9-header-xl`, r3clip);
+  const r3xlPage = await screenshot(`${theme}-9-header-xl-page`);
+  // A local override on the Glyph wins, and its row says so.
+  await evaluate(`document.querySelectorAll('[data-slot="members-section"]')[0].querySelector('[data-slot="member-select"]').click()`);
+  await sleep(250);
+  assert((await inspectorName()) === "Glyph", "into the Glyph");
+  await evaluate(`Array.from(document.querySelectorAll('[data-slot="tier-button"]')).find(b => /expert/i.test(b.textContent))?.click()`);
+  await sleep(150);
+  // The row's provenance lives on its dot (a title, as the other layers'
+  // provenance does), not in the row text.
+  const provenance = await evaluate(`document.querySelector('[data-field="size"] [data-slot="field-provenance-dot"]')?.getAttribute('title') ?? ""`);
+  assert(/inherited/i.test(provenance) && /Header/.test(provenance), `the Glyph's size dot says inherited from Header (${provenance.slice(0, 80)})`);
+  const r3inherited = await screenshot(`${theme}-10-inherited-row`, r3clip);
+  // A size row with px labels is Figma Dense's named dropdown: open the
+  // trigger, then pick the "Small" row.
+  await evaluate(`document.querySelector('[data-field="size"] [data-slot="named-dropdown-trigger"]')?.click()`);
+  await sleep(150);
+  const picked = await evaluate(`(() => { const row = Array.from(document.querySelectorAll('[data-field="size"] [data-slot="named-dropdown-row"]')).find(b => /small/i.test(b.textContent)); if (row) { row.click(); return true; } const sel = document.querySelector('[data-field="size"] select'); if (sel) { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(sel, "sm"); sel.dispatchEvent(new Event("change", { bubbles: true })); return true; } return false; })()`);
+  assert(picked, "picked Small on the Glyph's size row");
+  await sleep(250);
+  assert((await glyphSize()) === "sm", `the Glyph's own sm wins over the header's xl (${await glyphSize()})`);
+  assert((await textSize()) === "xl", "the TextBox still inherits xl");
+  await evaluate(`document.querySelector('[data-field="size"] [data-slot="field-clear-override"]')?.click()`);
+  await sleep(250);
+  assert((await glyphSize()) === "xl", `clearing the override returns the Glyph to the inherited xl (${await glyphSize()})`);
+  await sideButton("back");
+  assert((await inspectorName()) === "Block", "back on the Block");
+  // Hide the footer; turn the header's line off.
+  await evaluate(`document.querySelectorAll('[data-slot="region-header"]')[1].querySelector('[data-slot="region-hidden"]').click()`);
+  await sleep(250);
+  assert((await evaluate(`document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="top"]')?.getAttribute('data-hidden')`)) === "true", "the footer bar is hidden in the render");
+  assert((await sectionCount()) === 4, `the footer's lists fold away: four lists remain (${await sectionCount()})`);
+  await evaluate(`document.querySelectorAll('[data-slot="region-header"]')[0].querySelector('[data-slot="region-line"]').click()`);
+  await sleep(250);
+  assert((await evaluate(`document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="bottom"]')?.getAttribute('data-line')`)) === "false", "the header's line is off");
+  assert((await evaluate(`getComputedStyle(document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="bottom"]')).borderBottomWidth`)) === "0px", "no divider painted");
+  const r3hidden = await screenshot(`${theme}-11-footer-hidden-line-off`, r3clip);
+  const r3hiddenPage = await screenshot(`${theme}-11-footer-hidden-page`);
+  // Radius: 0 is edge-to-edge. The number row sits in the Expert tier.
+  await evaluate(`Array.from(document.querySelectorAll('[data-slot="tier-button"]')).find(b => /expert/i.test(b.textContent))?.click()`);
+  await sleep(150);
+  assert(await evaluate(`!!document.querySelector('[data-field="radius"] input')`), "the radius row is there in Expert");
+  const before = await evaluate(`getComputedStyle(document.querySelector('[data-slot="dom-preview"] [data-slot="block"]')).borderRadius`);
+  assert(before === "8px", `default radius 8 (${before})`);
+  await evaluate(`(() => { const input = document.querySelector('[data-field="radius"] input, [data-field="radius"] [data-slot="number-input"] input'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; setter.call(input, "0"); input.dispatchEvent(new Event("input", { bubbles: true })); input.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+  await sleep(250);
+  const after = await evaluate(`getComputedStyle(document.querySelector('[data-slot="dom-preview"] [data-slot="block"]')).borderRadius`);
+  assert(after === "0px", `radius 0 is square (${after})`);
+  const r3square = await screenshot(`${theme}-12-radius-0-page`);
+  manifest.push({ theme, console: Array.from(new Set(consoleErrors)), files: { emptyOpen, stayed, entered, back, blockFresh, blockFilled, blockPage, deep, r3fresh, r3page, r3xl, r3xlPage, r3inherited, r3hidden, r3hiddenPage, r3square } });
 }
 
 writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2));

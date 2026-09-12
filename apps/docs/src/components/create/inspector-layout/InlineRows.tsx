@@ -67,6 +67,7 @@ function InlineRowsLayout(p: InspectorLayoutProps) {
   }
 
   let lastRegion: string | null | undefined;
+  const hiddenRegions = new Set<string>();
 
   return (
     <div data-slot="inspector-layout" data-inspector-layout="inline">
@@ -74,11 +75,19 @@ function InlineRowsLayout(p: InspectorLayoutProps) {
       <div data-slot="inline-rows-divider" style={dividerStyle} />
       <div data-slot="inline-rows-list" style={listWrapStyle}>
         {p.lists.map((list) => {
-          const caption = list.region !== null && list.region !== lastRegion ? list.region : null;
+          const caption = list.region !== null && list.region !== lastRegion && !list.regionHeader ? list.region : null;
+          const hiddenRegion = list.region !== null && hiddenRegions.has(list.region);
+          if (list.regionHeader && list.regionHidden && list.region !== null) hiddenRegions.add(list.region);
           lastRegion = list.region;
           const open = openIds.has(list.id);
+          // A hidden region (a Bar with `hidden` on) keeps only its header
+          // row — the toggle to bring it back — and folds its lists away.
+          if (hiddenRegion || (list.regionHeader && list.regionHidden)) {
+            return <div key={list.id}>{list.regionHeader ?? null}</div>;
+          }
           return (
             <div key={list.id}>
+              {list.regionHeader ?? null}
               {caption && (
                 <div data-slot="region-caption" className="px-2 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
                   {caption}

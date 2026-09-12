@@ -196,6 +196,25 @@ export const PORT_TEXT_SIZE_LABELS: Record<PortTextSize, string> = {
 };
 
 /**
+ * The unified size rung a header (Bar/Flex) hands down to its Ports
+ * (Zach, 2026-09-11: "one size rung, the same four names on every leaf").
+ * One cascading field instead of `diameter`/`textSize` drifting apart —
+ * see `port.presets.ts`, whose `PORT_PRESETS` governs both from this rung.
+ * Deliberately its own type, not `PortSize`/`PortTextSize`: those are each
+ * a single leaf's OWN ladder (and `PortSize` also accepts a bare `number`,
+ * the "Exact" branch), while `PortSizeRung` is the closed four-name
+ * vocabulary shared with `FlexSize`/`BarSize`.
+ */
+export const PORT_SIZE_RUNGS = ["sm", "md", "lg", "xl"] as const;
+export type PortSizeRung = (typeof PORT_SIZE_RUNGS)[number];
+export const PORT_SIZE_RUNG_LABELS: Record<PortSizeRung, string> = {
+  sm: "Small",
+  md: "Medium",
+  lg: "Large",
+  xl: "Extra Large",
+};
+
+/**
  * The interaction axis's visibility policy (PORT-SPEC.md §1.3.2):
  * `"onHover"` replaces the donor's `subtle` (opacity, not colour, so it
  * has no place on the state/colour axis). Host-computed, never persisted

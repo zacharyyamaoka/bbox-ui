@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { ComponentEntry, Instance, RenderContext } from "@bbox-ui/panel";
+import { effectiveProps } from "@bbox-ui/panel";
 
 /**
  * ONE way to draw an instance, members included, for every render.
@@ -56,12 +57,20 @@ export function renderInstance(
   };
   const kids = memberIds.map((id) => byId.get(id)).filter((c): c is Instance => !!c);
   const ctx: RenderContext = {};
-  if (inst.slot) ctx.slotLabel = inst.slot.label;
+  if (inst.slot) {
+    ctx.slotLabel = inst.slot.label;
+    ctx.slotId = inst.slot.id;
+  }
+  // What the component draws is its own props over what it inherits (a
+  // header's size reaching the Glyph inside it). The store keeps only the
+  // own props; the Code view prints only the store.
+  const all = Array.from(byId.values());
+  const props = effectiveProps(all, entries, inst);
   if (entry.slots) {
     ctx.slots = {};
     for (const child of kids) if (child.slot) ctx.slots[child.slot.id] = wrap(child);
-    return entry.render(inst.props, undefined, ctx);
+    return entry.render(props, undefined, ctx);
   }
   const children = kids.length === 0 ? undefined : kids.map(wrap);
-  return entry.render(inst.props, children, ctx);
+  return entry.render(props, children, ctx);
 }

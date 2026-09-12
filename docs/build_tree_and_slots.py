@@ -203,6 +203,31 @@ if r2.exists():
 {cons_html}
 """
 
+# ---- Round 3: Bar, hide / line / radius, the size cascade (same round2/ manifest, new files)
+ROUND3 = ""
+if r2.exists():
+    entries3 = {m["theme"]: m for m in json.loads(r2.read_text())}
+    d3, l3 = entries3.get("dark"), entries3.get("light")
+    if d3 and "r3fresh" in d3.get("files", {}):
+        cons3 = d3.get("console") or []
+        cons3_html = ("<details><summary>console during the run: " + str(len(cons3)) + "</summary><pre>" + "\n".join(cons3) + "</pre></details>") if cons3 else '<p class="meas">console clean during the run</p>'
+        ROUND3 = f"""
+<h2>Round 3 — Header · Body · Footer, one Bar for both ends, and the size cascade</h2>
+<p>The plan you approved, built. A Block declares three slots: <strong>header</strong> and <strong>footer</strong> are each filled by a <strong>Bar</strong> (the same component: left · center · right cells, a dividing line that takes the appearance cascade, <code>hidden</code>, <code>line</code>, <code>size</code>), the <strong>body</strong> by a Flex column. Slots nest, so a fresh Block is ten instances and the navigator reads Block › Header › Left. The Block gained <code>radius</code> (0 is edge-to-edge). Every leaf has the same <code>size</code> rung — sm · md · lg · xl — and a header's size reaches its members through a fourth resolver layer, <em>inherited</em>, that loses to an own value and beats a preset (D1).</p>
+<div class="three">
+  <figure class="card"><img src="{png("round2/" + d3["files"]["r3fresh"])}" alt="anatomy"><figcaption>dark · a fresh Block: Header and Footer rows with hidden · line · size, seven lists</figcaption></figure>
+  <figure class="card"><img src="{webp("round2/" + d3["files"]["r3xlPage"])}" alt="header xl"><figcaption>dark · header set to xl: the Glyph, TextBox and bar grew; the footer stayed md</figcaption></figure>
+  <figure class="card"><img src="{png("round2/" + d3["files"]["r3inherited"])}" alt="inherited row"><figcaption>dark · inside the Glyph: its size row reads <em>inherited · Header</em></figcaption></figure>
+</div>
+<div class="three" style="margin-top:16px">
+  <figure class="card"><img src="{webp("round2/" + d3["files"]["r3hiddenPage"])}" alt="footer hidden, line off"><figcaption>dark · footer hidden (its lists fold to the row), header line off</figcaption></figure>
+  <figure class="card"><img src="{webp("round2/" + d3["files"]["r3square"])}" alt="radius 0"><figcaption>dark · radius 0: edge to edge</figcaption></figure>
+  <figure class="card"><img src="{webp("round2/" + (l3 or d3)["files"]["r3xlPage"])}" alt="light"><figcaption>light · header xl</figcaption></figure>
+</div>
+<p>Checked in both themes by the same journey: ten navigator rows in anatomy order; two region rows; the Glyph, TextBox and Pill land in the header's cells; xl on the header reaches the Glyph and TextBox while the footer stays md; the Glyph's own sm wins and clearing it returns to inherited xl; hiding the footer removes its bar from the render and folds its lists; line off paints no divider; radius 0 measures 0px.</p>
+{cons3_html}
+"""
+
 HTML = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -298,6 +323,7 @@ HTML = f"""<!doctype html>
 {LAYOUT_CARDS}
 
 {ROUND2}
+{ROUND3}
 
 <h2>Decisions — each with the default taken if you say nothing</h2>
 <ul class="decide">
