@@ -461,7 +461,13 @@ function FieldRow({
   const data = readRow(field, subjects, presets, toSubject);
 
   return (
-    <div data-slot="figma-dense-row" data-field={field.id} data-governed={isGoverned} style={rowWrapStyle}>
+    <div
+      data-slot="figma-dense-row"
+      data-field={field.id}
+      data-governed={isGoverned}
+      data-readonly={field.readOnly === true}
+      style={rowWrapStyle}
+    >
       <div style={rowGridStyle}>
         <RowLabel field={field} data={data} governed={isGoverned} expanded={expanded} setExpanded={setExpanded} onChange={onChange} />
         <div style={controlCellStyle}>
@@ -733,6 +739,28 @@ function DenseControl({
   drivenPresetId: string | undefined;
   onChange: (value: FieldValue) => void;
 }) {
+  // WHY checked before any `field.kind` branch: `FieldSpec.readOnly`
+  // (schema/field.ts — `HOST_FIELDS`'s derived `w`/`h`, @bbox-ui/panel's
+  // hostFields.ts) is a fact about who may EDIT the field, orthogonal to
+  // what kind of value it holds. A read-only number still renders as a
+  // number-shaped display, never the live `NumberInput` a drag/scroll
+  // could nudge — this is the one row a panel must show but never let
+  // anyone commit a value through.
+  if (field.readOnly) {
+    return (
+      <div style={numberBoxStyle(secondary)}>
+        <input
+          type="text"
+          disabled
+          readOnly
+          value={isMixed ? "Mixed" : String(value ?? field.defaultValue)}
+          style={{ ...textInputStyle(true), cursor: "not-allowed", opacity: 0.6 }}
+        />
+        {field.unit && <span style={numberUnitStyle}>{field.unit}</span>}
+      </div>
+    );
+  }
+
   if (field.kind === "segments") {
     const options = field.options ?? [];
     // The one thing named outright: a wrapped row of buttons for a

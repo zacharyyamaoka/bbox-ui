@@ -45,6 +45,17 @@ export const TIER_META: Record<Tier, { label: string; hint: string }> = {
  * field is one tap away.
  */
 export function classifyField(field: FieldSpec, presets: PresetSpec[], governed: Set<string>): Tier {
+  // WHY checked before every other rule: a HOST FACT (`HOST_FIELDS` —
+  // ./hostFields.ts) is neither the frequently-tweaked "simple" case nor a
+  // preset-governed "expert" one — it is just always there, the same row
+  // in the same place regardless of which component is selected. Letting
+  // it fall through to the ordinary rules below would sort `rotation`
+  // (a `kind: "number"`) into "expert" as a bare continuous number, next
+  // to Pill's raw opacity — a fact about the FIELD's shape, not about
+  // where it comes from, and the wrong tier for something that belongs on
+  // every single instance's Renderer section.
+  if (field.host === true) return "advanced";
+
   const isSelector = field.id === "state" || presets.some((p) => p.selector === field.id);
   const isEscapeHatch = /escape hatch/i.test(field.hint ?? "");
   const isPlainName = field.kind === "text" && !field.hint;

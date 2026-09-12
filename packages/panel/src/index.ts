@@ -35,3 +35,4 @@ export {
   type Instance,
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
+export { HOST_FIELDS } from "./hostFields";

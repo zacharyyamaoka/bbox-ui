@@ -227,9 +227,9 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { state: "outOfFocus", children: "Dimmed" },
   ],
   Glyph: [
-    { size: "xl", children: "🔍" },
-    { size: "lg", children: "⚙️" },
-    { size: "md", children: "◆" },
+    { content: "lucide:search" },
+    { sizePreset: "lg", content: "emoji:⚙️" },
+    { sizePreset: "md", content: "text:◆" },
   ],
   TextBox: [
     { size: "md", children: "Text Box" },
@@ -359,6 +359,13 @@ export function randomValue(field: FieldSpec, roll: () => number): FieldValue | 
     }
     case "text":
       return RANDOM_WORDS[Math.floor(roll() * RANDOM_WORDS.length)]!;
+    case "glyph":
+      // A "glyph" field's value is the SAME encoded string a "text" field
+      // holds (@bbox-ui/glyph-content's grammar) — randomising it as a
+      // plain word, explicitly `text:`-prefixed, keeps it a valid,
+      // renderable value rather than a bare string decode would only
+      // accept via its leniency fallback.
+      return `text:${RANDOM_WORDS[Math.floor(roll() * RANDOM_WORDS.length)]}`;
   }
 }
 
