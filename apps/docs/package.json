@@ -11,7 +11,8 @@
     "lint": "biome check",
     "format": "biome format --write",
     "registry:build": "node --experimental-strip-types ./src/scripts/build-registry.mts",
-    "registry:copy": "node scripts-copy-registry.mjs"
+    "registry:copy": "node scripts-copy-registry.mjs",
+    "typecheck": "pnpm run types:check"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

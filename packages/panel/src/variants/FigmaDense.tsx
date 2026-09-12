@@ -1004,7 +1004,9 @@ function NamedDropdown({
                   if (e.key !== "Enter") return;
                   const target = e.target as HTMLInputElement;
                   if (target.value === "") return;
-                  custom.onChange(Number(target.value));
+                  const n = commitFor(target.value, custom.min, custom.max, custom.step);
+                  if (n === null) return;
+                  custom.onChange(n);
                   setOpen(false);
                 }}
                 style={dropdownCustomInputStyle}

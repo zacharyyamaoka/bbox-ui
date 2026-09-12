@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The inspector panel engine: one field-resolution model, one tier rule, and the panel designs that render them. Host-neutral \u2014 no Vite, no Next, no Storybook. Consumed by demos/inspector and by the bbox-ui.com create page, so the two can never drift.",
+  "description": "The inspector panel engine: one field-resolution model, one tier rule, and the panel designs that render them. Host-neutral — no Vite, no Next, no Storybook. Consumed by demos/inspector and by the bbox-ui.com create page, so the two can never drift.",
   "exports": {
     ".": "./src/index.ts",
     "./variants": "./src/variants/index.ts",
@@ -14,12 +14,16 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bbox-ui/core": "workspace:*",
     "@bbox-ui/schema": "workspace:*",
-    "react": "^19.0.0",
-    "@bbox-ui/core": "workspace:*"
+    "react": "^19.0.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.0.0",
+    "jsdom": "^30.0.1",
+    "react-dom": "^19.3.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
   }

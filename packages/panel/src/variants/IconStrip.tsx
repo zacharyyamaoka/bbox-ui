@@ -8,7 +8,7 @@ import {
   type FieldValue,
 } from "@bbox-ui/schema";
 import { STATE_TOKENS, TONE_TOKENS, type AppearanceState, type Tone } from "@bbox-ui/core";
-import { NumberInput } from "../NumberInput";
+import { NumberInput, snapTo } from "../NumberInput";
 import { readFieldRow } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
@@ -485,10 +485,16 @@ function FieldStepper({
   const r = resolve(field, panel);
   const step = field.step ?? 1;
   const current = r.collapsed === undefined ? (field.defaultValue as number) : Number(r.collapsed);
+  // WHY the arrows are inert on a Mixed selection: the contract writes ONE
+  // value to every selected instance, so "+" on a Mixed row could only write
+  // default+step to all of them and destroy the values that made it Mixed
+  // (round 5). Figma nudges each instance by the delta; that needs a
+  // per-instance write the contract does not have. Typing still works.
+  // The clamp is the number box's own snapTo, so the arrows and the box can
+  // never disagree about the grid.
   function nudge(delta: number) {
-    const next = current + delta;
-    const clamped = Math.min(field.max ?? Infinity, Math.max(field.min ?? -Infinity, next));
-    panel.onChange(field.id, Math.round(clamped * 1000) / 1000);
+    if (r.isMixed) return;
+    panel.onChange(field.id, snapTo(current + delta, { min: field.min, max: field.max, step: field.step }));
   }
   return (
     <ClusterShell field={field} r={r} isGoverned={governed.has(field.id)} onClearOverride={() => panel.onClearOverride(field.id)}>
@@ -496,8 +502,9 @@ function FieldStepper({
         {glyph}
         <button
           type="button"
-          title={`Decrease ${field.label}`}
+          title={r.isMixed ? "Mixed: type a value instead" : `Decrease ${field.label}`}
           aria-label={`Decrease ${field.label}`}
+          disabled={r.isMixed}
           onClick={() => nudge(-step)}
           style={stepperBtnStyle}
         >
@@ -521,8 +528,9 @@ function FieldStepper({
         />
         <button
           type="button"
-          title={`Increase ${field.label}`}
+          title={r.isMixed ? "Mixed: type a value instead" : `Increase ${field.label}`}
           aria-label={`Increase ${field.label}`}
+          disabled={r.isMixed}
           onClick={() => nudge(step)}
           style={stepperBtnStyle}
         >

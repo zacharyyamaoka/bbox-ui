@@ -86,6 +86,14 @@ describe("blurOutcome", () => {
 });
 
 describe("reduceNumberInput — the wiring, as a user drives it", () => {
+  it("the clear route shows the value the blur carried, so a box over a resolved 0 does not sit blank (round 5)", () => {
+    // Padding reads 0 with nothing stored. Erase and leave: the override
+    // is cleared (nothing to clear) and the resolution is still 0, so no
+    // value change arrives; the box must already read 0.
+    const r = run(0, [{ type: "focus", value: 0 }, { type: "change", next: "" }, { type: "blur", value: 0 }]);
+    expect(r.effects).toEqual([{ kind: "clear" }]);
+    expect(r.state.draft).toBe("0");
+  });
   it("focus records whether the box displayed a value (kills 'always started with value')", () => {
     const mixed = run(undefined, [{ type: "focus", value: undefined }]);
     expect(mixed.state.startedWithValue).toBe(false);

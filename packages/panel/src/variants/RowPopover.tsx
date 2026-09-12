@@ -136,9 +136,19 @@ function RowPopoverPanel({
   useEffect(() => {
     if (openFieldId === null) return;
     const fieldId = openFieldId;
+    // WHY the active element is blurred before the popover unmounts: the
+    // number box commits an erase-to-clear on blur, and unmounting first
+    // meant React never delivered that blur — Escape, outside-click and
+    // re-clicking the row all silently kept a value the user had erased
+    // (round 5). Dismissing is not cancelling anywhere else in the panel.
+    function settlePendingEdit() {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && popoverRef.current?.contains(active)) active.blur();
+    }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
+        settlePendingEdit();
         setOpenFieldId(null);
       }
     }
@@ -146,7 +156,10 @@ function RowPopoverPanel({
       const target = e.target as Node;
       const insidePopover = popoverRef.current?.contains(target);
       const insideRow = rowRefs.current[fieldId]?.contains(target);
-      if (!insidePopover && !insideRow) setOpenFieldId(null);
+      if (!insidePopover && !insideRow) {
+        settlePendingEdit();
+        setOpenFieldId(null);
+      }
     }
     document.addEventListener("keydown", onKeyDown, true);
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -296,7 +309,13 @@ function RowPopoverPanel({
                 data-slot="row-value-trigger"
                 aria-haspopup="dialog"
                 aria-expanded={openFieldId === field.id}
-                onClick={() => setOpenFieldId((id) => (id === field.id ? null : field.id))}
+                onClick={() => {
+                  // Re-clicking the row is the third dismissal route; settle
+                  // a pending erase-to-clear before the popover unmounts.
+                  const active = document.activeElement;
+                  if (active instanceof HTMLElement && popoverRef.current?.contains(active)) active.blur();
+                  setOpenFieldId((id) => (id === field.id ? null : field.id));
+                }}
                 style={rowValueButtonStyle(openFieldId === field.id)}
               >
                 {state.isMixed ? (

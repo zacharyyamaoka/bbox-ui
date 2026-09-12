@@ -47,6 +47,9 @@ export interface NumberRange {
 /** The one clamp every number surface uses — the box, the spinner and the
  *  scrub label. Two clamps for one rule is how they disagree. */
 export function clampTo(n: number, min?: number, max?: number): number {
+  // An inverted range (max < min) is not a range; the browser leaves the
+  // value alone, so this does too rather than returning max below min.
+  if (min !== undefined && max !== undefined && max < min) return n;
   return Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
 }
 
@@ -63,8 +66,8 @@ export function clampTo(n: number, min?: number, max?: number): number {
  */
 export function snapTo(n: number, range: NumberRange): number {
   const { min, max } = range;
-  const step = range.step ?? 1;
-  if (!(step > 0)) return clampTo(n, min, max);
+  // No step, or a non-positive one, is the browser's default grid of 1.
+  const step = range.step !== undefined && range.step > 0 ? range.step : 1;
   const base = min ?? 0;
   let k = Math.round((n - base) / step + 1e-9);
   if (min !== undefined) k = Math.max(k, 0);
@@ -154,7 +157,12 @@ export function reduceNumberInput(
           // stored, not "" over it.
           return { state: { ...next, draft: event.value === undefined ? "" : String(event.value) }, effects: [] };
         case "clear":
-          return { state: { ...next, draft: "" }, effects: [{ kind: "clear" }] };
+          // Show the value the blur carried, not "": when clearing does not
+          // move the resolved value (nothing was stored, or the override
+          // equalled the default) no value change arrives to resync the box,
+          // and it sat blank over a resolved 0 (round 5). When clearing does
+          // move it, the value effect brings the new resolution.
+          return { state: { ...next, draft: event.value === undefined ? "" : String(event.value) }, effects: [{ kind: "clear" }] };
         case "commit":
           return { state: { ...next, draft: String(out.value) }, effects: [{ kind: "commit", value: out.value }] };
         case "show":

@@ -283,8 +283,12 @@ export const MIXED_BENCH = "Mixed bench";
 export function sharedFields(entries: ComponentEntry[]): { fields: FieldSpec[]; excluded: string[] } {
   if (entries.length === 0) return { fields: [], excluded: [] };
   const [first, ...rest] = entries;
+  // For a number field the RANGE is the option set: two heights that agree
+  // on kind alone let a shared box write 500 into a component whose own
+  // control stops at 200 (round 5). Default matters too — one box cannot
+  // show two resting values.
   const signature = (f: FieldSpec) =>
-    `${f.kind}|${(f.options ?? []).map((o) => String(o.value)).join(",")}`;
+    `${f.kind}|${(f.options ?? []).map((o) => String(o.value)).join(",")}|${f.min ?? ""}|${f.max ?? ""}|${f.step ?? ""}|${String(f.defaultValue)}`;
 
   const fields: FieldSpec[] = [];
   const excluded: string[] = [];

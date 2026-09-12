@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FieldSpec } from "@bbox-ui/schema";
 import { PORT_FIELDS } from "@bbox-ui/core";
-import { randomValue } from "../src/bench";
+import { randomValue, sharedFields } from "../src/bench";
+import type { ComponentEntry } from "../src/registerComponent";
 
 const roll = () => 0.42;
 
@@ -38,5 +39,28 @@ describe("randomValue", () => {
     for (const f of PORT_FIELDS) {
       expect(f.randomize === false, `${f.id} randomize flag`).toBe(hostComputed.includes(f.id));
     }
+  });
+});
+
+describe("sharedFields", () => {
+  const entry = (name: string, fields: FieldSpec[]): ComponentEntry => ({ name, fields, presets: [], render: () => null });
+  const height = (max: number | undefined, def = 0): FieldSpec => ({ id: "height", label: "Height", kind: "number", defaultValue: def, min: 0, max, step: 1 });
+
+  it("does not share a number field whose range differs — the range IS the option set (round 5)", () => {
+    // Block's height has no max; RowContainer's stops at 200. One box over
+    // both wrote 500 into the one that forbids it.
+    const { fields, excluded } = sharedFields([entry("Block", [height(undefined)]), entry("RowContainer", [height(200)])]);
+    expect(fields).toEqual([]);
+    expect(excluded).toEqual(["Height (different options on RowContainer)"]);
+  });
+
+  it("does not share a number field whose resting default differs", () => {
+    const { fields } = sharedFields([entry("Stack", [height(24, 12)]), entry("RowContainer", [height(24, 8)])]);
+    expect(fields).toEqual([]);
+  });
+
+  it("still shares a number field that agrees on everything", () => {
+    const { fields } = sharedFields([entry("A", [height(24)]), entry("B", [height(24)])]);
+    expect(fields.map((f) => f.id)).toEqual(["height"]);
   });
 });
