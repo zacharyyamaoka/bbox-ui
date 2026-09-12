@@ -1,22 +1,34 @@
+import React from "react";
+import { act, create, type ReactTestRendererJSON } from "react-test-renderer";
 import { describe, expect, it } from "vitest";
-import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
+import { assertDisjointPresets, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import { GLYPH_FIELDS, GLYPH_PRESETS } from "../src/glyph.fields";
-import { Glyph } from "../src/glyph";
+import { Glyph, GlyphResolverProvider, type GlyphProps } from "../src/glyph";
 import { GLYPH_SIZES } from "../src/glyph.layout";
 
+// React 19's test renderer only flushes its render synchronously inside
+// `act()`; without this flag it warns "not configured to support act()"
+// even though `act()` is exactly what every render below already uses.
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 /**
- * `Glyph` uses no hooks — calling it directly, as a plain function, returns
- * the exact React element tree it would render, with every default already
- * applied by its own `= "..."` destructuring. Reading defaults off THIS
- * (not off a hand-retyped literal) is what makes this file fail the moment
- * `glyph.tsx`'s real default changes, instead of silently drifting alongside
- * a copy that only agrees with itself. No DOM/jsdom is needed: these are
- * plain element objects, never rendered or mounted. Same pattern as T0's
- * `port.fields.test.ts`.
+ * Glyph v2 reads a React context (`useGlyphResolver`) to resolve a Lucide
+ * name — the frozen contract's own design (docs/GLYPH-PLAN.md), so it can
+ * no longer be called as a bare function the way `port.fields.test.ts`
+ * calls `Port`: `useContext` throws "Invalid hook call" outside an actual
+ * React render (no fiber, no dispatcher). `react-test-renderer` renders it
+ * for real, with zero DOM/jsdom, and hands back the same host-node prop
+ * object (`.toJSON().props`) the old direct-call pattern read — every
+ * assertion below is unchanged in shape, only the getter changed.
  */
-function glyphElement(props: Record<string, unknown> = {}) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (Glyph as any)(props);
+function renderGlyph(props: GlyphProps = {}): ReactTestRendererJSON {
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(React.createElement(Glyph, props));
+  });
+  const json = renderer.toJSON() as ReactTestRendererJSON;
+  act(() => renderer.unmount());
+  return json;
 }
 
 function field(id: string) {
@@ -25,76 +37,165 @@ function field(id: string) {
   return found;
 }
 
-const bareGlyph = glyphElement();
+const bareGlyph = renderGlyph();
 
 describe("GLYPH_FIELDS", () => {
-  it("has exactly Glyph's three real props, in panel order", () => {
-    expect(GLYPH_FIELDS.map((f) => f.id)).toEqual(["size", "padding", "children"]);
+  it("every id is a real GlyphProps key, in panel order (docs/GLYPH-PLAN.md's contract table)", () => {
+    expect(GLYPH_FIELDS.map((f) => f.id)).toEqual(["content", "sizePreset", "size", "padding"]);
   });
 
-  it("size's declared default equals Glyph's real default (glyph.tsx: size = \"xl\")", () => {
-    expect(field("size").defaultValue).toBe("xl");
-    expect(bareGlyph.props["data-size"]).toBe(field("size").defaultValue);
-    expect(bareGlyph.props.style.width).toBe(GLYPH_SIZES.xl);
-    expect(bareGlyph.props.style.fontSize).toBe(GLYPH_SIZES.xl);
+  it('content defaults to "", the encoded empty slot (glyph.tsx: content = "")', () => {
+    expect(field("content").defaultValue).toBe("");
+    expect(field("content").kind).toBe("glyph");
+    expect(bareGlyph.props["data-content-kind"]).toBe("none");
+    expect(bareGlyph.props["data-empty"]).toBe("true");
+  });
+
+  it('sizePreset defaults to "sm" (D1 — glyph.tsx: sizePreset = "sm")', () => {
+    expect(field("sizePreset").defaultValue).toBe("sm");
+    expect(bareGlyph.props["data-size-preset"]).toBe("sm");
+  });
+
+  it("size's declared default equals GLYPH_SIZES.sm, and the bare glyph paints at that footprint", () => {
+    expect(field("size").defaultValue).toBe(GLYPH_SIZES.sm);
+    expect(bareGlyph.props["data-size"]).toBe(GLYPH_SIZES.sm);
+    expect((bareGlyph.props.style as Record<string, unknown>).width).toBe(GLYPH_SIZES.sm);
+    expect((bareGlyph.props.style as Record<string, unknown>).height).toBe(GLYPH_SIZES.sm);
+    expect((bareGlyph.props.style as Record<string, unknown>).fontSize).toBe(GLYPH_SIZES.sm);
   });
 
   it("padding's declared default equals Glyph's real default (glyph.tsx: padding = 0)", () => {
     expect(field("padding").defaultValue).toBe(0);
-    expect(bareGlyph.props.style.padding).toBe(field("padding").defaultValue);
-  });
-
-  it("children has NO real destructured default on Glyph — omitting it renders an empty square, not the literal placeholder", () => {
-    // The span's own `children` prop is exactly what was passed in — no
-    // fallback branch exists (unlike Port's conditional PortLabel), so an
-    // omitted `children` reads back as `undefined`, proving the real
-    // default behavior is "empty slot", which `FieldValue` (string |
-    // number | boolean) cannot encode.
-    expect(bareGlyph.props.children).toBeUndefined();
-    // "🔍" is therefore a deliberate demoable placeholder, not a fact
-    // about the component — pinned consciously here rather than asserted
-    // as if it were glyph.tsx's own default. See glyph.fields.ts's comment
-    // on this field and docs/T1-SPEC.md §4.1 for the full disagreement.
-    expect(field("children").defaultValue).toBe("🔍");
+    expect((bareGlyph.props.style as Record<string, unknown>).padding).toBe(0);
   });
 
   it("defaultArgs mirrors every field's own declared defaultValue, one entry per field", () => {
-    expect(defaultArgs(GLYPH_FIELDS)).toEqual({
-      size: field("size").defaultValue,
+    expect(defaultArgs(GLYPH_FIELDS, GLYPH_PRESETS)).toEqual({
+      content: field("content").defaultValue,
+      sizePreset: field("sizePreset").defaultValue,
+      // "size" is governed by every GLYPH_PRESETS entry — omitted from
+      // defaultArgs on purpose, same reason storybook.ts's own header
+      // comment gives: materialising it would pin the override layer and
+      // make the preset layer unreachable in a Storybook story.
       padding: field("padding").defaultValue,
-      children: field("children").defaultValue,
     });
   });
 
-  it("size's options are exactly the real GlyphSize union (glyph.layout.ts's own GLYPH_SIZES keys)", () => {
-    expect(field("size").options?.map((o) => o.value)).toEqual(Object.keys(GLYPH_SIZES));
+  it("an explicit size overrides the preset, even size:0 (checked with !== undefined, never ??)", () => {
+    const el = renderGlyph({ size: 0 });
+    expect((el.props.style as Record<string, unknown>).width).toBe(0);
+    expect(el.props["data-size"]).toBe(0);
   });
 
-  it("every size option resolves to Glyph's real rendered footprint for that size", () => {
-    for (const option of field("size").options ?? []) {
-      const el = glyphElement({ size: option.value });
-      expect(el.props.style.width).toBe(GLYPH_SIZES[option.value as keyof typeof GLYPH_SIZES]);
-      expect(el.props.style.height).toBe(GLYPH_SIZES[option.value as keyof typeof GLYPH_SIZES]);
+  it("padding is additive to the rendered footprint, never folded into size", () => {
+    const el = renderGlyph({ padding: 8 });
+    expect((el.props.style as Record<string, unknown>).width).toBe(GLYPH_SIZES.sm);
+    expect((el.props.style as Record<string, unknown>).padding).toBe(8);
+  });
+
+  it("sizePreset's options are exactly the real GlyphSize union (glyph.layout.ts's own GLYPH_SIZES keys)", () => {
+    expect(field("sizePreset").options?.map((o) => o.value)).toEqual(Object.keys(GLYPH_SIZES));
+  });
+
+  it("every size preset resolves to Glyph's real rendered footprint for that preset", () => {
+    for (const option of field("sizePreset").options ?? []) {
+      const el = renderGlyph({ sizePreset: option.value as GlyphProps["sizePreset"] });
+      expect((el.props.style as Record<string, unknown>).width).toBe(
+        GLYPH_SIZES[option.value as keyof typeof GLYPH_SIZES],
+      );
     }
   });
 
-  it("padding is additive to the rendered footprint, never a fourth field baked into size (docs/T1-SPEC.md §4.1)", () => {
-    const el = glyphElement({ padding: 8 });
-    expect(el.props.style.width).toBe(GLYPH_SIZES.xl);
-    expect(el.props.style.padding).toBe(8);
-  });
-
-  it("toArgTypes maps size to a select control, padding to number, children to text", () => {
+  it("toArgTypes maps content to text (Storybook has no picker), sizePreset to select, size/padding to number", () => {
     const argTypes = toArgTypes(GLYPH_FIELDS);
-    expect(argTypes.size.control).toBe("select");
+    expect(argTypes.content.control).toBe("text");
+    expect(argTypes.sizePreset.control).toBe("select");
+    expect(argTypes.size.control).toBe("number");
+    expect(argTypes.size.min).toBe(8);
+    expect(argTypes.size.max).toBe(512);
     expect(argTypes.padding.control).toBe("number");
     expect(argTypes.padding.min).toBe(0);
-    expect(argTypes.padding.max).toBe(24);
-    expect(argTypes.padding.step).toBe(1);
-    expect(argTypes.children.control).toBe("text");
+    expect(argTypes.padding.max).toBe(64);
   });
 
-  it("has no presets — nothing on the board or in any donor gives Glyph a state axis (docs/T1-SPEC.md §4.1)", () => {
-    expect(GLYPH_PRESETS).toEqual([]);
+  it("GLYPH_PRESETS has exactly the four size presets, each governing only size", () => {
+    expect(GLYPH_PRESETS.map((p) => p.id)).toEqual(["sm", "md", "lg", "xl"]);
+    for (const preset of GLYPH_PRESETS) {
+      expect(preset.selector).toBe("sizePreset");
+      expect(preset.governs).toEqual(["size"]);
+    }
+  });
+
+  it("each preset's values keys equal its own governs — no orphaned or missing value", () => {
+    for (const preset of GLYPH_PRESETS) {
+      expect(Object.keys(preset.values).sort()).toEqual([...preset.governs].sort());
+    }
+  });
+
+  it("every preset's governed value matches the real GLYPH_SIZES ladder", () => {
+    for (const preset of GLYPH_PRESETS) {
+      expect(preset.values.size).toBe(GLYPH_SIZES[preset.id as keyof typeof GLYPH_SIZES]);
+    }
+  });
+
+  it("the governed set is closed — no two presets on different selectors ever claim the same field", () => {
+    expect(() => assertDisjointPresets(GLYPH_PRESETS)).not.toThrow();
+  });
+});
+
+describe("Glyph content rendering", () => {
+  it('renders children through the backwards-compatible slot while content is ""', () => {
+    const el = renderGlyph({ children: "◆" });
+    expect(el.props["data-content-kind"]).toBe("none");
+    expect(el.props["data-empty"]).toBeUndefined();
+    expect(el.children).toEqual(["◆"]);
+  });
+
+  it("renders emoji content at 0.85em", () => {
+    const el = renderGlyph({ content: "emoji:🚀" });
+    expect(el.props["data-content-kind"]).toBe("emoji");
+    const child = (el.children as { props: Record<string, unknown> }[])[0]!;
+    expect(child.props.style).toMatchObject({ fontSize: "0.85em" });
+  });
+
+  it("renders text content as a plain string child", () => {
+    const el = renderGlyph({ content: "text:◆" });
+    expect(el.props["data-content-kind"]).toBe("text");
+    expect(el.children).toEqual(["◆"]);
+  });
+
+  it("renders image content as a contain-fit <img>, never cropped or stretched", () => {
+    const el = renderGlyph({ content: "data:image/png;base64,AAAA" });
+    expect(el.props["data-content-kind"]).toBe("image");
+    const img = (el.children as { type: string; props: Record<string, unknown> }[])[0]!;
+    expect(img.type).toBe("img");
+    expect(img.props.src).toBe("data:image/png;base64,AAAA");
+    expect(img.props.style).toMatchObject({ objectFit: "contain" });
+  });
+
+  it("an UNRESOLVED lucide name (no GlyphResolverProvider) renders empty and marks data-unresolved with the name", () => {
+    const el = renderGlyph({ content: "lucide:rocket" });
+    expect(el.props["data-content-kind"]).toBe("lucide");
+    expect(el.props["data-unresolved"]).toBe("rocket");
+    expect(el.children).toBeNull();
+  });
+
+  it("a RESOLVED lucide name (GlyphResolverProvider mounted) renders the provider's element and clears data-unresolved", () => {
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        React.createElement(
+          GlyphResolverProvider,
+          { value: { renderLucide: (name: string) => React.createElement("svg", { "data-icon": name }) } },
+          React.createElement(Glyph, { content: "lucide:rocket" }),
+        ),
+      );
+    });
+    const json = renderer.toJSON() as ReactTestRendererJSON;
+    const children = json.children as ReactTestRendererJSON[];
+    expect(json.props["data-unresolved"]).toBeUndefined();
+    expect(children[0]!.type).toBe("svg");
+    expect(children[0]!.props["data-icon"]).toBe("rocket");
+    act(() => renderer.unmount());
   });
 });
