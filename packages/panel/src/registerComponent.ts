@@ -27,6 +27,29 @@ export interface RenderContext {
   /** When this instance itself fills a slot: the slot's label, so an empty
    *  Flex can say which hole it is. */
   slotLabel?: string;
+  /**
+   * True when this instance is drawn INSIDE a parent (a member or a slot
+   * fill), so a render can drop bench-only chrome such as a placeholder
+   * frame. Absent (top-level, drawn straight onto a canvas) reads as
+   * `false` — see docs/TEXTBOX-EDITING-SPEC.md §3.
+   */
+  nested?: boolean;
+  /**
+   * Present for an entry that declares `inlineEdit`. The host (apps/docs's
+   * workbench.tsx) owns `editingId` and the cancel snapshot; this bundle is
+   * this ONE instance's slice of it, already bound to its id and its
+   * `inlineEdit.field` so a component's render never sees an instance id.
+   */
+  edit?: {
+    /** True when THIS instance is the one currently being edited. */
+    editing: boolean;
+    /** Write-through to `inlineEdit.field` — every keystroke. */
+    onChange: (value: string) => void;
+    /** Ends editing, keeping the value. */
+    onCommit: (value: string) => void;
+    /** Ends editing, restoring the value captured when editing began. */
+    onCancel: () => void;
+  };
 }
 
 /**
@@ -76,6 +99,15 @@ export interface ComponentEntry {
    * the transform; this is where the panel picks it up. Defaults to identity.
    */
   toSubject?: (props: Record<string, unknown>) => Record<string, unknown>;
+  /**
+   * Declared by a component whose text IS one of its own props, so the
+   * create page's two-click rule and in-place editor know which field a
+   * typed value writes to. Only `TextBox` declares this today — the
+   * FieldSpec system stays untouched (`editing`/`onChange`/`onCommit`/
+   * `onCancel` are host wiring, never fields; docs/TEXTBOX-EDITING-SPEC.md
+   * §1/§3).
+   */
+  inlineEdit?: { field: string };
 }
 
 export function registerComponent(entry: ComponentEntry): ComponentEntry {

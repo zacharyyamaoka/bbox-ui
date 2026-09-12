@@ -128,6 +128,15 @@ export function Workbench() {
     Object.fromEntries(Object.entries(INITIAL_BENCHES).map(([name, list]) => [name, new Set(topLevel(list).map((i) => i.id))])),
   );
   const [positions, setPositions] = useState<Record<string, CanvasPosition>>({});
+  // In-place text editing (docs/TEXTBOX-EDITING-SPEC.md §3). The page owns
+  // both: which instance is editing, AND the value it held the moment
+  // editing began — `onChange` writes through on every keystroke (so a
+  // render can show what's being typed live), which means `props[field]`
+  // is no longer the pre-edit value by the time Escape asks to cancel.
+  // Without this snapshot, cancelling could only re-show whatever was last
+  // typed, not undo it.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSnapshot, setEditSnapshot] = useState<FieldValue | null>(null);
 
   const variant = findVariant(variantId);
   const navigator = findNavigator(navigatorId);
@@ -178,7 +187,46 @@ export function Workbench() {
   }, [instances, positions]);
 
   function setSelection(ids: string[]) {
+    // "Selecting a different instance commits and ends editing"
+    // (docs/TEXTBOX-EDITING-SPEC.md §3): no restore here, so whatever the
+    // write-through already put in `props[field]` simply stands — that IS
+    // the commit. Re-selecting the SAME sole instance (the two-click rule's
+    // first press landing again) must not interrupt an edit in progress.
+    if (editingId !== null && !(ids.length === 1 && ids[0] === editingId)) {
+      endEditing();
+    }
     setSelectedIdsByBench((prev) => ({ ...prev, [activeName]: new Set(ids) }));
+  }
+  /** Starts editing `id`'s `inlineEdit` field, snapshotting its current
+   *  value for a later cancel. A no-op for an entry that declares no
+   *  `inlineEdit` — docs/TEXTBOX-EDITING-SPEC.md §3's own rule. */
+  function requestEdit(id: string) {
+    const inst = instances.find((i) => i.id === id);
+    if (!inst) return;
+    const entry = entryFor(inst.type);
+    if (!entry.inlineEdit) return;
+    const value = inst.props[entry.inlineEdit.field];
+    setEditSnapshot(typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : "");
+    setEditingId(id);
+  }
+  function endEditing() {
+    setEditingId(null);
+    setEditSnapshot(null);
+  }
+  /** Writes ONE instance's prop — `applyToSelected`'s sibling for a single
+   *  in-place edit rather than the whole selection. */
+  function instancePropChange(id: string, fieldId: string, value: FieldValue) {
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: prev[activeName].map((i) => (i.id === id ? { ...i, props: { ...i.props, [fieldId]: value } } : i)),
+    }));
+  }
+  // Switching benches leaves `editingId` pointing at an instance in a bench
+  // that is no longer showing — end it rather than leave a dangling id an
+  // unrelated instance in the new bench could coincidentally match.
+  function changeActiveBench(name: string) {
+    if (editingId !== null) endEditing();
+    setActiveName(name);
   }
   function toggleSelected(id: string) {
     const next = new Set(selectedIds);
@@ -206,6 +254,7 @@ export function Workbench() {
     if (rootList.length <= 1) return;
     const doomed = rootList[rootList.length - 1]!;
     const gone = new Set(subtreeIds(bench, doomed.id));
+    if (editingId !== null && gone.has(editingId)) endEditing();
     setBenches((prev) => ({ ...prev, [activeName]: removeMember(prev[activeName], doomed.id) }));
     setSelectedIdsByBench((prev) => {
       const next = new Set(Array.from(prev[activeName]).filter((id) => !gone.has(id)));
@@ -248,6 +297,7 @@ export function Workbench() {
     if (isSlotFill(bench.find((i) => i.id === id))) return;
     const parent = parentMap(bench).get(id);
     const gone = new Set(subtreeIds(bench, id));
+    if (editingId !== null && gone.has(editingId)) endEditing();
     setBenches((prev) => ({ ...prev, [activeName]: removeMember(prev[activeName] ?? [], id) }));
     // A selection pointing at what was just removed lands on the parent, so
     // the inspector never goes blank mid-edit.
@@ -329,7 +379,7 @@ export function Workbench() {
       <BenchSidebar
         entries={REGISTRY}
         activeName={activeName}
-        onActiveNameChange={setActiveName}
+        onActiveNameChange={changeActiveBench}
         isMixed={isMixed}
         instances={treeOrder}
         tree={tree}
@@ -370,6 +420,11 @@ export function Workbench() {
             view={view}
             onRenderChange={setRender}
             onViewChange={setView}
+            editingId={editingId}
+            onRequestEdit={requestEdit}
+            onEditEnd={endEditing}
+            onInstancePropChange={instancePropChange}
+            editSnapshot={editSnapshot}
           />
         </div>
         <InspectorColumn

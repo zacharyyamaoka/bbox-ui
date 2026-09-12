@@ -17,13 +17,23 @@ import {
 } from "tldraw";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import type { CanvasPosition } from "../contract";
-import { renderInstance } from "../render-instance";
+import { renderInstance, type EditBundle } from "../render-instance";
+
+// The same host-neutral marker `TextBoxControl` puts on its own control
+// (packages/bbox-ui/src/textBox.tsx) — see the CSS rule added in
+// app/global.css and the `markEventAsHandled` call below, both keyed off it.
+const BBOX_INTERACTIVE_SELECTOR = "[data-bbox-interactive]";
 
 /**
  * Content rides a React context, not shape props: tldraw validates and
  * persists props as JSON, so a rendered component cannot live there. The
  * shape stores only WHICH instance it is; the component method looks the
  * live one up. Same mechanism as demos/story-hosts, for the same reason.
+ *
+ * `edit` rides the same context as `selectedIds` for the same reason:
+ * `editingId` must reach whichever shape is currently rendering, and a
+ * shape has no prop channel for it (tldraw props are JSON, `EditBundle`
+ * carries functions).
  */
 const BenchContext = createContext<{
   entries: ComponentEntry[];
@@ -31,7 +41,15 @@ const BenchContext = createContext<{
   byId: Map<string, Instance>;
   selectedIds: string[];
   onSelectInstance: (id: string, additive: boolean) => void;
-}>({ entries: [], instances: [], byId: new Map(), selectedIds: [], onSelectInstance: () => {} });
+  edit: EditBundle;
+}>({
+  entries: [],
+  instances: [],
+  byId: new Map(),
+  selectedIds: [],
+  onSelectInstance: () => {},
+  edit: { editingId: null, editSnapshot: null, onRequestEdit: () => {}, onEditEnd: () => {}, onInstancePropChange: () => {} },
+});
 
 interface BenchShapeProps {
   instanceId: string;
@@ -57,16 +75,43 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
   override canResize() {
     return false;
   }
+  // WHY explicit rather than relying on the inherited default: tldraw's own
+  // "edit" state is a SEPARATE mode (double-click a text shape, get its
+  // native editor) that this shape never enters — the create page owns
+  // "editing" as its own React state (`editingId`) and draws it by
+  // swapping in a real `<input>`/`<textarea>` inside the SAME shape, not by
+  // asking tldraw to switch tools. Returning `true` here would let tldraw
+  // start its own edit session on double-click, racing the two-click rule
+  // this shape's `onPointerDown` (below) already implements.
+  override canEdit() {
+    return false;
+  }
   override component(shape: BenchShape) {
-    const { entries, byId, selectedIds, onSelectInstance } = useContext(BenchContext);
+    const { entries, byId, selectedIds, onSelectInstance, edit } = useContext(BenchContext);
     const inst = byId.get(shape.props.instanceId);
+    const editor = this.editor;
     return (
       <HTMLContainer
         data-slot="tl-instance"
         data-instance-id={shape.props.instanceId}
         style={{ width: shape.props.w, height: shape.props.h, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "all" }}
+        // WHY: a pointer-down that lands on the editing control (the real
+        // `<input>`/`<textarea>`, marked `data-bbox-interactive` by
+        // packages/bbox-ui/src/textBox.tsx) must not let tldraw start its
+        // own gesture (a drag-to-move, a marquee) underneath it. The
+        // control already stops React's OWN propagation on its pointerdown
+        // (so this shape's onPointerDown never even fires for it), but
+        // tldraw's gesture recognizer listens on the native document, not
+        // through React — `markEventAsHandled` is tldraw's own escape
+        // hatch for exactly this (its doc: "stop other parts of tldraw
+        // from handling the event without impacting other... handlers").
+        onPointerDown={(e) => {
+          if (e.target instanceof Element && e.target.closest(BBOX_INTERACTIVE_SELECTOR)) {
+            editor.markEventAsHandled(e);
+          }
+        }}
       >
-        {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance) : null}
+        {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit) : null}
       </HTMLContainer>
     );
   }
@@ -110,6 +155,7 @@ interface Props {
   positions: Record<string, CanvasPosition>;
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
+  edit: EditBundle;
 }
 
 /**
@@ -128,8 +174,8 @@ export function TldrawCanvas(p: Props) {
 
   const byId = useMemo(() => new Map(p.instances.map((i) => [i.id, i])), [p.instances]);
   const ctx = useMemo(
-    () => ({ entries: p.entries, instances: p.instances, byId, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance }),
-    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance],
+    () => ({ entries: p.entries, instances: p.instances, byId, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit }),
+    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.edit],
   );
 
   // page → editor

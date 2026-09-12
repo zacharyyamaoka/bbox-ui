@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { RENDERS, VIEWS, type ViewportProps } from "../contract";
+import type { EditBundle } from "../render-instance";
 import { DomPreview } from "./dom-preview";
 import { CodeView } from "./code-view";
 
@@ -94,6 +95,15 @@ function Body(p: ViewportProps) {
   if (p.view === "code") {
     return <CodeView render={p.render} entries={p.entries} instances={p.instances} roots={p.roots} selectedIds={p.selectedIds} positions={p.positions} />;
   }
+  // The four in-place-editing props, regrouped once here rather than at
+  // every call site below — see `EditBundle`'s own doc comment.
+  const edit: EditBundle = {
+    editingId: p.editingId,
+    editSnapshot: p.editSnapshot,
+    onRequestEdit: p.onRequestEdit,
+    onEditEnd: p.onEditEnd,
+    onInstancePropChange: p.onInstancePropChange,
+  };
   switch (p.render) {
     case "dom":
       return (
@@ -104,6 +114,7 @@ function Body(p: ViewportProps) {
           selectedIds={p.selectedIds}
           onSelectionChange={p.onSelectionChange}
           onSelectInstance={p.onSelectInstance}
+          edit={edit}
         />
       );
     case "reactflow":
@@ -117,6 +128,7 @@ function Body(p: ViewportProps) {
           positions={p.positions}
           onSelectionChange={p.onSelectionChange}
           onPositionsChange={p.onPositionsChange}
+          edit={edit}
         />
       );
     case "tldraw":
@@ -130,6 +142,7 @@ function Body(p: ViewportProps) {
           positions={p.positions}
           onSelectionChange={p.onSelectionChange}
           onPositionsChange={p.onPositionsChange}
+          edit={edit}
         />
       );
   }

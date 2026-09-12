@@ -14,9 +14,17 @@ import {
 } from "@xyflow/react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import type { CanvasPosition } from "../contract";
-import { renderInstance } from "../render-instance";
+import { renderInstance, type EditBundle } from "../render-instance";
 
-type BenchNodeData = { entries: ComponentEntry[]; byId: Map<string, Instance>; instance: Instance; selectedIds: string[]; onSelectInstance: (id: string, additive: boolean) => void };
+// WHY this exact string and nothing fancier: it is the SAME class
+// `TextBoxControl` already puts on its `<input>`/`<textarea>`
+// (packages/bbox-ui/src/textBox.tsx) — the host-neutral marker
+// docs/TEXTBOX-EDITING-SPEC.md §1 asks the core to emit once and every host
+// to gate on in its own vocabulary. React Flow gates drag/pan/wheel by
+// class name, so naming it here is the WHOLE integration; no per-host CSS.
+const BBOX_INTERACTIVE = "bbox-interactive";
+
+type BenchNodeData = { entries: ComponentEntry[]; byId: Map<string, Instance>; instance: Instance; selectedIds: string[]; onSelectInstance: (id: string, additive: boolean) => void; edit: EditBundle };
 type BenchNode = Node<BenchNodeData, "bench">;
 
 /** The node body is the component itself, nothing else: the point of the
@@ -31,7 +39,7 @@ function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
       data-selected={selected}
       className="rounded-md p-2 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-ring"
     >
-      {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance)}
+      {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance, data.edit)}
     </div>
   );
 }
@@ -47,6 +55,7 @@ interface Props {
   positions: Record<string, CanvasPosition>;
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
+  edit: EditBundle;
 }
 
 /**
@@ -66,10 +75,10 @@ function Canvas(p: Props) {
         type: "bench",
         position: p.positions[instance.id] ?? { x: 0, y: 0 },
         selected: p.selectedIds.includes(instance.id),
-        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance },
+        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit },
         draggable: true,
       })),
-    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance],
+    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, p.edit],
   );
 
   // WHY selection is read from `select` changes and NOT from
@@ -116,6 +125,17 @@ function Canvas(p: Props) {
         multiSelectionKeyCode="Shift"
         proOptions={{ hideAttribution: true }}
         style={{ background: "transparent" }}
+        // WHY all three: a drag that starts on an editing TextBox's <input>
+        // must move the caret, not the node (noDragClassName); React Flow's
+        // own pan-on-drag/marquee must not start under it either
+        // (noPanClassName), and neither should its wheel-zoom eat a
+        // textarea's scroll (noWheelClassName). docs/TEXTBOX-EDITING-SPEC.md
+        // §3 — verified present on the installed @xyflow/react types before
+        // relying on the direct prop rather than the BenchFlowNode-wrapper
+        // fallback it names.
+        noDragClassName={BBOX_INTERACTIVE}
+        noPanClassName={BBOX_INTERACTIVE}
+        noWheelClassName={BBOX_INTERACTIVE}
       >
         <Background gap={20} size={1} />
       </ReactFlow>

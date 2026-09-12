@@ -210,3 +210,16 @@
 @theme inline {
   --color-bbox-received: var(--bbox-received);
 }
+
+/*
+ * docs/TEXTBOX-EDITING-SPEC.md §3: tldraw's `select.idle` state is when a
+ * shape's HTMLContainer content is safe to hand a real DOM control's
+ * pointer events to — mid-drag or mid-marquee, tldraw's own gesture must
+ * win instead. `[data-bbox-interactive]` is the same host-neutral marker
+ * `TextBoxControl` (packages/bbox-ui/src/textBox.tsx) already carries, so
+ * this rule targets exactly the editing control and nothing else in the
+ * shape's rendered content.
+ */
+.tl-container[data-state='select.idle'] [data-bbox-interactive] {
+  pointer-events: all;
+}

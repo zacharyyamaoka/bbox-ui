@@ -202,11 +202,29 @@ export const REGISTRY: ComponentEntry[] = [
     name: "TextBox",
     fields: TEXT_BOX_FIELDS,
     presets: TEXT_BOX_PRESETS,
-    render: (props) => (
-      <div style={{ width: 220, border: "1px dashed #ccc" }}>
-        <TextBox {...(props as Record<string, never>)} />
-      </div>
-    ),
+    // WHY `inlineEdit` names `children` and nothing else: `children` is the
+    // one flat property that IS the text (docs/TEXTBOX-EDITING-SPEC.md §1 —
+    // "there is no `value` prop"), so it is also the one field the create
+    // page's in-place editor is allowed to write through a pointer/keyboard
+    // gesture rather than the inspector.
+    inlineEdit: { field: "children" },
+    render: (props, _children, ctx) => {
+      const box = (
+        <TextBox
+          {...(props as Record<string, never>)}
+          editing={ctx?.edit?.editing ?? false}
+          onChange={ctx?.edit?.onChange}
+          onCommit={ctx?.edit?.onCommit}
+          onCancel={ctx?.edit?.onCancel}
+        />
+      );
+      // WHY bare when nested: the dashed 220px frame is bench-only chrome
+      // for a top-level specimen on the demo strip. Inside a Block's slot
+      // (or any other member position) it would print a visible box around
+      // a box, which is not what "add a TextBox to Header · left" means.
+      if (ctx?.nested) return box;
+      return <div style={{ width: 220, border: "1px dashed #ccc" }}>{box}</div>;
+    },
   }),
   registerComponent({
     name: "RowContainer",
