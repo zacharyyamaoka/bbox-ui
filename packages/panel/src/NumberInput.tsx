@@ -116,18 +116,21 @@ export interface NumberInputState {
   focused: boolean;
   dirty: boolean;
   startedWithValue: boolean;
+  /** The DOM holds text the browser cannot parse (a lone "-"): it reports
+   *  value "" but is NOT empty, so an erase must not be inferred from it. */
+  badInput: boolean;
 }
 
 export type NumberInputEvent =
   | { type: "focus"; value: number | undefined }
-  | { type: "change"; next: string }
+  | { type: "change"; next: string; fromSpinner?: boolean; badInput?: boolean }
   | { type: "blur"; value: number | undefined } // the stored value at that moment
   | { type: "value"; value: number | undefined }; // an outside change
 
 export type NumberInputEffect = { kind: "commit"; value: number } | { kind: "clear" };
 
 export function initialNumberInput(value: number | undefined): NumberInputState {
-  return { draft: value === undefined ? "" : String(value), focused: false, dirty: false, startedWithValue: false };
+  return { draft: value === undefined ? "" : String(value), focused: false, dirty: false, startedWithValue: false, badInput: false };
 }
 
 export function reduceNumberInput(
@@ -144,12 +147,24 @@ export function reduceNumberInput(
         ? { state, effects: [] }
         : { state: { ...state, draft: event.value === undefined ? "" : String(event.value) }, effects: [] };
     case "change": {
+      // A Mixed box refuses the native spinner: stepping "up" from empty
+      // invents a value from the range and would write it to every selected
+      // instance — the same destruction the ± buttons and the scrub refuse
+      // (round 6). Typing into it is still a deliberate write.
+      if (event.fromSpinner && !state.startedWithValue && !state.dirty) return { state, effects: [] };
+      // Unparseable text ("-" alone) is not an erase: keep the box as the
+      // user left it, commit nothing, and let blur discard it (round 6).
+      if (event.badInput) return { state: { ...state, dirty: true, badInput: true }, effects: [] };
       const n = commitFor(event.next, ctx.min, ctx.max, ctx.step);
-      return { state: { ...state, draft: event.next, dirty: true }, effects: n === null ? [] : [{ kind: "commit", value: n }] };
+      return { state: { ...state, draft: event.next, dirty: true, badInput: false }, effects: n === null ? [] : [{ kind: "commit", value: n }] };
     }
     case "blur": {
+      const next: NumberInputState = { ...state, focused: false, dirty: false, badInput: false };
+      if (state.badInput) {
+        // Leaving with unparseable text drops it and shows the store.
+        return { state: { ...next, draft: event.value === undefined ? "" : String(event.value) }, effects: [] };
+      }
       const out = blurOutcome({ ...state, hasClear: ctx.hasClear, defaultValue: ctx.defaultValue, min: ctx.min, max: ctx.max, step: ctx.step });
-      const next: NumberInputState = { ...state, focused: false, dirty: false };
       switch (out.kind) {
         case "none":
           // Resync to the store whatever the route: a Mixed box that
@@ -230,7 +245,21 @@ export function NumberInput({
       placeholder={placeholder}
       style={style}
       onFocus={() => dispatch({ type: "focus", value })}
-      onChange={(e) => dispatch({ type: "change", next: e.target.value })}
+      onChange={(e) => {
+        // Chrome's spin buttons fire an input event with no inputType;
+        // keystrokes carry "insertText"/"deleteContentBackward".
+        const native = e.nativeEvent as InputEvent;
+        dispatch({
+          type: "change",
+          next: e.target.value,
+          fromSpinner: !native.inputType,
+          badInput: e.target.validity.badInput,
+        });
+      }}
+      onKeyDown={(e) => {
+        // The keyboard spinner, same rule as the ± buttons: inert on Mixed.
+        if ((e.key === "ArrowUp" || e.key === "ArrowDown") && value === undefined && !state.dirty) e.preventDefault();
+      }}
       onBlur={() => dispatch({ type: "blur", value })}
       {...rest}
     />

@@ -25,6 +25,9 @@ export const WIDTH_FIELD: FieldSpec = {
   label: "Width",
   kind: "number",
   defaultValue: SIMPLE_BLOCK.width,
+  // A box faithfully stored -5 and the component silently ignored it: the
+  // control asserted a state the pixels denied. Declare what the paint does.
+  min: 0,
   unit: "px",
   group: "size",
 };
@@ -34,6 +37,9 @@ export const HEIGHT_FIELD: FieldSpec = {
   label: "Height",
   kind: "number",
   defaultValue: SIMPLE_BLOCK.height,
+  // A box faithfully stored -5 and the component silently ignored it: the
+  // control asserted a state the pixels denied. Declare what the paint does.
+  min: 0,
   unit: "px",
   group: "size",
 };

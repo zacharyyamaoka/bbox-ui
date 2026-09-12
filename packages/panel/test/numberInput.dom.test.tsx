@@ -45,9 +45,9 @@ describe("NumberInput, rendered", () => {
   it("a Mixed box that committed while typing, was erased and left, reads the stored value (kills 'blur carries no value')", () => {
     const { box, stored } = drive(undefined, { min: 0, max: 24, step: 1, mixed: true });
     act(() => { fireEvent.focus(box); });
-    act(() => { fireEvent.change(box, { target: { value: "3" } }); });
+    act(() => { fireEvent.input(box, { target: { value: "3" }, inputType: "insertText" }); });
     expect(stored()).toBe("3");
-    act(() => { fireEvent.change(box, { target: { value: "" } }); });
+    act(() => { fireEvent.input(box, { target: { value: "" }, inputType: "deleteContentBackward" }); });
     act(() => { fireEvent.blur(box); });
     expect(stored()).toBe("3");
     expect(box.value).toBe("3");
@@ -56,7 +56,7 @@ describe("NumberInput, rendered", () => {
   it("erasing a box over a resolved default and leaving shows the default, not blank (round 5)", () => {
     const { box, stored } = drive(0, { min: 0, max: 24, step: 1 });
     act(() => { fireEvent.focus(box); });
-    act(() => { fireEvent.change(box, { target: { value: "" } }); });
+    act(() => { fireEvent.input(box, { target: { value: "" }, inputType: "deleteContentBackward" }); });
     act(() => { fireEvent.blur(box); });
     expect(stored()).toBe("unset");
     expect(box.value).toBe("0");
@@ -66,20 +66,30 @@ describe("NumberInput, rendered", () => {
     const { box, stored } = drive(0, { min: 0, max: 24 });
     expect(box.step).toBe("1");
     act(() => { fireEvent.focus(box); });
-    act(() => { fireEvent.change(box, { target: { value: "12.5" } }); });
+    act(() => { fireEvent.input(box, { target: { value: "12.5" }, inputType: "insertText" }); });
     expect(stored()).toBe("13");
   });
 
   it("the padding bug itself: the initial 0 can be deleted and 50 lands as the clamped 24, never 050", () => {
     const { box, stored } = drive(0, { min: 0, max: 24, step: 1 });
     act(() => { fireEvent.focus(box); });
-    act(() => { fireEvent.change(box, { target: { value: "" } }); });
+    act(() => { fireEvent.input(box, { target: { value: "" }, inputType: "deleteContentBackward" }); });
     expect(box.value).toBe("");
-    act(() => { fireEvent.change(box, { target: { value: "50" } }); });
+    act(() => { fireEvent.input(box, { target: { value: "50" }, inputType: "insertText" }); });
     expect(box.value).toBe("50");
     expect(stored()).toBe("24");
     act(() => { fireEvent.blur(box); });
     expect(box.value).toBe("24");
+  });
+
+  it("pressing the spinner on a Mixed box writes nothing; typing into it does", () => {
+    const { box, stored } = drive(undefined, { min: 0, max: 24, step: 1, mixed: true });
+    act(() => { fireEvent.focus(box); });
+    // A spin button fires input with no inputType.
+    act(() => { fireEvent.input(box, { target: { value: "1" } }); });
+    expect(stored()).toBe("unset");
+    act(() => { fireEvent.input(box, { target: { value: "5" }, inputType: "insertText" }); });
+    expect(stored()).toBe("5");
   });
 
   it("a Tab through a Mixed box writes nothing", () => {

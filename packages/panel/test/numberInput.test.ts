@@ -118,6 +118,21 @@ describe("reduceNumberInput — the wiring, as a user drives it", () => {
     const r = run(undefined, [{ type: "focus", value: undefined }, { type: "change", next: "" }, { type: "blur", value: undefined }]);
     expect(r.effects).toEqual([]);
   });
+  it("the native spinner is inert on a Mixed box, and typing still writes (round 6)", () => {
+    const spun = run(undefined, [{ type: "focus", value: undefined }, { type: "change", next: "1", fromSpinner: true }]);
+    expect(spun.effects).toEqual([]);
+    expect(spun.state.draft).toBe("");
+    const typed = run(undefined, [{ type: "focus", value: undefined }, { type: "change", next: "1", fromSpinner: false }]);
+    expect(typed.effects).toEqual([{ kind: "commit", value: 1 }]);
+    // Once the user has typed, the spinner is a normal edit again.
+    const then = run(undefined, [{ type: "focus", value: undefined }, { type: "change", next: "1" }, { type: "change", next: "2", fromSpinner: true }]);
+    expect(then.effects).toEqual([{ kind: "commit", value: 1 }, { kind: "commit", value: 2 }]);
+  });
+  it("a lone '-' is not an erase: nothing is cleared, and blur shows the store (round 6)", () => {
+    const r = run(12, [{ type: "focus", value: 12 }, { type: "change", next: "", badInput: true }, { type: "blur", value: 12 }]);
+    expect(r.effects).toEqual([]);
+    expect(r.state.draft).toBe("12");
+  });
   it("an outside change replaces the draft only while not focused", () => {
     const idle = run(3, [{ type: "value", value: 9 }]);
     expect(idle.state.draft).toBe("9");

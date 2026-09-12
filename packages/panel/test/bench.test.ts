@@ -51,12 +51,19 @@ describe("sharedFields", () => {
     // both wrote 500 into the one that forbids it.
     const { fields, excluded } = sharedFields([entry("Block", [height(undefined)]), entry("RowContainer", [height(200)])]);
     expect(fields).toEqual([]);
-    expect(excluded).toEqual(["Height (different options on RowContainer)"]);
+    expect(excluded).toEqual(["Height (different range on RowContainer)"]);
   });
 
   it("does not share a number field whose resting default differs", () => {
     const { fields } = sharedFields([entry("Stack", [height(24, 12)]), entry("RowContainer", [height(24, 8)])]);
     expect(fields).toEqual([]);
+  });
+
+  it("still shares a text field whose resting default differs — it reads Mixed, which is the honest answer (round 6)", () => {
+    const label = (def: string): FieldSpec => ({ id: "children", label: "Label", kind: "text", defaultValue: def });
+    const { fields, excluded } = sharedFields([entry("Port", [label("")]), entry("Pill", [label("Pill")])]);
+    expect(fields.map((f) => f.id)).toEqual(["children"]);
+    expect(excluded).toEqual([]);
   });
 
   it("still shares a number field that agrees on everything", () => {

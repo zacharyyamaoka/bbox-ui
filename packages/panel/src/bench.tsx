@@ -283,12 +283,18 @@ export const MIXED_BENCH = "Mixed bench";
 export function sharedFields(entries: ComponentEntry[]): { fields: FieldSpec[]; excluded: string[] } {
   if (entries.length === 0) return { fields: [], excluded: [] };
   const [first, ...rest] = entries;
-  // For a number field the RANGE is the option set: two heights that agree
+  // For a NUMBER field the range is the option set: two heights that agree
   // on kind alone let a shared box write 500 into a component whose own
-  // control stops at 200 (round 5). Default matters too — one box cannot
-  // show two resting values.
+  // control stops at 200 (round 5). The resting default matters there too —
+  // one box cannot show two resting numbers. For text, toggles and segments
+  // it must NOT: two labels with different placeholders read as Mixed, which
+  // is the honest answer already built, and keying them on the default
+  // silently dropped the label from every cross-type bench (round 6).
   const signature = (f: FieldSpec) =>
-    `${f.kind}|${(f.options ?? []).map((o) => String(o.value)).join(",")}|${f.min ?? ""}|${f.max ?? ""}|${f.step ?? ""}|${String(f.defaultValue)}`;
+    f.kind === "number"
+      ? `number|${f.min ?? ""}|${f.max ?? ""}|${f.step ?? ""}|${String(f.defaultValue)}`
+      : `${f.kind}|${(f.options ?? []).map((o) => String(o.value)).join(",")}`;
+  const reasonFor = (f: FieldSpec) => (f.kind === "number" ? "different range" : "different options");
 
   const fields: FieldSpec[] = [];
   const excluded: string[] = [];
@@ -305,7 +311,7 @@ export function sharedFields(entries: ComponentEntry[]): { fields: FieldSpec[]; 
     );
     if (absentFrom.length === 0 && differsOn.length === 0) fields.push(field);
     else if (differsOn.length > 0)
-      excluded.push(`${field.label} (different options on ${differsOn.map((e) => e.name).join(", ")})`);
+      excluded.push(`${field.label} (${reasonFor(field)} on ${differsOn.map((e) => e.name).join(", ")})`);
     else excluded.push(`${field.label} (not on ${absentFrom.map((e) => e.name).join(", ")})`);
   }
 

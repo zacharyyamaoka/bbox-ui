@@ -12,7 +12,7 @@ import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 import { readFieldRow } from "../fieldModel";
 import { groupRows } from "../fieldGroups";
-import { NumberInput, clampTo, commitFor } from "../NumberInput";
+import { NumberInput, commitFor, snapTo, type NumberRange } from "../NumberInput";
 import {
   classifyField,
   loadStoredTier,
@@ -483,7 +483,7 @@ function FieldRow({
               data-slot="field-clear-override"
               onClick={() => onClearOverride(field.id)}
               style={clearButtonStyle}
-              title="Clear this instance's override — fall back to the preset"
+              title={subjects.length > 1 ? "Clear the override on every selected instance — fall back to the preset" : "Clear this instance's override — fall back to the preset"}
             >
               ×
             </button>
@@ -580,7 +580,7 @@ function PairedFieldCell({
             data-slot="field-clear-override"
             onClick={() => onClearOverride(field.id)}
             style={clearButtonStyle}
-            title="Clear this instance's override — fall back to the preset"
+            title={subjects.length > 1 ? "Clear the override on every selected instance — fall back to the preset" : "Clear this instance's override — fall back to the preset"}
           >
             ×
           </button>
@@ -654,6 +654,16 @@ function RowLabel({
 const SCRUB_PX_PER_STEP = 4;
 const SCRUB_THRESHOLD_PX = 3;
 
+/**
+ * Where a label drag lands: start value plus one step per SCRUB_PX_PER_STEP,
+ * on the field's own grid via snapTo. Pure, so the arrows, the box and the
+ * scrub can be tested for agreement without a pointer.
+ */
+export function scrubValue(startValue: number, dx: number, range: NumberRange): number {
+  const step = range.step ?? 1;
+  return snapTo(startValue + Math.round(dx / SCRUB_PX_PER_STEP) * step, range);
+}
+
 function useLabelScrub(
   field: FieldSpec,
   data: RowData,
@@ -662,8 +672,12 @@ function useLabelScrub(
   const drag = useRef<{ startX: number; startValue: number; moved: boolean } | null>(null);
 
   function onPointerDown(e: ReactPointerEvent<HTMLSpanElement>) {
-    const current = typeof data.collapsedValue === "number" ? data.collapsedValue : (field.defaultValue as number);
-    drag.current = { startX: e.clientX, startValue: current, moved: false };
+    // WHY a Mixed row does not scrub: the contract writes ONE value to every
+    // selected instance, and starting from the default wrote 3 over an 18
+    // and a 6 with no undo (round 6). Same rule as the arrows. The box next
+    // to the label still takes a typed value.
+    if (typeof data.collapsedValue !== "number") return;
+    drag.current = { startX: e.clientX, startValue: data.collapsedValue, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
   function onPointerMove(e: ReactPointerEvent<HTMLSpanElement>) {
@@ -673,12 +687,7 @@ function useLabelScrub(
       if (Math.abs(dx) <= SCRUB_THRESHOLD_PX) return;
       drag.current.moved = true;
     }
-    const step = field.step ?? 1;
-    let next = drag.current.startValue + Math.round(dx / SCRUB_PX_PER_STEP) * step;
-    // One clamp for the box, the spinner and this label: clampTo is the
-    // number box's own rule, so the two can never disagree about the range.
-    next = clampTo(next, field.min, field.max);
-    onChange(field.id, Number(next.toFixed(6)));
+    onChange(field.id, scrubValue(drag.current.startValue, dx, { min: field.min, max: field.max, step: field.step }));
   }
   function onPointerUp(e: ReactPointerEvent<HTMLSpanElement>) {
     try {
@@ -942,6 +951,9 @@ function NamedDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // Focus goes back to the trigger on select and on Escape; dropping it to
+  // <body> threw a keyboard user to the top of the page after every value.
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -949,7 +961,10 @@ function NamedDropdown({
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     }
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     }
     document.addEventListener("pointerdown", onDocPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -961,7 +976,7 @@ function NamedDropdown({
 
   return (
     <div ref={rootRef} data-slot="named-dropdown" style={dropdownRootStyle}>
-      <button type="button" data-slot="named-dropdown-trigger" onClick={() => setOpen((v) => !v)} style={dropdownTriggerStyle(secondary)}>
+      <button ref={triggerRef} type="button" data-slot="named-dropdown-trigger" onClick={() => setOpen((v) => !v)} style={dropdownTriggerStyle(secondary)}>
         <span style={dropdownTriggerTextStyle}>{isMixed ? "Mixed" : triggerText}</span>
         <span aria-hidden="true" style={dropdownChevronStyle}>
           ▾
@@ -978,6 +993,7 @@ function NamedDropdown({
               onClick={() => {
                 onSelect(row.key);
                 setOpen(false);
+                triggerRef.current?.focus();
               }}
               style={dropdownRowStyle(row.active)}
             >
