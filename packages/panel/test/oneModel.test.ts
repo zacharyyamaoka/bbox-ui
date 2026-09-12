@@ -92,6 +92,31 @@ describe("one resolution model", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("no panel gates the clear-override button on the field being governed", () => {
+    // Round 3 of the first loop fixed this in FieldTraceRow and left the
+    // gate standing in FigmaDense and IconStrip: 61 of 65 rows could enter
+    // the override layer and never leave it, in the chosen default panel.
+    const offenders = panelFiles().filter((rel) =>
+      /(?:isGoverned|governed)\s*&&\s*[\w.]*hasOwnOverride/.test(code(readFileSync(path.join(SRC, rel), "utf8"))),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("no panel owns a controlled number input; NumberInput is the only one", () => {
+    // The padding-box fix reached two of three copies. A controlled
+    // type="number" with a value= prop is the shape of the defect; the
+    // uncontrolled "Custom" rows (defaultValue=) are a different control and
+    // are allowed.
+    const offenders: string[] = [];
+    for (const rel of panelFiles()) {
+      const text = code(readFileSync(path.join(SRC, rel), "utf8"));
+      for (const tag of text.match(/<input\b[\s\S]*?\/?>/g) ?? []) {
+        if (/type="number"/.test(tag) && /\bvalue=/.test(tag)) offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("the shared model is the only place the two resolutions are computed", () => {
     const model = readFileSync(path.join(SRC, "fieldModel.ts"), "utf8");
     const calls = code(model).match(/\bresolveField\s*\(/g) ?? [];

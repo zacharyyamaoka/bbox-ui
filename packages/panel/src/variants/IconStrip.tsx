@@ -8,6 +8,7 @@ import {
   type FieldValue,
 } from "@bbox-ui/schema";
 import { STATE_TOKENS, TONE_TOKENS, type AppearanceState, type Tone } from "@bbox-ui/core";
+import { NumberInput } from "../NumberInput";
 import { readFieldRow } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
@@ -179,7 +180,7 @@ function ClusterShell({
           style={paintedDotStyle}
         />
       )}
-      {isGoverned && r.hasOwnOverride && (
+      {r.hasOwnOverride && (
         <button
           type="button"
           data-slot="icon-strip-clear-override"
@@ -364,7 +365,7 @@ function FieldScaleDropdown({
           style={paintedDotStyle}
         />
       )}
-      {isGoverned && r.hasOwnOverride && (
+      {r.hasOwnOverride && (
         <button
           type="button"
           data-slot="icon-strip-clear-override"
@@ -502,7 +503,22 @@ function FieldStepper({
         >
           −
         </button>
-        <span style={stepperValueStyle}>{r.isMixed ? "Mix" : current}</span>
+        {/* WHY a box beside the arrows: setting padding to 24 was 24 clicks.
+            The arrows stay for nudging; the box is the same shared NumberInput
+            every other panel uses, so it empties, clamps and clears the same
+            way. */}
+        <NumberInput
+          data-slot="icon-strip-number"
+          value={r.isMixed || r.collapsed === undefined ? undefined : Number(r.collapsed)}
+          defaultValue={field.defaultValue as number}
+          min={field.min}
+          max={field.max}
+          step={field.step}
+          placeholder={r.isMixed ? "Mix" : undefined}
+          onCommit={(n) => panel.onChange(field.id, n)}
+          onClear={() => panel.onClearOverride(field.id)}
+          style={stepperValueStyle}
+        />
         <button
           type="button"
           title={`Increase ${field.label}`}

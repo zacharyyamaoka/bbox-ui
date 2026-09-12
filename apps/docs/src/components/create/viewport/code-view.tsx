@@ -42,7 +42,12 @@ export function instanceToJsx(entry: ComponentEntry, inst: Instance): string {
   const children = "children" in props ? String(props.children) : null;
   delete props.children;
   const head = [entry.name, ...Object.entries(props).map(([k, v]) => jsxAttr(k, v))].join(" ");
-  return children === null ? `<${head} />` : `<${head}>${children}</${entry.name}>`;
+  if (children === null) return `<${head} />`;
+  // WHY the braces: raw children containing < > { } would not compile as JSX,
+  // and the Copy button hands this straight to a file. A string expression is
+  // always valid; attributes were already safe through JSON.stringify.
+  const body = /[<>{}\n]/.test(children) ? `{${JSON.stringify(children)}}` : children;
+  return `<${head}>${body}</${entry.name}>`;
 }
 
 function literal(value: unknown, indent: string): string {

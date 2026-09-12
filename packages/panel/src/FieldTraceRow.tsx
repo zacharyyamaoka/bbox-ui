@@ -114,6 +114,7 @@ export function FieldTraceRow({
           field={field}
           value={collapsedValue}
           placeholder={isMixed ? "Mixed" : undefined}
+          onClear={() => onClearOverride(field.id)}
           secondary={isGoverned}
           onChange={(value) => onChange(field.id, value)}
         />
@@ -315,12 +316,16 @@ function FieldControl({
   placeholder,
   secondary,
   onChange,
+  onClear,
 }: {
   field: FieldSpec;
   value: FieldValue | undefined;
   placeholder?: string;
   secondary?: boolean;
   onChange: (value: FieldValue) => void;
+  /** Remove the stored override; a number box cleared and left uses this
+   *  rather than storing an override equal to the default. */
+  onClear?: () => void;
 }) {
   if (field.kind === "segments") {
     // WHY a menu past four options, and buttons at or below it: a segmented
@@ -365,9 +370,15 @@ function FieldControl({
         <input
           type="checkbox"
           checked={value === true}
+          // WHY: a Mixed toggle used to render as a definite "off" under a
+          // badge that said Mixed — the control asserting what the row denied.
+          // The indeterminate state is what a checkbox has for exactly this.
+          ref={(el) => {
+            if (el) el.indeterminate = value === undefined && placeholder === "Mixed";
+          }}
           onChange={(e) => onChange(e.target.checked)}
         />
-        {value === true ? "on" : "off"}
+        {value === undefined && placeholder === "Mixed" ? "mixed" : value === true ? "on" : "off"}
       </label>
     );
   }
@@ -381,6 +392,7 @@ function FieldControl({
         max={field.max}
         step={field.step}
         onCommit={onChange}
+        onClear={onClear}
         style={numberInputStyle(secondary)}
       />
     );

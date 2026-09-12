@@ -473,8 +473,11 @@ function FieldRow({
             presets={presets}
             drivenPresetId={data.drivenPresetId}
             onChange={(value) => onChange(field.id, value)}
+            onClear={() => onClearOverride(field.id)}
           />
-          {isGoverned && data.hasOwnOverride && (
+          {/* Ungated: any stored value can be cleared, governed or not; 61 of 65 rows
+              had no way out of the override layer otherwise. */}
+          {data.hasOwnOverride && (
             <button
               type="button"
               data-slot="field-clear-override"
@@ -569,8 +572,9 @@ function PairedFieldCell({
           presets={presets}
           drivenPresetId={data.drivenPresetId}
           onChange={(value) => onChange(field.id, value)}
+          onClear={() => onClearOverride(field.id)}
         />
-        {governed && data.hasOwnOverride && (
+        {data.hasOwnOverride && (
           <button
             type="button"
             data-slot="field-clear-override"
@@ -724,6 +728,7 @@ function DenseControl({
   presets,
   drivenPresetId,
   onChange,
+  onClear,
 }: {
   field: FieldSpec;
   value: FieldValue | undefined;
@@ -732,6 +737,8 @@ function DenseControl({
   presets: PresetSpec[];
   drivenPresetId: string | undefined;
   onChange: (value: FieldValue) => void;
+  /** Remove the stored override; a number box cleared and left uses this. */
+  onClear?: () => void;
 }) {
   if (field.kind === "segments") {
     const options = field.options ?? [];
@@ -859,6 +866,7 @@ function DenseControl({
           max={field.max}
           step={field.step}
           onCommit={onChange}
+          onClear={onClear}
           style={numberInputStyle}
         />
         {field.unit && <span style={numberUnitStyle}>{field.unit}</span>}

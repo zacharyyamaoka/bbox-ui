@@ -9,6 +9,7 @@ import {
   type Layer,
   type PresetSpec,
 } from "@bbox-ui/schema";
+import { NumberInput } from "../NumberInput";
 import { readFieldRow, type FieldRowModel } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
@@ -418,6 +419,7 @@ function FieldPopoverBody({
           value={value}
           placeholder={isMixed ? "Mixed" : undefined}
           onChange={(v) => onChange(field.id, v)}
+          onClear={() => onClearOverride(field.id)}
         />
       </div>
 
@@ -484,11 +486,13 @@ function PopoverControl({
   value,
   placeholder,
   onChange,
+  onClear,
 }: {
   field: FieldSpec;
   value: FieldValue | undefined;
   placeholder?: string;
   onChange: (value: FieldValue) => void;
+  onClear?: () => void;
 }) {
   if (field.kind === "segments") {
     // AMENDMENT CASE A: Zach's own toolbar reference — named options in a
@@ -550,14 +554,18 @@ function PopoverControl({
             style={sliderStyle}
           />
         )}
-        <input
-          type="number"
-          value={value === undefined ? "" : Number(value)}
+        {/* WHY the shared NumberInput: this box kept Zach's exact bug ("050")
+            after the other two panels were fixed — the third copy of one
+            control. There is one now, and a structural test refuses another. */}
+        <NumberInput
+          value={value === undefined ? undefined : Number(value)}
+          defaultValue={Number(field.defaultValue)}
           placeholder={placeholder}
           min={field.min}
           max={field.max}
-          step={field.step ?? 1}
-          onChange={(e) => onChange(e.target.value === "" ? field.defaultValue : Number(e.target.value))}
+          step={field.step}
+          onCommit={(n) => onChange(n)}
+          onClear={onClear}
           style={numberInputStyle()}
         />
         {field.unit && <span style={unitStyle}>{field.unit}</span>}
