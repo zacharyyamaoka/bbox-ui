@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
 import { readFieldRow } from "./fieldModel";
+import { NumberInput } from "./NumberInput";
 
 // `Subject` lives in fieldModel.ts — the model owns the shape it resolves —
 // and is re-exported here because every panel already imports it from this
@@ -372,14 +373,14 @@ function FieldControl({
   }
   if (field.kind === "number") {
     return (
-      <input
-        type="number"
-        value={value === undefined ? "" : Number(value)}
+      <NumberInput
+        value={value === undefined ? undefined : Number(value)}
+        defaultValue={Number(field.defaultValue)}
         placeholder={placeholder}
         min={field.min}
         max={field.max}
-        step={field.step ?? 1}
-        onChange={(e) => onChange(e.target.value === "" ? field.defaultValue : Number(e.target.value))}
+        step={field.step}
+        onCommit={onChange}
         style={numberInputStyle(secondary)}
       />
     );

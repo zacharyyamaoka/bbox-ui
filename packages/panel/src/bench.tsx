@@ -339,9 +339,12 @@ export const RANDOM_WORDS = ["alpha", "beta", "gamma", "delta", "signal", "frame
  * says exactly what is legal here.
  */
 export function randomValue(field: FieldSpec, roll: () => number): FieldValue | undefined {
+  // A field may opt out (FieldSpec.randomize): host-computed state such as
+  // Port's reveal-on-hover made instances vanish from the bench when rolled.
+  if (field.randomize === false) return undefined;
   switch (field.kind) {
     case "segments": {
-      const options = field.options ?? [];
+      const options = (field.options ?? []).filter((o) => o.randomize !== false);
       if (options.length === 0) return undefined;
       return options[Math.floor(roll() * options.length)]!.value;
     }

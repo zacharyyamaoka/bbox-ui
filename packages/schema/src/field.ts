@@ -25,6 +25,10 @@ export interface FieldOption {
   value: string;
   /** What a control (a segmented row, a select) prints for it. */
   label: string;
+  /** `false` keeps this one option out of "randomise everything" while the
+   *  field itself stays in: a Port state of `hidden` is a real, settable
+   *  value, and also makes the instance vanish from the bench. */
+  randomize?: boolean;
 }
 
 export interface FieldSpec<TValue = FieldValue> {
@@ -65,6 +69,18 @@ export interface FieldSpec<TValue = FieldValue> {
    * the fields. Absent means "own row", which stays the default.
    */
   group?: string;
+  /**
+   * `false` keeps a field out of "randomise everything". Default true.
+   *
+   * WHY: Randomize rolled Port's `reveal` to "on hover" and the port
+   * vanished from the bench until the pointer found it; Zach, 2026-09-11:
+   * "a disproportionate amount seem to disappear". The same goes for every
+   * host-computed, never-persisted field (eligible, hinting, dragging,
+   * producers): they are not properties a person sets, so a random value
+   * for them is noise, not exploration. Declared on the field, next to the
+   * hint that already says "never persisted", rather than inferred from it.
+   */
+  randomize?: boolean;
 }
 
 /**

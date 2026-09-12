@@ -10,9 +10,6 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarSeparator,
 } from "@/registry/new-york-v4/ui/sidebar";
 import { Button } from "@/registry/new-york-v4/ui/button";
@@ -44,6 +41,11 @@ interface BenchSidebarProps {
  */
 export function BenchSidebar(p: BenchSidebarProps) {
   const showCheckboxes = p.instances.length > 1;
+  // WHY an instance row may wrap and its preview is never clipped: a Port
+  // with its label on the left, or above, is wider and taller than one row,
+  // and overflow:hidden cut the label off ("tick" painted over the dot). The
+  // preview is the truth of what the instance looks like; the row bends
+  // around it.
 
   return (
     <Sidebar collapsible="none" data-slot="bench-sidebar" className="h-full shrink-0 border-r border-sidebar-border">
@@ -55,31 +57,25 @@ export function BenchSidebar(p: BenchSidebarProps) {
       <SidebarContent className="min-h-0">
         <SidebarGroup>
           <SidebarGroupLabel>Component</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
+          <SidebarGroupContent className="px-2">
+            {/* WHY a select and not a menu list: Zach, 2026-09-11 — "to give us
+                more space on the left hand side, it would make more sense if all
+                the different components are in a drop down list." Nine rows of
+                nav were most of the column; the instances are what the column
+                is for. Same control as the panel-design picker below it. */}
+            <select
+              data-slot="component-picker"
+              value={p.activeName}
+              onChange={(e) => p.onActiveNameChange(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
+            >
               {p.entries.map((e) => (
-                <SidebarMenuItem key={e.name}>
-                  <SidebarMenuButton
-                    data-slot="component-pick"
-                    data-name={e.name}
-                    isActive={p.activeName === e.name}
-                    onClick={() => p.onActiveNameChange(e.name)}
-                  >
-                    {e.name}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <option key={e.name} value={e.name}>
+                  {e.name}
+                </option>
               ))}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  data-slot="component-pick"
-                  data-name={MIXED_BENCH}
-                  isActive={p.activeName === MIXED_BENCH}
-                  onClick={() => p.onActiveNameChange(MIXED_BENCH)}
-                >
-                  {MIXED_BENCH}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+              <option value={MIXED_BENCH}>{MIXED_BENCH}</option>
+            </select>
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -94,7 +90,7 @@ export function BenchSidebar(p: BenchSidebarProps) {
                 data-slot="subject-row"
                 data-subject-id={inst.id}
                 data-subject-type={inst.type}
-                className="flex items-center gap-2 rounded-md px-1 py-1 text-xs hover:bg-sidebar-accent"
+                className="flex flex-wrap items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-sidebar-accent"
               >
                 {showCheckboxes && (
                   <input
@@ -108,7 +104,7 @@ export function BenchSidebar(p: BenchSidebarProps) {
                 {p.isMixed && (
                   <span className="w-14 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{inst.type}</span>
                 )}
-                <div className="flex min-w-0 items-center overflow-hidden [&>*]:max-w-full">{p.entryFor(inst.type).render(inst.props)}</div>
+                <div data-slot="subject-preview" className="flex min-h-6 min-w-0 max-w-full items-center overflow-visible [&>*]:max-w-full">{p.entryFor(inst.type).render(inst.props)}</div>
               </label>
             ))}
 

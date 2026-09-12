@@ -11,6 +11,10 @@ import {
 const STATE_OPTIONS: FieldOption[] = APPEARANCE_STATES.map((state) => ({
   value: state,
   label: APPEARANCE_STATE_LABELS[state],
+  // `hidden` removes the dot entirely and `received` is runtime-only; both
+  // stay pickable, neither is worth rolling — Randomize made instances
+  // vanish from the bench.
+  ...(state === "hidden" || state === "received" ? { randomize: false } : {}),
 }));
 
 const TONE_OPTIONS: FieldOption[] = TONES.map((tone) => ({

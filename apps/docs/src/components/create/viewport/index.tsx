@@ -73,11 +73,16 @@ export function Viewport(p: ViewportProps) {
           ))}
         </div>
       </div>
+      {/* WHY the well is plain, not a dotted grid: Zach, 2026-09-11 — "the DOM
+          background should just be plain, so we don't think it's a canvas or
+          something; the dots make it look like React Flow." Each canvas paints
+          its own ground (React Flow's <Background>, tldraw's grid); the well
+          stays the page colour so the DOM render reads as what it is. */}
       <div
         data-slot="viewport-well"
         data-render={p.render}
         data-view={p.view}
-        className="relative m-3 min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] [background-size:20px_20px]"
+        className="relative m-3 min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-background"
       >
         <Body {...p} />
       </div>

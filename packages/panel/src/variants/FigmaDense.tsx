@@ -12,6 +12,7 @@ import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 import { readFieldRow } from "../fieldModel";
 import { groupRows } from "../fieldGroups";
+import { NumberInput } from "../NumberInput";
 import {
   classifyField,
   loadStoredTier,
@@ -850,14 +851,14 @@ function DenseControl({
     }
     return (
       <div style={numberBoxStyle(secondary)}>
-        <input
-          type="number"
-          value={value === undefined ? "" : Number(value)}
+        <NumberInput
+          value={value === undefined ? undefined : Number(value)}
+          defaultValue={Number(field.defaultValue)}
           placeholder={isMixed ? "Mixed" : undefined}
           min={field.min}
           max={field.max}
-          step={field.step ?? 1}
-          onChange={(e) => onChange(e.target.value === "" ? field.defaultValue : Number(e.target.value))}
+          step={field.step}
+          onCommit={onChange}
           style={numberInputStyle}
         />
         {field.unit && <span style={numberUnitStyle}>{field.unit}</span>}

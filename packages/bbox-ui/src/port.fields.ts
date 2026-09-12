@@ -168,6 +168,7 @@ export const PORT_FIELDS: FieldSpec[] = [
     kind: "toggle",
     defaultValue: false,
     hint: "Host-computed drag-time state — never persisted.",
+    randomize: false,
   },
   {
     id: "hinting",
@@ -175,6 +176,7 @@ export const PORT_FIELDS: FieldSpec[] = [
     kind: "toggle",
     defaultValue: false,
     hint: "Host-computed drag-time state — never persisted. Previews becoming `wired`: wears `wired`'s ink regardless of the resting `state`.",
+    randomize: false,
   },
   {
     id: "dragging",
@@ -182,6 +184,7 @@ export const PORT_FIELDS: FieldSpec[] = [
     kind: "toggle",
     defaultValue: false,
     hint: "Host-computed drag-time state — never persisted.",
+    randomize: false,
   },
   {
     id: "reveal",
@@ -190,6 +193,7 @@ export const PORT_FIELDS: FieldSpec[] = [
     defaultValue: "always",
     options: REVEAL_OPTIONS,
     hint: "Host-computed visibility policy — never persisted.",
+    randomize: false,
   },
   {
     id: "producers",
@@ -200,6 +204,7 @@ export const PORT_FIELDS: FieldSpec[] = [
     max: 9,
     step: 1,
     hint: "Host-computed many-to-one count — never persisted. 2 or more shows the count badge.",
+    randomize: false,
   },
   {
     id: "children",
