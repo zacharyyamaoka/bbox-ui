@@ -130,6 +130,20 @@ async function press(selector, mods = {}) {
   await sleep(200);
   return r;
 }
+/** A real right-click (button "right", `mouseUp`/`mouseDown` — NOT the
+ *  `mouse()` helper above, which hardcodes "left") at a selector's own
+ *  centre. Chromium synthesizes a genuine, trusted `contextmenu` event
+ *  from this the same way an actual right-click would (verify round 3
+ *  F1's own repro tool, /tmp/tbe-probe.mjs, confirmed this over CDP). */
+async function rightClick(selector) {
+  const r = await rectOf(selector);
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: r.x, y: r.y, button: "none" });
+  await send("Input.dispatchMouseEvent", { type: "mousePressed", x: r.x, y: r.y, button: "right", buttons: 2, clickCount: 1 });
+  await sleep(30);
+  await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: r.x, y: r.y, button: "right", buttons: 0, clickCount: 1 });
+  await sleep(200);
+  return r;
+}
 /** Same gesture as `press`, at a raw viewport point rather than a
  *  selector's own rect — for a click that must land on bare canvas
  *  content with no element of its own to query (verify-round-1, F4). */
@@ -539,6 +553,36 @@ for (const renderId of RENDERS) {
   const restingAfterCancel = await restingText(textBoxId);
   assertStep(5, "Escape cancels: text is still Hello slot", restingAfterCancel === "Hello slot", restingAfterCancel);
   await screenshot(`${renderId}-4-cancelled`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+
+  // ---- step 5b (verify round 3, F1): a right-click on the editing
+  // control must give the browser's own cut/copy/paste menu — leaving the
+  // control mounted, focused and untouched — never end editing or open a
+  // HOST's own context menu (tldraw's `useCanvasEvents` synthesized one
+  // from an unstopped pointerup). Runs on ALL THREE renders: DOM and
+  // React Flow were already correct here per the round-3 audit, and this
+  // proves they STAY that way while tldraw is fixed — a check scoped to
+  // tldraw alone could not catch a future regression that broke DOM or
+  // React Flow instead.
+  await press(textBoxSel(textBoxId)); // already sole-selected + inlineEdit -> re-enters editing
+  await sleep(150);
+  const hasControl5b = await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
+  assertStep(5, "F1 setup: re-entered editing", hasControl5b, hasControl5b);
+  await typeText("typed");
+  await rightClick(controlSel(textBoxId));
+  await sleep(200);
+  const stillMounted = await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
+  assertStep(5, "F1: right-click on the control leaves it mounted (no blur-triggered commit)", stillMounted, stillMounted);
+  const stillActive = stillMounted && (await evaluate(`document.activeElement === document.querySelector(${JSON.stringify(controlSel(textBoxId))})`));
+  assertStep(5, "F1: right-click on the control leaves it focused", stillActive, stillActive);
+  const noHostMenu = await evaluate(`!document.querySelector(".tlui-menu")`);
+  assertStep(5, "F1: right-click does not open a host context menu (e.g. tldraw's .tlui-menu)", noHostMenu, noHostMenu);
+  const valueAfterRightClick = stillMounted ? await evaluate(`document.querySelector(${JSON.stringify(controlSel(textBoxId))})?.value ?? null`) : null;
+  assertStep(5, "F1: right-click left the typed value untouched", valueAfterRightClick === "typed", valueAfterRightClick);
+  await screenshot(`${renderId}-4b-rightclick-still-editing`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+  await key("Escape");
+  await sleep(250);
+  const restingAfter5b = await restingText(textBoxId);
+  assertStep(5, "F1 cleanup: Escape restores Hello slot", restingAfter5b === "Hello slot", restingAfter5b);
 
   // ---- step 6: lines -> multi, newline, ctrl+enter commits, two lines ----
   // Selection is still solely the TextBox (cancel ends editing, keeps

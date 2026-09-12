@@ -173,6 +173,40 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
             editor.markEventAsHandled(e);
           }
         }}
+        // WHY a SEPARATE mark on pointer-UP, not just pointer-down (verify
+        // round 3 F1 — a right-click on the control opened tldraw's own
+        // context menu instead of the browser's): the control's own
+        // `onContextMenu` stopPropagation (textBox.tsx) only stops the
+        // REAL, trusted contextmenu event; installed @tldraw/editor 5.3.2
+        // `useCanvasEvents.mjs`'s `.tl-canvas` `onPointerUp` handler is a
+        // SEPARATE listener that reacts to the right button's pointer-UP
+        // itself — `if (rightClickPanning && button === 2 && …)` it
+        // synthesizes and dispatches a BRAND NEW untrusted `contextmenu`
+        // event directly on the canvas element, bypassing the control
+        // entirely (proven live: the installed source's exact branch,
+        // and the synthetic event's target was the canvas DIV, not the
+        // input). Marking pointerdown handled does nothing for this —
+        // it is a different native event object. Marking THIS pointerup
+        // handled (same WeakSet-by-nativeEvent mechanism, same
+        // `HTMLContainer` — an ANCESTOR of `.tl-canvas`'s own listener in
+        // the bubble path) makes `useCanvasEvents`'s own
+        // `wasEventAlreadyHandled` guard bail out before it ever
+        // synthesizes that event, so the browser's native cut/copy/paste
+        // menu (opened by the real, still-unstopped, contextmenu event)
+        // is the only one that shows. Deliberately NOT done by adding a
+        // 5th `stopPropagation` to textBox.tsx's shared control: tldraw's
+        // own doc for `markEventAsHandled` warns that a blanket
+        // `stopPropagation()` "can impact non-tldraw event handlers set
+        // up elsewhere" (this file's own `armEditOnRelease`
+        // `document`-level pointerup listener among them) — this stays
+        // scoped to tldraw's own pipeline, in the file the contract (§3)
+        // already assigns this responsibility to, and leaves the core
+        // control exactly matching the spec's literal four events.
+        onPointerUp={(e) => {
+          if (e.target instanceof Element && e.target.closest(BBOX_INTERACTIVE_SELECTOR)) {
+            editor.markEventAsHandled(e);
+          }
+        }}
       >
         <div ref={contentRef} style={{ display: "inline-flex" }}>
           {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit) : null}
