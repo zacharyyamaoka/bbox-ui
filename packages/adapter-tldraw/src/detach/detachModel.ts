@@ -20,6 +20,7 @@
 import type { JsonObject } from "tldraw";
 
 import type { BBoxBlockShapeProps } from "../block-shape-util";
+import type { BBoxGlyphShapeProps } from "../glyph-shape-util";
 import type { BBoxPortShapeProps } from "../port-shape-util";
 
 /** The single key bbox-ui claims inside any shape's `meta`. */
@@ -47,19 +48,31 @@ export interface DetachedBlockRecord {
 }
 
 /**
+ * The complete `bbox-glyph` props (docs/GLYPH-PLAN.md's contract). A
+ * Glyph always lowers to exactly one primitive, so this record and its
+ * `"glyph-box"` anchor below are the same shape — see glyphDetachable.ts.
+ */
+export interface DetachedGlyphRecord {
+  kind: "glyph";
+  version: number;
+  props: BBoxGlyphShapeProps;
+}
+
+/**
  * The primitive inside a detached group that stands where the original
- * shape's own origin stood — the Block's card rectangle, the Port's ring.
- * Marked with a record rather than a remembered id: ids are re-minted by
- * copy, paste and duplicate, and `meta` is not.
+ * shape's own origin stood — the Block's card rectangle, the Port's ring,
+ * the Glyph's inner box. Marked with a record rather than a remembered id:
+ * ids are re-minted by copy, paste and duplicate, and `meta` is not.
  */
 export interface DetachedAnchorRecord {
-  kind: "block-card" | "port-dot";
+  kind: "block-card" | "port-dot" | "glyph-box";
   version: number;
 }
 
 export type DetachedRecord =
   | DetachedPortRecord
   | DetachedBlockRecord
+  | DetachedGlyphRecord
   | DetachedAnchorRecord;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -133,7 +146,7 @@ export function readDetachedRecord(meta: unknown): DetachedRecord | null {
   ) {
     return null;
   }
-  if (record.kind === "block-card" || record.kind === "port-dot") {
+  if (record.kind === "block-card" || record.kind === "port-dot" || record.kind === "glyph-box") {
     return { kind: record.kind, version: record.version };
   }
   if (record.kind === "port") {
@@ -154,6 +167,15 @@ export function readDetachedRecord(meta: unknown): DetachedRecord | null {
         }
       : null;
   }
+  if (record.kind === "glyph") {
+    return isObject(record.props)
+      ? {
+          kind: "glyph",
+          version: record.version,
+          props: record.props as unknown as BBoxGlyphShapeProps,
+        }
+      : null;
+  }
   return null;
 }
 
@@ -169,15 +191,25 @@ export function readDetachedBlock(meta: unknown): DetachedBlockRecord | null {
   return record?.kind === "block" ? record : null;
 }
 
-/** A rebuildable record of either kind (what the Rebuild menu item scans for). */
+/** The Glyph record a shape carries, if it carries one. */
+export function readDetachedGlyph(meta: unknown): DetachedGlyphRecord | null {
+  const record = readDetachedRecord(meta);
+  return record?.kind === "glyph" ? record : null;
+}
+
+/** A rebuildable record of any kind (what the Rebuild menu item scans for). */
 export function readRebuildableRecord(
   meta: unknown,
-): DetachedPortRecord | DetachedBlockRecord | null {
+): DetachedPortRecord | DetachedBlockRecord | DetachedGlyphRecord | null {
   const record = readDetachedRecord(meta);
-  return record?.kind === "port" || record?.kind === "block" ? record : null;
+  return record?.kind === "port" || record?.kind === "block" || record?.kind === "glyph"
+    ? record
+    : null;
 }
 
 export function isDetachedAnchor(meta: unknown): boolean {
   const record = readDetachedRecord(meta);
-  return record?.kind === "block-card" || record?.kind === "port-dot";
+  return (
+    record?.kind === "block-card" || record?.kind === "port-dot" || record?.kind === "glyph-box"
+  );
 }

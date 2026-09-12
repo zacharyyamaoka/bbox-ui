@@ -10,6 +10,7 @@ import { blockDetachableKind } from "./blockDetachable";
 import { matchDetachableKind, type DetachableKind } from "./detachableKind";
 import { planDetach } from "./detachPlan";
 import { runDetachSweep } from "./detachSweep";
+import { glyphDetachableKind } from "./glyphDetachable";
 import { portDetachableKind } from "./portDetachable";
 
 export {
@@ -18,12 +19,14 @@ export {
   detachMeta,
   isDetachedAnchor,
   readDetachedBlock,
+  readDetachedGlyph,
   readDetachedPort,
   readDetachedRecord,
   readRebuildableRecord,
   toJsonSafe,
   type DetachedAnchorRecord,
   type DetachedBlockRecord,
+  type DetachedGlyphRecord,
   type DetachedPortRecord,
   type DetachedRecord,
 } from "./detachModel";
@@ -42,15 +45,18 @@ export {
   type BlockPrimitiveOptions,
   type BlockPrimitives,
 } from "./blockPrimitives";
+export { primitivesForGlyph, type GlyphPrimitives } from "./glyphPrimitives";
 export { renderedLineMeasureFor, type RenderedLineMeasure } from "./stockPartials";
 export { blockDetachableKind } from "./blockDetachable";
 export { portDetachableKind } from "./portDetachable";
+export { glyphDetachableKind } from "./glyphDetachable";
 export { rebuildDetachedShapes, selectedRebuildableIds, type RebuildResult } from "./rebuild";
 
 /** Every registered kind, leaf and (future) container alike. */
 export const DETACHABLE_KINDS: readonly DetachableKind[] = [
   portDetachableKind,
   blockDetachableKind,
+  glyphDetachableKind,
 ];
 
 /** Ids in the selection (or their subtrees) that some kind can detach. */

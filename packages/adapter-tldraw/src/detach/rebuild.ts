@@ -19,7 +19,7 @@
  * thing apart by hand.
  */
 import { createShapeId } from "tldraw";
-import type { Editor, TLShapeId } from "tldraw";
+import type { Editor, TLShape, TLShapeId, TLShapePartial } from "tldraw";
 
 import { rekeyReceivedPorts } from "../block-shape-util";
 import {
@@ -98,16 +98,46 @@ export function rebuildDetachedShapes(editor: Editor): RebuildResult {
         anchorTransform.rotation() -
         editor.getShapeParentTransform(carrierId).rotation();
 
+      // A Glyph's sole primitive is planted at its INNER origin — the
+      // shape's own origin plus `padding`, in the glyph's unrotated local
+      // frame (glyphPrimitives.ts) — because tldraw refuses to group a
+      // single shape, so that box has to double as both the picture and
+      // its own anchor (docs/GLYPH-PLAN.md D4's "at the glyph's inner
+      // origin"). Port and Block have no such offset — their anchor
+      // (the ring, the card) already stands exactly at the original
+      // shape's own origin — so this correction is Glyph-only: undo the
+      // padding offset, rotated by the pose just derived above, or every
+      // detach → rebuild walks the glyph `padding` px further from where
+      // it started (and compounds on a repeated round trip).
+      let originX = local.x;
+      let originY = local.y;
+      if (record.kind === "glyph" && record.props.padding !== 0) {
+        const { padding } = record.props;
+        const cos = Math.cos(rotation);
+        const sin = Math.sin(rotation);
+        originX -= padding * cos - padding * sin;
+        originY -= padding * sin + padding * cos;
+      }
+
       const shapeId = createShapeId();
+      const shapeType =
+        record.kind === "port" ? "bbox-port" : record.kind === "block" ? "bbox-block" : "bbox-glyph";
+      // WHY the cast: a THIRD bbox-ui shape type pushed tldraw's shape
+      // union past a TS discriminated-union limit — a shape-agnostic call
+      // site choosing `type` from a variable can no longer narrow which
+      // `props` shape is expected, at any of the sites that pick a type
+      // dynamically. Not a real type hole (`record.kind`/`shapeType`
+      // above already agree by construction); see
+      // tldraw-shape-union-checker-limit in this box's memory.
       editor.createShape({
         id: shapeId,
-        type: record.kind === "port" ? "bbox-port" : "bbox-block",
+        type: shapeType,
         parentId: carrier.parentId,
-        x: local.x,
-        y: local.y,
+        x: originX,
+        y: originY,
         rotation,
         props: record.props,
-      });
+      } as TLShapePartial<TLShape>);
       // Hand the runtime `received` flags from the carrier to the minted id
       // (in memory only) so a port that is receiving right now stays lit.
       rekeyReceivedPorts(editor, carrierId, shapeId);
