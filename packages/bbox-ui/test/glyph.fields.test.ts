@@ -198,4 +198,22 @@ describe("Glyph content rendering", () => {
     expect(children[0]!.props["data-icon"]).toBe("rocket");
     act(() => renderer.unmount());
   });
+
+  it("a MOUNTED provider that returns null (packages/glyph-picker's day-one resolveLucideName stub) still marks data-unresolved — null and 'no provider' are the same 'not resolved' case", () => {
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        React.createElement(
+          GlyphResolverProvider,
+          { value: { renderLucide: () => null } },
+          React.createElement(Glyph, { content: "lucide:rocket" }),
+        ),
+      );
+    });
+    const json = renderer.toJSON() as ReactTestRendererJSON;
+    expect(json.props["data-content-kind"]).toBe("lucide");
+    expect(json.props["data-unresolved"]).toBe("rocket");
+    expect(json.children).toBeNull();
+    act(() => renderer.unmount());
+  });
 });

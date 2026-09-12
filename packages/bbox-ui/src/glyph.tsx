@@ -121,7 +121,13 @@ export function Glyph({
       break;
     case "lucide": {
       const rendered = renderLucide?.(decoded.name);
-      if (rendered === undefined) unresolvedLucideName = decoded.name;
+      // WHY `== null` and not `=== undefined`: a mounted resolver that
+      // could not find the name (`resolveLucideName`'s day-one stub, or a
+      // real resolver on an unknown icon) returns `null`, same as no
+      // provider at all — "not resolved" is one case, not two, so both take
+      // the `data-unresolved` diagnostic path rather than one of them
+      // painting a blank square with nothing to grep for.
+      if (rendered == null) unresolvedLucideName = decoded.name;
       body = rendered ?? null;
       break;
     }
