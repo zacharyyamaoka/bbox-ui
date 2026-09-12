@@ -17,7 +17,7 @@
  * docs/GLYPH-PLAN.md phase 5's proof requirement.)
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +32,14 @@ const url = `${baseUrl.replace(/\/$/, "")}/create`;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const shotDir = path.join(here, "..", "..", "..", ".scratch", "create-glyph");
 mkdirSync(shotDir, { recursive: true });
+// Optional capture mode for the review report: BBOX_CAPTURE_DIR=<dir> makes
+// the run also record a screencast of the tldraw flow (frame-NNNN.jpg, one
+// file per frame, ffmpeg turns them into the hero video) and light-theme
+// stills at the end. Assertions are unchanged; the journey stays the oracle.
+const captureDir = process.env.BBOX_CAPTURE_DIR ?? null;
+if (captureDir) mkdirSync(captureDir, { recursive: true });
+let frameIndex = 0;
+let casting = false;
 
 const profile = mkdtempSync(path.join(tmpdir(), "bbox-glyph-chrome-"));
 let chrome;
@@ -89,6 +97,13 @@ try {
       pending.delete(message.id);
       message.error ? reject(new Error(message.error.message)) : resolve(message.result);
       return;
+    }
+    if (message.method === "Page.screencastFrame" && captureDir) {
+      if (casting) {
+        frameIndex += 1;
+        writeFileSync(path.join(captureDir, `frame-${String(frameIndex).padStart(4, "0")}.jpg`), Buffer.from(message.params.data, "base64"));
+      }
+      send("Page.screencastFrameAck", { sessionId: message.params.sessionId }).catch(() => {});
     }
     if (message.method === "Runtime.exceptionThrown") {
       consoleErrors.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
@@ -221,6 +236,17 @@ try {
     return shotPath;
   }
 
+  async function startCast() {
+    if (!captureDir || casting) return;
+    casting = true;
+    await send("Page.startScreencast", { format: "jpeg", quality: 72, maxWidth: 1600, maxHeight: 1000, everyNthFrame: 2 });
+  }
+  async function stopCast() {
+    if (!captureDir || !casting) return;
+    await send("Page.stopScreencast");
+    casting = false;
+  }
+
   async function step(label, fn) {
     try {
       await fn();
@@ -302,6 +328,7 @@ try {
   // 1. Click -> picker opens -> filter "rocket" -> pick -> paints here and in
   // the other two renders after switching, for each render in turn.
   for (const render of ["dom", "reactflow", "tldraw"]) {
+    if (render === "tldraw") await startCast();
     await step(`${render}: click the glyph opens the picker`, async () => {
       await gotoRender(render);
       const target =
@@ -338,6 +365,8 @@ try {
   }
 
   // 2. Emoji tab pick, on DOM.
+  await stopCast();
+
   await step("DOM: Emoji tab pick paints an emoji", async () => {
     await gotoRender("dom");
     const trigger = await centerOf(`[data-slot="dom-instance"] [data-slot="glyph-picker-trigger"]`);
@@ -371,6 +400,7 @@ try {
 
   // 3. Press-drag 60px on React Flow and on tldraw: it moved, no dialog opened.
   for (const render of ["reactflow", "tldraw"]) {
+    if (render === "tldraw") await startCast();
     await step(`${render}: press-drag 60px moves the glyph without opening the picker`, async () => {
       await gotoRender(render);
       const triggerSelector = render === "reactflow" ? `[data-slot="rf-glyph"] [data-slot="glyph-picker-trigger"]` : `[data-slot="glyph-picker-trigger"]`;
@@ -439,6 +469,7 @@ try {
     assert(rotation !== null && Math.abs(rotation) > 0.01, `the shape's own rotation changed (measured ${rotation})`);
   });
   await screenshot("04-tldraw-rotated.png");
+  await stopCast();
 
   await step("the Renderer rotation row reflects the drag", async () => {
     const value = await evaluate(
@@ -619,6 +650,45 @@ try {
   // page reads or writes a bench's rotation today (only `bbox-glyph`'s own
   // shape/node carries one), so a row that claimed a writer here would be
   // lying about what the canvas actually does with it.
+  if (captureDir) {
+    await step("capture: light-theme stills of the three renders and the open picker", async () => {
+      await evaluate(`(localStorage.setItem("theme", "light"), true)`);
+      await send("Page.navigate", { url });
+      await waitFor(`document.querySelector('[data-slot="create-workbench"]')`, "workbench after reload");
+      await waitFor(`document.documentElement.classList.contains("light") || !document.documentElement.classList.contains("dark")`, "light theme applied");
+      await selectComponentPicker("Glyph");
+      await waitFor(`document.querySelector('[data-slot="glyph-picker-trigger"]')`, "a glyph on the bench");
+      await gotoView("preview");
+      for (const render of ["dom", "reactflow", "tldraw"]) {
+        await gotoRender(render);
+        await new Promise((r) => setTimeout(r, 400));
+        const shot = await screenshot(`06-light-${render}.png`);
+        copyFileSync(shot, path.join(captureDir, `06-light-${render}.png`));
+      }
+      await gotoRender("dom");
+      const trigger = await centerOf(`[data-slot="dom-preview"] [data-slot="glyph-picker-trigger"]`);
+      await click(trigger.x, trigger.y);
+      await waitFor(`document.querySelector('[role="dialog"][aria-label="Glyph picker"]')`, "picker open in light theme");
+      await new Promise((r) => setTimeout(r, 300));
+      const filter = await centerOf(`[data-testid="glyph-picker-filter"]`);
+      await click(filter.x, filter.y);
+      await typeText("rocket");
+      await new Promise((r) => setTimeout(r, 500));
+      const open = await screenshot("06-light-picker.png");
+      copyFileSync(open, path.join(captureDir, "06-light-picker.png"));
+      await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+      await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+      await evaluate(`(localStorage.setItem("theme", "dark"), true)`);
+      await send("Page.navigate", { url });
+      await waitFor(`document.querySelector('[data-slot="create-workbench"]')`, "workbench back in dark");
+      await selectComponentPicker("Glyph");
+      await gotoView("preview");
+    });
+    for (const name of ["01-dom-rocket.png", "01-reactflow-rocket.png", "01-tldraw-rocket.png", "02-tldraw-dragged.png", "03-tldraw-resized.png", "04-tldraw-rotated.png", "05-code-dom.png", "05-code-reactflow.png", "05-code-tldraw.png"]) {
+      try { copyFileSync(path.join(shotDir, name), path.join(captureDir, name)); } catch {}
+    }
+  }
+
   await step("a non-Glyph selection has no Rotation row (nothing writes it)", async () => {
     await gotoView("preview");
     await gotoRender("tldraw");

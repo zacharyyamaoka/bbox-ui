@@ -121,9 +121,24 @@ function FigmaDensePanel({
   // regardless... just because it's a lot of controls as well." They are
   // filters over the field array, orthogonal to how a row is drawn, so they
   // compose with the single-row layout instead of competing with it.
-  const [tier, setTier] = useState<Tier>(loadStoredTier);
+  // WHY the stored tier is read AFTER mount and not in the initializer: the
+  // create page server-renders this panel, and the server has no
+  // localStorage, so an initializer that reads it makes the first client
+  // render disagree with the HTML it hydrates (React logged a hydration
+  // mismatch on every reload after Expert was chosen). `restored` is STATE,
+  // not a ref, so the store effect below cannot run in the same commit and
+  // write the default over the value just read (the workbench paid for this
+  // once already — see apps/docs/src/components/create/workbench.tsx).
+  const [tier, setTier] = useState<Tier>("simple");
+  const [tierRestored, setTierRestored] = useState(false);
+  useEffect(() => {
+    setTier(loadStoredTier());
+    setTierRestored(true);
+  }, []);
   const [filter, setFilter] = useState("");
-  useEffect(() => storeTier(tier), [tier]);
+  useEffect(() => {
+    if (tierRestored) storeTier(tier);
+  }, [tierRestored, tier]);
 
   const searching = filter.trim() !== "";
   const matched = fields.filter((f) => matchesFilter(f, filter));
