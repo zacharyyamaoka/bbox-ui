@@ -8,3 +8,6 @@ storybook-static/
 # Next 16 writes these on every dev start ("Generated AGENTS.md and CLAUDE.md for AI agents"); the repo guidance lives in the root CLAUDE.md.
 apps/docs/AGENTS.md
 apps/docs/CLAUDE.md
+
+# Reports that inline captures live in the gitignored media half (Zach, 2026-09-07)
+reports/media/
