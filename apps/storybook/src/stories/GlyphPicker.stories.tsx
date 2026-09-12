@@ -85,6 +85,25 @@ export const Primary: Story = {
   },
 };
 
+/**
+ * NO play function, deliberately — this story's whole point is that
+ * nothing ever opens it. Regression guard for the bug this closed: the
+ * default trigger's `LucideGlyphResolver` used to call
+ * `loadLucideLibrary()` unconditionally on mount, so the ~637KB Lucide
+ * chunk fetched even for a trigger that will only ever show an emoji.
+ * The durable guard is `packages/glyph-picker/test/GlyphPicker.test.tsx`'s
+ * "GlyphPicker — Lucide chunk load gating" describe (tracked, runs in CI;
+ * confirmed red when the `active` gate is removed) — this story is the
+ * same regression proved once more in a real browser: a network-log probe
+ * over CDP asserts zero `lucide-icons.json` requests while this story sits
+ * closed; `Primary`'s own click (which opens on the Icons tab by default)
+ * is the other half of that proof — it must fetch once opened, story
+ * value or not.
+ */
+export const EmojiClosed: Story = {
+  args: { initialValue: "emoji:🚀" },
+};
+
 /** Switches to the Emoji tab, filters, and picks — the trigger ends up
  *  showing the literal emoji character. */
 export const EmojiTab: Story = {

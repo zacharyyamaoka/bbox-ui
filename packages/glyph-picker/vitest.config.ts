@@ -13,11 +13,13 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     // GlyphPicker.test.tsx's own header explains why: only ONE test in
-    // this package ever waits on the real Popover's async library load
+    // this package ever opens the real Popover and waits on it
     // (`GlyphPicker — Remove`), and it does so reliably in a couple of
-    // seconds. A little headroom over the vitest default (5s), not the
-    // large budget an earlier version of this file needed before the
-    // open-and-wait tests that actually needed it were removed.
+    // seconds — every other test either stays closed or, for "encode on
+    // pick", renders the picker's grid components directly with no
+    // Popover involved. A little headroom over the vitest default (5s),
+    // not the large budget an earlier version of this file needed before
+    // the open-and-wait tests that actually needed it were removed.
     testTimeout: 10000,
   },
 });

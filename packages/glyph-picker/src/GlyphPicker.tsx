@@ -176,6 +176,49 @@ function describeUpload(prepared: PreparedIconImage): string {
   );
 }
 
+/**
+ * The encode half of `choose()`, pulled out so a test can exercise the
+ * exact "did picking this actually change anything, and if so what string
+ * does it become" logic directly — without going through `choose()`'s
+ * side effects (Recent bookkeeping, `setOpen`) or, more importantly,
+ * without opening the real Base UI `Popover` those live behind (the
+ * component's `open` effect chain is what makes jsdom's event loop stall
+ * on repeated real opens — see `GlyphPicker.test.tsx`'s own header).
+ * `choose()` calls this rather than reimplementing it, so a test that
+ * calls it too is exercising production code, not a hand-copied stand-in
+ * for it.
+ *
+ * Returns the string to hand `onChange`, or `null` when `content` is
+ * already the current value (`sameGlyphContent`'s own doc comment: a
+ * re-pick of the already-selected icon shouldn't fire a host update).
+ */
+export function encodePickedContent(current: GlyphContent, content: GlyphContent): string | null {
+  return sameGlyphContent(current, content) ? null : encodeGlyphContent(content);
+}
+
+/**
+ * The `content` this Popover's own `choose()` builds for each grid's
+ * `onChoose`, pulled out as one named factory so a test can hold the exact
+ * mapping the real `IconsGrid`/`EmojiGrid` wiring below uses — without
+ * opening the Popover `choose()` lives behind. `choose` itself stays a
+ * component-local closure (it reads/writes Recent state and `decoded` via
+ * hooks); this only owns the "which `GlyphContent` does a picked kebab/char
+ * become" step, which is the step a mutant could silently swap (lucide ↔
+ * emoji) with every other test in the file none the wiser, because nothing
+ * outside this component called it. `GlyphPicker`'s body wires
+ * `IconsGrid`/`EmojiGrid`'s `onChoose` straight to this factory's output,
+ * so a test importing it exercises the real call site, not a hand copy.
+ */
+export function makeChooseHandlers(choose: (content: GlyphContent, options?: { emojiSlug?: string }) => void): {
+  onChooseIcon(kebab: string): void;
+  onChooseEmoji(char: string, slug: string): void;
+} {
+  return {
+    onChooseIcon: (kebab) => choose({ kind: "lucide", name: kebab }),
+    onChooseEmoji: (char, slug) => choose({ kind: "emoji", char }, { emojiSlug: slug }),
+  };
+}
+
 export function GlyphPicker({
   value,
   onChange,
@@ -207,7 +250,13 @@ export function GlyphPicker({
   // WHY gated on `open`: Root/Trigger stay mounted for the picker's whole
   // life (Base UI only unmounts the Popup), so an unconditional load here
   // would fetch the ~1,800-icon chunk the moment a Glyph mounts, not the
-  // moment its picker is actually opened.
+  // moment its picker is actually opened. This is the panel's OWN grid
+  // data (icons + emoji, for browsing); the default trigger's Glyph has a
+  // separate load path below (`defaultTrigger`'s `active` prop) for
+  // resolving a persisted `lucide:` value even while this panel is closed
+  // — that one is gated on the value OR on `isOpen` (never on mount
+  // alone), and an emoji or empty trigger sitting closed must reach
+  // neither path.
   useEffect(() => {
     if (!isOpen || (lucideLib && emojiLib)) return;
     let cancelled = false;
@@ -270,13 +319,11 @@ export function GlyphPicker({
       setRecentEmoji(next);
       writeRecents(RECENT_EMOJI_KEY, next);
     }
-    // `sameGlyphContent` per its own doc comment: skip an `onChange` that
-    // would not actually change anything (re-picking the icon already
-    // selected shouldn't fire a host update, even though it still counts
-    // as "picked" for Recent above and still closes the panel below).
-    if (!sameGlyphContent(decoded, content)) onChange(encodeGlyphContent(content));
+    const encoded = encodePickedContent(decoded, content);
+    if (encoded !== null) onChange(encoded);
     if (!options.keepOpen) setOpen(false);
   };
+  const { onChooseIcon, onChooseEmoji } = makeChooseHandlers(choose);
 
   const stageFile = async (file: File) => {
     try {
@@ -364,8 +411,14 @@ export function GlyphPicker({
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [isOpen]);
 
+  // WHY `active` isn't just `true`: the default trigger renders on every
+  // Glyph, most of which are emoji, empty, or a data: upload — none of
+  // which ever need Lucide. Only fetch when this trigger's OWN value is a
+  // lucide one (it needs resolving regardless of open state) or the panel
+  // is open (about to let you pick one); see `LucideGlyphResolver`'s own
+  // doc comment for the default-`true` case this deliberately isn't using.
   const defaultTrigger = (
-    <LucideGlyphResolver>
+    <LucideGlyphResolver active={decoded.kind === "lucide" || isOpen}>
       <Glyph content={value} size={size} padding={padding} sizePreset={sizePreset} />
     </LucideGlyphResolver>
   );
@@ -535,7 +588,7 @@ export function GlyphPicker({
                       recent={recentIcons}
                       query={query}
                       decoded={decoded}
-                      onChoose={(kebab) => choose({ kind: "lucide", name: kebab })}
+                      onChoose={onChooseIcon}
                     />
                   ) : (
                     <EmojiGrid
@@ -545,7 +598,7 @@ export function GlyphPicker({
                       query={query}
                       tone={tone}
                       decoded={decoded}
-                      onChoose={(char, slug) => choose({ kind: "emoji", char }, { emojiSlug: slug })}
+                      onChoose={onChooseEmoji}
                     />
                   )}
                 </div>
@@ -582,7 +635,10 @@ function WindowedGrid<T>({ items, renderItem }: { items: readonly T[]; renderIte
   );
 }
 
-function IconsGrid({
+// Exported for `GlyphPicker.test.tsx` to render directly, below the
+// Base UI `Popover` boundary — see `encodePickedContent`'s doc comment
+// for why. Not part of the package's public `index.ts` surface.
+export function IconsGrid({
   entries,
   recent,
   query,
@@ -643,7 +699,8 @@ function IconCell({ entry, selected, onChoose }: { entry: LucideLibraryEntry; se
   );
 }
 
-function EmojiGrid({
+// Same reason as `IconsGrid` above.
+export function EmojiGrid({
   entries,
   recent,
   groups,

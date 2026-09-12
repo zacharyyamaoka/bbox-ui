@@ -25,29 +25,35 @@ export function resolveLucideName(name: string): ReactNode | null {
 }
 
 /**
- * Mount once near the root of whatever renders Glyphs with Lucide content.
- * Lazy-loads the one JSON chunk (plan D6) the first time ANY consumer
- * needs it — not on mount — and re-renders every `Glyph` beneath it once
- * the chunk resolves, by installing a fresh `renderLucide` reference into
- * `GlyphResolverProvider` (a bare function reference wouldn't do that: the
- * provider's context value has to actually change for its consumers to
- * re-render).
+ * Mount near the root of whatever renders Glyphs with Lucide content and
+ * re-renders every `Glyph` beneath it once the chunk resolves, by
+ * installing a fresh `renderLucide` reference into `GlyphResolverProvider`
+ * (a bare function reference wouldn't do that: the provider's context
+ * value has to actually change for its consumers to re-render).
  *
- * WHY the load is kicked off here rather than only from the picker's own
- * open effect: the default trigger (`GlyphPicker.tsx`) wraps its own Glyph
- * in this same resolver so a picked icon paints even if the host never
- * mounted a provider itself — that Glyph can be showing a `lucide:` value
- * with the picker still closed, so waiting for "picker opened" would leave
- * it permanently unresolved.
+ * `active` decides whether THIS mount is the one that should kick off the
+ * ~637 KB fetch — default `true`, so a host that mounts this once near its
+ * own root (the doc comment above) still gets the original "load the
+ * moment anything needs Lucide" behaviour, and so does
+ * `resolver.test.tsx`'s bare `<LucideGlyphResolver><Glyph content="lucide:…" />`.
+ * `GlyphPicker`'s own default trigger is the one caller that passes
+ * `active={false}` some of the time: it wraps a SINGLE Glyph of known
+ * content, so it can tell in advance whether that Glyph needs Lucide at
+ * all (`decoded.kind === "lucide"`) or whether the picker itself is open
+ * (about to let you pick one) — an emoji glyph, an empty glyph, or a data:
+ * upload should never cause this fetch just because it happens to render
+ * through the same resolver as every other trigger.
  */
-export function LucideGlyphResolver({ children }: { children?: ReactNode }) {
+export function LucideGlyphResolver({ children, active = true }: { children?: ReactNode; active?: boolean }) {
   const library = useSyncExternalStore(subscribeLucideLibrary, peekLucideLibrary, peekLucideLibrary);
   useEffect(() => {
     // Idempotent — `loadLucideLibrary` checks `loaded`/`loading` before
     // starting the import, so re-running this on every null render only
-    // ever starts the one chunk fetch.
-    if (!library) void loadLucideLibrary();
-  }, [library]);
+    // ever starts the one chunk fetch. Gated on `active` too: an inactive
+    // mount must never start the fetch just by existing, even though its
+    // `library` is still null.
+    if (active && !library) void loadLucideLibrary();
+  }, [active, library]);
   const renderLucide = useMemo(() => (library ? resolveLucideName : undefined), [library]);
   return createElement(GlyphResolverProvider, { value: { renderLucide } }, children);
 }
