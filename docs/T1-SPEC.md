@@ -842,6 +842,13 @@ sensible default is computed from another field, even though the
 
 ### 4.1 Glyph
 
+> **Superseded by `docs/GLYPH-PLAN.md`.** This section describes the T1
+> shape — a bare `size`/`padding`/`children` prop table, `size` default
+> `"xl"`. The shipped Glyph v2 (`docs/GLYPH-PLAN.md`'s frozen contract)
+> instead has `content` (an encoded string), `sizePreset` (default `"sm"`,
+> D1) with a separate numeric `size` override, and no `children` field —
+> kept below unedited, as the record of what was believed at the time.
+
 A square icon **slot** — like `Port`'s `PortLabel`, it renders whatever
 content its consumer hands it and never itself resolves "a Lucide name"
 or "an uploaded asset." Generalizes the already-shipped `BlockGlyph`
