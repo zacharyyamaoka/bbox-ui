@@ -245,8 +245,8 @@ HTML = f"""<!doctype html>
 </ul>
 
 <h2>Open it</h2>
-<pre>pnpm --dir /home/bam/bbox-ui/.claude/worktrees/glyph-finish --filter @bbox-ui/docs exec next dev --port 4110</pre>
-<p>then <code>http://localhost:4110/create</code> — use <code>localhost</code>, not the IP (Next 16 does not hydrate by IP). Pick <b>Glyph</b> in the Component select; the tldraw and React Flow tabs have the handles.</p>
+<pre>pnpm --dir /home/bam/bbox-ui/.claude/worktrees/glyph-finish --filter @bbox-ui/docs exec next dev --port 4120</pre>
+<p>then <code>http://localhost:4120/create</code> — use <code>localhost</code>, not the IP (Next 16 does not hydrate by IP). Pick <b>Glyph</b> in the Component select; the tldraw and React Flow tabs have the handles.</p>
 
 </main></body></html>
 """
