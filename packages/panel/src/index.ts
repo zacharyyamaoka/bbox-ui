@@ -43,8 +43,10 @@ export {
   isInstancePointerDownClaimed,
   armEditOnRelease,
   clearArmedEdit,
+  shouldSuppressNativeFocusShift,
   type TwoClickPointerDown,
 } from "./twoClickEdit";
+export { priorSelectionForRootPress, nextSelectionForRootPress, type RootPress } from "./bareAreaSelect";
 export { MEMBER_SPECS } from "./bench";
 export {
   MEMBERS_CONTROLS,

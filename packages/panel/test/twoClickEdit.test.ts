@@ -5,6 +5,7 @@ import {
   clearArmedEdit,
   isInstancePointerDownClaimed,
   isSecondPressToEdit,
+  shouldSuppressNativeFocusShift,
 } from "../src/twoClickEdit";
 
 describe("the two-click-to-edit rule", () => {
@@ -198,5 +199,33 @@ describe("armEditOnRelease / clearArmedEdit", () => {
     armEditOnRelease(pointerEvent("pointerdown", 100, 100, 1), onEdit);
     doc.dispatchEvent(pointerEvent("pointerup", 100, 100, 1));
     expect(onEdit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * verify-round-4, F3: react-arborist/React Aria Tree/headless-tree dropped a
+ * navigator click's own selection when it landed while a TextBox elsewhere
+ * was mid-edit — see `shouldSuppressNativeFocusShift`'s own doc comment
+ * (src/twoClickEdit.ts) for the confirmed browser-event race this closes.
+ * This proves only the decision's own two-input truth table; the actual
+ * DOM behavior (the browser's mousedown default action, `blur`, and
+ * whether `click` then fires) is the browser journey's job
+ * (docs/TEXTBOX-EDITING-SPEC.md §4), not this dependency-free package's.
+ */
+describe("shouldSuppressNativeFocusShift", () => {
+  it("suppresses the native focus shift for a nav-row press while an inline-edit control has focus", () => {
+    expect(shouldSuppressNativeFocusShift({ activeElementIsInlineEditControl: true, pressLandedOnSelectableRow: true })).toBe(true);
+  });
+
+  it("does nothing when nothing is being edited", () => {
+    expect(shouldSuppressNativeFocusShift({ activeElementIsInlineEditControl: false, pressLandedOnSelectableRow: true })).toBe(false);
+  });
+
+  it("does nothing for a press that did not land on a selectable row", () => {
+    expect(shouldSuppressNativeFocusShift({ activeElementIsInlineEditControl: true, pressLandedOnSelectableRow: false })).toBe(false);
+  });
+
+  it("does nothing when neither condition holds", () => {
+    expect(shouldSuppressNativeFocusShift({ activeElementIsInlineEditControl: false, pressLandedOnSelectableRow: false })).toBe(false);
   });
 });

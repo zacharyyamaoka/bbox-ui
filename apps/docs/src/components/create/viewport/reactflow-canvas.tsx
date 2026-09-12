@@ -14,6 +14,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
+import { priorSelectionForRootPress } from "@bbox-ui/panel";
 import type { CanvasPosition } from "../contract";
 import { renderInstance, type EditBundle } from "../render-instance";
 
@@ -71,6 +72,12 @@ interface Props {
 function Canvas(p: Props) {
   const { resolvedTheme } = useTheme();
   const byId = useMemo(() => new Map(p.instances.map((i) => [i.id, i])), [p.instances]);
+  // WHY: see bareAreaSelect.ts's own doc comment (verify-round-4, F2) — the
+  // set of ids React Flow actually gave a NODE to, so a leftover MEMBER id
+  // (added directly by render-instance.tsx's member wrapper, which bypasses
+  // React Flow entirely — no host has a node for a member) can never
+  // survive a union with a freshly root-clicked id below.
+  const rootIdSet = useMemo(() => new Set(p.roots.map((r) => r.id)), [p.roots]);
 
   // WHY a ref, fed by `dimensions` changes, rather than trusting React
   // Flow's own internal measurement to persist on its own: this canvas is
@@ -127,7 +134,19 @@ function Canvas(p: Props) {
       for (const c of changes) {
         if (c.type === "position" && c.position) moved[c.id] = { x: c.position.x, y: c.position.y };
         if (c.type === "select") {
-          selection ??= new Set(p.selectedIds);
+          // WHY `priorSelectionForRootPress` and not `new Set(p.selectedIds)`
+          // (verify-round-4, F2 — see bareAreaSelect.ts): after a member is
+          // selected directly (bypassing React Flow, which has no node for
+          // one), `p.selectedIds` can hold an id no node's `selected` flag
+          // was ever derived from. Folding a fresh root click into the RAW
+          // previous selection then UNIONS the two instead of replacing —
+          // clicking a Block's bare padding produced a mixed
+          // [Block, TextBox] selection instead of the Block alone. Starting
+          // from only the ids React Flow still recognizes as a root's own
+          // node drops that leftover before the union ever happens, while a
+          // genuine multi-root selection (two Blocks shift-selected) is
+          // untouched, since both survive the filter.
+          selection ??= new Set(priorSelectionForRootPress(p.selectedIds, (id) => rootIdSet.has(id)));
           if (c.selected) selection.add(c.id);
           else selection.delete(c.id);
         }
@@ -155,7 +174,7 @@ function Canvas(p: Props) {
       // React Flow's own internal measurement loop for no visible gain.
       if (firstMeasurement) forceMeasuredTick((n) => n + 1);
     },
-    [p],
+    [p, rootIdSet],
   );
 
   return (

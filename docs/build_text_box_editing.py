@@ -35,6 +35,10 @@ DATE = "2026-09-12"
 # time, so the report keeps saying what it said even if rebuilt later from
 # a different checkout).
 POLISH_SHA = "dcaa7f9"
+# The final-pass (this fixer's own) commit sha — same convention, filled in
+# right after committing it in a small follow-up, exactly like POLISH_SHA
+# above was.
+FINAL_SHA = "TBD"
 HERE = pathlib.Path(__file__).resolve().parent.parent  # the worktree root
 MEDIA = HERE / "reports" / "media" / "text-box-editing"
 OUT = HERE / "reports" / "media" / f"text-box-editing-{DATE}.html"
@@ -68,7 +72,7 @@ STEP_LABEL = {
     5: "5 · click again, Escape cancels, then (verify round 4) right-click leaves the control focused",
     6: "6 · lines → multi, newline, Ctrl+Enter, then the 6-variant textarea sweep",
     7: "7 · drag the resting text moves the node",
-    8: "8 · verify round 2 (tldraw) — shift-select across two members, bare-padding click",
+    8: "8 · shift-select across two members, then a bare-padding click (tldraw AND React Flow since the final pass)",
     9: "9 · polish pass — --bbox-ring resolves to --bbox-accent, both themes",
 }
 
@@ -195,6 +199,33 @@ RING_HTML = f"""
 </div>
 """
 
+# ---- the navigator commit+select sweep (final pass, F3): one row per
+# navigator variant, each proving the SAME single-click gesture — a
+# navigator click while a TextBox elsewhere is mid-edit both commits the
+# value and selects the clicked row, in one press.
+NAV_IDS = ["shadcn", "dndkit", "arborist", "aria", "headless"]
+NAV_LABEL = {"shadcn": "shadcn Sidebar tree", "dndkit": "dnd-kit tree", "arborist": "react-arborist", "aria": "React Aria Tree", "headless": "headless-tree"}
+nav_rows_html = []
+for nav_id in NAV_IDS:
+    rows = by_render(nav_id)
+    p = MEDIA / f"nav-{nav_id}-commit-and-select.png"
+    passed = sum(1 for r in rows if r["pass"])
+    shot = f'<figure class="card"><img src="{png(p)}" alt="{nav_id}: one click committed and selected"><figcaption>{NAV_LABEL[nav_id]}</figcaption></figure>' if p.exists() else ""
+    nav_rows_html.append(
+        f'<h4>{NAV_LABEL[nav_id]} <span class="meas">{passed}/{len(rows)}</span></h4>'
+        f'<div class="shots">{shot}</div>'
+        f'<table class="assertions"><tbody>{assertion_rows(rows)}</tbody></table>'
+    )
+NAV_RESULTS = [r for nav_id in NAV_IDS for r in by_render(nav_id)]
+NAV_PASS = sum(1 for r in NAV_RESULTS if r["pass"])
+NAV_HTML = f"""
+<div class="bug fixed">
+<h3>F3 · a navigator click while a TextBox was mid-edit elsewhere dropped its OWN selection on 1 of 5 navigators <span class="meas">{NAV_PASS}/{len(NAV_RESULTS)}</span></h3>
+<p>Only <strong>react-arborist</strong> actually failed this — confirmed live with a MutationObserver timestamped against the real event sequence, after the other four (shadcn, dnd-kit, React Aria Tree, headless-tree) all reproduced clean on the first attempt. The shared mechanism every navigator is exposed to: a mouse press on an unrelated row triggers the browser's own <code>mousedown</code>→focus-shift default action, which fires <code>blur</code> on whatever control had focus — <code>TextBox</code>'s control commits synchronously on blur (<code>textBox.tsx</code> §1's own contract), and that commit's state update re-renders the page in the SAME tick, before the still-pending <code>click</code> event ever fires. For react-arborist specifically, that re-render changes <code>p.roots</code>' identity (the edited instance's own prop write), which busts <code>RowContainer</code>'s own <code>React.memo</code> check — measured: EVERY row's underlying DOM element gets removed and a fresh one inserted in its place, including the row the pointer is still, physically, mid-press on. A browser's <code>click</code> event resolves its target once, at <code>mousedown</code> time; once that element is disconnected before <code>mouseup</code>, no <code>click</code> fires for it at all, so the row that should have been selected needed a second, separate press. <strong>Fix:</strong> a single capture-phase <code>onMouseDownCapture</code> on <code>bench-sidebar.tsx</code>'s shared <code>[data-slot="navigator-host"]</code> wrapper — common to all five variants — calls <code>preventDefault()</code> on a press that lands on a <code>[data-slot="nav-row"]</code> while <code>document.activeElement</code> is the TextBox's own <code>[data-bbox-interactive]</code> control, suppressing just the browser's default focus-shift. That defers <code>blur</code> (and so the commit) until the row's own <code>click</code> handler runs first — which, on every navigator here, already ends editing itself as an ordinary side effect of selecting a different instance (<code>workbench.tsx</code>'s <code>setSelection</code>). Suppressing the default focus assignment does not stop the row from ever receiving focus: every navigator here already manages focus programmatically off its own selection state (shadcn's own effect calling <code>.focus()</code>, react-arborist's <code>RowContainer</code> doing the same off <code>node.isFocused</code>, React Aria/headless-tree's roving-tabindex pattern) — this removes only the ONE moment that assignment would otherwise race a commit. The decision itself (<code>shouldSuppressNativeFocusShift</code>, <code>packages/panel/src/twoClickEdit.ts</code>) is a pure two-input function, unit-tested; the browser race it closes is proven here, on all five navigators, not just the one that happened to fail loudest.</p>
+{"".join(nav_rows_html)}
+</div>
+"""
+
 SCOREBOARD_ROW = "".join(
     f'<div class="score-cell"><div class="score-render">{RENDER_LABEL[r]}</div>'
     f'<div class="score-num {"allpass" if sum(1 for x in by_render(r) if x["pass"]) == len(by_render(r)) else "somefail"}">'
@@ -269,7 +300,7 @@ HTML = f"""<!doctype html>
 
 <div class="note">
 {
-  f"<strong>All {TOTAL} assertions pass</strong> — across all three renders, plus the polish pass's own <code>--bbox-ring</code> check (both themes, through the DOM root wrapper). Verify round 1 confirmed five defects in this journey's original run, fixed each at its root, swept the sibling paths the same causes reached (a bare-padding drag, a different non-editable member, the default inspector's textarea fallback), and re-ran this exact journey against the fixed tree. A second, independent audit of that fix then confirmed four more (\"Fixed in verify round 2\") — two the fix itself introduced, two it left unswept in five of the panel's six variants. A THIRD, independent audit of round 2's own fix commit then confirmed one more (\"Fixed in verify round 3\"): <code>lines: \"single\"</code>'s rest recipe was declared correctly but painted nothing, because <code>text-overflow</code> never applies to a flex container — every earlier round's own unit test pinned the style OBJECT, never the paint. A FOURTH, independent audit of round 3's own fix commit (7ba431c) then confirmed one more (below, \"Fixed in verify round 4\"): on tldraw only, a right-click on the editing control ended editing and opened tldraw's own context menu instead of leaving the control focused with the browser's native one. Each of these eleven defects is fixed at its root and covered by new permanent assertions (step 2's truncation probe, step 5b's right-click-stays-focused check on all three renders, step 6's 6-variant sweep, step 8's tldraw shift-select and bare-padding checks) so none can return unnoticed. A FIFTH pass ({POLISH_SHA}, \"Fixed in polish pass\" below) then cleared four minors three prior audits kept repeating rather than finding fresh, plus the hero clip and this report's own one-builder consolidation. Nothing here is patched to make the number look better, the number is what the fixes produced."
+  f"<strong>All {TOTAL} assertions pass</strong> — across all three renders, plus the polish pass's own <code>--bbox-ring</code> check (both themes, through the DOM root wrapper). Verify round 1 confirmed five defects in this journey's original run, fixed each at its root, swept the sibling paths the same causes reached (a bare-padding drag, a different non-editable member, the default inspector's textarea fallback), and re-ran this exact journey against the fixed tree. A second, independent audit of that fix then confirmed four more (\"Fixed in verify round 2\") — two the fix itself introduced, two it left unswept in five of the panel's six variants. A THIRD, independent audit of round 2's own fix commit then confirmed one more (\"Fixed in verify round 3\"): <code>lines: \"single\"</code>'s rest recipe was declared correctly but painted nothing, because <code>text-overflow</code> never applies to a flex container — every earlier round's own unit test pinned the style OBJECT, never the paint. A FOURTH, independent audit of round 3's own fix commit (7ba431c) then confirmed one more (below, \"Fixed in verify round 4\"): on tldraw only, a right-click on the editing control ended editing and opened tldraw's own context menu instead of leaving the control focused with the browser's native one. Each of these eleven defects is fixed at its root and covered by new permanent assertions (step 2's truncation probe, step 5b's right-click-stays-focused check on all three renders, step 6's 6-variant sweep, step 8's tldraw shift-select and bare-padding checks) so none can return unnoticed. A FIFTH pass ({POLISH_SHA}, \"Fixed in polish pass\" below) then cleared four minors three prior audits kept repeating rather than finding fresh, plus the hero clip and this report's own one-builder consolidation. A SIXTH pass ({FINAL_SHA}, \"Fixed in final pass\" below) closed three MORE lane-introduced regressions a closing audit found the journey did not yet check for — a stale tldraw selection echo and a React Flow mixed-selection union, both the SAME rule fixed once as a shared helper, plus a navigator click dropped mid-edit on react-arborist — each now covered by 25 new permanent assertions (step 8 on tldraw AND React Flow, and a full five-navigator sweep). Nothing here is patched to make the number look better, the number is what the fixes produced."
   if not FAILURES else
   f'<strong>{len(FAILURES)} assertion(s) still fail.</strong> See "What did not pass" below.'
 }
@@ -375,6 +406,22 @@ HTML = f"""<!doctype html>
 
 <div class="note">Also in this pass: the hero clip at the top of this report (real captured frames, tldraw, steps 3&ndash;4 — no fabricated animation), and this report itself — <code>docs/build_text_box_editing.py</code> is the SINGLE source for TextBox's inline-editing review; the stale <code>text-box-editing-2026-09-11.html</code> this pass found sitting alongside it is deleted, not superseded by a second builder.</div>
 
+<h2>Fixed in final pass ({FINAL_SHA}) <span class="meas">a closing audit passed the journey as it stood, then found three lane-introduced defects the journey itself did not yet check for — fixed at their root and now permanently covered, in the same file, by 25 new assertions</span></h2>
+
+<div class="note">F1 and F2 below are ONE rule — "a press on a parent's own bare area, with one of its members selected, selects the parent alone" — fixed ONCE as a shared helper (<code>packages/panel/src/bareAreaSelect.ts</code>) and applied in both host canvases, proven on both in step 8 above rather than in two drifting copies. F3 is a separate, unrelated race, fixed once at the one place all five navigators share.</div>
+
+<div class="bug fixed">
+<h3>F1 · tldraw: clicking a Block's own bare padding did not re-select it while one of its members was selected</h3>
+<p>Only reproduced in the journey's own two-member SHIFT-selected state (step 8): select member 1, shift-select member 2 (neither has a shape of its own — only a root gets one), then click the Block's bare padding with no member anywhere under the pointer. The page's own selection was correctly the two members, but tldraw's own internal shape selection could go STALE against it: the page→editor sync effect deliberately skips writing tldraw's selection while <code>editor.inputs.getIsPointing()</code> is true (a real, necessary guard — without it, a drag starting on a member with nothing previously selected moved the node 0px instead of the expected 80, a round-1 regression), and a member press can leave that write permanently deferred with nothing left to ever re-trigger it. The NEXT bare-padding press then lands on a shape tldraw's own STALE memory already considers selected — which produces NO store change at all, so the echo listener that would tell the page never fires, and the Block never re-selects. <strong>Fix:</strong> the shape's own bare-area press now calls <code>onSelectionChange</code> DIRECTLY — the exact same architecture <code>render-instance.tsx</code>'s member wrapper already uses, bypassing the engine's own click/echo mechanism entirely for a root press, not just a member one. <code>nextSelectionForRootPress</code> (<code>bareAreaSelect.ts</code>) computes the result from only the ids tldraw still has a shape for, so a leftover member id can never survive into it — tldraw's own native click/drag handling for the same press still runs alongside unsuppressed (a drag starting on this bare padding must still move the shape), and if it also changes tldraw's own store, the echo is a harmless no-op re-assertion of the identical selection.</p>
+</div>
+
+<div class="bug fixed">
+<h3>F2 · React Flow: the identical bare-padding press produced a MIXED [Block, TextBox] selection instead of the Block alone</h3>
+<p>Same root scenario as F1 (two members selected, no shape/node of their own), a different failure shape: React Flow's own <code>onNodesChange</code> reported <code>{{selected: true}}</code> for the Block's node on the bare-padding press, and the fold-in was a UNION — <code>selection ??= new Set(p.selectedIds)</code> — not a replacement, so the stale member ids survived alongside the freshly-clicked root and the inspector showed a two-type "Mixed" header instead of "Block" alone. <strong>Fix:</strong> the SAME shared helper, used the other way it is exposed — <code>priorSelectionForRootPress(p.selectedIds, (id) =&gt; rootIdSet.has(id))</code> filters the fold-in base down to only ids React Flow still has a NODE for before folding in its own reported delta, so a leftover member id is dropped before the union ever happens. A genuine multi-root selection (two Blocks shift-selected) is untouched, since both survive the filter.</p>
+</div>
+
+{NAV_HTML}
+
 {SECTIONS}
 
 <h2>Stock parts touched by this feature, element by element</h2>
@@ -393,6 +440,8 @@ HTML = f"""<!doctype html>
     <tr><th>Inspector textarea control</th><td>single-line <code>&lt;input&gt;</code> for every text field</td><td><code>FieldKind: "textarea"</code> (new), rendered as <code>&lt;textarea rows=1 style="field-sizing:content"&gt;</code> in <code>FieldTraceRow.tsx</code>, <code>FigmaDense.tsx</code> and <code>RowPopover.tsx</code> (<strong>F5</strong> — the latter two fell through to a newline-stripping <code>&lt;input&gt;</code> until this round)</td><td>a multi-line <code>children</code> value shows its newline in every panel that reads it, not just at rest</td></tr>
     <tr><th>Two-click-to-edit decision</th><td>none existed</td><td><code>isSecondPressToEdit()</code>, one shared function (<code>packages/panel/src/twoClickEdit.ts</code>), unit-tested</td><td>the exact same rule fires for a top-level instance (<code>dom-preview.tsx</code>) and a nested member (<code>render-instance.tsx</code>'s wrapper) — they cannot drift apart</td></tr>
     <tr><th>react-arborist instance navigator</th><td colspan="3"><strong>unchanged (stock seam)</strong> — F1's original report suspected its roving-tabindex focus management; refuted (reproduced identically with the shadcn navigator instead), so left untouched</td></tr>
+    <tr><th>Root-level bare-area press (final pass)</th><td>none existed — a root's selection was 100% the host engine's own native click + an echo listener</td><td><code>nextSelectionForRootPress</code> / <code>priorSelectionForRootPress</code> (<code>packages/panel/src/bareAreaSelect.ts</code>, new, unit-tested), applied in <code>tldraw-canvas.tsx</code> and <code>reactflow-canvas.tsx</code></td><td><strong>final pass F1/F2</strong>: a root press selects the root alone even when the engine's own remembered selection has gone stale or a member selection left it a leftover id — the same rule members already got, now given to roots too</td></tr>
+    <tr><th>Navigator row focus-vs-commit ordering (final pass)</th><td>none existed — every navigator relied on its own library's native mousedown→focus→blur→click sequence</td><td><code>shouldSuppressNativeFocusShift</code> (<code>packages/panel/src/twoClickEdit.ts</code>, new, unit-tested) behind one <code>onMouseDownCapture</code> on <code>bench-sidebar.tsx</code>'s shared <code>[data-slot="navigator-host"]</code></td><td><strong>final pass F3</strong>: a navigator click while a TextBox is mid-edit elsewhere both commits AND selects the clicked row in one press, on all five navigators — react-arborist's virtualized rows no longer get torn down before their own <code>click</code> can fire</td></tr>
     <tr><th>tldraw editor→page selection echo guard (round 2)</th><td>an un-deduplicated <code>impliedRootSelection()</code> ID-set join</td><td><code>onPointerDownCapture</code> (stock React synthetic capture event) on the canvas wrapper + <code>Element.closest()</code></td><td><strong>round 2 F3/F4</strong>: whether the page's own member/control handling already owns this exact press — read from WHERE it landed, not reconstructed from which ids happen to already be selected</td></tr>
     <tr><th>Every panel variant's "textarea" field control (round 2)</th><td>FigmaDense: real <code>&lt;textarea&gt;</code> that never actually grew (fixed <code>height:22</code> beat <code>fieldSizing</code>); IconStrip: single-line <code>&lt;input&gt;</code></td><td>the same <code>&lt;textarea rows=1 style="field-sizing:content"&gt;</code> idiom <code>FieldTraceRow.tsx</code> already had, now in all 6 of <code>PANEL_VARIANTS</code></td><td><strong>round 2 F1/F2</strong>: a multi-line value shows every line, and keeps every newline through one more keystroke, in every panel design a person can switch to — not only the default</td></tr>
   </tbody>

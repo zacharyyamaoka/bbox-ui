@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentEntry, Instance, InstanceNode, PanelVariant } from "@bbox-ui/panel";
-import { MIXED_BENCH } from "@bbox-ui/panel";
+import { MIXED_BENCH, shouldSuppressNativeFocusShift } from "@bbox-ui/panel";
 import type { NavigatorVariant } from "./navigator";
 import type { InspectorLayoutVariant } from "./inspector-layout";
 import {
@@ -99,7 +99,37 @@ export function BenchSidebar(p: BenchSidebarProps) {
                 into a tree … instead of check boxes … more ergonomic shift
                 multi select … highlight the rows". Which stock tree part
                 draws it is the switcher's choice in the footer. */}
-            <div data-slot="navigator-host" data-navigator={p.navigator.id} className="min-h-0">
+            <div
+              data-slot="navigator-host"
+              data-navigator={p.navigator.id}
+              className="min-h-0"
+              // WHY here, common to all five navigator variants, and not
+              // inside any one of them: `shouldSuppressNativeFocusShift`'s
+              // own doc comment (@bbox-ui/panel/twoClickEdit.ts,
+              // verify-round-4 F3) — react-arborist, React Aria Tree and
+              // headless-tree all lost a navigator click's own selection
+              // when it landed while a TextBox elsewhere was mid-edit,
+              // because the browser's own mousedown→focus-shift default
+              // action fires (and with it, `blur` → the edit's commit →
+              // a re-render) BEFORE the row's own `click` ever does. This
+              // one capture-phase check, applied uniformly to every
+              // navigator's own rows via the shared `[data-slot="nav-row"]`
+              // marker, removes the race at its one common source rather
+              // than patching each library's own click handling
+              // separately — the DOM check reads `document.activeElement`
+              // directly rather than threading `editingId` through
+              // `NavigatorProps`, since "is an inline-edit control
+              // currently focused" is exactly what the shared
+              // `data-bbox-interactive` marker already answers.
+              onMouseDownCapture={(e) => {
+                const activeElementIsInlineEditControl =
+                  document.activeElement instanceof Element && document.activeElement.matches("[data-bbox-interactive]");
+                const pressLandedOnSelectableRow = e.target instanceof Element && !!e.target.closest('[data-slot="nav-row"]');
+                if (shouldSuppressNativeFocusShift({ activeElementIsInlineEditControl, pressLandedOnSelectableRow })) {
+                  e.preventDefault();
+                }
+              }}
+            >
               <p.navigator.Navigator
                 roots={p.tree}
                 selectedIds={Array.from(p.selectedIds)}

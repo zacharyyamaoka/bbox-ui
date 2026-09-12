@@ -803,13 +803,21 @@ for (const renderId of RENDERS) {
     assertStep(7, "dragging a DIFFERENT, non-editable member (Header · center placeholder) moved the node ~80px", Math.abs(memberDx - 80) <= 12, `dx=${memberDx.toFixed(1)}`);
   }
 
-  // ---- step 8 (tldraw only, verify round 1 F3/F4): a member has no shape
-  // of its own on tldraw — only the root does — so both regressions turn
-  // on exactly WHERE a press lands relative to a member's own wrapper, not
-  // on any id-set arithmetic. Both need a SECOND member of the same Block
-  // to tell "the page's own additive selection" apart from "tldraw's
-  // reflexive re-assertion of the shared root". ---------------------------
-  if (renderId === "tldraw") {
+  // ---- step 8 (tldraw AND React Flow, verify round 1 F3/F4 + verify round
+  // 4 F1/F2): a member has no shape/node of its own in either host — only
+  // the root does — so all four regressions turn on exactly WHERE a press
+  // lands relative to a member's own wrapper, not on any id-set arithmetic.
+  // Both need a SECOND member of the same Block to tell "the page's own
+  // additive selection" apart from the host's own reflexive re-assertion
+  // of the shared root. Originally tldraw-only (round 1's own F3/F4); round
+  // 4 found the IDENTICAL bare-padding-after-member-select defect on React
+  // Flow too (F2 — a mixed [Block, TextBox] selection, not merely a stale
+  // echo), so this now runs on both hosts through the same assertions
+  // rather than a second, drifting copy — the shared fix
+  // (packages/panel/src/bareAreaSelect.ts) is proven on both here, in one
+  // place. --------------------------------------------------------------
+  if (renderId === "tldraw" || renderId === "reactflow") {
+    const nodeSelForRender = renderId === "tldraw" ? '[data-slot="tl-instance"]' : '[data-slot="rf-instance"]';
     const rootBefore = (await navRows()).find((r) => r.depth === 0);
     if (!rootBefore) throw new Error("no depth-0 root row for the Block bench");
     const rightId = await selectByTitle("Header · right");
@@ -819,7 +827,7 @@ for (const renderId of RENDERS) {
     const afterAdd2 = await selectedRows();
     assertStep(8, "adding a second TextBox (Header · right) selected exactly the new child", afterAdd2.length === 1, afterAdd2.join());
     const textBoxId2 = afterAdd2[0];
-    await sleep(400); // tldraw's ResizeObserver-driven shape geometry settles asynchronously
+    await sleep(400); // tldraw's ResizeObserver-driven shape geometry / React Flow's own measurement settles asynchronously
 
     await press(textBoxSel(textBoxId));
     const selAfterFirst = await selectedRows();
@@ -834,24 +842,100 @@ for (const renderId of RENDERS) {
       selAfterShift.join(",") === wantShift.join(","),
       `got [${selAfterShift.join(",")}] want [${wantShift.join(",")}]`,
     );
-    await screenshot("tldraw-7a-shift-extended-selection");
+    await screenshot(`${renderId}-7a-shift-extended-selection`);
 
     // Now click the Block's own bare padding — no member anywhere under
     // the pointer — while a member still holds the page's selection.
-    const bare = await findBarePoint(`[data-slot="tl-instance"]`);
-    if (!bare) throw new Error("could not find a bare (non-member) point inside the tldraw shape");
+    const bare = await findBarePoint(nodeSelForRender);
+    if (!bare) throw new Error("could not find a bare (non-member) point inside the shape/node");
     await pressAt(bare.x, bare.y);
     const selAfterBare = await selectedRows();
     assertStep(
       8,
-      "F4: clicking the Block's own bare padding re-selects the Block itself while a member was selected",
+      `verify-round-4 ${renderId === "tldraw" ? "F1" : "F2"}: clicking the Block's own bare padding re-selects the Block ALONE while a member was selected (not a stale echo, not a mixed union)`,
       selAfterBare.join() === rootBefore.id,
       `sel=[${selAfterBare.join(",")}] want [${rootBefore.id}] at (${bare.x.toFixed(0)},${bare.y.toFixed(0)})`,
     );
-    await screenshot("tldraw-7b-bare-padding-reselects-block");
+    // The inspector is the other place a mixed selection actually shows up
+    // to a person (verify-round-4 F2's own repro: a two-type "Mixed"
+    // header) — reading it directly, not just the navigator's own
+    // data-selected flags, closes that gap.
+    const inspectorAfterBare = await inspectorName();
+    assertStep(
+      8,
+      `verify-round-4 ${renderId === "tldraw" ? "F1" : "F2"}: the inspector shows the Block alone, not a mixed selection`,
+      inspectorAfterBare === "Block",
+      inspectorAfterBare,
+    );
+    await screenshot(`${renderId}-7b-bare-padding-reselects-block`);
   }
 
   manifest.renders[renderId] = { console: takeConsole() };
+}
+
+// ---- item 2 (verify round 4, F3): a navigator click while a TextBox is
+// mid-edit elsewhere must both COMMIT the edit and SELECT the clicked row
+// in ONE press, on every navigator variant. See
+// packages/panel/src/twoClickEdit.ts's `shouldSuppressNativeFocusShift` for
+// the confirmed root cause: the browser's own mousedown→focus-shift
+// default action fires the outgoing control's `blur` — and with it the
+// edit's commit, and the re-render that follows — BEFORE the row's own
+// `click` event ever does. react-arborist's virtualized rows additionally
+// get torn down and rebuilt by that SAME re-render (confirmed live with a
+// MutationObserver: every row's DOM element gets replaced), disconnecting
+// the very row the pointer is mid-press on before its `click` can fire at
+// all — so react-arborist dropped the click outright, not merely mis-timed
+// it. Swept across ALL FIVE navigators, not just react-arborist where it
+// was first found: the fix is one shared capture-phase check on
+// `apps/docs/src/components/create/bench-sidebar.tsx`'s
+// `[data-slot="navigator-host"]` wrapper, common to every variant, and
+// only a sweep of all five can prove it was not special-cased to the one
+// library that happened to fail loudest.
+const NAVIGATORS = ["shadcn", "dndkit", "arborist", "aria", "headless"];
+console.log(`\n=== navigator commit+select while editing (all 5 navigators) ===`);
+const restingRootText = (id) => evaluate(`document.querySelector('[data-slot="dom-instance"][data-instance-id="${id}"] [data-slot="text-box"]')?.textContent ?? null`);
+for (const navId of NAVIGATORS) {
+  currentRender = navId;
+  await load("dark", "TextBox");
+  await setSelect('[data-slot="navigator-picker"]', navId);
+  await sleep(250);
+  await switchRender("dom");
+  // A second root TextBox so there is a genuinely different row to click —
+  // the freshly-added one becomes the sole selection, so row1 (the
+  // ORIGINAL instance) is the one this test edits and row2 is untouched.
+  await evaluate(`document.querySelector('[data-slot="instance-plus"]')?.click()`);
+  await sleep(250);
+  const rootRows = await navRows();
+  const [row1, row2] = rootRows;
+  if (!row1 || !row2) throw new Error(`[${navId}] need two root TextBox rows, got ${JSON.stringify(rootRows)}`);
+  const domSel = (id) => `[data-slot="dom-instance"][data-instance-id="${id}"]`;
+  await press(domSel(row1.id)); // first press: select row1 (not yet sole-selected)
+  await sleep(150);
+  await press(domSel(row1.id)); // second press: already sole-selected + inlineEdit -> edits
+  await sleep(150);
+  const editingBefore = await evaluate(`!!document.querySelector('[data-slot="text-box-input"]')`);
+  assertStep(10, `[${navId}] entered editing on the first TextBox`, editingBefore, editingBefore);
+  await typeText("edited"); // single-line mount selects all -> replaces the seed text
+  const midValue = await evaluate(`document.querySelector('[data-slot="text-box-input"]')?.value ?? null`);
+  assertStep(10, `[${navId}] typed the replacement value`, midValue === "edited", midValue);
+  // The click this whole check is about: a DIFFERENT row, while row1 is
+  // still mid-edit — one physical press, nothing else.
+  await press(rowSel(row2.id));
+  await sleep(250);
+  const stillEditing = await evaluate(`!!document.querySelector('[data-slot="text-box-input"]')`);
+  assertStep(10, `[${navId}] the navigator click committed and ended editing`, !stillEditing, stillEditing);
+  const restingAfter = await restingRootText(row1.id);
+  assertStep(10, `[${navId}] the typed value committed to the instance`, restingAfter === "edited", restingAfter);
+  const selectedAfterOneClick = await selectedRows();
+  assertStep(
+    10,
+    `[${navId}] ONE click on the different row both committed AND selected it — no second click needed`,
+    selectedAfterOneClick.join() === row2.id,
+    selectedAfterOneClick.join(),
+  );
+  const sidebarClip = await rectOf('[data-slot="bench-sidebar"]');
+  await screenshot(`nav-${navId}-commit-and-select`, { left: Math.floor(sidebarClip.left), top: Math.floor(sidebarClip.top), w: Math.ceil(sidebarClip.w), h: Math.min(600, Math.ceil(sidebarClip.h)) });
+  manifest.renders[navId] = { console: takeConsole() };
 }
 
 // ---- item 3 (polish pass): --bbox-ring resolves to --bbox-accent, not

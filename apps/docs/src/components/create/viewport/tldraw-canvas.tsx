@@ -16,6 +16,7 @@ import {
   type TLShapeId,
 } from "tldraw";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
+import { claimInstancePointerDown, isInstancePointerDownClaimed, nextSelectionForRootPress } from "@bbox-ui/panel";
 import type { CanvasPosition } from "../contract";
 import { renderInstance, type EditBundle } from "../render-instance";
 
@@ -41,6 +42,10 @@ const BenchContext = createContext<{
   byId: Map<string, Instance>;
   selectedIds: string[];
   onSelectInstance: (id: string, additive: boolean) => void;
+  /** Direct root-level selection — see `nextSelectionForRootPress`'s call
+   *  site below (verify-round-4 F1) for why a root press can't go through
+   *  `onSelectInstance`/the engine's own echo alone. */
+  onSelectionChange: (ids: string[]) => void;
   edit: EditBundle;
 }>({
   entries: [],
@@ -48,6 +53,7 @@ const BenchContext = createContext<{
   byId: new Map(),
   selectedIds: [],
   onSelectInstance: () => {},
+  onSelectionChange: () => {},
   edit: { editingId: null, editSnapshot: null, onRequestEdit: () => {}, onEditEnd: () => {}, onInstancePropChange: () => {} },
 });
 
@@ -108,7 +114,7 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
     return { id: shape.id, type: shape.type };
   }
   override component(shape: BenchShape) {
-    const { entries, byId, selectedIds, onSelectInstance, edit } = useContext(BenchContext);
+    const { entries, byId, selectedIds, onSelectInstance, onSelectionChange, edit } = useContext(BenchContext);
     const inst = byId.get(shape.props.instanceId);
     const editor = this.editor;
     const contentRef = useRef<HTMLDivElement>(null);
@@ -171,6 +177,37 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
         onPointerDown={(e) => {
           if (e.target instanceof Element && e.target.closest(BBOX_INTERACTIVE_SELECTOR)) {
             editor.markEventAsHandled(e);
+          }
+          // WHY this shape now selects itself directly, deliberately NOT
+          // relying on tldraw's own native click + the editor→page echo
+          // below (verify-round-4 F1 — see bareAreaSelect.ts's own doc
+          // comment for the full mechanism): a press that reaches here
+          // unclaimed landed on THIS shape's own bare area — a member's
+          // wrapper (render-instance.tsx) always claims the event first —
+          // so it means exactly what a member's own direct
+          // `onSelect`/`onSelectionChange` call already means, and must be
+          // just as unconditional. Left to tldraw's own store-diff echo
+          // (the ONLY mechanism a bare-root press used to have), a press on
+          // a shape tldraw's OWN memory already (possibly stalely)
+          // considers selected produces no store change at all, so the
+          // page never hears about it. Calling `onSelectionChange` directly
+          // here removes that dependency entirely; tldraw's own native
+          // click/drag handling for this SAME press still runs alongside
+          // (nothing here calls `markEventAsHandled`, on purpose — a drag
+          // that starts on this bare padding must still move the shape),
+          // and if it also changes tldraw's own store, the echo below is a
+          // harmless no-op re-assertion of the identical selection.
+          if (!isInstancePointerDownClaimed(e)) {
+            claimInstancePointerDown(e);
+            const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+            onSelectionChange(
+              nextSelectionForRootPress({
+                rootId: shape.props.instanceId,
+                additive,
+                selectedIds,
+                isKnownRoot: (id) => !!editor.getShape(shapeIdFor(id)),
+              }),
+            );
           }
         }}
         // WHY a SEPARATE mark on pointer-UP, not just pointer-down (verify
@@ -324,8 +361,16 @@ export function TldrawCanvas(p: Props) {
 
   const byId = useMemo(() => new Map(p.instances.map((i) => [i.id, i])), [p.instances]);
   const ctx = useMemo(
-    () => ({ entries: p.entries, instances: p.instances, byId, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit }),
-    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.edit],
+    () => ({
+      entries: p.entries,
+      instances: p.instances,
+      byId,
+      selectedIds: p.selectedIds,
+      onSelectInstance: p.onSelectInstance,
+      onSelectionChange: p.onSelectionChange,
+      edit: p.edit,
+    }),
+    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.onSelectionChange, p.edit],
   );
 
   // page → editor

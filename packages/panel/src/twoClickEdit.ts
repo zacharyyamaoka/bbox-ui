@@ -189,3 +189,61 @@ export function clearArmedEdit(): void {
   armedEdit?.teardown();
   armedEdit = null;
 }
+
+/**
+ * verify-round-4, F3 — "selecting a different instance commits and ends
+ * editing" (docs/TEXTBOX-EDITING-SPEC.md §3) failed on 3 of 5 navigators
+ * (react-arborist, React Aria `<Tree>`, `@headless-tree/react`): clicking a
+ * DIFFERENT navigator row while a TextBox was mid-edit elsewhere committed
+ * the value and ended editing, but dropped the click that should have
+ * selected the row it landed on — a second, identical click was needed.
+ *
+ * Root cause, confirmed live over CDP (a MutationObserver on the navigator
+ * host, timestamped against the native event sequence): for a mouse press
+ * on an unrelated element, the browser's OWN default action for `mousedown`
+ * — moving focus to the newly-pressed element, which is what fires `blur`
+ * on whatever had it — happens BEFORE the subsequent `click` event, and
+ * ALL of it (`mousedown` → default-action focus shift → `blur` → `click`)
+ * plays out across native events the browser dispatches back to back for
+ * one physical press. `TextBox`'s control commits synchronously on blur
+ * (packages/bbox-ui/src/textBox.tsx, §1's own contract: "blur →
+ * `onCommit(current)`"), and that commit's state update — batched with
+ * `onEditEnd()` — re-renders the whole page in the SAME tick, before the
+ * still-pending `click` ever fires. For react-arborist specifically, that
+ * re-render changes `p.roots`' identity (the edited instance's own prop
+ * write), which busts every row's `React.memo` (`RowContainer`'s own doc
+ * comment: "will only render when a new instance of NodeApi is passed") —
+ * measured: EVERY row's underlying DOM element gets removed and a fresh one
+ * inserted in its place, including the row the pointer is still, physically,
+ * mid-press on. A `click` event's target is resolved once, at `mousedown`
+ * time; once that element is disconnected before `mouseup`, no `click`
+ * fires for it at all — not on the old element, and not on whatever
+ * replaced it. (React Aria's `<Tree>`, `@headless-tree/react`'s own
+ * `<button>` rows, shadcn's `SidebarMenuButton` and the dnd-kit variant all
+ * survive the identical commit-triggered re-render with their DOM node
+ * intact — the same trace shows their `click` firing normally — so this is
+ * an react-arborist-specific consequence of one general, host-agnostic
+ * race, not something every library equally suffers from.)
+ *
+ * The general fix does not require knowing why, or whether, a given
+ * navigator's own row happens to survive that re-render: since the
+ * browser's default mousedown→focus-shift action is what starts the whole
+ * race (it is what fires `blur`, which is what fires the commit, which is
+ * what fires the re-render, all BEFORE `click`), suppressing just that one
+ * default action for a press that lands on a navigator row WHILE an
+ * inline-edit control has focus removes the race outright: `blur` (and so
+ * the commit) is deferred until the row's own `click` handler runs first —
+ * which, on every navigator here, already ends editing itself as a normal
+ * side effect of selecting a different instance
+ * (`workbench.tsx`'s `setSelection`: "if (editingId !== null && …)
+ * endEditing()"). Suppressing the browser's default focus assignment does
+ * NOT stop the row from ever receiving focus: every navigator here manages
+ * focus programmatically off its own selection state anyway (shadcn's own
+ * `useEffect` calling `.focus()`, react-arborist's `RowContainer` doing the
+ * same off `node.isFocused`, React Aria/headless-tree's roving-tabindex
+ * pattern) — this only removes the ONE moment that focus assignment would
+ * otherwise race a commit.
+ */
+export function shouldSuppressNativeFocusShift(params: { activeElementIsInlineEditControl: boolean; pressLandedOnSelectableRow: boolean }): boolean {
+  return params.activeElementIsInlineEditControl && params.pressLandedOnSelectableRow;
+}
