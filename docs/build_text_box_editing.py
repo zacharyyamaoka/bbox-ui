@@ -38,7 +38,7 @@ POLISH_SHA = "dcaa7f9"
 # The final-pass (this fixer's own) commit sha — same convention, filled in
 # right after committing it in a small follow-up, exactly like POLISH_SHA
 # above was.
-FINAL_SHA = "TBD"
+FINAL_SHA = "ff62ab4"
 HERE = pathlib.Path(__file__).resolve().parent.parent  # the worktree root
 MEDIA = HERE / "reports" / "media" / "text-box-editing"
 OUT = HERE / "reports" / "media" / f"text-box-editing-{DATE}.html"
