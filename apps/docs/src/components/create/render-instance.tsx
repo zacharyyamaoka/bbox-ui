@@ -44,7 +44,9 @@ export function renderInstance(
         data-instance-id={child.id}
         data-instance-type={child.type}
         data-selected={on}
-        className="contents [&>*:first-child]:rounded-sm [&>*:first-child]:outline-offset-2 data-[selected=true]:[&>*:first-child]:outline data-[selected=true]:[&>*:first-child]:outline-2 data-[selected=true]:[&>*:first-child]:outline-ring"
+        // See viewport/dom-preview.tsx: no rounded-* under the selection
+        // outline, and bbox-accent instead of the neutral ring token.
+        className="contents [&>*:first-child]:outline-offset-2 data-[selected=true]:[&>*:first-child]:outline data-[selected=true]:[&>*:first-child]:outline-2 data-[selected=true]:[&>*:first-child]:outline-[color:var(--bbox-accent)]"
         onPointerDown={(e) => {
           e.stopPropagation();
           onSelect(child.id, e.shiftKey || e.metaKey || e.ctrlKey);

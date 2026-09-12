@@ -41,7 +41,12 @@ export function DomPreview({
                 onSelectionChange(on ? selectedIds.filter((x) => x !== inst.id) : [...selectedIds, inst.id]);
               } else onSelectionChange([inst.id]);
             }}
-            className="rounded-md p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-ring"
+            // WHY no rounded-* here: `outline` traces the element's own
+            // border-radius, so a rounded box drew the selection as a soft
+            // pill instead of tldraw's sharp-cornered indicator (Zach,
+            // 2026-09-11). bbox-accent — not the neutral `ring` token — is
+            // this app's real blue, already used for Port's role text.
+            className="p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
             title={`${inst.type} · ${inst.id}`}
           >
             {renderInstance(entries, byId, inst, selectedIds, onSelectInstance)}

@@ -29,7 +29,9 @@ function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
       data-slot="rf-instance"
       data-instance-id={data.instance.id}
       data-selected={selected}
-      className="rounded-md p-2 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-ring"
+      // See dom-preview.tsx: no rounded-* under the selection outline, and
+      // bbox-accent (this app's real blue) instead of the neutral ring token.
+      className="p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
     >
       {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance)}
     </div>
