@@ -45,7 +45,7 @@ def png(file: str) -> str:
     bg = px[im.width // 2, im.height - 1]
     last = 0
     for y in range(im.height - 1, -1, -1):
-        row = [px[x, y] for x in range(0, im.width, 4)]
+        row = [px[x, y] for x in range(6, im.width - 2, 4)]  # skip the column border
         if any(abs(r[0] - bg[0]) + abs(r[1] - bg[1]) + abs(r[2] - bg[2]) > 24 for r in row):
             last = y
             break
