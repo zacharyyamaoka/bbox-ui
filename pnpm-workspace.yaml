@@ -11,6 +11,7 @@ packages:
   - demos/story-hosts
   - demos/port-inspector
   - demos/inspector
+  - demos/dndkit-lab
 allowBuilds:
   esbuild: true
   msw: false
