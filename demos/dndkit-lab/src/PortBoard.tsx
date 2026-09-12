@@ -106,6 +106,21 @@ function findContainer(items: Record<ContainerId, string[]>, id: string): Contai
   return CONTAINER_IDS.find((key) => items[key].includes(id));
 }
 
+/**
+ * The fixed cross-axis coordinate that puts a card exactly on the edge
+ * line — top/bottom containers are locked in y, left/right in x. Free mode
+ * only ever gives a card freedom along the main axis; this is what the
+ * edge actually meant by "a line", not just a container boundary.
+ */
+function crossCenterFor(containerId: ContainerId): number {
+  const axis = AXIS[containerId];
+  const cardSize = CARD_SIZE[ORIENTATION[containerId]];
+  const containerSize = CONTAINER_SIZE[containerId];
+  const crossSize = (axis === "row" ? containerSize.height : containerSize.width) - 2 * CONTAINER_PADDING;
+  const cardCross = axis === "row" ? cardSize.height : cardSize.width;
+  return (crossSize - cardCross) / 2 + CONTAINER_PADDING;
+}
+
 /** Where the flex layout (auto mode) is currently placing every card in one container. */
 function computeContainerFreePositions(
   containerId: ContainerId,
@@ -118,17 +133,14 @@ function computeContainerFreePositions(
   const containerSize = CONTAINER_SIZE[containerId];
 
   const mainSize = (axis === "row" ? containerSize.width : containerSize.height) - 2 * CONTAINER_PADDING;
-  const crossSize = (axis === "row" ? containerSize.height : containerSize.width) - 2 * CONTAINER_PADDING;
   const cardMain = axis === "row" ? cardSize.width : cardSize.height;
-  const cardCross = axis === "row" ? cardSize.height : cardSize.width;
 
   const mains = mainAxisPositions(ids.length, mainSize, cardMain, scheme);
-  const cross = (crossSize - cardCross) / 2;
+  const crossPos = crossCenterFor(containerId);
 
   const result: Record<string, Point> = {};
   ids.forEach((id, i) => {
     const main = mains[i] + CONTAINER_PADDING;
-    const crossPos = cross + CONTAINER_PADDING;
     result[id] = axis === "row" ? { x: main, y: crossPos } : { x: crossPos, y: main };
   });
   return result;
@@ -261,6 +273,13 @@ export function PortBoard() {
     }
     x = clamp(x, CONTAINER_PADDING, Math.max(bounds.width - CONTAINER_PADDING - cardSize.width, CONTAINER_PADDING));
     y = clamp(y, CONTAINER_PADDING, Math.max(bounds.height - CONTAINER_PADDING - cardSize.height, CONTAINER_PADDING));
+    // Free mode still only gives a card freedom along the main axis — the
+    // cross axis is always exactly on the edge line.
+    if (AXIS[containerId] === "row") {
+      y = crossCenterFor(containerId);
+    } else {
+      x = crossCenterFor(containerId);
+    }
     setFreePositions((prev) => ({ ...prev, [id]: { x, y } }));
   }
 
@@ -446,6 +465,15 @@ export function PortBoard() {
       const bounds = CONTAINER_SIZE[toContainer];
       nextX = clamp(nextX, CONTAINER_PADDING, Math.max(bounds.width - CONTAINER_PADDING - cardSize.width, CONTAINER_PADDING));
       nextY = clamp(nextY, CONTAINER_PADDING, Math.max(bounds.height - CONTAINER_PADDING - cardSize.height, CONTAINER_PADDING));
+
+      // The drag itself is free in both axes (the card follows the pointer
+      // exactly, mid-gesture) — only ON DROP does the cross axis snap back
+      // onto the edge line, leaving just the main axis draggable.
+      if (AXIS[toContainer] === "row") {
+        nextY = crossCenterFor(toContainer);
+      } else {
+        nextX = crossCenterFor(toContainer);
+      }
 
       return { ...prev, [cardId]: { x: nextX, y: nextY } };
     });
