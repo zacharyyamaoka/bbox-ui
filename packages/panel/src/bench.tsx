@@ -294,7 +294,14 @@ export function sharedFields(entries: ComponentEntry[]): { fields: FieldSpec[]; 
     f.kind === "number"
       ? `number|${f.min ?? ""}|${f.max ?? ""}|${f.step ?? ""}|${String(f.defaultValue)}`
       : `${f.kind}|${(f.options ?? []).map((o) => String(o.value)).join(",")}`;
-  const reasonFor = (f: FieldSpec) => (f.kind === "number" ? "different range" : "different options");
+  // Say which half differs: "different range" for a default-only difference
+  // was a false reason (round 7), and the bench must explain correctly or
+  // say nothing.
+  const reasonFor = (f: FieldSpec, other: FieldSpec) => {
+    if (f.kind !== "number") return "different options";
+    const rangeSame = f.min === other.min && f.max === other.max && f.step === other.step;
+    return rangeSame ? "different default" : "different range";
+  };
 
   const fields: FieldSpec[] = [];
   const excluded: string[] = [];
@@ -310,8 +317,10 @@ export function sharedFields(entries: ComponentEntry[]): { fields: FieldSpec[]; 
       e.fields.some((o) => o.id === field.id && signature(o) !== signature(field)),
     );
     if (absentFrom.length === 0 && differsOn.length === 0) fields.push(field);
-    else if (differsOn.length > 0)
-      excluded.push(`${field.label} (${reasonFor(field)} on ${differsOn.map((e) => e.name).join(", ")})`);
+    else if (differsOn.length > 0) {
+      const other = differsOn[0]!.fields.find((o) => o.id === field.id)!;
+      excluded.push(`${field.label} (${reasonFor(field, other)} on ${differsOn.map((e) => e.name).join(", ")})`);
+    }
     else excluded.push(`${field.label} (not on ${absentFrom.map((e) => e.name).join(", ")})`);
   }
 

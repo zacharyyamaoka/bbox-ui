@@ -54,9 +54,10 @@ describe("sharedFields", () => {
     expect(excluded).toEqual(["Height (different range on RowContainer)"]);
   });
 
-  it("does not share a number field whose resting default differs", () => {
-    const { fields } = sharedFields([entry("Stack", [height(24, 12)]), entry("RowContainer", [height(24, 8)])]);
+  it("does not share a number field whose resting default differs, and says so (round 7)", () => {
+    const { fields, excluded } = sharedFields([entry("Stack", [height(24, 12)]), entry("RowContainer", [height(24, 8)])]);
     expect(fields).toEqual([]);
+    expect(excluded).toEqual(["Height (different default on RowContainer)"]);
   });
 
   it("still shares a text field whose resting default differs — it reads Mixed, which is the honest answer (round 6)", () => {
