@@ -8,22 +8,45 @@ import {
   Background,
   ReactFlow,
   ReactFlowProvider,
+  useUpdateNodeInternals,
+  useViewport,
   type Node,
   type NodeChange,
   type NodeProps,
 } from "@xyflow/react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
+import type { PortEdgeId } from "@bbox-ui/core";
 import type { CanvasPosition } from "../contract";
 import { renderInstance } from "../render-instance";
+import { HostZoomContext } from "../port-dnd";
 
-type BenchNodeData = { entries: ComponentEntry[]; byId: Map<string, Instance>; instance: Instance; selectedIds: string[]; onSelectInstance: (id: string, additive: boolean) => void };
+type MovePort = (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+type BenchNodeData = {
+  entries: ComponentEntry[];
+  byId: Map<string, Instance>;
+  instance: Instance;
+  selectedIds: string[];
+  onSelectInstance: (id: string, additive: boolean) => void;
+  onMovePort?: MovePort;
+};
 type BenchNode = Node<BenchNodeData, "bench">;
 
 /** The node body is the component itself, nothing else: the point of the
  *  tab is "the same instances, now on a canvas", not a card around them.
  *  Members are drawn inside it by `renderInstance`; a pointer-down on one
- *  selects the member and is stopped before React Flow selects the node. */
+ *  selects the member and is stopped before React Flow selects the node.
+ *
+ *  `HostZoomContext` is provided here from React Flow's own live
+ *  `useViewport().zoom` (Zach's 2026-09-12 model: dnd-kit owns every Port
+ *  drag in every host) — `PortDndProvider` (mounted inside `renderInstance`,
+ *  one per Block) portals its `DragOverlay` to `document.body` and scales
+ *  the ghost by this zoom (`adjustScale`, see portDnd.tsx), so the dragged
+ *  dot both tracks the pointer 1:1 and renders at the same apparent size
+ *  as the Port it was grabbed from, at any zoom level. `useViewport`
+ *  re-renders this node on every zoom/pan tick, same cost React Flow
+ *  already pays for the node's own transform. */
 function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
+  const { zoom } = useViewport();
   return (
     <div
       data-slot="rf-instance"
@@ -33,7 +56,9 @@ function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
       // bbox-accent (this app's real blue) instead of the neutral ring token.
       className="p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
     >
-      {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance)}
+      <HostZoomContext.Provider value={zoom}>
+        {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance, data.onMovePort)}
+      </HostZoomContext.Provider>
     </div>
   );
 }
@@ -49,6 +74,10 @@ interface Props {
   positions: Record<string, CanvasPosition>;
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
+  /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
+   *  Absent means this render is not yet wired for it (matches
+   *  `ViewportProps.onMovePort` and `dom-preview.tsx`'s own optional prop). */
+  onMovePort?: MovePort;
 }
 
 /**
@@ -60,6 +89,21 @@ interface Props {
 function Canvas(p: Props) {
   const { resolvedTheme } = useTheme();
   const byId = useMemo(() => new Map(p.instances.map((i) => [i.id, i])), [p.instances]);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  // Wraps the page's `onMovePort` so a drop also tells React Flow to
+  // refresh this node's internals — `blockId` here IS the node id (one
+  // root instance per node), so any Handle a future Port grows would
+  // otherwise keep stale coordinates after an auto-mode reflow moves it
+  // to a different lane/order without the node itself resizing.
+  const onMovePort = useMemo<MovePort | undefined>(() => {
+    if (!p.onMovePort) return undefined;
+    const move = p.onMovePort;
+    return (blockId, portId, edge, target) => {
+      move(blockId, portId, edge, target);
+      updateNodeInternals(blockId);
+    };
+  }, [p.onMovePort, updateNodeInternals]);
 
   const nodes: BenchNode[] = useMemo(
     () =>
@@ -68,10 +112,10 @@ function Canvas(p: Props) {
         type: "bench",
         position: p.positions[instance.id] ?? { x: 0, y: 0 },
         selected: p.selectedIds.includes(instance.id),
-        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance },
+        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, onMovePort },
         draggable: true,
       })),
-    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance],
+    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, onMovePort],
   );
 
   // WHY selection is read from `select` changes and NOT from

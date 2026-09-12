@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { Arrangement, Placements } from "@bbox-ui/core";
 import type { MembersSpec } from "./members/contract";
 
 export interface SlotSpec {
@@ -30,6 +31,37 @@ export interface RenderContext {
   /** …and the slot's id, so a Bar knows whether it is the header (line at
    *  its bottom) or the footer (line at its top). */
   slotId?: string;
+  /**
+   * Rendered members by id, for a component with `members` (Zach's
+   * 2026-09-12 ruling: a Block holds Ports as members ALONGSIDE its
+   * slots). A slot-having component's fills keep arriving via `slots` as
+   * today; anything held that is NOT a slot fill arrives here instead —
+   * never mixed into `children`, because a slotted `render` never reads
+   * `children` at all (see `renderInstance`'s own `entry.slots` branch).
+   */
+  members?: Record<string, ReactNode>;
+  /**
+   * The active Arrangement and its per-port Placements, for a component
+   * whose members carry placement data (a Block's Ports — see
+   * `packages/bbox-ui/src/portPlacement.ts`). `render` asks the model's
+   * own `laneOrder`/`drawnEdge` which of its PortEdge lanes each member
+   * belongs in and reads `t` to place it there in custom mode — the model
+   * owns that math, `render` only puts the answer on screen. Absent for
+   * anything that isn't Block-shaped (no `arrangements` on the instance).
+   */
+  arrangement?: Arrangement;
+  placements?: Placements;
+  /** Member ids whose Port is `locked: true` (the function port, at most
+   *  one per Block) — rendered once at the header's left corner, outside
+   *  any lane, and excluded from every lane's order/spacing math, per
+   *  `portPlacement.ts`'s own `refresh`/`movePort`. */
+  lockedMemberIds?: string[];
+  /** The instance id of the Block itself, set alongside `arrangement`/
+   *  `placements` (Zach's 2026-09-12 model) — `renderLane`'s `PortLane`
+   *  droppables need it to form their `blockId:edge` id (see
+   *  `portDnd.ts`'s `portLaneId`), and it is what `renderInstance` passes
+   *  to the `PortDndProvider` it mounts around this same render. */
+  blockId?: string;
 }
 
 /**

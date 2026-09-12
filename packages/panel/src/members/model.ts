@@ -1,3 +1,4 @@
+import { DEFAULT_ARRANGEMENT, defaultPlacement, lockedPlacement, type Arrangement, type Placements } from "@bbox-ui/core";
 import type { Instance } from "../bench";
 import type { ComponentEntry } from "../registerComponent";
 import type { MemberSummary, MembersSpec } from "./contract";
@@ -114,12 +115,38 @@ export function addMemberTo(instances: Instance[], parentId: string, child: Inst
   ];
 }
 
-/** Removes `id` and its whole subtree, and unlinks it from its parent. */
+/**
+ * Removes `id` and its whole subtree, unlinks it from its parent, and
+ * prunes every removed id out of any remaining instance's Arrangements'
+ * `grouping.assignments`.
+ *
+ * WHY: a Block's Arrangements are data living ON the instance (not
+ * derived), so a removed Port's id would otherwise survive forever as an
+ * orphaned `assignments` entry — nothing else scans for it. `groupSlots`
+ * (portPlacement.ts) happens to stay correct without this, because it only
+ * ever looks up an id already in the lane's live set, but that is a
+ * property of ONE reader, not a guarantee for whatever reads
+ * `assignments` next.
+ */
 export function removeMember(instances: Instance[], id: string): Instance[] {
   const doomed = new Set(subtreeIds(instances, id));
   return instances
     .filter((i) => !doomed.has(i.id))
-    .map((i) => (i.members?.includes(id) ? { ...i, members: i.members.filter((m) => m !== id) } : i));
+    .map((i) => (i.members?.includes(id) ? { ...i, members: i.members.filter((m) => m !== id) } : i))
+    .map((i) => {
+      if (!i.arrangements) return i;
+      let changed = false;
+      const nextArrangements = i.arrangements.map((a) => {
+        const assignments = a.grouping?.assignments;
+        if (!assignments) return a;
+        const hasDoomed = Object.keys(assignments).some((pid) => doomed.has(pid));
+        if (!hasDoomed) return a;
+        changed = true;
+        const nextAssignments = Object.fromEntries(Object.entries(assignments).filter(([pid]) => !doomed.has(pid)));
+        return { ...a, grouping: { ...a.grouping!, assignments: nextAssignments } };
+      });
+      return changed ? { ...i, arrangements: nextArrangements } : i;
+    });
 }
 
 export function moveMember(instances: Instance[], parentId: string, from: number, to: number): Instance[] {
@@ -251,6 +278,54 @@ export function inheritedFor(instances: Instance[], entries: ComponentEntry[], i
       out[fieldId] = up ?? { value: field.defaultValue as InheritedValueLike["value"], from: ancestorId, fromLabel: title };
       break;
     }
+  }
+  return out;
+}
+
+/**
+ * A Block's own Port members, in member order — never its slot fills (a
+ * Block's `members` list holds both: slot fills always come first,
+ * `addMember` appends Ports after them, see `bench.tsx`'s own
+ * `makeInstanceWithSlots`/`addMemberTo`). Filtering by `type === "Port"`
+ * rather than "not a slot fill" is deliberate: it stays correct even if a
+ * future member type joins `MEMBER_SPECS.Block.accepts`.
+ */
+export function blockPorts(instances: Instance[], blockId: string): Instance[] {
+  const block = instances.find((i) => i.id === blockId);
+  if (!block) return [];
+  const byId = new Map(instances.map((i) => [i.id, i]));
+  return (block.members ?? [])
+    .map((id) => byId.get(id))
+    .filter((i): i is Instance => !!i && i.type === "Port");
+}
+
+/** The Block's active Arrangement — falling back to the shared
+ *  `DEFAULT_ARRANGEMENT` when `arrangement` doesn't resolve (a Block with
+ *  no `arrangements` yet, or a stale/typo'd active id). Never mutates. */
+export function activeArrangement(block: Instance): Arrangement {
+  const arrangements = block.arrangements ?? [DEFAULT_ARRANGEMENT];
+  return arrangements.find((a) => a.id === block.arrangement) ?? arrangements[0] ?? DEFAULT_ARRANGEMENT;
+}
+
+/**
+ * One Arrangement's `Placements` over a Block's REAL Port instances: a
+ * port with nothing stored yet for `arrangementId` gets `defaultPlacement`
+ * (parked on the arrangement's first live edge, appended after whatever
+ * this call has already assigned there — see that function's own doc), a
+ * `locked` port always gets `lockedPlacement()` regardless of anything
+ * stored (the function port's corner placement is never subject to an
+ * arrangement, `portPlacement.ts`'s own header). Pure: never writes back
+ * to any Port's own `placements`, so calling it from a render is safe.
+ */
+export function portPlacementsOf(block: Instance, ports: Instance[], arrangementId: string): Placements {
+  const arrangement = (block.arrangements ?? [DEFAULT_ARRANGEMENT]).find((a) => a.id === arrangementId) ?? DEFAULT_ARRANGEMENT;
+  const out: Placements = {};
+  for (const port of ports) {
+    if (port.locked) {
+      out[port.id] = lockedPlacement();
+      continue;
+    }
+    out[port.id] = port.placements?.[arrangementId] ?? defaultPlacement(port.id, arrangement, out);
   }
   return out;
 }

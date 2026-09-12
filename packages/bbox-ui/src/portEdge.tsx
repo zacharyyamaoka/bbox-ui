@@ -41,12 +41,20 @@ function edgeFlexDirection(edge: BlockSide): "column" | "row" {
  * stops the cascade there by design, a Fragment stops it by omission.
  *
  * A Port that sets its own `textLayout` still wins, because the cascade is
- * only applied when the child's own prop is undefined. Known limit, stated
- * rather than hidden: an element that is neither a Port nor a Fragment (a
- * wrapping `div`, say) still stops the cascade at itself. Context would pass
- * through anything, but Port is deliberately callable as a plain function so
- * its tests can read real defaults off the returned tree, and a hook would
- * end that.
+ * only applied when the child's own prop is undefined.
+ *
+ * WHY hosts are looked THROUGH and never stamped (2026-09-12): on /create a
+ * lane's children are `<span data-slot="port-group">` → `<DraggablePort>` →
+ * `<Port>`, and the old rule stamped the span — React's "does not recognize
+ * the `textLayout` prop on a DOM element" on every Block bench, while the
+ * Port underneath never saw the lane's layout at all, so a port on the top
+ * edge still wrote its label to the right and neighbours overlapped. A host
+ * element cannot take the prop; a component can (a Port consumes it, the
+ * gallery's `ThreePorts` forwards it, a wrapper simply ignores it), so
+ * components are stamped AND recursed into by their `children`. Context
+ * would pass through anything, but Port is deliberately callable as a plain
+ * function so its tests can read real defaults off the returned tree, and a
+ * hook would end that.
  */
 function cascadeInto(children: ReactNode, textLayout: PortTextLayout): ReactNode {
   return Children.map(children, (child) => {
@@ -55,8 +63,13 @@ function cascadeInto(children: ReactNode, textLayout: PortTextLayout): ReactNode
       const fragment = child as ReactElement<{ children?: ReactNode }>;
       return cascadeInto(fragment.props.children, textLayout);
     }
-    const element = child as ReactElement<{ textLayout?: PortTextLayout }>;
-    return cloneElement(element, { textLayout: element.props.textLayout ?? textLayout });
+    const element = child as ReactElement<{ textLayout?: PortTextLayout; children?: ReactNode }>;
+    const isHost = typeof element.type === "string";
+    const hasChildren = element.props.children !== undefined && element.props.children !== null;
+    const nextChildren = hasChildren ? cascadeInto(element.props.children, textLayout) : undefined;
+    if (isHost) return hasChildren ? cloneElement(element, undefined, nextChildren) : element;
+    const props = { textLayout: element.props.textLayout ?? textLayout };
+    return hasChildren ? cloneElement(element, props, nextChildren) : cloneElement(element, props);
   });
 }
 

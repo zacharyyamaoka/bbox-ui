@@ -3,12 +3,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
+  DEFAULT_ARRANGEMENT,
+  addArrangement,
+  lockedPlacement,
+  movePort,
+  refresh,
+  setMode,
+  toggleEdge,
+  type Arrangement,
+  type ArrangementMode,
+  type Placement,
+  type Placements,
+  type PortEdgeId,
+} from "@bbox-ui/core";
+import {
+  activeArrangement,
   addMemberTo,
+  blockPorts,
   findVariant,
   inheritedFor,
   instanceTree,
   isSlotFill,
   makeInstanceWithSlots,
+  portPlacementsOf,
   memberSpecFor,
   reparent,
   typeGlyph,
@@ -308,6 +325,216 @@ export function Workbench() {
     }));
   }
 
+  /*
+   * Arrangement / Placement ops (Zach, 2026-09-12) — a Block's own states
+   * and its Ports' per-state placement. Every write here goes through
+   * `packages/bbox-ui/src/portPlacement.ts`'s model functions rather than
+   * hand-rolling the order/t math a second time; see `arrangement-section.tsx`
+   * for the two inspector surfaces these back.
+   */
+
+  function setArrangement(blockId: string, id: string) {
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: (prev[activeName] ?? []).map((i) => (i.id === blockId ? { ...i, arrangement: id } : i)),
+    }));
+  }
+
+  /** "+ new state": clones the ACTIVE arrangement (mode, spacing, edges,
+   *  grouping) under a fresh id, and clones every Port's resolved
+   *  placement under that id too — `addArrangement` alone only clones the
+   *  Arrangement struct, not the per-Port placements that live beside it
+   *  on each Port instance, so both have to be copied here for "copies
+   *  the active one" to actually hold for what a person sees. */
+  function addArrangementTo(blockId: string) {
+    setBenches((prev) => {
+      const bench = prev[activeName] ?? [];
+      const block = bench.find((i) => i.id === blockId);
+      if (!block) return prev;
+      const arrangements = block.arrangements ?? [DEFAULT_ARRANGEMENT];
+      const from = activeArrangement(block);
+      const id = `arrangement-${Date.now().toString(36)}-${arrangements.length}`;
+      const nextArrangements = addArrangement(arrangements, from.id, id, `Arrangement ${arrangements.length + 1}`);
+      const ports = blockPorts(bench, blockId);
+      const sourcePlacements = portPlacementsOf(block, ports, from.id);
+      const portIds = new Set(ports.map((p) => p.id));
+      return {
+        ...prev,
+        [activeName]: bench.map((i) => {
+          if (i.id === blockId) return { ...i, arrangements: nextArrangements, arrangement: id };
+          if (portIds.has(i.id)) return { ...i, placements: { ...(i.placements ?? {}), [id]: sourcePlacements[i.id]! } };
+          return i;
+        }),
+      };
+    });
+  }
+
+  /** Auto ↔ custom (`setMode`'s own two-step refresh — see
+   *  `portPlacement.ts`'s own doc: nothing jumps either direction). */
+  function setArrangementMode(blockId: string, mode: ArrangementMode) {
+    setBenches((prev) => {
+      const bench = prev[activeName] ?? [];
+      const block = bench.find((i) => i.id === blockId);
+      if (!block) return prev;
+      const arrangement = activeArrangement(block);
+      const ports = blockPorts(bench, blockId);
+      const placements = portPlacementsOf(block, ports, arrangement.id);
+      const lockedIds = new Set(ports.filter((p) => p.locked).map((p) => p.id));
+      const { placements: nextPlacements, arrangement: nextArrangement } = setMode(placements, arrangement, mode, lockedIds);
+      const nextArrangements = (block.arrangements ?? [DEFAULT_ARRANGEMENT]).map((a) => (a.id === arrangement.id ? nextArrangement : a));
+      return {
+        ...prev,
+        [activeName]: bench.map((i) => {
+          if (i.id === blockId) return { ...i, arrangements: nextArrangements };
+          if (nextPlacements[i.id] && !lockedIds.has(i.id)) return { ...i, placements: { ...(i.placements ?? {}), [arrangement.id]: nextPlacements[i.id]! } };
+          return i;
+        }),
+      };
+    });
+  }
+
+  /** `toggleEdge` refuses to drop the last live edge (returns the same
+   *  Arrangement) — that refusal is what makes this a no-op cleanly. */
+  function toggleArrangementEdge(blockId: string, edge: PortEdgeId, on: boolean) {
+    setBenches((prev) => {
+      const bench = prev[activeName] ?? [];
+      const block = bench.find((i) => i.id === blockId);
+      if (!block) return prev;
+      const arrangement = activeArrangement(block);
+      const nextArrangement = toggleEdge(arrangement, edge, on);
+      if (nextArrangement === arrangement) return prev;
+      const ports = blockPorts(bench, blockId);
+      const lockedIds = new Set(ports.filter((p) => p.locked).map((p) => p.id));
+      const placements = portPlacementsOf(block, ports, arrangement.id);
+      const refreshed = refresh(placements, nextArrangement, lockedIds);
+      const nextArrangements = (block.arrangements ?? [DEFAULT_ARRANGEMENT]).map((a) => (a.id === arrangement.id ? nextArrangement : a));
+      return {
+        ...prev,
+        [activeName]: bench.map((i) => {
+          if (i.id === blockId) return { ...i, arrangements: nextArrangements };
+          if (refreshed[i.id] && !lockedIds.has(i.id)) return { ...i, placements: { ...(i.placements ?? {}), [arrangement.id]: refreshed[i.id]! } };
+          return i;
+        }),
+      };
+    });
+  }
+
+  /** The picker only ever offers "none" plus the arrangement's OWN
+   *  grouping set (the model stores at most one per Arrangement) — so
+   *  choosing its own id is a no-op, choosing "none" clears it, and any
+   *  other id (the picker's "+ New grouping set") creates a fresh,
+   *  expanded-by-default set with that id. */
+  function setArrangementGrouping(blockId: string, setId: string | null) {
+    setBenches((prev) => {
+      const bench = prev[activeName] ?? [];
+      const block = bench.find((i) => i.id === blockId);
+      if (!block) return prev;
+      const arrangement = activeArrangement(block);
+      const grouping =
+        setId === null
+          ? undefined
+          : arrangement.grouping?.id === setId
+            ? arrangement.grouping
+            : { id: setId, label: setId, collapsed: true, assignments: {} };
+      const nextArrangement: Arrangement = { ...arrangement, grouping };
+      const nextArrangements = (block.arrangements ?? [DEFAULT_ARRANGEMENT]).map((a) => (a.id === arrangement.id ? nextArrangement : a));
+      return { ...prev, [activeName]: bench.map((i) => (i.id === blockId ? { ...i, arrangements: nextArrangements } : i)) };
+    });
+  }
+
+  /** Drag lands here (the next agent wires the gesture) — `movePort`'s own
+   *  refresh keeps the rest of both lanes (the one a port left, the one it
+   *  landed on) even/ranked around it. */
+  function movePortTo(blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) {
+    setBenches((prev) => {
+      const bench = prev[activeName] ?? [];
+      const block = bench.find((i) => i.id === blockId);
+      if (!block) return prev;
+      const arrangement = activeArrangement(block);
+      const ports = blockPorts(bench, blockId);
+      const lockedIds = new Set(ports.filter((p) => p.locked).map((p) => p.id));
+      const placements = portPlacementsOf(block, ports, arrangement.id);
+      const next = movePort(placements, arrangement, portId, edge, target, lockedIds);
+      return {
+        ...prev,
+        [activeName]: bench.map((i) => (next[i.id] ? { ...i, placements: { ...(i.placements ?? {}), [arrangement.id]: next[i.id]! } } : i)),
+      };
+    });
+  }
+
+  /**
+   * The Port inspector's Placement section: writes the patch into
+   * `placements[activeArrangementId]` (or, for `locked`, the Port's own
+   * top-level flag — capacity ONE per Block, a second attempt is refused
+   * silently), then `refresh()`es the whole arrangement so the rest of
+   * whichever lane(s) are touched stay even/ranked. `locked` is not a
+   * `Placement` field, so it never reaches `refresh`'s input — the
+   * locked port's OWN entry is written as `lockedPlacement()` directly.
+   */
+  function setPortPlacement(portId: string, patch: Partial<Placement> & { locked?: boolean }) {
+    setBenches((prev) => {
+      const bench = prev[activeName] ?? [];
+      const port = bench.find((i) => i.id === portId);
+      const blockId = parentMap(bench).get(portId);
+      const block = blockId ? bench.find((i) => i.id === blockId) : undefined;
+      if (!port || !block) return prev;
+      const arrangement = activeArrangement(block);
+      const ports = blockPorts(bench, block.id);
+
+      let nextLocked = port.locked === true;
+      const otherLocked = ports.some((p) => p.id !== portId && p.locked);
+      if (patch.locked !== undefined) {
+        // Capacity one per Block: a second lock attempt is refused — the
+        // toggle simply does not take, matching the section's own hint.
+        nextLocked = patch.locked && otherLocked ? nextLocked : patch.locked;
+      }
+
+      const { locked: _locked, ...placementPatch } = patch;
+      const placements = portPlacementsOf(block, ports, arrangement.id);
+      const current = placements[portId] ?? { edge: arrangement.edges[0] ?? "top", order: 0, t: 0 };
+      const merged: Placements = { ...placements, [portId]: { ...current, ...placementPatch } };
+      const lockedIds = new Set(ports.filter((p) => (p.id === portId ? nextLocked : p.locked)).map((p) => p.id));
+      const refreshed = refresh(merged, arrangement, lockedIds);
+
+      // Mirror `group` into the Block's active Arrangement's OWN
+      // GroupingSet.assignments — the one thing `groupSlots`/`renderLane`
+      // actually read (see portPlacement.ts's own `groupSlots` doc and
+      // test). A Port's `Placement.group` field alone is inert; without
+      // this the section's "Group" input silently did nothing to the
+      // render — a real gap found while building demos/capture-port-edges.mjs.
+      // Only tags a port INTO the Block's active set: it never creates one
+      // (that stays "+ new grouping set" in ArrangementSection), so setting
+      // Group before a grouping set exists is still a no-op, matching the
+      // section's own two-surface split.
+      let groupingChanged = false;
+      let nextArrangements = block.arrangements ?? [DEFAULT_ARRANGEMENT];
+      if ("group" in placementPatch && arrangement.grouping) {
+        const nextAssignments = { ...arrangement.grouping.assignments };
+        if (!placementPatch.group) delete nextAssignments[portId];
+        else nextAssignments[portId] = { group: placementPatch.group, groupOrder: placementPatch.groupOrder ?? nextAssignments[portId]?.groupOrder ?? 0 };
+        const nextArrangement: Arrangement = { ...arrangement, grouping: { ...arrangement.grouping, assignments: nextAssignments } };
+        nextArrangements = nextArrangements.map((a) => (a.id === arrangement.id ? nextArrangement : a));
+        groupingChanged = true;
+      }
+
+      return {
+        ...prev,
+        [activeName]: bench.map((i) => {
+          if (i.id === blockId && groupingChanged) return { ...i, arrangements: nextArrangements };
+          if (i.id === portId) {
+            return {
+              ...i,
+              locked: nextLocked,
+              placements: { ...(i.placements ?? {}), [arrangement.id]: nextLocked ? lockedPlacement() : (refreshed[portId] ?? merged[portId]!) },
+            };
+          }
+          if (refreshed[i.id] && !lockedIds.has(i.id)) return { ...i, placements: { ...(i.placements ?? {}), [arrangement.id]: refreshed[i.id]! } };
+          return i;
+        }),
+      };
+    });
+  }
+
   function applyToSelected(fieldId: string, value: FieldValue) {
     setBenches((prev) => ({
       ...prev,
@@ -380,6 +607,7 @@ export function Workbench() {
             view={view}
             onRenderChange={setRender}
             onViewChange={setView}
+            onMovePort={movePortTo}
           />
         </div>
         <InspectorColumn
@@ -404,6 +632,15 @@ export function Workbench() {
           onMoveMember={moveMemberInParent}
           onSetProp={setInstanceProp}
           onSelectInstance={(id) => selectInstance(id)}
+          arrangementActions={{
+            onSetArrangement: setArrangement,
+            onAddArrangement: addArrangementTo,
+            onSetArrangementMode: setArrangementMode,
+            onToggleArrangementEdge: toggleArrangementEdge,
+            onSetArrangementGrouping: setArrangementGrouping,
+            onMovePort: movePortTo,
+            onSetPortPlacement: setPortPlacement,
+          }}
         />
       </div>
     </SidebarProvider>

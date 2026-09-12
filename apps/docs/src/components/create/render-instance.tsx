@@ -2,7 +2,9 @@
 
 import type { ReactNode } from "react";
 import type { ComponentEntry, Instance, RenderContext } from "@bbox-ui/panel";
-import { effectiveProps } from "@bbox-ui/panel";
+import { activeArrangement, blockPorts, DraggablePort, effectiveProps, portPlacementsOf } from "@bbox-ui/panel";
+import type { PortEdgeId } from "@bbox-ui/core";
+import { PortDndProvider } from "./port-dnd";
 
 /**
  * ONE way to draw an instance, members included, for every render.
@@ -31,12 +33,27 @@ export function renderInstance(
   inst: Instance,
   selectedIds: string[],
   onSelect: (id: string, additive: boolean) => void,
+  // Absent for a host not yet wired for Port dragging (React Flow, tldraw —
+  // see port-dnd.tsx's own header): a Block then renders with its lanes
+  // but no PortDndProvider, so its ports are visible and selectable, just
+  // not draggable.
+  onMovePort?: (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void,
 ): ReactNode {
   const entry = entries.find((e) => e.name === inst.type);
   if (!entry) return null;
   const memberIds = inst.members ?? [];
   const wrap = (child: Instance): ReactNode => {
     const on = selectedIds.includes(child.id);
+    // A Port member of a Block that has reached its arrangements (Zach,
+    // 2026-09-12) is draggable; every other member keeps the plain
+    // selection wrapper unchanged.
+    if (child.type === "Port" && inst.arrangements) {
+      return (
+        <DraggablePort key={child.id} portId={child.id} selected={on} disabled={child.locked === true} onSelect={onSelect}>
+          {renderInstance(entries, byId, child, selectedIds, onSelect, onMovePort)}
+        </DraggablePort>
+      );
+    }
     return (
       <span
         key={child.id}
@@ -53,7 +70,7 @@ export function renderInstance(
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {renderInstance(entries, byId, child, selectedIds, onSelect)}
+        {renderInstance(entries, byId, child, selectedIds, onSelect, onMovePort)}
       </span>
     );
   };
@@ -70,8 +87,44 @@ export function renderInstance(
   const props = effectiveProps(all, entries, inst);
   if (entry.slots) {
     ctx.slots = {};
-    for (const child of kids) if (child.slot) ctx.slots[child.slot.id] = wrap(child);
-    return entry.render(props, undefined, ctx);
+    const nonSlotKids: Instance[] = [];
+    for (const child of kids) {
+      if (child.slot) ctx.slots[child.slot.id] = wrap(child);
+      else nonSlotKids.push(child);
+    }
+    // A component with BOTH slots and members (a Block: its Bars/body,
+    // plus its own Ports) hands the non-slot members through separately,
+    // by id — never mixed into `slots`, and never as `children` (a
+    // slotted `render` never reads that arg, see the call below).
+    if (entry.members && nonSlotKids.length > 0) {
+      ctx.members = {};
+      for (const child of nonSlotKids) ctx.members[child.id] = wrap(child);
+      // Placement data only makes sense once the instance actually carries
+      // an active Arrangement (Zach's 2026-09-12 model) — absent for any
+      // other slots+members shape that might arrive later.
+      if (inst.arrangements) {
+        const arrangement = activeArrangement(inst);
+        const ports = blockPorts(all, inst.id);
+        ctx.arrangement = arrangement;
+        ctx.placements = portPlacementsOf(inst, ports, arrangement.id);
+        ctx.lockedMemberIds = ports.filter((p) => p.locked).map((p) => p.id);
+        ctx.blockId = inst.id;
+      }
+    }
+    const rendered = entry.render(props, undefined, ctx);
+    // One DndContext per Block (Zach, 2026-09-12: "nested contexts across
+    // Blocks are fine") — mounted here, around this Block's own render, so
+    // a sibling Block's Ports never collide with this one's four lanes.
+    // Absent `onMovePort` (a host not yet wired for dragging) or `arrangement`
+    // (not a Block) means the plain render, unwrapped.
+    if (ctx.arrangement && onMovePort) {
+      return (
+        <PortDndProvider blockId={inst.id} arrangement={ctx.arrangement} onMovePort={onMovePort}>
+          {rendered}
+        </PortDndProvider>
+      );
+    }
+    return rendered;
   }
   const children = kids.length === 0 ? undefined : kids.map(wrap);
   return entry.render(props, children, ctx);

@@ -222,14 +222,20 @@ for (const theme of ["dark", "light"]) {
 
   // The slotted Block: seven lists visible on a fresh Block with no unfolding; Add stays; ⚙ enters the fill; back returns.
   await load(theme, "Block");
-  assert((await sectionCount()) === 7, "a fresh Block shows all seven slot lists without unfolding");
-  assert((await evaluate(`document.querySelectorAll('[data-slot="members-section"] [data-slot="add-member-trigger"]').length`)) === 7, "seven + buttons, one click each");
+  // Zach, 2026-09-12: a Block owns its Ports (they are its members) — a
+  // fresh Block now seeds three ("in", "cfg", "out") into its own Ports
+  // list, appended after the seven slot lists (`seedBlockPorts` in
+  // packages/panel/src/bench.tsx), so eight lists render, not seven.
+  assert((await sectionCount()) === 8, "a fresh Block shows all seven slot lists plus its own seeded Ports list, without unfolding");
+  assert((await evaluate(`document.querySelectorAll('[data-slot="members-section"] [data-slot="add-member-trigger"]').length`)) === 8, "eight + buttons, one click each");
   const blockClip = await inspectorClip();
   const blockFresh = await screenshot(`${theme}-5-block-fresh`, blockClip);
   await addVia("Glyph", 0);
   await addVia("Pill", 2);
   assert((await inspectorName()) === "Block", "adding into a slot keeps the Block");
-  assert((await listCounts()).join() === "1,0,1,0,0,0,0", `header left and right count one (${(await listCounts()).join()})`);
+  // The eighth entry is the Block's own Ports list, already seeded with
+  // three ("in", "cfg", "out") — see the WHY above.
+  assert((await listCounts()).join() === "1,0,1,0,0,0,0,3", `header left and right count one, ports list carries its seeded three (${(await listCounts()).join()})`);
   // The header is a Bar: its left / center / right are the Bar's cells; the
   // first member-instance inside a cell is the cell's own Flex fill.
   const inCell = async (edge, cell) => evaluate(`Array.from(document.querySelectorAll('[data-slot="dom-preview"] [data-slot="bar"][data-edge="${edge}"] [data-slot="bar-cell"][data-cell="${cell}"] [data-slot="member-instance"]')).map(e => e.getAttribute('data-instance-type')).slice(1)`);
@@ -259,13 +265,20 @@ for (const theme of ["dark", "light"]) {
   // The anatomy: Block › Header (Bar) › Left · Center · Right; Body; Footer (Bar) › …
   const navRows = () => evaluate(`Array.from(document.querySelectorAll('[data-slot="instance-navigator"] [data-slot="nav-row"]')).map(e => [e.getAttribute('data-instance-type'), Number(e.getAttribute('data-depth')), e.querySelector('[data-slot="nav-title"]')?.textContent.trim()])`);
   const rows = await navRows();
-  assert(rows.length === 10, `ten rows: Block + 2 Bars + 7 Flex (${rows.length})`);
+  // Thirteen rows: Block + 2 Bars + 7 Flex (as before) + the three seeded
+  // Ports ("in", "cfg", "out"), appended at depth 1 after the Footer's
+  // cells — a Block's own members render in the tree same as any other.
+  assert(rows.length === 13, `thirteen rows: Block + 2 Bars + 7 Flex + 3 seeded Ports (${rows.length})`);
   assert(rows[1][0] === "Bar" && rows[1][1] === 1 && rows[1][2] === "Header", `row 1 is the Header Bar (${rows[1]})`);
   assert(rows[2][0] === "Flex" && rows[2][1] === 2 && rows[2][2] === "Left", `row 2 is the header's Left cell at depth 2 (${rows[2]})`);
   assert(rows[5][2] === "Body" && rows[6][2] === "Footer", `Body then Footer (${rows[5][2]}, ${rows[6][2]})`);
+  assert(
+    rows[10][0] === "Port" && rows[11][0] === "Port" && rows[12][0] === "Port",
+    `the three seeded Ports trail the tree (${JSON.stringify(rows.slice(10))})`,
+  );
   // Two region rows with quick controls; seven lists still one click from +.
   assert((await evaluate(`document.querySelectorAll('[data-slot="region-header"]').length`)) === 2, "a region row for Header and for Footer");
-  assert((await sectionCount()) === 7, "seven lists: three per bar and the body");
+  assert((await sectionCount()) === 8, "eight lists: three per bar, the body, and the Block's own seeded Ports list");
   const r3clip = await inspectorClip();
   const r3fresh = await screenshot(`${theme}-8-anatomy`, r3clip);
   const r3page = await screenshot(`${theme}-8-anatomy-page`);
@@ -319,7 +332,10 @@ for (const theme of ["dark", "light"]) {
   await evaluate(`document.querySelectorAll('[data-slot="region-header"]')[1].querySelector('[data-slot="region-hidden"]').click()`);
   await sleep(250);
   assert((await evaluate(`document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="top"]')?.getAttribute('data-hidden')`)) === "true", "the footer bar is hidden in the render");
-  assert((await sectionCount()) === 4, `the footer's lists fold away: four lists remain (${await sectionCount()})`);
+  // Four slot lists (header × 3 + body) plus the Block's own Ports list,
+  // which carries `region: null` precisely so the footer's fold never
+  // hides it (see members-section.tsx's `memberListsFor`).
+  assert((await sectionCount()) === 5, `the footer's lists fold away: five lists remain, four slots plus the Block's own Ports list (${await sectionCount()})`);
   await evaluate(`document.querySelectorAll('[data-slot="region-header"]')[0].querySelector('[data-slot="region-line"]').click()`);
   await sleep(250);
   assert((await evaluate(`document.querySelector('[data-slot="dom-preview"] [data-slot="bar"][data-edge="bottom"]')?.getAttribute('data-line')`)) === "false", "the header's line is off");

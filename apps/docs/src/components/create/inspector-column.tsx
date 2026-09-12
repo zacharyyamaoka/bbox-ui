@@ -3,8 +3,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
 import type { ComponentEntry, Instance, PanelVariant, Subject } from "@bbox-ui/panel";
-import { isSlotFill } from "@bbox-ui/panel";
-import { MembersPath, memberListsFor } from "./members-section";
+import { activeArrangement, ancestry, blockPorts, isSlotFill, portPlacementsOf } from "@bbox-ui/panel";
+import { MembersPath, memberListsFor, type MemberListActions } from "./members-section";
+import { PlacementSection } from "./arrangement-section";
 import type { InspectorLayoutVariant } from "./inspector-layout";
 
 interface InspectorColumnProps {
@@ -29,6 +30,7 @@ interface InspectorColumnProps {
   onMoveMember: (parentId: string, from: number, to: number) => void;
   onSetProp: (id: string, fieldId: string, value: FieldValue) => void;
   onSelectInstance: (id: string) => void;
+  arrangementActions: Omit<MemberListActions, "onAddMember" | "onRemoveMember" | "onMoveMember" | "onSetProp" | "onSelect">;
 }
 
 /**
@@ -76,6 +78,35 @@ export function InspectorColumn(p: InspectorColumnProps) {
         </div>
       )}
       <MembersPath instances={p.instances} subject={p.subject} onSelect={p.onSelectInstance} />
+      {(() => {
+        // A Port's Placement section: a dedicated slot here rather than a
+        // member list's regionHeader, because a Port declares no `members`
+        // of its own — there is no list to attach it to (Zach's
+        // 2026-09-12 model; see arrangement-section.tsx's own doc).
+        if (p.subject?.type !== "Port") return null;
+        const parentId = ancestry(p.instances, p.subject.id).at(-1);
+        const block = parentId ? p.instances.find((i) => i.id === parentId) : undefined;
+        if (!block || block.type !== "Block") return null;
+        const arrangement = activeArrangement(block);
+        // WHY the full port list, not just [p.subject]: defaultPlacement()
+        // appends after whatever this call has already assigned on the
+        // same edge (portPlacementsOf's own doc) — a one-element list can
+        // never see the Block's other ports, so a freshly-added, not-yet-
+        // dragged port showed Order 0 here while the canvas (which does
+        // pass the full list, see render-instance.tsx) correctly drew it
+        // appended after its siblings.
+        const ports = blockPorts(p.instances, block.id);
+        const placement = portPlacementsOf(block, ports, arrangement.id)[p.subject.id]!;
+        return (
+          <PlacementSection
+            port={p.subject}
+            block={block}
+            arrangement={arrangement}
+            placement={placement}
+            actions={{ onSetPortPlacement: p.arrangementActions.onSetPortPlacement }}
+          />
+        );
+      })()}
       <div ref={scrollRef} data-slot="inspector-scroll" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div data-slot="panel-variant-host" data-variant={p.variant.id} className="[&>*]:!w-full [&>*]:!max-w-none [&>*]:!rounded-none [&>*]:!border-0 [&>*]:!shadow-none">
           {(() => {
@@ -109,6 +140,7 @@ export function InspectorColumn(p: InspectorColumnProps) {
               onMoveMember: p.onMoveMember,
               onSetProp: p.onSetProp,
               onSelect: p.onSelectInstance,
+              ...p.arrangementActions,
             });
             return <p.layout.Layout subjectName={p.componentName} panel={panel} lists={lists} isSlotFill={isSlotFill(p.subject ?? undefined)} />;
           })()}

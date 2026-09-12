@@ -104,6 +104,7 @@ function Body(p: ViewportProps) {
           selectedIds={p.selectedIds}
           onSelectionChange={p.onSelectionChange}
           onSelectInstance={p.onSelectInstance}
+          onMovePort={p.onMovePort}
         />
       );
     case "reactflow":
@@ -117,6 +118,7 @@ function Body(p: ViewportProps) {
           positions={p.positions}
           onSelectionChange={p.onSelectionChange}
           onPositionsChange={p.onPositionsChange}
+          onMovePort={p.onMovePort}
         />
       );
     case "tldraw":
@@ -130,6 +132,7 @@ function Body(p: ViewportProps) {
           positions={p.positions}
           onSelectionChange={p.onSelectionChange}
           onPositionsChange={p.onPositionsChange}
+          onMovePort={p.onMovePort}
         />
       );
   }

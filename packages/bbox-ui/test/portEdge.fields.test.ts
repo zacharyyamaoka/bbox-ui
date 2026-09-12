@@ -4,6 +4,10 @@ import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
 
 import { PORT_EDGE_FIELDS, PORT_EDGE_PRESETS } from "../src/portEdge.fields";
 import { PortEdge } from "../src/portEdge";
+// A real Port, not a stand-in span: since 2026-09-12 the cascade stamps only
+// component elements (a host element cannot take the prop) and looks
+// through hosts by their children.
+import { Port } from "../src/port";
 import { PORT_TEXT_LAYOUTS } from "../src/port.layout";
 
 /**
@@ -32,7 +36,7 @@ const bareEdge = portEdgeElement();
 // mapped array sits at index 0 of the root `<div>`'s own children, the
 // `+N more` row (or `false`) at index 1. See `portEdge.tsx`.
 function mappedChild(props: Record<string, unknown> = {}, childProps: Record<string, unknown> = {}) {
-  const el = portEdgeElement({ ...props, children: createElement("span", childProps) });
+  const el = portEdgeElement({ ...props, children: createElement(Port, childProps) });
   const mapped = el.props.children[0] as unknown[];
   return mapped[0] as { props: Record<string, unknown> };
 }
@@ -90,7 +94,7 @@ describe("PORT_EDGE_FIELDS", () => {
   it("reaches a child wrapped in a Fragment — the arrangement both real callers use", () => {
     const el = portEdgeElement({
       edge: "top",
-      children: createElement(Fragment, null, createElement("span", {}), createElement("span", {})),
+      children: createElement(Fragment, null, createElement(Port, {}), createElement(Port, {})),
     });
     const mapped = el.props.children[0] as unknown[];
     const flattened = mapped.flat(Infinity) as Array<{ props: Record<string, unknown> }>;
@@ -103,11 +107,29 @@ describe("PORT_EDGE_FIELDS", () => {
   it("a Fragment-wrapped child that sets its own textLayout still wins", () => {
     const el = portEdgeElement({
       edge: "top",
-      children: createElement(Fragment, null, createElement("span", { textLayout: "left" })),
+      children: createElement(Fragment, null, createElement(Port, { textLayout: "left" })),
     });
     const mapped = el.props.children[0] as unknown[];
     const flattened = mapped.flat(Infinity) as Array<{ props: Record<string, unknown> }>;
     expect(flattened[0]!.props.textLayout).toBe("left");
+  });
+
+  it("looks THROUGH a host wrapper (span → component → Port) without stamping the host — the /create lane's own shape", () => {
+    const Wrapper = ({ children }: { children?: unknown }) => children as never;
+    const el = portEdgeElement({
+      edge: "top",
+      children: createElement("span", { "data-slot": "port-group" }, createElement(Wrapper, null, createElement(Port, {}))),
+    });
+    const mapped = el.props.children[0] as unknown[];
+    const span = mapped[0] as { props: Record<string, unknown> };
+    expect(span.props.textLayout).toBeUndefined();
+    // `Children.map` hands back an array even for one child, so each cloned
+    // level's `children` is a one-element array.
+    const one = (x: unknown) => (Array.isArray(x) ? x[0] : x) as { props: Record<string, unknown> };
+    const wrapper = one(span.props.children);
+    expect(wrapper.props.textLayout).toBe("bot");
+    const port = one(wrapper.props.children);
+    expect(port.props.textLayout).toBe("bot");
   });
 
   it("a child that sets its own textLayout always wins over the cascade", () => {

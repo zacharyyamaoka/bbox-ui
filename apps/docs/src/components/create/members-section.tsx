@@ -2,8 +2,10 @@
 
 import { useMemo, type ReactNode } from "react";
 import type { FieldValue } from "@bbox-ui/schema";
+import type { ArrangementMode, Placement, PortEdgeId } from "@bbox-ui/core";
 import type { ComponentEntry, Instance, MembersSpec } from "@bbox-ui/panel";
 import { MEMBERS_CONTROLS, ancestry, memberSpecFor, summarize, typeGlyph } from "@bbox-ui/panel";
+import { ArrangementSection } from "./arrangement-section";
 
 export interface MemberListActions {
   onAddMember: (parentId: string, type: string) => void;
@@ -12,6 +14,18 @@ export interface MemberListActions {
   onSelect: (id: string) => void;
   /** Write one prop on one instance — the region row's quick controls. */
   onSetProp: (id: string, fieldId: string, value: FieldValue) => void;
+  /**
+   * The Block Arrangement / Port Placement ops (Zach, 2026-09-12) — see
+   * `arrangement-section.tsx` for the two inspector surfaces these back
+   * and `workbench.tsx` for the model-backed implementation.
+   */
+  onSetArrangement: (blockId: string, id: string) => void;
+  onAddArrangement: (blockId: string) => void;
+  onSetArrangementMode: (blockId: string, mode: ArrangementMode) => void;
+  onToggleArrangementEdge: (blockId: string, edge: PortEdgeId, on: boolean) => void;
+  onSetArrangementGrouping: (blockId: string, setId: string | null) => void;
+  onMovePort: (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+  onSetPortPlacement: (portId: string, patch: Partial<Placement> & { locked?: boolean }) => void;
 }
 
 /**
@@ -187,6 +201,41 @@ export function memberListsFor(entries: ComponentEntry[], instances: Instance[],
       const spec = memberSpecFor(fillEntry, fill);
       if (!spec) continue;
       out.push(listFor(entries, instances, fill, fillEntry, spec, slot.region, actions, () => actions.onSelect(fill.id)));
+    }
+    // A component with slots AND its own members (a Block: its Bars/body
+    // fill the slots above, its Ports are its OWN list) gets that list
+    // appended last, with the Arrangement controls riding its
+    // `regionHeader` — the same seam a slot-filling Bar already uses for
+    // ITS quick controls (`RegionHeader`, above). `region: null` keeps it
+    // out of the slot-region hiding logic (`InlineRows.tsx`), which only
+    // ever applies to `region !== null`.
+    //
+    // `subject.members` holds slot fills FIRST, ports after (see
+    // `bench.tsx`'s `makeInstanceWithSlots`/`addMemberTo`) — the list must
+    // show only the ports (never the Header/Body/Footer fills, which are
+    // reached through their own slot lists' ⚙, not this one), so it gets a
+    // narrowed clone rather than the raw instance. `onMoveMember` is
+    // re-scoped to translate an index WITHIN that narrowed list back to
+    // its real position in the full array — the drag reorders ports
+    // amongst themselves without touching where the slot fills sit.
+    if (entry.members) {
+      const spec = memberSpecFor(entry, subject);
+      if (spec) {
+        const fullMembers = subject.members ?? [];
+        const portIds = fullMembers.filter((id) => !byId.get(id)?.slot);
+        const portsOnly: Instance = { ...subject, members: portIds };
+        const scopedActions: MemberListActions = {
+          ...actions,
+          onMoveMember: (parentId, from, to) => {
+            const a = fullMembers.indexOf(portIds[from]!);
+            const b = fullMembers.indexOf(portIds[to]!);
+            if (a === -1 || b === -1) return;
+            actions.onMoveMember(parentId, a, b);
+          },
+        };
+        const list = listFor(entries, instances, portsOnly, entry, spec, null, scopedActions);
+        out.push({ ...list, regionHeader: <ArrangementSection block={subject} actions={actions} /> });
+      }
     }
     return out;
   }

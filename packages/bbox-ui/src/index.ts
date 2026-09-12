@@ -47,4 +47,8 @@ export * from "./block.fields";
 export * from "./block.presets";
 export * from "./block";
 
+// The zero-dependency Port placement model (Zach, 2026-09-12) — no React,
+// no DOM, no host imports; see portPlacement.ts's own header.
+export * from "./portPlacement";
+
 export { cn } from "./lib/utils";

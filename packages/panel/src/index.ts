@@ -63,5 +63,9 @@ export {
   wouldCycle,
   typeGlyph,
   TYPE_GLYPH,
+  blockPorts,
+  activeArrangement,
+  portPlacementsOf,
 } from "./members";
 export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary, InstanceNode } from "./members";
+export { PortDndProvider, PortLane, DraggablePort, HostZoomContext, portLaneId, type PortDndProviderProps } from "./portDnd";
