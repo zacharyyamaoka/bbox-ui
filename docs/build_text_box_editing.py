@@ -34,7 +34,7 @@ DATE = "2026-09-12"
 # (each hardcodes its own fix commit rather than resolving HEAD at build
 # time, so the report keeps saying what it said even if rebuilt later from
 # a different checkout).
-POLISH_SHA = "pending"
+POLISH_SHA = "dcaa7f9"
 HERE = pathlib.Path(__file__).resolve().parent.parent  # the worktree root
 MEDIA = HERE / "reports" / "media" / "text-box-editing"
 OUT = HERE / "reports" / "media" / f"text-box-editing-{DATE}.html"
