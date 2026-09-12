@@ -16,11 +16,12 @@ import {
   type ComponentEntry,
   type Instance,
 } from "@bbox-ui/panel";
+import { LucideGlyphResolver } from "@bbox-ui/glyph-picker";
 import { SidebarProvider } from "@/registry/new-york-v4/ui/sidebar";
 import { BenchSidebar } from "./bench-sidebar";
 import { InspectorColumn } from "./inspector-column";
 import { Viewport } from "./viewport";
-import { defaultPosition, type CanvasPosition, type Render, type View } from "./contract";
+import { defaultPosition, type CanvasPosition, type CanvasTransform, type Render, type View } from "./contract";
 
 const VARIANT_KEY = "bbox-ui.create.panelVariant";
 const RENDER_KEY = "bbox-ui.create.render";
@@ -100,6 +101,7 @@ export function Workbench() {
     Object.fromEntries(Object.entries(INITIAL_BENCHES).map(([name, list]) => [name, new Set(list.map((i) => i.id))])),
   );
   const [positions, setPositions] = useState<Record<string, CanvasPosition>>({});
+  const [transforms, setTransforms] = useState<Record<string, CanvasTransform>>({});
 
   const variant = findVariant(variantId);
   const isMixed = activeName === MIXED_BENCH;
@@ -197,67 +199,107 @@ export function Workbench() {
       }),
     }));
   }
+  /**
+   * ONE instance's own props, written by a render surface — see
+   * `ViewportProps.onInstancePropsChange`'s own doc comment for why this
+   * targets `id` alone rather than the whole selection the way
+   * `applyToSelected` does. `bench` is captured directly rather than routed
+   * through `activeName`'s current `benches[activeName]` lookup so a stale
+   * closure never writes into the wrong (already-switched) bench, matching
+   * every other setter above.
+   */
+  function setInstanceProps(id: string, patch: Record<string, FieldValue | undefined>) {
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: (prev[activeName] ?? []).map((i) => {
+        if (i.id !== id) return i;
+        const props = { ...i.props };
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === undefined) delete props[key];
+          else props[key] = value;
+        }
+        return { ...i, props };
+      }),
+    }));
+  }
 
   return (
-    // WHY the explicit height: the body is a min-h-screen column with a
-    // sticky header. "Fill the rest" has to be stated as a number here or a
-    // short bench leaves the sidebar and inspector ending mid-screen — the
-    // exact thing Zach asked not to happen.
-    <SidebarProvider
-      data-slot="create-workbench"
-      // color-scheme tells the browser which UA chrome to paint native
-      // selects and inputs with. The site never sets it, so in dark mode a
-      // native <select> kept its light popup and light default background
-      // under light text: a white box with nothing readable in it.
-      className="min-h-0 w-full [color-scheme:light] dark:[color-scheme:dark]"
-      style={{ height: "calc(100svh - var(--header-height) - 1rem)", "--sidebar-width": "17rem" } as React.CSSProperties}
-    >
-      <BenchSidebar
-        entries={REGISTRY}
-        activeName={activeName}
-        onActiveNameChange={setActiveName}
-        isMixed={isMixed}
-        instances={instances}
-        selectedIds={selectedIds}
-        onToggleSelected={toggleSelected}
-        onAdd={addInstance}
-        onRemoveLast={removeLastInstance}
-        onRandomize={randomizeInstances}
-        variants={PANEL_VARIANTS}
-        variantId={variantId}
-        onVariantChange={setVariantId}
-        entryFor={entryFor}
-      />
-      <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Viewport
-            entries={REGISTRY}
-            instances={instances}
-            selectedIds={selectedIdList}
-            positions={placedPositions}
-            onSelectionChange={setSelection}
-            onPositionsChange={setPositions}
+    // WHY LucideGlyphResolver wraps the WHOLE workbench, not just the
+    // viewport: the bench sidebar (BenchSidebar) renders each instance's raw
+    // core <Glyph> as its list preview, a sibling of <Viewport> below — a
+    // resolver scoped to only the viewport left every lucide-content glyph
+    // painting empty (data-unresolved) in that list even while the canvas
+    // and inspector, both inside the viewport's own wrap, painted it fine.
+    <LucideGlyphResolver>
+      {/* WHY the explicit height: the body is a min-h-screen column with a
+          sticky header. "Fill the rest" has to be stated as a number here or
+          a short bench leaves the sidebar and inspector ending mid-screen —
+          the exact thing Zach asked not to happen. */}
+      <SidebarProvider
+        data-slot="create-workbench"
+        // color-scheme tells the browser which UA chrome to paint native
+        // selects and inputs with. The site never sets it, so in dark mode a
+        // native <select> kept its light popup and light default background
+        // under light text: a white box with nothing readable in it.
+        className="min-h-0 w-full [color-scheme:light] dark:[color-scheme:dark]"
+        style={{ height: "calc(100svh - var(--header-height) - 1rem)", "--sidebar-width": "17rem" } as React.CSSProperties}
+      >
+        <BenchSidebar
+          entries={REGISTRY}
+          activeName={activeName}
+          onActiveNameChange={setActiveName}
+          isMixed={isMixed}
+          instances={instances}
+          selectedIds={selectedIds}
+          onToggleSelected={toggleSelected}
+          onAdd={addInstance}
+          onRemoveLast={removeLastInstance}
+          onRandomize={randomizeInstances}
+          variants={PANEL_VARIANTS}
+          variantId={variantId}
+          onVariantChange={setVariantId}
+          entryFor={entryFor}
+        />
+        <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <Viewport
+              entries={REGISTRY}
+              instances={instances}
+              selectedIds={selectedIdList}
+              positions={placedPositions}
+              onSelectionChange={setSelection}
+              onPositionsChange={setPositions}
+              transforms={transforms}
+              onTransformsChange={setTransforms}
+              onInstancePropsChange={setInstanceProps}
+              render={render}
+              view={view}
+              onRenderChange={setRender}
+              onViewChange={setView}
+            />
+          </div>
+          <InspectorColumn
+            variant={variant}
+            componentName={panelName}
+            fields={panelFields}
+            presets={panelPresets}
+            subjects={selected}
+            toSubject={panelToSubject}
+            onChange={applyToSelected}
+            onClearOverride={clearOverride}
+            shared={shared}
+            selectedTypes={selectedTypes}
+            selectedCount={selected.length}
+            excludedShown={EXCLUDED_SHOWN}
             render={render}
-            view={view}
-            onRenderChange={setRender}
-            onViewChange={setView}
+            selectedInstances={selected}
+            positions={placedPositions}
+            transforms={transforms}
+            onPositionsChange={setPositions}
+            onTransformsChange={setTransforms}
           />
         </div>
-        <InspectorColumn
-          variant={variant}
-          componentName={panelName}
-          fields={panelFields}
-          presets={panelPresets}
-          subjects={selected}
-          toSubject={panelToSubject}
-          onChange={applyToSelected}
-          onClearOverride={clearOverride}
-          shared={shared}
-          selectedTypes={selectedTypes}
-          selectedCount={selected.length}
-          excludedShown={EXCLUDED_SHOWN}
-        />
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </LucideGlyphResolver>
   );
 }

@@ -3,7 +3,9 @@
 import { useState } from "react";
 import type { FieldSpec } from "@bbox-ui/schema";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
-import type { CanvasPosition, Render } from "../contract";
+import type { CanvasPosition, CanvasTransform, Render } from "../contract";
+import { glyphFootprint, type GlyphSize } from "@bbox-ui/core";
+import { tldrawOriginFor } from "../glyph-geometry";
 
 /**
  * The code that reproduces what the chosen render is showing.
@@ -53,14 +55,45 @@ function literal(value: unknown, indent: string): string {
   return `{\n${inner}\n${indent}}`;
 }
 
+/** A Glyph instance's data/props, resolved with the same fallbacks the
+ *  canvases themselves use — the one place the printed record and the
+ *  real adapter record are guaranteed to describe the same shape.
+ *
+ * WHY this takes the instance's RAW `props`, never the `ownProps()` result
+ * the other two record printers pass through: `ownProps()` drops a value
+ * equal to its field's declared default so DOM's JSX omission reads like
+ * something a person would paste — correct there, wrong here. `size`'s
+ * declared default is `GLYPH_SIZES.sm` (18), so an explicit override of
+ * exactly 18 (the resize handle landing there, or the panel's own Custom
+ * box) was getting stripped before this function ever saw it, and printed
+ * `size: null` for a real, stored override — the tldraw shape and React
+ * Flow node adapters read `inst.props.size` directly (`glyphShapePropsFor`,
+ * `glyphDataFor`), so the record printed here has to read the same place
+ * or it disagrees with the canvas it claims to describe. */
+function glyphRecord(props: Record<string, unknown>) {
+  return {
+    content: (props.content as string | undefined) ?? "",
+    sizePreset: (props.sizePreset as string | undefined) ?? "sm",
+    size: props.size ?? null,
+    padding: (props.padding as number | undefined) ?? 0,
+  };
+}
+
 /**
- * React Flow: the Port has a real adapter node (`bboxStandalonePort`). Every
- * other component rides a generic content node, and the code says so out
- * loud rather than inventing a node type that does not exist.
+ * React Flow: Port and Glyph each have a real adapter node
+ * (`bboxStandalonePort`, `bboxGlyph`). Every other component rides a
+ * generic content node, and the code says so out loud rather than
+ * inventing a node type that does not exist.
  */
-function reactFlowCode(entries: ComponentEntry[], shown: Instance[], positions: Record<string, CanvasPosition>): string {
+function reactFlowCode(
+  entries: ComponentEntry[],
+  shown: Instance[],
+  positions: Record<string, CanvasPosition>,
+  transforms: Record<string, CanvasTransform>,
+): string {
   const hasPort = shown.some((i) => i.type === "Port");
-  const others = Array.from(new Set(shown.filter((i) => i.type !== "Port").map((i) => i.type))).sort();
+  const hasGlyph = shown.some((i) => i.type === "Glyph");
+  const others = Array.from(new Set(shown.filter((i) => i.type !== "Port" && i.type !== "Glyph").map((i) => i.type))).sort();
   const nodes = shown.map((inst) => {
     const entry = entries.find((e) => e.name === inst.type)!;
     const pos = positions[inst.id] ?? { x: 0, y: 0 };
@@ -74,15 +107,21 @@ function reactFlowCode(entries: ComponentEntry[], shown: Instance[], positions: 
       };
       return `  { id: ${JSON.stringify(inst.id)}, type: "bboxStandalonePort", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: ${literal(data, "  ")} },`;
     }
+    if (inst.type === "Glyph") {
+      const data = { ...glyphRecord(inst.props), rotation: transforms[inst.id]?.rotation ?? 0 };
+      return `  { id: ${JSON.stringify(inst.id)}, type: "bboxGlyph", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: ${literal(data, "  ")} },`;
+    }
     return `  { id: ${JSON.stringify(inst.id)}, type: "bench", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: { element: ${instanceToJsx(entry, inst)} } },`;
   });
   const lines = [
     `import { ReactFlow, Background } from "@xyflow/react";`,
     hasPort ? `import { BBoxPortNode } from "@/components/bbox-ui/adapter-reactflow";` : null,
+    hasGlyph ? `import { BBoxGlyphNode } from "@bbox-ui/adapter-reactflow";` : null,
     others.length ? `import { ${others.join(", ")} } from "@/components/bbox-ui";` : null,
     ``,
     `const nodeTypes = {`,
     hasPort ? `  bboxStandalonePort: BBoxPortNode,` : null,
+    hasGlyph ? `  bboxGlyph: BBoxGlyphNode,` : null,
     others.length ? `  // ${others.join(", ")} ${others.length === 1 ? "has" : "have"} no React Flow adapter yet; a generic node renders the element.` : null,
     others.length ? `  bench: ({ data }) => data.element,` : null,
     `};`,
@@ -99,12 +138,19 @@ function reactFlowCode(entries: ComponentEntry[], shown: Instance[], positions: 
 }
 
 /**
- * tldraw: the Port has a real shape util (`bbox-port`). Other components are
- * shown as the generic bench shape the canvas actually uses, with the
- * element they render, so the code matches the pixels.
+ * tldraw: Port and Glyph each have a real shape util (`bbox-port`,
+ * `bbox-glyph`). Other components are shown as the generic bench shape the
+ * canvas actually uses, with the element they render, so the code matches
+ * the pixels.
  */
-function tldrawCode(entries: ComponentEntry[], shown: Instance[], positions: Record<string, CanvasPosition>): string {
+function tldrawCode(
+  entries: ComponentEntry[],
+  shown: Instance[],
+  positions: Record<string, CanvasPosition>,
+  transforms: Record<string, CanvasTransform>,
+): string {
   const hasPort = shown.some((i) => i.type === "Port");
+  const hasGlyph = shown.some((i) => i.type === "Glyph");
   const shapes = shown.map((inst) => {
     const entry = entries.find((e) => e.name === inst.type)!;
     const pos = positions[inst.id] ?? { x: 0, y: 0 };
@@ -118,14 +164,29 @@ function tldrawCode(entries: ComponentEntry[], shown: Instance[], positions: Rec
       };
       return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-port", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: ${literal(p, "  ")} },`;
     }
+    if (inst.type === "Glyph") {
+      const rotationDeg = transforms[inst.id]?.rotation ?? 0;
+      const radians = Math.round(((rotationDeg * Math.PI) / 180) * 10000) / 10000;
+      // The canvas converts the page's centre-pivot top-left into tldraw's
+      // origin-pivot x/y (see glyph-geometry.ts); the record must print the
+      // converted point or a rotated glyph pasted from here lands elsewhere.
+      const record = glyphRecord(inst.props);
+      const footprint = glyphFootprint({ sizePreset: record.sizePreset as GlyphSize, size: (record.size as number | null) ?? undefined, padding: record.padding }).w;
+      const origin = tldrawOriginFor(pos, (rotationDeg * Math.PI) / 180, footprint);
+      return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-glyph", x: ${Math.round(origin.x)}, y: ${Math.round(origin.y)}, rotation: ${radians}, /* ${rotationDeg}° */ props: ${literal(record, "  ")} },`;
+    }
     return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-bench", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: { instanceId: ${JSON.stringify(inst.id)} } }, // renders ${instanceToJsx(entry, inst)}`;
   });
+  const utilNames = [hasPort && "BBoxPortShapeUtil", hasGlyph && "BBoxGlyphShapeUtil", shown.some((i) => i.type !== "Port" && i.type !== "Glyph") && "BenchShapeUtil"].filter(
+    (n): n is string => !!n,
+  );
   const lines = [
     `import { Tldraw, createShapeId } from "tldraw";`,
     hasPort ? `import { BBoxPortShapeUtil } from "@/components/bbox-ui/adapter-tldraw";` : null,
+    hasGlyph ? `import { BBoxGlyphShapeUtil } from "@bbox-ui/adapter-tldraw";` : null,
     ``,
     `<Tldraw`,
-    `  shapeUtils={[${hasPort ? "BBoxPortShapeUtil" : ""}${hasPort && shown.some((i) => i.type !== "Port") ? ", " : ""}${shown.some((i) => i.type !== "Port") ? "BenchShapeUtil" : ""}]}`,
+    `  shapeUtils={[${utilNames.join(", ")}]}`,
     `  onMount={(editor) => {`,
     `    editor.createShapes([`,
     ...shapes.map((s) => "    " + s),
@@ -136,9 +197,20 @@ function tldrawCode(entries: ComponentEntry[], shown: Instance[], positions: Rec
   return lines.filter((l): l is string => l !== null).join("\n");
 }
 
-function domCode(entries: ComponentEntry[], shown: Instance[]): string {
+/** A Glyph's rotation (a host fact, never a prop) is added as a plain CSS
+ *  `rotate` style rather than folded into `instanceToJsx`'s generic prop
+ *  printer, which knows nothing about host facts and shouldn't have to. */
+function withRotationStyle(jsx: string, rotationDeg: number): string {
+  if (rotationDeg === 0 || !jsx.endsWith(" />")) return jsx;
+  return `${jsx.slice(0, -3)} style={{ transform: "rotate(${rotationDeg}deg)" }} />`;
+}
+
+function domCode(entries: ComponentEntry[], shown: Instance[], transforms: Record<string, CanvasTransform>): string {
   const imports = Array.from(new Set(shown.map((i) => i.type))).sort();
-  const lines = shown.map((inst) => instanceToJsx(entries.find((e) => e.name === inst.type)!, inst));
+  const lines = shown.map((inst) => {
+    const jsx = instanceToJsx(entries.find((e) => e.name === inst.type)!, inst);
+    return inst.type === "Glyph" ? withRotationStyle(jsx, transforms[inst.id]?.rotation ?? 0) : jsx;
+  });
   return [`import { ${imports.join(", ")} } from "@/components/bbox-ui";`, "", ...lines].join("\n");
 }
 
@@ -148,17 +220,23 @@ export function CodeView({
   instances,
   selectedIds,
   positions,
+  transforms,
 }: {
   render: Render;
   entries: ComponentEntry[];
   instances: Instance[];
   selectedIds: string[];
   positions: Record<string, CanvasPosition>;
+  transforms: Record<string, CanvasTransform>;
 }) {
   const [copied, setCopied] = useState(false);
   const shown = selectedIds.length > 0 ? instances.filter((i) => selectedIds.includes(i.id)) : instances;
   const code =
-    render === "dom" ? domCode(entries, shown) : render === "reactflow" ? reactFlowCode(entries, shown, positions) : tldrawCode(entries, shown, positions);
+    render === "dom"
+      ? domCode(entries, shown, transforms)
+      : render === "reactflow"
+        ? reactFlowCode(entries, shown, positions, transforms)
+        : tldrawCode(entries, shown, positions, transforms);
 
   return (
     <div data-slot="code-view" data-render={render} className="relative h-full min-h-0 overflow-auto">

@@ -2,7 +2,9 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
-import type { PanelVariant, Subject } from "@bbox-ui/panel";
+import { HOST_FIELDS, HostFactsSection, type Instance, type PanelVariant, type Subject } from "@bbox-ui/panel";
+import { glyphFootprint, type GlyphSize } from "@bbox-ui/core";
+import { RENDERS, type CanvasPosition, type CanvasTransform, type Render } from "./contract";
 
 interface InspectorColumnProps {
   variant: PanelVariant;
@@ -17,6 +19,43 @@ interface InspectorColumnProps {
   selectedTypes: string[];
   selectedCount: number;
   excludedShown: number;
+  /** Which render is showing — decides the Renderer section's label, and
+   *  whether it has any handles to write with at all (docs/GLYPH-PLAN.md:
+   *  "on DOM: rows disabled, no handles here"). */
+  render: Render;
+  /** The same selection as `subjects`, but as full `Instance`s: the
+   *  Renderer section needs `.type` to tell a Glyph's real footprint
+   *  (`glyphFootprint`) from a component this page has never measured —
+   *  `subjects` stays the narrower `Subject` shape the properties panel
+   *  itself is written against. */
+  selectedInstances: Instance[];
+  positions: Record<string, CanvasPosition>;
+  transforms: Record<string, CanvasTransform>;
+  onPositionsChange: (next: Record<string, CanvasPosition>) => void;
+  onTransformsChange: (next: Record<string, CanvasTransform>) => void;
+}
+
+/** Renderer-section host facts for one instance — x/y/rotation from the
+ *  page's own host-fact state, w/h from the one component whose footprint
+ *  this page actually knows how to compute. Every other component's w/h
+ *  reads 0 with a hint saying so, rather than a number that would look
+ *  measured but isn't (docs/GLYPH-PLAN.md phase 5, item 5). */
+function hostFactsProps(
+  inst: Instance,
+  positions: Record<string, CanvasPosition>,
+  transforms: Record<string, CanvasTransform>,
+): Record<string, unknown> {
+  const pos = positions[inst.id] ?? { x: 0, y: 0 };
+  const rotation = transforms[inst.id]?.rotation ?? 0;
+  if (inst.type === "Glyph") {
+    const footprint = glyphFootprint({
+      sizePreset: inst.props.sizePreset as GlyphSize | undefined,
+      size: inst.props.size as number | undefined,
+      padding: inst.props.padding as number | undefined,
+    });
+    return { x: pos.x, y: pos.y, rotation, w: footprint.w, h: footprint.h };
+  }
+  return { x: pos.x, y: pos.y, rotation, w: 0, h: 0 };
 }
 
 /**
@@ -83,8 +122,76 @@ export function InspectorColumn(p: InspectorColumnProps) {
               onClearOverride={p.onClearOverride}
             />
           )}
+          {p.selectedInstances.length > 0 && <RendererSection {...p} />}
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * The Renderer section, below the properties panel — one `HostFactsSection`
+ * (`@bbox-ui/panel`, the frozen API lane A implements) per render, reading
+ * the page's own `positions`/`transforms` rather than a component prop.
+ */
+function RendererSection(p: InspectorColumnProps) {
+  const renderLabel = RENDERS.find((r) => r.id === p.render)!.label;
+  const editable = p.render !== "dom";
+  const allGlyph = p.selectedInstances.every((i) => i.type === "Glyph");
+  // Rotation is a real host fact ONLY for a Glyph — no render turns a
+  // bench box today (tldraw's rotate handle and this row both write
+  // straight to `bbox-glyph`'s own shape via `tldraw-canvas.tsx`'s
+  // `syncShape`, and `bbox-bench` never reads a rotation at all). Drop
+  // the row entirely for a non-Glyph selection rather than leave it
+  // editable with a claimed writer that writes nothing (audit finding:
+  // typing 45 into the row for a Pill left the shape's own rotation at 0).
+  const fields = allGlyph ? HOST_FIELDS : HOST_FIELDS.filter((f) => f.id !== "rotation");
+  // React Flow has no rotate handle at all (docs/GLYPH-PLAN.md's stock-part
+  // table) — this row is the ONLY way to turn a Glyph there, so it gets no
+  // "writes this when you drag" note; tldraw's own rotate handle does.
+  const writers: Partial<Record<string, string>> =
+    p.render === "tldraw"
+      ? { x: "tldraw writes this when you drag", y: "tldraw writes this when you drag", rotation: "the rotate handle writes this" }
+      : p.render === "reactflow"
+        ? { x: "React Flow writes this when you drag", y: "React Flow writes this when you drag" }
+        : {};
+  if (!allGlyph) {
+    writers.w = "not measured for this component yet";
+    writers.h = "not measured for this component yet";
+    delete writers.rotation;
+  }
+
+  const subjects: Subject[] = p.selectedInstances.map((inst) => ({
+    id: inst.id,
+    props: hostFactsProps(inst, p.positions, p.transforms),
+  }));
+
+  function handleChange(fieldId: string, value: FieldValue) {
+    if (fieldId === "x" || fieldId === "y") {
+      const next = { ...p.positions };
+      for (const inst of p.selectedInstances) {
+        const pos = next[inst.id] ?? { x: 0, y: 0 };
+        next[inst.id] = { ...pos, [fieldId]: value as number };
+      }
+      p.onPositionsChange(next);
+      return;
+    }
+    if (fieldId === "rotation") {
+      const next = { ...p.transforms };
+      for (const inst of p.selectedInstances) next[inst.id] = { rotation: value as number };
+      p.onTransformsChange(next);
+    }
+    // w/h are `readOnly` — HostFactsSection never fires onChange for them.
+  }
+
+  return (
+    <HostFactsSection
+      renderLabel={renderLabel}
+      fields={fields}
+      subjects={subjects}
+      onChange={handleChange}
+      editable={editable}
+      writers={writers}
+    />
   );
 }

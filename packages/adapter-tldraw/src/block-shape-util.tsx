@@ -308,10 +308,12 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
                 {port.label !== "" && (
                   <PortLabel
                     className="absolute"
-                    style={portLabelPlacement(port.textLayout, {
-                      w: diameter,
-                      h: diameter,
-                    })}
+                    style={{
+                      ...portLabelPlacement(port.textLayout, {
+                        w: diameter,
+                        h: diameter,
+                      }),
+                    }}
                   >
                     {port.label}
                   </PortLabel>

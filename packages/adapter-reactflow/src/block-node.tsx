@@ -204,7 +204,7 @@ export function BBoxBlockNode({
                   // box-shadow (no CSS border), so unlike T0's bordered
                   // Handle the padding box already sits on the dot's true
                   // edge — same as tldraw's always-unbordered wrapper.
-                  style={portLabelPlacement(textLayout, { w: diameter, h: diameter })}
+                  style={{ ...portLabelPlacement(textLayout, { w: diameter, h: diameter }) }}
                 >
                   {port.label}
                 </PortLabel>

@@ -84,6 +84,15 @@ export function Viewport(p: ViewportProps) {
         data-view={p.view}
         className="relative m-3 min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-background"
       >
+        {/* Every render's Glyph paints through ONE `GlyphPicker` (its
+            default trigger already carries its own scoped resolver, gated
+            on need — see `resolveLucideName.ts`'s own doc comment). The
+            eager resolver that keeps a name painted the instant a canvas
+            mounts (rather than waiting on that per-trigger gate) now wraps
+            the whole workbench in `workbench.tsx`, not just this viewport —
+            the bench sidebar's own glyph previews are a sibling of
+            `Viewport`, so a wrap scoped here left them permanently
+            unresolved. */}
         <Body {...p} />
       </div>
     </div>
@@ -92,11 +101,29 @@ export function Viewport(p: ViewportProps) {
 
 function Body(p: ViewportProps) {
   if (p.view === "code") {
-    return <CodeView render={p.render} entries={p.entries} instances={p.instances} selectedIds={p.selectedIds} positions={p.positions} />;
+    return (
+      <CodeView
+        render={p.render}
+        entries={p.entries}
+        instances={p.instances}
+        selectedIds={p.selectedIds}
+        positions={p.positions}
+        transforms={p.transforms}
+      />
+    );
   }
   switch (p.render) {
     case "dom":
-      return <DomPreview entries={p.entries} instances={p.instances} selectedIds={p.selectedIds} onSelectionChange={p.onSelectionChange} />;
+      return (
+        <DomPreview
+          entries={p.entries}
+          instances={p.instances}
+          selectedIds={p.selectedIds}
+          onSelectionChange={p.onSelectionChange}
+          transforms={p.transforms}
+          onInstancePropsChange={p.onInstancePropsChange}
+        />
+      );
     case "reactflow":
       return (
         <ReactFlowCanvas
@@ -106,6 +133,9 @@ function Body(p: ViewportProps) {
           positions={p.positions}
           onSelectionChange={p.onSelectionChange}
           onPositionsChange={p.onPositionsChange}
+          transforms={p.transforms}
+          onTransformsChange={p.onTransformsChange}
+          onInstancePropsChange={p.onInstancePropsChange}
         />
       );
     case "tldraw":
@@ -117,6 +147,9 @@ function Body(p: ViewportProps) {
           positions={p.positions}
           onSelectionChange={p.onSelectionChange}
           onPositionsChange={p.onPositionsChange}
+          transforms={p.transforms}
+          onTransformsChange={p.onTransformsChange}
+          onInstancePropsChange={p.onInstancePropsChange}
         />
       );
   }
