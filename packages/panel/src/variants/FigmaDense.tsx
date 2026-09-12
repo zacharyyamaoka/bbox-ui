@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { RotateCcw } from "lucide-react";
 import {
   MIXED,
   governedFieldIds,
@@ -46,13 +47,14 @@ import {
  *     row — the one thing Zach named outright. 2-3 options stays segmented:
  *     a fair coin flip fits on one line and a dropdown for it is a click
  *     where a glance used to do.
- *   - two adjacent short numeric fields (Block's width/height, a future
- *     x/y) share one row, each with its own short label above it — the one
- *     place figmaExact's label-above shape earns its keep, because it is
- *     the only way two fields fit one line. `FieldSpec` carries no explicit
- *     pairing metadata, so this is a conservative structural heuristic
- *     (two consecutive `kind: "number"` fields), not an invented product
- *     rule — Pill has no such pair and none is forced.
+ *   - two short numeric fields that DECLARE the same `FieldSpec.group`
+ *     (Stack's gap/gutter is the live case) share one row, each with its
+ *     own short label above it — the one place figmaExact's label-above
+ *     shape earns its keep, because it is the only way two fields fit one
+ *     line. Pairing is never inferred from adjacency or from both being
+ *     `kind: "number"` — see `groupRows`' own comment below for why that
+ *     was tried and reverted. A component with no declared group (Pill,
+ *     RowContainer's own height/gap) gets one row per field, full stop.
  *
  * SEMANTICS are ported, not reinvented: `resolveField`/`readFields` are the
  * exact functions `FieldTraceRow.tsx`/`ComponentInspector.tsx` call, called
@@ -366,7 +368,7 @@ function PresetPicker({
             style={clearButtonStyle}
             title={`Clear ${modifiedFieldIds.length} override(s) — fall back to ${activePreset?.label}`}
           >
-            ×
+            <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
           </button>
         </>
       )}
@@ -485,7 +487,7 @@ function FieldRow({
               style={clearButtonStyle}
               title="Clear this instance's override — fall back to the preset"
             >
-              ×
+              <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -500,7 +502,9 @@ function FieldRow({
   );
 }
 
-/** Two short numeric fields sharing one row — Block's width/height. */
+/** Two fields sharing one row because their `FieldSpec.group` matches
+ *  (Stack's gap/gutter is the live case) — see `groupRows` in
+ *  fieldGroups.ts, which does the actual pairing before this ever runs. */
 function PairedRow({
   fields,
   subjects,
@@ -581,7 +585,7 @@ function PairedFieldCell({
             style={clearButtonStyle}
             title="Clear this instance's override — fall back to the preset"
           >
-            ×
+            <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -591,11 +595,26 @@ function PairedFieldCell({
 }
 
 /**
- * The label cell: a small provenance dot (click = expand the cascade for a
- * single subject, contract point 5) then the field name. For a NUMBER field
- * the label itself is the scrub handle (contract-adjacent, figmaExact's own
- * "the whole field is the scrub surface" taste, cheapened to just the label
- * so the box underneath keeps a normal text caret).
+ * The label cell: the field name, plus a small text TAG when the value is
+ * something you'd want called out (click either = expand the cascade for a
+ * single subject, contract point 5). For a NUMBER field the label itself is
+ * the scrub handle (contract-adjacent, figmaExact's own "the whole field is
+ * the scrub surface" taste, cheapened to just the label so the box
+ * underneath keeps a normal text caret).
+ *
+ * WHY a tag instead of the provenance dot, and why only override/mixed:
+ * Zach, 2026-09-11, reviewing the /babble legend round — "spell it out" won
+ * on legibility but its always-on badge cost real height; "only when
+ * notable" won on density but a bare colour still needed decoding. This
+ * merges them: a plain-word tag, shown ONLY for override and mixed, on the
+ * SAME line as the label (no more stacked second line — the label column
+ * widened for exactly this). A PRESET row stays untagged on purpose: its own
+ * control already reads "Wired · primary", so a second tag would repeat
+ * itself. An INHERITED row (a Header's size reaching a Glyph inside it)
+ * gets the same treatment as preset for the same reason — its own value
+ * reads "inherited · Header". A DEFAULT row stays untagged because that is
+ * the read when nothing is called out at all. The dot itself is gone — the
+ * tag already carries the one bit of information the dot's colour used to.
  */
 function RowLabel({
   field,
@@ -615,8 +634,9 @@ function RowLabel({
   compact?: boolean;
 }) {
   const scrub = useLabelScrub(field, data, onChange);
-  const dotTitle = data.isMixed
-    ? "Mixed across selection"
+  const tag: "override" | "mixed" | null = data.isMixed ? "mixed" : data.trace?.winner === "override" ? "override" : null;
+  const disclosureTitle = data.isMixed
+    ? "Mixed across selection — click to see the cascade"
     : data.trace
       ? `${
           data.trace.winner === "preset"
@@ -626,27 +646,38 @@ function RowLabel({
               : data.trace.winner
         } — click to see the cascade`
       : undefined;
+  const toggleExpanded = data.trace ? () => setExpanded((v) => !v) : undefined;
 
   return (
     <div style={compact ? labelCellCompactStyle : labelCellStyle}>
-      <button
-        type="button"
-        data-slot="field-provenance-dot"
-        disabled={!data.trace}
-        onClick={() => setExpanded((v) => !v)}
-        title={dotTitle}
-        style={dotButtonStyle(data.isMixed, data.trace?.winner, expanded)}
-      />
       <span
         data-slot="field-label"
-        style={labelTextStyle(governed, field.kind === "number")}
+        role={data.trace ? "button" : undefined}
+        tabIndex={data.trace ? 0 : undefined}
+        style={labelTextStyle(governed, field.kind === "number", !!data.trace)}
+        onClick={toggleExpanded}
+        onKeyDown={
+          toggleExpanded
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleExpanded();
+                }
+              }
+            : undefined
+        }
         onPointerDown={field.kind === "number" ? scrub.onPointerDown : undefined}
         onPointerMove={field.kind === "number" ? scrub.onPointerMove : undefined}
         onPointerUp={field.kind === "number" ? scrub.onPointerUp : undefined}
-        title={field.hint}
+        title={field.hint ?? disclosureTitle}
       >
         {field.label}
       </span>
+      {tag && (
+        <span data-slot="field-provenance-tag" title={disclosureTitle} onClick={toggleExpanded} style={tagStyle(tag, expanded)}>
+          {tag}
+        </span>
+      )}
     </div>
   );
 }
@@ -1057,17 +1088,23 @@ const fieldListStyle: CSSProperties = { display: "flex", flexDirection: "column"
 const rowWrapStyle: CSSProperties = { padding: "1px 2px" };
 // LABEL_WIDTH is the whole compaction argument: a fixed narrow label column
 // with the control taking the rest is what turns N wrapped rows into N
-// tight ones — the exact halving-of-height the brief points at.
-const LABEL_WIDTH = 96;
+// tight ones — the exact halving-of-height the brief points at. Widened from
+// 96 (2026-09-11): the longest label ("Line Thickness") plus an "OVERRIDE"
+// tag needs room to sit on ONE line now that the tag replaced the dot — the
+// whole point of the change was to stop stacking a second line under a
+// narrow column. The inspector column on /create grew to match (see
+// apps/docs/src/components/create/inspector-column.tsx) and is now
+// user-resizable, so a demo host with less room can still shrink it back.
+const LABEL_WIDTH = 152;
 const rowGridStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, minHeight: 22 };
-const labelCellStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 5, width: LABEL_WIDTH, flexShrink: 0 };
+const labelCellStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, width: LABEL_WIDTH, flexShrink: 0 };
 const labelCellCompactStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 4 };
 const controlCellStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 4, flex: 1, minWidth: 0 };
 
 const pairedRowWrapStyle: CSSProperties = { display: "flex", gap: 10, padding: "1px 2px" };
 const pairedCellStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 };
 
-function labelTextStyle(governed: boolean, scrubbable: boolean): CSSProperties {
+function labelTextStyle(governed: boolean, scrubbable: boolean, hasTrace: boolean): CSSProperties {
   return {
     fontSize: 11,
     color: governed ? "var(--bbox-panel-fg-faint, #999)" : "var(--bbox-panel-fg, #444)",
@@ -1075,33 +1112,35 @@ function labelTextStyle(governed: boolean, scrubbable: boolean): CSSProperties {
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
-    cursor: scrubbable ? "ew-resize" : "default",
+    cursor: scrubbable ? "ew-resize" : hasTrace ? "pointer" : "default",
     userSelect: "none",
   };
 }
 
-function dotButtonStyle(mixed: boolean, winner: FieldTrace["winner"] | undefined, expanded: boolean): CSSProperties {
-  const palette: Record<"override" | "inherited" | "preset" | "default" | "mixed", string> = {
-    override: "var(--bbox-panel-override-soft, #8b5cf6)",
-    // Same preset-soft token as "preset" — an inherited value is, like a
-    // preset, not this instance's own choice; see FieldTraceRow's
-    // winnerBadgeStyle for the identical call.
-    inherited: "var(--bbox-panel-preset-soft, #3b82f6)",
-    preset: "var(--bbox-panel-preset-soft, #3b82f6)",
-    default: "var(--bbox-panel-border, #d1d5db)",
-    mixed: "var(--bbox-panel-warn-soft, #f59e0b)",
+/** Replaces the old provenance DOT (2026-09-11): a plain-word tag, shown
+ *  only for override/mixed — see RowLabel's own comment for why preset,
+ *  inherited, and default stay untagged. `expanded` gets a faint outline so
+ *  the tag still shows which row's cascade is open, the one thing the dot's
+ *  outline used to do. */
+function tagStyle(tag: "override" | "mixed", expanded: boolean): CSSProperties {
+  const palette: Record<"override" | "mixed", { fg: string; bg: string; ring: string }> = {
+    override: { fg: "var(--bbox-panel-override, #6d28d9)", bg: "var(--bbox-panel-override-bg, #ede9fe)", ring: "var(--bbox-panel-override-soft, #8b5cf6)" },
+    mixed: { fg: "var(--bbox-panel-warn, #b45309)", bg: "var(--bbox-panel-warn-bg, #fef3c7)", ring: "var(--bbox-panel-warn-soft, #f59e0b)" },
   };
-  const color = mixed ? palette.mixed : winner ? palette[winner] : "var(--bbox-panel-border-soft, #e5e7eb)";
+  const c = palette[tag];
   return {
-    width: 6,
-    height: 6,
-    borderRadius: "50%",
+    fontSize: 9,
+    fontWeight: 700,
+    lineHeight: "13px",
+    textTransform: "uppercase",
+    letterSpacing: 0.02,
+    padding: "1px 4px",
+    borderRadius: 3,
+    color: c.fg,
+    background: c.bg,
     flexShrink: 0,
-    border: "none",
-    padding: 0,
-    cursor: winner || mixed ? "pointer" : "default",
-    background: color,
-    outline: expanded ? `2px solid ${color}55` : "none",
+    cursor: "pointer",
+    outline: expanded ? `2px solid ${c.ring}55` : "none",
     outlineOffset: 1,
   };
 }
@@ -1114,12 +1153,23 @@ const paintedElsewhereStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+// WHY the danger/red treatment is gone (2026-09-11): a "×" read as delete,
+// which this never was — clearing an override just falls back to the
+// preset/inherited/default value, a reversible, low-stakes action. Zach:
+// "instead of an x here can you use the reset icon from the icon set we
+// are using. it makes it clearer it like resets it back to default." A
+// neutral icon that matches the ↺ reset convention already used elsewhere
+// in this monorepo (packages/inspector/src/inspector/Inspector.tsx's
+// per-section reset) says that correctly; lucide's `RotateCcw` is the
+// vector version of the same glyph, added as this package's first icon
+// dependency.
 const clearButtonStyle: CSSProperties = {
-  fontSize: 10,
-  lineHeight: 1,
-  color: "var(--bbox-panel-danger, #b91c1c)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "var(--bbox-panel-fg-muted, #6b7280)",
   background: "none",
-  border: "1px solid var(--bbox-panel-danger-ring, #fca5a5)",
+  border: "1px solid var(--bbox-panel-border, #ddd)",
   borderRadius: 4,
   width: 16,
   height: 16,
@@ -1299,11 +1349,20 @@ function toggleLabelStyle(secondary?: boolean): CSSProperties {
   };
 }
 
+// WHY 72px fixed, not flex:1 (2026-09-11): a plain number stretched across
+// the whole control column — Zach, seeing Gap/Gutter's "23"/"12" filling a
+// half-row each: "right now the controls are huge." figmaExact's own
+// ScrubNumber, the donor this whole variant ports from, is a compact box for
+// exactly this reason; a dropdown stays flex:1 because it needs the room for
+// longer option text, but a number never has more to show than a few digits
+// plus its unit. `flex: "0 1 72px"` still lets it shrink below 72px if the
+// panel itself is dragged narrow rather than overflow.
+const NUMBER_BOX_WIDTH = 72;
 function numberBoxStyle(secondary?: boolean): CSSProperties {
   return {
     display: "flex",
     alignItems: "center",
-    flex: 1,
+    flex: `0 1 ${NUMBER_BOX_WIDTH}px`,
     minWidth: 0,
     height: 22,
     borderRadius: 4,

@@ -43,8 +43,23 @@ const VARIANT_KEY = "bbox-ui.create.panelVariant";
 
 const RENDER_KEY = "bbox-ui.create.render";
 const VIEW_KEY = "bbox-ui.create.view";
+const INSPECTOR_WIDTH_KEY = "bbox-ui.create.inspectorWidth";
 // The single-strip key from before the two-axis split; read once to migrate.
 const LEGACY_TAB_KEY = "bbox-ui.create.viewportTab";
+
+// WHY 416 (26rem), up from the previous fixed 22rem: same-line provenance
+// tags need a wider label column than the old dot did (see LABEL_WIDTH in
+// FigmaDense.tsx) — Zach, 2026-09-11, on the /babble legend round: "we
+// actually have a fair amount of space... make it wider... please make it
+// so we can adjust its width as well." Min/max keep a drag from collapsing
+// the panel unusably narrow or eating the whole viewport.
+const DEFAULT_INSPECTOR_WIDTH = 416;
+const MIN_INSPECTOR_WIDTH = 288;
+const MAX_INSPECTOR_WIDTH = 640;
+
+function clampInspectorWidth(width: number): number {
+  return Math.min(MAX_INSPECTOR_WIDTH, Math.max(MIN_INSPECTOR_WIDTH, width));
+}
 
 function readStored(key: string): string | null {
   try {
@@ -69,6 +84,7 @@ export function Workbench() {
 
   const [render, setRender] = useState<Render>("dom");
   const [view, setView] = useState<View>("preview");
+  const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const uid = useRef(INITIAL_UID);
 
   // Persisted choices are read after mount: this is a Next page and the
@@ -90,6 +106,11 @@ export function Workbench() {
     if (r === "dom" || r === "reactflow" || r === "tldraw") setRender(r);
     const vw = readStored(VIEW_KEY);
     if (vw === "preview" || vw === "code") setView(vw);
+    const w = readStored(INSPECTOR_WIDTH_KEY);
+    if (w) {
+      const parsed = Number(w);
+      if (Number.isFinite(parsed)) setInspectorWidth(clampInspectorWidth(parsed));
+    }
     // A choice stored under the old single strip maps onto the two axes so a
     // returning tab lands where it was, then the old key is retired.
     const legacy = readStored(LEGACY_TAB_KEY);
@@ -106,11 +127,12 @@ export function Workbench() {
 
       window.localStorage.setItem(RENDER_KEY, render);
       window.localStorage.setItem(VIEW_KEY, view);
+      window.localStorage.setItem(INSPECTOR_WIDTH_KEY, String(inspectorWidth));
       window.localStorage.removeItem(LEGACY_TAB_KEY);
     } catch {
       /* private window: the choice still works, it just forgets */
     }
-  }, [restored, variantId, render, view]);
+  }, [restored, variantId, render, view, inspectorWidth]);
 
   const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
@@ -404,6 +426,10 @@ export function Workbench() {
           onMoveMember={moveMemberInParent}
           onSetProp={setInstanceProp}
           onSelectInstance={(id) => selectInstance(id)}
+          width={inspectorWidth}
+          minWidth={MIN_INSPECTOR_WIDTH}
+          maxWidth={MAX_INSPECTOR_WIDTH}
+          onWidthChange={(w) => setInspectorWidth(clampInspectorWidth(w))}
         />
       </div>
     </SidebarProvider>
