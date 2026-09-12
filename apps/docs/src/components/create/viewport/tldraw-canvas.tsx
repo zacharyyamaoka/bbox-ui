@@ -15,7 +15,7 @@ import {
   type TLBaseShape,
   type TLShapeId,
 } from "tldraw";
-import { ancestry, type ComponentEntry, type Instance } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import type { CanvasPosition } from "../contract";
 import { renderInstance, type EditBundle } from "../render-instance";
 
@@ -210,41 +210,52 @@ function shapeBackedSelection(editor: Editor, selectedIds: string[]): string {
     .join("|");
 }
 
+// A press inside a member wrapper (any depth) or the inline-edit control
+// itself — the two DOM markers a page-side click handler already owns.
+const MEMBER_OR_CONTROL_SELECTOR = '[data-slot="member-instance"], [data-bbox-interactive]';
+
 /**
- * The ROOT each selected id ultimately belongs to — a member maps to its
- * top-level ancestor (`ancestry(...)[0]`, empty for a top-level instance,
- * meaning it already IS a root); a root maps to itself.
+ * WHY this replaced an ID-set heuristic (`impliedRootSelection`, verify
+ * round 1, F3/F4): tldraw has no shape for a member — only a ROOT gets one
+ * (`shapeIdFor` below) — so EVERY press anywhere inside a shape's rendered
+ * content, member or not, resolves at tldraw's OWN geometry-based hit-test
+ * to the SAME root shape. Once render-instance.tsx's member wrapper
+ * stopped calling `stopPropagation()` (so a drag starting on a member can
+ * still reach tldraw's canvas-level pointer handling), tldraw's OWN click
+ * machinery started running for every member press too, reselecting that
+ * root — which the listener below must recognize and ignore, since the
+ * member's own `onPointerDown` (render-instance.tsx) is already the
+ * authoritative source for what this press means.
  *
- * WHY this exists (verify-round-1, the regression F3's own fix introduced):
- * tldraw has no shape for a member — only a ROOT gets one (`shapeIdFor`
- * above) — so EVERY press anywhere inside a shape's rendered content,
- * member or not, resolves at tldraw's OWN geometry-based hit-test to the
- * SAME root shape. Once render-instance.tsx's member wrapper stopped
- * calling `stopPropagation()` (so a drag starting on a member can still
- * reach tldraw's canvas-level pointer handling — that fix is what F3
- * asked for), tldraw's OWN click machinery started running for every
- * member press too, and its default click-on-a-shape behavior selects
- * that root shape — which used to be invisible because stopPropagation
- * blocked React's OWN bubble from ever reaching `.tl-canvas`'s handler,
- * not only the native listeners this file's other WHY comments are about.
- * That reflexive reselection then echoed through the listener below as
- * "the user selected `block-8`", which read as "different from the
- * member `textbox-18` that's mid-edit" and ended the edit before a single
- * keystroke could land — literally every second press failed to enter
- * editing (measured: `hasControl` false after the second press, every
- * time). tldraw reporting the CONTAINING root of what the page already
- * has selected is not new information — it is tldraw's own coarser
- * granularity catching up, not a different choice by the user — so this
- * function lets the listener recognize and ignore exactly that case,
- * distinct from `shapeBackedSelection` (above), which recognizes a
- * different case entirely: the ECHO of a `setSelectedShapes([])` this
- * SAME file wrote a moment earlier because a member has no shape.
+ * The previous fix compared `ancestry(...)[0]` of the page's selected ids
+ * against tldraw's reported ids — but two members of the SAME block
+ * (`[T1, T3]`) both imply that one root, so an un-deduplicated join
+ * (`"block-8|block-8"`) never matched tldraw's own single-shape id
+ * (`"block-8"`), and the guard fired for real: a shift-click extending the
+ * selection to two members got silently collapsed back to their shared
+ * root (F3). Deduplicating would have fixed that, but the SAME string
+ * comparison is also blind to WHERE the press landed: clicking a Block's
+ * bare padding while one of its members is selected produces the exact
+ * same strings (`"block-8" === "block-8"`) as the member's own reflexive
+ * echo, so it was ALSO swallowed — the Block could never be reselected by
+ * clicking it again (F4). No amount of ID-set arithmetic can tell those
+ * two cases apart; they differ only in which DOM element the pointerdown
+ * actually hit.
+ *
+ * So this reads that directly: `lastPointerDownTarget` (below) is stamped
+ * by an `onPointerDownCapture` on this component's own wrapper div, which
+ * — because the capture phase always finishes walking every ancestor
+ * before ANY bubble-phase listener anywhere in the subtree runs, tldraw's
+ * native click handling on `.tl-container` included — is guaranteed to be
+ * set before tldraw (or React's own bubble dispatch to the member's
+ * `onPointerDown`) has processed the same physical event. A press that
+ * landed on a member or the inline-edit control is always something a
+ * page-side handler already decided; a press that landed on neither
+ * (bare padding, the canvas background) has no other handler at all, and
+ * tldraw's own selection change IS the whole story.
  */
-function impliedRootSelection(instances: Instance[], selectedIds: string[]): string {
-  return selectedIds
-    .map((id) => ancestry(instances, id)[0] ?? id)
-    .sort()
-    .join("|");
+function pressLandedOnMemberOrControl(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest(MEMBER_OR_CONTROL_SELECTOR);
 }
 const shapeIdFor = (instanceId: string): TLShapeId => createShapeId(`bench-${instanceId}`);
 
@@ -273,6 +284,9 @@ export function TldrawCanvas(p: Props) {
   const applying = useRef(false);
   const latest = useRef(p);
   latest.current = p;
+  // Stamped by `onPointerDownCapture` below, read by the editor→page
+  // listeners — see `pressLandedOnMemberOrControl`'s doc comment.
+  const pressOnMemberOrControl = useRef(false);
 
   const byId = useMemo(() => new Map(p.instances.map((i) => [i.id, i])), [p.instances]);
   const ctx = useMemo(
@@ -330,7 +344,20 @@ export function TldrawCanvas(p: Props) {
 
   return (
     <BenchContext.Provider value={ctx}>
-      <div data-slot="tldraw-canvas" className="relative h-full min-h-0 w-full">
+      <div
+        data-slot="tldraw-canvas"
+        className="relative h-full min-h-0 w-full"
+        // WHY capture, not bubble, and why on THIS ancestor: the capture
+        // phase finishes walking every ancestor of the event target before
+        // ANY bubble-phase listener anywhere in the subtree fires — this
+        // div sits above `.tl-container`, so this always stamps the ref
+        // before tldraw's own native click handling (and before React's
+        // bubble dispatch to a member's `onPointerDown`) sees the same
+        // physical press. See `pressLandedOnMemberOrControl`'s doc comment.
+        onPointerDownCapture={(e) => {
+          pressOnMemberOrControl.current = pressLandedOnMemberOrControl(e.target);
+        }}
+      >
         <Tldraw
           shapeUtils={shapeUtils}
           hideUi
@@ -372,13 +399,14 @@ export function TldrawCanvas(p: Props) {
                   .sort();
                 const idsKey = ids.join("|");
                 // Two DIFFERENT reasons to treat this as a no-op, not one:
-                // `shapeBackedSelection` catches an ECHO of a selection
-                // we (the page → editor effect) just wrote; `impliedRootSelection`
-                // catches tldraw's OWN reflexive re-assertion of the root
-                // that already (indirectly, via a selected/editing member)
-                // holds the page's selection — see that function's own
-                // long comment for the regression this closes.
-                if (idsKey !== shapeBackedSelection(editor, cur.selectedIds) && idsKey !== impliedRootSelection(cur.instances, cur.selectedIds)) {
+                // `shapeBackedSelection` catches an ECHO of a selection we
+                // (the page → editor effect) just wrote; `pressOnMemberOrControl`
+                // catches tldraw's OWN reflexive re-assertion of a root
+                // whose member (or inline-edit control) a page-side handler
+                // already acted on for this exact press — see
+                // `pressLandedOnMemberOrControl`'s own long comment for the
+                // regression this closes and the one it replaced.
+                if (idsKey !== shapeBackedSelection(editor, cur.selectedIds) && !pressOnMemberOrControl.current) {
                   cur.onSelectionChange(ids);
                 }
               },
@@ -396,13 +424,14 @@ export function TldrawCanvas(p: Props) {
                   .sort();
                 const idsKey = ids.join("|");
                 // Two DIFFERENT reasons to treat this as a no-op, not one:
-                // `shapeBackedSelection` catches an ECHO of a selection
-                // we (the page → editor effect) just wrote; `impliedRootSelection`
-                // catches tldraw's OWN reflexive re-assertion of the root
-                // that already (indirectly, via a selected/editing member)
-                // holds the page's selection — see that function's own
-                // long comment for the regression this closes.
-                if (idsKey !== shapeBackedSelection(editor, cur.selectedIds) && idsKey !== impliedRootSelection(cur.instances, cur.selectedIds)) {
+                // `shapeBackedSelection` catches an ECHO of a selection we
+                // (the page → editor effect) just wrote; `pressOnMemberOrControl`
+                // catches tldraw's OWN reflexive re-assertion of a root
+                // whose member (or inline-edit control) a page-side handler
+                // already acted on for this exact press — see
+                // `pressLandedOnMemberOrControl`'s own long comment for the
+                // regression this closes and the one it replaced.
+                if (idsKey !== shapeBackedSelection(editor, cur.selectedIds) && !pressOnMemberOrControl.current) {
                   cur.onSelectionChange(ids);
                 }
               },

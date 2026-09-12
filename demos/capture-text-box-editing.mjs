@@ -130,6 +130,39 @@ async function press(selector, mods = {}) {
   await sleep(200);
   return r;
 }
+/** Same gesture as `press`, at a raw viewport point rather than a
+ *  selector's own rect — for a click that must land on bare canvas
+ *  content with no element of its own to query (verify-round-1, F4). */
+async function pressAt(x, y, mods = {}) {
+  const modifiers = (mods.shift ? MOD.shift : 0) | (mods.ctrl ? MOD.ctrl : 0);
+  await mouse("mouseMoved", x, y, modifiers);
+  await mouse("mousePressed", x, y, modifiers);
+  await sleep(30);
+  await mouse("mouseReleased", x, y, modifiers);
+  await sleep(250);
+}
+/** Scans a grid inside `nodeSelector`'s own rect for a point that lands
+ *  inside NONE of the page's `[data-slot="member-instance"]` rects — the
+ *  Block's own bare padding, wherever the current layout happens to put
+ *  it, rather than a hand-guessed coordinate that could start landing on
+ *  a member the moment the fixture's layout changes. */
+async function findBarePoint(nodeSelector) {
+  return evaluate(`(() => {
+    const node = document.querySelector(${JSON.stringify(nodeSelector)});
+    if (!node) throw new Error("not found: " + ${JSON.stringify(nodeSelector)});
+    const r = node.getBoundingClientRect();
+    const members = Array.from(document.querySelectorAll('[data-slot="member-instance"]')).map((m) => m.getBoundingClientRect());
+    const insideAnyMember = (x, y) => members.some((m) => x >= m.left && x <= m.right && y >= m.top && y <= m.bottom);
+    for (let fy = 0.03; fy <= 0.97; fy += 0.02) {
+      for (let fx = 0.03; fx <= 0.97; fx += 0.02) {
+        const x = r.left + r.width * fx;
+        const y = r.top + r.height * fy;
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && !insideAnyMember(x, y)) return { x, y };
+      }
+    }
+    return null;
+  })()`);
+}
 async function click(selector) {
   await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error("not found: " + ${JSON.stringify(selector)}); el.click(); })()`);
   await sleep(150);
@@ -237,6 +270,26 @@ const selectedRows = async () => (await navRows()).filter((r) => r.selected).map
 const inspectorTextControl = () => evaluate(`document.querySelector('[data-field="children"] textarea, [data-field="children"] input')?.tagName ?? null`);
 const inspectorTextValue = () => evaluate(`(document.querySelector('[data-field="children"] textarea, [data-field="children"] input'))?.value ?? null`);
 const inspectorName = () => evaluate(`document.querySelector('[data-slot="figma-dense-header"] span')?.textContent ?? null`);
+/** Best-effort opens whatever affordance the CURRENT panel variant hides
+ *  the "children" field's real control behind, then reports the tag that
+ *  is now actually there for it (verify round 1, F1/F2 sweep, step 6c):
+ *  FigmaDense/Tiered tier-gate some fields behind an Expert toggle;
+ *  FilterFirst starts every row collapsed to a summary line; RowPopover's
+ *  real control lives in a separate popover opened by a trigger button.
+ *  Both of the latter are exactly one `<button>` inside the field's own
+ *  `[data-field="children"]` region, so a single generic click covers
+ *  both without a per-variant branch. */
+async function revealChildrenControl() {
+  await evaluate(`Array.from(document.querySelectorAll('[data-slot="tier-button"]')).find(b => /expert/i.test(b.textContent))?.click()`);
+  await sleep(150);
+  let tag = await inspectorTextControl();
+  if (!tag) {
+    await evaluate(`document.querySelector('[data-field="children"] button')?.click()`);
+    await sleep(200);
+    tag = await inspectorTextControl();
+  }
+  return tag;
+}
 
 /** The instance the resting box currently shows, however it is nested —
  *  member-instance wraps every non-root instance, `display: contents`, so
@@ -470,6 +523,58 @@ for (const renderId of RENDERS) {
     JSON.stringify(restingAfterInspectorKeystroke),
   );
 
+  // ---- step 6c (verify round 1, F1/F2 sweep): every one of the six panel
+  // variants must render a REAL <textarea> for a "textarea" field that
+  // actually grows to its content and never drops a newline on the next
+  // keystroke made through it. F1 (FigmaDense's fixed `height: 22` beat
+  // `fieldSizing: content`, clipping everything past the first line) and
+  // F2 (IconStrip's `FieldText` always used a single-line `<input>`, whose
+  // native value sanitization strips newlines outright) were each found
+  // in exactly ONE of the six — this sweeps all six so neither class of
+  // bug can come back unnoticed in a variant this journey does not happen
+  // to be sitting on. Panel choice is independent of canvas render, so
+  // this runs once, on "dom". ---------------------------------------------
+  if (renderId === "dom") {
+    const pickerPresent = await evaluate(`!!document.querySelector('[data-slot="variant-picker"]')`);
+    assertStep(6, "variant picker is present for the sweep", pickerPresent, pickerPresent);
+    for (const variantId of ["figma-dense", "current", "row-popover", "tiered", "filter-first", "icon-strip"]) {
+      await setSelect('[data-slot="variant-picker"]', variantId);
+      await sleep(250);
+      const tag = await revealChildrenControl();
+      assertStep(6, `[${variantId}] Text field's control for kind=textarea is a TEXTAREA`, tag === "TEXTAREA", tag);
+      if (tag !== "TEXTAREA") continue; // wrong element — geometry/keystroke checks below would be meaningless
+      const geom = await evaluate(`(() => {
+        const el = document.querySelector('[data-field="children"] textarea');
+        return { clientHeight: el.clientHeight, scrollHeight: el.scrollHeight, value: el.value };
+      })()`);
+      assertStep(
+        6,
+        `[${variantId}] textarea grows to its content — no clipped overflow`,
+        geom.scrollHeight - geom.clientHeight <= 1,
+        `client=${geom.clientHeight} scroll=${geom.scrollHeight} value=${JSON.stringify(geom.value)}`,
+      );
+      // One keystroke through THIS variant's control must not drop the
+      // newline the canvas is currently showing — F2's exact failure mode,
+      // generalized past the one variant it was found in.
+      await evaluate(`(() => { const el = document.querySelector('[data-field="children"] textarea'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); })()`);
+      await typeText(".");
+      await sleep(150);
+      const restingNow = await restingText(textBoxId);
+      assertStep(
+        6,
+        `[${variantId}] one keystroke keeps the newline in the instance`,
+        typeof restingNow === "string" && restingNow.includes("\n"),
+        JSON.stringify(restingNow),
+      );
+      if (variantId === "icon-strip") {
+        const inspClip = await rectOf('[data-slot="inspector-column"]');
+        await screenshot("dom-6c-icon-strip-textarea", inspClip);
+      }
+    }
+    await setSelect('[data-slot="variant-picker"]', "figma-dense");
+    await sleep(200);
+  }
+
   // ---- step 7: reactflow/tldraw only — drag the resting text moves the node
   if (renderId !== "dom") {
     const nodeSel = renderId === "reactflow" ? `[data-slot="rf-instance"]` : `[data-slot="tl-instance"]`;
@@ -523,6 +628,54 @@ for (const renderId of RENDERS) {
     const nodeAfterMember = await rectOf(nodeSel);
     const memberDx = nodeAfterMember.left - nodeBeforeMember.left;
     assertStep(7, "dragging a DIFFERENT, non-editable member (Header · center placeholder) moved the node ~80px", Math.abs(memberDx - 80) <= 12, `dx=${memberDx.toFixed(1)}`);
+  }
+
+  // ---- step 8 (tldraw only, verify round 1 F3/F4): a member has no shape
+  // of its own on tldraw — only the root does — so both regressions turn
+  // on exactly WHERE a press lands relative to a member's own wrapper, not
+  // on any id-set arithmetic. Both need a SECOND member of the same Block
+  // to tell "the page's own additive selection" apart from "tldraw's
+  // reflexive re-assertion of the shared root". ---------------------------
+  if (renderId === "tldraw") {
+    const rootBefore = (await navRows()).find((r) => r.depth === 0);
+    if (!rootBefore) throw new Error("no depth-0 root row for the Block bench");
+    const rightId = await selectByTitle("Header · right");
+    assertStep(8, "selected the Header · right slot fill", (await selectedRows()).join() === rightId, rightId);
+    await reveal();
+    await addTextBox();
+    const afterAdd2 = await selectedRows();
+    assertStep(8, "adding a second TextBox (Header · right) selected exactly the new child", afterAdd2.length === 1, afterAdd2.join());
+    const textBoxId2 = afterAdd2[0];
+    await sleep(400); // tldraw's ResizeObserver-driven shape geometry settles asynchronously
+
+    await press(textBoxSel(textBoxId));
+    const selAfterFirst = await selectedRows();
+    assertStep(8, "plain press selects the first TextBox alone", selAfterFirst.join() === textBoxId, selAfterFirst.join());
+
+    await press(textBoxSel(textBoxId2), { shift: true });
+    const selAfterShift = (await selectedRows()).sort();
+    const wantShift = [textBoxId, textBoxId2].sort();
+    assertStep(
+      8,
+      "F3: shift+press on a second member of the SAME block EXTENDS the selection rather than collapsing to their shared root",
+      selAfterShift.join(",") === wantShift.join(","),
+      `got [${selAfterShift.join(",")}] want [${wantShift.join(",")}]`,
+    );
+    await screenshot("tldraw-7a-shift-extended-selection");
+
+    // Now click the Block's own bare padding — no member anywhere under
+    // the pointer — while a member still holds the page's selection.
+    const bare = await findBarePoint(`[data-slot="tl-instance"]`);
+    if (!bare) throw new Error("could not find a bare (non-member) point inside the tldraw shape");
+    await pressAt(bare.x, bare.y);
+    const selAfterBare = await selectedRows();
+    assertStep(
+      8,
+      "F4: clicking the Block's own bare padding re-selects the Block itself while a member was selected",
+      selAfterBare.join() === rootBefore.id,
+      `sel=[${selAfterBare.join(",")}] want [${rootBefore.id}] at (${bare.x.toFixed(0)},${bare.y.toFixed(0)})`,
+    );
+    await screenshot("tldraw-7b-bare-padding-reselects-block");
   }
 
   manifest.renders[renderId] = { console: takeConsole() };

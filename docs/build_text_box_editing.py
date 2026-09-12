@@ -28,7 +28,7 @@ import pathlib
 
 from PIL import Image
 
-DATE = "2026-09-11"
+DATE = "2026-09-12"
 HERE = pathlib.Path(__file__).resolve().parent.parent  # the worktree root
 MEDIA = HERE / "reports" / "media" / "text-box-editing"
 OUT = HERE / "reports" / "media" / f"text-box-editing-{DATE}.html"
@@ -39,13 +39,19 @@ RENDERS_META = manifest["renders"]
 
 RENDER_ORDER = ["dom", "reactflow", "tldraw"]
 RENDER_LABEL = {"dom": "DOM", "reactflow": "React Flow", "tldraw": "tldraw"}
+ALL_STEPS = (1, 2, 3, 4, 5, 6, 7, 8)
+# A step can have more than one screenshot now (step 6's variant sweep adds
+# one, step 8's F3/F4 pair adds two) — every entry is a list of `{render}-
+# {name}.png` suffixes, tried per render; whichever don't exist for a given
+# render are silently skipped below, same as before.
 STEP_SHOT = {
-    1: "1-added",
-    3: "2-editing",
-    4: "3-committed",
-    5: "4-cancelled",
-    6: "5-multiline",
-    7: "6-dragged",
+    1: ["1-added"],
+    3: ["2-editing"],
+    4: ["3-committed"],
+    5: ["4-cancelled"],
+    6: ["5-multiline", "6c-icon-strip-textarea"],
+    7: ["6-dragged"],
+    8: ["7a-shift-extended-selection", "7b-bare-padding-reselects-block"],
 }
 STEP_LABEL = {
     1: "1 · add a TextBox to Header · left",
@@ -53,8 +59,9 @@ STEP_LABEL = {
     3: "3 · click selects, click again edits",
     4: "4 · type, Enter commits",
     5: "5 · click again, Escape cancels",
-    6: "6 · lines → multi, newline, Ctrl+Enter",
+    6: "6 · lines → multi, newline, Ctrl+Enter, then the 6-variant textarea sweep",
     7: "7 · drag the resting text moves the node",
+    8: "8 · verify round 2 (tldraw) — shift-select across two members, bare-padding click",
 }
 
 
@@ -99,17 +106,17 @@ def render_section(render: str) -> str:
         else '<p class="meas">console clean during this render\'s run</p>'
     )
     shots = []
-    for step in (1, 3, 4, 5, 6, 7):
-        name = STEP_SHOT[step]
-        path = MEDIA / f"{render}-{name}.png"
-        if not path.exists():
-            continue
-        shots.append(
-            f'<figure class="card"><img src="{png(path)}" alt="{render} {STEP_LABEL[step]}">'
-            f'<figcaption>{STEP_LABEL[step]}</figcaption></figure>'
-        )
+    for step in ALL_STEPS:
+        for name in STEP_SHOT.get(step, []):
+            path = MEDIA / f"{render}-{name}.png"
+            if not path.exists():
+                continue
+            shots.append(
+                f'<figure class="card"><img src="{png(path)}" alt="{render} {STEP_LABEL[step]} — {name}">'
+                f'<figcaption>{STEP_LABEL[step]}</figcaption></figure>'
+            )
     steps_html = []
-    for step in (1, 2, 3, 4, 5, 6, 7):
+    for step in ALL_STEPS:
         srows = by_step(render, step)
         if not srows:
             continue
@@ -203,7 +210,7 @@ HTML = f"""<!doctype html>
 
 <div class="note">
 {
-  f"<strong>All {TOTAL} assertions pass across all three renders.</strong> Verify round 1 confirmed five defects in this journey's original run (below), fixed each at its root, swept the sibling paths the same causes reached (a bare-padding drag, a different non-editable member, the default inspector's textarea fallback), and re-ran this exact journey against the fixed tree — nothing here is patched to make the number look better, the number is what the fixes produced."
+  f"<strong>All {TOTAL} assertions pass across all three renders.</strong> Verify round 1 confirmed five defects in this journey's original run, fixed each at its root, swept the sibling paths the same causes reached (a bare-padding drag, a different non-editable member, the default inspector's textarea fallback), and re-ran this exact journey against the fixed tree. A second, independent audit of that fix then confirmed four more (below, \"Fixed in verify round 2\") — two the fix itself introduced, two it left unswept in five of the panel's six variants — each fixed at its root and covered by new permanent assertions (step 6's 6-variant sweep, step 8's tldraw shift-select and bare-padding checks) so neither class of bug can return unnoticed. Nothing here is patched to make the number look better, the number is what the fixes produced."
   if not FAILURES else
   f'<strong>{len(FAILURES)} assertion(s) still fail.</strong> See "What did not pass" below.'
 }
@@ -243,6 +250,30 @@ HTML = f"""<!doctype html>
 <p><code>FigmaDense.tsx</code> (<code>PANEL_VARIANTS[0]</code>, the <code>/create</code> default) and <code>RowPopover.tsx</code> had no explicit branch for the new <code>"textarea"</code> field kind, so both fell through to a single-line <code>&lt;input&gt;</code>, whose value sanitization strips newlines — a real, silent character-loss the moment either panel touched the field, violating the truthful-rendering rule. <strong>Fix:</strong> both variants grew the same real <code>&lt;textarea rows=1 style="field-sizing:content"&gt;</code> branch <code>FieldTraceRow.tsx</code> already had.</p>
 </div>
 
+<h2>Fixed in verify round 2 (2026-09-12) <span class="meas">a second, independent audit of round 1's own fix commit (9a81da9) — distinct bugs from F1&ndash;F5 above, reusing the same letters because each round numbers its own findings from 1</span></h2>
+
+<div class="note">Round 1's fix pass repaired the five defects above but introduced two new ones of its own (F3, F4 below) and left two pre-existing defects unswept in five of the panel's six selectable variants (F1, F2 below — round 1 verified only the default <code>FigmaDense</code> variant and one other IconStrip-adjacent path). All four are fixed at their root below and covered by new, permanent journey assertions (<code>demos/capture-text-box-editing.mjs</code> step 6's 6-variant sweep and step 8) so none of the four can regress unnoticed again.</div>
+
+<div class="bug fixed">
+<h3>F1 · FigmaDense's Text field never grew past one line</h3>
+<p><code>FigmaDense.tsx</code>'s textarea branch (added in round 1 for F5) spread <code>textInputStyle(secondary)</code> — which pins <code>height: 22</code> for every OTHER dense-row control — before adding <code>fieldSizing: "content"</code>. <code>height</code> still won the cascade, so a 4-line value rendered exactly one line tall with the rest scrolled out of view and no visual indication anything was hidden (measured: <code>clientHeight 20</code> vs <code>scrollHeight 66</code> for a 4-line value). <strong>Fix:</strong> the textarea's own style now overrides with <code>height: "auto", minHeight: 22</code> after the spread, so the row still starts at the same 22px height as every other control but is free to grow.</p>
+</div>
+
+<div class="bug fixed">
+<h3>F2 · IconStrip's Text field silently dropped every newline on the next keystroke</h3>
+<p><code>IconStrip.tsx</code>'s <code>FieldText</code> — the control both the direct <code>childrenField</code> row AND <code>GenericFallback</code> route a <code>kind: "textarea"</code> field to — had no branch for it at all and always rendered a single-line <code>&lt;input&gt;</code>. An <code>&lt;input&gt;</code>'s value setter strips <code>\n</code> outright, so the FIRST keystroke made through IconStrip's own inspector on a multi-line TextBox silently collapsed its two lines into one (Zach's truthful-rendering rule) — this is round 1's own F5 class of bug, present in a SIXTH selectable variant round 1's fix never reached. <strong>Fix:</strong> <code>FieldText</code> now branches on <code>field.kind === "textarea"</code> and renders the same growable <code>&lt;textarea rows=1 style="field-sizing:content"&gt;</code> idiom every other variant uses.</p>
+</div>
+
+<div class="bug fixed">
+<h3>F3 · tldraw: shift-selecting a second member of the same Block collapsed the selection to just that Block</h3>
+<p>Round 1's own fix for a DIFFERENT regression (a stray reflexive root-reselection ending an in-progress edit) added <code>impliedRootSelection()</code>: it maps each selected id to its ancestor root and joins the sorted list. For two members of the SAME block (<code>[T1, T3]</code>) that join is <code>"block-8|block-8"</code> — not deduplicated — which never equals tldraw's own single reported shape id <code>"block-8"</code>, so the guard treated a genuine shift-extend as a real change and overwrote the page's <code>[T1, T3]</code> selection with just the shared root. <strong>Fix:</strong> replaced the whole ID-set heuristic with a DOM-target-based one — an <code>onPointerDownCapture</code> on the canvas wrapper (capture always finishes before any bubble-phase listener anywhere in the subtree, tldraw's own click handling included) records whether the causing press landed inside a member wrapper or the inline-edit control; the editor→page listener now skips exactly when that is true, regardless of which or how many ids are involved.</p>
+</div>
+
+<div class="bug fixed">
+<h3>F4 · tldraw: clicking a Block's own bare padding stopped reselecting the Block once one of its members was selected</h3>
+<p>The SAME <code>impliedRootSelection()</code> guard was blind to WHERE a press landed: a member already selected (<code>[T1]</code>) implies the same root string (<code>"block-8"</code>) that a genuine click on the Block's own bare padding ALSO reports, natively, at tldraw's geometry-based hit-test (only roots get a shape — a member's press and a bare-padding press are indistinguishable by id alone). The guard suppressed both identically, so the Block could never be reselected by clicking it again — only via the navigator or an empty-canvas click first. <strong>Fix:</strong> the same capture-phase press classification from F3 answers this directly — a bare-padding press has no member or control under it, so the flag is false, the guard does not suppress, and the native selection change reaches the page.</p>
+</div>
+
 {SECTIONS}
 
 <h2>Stock parts touched by this feature, element by element</h2>
@@ -261,6 +292,8 @@ HTML = f"""<!doctype html>
     <tr><th>Inspector textarea control</th><td>single-line <code>&lt;input&gt;</code> for every text field</td><td><code>FieldKind: "textarea"</code> (new), rendered as <code>&lt;textarea rows=1 style="field-sizing:content"&gt;</code> in <code>FieldTraceRow.tsx</code>, <code>FigmaDense.tsx</code> and <code>RowPopover.tsx</code> (<strong>F5</strong> — the latter two fell through to a newline-stripping <code>&lt;input&gt;</code> until this round)</td><td>a multi-line <code>children</code> value shows its newline in every panel that reads it, not just at rest</td></tr>
     <tr><th>Two-click-to-edit decision</th><td>none existed</td><td><code>isSecondPressToEdit()</code>, one shared function (<code>packages/panel/src/twoClickEdit.ts</code>), unit-tested</td><td>the exact same rule fires for a top-level instance (<code>dom-preview.tsx</code>) and a nested member (<code>render-instance.tsx</code>'s wrapper) — they cannot drift apart</td></tr>
     <tr><th>react-arborist instance navigator</th><td colspan="3"><strong>unchanged (stock seam)</strong> — F1's original report suspected its roving-tabindex focus management; refuted (reproduced identically with the shadcn navigator instead), so left untouched</td></tr>
+    <tr><th>tldraw editor→page selection echo guard (round 2)</th><td>an un-deduplicated <code>impliedRootSelection()</code> ID-set join</td><td><code>onPointerDownCapture</code> (stock React synthetic capture event) on the canvas wrapper + <code>Element.closest()</code></td><td><strong>round 2 F3/F4</strong>: whether the page's own member/control handling already owns this exact press — read from WHERE it landed, not reconstructed from which ids happen to already be selected</td></tr>
+    <tr><th>Every panel variant's "textarea" field control (round 2)</th><td>FigmaDense: real <code>&lt;textarea&gt;</code> that never actually grew (fixed <code>height:22</code> beat <code>fieldSizing</code>); IconStrip: single-line <code>&lt;input&gt;</code></td><td>the same <code>&lt;textarea rows=1 style="field-sizing:content"&gt;</code> idiom <code>FieldTraceRow.tsx</code> already had, now in all 6 of <code>PANEL_VARIANTS</code></td><td><strong>round 2 F1/F2</strong>: a multi-line value shows every line, and keeps every newline through one more keystroke, in every panel design a person can switch to — not only the default</td></tr>
   </tbody>
 </table>
 

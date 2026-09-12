@@ -876,6 +876,13 @@ function DenseControl({
   // is the same growable idiom `FieldTraceRow.tsx` and the editing control
   // itself (`textBox.tsx`) already use, so a one-line value still reads
   // like a normal text row here too.
+  // WHY `height`/`minHeight` are overridden after the spread (verify round
+  // 1, F1): `textInputStyle()` pins `height: 22` for every other dense-row
+  // control; spreading it first and `fieldSizing: "content"` after did
+  // nothing because `height` still won the cascade, so a 4-line value
+  // rendered exactly one line tall with the rest scrolled out of view.
+  // `minHeight` keeps the collapsed row the same 22px the design wants;
+  // `height: "auto"` is what actually lets `fieldSizing` grow it.
   if (field.kind === "textarea") {
     return (
       <textarea
@@ -883,7 +890,14 @@ function DenseControl({
         value={value === undefined ? "" : String(value)}
         placeholder={isMixed ? "Mixed" : undefined}
         onChange={(e) => onChange(e.target.value)}
-        style={{ ...textInputStyle(secondary), resize: "none", fontFamily: "inherit", ...({ fieldSizing: "content" } as CSSProperties) }}
+        style={{
+          ...textInputStyle(secondary),
+          height: "auto",
+          minHeight: 22,
+          resize: "none",
+          fontFamily: "inherit",
+          ...({ fieldSizing: "content" } as CSSProperties),
+        }}
       />
     );
   }
