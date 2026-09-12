@@ -8,3 +8,7 @@ storybook-static/
 # Next 16 writes these on every dev start ("Generated AGENTS.md and CLAUDE.md for AI agents"); the repo guidance lives in the root CLAUDE.md.
 apps/docs/AGENTS.md
 apps/docs/CLAUDE.md
+
+# agent scratch hosts and captures, never tracked
+.scratch/
+.scratch-host/
