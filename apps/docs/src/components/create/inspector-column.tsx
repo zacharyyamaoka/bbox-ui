@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
 import type { ComponentEntry, Instance, PanelVariant, Subject } from "@bbox-ui/panel";
 import { isSlotFill } from "@bbox-ui/panel";
@@ -29,6 +29,65 @@ interface InspectorColumnProps {
   onMoveMember: (parentId: string, from: number, to: number) => void;
   onSetProp: (id: string, fieldId: string, value: FieldValue) => void;
   onSelectInstance: (id: string) => void;
+  /** Current column width in px, and its drag bounds — Workbench owns and
+   *  persists the value, this component only renders the handle. */
+  width: number;
+  minWidth: number;
+  maxWidth: number;
+  onWidthChange: (width: number) => void;
+}
+
+/** A thin drag handle on the column's LEFT edge — it borders the viewport,
+ *  so dragging left grows the inspector and dragging right shrinks it.
+ *  Plain pointer events, no library: the same shape as FigmaDense's own
+ *  label-scrub drag, just resizing a column instead of a number. */
+function ResizeHandle({
+  width,
+  minWidth,
+  maxWidth,
+  onWidthChange,
+}: {
+  width: number;
+  minWidth: number;
+  maxWidth: number;
+  onWidthChange: (width: number) => void;
+}) {
+  const drag = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [active, setActive] = useState(false);
+
+  function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    drag.current = { startX: e.clientX, startWidth: width };
+    setActive(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!drag.current) return;
+    const dx = e.clientX - drag.current.startX;
+    const next = Math.min(maxWidth, Math.max(minWidth, drag.current.startWidth - dx));
+    onWidthChange(next);
+  }
+  function onPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    drag.current = null;
+    setActive(false);
+  }
+
+  return (
+    <div
+      data-slot="inspector-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize inspector panel"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      className={`absolute inset-y-0 left-0 z-10 w-2 -translate-x-1/2 cursor-col-resize touch-none ${active ? "bg-primary/25" : "bg-transparent hover:bg-primary/15"}`}
+    />
+  );
 }
 
 /**
@@ -59,8 +118,10 @@ export function InspectorColumn(p: InspectorColumnProps) {
     <aside
       data-slot="inspector-column"
       data-scrolls={scrolls}
-      className="flex h-full w-[22rem] shrink-0 flex-col border-l border-border bg-background"
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
+      style={{ width: p.width }}
     >
+      <ResizeHandle width={p.width} minWidth={p.minWidth} maxWidth={p.maxWidth} onWidthChange={p.onWidthChange} />
       {p.shared && (
         <div data-slot="shared-field-note" className="border-b border-border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
           <strong className="text-foreground">{p.selectedTypes.join(" + ")}</strong> —{" "}
