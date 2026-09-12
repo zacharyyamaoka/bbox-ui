@@ -277,6 +277,17 @@ body {
 }
 
 .board {
+  /* WHY (load-bearing, do not drop): `.board-arrow-overlay` is `position:
+     absolute; inset: 0` and is meant to be exactly this box — it is the very
+     definition of the board-local coordinate space the arrow tool draws in.
+     Without a positioned ancestor here the overlay resolved against the
+     initial containing block instead, i.e. the viewport rect at the document
+     origin, and the bug was invisible to end-state tests: the hit-test is pure
+     getBoundingClientRect math and kept returning the right container, while
+     the drawn arrow, the ghost card and the crosshair region all sat at
+     (-210, -387.5) from the pointer and the bottom third of the board fell
+     outside the interactive layer entirely. */
+  position: relative;
   display: grid;
   grid-template-columns: 240px 560px 240px;
   grid-template-rows: 180px 460px 180px;
@@ -441,12 +452,25 @@ body {
   color: #fb7185;
 }
 
+/* WHY its own row: this hint swaps to a longer string the moment the arrow
+   tool arms, and the Spacing control grows a note the moment Custom turns on.
+   Sharing a wrapping flex line with them made `.controls-row` re-wrap on both
+   events, shoving the whole board down 47px on the Custom toggle and jittering
+   it ~2px under the cursor on the very keypress that starts an arrow. Giving
+   the hint a line to itself makes the header's height constant in all four
+   states, so the board never moves. */
 .tool-hint {
-  display: inline-flex;
+  flex-basis: 100%;
+  display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
   color: var(--text-dim);
+  /* The unarmed hint carries a <kbd>, which is 2px taller than the bare text
+     of the armed one. Without a floor here the header still shrinks by those
+     2px on the keypress that starts an arrow, sliding the board out from
+     under the cursor mid-gesture. Measured: 19px with the kbd, 17px without. */
+  min-height: 19px;
 }
 
 .tool-hint kbd {
@@ -475,6 +499,22 @@ body {
 .board-arrow-overlay.is-active {
   pointer-events: auto;
   cursor: crosshair;
+}
+
+/* Pinned rather than sized `100% x 100%` in normal flow: an inline <svg> is
+   laid out on a text baseline, so its origin is only accidentally the
+   overlay's origin. The arrow is drawn in board-local px, and its 0,0 has to
+   BE the overlay's 0,0. */
+.board-arrow-overlay svg {
+  position: absolute;
+  inset: 0;
+  /* An <svg> is a REPLACED element: with width auto it falls back to its
+     intrinsic 300x150 and the `right`/`bottom` insets are simply dropped, so
+     the insets alone do not stretch it. */
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
 }
 
 .card--ghost {

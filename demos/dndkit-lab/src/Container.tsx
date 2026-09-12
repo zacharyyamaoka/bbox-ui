@@ -12,6 +12,7 @@ export function Container({
   spacing,
   size,
   dashed,
+  highlighted,
   registerRef,
   onContextMenu,
   children,
@@ -23,6 +24,8 @@ export function Container({
   spacing: SpacingScheme;
   size: Size;
   dashed?: boolean;
+  /** The arrow tool's tip is currently snapped to this container's edge. */
+  highlighted?: boolean;
   registerRef?: (el: HTMLDivElement | null) => void;
   onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
   children: ReactNode;
@@ -42,7 +45,7 @@ export function Container({
           setNodeRef(el);
           registerRef?.(el);
         }}
-        className={`container container--${axis}${dashed ? " container--dashed" : ""}${isOver ? " is-over" : ""}`}
+        className={`container container--${axis}${dashed ? " container--dashed" : ""}${isOver ? " is-over" : ""}${highlighted ? " is-arrow-target" : ""}`}
         style={style}
         onContextMenu={onContextMenu}
       >

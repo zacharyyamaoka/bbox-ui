@@ -16,7 +16,14 @@ import type { MouseEvent, PointerEvent, ReactNode } from "react";
 
 import { CardPreview, FreeCard, SortableCard } from "./Card";
 import { Container } from "./Container";
-import { CONTAINER_PADDING, clamp, mainAxisPositions, type Point } from "./layout";
+import {
+  CONTAINER_BORDER,
+  CONTAINER_PADDING,
+  clamp,
+  innerBoxSize,
+  mainAxisPositions,
+  type Point,
+} from "./layout";
 import { SpacingControl } from "./SpacingControl";
 import type { Direction, Orientation, Size, SpacingScheme } from "./types";
 
@@ -95,10 +102,15 @@ interface EdgeLine {
 
 interface EdgeSnap {
   containerId: ContainerId;
-  /** Board-local — for rendering the ghost card and ping. */
+  /** Board-local — where the ghost card and the snapped arrow tip are drawn. */
   local: Point;
-  /** Viewport — for addCardAt, which measures against getBoundingClientRect(). */
-  client: Point;
+  /**
+   * How far along the container's main axis the snap landed, measured from
+   * its padding-box origin — the one number `addCardAt` needs. Keeping the
+   * snap in the container's own space means the drop point never makes a
+   * round trip back out through viewport coordinates to be re-measured.
+   */
+  mainOffset: number;
 }
 
 function findContainer(items: Record<ContainerId, string[]>, id: string): ContainerId | undefined {
@@ -111,14 +123,50 @@ function findContainer(items: Record<ContainerId, string[]>, id: string): Contai
  * line — top/bottom containers are locked in y, left/right in x. Free mode
  * only ever gives a card freedom along the main axis; this is what the
  * edge actually meant by "a line", not just a container boundary.
+ *
+ * WHY it centres in the PADDING box and ignores CONTAINER_PADDING: the edge
+ * line is at 50% of that same padding box, and a free card's `top`/`left` is
+ * resolved against it too. Measuring the old way (content box + padding)
+ * dropped the border, landing every Custom-mode card 2px off the line it was
+ * supposed to be sitting on — and 2px off the ghost that previewed it.
  */
 function crossCenterFor(containerId: ContainerId): number {
   const axis = AXIS[containerId];
   const cardSize = CARD_SIZE[ORIENTATION[containerId]];
-  const containerSize = CONTAINER_SIZE[containerId];
-  const crossSize = (axis === "row" ? containerSize.height : containerSize.width) - 2 * CONTAINER_PADDING;
+  const innerBox = innerBoxSize(CONTAINER_SIZE[containerId]);
+  const crossSize = axis === "row" ? innerBox.height : innerBox.width;
   const cardCross = axis === "row" ? cardSize.height : cardSize.width;
-  return (crossSize - cardCross) / 2 + CONTAINER_PADDING;
+  return (crossSize - cardCross) / 2;
+}
+
+/** Main-axis size of the content box the flex layout distributes cards across. */
+function mainContentSize(containerId: ContainerId): number {
+  const innerBox = innerBoxSize(CONTAINER_SIZE[containerId]);
+  const main = AXIS[containerId] === "row" ? innerBox.width : innerBox.height;
+  return main - 2 * CONTAINER_PADDING;
+}
+
+/**
+ * Hold a free-positioned card inside its container's padding box, and pinned
+ * to the edge line on the cross axis. Every path that places a card — the
+ * arrow tool, the context menu, and the end of a free drag — goes through
+ * here, so they cannot disagree about where "on the line" is.
+ */
+function clampCardPosition(containerId: ContainerId, point: Point): Point {
+  const cardSize = CARD_SIZE[ORIENTATION[containerId]];
+  const innerBox = innerBoxSize(CONTAINER_SIZE[containerId]);
+  const x = clamp(
+    point.x,
+    CONTAINER_PADDING,
+    Math.max(innerBox.width - CONTAINER_PADDING - cardSize.width, CONTAINER_PADDING),
+  );
+  const y = clamp(
+    point.y,
+    CONTAINER_PADDING,
+    Math.max(innerBox.height - CONTAINER_PADDING - cardSize.height, CONTAINER_PADDING),
+  );
+  const cross = crossCenterFor(containerId);
+  return AXIS[containerId] === "row" ? { x, y: cross } : { x: cross, y };
 }
 
 /** Where the flex layout (auto mode) is currently placing every card in one container. */
@@ -128,14 +176,10 @@ function computeContainerFreePositions(
   scheme: SpacingScheme,
 ): Record<string, Point> {
   const axis = AXIS[containerId];
-  const orientation = ORIENTATION[containerId];
-  const cardSize = CARD_SIZE[orientation];
-  const containerSize = CONTAINER_SIZE[containerId];
-
-  const mainSize = (axis === "row" ? containerSize.width : containerSize.height) - 2 * CONTAINER_PADDING;
+  const cardSize = CARD_SIZE[ORIENTATION[containerId]];
   const cardMain = axis === "row" ? cardSize.width : cardSize.height;
 
-  const mains = mainAxisPositions(ids.length, mainSize, cardMain, scheme);
+  const mains = mainAxisPositions(ids.length, mainContentSize(containerId), cardMain, scheme);
   const crossPos = crossCenterFor(containerId);
 
   const result: Record<string, Point> = {};
@@ -179,8 +223,7 @@ function sortByFreePosition(
  * horizontal, left/right are vertical), so a hit-test only ever needs to
  * compare a single coordinate — no line/point vector math.
  */
-function computeEdgeLine(containerId: ContainerId, containerEl: HTMLDivElement, boardRect: DOMRect): EdgeLine {
-  const rect = containerEl.getBoundingClientRect();
+function computeEdgeLine(containerId: ContainerId, rect: DOMRect, boardRect: DOMRect): EdgeLine {
   const left = rect.left - boardRect.left;
   const top = rect.top - boardRect.top;
   if (AXIS[containerId] === "row") {
@@ -257,30 +300,47 @@ export function PortBoard() {
 
   // --- Add / delete cards (context menu + arrow-drop share these) ---
 
-  function addCardAt(containerId: ContainerId, clientPoint: Point) {
+  /**
+   * Create a card `mainOffset` px along a container's main axis, measured
+   * from its padding-box origin — that offset is the new card's CENTRE, so it
+   * lands exactly under the arrow tip (or the right-click) that asked for it.
+   */
+  function addCardAt(containerId: ContainerId, mainOffset: number) {
     const id = `P${nextIdRef.current++}`;
-    setItems((prev) => ({ ...prev, [containerId]: [...prev[containerId], id] }));
-
+    const axis = AXIS[containerId];
     const cardSize = CARD_SIZE[ORIENTATION[containerId]];
-    const bounds = CONTAINER_SIZE[containerId];
-    const containerEl = containerRefs.current[containerId];
-    let x = CONTAINER_PADDING;
-    let y = CONTAINER_PADDING;
-    if (containerEl) {
-      const rect = containerEl.getBoundingClientRect();
-      x = clientPoint.x - rect.left - cardSize.width / 2;
-      y = clientPoint.y - rect.top - cardSize.height / 2;
-    }
-    x = clamp(x, CONTAINER_PADDING, Math.max(bounds.width - CONTAINER_PADDING - cardSize.width, CONTAINER_PADDING));
-    y = clamp(y, CONTAINER_PADDING, Math.max(bounds.height - CONTAINER_PADDING - cardSize.height, CONTAINER_PADDING));
-    // Free mode still only gives a card freedom along the main axis — the
-    // cross axis is always exactly on the edge line.
-    if (AXIS[containerId] === "row") {
-      y = crossCenterFor(containerId);
-    } else {
-      x = crossCenterFor(containerId);
-    }
-    setFreePositions((prev) => ({ ...prev, [id]: { x, y } }));
+    const cardMain = axis === "row" ? cardSize.width : cardSize.height;
+
+    setItems((prev) => {
+      // WHY an insertion index and not just a position: in Auto mode the flex
+      // layout owns position outright, so "create it where I dropped" can only
+      // mean "in the slot my drop point fell in". Appending sent every
+      // arrow-drawn port to the far end of the row instead — contradicting the
+      // ghost card that had just previewed it in place.
+      const existing = prev[containerId];
+      const laidOut = computeContainerFreePositions(containerId, existing, spacing);
+      const insertAt = existing.filter((cardId) => {
+        const p = laidOut[cardId];
+        return (axis === "row" ? p.x : p.y) + cardMain / 2 < mainOffset;
+      }).length;
+      return {
+        ...prev,
+        [containerId]: [...existing.slice(0, insertAt), id, ...existing.slice(insertAt)],
+      };
+    });
+
+    const main = mainOffset - cardMain / 2;
+    const seed = axis === "row" ? { x: main, y: 0 } : { x: 0, y: main };
+    setFreePositions((prev) => ({ ...prev, [id]: clampCardPosition(containerId, seed) }));
+  }
+
+  /** Where a viewport point falls along one container's main axis, in its padding box. */
+  function mainOffsetFromClient(containerId: ContainerId, clientPoint: Point): number {
+    const el = containerRefs.current[containerId];
+    if (!el) return CONTAINER_PADDING;
+    const rect = el.getBoundingClientRect();
+    const along = AXIS[containerId] === "row" ? clientPoint.x - rect.left : clientPoint.y - rect.top;
+    return along - CONTAINER_BORDER;
   }
 
   function deleteCard(cardId: string) {
@@ -322,11 +382,22 @@ export function PortBoard() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        // Dropping the draft also tears down the window listeners, so the
+        // pointerup that ends a cancelled drag can no longer spawn a port.
         setTool("select");
         setDraftArrow(null);
         setContextMenu(null);
         return;
       }
+      // `A` is a bare shortcut, so Ctrl/Cmd+A (select all) and text entry must
+      // not arm the tool. Checkboxes and buttons are left alone — they don't
+      // consume letters, and the Custom toggle is the control most likely to
+      // hold focus when you reach for the arrow tool.
+      const target = e.target as HTMLElement | null;
+      const typing = target?.closest(
+        "input:not([type='checkbox']):not([type='radio']), textarea, [contenteditable='true']",
+      );
+      if (e.ctrlKey || e.metaKey || e.altKey || typing) return;
       if (e.key.toLowerCase() === "a" && tool === "select" && !contextMenu && !activeId) {
         setTool("arrow");
       }
@@ -337,6 +408,18 @@ export function PortBoard() {
 
   // --- Arrow tool: draw a line, snap its tip to an axis-aligned edge ---
 
+  /**
+   * The single coordinate space this whole tool works in: px relative to
+   * `.board`. It is read live from getBoundingClientRect on every event, so
+   * scrolling and reflow can never stale it.
+   *
+   * WHY it is also a layout contract: the overlay that DRAWS in this space is
+   * `position: absolute; inset: 0`, so the two only agree while `.board` is a
+   * positioned ancestor. Take `position: relative` off `.board` and this
+   * function keeps returning correct numbers while everything drawn from them
+   * silently moves to the page's top-left corner — which is exactly how this
+   * shipped broken. See the WHY on `.board` in index.css.
+   */
   function boardLocalPoint(e: { clientX: number; clientY: number }): Point {
     const rect = boardRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -346,52 +429,100 @@ export function PortBoard() {
   function findEdgeSnap(point: Point): EdgeSnap | null {
     const boardRect = boardRef.current?.getBoundingClientRect();
     if (!boardRect) return null;
+
+    let best: (EdgeSnap & { distance: number }) | null = null;
     for (const id of CONTAINER_IDS) {
       const el = containerRefs.current[id];
       if (!el) continue;
-      const line = computeEdgeLine(id, el, boardRect);
-      let local: Point | null = null;
-      if (line.orientation === "h") {
-        if (
-          Math.abs(point.y - line.pos) <= EDGE_SNAP_THRESHOLD &&
-          point.x >= line.from - EDGE_SNAP_THRESHOLD &&
-          point.x <= line.to + EDGE_SNAP_THRESHOLD
-        ) {
-          local = { x: clamp(point.x, line.from, line.to), y: line.pos };
-        }
-      } else if (
-        Math.abs(point.x - line.pos) <= EDGE_SNAP_THRESHOLD &&
-        point.y >= line.from - EDGE_SNAP_THRESHOLD &&
-        point.y <= line.to + EDGE_SNAP_THRESHOLD
-      ) {
-        local = { x: line.pos, y: clamp(point.y, line.from, line.to) };
-      }
-      if (local) {
-        return { containerId: id, local, client: { x: boardRect.left + local.x, y: boardRect.top + local.y } };
-      }
+      const line = computeEdgeLine(id, el.getBoundingClientRect(), boardRect);
+      // Every edge is axis-aligned by construction, so "across" is the single
+      // coordinate the hit-test measures and "along" is the one it slides on.
+      const across = line.orientation === "h" ? point.y : point.x;
+      const along = line.orientation === "h" ? point.x : point.y;
+
+      const distance = Math.abs(across - line.pos);
+      if (distance > EDGE_SNAP_THRESHOLD) continue;
+      if (along < line.from - EDGE_SNAP_THRESHOLD || along > line.to + EDGE_SNAP_THRESHOLD) continue;
+      // WHY nearest rather than first match: the four snap bands are disjoint
+      // in today's layout, so list order happened to be harmless — but that is
+      // a property of the current CONTAINER_SIZE/grid numbers, not of the
+      // hit-test, and it would break silently the moment they move.
+      if (best && best.distance <= distance) continue;
+
+      const snappedAlong = clamp(along, line.from, line.to);
+      best = {
+        containerId: id,
+        local:
+          line.orientation === "h"
+            ? { x: snappedAlong, y: line.pos }
+            : { x: line.pos, y: snappedAlong },
+        mainOffset: snappedAlong - line.from - CONTAINER_BORDER,
+        distance,
+      };
     }
-    return null;
+    return best;
   }
 
+  /**
+   * The press starts the gesture; `window` owns the rest of it (see below).
+   */
   function handleOverlayPointerDown(e: PointerEvent<HTMLDivElement>) {
-    if (tool !== "arrow") return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (tool !== "arrow" || e.button !== 0) return;
+    // Suppresses the text selection an unmodified drag across the page would
+    // otherwise start — the job setPointerCapture used to be doing here.
+    e.preventDefault();
     const point = boardLocalPoint(e);
     setDraftArrow({ start: point, end: point });
   }
 
-  function handleOverlayPointerMove(e: PointerEvent<HTMLDivElement>) {
+  /**
+   * The live part of the drag listens on `window`, not on the overlay.
+   *
+   * WHY, and why not setPointerCapture: the overlay is exactly the board's
+   * box, so releasing the mouse just outside it — off the end of an arrow you
+   * dragged toward an edge — is an ordinary thing to do. The overlay's own
+   * pointerup never fires for that release, which left the draft arrow stuck
+   * on screen and the tool armed with no way out but Escape. Pointer capture
+   * is the usual answer and the old code reached for it, but it is a
+   * capability that can be lost (measured: this app's own capture is released
+   * before the next event arrives under CDP-driven input) and relying on it
+   * makes finishing a gesture conditional. A window listener cannot be lost.
+   *
+   * Re-subscribing per move is deliberate: every handler below then closes
+   * over the current render, so no stale `items`/`spacing` can leak into the
+   * card this gesture creates.
+   */
+  useEffect(() => {
     if (!draftArrow) return;
-    setDraftArrow((prev) => (prev ? { ...prev, end: boardLocalPoint(e) } : prev));
-  }
 
-  function handleOverlayPointerUp() {
-    if (!draftArrow) return;
-    const snap = findEdgeSnap(draftArrow.end);
-    if (snap) addCardAt(snap.containerId, snap.client);
-    setDraftArrow(null);
-    setTool("select");
-  }
+    function onMove(e: globalThis.PointerEvent) {
+      const point = boardLocalPoint(e);
+      setDraftArrow((prev) => (prev ? { ...prev, end: point } : prev));
+    }
+    function onUp(e: globalThis.PointerEvent) {
+      // WHY the release event's own point and not `draftArrow.end`: the final
+      // pointermove can be coalesced away, and a bare click produces none at
+      // all — either would snap the port to a stale position.
+      const snap = findEdgeSnap(boardLocalPoint(e));
+      if (snap) addCardAt(snap.containerId, snap.mainOffset);
+      setDraftArrow(null);
+      setTool("select");
+    }
+    function onCancel() {
+      setDraftArrow(null);
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+    };
+    // No dependency array on purpose — see above. Adding one re-introduces the
+    // stale closure this shape exists to avoid.
+  });
 
   const liveSnap = draftArrow ? findEdgeSnap(draftArrow.end) : null;
 
@@ -461,21 +592,10 @@ export function PortBoard() {
         }
       }
 
-      const cardSize = CARD_SIZE[ORIENTATION[toContainer]];
-      const bounds = CONTAINER_SIZE[toContainer];
-      nextX = clamp(nextX, CONTAINER_PADDING, Math.max(bounds.width - CONTAINER_PADDING - cardSize.width, CONTAINER_PADDING));
-      nextY = clamp(nextY, CONTAINER_PADDING, Math.max(bounds.height - CONTAINER_PADDING - cardSize.height, CONTAINER_PADDING));
-
       // The drag itself is free in both axes (the card follows the pointer
       // exactly, mid-gesture) — only ON DROP does the cross axis snap back
       // onto the edge line, leaving just the main axis draggable.
-      if (AXIS[toContainer] === "row") {
-        nextY = crossCenterFor(toContainer);
-      } else {
-        nextX = crossCenterFor(toContainer);
-      }
-
-      return { ...prev, [cardId]: { x: nextX, y: nextY } };
+      return { ...prev, [cardId]: clampCardPosition(toContainer, { x: nextX, y: nextY }) };
     });
 
     if (toContainer !== fromContainer) {
@@ -551,6 +671,7 @@ export function PortBoard() {
         spacing={spacing}
         size={CONTAINER_SIZE[id]}
         dashed
+        highlighted={highlighted}
         registerRef={(el) => registerContainerRef(id, el)}
         onContextMenu={(e) => handleContainerContextMenu(e, id)}
       >
@@ -622,10 +743,8 @@ export function PortBoard() {
           <div
             className={`board-arrow-overlay${tool === "arrow" ? " is-active" : ""}`}
             onPointerDown={handleOverlayPointerDown}
-            onPointerMove={handleOverlayPointerMove}
-            onPointerUp={handleOverlayPointerUp}
           >
-            <svg width="100%" height="100%">
+            <svg>
               <defs>
                 <marker
                   id="dndkit-lab-arrowhead"
@@ -643,8 +762,11 @@ export function PortBoard() {
                 <line
                   x1={draftArrow.start.x}
                   y1={draftArrow.start.y}
-                  x2={draftArrow.end.x}
-                  y2={draftArrow.end.y}
+                  // Once the tip is in range the line ends ON the edge, not at
+                  // the raw pointer — the arrow showing the snap is what makes
+                  // the snap legible before you commit to it.
+                  x2={liveSnap ? liveSnap.local.x : draftArrow.end.x}
+                  y2={liveSnap ? liveSnap.local.y : draftArrow.end.y}
                   style={{ stroke: "var(--accent)", strokeWidth: 2 }}
                   markerEnd="url(#dndkit-lab-arrowhead)"
                 />
@@ -677,10 +799,12 @@ export function PortBoard() {
             <button
               type="button"
               onClick={() => {
-                addCardAt(contextMenu.target.type === "container" ? contextMenu.target.containerId : "top", {
-                  x: contextMenu.clientX,
-                  y: contextMenu.clientY,
-                });
+                const containerId =
+                  contextMenu.target.type === "container" ? contextMenu.target.containerId : "top";
+                addCardAt(
+                  containerId,
+                  mainOffsetFromClient(containerId, { x: contextMenu.clientX, y: contextMenu.clientY }),
+                );
                 setContextMenu(null);
               }}
             >
