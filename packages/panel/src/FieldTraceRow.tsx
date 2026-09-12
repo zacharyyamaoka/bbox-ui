@@ -322,6 +322,25 @@ function FieldControl({
   secondary?: boolean;
   onChange: (value: FieldValue) => void;
 }) {
+  // WHY checked before any `field.kind` branch, mirroring FigmaDense's own
+  // `DenseControl`: `FieldSpec.readOnly` (HOST_FIELDS' derived `w`/`h`) is a
+  // fact about who may edit the field, orthogonal to what kind of value it
+  // holds. Every variant that renders through this shared `FieldControl` —
+  // Current (via `ComponentInspector`), Tiered, FilterFirst — must show the
+  // same disabled, non-committing display, or a row that says "read-only
+  // here" in its own hint would still accept a keystroke.
+  if (field.readOnly) {
+    return (
+      <input
+        type="text"
+        disabled
+        readOnly
+        value={value === undefined ? String(field.defaultValue) : String(value)}
+        placeholder={placeholder}
+        style={{ ...textInputStyle(true), cursor: "not-allowed", opacity: 0.6 }}
+      />
+    );
+  }
   if (field.kind === "segments") {
     // WHY a menu past four options, and buttons at or below it: a segmented
     // control with six options wraps onto three rows, and rows are what make

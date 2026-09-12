@@ -60,7 +60,13 @@ export function classifyField(field: FieldSpec, presets: PresetSpec[], governed:
   const isEscapeHatch = /escape hatch/i.test(field.hint ?? "");
   const isPlainName = field.kind === "text" && !field.hint;
   const isBareLabel = field.id === "children" && !isEscapeHatch;
-  if (isSelector || isPlainName || isBareLabel) return "simple";
+  // WHY a "glyph" field is simple even though it carries a hint (unlike the
+  // bare-name text case above): its whole reason to exist is a picker
+  // trigger the user reaches for constantly — the "what changes constantly"
+  // case this tier is for — not an occasional escape hatch. Falling through
+  // to "advanced" hid Glyph's Content row behind a tier switch by default.
+  const isGlyphPicker = field.kind === "glyph";
+  if (isSelector || isPlainName || isBareLabel || isGlyphPicker) return "simple";
 
   if (governed.has(field.id)) return "expert";
 
