@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import type { FieldSpec } from "@bbox-ui/schema";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import type { CanvasPosition, Render } from "../contract";
 
@@ -13,19 +12,19 @@ import type { CanvasPosition, Render } from "../contract";
  * instances and, for the canvases, their real positions — nothing here is a
  * template with the values pasted in.
  *
- * WHY a prop equal to its declared default is omitted: the code should read
- * like something a person would paste, and a person does not write
- * `state="empty"` on a Port whose default is empty. The declaration says
- * what the default is, so the omission is exact, not a guess.
+ * WHY every STORED prop is emitted, including one equal to the declared
+ * default: the first version dropped those "so it reads like something a
+ * person would paste", and the judge produced two visibly different pills
+ * with byte-identical code — a lineColor pinned to its default under the
+ * Empty preset is load-bearing the moment the Wired preset would paint it
+ * primary. The store is the truth; the code shows the store. Zach's rule:
+ * render stored properties truthfully, never silently normalise.
  */
 
-function ownProps(entry: ComponentEntry, inst: Instance): Record<string, unknown> {
-  const byId = new Map<string, FieldSpec>(entry.fields.map((f) => [f.id, f]));
+function ownProps(_entry: ComponentEntry, inst: Instance): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, raw] of Object.entries(inst.props)) {
     if (raw === undefined) continue;
-    const spec = byId.get(key);
-    if (spec && spec.defaultValue === raw) continue;
     out[key] = raw;
   }
   return out;

@@ -36,10 +36,18 @@ function inputTags(text: string): string[] {
   let i = text.indexOf("<input");
   while (i !== -1) {
     let depth = 0;
+    let quote: string | null = null;
     let j = i;
     for (; j < text.length; j++) {
       const ch = text[j];
-      if (ch === "{") depth++;
+      // Quote-aware as well as brace-aware: a `>` inside title="Must be > 0"
+      // ended the tag early and hid the value= after it (round 3).
+      if (quote) {
+        if (ch === quote && text[j - 1] !== "\\") quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+      else if (ch === "{") depth++;
       else if (ch === "}") depth--;
       else if (ch === ">" && depth === 0) break;
     }
@@ -60,7 +68,7 @@ function rederivesOverride(text: string): boolean {
   // `=(?!\s*row…)` and not `=\s*(?!row…)`: with the whitespace outside the
   // lookahead, \s* backtracks to zero and the lookahead is tested at a space,
   // so the innocent `= row.hasOwnOverride` matched too.
-  return /\b(?:const|let|var)\s+hasOwnOverride\s*=(?!\s*row\.hasOwnOverride\b)/.test(text);
+  return /\b(?:const|let|var)\s+hasOwnOverride\s*=(?!\s*row\s*\.\s*hasOwnOverride\b)/.test(text);
 }
 
 /** A clear button conditioned on "governed" in either order. */
@@ -185,6 +193,18 @@ describe("one resolution model", () => {
     expect(rederivesOverride('const hasOwnOverride = state.winner === "override";')).toBe(true);
     expect(rederivesOverride("const hasOwnOverride = row.hasOwnOverride;")).toBe(false);
     expect(rederivesOverride("<Shell hasOwnOverride={r.hasOwnOverride} />")).toBe(false);
+    expect(rederivesOverride("const hasOwnOverride = row . hasOwnOverride;")).toBe(false);
+    // Round 3's quote escape.
+    expect(inputTags(`<input type="number" title="Must be > 0" value={draft}/>`).some(controlledNumber)).toBe(true);
+  });
+
+  it("names, honestly, what these gates cannot see", () => {
+    // A renamed variable, a helper function, a ternary or early-return guard,
+    // and a spread carrying value= all walk past a text gate. That residue
+    // is what the judge loop is for; this test exists so nobody reads the
+    // gates above as a proof.
+    expect(rederivesOverride("const stored = subjects.some((s) => s.props[field.id] !== undefined);")).toBe(false);
+    expect(governedGate("{!isGoverned ? null : row.hasOwnOverride && (")).toBe(false);
   });
 
   it("the shared model is the only place the two resolutions are computed", () => {
