@@ -66,6 +66,9 @@ export interface MembersControlProps {
   onMove: (from: number, to: number) => void;
   /** Make this the inspector's subject. */
   onSelect: (id: string) => void;
+  /** When the list belongs to a slot fill shown inside ITS parent's
+   *  inspector: select the fill itself (to edit its Flex props). */
+  onSelectParent?: () => void;
 }
 
 export interface MembersControl {

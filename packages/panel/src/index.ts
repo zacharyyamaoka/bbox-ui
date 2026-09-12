@@ -19,7 +19,7 @@ export {
 } from "./fieldTiers";
 export { FieldTraceRow } from "./FieldTraceRow";
 export { ComponentInspector, type ComponentInspectorProps } from "./ComponentInspector";
-export { registerComponent, type ComponentEntry } from "./registerComponent";
+export { registerComponent, type ComponentEntry, type RenderContext, type SlotSpec } from "./registerComponent";
 export { PANEL_VARIANTS, findVariant, VARIANT_CONTRACT } from "./variants";
 export type { PanelVariant, PanelVariantProps } from "./variants";
 export {
@@ -30,6 +30,8 @@ export {
   INITIAL_UID,
   EXCLUDED_SHOWN,
   makeInstance,
+  makeInstanceWithSlots,
+  BLOCK_SLOTS,
   randomValue,
   sharedFields,
   type Instance,
@@ -51,8 +53,13 @@ export {
   addMemberTo,
   removeMember,
   moveMember,
+  reparent,
+  instanceTree,
+  memberSpecFor,
+  isSlotFill,
   wouldCycle,
   typeGlyph,
   TYPE_GLYPH,
 } from "./members";
-export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary } from "./members";
+export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary, InstanceNode } from "./members";
+export { clickSelect, stepRow, visibleRows, type ClickModifiers, type SelectionState } from "./navigator/selection";

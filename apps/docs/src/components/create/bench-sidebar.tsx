@@ -1,7 +1,9 @@
 "use client";
 
-import type { ComponentEntry, Instance, MembersControl, PanelVariant } from "@bbox-ui/panel";
-import { MIXED_BENCH, depthOf, typeGlyph } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance, InstanceNode, PanelVariant } from "@bbox-ui/panel";
+import { MIXED_BENCH } from "@bbox-ui/panel";
+import type { NavigatorVariant } from "./navigator";
+import type { InspectorLayoutVariant } from "./inspector-layout";
 import {
   Sidebar,
   SidebarContent,
@@ -20,17 +22,28 @@ interface BenchSidebarProps {
   onActiveNameChange: (name: string) => void;
   isMixed: boolean;
   instances: Instance[];
+  tree: InstanceNode[];
   selectedIds: Set<string>;
   onToggleSelected: (id: string) => void;
+  onSelectionChange: (ids: string[]) => void;
+  onMoveInstance: (id: string, parentId: string | null, index: number) => void;
+  canDropInstance: (id: string, parentId: string | null) => boolean;
+  glyph: (type: string) => string;
+  navigator: NavigatorVariant;
+  navigators: NavigatorVariant[];
+  navigatorId: string;
+  onNavigatorChange: (id: string) => void;
+  /** Roots only — a Block's seven slot fills are not "instances" to the stepper. */
+  rootCount: number;
+  layouts: InspectorLayoutVariant[];
+  layoutId: string;
+  onLayoutChange: (id: string) => void;
   onAdd: (type: string) => void;
   onRemoveLast: () => void;
   onRandomize: () => void;
   variants: PanelVariant[];
   variantId: string;
   onVariantChange: (id: string) => void;
-  membersControls: MembersControl[];
-  membersControlId: string;
-  onMembersControlChange: (id: string) => void;
   entryFor: (name: string) => ComponentEntry;
 }
 
@@ -43,12 +56,6 @@ interface BenchSidebarProps {
  * height top to bottom even if we don't use the full height".
  */
 export function BenchSidebar(p: BenchSidebarProps) {
-  const showCheckboxes = p.instances.length > 1;
-  // WHY an instance row may wrap and its preview is never clipped: a Port
-  // with its label on the left, or above, is wider and taller than one row,
-  // and overflow:hidden cut the label off ("tick" painted over the dot). The
-  // preview is the truth of what the instance looks like; the row bends
-  // around it.
 
   return (
     <Sidebar collapsible="none" data-slot="bench-sidebar" className="h-full shrink-0 border-r border-sidebar-border">
@@ -87,56 +94,21 @@ export function BenchSidebar(p: BenchSidebarProps) {
         <SidebarGroup>
           <SidebarGroupLabel>{p.isMixed ? "Bench" : "Instances"}</SidebarGroupLabel>
           <SidebarGroupContent className="flex flex-col gap-1.5 px-2">
-            {p.instances.map((inst) => {
-              // A member is listed under its parent, indented one step per
-              // level, with its type glyph as the tree mark. The list is
-              // already in tree order (see Workbench's `treeOrder`).
-              const depth = depthOf(p.instances, inst.id);
-              return (
-              <label
-                key={inst.id}
-                data-slot="subject-row"
-                data-subject-id={inst.id}
-                data-subject-type={inst.type}
-                data-depth={depth}
-                style={{ marginLeft: depth * 14 }}
-                className="flex flex-wrap items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-sidebar-accent"
-              >
-                {depth > 0 && (
-                  <span data-slot="subject-tree-mark" className="text-[10px] text-muted-foreground" title={`${inst.type}, inside its parent`}>
-                    {typeGlyph(inst.type)}
-                  </span>
-                )}
-                {showCheckboxes && (
-                  <input
-                    type="checkbox"
-                    data-slot="subject-checkbox"
-                    checked={p.selectedIds.has(inst.id)}
-                    onChange={() => p.onToggleSelected(inst.id)}
-                    className="accent-foreground"
-                  />
-                )}
-                {p.isMixed && (
-                  <span className="w-14 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{inst.type}</span>
-                )}
-                <div data-slot="subject-preview" className="flex min-h-6 min-w-0 max-w-full items-center overflow-visible [&>*]:max-w-full">
-                  {/* A parent's row does not repaint its members (they have
-                      rows of their own right below); it says how many it
-                      holds, so the well never shows placeholder members that
-                      are not there. */}
-                  {p.entryFor(inst.type).render(
-                    inst.props,
-                    inst.members && inst.members.length > 0 ? (
-                      <span data-slot="subject-member-count" className="text-[10px] text-muted-foreground">
-                        {inst.members.length} {inst.members.length === 1 ? "member" : "members"}
-                      </span>
-                    ) : undefined,
-                  )}
-                </div>
-              </label>
-              );
-            })}
-
+            {/* The navigator: a tree, rows highlighted when selected, no
+                checkboxes. Zach, 2026-09-11: "its actually basically turning
+                into a tree … instead of check boxes … more ergonomic shift
+                multi select … highlight the rows". Which stock tree part
+                draws it is the switcher's choice in the footer. */}
+            <div data-slot="navigator-host" data-navigator={p.navigator.id} className="min-h-0">
+              <p.navigator.Navigator
+                roots={p.tree}
+                selectedIds={Array.from(p.selectedIds)}
+                onSelectionChange={p.onSelectionChange}
+                onMove={p.onMoveInstance}
+                canDrop={p.canDropInstance}
+                glyph={p.glyph}
+              />
+            </div>
             {p.isMixed ? (
               <div data-slot="bench-adder" className="mt-1 flex flex-wrap gap-1">
                 {p.entries.map((e) => (
@@ -151,7 +123,7 @@ export function BenchSidebar(p: BenchSidebarProps) {
                     + {e.name}
                   </button>
                 ))}
-                {p.instances.length > 1 && (
+                {p.rootCount > 1 && (
                   <Button size="icon-sm" variant="outline" data-slot="instance-minus" onClick={p.onRemoveLast} title="Remove the last one">
                     −
                   </Button>
@@ -159,11 +131,11 @@ export function BenchSidebar(p: BenchSidebarProps) {
               </div>
             ) : (
               <div data-slot="instance-stepper" className="mt-1 flex items-center gap-2">
-                <Button size="icon-sm" variant="outline" data-slot="instance-minus" onClick={p.onRemoveLast} disabled={p.instances.length <= 1}>
+                <Button size="icon-sm" variant="outline" data-slot="instance-minus" onClick={p.onRemoveLast} disabled={p.rootCount <= 1}>
                   −
                 </Button>
                 <span data-slot="instance-count" className="min-w-[4.5rem] text-center text-xs text-muted-foreground">
-                  {p.instances.length} {p.instances.length === 1 ? "instance" : "instances"}
+                  {p.rootCount} {p.rootCount === 1 ? "instance" : "instances"}
                 </span>
                 <Button size="icon-sm" variant="outline" data-slot="instance-plus" onClick={() => p.onAdd(p.activeName)}>
                   +
@@ -178,20 +150,34 @@ export function BenchSidebar(p: BenchSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
-        {/* The Members-control babble switch. Zach's rule: a prototype
-            variant is picked live in the app, never by a URL flag. Same
-            control as the panel-design picker under it. */}
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Members control
+          Instance navigator
           <select
-            data-slot="members-control-picker"
-            value={p.membersControlId}
-            onChange={(e) => p.onMembersControlChange(e.target.value)}
+            data-slot="navigator-picker"
+            value={p.navigatorId}
+            onChange={(e) => p.onNavigatorChange(e.target.value)}
             className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
+            title={p.navigator.blurb}
           >
-            {p.membersControls.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
+            {p.navigators.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          Inspector layout
+          <select
+            data-slot="layout-picker"
+            value={p.layoutId}
+            onChange={(e) => p.onLayoutChange(e.target.value)}
+            className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
+            title={p.layouts.find((l) => l.id === p.layoutId)?.blurb}
+          >
+            {p.layouts.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
               </option>
             ))}
           </select>

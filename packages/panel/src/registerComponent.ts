@@ -2,6 +2,33 @@ import type { ReactNode } from "react";
 import type { FieldSpec, PresetSpec } from "@bbox-ui/schema";
 import type { MembersSpec } from "./members/contract";
 
+export interface SlotSpec {
+  /** Stable id, dotted by region: "header.left". */
+  id: string;
+  /** What the inspector and the navigator print: "Header · left". */
+  label: string;
+  /** Which of the parent's regions it sits in; the parent's render decides
+   *  what a region looks like. */
+  region: string;
+  /** The component that fills it. Always registered; today always "Flex". */
+  fill: string;
+  /** Props the filling instance starts with (a footer-right Flex justifies
+   *  end). */
+  fillProps?: Record<string, unknown>;
+  /** Narrows what the filling instance may hold, when the fill's own
+   *  `members.accepts` is too wide for this slot (a body holds rows). */
+  accepts?: string[];
+}
+
+/** What a render may need beyond props and rendered children. */
+export interface RenderContext {
+  /** Rendered slot fills by slot id, for a component with `slots`. */
+  slots?: Record<string, ReactNode>;
+  /** When this instance itself fills a slot: the slot's label, so an empty
+   *  Flex can say which hole it is. */
+  slotLabel?: string;
+}
+
 /**
  * demos/inspector/src/schema/registerComponent.ts
  *
@@ -19,7 +46,16 @@ export interface ComponentEntry {
    * resolved plain prop bag (never a FieldTrace, never the FieldSpec
    * array) so this file never imports a specific component type.
    */
-  render: (props: Record<string, unknown>, children?: ReactNode) => ReactNode;
+  render: (props: Record<string, unknown>, children?: ReactNode, ctx?: RenderContext) => ReactNode;
+  /**
+   * Named holes this component owns — Block's `header.left`, `body`,
+   * `footer.right`. Each is filled at creation by ONE child instance (a
+   * Flex) that carries `slot` and can never be removed or moved; what a
+   * person adds goes INTO that child. A slot is the API role (where on the
+   * parent); a Flex is the component that fills it (packages/bbox-ui/src/
+   * flex.tsx has the naming argument). Absent means no slots.
+   */
+  slots?: SlotSpec[];
   /**
    * Declared when the component holds other instances. The inspector then
    * adds the standard Members control for it automatically, and every

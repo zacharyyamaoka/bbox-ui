@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { ComponentEntry, Instance } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance, RenderContext } from "@bbox-ui/panel";
 
 /**
  * ONE way to draw an instance, members included, for every render.
@@ -19,6 +19,10 @@ import type { ComponentEntry, Instance } from "@bbox-ui/panel";
  * panel to them" — done by ordinary selection, not a nested editor. The
  * wrapper is `display: contents` so it adds no box to the parent's layout;
  * the outline paints on the member's first element instead.
+ *
+ * A component with SLOTS gets its fills by slot id in `ctx.slots` instead
+ * of as ordered children, so its render puts each in its hole. A fill is
+ * told its slot's label so an empty Flex can say which hole it is.
  */
 export function renderInstance(
   entries: ComponentEntry[],
@@ -30,32 +34,34 @@ export function renderInstance(
   const entry = entries.find((e) => e.name === inst.type);
   if (!entry) return null;
   const memberIds = inst.members ?? [];
-  const children =
-    entry.members === undefined
-      ? undefined
-      : memberIds.length === 0
-        ? undefined
-        : memberIds.map((id) => {
-            const child = byId.get(id);
-            if (!child) return null;
-            const on = selectedIds.includes(id);
-            return (
-              <span
-                key={id}
-                data-slot="member-instance"
-                data-instance-id={id}
-                data-instance-type={child.type}
-                data-selected={on}
-                className="contents [&>*:first-child]:rounded-sm [&>*:first-child]:outline-offset-2 data-[selected=true]:[&>*:first-child]:outline data-[selected=true]:[&>*:first-child]:outline-2 data-[selected=true]:[&>*:first-child]:outline-ring"
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  onSelect(id, e.shiftKey || e.metaKey || e.ctrlKey);
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {renderInstance(entries, byId, child, selectedIds, onSelect)}
-              </span>
-            );
-          });
-  return entry.render(inst.props, children);
+  const wrap = (child: Instance): ReactNode => {
+    const on = selectedIds.includes(child.id);
+    return (
+      <span
+        key={child.id}
+        data-slot="member-instance"
+        data-instance-id={child.id}
+        data-instance-type={child.type}
+        data-selected={on}
+        className="contents [&>*:first-child]:rounded-sm [&>*:first-child]:outline-offset-2 data-[selected=true]:[&>*:first-child]:outline data-[selected=true]:[&>*:first-child]:outline-2 data-[selected=true]:[&>*:first-child]:outline-ring"
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onSelect(child.id, e.shiftKey || e.metaKey || e.ctrlKey);
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {renderInstance(entries, byId, child, selectedIds, onSelect)}
+      </span>
+    );
+  };
+  const kids = memberIds.map((id) => byId.get(id)).filter((c): c is Instance => !!c);
+  const ctx: RenderContext = {};
+  if (inst.slot) ctx.slotLabel = inst.slot.label;
+  if (entry.slots) {
+    ctx.slots = {};
+    for (const child of kids) if (child.slot) ctx.slots[child.slot.id] = wrap(child);
+    return entry.render(inst.props, undefined, ctx);
+  }
+  const children = kids.length === 0 ? undefined : kids.map(wrap);
+  return entry.render(inst.props, children, ctx);
 }

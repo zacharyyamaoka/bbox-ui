@@ -2,8 +2,10 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
-import type { ComponentEntry, Instance, MembersControl, PanelVariant, Subject } from "@bbox-ui/panel";
-import { MembersPath, MembersSection } from "./members-section";
+import type { ComponentEntry, Instance, PanelVariant, Subject } from "@bbox-ui/panel";
+import { isSlotFill } from "@bbox-ui/panel";
+import { MembersPath, memberListsFor } from "./members-section";
+import type { InspectorLayoutVariant } from "./inspector-layout";
 
 interface InspectorColumnProps {
   variant: PanelVariant;
@@ -18,7 +20,7 @@ interface InspectorColumnProps {
   selectedTypes: string[];
   selectedCount: number;
   excludedShown: number;
-  membersControl: MembersControl;
+  layout: InspectorLayoutVariant;
   entries: ComponentEntry[];
   instances: Instance[];
   subject: Instance | null;
@@ -75,36 +77,39 @@ export function InspectorColumn(p: InspectorColumnProps) {
       <MembersPath instances={p.instances} subject={p.subject} onSelect={p.onSelectInstance} />
       <div ref={scrollRef} data-slot="inspector-scroll" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div data-slot="panel-variant-host" data-variant={p.variant.id} className="[&>*]:!w-full [&>*]:!max-w-none [&>*]:!rounded-none [&>*]:!border-0 [&>*]:!shadow-none">
-          {p.subjects.length > 0 && p.fields.length === 0 ? (
-            <div data-slot="no-shared-fields" className="p-4 text-sm text-muted-foreground">
-              <strong className="text-foreground">{p.selectedTypes.join(" + ")}</strong>
-              <p className="mt-1">
-                No field is common to all {p.selectedCount} selected instances, so there is nothing a single control could write. Deselect a type to get a panel back.
-              </p>
-            </div>
-          ) : (
-            <p.variant.Panel
-              componentName={p.componentName}
-              fields={p.fields}
-              presets={p.presets}
-              subjects={p.subjects}
-              toSubject={p.toSubject}
-              onChange={p.onChange}
-              onClearOverride={p.onClearOverride}
-            />
-          )}
-          {/* Added automatically for any component whose entry declares
-              `members`; the six panel designs never learn about it. */}
-          <MembersSection
-            control={p.membersControl}
-            entries={p.entries}
-            instances={p.instances}
-            subject={p.subject}
-            onAddMember={p.onAddMember}
-            onRemoveMember={p.onRemoveMember}
-            onMoveMember={p.onMoveMember}
-            onSelect={p.onSelectInstance}
-          />
+          {(() => {
+            const panel =
+              p.subjects.length > 0 && p.fields.length === 0 ? (
+                <div data-slot="no-shared-fields" className="p-4 text-sm text-muted-foreground">
+                  <strong className="text-foreground">{p.selectedTypes.join(" + ")}</strong>
+                  <p className="mt-1">
+                    No field is common to all {p.selectedCount} selected instances, so there is nothing a single control could write. Deselect a type to get a panel back.
+                  </p>
+                </div>
+              ) : (
+                <p.variant.Panel
+                  componentName={p.componentName}
+                  fields={p.fields}
+                  presets={p.presets}
+                  subjects={p.subjects}
+                  toSubject={p.toSubject}
+                  onChange={p.onChange}
+                  onClearOverride={p.onClearOverride}
+                />
+              );
+            // The member lists a subject carries, computed automatically
+            // from its entry (slots → one per slot; members → one; else none)
+            // and handed to the chosen layout together with the panel. The
+            // panel designs never learn about lists; the layouts never
+            // learn about fields.
+            const lists = memberListsFor(p.entries, p.instances, p.subject, {
+              onAddMember: p.onAddMember,
+              onRemoveMember: p.onRemoveMember,
+              onMoveMember: p.onMoveMember,
+              onSelect: p.onSelectInstance,
+            });
+            return <p.layout.Layout subjectName={p.componentName} panel={panel} lists={lists} isSlotFill={isSlotFill(p.subject ?? undefined)} />;
+          })()}
         </div>
       </div>
     </aside>

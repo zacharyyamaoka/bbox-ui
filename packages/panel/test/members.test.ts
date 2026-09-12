@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Instance } from "../src/bench";
-import { INITIAL_BENCHES, MEMBER_SPECS, REGISTRY } from "../src/bench";
+import { BLOCK_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstanceWithSlots } from "../src/bench";
 import {
   addMemberTo,
   addableTypes,
   ancestry,
   depthOf,
+  instanceTree,
+  isSlotFill,
+  memberSpecFor,
   moveIndex,
   moveMember,
+  reparent,
   parentMap,
   removeMember,
   subtreeIds,
@@ -77,6 +81,34 @@ describe("the bench operations", () => {
     expect(moveIndex([1, 2, 3], 2, 0)).toEqual([3, 1, 2]);
     expect(moveIndex([1, 2, 3], 5, 0)).toEqual([1, 2, 3]);
   });
+  it("reparent moves an id between lists, to a root, or into a list at an index — never into its own subtree", () => {
+    const out = reparent(bench, "port-3", "block-2", 0);
+    expect(out.find((i) => i.id === "stack-1")?.members).toEqual(["block-2"]);
+    expect(out.find((i) => i.id === "block-2")?.members).toEqual(["port-3", "pill-4"]);
+    const rooted = reparent(bench, "pill-4", null, 0);
+    expect(rooted.find((i) => i.id === "block-2")?.members).toEqual([]);
+    expect(topLevel(rooted).map((i) => i.id)).toContain("pill-4");
+    const adopted = reparent(bench, "port-9", "stack-1", 1);
+    expect(adopted.find((i) => i.id === "stack-1")?.members).toEqual(["block-2", "port-9", "port-3"]);
+    expect(reparent(bench, "stack-1", "block-2", 0)).toBe(bench);
+    expect(reparent(bench, "stack-1", "stack-1", 0)).toBe(bench);
+  });
+  it("instanceTree marks containers by what the registry says they can hold, not by emptiness", () => {
+    const tree = instanceTree([inst("s", "Stack"), inst("p", "Port"), inst("b", "Block", {}, ["f"]), inst("f", "Flex", {}, [])], REGISTRY);
+    expect(tree.map((n) => [n.type, n.container])).toEqual([
+      ["Stack", true],
+      ["Port", false],
+      ["Block", false],
+    ]);
+    expect(tree[2]!.children[0]).toMatchObject({ type: "Flex", container: true });
+  });
+  it("instanceTree nests members under their roots with titles", () => {
+    const tree = instanceTree(bench);
+    expect(tree.map((n) => n.id)).toEqual(["stack-1", "port-9"]);
+    expect(tree[0]!.children.map((n) => n.id)).toEqual(["block-2", "port-3"]);
+    expect(tree[0]!.children[0]!.children[0]).toMatchObject({ id: "pill-4", title: "Pill 1", untitled: true });
+    expect(tree[0]!.children[1]).toMatchObject({ title: "goal", badge: "wired" });
+  });
   it("refuses to make a cycle", () => {
     expect(wouldCycle(bench, "block-2", "stack-1")).toBe(true);
     expect(wouldCycle(bench, "stack-1", "port-9")).toBe(false);
@@ -103,18 +135,50 @@ describe("what a parent may add is declared, closed and capped", () => {
     // grow a Members section by accident.
     for (const e of REGISTRY) if (!(e.name in MEMBER_SPECS)) expect(e.members).toBeUndefined();
   });
-  it("a fresh bench has no members, so every seed is a root", () => {
-    for (const list of Object.values(INITIAL_BENCHES)) expect(topLevel(list)).toEqual(list);
+  it("a fresh bench holds one root (two on the mixed bench); anything else is a slot fill", () => {
+    for (const [name, list] of Object.entries(INITIAL_BENCHES)) {
+      expect(topLevel(list).length, name).toBe(name === MIXED_BENCH ? 2 : 1);
+      for (const inst of list) if (!topLevel(list).includes(inst)) expect(isSlotFill(inst), inst.id).toBe(true);
+    }
   });
 });
 
-describe("the five controls", () => {
-  it("are five, distinct by id, with List first as the default", () => {
-    expect(MEMBERS_CONTROLS.map((c) => c.id)).toEqual(["list", "chips", "outline", "grouped", "stepper"]);
-    expect(new Set(MEMBERS_CONTROLS.map((c) => c.label)).size).toBe(5);
+describe("slots — a Block arrives with its anatomy filled", () => {
+  it("makes the instance plus one Flex per slot, in slot order, with the slot's starting props", () => {
+    const made = makeInstanceWithSlots("Block", 0, 10);
+    expect(made).toHaveLength(1 + BLOCK_SLOTS.length);
+    expect(made[0]!.members).toEqual(made.slice(1).map((f) => f.id));
+    expect(made.slice(1).map((f) => f.slot?.id)).toEqual(BLOCK_SLOTS.map((s) => s.id));
+    expect(made.slice(1).every((f) => f.type === "Flex")).toBe(true);
+    const right = made.find((f) => f.slot?.id === "header.right")!;
+    expect(right.props.justify).toBe("end");
+    const body = made.find((f) => f.slot?.id === "body")!;
+    expect(body.props.direction).toBe("column");
+    // Ids are drawn from uid upward, so the caller advances uid by the length.
+    expect(new Set(made.map((m) => m.id)).size).toBe(made.length);
   });
-  it("each states what it optimises for", () => {
-    for (const c of MEMBERS_CONTROLS) expect(c.blurb.length, c.id).toBeGreaterThan(20);
+  it("a leaf makes just itself", () => {
+    expect(makeInstanceWithSlots("Port", 0, 3)).toHaveLength(1);
+  });
+  it("a slot narrows what its fill accepts; the fill is named after the slot", () => {
+    const made = makeInstanceWithSlots("Block", 0, 0);
+    const flex = REGISTRY.find((e) => e.name === "Flex")!;
+    const body = made.find((f) => f.slot?.id === "body")!;
+    const left = made.find((f) => f.slot?.id === "header.left")!;
+    expect(memberSpecFor(flex, body)?.accepts).toEqual(["Flex"]);
+    expect(memberSpecFor(flex, left)?.accepts).toEqual(MEMBER_SPECS.Flex.accepts);
+    expect(summarize(made, left.id)?.title).toBe("Header · left");
+  });
+  it("Block declares slots and no members list of its own; Flex declares members", () => {
+    expect(REGISTRY.find((e) => e.name === "Block")?.slots).toBe(BLOCK_SLOTS);
+    expect(REGISTRY.find((e) => e.name === "Block")?.members).toBeUndefined();
+    expect(REGISTRY.find((e) => e.name === "Flex")?.members).toBe(MEMBER_SPECS.Flex);
+  });
+});
+
+describe("the control", () => {
+  it("is List, and only List — Zach's pick of the five babbled on 2026-09-11", () => {
+    expect(MEMBERS_CONTROLS.map((c) => c.id)).toEqual(["list"]);
     expect(MEMBERS_CONTRACT).toHaveLength(6);
   });
 });

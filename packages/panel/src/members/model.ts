@@ -66,7 +66,9 @@ export function summarize(instances: Instance[], id: string): MemberSummary | un
   const inst = instances.find((i) => i.id === id);
   if (!inst) return undefined;
   const raw = inst.props.children;
-  const own = typeof raw === "string" && raw.trim() !== "" ? raw : null;
+  // A slot fill is named after its slot, always — "Header · left" — so the
+  // navigator and the path read the anatomy, not "Flex 3".
+  const own = inst.slot ? inst.slot.label : typeof raw === "string" && raw.trim() !== "" ? raw : null;
   const parents = parentMap(instances);
   const parentId = parents.get(id);
   const siblings = parentId
@@ -128,3 +130,79 @@ export function moveMember(instances: Instance[], parentId: string, from: number
 export function wouldCycle(instances: Instance[], parentId: string, childId: string): boolean {
   return subtreeIds(instances, childId).includes(parentId);
 }
+
+/**
+ * Re-parent: `id` leaves whatever holds it (or the top level) and lands in
+ * `parentId`'s list at `index`, or becomes a root when `parentId` is null.
+ * The instance itself is untouched — only two lists change. Refuses a
+ * cycle, and refuses silently nothing else: whether the parent ACCEPTS the
+ * type is the caller's check (it needs the registry), done before calling.
+ */
+export function reparent(instances: Instance[], id: string, parentId: string | null, index: number): Instance[] {
+  if (parentId === id || (parentId !== null && wouldCycle(instances, parentId, id))) return instances;
+  const without = instances.map((i) => (i.members?.includes(id) ? { ...i, members: i.members.filter((m) => m !== id) } : i));
+  if (parentId === null) return without;
+  return without.map((i) => {
+    if (i.id !== parentId) return i;
+    const list = [...(i.members ?? [])];
+    list.splice(Math.max(0, Math.min(index, list.length)), 0, id);
+    return { ...i, members: list };
+  });
+}
+
+/** The tree as nested nodes, for a navigator that wants children inline. */
+export interface InstanceNode {
+  id: string;
+  type: string;
+  title: string;
+  untitled: boolean;
+  badge: string | null;
+  /**
+   * Can hold members — a Stack, a Flex — even while empty. A tree part
+   * needs this to tell "a folder with nothing in it" from "a file": an
+   * empty Stack must still be a drop target and fold like a folder. A
+   * Block is NOT a container here: its children are fixed slot fills, and
+   * nothing is dropped into a Block directly.
+   */
+  container: boolean;
+  children: InstanceNode[];
+}
+
+export function instanceTree(instances: Instance[], entries: ComponentEntry[] = []): InstanceNode[] {
+  const byId = new Map(instances.map((i) => [i.id, i]));
+  const node = (id: string): InstanceNode | null => {
+    const inst = byId.get(id);
+    const s = summarize(instances, id);
+    if (!inst || !s) return null;
+    const entry = entries.find((e) => e.name === inst.type);
+    return {
+      id,
+      type: inst.type,
+      title: s.title,
+      untitled: s.untitled,
+      badge: s.badge,
+      container: entry ? entry.members !== undefined : (inst.members?.length ?? 0) > 0,
+      children: (inst.members ?? []).map(node).filter((n): n is InstanceNode => n !== null),
+    };
+  };
+  return topLevel(instances)
+    .map((r) => node(r.id))
+    .filter((n): n is InstanceNode => n !== null);
+}
+
+/**
+ * The members spec that applies to THIS instance: its component's, narrowed
+ * by its slot when the slot says so (a Block's body holds rows only).
+ */
+export function memberSpecFor(entry: ComponentEntry, inst: Instance): MembersSpec | undefined {
+  const base = entry.members;
+  if (!base) return undefined;
+  if (inst.slot?.accepts) return { ...base, accepts: inst.slot.accepts, label: base.label };
+  return base;
+}
+
+/** A slot fill is structural: never removed, reordered or dragged. */
+export function isSlotFill(inst: Instance | undefined): boolean {
+  return !!inst?.slot;
+}
+

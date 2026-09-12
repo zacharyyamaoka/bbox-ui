@@ -23,7 +23,20 @@ function ListControl(p: MembersControlProps) {
   };
   return (
     <section data-slot="members-control" data-members-control="list" style={sectionStyle}>
-      <SectionHeader label={p.spec.label ?? "Members"} count={p.members.length} right={<AddMemberMenu p={p} />} />
+      <SectionHeader
+        label={p.parent.slot?.label ?? p.spec.label ?? "Members"}
+        count={p.members.length}
+        right={
+          <>
+            {p.onSelectParent && (
+              <button type="button" data-slot="members-edit-parent" title={`Edit the ${p.parent.type} that fills this slot`} onClick={p.onSelectParent} style={iconButtonStyle}>
+                ⚙
+              </button>
+            )}
+            <AddMemberMenu p={p} />
+          </>
+        }
+      />
       {p.members.length === 0 ? (
         <p data-slot="members-empty" style={hintStyle}>
           No members yet. {acceptsSentence(p)}

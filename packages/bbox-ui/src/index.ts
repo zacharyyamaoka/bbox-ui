@@ -22,6 +22,9 @@ export * from "./pill";
 export * from "./rowContainer.fields";
 export * from "./rowContainer";
 
+export * from "./flex.fields";
+export * from "./flex";
+
 export * from "./stack.fields";
 export * from "./stack";
 

@@ -258,7 +258,9 @@ async function removeOne(control, id) {
   await sleep(250);
 }
 
-const CONTROLS = ["list", "chips", "outline", "grouped", "stepper"];
+// Only List remains (Zach's pick, 2026-09-11); the per-control branches
+// below are the record of how the other four were driven at 9d365e2.
+const CONTROLS = ["list"];
 const THEMES = ["dark", "light"];
 const manifest = [];
 const inspectorClip = async () => {
@@ -270,9 +272,7 @@ for (const theme of THEMES) {
   for (const control of CONTROLS) {
     console.log(`— ${theme} · ${control}`);
     await load(theme);
-    await setSelect('[data-slot="members-control-picker"]', control);
-    await sleep(200);
-    const label = await evaluate(`document.querySelector('[data-slot="members-control-picker"] option:checked').textContent`);
+    const label = "List";
     assert((await evaluate(`document.querySelector('[data-slot="members-control"]')?.getAttribute('data-members-control')`)) === control, `${control} mounted`);
     assert((await inspectorName()) === "Stack", "starts on the Stack");
     const isHero = theme === "dark" && control === "list";
@@ -357,7 +357,6 @@ for (const theme of THEMES) {
 
   // --- member click on each RENDER: DOM, React Flow, tldraw (List control, once per theme)
   await load(theme);
-  await setSelect('[data-slot="members-control-picker"]', "list");
   await addVia("list", "Port");
   await backToParent();
   await addVia("list", "Pill");
@@ -388,7 +387,6 @@ for (const theme of THEMES) {
 
 // --- Code view prints members nested
 await load("dark");
-await setSelect('[data-slot="members-control-picker"]', "list");
 await addVia("list", "Port");
 await backToParent();
 await click('[data-slot="view-tab"][data-view="code"]');
@@ -397,37 +395,6 @@ const code = await evaluate(`document.querySelector('[data-slot="code-text"]').t
 assert(/<Stack[^>]*>\n\s+<Port[^\n]*\n<\/Stack>/.test(code), `code view nests the Port inside the Stack:\n${code}`);
 const codeShot = await screenshot("dark-code-nested");
 manifest.push({ theme: "dark", control: "code", files: { code: codeShot }, code });
-
-// --- Outline with real depth: a Block inside the Stack, a Port inside the Block
-for (const theme of THEMES) {
-  await load(theme);
-  await setSelect('[data-slot="members-control-picker"]', "outline");
-  await addVia("outline", "Port");
-  await backToParent();
-  await addVia("outline", "Block");
-  // Now inside the Block: it accepts leaves, so add a Port to it.
-  assert((await inspectorName()) === "Block", "outline depth: inside the new Block");
-  await addVia("outline", "Port");
-  assert((await inspectorName()) === "Port", "outline depth: inside the Block's new Port");
-  const crumbs = await pathCrumbs();
-  assert(crumbs.length === 2, `outline depth: two crumbs (${crumbs.join(" > ")})`);
-  await click('[data-slot="members-path-crumb"]'); // the first crumb is the Stack
-  await sleep(250);
-  assert((await inspectorName()) === "Stack", "outline depth: the first crumb climbs to the Stack");
-  const depths = await evaluate(`Array.from(document.querySelectorAll('[data-slot="members-control"] [data-slot="member-row"]')).map(e => e.getAttribute('data-depth'))`);
-  assert(depths.join() === "0,0,1", `outline depth: rows at depths 0,0,1 (${depths.join()})`);
-  const grand = await evaluate(`document.querySelector('[data-slot="members-control"] [data-slot="member-row"][data-depth="1"]').getAttribute('data-member-id')`);
-  const clip = await inspectorClip();
-  const depth = await screenshot(`${theme}-outline-depth`, clip);
-  const page = await screenshot(`${theme}-outline-depth-page`);
-  // Clicking the grandchild row jumps straight to it, two levels down.
-  await click(`[data-slot="members-control"] [data-member-id="${grand}"] [data-slot="member-select"]`);
-  await sleep(200);
-  assert((await inspectorName()) === "Port", "outline depth: the grandchild row selects the grandchild");
-  assert((await pathCrumbs()).length === 2, "outline depth: the path shows both ancestors");
-  const jumped = await screenshot(`${theme}-outline-depth-jump`, clip);
-  manifest.push({ theme, control: "outline-depth", files: { depth, page, jumped } });
-}
 
 writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2));
 chrome.kill();

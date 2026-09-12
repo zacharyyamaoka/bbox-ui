@@ -47,7 +47,9 @@ export function instanceToJsx(entry: ComponentEntry, inst: Instance, byId?: Map<
   const text = "children" in props ? String(props.children) : null;
   delete props.children;
   const head = [entry.name, ...Object.entries(props).map(([k, v]) => jsxAttr(k, v))].join(" ");
-  const memberIds = entry.members ? (inst.members ?? []) : [];
+  // Members AND slot fills print nested: a slotted Block prints its seven
+  // Flex fills in slot order, each with the props its slot gave it.
+  const memberIds = entry.members || entry.slots ? (inst.members ?? []) : [];
   const nested = memberIds
     .map((id) => byId?.get(id))
     .filter((c): c is Instance => !!c)

@@ -4,10 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
   addMemberTo,
-  findMembersControl,
   findVariant,
+  instanceTree,
+  isSlotFill,
+  makeInstanceWithSlots,
+  memberSpecFor,
+  reparent,
+  typeGlyph,
+  wouldCycle,
   makeInstance,
-  MEMBERS_CONTROLS,
   moveMember,
   parentMap,
   removeMember,
@@ -29,9 +34,12 @@ import { BenchSidebar } from "./bench-sidebar";
 import { InspectorColumn } from "./inspector-column";
 import { Viewport } from "./viewport";
 import { defaultPosition, type CanvasPosition, type Render, type View } from "./contract";
+import { NAVIGATOR_VARIANTS, findNavigator } from "./navigator";
+import { INSPECTOR_LAYOUTS, findInspectorLayout } from "./inspector-layout";
 
 const VARIANT_KEY = "bbox-ui.create.panelVariant";
-const MEMBERS_CONTROL_KEY = "bbox-ui.create.membersControl";
+const NAVIGATOR_KEY = "bbox-ui.create.navigator";
+const LAYOUT_KEY = "bbox-ui.create.inspectorLayout";
 const RENDER_KEY = "bbox-ui.create.render";
 const VIEW_KEY = "bbox-ui.create.view";
 // The single-strip key from before the two-axis split; read once to migrate.
@@ -57,7 +65,8 @@ function readStored(key: string): string | null {
 export function Workbench() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
   const [variantId, setVariantId] = useState(() => PANEL_VARIANTS[0].id);
-  const [membersControlId, setMembersControlId] = useState(() => MEMBERS_CONTROLS[0]!.id);
+  const [navigatorId, setNavigatorId] = useState(() => NAVIGATOR_VARIANTS[0]!.id);
+  const [layoutId, setLayoutId] = useState(() => INSPECTOR_LAYOUTS[0]!.id);
   const [render, setRender] = useState<Render>("dom");
   const [view, setView] = useState<View>("preview");
   const uid = useRef(INITIAL_UID);
@@ -76,8 +85,10 @@ export function Workbench() {
   useEffect(() => {
     const v = readStored(VARIANT_KEY);
     if (v) setVariantId(findVariant(v).id);
-    const mc = readStored(MEMBERS_CONTROL_KEY);
-    if (mc) setMembersControlId(findMembersControl(mc).id);
+    const nav = readStored(NAVIGATOR_KEY);
+    if (nav) setNavigatorId(findNavigator(nav).id);
+    const lay = readStored(LAYOUT_KEY);
+    if (lay) setLayoutId(findInspectorLayout(lay).id);
     const r = readStored(RENDER_KEY);
     if (r === "dom" || r === "reactflow" || r === "tldraw") setRender(r);
     const vw = readStored(VIEW_KEY);
@@ -95,14 +106,15 @@ export function Workbench() {
     if (!restored) return;
     try {
       window.localStorage.setItem(VARIANT_KEY, variantId);
-      window.localStorage.setItem(MEMBERS_CONTROL_KEY, membersControlId);
+      window.localStorage.setItem(NAVIGATOR_KEY, navigatorId);
+      window.localStorage.setItem(LAYOUT_KEY, layoutId);
       window.localStorage.setItem(RENDER_KEY, render);
       window.localStorage.setItem(VIEW_KEY, view);
       window.localStorage.removeItem(LEGACY_TAB_KEY);
     } catch {
       /* private window: the choice still works, it just forgets */
     }
-  }, [restored, variantId, membersControlId, render, view]);
+  }, [restored, variantId, navigatorId, layoutId, render, view]);
 
   const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
@@ -110,18 +122,24 @@ export function Workbench() {
     ),
   );
   const [selectedIdsByBench, setSelectedIdsByBench] = useState<Record<string, Set<string>>>(() =>
-    Object.fromEntries(Object.entries(INITIAL_BENCHES).map(([name, list]) => [name, new Set(list.map((i) => i.id))])),
+    // Roots only: a Block bench opens with the Block selected, not the Block
+    // plus its seven slot fills (which would put "Block + Flex — nothing in
+    // common" in the inspector before anyone has clicked anything).
+    Object.fromEntries(Object.entries(INITIAL_BENCHES).map(([name, list]) => [name, new Set(topLevel(list).map((i) => i.id))])),
   );
   const [positions, setPositions] = useState<Record<string, CanvasPosition>>({});
 
   const variant = findVariant(variantId);
-  const membersControl = findMembersControl(membersControlId);
+  const navigator = findNavigator(navigatorId);
+  const layout = findInspectorLayout(layoutId);
   const isMixed = activeName === MIXED_BENCH;
   const instances = benches[activeName] ?? [];
+  const rootCount = useMemo(() => topLevel(instances).length, [instances]);
   // Roots for the renders; tree order for the sidebar, so a member lists
   // right under its parent. Both derive from the one stored fact, the
   // parent's `members` list — nothing here stores a parent pointer.
   const roots = useMemo(() => topLevel(instances), [instances]);
+  const tree = useMemo(() => instanceTree(instances, REGISTRY), [instances]);
   const treeOrder = useMemo(() => {
     const byId = new Map(instances.map((i) => [i.id, i]));
     return roots.flatMap((r) => subtreeIds(instances, r.id)).map((id) => byId.get(id)!).filter(Boolean);
@@ -169,14 +187,15 @@ export function Workbench() {
     setSelection(Array.from(next));
   }
   function addInstance(type: string) {
-    const id = `${type.toLowerCase()}-${uid.current}`;
-    setBenches((prev) => {
-      const bench = prev[activeName] ?? [];
-      const sameType = bench.filter((i) => i.type === type).length;
-      return { ...prev, [activeName]: [...bench, makeInstance(type, sameType, uid.current)] };
-    });
-    setSelectedIdsByBench((prev) => ({ ...prev, [activeName]: new Set([...(prev[activeName] ?? []), id]) }));
-    uid.current += 1;
+    // A slotted component arrives with its slot fills (a Block brings seven
+    // Flexes); the bench count below only counts roots, so those stay
+    // invisible to the stepper.
+    const bench = benches[activeName] ?? [];
+    const sameType = topLevel(bench).filter((i) => i.type === type).length;
+    const made = makeInstanceWithSlots(type, sameType, uid.current);
+    uid.current += made.length;
+    setBenches((prev) => ({ ...prev, [activeName]: [...(prev[activeName] ?? []), ...made] }));
+    setSelectedIdsByBench((prev) => ({ ...prev, [activeName]: new Set([...(prev[activeName] ?? []), made[0]!.id]) }));
   }
   function removeLastInstance() {
     // "Last" means the last ROOT; its members go with it. Counting members
@@ -218,13 +237,15 @@ export function Workbench() {
    * has no canvas position of its own, it sits inside its parent.
    */
   function addMember(parentId: string, type: string) {
-    const child = makeInstance(type, 0, uid.current);
-    uid.current += 1;
-    setBenches((prev) => ({ ...prev, [activeName]: addMemberTo(prev[activeName] ?? [], parentId, child) }));
-    setSelection([child.id]);
+    const [child, ...fills] = makeInstanceWithSlots(type, 0, uid.current);
+    uid.current += 1 + fills.length;
+    setBenches((prev) => ({ ...prev, [activeName]: [...addMemberTo(prev[activeName] ?? [], parentId, child!), ...fills] }));
+    setSelection([child!.id]);
   }
   function removeMemberById(id: string) {
     const bench = benches[activeName] ?? [];
+    // A slot fill is structural: it goes when its parent goes, never alone.
+    if (isSlotFill(bench.find((i) => i.id === id))) return;
     const parent = parentMap(bench).get(id);
     const gone = new Set(subtreeIds(bench, id));
     setBenches((prev) => ({ ...prev, [activeName]: removeMember(prev[activeName] ?? [], id) }));
@@ -236,6 +257,30 @@ export function Workbench() {
   function moveMemberInParent(parentId: string, from: number, to: number) {
     setBenches((prev) => ({ ...prev, [activeName]: moveMember(prev[activeName] ?? [], parentId, from, to) }));
   }
+  /**
+   * Re-parent by drag, from a navigator whose stock part offers it. The
+   * target must declare members and accept the type; the top level accepts
+   * anything. `reparent` refuses a cycle on its own. A refused drop is the
+   * navigator's to show — this just declines.
+   */
+  function canDropInstance(id: string, parentId: string | null): boolean {
+    const bench = benches[activeName] ?? [];
+    const moving = bench.find((i) => i.id === id);
+    if (!moving || isSlotFill(moving)) return false;
+    if (parentId === null) return true;
+    if (parentId === id || wouldCycle(bench, parentId, id)) return false;
+    const parent = bench.find((i) => i.id === parentId);
+    const spec = parent && memberSpecFor(entryFor(parent.type), parent);
+    if (!spec) return false;
+    const siblings = (parent.members ?? []).filter((m) => m !== id).length;
+    if (spec.max !== undefined && siblings >= spec.max) return false;
+    return spec.accepts.length === 0 || spec.accepts.includes(moving.type);
+  }
+  function moveInstance(id: string, parentId: string | null, index: number) {
+    if (!canDropInstance(id, parentId)) return;
+    setBenches((prev) => ({ ...prev, [activeName]: reparent(prev[activeName] ?? [], id, parentId, index) }));
+  }
+
   function selectInstance(id: string, additive = false) {
     if (!additive) {
       setSelection([id]);
@@ -287,17 +332,27 @@ export function Workbench() {
         onActiveNameChange={setActiveName}
         isMixed={isMixed}
         instances={treeOrder}
+        tree={tree}
         selectedIds={selectedIds}
         onToggleSelected={toggleSelected}
+        onSelectionChange={setSelection}
+        onMoveInstance={moveInstance}
+        canDropInstance={canDropInstance}
+        glyph={typeGlyph}
+        navigator={navigator}
+        navigators={NAVIGATOR_VARIANTS}
+        navigatorId={navigatorId}
+        onNavigatorChange={setNavigatorId}
+        rootCount={rootCount}
+        layouts={INSPECTOR_LAYOUTS}
+        layoutId={layoutId}
+        onLayoutChange={setLayoutId}
         onAdd={addInstance}
         onRemoveLast={removeLastInstance}
         onRandomize={randomizeInstances}
         variants={PANEL_VARIANTS}
         variantId={variantId}
         onVariantChange={setVariantId}
-        membersControls={MEMBERS_CONTROLS}
-        membersControlId={membersControlId}
-        onMembersControlChange={setMembersControlId}
         entryFor={entryFor}
       />
       <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">
@@ -330,7 +385,7 @@ export function Workbench() {
           selectedTypes={selectedTypes}
           selectedCount={selected.length}
           excludedShown={EXCLUDED_SHOWN}
-          membersControl={membersControl}
+          layout={layout}
           entries={REGISTRY}
           instances={instances}
           subject={selected.length === 1 ? selected[0]! : null}

@@ -7,18 +7,15 @@
  * drift the first time a component was added to one of them. Adding a ninth
  * component stays one import and one `registerComponent` call, in one file.
  */
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
   Block,
-  BlockChip,
-  BlockDescription,
-  BlockGlyph,
-  BlockHeader,
-  BlockTitle,
-  BlockType,
   BLOCK_FIELDS,
   BLOCK_PRESETS,
+  Flex,
+  FLEX_FIELDS,
+  FLEX_PRESETS,
   Glyph,
   GLYPH_FIELDS,
   GLYPH_PRESETS,
@@ -45,7 +42,7 @@ import {
   type Tone,
   type Lens,
 } from "@bbox-ui/core";
-import { registerComponent, type ComponentEntry } from "./registerComponent";
+import { registerComponent, type ComponentEntry, type RenderContext, type SlotSpec } from "./registerComponent";
 import type { Subject } from "./fieldModel";
 import type { MembersSpec } from "./members/contract";
 
@@ -61,8 +58,34 @@ export const MEMBER_SPECS: Record<string, MembersSpec> = {
   RowContainer: { accepts: LEAVES },
   Stack: { accepts: ["Block", "Stack", "RowContainer", ...LEAVES] },
   PortEdge: { accepts: ["Port"], label: "Ports" },
-  Block: { accepts: ["Stack", "RowContainer", ...LEAVES], label: "Body" },
+  Flex: { accepts: [...LEAVES, "Flex", "Block"] },
 };
+
+/**
+ * The Block's anatomy, as Zach drew it on 2026-09-11: a header with left /
+ * centre / right, a body that is a column of rows, a footer with left /
+ * centre / right. "Most of the block things that we basically generate are
+ * just gonna be essentially variants on this." Every slot is filled by a
+ * Flex; the body's Flex is a column that holds Flex rows, and each row
+ * holds leaves. The old fixed header (glyph · title · chip) is now what you
+ * COMPOSE into the header slots.
+ */
+const edge = (region: string, side: "left" | "center" | "right"): SlotSpec => ({
+  id: `${region}.${side}`,
+  label: `${region[0]!.toUpperCase()}${region.slice(1)} · ${side}`,
+  region,
+  fill: "Flex",
+  fillProps: { justify: side === "left" ? "start" : side === "right" ? "end" : "center", gap: 6 },
+});
+export const BLOCK_SLOTS: SlotSpec[] = [
+  edge("header", "left"),
+  edge("header", "center"),
+  edge("header", "right"),
+  { id: "body", label: "Body", region: "body", fill: "Flex", fillProps: { direction: "column", align: "stretch", gap: 6 }, accepts: ["Flex"] },
+  edge("footer", "left"),
+  edge("footer", "center"),
+  edge("footer", "right"),
+];
 
 function swatch(label: string): ReactNode {
   return (
@@ -112,33 +135,42 @@ function threePorts(): ReactNode {
 interface BlockRenderProps {
   width?: number;
   height?: number;
-  orientation?: "horizontal" | "vertical";
-  state?: AppearanceState;
-  tone?: Tone;
-  lens?: Lens;
-  lensBefore?: string;
 }
 
-function renderBlock(props: Record<string, unknown>, children?: ReactNode): ReactNode {
-  const p = props as BlockRenderProps;
+function slotCell(ctx: RenderContext | undefined, id: string, extra?: CSSProperties): ReactNode {
   return (
-    <Block width={p.width} height={p.height}>
-      <BlockHeader orientation={p.orientation}>
-        <BlockGlyph>◆</BlockGlyph>
-        <BlockTitle>Block</BlockTitle>
-        <BlockChip state={p.state} tone={p.tone} lens={p.lens} lensBefore={p.lensBefore}>
-          Chip
-        </BlockChip>
-      </BlockHeader>
-      <BlockDescription>Description</BlockDescription>
-      {/* The body: whatever the Block holds, laid down the column between
-          the description and the pinned type line. */}
-      {children !== undefined && (
-        <div data-slot="block-body" style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6, width: "100%" }}>
-          {children}
-        </div>
-      )}
-      <BlockType>Type</BlockType>
+    <div key={id} data-slot="block-slot" data-slot-id={id} style={{ minWidth: 0, minHeight: 28, display: "flex", alignItems: "center", ...extra }}>
+      {ctx?.slots?.[id] ?? null}
+    </div>
+  );
+}
+
+/**
+ * The slotted Block. Header and footer are a 1fr · auto · 1fr grid so the
+ * centre slot is truly centred whatever the sides hold; the body is the
+ * body slot's Flex (a column of rows). Height hugs unless set; width from
+ * the field.
+ */
+function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?: RenderContext): ReactNode {
+  const p = props as BlockRenderProps;
+  const bar = (region: "header" | "footer") => (
+    <div data-slot={`block-${region}`} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8, padding: "6px 10px", minHeight: 40 }}>
+      {slotCell(ctx, `${region}.left`, { justifyContent: "flex-start" })}
+      {slotCell(ctx, `${region}.center`, { justifyContent: "center" })}
+      {slotCell(ctx, `${region}.right`, { justifyContent: "flex-end" })}
+    </div>
+  );
+  return (
+    // WHY maxWidth 100%: a Block placed INSIDE a Stack or a Flex row must
+    // not overflow it. The width field still means what it says on a root
+    // Block; inside a narrower parent the parent wins, which is what a
+    // person expects from a member.
+    <Block width={p.width} height={p.height} className="!justify-start !px-0 !text-left" style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 0, height: p.height && p.height > 0 ? p.height : undefined, minHeight: 120, maxWidth: "100%" }}>
+      {bar("header")}
+      <div data-slot="block-body" style={{ flex: 1, borderTop: "1px solid currentColor", borderBottom: "1px solid currentColor", padding: 8, display: "flex", flexDirection: "column" }}>
+        {ctx?.slots?.body ?? null}
+      </div>
+      {bar("footer")}
     </Block>
   );
 }
@@ -199,6 +231,28 @@ export const REGISTRY: ComponentEntry[] = [
     ),
   }),
   registerComponent({
+    name: "Flex",
+    fields: FLEX_FIELDS,
+    presets: FLEX_PRESETS,
+    members: MEMBER_SPECS.Flex,
+    // An empty Flex paints nothing, which on the bench reads as a bug and
+    // inside a Block hides the hole entirely. The dashed placeholder is
+    // Zach's own sketch — "left slot", "Row 1" — and steps aside the moment
+    // a member arrives.
+    render: (props, children, ctx) => (
+      <Flex {...(props as Record<string, never>)} data-slot-label={ctx?.slotLabel}>
+        {children ?? (
+          <span
+            data-slot="flex-placeholder"
+            style={{ display: "inline-flex", alignItems: "center", minHeight: 24, minWidth: 64, padding: "0 8px", border: "1px dashed currentColor", opacity: 0.45, fontSize: 11, whiteSpace: "nowrap", justifyContent: "center", ...(props.direction === "column" ? { alignSelf: "stretch", minHeight: 36 } : {}) }}
+          >
+            {ctx?.slotLabel ?? "Flex"}
+          </span>
+        )}
+      </Flex>
+    ),
+  }),
+  registerComponent({
     name: "Stack",
     fields: STACK_FIELDS,
     presets: STACK_PRESETS,
@@ -231,7 +285,7 @@ export const REGISTRY: ComponentEntry[] = [
     name: "Block",
     fields: BLOCK_FIELDS,
     presets: BLOCK_PRESETS,
-    members: MEMBER_SPECS.Block,
+    slots: BLOCK_SLOTS,
     render: renderBlock,
   }),
 ];
@@ -277,11 +331,8 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
   RowContainer: [{}, { gap: "lg" }, { align: "center" }],
   Stack: [{}, { gap: "lg" }],
   PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],
-  Block: [
-    { state: "wired", tone: "neutral" },
-    { state: "empty", tone: "accent" },
-    { state: "received", tone: "neutral" },
-  ],
+  Flex: [{}, { justify: "between" }, { direction: "column", align: "stretch" }],
+  Block: [{}, { width: 320 }, { width: 480, height: 260 }],
 };
 
 export interface Instance extends Subject {
@@ -296,6 +347,12 @@ export interface Instance extends Subject {
    * See members/model.ts for every derived fact (parent, depth, subtree).
    */
   members?: string[];
+  /**
+   * Set on an instance that fills one of its parent's slots. Such an
+   * instance is created with the parent, cannot be removed, moved or
+   * dragged, and prints its slot's label as its title.
+   */
+  slot?: { id: string; label: string; accepts?: string[] };
 }
 
 export function makeInstance(type: string, index: number, uid: number): Instance {
@@ -305,6 +362,25 @@ export function makeInstance(type: string, index: number, uid: number): Instance
     type,
     props: { ...variants[index % variants.length] },
   };
+}
+
+/**
+ * A fresh instance PLUS the instances that fill its slots, ids drawn from
+ * `uid` upward (the caller advances `uid` by the returned length). The
+ * first element is the instance itself, its `members` already pointing at
+ * the fills in slot order. A component without slots returns one.
+ */
+export function makeInstanceWithSlots(type: string, index: number, uid: number): Instance[] {
+  const self = makeInstance(type, index, uid);
+  const slots = REGISTRY.find((e) => e.name === type)?.slots ?? [];
+  if (slots.length === 0) return [self];
+  const fills: Instance[] = slots.map((slot, k) => ({
+    id: `${slot.fill.toLowerCase()}-${uid + 1 + k}`,
+    type: slot.fill,
+    props: { ...(slot.fillProps ?? {}) },
+    slot: { id: slot.id, label: slot.label, ...(slot.accepts ? { accepts: slot.accepts } : {}) },
+  }));
+  return [{ ...self, members: fills.map((f) => f.id) }, ...fills];
 }
 
 /**
@@ -419,7 +495,11 @@ export function randomValue(field: FieldSpec, roll: () => number): FieldValue | 
 export const INITIAL_BENCHES: Record<string, Instance[]> = (() => {
   const seeded: Record<string, Instance[]> = {};
   let n = 0;
-  for (const entry of REGISTRY) seeded[entry.name] = [makeInstance(entry.name, 0, n++)];
+  for (const entry of REGISTRY) {
+    const made = makeInstanceWithSlots(entry.name, 0, n);
+    n += made.length;
+    seeded[entry.name] = made;
+  }
   seeded[MIXED_BENCH] = [makeInstance("Port", 0, n++), makeInstance("Pill", 0, n++)];
   return seeded;
 })();
