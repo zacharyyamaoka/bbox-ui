@@ -44,4 +44,30 @@ describe("readFields", () => {
     const readings = readFields(FIELDS, [{ state: "wired" }]);
     expect(readings[0].value).not.toBe(MIXED);
   });
+
+  // WHY this is its own block with its OWN field array, rather than adding a
+  // third entry to the shared `FIELDS` above: `readFields` never branches on
+  // `field.kind` at all — it reads and compares `FieldValue`s generically —
+  // so a "glyph" field's stored value (an encoded string,
+  // @bbox-ui/glyph-content's grammar) is read, defaulted and MIXED-detected
+  // identically to a "text" field's. A local array pins that down without
+  // making every other test in this file re-account for a third field.
+  describe("a glyph field", () => {
+    const GLYPH_FIELDS: FieldSpec[] = [{ id: "content", label: "Content", kind: "glyph", defaultValue: "" }];
+
+    it("reads its defaultValue with zero subjects, same as a text field", () => {
+      const readings = readFields(GLYPH_FIELDS, []);
+      expect(readings).toEqual([{ field: GLYPH_FIELDS[0], value: "" }]);
+    });
+
+    it("reads the shared encoded string when subjects agree", () => {
+      const readings = readFields(GLYPH_FIELDS, [{ content: "lucide:rocket" }, { content: "lucide:rocket" }]);
+      expect(readings[0].value).toBe("lucide:rocket");
+    });
+
+    it("reads MIXED across two different encoded strings", () => {
+      const readings = readFields(GLYPH_FIELDS, [{ content: "lucide:rocket" }, { content: "emoji:🚀" }]);
+      expect(readings[0].value).toBe(MIXED);
+    });
+  });
 });

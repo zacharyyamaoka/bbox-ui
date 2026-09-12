@@ -16,7 +16,14 @@
  * imports an engine, so it structurally cannot make that mistake.
  */
 
-export type FieldKind = "segments" | "number" | "toggle" | "text";
+// WHY "glyph" is its own kind rather than reusing "text": the VALUE is an
+// encoded string (@bbox-ui/glyph-content's `content` grammar), same as
+// "text" — but the CONTROL is not a text box, it is the picker itself (a
+// panel row for a glyph field IS the trigger, per docs/GLYPH-PLAN.md's
+// contract table). storybook.ts still maps it to a plain text control
+// (Storybook has no picker), which is the one place "glyph" and "text"
+// deliberately agree.
+export type FieldKind = "segments" | "number" | "toggle" | "text" | "glyph";
 
 export type FieldValue = string | number | boolean;
 
@@ -81,6 +88,24 @@ export interface FieldSpec<TValue = FieldValue> {
    * hint that already says "never persisted", rather than inferred from it.
    */
   randomize?: boolean;
+  /**
+   * `true` marks a field the panel must render disabled — a value shown for
+   * provenance, never edited through this row. `HOST_FIELDS`'s `w`/`h`
+   * (`@bbox-ui/panel/hostFields`) are the first case: derived from the
+   * component (`size + 2*padding`), not a thing a person sets. Default
+   * false/absent.
+   */
+  readOnly?: boolean;
+  /**
+   * `true` marks a field as a HOST FACT — something the render surface
+   * (tldraw, React Flow, the DOM) owns and writes (position, rotation),
+   * never a component prop. `classifyField` (`@bbox-ui/panel`) sends every
+   * `host` field to the "advanced" tier unconditionally, ahead of its other
+   * rules: a host fact is neither the frequently-tweaked "simple" case nor
+   * a preset-governed "expert" one, it is just always there. Default
+   * false/absent.
+   */
+  host?: boolean;
 }
 
 /**
