@@ -36,3 +36,4 @@ export {
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
 export { HOST_FIELDS } from "./hostFields";
+export { HostFactsSection, type HostFactsSectionProps } from "./HostFactsSection";

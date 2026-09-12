@@ -8,6 +8,7 @@ import {
   type FieldValue,
   type PresetSpec,
 } from "@bbox-ui/schema";
+import { GlyphPicker } from "@bbox-ui/glyph-picker";
 import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 import { readFieldRow } from "../fieldModel";
@@ -378,7 +379,7 @@ function PresetPicker({
 /* One row — label left, control right, dot = provenance + disclosure  */
 /* ------------------------------------------------------------------ */
 
-interface RowData {
+export interface RowData {
   trace: FieldTrace | null;
   paintedElsewhere: FieldValue | null;
   isMixed: boolean;
@@ -400,7 +401,7 @@ interface RowData {
  * identical defect that had already been fixed in the canonical row. Six
  * files, four answers. The model is shared now; see fieldModel.ts.
  */
-function readRow(
+export function readRow(
   field: FieldSpec,
   subjects: Subject[],
   presets: PresetSpec[],
@@ -600,7 +601,7 @@ function PairedFieldCell({
  * "the whole field is the scrub surface" taste, cheapened to just the label
  * so the box underneath keeps a normal text caret).
  */
-function RowLabel({
+export function RowLabel({
   field,
   data,
   governed,
@@ -608,6 +609,7 @@ function RowLabel({
   setExpanded,
   onChange,
   compact,
+  disabled,
 }: {
   field: FieldSpec;
   data: RowData;
@@ -616,7 +618,15 @@ function RowLabel({
   setExpanded: (fn: (v: boolean) => boolean) => void;
   onChange: (fieldId: string, value: FieldValue) => void;
   compact?: boolean;
+  /** HostFactsSection's own reuse of this row (`docs/GLYPH-PLAN.md`'s
+   *  Renderer section): a read-only host fact (`w`/`h`) or a non-editable
+   *  render surface (the DOM tab) must not let dragging the LABEL write a
+   *  value — `field.kind === "number"` alone said nothing about that,
+   *  since every FigmaDense caller today is always editable. Default
+   *  `false` so no existing call site's behaviour changes. */
+  disabled?: boolean;
 }) {
+  const scrubbable = !disabled && field.kind === "number";
   const scrub = useLabelScrub(field, data, onChange);
   const dotTitle = data.isMixed
     ? "Mixed across selection"
@@ -636,10 +646,10 @@ function RowLabel({
       />
       <span
         data-slot="field-label"
-        style={labelTextStyle(governed, field.kind === "number")}
-        onPointerDown={field.kind === "number" ? scrub.onPointerDown : undefined}
-        onPointerMove={field.kind === "number" ? scrub.onPointerMove : undefined}
-        onPointerUp={field.kind === "number" ? scrub.onPointerUp : undefined}
+        style={labelTextStyle(governed, scrubbable)}
+        onPointerDown={scrubbable ? scrub.onPointerDown : undefined}
+        onPointerMove={scrubbable ? scrub.onPointerMove : undefined}
+        onPointerUp={scrubbable ? scrub.onPointerUp : undefined}
         title={field.hint}
       >
         {field.label}
@@ -694,7 +704,7 @@ function useLabelScrub(
 
 /** Collapsed-by-default cascade — contract point 5, still reachable, just
  *  behind the dot instead of an always-visible badge row. */
-function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec[] }) {
+export function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec[] }) {
   return (
     <div data-slot="field-trace-chain" style={chainStyle}>
       {trace.candidates.map((candidate) => (
@@ -757,6 +767,27 @@ function DenseControl({
           style={{ ...textInputStyle(true), cursor: "not-allowed", opacity: 0.6 }}
         />
         {field.unit && <span style={numberUnitStyle}>{field.unit}</span>}
+      </div>
+    );
+  }
+
+  // WHY "glyph" is checked ahead of every other kind, right after
+  // `readOnly`: its stored value is an encoded string
+  // (@bbox-ui/glyph-content's grammar, the same shape "text" holds), but
+  // per docs/GLYPH-PLAN.md's contract table the CONTROL is not a text
+  // box — it IS the picker trigger. This is the row this whole lane
+  // exists to land: every other variant keeps the honest text fallback
+  // (IconStrip's own comment, `fieldKindCoverage.test.ts`), FigmaDense —
+  // the chosen design — gets the real thing.
+  if (field.kind === "glyph") {
+    return (
+      <div data-slot="glyph-field-control" style={glyphControlWrapStyle}>
+        <GlyphPicker value={isMixed ? "" : String(value ?? "")} onChange={onChange} sizePreset="md" />
+        {isMixed && (
+          <span data-slot="field-mixed-badge" style={mixedNoteStyle}>
+            mixed
+          </span>
+        )}
       </div>
     );
   }
@@ -1174,6 +1205,12 @@ function candidateDotStyle(winner: boolean): CSSProperties {
 }
 const candidateLayerStyle: CSSProperties = { width: 110, flexShrink: 0 };
 const candidateValueStyle: CSSProperties = { fontFamily: "monospace" };
+
+// The glyph row's control cell: the picker trigger plus, when Mixed, the
+// same quiet badge `PresetPicker` already uses for a disagreeing selector
+// — reused rather than invented, since a Glyph trigger has no text field
+// to show "Mixed" as a placeholder inside the way every other kind does.
+const glyphControlWrapStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6 };
 
 const segmentedGroupStyle: CSSProperties = { display: "flex", gap: 2 };
 

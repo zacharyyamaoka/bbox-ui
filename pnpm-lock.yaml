@@ -20,6 +20,12 @@ importers:
       '@base-ui/react':
         specifier: ^1.7.0
         version: 1.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@bbox-ui/adapter-reactflow':
+        specifier: workspace:*
+        version: link:../../packages/adapter-reactflow
+      '@bbox-ui/adapter-tldraw':
+        specifier: workspace:*
+        version: link:../../packages/adapter-tldraw
       '@bbox-ui/core':
         specifier: workspace:*
         version: link:../../packages/bbox-ui
@@ -755,6 +761,9 @@ importers:
       '@bbox-ui/core':
         specifier: workspace:*
         version: link:../bbox-ui
+      '@bbox-ui/glyph-picker':
+        specifier: workspace:*
+        version: link:../glyph-picker
       '@bbox-ui/schema':
         specifier: workspace:*
         version: link:../schema
@@ -765,6 +774,21 @@ importers:
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@types/react-test-renderer':
+        specifier: ^19.0.0
+        version: 19.3.0
+      jsdom:
+        specifier: ^25.0.0
+        version: 25.0.1
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.3.0(react@19.3.0)
+      react-test-renderer:
+        specifier: ^19.0.0
+        version: 19.3.0(react@19.3.0)
       typescript:
         specifier: ^5.6.0
         version: 5.9.3

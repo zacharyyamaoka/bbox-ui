@@ -20,7 +20,11 @@ function panelFiles(): string[] {
   const variants = readdirSync(path.join(SRC, "variants"))
     .filter((f) => f.endsWith(".tsx"))
     .map((f) => path.join("variants", f));
-  return [...variants, "FieldTraceRow.tsx", "ComponentInspector.tsx"];
+  // "HostFactsSection.tsx" calls `readFieldRow` and owns its own
+  // `field.readOnly` branch (docs/GLYPH-PLAN.md's Renderer section) — a
+  // seventh/eighth control-drawing file, and exactly the shape this gate
+  // exists to catch if it were ever missed here.
+  return [...variants, "FieldTraceRow.tsx", "ComponentInspector.tsx", "HostFactsSection.tsx"];
 }
 
 /** Strip block and line comments so a file DISCUSSING resolveField in a WHY
@@ -33,8 +37,9 @@ describe("one resolution model", () => {
   it("finds panels to check at all", () => {
     // Without this, a bad glob would make every assertion below vacuous.
     const files = panelFiles();
-    expect(files.length).toBeGreaterThanOrEqual(7);
+    expect(files.length).toBeGreaterThanOrEqual(9);
     expect(files).toContain("FieldTraceRow.tsx");
+    expect(files).toContain("HostFactsSection.tsx");
     expect(files.some((f) => f.includes("FigmaDense"))).toBe(true);
   });
 

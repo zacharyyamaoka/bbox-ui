@@ -45,6 +45,7 @@ import {
   type Tone,
   type Lens,
 } from "@bbox-ui/core";
+import { LucideGlyphResolver } from "@bbox-ui/glyph-picker";
 import { registerComponent, type ComponentEntry } from "./registerComponent";
 import type { Subject } from "./fieldModel";
 
@@ -141,7 +142,24 @@ export const REGISTRY: ComponentEntry[] = [
     name: "Glyph",
     fields: GLYPH_FIELDS,
     presets: GLYPH_PRESETS,
-    render: (props) => <Glyph {...(props as Record<string, never>)} />,
+    // WHY wrapped here and not left bare: the glyph-picker row this lane
+    // ships (FigmaDense's "glyph" FieldKind) can now WRITE a `lucide:*`
+    // value into this very instance, and a bare `<Glyph>` has no resolver
+    // above it to turn that string into an icon (`GlyphResolverProvider`'s
+    // default context has no `renderLucide`, so `Glyph`'s switch falls to
+    // its `data-unresolved` branch — nothing paints). Every other trigger
+    // of the same picker (`GlyphPicker`'s own default trigger) already
+    // wraps itself the same way; the bench preview is the one render of a
+    // stored value that didn't, so a pick looked like it silently failed.
+    // `active` gates the ~637 KB Lucide chunk on the value actually needing
+    // it: an emoji, text, image or empty glyph must never start that fetch
+    // just because it renders through the same resolver (audit minor). The
+    // prefix is `@bbox-ui/glyph-content`'s own grammar for a lucide value.
+    render: (props) => (
+      <LucideGlyphResolver active={String(props.content ?? "").startsWith("lucide:")}>
+        <Glyph {...(props as Record<string, never>)} />
+      </LucideGlyphResolver>
+    ),
   }),
   registerComponent({
     name: "TextBox",
@@ -227,13 +245,15 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { state: "outOfFocus", children: "Dimmed" },
   ],
   Glyph: [
-    // WHY the emoji seed is FIRST and not the lucide one: `makeInstance`
-    // always opens a fresh bench at index 0, and no host in this repo
-    // mounts `GlyphResolverProvider` yet (phase 3's picker package is a
-    // stub) — a lucide-first seed would make the one Glyph every visitor
-    // to /create actually sees paint as an invisible empty square, with
-    // nothing on screen to say why. An emoji renders with zero resolver,
-    // same as v1's bare-emoji default.
+    // WHY the emoji seed is still FIRST even though `REGISTRY`'s own
+    // `render` now wraps every Glyph in `LucideGlyphResolver`:
+    // `makeInstance` always opens a fresh bench at index 0, and a host
+    // that renders this SAME instance through a DIFFERENT registration
+    // (a raw `<Glyph>` with no resolver above it, e.g. a future consumer
+    // that reads `SEED_VARIANTS` directly) must not depend on one. An
+    // emoji renders with zero resolver, same as v1's bare-emoji default;
+    // the lucide seed exists specifically to exercise the resolver this
+    // package now provides.
     { content: "emoji:🔍" },
     { sizePreset: "lg", content: "lucide:search" },
     { sizePreset: "md", content: "text:◆" },
