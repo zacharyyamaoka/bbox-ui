@@ -8,8 +8,9 @@ import { cn } from "./lib/utils";
  * Flex = the thing that fills a slot. An ordered run of members laid out
  * by CSS flexbox in one direction, with the four knobs a person actually
  * reaches for (direction, justify, align, gap) and a padding. Paints
- * nothing of its own, like RowContainer, which it generalises: a
- * RowContainer is a Flex with `direction: "row"`.
+ * nothing of its own. It replaced RowContainer on 2026-09-11 (Zach: "flex
+ * can do both column or row") — a RowContainer was a Flex with
+ * `direction: "row"`.
  *
  * WHY the name is Flex and not "FlexBox" or "Slot" (Zach, 2026-09-11:
  * "instead of calling these slots, maybe we should just call them flex

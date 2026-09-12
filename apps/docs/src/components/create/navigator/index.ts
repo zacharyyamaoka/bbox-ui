@@ -1,20 +1,15 @@
 import type { NavigatorVariant } from "./contract";
-import { SHADCN_TREE } from "./ShadcnTree";
 import { ARBORIST } from "./Arborist";
-import { ARIA_TREE } from "./AriaTree";
-import { HEADLESS_TREE } from "./HeadlessTree";
-import { DNDKIT_TREE } from "./DndKitTree";
 
 export type { NavigatorProps, NavigatorVariant } from "./contract";
 export { NAVIGATOR_CONTRACT } from "./contract";
 
 /**
- * First is the default. Five stock tree parts, one contract; Zach picks
- * live from the "Instance navigator" switcher in the sidebar footer, the
- * same way the panel design and the Members control were picked.
+ * ONE navigator. Five were babbled on 2026-09-11 (react-arborist, React
+ * Aria Tree, headless-tree, the vendored shadcn Sidebar, a dnd-kit sortable
+ * tree — see reports/media/tree-and-slots-2026-09-11 and commit 3cfd8c0);
+ * Zach picked react-arborist the same evening. The others were deleted, not
+ * kept behind a switcher: a switcher with one real answer is a control
+ * whose only reachable state is the one it is already in.
  */
-export const NAVIGATOR_VARIANTS: NavigatorVariant[] = [ARBORIST, ARIA_TREE, HEADLESS_TREE, SHADCN_TREE, DNDKIT_TREE];
-
-export function findNavigator(id: string | null): NavigatorVariant {
-  return NAVIGATOR_VARIANTS.find((v) => v.id === id) ?? NAVIGATOR_VARIANTS[0]!;
-}
+export const NAVIGATOR: NavigatorVariant = ARBORIST;

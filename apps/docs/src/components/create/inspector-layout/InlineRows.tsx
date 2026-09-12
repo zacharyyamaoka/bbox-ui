@@ -27,16 +27,25 @@ function InlineRowsLayout(p: InspectorLayoutProps) {
     () => new Set(p.lists.filter((list) => list.count > 0).map((list) => list.id)),
   );
   const knownIds = useRef<Set<string>>(new Set(p.lists.map((list) => list.id)));
+  const lastCount = useRef<Map<string, number>>(new Map(p.lists.map((list) => [list.id, list.count])));
 
   useEffect(() => {
-    const unseen = p.lists.filter((list) => !knownIds.current.has(list.id));
-    if (unseen.length === 0) return;
-    for (const list of unseen) knownIds.current.add(list.id);
-    const toOpen = unseen.filter((list) => list.count > 0);
+    const toOpen: string[] = [];
+    for (const list of p.lists) {
+      const unseen = !knownIds.current.has(list.id);
+      const grewFromEmpty = (lastCount.current.get(list.id) ?? 0) === 0 && list.count > 0;
+      knownIds.current.add(list.id);
+      lastCount.current.set(list.id, list.count);
+      // A list opens the first time it is seen with members, and again when
+      // it goes from empty to one: an empty list is drawn unfolded (its + in
+      // reach), so the row that replaces it must not appear folded — the
+      // member just added would vanish behind a chevron.
+      if ((unseen || grewFromEmpty) && list.count > 0) toOpen.push(list.id);
+    }
     if (toOpen.length === 0) return;
     setOpenIds((prev) => {
       const next = new Set(prev);
-      for (const list of toOpen) next.add(list.id);
+      for (const id of toOpen) next.add(id);
       return next;
     });
   }, [p.lists]);
@@ -75,6 +84,16 @@ function InlineRowsLayout(p: InspectorLayoutProps) {
                   {caption}
                 </div>
               )}
+              {list.count === 0 ? (
+                // WHY an empty list is not a collapsible row: Zach, 2026-09-11
+                // — "if the member list is empty, then it shouldn't be folded.
+                // I like being able to see the plus so with a single click I
+                // can add members". There is nothing to fold, and hiding the
+                // + behind a chevron costs the click that matters.
+                <div data-slot="inline-list-empty" data-list-id={list.id}>
+                  {list.node}
+                </div>
+              ) : (
               <Collapsible open={open} onOpenChange={(next) => setListOpen(list.id, next)}>
                 <CollapsibleTrigger
                   nativeButton={false}
@@ -90,6 +109,7 @@ function InlineRowsLayout(p: InspectorLayoutProps) {
                 />
                 <CollapsibleContent>{list.node}</CollapsibleContent>
               </Collapsible>
+              )}
             </div>
           );
         })}

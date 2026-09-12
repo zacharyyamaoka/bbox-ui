@@ -29,9 +29,6 @@ import {
   PortEdge,
   PORT_EDGE_FIELDS,
   PORT_EDGE_PRESETS,
-  RowContainer,
-  ROW_CONTAINER_FIELDS,
-  ROW_CONTAINER_PRESETS,
   Stack,
   STACK_FIELDS,
   STACK_PRESETS,
@@ -50,13 +47,12 @@ import type { MembersSpec } from "./members/contract";
  * Which components hold others, and what. `accepts` is closed on purpose:
  * a PortEdge is a lane of Ports and nothing else; a Stack is a column of
  * block-shaped things; a Block's body takes one layout container or a few
- * leaves; a RowContainer takes leaves. Widening a set is a one-line edit
+ * leaves; a Flex takes leaves and Flexes. Widening a set is a one-line edit
  * here, and the Members control offers exactly this list.
  */
 const LEAVES = ["Port", "Pill", "Glyph", "TextBox"];
 export const MEMBER_SPECS: Record<string, MembersSpec> = {
-  RowContainer: { accepts: LEAVES },
-  Stack: { accepts: ["Block", "Stack", "RowContainer", ...LEAVES] },
+  Stack: { accepts: ["Block", "Stack", "Flex", ...LEAVES] },
   PortEdge: { accepts: ["Port"], label: "Ports" },
   Flex: { accepts: [...LEAVES, "Flex", "Block"] },
 };
@@ -86,24 +82,6 @@ export const BLOCK_SLOTS: SlotSpec[] = [
   edge("footer", "center"),
   edge("footer", "right"),
 ];
-
-function swatch(label: string): ReactNode {
-  return (
-    <div
-      key={label}
-      style={{
-        border: "2px solid currentColor",
-        borderRadius: 4,
-        padding: "6px 10px",
-        fontFamily: "monospace",
-        fontSize: 12,
-        flexShrink: 0,
-      }}
-    >
-      {label}
-    </div>
-  );
-}
 
 function stackMember(label: string): ReactNode {
   return (
@@ -209,28 +187,6 @@ export const REGISTRY: ComponentEntry[] = [
     ),
   }),
   registerComponent({
-    name: "RowContainer",
-    fields: ROW_CONTAINER_FIELDS,
-    presets: ROW_CONTAINER_PRESETS,
-    members: MEMBER_SPECS.RowContainer,
-    // WHY placeholders when there are no members: a container with nothing
-    // in it paints nothing, and a blank 320px well on the bench reads as a
-    // bug. The swatches stand in until a member is added, then step aside.
-    render: (props, children) => (
-      <div style={{ width: 320, border: "1px dashed #ccc" }}>
-        <RowContainer {...(props as Record<string, never>)}>
-          {children ?? (
-            <>
-              {swatch("A")}
-              {swatch("B")}
-              {swatch("C")}
-            </>
-          )}
-        </RowContainer>
-      </div>
-    ),
-  }),
-  registerComponent({
     name: "Flex",
     fields: FLEX_FIELDS,
     presets: FLEX_PRESETS,
@@ -330,7 +286,6 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { size: "lg", children: "Bigger text" },
     { size: "sm", children: "Small print" },
   ],
-  RowContainer: [{}, { gap: "lg" }, { align: "center" }],
   Stack: [{}, { gap: "lg" }],
   PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],
   Flex: [{}, { justify: "between" }, { direction: "column", align: "stretch" }],

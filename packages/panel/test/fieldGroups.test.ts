@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FieldSpec } from "@bbox-ui/schema";
 import { groupRows } from "../src/fieldGroups";
-import { ROW_CONTAINER_FIELDS, STACK_FIELDS, TEXT_BOX_FIELDS, BLOCK_FIELDS } from "@bbox-ui/core";
+import { FLEX_FIELDS, STACK_FIELDS, TEXT_BOX_FIELDS, BLOCK_FIELDS } from "@bbox-ui/core";
 
 const num = (id: string, group?: string): FieldSpec => ({ id, label: id, kind: "number", defaultValue: 0, group });
 const text = (id: string): FieldSpec => ({ id, label: id, kind: "text", defaultValue: "" });
@@ -16,10 +16,10 @@ describe("groupRows", () => {
     expect(ids(groupRows([num("height"), num("gap")]))).toEqual(["height", "gap"]);
   });
 
-  it("RowContainer's real height and gap stay on separate rows", () => {
-    const rows = ids(groupRows(ROW_CONTAINER_FIELDS));
-    expect(rows).toContain("height");
-    expect(rows).toContain("gap");
+  it("Flex's gap and padding share a row; nothing else on Flex pairs", () => {
+    const rows = ids(groupRows(FLEX_FIELDS));
+    expect(rows).toContainEqual(["gap", "padding"]);
+    expect(rows.filter(Array.isArray)).toHaveLength(1);
   });
 
   it("pairs a declared group even when the array separates its members", () => {

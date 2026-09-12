@@ -3,7 +3,6 @@
 import type { ComponentEntry, Instance, InstanceNode, PanelVariant } from "@bbox-ui/panel";
 import { MIXED_BENCH } from "@bbox-ui/panel";
 import type { NavigatorVariant } from "./navigator";
-import type { InspectorLayoutVariant } from "./inspector-layout";
 import {
   Sidebar,
   SidebarContent,
@@ -30,14 +29,8 @@ interface BenchSidebarProps {
   canDropInstance: (id: string, parentId: string | null) => boolean;
   glyph: (type: string) => string;
   navigator: NavigatorVariant;
-  navigators: NavigatorVariant[];
-  navigatorId: string;
-  onNavigatorChange: (id: string) => void;
   /** Roots only — a Block's seven slot fills are not "instances" to the stepper. */
   rootCount: number;
-  layouts: InspectorLayoutVariant[];
-  layoutId: string;
-  onLayoutChange: (id: string) => void;
   onAdd: (type: string) => void;
   onRemoveLast: () => void;
   onRandomize: () => void;
@@ -97,8 +90,8 @@ export function BenchSidebar(p: BenchSidebarProps) {
             {/* The navigator: a tree, rows highlighted when selected, no
                 checkboxes. Zach, 2026-09-11: "its actually basically turning
                 into a tree … instead of check boxes … more ergonomic shift
-                multi select … highlight the rows". Which stock tree part
-                draws it is the switcher's choice in the footer. */}
+                multi select … highlight the rows". react-arborist draws it,
+                his pick of the five compared that day. */}
             <div data-slot="navigator-host" data-navigator={p.navigator.id} className="min-h-0">
               <p.navigator.Navigator
                 roots={p.tree}
@@ -150,38 +143,6 @@ export function BenchSidebar(p: BenchSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Instance navigator
-          <select
-            data-slot="navigator-picker"
-            value={p.navigatorId}
-            onChange={(e) => p.onNavigatorChange(e.target.value)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
-            title={p.navigator.blurb}
-          >
-            {p.navigators.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Inspector layout
-          <select
-            data-slot="layout-picker"
-            value={p.layoutId}
-            onChange={(e) => p.onLayoutChange(e.target.value)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
-            title={p.layouts.find((l) => l.id === p.layoutId)?.blurb}
-          >
-            {p.layouts.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        </label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Panel design
           <select

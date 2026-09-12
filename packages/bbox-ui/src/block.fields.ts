@@ -12,7 +12,7 @@
  * else inert").
  *
  * WHY no `bodyLayout`/paint fields here: `Block`'s body-layout integration
- * (`Stack`/`RowContainer` composition) and its own literal paint fields are
+ * (`Stack`/`Flex` composition) and its own literal paint fields are
  * explicitly deferred, non-goals for this lane (T1-SPEC.md §4.8, §10) —
  * this array is intentionally narrow, not an oversight.
  */

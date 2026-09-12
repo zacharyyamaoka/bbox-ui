@@ -53,7 +53,7 @@ function StackMember({ label }: { label: string }) {
 /**
  * THE STORY THAT CARRIES THE PLAY FUNCTION. Stack has no natural
  * click-target interaction (docs/T1-SPEC.md §6 item 2 — `Glyph`,
- * `TextBox`, `RowContainer`, `Stack`), so this asserts the rendered DOM's
+ * `TextBox`, `Flex`, `Stack`), so this asserts the rendered DOM's
  * computed layout matches the args it was actually rendered with.
  */
 export const Primary: Story = {

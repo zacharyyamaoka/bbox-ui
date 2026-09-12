@@ -13,7 +13,7 @@ export type FieldRow = FieldSpec | [FieldSpec, FieldSpec];
  *   its own after the pairs. A group never absorbs a neighbour outside it.
  * - Ungrouped fields are one row each — including two adjacent numbers.
  *   That case is the regression this replaced: adjacency used to be the
- *   rule, and it paired RowContainer's height with its gap.
+ *   rule, and it paired a container's height with its gap.
  */
 export function groupRows(fields: FieldSpec[]): FieldRow[] {
   const rows: FieldRow[] = [];

@@ -76,7 +76,7 @@ const PREVIEW_CHECKS = {
   Pill: { slot: "pill", attr: "data-state", fieldId: "state" },
   Glyph: { slot: "glyph", attr: "data-size", fieldId: "size" },
   TextBox: { slot: "text-box", attr: "data-size", fieldId: "size" },
-  RowContainer: { slot: "row-container", attr: "data-justify", fieldId: "justify" },
+  Flex: { slot: "flex", attr: "data-justify", fieldId: "justify" },
   Stack: { slot: "stack", attr: "data-member-width", fieldId: "memberWidth" },
   PortEdge: { slot: "port-edge", attr: "data-edge", fieldId: "edge" },
   Block: { slot: "block-chip", attr: "data-state", fieldId: "state" },

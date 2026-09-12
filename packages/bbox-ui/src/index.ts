@@ -19,9 +19,6 @@ export * from "./pill.fields";
 export * from "./pill.presets";
 export * from "./pill";
 
-export * from "./rowContainer.fields";
-export * from "./rowContainer";
-
 export * from "./flex.fields";
 export * from "./flex";
 

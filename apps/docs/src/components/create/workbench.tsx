@@ -34,12 +34,12 @@ import { BenchSidebar } from "./bench-sidebar";
 import { InspectorColumn } from "./inspector-column";
 import { Viewport } from "./viewport";
 import { defaultPosition, type CanvasPosition, type Render, type View } from "./contract";
-import { NAVIGATOR_VARIANTS, findNavigator } from "./navigator";
-import { INSPECTOR_LAYOUTS, findInspectorLayout } from "./inspector-layout";
+import { NAVIGATOR } from "./navigator";
+import { useSelectionHistory } from "./selection-history";
+import { INSPECTOR_LAYOUT } from "./inspector-layout";
 
 const VARIANT_KEY = "bbox-ui.create.panelVariant";
-const NAVIGATOR_KEY = "bbox-ui.create.navigator";
-const LAYOUT_KEY = "bbox-ui.create.inspectorLayout";
+
 const RENDER_KEY = "bbox-ui.create.render";
 const VIEW_KEY = "bbox-ui.create.view";
 // The single-strip key from before the two-axis split; read once to migrate.
@@ -65,8 +65,7 @@ function readStored(key: string): string | null {
 export function Workbench() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
   const [variantId, setVariantId] = useState(() => PANEL_VARIANTS[0].id);
-  const [navigatorId, setNavigatorId] = useState(() => NAVIGATOR_VARIANTS[0]!.id);
-  const [layoutId, setLayoutId] = useState(() => INSPECTOR_LAYOUTS[0]!.id);
+
   const [render, setRender] = useState<Render>("dom");
   const [view, setView] = useState<View>("preview");
   const uid = useRef(INITIAL_UID);
@@ -85,10 +84,7 @@ export function Workbench() {
   useEffect(() => {
     const v = readStored(VARIANT_KEY);
     if (v) setVariantId(findVariant(v).id);
-    const nav = readStored(NAVIGATOR_KEY);
-    if (nav) setNavigatorId(findNavigator(nav).id);
-    const lay = readStored(LAYOUT_KEY);
-    if (lay) setLayoutId(findInspectorLayout(lay).id);
+
     const r = readStored(RENDER_KEY);
     if (r === "dom" || r === "reactflow" || r === "tldraw") setRender(r);
     const vw = readStored(VIEW_KEY);
@@ -106,15 +102,14 @@ export function Workbench() {
     if (!restored) return;
     try {
       window.localStorage.setItem(VARIANT_KEY, variantId);
-      window.localStorage.setItem(NAVIGATOR_KEY, navigatorId);
-      window.localStorage.setItem(LAYOUT_KEY, layoutId);
+
       window.localStorage.setItem(RENDER_KEY, render);
       window.localStorage.setItem(VIEW_KEY, view);
       window.localStorage.removeItem(LEGACY_TAB_KEY);
     } catch {
       /* private window: the choice still works, it just forgets */
     }
-  }, [restored, variantId, navigatorId, layoutId, render, view]);
+  }, [restored, variantId, render, view]);
 
   const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
@@ -130,8 +125,8 @@ export function Workbench() {
   const [positions, setPositions] = useState<Record<string, CanvasPosition>>({});
 
   const variant = findVariant(variantId);
-  const navigator = findNavigator(navigatorId);
-  const layout = findInspectorLayout(layoutId);
+  const navigator = NAVIGATOR;
+  const layout = INSPECTOR_LAYOUT;
   const isMixed = activeName === MIXED_BENCH;
   const instances = benches[activeName] ?? [];
   const rootCount = useMemo(() => topLevel(instances).length, [instances]);
@@ -229,6 +224,12 @@ export function Workbench() {
       }),
     }));
   }
+  // Subject history for the mouse's back/forward buttons: every selection
+  // the page lands on is an entry, so "click into a child, press back" returns
+  // to the parent, and forward re-enters. See useSelectionHistory.
+  const history = useSelectionHistory(selectedIdList, setSelection);
+  void history;
+
   /**
    * Members. Add appends a fresh instance of `type` to the parent's list and
    * selects it — the inspector jumps to the new child, which is the whole
@@ -240,7 +241,9 @@ export function Workbench() {
     const [child, ...fills] = makeInstanceWithSlots(type, 0, uid.current);
     uid.current += 1 + fills.length;
     setBenches((prev) => ({ ...prev, [activeName]: [...addMemberTo(prev[activeName] ?? [], parentId, child!), ...fills] }));
-    setSelection([child!.id]);
+    // WHY the selection stays put: Zach, 2026-09-11 — "when you add a new
+    // thing, please stay at the same level, don't click into it". Add three
+    // Ports is three clicks; the new row is right there to click into.
   }
   function removeMemberById(id: string) {
     const bench = benches[activeName] ?? [];
@@ -340,13 +343,7 @@ export function Workbench() {
         canDropInstance={canDropInstance}
         glyph={typeGlyph}
         navigator={navigator}
-        navigators={NAVIGATOR_VARIANTS}
-        navigatorId={navigatorId}
-        onNavigatorChange={setNavigatorId}
         rootCount={rootCount}
-        layouts={INSPECTOR_LAYOUTS}
-        layoutId={layoutId}
-        onLayoutChange={setLayoutId}
         onAdd={addInstance}
         onRemoveLast={removeLastInstance}
         onRandomize={randomizeInstances}

@@ -62,4 +62,3 @@ export {
   TYPE_GLYPH,
 } from "./members";
 export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary, InstanceNode } from "./members";
-export { clickSelect, stepRow, visibleRows, type ClickModifiers, type SelectionState } from "./navigator/selection";

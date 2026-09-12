@@ -14,7 +14,7 @@ export const TYPE_GLYPH: Record<string, string> = {
   Pill: "▬",
   Glyph: "◆",
   TextBox: "T",
-  RowContainer: "⋯",
+  Flex: "▭",
   Stack: "☰",
   PortEdge: "⋮",
   Block: "▣",

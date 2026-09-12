@@ -75,7 +75,10 @@ def count(path: str, pattern: str) -> int:
 
 
 def wc(path: str) -> int:
-    return len((HERE / path).read_text().splitlines())
+    """Line count of a file in the live tree; 0 for one that has since been
+    deleted (the losing variants went the evening the picks were made)."""
+    f = HERE / path
+    return len(f.read_text().splitlines()) if f.exists() else 0
 
 
 NAVS = [
@@ -158,11 +161,47 @@ hero_page = by[("layout", "dark", "inline")]["files"]["page"]
 code = by[("code", "dark", "block")]
 fill_shot = by[("layout", "dark", "inline")]["files"]["fill"]
 
-nav_asserts = count("demos/capture-tree-and-slots.mjs", "assert(")
+nav_asserts = count("demos/capture-picks-applied.mjs", "assert(")
 lines_navs = sum(wc(f"apps/docs/src/components/create/navigator/{f}.tsx") for f in ("Arborist", "AriaTree", "HeadlessTree", "ShadcnTree", "DndKitTree"))
 lines_layouts = sum(wc(f"apps/docs/src/components/create/inspector-layout/{f}.tsx") for f in ("InlineRows", "AnatomyFirst", "BottomStack", "Tabs", "SplitPane"))
 sel_tests = count("packages/panel/test/navigatorSelection.test.ts", "^\\s*it(")
 slot_tests = count("packages/panel/test/members.test.ts", "^\\s*it(")
+
+# ---- Round 2: the picks applied (written by demos/capture-picks-applied.mjs into round2/)
+ROUND2 = ""
+r2 = MEDIA / "round2" / "manifest.json"
+if r2.exists():
+    entries = {m["theme"]: m for m in json.loads(r2.read_text())}
+    d, l = entries.get("dark"), entries.get("light")
+
+    def r2png(theme_entry, key):
+        return png("round2/" + theme_entry["files"][key])
+
+    def r2webp(theme_entry, key):
+        return webp("round2/" + theme_entry["files"][key])
+
+    cons = (d or {}).get("console") or []
+    cons_html = ("<details><summary>console during the run: " + str(len(cons)) + "</summary><pre>" + "\n".join(cons) + "</pre></details>") if cons else '<p class="meas">console clean during the run</p>'
+    ROUND2 = f"""
+<h2>Round 2 — the picks, applied</h2>
+<p>Same evening, after this page was first handed over: <strong>react-arborist</strong> is the navigator, <strong>Inline rows</strong> is the layout, <strong>List</strong> is the Members control, and <strong>Flex replaced RowContainer</strong>. The other four navigators and four layouts are deleted, with their switchers and their dependencies; the sections above are the record of what was compared. Three behaviours you asked for, each checked by <code>demos/capture-picks-applied.mjs</code> in both themes:</p>
+<ol class="contract">
+  <li><strong>Add stays on the parent.</strong> The new member is a row; click it to enter. No jump.</li>
+  <li><strong>Mouse back / forward walk the subject history.</strong> Click into a child, press back, you are on the parent; forward re-enters; two levels in, two presses out. The browser's own back navigation is swallowed on <code>mouseup</code>, the one event that cancels it.</li>
+  <li><strong>An empty list is never folded.</strong> Its + is one click away; a fresh Block shows seven + buttons.</li>
+</ol>
+<div class="three">
+  <figure class="card"><img src="{r2png(d, "emptyOpen")}" alt="empty list unfolded"><figcaption>dark · an empty Stack list, unfolded, + in reach</figcaption></figure>
+  <figure class="card"><img src="{r2png(d, "stayed")}" alt="add stays"><figcaption>dark · two members added, still on the Stack</figcaption></figure>
+  <figure class="card"><img src="{r2png(d, "back")}" alt="mouse back"><figcaption>dark · entered the Pill, mouse back: the Stack again</figcaption></figure>
+</div>
+<div class="three" style="margin-top:16px">
+  <figure class="card"><img src="{r2png(d, "blockFresh")}" alt="fresh Block"><figcaption>dark · a fresh Block: seven lists, seven + buttons, nothing folded</figcaption></figure>
+  <figure class="card"><img src="{r2png(l, "blockFilled")}" alt="Block filled, light"><figcaption>light · a Glyph left and a Pill right, added without leaving the Block</figcaption></figure>
+  <figure class="card"><img src="{r2webp(d, "blockPage")}" alt="the page"><figcaption>dark · the page after the adds</figcaption></figure>
+</div>
+{cons_html}
+"""
 
 HTML = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -215,7 +254,7 @@ HTML = f"""<!doctype html>
     <img src="{data_uri(MEDIA / "hero.gif", "image/gif")}" alt="The navigator tree being clicked, ranged, folded and dragged; then a Block's slots being filled">
   </video>
 </div>
-<p class="meas">Recorded from the real page by the journey ({nav_asserts} assertions): the arborist tree — click, ctrl-click, shift range, fold, drag re-parent — then a Block's header, body row and footer being filled through the inline-rows inspector.</p>
+<p class="meas">Recorded from the real page by the five-way journey (since retired; the living regression is <code>demos/capture-picks-applied.mjs</code>, {nav_asserts} assertions): the arborist tree — click, ctrl-click, shift range, fold, drag re-parent — then a Block's header, body row and footer being filled through the inline-rows inspector.</p>
 
 <h2>Terminology: slot and Flex are two words for two things</h2>
 <p>You asked whether these should be called slots or flex boxes. Both, at different levels, because they name different things:</p>
@@ -258,12 +297,14 @@ HTML = f"""<!doctype html>
 <p>A member list is not a field, and a Block has seven of them. Each layout receives the fields panel and the lists already rendered and only arranges them; the contract: every list and every field reachable, lists in anatomy order, a count visible for every list, zero lists = just the panel, nothing restyled.</p>
 {LAYOUT_CARDS}
 
+{ROUND2}
+
 <h2>Decisions — each with the default taken if you say nothing</h2>
 <ul class="decide">
-  <li><strong>D1 · Navigator.</strong> Recommendation: <strong>react-arborist</strong> — everything in the contract is stock, including drag re-parenting, and it is the VS Code explorer you already know. React Aria is the accessibility-correct alternative if keyboard drag matters; headless-tree if we want our own markup with a library state machine. Default: arborist stays applied.</li>
-  <li><strong>D2 · Inspector layout.</strong> Recommendation: <strong>Inline rows</strong> — a list becomes one row in the Figma Dense grammar and unfolds in place, so a fresh Block reads as seven quiet rows; Anatomy first is the strongest alternative for a Block-heavy day. Default: inline stays applied.</li>
+  <li><strong>D1 · Navigator — taken: react-arborist.</strong> Recommendation was: <strong>react-arborist</strong> — everything in the contract is stock, including drag re-parenting, and it is the VS Code explorer you already know. React Aria is the accessibility-correct alternative if keyboard drag matters; headless-tree if we want our own markup with a library state machine. Default: arborist stays applied.</li>
+  <li><strong>D2 · Inspector layout — taken: Inline rows.</strong> Recommendation was: <strong>Inline rows</strong> — a list becomes one row in the Figma Dense grammar and unfolds in place, so a fresh Block reads as seven quiet rows; Anatomy first is the strongest alternative for a Block-heavy day. Default: inline stays applied.</li>
   <li><strong>D3 · Names.</strong> <code>slot</code> for the hole, <code>Flex</code> for the fill. Default: as built.</li>
-  <li><strong>D4 · RowContainer.</strong> Flex generalises it (a RowContainer is a Flex with direction row). Default: RowContainer left in place, untouched; retire it when Flex has proven itself.</li>
+  <li><strong>D4 · RowContainer — taken: replaced by Flex.</strong> Its files, story and tests are gone; the verify scripts and the Stack's accepted kinds say Flex.</li>
   <li><strong>D5 · Block's appearance fields.</strong> state/tone/lens still sit on Block's field array but no chip is composed by default, so they are inert until a Pill is added to a slot. Default: left as is; the cleaner move is to drop them from Block and let the Pill carry them.</li>
 </ul>
 
@@ -277,7 +318,7 @@ HTML = f"""<!doctype html>
 <h2>Run it</h2>
 <p>Then open <code>http://localhost:4110/create</code> (use <em>localhost</em>). Pick <strong>Block</strong>; the three switchers are at the bottom of the sidebar.</p>
 <div class="run">pnpm --dir /home/bam/bbox-ui/.claude/worktrees/members-control --filter @bbox-ui/docs exec next dev --port 4110</div>
-<p class="meas">Branch <code>claude/members-control</code>. Navigators: {lines_navs} lines under <code>apps/docs/src/components/create/navigator/</code>; layouts: {lines_layouts} lines under <code>inspector-layout/</code>; Flex + slots in <code>packages/bbox-ui/src/flex.tsx</code> and <code>packages/panel/src/bench.tsx</code>. Built by <code>docs/build_tree_and_slots.py</code>.</p>
+<p class="meas">Branch <code>claude/members-control</code>. What remains after the picks: react-arborist ({lines_navs} lines under <code>apps/docs/src/components/create/navigator/</code>), Inline rows ({lines_layouts} lines under <code>inspector-layout/</code>), Flex + slots in <code>packages/bbox-ui/src/flex.tsx</code> and <code>packages/panel/src/bench.tsx</code>. The five-way captures above were taken before the deletions and are the record. Built by <code>docs/build_tree_and_slots.py</code>.</p>
 
 </main></body></html>
 """

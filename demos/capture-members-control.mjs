@@ -180,7 +180,7 @@ const renderedMemberIds = (root) =>
   evaluate(`Array.from(document.querySelectorAll('${root} [data-slot="member-instance"]')).map(e => e.getAttribute('data-instance-id'))`);
 const pathCrumbs = () => evaluate(`Array.from(document.querySelectorAll('[data-slot="members-path-crumb"]')).map(e => e.textContent.trim())`);
 const selectedInstanceIds = () =>
-  evaluate(`Array.from(document.querySelectorAll('[data-slot="subject-checkbox"]:checked')).map(e => e.closest('[data-subject-id]').getAttribute('data-subject-id'))`);
+  evaluate(`Array.from(document.querySelectorAll('[data-slot="instance-navigator"] [data-slot="nav-row"][data-selected="true"]')).map(e => e.getAttribute('data-instance-id'))`);
 const controlHeight = () => evaluate(`document.querySelector('[data-slot="members-control"]')?.getBoundingClientRect().height ?? 0`);
 
 async function load(theme) {
@@ -282,9 +282,16 @@ for (const theme of THEMES) {
     const empty = await screenshot(`${theme}-${control}-1-empty`, clip);
     if (isHero) await hero();
 
-    // 2 · add a Port: typed add, and the inspector jumps to the child
+    // 2 · add a Port: typed add; the inspector STAYS on the Stack (Zach,
+    // 2026-09-11: "when you add a new thing, stay at the same level") and
+    // the new member is a row. Click it to enter; the path says where it is.
     await addVia(control, "Port");
-    assert((await inspectorName()) === "Port", `${control}: after Add the inspector shows the new Port`);
+    assert((await inspectorName()) === "Stack", `${control}: after Add the inspector is still on the Stack`);
+    let firstIds = await memberIdsInControl();
+    assert(firstIds.length === 1, `${control}: one member listed`);
+    await click(`[data-slot="members-control"] [data-member-id="${firstIds[0]}"] [data-slot="member-select"]`);
+    await sleep(200);
+    assert((await inspectorName()) === "Port", `${control}: clicking the new row shows the Port`);
     const crumbs = await pathCrumbs();
     assert(crumbs.length === 1 && /Stack/.test(crumbs[0]), `${control}: path says it is inside the Stack (${crumbs.join(">")})`);
     const child = await screenshot(`${theme}-${control}-2-child`, clip);
@@ -293,14 +300,12 @@ for (const theme of THEMES) {
       await hero();
     }
 
-    // 3 · back to the parent, add two more (a Pill and a Block)
+    // 3 · back to the parent, add two more (a Pill and a Port)
     await backToParent();
     assert((await inspectorName()) === "Stack", `${control}: the crumb climbs back to the Stack`);
     if (isHero) await hero();
     await addVia(control, "Pill");
-    await backToParent();
     await addVia(control, "Port");
-    await backToParent();
     let ids = await memberIdsInControl();
     assert(ids.length === 3, `${control}: three members listed (${ids.length})`);
     const rendered = await renderedMemberIds('[data-slot="dom-preview"]');
@@ -358,19 +363,16 @@ for (const theme of THEMES) {
   // --- member click on each RENDER: DOM, React Flow, tldraw (List control, once per theme)
   await load(theme);
   await addVia("list", "Port");
-  await backToParent();
   await addVia("list", "Pill");
-  await backToParent();
   const ids = await memberIdsInControl();
   const renderProof = {};
   for (const [render, root] of [["dom", '[data-slot="dom-preview"]'], ["reactflow", '[data-slot="reactflow-canvas"]'], ["tldraw", '[data-slot="tldraw-canvas"]']]) {
     await click(`[data-slot="render-tab"][data-render="${render}"]`);
     await waitFor(`${root} [data-slot="member-instance"][data-instance-id="${ids[1]}"]`, 30000);
     await sleep(render === "dom" ? 200 : 900);
-    // Select the parent first so the click is the thing that changes it.
-    await click(`[data-subject-id] [data-slot="subject-checkbox"]`);
-    await sleep(100);
-    await evaluate(`(() => { const boxes = document.querySelectorAll('[data-slot="subject-checkbox"]'); if (!boxes[0].checked) boxes[0].click(); Array.from(boxes).slice(1).forEach(b => { if (b.checked) b.click(); }); })()`);
+    // Select the parent first (its row in the navigator) so the click on
+    // the member is the thing that changes the selection.
+    await realClick('[data-slot="instance-navigator"] [data-slot="nav-row"][data-depth="0"]');
     await sleep(200);
     assert((await inspectorName()) === "Stack", `${render}: starts on the Stack`);
     await realClick(`${root} [data-slot="member-instance"][data-instance-id="${ids[1]}"] > *`);
@@ -388,7 +390,6 @@ for (const theme of THEMES) {
 // --- Code view prints members nested
 await load("dark");
 await addVia("list", "Port");
-await backToParent();
 await click('[data-slot="view-tab"][data-view="code"]');
 await sleep(300);
 const code = await evaluate(`document.querySelector('[data-slot="code-text"]').textContent`);
