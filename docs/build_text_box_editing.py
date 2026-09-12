@@ -46,6 +46,7 @@ ALL_STEPS = (1, 2, 3, 4, 5, 6, 7, 8)
 # render are silently skipped below, same as before.
 STEP_SHOT = {
     1: ["1-added"],
+    2: ["1b-truncated"],
     3: ["2-editing"],
     4: ["3-committed"],
     5: ["4-cancelled"],
@@ -55,7 +56,7 @@ STEP_SHOT = {
 }
 STEP_LABEL = {
     1: "1 · add a TextBox to Header · left",
-    2: "2 · bare in the header, no dashed frame",
+    2: "2 · bare in the header, no dashed frame, and (verify round 3) truthful truncation",
     3: "3 · click selects, click again edits",
     4: "4 · type, Enter commits",
     5: "5 · click again, Escape cancels",
@@ -210,7 +211,7 @@ HTML = f"""<!doctype html>
 
 <div class="note">
 {
-  f"<strong>All {TOTAL} assertions pass across all three renders.</strong> Verify round 1 confirmed five defects in this journey's original run, fixed each at its root, swept the sibling paths the same causes reached (a bare-padding drag, a different non-editable member, the default inspector's textarea fallback), and re-ran this exact journey against the fixed tree. A second, independent audit of that fix then confirmed four more (below, \"Fixed in verify round 2\") — two the fix itself introduced, two it left unswept in five of the panel's six variants — each fixed at its root and covered by new permanent assertions (step 6's 6-variant sweep, step 8's tldraw shift-select and bare-padding checks) so neither class of bug can return unnoticed. Nothing here is patched to make the number look better, the number is what the fixes produced."
+  f"<strong>All {TOTAL} assertions pass across all three renders.</strong> Verify round 1 confirmed five defects in this journey's original run, fixed each at its root, swept the sibling paths the same causes reached (a bare-padding drag, a different non-editable member, the default inspector's textarea fallback), and re-ran this exact journey against the fixed tree. A second, independent audit of that fix then confirmed four more (\"Fixed in verify round 2\") — two the fix itself introduced, two it left unswept in five of the panel's six variants. A THIRD, independent audit of round 2's own fix commit then confirmed one more (below, \"Fixed in verify round 3\"): <code>lines: \"single\"</code>'s rest recipe was declared correctly but painted nothing, because <code>text-overflow</code> never applies to a flex container — every earlier round's own unit test pinned the style OBJECT, never the paint. Each of these ten defects is fixed at its root and covered by new permanent assertions (step 2's truncation probe, step 6's 6-variant sweep, step 8's tldraw shift-select and bare-padding checks) so none can return unnoticed. Nothing here is patched to make the number look better, the number is what the fixes produced."
   if not FAILURES else
   f'<strong>{len(FAILURES)} assertion(s) still fail.</strong> See "What did not pass" below.'
 }
@@ -272,6 +273,18 @@ HTML = f"""<!doctype html>
 <div class="bug fixed">
 <h3>F4 · tldraw: clicking a Block's own bare padding stopped reselecting the Block once one of its members was selected</h3>
 <p>The SAME <code>impliedRootSelection()</code> guard was blind to WHERE a press landed: a member already selected (<code>[T1]</code>) implies the same root string (<code>"block-8"</code>) that a genuine click on the Block's own bare padding ALSO reports, natively, at tldraw's geometry-based hit-test (only roots get a shape — a member's press and a bare-padding press are indistinguishable by id alone). The guard suppressed both identically, so the Block could never be reselected by clicking it again — only via the navigator or an empty-canvas click first. <strong>Fix:</strong> the same capture-phase press classification from F3 answers this directly — a bare-padding press has no member or control under it, so the flag is false, the guard does not suppress, and the native selection change reaches the page.</p>
+</div>
+
+<h2>Fixed in verify round 3 (2026-09-12) <span class="meas">a third, independent audit of round 2's own fix commit (83d9254) — reuses "F1" again, per the same each-round-starts-at-1 convention as round 2's own header above</span></h2>
+
+<div class="note">Round 2's fix pass repaired its own four defects but never touched <code>lines</code>'s rest recipe at all — this is a pre-existing defect, present since the feature's very first commit, that survived TWO prior audits because every existing check (a Storybook play function reading <code>data-lines</code>/the CSS class, a unit test reading <code>el.props.style</code>) inspects the DECLARED style object, and none of them render the box in a narrow enough real container to see what actually PAINTS. Fixed at its root below and covered by a new, permanent journey assertion (<code>demos/capture-text-box-editing.mjs</code>'s new step 2 truncation probe, run in a real, narrow <code>Header · left</code> slot in all three renders) so it cannot regress unnoticed.</div>
+
+<div class="bug fixed">
+<h3>F1 · <code>lines: "single"</code>'s "truthful truncation" recipe was declared but never painted — no ellipsis, ever, at any <code>justify</code></h3>
+<p>Two compounding defects, both inside <code>textBox.tsx</code>, both invisible to a unit test that only reads a style object:</p>
+<p><strong>(a) the recipe lived on the wrong box.</strong> <code>white-space: nowrap; overflow: hidden; text-overflow: ellipsis</code> sat directly on the ROOT <code>&lt;div&gt;</code>, which is <code>inline-flex</code> (needed so <code>align</code>/<code>justify</code> can position content once a host gives the box explicit size). CSS <code>text-overflow</code> only ever applies to a BLOCK container — never a flex one — so Chromium silently no-oped it: measured live in a real 107px <code>Header · left</code> slot with the default <code>justify: "middle"</code>, a 32-character label was hard-clipped at BOTH ends with NO ellipsis glyph at all (first character measured 105px to the LEFT of the box). <strong>Fix:</strong> the recipe now lives on a new inner <code>&lt;span data-slot="text-box-content"&gt;</code> — the box's one real block container — so <code>text-overflow</code> actually has somewhere to apply.</p>
+<p><strong>(b) even a correct block recipe had nothing narrow enough to clip against.</strong> Neither the new inner span nor the outer root declared <code>min-width: 0</code>, and a flex/grid item's automatic minimum size defaults to its OWN min-content size — for a <code>white-space: nowrap</code> label, that is the FULL untruncated text width. Nested two levels deep (root inside the inner span's own flex layout, and the root ITSELF inside a Block header slot's <code>Flex</code>), neither level would shrink below its content no matter how narrow its host tried to make it: measured live, a real Header · left slot correctly held to 107px by the Block's own header grid, yet the TextBox root still rendered at 534px, silently overflowing its own parent (which has <code>overflow: visible</code>, so nothing even clipped it — the inner span's ellipsis fix had no narrow box to engage). <strong>Fix:</strong> both the root and the inner content span now declare <code>min-width: 0</code> (the inner span also gets <code>max-width: "100%"</code>), so a host that squeezes this box can actually squeeze it.</p>
+<p>Verified empirically in headless Chrome, not just reasoned about: a small CSS probe (three real DOM boxes, <code>justify-content: flex-start/center/flex-end</code>, a fixed 107px container) confirmed the fixed shape ellipsizes correctly at every <code>justify</code> — and that once text is long enough to truncate, the ellipsis always lands at the trailing edge regardless of <code>justify</code> (a clamped-to-100%-width block box has no spare space left to justify within), while <code>justify</code> still positions a SHORT, untruncated value normally. That trade-off — <code>justify</code> becoming a no-op the instant truncation engages — is inherent to CSS `text-overflow` (it marks the line box's trailing edge, not wherever `text-align` centered an already-overflowing line) and is not specific to this fix.</p>
 </div>
 
 {SECTIONS}

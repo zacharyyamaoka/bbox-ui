@@ -318,6 +318,75 @@ async function dashedAncestor(instanceId, stopAtSelector) {
   })()`);
 }
 
+// WHY: a repro string too short to overflow the slot would let a broken
+// `lines: "single"` recipe pass silently (verify-round-2 F1) — this string
+// is deliberately far wider than any real "Header · left" slot fill.
+const TRUNCATION_REPRO_TEXT = "A fairly long single-line label that must truncate";
+
+/**
+ * Proves `lines: "single"`'s "truthful truncation" recipe actually PAINTS,
+ * not merely that the style object carries the right property names
+ * (verify-round-2 F1: a unit test pinning `style.textOverflow === "ellipsis"`
+ * on the OLD `inline-flex` root stayed green while Chromium silently
+ * no-oped it — `text-overflow` only ever applies to a BLOCK container).
+ * Three real-DOM signals, none of them trusting a style object's claim:
+ *   1. the box is genuinely narrower than its text (`scrollWidth >
+ *      clientWidth` on the real `text-box-content` element) — otherwise
+ *      every assertion below would trivially pass for the wrong reason;
+ *   2. the content wrapper actually computes as `display: block` with
+ *      `overflow: hidden` / `text-overflow: ellipsis` / `white-space:
+ *      nowrap` — a real block container carrying the recipe, not the flex
+ *      root;
+ *   3. the FIRST character of the text renders at/after the box's own
+ *      left edge — this is the exact shape of the old bug: with the recipe
+ *      stuck on the flex root and `justify: "middle"` centering an
+ *      overflowing line, the audit measured the first character 105px to
+ *      the LEFT of the box (`textLeft: -105`), i.e. hard-clipped on BOTH
+ *      sides with no ellipsis glyph at all. A first character flush with
+ *      (or to the right of) the box's left edge is only possible once the
+ *      overflowing line has been re-anchored to the box, which is what
+ *      block-level `text-overflow` does and flex-level never did.
+ */
+async function assertTruthfulTruncation(step, instanceId) {
+  const boxSel = textBoxSel(instanceId);
+  const contentSel = `${boxSel} [data-slot="text-box-content"]`;
+  const geom = await evaluate(`(() => {
+    const box = document.querySelector(${JSON.stringify(boxSel)});
+    const contentEl = document.querySelector(${JSON.stringify(contentSel)});
+    if (!box || !contentEl) return null;
+    const boxRect = box.getBoundingClientRect();
+    const cs = getComputedStyle(contentEl);
+    const textNode = Array.from(contentEl.childNodes).find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.length > 0);
+    let firstCharLeft = null;
+    if (textNode) {
+      const range = document.createRange();
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, 1);
+      firstCharLeft = range.getBoundingClientRect().left;
+    }
+    return {
+      boxLeft: boxRect.left,
+      scrollWidth: contentEl.scrollWidth,
+      clientWidth: contentEl.clientWidth,
+      display: cs.display,
+      overflow: cs.overflow,
+      whiteSpace: cs.whiteSpace,
+      textOverflow: cs.textOverflow,
+      firstCharLeft,
+      text: contentEl.textContent,
+    };
+  })()`);
+  if (!geom) throw new Error(`truncation probe found no ${contentSel}`);
+  assertStep(step, "content wrapper actually overflows its own box (repro string is wider than the slot)", geom.scrollWidth > geom.clientWidth + 4, `scroll=${geom.scrollWidth} client=${geom.clientWidth}`);
+  assertStep(step, "content wrapper is a real block container carrying nowrap/hidden/ellipsis", geom.display === "block" && geom.whiteSpace === "nowrap" && geom.overflow === "hidden" && geom.textOverflow === "ellipsis", JSON.stringify(geom));
+  assertStep(
+    step,
+    "truthful truncation: first character renders at/after the box's own left edge — no symmetric hard-clip hiding the start of the text",
+    geom.firstCharLeft == null || geom.firstCharLeft >= geom.boxLeft - 2,
+    `firstCharLeft=${geom.firstCharLeft?.toFixed?.(1)} boxLeft=${geom.boxLeft.toFixed(1)} text=${JSON.stringify(geom.text)}`,
+  );
+}
+
 async function load(theme, component) {
   await send("Page.navigate", { url });
   await waitFor('[data-slot="create-workbench"]');
@@ -401,6 +470,18 @@ for (const renderId of RENDERS) {
   assertStep(2, "no dashed frame between the TextBox and the header", !frame.dashed, frame.dashed ? `dashed at ${frame.at}` : "clean");
   const headerClip = await rectOf('[data-slot="block-header"]');
   await screenshot(`${renderId}-1-added`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+
+  // ---- step 2b (verify-round-2 F1): truthful truncation ------------------
+  // The TextBox is still the sole-selected instance from `addTextBox` above
+  // (step 3's own deselect below is what turns the NEXT press into a first
+  // click) — one press here is enough to request editing directly.
+  await press(textBoxSel(textBoxId));
+  await sleep(150);
+  await typeText(TRUNCATION_REPRO_TEXT);
+  await key("Enter");
+  await sleep(250);
+  await assertTruthfulTruncation(2, textBoxId);
+  await screenshot(`${renderId}-1b-truncated`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
 
   // Deselect so "click it" (step 3) is a genuine first press, not an
   // already-sole-selected one (adding a member auto-selects it).

@@ -307,11 +307,45 @@ export function TextBox({
     paddingBottom: paddingBot,
     paddingLeft,
     paddingRight,
-    ...(isEditingNow
-      ? null
-      : lines === "single"
-        ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
-        : { whiteSpace: "pre-wrap", overflowWrap: "anywhere" }),
+    // WHY the ROOT itself also needs `minWidth: 0` (verify-round-2 F1's own
+    // sweep, found live in `apps/docs`'s real Header · left slot, not just
+    // in a synthetic probe): `className` only sets `width: fit-content`
+    // (`w-fit`) — it never touches `min-width`, so once THIS box is itself
+    // a flex/grid item of a host that tries to squeeze it (a Block header
+    // slot's Flex, in the real app), the browser's default automatic
+    // minimum size for a flex/grid item is its OWN min-content size, not 0.
+    // For a `white-space: nowrap` label that min-content size equals the
+    // FULL, untruncated text width — measured live: a Header · left slot
+    // held to exactly 107px by a real Block's header grid, the slot's own
+    // `Flex` wrapper shrunk to that 107px correctly, and TextBox's ROOT
+    // still rendered at 534px, silently overflowing its own 107px parent
+    // (parent `overflow: visible`, so nothing even clipped it — the
+    // ellipsis fix below had no box narrow enough to ever engage). This is
+    // the identical bug class as the inner wrapper's own fix, one level
+    // higher: a flex/grid item's min-width doesn't default to 0, `lines`'s
+    // whole "single" contract is that this box CAN be squeezed by its host,
+    // and nothing else in this file (or its host) is positioned to declare
+    // "I am willing to shrink below my own text" on this box's behalf.
+    minWidth: 0,
+    // WHY the `lines` recipe does NOT live here any more (verify-round-2
+    // F1): this root is `inline-flex` (needed so `align`/`justify` can
+    // position content once a host gives the box explicit width/height —
+    // see this file's own header comment), and CSS `text-overflow` only
+    // applies to BLOCK containers, never to a flex container itself — a
+    // flex formatting context, not a block one, per the CSS Overflow spec.
+    // Chromium silently no-ops it there: measured, a flex root with
+    // `justify-content: center` hard-clipped the text at BOTH ends with NO
+    // ellipsis glyph at all (docs/TEXTBOX-EDITING-SPEC.md's own "truthful
+    // truncation" broken exactly where it mattered most — the default
+    // `justify: "middle"`). The recipe now lives on the inner
+    // `text-box-content` span below, which is `display: "block"` — a real
+    // block container, so `text-overflow` actually paints. Proven in the
+    // browser, not just pinned as a style object: empirically confirmed
+    // with a headless-Chrome CDP probe (three `justify` values × a 107px
+    // container) that this exact shape ellipsizes correctly at every
+    // `justify`, and that `justify` still positions the (untruncated) item
+    // normally once it fits — see docs/TEXTBOX-EDITING-SPEC.md §4's
+    // `assertTruthfulTruncation` journey step.
   };
 
   // Truthful truncation (docs/TEXTBOX-EDITING-SPEC.md §1, and Zach's own
@@ -333,14 +367,53 @@ export function TextBox({
         onCancel={onCancel}
       />
     );
-  } else if (isEmptyText && placeholder) {
-    content = (
+  } else if (isEmptyText && !placeholder) {
+    // Truly empty (no text, no placeholder): render nothing at all, not a
+    // phantom wrapper span — the box stays exactly as empty as it was
+    // before this file grew a truncation wrapper. `textBox.behavior.test.ts`
+    // pins this ("no placeholder configured renders truly empty, not a
+    // phantom node").
+    content = children;
+  } else {
+    const rest = isEmptyText && placeholder ? (
       <span data-placeholder="" style={{ opacity: 0.5 }}>
         {placeholder}
       </span>
+    ) : (
+      children
     );
-  } else {
-    content = children;
+    // WHY this wrapper exists at all (verify-round-2 F1): it is the ONE
+    // real block container in the tree, so the `lines` recipe (declared on
+    // it, not on the `inline-flex` root above) actually has a block box to
+    // clip/wrap against. `minWidth: 0` overrides the flex item's own
+    // default `min-width: auto`, which otherwise refuses to shrink the
+    // item below its content's intrinsic width no matter how narrow the
+    // host's slot is — the OTHER half of why the root's flex children never
+    // actually overflowed far enough to need clipping in the first place.
+    // `maxWidth: "100%"` is what lets it shrink to fill exactly the root's
+    // available width once content is wider than that, which is also what
+    // makes `justify` (positioning the item on the root's main axis)
+    // correctly become a no-op the instant truncation kicks in — an item
+    // clamped to 100% of its container has no spare space left to be
+    // positioned within, so it reads flush regardless of `justify`. Ellipsis
+    // itself always lands at the text's trailing (end) edge, independent of
+    // `justify` — verified empirically (headless-Chrome CDP probe): a real
+    // block box with `text-align: left|center|right` painted the identical
+    // truncated string in all three, because `text-overflow` clips/marks
+    // the inline-end edge of the LINE BOX, not wherever `text-align`
+    // happens to have centered the (already-overflowing) text within it.
+    content = (
+      <span
+        data-slot="text-box-content"
+        style={
+          lines === "single"
+            ? { display: "block", minWidth: 0, maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
+            : { display: "block", minWidth: 0, maxWidth: "100%", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }
+        }
+      >
+        {rest}
+      </span>
+    );
   }
 
   return (
