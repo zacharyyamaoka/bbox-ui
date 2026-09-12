@@ -38,6 +38,30 @@ export {
   type Instance,
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
+export {
+  SECTION_PANEL_CONTRACT,
+  STANDARD_CONTROLS,
+  type BoundField,
+  type InspectorSection,
+  type SectionAction,
+  type SectionList,
+  type SectionPanelProps,
+  type SectionPanelVariant,
+  type SectionRow,
+  type StandardControl,
+} from "./sections/contract";
+export { ControlFor, StandardPair, StandardRow, controlKindFor, LABEL_WIDTH, type RowGeometry } from "./sections/StandardRow";
+export {
+  Chevron,
+  PanelShell,
+  SectionActions,
+  SectionRows,
+  sectionDividerStyle,
+  sectionHasMembers,
+  sectionSummaryStyle,
+  sectionTitleTextStyle,
+} from "./sections/shared";
+export { SECTION_PANELS, findSectionPanel, DEFAULT_SECTION_PANEL } from "./sections/variants";
 export { MEMBER_SPECS } from "./bench";
 export {
   MEMBERS_CONTROLS,

@@ -108,12 +108,54 @@ export function acceptsSentence(p: MembersControlProps): string {
   return `Add a ${types.slice(0, -1).join(", ")} or ${types[types.length - 1]}.`;
 }
 
-/** Section title used by every control: caption, count pill, then whatever
- *  the control puts on the right (usually its Add trigger). */
-export function SectionHeader({ label, count, right }: { label: string; count: number; right?: ReactNode }) {
+/**
+ * Section title used by every control: an optional fold chevron, caption,
+ * count pill, then whatever the control puts on the right (usually its Add
+ * trigger).
+ *
+ * WHY the chevron is INSIDE this header rather than on a row above it:
+ * Zach, 2026-09-12 — "I don't like how you create another header. Instead
+ * of that just put a folding chevron to the left of the existing header."
+ * A list therefore has exactly one header in every design, and folding is
+ * something that header does, not something a wrapper adds.
+ *
+ * WHY `onToggleFold` is optional and the chevron vanishes with it: the
+ * same sentence's first half — "I like how the folding option is hidden
+ * until you actually have a member". An empty list has nothing to fold, so
+ * it shows no affordance to fold it, and its + stays one click away.
+ */
+export function SectionHeader({
+  label,
+  count,
+  right,
+  folded,
+  onToggleFold,
+}: {
+  label: string;
+  count: number;
+  right?: ReactNode;
+  folded?: boolean;
+  onToggleFold?: () => void;
+}) {
   return (
-    <div data-slot="members-header" style={headerStyle}>
-      <span style={headerLabelStyle}>{label}</span>
+    <div data-slot="members-header" data-folded={folded || undefined} style={headerStyle}>
+      {onToggleFold ? (
+        <button
+          type="button"
+          data-slot="members-fold"
+          aria-expanded={!folded}
+          title={folded ? `Show ${label}` : `Hide ${label}`}
+          onClick={onToggleFold}
+          style={foldButtonStyle}
+        >
+          <span aria-hidden data-slot="members-fold-chevron" data-open={!folded} style={foldChevronStyle(!folded)}>
+            ▶
+          </span>
+        </button>
+      ) : null}
+      <span data-slot="members-label" style={headerLabelStyle}>
+        {label}
+      </span>
       <span data-slot="members-count" style={countStyle}>
         {count}
       </span>
@@ -135,6 +177,28 @@ export const countStyle: CSSProperties = { fontSize: 10, padding: "0 6px", borde
 export const hintStyle: CSSProperties = { fontSize: 10.5, color: "var(--bbox-panel-fg-muted, #6a6a75)", lineHeight: 1.4, paddingTop: 4 };
 const glyphStyle: CSSProperties = { display: "inline-block", width: 14, textAlign: "center", fontSize: 11, color: "var(--bbox-panel-fg-muted, #5c5c66)", flexShrink: 0 };
 const badgeStyle: CSSProperties = { fontSize: 9.5, padding: "0 5px", borderRadius: 4, border: "1px solid var(--bbox-panel-border, #d6d6de)", color: "var(--bbox-panel-fg-muted, #5c5c66)", lineHeight: "14px", whiteSpace: "nowrap" };
+const foldButtonStyle: CSSProperties = {
+  width: 14,
+  height: 18,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "none",
+  background: "transparent",
+  padding: 0,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+function foldChevronStyle(open: boolean): CSSProperties {
+  return {
+    display: "inline-block",
+    fontSize: 8,
+    lineHeight: 1,
+    color: "var(--bbox-panel-fg-faint, #9a9aa5)",
+    transform: open ? "rotate(90deg)" : "rotate(0deg)",
+    transition: "transform 120ms ease",
+  };
+}
 export const iconButtonStyle: CSSProperties = { width: 20, height: 20, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--bbox-panel-fg-muted, #5c5c66)", borderRadius: 4, cursor: "pointer", fontSize: 12, flexShrink: 0, padding: 0 };
 function addButtonStyle(disabled: boolean, fullWidth: boolean): CSSProperties {
   return { ...iconButtonStyle, width: fullWidth ? "100%" : 20, height: fullWidth ? 26 : 20, border: fullWidth ? "1px dashed var(--bbox-panel-border, #d6d6de)" : "none", fontSize: fullWidth ? 11 : 14, opacity: disabled ? 0.4 : 1, cursor: disabled ? "not-allowed" : "pointer" };

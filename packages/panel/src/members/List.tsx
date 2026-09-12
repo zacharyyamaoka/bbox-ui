@@ -3,7 +3,7 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type D
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { MembersControl, MembersControlProps, MemberSummary } from "./contract";
-import { AddMemberMenu, MemberBadge, SectionHeader, TypeGlyph, acceptsSentence, hintStyle, iconButtonStyle, sectionStyle } from "./shared";
+import { AddMemberMenu, MemberBadge, SectionHeader, TypeGlyph, iconButtonStyle, sectionStyle } from "./shared";
 
 /**
  * V1 · List — the SystemSketch Arms/Members section, as a bbox-ui control.
@@ -21,11 +21,18 @@ function ListControl(p: MembersControlProps) {
     if (!e.over || e.active.id === e.over.id) return;
     p.onMove(ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id)));
   };
+  // Folding is offered only once there IS something to fold, and it is
+  // offered on this header — never on a second one above it. Both halves
+  // are Zach's, 2026-09-12; see SectionHeader's own doc.
+  const foldable = p.members.length > 0 && p.onToggleFold !== undefined;
+  const folded = foldable && p.folded === true;
   return (
-    <section data-slot="members-control" data-members-control="list" style={sectionStyle}>
+    <section data-slot="members-control" data-members-control="list" data-folded={folded || undefined} style={sectionStyle}>
       <SectionHeader
         label={p.parent.slot?.label ?? p.spec.label ?? "Members"}
         count={p.members.length}
+        folded={foldable ? folded : undefined}
+        onToggleFold={foldable ? p.onToggleFold : undefined}
         right={
           <>
             {p.onSelectParent && (
@@ -37,11 +44,13 @@ function ListControl(p: MembersControlProps) {
           </>
         }
       />
-      {p.members.length === 0 ? (
-        <p data-slot="members-empty" style={hintStyle}>
-          No members yet. {acceptsSentence(p)}
-        </p>
-      ) : (
+      {/* WHY an empty list renders NOTHING under its header — not even a
+          sentence naming what it accepts: Zach, 2026-09-12, "No need to put
+          this text under the members list. it just add clutter." The +
+          beside the header already opens a typed menu of exactly those
+          types, so the sentence was a permanent line spent restating a
+          menu one click away. */}
+      {p.members.length === 0 || folded ? null : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             <ul data-slot="members-list" style={listStyle}>
@@ -51,9 +60,6 @@ function ListControl(p: MembersControlProps) {
             </ul>
           </SortableContext>
         </DndContext>
-      )}
-      {p.members.length > 0 && (
-        <p style={hintStyle}>One row per member, in order. Click a row to edit that member; drag ⋮⋮ to reorder.</p>
       )}
     </section>
   );

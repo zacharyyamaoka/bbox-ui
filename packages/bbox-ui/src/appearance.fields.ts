@@ -27,12 +27,23 @@ const LENS_OPTIONS: FieldOption[] = LENSES.map((lens) => ({
   label: LENS_LABELS[lens],
 }));
 
+/**
+ * WHY the whole bundle declares `section: "appearance"`: it is shared by
+ * Port, Pill, Glyph, TextBox, Bar and Block, so declaring the section HERE
+ * gives every one of them a correctly-headed Appearance run for free —
+ * the same argument `APPEARANCE_FIELDS` already won for the fields
+ * themselves. Figma's panel has an Appearance section for the same reason:
+ * it is the one group that means the same thing on every kind of object.
+ */
+export const APPEARANCE_SECTION = "appearance";
+
 export const STATE_FIELD: FieldSpec = {
   id: "state",
   label: "State",
   kind: "segments",
   defaultValue: "empty",
   options: STATE_OPTIONS,
+  section: APPEARANCE_SECTION,
   hint: "`received` is runtime-only — never persisted (PERSISTABLE_APPEARANCE_STATES).",
 };
 
@@ -42,6 +53,7 @@ export const TONE_FIELD: FieldSpec = {
   kind: "segments",
   defaultValue: "neutral",
   options: TONE_OPTIONS,
+  section: APPEARANCE_SECTION,
   hint: "Escape hatch for a component not colouring by state. Writes an override, not a preset — see appearance.ts's toneOverride.",
 };
 
@@ -51,6 +63,7 @@ export const LENS_FIELD: FieldSpec = {
   kind: "segments",
   defaultValue: "normal",
   options: LENS_OPTIONS,
+  section: APPEARANCE_SECTION,
 };
 
 /**

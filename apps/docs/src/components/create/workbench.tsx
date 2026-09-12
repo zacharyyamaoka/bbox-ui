@@ -325,6 +325,22 @@ export function Workbench() {
     }));
   }
 
+  /** Clear one prop on one instance — the foreign-target half of
+   *  `clearOverride`, which only ever reaches the SELECTED instances. A
+   *  Bar's `size` shown in the Block's Header section needs a way back to
+   *  its default just as much as a row on the subject does. */
+  function clearInstanceProp(id: string, fieldId: string) {
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: (prev[activeName] ?? []).map((i) => {
+        if (i.id !== id) return i;
+        const props = { ...i.props };
+        delete props[fieldId];
+        return { ...i, props };
+      }),
+    }));
+  }
+
   /*
    * Arrangement / Placement ops (Zach, 2026-09-12) — a Block's own states
    * and its Ports' per-state placement. Every write here goes through
@@ -631,6 +647,7 @@ export function Workbench() {
           onRemoveMember={removeMemberById}
           onMoveMember={moveMemberInParent}
           onSetProp={setInstanceProp}
+          onClearProp={clearInstanceProp}
           onSelectInstance={(id) => selectInstance(id)}
           arrangementActions={{
             onSetArrangement: setArrangement,

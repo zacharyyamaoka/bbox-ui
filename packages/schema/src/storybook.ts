@@ -15,6 +15,12 @@ const CONTROL: Record<FieldKind, "select" | "number" | "boolean" | "text"> = {
   number: "number",
   toggle: "boolean",
   text: "text",
+  // Storybook has no multi-select primitive in this map's closed union, and
+  // `check` would need an array arg where every other control here is a
+  // scalar. A `flags` field stores its set as one comma-joined string
+  // (see StandardRow's `flags` control), so `text` is the honest mapping
+  // for a story: you can still type "top,bottom" and see it take effect.
+  flags: "text",
 };
 
 export interface StorybookArgType {

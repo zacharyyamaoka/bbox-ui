@@ -16,7 +16,7 @@
  * imports an engine, so it structurally cannot make that mistake.
  */
 
-export type FieldKind = "segments" | "number" | "toggle" | "text";
+export type FieldKind = "segments" | "number" | "toggle" | "text" | "flags";
 
 export type FieldValue = string | number | boolean;
 
@@ -48,7 +48,8 @@ export interface FieldSpec<TValue = FieldValue> {
    * that default — `port.fields.test.ts` pins it.
    */
   defaultValue: TValue;
-  /** Required when `kind === "segments"`; the field's exhaustive value set, in display order. */
+  /** Required when `kind === "segments"` or `"flags"`; the field's exhaustive
+   *  value set, in display order. */
   options?: FieldOption[];
   min?: number;
   max?: number;
@@ -98,6 +99,36 @@ export interface FieldSpec<TValue = FieldValue> {
    * only looks at the inherited bag at all when this is true.
    */
   cascades?: boolean;
+  /**
+   * Fields sharing a `section` are declared to belong under the same
+   * SUB-HEADER inside one panel — Figma's Position / Layout / Appearance /
+   * Fill / Stroke. Absent means the component's own root section.
+   *
+   * WHY a second declaration beside `group` and not a reuse of it: `group`
+   * answers "do these two share a LINE" (width beside height); `section`
+   * answers "do these share a HEADING" (width, height, radius and
+   * orientation all under Layout). They are independent — Block's
+   * width/height are one group inside the Layout section — so one string
+   * cannot carry both without meaning different things at different
+   * nesting levels.
+   *
+   * WHY it is called `section` and not `header`, which was Zach's own word
+   * (2026-09-12, "I think we need one for like 'header' which allows us to
+   * group things under the same sub header"): in this panel "header"
+   * already names two other things — the panel's own title bar, and the
+   * Block's `header` REGION, which is itself one of the sections this
+   * declaration produces. A Bar's fields would then have read
+   * `header: "header"`. The word he reached for is the rendered artifact
+   * (the sub-header); `section` is the thing being declared.
+   *
+   * WHY on the field and not a list on the component: same argument
+   * `group` already won — a field's section is a fact about that field's
+   * meaning, so a component that adds a field gets it placed without a
+   * second edit somewhere else that can drift. Section ORDER comes from
+   * first appearance in the field array, so declaration order is layout
+   * order and there is no list to keep in sync.
+   */
+  section?: string;
 }
 
 /**

@@ -165,6 +165,22 @@ async function load(theme, component) {
   await setSelect('[data-slot="component-picker"]', component);
   await waitFor('[data-slot="instance-navigator"]');
   await sleep(250);
+  // Pin this journey to the PRE-2026-09-12 inspector.
+  //
+  // WHY, and why this is not a weakened assertion: every check below reads
+  // that panel's own slots — `figma-dense-header`, `inspector-layout`,
+  // `placement-edge` — and on 2026-09-12 the create page grew a switcher
+  // whose DEFAULT is the new section panel (S1), so those slots stopped
+  // existing on load. Naming the surface a regression is ABOUT is the
+  // honest repair; the alternative (relaxing the selectors until they
+  // match either panel) would make the test pass against a panel it was
+  // never written for. It also fails loudly the day "current" is deleted,
+  // which is exactly when someone should re-derive these expectations.
+  // The new panel's own regression is demos/capture-inspector-v5.mjs.
+  if (await evaluate(`!!document.querySelector('[data-slot="inspector-design-picker"]')`)) {
+    await setSelect('[data-slot="inspector-design-picker"]', "current");
+    await sleep(320);
+  }
   consoleErrors.length = 0;
 }
 /** Add `type` through the nth member list; the page keeps the subject. */

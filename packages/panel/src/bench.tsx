@@ -644,6 +644,13 @@ export function randomValue(field: FieldSpec, roll: () => number): FieldValue | 
     }
     case "text":
       return RANDOM_WORDS[Math.floor(roll() * RANDOM_WORDS.length)]!;
+    // WHY flags never rolls: a `flags` field is a SET (a Block's live port
+    // edges), and a random subset regularly rolls the empty set — which
+    // parks every port and makes the Block look broken, exactly the
+    // "a disproportionate amount seem to disappear" failure `randomize:
+    // false` was added for. Left out rather than given a special rule.
+    case "flags":
+      return undefined;
   }
 }
 

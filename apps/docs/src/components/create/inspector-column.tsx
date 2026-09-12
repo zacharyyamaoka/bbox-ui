@@ -1,12 +1,26 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
 import type { ComponentEntry, Instance, PanelVariant, Subject } from "@bbox-ui/panel";
-import { activeArrangement, ancestry, blockPorts, isSlotFill, portPlacementsOf } from "@bbox-ui/panel";
+import { SECTION_PANELS, activeArrangement, ancestry, blockPorts, findSectionPanel, isSlotFill, portPlacementsOf } from "@bbox-ui/panel";
 import { MembersPath, memberListsFor, type MemberListActions } from "./members-section";
 import { PlacementSection } from "./arrangement-section";
 import type { InspectorLayoutVariant } from "./inspector-layout";
+import { SectionInspector } from "./sections/SectionInspector";
+
+/**
+ * Which inspector design is on screen.
+ *
+ * "current" is the pre-feedback panel, kept reachable rather than deleted —
+ * nothing Zach has not rejected gets removed, and having the before one
+ * dropdown away is what makes five proposals judgeable instead of
+ * described. Everything else is a section design (packages/panel/src/
+ * sections/variants).
+ */
+const DESIGN_KEY = "bbox-ui.create.inspectorDesign";
+const CURRENT_DESIGN = "current";
+const DEFAULT_DESIGN = SECTION_PANELS[0]!.id;
 
 interface InspectorColumnProps {
   variant: PanelVariant;
@@ -31,6 +45,7 @@ interface InspectorColumnProps {
   onSetProp: (id: string, fieldId: string, value: FieldValue) => void;
   onSelectInstance: (id: string) => void;
   arrangementActions: Omit<MemberListActions, "onAddMember" | "onRemoveMember" | "onMoveMember" | "onSetProp" | "onSelect">;
+  onClearProp: (id: string, fieldId: string) => void;
 }
 
 /**
@@ -47,6 +62,30 @@ interface InspectorColumnProps {
 export function InspectorColumn(p: InspectorColumnProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrolls, setScrolls] = useState(false);
+  // Read after mount, never in the initialiser: this is a Next page and the
+  // server has no localStorage, so the first client render would disagree
+  // with the HTML it hydrates (the same rule workbench.tsx already keeps).
+  const [design, setDesign] = useState<string>(DEFAULT_DESIGN);
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(DESIGN_KEY);
+      if (stored) setDesign(stored);
+    } catch {
+      /* private window: the choice still works, it just forgets */
+    }
+    setRestored(true);
+  }, []);
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      window.localStorage.setItem(DESIGN_KEY, design);
+    } catch {
+      /* see above */
+    }
+  }, [restored, design]);
+  const sectionPanel = findSectionPanel(design);
+  const showSections = design !== CURRENT_DESIGN;
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -78,7 +117,7 @@ export function InspectorColumn(p: InspectorColumnProps) {
         </div>
       )}
       <MembersPath instances={p.instances} subject={p.subject} onSelect={p.onSelectInstance} />
-      {(() => {
+      {showSections ? null : (() => {
         // A Port's Placement section: a dedicated slot here rather than a
         // member list's regionHeader, because a Port declares no `members`
         // of its own — there is no list to attach it to (Zach's
@@ -108,6 +147,35 @@ export function InspectorColumn(p: InspectorColumnProps) {
         );
       })()}
       <div ref={scrollRef} data-slot="inspector-scroll" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        {showSections ? (
+          <div data-slot="panel-variant-host" data-variant={sectionPanel.id}>
+            <SectionInspector
+              variant={sectionPanel}
+              entries={p.entries}
+              instances={p.instances}
+              subject={p.subject}
+              subjects={p.subjects}
+              componentName={p.componentName}
+              fields={p.fields}
+              presets={p.presets}
+              toSubject={p.toSubject}
+              onChange={p.onChange}
+              onClearOverride={p.onClearOverride}
+              onSetProp={p.onSetProp}
+              onClearProp={p.onClearProp}
+              onAddMember={p.onAddMember}
+              onRemoveMember={p.onRemoveMember}
+              onMoveMember={p.onMoveMember}
+              onSelectInstance={p.onSelectInstance}
+              onSetArrangement={p.arrangementActions.onSetArrangement}
+              onAddArrangement={p.arrangementActions.onAddArrangement}
+              onSetArrangementMode={p.arrangementActions.onSetArrangementMode}
+              onToggleArrangementEdge={p.arrangementActions.onToggleArrangementEdge}
+              onSetArrangementGrouping={p.arrangementActions.onSetArrangementGrouping}
+              onSetPortPlacement={p.arrangementActions.onSetPortPlacement}
+            />
+          </div>
+        ) : (
         <div data-slot="panel-variant-host" data-variant={p.variant.id} className="[&>*]:!w-full [&>*]:!max-w-none [&>*]:!rounded-none [&>*]:!border-0 [&>*]:!shadow-none">
           {(() => {
             const panel =
@@ -145,6 +213,28 @@ export function InspectorColumn(p: InspectorColumnProps) {
             return <p.layout.Layout subjectName={p.componentName} panel={panel} lists={lists} isSlotFill={isSlotFill(p.subject ?? undefined)} />;
           })()}
         </div>
+        )}
+      </div>
+      {/* The proposal switcher, bottom of the inspector column — the same
+          `<select>` + localStorage pattern as the panel-design picker in
+          `bench-sidebar.tsx`, deliberately, so there is one way to switch a
+          prototype on this page. Zach, 2026-09-09: never a URL flag he has
+          to type. */}
+      <div data-slot="inspector-design-switcher" className="flex items-center gap-2 border-t border-border px-3 py-2">
+        <span className="shrink-0 text-[11px] text-muted-foreground">Inspector</span>
+        <select
+          data-slot="inspector-design-picker"
+          value={design}
+          onChange={(e) => setDesign(e.target.value)}
+          className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground"
+        >
+          <option value={CURRENT_DESIGN}>Current (before)</option>
+          {SECTION_PANELS.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.label}
+            </option>
+          ))}
+        </select>
       </div>
     </aside>
   );

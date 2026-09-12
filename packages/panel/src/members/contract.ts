@@ -69,6 +69,23 @@ export interface MembersControlProps {
   /** When the list belongs to a slot fill shown inside ITS parent's
    *  inspector: select the fill itself (to edit its Flex props). */
   onSelectParent?: () => void;
+  /**
+   * Folded away, with only its own header showing.
+   *
+   * WHY the fold lives on THIS control and not on the layout wrapping it:
+   * Zach, 2026-09-12 — "I like how the folding option is hidden until you
+   * actually have a member, however I don't like how you create another
+   * header. Instead of that just put a folding chevron to the left of the
+   * existing header." The wrapper that owned the fold had to draw a row to
+   * put the chevron on, and that row WAS the second header. Moving the
+   * state one level in deletes the row.
+   *
+   * Undefined means "this host does not offer folding" — the control then
+   * draws no chevron at all, which is also what a list with no members
+   * must do.
+   */
+  folded?: boolean;
+  onToggleFold?: () => void;
 }
 
 export interface MembersControl {
@@ -87,7 +104,12 @@ export interface MembersControl {
  * 2. Add is typed: only what the parent accepts, and never past `max`.
  * 3. Clicking a member selects it — the inspector switches to the child.
  * 4. Remove and reorder are reachable for every member.
- * 5. Empty says what can be added, not nothing.
+ * 5. An empty list shows its + and nothing else — no sentence explaining
+ *    what could go in it. (Zach, 2026-09-12, of "No members yet. Add a
+ *    Port, Pill, Glyph, TextBox, Flex or Block.": "No need to put this
+ *    text under the members list. it just add clutter." The Add menu
+ *    already answers the question, on demand, without spending a line of
+ *    every empty list to do it.)
  * 6. No nested editor: a member's own fields are edited by selecting it.
  */
 export const MEMBERS_CONTRACT = [
@@ -95,6 +117,6 @@ export const MEMBERS_CONTRACT = [
   "add is typed and capped",
   "click selects the member",
   "remove and reorder reachable",
-  "empty says what can be added",
+  "empty shows its + and no sentence",
   "no nested editor",
 ] as const;
