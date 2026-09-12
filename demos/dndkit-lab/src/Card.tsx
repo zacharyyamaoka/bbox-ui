@@ -1,7 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { CSSProperties } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 
 import type { Direction, Orientation } from "./types";
 
@@ -35,11 +35,13 @@ export function SortableCard({
   label,
   orientation,
   direction,
+  onContextMenu,
 }: {
   id: string;
   label: string;
   orientation: Orientation;
   direction?: Direction;
+  onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -56,6 +58,7 @@ export function SortableCard({
       ref={setNodeRef}
       style={style}
       className={`card card--${orientation}${isDragging ? " is-dragging" : ""}`}
+      onContextMenu={onContextMenu}
       {...attributes}
       {...listeners}
     >
@@ -71,6 +74,7 @@ export function FreeCard({
   direction,
   x,
   y,
+  onContextMenu,
 }: {
   id: string;
   label: string;
@@ -78,6 +82,7 @@ export function FreeCard({
   direction?: Direction;
   x: number;
   y: number;
+  onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
 
@@ -94,6 +99,7 @@ export function FreeCard({
       ref={setNodeRef}
       style={style}
       className={`card card--${orientation}${isDragging ? " is-dragging" : ""}`}
+      onContextMenu={onContextMenu}
       {...attributes}
       {...listeners}
     >

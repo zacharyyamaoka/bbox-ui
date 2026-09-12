@@ -91,6 +91,7 @@ body {
 
 /* Kept in sync by hand with CONTAINER_PADDING in layout.ts. */
 .container {
+  position: relative;
   display: flex;
   align-items: center;
   border: 2px solid var(--line);
@@ -114,9 +115,44 @@ body {
   position: relative;
 }
 
+.container--dashed {
+  border-style: dashed;
+}
+
 .container.is-over {
   border-color: var(--accent);
   background: rgba(125, 211, 252, 0.07);
+}
+
+.container.is-arrow-target {
+  border-color: var(--accent-strong);
+}
+
+/* The Block's edge itself — a straight line through the container, drawn
+   full-bleed (edge to edge of the dashed box, ignoring its own padding)
+   since abspos children measure from the padding edge, not the content
+   box. Cards sit ON this line; the dashed box around them is just the
+   kanban-style drag boundary, not the edge. */
+.edge-line {
+  position: absolute;
+  pointer-events: none;
+  background: var(--line-dim);
+}
+
+.edge-line--horizontal {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.edge-line--vertical {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
 }
 
 .card {
@@ -370,4 +406,81 @@ body {
 
 .group-slot.is-dragging {
   cursor: grabbing;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  background: var(--panel);
+  border: 1px solid var(--line-dim);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 120px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: rgba(125, 211, 252, 0.12);
+}
+
+.context-menu button.is-destructive:hover {
+  background: rgba(251, 113, 133, 0.15);
+  color: #fb7185;
+}
+
+.tool-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.tool-hint kbd {
+  border: 1px solid var(--line-dim);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.tool-hint.is-active {
+  color: var(--accent);
+}
+
+/* A full-board layer that only intercepts the pointer while the arrow tool
+   is active — pointer-events stay off the rest of the time so every
+   existing drag/drop/right-click keeps working untouched. */
+.board-arrow-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.board-arrow-overlay.is-active {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.card--ghost {
+  position: absolute;
+  opacity: 0.55;
+  border-style: dashed;
+  border-color: var(--accent);
+  pointer-events: none;
 }

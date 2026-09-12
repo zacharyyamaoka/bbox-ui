@@ -129,6 +129,25 @@ async function drag(from, to, steps = 12) {
   await sleep(150);
 }
 
+async function emptySpotInRow(containerSelector) {
+  // Right-clicking "empty container space" needs a point that isn't sitting
+  // on a card — the container's own geometric center can land on a middle
+  // card once an odd number remain (as happened here after stage 3's earlier
+  // cross-container drag left only 3 in the top row). Use the padding strip
+  // after the rightmost card instead, which stays empty at any card count
+  // this demo produces.
+  return evaluate(`(() => {
+    const container = document.querySelector(${JSON.stringify(containerSelector)});
+    const rect = container.getBoundingClientRect();
+    const cards = [...container.children]
+      .filter((el) => el.classList.contains("card"))
+      .map((el) => el.getBoundingClientRect());
+    const rightmost = cards.length ? Math.max(...cards.map((r) => r.right)) : rect.left;
+    const x = rightmost + 20 < rect.right - 10 ? (rightmost + rect.right - 10) / 2 : rect.left + 10;
+    return { x, y: rect.top + rect.height / 2 };
+  })()`);
+}
+
 async function rectOf(selector) {
   return evaluate(`(() => {
     const selector = ${JSON.stringify(selector)};
@@ -194,6 +213,31 @@ async function clickByText(tag, text) {
   await sleep(80);
 }
 
+async function rightClick(point) {
+  await mouseMove(point.x, point.y);
+  await send("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    x: point.x,
+    y: point.y,
+    button: "right",
+    clickCount: 1,
+  });
+  await send("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    x: point.x,
+    y: point.y,
+    button: "right",
+    clickCount: 1,
+  });
+  await sleep(120);
+}
+
+async function pressKey(key) {
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key, text: key });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key, text: key });
+  await sleep(80);
+}
+
 await waitForTabs();
 await sleep(300);
 
@@ -231,29 +275,79 @@ const p3 = await rectOfXPath(cardSelector("P3"));
 const p4 = await rectOfXPath(cardSelector("P4"));
 await drag(p3, { x: (p3.x + p4.x) / 2, y: p3.y - 25 });
 await screenshot("07-board-custom-freeform");
+await click('input[type="checkbox"]'); // back to Auto for the rest of stage 3
+await sleep(150);
+
+// --- Stage 3: right-click to add / delete a card ---
+const topContainerGap = await emptySpotInRow(".board__top .container");
+await rightClick(topContainerGap);
+await sleep(120);
+await screenshot("08-board-context-menu-add");
+
+await clickByText("button", "Add card");
+await sleep(150);
+await screenshot("09-board-card-added");
+
+const p11 = await rectOfXPath(cardSelector("P11"));
+await rightClick(p11);
+await sleep(120);
+await screenshot("10-board-context-menu-delete");
+
+await clickByText("button", "Delete");
+await sleep(150);
+
+// --- Stage 3: the arrow tool — draw near an edge to spawn a port there ---
+await pressKey("a");
+await sleep(100);
+const rightContainerCenter = await rectOf(".board__right .container");
+const arrowStart = { x: rightContainerCenter.x - 180, y: rightContainerCenter.y - 40 };
+const arrowMid = { x: rightContainerCenter.x - 60, y: rightContainerCenter.y - 20 };
+await mouseMove(arrowStart.x, arrowStart.y);
+await send("Input.dispatchMouseEvent", {
+  type: "mousePressed",
+  x: arrowStart.x,
+  y: arrowStart.y,
+  button: "left",
+  clickCount: 1,
+});
+await mouseMove(arrowMid.x, arrowMid.y);
+await sleep(60);
+await screenshot("11-board-arrow-tool-drawing");
+
+await mouseMove(rightContainerCenter.x, rightContainerCenter.y);
+await sleep(60);
+await send("Input.dispatchMouseEvent", {
+  type: "mouseReleased",
+  x: rightContainerCenter.x,
+  y: rightContainerCenter.y,
+  button: "left",
+  clickCount: 1,
+});
+await sleep(150);
+await screenshot("12-board-arrow-tool-port-created");
 
 // --- Stage 4: grouping ---
 await click(".tabs__tab:nth-of-type(4)");
 await sleep(200);
-await screenshot("08-grouping-pairs-grouped");
+await screenshot("13-grouping-pairs-grouped");
 
 await clickByText("button", "Collapsed");
 await sleep(150);
-await screenshot("09-grouping-pairs-collapsed");
+await screenshot("14-grouping-pairs-collapsed");
 
 await clickByText("button", "By source");
 await sleep(150);
 await clickByText("button", "Collapsed");
 await sleep(150);
-await screenshot("10-grouping-source-collapsed");
+await screenshot("15-grouping-source-collapsed");
 
 const coreChip = await rectOfXPath(chipSelector("Core"));
 await drag(coreChip, { x: coreChip.x + 340, y: coreChip.y });
-await screenshot("11-grouping-source-rigid-move");
+await screenshot("16-grouping-source-rigid-move");
 
 await clickByText("button", "Three-way split");
 await sleep(150);
-await screenshot("12-grouping-threeway-grouped");
+await screenshot("17-grouping-threeway-grouped");
 
 chrome.kill();
 await new Promise((resolve) => chrome.once("exit", resolve));

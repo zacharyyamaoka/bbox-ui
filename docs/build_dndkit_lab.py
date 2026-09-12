@@ -99,7 +99,45 @@ FIGURES = [
         "them.",
     ),
     (
-        "08-grouping-pairs-grouped.png",
+        "08-board-context-menu-add.png",
+        "Stage 3 — right-click a container: Add card",
+        "Right-clicking empty space inside a container (not a card) offers Add card. In Auto "
+        "mode the new card joins the flex flow and gets evenly spaced immediately; in Custom "
+        "mode it seeds at exactly the point you right-clicked and stays there.",
+    ),
+    (
+        "09-board-card-added.png",
+        "Stage 3 — the new card, evenly spaced",
+        "P11 lands in the top row and the container re-evens around it — the same mechanism "
+        "as any other Auto-mode reflow, just triggered by a menu action instead of a drag.",
+    ),
+    (
+        "10-board-context-menu-delete.png",
+        "Stage 3 — right-click a card: Delete",
+        "Right-clicking a card (rather than the empty container behind it) shows Delete "
+        "instead — the two menus share the same component, keyed off what the click landed "
+        "on. Deleting removes the card from whichever container holds it and drops its saved "
+        "free position.",
+    ),
+    (
+        "11-board-arrow-tool-drawing.png",
+        "Stage 3 — press A, draw an arrow (tldraw's own binding for the Arrow tool)",
+        "Mid-drag: a live SVG line follows the pointer. The tip here is still ~120px from "
+        "the right edge's line — outside the 28px snap distance — so no port preview shows "
+        "yet.",
+    ),
+    (
+        "12-board-arrow-tool-port-created.png",
+        "Stage 3 — released near the edge: a new port appears",
+        "Releasing within the snap distance of an edge spawns a card there (P12, evenly "
+        "spaced into the right column) and returns to the Select tool, tldraw-style — one "
+        "arrow, one shape, back to selection. Because every edge here is axis-aligned, the "
+        "hit-test only ever compares the tip's x or y against the line's fixed coordinate — "
+        "no vector math. Missing every edge (dragging into the middle, near the Block) "
+        "creates nothing.",
+    ),
+    (
+        "13-grouping-pairs-grouped.png",
         "Stage 4 — grouping, “Associated pairs”, Grouped mode",
         "Each card carries a group id + an order within that group. *args/**kwargs cluster "
         "into “variadic”, feedback/result cluster into “action” — the kind of ports that "
@@ -108,7 +146,7 @@ FIGURES = [
         "the whole dashed box as one rigid unit.",
     ),
     (
-        "09-grouping-pairs-collapsed.png",
+        "14-grouping-pairs-collapsed.png",
         "Stage 4 — same set, Collapsed mode",
         "Same two groups, now merged into one representative card each (“variadic ×2”, "
         "“action ×2”) with a stacked-card illusion behind the front face. This is the effect "
@@ -116,7 +154,7 @@ FIGURES = [
         "point.",
     ),
     (
-        "10-grouping-source-collapsed.png",
+        "15-grouping-source-collapsed.png",
         "Stage 4 — “By source”, Collapsed mode",
         "A different grouping set (a different lens) over the same 8 cards — grouped by which "
         "upstream block each port conceptually comes from: Core (args, kwargs, cfg), IO (in, "
@@ -124,7 +162,7 @@ FIGURES = [
         "representative port — the “simplify so each block only has 1 port” use case.",
     ),
     (
-        "11-grouping-source-rigid-move.png",
+        "16-grouping-source-rigid-move.png",
         "Stage 4 — dragging the collapsed “Core” card to the end",
         "Grabbing the merged card moves all 3 of its members together — “rigidly connected "
         "bodies”, per the ask. The new order (IO, Ctrl, Core) persists in the underlying flat "
@@ -132,7 +170,7 @@ FIGURES = [
         "at the new position, not reset.",
     ),
     (
-        "12-grouping-threeway-grouped.png",
+        "17-grouping-threeway-grouped.png",
         "Stage 4 — “Three-way split”, Grouped mode",
         "A third lens: an arbitrary assignment into 3 buckets (A, B, C), useful when you just "
         "want a fixed number of representative locations regardless of what the ports "
@@ -192,12 +230,15 @@ HTML = f"""<!doctype html>
     &rarr; &ldquo;Prototype of dnd kit&rdquo;: a single sortable row, a single sortable column,
     four containers around a Block that cards move freely between &mdash; with a switchable
     flex spacing scheme, a Custom mode where cards stop auto-evening and just sit where you
-    drop them, and a polarity arrow on each card that always points away from the Block and
-    flips the instant the card crosses to a different edge &mdash; and finally grouping: every
-    card gets a group id + an order within a switchable &ldquo;grouping set&rdquo;, so groups
-    can sit side by side, move together like a rigid body, and collapse into one
-    representative card. Plain DOM, <code>@dnd-kit/core</code> +
-    <code>@dnd-kit/sortable</code> &mdash; no React Flow or tldraw.
+    drop them, a polarity arrow on each card that always points away from the Block and flips
+    the instant the card crosses to a different edge, and now the Block's own edge drawn as a
+    dashed straight line through each container, a right-click menu to add or delete a card,
+    and an Arrow tool (press <code>A</code>, tldraw's own binding) that spawns a port wherever
+    it meets an edge &mdash; and finally grouping: every card gets a group id + an order within
+    a switchable &ldquo;grouping set&rdquo;, so groups can sit side by side, move together like
+    a rigid body, and collapse into one representative card. Plain DOM,
+    <code>@dnd-kit/core</code> + <code>@dnd-kit/sortable</code> &mdash; no React Flow or
+    tldraw.
   </p>
 
   <div class="meta">

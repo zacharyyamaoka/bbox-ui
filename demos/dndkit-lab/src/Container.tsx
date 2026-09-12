@@ -1,6 +1,6 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, type SortingStrategy } from "@dnd-kit/sortable";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
 
 import type { Size, SpacingScheme } from "./types";
 
@@ -11,6 +11,9 @@ export function Container({
   axis,
   spacing,
   size,
+  dashed,
+  registerRef,
+  onContextMenu,
   children,
 }: {
   id: string;
@@ -19,6 +22,9 @@ export function Container({
   axis: "row" | "column";
   spacing: SpacingScheme;
   size: Size;
+  dashed?: boolean;
+  registerRef?: (el: HTMLDivElement | null) => void;
+  onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
   children: ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -32,9 +38,13 @@ export function Container({
   return (
     <SortableContext id={id} items={items} strategy={strategy}>
       <div
-        ref={setNodeRef}
-        className={`container container--${axis}${isOver ? " is-over" : ""}`}
+        ref={(el) => {
+          setNodeRef(el);
+          registerRef?.(el);
+        }}
+        className={`container container--${axis}${dashed ? " container--dashed" : ""}${isOver ? " is-over" : ""}`}
         style={style}
+        onContextMenu={onContextMenu}
       >
         {children}
       </div>
