@@ -102,6 +102,23 @@ describe("detach → rebuild: standalone glyph", () => {
     expectSamePose(original, rebuilt);
   });
 
+  it("round-trips padding 20 (the finish-line lane's own regression value), unrotated", () => {
+    const { original, rebuilt } = roundTrip(
+      glyphProps({ content: "lucide:rocket", sizePreset: "lg", padding: 20 }),
+    );
+    expect(rebuilt.props).toEqual(original.props);
+    expectSamePose(original, rebuilt);
+  });
+
+  it("round-trips padding 20, rotated — both axes of the offset correction exercised together", () => {
+    const { original, rebuilt } = roundTrip(
+      glyphProps({ content: "emoji:🚀", sizePreset: "xl", padding: 20 }),
+      { rotateBy: Math.PI / 3 },
+    );
+    expect(rebuilt.props).toEqual(original.props);
+    expectSamePose(original, rebuilt);
+  });
+
   it("round-trips a glyph with an explicit size override", () => {
     const { original, rebuilt } = roundTrip(glyphProps({ size: 52 }));
     expect(rebuilt.props).toEqual(original.props);
