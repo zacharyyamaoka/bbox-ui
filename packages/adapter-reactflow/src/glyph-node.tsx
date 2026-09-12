@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type CSSProperties, type ReactNode } from "react";
 import {
   NodeResizer,
   useReactFlow,
@@ -51,6 +51,36 @@ export function glyphNodeFootprint(data: BBoxGlyphNodeData): { w: number; h: num
     padding: data.padding,
   });
   return { w, h };
+}
+
+/**
+ * The `[data-slot="rf-glyph"]` body's own style, pulled out as a pure
+ * function so the box-equality fix (verifier #34) is something a
+ * COMMITTED test can hold down, not only the gitignored `.scratch-host`
+ * CDP journey — react-test-renderer/jsdom do no layout, and adding either
+ * as a dependency would touch this lane's package.json/pnpm-lock.yaml
+ * (out of scope for a fix-only pass), so the assertion this test package
+ * *can* make is "the component asks for a centred flex box of the right
+ * size", not "the browser painted one" — the real box-vs-box pixel
+ * measurement stays `.scratch-host/drive.mjs`'s job (section 1d/1e/3d).
+ *
+ * display:flex + centering (not a plain block div) is what keeps the
+ * picker's `inline-flex` trigger centred in this box instead of resting
+ * on a block-level baseline strut — see the WHY at the call site below for
+ * the full defect this fixes.
+ */
+export function glyphNodeBodyStyle(data: BBoxGlyphNodeData): CSSProperties {
+  const { w, h } = glyphNodeFootprint(data);
+  const rotation = data.rotation ?? 0;
+  return {
+    width: w,
+    height: h,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
+    transformOrigin: "center",
+  };
 }
 
 /**
@@ -138,7 +168,6 @@ export function BBoxGlyphNode({ id, data, selected }: NodeProps<BBoxGlyphNodeTyp
   const { updateNodeData, updateNode } = useReactFlow();
   const { onContentChange } = useGlyphNodeContext();
   const { w, h } = glyphNodeFootprint(data);
-  const rotation = data.rotation ?? 0;
 
   // WHY an effect, not only `onResizeEnd` below: React Flow's own node box
   // (`node.width`/`node.height`) is a SEPARATE field from the footprint
@@ -187,18 +216,65 @@ export function BBoxGlyphNode({ id, data, selected }: NodeProps<BBoxGlyphNodeTyp
         maxWidth={512 + 2 * data.padding}
         maxHeight={512 + 2 * data.padding}
         isVisible={selected ?? false}
+        // WHY onResizeEnd only, not onResize too: one `size` override per
+        // COMPLETED drag, matching `sizeChangeFromDimensions`'s own
+        // `resizing !== false` rejection above — writing on every tick would
+        // thrash `updateNodeData` (and any controlled host's state) at frame
+        // rate for a value nothing downstream needs mid-drag. The visible
+        // trade-off this makes deliberately: the glyph does NOT track the
+        // handle live — it stays pinned at its pre-drag footprint while an
+        // empty, growing selection box drags around it, then snaps to fill
+        // that box on release (measured: mid-drag from 44px, node box grows
+        // to 104px while the body stays 44px; both settle to 104px on
+        // mouseup). This is pre-existing from the committed lane, not a
+        // regression this pass introduced. Painting the footprint from the
+        // live `resizing: true` dimensions instead — still writing the
+        // override once at `resizing: false` — would fix the visual lag,
+        // but is a product call (does Zach want a bouncing box during the
+        // drag, or the glyph itself scaling with the handle), left for that
+        // decision rather than guessed at here.
         onResizeEnd={(_event, params) => {
           updateNodeData(id, { size: glyphSizeFromNodeSize(data, params.width, params.height) });
         }}
       />
       <div
         data-slot="rf-glyph"
-        style={{
-          width: w,
-          height: h,
-          transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
-          transformOrigin: "center",
-        }}
+        // WHY flex+centered, not just width/height: the picker's default
+        // trigger (`.GlyphPicker-trigger`) is `display: inline-flex` — an
+        // INLINE-level box, so a plain block div lays it out on a text
+        // baseline, not centred in the box. Below size 18 the descender
+        // gap in that baseline strut pushes the trigger visibly outside
+        // this div (verifier #34: 8.4px below the top at size 8), which
+        // also moves the click target off the node's centre, breaking D5
+        // at the resizer floor. Centring here — the one seam every
+        // render's footprint already flows through — fixes it for every
+        // size without the picker package needing to know it is hosted
+        // inside a block-level wrapper. Pulled into `glyphNodeBodyStyle`
+        // (pure, exported) so `test/glyph-node.test.tsx` can hold the
+        // three style keys down — deleting them regresses silently
+        // otherwise, since they read as redundant beside an explicit
+        // width/height.
+        //
+        // WHY the box invariant this restores is NOT claimed under
+        // rotation: React Flow's own node box (`useEffect` above) always
+        // bounds the UNROTATED footprint — there is no stock rotate
+        // gesture here (D2, stock-part table) to make the box track a
+        // rotated AABB, so a rotated glyph paints outside its selection
+        // box by design, the same way `docs/GLYPH-PLAN.md:14`'s original
+        // defect looked, just for a different reason. The centre click
+        // still opens the picker either way (measured), so D5 holds even
+        // though the box-equals-box invariant only holds at rotation 0.
+        //
+        // WHY the invariant has a SECOND, unrelated exception at an empty
+        // `content`: core `Glyph`'s "add icon" affordance paints its dashed
+        // border with Tailwind's `box-content` utility, which is content-box
+        // by definition — the 1px border sits OUTSIDE the footprint on every
+        // side (measured: an 18px empty glyph's trigger box is 20x20,
+        // offset by -1px/-1px from the node box). That is a core-package
+        // decision (`packages/bbox-ui/src/glyph.tsx`), out of scope for this
+        // adapter to change; this file can only avoid claiming an invariant
+        // that empty glyphs do not actually hold.
+        style={glyphNodeBodyStyle(data)}
       >
         <GlyphPicker
           value={data.content}
