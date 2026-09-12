@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { GroupingBoard } from "./GroupingBoard";
 import { PortBoard } from "./PortBoard";
 import { SortableColumn } from "./SortableColumn";
 import { SortableRow } from "./SortableRow";
@@ -8,10 +9,11 @@ const STAGES = [
   { id: 1, label: "1 · Row" },
   { id: 2, label: "2 · Column" },
   { id: 3, label: "3 · Combined" },
+  { id: 4, label: "4 · Grouping" },
 ] as const;
 
 export function App() {
-  const [stage, setStage] = useState<1 | 2 | 3>(1);
+  const [stage, setStage] = useState<1 | 2 | 3 | 4>(1);
 
   return (
     <div className="app">
@@ -40,6 +42,7 @@ export function App() {
       {stage === 1 ? <SortableRow /> : null}
       {stage === 2 ? <SortableColumn /> : null}
       {stage === 3 ? <PortBoard /> : null}
+      {stage === 4 ? <GroupingBoard /> : null}
     </div>
   );
 }

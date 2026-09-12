@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the dnd-kit lab report.
 
-Self-contained HTML: the seven captures in reports/media/dndkit-lab/ (written
+Self-contained HTML: the captures in reports/media/dndkit-lab/ (written
 by demos/capture-dndkit-lab.mjs) are inlined as data URIs, so the page has
 no external file dependencies.
 
@@ -98,6 +98,47 @@ FIGURES = [
         "off re-sorts each container by where its cards were left, so Auto doesn't reshuffle "
         "them.",
     ),
+    (
+        "08-grouping-pairs-grouped.png",
+        "Stage 4 — grouping, “Associated pairs”, Grouped mode",
+        "Each card carries a group id + an order within that group. *args/**kwargs cluster "
+        "into “variadic”, feedback/result cluster into “action” — the kind of ports that "
+        "should always move as a pair. Everything else is a singleton group of one, so it "
+        "shows no chip and behaves like a plain card. Dragging any member of a cluster drags "
+        "the whole dashed box as one rigid unit.",
+    ),
+    (
+        "09-grouping-pairs-collapsed.png",
+        "Stage 4 — same set, Collapsed mode",
+        "Same two groups, now merged into one representative card each (“variadic ×2”, "
+        "“action ×2”) with a stacked-card illusion behind the front face. This is the effect "
+        "of switching a Block from Port to Simple view: every port collapses to a single "
+        "point.",
+    ),
+    (
+        "10-grouping-source-collapsed.png",
+        "Stage 4 — “By source”, Collapsed mode",
+        "A different grouping set (a different lens) over the same 8 cards — grouped by which "
+        "upstream block each port conceptually comes from: Core (args, kwargs, cfg), IO (in, "
+        "out), Ctrl (feedback, result, err). Collapsed, every source block gets exactly one "
+        "representative port — the “simplify so each block only has 1 port” use case.",
+    ),
+    (
+        "11-grouping-source-rigid-move.png",
+        "Stage 4 — dragging the collapsed “Core” card to the end",
+        "Grabbing the merged card moves all 3 of its members together — “rigidly connected "
+        "bodies”, per the ask. The new order (IO, Ctrl, Core) persists in the underlying flat "
+        "card order: expanding back to Grouped mode shows *args/**kwargs/cfg still clustered "
+        "at the new position, not reset.",
+    ),
+    (
+        "12-grouping-threeway-grouped.png",
+        "Stage 4 — “Three-way split”, Grouped mode",
+        "A third lens: an arbitrary assignment into 3 buckets (A, B, C), useful when you just "
+        "want a fixed number of representative locations regardless of what the ports "
+        "actually are. Every card is still included — the fallback rule is that a card with "
+        "no assignment in a grouping set defaults to its own id as a singleton group.",
+    ),
 ]
 
 HTML = f"""<!doctype html>
@@ -149,12 +190,14 @@ HTML = f"""<!doctype html>
   <p class="sub">
     Prototype for the port-drag interaction, from <code>PROJECT - Black Box UI.md</code>
     &rarr; &ldquo;Prototype of dnd kit&rdquo;: a single sortable row, a single sortable column,
-    then four containers around a Block that cards move freely between &mdash; with a
-    switchable flex spacing scheme, a Custom mode where cards stop auto-evening and just
-    sit where you drop them, and a polarity arrow on each card that always points away
-    from the Block and flips the instant the card crosses to a different edge. Plain DOM,
-    <code>@dnd-kit/core</code> + <code>@dnd-kit/sortable</code> &mdash; no React Flow or
-    tldraw.
+    four containers around a Block that cards move freely between &mdash; with a switchable
+    flex spacing scheme, a Custom mode where cards stop auto-evening and just sit where you
+    drop them, and a polarity arrow on each card that always points away from the Block and
+    flips the instant the card crosses to a different edge &mdash; and finally grouping: every
+    card gets a group id + an order within a switchable &ldquo;grouping set&rdquo;, so groups
+    can sit side by side, move together like a rigid body, and collapse into one
+    representative card. Plain DOM, <code>@dnd-kit/core</code> +
+    <code>@dnd-kit/sortable</code> &mdash; no React Flow or tldraw.
   </p>
 
   <div class="meta">

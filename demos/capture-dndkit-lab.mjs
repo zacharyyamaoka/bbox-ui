@@ -150,6 +150,12 @@ function cardSelector(label) {
   return `//span[contains(@class,"card__label") and normalize-space(text())=${JSON.stringify(label)}]/parent::div`;
 }
 
+function chipSelector(text) {
+  // A collapsed group's chip carries the group id — used to grab a merged
+  // card by which group it represents (e.g. "Core").
+  return `//span[contains(@class,"card__chip") and normalize-space(text())=${JSON.stringify(text)}]/parent::div`;
+}
+
 async function rectOfXPath(xpath) {
   return evaluate(`(() => {
     const xpath = ${JSON.stringify(xpath)};
@@ -170,10 +176,22 @@ async function waitForTabs() {
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
     const count = await evaluate(`document.querySelectorAll('.tabs__tab').length`);
-    if (count === 3) return;
+    if (count === 4) return;
     await sleep(150);
   }
   throw new Error("app did not render its tabs in time");
+}
+
+async function clickByText(tag, text) {
+  const xpath = `//${tag}[normalize-space(text())=${JSON.stringify(text)}]`;
+  await evaluate(`(() => {
+    const xpath = ${JSON.stringify(xpath)};
+    const el = document.evaluate(xpath, document, null,
+      XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+    if (!el) throw new Error("not found: " + xpath);
+    el.click();
+  })()`);
+  await sleep(80);
 }
 
 await waitForTabs();
@@ -213,6 +231,29 @@ const p3 = await rectOfXPath(cardSelector("P3"));
 const p4 = await rectOfXPath(cardSelector("P4"));
 await drag(p3, { x: (p3.x + p4.x) / 2, y: p3.y - 25 });
 await screenshot("07-board-custom-freeform");
+
+// --- Stage 4: grouping ---
+await click(".tabs__tab:nth-of-type(4)");
+await sleep(200);
+await screenshot("08-grouping-pairs-grouped");
+
+await clickByText("button", "Collapsed");
+await sleep(150);
+await screenshot("09-grouping-pairs-collapsed");
+
+await clickByText("button", "By source");
+await sleep(150);
+await clickByText("button", "Collapsed");
+await sleep(150);
+await screenshot("10-grouping-source-collapsed");
+
+const coreChip = await rectOfXPath(chipSelector("Core"));
+await drag(coreChip, { x: coreChip.x + 340, y: coreChip.y });
+await screenshot("11-grouping-source-rigid-move");
+
+await clickByText("button", "Three-way split");
+await sleep(150);
+await screenshot("12-grouping-threeway-grouped");
 
 chrome.kill();
 await new Promise((resolve) => chrome.once("exit", resolve));
