@@ -543,8 +543,13 @@ export function portLabelBox(input: PortLabelBoxInput): LayoutBox {
   const h = Math.round(fontPx * LEADING_TIGHT);
   switch (layout) {
     case "right":
+    case "rightOffset":
+      // `out` already carries the "Offset" variant's wider clearance
+      // (`portLabelOut` → `portLabelGap`, port.layout.ts) — same formula,
+      // no separate case needed beyond satisfying the exhaustive switch.
       return { x: out, y: dotH / 2 - h / 2, w, h };
     case "left":
+    case "leftOffset":
       return { x: dotW - out - w, y: dotH / 2 - h / 2, w, h };
     case "top":
       return { x: dotW / 2 - w / 2, y: dotH - out - h, w, h };

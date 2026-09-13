@@ -1,4 +1,4 @@
-import type { ComponentProps, CSSProperties } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { resolveField } from "@bbox-ui/schema";
 
 import { cn } from "./lib/utils";
@@ -10,16 +10,18 @@ import {
   type Tone,
   paintVar,
 } from "./appearance";
+import { CodeField } from "./codeField";
 import { PORT_FIELDS } from "./port.fields";
 import { PORT_PRESETS } from "./port.presets";
 import {
   PORT_DIAMETERS,
   PORT_HIT_PX,
+  PORT_SECONDARY_SLOT_GAP_PX,
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
+  defaultSecondarySlotLayout,
   inwardTextLayout,
-  portBadgeSide,
   portFlexDirection,
   portLabelGap,
   type BlockSide,
@@ -29,6 +31,7 @@ import {
   type PortSizeRung,
   type PortTextLayout,
   type PortTextSize,
+  type SecondarySlotLayout,
 } from "./port.layout";
 
 /** The two fields `Port`'s own `size` rung governs — looked up once from
@@ -39,26 +42,53 @@ const DIAMETER_FIELD = PORT_FIELDS.find((f) => f.id === "diameter")!;
 const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
 
 /**
- * packages/bbox-ui/src/port.tsx — the rebuilt Port (T1 Lane P).
+ * packages/bbox-ui/src/port.tsx — the rebuilt Port (T1 Lane P), now with
+ * TWO independently-positioned slots (the 2026-09-12 two-slot proposal).
  *
- * Anatomy (PORT-SPEC.md §2.1): `PortDot` and `PortLabel` (itself three
- * independently-typed spans, `PortName`/`PortType`/`PortDefaultChip`) are
- * SIBLINGS, never parent/child — the real app positions both absolutely
- * from the *container's* layout at a shared anchor, and needs the dot to
- * win z-order/hit-arbitration against its own label independently. `Port`
+ * Anatomy (PORT-SPEC.md §2.1): `PortDot` and `PortLabel` are SIBLINGS,
+ * never parent/child — the real app positions both absolutely from the
+ * *container's* layout at a shared anchor, and needs the dot to win
+ * z-order/hit-arbitration against its own label independently. `Port`
  * below is the flex-row PAIRING of those two siblings for a standalone
  * specimen; a host placing a real port on a real block wall instead uses
  * `PortDot`/`PortLabel` directly, positioned via `./port.layout.ts`'s
  * `portDotPlacement`/`portLabelPlacement` — never nested one inside the
  * other. This is T0's own anatomy bug (PORT-SPEC.md §0.2): a single flex
- * parent could not reproduce that independence.
+ * parent could not reproduce that independence. The SECOND slot (below)
+ * does NOT reopen that bug: it hugs `PortDot`'s own box exactly the way
+ * the old hardcoded count-badge overlay always did — a decoration OF the
+ * dot, not a second independently-flowed sibling like the label.
+ *
+ * THE TWO SLOTS:
+ * - The LABEL slot (`PortLabel`) — a real single-line `CodeField` (ported
+ *   from `claude/code-field`, see `./codeField.tsx`'s own doc), positioned
+ *   by `textLayout` (`./port.layout.ts`'s `PortTextLayout`, now six values:
+ *   `top | bot | right | left | rightOffset | leftOffset`, auto-defaulting
+ *   via `inwardTextLayout(edge)` when omitted — unchanged from before).
+ *   REPLACES the old three-span `PortName`/`PortType`/`PortDefaultChip`
+ *   rendering built from separate `name`/`type`/`defaultValue` props —
+ *   those props are GONE; `children` (a plain string) is now the field's
+ *   whole `value`, matching the "a port is one line of code" ruling
+ *   (`get_aruco: ArucoSrv`) and every real caller already in this
+ *   workspace (host adapters, docs examples, the port-inspector demo),
+ *   which already passed a single composed string as `children` and never
+ *   touched `name`/`type`/`defaultValue` at all.
+ * - The SECONDARY slot (`PortDot`'s new `secondarySlot` prop) — generic
+ *   `ReactNode`, positioned by `secondarySlotLayout` (`SecondarySlotLayout`,
+ *   `./port.layout.ts`: `leftOffset | rightOffset | topOffset | botOffset`,
+ *   auto-defaulting to the side opposite the label via
+ *   `defaultSecondarySlotLayout`). REPLACES the hardcoded, producer-count-
+ *   only `PortCountBadge` overlay — `Port` below still composes that same
+ *   badge by default (>= 2 producers, unchanged threshold), but as content
+ *   it HANDS to the now-generic slot rather than logic `PortDot` itself
+ *   runs. A consumer can pass anything else instead (a role cue, a status
+ *   dot) without `PortDot` knowing what it's rendering.
  *
  * PORT COLOUR COMES FROM STATE, NOT TYPE (Zach, 2026-09-10 ruling — see
- * docs/T1-SPEC.md and PORT-SPEC.md's standing amendment). The declared
- * `type` string survives only as muted text beside the name; it tints
- * nothing. `portDotStyle` below reads colour from `STATE_TOKENS`/
- * `TONE_TOKENS` (./appearance.ts) — the SAME two lookups the cascade's
- * worked example (docs/T1-SPEC.md §1.4) illustrates — never from `type`.
+ * docs/T1-SPEC.md and PORT-SPEC.md's standing amendment). `portDotStyle`
+ * below reads colour from `STATE_TOKENS`/`TONE_TOKENS` (./appearance.ts) —
+ * the SAME two lookups the cascade's worked example (docs/T1-SPEC.md §1.4)
+ * illustrates.
  */
 
 /* ------------------------------------------------------------------ */
@@ -205,10 +235,10 @@ export function portCoreStyle({ state = "empty", tone = "neutral", hinting = fal
 }
 
 /* ------------------------------------------------------------------ */
-/* The count badge — a small part painted ON the dot. `role`/          */
-/* `decoration` (the old semantic-role cue and mutates/variadic ring)  */
-/* were removed 2026-09-12 (port.layout.ts's own WHY, above their old  */
-/* import site) — this is the one small part `Port` still owns itself. */
+/* The secondary slot — generic content hugging a corner of the dot's  */
+/* own box (two-slot proposal, 2026-09-12). `role`/`decoration` (the   */
+/* old semantic-role cue and mutates/variadic ring) were removed       */
+/* 2026-09-12 (port.layout.ts's own WHY, above their old import site). */
 /* ------------------------------------------------------------------ */
 
 // WHY total lookups and not ternaries: a ternary has a fall-through, so
@@ -220,26 +250,53 @@ const REVEAL_CLASS: Record<PortReveal, string> = {
   onHover: "opacity-0 transition-opacity hover:opacity-100 focus-within:opacity-100",
 };
 
-/** One offset per `PortTextLayout` side, matching `portLabelPlacement`'s
- * own `PORT_LABEL_GAP`-style clearance so the badge/cue never reads as
- * randomly placed relative to the label it's dodging. */
-const OVERLAY_SIDE_STYLE: Record<PortTextLayout, CSSProperties> = {
-  left: { right: "100%", marginRight: 6, top: "50%", transform: "translateY(-50%)" },
-  right: { left: "100%", marginLeft: 6, top: "50%", transform: "translateY(-50%)" },
-  top: { bottom: "100%", marginBottom: 6, left: "50%", transform: "translateX(-50%)" },
-  bot: { top: "100%", marginTop: 6, left: "50%", transform: "translateX(-50%)" },
+/** One offset per `SecondarySlotLayout` corner, hugging the dot at
+ * `PORT_SECONDARY_SLOT_GAP_PX` clearance — the exact geometry the old
+ * hardcoded `PortCountBadge` overlay always used, now addressable by
+ * `secondarySlotLayout` independently of the label's own flow side rather
+ * than derived from it every time. */
+const SECONDARY_SLOT_STYLE: Record<SecondarySlotLayout, CSSProperties> = {
+  leftOffset: {
+    right: "100%",
+    marginRight: PORT_SECONDARY_SLOT_GAP_PX,
+    top: "50%",
+    transform: "translateY(-50%)",
+  },
+  rightOffset: {
+    left: "100%",
+    marginLeft: PORT_SECONDARY_SLOT_GAP_PX,
+    top: "50%",
+    transform: "translateY(-50%)",
+  },
+  topOffset: {
+    bottom: "100%",
+    marginBottom: PORT_SECONDARY_SLOT_GAP_PX,
+    left: "50%",
+    transform: "translateX(-50%)",
+  },
+  botOffset: {
+    top: "100%",
+    marginTop: PORT_SECONDARY_SLOT_GAP_PX,
+    left: "50%",
+    transform: "translateX(-50%)",
+  },
 };
 
-function PortCountBadge({ count, layout }: { count: number; layout: PortTextLayout }) {
-  // Anchors on `portBadgeSide(layout)` — the side OPPOSITE whichever way
-  // the label is actually flowing (port.layout.ts's own WHY) — never a
-  // side hardcoded to the default composition, which is what let a
-  // left-flowing label land directly under the badge (2026-09-12 D5 fix).
+/**
+ * The many-to-one producer count — `Port`'s own default secondary-slot
+ * content (`producers >= 2`, the unchanged threshold from before this
+ * change). Kept as an exported, documented EXAMPLE of what the now-generic
+ * secondary slot can hold: `PortDot` itself does not know this component
+ * exists, does no `producers` counting, and does not position it — a
+ * consumer composes something else in its place (a role cue, a status
+ * dot) the exact same way, by passing different `secondarySlot` content.
+ */
+export function PortCountBadge({ count }: { count: number }) {
   return (
     <span
       data-slot="port-count"
-      className="pointer-events-none absolute flex min-w-[16px] items-center justify-center rounded-[7px] bg-foreground/10 px-[5px] text-[10px] font-semibold leading-[16px] text-foreground"
-      style={{ height: 16, ...OVERLAY_SIDE_STYLE[portBadgeSide(layout)] }}
+      className="flex min-w-[16px] items-center justify-center rounded-[7px] bg-foreground/10 px-[5px] text-[10px] font-semibold leading-[16px] text-foreground"
+      style={{ height: 16 }}
     >
       {count}
     </span>
@@ -247,8 +304,8 @@ function PortCountBadge({ count, layout }: { count: number; layout: PortTextLayo
 }
 
 /* ------------------------------------------------------------------ */
-/* PortDot — the disc + both rings + the lit core + the hit halo + the */
-/* count badge. Independently positionable (see the module doc).       */
+/* PortDot — the disc + both rings + the lit core + the hit halo +     */
+/* the generic secondary slot. Independently positionable (module doc). */
 /* ------------------------------------------------------------------ */
 
 export interface PortDotProps extends ComponentProps<"span"> {
@@ -266,19 +323,30 @@ export interface PortDotProps extends ComponentProps<"span"> {
   dimmed?: boolean;
   /** Host-set, never persisted — the pointer is over this port mid-drag. */
   hinting?: boolean;
-  /** Which way this dot's label flows — only consulted to keep the count
-   * badge clear of it (`portBadgeSide`); purely presentational, never
+  /** Which way the LABEL slot flows — only consulted to compute
+   * `secondarySlotLayout`'s AUTO default (the free side opposite the
+   * label, `defaultSecondarySlotLayout`); purely presentational, never
    * persisted on the dot itself (a host's real layout owns this fact). */
   textLayout?: PortTextLayout;
-  /** Host-computed many-to-one count — never persisted. */
-  producers?: number;
+  /**
+   * Generic content for the dot's SECOND slot — a decoration hugging one
+   * corner of the dot's own box (the two-slot proposal's "Secondary Slot
+   * Placement"). `null`/`undefined` renders nothing. REPLACES the old
+   * hardcoded, producers-only `PortCountBadge` overlay — see this file's
+   * module doc and `PortCountBadge`'s own doc for what still supplies it
+   * by default (`Port`, below).
+   */
+  secondarySlot?: ReactNode;
+  /** Where `secondarySlot` sits. Omit for the AUTO default — the corner
+   * opposite wherever the label (`textLayout`) is flowing. */
+  secondarySlotLayout?: SecondarySlotLayout;
 }
 
 /**
  * The dot alone: the disc, the 2px surface-coloured gap ring, the 3px
  * state ring, the small lit "core" some states paint on top
  * (`portCoreStyle`), a 40px invisible hit halo (always centred on the dot
- * regardless of `diameter`), and an optional many-to-one count badge.
+ * regardless of `diameter`), and the optional generic secondary slot.
  *
  * `hidden` renders NOTHING ("not painted at all; the container counts it
  * into `+N more`") — see `PortHiddenSummary` below for that
@@ -292,7 +360,8 @@ export function PortDot({
   dimmed = false,
   hinting = false,
   textLayout = "right",
-  producers = 0,
+  secondarySlot,
+  secondarySlotLayout,
   className,
   style,
   ...props
@@ -303,6 +372,7 @@ export function PortDot({
   // donor's own `inset: -14px` is this formula evaluated at diameter=12.
   const haloInset = (diameterPx - PORT_HIT_PX) / 2;
   const coreStyle = portCoreStyle({ state, tone, hinting });
+  const resolvedSecondaryLayout = secondarySlotLayout ?? defaultSecondarySlotLayout(textLayout);
   return (
     <span
       data-slot="port-dot"
@@ -338,129 +408,94 @@ export function PortDot({
           }}
         />
       )}
-      {producers >= 2 && <PortCountBadge count={producers} layout={textLayout} />}
+      {secondarySlot != null && (
+        <span
+          data-slot="port-secondary-slot"
+          className="pointer-events-none absolute"
+          style={SECONDARY_SLOT_STYLE[resolvedSecondaryLayout]}
+        >
+          {secondarySlot}
+        </span>
+      )}
     </span>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* PortLabel — three typed, independently-clipped spans, mirrored by   */
-/* direction, or the `children` escape hatch wholesale.                */
+/* PortLabel — the label slot, now a real single-line CodeField.       */
+/* `PortName`/`PortType`/`PortDefaultChip` (the old three-span layout)  */
+/* are REMOVED here — confirmed zero usage outside this file before    */
+/* removal (recon, 2026-09-12), same standard `role`/`decoration`'s     */
+/* removal above was held to.                                          */
 /* ------------------------------------------------------------------ */
 
-export interface PortNameProps extends ComponentProps<"span"> {
-  textSize?: PortTextSize;
-}
-
-/** 18px (default) mono ink — the port's own name. */
-export function PortName({ textSize = "sm", className, style, ...props }: PortNameProps) {
-  return (
-    <span
-      data-slot="port-name"
-      className={cn(
-        "min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono leading-tight text-foreground",
-        className,
-      )}
-      style={{ fontSize: PORT_TEXT_SIZES[textSize], ...style }}
-      {...props}
-    />
-  );
-}
-
-export interface PortTypeProps extends ComponentProps<"span"> {
-  textSize?: PortTextSize;
-}
-
-/**
- * The declared type — muted mono text beside the name, TINTING NOTHING.
- * This is the other half of the 2026-09-10 ruling: the type did not
- * disappear, it stopped owning the colour channel (see `portDotStyle`).
- */
-export function PortType({ textSize = "sm", className, style, ...props }: PortTypeProps) {
-  return (
-    <span
-      data-slot="port-type"
-      className={cn(
-        "shrink-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono leading-tight text-muted-foreground",
-        className,
-      )}
-      style={{ fontSize: PORT_TEXT_SIZES[textSize], ...style }}
-      {...props}
-    />
-  );
-}
-
-export interface PortDefaultChipProps extends ComponentProps<"span"> {
-  /** Dims the chip to `opacity .5` without erasing it — PORT-SPEC.md §7
-   * Q2's adopted answer to "defaulted AND wired, which wins": `wired`
-   * wins the dot, the chip just dims. */
-  overridden?: boolean;
-}
-
-/** The `= v` pill, capped at 88px with a visible (never silent) ellipsis. */
-export function PortDefaultChip({
-  overridden = false,
-  className,
-  style,
-  children,
-  ...props
-}: PortDefaultChipProps) {
-  return (
-    <span
-      data-slot="port-default-chip"
-      data-overridden={overridden || undefined}
-      className={cn(
-        "shrink-0 overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-border bg-muted font-mono text-muted-foreground",
-        className,
-      )}
-      style={{
-        maxWidth: 88,
-        padding: "0 7px",
-        fontSize: 13,
-        lineHeight: "18px",
-        opacity: overridden ? 0.5 : 1,
-        ...style,
-      }}
-      {...props}
-    >
-      {children}
-    </span>
-  );
-}
+/** Stable no-op so an unwired `PortLabel` (no `onLabelWrite`) doesn't
+ * allocate a fresh throwaway function every render — `Port` is
+ * presentational ("props in, DOM out"); a field with nowhere to write
+ * still has to satisfy `CodeField`'s required `onWrite`. */
+function noopWrite() {}
 
 export interface PortLabelProps extends ComponentProps<"span"> {
-  name?: string;
-  type?: string;
-  defaultValue?: string;
+  /**
+   * The label's ENTIRE content, as one line — "a port is one line of
+   * code" (`get_aruco: ArucoSrv`). REPLACES the old separate `name`/
+   * `type`/`defaultValue` props, folded into this single string rather
+   * than kept apart: no parser anywhere in this workspace splits a
+   * composed `name: Type = default` line back into three fields on edit,
+   * and every REAL caller already in this workspace (the tldraw/React
+   * Flow adapters, the docs examples, the port-inspector demo) already
+   * passed one composed string as `children` and never touched
+   * `name`/`type`/`defaultValue` at all — this is that same shape, now
+   * also the thing `CodeField` actually edits.
+   */
+  children?: string;
   direction?: PortDirection;
   textSize?: PortTextSize;
-  /** Only consulted to dim the default chip when `state === "wired"` —
-   * see `PortDefaultChip`'s `overridden`. */
-  state?: AppearanceState;
   /** Same fact as `PortDot`'s own `hidden` — see its docblock. */
   hidden?: boolean;
+  /** No caret, no edits — a read-only port. */
+  disabled?: boolean;
+  /**
+   * Fired on every keystroke (`CodeField`'s own live `onWrite`). Omit for
+   * a label that shows `children` but never persists an edit anywhere —
+   * `Port` does no editing state of its own (same category as `dimmed`/
+   * `hinting`: host-set/host-observed, never internal). A host that wants
+   * typed text to stick wires this to whatever updates its own store; one
+   * left unwired simply reverts to `children` the moment the field blurs
+   * (`CodeField`'s own controlled-value contract), same as an `<input>`
+   * with no `onChange`.
+   */
+  onLabelWrite?(value: string): void;
+  /** Shown when `children` is empty. */
+  placeholder?: string;
 }
 
 /**
- * The label row: `PortName` + `PortType` + `PortDefaultChip`, in a
- * direction-mirrored order — input: name→type→chip; output:
- * type→name→chip (PORT-SPEC.md §2.1/§3f) — or `children`, when supplied,
- * REPLACING that three-span rendering wholesale (a CodeMirror mount, a
- * `name: Type = default` one-liner — PORT-SPEC.md §7 Q6's adopted
- * default). Independently positionable from `PortDot` — see the module
- * doc at the top of this file.
+ * The label slot: a real single-line `CodeField` (`./codeField.tsx`,
+ * ported from `claude/code-field`) bound to `children` as its whole
+ * `value` — grammar-free (a plain code text box; wiring the Python
+ * `name: Type = default` grammar/autocomplete is explicitly out of scope
+ * for this change, see this file's module doc). Independently
+ * positionable from `PortDot` — see the module doc at the top of this
+ * file.
+ *
+ * `direction` no longer reorders the label's CONTENT — there is nothing
+ * left TO reorder once it's one free-typed string, unlike the old
+ * direction-mirrored name/type/chip span order. It still sets the
+ * field's text alignment, so the caret-adjacent edge still visually hugs
+ * the dot on whichever side the port sits, the same visual intent the
+ * old mirroring served.
  */
 export function PortLabel({
-  name = "",
-  type = "",
-  defaultValue = "",
+  children = "",
   direction = "input",
   textSize = "sm",
-  state = "empty",
   hidden = false,
+  disabled = false,
+  onLabelWrite,
+  placeholder,
   className,
   style,
-  children,
   ...props
 }: PortLabelProps) {
   // "no dot, no slot" — a hidden port's label disappears along with its
@@ -468,36 +503,31 @@ export function PortLabel({
   // calls this far) or a host positions them independently and passes
   // `hidden` through.
   if (hidden) return null;
-  const nameSpan = name ? (
-    <PortName key="name" textSize={textSize}>
-      {name}
-    </PortName>
-  ) : null;
-  const typeSpan = type ? (
-    <PortType key="type" textSize={textSize}>
-      {type}
-    </PortType>
-  ) : null;
-  const chipSpan = defaultValue ? (
-    <PortDefaultChip key="chip" overridden={state === "wired"}>
-      = {defaultValue}
-    </PortDefaultChip>
-  ) : null;
-  const ordered =
-    direction === "output" ? [typeSpan, nameSpan, chipSpan] : [nameSpan, typeSpan, chipSpan];
   return (
     <span
       data-slot="port-label"
       data-direction={direction}
-      className={cn("flex min-w-0 items-center gap-2 overflow-hidden", className)}
+      className={cn("flex min-w-0 items-center overflow-hidden", className)}
       style={style}
       {...props}
     >
-      {/* `||`, not `??`: an explicitly empty string is the honest FieldSpec
-          default for a "no override" text control (FieldValue has no
-          `undefined`) and must behave IDENTICALLY to omitting `children`
-          — both fall through to the three-span rendering. */}
-      {children || ordered}
+      <CodeField
+        value={children}
+        onWrite={onLabelWrite ?? noopWrite}
+        disabled={disabled}
+        placeholder={placeholder}
+        // Text hugs the dot on the side the label actually flows toward —
+        // `right`/`rightOffset` grow away to the right (dot sits at the
+        // field's LEFT, so left-align), `left`/`leftOffset` the mirror.
+        // `direction` still carries this intent (see the docblock above)
+        // now that content order itself has nothing left to mirror.
+        align={direction === "output" ? "right" : "left"}
+        // `textSize` scales the field's own font (codeField.css inherits
+        // it from this wrapper — see its own WHY) so a Port at `lg`/`xl`
+        // doesn't stay pinned to the field's compact default size.
+        style={{ fontSize: PORT_TEXT_SIZES[textSize] }}
+        testId="port-label-field"
+      />
     </span>
   );
 }
@@ -546,9 +576,10 @@ export function PortHiddenSummary({
 /* ------------------------------------------------------------------ */
 
 export interface PortProps extends ComponentProps<"div"> {
-  name?: string;
-  type?: string;
-  defaultValue?: string;
+  /** The label slot's ENTIRE content, one line — see `PortLabelProps`'s
+   * own doc for why `name`/`type`/`defaultValue` (removed here) folded
+   * into this single string instead of staying apart. */
+  children?: string;
   direction?: PortDirection;
   edge?: BlockSide;
   /** The cascading rung a header (Bar/Flex) hands down — governs
@@ -556,7 +587,10 @@ export interface PortProps extends ComponentProps<"div"> {
    * `diameter`/`textSize` still wins (see `Port`'s own render). */
   size?: PortSizeRung;
   diameter?: PortSize;
-  /** Sensible default is `inwardTextLayout(edge)` when omitted. */
+  /** Sensible default is `inwardTextLayout(edge)` when omitted. Six
+   * values now (`PortTextLayout`, port.layout.ts) — the two-slot
+   * proposal's "Label Slot Placement": `top | bot | right | left |
+   * rightOffset | leftOffset`. */
   textLayout?: PortTextLayout;
   textSize?: PortTextSize;
   state?: AppearanceState;
@@ -570,8 +604,22 @@ export interface PortProps extends ComponentProps<"div"> {
   dimmed?: boolean;
   hinting?: boolean;
   reveal?: PortReveal;
-  /** Host-computed many-to-one count — never persisted. */
+  /** Host-computed many-to-one count — never persisted. `>= 2` composes
+   * `PortCountBadge` as the secondary slot's default content, unchanged
+   * threshold from before the two-slot proposal. */
   producers?: number;
+  /** Where that default `PortCountBadge` (or, with `producers < 2`,
+   * nothing) sits. Omit for the AUTO default — the corner opposite
+   * wherever the label is actually flowing (`defaultSecondarySlotLayout`,
+   * port.layout.ts). */
+  secondarySlotLayout?: SecondarySlotLayout;
+  /** No caret, no edits on the label's `CodeField` — see `PortLabelProps`. */
+  disabled?: boolean;
+  /** Fired on every keystroke of the label's `CodeField` — see
+   * `PortLabelProps.onLabelWrite`'s own doc for what an unwired field does. */
+  onLabelWrite?(value: string): void;
+  /** Shown in the label's `CodeField` when `children` is empty. */
+  placeholder?: string;
 }
 
 /**
@@ -593,9 +641,6 @@ export interface PortProps extends ComponentProps<"div"> {
  * `port.presets.ts`'s own `PORT_PRESETS`.
  */
 export function Port({
-  name = "",
-  type = "",
-  defaultValue = "",
   direction = "input",
   edge = "left",
   // `size` DOES take a real JS default ("md", matching `state`/`tone`
@@ -619,9 +664,13 @@ export function Port({
   hinting = false,
   reveal = "always",
   producers = 0,
+  secondarySlotLayout,
+  disabled = false,
+  onLabelWrite,
+  placeholder,
   className,
   style,
-  children,
+  children = "",
   ...props
 }: PortProps) {
   if (hidden) return null;
@@ -674,16 +723,19 @@ export function Port({
         dimmed={dimmed}
         hinting={hinting}
         textLayout={resolvedTextLayout}
-        producers={producers}
+        // The count badge is Port's own DEFAULT secondary-slot content
+        // (unchanged >= 2 threshold) — PortDot itself no longer knows
+        // what "producers" means, see this file's module doc.
+        secondarySlot={producers >= 2 ? <PortCountBadge count={producers} /> : undefined}
+        secondarySlotLayout={secondarySlotLayout}
       />
       <PortLabel
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
         direction={direction}
         textSize={textSizeResolved}
-        state={state}
         hidden={hidden}
+        disabled={disabled}
+        onLabelWrite={onLabelWrite}
+        placeholder={placeholder}
       >
         {children}
       </PortLabel>

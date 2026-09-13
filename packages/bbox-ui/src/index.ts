@@ -36,6 +36,19 @@ export * from "./stack";
 export * from "./portEdge.fields";
 export * from "./portEdge";
 
+// The generic code text box Port's label slot now mounts (see port.tsx's
+// module doc) — grammar-free by default, React-hook-bearing (unlike every
+// other file this barrel exports), but still zero canvas assumptions: no
+// host import here at all. `codeField.css` ships alongside `theme.css` as
+// its own package.json export (a consumer imports it once, same as the
+// theme).
+export * from "./caretGeometry";
+export * from "./fieldGesture";
+export * from "./codeFieldGuards";
+export * from "./codeGrammar";
+export * from "./codeFieldRows";
+export * from "./codeField";
+
 // port.layout.ts intentionally shares names with layout.ts's now-deleted
 // old Port section (docs/T1-SPEC.md §0) — nothing left to collide with.
 export * from "./port.layout";
