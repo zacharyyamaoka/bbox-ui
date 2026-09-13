@@ -332,10 +332,39 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
   }
 
   /* ---- 3 · the subject's OWN members ------------------------------- */
+  //
+  // WHY this lands IN the component's own section rather than beside it —
+  // Zach, 2026-09-12, of a Flex panel showing a "Flex" section of scalars and
+  // then a second bold "Members" section under it: "within a flex object you
+  // can get rid of the members header. members should just be a property of
+  // the flex directly."
+  //
+  // A section earns its title by distinguishing its contents from a SIBLING
+  // section's. That is real for a Block — Header, Body and Footer each hold
+  // their own fields AND their own lists, so a list has to say which region
+  // it belongs to. A Flex has no siblings: its handful of scalars and its one
+  // list are the entire panel, so a second titled, foldable wrapper separates
+  // the members from nothing and spends a header saying the word "Members"
+  // directly above a row already labelled "Members".
+  //
+  // `entry.slots` IS that distinction, and it is already the guard here: a
+  // component with slots never reaches this branch (its lists were placed
+  // with their regions in step 2), and a component without them has exactly
+  // one place its members can belong — its own section. The list keeps its
+  // own `FoldRow` (label, count, +), because that row is what ADDS a member;
+  // only the section-level wrapper goes.
   if (entry.members && !entry.slots) {
     const spec = memberSpecFor(entry, subject);
     const row = spec ? listRow(input, subject, entry) : null;
-    if (row) sections.push({ id: "members", label: spec!.label ?? MEMBERS_LABEL, rows: [row], actions: [] });
+    if (row) {
+      const own = sections.find((s) => s.id === "self");
+      // The fallback is not dead code: a component whose every field declares
+      // a `section` has no "self" bucket, so its panel IS several named
+      // sections and its list needs a name of its own again — the same rule,
+      // read the other way.
+      if (own) own.rows.push(row);
+      else sections.push({ id: "members", label: spec!.label ?? MEMBERS_LABEL, rows: [row], actions: [] });
+    }
   }
 
   /* ---- 4 · the HOST-owned section ---------------------------------- */

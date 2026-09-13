@@ -54,6 +54,19 @@ ROUND3 = {entry["theme"]: entry for entry in run["manifest"]}
 ROUND3_ASSERTIONS = len(run["checks"])
 assert ROUND3_ASSERTIONS > 250, f"expected round 3's one-panel journey checks, found {ROUND3_ASSERTIONS}"
 
+# WHY round 4 reads the SAME manifest: it added a gate (G15) to the existing
+# journey rather than writing a second one, so `run` above is now round 4's
+# run and `ROUND3_ASSERTIONS` is the LIVE total, not round 3's historical one.
+# Round 3's own share is therefore the live total minus G15's checks —
+# measured by counting them, never by subtracting a remembered number.
+LIVE_ASSERTIONS = ROUND3_ASSERTIONS
+ROUND4 = ROUND3
+ROUND4_CHECKS = [c for c in run["checks"] if "G15" in c]
+ROUND3_OWN_ASSERTIONS = LIVE_ASSERTIONS - len(ROUND4_CHECKS)
+assert ROUND4_CHECKS, "expected round 4's G15 gate in the live manifest — re-run demos/capture-inspector-v5b.mjs"
+ROUND4_MEMBERS = ROUND4["dark"]["membersProperty"]
+ROUND4_LIGHT_MEMBERS = ROUND4["light"]["membersProperty"]
+
 run2 = json.loads((MEDIA / "manifest-round2.json").read_text())
 MANIFEST = {entry["theme"]: entry for entry in run2["manifest"]}
 ASSERTIONS = len(run2["checks"])
@@ -182,6 +195,22 @@ _round3_shortstat = subprocess.run(
 ROUND3_DELETED = int(re.search(r"(\d+) deletions?\(-\)", _round3_shortstat).group(1))
 ROUND3_INSERTED = int(re.search(r"(\d+) insertions?\(\+\)", _round3_shortstat).group(1))
 ROUND3_FILES_CHANGED = int(re.search(r"(\d+) files? changed", _round3_shortstat).group(1))
+
+# ---- round 4: which components each side of the rule actually covers ----
+# WHY parsed from the registry rather than listed here: the rule keys off a
+# STRUCTURAL fact (`entry.slots`), so the honest way to say how far it reaches
+# is to read every registered component and sort them by that same fact. A
+# typed-in list would be a claim about the registry; this is the registry.
+_bench_src = (HERE / "packages/panel/src/bench.tsx").read_text()
+_registry_src = _bench_src.split("export const REGISTRY: ComponentEntry[] = [", 1)[1]
+MEMBERS_INLINED: list[str] = []   # members, no slots — the list is the content
+REGION_HOSTS: list[str] = []      # slots — Header/Body/Footer keep their chrome
+LEAVES: list[str] = []            # neither
+for _block in re.split(r"registerComponent\(\{", _registry_src)[1:]:
+    _name = re.search(r'name: "(\w+)"', _block).group(1)
+    _head = _block.split("render:", 1)[0]
+    (REGION_HOSTS if "slots:" in _head else MEMBERS_INLINED if "members:" in _head else LEAVES).append(_name)
+assert MEMBERS_INLINED and REGION_HOSTS, "the registry no longer has both sides of the rule"
 
 ROUND3_SECTIONS = ROUND3["dark"]["designs"]["sections"]
 ROUND3_LIGHT_SECTIONS = ROUND3["light"]["designs"]["sections"]
@@ -655,8 +684,47 @@ figcaption {{ color:var(--faint); font-size:12px; margin-top:7px }}
 <p><strong>A member list's header reads as a property row.</strong> &ldquo;I don't like how its greyed out and tab indented, I do like how its more compact now though.&rdquo; All three demotions were separate mistakes in one component &mdash; muted ink, smaller type, and a second helping of the section gutter &mdash; and they are fixed at the source in <code>FoldRow</code>, so no call site overrides anything. The height is unchanged; a gate measures it against a real sibling row so a future fix cannot quietly trade the compactness back.</p>
 <p><strong>And one real bug, reproduced before it was fixed:</strong> the dropdown cut off by the panel's scrollbar. See below.</p></div>
 
+<h2>Round 4 &mdash; the members header, on a component that is only members</h2>
+<p class="lede" style="font-size:15px">&ldquo;Within a flex object you can get rid of the members header. Members should just be a property of the flex directly.&rdquo;</p>
+<p>Right &mdash; and the reason is a rule the panel was already following everywhere else, applied one step too widely. <strong>A section earns its title by distinguishing its contents from a sibling section's.</strong> A Block has real siblings: Header, Body and Footer each hold their own fields <em>and</em> their own lists, so a heading there answers a live question &mdash; which region is this list in? A Flex has no siblings. Its {ROUND4_MEMBERS["flexFields"]} scalar rows and its {len(ROUND4_MEMBERS["flexLists"])} list are the entire panel, so a second titled, foldable wrapper separated the members from nothing, and spent a header saying the word &ldquo;Members&rdquo; directly above a row already labelled &ldquo;Members&rdquo;.</p>
+<p>The word appeared <strong>twice</strong> in that panel, measured in the browser on the pre-fix build; it appears <strong>once</strong> now, and G15 asserts that number in both themes.</p>
+<div class="pair">
+  <figure><img src="{shot('round4-before-light-flex-one.png')}" alt="Flex before: Members twice"><figcaption><strong>Before</strong> &mdash; a bold <em>Members</em> section with its own hairline and fold chevron, and then <em>Members</em> again as the list's own row, three rows apart. Captured from this same running page with the old branch restored.</figcaption></figure>
+  <figure><img src="{shot(ROUND4_LIGHT_MEMBERS['filledShot'])}" alt="Flex after: Members as the last property"><figcaption><strong>After</strong> &mdash; one section, and the list is its last property: same left edge, same ink, same row height as Wrap above it.</figcaption></figure>
+</div>
+
+<h3>The rule, and the signal it keys off</h3>
+<p>No new declaration was added, and none was needed: the fact that separates the two cases was already in the registry. <code>entry.slots</code> is what a component uses to say &ldquo;I am several named regions&rdquo;, and it was <em>already</em> the guard on this branch of <code>buildSections</code> &mdash; a component with slots never reached it, because its lists were placed with their regions one step earlier. So a component that reaches this branch has, by construction, exactly one place its members can belong: its own section.</p>
+<div class="card"><table><thead><tr><th style="width:30%">Registered as</th><th style="width:26%">Components</th><th>What its panel does</th></tr></thead><tbody>
+<tr><td><code>members</code>, no <code>slots</code></td><td>{", ".join(f"<code>{n}</code>" for n in MEMBERS_INLINED)}</td><td><strong>Changed.</strong> The list is inlined as the last row of the component's own section. It keeps its label, its count and its <code>+</code> &mdash; only the section wrapper goes.</td></tr>
+<tr><td><code>slots</code></td><td>{", ".join(f"<code>{n}</code>" for n in REGION_HOSTS)}</td><td><strong>Untouched.</strong> Header / Body / Footer are distinct named regions, each with its own fields and its own lists; a heading there is doing real work.</td></tr>
+<tr><td>neither</td><td>{", ".join(f"<code>{n}</code>" for n in LEAVES)}</td><td>Leaves. No member list to place either way.</td></tr>
+</tbody></table></div>
+<p class="sub">Read out of <code>packages/panel/src/bench.tsx</code> at build time, by the same structural test the rule itself makes &mdash; not a list typed into this page.</p>
+
+<h3>What the fold was hiding</h3>
+<p>One thing got strictly better rather than just quieter. A section whose only row is an empty list is <code>isEffectivelyEmpty</code>, so it opened <strong>folded</strong> &mdash; which on a fresh Flex meant the <code>+</code>, the only way to add a member at all, was behind a chevron. Inlined into a section that has scalar rows, the list is always on screen. G15 asserts the <code>+</code> is in the panel at rest with the list still empty.</p>
+<div class="pair">
+  <figure><img src="{shot('round4-before-light-flex-empty.png')}" alt="empty Flex before"><figcaption><strong>Before</strong> &mdash; empty Flex: &ldquo;Members &middot; 0 members &#9656;&rdquo;, folded, the <code>+</code> out of reach.</figcaption></figure>
+  <figure><img src="{shot(ROUND4_LIGHT_MEMBERS['emptyShot'])}" alt="empty Flex after"><figcaption><strong>After</strong> &mdash; empty Flex: the row is there, and so is the <code>+</code>.</figcaption></figure>
+</div>
+
+<h3>The other half of the gate: Block is untouched</h3>
+<p>A fix scoped by a structural rule has to be proved on both sides of it, so G15 drives a Block in the same run and asserts its section list is exactly what it was: <code>{" &rarr; ".join(ROUND4_MEMBERS["blockIds"])}</code>, with every region keeping its slot title and its own list(s).</p>
+<figure><img src="{shot(ROUND4_LIGHT_MEMBERS['blockShot'], cap=1400)}" alt="Block unchanged"><figcaption>The Block panel in the same run, after the change &mdash; Header Slot, Body Slot and Footer Slot still head their own lists.</figcaption></figure>
+<div class="rec" style="margin-top:14px"><h4>The part of this capture worth staring at is <em>Body Slot</em></h4>
+<p>A Block's body is filled by a Flex, and that section has read the right way the whole time: the Flex's Size / Direction / Justify / Align / Wrap, and then <strong>Members</strong> as the last row among them &mdash; no wrapper, no second heading. It is the exact shape you asked a standalone Flex for.</p>
+<p>So this change is not a new idea; it is the removal of an inconsistency. The same component was drawn two ways depending on whether you reached it through a Block or picked it directly, and only the direct route grew the extra header. The fix makes the direct route agree with the route that was already right, which is why it costs one branch and no new declaration &mdash; and why nothing in the Block panel had to move.</p></div>
+
+<div class="card"><h4>G15, and the mutant that proves it can fail</h4>
+<p class="sub">{len(ROUND4_CHECKS)} of the journey's {LIVE_ASSERTIONS} assertions are round 4's, across both themes:</p>
+<ul class="gates">{"".join(f"<li>{c.split(': ', 1)[1] if ': ' in c else c}</li>" for c in ROUND4_CHECKS if c.startswith("light/"))}</ul>
+<p class="sub" style="margin-top:10px">Reverted to the old <code>sections.push(&hellip;)</code>, the journey stops at G15's first assertion &mdash; <code>a Flex grows NO section of its own for its members (1)</code> &mdash; with every check before it still green. The gate fails on the bug and only on the bug.</p>
+<p class="sub">That one figure is the only number on this page not measured at build time, and it cannot be: re-deriving it would mean re-breaking the code the page is describing. It was observed once, by hand, on the run that reverted the branch &mdash; <code>137 assertions passed before the failure</code>.</p>
+</div>
+
 <h2>Round 3 &mdash; one panel, clearer words, and the reset that was missing</h2>
-<p class="lede" style="font-size:15px">This round's journey drives the one panel that ships, not four designs side by side, which is why it asserts {ROUND3_ASSERTIONS} checks rather than {ASSERTIONS} &mdash; not a regression, a smaller surface. Everything below this point that still says P1/P2/P3 or shows all three side by side is round 2's own record, kept as it was written.</p>
+<p class="lede" style="font-size:15px">This round's journey drives the one panel that ships, not four designs side by side, which is why it asserts far fewer checks than round 2's {ASSERTIONS} &mdash; not a regression, a smaller surface. It now carries round 4's G15 too, so the live total is {LIVE_ASSERTIONS}, of which {ROUND3_OWN_ASSERTIONS} are round 3's own. Everything below this point that still says P1/P2/P3 or shows all three side by side is round 2's own record, kept as it was written.</p>
 
 <h3>What was deleted</h3>
 <p>The commit that shipped this (<code>{ROUND3_TIP}</code>, on top of the round-2 report's own <code>{ROUND2_TIP}</code>) is net negative: {ROUND3_INSERTED} insertions, <strong>{ROUND3_DELETED} deletions</strong> across {ROUND3_FILES_CHANGED} files.</p>
@@ -762,19 +830,20 @@ figcaption {{ color:var(--faint); font-size:12px; margin-top:7px }}
 
 <h2>Proof, round 3</h2>
 <div class="card">
-<p>The one-panel journey: <strong>{ROUND3_ASSERTIONS} assertions</strong>, both themes, zero console errors &mdash; a smaller number than round 2's {ASSERTIONS} on purpose, since it now drives one shipped panel instead of four designs.</p>
+<p>The one-panel journey: <strong>{LIVE_ASSERTIONS} assertions</strong>, both themes, zero console errors &mdash; a smaller number than round 2's {ASSERTIONS} on purpose, since it now drives one shipped panel instead of four designs. {len(ROUND4_CHECKS)} of them are round 4's G15.</p>
 <p>The whole monorepo's tests, run for this build rather than quoted from memory: <strong>{TEST_TOTAL} tests across {TEST_PACKAGES} packages, {"green" if TEST_GREEN else "NOT green — see build output"}</strong> &mdash; <code>packages/panel</code> alone at <strong>{PANEL_TEST_COUNT}</strong>.</p>
 <p>Both type checks, also run for this build: <code>pnpm -r run typecheck</code> is {"clean" if TYPECHECK_GREEN else "NOT clean"}, and <code>apps/docs</code>' own <code>tsc --noEmit</code> (via <code>types:check</code>) is {"clean" if DOCS_TYPECHECK_GREEN else "NOT clean"}.</p>
-<p class="sub" style="margin-top:10px">Two new gates joined the list above this round:</p>
+<p class="sub" style="margin-top:10px">Three new gates joined the list above, across rounds 3 and 4:</p>
 <ul class="gates">
 <li><b>G13</b> a section that stands for a slot says so &mdash; &ldquo;Left Slot&rdquo;, never the bare Justify/Align/Edge word underneath it</li>
 <li><b>G14</b> the &#8634; reset appears on every overridden row, whatever control kind it is &mdash; a property of having an override, not of which control draws it</li>
+<li><b>G15</b> a component whose members <em>are</em> its content gets one section with the list as its last property, while a component with named regions keeps a heading per region &mdash; asserted on a Flex and a Block in the same run</li>
 </ul>
 </div>
 
 <h2>Run it</h2>
 <div class="run">pnpm --dir /home/bam/bbox-ui/.claude/worktrees/inspector-panel-v6 --filter @bbox-ui/docs run dev</div>
-<p class="meta">Already running on http://localhost:{PORT}/create &mdash; P1 ships as the only panel now, no picker left to choose it from. Add a Glyph to Header Slot &middot; Left and a Pill to Header Slot &middot; Right to reproduce the fixture in these captures.</p>
+<p class="meta">Already running on http://localhost:{PORT}/create &mdash; P1 ships as the only panel now, no picker left to choose it from. Add a Glyph to Header Slot &middot; Left and a Pill to Header Slot &middot; Right to reproduce the fixture in these captures. For round 4, pick <strong>Flex</strong> in the component picker: one section, with Members as its last row.</p>
 
 <div class="foot">
 Generated by <code>docs/build_inspector_v5b.py</code>. Every number on this page is read from the working tree or from the journey's own manifest at build time.

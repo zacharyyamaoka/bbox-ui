@@ -34,6 +34,11 @@
  *   G14 the ↺ reset appears on EVERY overridden row, whatever control kind
  *       draws it ("when you edit a value away from default you get a little
  *       reset icon that appears to put it back")
+ *   G15 a component whose members ARE its content (a Flex) gets ONE section,
+ *       with the list as its last property — "within a flex object you can
+ *       get rid of the members header. members should just be a property of
+ *       the flex directly" — while a Block, whose Header/Body/Footer each
+ *       hold their own fields AND lists, is untouched
  *   G12 an open dropdown is never cut off by the panel's own scroll box —
  *       every row painted and hittable, nothing off-screen ("I did a drop
  *       down on the state property, and instead of showing me the drop down
@@ -714,6 +719,147 @@ async function gateGroupRow(label) {
   assert(pair.sameLine, `${label}: G8 both halves sit on ONE line`);
 }
 
+/**
+ * G15 — when the members ARE the content, they are a property, not a section.
+ *
+ * Zach, 2026-09-12, of a Flex panel: "within a flex object you can get rid of
+ * the members header. members should just be a property of the flex directly."
+ * What he screenshotted was the word "Members" twice, four pixels apart — once
+ * as a bold section title with its own fold chevron, once as the list's own
+ * row directly under it — because `buildSections` pushed the list into a
+ * section of its own whenever a component had no slots.
+ *
+ * The distinction this gate protects is NOT "never head a member list". A
+ * Block's Header / Body / Footer each hold their own fields AND their own
+ * lists, so there a heading says which region a list belongs to. A Flex has no
+ * siblings for a heading to distinguish it from. So the gate is two-sided:
+ * Flex collapses to one section, and Block must come out completely unchanged.
+ */
+async function gateMembersIsAProperty(label) {
+  const shapeOf = async () =>
+    evaluate(`(() => {
+      const panel = document.querySelector('${PANEL}');
+      return {
+        sections: Array.from(panel.querySelectorAll('[data-slot="inspector-section"]')).map((s) => ({
+          id: s.getAttribute("data-section"),
+          title: s.querySelector('[data-slot="header-label"]')?.textContent ?? null,
+          lists: Array.from(s.querySelectorAll('[data-slot="section-list"]')).map((l) => ({
+            id: l.getAttribute("data-list-id"),
+            count: Number(l.getAttribute("data-count")),
+            label: l.querySelector('[data-slot="header-label"]')?.textContent ?? null,
+            headers: l.querySelectorAll('[data-slot="list-header"]').length,
+            add: !!l.querySelector('[data-slot="add-member-trigger"]'),
+          })),
+        })),
+        membersSections: panel.querySelectorAll('[data-slot="inspector-section"][data-section="members"]').length,
+        membersLabels: Array.from(panel.querySelectorAll('[data-slot="header-label"]')).filter((el) => el.textContent === "Members").length,
+      };
+    })()`);
+
+  /* ---- the component whose members are its whole content ---------- */
+  await setSelect('[data-slot="component-picker"]', "Flex");
+  await waitFor(`${PANEL} [data-slot="standard-row"]`);
+  await sleep(500);
+  const flex = await shapeOf();
+  const flexIds = flex.sections.map((s) => s.id);
+
+  assert(flex.membersSections === 0, `${label}: G15 a Flex grows NO section of its own for its members (${flex.membersSections})`);
+  assert(
+    JSON.stringify(flexIds) === JSON.stringify(["self", "renderer"]),
+    `${label}: G15 a Flex's panel is its own section and the host's, nothing between (${flexIds.join(" → ")})`,
+  );
+  // The literal complaint, as a number: the word appeared twice.
+  assert(flex.membersLabels === 1, `${label}: G15 the word "Members" appears ONCE in the panel, not as a title above its own row (${flex.membersLabels})`);
+
+  const own = flex.sections.find((s) => s.id === "self");
+  // How many scalar rows the one section holds, so the report can say what
+  // "its fields and its list are the whole panel" actually amounts to rather
+  // than rounding it to "a handful".
+  const flexFields = await evaluate(
+    `document.querySelectorAll('${PANEL} [data-slot="inspector-section"][data-section="self"] [data-slot="standard-row"]').length`,
+  );
+  assert(flexFields > 0, `${label}: G15 the one section holds the component's own fields (${flexFields})`);
+  assert(own.title === "Flex", `${label}: G15 the one section is the component's own (“${own.title}”)`);
+  assert(own.lists.length === 1, `${label}: G15 and the member list is INSIDE it (${own.lists.length})`);
+  assert(own.lists[0].label === "Members", `${label}: G15 the list keeps its own row label (“${own.lists[0].label}”)`);
+  assert(own.lists[0].headers === 1, `${label}: G15 that row is still the list's ONE header (${own.lists[0].headers})`);
+  // The + is the only way to add a member, and `FoldRow` shows it at rest
+  // exactly while the list is empty (`showActions`: `!foldable`). That is the
+  // state a fresh Flex is in — and the state in which the old layout hid it
+  // behind a section that `isEffectivelyEmpty` folded shut by default.
+  assert(own.lists[0].count === 0, `${label}: G15 a fresh Flex starts with no members (${own.lists[0].count})`);
+  assert(own.lists[0].add, `${label}: G15 and its + is in the panel at rest, not behind a section folded shut for being empty`);
+
+  // The list must read as the last PROPERTY of the section, not as something
+  // parked after it: same left edge as the field row above it.
+  const edges = await evaluate(`(() => {
+    const body = document.querySelector('${PANEL} [data-slot="inspector-section"][data-section="self"] [data-slot="section-body"]');
+    const field = body.querySelector('[data-slot="standard-row"]');
+    const list = body.querySelector('[data-slot="section-list"] [data-slot="list-header"]');
+    if (!field || !list) return null;
+    return { field: Math.round(field.getBoundingClientRect().left), list: Math.round(list.getBoundingClientRect().left), after: list.getBoundingClientRect().top > field.getBoundingClientRect().top };
+  })()`);
+  assert(edges !== null, `${label}: G15 the section body holds both a field row and the list`);
+  assert(edges.field === edges.list, `${label}: G15 the list row starts on the same left edge as a field row (${edges.list} vs ${edges.field})`);
+  assert(edges.after, `${label}: G15 and sits after the scalars, as the section's last property`);
+
+  const emptyShot = await shotInspector(`${label.split("/")[0]}-flex-members-empty`);
+
+  /* ---- adding one still must not spawn a section ------------------- */
+  // Increment, not an absolute: the create page may carry instances across a
+  // reload, so "is now 1" would be a fixture assumption rather than a fact
+  // about the +.
+  const before = own.lists[0].count;
+  await addVia(0, "Port");
+  const filled = await shapeOf();
+  const filledOwn = filled.sections.find((s) => s.id === "self");
+  assert(filledOwn.lists[0].count === before + 1, `${label}: G15 the + really adds through the app's own menu (${before} → ${filledOwn.lists[0].count})`);
+  assert(filled.membersSections === 0, `${label}: G15 and a populated list still spawns no section of its own`);
+  assert(filled.membersLabels === 1, `${label}: G15 the word is still said once, with a member in the list (${filled.membersLabels})`);
+  assert(filledOwn.lists[0].headers === 1, `${label}: G15 and the list still has exactly one header, expanded (${filledOwn.lists[0].headers})`);
+  const filledShot = await shotInspector(`${label.split("/")[0]}-flex-members-one`);
+
+  // What the section wrapper took with it must be NOTHING. The count and the
+  // + are the row-level controls — the + is the only way to add a member —
+  // and on a populated list they ride the same reveal every other header in
+  // this panel uses (`FoldRow.showActions`: `actionsAtRest || revealed`), not
+  // a rule of their own.
+  const LIST_HEADER = `${PANEL} [data-slot="inspector-section"][data-section="self"] [data-slot="list-header"]`;
+  await hover(LIST_HEADER);
+  const shown = await evaluate(`(() => {
+    const h = document.querySelector('${LIST_HEADER}');
+    return {
+      revealed: h.getAttribute("data-revealed"),
+      add: !!h.querySelector('[data-slot="add-member-trigger"]'),
+      count: h.querySelector('[data-slot="header-count"]')?.textContent ?? null,
+    };
+  })()`);
+  await unhover();
+  assert(shown.revealed === "true", `${label}: G15 the inlined list header still takes a real pointer (${shown.revealed})`);
+  assert(shown.add, `${label}: G15 and reveals its + — the only way to add a member — exactly as a section header would`);
+  assert(/1/.test(shown.count ?? ""), `${label}: G15 and its member count (“${shown.count}”)`);
+
+  /* ---- and the component that DOES have regions is untouched ------- */
+  await setSelect('[data-slot="component-picker"]', "Block");
+  await waitFor(`${PANEL} [data-slot="section-list"]`);
+  await sleep(500);
+  const block = await shapeOf();
+  const blockIds = block.sections.map((s) => s.id);
+  assert(
+    JSON.stringify(blockIds) === JSON.stringify(["layout", "appearance", "header", "body", "footer", "renderer"]),
+    `${label}: G15 a Block's sections are exactly as they were (${blockIds.join(" → ")})`,
+  );
+  for (const id of ["header", "body", "footer"]) {
+    const region = block.sections.find((s) => s.id === id);
+    assert(region.lists.length > 0, `${label}: G15 the ${id} region keeps its own list(s) under its own heading (${region.lists.length})`);
+    assert(/ Slot$/.test(region.title ?? ""), `${label}: G15 and keeps its slot title (“${region.title}”)`);
+  }
+  assert(block.membersSections === 0, `${label}: G15 a Block never had a members section and still does not`);
+  const blockShot = await shotInspector(`${label.split("/")[0]}-block-unchanged`);
+
+  return { flexIds, blockIds, flexFields, flexLists: filledOwn.lists, emptyShot, filledShot, blockShot };
+}
+
 /* ------------------------------------------------------------------ */
 /* The run                                                             */
 /* ------------------------------------------------------------------ */
@@ -869,6 +1015,10 @@ try {
     await sleep(200);
     await setSelect('[data-slot="component-picker"]', "Block");
     await sleep(500);
+
+    // G15 runs last because it drives the picker itself — Flex, then back to
+    // Block — and it leaves Block selected, the state everything above assumes.
+    entry.membersProperty = await gateMembersIsAProperty(`${theme}/${DESIGN}`);
 
     assert(consoleErrors.length === 0, `${theme}: G9 no console error anywhere in the run (${consoleErrors.slice(0, 2).join(" | ")})`);
     entry.console = consoleErrors.slice();
