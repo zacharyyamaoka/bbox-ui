@@ -10,11 +10,13 @@ import {
   refresh,
   setMode,
   toggleEdge,
+  type AlignConfig,
   type Arrangement,
   type ArrangementMode,
   type Placement,
   type Placements,
   type PortEdgeId,
+  type SpacingScheme,
 } from "@bbox-ui/core";
 import {
   activeArrangement,
@@ -43,10 +45,6 @@ import {
   INITIAL_UID,
   MIXED_BENCH,
   PANEL_VARIANTS,
-  PORT_EDGE_VARIANTS,
-  DEFAULT_PORT_EDGE_VARIANT,
-  findPortEdgeVariant,
-  PortEdgeVariantContext,
   portEdgesArrangement,
   REGISTRY,
   type ComponentEntry,
@@ -62,10 +60,6 @@ import { useSelectionHistory } from "./selection-history";
 import { INSPECTOR_LAYOUT } from "./inspector-layout";
 
 const VARIANT_KEY = "bbox-ui.create.panelVariant";
-/** Which of the five port-edge implementations is live. Its own key, not
- *  the panel's: the two switchers answer different questions and a returning
- *  tab must restore both. */
-const PORT_EDGE_KEY = "bbox-ui.create.portEdgeVariant";
 
 const RENDER_KEY = "bbox-ui.create.render";
 const VIEW_KEY = "bbox-ui.create.view";
@@ -92,7 +86,6 @@ function readStored(key: string): string | null {
 export function Workbench() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
   const [variantId, setVariantId] = useState(() => PANEL_VARIANTS[0].id);
-  const [portEdgeVariantId, setPortEdgeVariantId] = useState(DEFAULT_PORT_EDGE_VARIANT);
 
   const [render, setRender] = useState<Render>("dom");
   const [view, setView] = useState<View>("preview");
@@ -112,8 +105,6 @@ export function Workbench() {
   useEffect(() => {
     const v = readStored(VARIANT_KEY);
     if (v) setVariantId(findVariant(v).id);
-    const pe = readStored(PORT_EDGE_KEY);
-    if (pe) setPortEdgeVariantId(findPortEdgeVariant(pe).id);
 
     const r = readStored(RENDER_KEY);
     if (r === "dom" || r === "reactflow" || r === "tldraw") setRender(r);
@@ -132,7 +123,6 @@ export function Workbench() {
     if (!restored) return;
     try {
       window.localStorage.setItem(VARIANT_KEY, variantId);
-      window.localStorage.setItem(PORT_EDGE_KEY, portEdgeVariantId);
 
       window.localStorage.setItem(RENDER_KEY, render);
       window.localStorage.setItem(VIEW_KEY, view);
@@ -140,7 +130,7 @@ export function Workbench() {
     } catch {
       /* private window: the choice still works, it just forgets */
     }
-  }, [restored, variantId, portEdgeVariantId, render, view]);
+  }, [restored, variantId, render, view]);
 
   const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
@@ -406,6 +396,39 @@ export function Workbench() {
     });
   }
 
+  /**
+   * `spacing` is always one of the three real schemes — "Aligned to edge" in
+   * the inspector calls this with `spacing` left at its current/fallback
+   * value and `align` set (see `AlignConfig`'s own doc); clearing back to a
+   * plain scheme calls this with `align` omitted. `refresh()` afterward is
+   * cheap and idempotent even when only `align` changed and `t` didn't.
+   */
+  function setArrangementSpacing(blockId: string, spacing: SpacingScheme, align?: AlignConfig) {
+    setBenches((prev) => {
+      const bench = prev[activeName] ?? [];
+      const block = bench.find((i) => i.id === blockId);
+      if (!block) return prev;
+      const arrangement = activeArrangement(block);
+      const nextArrangement: Arrangement = { ...arrangement, spacing, align };
+      const ports = blockPorts(bench, blockId);
+      const lockedIds = new Set(ports.filter((p) => p.locked).map((p) => p.id));
+      const placements = portPlacementsOf(block, ports, arrangement.id);
+      const refreshed = refresh(placements, nextArrangement, lockedIds);
+      const nextArrangements = (block.arrangements ?? [DEFAULT_ARRANGEMENT]).map((a) =>
+        a.id === arrangement.id ? nextArrangement : a,
+      );
+      return {
+        ...prev,
+        [activeName]: bench.map((i) => {
+          if (i.id === blockId) return { ...i, arrangements: nextArrangements };
+          if (refreshed[i.id] && !lockedIds.has(i.id))
+            return { ...i, placements: { ...(i.placements ?? {}), [arrangement.id]: refreshed[i.id]! } };
+          return i;
+        }),
+      };
+    });
+  }
+
   /** `toggleEdge` refuses to drop the last live edge (returns the same
    *  Arrangement) — that refusal is what makes this a no-op cleanly. */
   function toggleArrangementEdge(blockId: string, edge: PortEdgeId, on: boolean) {
@@ -587,7 +610,6 @@ export function Workbench() {
     // sticky header. "Fill the rest" has to be stated as a number here or a
     // short bench leaves the sidebar and inspector ending mid-screen — the
     // exact thing Zach asked not to happen.
-    <PortEdgeVariantContext.Provider value={portEdgeVariantId}>
     <SidebarProvider
       data-slot="create-workbench"
       // color-scheme tells the browser which UA chrome to paint native
@@ -664,6 +686,7 @@ export function Workbench() {
             onSetArrangement: setArrangement,
             onAddArrangement: addArrangementTo,
             onSetArrangementMode: setArrangementMode,
+            onSetArrangementSpacing: setArrangementSpacing,
             onToggleArrangementEdge: toggleArrangementEdge,
             onSetArrangementGrouping: setArrangementGrouping,
             onMovePort: movePortTo,
@@ -671,32 +694,6 @@ export function Workbench() {
           }}
         />
       </div>
-      {/* The round's switcher. Bottom-RIGHT and floating, not another row in
-        * the sidebar: it is a question about the round ("which of the five
-        * am I looking at"), not about the instance, and Zach's rule since
-        * 2026-09-09 is that a prototype variant is never reached by typing a
-        * URL flag. The choice persists, and variant 1 is applied by default
-        * so ignoring it costs nothing. */}
-      <div
-        data-slot="port-edge-switcher"
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-md border bg-background/95 px-2 py-1.5 shadow-lg backdrop-blur"
-      >
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Port edge</span>
-        <select
-          data-slot="port-edge-picker"
-          value={portEdgeVariantId}
-          onChange={(e) => setPortEdgeVariantId(e.target.value)}
-          className="rounded border bg-background px-1.5 py-1 text-xs"
-          title={findPortEdgeVariant(portEdgeVariantId).thesis}
-        >
-          {PORT_EDGE_VARIANTS.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.label}
-            </option>
-          ))}
-        </select>
-      </div>
     </SidebarProvider>
-    </PortEdgeVariantContext.Provider>
   );
 }

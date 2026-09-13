@@ -1,7 +1,15 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { ALL_EDGES, type Arrangement, type ArrangementMode, type Placement, type PortEdgeId } from "@bbox-ui/core";
+import {
+  ALL_EDGES,
+  type AlignAnchor,
+  type Arrangement,
+  type ArrangementMode,
+  type Placement,
+  type PortEdgeId,
+  type SpacingScheme,
+} from "@bbox-ui/core";
 import type { Instance } from "@bbox-ui/panel";
 import { activeArrangement } from "@bbox-ui/panel";
 import type { MemberListActions } from "./members-section";
@@ -170,6 +178,93 @@ export function ArrangementSection({ block, actions }: { block: Instance; action
           ))}
         </div>
       </div>
+      <div style={rowStyle}>
+        <span style={labelCellStyle}>Spacing</span>
+        <div data-slot="arrangement-spacing" style={segmentWrapStyle}>
+          {(["between", "evenly", "around", "aligned"] as const).map((choice) => {
+            const isAligned = !!arrangement.align;
+            const active = choice === "aligned" ? isAligned : !isAligned && arrangement.spacing === choice;
+            return (
+              <button
+                key={choice}
+                type="button"
+                data-spacing={choice}
+                aria-pressed={active}
+                onClick={() =>
+                  actions.onSetArrangementSpacing(
+                    block.id,
+                    choice === "aligned" ? arrangement.spacing : (choice as SpacingScheme),
+                    choice === "aligned" ? (arrangement.align ?? { anchor: "start", gapPx: 18, edgePaddingPx: 0 }) : undefined,
+                  )
+                }
+                style={segmentButtonStyle(active)}
+              >
+                {choice === "between" ? "Between" : choice === "evenly" ? "Evenly" : choice === "around" ? "Around" : "Aligned"}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {arrangement.align && (
+        <>
+          <div style={rowStyle}>
+            <span style={labelCellStyle}>Anchor</span>
+            <div style={segmentWrapStyle}>
+              {(["start", "end"] as AlignAnchor[]).map((anchor) => (
+                <button
+                  key={anchor}
+                  type="button"
+                  aria-pressed={arrangement.align!.anchor === anchor}
+                  onClick={() =>
+                    actions.onSetArrangementSpacing(block.id, arrangement.spacing, { ...arrangement.align!, anchor })
+                  }
+                  style={segmentButtonStyle(arrangement.align!.anchor === anchor)}
+                >
+                  {anchor === "start" ? "Start" : "End"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={rowStyle}>
+            <span style={labelCellStyle}>Gap</span>
+            <div style={controlWrapStyle}>
+              <input
+                data-slot="arrangement-align-gap"
+                type="number"
+                min={0}
+                step={1}
+                value={arrangement.align.gapPx}
+                onChange={(e) =>
+                  actions.onSetArrangementSpacing(block.id, arrangement.spacing, {
+                    ...arrangement.align!,
+                    gapPx: Math.max(0, Number(e.target.value) || 0),
+                  })
+                }
+                style={numberStyle}
+              />
+            </div>
+          </div>
+          <div style={rowStyle}>
+            <span style={labelCellStyle}>Edge padding</span>
+            <div style={controlWrapStyle}>
+              <input
+                data-slot="arrangement-align-padding"
+                type="number"
+                min={0}
+                step={1}
+                value={arrangement.align.edgePaddingPx}
+                onChange={(e) =>
+                  actions.onSetArrangementSpacing(block.id, arrangement.spacing, {
+                    ...arrangement.align!,
+                    edgePaddingPx: Math.max(0, Number(e.target.value) || 0),
+                  })
+                }
+                style={numberStyle}
+              />
+            </div>
+          </div>
+        </>
+      )}
       <div style={rowStyle}>
         <span style={labelCellStyle}>Edges</span>
         <div style={{ ...controlWrapStyle, gap: 3 }}>

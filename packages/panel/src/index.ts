@@ -68,12 +68,5 @@ export {
   portPlacementsOf,
 } from "./members";
 export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary, InstanceNode } from "./members";
-export { PortDndProvider, PortLane, HostZoomContext, PortEdgeVariantContext, usePortEdgeVariant, portLaneId, type PortDndProviderProps } from "./portDnd";
-export {
-  PORT_EDGE_VARIANTS,
-  DEFAULT_PORT_EDGE_VARIANT,
-  findPortEdgeVariant,
-  LANE_BAND_PX,
-  type PortEdgesImpl,
-  type PortEdgesModel,
-} from "./portEdges";
+export { PortDndProvider, PortLane, HostZoomContext, portLaneId, type PortDndProviderProps } from "./portDnd";
+export { LANE_BAND_PX, type PortEdgesImpl, type PortEdgesModel } from "./portEdges";

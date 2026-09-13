@@ -172,7 +172,15 @@ function FreeCard({ slot, edge }: { slot: LaneSlot; edge: PortEdgeId }) {
   );
 }
 
-function Lane({ edge, style }: { edge: PortEdgeId; style?: CSSProperties }) {
+function Lane({
+  edge,
+  style,
+  showCenterLine,
+}: {
+  edge: PortEdgeId;
+  style?: CSSProperties;
+  showCenterLine?: boolean;
+}) {
   const model = usePortEdgesModel();
   const { setNodeRef, isOver } = useDroppable({ id: laneDroppableId(model.ownerId, edge) });
   const slots = laneSlots(model, edge);
@@ -181,7 +189,7 @@ function Lane({ edge, style }: { edge: PortEdgeId; style?: CSSProperties }) {
     ? slots.map((slot) => <FreeCard key={slot.group} slot={slot} edge={edge} />)
     : slots.map((slot) => <SortableCard key={slot.group} slot={slot} edge={edge} />);
   const box = (
-    <LaneBox edge={edge} style={style} isOver={isOver} laneRef={setNodeRef}>
+    <LaneBox edge={edge} style={style} isOver={isOver} laneRef={setNodeRef} showCenterLine={showCenterLine}>
       {body}
     </LaneBox>
   );

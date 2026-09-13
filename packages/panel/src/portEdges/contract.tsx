@@ -95,7 +95,7 @@ export interface PortEdgesImpl {
   /** Which dnd-kit exports it leans on — the "stock part" line. */
   stock: string;
   Provider: ComponentType<{ model: PortEdgesModel; children: ReactNode }>;
-  Lane: ComponentType<{ edge: PortEdgeId; style?: CSSProperties }>;
+  Lane: ComponentType<{ edge: PortEdgeId; style?: CSSProperties; showCenterLine?: boolean }>;
 }
 
 const ModelContext = createContext<PortEdgesModel | null>(null);
@@ -332,12 +332,36 @@ const SPACING_JUSTIFY: Record<string, string> = {
   around: "space-around",
 };
 
+/**
+ * A dev-time guide showing where the lane's own line actually is — never
+ * drawn by default (a real Block IS the line; there is nothing to guide
+ * toward). `LaneBox`'s `showCenterLine` prop opts a bench in, per Zach's
+ * 2026-09-12 ask: "always nice to be able to toggle them on if debugging."
+ */
+function LaneCenterLine({ horizontal }: { horizontal: boolean }) {
+  return (
+    <div
+      data-slot="port-lane-center-line"
+      aria-hidden
+      style={{
+        position: "absolute",
+        pointerEvents: "none",
+        background: "color-mix(in srgb, currentColor 30%, transparent)",
+        ...(horizontal
+          ? { left: 0, right: 0, top: "50%", height: 1, transform: "translateY(-50%)" }
+          : { top: 0, bottom: 0, left: "50%", width: 1, transform: "translateX(-50%)" }),
+      }}
+    />
+  );
+}
+
 export function LaneBox({
   edge,
   style,
   isOver,
   laneRef,
   trackStyle,
+  showCenterLine = false,
   children,
   ...rest
 }: {
@@ -348,11 +372,41 @@ export function LaneBox({
   /** Overrides on the inner track — V5 turns flex OFF entirely and places
    *  every card by arithmetic instead. */
   trackStyle?: CSSProperties;
+  /** Dev-time only — see `LaneCenterLine`'s own doc. Never set by a real Block. */
+  showCenterLine?: boolean;
   children?: ReactNode;
 } & Record<string, unknown>) {
   const model = usePortEdgesModel();
   const horizontal = isHorizontal(edge);
   const custom = model.arrangement.mode === "custom";
+  const align = model.arrangement.align;
+  // "Aligned to edge": pack from one end with a real gap, plus an optional
+  // push-in from that same end (the Offset layout's whole mechanism — see
+  // `AlignConfig`'s own doc in portPlacement.ts). Auto-mode only: custom
+  // mode already positions every card itself, so an alignment override
+  // would fight the free `t` a user just dragged to.
+  const justifyContent = custom
+    ? "flex-start"
+    : align
+      ? align.anchor === "start"
+        ? "flex-start"
+        : "flex-end"
+      : (SPACING_JUSTIFY[model.arrangement.spacing] ?? "space-evenly");
+  const alignTrackStyle: CSSProperties = {};
+  if (!custom && align) {
+    alignTrackStyle.gap = align.gapPx;
+    if (align.edgePaddingPx > 0) {
+      const side =
+        align.anchor === "start"
+          ? horizontal
+            ? "paddingLeft"
+            : "paddingTop"
+          : horizontal
+            ? "paddingRight"
+            : "paddingBottom";
+      (alignTrackStyle as Record<string, number>)[side] = align.edgePaddingPx;
+    }
+  }
   return (
     <div
       ref={laneRef}
@@ -367,17 +421,19 @@ export function LaneBox({
       <div
         data-slot="port-edge"
         data-edge={edge}
-        data-layout={custom ? "custom" : model.arrangement.spacing}
+        data-layout={custom ? "custom" : align ? "aligned" : model.arrangement.spacing}
         style={{
           position: "relative",
           flex: 1,
           display: "flex",
           flexDirection: horizontal ? "row" : "column",
-          justifyContent: custom ? "flex-start" : (SPACING_JUSTIFY[model.arrangement.spacing] ?? "space-evenly"),
+          justifyContent,
           alignItems: "center",
+          ...alignTrackStyle,
           ...trackStyle,
         }}
       >
+        {showCenterLine ? <LaneCenterLine horizontal={horizontal} /> : null}
         {children}
       </div>
     </div>

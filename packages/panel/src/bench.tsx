@@ -42,6 +42,7 @@ import {
   ALL_EDGES,
   DEFAULT_ARRANGEMENT,
   evenT,
+  type AlignAnchor,
   type AppearanceState,
   type Tone,
   type Lens,
@@ -170,9 +171,15 @@ function laneStyleFor(edge: PortEdgeId, inset: number): CSSProperties {
  * schema fields.
  */
 function renderPortEdges(props: Record<string, unknown>, _children?: ReactNode, ctx?: RenderContext): ReactNode {
-  const p = props as { width?: number; height?: number };
+  const p = props as { width?: number; height?: number; showContainer?: boolean; showCenterLine?: boolean };
   const width = p.width && p.width > 0 ? p.width : 420;
   const height = p.height && p.height > 0 ? p.height : 240;
+  // Dev-time-only visibility, per Zach's 2026-09-12 ask: "always nice to be
+  // able to toggle them on if debugging" — this bench is exactly that dev
+  // context, so the outline defaults ON here; a real Block never renders
+  // this component at all and never has to think about the default.
+  const showContainer = p.showContainer !== false;
+  const showCenterLine = p.showCenterLine === true;
   const live = ctx?.arrangement && ctx.placements && ctx.blockId;
   return (
     <div
@@ -182,15 +189,21 @@ function renderPortEdges(props: Record<string, unknown>, _children?: ReactNode, 
         width,
         height,
         borderRadius: 10,
-        border: "1px dashed color-mix(in srgb, currentColor 34%, transparent)",
+        border: showContainer
+          ? "1px dashed color-mix(in srgb, currentColor 34%, transparent)"
+          : "1px solid transparent",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         overflow: "visible",
       }}
     >
-      <span style={{ opacity: 0.4, fontSize: 12, letterSpacing: "0.04em" }}>PortEdges</span>
-      {live ? ALL_EDGES.map((edge) => <PortLane key={edge} edge={edge} style={laneStyleFor(edge, 14)} />) : null}
+      {showContainer && <span style={{ opacity: 0.4, fontSize: 12, letterSpacing: "0.04em" }}>PortEdges</span>}
+      {live
+        ? ALL_EDGES.map((edge) => (
+            <PortLane key={edge} edge={edge} style={laneStyleFor(edge, 14)} showCenterLine={showCenterLine} />
+          ))
+        : null}
     </div>
   );
 }
@@ -209,10 +222,24 @@ function renderPortEdges(props: Record<string, unknown>, _children?: ReactNode, 
 export function portEdgesArrangement(instanceType: string, props: Record<string, unknown>, stored: Arrangement): Arrangement {
   if (instanceType !== "PortEdges") return stored;
   const grouping = props.grouping as string | undefined;
+  const spacingProp = props.spacing as string | undefined;
+  // "Aligned to edge" isn't a fourth SpacingScheme — it's `align`, a
+  // separate presentational field portPlacement.ts's `t`-math never reads
+  // (see AlignConfig's own doc). `spacing` itself falls back to "evenly" so
+  // this arrangement still has a sane story if it's ever switched to Custom
+  // and back, or read by something that only knows the three CSS schemes.
+  const isAligned = spacingProp === "aligned";
   return {
     ...stored,
     mode: props.custom === true ? "custom" : "auto",
-    spacing: (props.spacing as SpacingScheme) ?? stored.spacing,
+    spacing: isAligned ? "evenly" : ((spacingProp as SpacingScheme) ?? stored.spacing),
+    align: isAligned
+      ? {
+          anchor: (props.alignAnchor as AlignAnchor) ?? "start",
+          gapPx: typeof props.alignGap === "number" ? props.alignGap : 18,
+          edgePaddingPx: typeof props.alignEdgePadding === "number" ? props.alignEdgePadding : 0,
+        }
+      : undefined,
     grouping:
       grouping === "off" || !stored.grouping
         ? undefined
@@ -237,8 +264,40 @@ const PORT_EDGES_FIELDS: FieldSpec[] = [
       { value: "between", label: "Edge to edge" },
       { value: "evenly", label: "Including edge" },
       { value: "around", label: "Around" },
+      { value: "aligned", label: "Aligned to edge" },
     ],
-    hint: "Auto mode only — the three flexbox distributions evenT reproduces as fractions.",
+    hint: "Auto mode only. The first three are the flexbox distributions evenT reproduces as fractions; Aligned to edge packs from one end with the three fields below instead.",
+  },
+  {
+    id: "alignAnchor",
+    label: "Align anchor",
+    kind: "segments",
+    defaultValue: "start",
+    options: [
+      { value: "start", label: "Start" },
+      { value: "end", label: "End" },
+    ],
+    hint: "Spacing: Aligned to edge only.",
+  },
+  {
+    id: "alignGap",
+    label: "Align gap",
+    kind: "number",
+    defaultValue: 18,
+    min: 0,
+    max: 200,
+    step: 1,
+    hint: "px between cards. Spacing: Aligned to edge only.",
+  },
+  {
+    id: "alignEdgePadding",
+    label: "Edge padding",
+    kind: "number",
+    defaultValue: 0,
+    min: 0,
+    max: 400,
+    step: 1,
+    hint: "px the whole pack is pushed in from its anchor — the Offset layout's mechanism. Spacing: Aligned to edge only.",
   },
   {
     id: "grouping",
@@ -254,6 +313,20 @@ const PORT_EDGES_FIELDS: FieldSpec[] = [
   },
   { id: "width", label: "Width", kind: "number", defaultValue: 420, min: 240, max: 720, step: 10 },
   { id: "height", label: "Height", kind: "number", defaultValue: 240, min: 160, max: 480, step: 10 },
+  {
+    id: "showContainer",
+    label: "Show container",
+    kind: "toggle",
+    defaultValue: true,
+    hint: "Dev-time only — a real Block draws its own outline and never renders this box at all.",
+  },
+  {
+    id: "showCenterLine",
+    label: "Show center line",
+    kind: "toggle",
+    defaultValue: false,
+    hint: "Dev-time guide for where the lane's own line actually is. Off is how a real Block sits — it IS the line.",
+  },
 ];
 
 /**

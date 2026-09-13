@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from "react";
 import type { FieldValue } from "@bbox-ui/schema";
-import type { ArrangementMode, Placement, PortEdgeId } from "@bbox-ui/core";
+import type { AlignConfig, ArrangementMode, Placement, PortEdgeId, SpacingScheme } from "@bbox-ui/core";
 import type { ComponentEntry, Instance, MembersSpec } from "@bbox-ui/panel";
 import { MEMBERS_CONTROLS, ancestry, memberSpecFor, summarize, typeGlyph } from "@bbox-ui/panel";
 import { ArrangementSection } from "./arrangement-section";
@@ -24,6 +24,9 @@ export interface MemberListActions {
   onSetArrangementMode: (blockId: string, mode: ArrangementMode) => void;
   onToggleArrangementEdge: (blockId: string, edge: PortEdgeId, on: boolean) => void;
   onSetArrangementGrouping: (blockId: string, setId: string | null) => void;
+  /** `align` is `undefined` for the three plain schemes, set only for
+   *  "aligned" — see AlignConfig's own doc in portPlacement.ts. */
+  onSetArrangementSpacing: (blockId: string, spacing: SpacingScheme, align?: AlignConfig) => void;
   onMovePort: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
   onSetPortPlacement: (portId: string, patch: Partial<Placement> & { locked?: boolean }) => void;
 }

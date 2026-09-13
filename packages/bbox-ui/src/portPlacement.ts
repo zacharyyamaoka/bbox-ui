@@ -51,6 +51,35 @@ export interface GroupingSet {
   assignments: Record<string, { group: string; groupOrder?: number }>;
 }
 
+export type AlignAnchor = "start" | "end";
+
+/**
+ * A purely presentational override on top of `spacing`: pack cards from one
+ * end of the lane with an explicit px gap, plus an extra px push-in from
+ * that same anchor (`edgePaddingPx`) — the mechanism behind the Inline/
+ * Offset port layouts (`PROJECT - Black Box UI.md`, 2026-09-12): give the
+ * offset edge a non-zero `edgePaddingPx` and its pack starts further in than
+ * the inline edge's.
+ *
+ * Deliberately read ONLY by the render layer (`packages/panel/src/
+ * portEdges/contract.tsx`'s `LaneBox`) — never by `evenT`/`refresh` here,
+ * which keep deriving `t` from `spacing` exactly as they did before `align`
+ * existed. That is a considered trade-off, not an oversight: `t` is this
+ * module's length-agnostic fraction (see this file's header), while a gap
+ * or padding in real px only means something once a lane has an actual
+ * rendered length — a fact this zero-dependency module never has and must
+ * not acquire. The cost is that `t` isn't pixel-exact to what's on screen
+ * while `align` is active; the only place that would show is switching this
+ * arrangement to Custom mode, where a port lands close to (not exactly at)
+ * its aligned position — a minor one-time cosmetic settle, not a bug this
+ * module's existing continuity tests need to (or do) cover.
+ */
+export interface AlignConfig {
+  anchor: AlignAnchor;
+  gapPx: number;
+  edgePaddingPx: number;
+}
+
 export interface Arrangement {
   id: string;
   label: string;
@@ -60,6 +89,8 @@ export interface Arrangement {
    * `ALL_EDGES` for the canonical clockwise order everything else walks. */
   edges: PortEdgeId[];
   grouping?: GroupingSet;
+  /** Optional "aligned to edge" packing — see `AlignConfig`'s own doc. */
+  align?: AlignConfig;
 }
 
 /**

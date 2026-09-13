@@ -32,17 +32,8 @@ import { createContext, useContext, useMemo } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Arrangement, PortEdgeId, Placements } from "@bbox-ui/core";
 
-import { DEFAULT_PORT_EDGE_VARIANT, findPortEdgeVariant } from "./portEdges";
+import { PORT_EDGE_IMPL } from "./portEdges";
 import type { PortEdgesModel } from "./portEdges";
-
-/** Which of the five is live. A plain string on a context so a host can flip
- *  it from a switcher and every Block re-mounts its drag machinery; the
- *  losing four stay compiled in until Zach picks. */
-export const PortEdgeVariantContext = createContext<string>(DEFAULT_PORT_EDGE_VARIANT);
-
-export function usePortEdgeVariant() {
-  return findPortEdgeVariant(useContext(PortEdgeVariantContext));
-}
 
 /**
  * How zoomed the host that mounted this subtree currently is. The plain DOM
@@ -82,7 +73,6 @@ export function PortDndProvider({
   onMovePort,
   children,
 }: PortDndProviderProps) {
-  const impl = usePortEdgeVariant();
   const zoom = useContext(HostZoomContext);
   const model: PortEdgesModel = useMemo(
     () => ({
@@ -96,15 +86,22 @@ export function PortDndProvider({
     }),
     [blockId, arrangement, placements, members, lockedMemberIds, zoom, onMovePort],
   );
-  return <impl.Provider model={model}>{children}</impl.Provider>;
+  return <PORT_EDGE_IMPL.Provider model={model}>{children}</PORT_EDGE_IMPL.Provider>;
 }
 
 /**
- * One lane, drawn by whichever implementation is live. `bench.tsx`'s
- * `renderLane` is a plain function and cannot read a context itself, so this
- * component is the hook boundary between it and the variant.
+ * One lane. `bench.tsx`'s `renderLane` is a plain function, not a component,
+ * so this is the hook boundary between it and V1's own Lane.
  */
-export function PortLane({ edge, style }: { edge: PortEdgeId; style?: CSSProperties }) {
-  const impl = usePortEdgeVariant();
-  return <impl.Lane edge={edge} style={style} />;
+export function PortLane({
+  edge,
+  style,
+  showCenterLine,
+}: {
+  edge: PortEdgeId;
+  style?: CSSProperties;
+  /** Dev-time guide, off by default — see contract.tsx's `LaneCenterLine`. */
+  showCenterLine?: boolean;
+}) {
+  return <PORT_EDGE_IMPL.Lane edge={edge} style={style} showCenterLine={showCenterLine} />;
 }

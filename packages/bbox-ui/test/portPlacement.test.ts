@@ -408,3 +408,35 @@ describe("addArrangement / clonePlacements", () => {
     expect(source.p1.t).toBe(0.5);
   });
 });
+
+describe("Arrangement.align — presentational only, this module ignores it", () => {
+  it("refresh() derives the same t whether or not align is set", () => {
+    const placements: Placements = {
+      p1: { edge: "top", order: 0, t: 0 },
+      p2: { edge: "top", order: 1, t: 0 },
+      p3: { edge: "top", order: 2, t: 0 },
+    };
+    const plain = arrangement({ spacing: "evenly" });
+    const aligned = arrangement({
+      spacing: "evenly",
+      align: { anchor: "start", gapPx: 18, edgePaddingPx: 72 },
+    });
+    expect(refresh(placements, aligned)).toEqual(refresh(placements, plain));
+  });
+
+  it("movePort() commits the same order/t regardless of align", () => {
+    const placements: Placements = {
+      p1: { edge: "top", order: 0, t: 0 },
+      p2: { edge: "top", order: 1, t: 0 },
+    };
+    const plain = arrangement({ spacing: "between" });
+    const aligned = arrangement({
+      spacing: "between",
+      align: { anchor: "end", gapPx: 10, edgePaddingPx: 0 },
+    });
+    const target = { index: 0 } as const;
+    expect(movePort(placements, aligned, "p2", "top", target)).toEqual(
+      movePort(placements, plain, "p2", "top", target),
+    );
+  });
+});
