@@ -38,6 +38,37 @@ export {
   type Instance,
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
+export {
+  DENSITY,
+  SECTION_PANEL_CONTRACT,
+  STANDARD_CONTROLS,
+  type BoundField,
+  type Density,
+  type DensityRung,
+  type FoldState,
+  type InspectorSection,
+  type SectionAction,
+  type SectionList,
+  type SectionPanelProps,
+  type SectionPanelVariant,
+  type SectionRow,
+  type StandardControl,
+} from "./sections/contract";
+export { StandardPair, StandardRow, controlKindFor, LABEL_WIDTH, type RowGeometry } from "./sections/StandardRow";
+export { FoldRow, HeaderActions, sectionDividerStyle } from "./sections/FoldRow";
+export {
+  ListBlock,
+  PanelShell,
+  PanelTitle,
+  SectionBody,
+  SectionRows,
+  derivedSummary,
+  isEffectivelyEmpty,
+  listSummary,
+  sectionTagCount,
+  type HeaderPolicy,
+} from "./sections/shared";
+export { SECTION_PANELS, DEFAULT_SECTION_PANEL, findSectionPanel } from "./sections/variants";
 export { MEMBER_SPECS } from "./bench";
 export {
   MEMBERS_CONTROLS,
@@ -62,6 +93,7 @@ export {
   effectiveProps,
   wouldCycle,
   typeGlyph,
+  TypedAddMenu,
   TYPE_GLYPH,
 } from "./members";
 export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary, InstanceNode } from "./members";

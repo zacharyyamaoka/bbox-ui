@@ -330,6 +330,29 @@ export function Workbench() {
     }));
   }
 
+  /** Clear one prop on one instance — the foreign-target half of
+   *  `clearOverride`, which only ever reaches the SELECTED instances. A
+   *  Bar's `size` shown in the Block's Header section needs a way back to
+   *  its default just as much as a row on the subject does. */
+  function clearInstanceProp(id: string, fieldId: string) {
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: (prev[activeName] ?? []).map((i) => {
+        if (i.id !== id) return i;
+        const props = { ...i.props };
+        delete props[fieldId];
+        return { ...i, props };
+      }),
+    }));
+  }
+
+  /** Move one root on the canvas from the inspector's host-owned section —
+   *  the same setter a React Flow or tldraw drag writes through, so typing
+   *  an X and dragging the node are one code path, not two. */
+  function setPosition(id: string, next: CanvasPosition) {
+    setPositions((prev) => ({ ...prev, [id]: next }));
+  }
+
   function applyToSelected(fieldId: string, value: FieldValue) {
     setBenches((prev) => ({
       ...prev,
@@ -425,7 +448,11 @@ export function Workbench() {
           onRemoveMember={removeMemberById}
           onMoveMember={moveMemberInParent}
           onSetProp={setInstanceProp}
+          onClearProp={clearInstanceProp}
           onSelectInstance={(id) => selectInstance(id)}
+          render={render}
+          positions={placedPositions}
+          onSetPosition={setPosition}
           width={inspectorWidth}
           minWidth={MIN_INSPECTOR_WIDTH}
           maxWidth={MAX_INSPECTOR_WIDTH}

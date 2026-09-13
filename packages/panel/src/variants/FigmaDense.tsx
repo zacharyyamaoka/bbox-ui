@@ -380,7 +380,7 @@ function PresetPicker({
 /* One row — label left, control right, dot = provenance + disclosure  */
 /* ------------------------------------------------------------------ */
 
-interface RowData {
+export interface RowData {
   trace: FieldTrace | null;
   paintedElsewhere: FieldValue | null;
   isMixed: boolean;
@@ -402,7 +402,7 @@ interface RowData {
  * identical defect that had already been fixed in the canonical row. Six
  * files, four answers. The model is shared now; see fieldModel.ts.
  */
-function readRow(
+export function readRow(
   field: FieldSpec,
   subjects: Subject[],
   presets: PresetSpec[],
@@ -616,7 +616,7 @@ function PairedFieldCell({
  * the read when nothing is called out at all. The dot itself is gone — the
  * tag already carries the one bit of information the dot's colour used to.
  */
-function RowLabel({
+export function RowLabel({
   field,
   data,
   governed,
@@ -624,6 +624,8 @@ function RowLabel({
   setExpanded,
   onChange,
   compact,
+  disabled,
+  showProvenance = true,
 }: {
   field: FieldSpec;
   data: RowData;
@@ -632,9 +634,34 @@ function RowLabel({
   setExpanded: (fn: (v: boolean) => boolean) => void;
   onChange: (fieldId: string, value: FieldValue) => void;
   compact?: boolean;
+  /**
+   * `false` for a row with only ONE layer — a render surface's X, where the
+   * stored value IS the fact and there is no default it could be said to
+   * override.
+   *
+   * WHY it needs saying at all: the tag and the cascade disclosure exist to
+   * explain which of several layers won. A host fact has no preset, no
+   * inheritance and no meaningful default, so the resolver's honest answer
+   * ("the stored value won") rendered as a violet OVERRIDE tag on every
+   * X and Y — a true statement about the model that is a false statement to
+   * the reader. Observed in the first capture pass of this design.
+   */
+  showProvenance?: boolean;
+  /** The row cannot be written right now — a host fact on a render surface
+   *  with no handles, or a value the model derives. The label stops being a
+   *  scrub handle; the cascade stays clickable, because reading where a
+   *  value came from is exactly what a read-only row is for. */
+  disabled?: boolean;
 }) {
   const scrub = useLabelScrub(field, data, onChange);
-  const tag: "override" | "mixed" | null = data.isMixed ? "mixed" : data.trace?.winner === "override" ? "override" : null;
+  const scrubbable = field.kind === "number" && !disabled;
+  const tag: "override" | "mixed" | null = !showProvenance
+    ? null
+    : data.isMixed
+      ? "mixed"
+      : data.trace?.winner === "override"
+        ? "override"
+        : null;
   const disclosureTitle = data.isMixed
     ? "Mixed across selection — click to see the cascade"
     : data.trace
@@ -646,7 +673,7 @@ function RowLabel({
               : data.trace.winner
         } — click to see the cascade`
       : undefined;
-  const toggleExpanded = data.trace ? () => setExpanded((v) => !v) : undefined;
+  const toggleExpanded = data.trace && showProvenance ? () => setExpanded((v) => !v) : undefined;
 
   return (
     <div style={compact ? labelCellCompactStyle : labelCellStyle}>
@@ -654,7 +681,7 @@ function RowLabel({
         data-slot="field-label"
         role={data.trace ? "button" : undefined}
         tabIndex={data.trace ? 0 : undefined}
-        style={labelTextStyle(governed, field.kind === "number", !!data.trace)}
+        style={labelTextStyle(governed, scrubbable, !!data.trace)}
         onClick={toggleExpanded}
         onKeyDown={
           toggleExpanded
@@ -666,19 +693,60 @@ function RowLabel({
               }
             : undefined
         }
-        onPointerDown={field.kind === "number" ? scrub.onPointerDown : undefined}
-        onPointerMove={field.kind === "number" ? scrub.onPointerMove : undefined}
-        onPointerUp={field.kind === "number" ? scrub.onPointerUp : undefined}
+        onPointerDown={scrubbable ? scrub.onPointerDown : undefined}
+        onPointerMove={scrubbable ? scrub.onPointerMove : undefined}
+        onPointerUp={scrubbable ? scrub.onPointerUp : undefined}
         title={field.hint ?? disclosureTitle}
       >
         {field.label}
       </span>
-      {tag && (
-        <span data-slot="field-provenance-tag" title={disclosureTitle} onClick={toggleExpanded} style={tagStyle(tag, expanded)}>
-          {tag}
-        </span>
-      )}
+      {tag && <ProvenanceTag tag={tag} title={disclosureTitle} outlined={expanded} onClick={toggleExpanded} />}
     </div>
+  );
+}
+
+/**
+ * The plain-word provenance tag itself, extracted so a SECTION header can
+ * carry the same mark its rows do without a second palette.
+ *
+ * WHY extracted rather than copied into the section layer: this repo has
+ * already paid for the copy — "six files, four answers" on the resolution
+ * model, and `tierButtonStyle` existing in three places with two of them
+ * fixed. A section that wants to say "two of my rows are overridden" must
+ * say it in the SAME ink as the rows, or the panel grows a second private
+ * vocabulary for one idea. `text` widens the tag past the two row states
+ * (an aggregate reads "2 OVERRIDE"); `tag` still decides the colour.
+ */
+export function ProvenanceTag({
+  tag,
+  text,
+  title,
+  outlined,
+  onClick,
+}: {
+  tag: "override" | "mixed";
+  text?: string;
+  title?: string;
+  outlined?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <span
+      data-slot="field-provenance-tag"
+      data-tag={tag}
+      title={title}
+      onClick={
+        onClick
+          ? (e) => {
+              e.stopPropagation();
+              onClick();
+            }
+          : undefined
+      }
+      style={tagStyle(tag, outlined === true)}
+    >
+      {text ?? tag}
+    </span>
   );
 }
 
@@ -728,7 +796,7 @@ function useLabelScrub(
 
 /** Collapsed-by-default cascade — contract point 5, still reachable, just
  *  behind the dot instead of an always-visible badge row. */
-function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec[] }) {
+export function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec[] }) {
   return (
     <div data-slot="field-trace-chain" style={chainStyle}>
       {trace.candidates.map((candidate) => (
@@ -760,13 +828,14 @@ function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec
    text                                                                 */
 /* ------------------------------------------------------------------ */
 
-function DenseControl({
+export function DenseControl({
   field,
   value,
   isMixed,
   secondary,
   presets,
   drivenPresetId,
+  disabled,
   onChange,
 }: {
   field: FieldSpec;
@@ -775,8 +844,37 @@ function DenseControl({
   secondary?: boolean;
   presets: PresetSpec[];
   drivenPresetId: string | undefined;
+  /** Read-only right now for a MODEL reason, not a permission one — a
+   *  render surface with no drag handles, a value derived from the
+   *  component. Rendered, never hidden: seeing the number the model
+   *  computed is the whole point of showing the row. */
+  disabled?: boolean;
   onChange: (value: FieldValue) => void;
 }) {
+  // WHY one early branch rather than a `disabled` prop threaded through all
+  // five control shapes: a disabled row has nothing to say with a segmented
+  // strip or a dropdown — there is no choice to offer — so every kind
+  // collapses to the same read-only box printing the resolved value. This
+  // is also what stops a disabled NUMBER row from mounting `NumberInput`,
+  // whose blur handler would otherwise commit `field.defaultValue` over a
+  // host-owned value the panel was only supposed to display.
+  if (disabled) {
+    const text = isMixed
+      ? "Mixed"
+      : field.kind === "segments"
+        ? optionLabelFor(field, value)
+        : field.kind === "toggle"
+          ? value === true
+            ? "on"
+            : "off"
+          : String(value ?? field.defaultValue);
+    return (
+      <div data-slot="dense-control-readonly" style={numberBoxStyle(true)}>
+        <input type="text" readOnly disabled value={text} style={readOnlyInputStyle} />
+        {field.unit && <span style={numberUnitStyle}>{field.unit}</span>}
+      </div>
+    );
+  }
   if (field.kind === "segments") {
     const options = field.options ?? [];
     // The one thing named outright: a wrapped row of buttons for a
@@ -1095,7 +1193,7 @@ const rowWrapStyle: CSSProperties = { padding: "1px 2px" };
 // narrow column. The inspector column on /create grew to match (see
 // apps/docs/src/components/create/inspector-column.tsx) and is now
 // user-resizable, so a demo host with less room can still shrink it back.
-const LABEL_WIDTH = 152;
+export const LABEL_WIDTH = 152;
 const rowGridStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, minHeight: 22 };
 const labelCellStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, width: LABEL_WIDTH, flexShrink: 0 };
 const labelCellCompactStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 4 };
@@ -1163,7 +1261,7 @@ const paintedElsewhereStyle: CSSProperties = {
 // per-section reset) says that correctly; lucide's `RotateCcw` is the
 // vector version of the same glyph, added as this package's first icon
 // dependency.
-const clearButtonStyle: CSSProperties = {
+export const clearButtonStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1381,6 +1479,11 @@ const numberInputStyle: CSSProperties = {
   background: "transparent",
 };
 const numberUnitStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-fg-faint, #999)", flexShrink: 0, paddingRight: 4 };
+const readOnlyInputStyle: CSSProperties = {
+  ...numberInputStyle,
+  color: "var(--bbox-panel-fg-faint, #999)",
+  cursor: "not-allowed",
+};
 
 function textInputStyle(secondary?: boolean): CSSProperties {
   return {

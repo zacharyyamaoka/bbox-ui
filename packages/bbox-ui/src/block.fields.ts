@@ -28,6 +28,7 @@ export const WIDTH_FIELD: FieldSpec = {
   defaultValue: SIMPLE_BLOCK.width,
   unit: "px",
   group: "size",
+  section: "layout",
 };
 
 export const HEIGHT_FIELD: FieldSpec = {
@@ -37,6 +38,7 @@ export const HEIGHT_FIELD: FieldSpec = {
   defaultValue: SIMPLE_BLOCK.height,
   unit: "px",
   group: "size",
+  section: "layout",
 };
 
 export const RADIUS_FIELD: FieldSpec = {
@@ -47,6 +49,12 @@ export const RADIUS_FIELD: FieldSpec = {
   min: 0,
   max: 32,
   unit: "px",
+  // WHY radius and orientation join width/height under one `section` while
+  // staying OUT of their `group`: `group` is "these share a line" (width
+  // beside height); `section` is "these share a heading". Figma's own panel
+  // draws exactly this distinction — X and Y on one line, both under
+  // Position. See FieldSpec.section.
+  section: "layout",
   hint: "0 is edge-to-edge. The header and footer clip to it.",
 };
 
@@ -62,6 +70,7 @@ export const ORIENTATION_FIELD: FieldSpec = {
     value: o,
     label: o === "horizontal" ? "Horizontal" : "Vertical",
   })),
+  section: "layout",
 };
 
 /**
