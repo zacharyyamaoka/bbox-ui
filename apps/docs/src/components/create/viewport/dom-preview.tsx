@@ -3,7 +3,9 @@
 import { useMemo } from "react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import { armEditOnRelease, claimInstancePointerDown, isInstancePointerDownClaimed, isSecondPressToEdit } from "@bbox-ui/panel";
+import type { PortEdgeId } from "@bbox-ui/core";
 import { renderInstance, type EditBundle } from "../render-instance";
+import { HostZoomContext } from "../port-dnd";
 
 /**
  * Plain DOM. The components exactly as they render with no host around them,
@@ -28,6 +30,7 @@ export function DomPreview({
   onSelectionChange,
   onSelectInstance,
   edit,
+  onMovePort,
 }: {
   entries: ComponentEntry[];
   instances: Instance[];
@@ -36,9 +39,16 @@ export function DomPreview({
   onSelectionChange: (ids: string[]) => void;
   onSelectInstance: (id: string, additive: boolean) => void;
   edit: EditBundle;
+  /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
+   *  The DOM render is the one host wired for it today. */
+  onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
 }) {
   const byId = useMemo(() => new Map(instances.map((i) => [i.id, i])), [instances]);
   return (
+    // The DOM render is never scaled, so every PortDndProvider nested under
+    // it (one per Block, mounted by renderInstance) divides its drag
+    // overlay by zoom 1 — a no-op, and the seam a scaled host would use.
+    <HostZoomContext.Provider value={1}>
     <div data-slot="dom-preview" className="flex h-full min-h-0 flex-wrap content-start items-start gap-6 overflow-auto p-6">
       {roots.map((inst) => {
         const on = selectedIds.includes(inst.id);
@@ -123,10 +133,11 @@ export function DomPreview({
             className="cursor-default p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
             title={`${inst.type} · ${inst.id}`}
           >
-            {renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit)}
+            {renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, onMovePort)}
           </div>
         );
       })}
     </div>
+    </HostZoomContext.Provider>
   );
 }

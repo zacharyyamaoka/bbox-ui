@@ -8,6 +8,8 @@ import {
   Background,
   ReactFlow,
   ReactFlowProvider,
+  useUpdateNodeInternals,
+  useViewport,
   type Dimensions,
   type Node,
   type NodeChange,
@@ -15,8 +17,10 @@ import {
 } from "@xyflow/react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import { priorSelectionForRootPress } from "@bbox-ui/panel";
+import type { PortEdgeId } from "@bbox-ui/core";
 import type { CanvasPosition } from "../contract";
 import { renderInstance, type EditBundle } from "../render-instance";
+import { HostZoomContext } from "../port-dnd";
 
 // WHY this exact string and nothing fancier: it is the SAME class
 // `TextBoxControl` already puts on its `<input>`/`<textarea>`
@@ -29,14 +33,34 @@ import { renderInstance, type EditBundle } from "../render-instance";
 // see `noPanClassName` below, deliberately left at React Flow's own default.
 const BBOX_INTERACTIVE = "bbox-interactive";
 
-type BenchNodeData = { entries: ComponentEntry[]; byId: Map<string, Instance>; instance: Instance; selectedIds: string[]; onSelectInstance: (id: string, additive: boolean) => void; edit: EditBundle };
+type MovePort = (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+type BenchNodeData = {
+  entries: ComponentEntry[];
+  byId: Map<string, Instance>;
+  instance: Instance;
+  selectedIds: string[];
+  onSelectInstance: (id: string, additive: boolean) => void;
+  edit: EditBundle;
+  onMovePort?: MovePort;
+};
 type BenchNode = Node<BenchNodeData, "bench">;
 
 /** The node body is the component itself, nothing else: the point of the
  *  tab is "the same instances, now on a canvas", not a card around them.
  *  Members are drawn inside it by `renderInstance`; a pointer-down on one
- *  selects the member and is stopped before React Flow selects the node. */
+ *  selects the member and is stopped before React Flow selects the node.
+ *
+ *  `HostZoomContext` is provided here from React Flow's own live
+ *  `useViewport().zoom` (Zach's 2026-09-12 model: dnd-kit owns every Port
+ *  drag in every host) — `PortDndProvider` (mounted inside `renderInstance`,
+ *  one per Block) portals its `DragOverlay` to `document.body` and scales
+ *  the ghost by this zoom (`adjustScale`, see portDnd.tsx), so the dragged
+ *  dot both tracks the pointer 1:1 and renders at the same apparent size
+ *  as the Port it was grabbed from, at any zoom level. `useViewport`
+ *  re-renders this node on every zoom/pan tick, same cost React Flow
+ *  already pays for the node's own transform. */
 function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
+  const { zoom } = useViewport();
   return (
     <div
       data-slot="rf-instance"
@@ -46,7 +70,9 @@ function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
       // bbox-accent (this app's real blue) instead of the neutral ring token.
       className="p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
     >
-      {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance, data.edit)}
+      <HostZoomContext.Provider value={zoom}>
+        {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance, data.edit, false, data.onMovePort)}
+      </HostZoomContext.Provider>
     </div>
   );
 }
@@ -63,6 +89,10 @@ interface Props {
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
   edit: EditBundle;
+  /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
+   *  Absent means this render is not yet wired for it (matches
+   *  `ViewportProps.onMovePort` and `dom-preview.tsx`'s own optional prop). */
+  onMovePort?: MovePort;
 }
 
 /**
@@ -103,6 +133,22 @@ function Canvas(p: Props) {
   const measuredRef = useRef<Record<string, Dimensions>>({});
   const [, forceMeasuredTick] = useState(0);
 
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  // Wraps the page's `onMovePort` so a drop also tells React Flow to
+  // refresh this node's internals — `blockId` here IS the node id (one
+  // root instance per node), so any Handle a future Port grows would
+  // otherwise keep stale coordinates after an auto-mode reflow moves it
+  // to a different lane/order without the node itself resizing.
+  const onMovePort = useMemo<MovePort | undefined>(() => {
+    if (!p.onMovePort) return undefined;
+    const move = p.onMovePort;
+    return (blockId, portIds, edge, target) => {
+      move(blockId, portIds, edge, target);
+      updateNodeInternals(blockId);
+    };
+  }, [p.onMovePort, updateNodeInternals]);
+
   const nodes: BenchNode[] = useMemo(
     () =>
       p.roots.map((instance) => ({
@@ -110,14 +156,14 @@ function Canvas(p: Props) {
         type: "bench",
         position: p.positions[instance.id] ?? { x: 0, y: 0 },
         selected: p.selectedIds.includes(instance.id),
-        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit },
+        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit, onMovePort },
         draggable: true,
         measured: measuredRef.current[instance.id],
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- measuredRef is
     // a ref (stable identity); `forceMeasuredTick` is read only to re-run
     // this memo the one time a node's first-ever measurement arrives.
-    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, p.edit, forceMeasuredTick],
+    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, p.edit, onMovePort, forceMeasuredTick],
   );
 
   // WHY selection is read from `select` changes and NOT from
@@ -188,6 +234,14 @@ function Canvas(p: Props) {
         onNodesChange={onNodesChange}
         colorMode={resolvedTheme === "dark" ? "dark" : "light"}
         fitView={false}
+        // A test seam, matching the one tldraw-canvas.tsx already exposes
+        // (`window.__bboxEditor`): a port drag has to be proved at a camera
+        // zoom other than 1, and React Flow ships no zoom control here to
+        // click. `zoomTo` from the journey is deterministic where a synthetic
+        // wheel gesture is not.
+        onInit={(instance) => {
+          (window as unknown as { __bboxReactFlow?: unknown }).__bboxReactFlow = instance;
+        }}
         selectionOnDrag
         panOnDrag={[1, 2]}
         selectNodesOnDrag

@@ -18,7 +18,7 @@ import json
 import pathlib
 import subprocess
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 DATE = "2026-09-11"
 NAME = f"tree-and-slots-{DATE}"
@@ -47,6 +47,18 @@ def trim(im: Image.Image, margin: int = 24) -> Image.Image:
             last = y
             break
     return im.crop((0, 0, im.width, min(im.height, last + margin)))
+
+
+def crop_content(im: Image.Image, margin: int = 28, frame: int = 6) -> Image.Image:
+    """Crop a viewport capture to what is drawn on it: the bounding box of
+    pixels that differ from the background, ignoring the well's own frame."""
+    inner = im.crop((frame, frame, im.width - frame, im.height - frame))
+    background = Image.new("RGB", inner.size, inner.getpixel((inner.width - 1, inner.height - 1)))
+    box = ImageChops.difference(inner, background).point(lambda v: 255 if v > 24 else 0).getbbox()
+    if not box:
+        return im
+    left, top, right, bottom = box
+    return im.crop((max(0, left + frame - margin), max(0, top + frame - margin), min(im.width, right + frame + margin), min(im.height, bottom + frame + margin)))
 
 
 def png(file: str | None, do_trim: bool = True) -> str | None:
@@ -228,6 +240,63 @@ if r2.exists():
 {cons3_html}
 """
 
+# ---- Round 4: the Arrangement/Placement model (Zach, 2026-09-12) — a
+# Block's own Ports member list, drawn on four PortEdge lanes, driven by
+# demos/capture-port-edges.mjs into its own round4/ directory.
+ROUND4 = ""
+r4 = MEDIA / "round4" / "manifest.json"
+if r4.exists():
+    entries4 = {m["theme"]: m for m in json.loads(r4.read_text())}
+    d4, l4 = entries4.get("dark"), entries4.get("light")
+    if d4:
+        # The journey clips the whole viewport well (752×679) and the Block
+        # sits in its top-left corner, so a card would be mostly empty
+        # canvas: crop to the drawn content for the DOM shots, and to a
+        # fixed top-left window for the two canvas hosts, whose dotted grid
+        # (React Flow) and badges (tldraw) defeat a content crop.
+        def r4png(theme_entry, key):
+            file = theme_entry["files"][key]
+            if key in ("customMode", "reorderedInspector"):
+                return png("round4/" + file)
+            im = Image.open(MEDIA / "round4" / file).convert("RGB")
+            if key in ("reactflow", "tldraw"):
+                im = im.crop((0, 0, min(im.width, 520), min(im.height, 290)))
+            else:
+                im = crop_content(im)
+            buf = io.BytesIO()
+            im.save(buf, "PNG", optimize=True)
+            return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+        cons4 = d4.get("console") or []
+        cons4_html = ("<details><summary>console during the run: " + str(len(cons4)) + "</summary><pre>" + "\n".join(cons4) + "</pre></details>") if cons4 else '<p class="meas">console clean during the run</p>'
+        port_asserts = count("demos/capture-port-edges.mjs", "assert(")
+        ROUND4 = f"""
+<h2>Round 4 — a Block owns its Ports: Arrangements, Placements, dnd-kit</h2>
+<p>Your 2026-09-12 ruling, built: a Block has n <strong>Arrangements</strong> (states, minimum one "default"), each with a <code>mode</code> (auto | custom), a set of live edges and an optional grouping set. Each Port stores, PER Arrangement, a <code>Placement</code> — <code>edge</code>, <code>order</code> AND <code>t</code> always both stored, whichever the mode does not trust refreshes to match on every change (<code>packages/bbox-ui/src/portPlacement.ts</code>, ported from <code>demos/dndkit-lab</code>'s own math). dnd-kit owns the drag in all three hosts; a Port dragged on React Flow or tldraw moves itself, never the node/shape under it. Checked end to end by <code>demos/capture-port-edges.mjs</code> ({port_asserts} assertions, both themes) — the seeded Block already carries three real Ports (two left, one right) so the very first screenshot shows lanes with something on them.</p>
+<div class="three">
+  <figure class="card"><img src="{r4png(d4, "initial")}" alt="seeded ports"><figcaption>dark · seed: in/cfg on the left lane, out on the right — even spacing measured from the dots' own boxes, not the model</figcaption></figure>
+  <figure class="card"><img src="{r4png(d4, "draggedTop")}" alt="dragged to top"><figcaption>dark · a real-mouse drag moves "in" from left to top; BOTH lanes re-even around what stayed and what arrived</figcaption></figure>
+  <figure class="card"><img src="{r4png(d4, "reordered")}" alt="custom mode reorder"><figcaption>dark · custom mode: "Port A" dragged past "in" — t is stored, order = rank(t) for both</figcaption></figure>
+</div>
+<div class="three" style="margin-top:16px">
+  <figure class="card"><img src="{r4png(d4, "grouped")}" alt="collapsed group"><figcaption>dark · "in" and "Port A" grouped and collapsed: one card, group-size 2 — a real product gap fixed this round (grouping was stored but never rendered)</figcaption></figure>
+  <figure class="card"><img src="{r4png(d4, "locked")}" alt="locked port"><figcaption>dark · "out" locked: pinned at the header-left corner, outside every lane; a drag on it leaves it exactly in place</figcaption></figure>
+  <figure class="card"><img src="{r4png(d4, "secondArrangement")}" alt="second arrangement"><figcaption>dark · a second Arrangement: cfg's edge changed there only — switching back to default, its placement was exactly as before</figcaption></figure>
+</div>
+<div class="three" style="margin-top:16px">
+  <figure class="card"><img src="{r4png(d4, "edgeOffParked")}" alt="edge off"><figcaption>dark · the left edge toggled off: cfg draws parked on top, the nearest live edge walking clockwise — its stored placement is untouched</figcaption></figure>
+  <figure class="card"><img src="{r4png(d4, "reactflow")}" alt="React Flow"><figcaption>dark · React Flow: cfg dragged — the node's own transform is byte-identical before and after</figcaption></figure>
+  <figure class="card"><img src="{r4png(d4, "tldraw")}" alt="tldraw"><figcaption>dark · tldraw: cfg dragged — the shape's x/y is unchanged, and the select tool never entered pointing_shape/translating</figcaption></figure>
+</div>
+<div class="two" style="margin-top:16px">
+  <figure class="card"><img src="{r4png(d4, "customMode")}" alt="Arrangement section"><figcaption>dark · the Block's inspector: its seven slot lists, then its own Ports list under the Arrangement controls — active arrangement, ＋ new, Auto | Custom, the four edge toggles, grouping</figcaption></figure>
+  <figure class="card"><img src="{r4png(d4, "reorderedInspector")}" alt="Placement section"><figcaption>dark · a Port's inspector after the custom-mode drag: Placement · Default with edge, order, t (stored), group and locked</figcaption></figure>
+</div>
+<p>Checked in both themes: the seed's even spacing (gaps measured between the flex ITEM boxes dnd-kit drags, not the dot's off-centre position inside one); a DOM auto-mode cross-lane drag and the re-evening of both lanes it touched; adding a Port and switching to custom mode; a custom-mode drag proving <code>t</code> is stored and <code>order = rank(t)</code>; a second Arrangement changing one port's edge without disturbing the default's own placements; the left edge toggled off and on, parking and restoring cfg; a collapsed group rendering as one card; a locked port pinned at the corner and immovable; and, on React Flow and on tldraw, a Port drag that leaves the node/shape exactly where it was.</p>
+<p class="meas">Two real product gaps found and fixed while building this regression: <code>renderLane</code> (<code>packages/panel/src/bench.tsx</code>) never called the model's own <code>groupSlots</code>, so a collapsed grouping set had no visible effect; and the Placement section's "Group" field (<code>arrangement-section.tsx</code>) wrote only <code>Placement.group</code>, which nothing reads — <code>workbench.tsx</code>'s <code>setPortPlacement</code> now mirrors it into the Arrangement's own <code>GroupingSet.assignments</code>, the field <code>groupSlots</code> actually consults.</p>
+{cons4_html}
+"""
+
 HTML = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -324,6 +393,7 @@ HTML = f"""<!doctype html>
 
 {ROUND2}
 {ROUND3}
+{ROUND4}
 
 <h2>Decisions — each with the default taken if you say nothing</h2>
 <ul class="decide">

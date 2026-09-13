@@ -48,7 +48,7 @@ export {
   type TwoClickPointerDown,
 } from "./twoClickEdit";
 export { priorSelectionForRootPress, nextSelectionForRootPress, type RootPress } from "./bareAreaSelect";
-export { MEMBER_SPECS } from "./bench";
+export { MEMBER_SPECS, portEdgesArrangement } from "./bench";
 export {
   MEMBERS_CONTROLS,
   MEMBERS_CONTRACT,
@@ -73,5 +73,10 @@ export {
   wouldCycle,
   typeGlyph,
   TYPE_GLYPH,
+  blockPorts,
+  activeArrangement,
+  portPlacementsOf,
 } from "./members";
 export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary, InstanceNode } from "./members";
+export { PortDndProvider, PortLane, HostZoomContext, portLaneId, type PortDndProviderProps } from "./portDnd";
+export { LANE_BAND_PX, type PortEdgesImpl, type PortEdgesModel } from "./portEdges";

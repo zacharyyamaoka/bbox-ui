@@ -2,7 +2,7 @@
 
 import "tldraw/tldraw.css";
 
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   HTMLContainer,
@@ -17,13 +17,27 @@ import {
 } from "tldraw";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import { claimInstancePointerDown, isInstancePointerDownClaimed, nextSelectionForRootPress } from "@bbox-ui/panel";
+import type { PortEdgeId } from "@bbox-ui/core";
 import type { CanvasPosition } from "../contract";
 import { renderInstance, type EditBundle } from "../render-instance";
+import { HostZoomContext } from "../port-dnd";
 
 // The same host-neutral marker `TextBoxControl` puts on its own control
 // (packages/bbox-ui/src/textBox.tsx) — see the CSS rule added in
 // app/global.css and the `markEventAsHandled` call below, both keyed off it.
 const BBOX_INTERACTIVE_SELECTOR = "[data-bbox-interactive]";
+
+declare global {
+  interface Window {
+    /** See this file's `onMount`: a test-only read of tldraw's own
+     *  select-tool path, for proving a Port press never enters it. */
+    __bboxEditorPath?: () => string;
+    /** The same debug seam, widened to the editor itself — a CDP script has
+     *  no other way to read the live zoom or a shape's x/y mid-drag. Never
+     *  read by product code; deleted on unmount like its sibling above. */
+    __bboxEditor?: Editor;
+  }
+}
 
 /**
  * Content rides a React context, not shape props: tldraw validates and
@@ -35,6 +49,14 @@ const BBOX_INTERACTIVE_SELECTOR = "[data-bbox-interactive]";
  * `editingId` must reach whichever shape is currently rendering, and a
  * shape has no prop channel for it (tldraw props are JSON, `EditBundle`
  * carries functions).
+ *
+ * `onMovePort`/`zoom` ride the same context (Zach, 2026-09-12: dnd-kit owns
+ * every Port drag, tldraw included) — `onMovePort` is `renderInstance`'s
+ * trailing argument, the same one `dom-preview.tsx` already threads, and
+ * `zoom` is this Block's live `HostZoomContext` value so `PortDndProvider`'s
+ * `DragOverlay` (rendered inside tldraw's own scaled shape layer, unlike the
+ * DOM render's unscaled well) divides its drag translation back down and
+ * the ghost still tracks the pointer 1:1 at any zoom.
  */
 const BenchContext = createContext<{
   entries: ComponentEntry[];
@@ -47,6 +69,8 @@ const BenchContext = createContext<{
    *  `onSelectInstance`/the engine's own echo alone. */
   onSelectionChange: (ids: string[]) => void;
   edit: EditBundle;
+  onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+  zoom: number;
 }>({
   entries: [],
   instances: [],
@@ -55,6 +79,7 @@ const BenchContext = createContext<{
   onSelectInstance: () => {},
   onSelectionChange: () => {},
   edit: { editingId: null, editSnapshot: null, onRequestEdit: () => {}, onEditEnd: () => {}, onInstancePropChange: () => {} },
+  zoom: 1,
 });
 
 interface BenchShapeProps {
@@ -114,7 +139,8 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
     return { id: shape.id, type: shape.type };
   }
   override component(shape: BenchShape) {
-    const { entries, byId, selectedIds, onSelectInstance, onSelectionChange, edit } = useContext(BenchContext);
+    const { entries, byId, selectedIds, onSelectInstance, onSelectionChange, edit, onMovePort, zoom } =
+      useContext(BenchContext);
     const inst = byId.get(shape.props.instanceId);
     const editor = this.editor;
     const contentRef = useRef<HTMLDivElement>(null);
@@ -245,8 +271,15 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
           }
         }}
       >
+        {/* One HostZoomContext per Block, read from this shape's own
+            HTMLContainer — same value for every Block on the page (tldraw
+            has one zoom, not one per shape), but provided here rather than
+            wrapped once around <Tldraw> because `PortDndProvider` is
+            mounted by `renderInstance`, INSIDE this returned tree. */}
         <div ref={contentRef} style={{ display: "inline-flex" }}>
-          {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit) : null}
+          <HostZoomContext.Provider value={zoom}>
+            {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, onMovePort) : null}
+          </HostZoomContext.Provider>
         </div>
       </HTMLContainer>
     );
@@ -340,6 +373,9 @@ interface Props {
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
   edit: EditBundle;
+  /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
+   *  tldraw is wired for it (this file); React Flow still is not. */
+  onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
 }
 
 /**
@@ -359,6 +395,11 @@ export function TldrawCanvas(p: Props) {
   // listeners — see `pressLandedOnMemberOrControl`'s doc comment.
   const pressOnMemberOrControl = useRef(false);
 
+  // The canvas' own zoom (Zach, 2026-09-12: HostZoomContext, subscribed so
+  // a Port's drag overlay stays 1:1 with the pointer after a ctrl+wheel
+  // zoom, not just at whatever level the shape mounted at).
+  const [zoom, setZoom] = useState(1);
+
   const byId = useMemo(() => new Map(p.instances.map((i) => [i.id, i])), [p.instances]);
   const ctx = useMemo(
     () => ({
@@ -369,8 +410,10 @@ export function TldrawCanvas(p: Props) {
       onSelectInstance: p.onSelectInstance,
       onSelectionChange: p.onSelectionChange,
       edit: p.edit,
+      onMovePort: p.onMovePort,
+      zoom,
     }),
-    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.onSelectionChange, p.edit],
+    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.onSelectionChange, p.edit, p.onMovePort, zoom],
   );
 
   // page → editor
@@ -453,6 +496,25 @@ export function TldrawCanvas(p: Props) {
             editor.setSelectedShapes(latest.current.selectedIds.map(shapeIdFor));
             applying.current = false;
 
+            setZoom(editor.getZoomLevel());
+            // Zoom lives on the current page's own `camera` record — a
+            // session-scoped fact (ephemeral UI state, never synced or
+            // undone), not a document edit, so it is listened for
+            // separately from the position/selection listener below rather
+            // than folded into it.
+            const stopZoom = editor.store.listen(
+              () => setZoom(editor.getZoomLevel()),
+              { source: "user", scope: "session" },
+            );
+
+            // Test-only observability hook (Zach's ask, 2026-09-12): lets a
+            // CDP script read which select-tool state tldraw is actually in
+            // while a Port drag is in flight, to prove the press never
+            // reaches `select.pointing_shape`/`select.translating`. Never
+            // read by product code.
+            window.__bboxEditorPath = () => editor.getPath();
+            window.__bboxEditor = editor;
+
             // editor → page, user changes only.
             const stop = editor.store.listen(
               () => {
@@ -519,6 +581,9 @@ export function TldrawCanvas(p: Props) {
             return () => {
               stop();
               stopSel();
+              stopZoom();
+              delete window.__bboxEditorPath;
+              delete window.__bboxEditor;
             };
           }}
         />

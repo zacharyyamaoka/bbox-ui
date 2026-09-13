@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_ARRANGEMENT, evenT, type Arrangement } from "@bbox-ui/core";
 import type { Instance } from "../src/bench";
-import { BAR_SLOTS, BLOCK_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstanceWithSlots } from "../src/bench";
+import { BAR_SLOTS, BLOCK_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstance, makeInstanceWithSlots } from "../src/bench";
 import {
+  activeArrangement,
   addMemberTo,
   addableTypes,
   ancestry,
+  blockPorts,
   depthOf,
   effectiveProps,
   inheritedFor,
@@ -13,6 +16,7 @@ import {
   memberSpecFor,
   moveIndex,
   moveMember,
+  portPlacementsOf,
   reparent,
   parentMap,
   removeMember,
@@ -76,6 +80,28 @@ describe("the bench operations", () => {
     expect(removed.map((i) => i.id)).toEqual(["stack-1", "port-3", "port-9", "glyph-5"]);
     expect(removed.find((i) => i.id === "stack-1")?.members).toEqual(["port-3", "glyph-5"]);
   });
+  it("remove also prunes the removed port out of its Block's grouping assignments, leaving the rest", () => {
+    const grouped: Arrangement = {
+      ...DEFAULT_ARRANGEMENT,
+      grouping: {
+        id: "variadic-set",
+        label: "variadic",
+        collapsed: true,
+        assignments: { args: { group: "variadic", groupOrder: 1 }, kwargs: { group: "variadic", groupOrder: 2 } },
+      },
+    };
+    const withGroups: Instance[] = [
+      { ...inst("block-1", "Block", {}, ["args", "kwargs"]), arrangements: [grouped], arrangement: grouped.id },
+      inst("args", "Port"),
+      inst("kwargs", "Port"),
+    ];
+    const removed = removeMember(withGroups, "args");
+    expect(removed.find((i) => i.id === "block-1")?.members).toEqual(["kwargs"]);
+    // The stale "args" entry must not survive — only "kwargs" remains.
+    expect(removed.find((i) => i.id === "block-1")?.arrangements?.[0]?.grouping?.assignments).toEqual({
+      kwargs: { group: "variadic", groupOrder: 2 },
+    });
+  });
   it("move reorders the parent's list and nothing else", () => {
     const moved = moveMember(bench, "stack-1", 0, 1);
     expect(moved.find((i) => i.id === "stack-1")?.members).toEqual(["port-3", "block-2"]);
@@ -100,7 +126,9 @@ describe("the bench operations", () => {
     expect(tree.map((n) => [n.type, n.container])).toEqual([
       ["Stack", true],
       ["Port", false],
-      ["Block", false],
+      // A Block IS a container now (Zach, 2026-09-12): it declares
+      // `members` (its Ports) alongside its slots.
+      ["Block", true],
     ]);
     expect(tree[2]!.children[0]).toMatchObject({ type: "Flex", container: true });
   });
@@ -137,10 +165,11 @@ describe("what a parent may add is declared, closed and capped", () => {
     // grow a Members section by accident.
     for (const e of REGISTRY) if (!(e.name in MEMBER_SPECS)) expect(e.members).toBeUndefined();
   });
-  it("a fresh bench holds one root (two on the mixed bench); anything else is a slot fill", () => {
+  it("a fresh bench holds one root (two on the mixed bench); anything else is a slot fill or one of the Block's seeded Ports", () => {
     for (const [name, list] of Object.entries(INITIAL_BENCHES)) {
       expect(topLevel(list).length, name).toBe(name === MIXED_BENCH ? 2 : 1);
-      for (const inst of list) if (!topLevel(list).includes(inst)) expect(isSlotFill(inst), inst.id).toBe(true);
+      for (const inst of list)
+        if (!topLevel(list).includes(inst)) expect(isSlotFill(inst) || inst.type === "Port", inst.id).toBe(true);
     }
   });
 });
@@ -176,10 +205,11 @@ describe("slots — a Block arrives with its anatomy filled, two levels deep", (
     expect(summarize(made, header.id)?.title).toBe("Header");
     expect(summarize(made, left.id)?.title).toBe("Left");
   });
-  it("Block and Bar declare slots and no members list; Flex declares members", () => {
+  it("Block declares slots AND members (its own Ports); Bar declares slots and no members; Flex declares members", () => {
     expect(REGISTRY.find((e) => e.name === "Block")?.slots).toBe(BLOCK_SLOTS);
     expect(REGISTRY.find((e) => e.name === "Bar")?.slots).toBe(BAR_SLOTS);
-    expect(REGISTRY.find((e) => e.name === "Block")?.members).toBeUndefined();
+    expect(REGISTRY.find((e) => e.name === "Block")?.members).toBe(MEMBER_SPECS.Block);
+    expect(REGISTRY.find((e) => e.name === "Bar")?.members).toBeUndefined();
     expect(REGISTRY.find((e) => e.name === "Flex")?.members).toBe(MEMBER_SPECS.Flex);
   });
 });
@@ -210,6 +240,91 @@ describe("size cascades down the tree", () => {
   });
   it("a field that does not cascade is untouched", () => {
     expect(inheritedFor(bench, REGISTRY, glyph.id).padding).toBeUndefined();
+  });
+});
+
+describe("a Block's Ports (Zach, 2026-09-12): members, active Arrangement, per-arrangement placements", () => {
+  const block: Instance = { ...inst("block-1", "Block", {}, ["bar-h", "flex-b", "bar-f", "port-in", "port-out"]), arrangements: [DEFAULT_ARRANGEMENT], arrangement: "default" };
+  const bench: Instance[] = [
+    block,
+    inst("bar-h", "Bar"),
+    inst("flex-b", "Flex"),
+    inst("bar-f", "Bar"),
+    { ...inst("port-in", "Port", { children: "in" }), placements: { default: { edge: "left", order: 0, t: 0.5 } } },
+    inst("port-out", "Port", { children: "out" }),
+  ];
+
+  it("blockPorts returns only the Port members, in member order — never the slot fills", () => {
+    expect(blockPorts(bench, "block-1").map((p) => p.id)).toEqual(["port-in", "port-out"]);
+    expect(blockPorts(bench, "does-not-exist")).toEqual([]);
+  });
+
+  it("activeArrangement resolves the Block's own `arrangement` id, and falls back to DEFAULT_ARRANGEMENT", () => {
+    expect(activeArrangement(block)).toBe(DEFAULT_ARRANGEMENT);
+    const custom: Arrangement = { ...DEFAULT_ARRANGEMENT, id: "hover", label: "Hover" };
+    expect(activeArrangement({ ...block, arrangements: [DEFAULT_ARRANGEMENT, custom], arrangement: "hover" })).toBe(custom);
+    // A stale/typo'd id falls back to the first arrangement, never throws.
+    expect(activeArrangement({ ...block, arrangement: "missing" })).toBe(DEFAULT_ARRANGEMENT);
+    expect(activeArrangement({ ...block, arrangements: undefined, arrangement: undefined })).toBe(DEFAULT_ARRANGEMENT);
+  });
+
+  it("portPlacementsOf fills in defaultPlacement for a port with nothing stored yet, and never mutates its input", () => {
+    const ports = blockPorts(bench, "block-1");
+    const before = JSON.stringify(ports.map((p) => p.placements));
+    const placements = portPlacementsOf(block, ports, "default");
+    expect(placements["port-in"]).toEqual({ edge: "left", order: 0, t: 0.5 });
+    // port-out had nothing stored: parked on the arrangement's first live
+    // edge (top), appended after port-in (which is on "left", not "top") —
+    // so it lands at order 0 on "top", not stacked behind port-in.
+    expect(placements["port-out"]).toEqual({ edge: "top", order: 0, t: 0 });
+    expect(JSON.stringify(ports.map((p) => p.placements))).toBe(before);
+  });
+
+  it("portPlacementsOf must be called with the Block's FULL port list — a truncated `ports` argument silently loses siblings already on the same edge (inspector-column.tsx:91's bug)", () => {
+    // port-in is already stored on "top". A brand-new, not-yet-placed
+    // sibling (no `placements` entry, matching a fresh `addMember`) must
+    // append AFTER it when the caller passes every Port on the Block —
+    // exactly what render-instance.tsx does via blockPorts(). Passing
+    // only the new port, as inspector-column.tsx wrongly did, hides
+    // port-in from `defaultPlacement`'s `out` accumulator entirely, so it
+    // computes order 0 instead of 1: the same not-yet-stored port gets a
+    // DIFFERENT answer depending only on how much of the list its caller
+    // bothered to pass in.
+    const onTop: Instance = { ...inst("port-on-top", "Port", { children: "on-top" }), placements: { default: { edge: "top", order: 0, t: 0 } } };
+    const fresh: Instance = inst("port-fresh", "Port", { children: "fresh" });
+    const fullList = portPlacementsOf(block, [onTop, fresh], "default");
+    expect(fullList["port-fresh"]).toEqual({ edge: "top", order: 1, t: expect.any(Number) });
+    const truncatedList = portPlacementsOf(block, [fresh], "default");
+    expect(truncatedList["port-fresh"]).toEqual({ edge: "top", order: 0, t: 0 });
+    // The divergence itself, spelled out: same Block, same arrangement,
+    // same not-yet-placed port — different `order` depending only on
+    // whether its siblings were included. A caller MUST pass the full
+    // list (blockPorts(all, blockId)), never a subset built around one
+    // selected port.
+    expect(fullList["port-fresh"]!.order).not.toBe(truncatedList["port-fresh"]!.order);
+  });
+
+  it("portPlacementsOf gives a locked port its fixed corner placement, ignoring anything stored", () => {
+    const lockedPort: Instance = { ...inst("port-fn", "Port"), locked: true, placements: { default: { edge: "bottom", order: 3, t: 0.9 } } };
+    expect(portPlacementsOf(block, [lockedPort], "default")).toEqual({ "port-fn": { edge: "top", order: 0, t: 0 } });
+  });
+
+  it("a fresh Block (makeInstance) already carries the default Arrangement, active", () => {
+    const fresh = makeInstance("Block", 0, 999);
+    expect(fresh.arrangements).toEqual([DEFAULT_ARRANGEMENT]);
+    expect(fresh.arrangement).toBe("default");
+    expect(activeArrangement(fresh)).toBe(DEFAULT_ARRANGEMENT);
+  });
+
+  it("the bench's real seed opens with two Ports on the left and one on the right, matching evenT", () => {
+    const seeded = INITIAL_BENCHES.Block!;
+    const seedBlock = seeded[0]!;
+    const ports = blockPorts(seeded, seedBlock.id);
+    expect(ports.map((p) => p.props.children)).toEqual(["in", "cfg", "out"]);
+    const placements = portPlacementsOf(seedBlock, ports, "default");
+    expect(placements[ports[0]!.id]).toEqual({ edge: "left", order: 0, t: evenT(2, "evenly")[0] });
+    expect(placements[ports[1]!.id]).toEqual({ edge: "left", order: 1, t: evenT(2, "evenly")[1] });
+    expect(placements[ports[2]!.id]).toEqual({ edge: "right", order: 0, t: evenT(1, "evenly")[0] });
   });
 });
 

@@ -1,5 +1,6 @@
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import type { FieldValue } from "@bbox-ui/schema";
+import type { PortEdgeId } from "@bbox-ui/core";
 
 /**
  * The seam between the create page's shell and its viewport.
@@ -92,6 +93,10 @@ export interface ViewportProps {
    * component's `RenderContext.edit`. `null` when nothing is editing.
    */
   editSnapshot: FieldValue | null;
+  /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
+   *  The DOM render and tldraw are wired for it; React Flow simply never
+   *  receives this and renders its Ports undraggable. */
+  onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
 }
 
 /** Default position for an instance that has never been placed. Laid out in a
