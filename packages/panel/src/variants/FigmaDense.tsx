@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { RotateCcw } from "lucide-react";
 import {
   MIXED,
@@ -7,11 +7,12 @@ import {
   type FieldSpec,
   type FieldTrace,
   type FieldValue,
+  type Layer,
   type PresetSpec,
 } from "@bbox-ui/schema";
 import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
-import { readFieldRow } from "../fieldModel";
+import { readFieldRow, resetTitleFor } from "../fieldModel";
 import { groupRows } from "../fieldGroups";
 import { NumberInput } from "../NumberInput";
 import {
@@ -380,11 +381,15 @@ function PresetPicker({
 /* One row — label left, control right, dot = provenance + disclosure  */
 /* ------------------------------------------------------------------ */
 
-interface RowData {
+export interface RowData {
   trace: FieldTrace | null;
   paintedElsewhere: FieldValue | null;
   isMixed: boolean;
   hasOwnOverride: boolean;
+  /** Whether this row offers its ↺ reset — see `FieldRowModel.canReset`. */
+  canReset: boolean;
+  /** Which layer the ↺ would land on, when the selection agrees. */
+  resetsTo: Layer | null;
   collapsedValue: FieldValue | undefined;
   /** Amendment Case B point 1: set only when EVERY selected subject's
    *  stored value for this field is currently supplied by the SAME
@@ -402,7 +407,7 @@ interface RowData {
  * identical defect that had already been fixed in the canonical row. Six
  * files, four answers. The model is shared now; see fieldModel.ts.
  */
-function readRow(
+export function readRow(
   field: FieldSpec,
   subjects: Subject[],
   presets: PresetSpec[],
@@ -414,6 +419,8 @@ function readRow(
     paintedElsewhere: row.paintedElsewhere,
     isMixed: row.isMixed,
     hasOwnOverride: row.hasOwnOverride,
+    canReset: row.canReset,
+    resetsTo: row.resetsTo,
     collapsedValue: row.collapsedValue,
     // This panel's render path reads `undefined` for "no single preset drives
     // every selected subject"; the model says `null`. One conversion here,
@@ -476,20 +483,7 @@ function FieldRow({
             drivenPresetId={data.drivenPresetId}
             onChange={(value) => onChange(field.id, value)}
           />
-          {/* WHY also when an inherited value sits under the own one: the
-              clear is the way back to "inherited from Header"; without it an
-              own size over a cascade could never be undone. */}
-          {(isGoverned || data.trace?.candidates[1]?.value !== undefined) && data.hasOwnOverride && (
-            <button
-              type="button"
-              data-slot="field-clear-override"
-              onClick={() => onClearOverride(field.id)}
-              style={clearButtonStyle}
-              title="Clear this instance's override — fall back to the preset"
-            >
-              <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
-            </button>
-          )}
+          <ResetOverrideButton data={data} fieldLabel={field.label} onReset={() => onClearOverride(field.id)} />
         </div>
       </div>
       {data.paintedElsewhere !== null && (
@@ -577,17 +571,7 @@ function PairedFieldCell({
           drivenPresetId={data.drivenPresetId}
           onChange={(value) => onChange(field.id, value)}
         />
-        {(governed || data.trace?.candidates[1]?.value !== undefined) && data.hasOwnOverride && (
-          <button
-            type="button"
-            data-slot="field-clear-override"
-            onClick={() => onClearOverride(field.id)}
-            style={clearButtonStyle}
-            title="Clear this instance's override — fall back to the preset"
-          >
-            <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-        )}
+        <ResetOverrideButton data={data} fieldLabel={field.label} onReset={() => onClearOverride(field.id)} />
       </div>
       {expanded && data.trace && <TraceChain trace={data.trace} presets={presets} />}
     </div>
@@ -616,7 +600,7 @@ function PairedFieldCell({
  * the read when nothing is called out at all. The dot itself is gone — the
  * tag already carries the one bit of information the dot's colour used to.
  */
-function RowLabel({
+export function RowLabel({
   field,
   data,
   governed,
@@ -624,6 +608,8 @@ function RowLabel({
   setExpanded,
   onChange,
   compact,
+  disabled,
+  showProvenance = true,
 }: {
   field: FieldSpec;
   data: RowData;
@@ -632,9 +618,34 @@ function RowLabel({
   setExpanded: (fn: (v: boolean) => boolean) => void;
   onChange: (fieldId: string, value: FieldValue) => void;
   compact?: boolean;
+  /**
+   * `false` for a row with only ONE layer — a render surface's X, where the
+   * stored value IS the fact and there is no default it could be said to
+   * override.
+   *
+   * WHY it needs saying at all: the tag and the cascade disclosure exist to
+   * explain which of several layers won. A host fact has no preset, no
+   * inheritance and no meaningful default, so the resolver's honest answer
+   * ("the stored value won") rendered as a violet OVERRIDE tag on every
+   * X and Y — a true statement about the model that is a false statement to
+   * the reader. Observed in the first capture pass of this design.
+   */
+  showProvenance?: boolean;
+  /** The row cannot be written right now — a host fact on a render surface
+   *  with no handles, or a value the model derives. The label stops being a
+   *  scrub handle; the cascade stays clickable, because reading where a
+   *  value came from is exactly what a read-only row is for. */
+  disabled?: boolean;
 }) {
   const scrub = useLabelScrub(field, data, onChange);
-  const tag: "override" | "mixed" | null = data.isMixed ? "mixed" : data.trace?.winner === "override" ? "override" : null;
+  const scrubbable = field.kind === "number" && !disabled;
+  const tag: "override" | "mixed" | null = !showProvenance
+    ? null
+    : data.isMixed
+      ? "mixed"
+      : data.trace?.winner === "override"
+        ? "override"
+        : null;
   const disclosureTitle = data.isMixed
     ? "Mixed across selection — click to see the cascade"
     : data.trace
@@ -646,7 +657,7 @@ function RowLabel({
               : data.trace.winner
         } — click to see the cascade`
       : undefined;
-  const toggleExpanded = data.trace ? () => setExpanded((v) => !v) : undefined;
+  const toggleExpanded = data.trace && showProvenance ? () => setExpanded((v) => !v) : undefined;
 
   return (
     <div style={compact ? labelCellCompactStyle : labelCellStyle}>
@@ -654,7 +665,7 @@ function RowLabel({
         data-slot="field-label"
         role={data.trace ? "button" : undefined}
         tabIndex={data.trace ? 0 : undefined}
-        style={labelTextStyle(governed, field.kind === "number", !!data.trace)}
+        style={labelTextStyle(governed, scrubbable, !!data.trace)}
         onClick={toggleExpanded}
         onKeyDown={
           toggleExpanded
@@ -666,19 +677,60 @@ function RowLabel({
               }
             : undefined
         }
-        onPointerDown={field.kind === "number" ? scrub.onPointerDown : undefined}
-        onPointerMove={field.kind === "number" ? scrub.onPointerMove : undefined}
-        onPointerUp={field.kind === "number" ? scrub.onPointerUp : undefined}
+        onPointerDown={scrubbable ? scrub.onPointerDown : undefined}
+        onPointerMove={scrubbable ? scrub.onPointerMove : undefined}
+        onPointerUp={scrubbable ? scrub.onPointerUp : undefined}
         title={field.hint ?? disclosureTitle}
       >
         {field.label}
       </span>
-      {tag && (
-        <span data-slot="field-provenance-tag" title={disclosureTitle} onClick={toggleExpanded} style={tagStyle(tag, expanded)}>
-          {tag}
-        </span>
-      )}
+      {tag && <ProvenanceTag tag={tag} title={disclosureTitle} outlined={expanded} onClick={toggleExpanded} />}
     </div>
+  );
+}
+
+/**
+ * The plain-word provenance tag itself, extracted so a SECTION header can
+ * carry the same mark its rows do without a second palette.
+ *
+ * WHY extracted rather than copied into the section layer: this repo has
+ * already paid for the copy — "six files, four answers" on the resolution
+ * model, and `tierButtonStyle` existing in three places with two of them
+ * fixed. A section that wants to say "two of my rows are overridden" must
+ * say it in the SAME ink as the rows, or the panel grows a second private
+ * vocabulary for one idea. `text` widens the tag past the two row states
+ * (an aggregate reads "2 OVERRIDE"); `tag` still decides the colour.
+ */
+export function ProvenanceTag({
+  tag,
+  text,
+  title,
+  outlined,
+  onClick,
+}: {
+  tag: "override" | "mixed";
+  text?: string;
+  title?: string;
+  outlined?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <span
+      data-slot="field-provenance-tag"
+      data-tag={tag}
+      title={title}
+      onClick={
+        onClick
+          ? (e) => {
+              e.stopPropagation();
+              onClick();
+            }
+          : undefined
+      }
+      style={tagStyle(tag, outlined === true)}
+    >
+      {text ?? tag}
+    </span>
   );
 }
 
@@ -728,7 +780,7 @@ function useLabelScrub(
 
 /** Collapsed-by-default cascade — contract point 5, still reachable, just
  *  behind the dot instead of an always-visible badge row. */
-function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec[] }) {
+export function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec[] }) {
   return (
     <div data-slot="field-trace-chain" style={chainStyle}>
       {trace.candidates.map((candidate) => (
@@ -760,13 +812,14 @@ function TraceChain({ trace, presets }: { trace: FieldTrace; presets: PresetSpec
    text                                                                 */
 /* ------------------------------------------------------------------ */
 
-function DenseControl({
+export function DenseControl({
   field,
   value,
   isMixed,
   secondary,
   presets,
   drivenPresetId,
+  disabled,
   onChange,
 }: {
   field: FieldSpec;
@@ -775,8 +828,37 @@ function DenseControl({
   secondary?: boolean;
   presets: PresetSpec[];
   drivenPresetId: string | undefined;
+  /** Read-only right now for a MODEL reason, not a permission one — a
+   *  render surface with no drag handles, a value derived from the
+   *  component. Rendered, never hidden: seeing the number the model
+   *  computed is the whole point of showing the row. */
+  disabled?: boolean;
   onChange: (value: FieldValue) => void;
 }) {
+  // WHY one early branch rather than a `disabled` prop threaded through all
+  // five control shapes: a disabled row has nothing to say with a segmented
+  // strip or a dropdown — there is no choice to offer — so every kind
+  // collapses to the same read-only box printing the resolved value. This
+  // is also what stops a disabled NUMBER row from mounting `NumberInput`,
+  // whose blur handler would otherwise commit `field.defaultValue` over a
+  // host-owned value the panel was only supposed to display.
+  if (disabled) {
+    const text = isMixed
+      ? "Mixed"
+      : field.kind === "segments"
+        ? optionLabelFor(field, value)
+        : field.kind === "toggle"
+          ? value === true
+            ? "on"
+            : "off"
+          : String(value ?? field.defaultValue);
+    return (
+      <div data-slot="dense-control-readonly" style={numberBoxStyle(true)}>
+        <input type="text" readOnly disabled value={text} style={readOnlyInputStyle} />
+        {field.unit && <span style={numberUnitStyle}>{field.unit}</span>}
+      </div>
+    );
+  }
   if (field.kind === "segments") {
     const options = field.options ?? [];
     // The one thing named outright: a wrapped row of buttons for a
@@ -1007,6 +1089,8 @@ function NamedDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [box, setBox] = useState<MenuBox | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -1024,16 +1108,58 @@ function NamedDropdown({
     };
   }, [open]);
 
+  // Placed against the VIEWPORT, and re-placed whenever anything moves.
+  //
+  // WHY, measured rather than assumed: this menu used to be
+  // `position: absolute` inside the row, with a comment claiming "this panel
+  // never sits inside an `overflow:hidden` ancestor that would clip it".
+  // That stopped being true the moment the panel became a full-height
+  // column — `[data-slot="inspector-scroll"]` is `overflow-y: auto`, and an
+  // absolutely-positioned child is clipped by it. Zach, 2026-09-12, on
+  // Port's State row: "I did a drop down on the state property, and instead
+  // of showing me the drop down menu, its cut off with a scroll wheel."
+  // Reproduced before fixing: 22px of a six-row Lens menu sheared off at the
+  // scroller's edge.
+  //
+  // WHY `position: fixed` and not a React portal: a fixed element's
+  // containing block is the viewport, so an ancestor's overflow does not
+  // clip it — and unlike a portal it stays a DOM DESCENDANT of `rootRef`,
+  // which is what the outside-pointerdown handler above uses to tell "inside
+  // the menu" from "outside it". A portal would have silently broken that
+  // and made every click on a menu row close the menu before it fired.
+  // `@bbox-ui/panel` also declares no `react-dom` dependency, and this needs
+  // none.
+  useLayoutEffect(() => {
+    if (!open) {
+      setBox(null);
+      return;
+    }
+    const place = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      setBox(placeMenu(trigger.getBoundingClientRect(), rows.length + (custom ? 1 : 0)));
+    };
+    place();
+    // `capture: true` so a scroll inside the inspector column reaches this
+    // even though the event does not bubble past its own scroller.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, rows.length, custom]);
+
   return (
     <div ref={rootRef} data-slot="named-dropdown" style={dropdownRootStyle}>
-      <button type="button" data-slot="named-dropdown-trigger" onClick={() => setOpen((v) => !v)} style={dropdownTriggerStyle(secondary)}>
+      <button ref={triggerRef} type="button" data-slot="named-dropdown-trigger" onClick={() => setOpen((v) => !v)} style={dropdownTriggerStyle(secondary)}>
         <span style={dropdownTriggerTextStyle}>{isMixed ? "Mixed" : triggerText}</span>
         <span aria-hidden="true" style={dropdownChevronStyle}>
           ▾
         </span>
       </button>
-      {open && (
-        <div data-slot="named-dropdown-menu" style={dropdownMenuStyle}>
+      {open && box && (
+        <div data-slot="named-dropdown-menu" data-placement={box.placement} style={dropdownMenuStyle(box)}>
           {rows.map((row) => (
             <button
               key={row.key}
@@ -1131,7 +1257,7 @@ const rowWrapStyle: CSSProperties = { padding: "1px 2px" };
 // narrow column. The inspector column on /create grew to match (see
 // apps/docs/src/components/create/inspector-column.tsx) and is now
 // user-resizable, so a demo host with less room can still shrink it back.
-const LABEL_WIDTH = 152;
+export const LABEL_WIDTH = 152;
 const rowGridStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, minHeight: 22 };
 const labelCellStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6, width: LABEL_WIDTH, flexShrink: 0 };
 const labelCellCompactStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 4 };
@@ -1199,7 +1325,46 @@ const paintedElsewhereStyle: CSSProperties = {
 // per-section reset) says that correctly; lucide's `RotateCcw` is the
 // vector version of the same glyph, added as this package's first icon
 // dependency.
-const clearButtonStyle: CSSProperties = {
+/**
+ * THE ↺ reset. One component, four callers.
+ *
+ * WHY it is a component and not three copies of a `<button>`: the three
+ * copies is precisely how the bug Zach found survived — each carried its own
+ * `governed || candidates[1]` predicate and its own tooltip, so the rule for
+ * "does this row offer a reset" was an emergent property of which file you
+ * happened to be rendering from. The predicate now lives once in
+ * `fieldModel.ts` (`canReset`) and the button once here.
+ */
+export function ResetOverrideButton({
+  data,
+  onReset,
+  fieldLabel,
+}: {
+  data: Pick<RowData, "canReset" | "resetsTo">;
+  onReset: () => void;
+  fieldLabel: string;
+}) {
+  if (!data.canReset) return null;
+  const title = resetTitleFor(data.resetsTo);
+  return (
+    <button
+      type="button"
+      data-slot="field-clear-override"
+      data-resets-to={data.resetsTo ?? "mixed"}
+      onClick={onReset}
+      title={title}
+      // The glyph is `aria-hidden`, so without this the control has no
+      // accessible name at all — it read as an empty button to a screen
+      // reader and to any journey asserting by role.
+      aria-label={`${title} of ${fieldLabel}`}
+      style={clearButtonStyle}
+    >
+      <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
+    </button>
+  );
+}
+
+export const clearButtonStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1315,25 +1480,75 @@ function dropdownTriggerStyle(secondary?: boolean): CSSProperties {
 const dropdownTriggerTextStyle: CSSProperties = { flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 const dropdownChevronStyle: CSSProperties = { fontSize: 9, opacity: 0.5, flexShrink: 0 };
 
-// Absolutely positioned, not portalled — no dependency on a portal target,
-// and this panel never sits inside an `overflow:hidden` ancestor that would
-// clip it. Good enough for a demo comparing five variants side by side.
-const dropdownMenuStyle: CSSProperties = {
-  position: "absolute",
-  top: "calc(100% + 2px)",
-  left: 0,
-  right: 0,
-  zIndex: 20,
-  display: "flex",
-  flexDirection: "column",
-  background: "var(--bbox-panel-surface, white)",
-  border: "1px solid var(--bbox-panel-border, #ddd)",
-  borderRadius: 6,
-  boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
-  padding: 3,
-  maxHeight: 220,
-  overflowY: "auto",
-};
+interface MenuBox {
+  left: number;
+  width: number;
+  top: number;
+  maxHeight: number;
+  placement: "below" | "above";
+}
+
+/** How tall one row is, and the padding the menu adds around them. Used only
+ *  to guess whether the menu WANTS more room than it has below; the real
+ *  height is still whatever the rows render to, capped by `maxHeight`. */
+const MENU_ROW_HEIGHT = 24;
+const MENU_PADDING = 8;
+const MENU_GAP = 2;
+const MENU_VIEWPORT_MARGIN = 8;
+const MENU_MAX_HEIGHT = 220;
+const MENU_MIN_HEIGHT = 96;
+
+/**
+ * Where the menu goes, given where its trigger is.
+ *
+ * Prefers below, flips above when below cannot hold it and above can hold
+ * more, and clamps to the viewport either way — so the menu is never cut
+ * off, whatever the panel's scroll position. Exported for its own test:
+ * this is arithmetic, and arithmetic should not need a browser to check.
+ */
+export function placeMenu(
+  trigger: { left: number; right: number; top: number; bottom: number; width: number },
+  rowCount: number,
+  viewport: { width: number; height: number } = { width: window.innerWidth, height: window.innerHeight },
+): MenuBox {
+  const wanted = Math.min(MENU_MAX_HEIGHT, rowCount * MENU_ROW_HEIGHT + MENU_PADDING);
+  const roomBelow = viewport.height - trigger.bottom - MENU_GAP - MENU_VIEWPORT_MARGIN;
+  const roomAbove = trigger.top - MENU_GAP - MENU_VIEWPORT_MARGIN;
+  // Flip only when it actually buys room: a menu that is cramped both ways
+  // should stay where the eye already is.
+  const placement: "below" | "above" = wanted <= roomBelow || roomBelow >= roomAbove ? "below" : "above";
+  const room = placement === "below" ? roomBelow : roomAbove;
+  const height = Math.max(MENU_MIN_HEIGHT, Math.min(wanted, room));
+  const width = trigger.width;
+  const left = Math.max(
+    MENU_VIEWPORT_MARGIN,
+    Math.min(trigger.left, viewport.width - width - MENU_VIEWPORT_MARGIN),
+  );
+  const top = placement === "below" ? trigger.bottom + MENU_GAP : Math.max(MENU_VIEWPORT_MARGIN, trigger.top - MENU_GAP - height);
+  return { left, width, top, maxHeight: height, placement };
+}
+
+function dropdownMenuStyle(box: MenuBox): CSSProperties {
+  return {
+    position: "fixed",
+    left: box.left,
+    top: box.top,
+    width: box.width,
+    // Above every panel chrome, and above the canvas: the inspector column
+    // and the viewport tabs both paint over the page, and a menu that loses
+    // to either of them is as unusable as one that is clipped.
+    zIndex: 1000,
+    display: "flex",
+    flexDirection: "column",
+    background: "var(--bbox-panel-surface, white)",
+    border: "1px solid var(--bbox-panel-border, #ddd)",
+    borderRadius: 6,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+    padding: 3,
+    maxHeight: box.maxHeight,
+    overflowY: "auto",
+  };
+}
 
 function dropdownRowStyle(active: boolean): CSSProperties {
   return {
@@ -1417,6 +1632,11 @@ const numberInputStyle: CSSProperties = {
   background: "transparent",
 };
 const numberUnitStyle: CSSProperties = { fontSize: 10, color: "var(--bbox-panel-fg-faint, #999)", flexShrink: 0, paddingRight: 4 };
+const readOnlyInputStyle: CSSProperties = {
+  ...numberInputStyle,
+  color: "var(--bbox-panel-fg-faint, #999)",
+  cursor: "not-allowed",
+};
 
 function textInputStyle(secondary?: boolean): CSSProperties {
   return {

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
   addMemberTo,
-  findVariant,
   inheritedFor,
   instanceTree,
   isSlotFill,
@@ -25,7 +24,6 @@ import {
   INITIAL_BENCHES,
   INITIAL_UID,
   MIXED_BENCH,
-  PANEL_VARIANTS,
   REGISTRY,
   type ComponentEntry,
   type Instance,
@@ -37,9 +35,6 @@ import { Viewport } from "./viewport";
 import { defaultPosition, type CanvasPosition, type Render, type View } from "./contract";
 import { NAVIGATOR } from "./navigator";
 import { useSelectionHistory } from "./selection-history";
-import { INSPECTOR_LAYOUT } from "./inspector-layout";
-
-const VARIANT_KEY = "bbox-ui.create.panelVariant";
 
 const RENDER_KEY = "bbox-ui.create.render";
 const VIEW_KEY = "bbox-ui.create.view";
@@ -80,7 +75,6 @@ function readStored(key: string): string | null {
  */
 export function Workbench() {
   const [activeName, setActiveName] = useState(REGISTRY[0].name);
-  const [variantId, setVariantId] = useState(() => PANEL_VARIANTS[0].id);
 
   const [render, setRender] = useState<Render>("dom");
   const [view, setView] = useState<View>("preview");
@@ -99,9 +93,6 @@ export function Workbench() {
   // that is allowed already sees the restored value.
   const [restored, setRestored] = useState(false);
   useEffect(() => {
-    const v = readStored(VARIANT_KEY);
-    if (v) setVariantId(findVariant(v).id);
-
     const r = readStored(RENDER_KEY);
     if (r === "dom" || r === "reactflow" || r === "tldraw") setRender(r);
     const vw = readStored(VIEW_KEY);
@@ -123,8 +114,6 @@ export function Workbench() {
   useEffect(() => {
     if (!restored) return;
     try {
-      window.localStorage.setItem(VARIANT_KEY, variantId);
-
       window.localStorage.setItem(RENDER_KEY, render);
       window.localStorage.setItem(VIEW_KEY, view);
       window.localStorage.setItem(INSPECTOR_WIDTH_KEY, String(inspectorWidth));
@@ -132,7 +121,7 @@ export function Workbench() {
     } catch {
       /* private window: the choice still works, it just forgets */
     }
-  }, [restored, variantId, render, view, inspectorWidth]);
+  }, [restored, render, view, inspectorWidth]);
 
   const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
@@ -156,9 +145,7 @@ export function Workbench() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSnapshot, setEditSnapshot] = useState<FieldValue | null>(null);
 
-  const variant = findVariant(variantId);
   const navigator = NAVIGATOR;
-  const layout = INSPECTOR_LAYOUT;
   const isMixed = activeName === MIXED_BENCH;
   const instances = benches[activeName] ?? [];
   const rootCount = useMemo(() => topLevel(instances).length, [instances]);
@@ -380,6 +367,29 @@ export function Workbench() {
     }));
   }
 
+  /** Clear one prop on one instance — the foreign-target half of
+   *  `clearOverride`, which only ever reaches the SELECTED instances. A
+   *  Bar's `size` shown in the Block's Header section needs a way back to
+   *  its default just as much as a row on the subject does. */
+  function clearInstanceProp(id: string, fieldId: string) {
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: (prev[activeName] ?? []).map((i) => {
+        if (i.id !== id) return i;
+        const props = { ...i.props };
+        delete props[fieldId];
+        return { ...i, props };
+      }),
+    }));
+  }
+
+  /** Move one root on the canvas from the inspector's host-owned section —
+   *  the same setter a React Flow or tldraw drag writes through, so typing
+   *  an X and dragging the node are one code path, not two. */
+  function setPosition(id: string, next: CanvasPosition) {
+    setPositions((prev) => ({ ...prev, [id]: next }));
+  }
+
   function applyToSelected(fieldId: string, value: FieldValue) {
     setBenches((prev) => ({
       ...prev,
@@ -432,9 +442,6 @@ export function Workbench() {
         onAdd={addInstance}
         onRemoveLast={removeLastInstance}
         onRandomize={randomizeInstances}
-        variants={PANEL_VARIANTS}
-        variantId={variantId}
-        onVariantChange={setVariantId}
         entryFor={entryFor}
       />
       <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">
@@ -460,7 +467,6 @@ export function Workbench() {
           />
         </div>
         <InspectorColumn
-          variant={variant}
           componentName={panelName}
           fields={panelFields}
           presets={panelPresets}
@@ -472,7 +478,6 @@ export function Workbench() {
           selectedTypes={selectedTypes}
           selectedCount={selected.length}
           excludedShown={EXCLUDED_SHOWN}
-          layout={layout}
           entries={REGISTRY}
           instances={instances}
           subject={selected.length === 1 ? selected[0]! : null}
@@ -480,7 +485,11 @@ export function Workbench() {
           onRemoveMember={removeMemberById}
           onMoveMember={moveMemberInParent}
           onSetProp={setInstanceProp}
+          onClearProp={clearInstanceProp}
           onSelectInstance={(id) => selectInstance(id)}
+          render={render}
+          positions={placedPositions}
+          onSetPosition={setPosition}
           width={inspectorWidth}
           minWidth={MIN_INSPECTOR_WIDTH}
           maxWidth={MAX_INSPECTOR_WIDTH}

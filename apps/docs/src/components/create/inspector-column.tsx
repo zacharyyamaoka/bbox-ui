@@ -2,13 +2,27 @@
 
 import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
-import type { ComponentEntry, Instance, PanelVariant, Subject } from "@bbox-ui/panel";
-import { isSlotFill } from "@bbox-ui/panel";
-import { MembersPath, memberListsFor } from "./members-section";
-import type { InspectorLayoutVariant } from "./inspector-layout";
+import type { ComponentEntry, Instance, Subject } from "@bbox-ui/panel";
+import { MembersPath } from "./members-section";
+import { SectionInspector } from "./sections/SectionInspector";
+import type { CanvasPosition, Render } from "./contract";
+
+/**
+ * WHY there is no inspector design picker at the foot of this column any
+ * more, and no pre-sections panel behind it: the drop-down offered "Current
+ * (before)" plus P1/P2/P3 while those were being judged, and Zach picked P1
+ * on 2026-09-12. A switcher whose decision is made can only ever put the page
+ * into a state nobody wants, and the repo already set the precedent —
+ * `demos/capture-picks-applied.mjs` asserts that once picks are applied "no
+ * switcher for navigator, layout or members control remains".
+ *
+ * The six `PANEL_VARIANTS` are still built, exported and comparable side by
+ * side in the demo that exists for exactly that (`demos/inspector`, `pnpm
+ * demo`). What they are not any more is a second inspector living inside the
+ * product page.
+ */
 
 interface InspectorColumnProps {
-  variant: PanelVariant;
   componentName: string;
   fields: FieldSpec[];
   presets: PresetSpec[];
@@ -20,7 +34,6 @@ interface InspectorColumnProps {
   selectedTypes: string[];
   selectedCount: number;
   excludedShown: number;
-  layout: InspectorLayoutVariant;
   entries: ComponentEntry[];
   instances: Instance[];
   subject: Instance | null;
@@ -28,7 +41,15 @@ interface InspectorColumnProps {
   onRemoveMember: (id: string) => void;
   onMoveMember: (parentId: string, from: number, to: number) => void;
   onSetProp: (id: string, fieldId: string, value: FieldValue) => void;
+  /** Clear one prop on one instance — the foreign-target half of
+   *  `onClearOverride`, which only ever reaches the SELECTED instances. */
+  onClearProp: (id: string, fieldId: string) => void;
   onSelectInstance: (id: string) => void;
+  /** The host-owned stratum's live data: which surface is showing, where
+   *  each root sits on it, and how to move one. */
+  render: Render;
+  positions: Record<string, CanvasPosition>;
+  onSetPosition: (id: string, next: CanvasPosition) => void;
   /** Current column width in px, and its drag bounds — Workbench owns and
    *  persists the value, this component only renders the handle. */
   width: number;
@@ -138,41 +159,28 @@ export function InspectorColumn(p: InspectorColumnProps) {
       )}
       <MembersPath instances={p.instances} subject={p.subject} onSelect={p.onSelectInstance} />
       <div ref={scrollRef} data-slot="inspector-scroll" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-        <div data-slot="panel-variant-host" data-variant={p.variant.id} className="[&>*]:!w-full [&>*]:!max-w-none [&>*]:!rounded-none [&>*]:!border-0 [&>*]:!shadow-none">
-          {(() => {
-            const panel =
-              p.subjects.length > 0 && p.fields.length === 0 ? (
-                <div data-slot="no-shared-fields" className="p-4 text-sm text-muted-foreground">
-                  <strong className="text-foreground">{p.selectedTypes.join(" + ")}</strong>
-                  <p className="mt-1">
-                    No field is common to all {p.selectedCount} selected instances, so there is nothing a single control could write. Deselect a type to get a panel back.
-                  </p>
-                </div>
-              ) : (
-                <p.variant.Panel
-                  componentName={p.componentName}
-                  fields={p.fields}
-                  presets={p.presets}
-                  subjects={p.subjects}
-                  toSubject={p.toSubject}
-                  onChange={p.onChange}
-                  onClearOverride={p.onClearOverride}
-                />
-              );
-            // The member lists a subject carries, computed automatically
-            // from its entry (slots → one per slot; members → one; else none)
-            // and handed to the chosen layout together with the panel. The
-            // panel designs never learn about lists; the layouts never
-            // learn about fields.
-            const lists = memberListsFor(p.entries, p.instances, p.subject, {
-              onAddMember: p.onAddMember,
-              onRemoveMember: p.onRemoveMember,
-              onMoveMember: p.onMoveMember,
-              onSetProp: p.onSetProp,
-              onSelect: p.onSelectInstance,
-            });
-            return <p.layout.Layout subjectName={p.componentName} panel={panel} lists={lists} isSlotFill={isSlotFill(p.subject ?? undefined)} />;
-          })()}
+        <div data-slot="panel-variant-host" data-variant="sections">
+          <SectionInspector
+            entries={p.entries}
+            instances={p.instances}
+            subject={p.subject}
+            subjects={p.subjects}
+            componentName={p.componentName}
+            fields={p.fields}
+            presets={p.presets}
+            toSubject={p.toSubject}
+            onChange={p.onChange}
+            onClearOverride={p.onClearOverride}
+            onSetProp={p.onSetProp}
+            onClearProp={p.onClearProp}
+            onAddMember={p.onAddMember}
+            onRemoveMember={p.onRemoveMember}
+            onMoveMember={p.onMoveMember}
+            onSelectInstance={p.onSelectInstance}
+            render={p.render}
+            positions={p.positions}
+            onSetPosition={p.onSetPosition}
+          />
         </div>
       </div>
     </aside>

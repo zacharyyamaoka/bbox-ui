@@ -59,9 +59,51 @@ export function AddMemberMenu({
   compact?: boolean;
   fullWidth?: boolean;
 }) {
+  return (
+    <TypedAddMenu
+      types={addableTypes(p.spec, p.entries, p.members.length)}
+      atMax={p.spec.max !== undefined && p.members.length >= p.spec.max}
+      max={p.spec.max}
+      onAdd={p.onAdd}
+      label={label}
+      title={title}
+      compact={compact}
+      fullWidth={fullWidth}
+    />
+  );
+}
+
+/**
+ * The same typed Add trigger, decoupled from `MembersControlProps`.
+ *
+ * WHY it is split out: a headless list (`chrome: "none"`) has no header to
+ * put its + on — the section's one `FoldRow` carries it instead, and that
+ * row is built by the page, which holds a section model rather than a
+ * members-control props bag. Extracting the trigger is what lets the header
+ * move without the Add menu being reimplemented next to it, which is
+ * exactly the hand-drawn-control-beside-the-engine move this whole round
+ * exists to stop.
+ */
+export function TypedAddMenu({
+  types,
+  atMax,
+  max,
+  onAdd,
+  label = "+",
+  title = "Add member",
+  compact = false,
+  fullWidth = false,
+}: {
+  types: string[];
+  atMax: boolean;
+  max?: number;
+  onAdd: (type: string) => void;
+  label?: ReactNode;
+  title?: string;
+  compact?: boolean;
+  fullWidth?: boolean;
+}) {
   const [open, setOpen] = useState(false);
-  const types = addableTypes(p.spec, p.entries, p.members.length);
-  const atMax = p.spec.max !== undefined && p.members.length >= p.spec.max;
   const one = types.length === 1 ? types[0] : null;
   return (
     <div data-slot="add-member" style={{ position: "relative", ...(fullWidth ? { width: "100%" } : {}) }}>
@@ -69,9 +111,9 @@ export function AddMemberMenu({
         type="button"
         data-slot="add-member-trigger"
         disabled={atMax}
-        title={atMax ? `At most ${p.spec.max} here` : one ? `Add ${one}` : title}
+        title={atMax ? `At most ${max} here` : one ? `Add ${one}` : title}
         aria-label={one ? `Add ${one}` : title}
-        onClick={() => (one ? p.onAdd(one) : setOpen((v) => !v))}
+        onClick={() => (one ? onAdd(one) : setOpen((v) => !v))}
         style={compact ? addCompactStyle(atMax) : addButtonStyle(atMax, fullWidth)}
       >
         {label}
@@ -86,7 +128,7 @@ export function AddMemberMenu({
               data-type={t}
               onClick={() => {
                 setOpen(false);
-                p.onAdd(t);
+                onAdd(t);
               }}
               style={menuRowStyle}
             >
