@@ -15,18 +15,16 @@ import { PORT_PRESETS } from "./port.presets";
 import {
   PORT_DIAMETERS,
   PORT_HIT_PX,
-  PORT_ROLE_LABELS,
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
   inwardTextLayout,
+  portBadgeSide,
   portFlexDirection,
   portLabelGap,
   type BlockSide,
-  type PortDecoration,
   type PortDirection,
   type PortReveal,
-  type PortRole,
   type PortSize,
   type PortSizeRung,
   type PortTextLayout,
@@ -70,9 +68,8 @@ const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
 export interface PortDotPaintInput {
   state?: AppearanceState;
   tone?: Tone;
-  eligible?: boolean;
+  dimmed?: boolean;
   hinting?: boolean;
-  dragging?: boolean;
 }
 
 /**
@@ -83,14 +80,22 @@ export interface PortDotPaintInput {
  * Tailwind border class the way T0's single `border-2` could. Exported —
  * same reason T0 exported it — "so host adapters can paint the same dot
  * on elements they own" (e.g. a React Flow `Handle`).
+ *
+ * `hover:scale-110` is a real CSS `:hover` pseudo-class, deliberately NOT
+ * a `hover`/`hovering` prop (2026-09-12 port-props ruling, D2) — nothing
+ * ever needs to SET hover from outside (a host doesn't drive it, a
+ * document never persists it), so giving it a prop would be a control
+ * that never does anything a real `:hover` doesn't already do on its own.
+ * Preview it in Storybook via the pseudo-states addon, not a boolean arg.
  */
 export function portDotClass(): string {
-  return "relative box-border inline-flex shrink-0 rounded-full transition-transform duration-[50ms] ease-in-out motion-reduce:transition-none";
+  return "relative box-border inline-flex shrink-0 rounded-full transition-transform duration-[50ms] ease-in-out hover:scale-110 motion-reduce:transition-none motion-reduce:hover:scale-100";
 }
 
 /**
- * Resolves ONE paint channel (ring or fill) to a real CSS colour value —
- * or `null`, meaning "state says this channel does not paint at all".
+ * Resolves ONE paint channel (ring, fill, or core) to a real CSS colour
+ * value — or `null`, meaning "state says this channel does not paint at
+ * all".
  *
  * `base` is the STATE_TOKENS token for this channel at the current state;
  * `null` there is authoritative and wins outright, before `tone` is even
@@ -100,12 +105,12 @@ export function portDotClass(): string {
  * base colour rather than replacing it outright: a flat substitution
  * (tried first, see the fix's git history) collapses every state that
  * shares a base token's "shape" — `empty`'s hollow `foreground` ring and
- * `outOfFocus`'s hollow `muted-foreground` ring, or `wired`'s solid
- * `primary` and `received`'s solid `bbox-received` — into one identical
+ * `valueSet`'s hollow `muted-foreground` ring, or `wired`'s lit `primary`
+ * core and `received`'s solid `bbox-received` fill — into one identical
  * tone-coloured circle, re-breaking the same "State control goes inert"
  * bug one level down. Blending keeps the tone recognisably dominant while
- * the state's own hue still shows through enough that all five states
- * stay distinguishable under any single tone (verified by
+ * the state's own hue still shows through enough that every persistable
+ * state stays distinguishable under any single tone (verified by
  * `test/port.paint.test.ts`).
  */
 function toneColor(base: string | null, toneToken: string | null): string | null {
@@ -115,7 +120,7 @@ function toneColor(base: string | null, toneToken: string | null): string | null
 }
 
 /**
- * The dot's paint, resolved from the cascade's two token lookups via
+ * The dot's ring/fill, resolved from the cascade's token lookups via
  * `toneColor` above. `tone` is sugar that writes the override layer
  * (`toneOverride`, appearance.ts) — Port has no separate settable paint
  * field for an override to land on (see `port.presets.ts` for why
@@ -123,26 +128,42 @@ function toneColor(base: string | null, toneToken: string | null): string | null
  * directly rather than through `resolveFields` against a governed
  * property that doesn't exist.
  *
- * The interaction axis composes OVER the resting paint (PORT-SPEC.md
- * §1.3.2), never replacing it, with one deliberate exception: `hinting`
- * OVERRIDES the ring/fill to `--primary` regardless of `state` — a hint
- * previews the port BECOMING `wired`, so it wears `wired`'s ink even at
- * rest on `empty` (filling an `empty` port with its own ink would read as
- * "this port is broken", PORT-SPEC.md §1.3.2). `eligible`/`dragging`
- * instead ADD a third, wider halo layer without touching the resting
- * ring/fill.
+ * Two host-set, never-persisted modifiers compose OVER the resting paint,
+ * never replacing `state`'s own reading (2026-09-12 port-props ruling —
+ * `outOfFocus`/`eligible`/`dragging` used to be three overlapping ways of
+ * saying "the host is doing something to this port"; now there are two):
+ *
+ * - `dimmed` — the port is out of focus, OR mid-drag and not a legal
+ *   target ("not eligible ⇒ dimmed": one boolean covers both, since
+ *   they're the identical grey-ring-and-faded read). Forces the ring to
+ *   `muted-foreground` and fades the WHOLE dot to ~45% opacity, leaving
+ *   the resting fill/core colour underneath untouched (so a `dimmed`
+ *   `wired` port is still legible as "wired, just not focused right now"
+ *   rather than becoming indistinguishable grey).
+ * - `hinting` — the pointer is over this port mid-drag, previewing it
+ *   BECOMING `wired`: it wears `wired`'s own shape (hollow ring, lit
+ *   core) in `--primary` ink regardless of `state`, scaled up with a
+ *   wide halo. Wearing `empty`'s own ink here would read as "this port is
+ *   broken" rather than "drop here" — see `portCoreStyle` below for the
+ *   matching core paint. `hinting` wins over `dimmed` when both are set
+ *   (the one port under the pointer is by definition the eligible one).
  */
 export function portDotStyle({
   state = "empty",
   tone = "neutral",
-  eligible = false,
+  dimmed = false,
   hinting = false,
-  dragging = false,
 }: PortDotPaintInput): CSSProperties {
   const toneToken = TONE_TOKENS[tone];
   const { ring, fill } = STATE_TOKENS[state];
-  const ringColor = hinting ? paintVar("primary") : toneColor(ring, toneToken);
-  const fillColor = hinting ? paintVar("primary") : toneColor(fill, toneToken);
+  const ringColor = hinting
+    ? paintVar("primary")
+    : dimmed
+      ? paintVar("muted-foreground")
+      : toneColor(ring, toneToken);
+  // `hinting` renders hollow (fill: null), matching `wired`'s own shape —
+  // see the module doc above and `portCoreStyle`'s matching lit core.
+  const fillColor = hinting ? null : toneColor(fill, toneToken);
 
   const layers: string[] = [];
   if (ringColor != null) {
@@ -152,27 +173,42 @@ export function portDotStyle({
   }
   if (hinting) {
     layers.push("0 0 0 9px color-mix(in srgb, var(--bbox-primary, var(--primary)) 38%, transparent)");
-  } else {
-    if (eligible) {
-      layers.push("0 0 0 7px color-mix(in srgb, var(--bbox-primary, var(--primary)) 26%, transparent)");
-    }
-    if (dragging) {
-      layers.push("0 0 0 7px color-mix(in srgb, var(--ring) 30%, transparent)");
-    }
   }
 
   return {
     boxShadow: layers.length > 0 ? layers.join(", ") : undefined,
     background: fillColor ?? "transparent",
+    opacity: dimmed && !hinting ? 0.45 : undefined,
     transform: hinting ? "scale(1.18)" : undefined,
   };
 }
 
+/** The core's own diameter as a fraction of the dot's — small enough to
+ * read as "something lit inside the ring", never competing with the fill
+ * for the disc's whole area. */
+const PORT_CORE_RATIO = 0.42;
+
+/**
+ * The small inner "core" dot lit for `wired` (disc kept hollow, core lit
+ * instead of the old solid fill) and `received` (core matches the already
+ * -solid fill, so it reads as "fully lit" rather than losing the core in
+ * its own fill colour) — 2026-09-12 port-props ruling, "the three circles
+ * are one token-table row." A `null` return means "no core layer at all",
+ * not a transparent one, so `empty`/`valueSet` never mount the extra span.
+ */
+export function portCoreStyle({ state = "empty", tone = "neutral", hinting = false }: PortDotPaintInput): CSSProperties | null {
+  const toneToken = TONE_TOKENS[tone];
+  const core = hinting ? "primary" : STATE_TOKENS[state].core;
+  const color = hinting ? paintVar("primary") : toneColor(core, toneToken);
+  if (color == null) return null;
+  return { background: color };
+}
+
 /* ------------------------------------------------------------------ */
-/* The decoration ring, the semantic-role cue, the count badge —       */
-/* small parts painted ON the dot (PORT-SPEC.md §2.1's ::after/spans). */
-/* Geometry approximated from PORT-SPEC.md §1.1 #37-41 — the donor's    */
-/* own measured boxes, re-expressed as real DOM (see the module doc).  */
+/* The count badge — a small part painted ON the dot. `role`/          */
+/* `decoration` (the old semantic-role cue and mutates/variadic ring)  */
+/* were removed 2026-09-12 (port.layout.ts's own WHY, above their old  */
+/* import site) — this is the one small part `Port` still owns itself. */
 /* ------------------------------------------------------------------ */
 
 // WHY total lookups and not ternaries: a ternary has a fall-through, so
@@ -184,73 +220,26 @@ const REVEAL_CLASS: Record<PortReveal, string> = {
   onHover: "opacity-0 transition-opacity hover:opacity-100 focus-within:opacity-100",
 };
 
-type VariadicCollar = { ink: string; borderStyle: "solid" | "dotted"; opacity: number };
-const VARIADIC_COLLAR: Record<Exclude<PortDecoration, "none" | "mutates">, VariadicCollar> = {
-  "variadic-positional": { ink: "var(--bbox-success)", borderStyle: "solid", opacity: 0.5 },
-  "variadic-keyword": { ink: "var(--bbox-warning)", borderStyle: "solid", opacity: 0.5 },
-  "variadic-bundled": { ink: "var(--bbox-success)", borderStyle: "dotted", opacity: 0.78 },
+/** One offset per `PortTextLayout` side, matching `portLabelPlacement`'s
+ * own `PORT_LABEL_GAP`-style clearance so the badge/cue never reads as
+ * randomly placed relative to the label it's dodging. */
+const OVERLAY_SIDE_STYLE: Record<PortTextLayout, CSSProperties> = {
+  left: { right: "100%", marginRight: 6, top: "50%", transform: "translateY(-50%)" },
+  right: { left: "100%", marginLeft: 6, top: "50%", transform: "translateY(-50%)" },
+  top: { bottom: "100%", marginBottom: 6, left: "50%", transform: "translateX(-50%)" },
+  bot: { top: "100%", marginTop: 6, left: "50%", transform: "translateX(-50%)" },
 };
 
-function PortDecorationRing({
-  decoration,
-}: {
-  decoration: Exclude<PortDecoration, "none">;
-}) {
-  if (decoration === "mutates") {
-    return (
-      <span
-        data-slot="port-dot-decoration"
-        aria-hidden
-        className="pointer-events-none absolute rounded-full"
-        style={{
-          inset: -6,
-          border: "2.2px solid var(--bbox-warning)",
-          clipPath: "inset(0 0 50% 0)",
-          transform: "rotate(-45deg)",
-        }}
-      />
-    );
-  }
-  // `variadic-*`: one collar, mutually exclusive with `mutates` by
-  // construction (PORT-SPEC.md §2.2 — the donor paints both through a
-  // single pseudo-element for exactly this reason). Positional reads as
-  // the plain collar; keyword swaps the ink to warning; bundled dots the
-  // stroke and lifts the opacity — PORT-SPEC.md §3f's donor table.
-  const { ink, borderStyle, opacity } = VARIADIC_COLLAR[decoration];
-  return (
-    <span
-      data-slot="port-dot-decoration"
-      aria-hidden
-      className="pointer-events-none absolute rounded-full"
-      style={{ inset: -6, border: `1px ${borderStyle} ${ink}`, opacity }}
-    />
-  );
-}
-
-function PortRoleCue({ role }: { role: Exclude<PortRole, "data"> }) {
-  return (
-    <span
-      data-slot="port-role-cue"
-      className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[3px] px-[3px] text-[8px] font-semibold leading-[11px] tracking-[0.01em] text-bbox-accent"
-      style={{ top: -13, background: "var(--card)" }}
-    >
-      {PORT_ROLE_LABELS[role]}
-    </span>
-  );
-}
-
-function PortCountBadge({ count }: { count: number }) {
-  // `right`, not `left`: the default composition (edge "left", textLayout
-  // "right") flows the label OUT of the dot's right side, so a `left`
-  // offset landed the badge almost exactly where the label text starts
-  // (both ~diameter+gap px from the dot). Anchoring outward, on the
-  // opposite side from the label, clears it in the common case; a host
-  // that mirrors the whole row for an output port mirrors this with it.
+function PortCountBadge({ count, layout }: { count: number; layout: PortTextLayout }) {
+  // Anchors on `portBadgeSide(layout)` — the side OPPOSITE whichever way
+  // the label is actually flowing (port.layout.ts's own WHY) — never a
+  // side hardcoded to the default composition, which is what let a
+  // left-flowing label land directly under the badge (2026-09-12 D5 fix).
   return (
     <span
       data-slot="port-count"
       className="pointer-events-none absolute flex min-w-[16px] items-center justify-center rounded-[7px] bg-foreground/10 px-[5px] text-[10px] font-semibold leading-[16px] text-foreground"
-      style={{ height: 16, right: "100%", marginRight: 6, top: -10 }}
+      style={{ height: 16, ...OVERLAY_SIDE_STYLE[portBadgeSide(layout)] }}
     >
       {count}
     </span>
@@ -258,69 +247,75 @@ function PortCountBadge({ count }: { count: number }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* PortDot — the disc + both rings + the hit halo + the small parts    */
-/* above. Independently positionable (see the module doc).             */
+/* PortDot — the disc + both rings + the lit core + the hit halo + the */
+/* count badge. Independently positionable (see the module doc).       */
 /* ------------------------------------------------------------------ */
 
-export interface PortDotProps extends Omit<ComponentProps<"span">, "role"> {
+export interface PortDotProps extends ComponentProps<"span"> {
   state?: AppearanceState;
   tone?: Tone;
   diameter?: PortSize;
-  role?: PortRole;
-  decoration?: PortDecoration;
+  /** Author-set, persisted — same shape as `bar.fields.ts`'s existing
+   * `hidden`. Replaces the old `state: "hidden"` rung: painting nothing is
+   * a visibility fact, not a seventh kind of content (appearance.ts's own
+   * WHY). */
+  hidden?: boolean;
+  /** Host-set, never persisted — the port is out of focus, or mid-drag and
+   * not a legal target. Replaces `outOfFocus` (a `state` rung) and
+   * `eligible` (inverted): see `portDotStyle`'s own WHY. */
+  dimmed?: boolean;
+  /** Host-set, never persisted — the pointer is over this port mid-drag. */
+  hinting?: boolean;
+  /** Which way this dot's label flows — only consulted to keep the count
+   * badge clear of it (`portBadgeSide`); purely presentational, never
+   * persisted on the dot itself (a host's real layout owns this fact). */
+  textLayout?: PortTextLayout;
   /** Host-computed many-to-one count — never persisted. */
   producers?: number;
-  eligible?: boolean;
-  hinting?: boolean;
-  dragging?: boolean;
 }
 
 /**
  * The dot alone: the disc, the 2px surface-coloured gap ring, the 3px
- * state ring, a 40px invisible hit halo (always centred on the dot
- * regardless of `diameter` — PORT-SPEC.md §1.1 #8), an optional
- * decoration ring, an optional semantic-role cue, and an optional
- * many-to-one count badge.
+ * state ring, the small lit "core" some states paint on top
+ * (`portCoreStyle`), a 40px invisible hit halo (always centred on the dot
+ * regardless of `diameter`), and an optional many-to-one count badge.
  *
- * `state === "hidden"` renders NOTHING (PORT-SPEC.md §1.3.1: "not painted
- * at all; the container counts it into `+N more`") — see
- * `PortHiddenSummary` below for that container-owned summary.
+ * `hidden` renders NOTHING ("not painted at all; the container counts it
+ * into `+N more`") — see `PortHiddenSummary` below for that
+ * container-owned summary.
  */
 export function PortDot({
   state = "empty",
   tone = "neutral",
   diameter = "md",
-  role = "data",
-  decoration = "none",
-  producers = 0,
-  eligible = false,
+  hidden = false,
+  dimmed = false,
   hinting = false,
-  dragging = false,
+  textLayout = "right",
+  producers = 0,
   className,
   style,
   ...props
 }: PortDotProps) {
-  if (state === "hidden") return null;
+  if (hidden) return null;
   const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
   // A fixed 40px hit target regardless of the painted diameter — the
   // donor's own `inset: -14px` is this formula evaluated at diameter=12.
   const haloInset = (diameterPx - PORT_HIT_PX) / 2;
+  const coreStyle = portCoreStyle({ state, tone, hinting });
   return (
     <span
       data-slot="port-dot"
       data-state={state}
       data-tone={tone}
       data-diameter={diameter}
-      data-role={role}
-      data-decoration={decoration}
-      data-eligible={eligible || undefined}
+      data-dimmed={dimmed || undefined}
       data-hinting={hinting || undefined}
-      data-dragging={dragging || undefined}
       className={cn(portDotClass(), className)}
       style={{
         width: diameterPx,
         height: diameterPx,
-        ...portDotStyle({ state, tone, eligible, hinting, dragging }),
+        ...portDotStyle({ state, tone, dimmed, hinting }),
         ...style,
       }}
       {...props}
@@ -331,9 +326,19 @@ export function PortDot({
         className="absolute rounded-full"
         style={{ inset: haloInset }}
       />
-      {decoration !== "none" && <PortDecorationRing decoration={decoration} />}
-      {role !== "data" && <PortRoleCue role={role} />}
-      {producers >= 2 && <PortCountBadge count={producers} />}
+      {coreStyle && (
+        <span
+          data-slot="port-dot-core"
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{
+            width: `${PORT_CORE_RATIO * 100}%`,
+            height: `${PORT_CORE_RATIO * 100}%`,
+            ...coreStyle,
+          }}
+        />
+      )}
+      {producers >= 2 && <PortCountBadge count={producers} layout={textLayout} />}
     </span>
   );
 }
@@ -432,6 +437,8 @@ export interface PortLabelProps extends ComponentProps<"span"> {
   /** Only consulted to dim the default chip when `state === "wired"` —
    * see `PortDefaultChip`'s `overridden`. */
   state?: AppearanceState;
+  /** Same fact as `PortDot`'s own `hidden` — see its docblock. */
+  hidden?: boolean;
 }
 
 /**
@@ -450,16 +457,17 @@ export function PortLabel({
   direction = "input",
   textSize = "sm",
   state = "empty",
+  hidden = false,
   className,
   style,
   children,
   ...props
 }: PortLabelProps) {
-  // "no dot, no slot" (PORT-SPEC.md §1.3.1) — a hidden port's label
-  // disappears along with its dot, whether the two are rendered together
-  // (`Port`, which never even calls this far) or a host positions them
-  // independently and passes `state` through for the chip-dimming check.
-  if (state === "hidden") return null;
+  // "no dot, no slot" — a hidden port's label disappears along with its
+  // dot, whether the two are rendered together (`Port`, which never even
+  // calls this far) or a host positions them independently and passes
+  // `hidden` through.
+  if (hidden) return null;
   const nameSpan = name ? (
     <PortName key="name" textSize={textSize}>
       {name}
@@ -537,7 +545,7 @@ export function PortHiddenSummary({
 /* PortDot/PortLabel directly instead (see the module doc).             */
 /* ------------------------------------------------------------------ */
 
-export interface PortProps extends Omit<ComponentProps<"div">, "role"> {
+export interface PortProps extends ComponentProps<"div"> {
   name?: string;
   type?: string;
   defaultValue?: string;
@@ -548,8 +556,6 @@ export interface PortProps extends Omit<ComponentProps<"div">, "role"> {
    * `diameter`/`textSize` still wins (see `Port`'s own render). */
   size?: PortSizeRung;
   diameter?: PortSize;
-  role?: PortRole;
-  decoration?: PortDecoration;
   /** Sensible default is `inwardTextLayout(edge)` when omitted. */
   textLayout?: PortTextLayout;
   textSize?: PortTextSize;
@@ -557,11 +563,12 @@ export interface PortProps extends Omit<ComponentProps<"div">, "role"> {
   tone?: Tone;
   lens?: Lens;
   lensBefore?: string;
-  /** Host-computed drag-time states — never persisted (PORT-SPEC.md
-   * §1.3.2/§3d). */
-  eligible?: boolean;
+  /** Author-set, persisted — same shape as `bar.fields.ts`'s existing
+   * `hidden`. See `PortDot`'s own docblock. */
+  hidden?: boolean;
+  /** Host-set, never persisted — see `portDotStyle`'s own WHY. */
+  dimmed?: boolean;
   hinting?: boolean;
-  dragging?: boolean;
   reveal?: PortReveal;
   /** Host-computed many-to-one count — never persisted. */
   producers?: number;
@@ -571,8 +578,8 @@ export interface PortProps extends Omit<ComponentProps<"div">, "role"> {
  * Port = the dot, the label, paired as flex siblings for a standalone
  * specimen (Storybook, the product inspector, a detached copy) — a real
  * host instead positions `PortDot`/`PortLabel` independently, at a
- * shared anchor, per `./port.layout.ts`. `state === "hidden"` renders
- * nothing at all, same as its `PortDot`/`PortLabel` parts.
+ * shared anchor, per `./port.layout.ts`. `hidden` renders nothing at all,
+ * same as its `PortDot`/`PortLabel` parts.
  *
  * `lens`/`lensBefore` (the diff/lint overlay, `./appearance.ts`) are
  * accepted and exposed as `data-lens` for a host to style, but T1 does
@@ -601,17 +608,15 @@ export function Port({
   // textSize that silently outranks the preset layer.
   size = "md",
   diameter,
-  role = "data",
-  decoration = "none",
   textLayout,
   textSize,
   state = "empty",
   tone = "neutral",
   lens = "normal",
   lensBefore: _lensBefore = "",
-  eligible = false,
+  hidden = false,
+  dimmed = false,
   hinting = false,
-  dragging = false,
   reveal = "always",
   producers = 0,
   className,
@@ -619,7 +624,7 @@ export function Port({
   children,
   ...props
 }: PortProps) {
-  if (state === "hidden") return null;
+  if (hidden) return null;
   const resolvedTextLayout = textLayout ?? inwardTextLayout(edge);
   const flexStyle: CSSProperties = {
     flexDirection: portFlexDirection(resolvedTextLayout),
@@ -648,13 +653,13 @@ export function Port({
       data-lens={lens !== "normal" ? lens : undefined}
       className={cn(
         "flex w-fit items-center",
-        // `reveal: "onHover"` composes opacity, not colour, over
-        // whichever resting state is in force (PORT-SPEC.md §1.3.2) — a
-        // visibility policy triggered by the CONTAINER's view, kept
-        // deliberately apart from `outOfFocus` (painted-but-dimmed,
-        // triggered by what the port IS). Standing in for "the container
-        // is hovered" with self-hover, since a standalone specimen has
-        // no outer container to key off.
+        // `reveal: "onHover"` composes opacity, not colour, over whichever
+        // resting state is in force — a visibility policy triggered by the
+        // CONTAINER's view, kept deliberately apart from `dimmed`
+        // (painted-but-faded, triggered by what the HOST is doing to this
+        // port). Standing in for "the container is hovered" with
+        // self-hover, since a standalone specimen has no outer container
+        // to key off.
         REVEAL_CLASS[reveal],
         className,
       )}
@@ -665,12 +670,11 @@ export function Port({
         state={state}
         tone={tone}
         diameter={diameterResolved}
-        role={role}
-        decoration={decoration}
-        producers={producers}
-        eligible={eligible}
+        hidden={hidden}
+        dimmed={dimmed}
         hinting={hinting}
-        dragging={dragging}
+        textLayout={resolvedTextLayout}
+        producers={producers}
       />
       <PortLabel
         name={name}
@@ -679,6 +683,7 @@ export function Port({
         direction={direction}
         textSize={textSizeResolved}
         state={state}
+        hidden={hidden}
       >
         {children}
       </PortLabel>

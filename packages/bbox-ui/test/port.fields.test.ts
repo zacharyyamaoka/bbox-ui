@@ -16,11 +16,9 @@ import {
 } from "../src/appearance";
 import {
   BLOCK_SIDES,
-  PORT_DECORATIONS,
   PORT_DIAMETERS,
   PORT_DIRECTIONS,
   PORT_REVEALS,
-  PORT_ROLES,
   PORT_SIZE_RUNGS,
   PORT_TEXT_LAYOUTS,
   PORT_TEXT_SIZES,
@@ -61,7 +59,7 @@ const dotRendered = call(PortDot, dotElement.props);
 const labelRendered = call(PortLabel, labelElement.props);
 
 describe("PORT_FIELDS", () => {
-  it("has exactly Port's real props, in panel order — own fields, then the shared APPEARANCE_FIELDS bundle, then the host-computed interaction axis, then the escape hatch", () => {
+  it("has exactly Port's real props, in panel order — own fields, then the shared APPEARANCE_FIELDS bundle, then the author-set hidden toggle, then the host-computed interaction axis, then the escape hatch", () => {
     expect(PORT_FIELDS.map((f) => f.id)).toEqual([
       "name",
       "type",
@@ -70,8 +68,10 @@ describe("PORT_FIELDS", () => {
       "edge",
       "size",
       "diameter",
-      "role",
-      "decoration",
+      // "role"/"decoration" REMOVED 2026-09-12 — vestigial, no host
+      // adapter ever set or read either (recon confirmed zero call
+      // sites); Python-specific annotations are SystemSketch's business,
+      // not this package's. See port.layout.ts's own WHY.
       "textLayout",
       "textSize",
       "state",
@@ -81,9 +81,9 @@ describe("PORT_FIELDS", () => {
     // appearance.fields.ts but deliberately NOT in APPEARANCE_FIELDS —
     // nothing renders it, so shipping it put a live control into 27 story
     // panels that moved nothing. See its docblock for the one-line undo.
-      "eligible",
+      "hidden",
+      "dimmed",
       "hinting",
-      "dragging",
       "reveal",
       "producers",
       "children",
@@ -122,23 +122,6 @@ describe("PORT_FIELDS", () => {
     expect(dotRendered.props.style.height).toBe(PORT_DIAMETERS.md);
   });
 
-  it("role's declared default equals Port's real default; a non-\"data\" role paints the semantic cue, \"data\" paints nothing extra", () => {
-    expect(field("role").defaultValue).toBe("data");
-    expect(dotElement.props.role).toBe("data");
-    // children: [halo, decoration-or-false, role-cue-or-false, badge-or-false]
-    expect(dotRendered.props.children[2]).toBe(false);
-    const eventDot = call(PortDot, { role: "event" });
-    expect(eventDot.props.children[2]).not.toBe(false);
-  });
-
-  it("decoration's declared default equals Port's real default; \"none\" paints no ring, any other value does", () => {
-    expect(field("decoration").defaultValue).toBe("none");
-    expect(dotElement.props.decoration).toBe("none");
-    expect(dotRendered.props.children[1]).toBe(false);
-    const mutatesDot = call(PortDot, { decoration: "mutates" });
-    expect(mutatesDot.props.children[1]).not.toBe(false);
-  });
-
   it("textLayout's declared default equals inwardTextLayout(edge) at Port's real default edge (\"left\")", () => {
     expect(inwardTextLayout("left")).toBe("right");
     expect(field("textLayout").defaultValue).toBe("right");
@@ -165,26 +148,31 @@ describe("PORT_FIELDS", () => {
     expect(changedRoot.props["data-lens"]).toBe("changed");
   });
 
-  it("the interaction axis (eligible/hinting/dragging/reveal/producers) is host-computed, defaults to inert, and is never a preset-governed field", () => {
-    expect(field("eligible").defaultValue).toBe(false);
+  it("the interaction axis (dimmed/hinting/reveal/producers) is host-computed, defaults to inert, and is never a preset-governed field", () => {
+    expect(field("dimmed").defaultValue).toBe(false);
     expect(field("hinting").defaultValue).toBe(false);
-    expect(field("dragging").defaultValue).toBe(false);
     expect(field("reveal").defaultValue).toBe("always");
     expect(field("producers").defaultValue).toBe(0);
-    expect(dotElement.props.eligible).toBe(false);
+    expect(dotElement.props.dimmed).toBe(false);
     expect(dotElement.props.hinting).toBe(false);
-    expect(dotElement.props.dragging).toBe(false);
     expect(dotElement.props.producers).toBe(0);
-    // 2+ producers is the real threshold for the count badge (children[3]).
-    expect(dotRendered.props.children[3]).toBe(false);
-    expect(call(PortDot, { producers: 2 }).props.children[3]).not.toBe(false);
-    expect(call(PortDot, { producers: 1 }).props.children[3]).toBe(false);
+    // 2+ producers is the real threshold for the count badge — children:
+    // [halo, core-or-false, badge-or-false].
+    expect(dotRendered.props.children[2]).toBe(false);
+    expect(call(PortDot, { producers: 2 }).props.children[2]).not.toBe(false);
+    expect(call(PortDot, { producers: 1 }).props.children[2]).toBe(false);
   });
 
-  it("`state: \"hidden\"` renders nothing — Port, PortDot and PortLabel all return null", () => {
-    expect(call(Port, { state: "hidden" })).toBeNull();
-    expect(call(PortDot, { state: "hidden" })).toBeNull();
-    expect(call(PortLabel, { state: "hidden" })).toBeNull();
+  it("`hidden: true` renders nothing — Port, PortDot and PortLabel all return null", () => {
+    expect(call(Port, { hidden: true })).toBeNull();
+    expect(call(PortDot, { hidden: true })).toBeNull();
+    expect(call(PortLabel, { hidden: true })).toBeNull();
+  });
+
+  it("hidden's declared default equals Port's real default (false, persisted — not host-computed)", () => {
+    expect(field("hidden").defaultValue).toBe(false);
+    expect(field("hidden").randomize).not.toBe(false);
+    expect(dotElement.props.hidden).toBe(false);
   });
 
   it("children's default (\"\") behaves IDENTICALLY to omitting it — both fall through to the three-span rendering, so \"\" is a real default, not a demoable placeholder", () => {
@@ -211,8 +199,6 @@ describe("PORT_FIELDS", () => {
     expect(field("diameter").options?.map((o) => o.value)).toEqual(
       Object.keys(PORT_DIAMETERS),
     );
-    expect(field("role").options?.map((o) => o.value)).toEqual(PORT_ROLES);
-    expect(field("decoration").options?.map((o) => o.value)).toEqual(PORT_DECORATIONS);
     expect(field("textLayout").options?.map((o) => o.value)).toEqual(PORT_TEXT_LAYOUTS);
     expect(field("textSize").options?.map((o) => o.value)).toEqual(
       Object.keys(PORT_TEXT_SIZES),
@@ -229,7 +215,8 @@ describe("PORT_FIELDS", () => {
     expect(argTypes.size.control).toBe("select");
     expect(argTypes.diameter.control).toBe("select");
     expect(argTypes.state.control).toBe("select");
-    expect(argTypes.eligible.control).toBe("boolean");
+    expect(argTypes.dimmed.control).toBe("boolean");
+    expect(argTypes.hidden.control).toBe("boolean");
     expect(argTypes.producers.control).toBe("number");
     expect(argTypes.producers.min).toBe(0);
     expect(argTypes.producers.max).toBe(9);

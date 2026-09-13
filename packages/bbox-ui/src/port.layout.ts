@@ -144,45 +144,6 @@ export function inwardTextLayout(side: BlockSide): PortTextLayout {
   }
 }
 
-export type PortRole = "data" | "event" | "configuration" | "state" | "control" | "error";
-export const PORT_ROLES: PortRole[] = [
-  "data",
-  "event",
-  "configuration",
-  "state",
-  "control",
-  "error",
-];
-export const PORT_ROLE_LABELS: Record<PortRole, string> = {
-  data: "Data",
-  event: "Event",
-  configuration: "Configuration",
-  state: "State",
-  control: "Control",
-  error: "Error",
-};
-
-export type PortDecoration =
-  | "none"
-  | "mutates"
-  | "variadic-positional"
-  | "variadic-keyword"
-  | "variadic-bundled";
-export const PORT_DECORATIONS: PortDecoration[] = [
-  "none",
-  "mutates",
-  "variadic-positional",
-  "variadic-keyword",
-  "variadic-bundled",
-];
-export const PORT_DECORATION_LABELS: Record<PortDecoration, string> = {
-  none: "None",
-  mutates: "Mutates",
-  "variadic-positional": "Variadic (Positional)",
-  "variadic-keyword": "Variadic (Keyword)",
-  "variadic-bundled": "Variadic (Bundled)",
-};
-
 /** Port's own 18px "small" text rung — deliberately NOT a shared
  * TEXT_SIZES edit, see T1-SPEC.md §0 (three components each get their own
  * 18px rung, in their own file, rather than merging into one). */
@@ -226,6 +187,56 @@ export const PORT_REVEAL_LABELS: Record<PortReveal, string> = {
   always: "Always",
   onHover: "On Hover",
 };
+
+// `PortRole`/`PortDecoration` (and `PORT_ROLES`/`PORT_ROLE_LABELS`/
+// `PORT_DECORATIONS`/`PORT_DECORATION_LABELS`) REMOVED 2026-09-12, per
+// Zach's ruling on the port-props proposal (D4): these are Python-specific
+// annotations (a `configuration`/`control`/`error` port role, a
+// `mutates`/`variadic-*` collar) that belong to whichever app has that
+// domain knowledge — SystemSketch, not this generic design system — never
+// to base `Port`'s own panel. Confirmed dead weight before removal: no
+// host adapter (React Flow, tldraw) ever set or read either prop, and
+// neither is part of any persisted shape (`git log`/recon, 2026-09-12). A
+// consuming app that wants them back composes its own ring/cue as a thin
+// wrapper OVER `PortDot`/`Port` (an absolutely-positioned sibling span,
+// the same technique `PortDecorationRing`/`PortRoleCue` used internally)
+// rather than reaching for a prop this package no longer carries.
+
+/**
+ * Where the count badge (`Port`'s own `PortCountBadge`) lands relative to
+ * the dot, given the label's own flow direction — the fix for "the badge
+ * sat on top of a left-flowing label" (2026-09-12 port-props proposal,
+ * D5): the badge used to carry a FIXED offset (assuming the label always
+ * flows right), so a `textLayout` other than the default silently
+ * overlapped it with the label text. Anchoring on the side OPPOSITE
+ * whichever way the label is actually flowing keeps it clear in every
+ * `textLayout`, not just the default one.
+ */
+export function portBadgeSide(layout: PortTextLayout): PortTextLayout {
+  switch (layout) {
+    case "left":
+      return "right";
+    case "right":
+      return "left";
+    case "top":
+      return "bot";
+    case "bot":
+      return "top";
+  }
+}
+
+/**
+ * The free axis for a small overlay that isn't the count badge — e.g. a
+ * consuming app's own semantic-role cue, composed on top of `PortDot` the
+ * way `port.layout.ts`'s own module doc (D4) describes. Not used inside
+ * this package (the base `PortDot` paints only the badge), exported so a
+ * consumer doesn't have to re-derive "which side is free" by hand: the
+ * vertical rung is free when the label flows horizontally, the horizontal
+ * rung when the label itself flows top/bot.
+ */
+export function portCueSide(layout: PortTextLayout): "top" | "right" {
+  return layout === "top" || layout === "bot" ? "right" : "top";
+}
 
 /* ------------------------------------------------------------------ */
 /* Port anchors on a block boundary — carried forward verbatim         */

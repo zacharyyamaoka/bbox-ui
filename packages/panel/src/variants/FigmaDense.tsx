@@ -977,8 +977,8 @@ interface DropdownRow {
   label: string;
   /** The raw value beside the friendly name — only rendered when it says
    *  something the label doesn't (PAINT_TOKENS's label===value, so Pill's
-   *  colour rows show nothing here; a state's `"Out of Focus"` shows its
-   *  technical `outOfFocus` beside it). */
+   *  colour rows show nothing here; a state's `"Default Value"` shows its
+   *  technical `valueSet` beside it). */
   sublabel?: string;
   active: boolean;
 }

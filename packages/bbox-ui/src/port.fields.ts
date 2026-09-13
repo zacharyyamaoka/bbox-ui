@@ -19,16 +19,12 @@ import { APPEARANCE_FIELDS } from "./appearance.fields";
 import {
   BLOCK_SIDES,
   BLOCK_SIDE_LABELS,
-  PORT_DECORATIONS,
-  PORT_DECORATION_LABELS,
   PORT_DIAMETER_LABELS,
   PORT_DIAMETERS,
   PORT_DIRECTION_LABELS,
   PORT_DIRECTIONS,
   PORT_REVEAL_LABELS,
   PORT_REVEALS,
-  PORT_ROLE_LABELS,
-  PORT_ROLES,
   PORT_SIZE_RUNG_LABELS,
   PORT_SIZE_RUNGS,
   PORT_TEXT_LAYOUT_LABELS,
@@ -60,16 +56,6 @@ const DIAMETER_OPTIONS: FieldOption[] = (
   label: `${PORT_DIAMETER_LABELS[size]} · ${PORT_DIAMETERS[size]}px`,
 }));
 
-const ROLE_OPTIONS: FieldOption[] = PORT_ROLES.map((role) => ({
-  value: role,
-  label: PORT_ROLE_LABELS[role],
-}));
-
-const DECORATION_OPTIONS: FieldOption[] = PORT_DECORATIONS.map((decoration) => ({
-  value: decoration,
-  label: PORT_DECORATION_LABELS[decoration],
-}));
-
 const TEXT_LAYOUT_OPTIONS: FieldOption[] = PORT_TEXT_LAYOUTS.map((layout) => ({
   value: layout,
   label: PORT_TEXT_LAYOUT_LABELS[layout],
@@ -89,9 +75,13 @@ const REVEAL_OPTIONS: FieldOption[] = PORT_REVEALS.map((reveal) => ({
 
 /**
  * `Port`'s full field list, in panel order (docs/T1-SPEC.md §4.7's own
- * table order): identity/own fields, then the shared `APPEARANCE_FIELDS`
- * bundle (this is what colours the dot — `state`, `tone`, plus `lens`/
- * `lensBefore`), then the host-computed interaction axis, then the
+ * table order, narrowed 2026-09-12 per the port-props ruling: `role`/
+ * `decoration` removed — vestigial, SystemSketch's business, not this
+ * package's — and `eligible`/`dragging` folded into `dimmed`; see each
+ * removal's own WHY in `port.layout.ts`/`port.tsx`): identity/own fields,
+ * then the shared `APPEARANCE_FIELDS` bundle (this is what colours the
+ * dot — `state`, `tone`, plus `lens`/`lensBefore`), then the author-set,
+ * persisted `hidden`, then the host-computed interaction axis, then the
  * `children` escape hatch.
  */
 export const PORT_FIELDS: FieldSpec[] = [
@@ -147,22 +137,6 @@ export const PORT_FIELDS: FieldSpec[] = [
     hint: 'A free-numeric "Exact" 4th branch is deferred — no FieldKind combines segments+number today, see docs/T1-SPEC.md §10.',
   },
   {
-    id: "role",
-    label: "Role",
-    kind: "segments",
-    defaultValue: "data",
-    options: ROLE_OPTIONS,
-    hint: 'Non-"data" roles show only as a small text cue above the dot — the colour channel is spoken for by `state` (PORT-SPEC.md §1.3.3).',
-  },
-  {
-    id: "decoration",
-    label: "Decoration",
-    kind: "segments",
-    defaultValue: "none",
-    options: DECORATION_OPTIONS,
-    hint: "`mutates` and every `variadic-*` paint through one shared ring — mutually exclusive by construction, one enum instead of two booleans.",
-  },
-  {
     id: "textLayout",
     label: "Text Layout",
     kind: "segments",
@@ -184,11 +158,18 @@ export const PORT_FIELDS: FieldSpec[] = [
   },
   ...APPEARANCE_FIELDS,
   {
-    id: "eligible",
-    label: "Eligible",
+    id: "hidden",
+    label: "Hidden",
     kind: "toggle",
     defaultValue: false,
-    hint: "Host-computed drag-time state — never persisted.",
+    hint: "The dot and label draw nothing; a container counts it into \"+N more\" (same shape as bar.fields.ts's own `hidden`).",
+  },
+  {
+    id: "dimmed",
+    label: "Dimmed",
+    kind: "toggle",
+    defaultValue: false,
+    hint: "Host-computed — out of focus, or mid-drag and not a legal target. Never persisted.",
     randomize: false,
   },
   {
@@ -197,14 +178,6 @@ export const PORT_FIELDS: FieldSpec[] = [
     kind: "toggle",
     defaultValue: false,
     hint: "Host-computed drag-time state — never persisted. Previews becoming `wired`: wears `wired`'s ink regardless of the resting `state`.",
-    randomize: false,
-  },
-  {
-    id: "dragging",
-    label: "Dragging",
-    kind: "toggle",
-    defaultValue: false,
-    hint: "Host-computed drag-time state — never persisted.",
     randomize: false,
   },
   {

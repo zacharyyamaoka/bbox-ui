@@ -6,11 +6,10 @@ import { randomValue } from "../src/bench";
 const roll = () => 0.42;
 
 describe("randomValue", () => {
-  it("never rolls an option that opts out, so a Port cannot randomise to hidden", () => {
+  it("never rolls an option that opts out, so a Port cannot randomise to received (runtime-only)", () => {
     const state = PORT_FIELDS.find((f) => f.id === "state")!;
     const seen = new Set<string>();
     for (let i = 0; i < 200; i++) seen.add(String(randomValue(state, () => (i % 97) / 97)));
-    expect(seen.has("hidden")).toBe(false);
     expect(seen.has("received")).toBe(false);
     expect(seen.size).toBeGreaterThanOrEqual(3);
   });
@@ -40,7 +39,7 @@ describe("randomValue", () => {
     // exploring. (The shared `state` hint also says "never persisted" — about
     // ONE of its values — so "never persisted" alone is the wrong key.)
     const hostComputed = PORT_FIELDS.filter((f) => /host-computed/i.test(f.hint ?? "")).map((f) => f.id);
-    expect(hostComputed).toEqual(["eligible", "hinting", "dragging", "reveal", "producers"]);
+    expect(hostComputed).toEqual(["dimmed", "hinting", "reveal", "producers"]);
     for (const f of PORT_FIELDS) {
       expect(f.randomize === false, `${f.id} randomize flag`).toBe(hostComputed.includes(f.id));
     }

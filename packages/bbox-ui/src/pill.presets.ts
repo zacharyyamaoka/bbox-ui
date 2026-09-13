@@ -35,12 +35,6 @@ const PRESET_PAINT: Record<
   { lineStyle: string; lineColor: string; fillStyle: string; fillColor: string }
 > = {
   empty: { lineStyle: "solid", lineColor: "foreground", fillStyle: "none", fillColor: "transparent" },
-  outOfFocus: {
-    lineStyle: "solid",
-    lineColor: "muted-foreground",
-    fillStyle: "none",
-    fillColor: "transparent",
-  },
   valueSet: {
     lineStyle: "solid",
     lineColor: "muted-foreground",
@@ -54,7 +48,6 @@ const PRESET_PAINT: Record<
     fillStyle: "solid",
     fillColor: "bbox-received",
   },
-  hidden: { lineStyle: "none", lineColor: "transparent", fillStyle: "none", fillColor: "transparent" },
 };
 
 export const PILL_PRESETS: PresetSpec[] = APPEARANCE_STATES.map((state) => ({

@@ -287,7 +287,7 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { state: "wired", children: "Wired" },
     { state: "valueSet", children: "Default" },
     { state: "empty", children: "Empty" },
-    { state: "outOfFocus", children: "Dimmed" },
+    { state: "received", children: "Received" },
   ],
   // WHY the first seed of a sized leaf sets no size: it is the one Add
   // uses, and an own size would beat whatever a header hands down — the

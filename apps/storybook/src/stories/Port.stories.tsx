@@ -8,10 +8,8 @@ import {
   type AppearanceState,
   type BlockSide,
   type Lens,
-  type PortDecoration,
   type PortDirection,
   type PortReveal,
-  type PortRole,
   type PortSize,
   type PortTextLayout,
   type PortTextSize,
@@ -51,8 +49,6 @@ type Story = StoryObj<typeof meta>;
 const DIRECTION_FIELD = PORT_FIELDS.find((f) => f.id === "direction")!;
 const EDGE_FIELD = PORT_FIELDS.find((f) => f.id === "edge")!;
 const DIAMETER_FIELD = PORT_FIELDS.find((f) => f.id === "diameter")!;
-const ROLE_FIELD = PORT_FIELDS.find((f) => f.id === "role")!;
-const DECORATION_FIELD = PORT_FIELDS.find((f) => f.id === "decoration")!;
 const TEXT_LAYOUT_FIELD = PORT_FIELDS.find((f) => f.id === "textLayout")!;
 const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
 const STATE_FIELD = PORT_FIELDS.find((f) => f.id === "state")!;
@@ -103,8 +99,10 @@ const sweep = (fieldId: string) => ({
 const galleryRow = { display: "flex", flexDirection: "column" as const, gap: 16 };
 const galleryRowInline = { display: "flex", alignItems: "center" as const, gap: 24, flexWrap: "wrap" as const };
 
-/** Every real AppearanceState (docs/T1-SPEC.md §3) — including runtime-only
- * `received`, and `hidden`, which renders nothing (see the row gap). */
+/** Every real AppearanceState (docs/T1-SPEC.md §3, narrowed 2026-09-12 to
+ * the value axis) — including runtime-only `received`. `wired`/`received`
+ * light the small inner core; see the `Hidden` story for the separate,
+ * author-set `hidden` toggle this gallery deliberately does not sweep. */
 export const AllStates: Story = {
   parameters: sweep("state"),
   render: (args) => (
@@ -182,41 +180,6 @@ export const AllDiameters: Story = {
           {...args}
           key={option.value}
           diameter={option.value as PortSize}
-          name={(args.name as string) || option.label}
-        />
-      ))}
-    </div>
-  ),
-};
-
-/** Every semantic role — only a non-"data" role paints the cue text. */
-export const AllRoles: Story = {
-  parameters: sweep("role"),
-  render: (args) => (
-    <div style={galleryRow}>
-      {ROLE_FIELD.options!.map((option) => (
-        <Port
-          {...args}
-          key={option.value}
-          role={option.value as PortRole}
-          name={(args.name as string) || option.label}
-        />
-      ))}
-    </div>
-  ),
-};
-
-/** `mutates` and every `variadic-*` — one shared ring, mutually exclusive
- * by construction (PORT-SPEC.md §2.2). */
-export const AllDecorations: Story = {
-  parameters: sweep("decoration"),
-  render: (args) => (
-    <div style={galleryRow}>
-      {DECORATION_FIELD.options!.map((option) => (
-        <Port
-          {...args}
-          key={option.value}
-          decoration={option.value as PortDecoration}
           name={(args.name as string) || option.label}
         />
       ))}
@@ -316,13 +279,31 @@ export const ManyProducers: Story = {
   args: { name: "pose", direction: "output", producers: 3 },
 };
 
-/** `state: "hidden"` renders nothing at all — a container rolls it into
- * its own `+N more` summary (`PortHiddenSummary`, exported from
- * `./port.tsx`, not exercised as a standalone story: it is the
- * CONTAINER's part, not one Port's — PORT-SPEC.md §4's "owned by the
- * host" table). */
+/**
+ * The 2026-09-12 D5 fix: the count badge used to carry a FIXED offset
+ * (assuming the label always flows right), so a left-flowing label landed
+ * almost exactly where the badge sat. Both rows below carry `producers:
+ * 3`; the badge now anchors on `portBadgeSide(textLayout)` — the side
+ * OPPOSITE the label — so it stays clear of the text in either layout.
+ */
+export const ManyProducersEitherLayout: Story = {
+  parameters: sweep("textLayout"),
+  args: { name: "get_aruco", producers: 3 },
+  render: (args) => (
+    <div style={galleryRow}>
+      <Port {...args} textLayout="right" />
+      <Port {...args} textLayout="left" />
+    </div>
+  ),
+};
+
+/** `hidden: true` renders nothing at all — a container rolls it into its
+ * own `+N more` summary (`PortHiddenSummary`, exported from `./port.tsx`,
+ * not exercised as a standalone story: it is the CONTAINER's part, not
+ * one Port's). Replaces the old `state: "hidden"` rung — see
+ * appearance.ts's own WHY for the split. */
 export const Hidden: Story = {
-  args: { name: "hiddenPort", state: "hidden" },
+  args: { name: "hiddenPort", hidden: true },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('[data-slot="port"]')).toBeNull();
   },

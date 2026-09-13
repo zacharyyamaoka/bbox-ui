@@ -12,69 +12,61 @@
 /* -------------------------------------------------------------- */
 
 /**
- * Board vocabulary (Zach, 2026-09-10 ruling): `empty · out of focus ·
- * value set · wired · data received · hidden`. One resting state is in
- * force at a time on anything that includes this bundle.
+ * Board vocabulary (Zach, 2026-09-10 ruling), NARROWED 2026-09-12 (Zach's
+ * ruling on the port-props proposal — see docs/T1-SPEC.md §2.4): `empty ·
+ * value set · wired · data received`. This is the VALUE axis only — "what
+ * is in the port/pill" — and it is the only axis a document persists.
+ *
+ * `outOfFocus` and `hidden` used to be two more rungs of this same union,
+ * but neither is a fact about what a thing IS: `outOfFocus` is a fact
+ * about what the HOST is doing to it right now (dimmed while ineligible
+ * mid-drag, or simply out of focus) and never survives a reload, while
+ * `hidden` is a visibility toggle a container counts into "+N more" —
+ * painting nothing is not a seventh kind of content. Splitting them out
+ * stops one enum from doing three unrelated jobs: see `Port`'s own
+ * `dimmed` (host-set, boolean, never persisted) and `hidden` (author-set,
+ * boolean, persisted, same shape as `bar.fields.ts`'s existing `hidden`)
+ * in `./port.tsx`/`./port.fields.ts`.
  */
-export type AppearanceState =
-  | "empty"
-  | "outOfFocus"
-  | "valueSet"
-  | "wired"
-  | "received"
-  | "hidden";
+export type AppearanceState = "empty" | "valueSet" | "wired" | "received";
 
-export const APPEARANCE_STATES: AppearanceState[] = [
-  "empty",
-  "outOfFocus",
-  "valueSet",
-  "wired",
-  "received",
-  "hidden",
-];
+export const APPEARANCE_STATES: AppearanceState[] = ["empty", "valueSet", "wired", "received"];
 
 /** Board labels verbatim, including Zach's own spelling of "Recived". */
 export const APPEARANCE_STATE_LABELS: Record<AppearanceState, string> = {
   empty: "Empty",
-  outOfFocus: "Out of Focus",
   valueSet: "Default Value",
   wired: "Wired",
   received: "Data Recived",
-  hidden: "Hidden",
 };
 
 /**
  * States a document format may persist. `received` means "data flowed
  * through this just now" — only a live host can know that; persisting it
  * would lie after reload. Runtime-only, host-sourced, never written to a
- * document. (`hidden` IS persistable — it is a fact about the document,
- * not the runtime.)
+ * document.
  */
-export const PERSISTABLE_APPEARANCE_STATES = [
-  "empty",
-  "outOfFocus",
-  "valueSet",
-  "wired",
-  "hidden",
-] as const;
+export const PERSISTABLE_APPEARANCE_STATES = ["empty", "valueSet", "wired"] as const;
 
-/** The two-bit reading every state resolves to: a ring/ink emphasis, and
- * whether a fill is present at all. `null` fill means hollow; `null` ring
- * means "not painted" (only `hidden`). Values are TOKEN NAMES (no leading
+/** The three-channel reading every state resolves to: a ring/ink emphasis,
+ * whether a fill is present, and whether the small inner "core" dot lights
+ * up. `null` in any channel means "that layer does not paint at all" —
+ * `wired` keeps a hollow ring (PORT-SPEC's disc) and lights only the core,
+ * distinguishing it from `received`'s fully solid circle at a glance
+ * without inventing a seventh state. Values are TOKEN NAMES (no leading
  * `--`) — resolve with `var(--${token})`, never a literal colour. See §3
  * for the actual token values and the contrast math behind them. */
 export interface StateTokenPair {
   ring: string | null;
   fill: string | null;
+  core: string | null;
 }
 
 export const STATE_TOKENS: Record<AppearanceState, StateTokenPair> = {
-  empty: { ring: "foreground", fill: null },
-  outOfFocus: { ring: "muted-foreground", fill: null },
-  valueSet: { ring: "muted-foreground", fill: "muted" },
-  wired: { ring: "primary", fill: "primary" },
-  received: { ring: "bbox-received", fill: "bbox-received" },
-  hidden: { ring: null, fill: null },
+  empty: { ring: "foreground", fill: null, core: null },
+  valueSet: { ring: "muted-foreground", fill: "muted", core: null },
+  wired: { ring: "primary", fill: null, core: "primary" },
+  received: { ring: "bbox-received", fill: "bbox-received", core: "bbox-received" },
 };
 
 /* -------------------------------------------------------------- */

@@ -297,12 +297,6 @@ describe("Pill — the real component reached through the same cascade the trace
     expect(wired.props.style.background).toBe("var(--bbox-primary, var(--primary))");
   });
 
-  it("state:'hidden' paints nothing — borderStyle none, fully transparent", () => {
-    const hidden = pillElement({ state: "hidden" });
-    expect(hidden.props.style.borderStyle).toBe("none");
-    expect(hidden.props.style.background).toBe("transparent");
-  });
-
   it("an explicit lineColor override reaches past the 'wired' preset on the real component, exactly the §1.4 worked example", () => {
     const overridden = pillElement({ state: "wired", lineColor: "bbox-danger" });
     expect(overridden.props.style.borderColor).toBe("var(--bbox-danger)");
