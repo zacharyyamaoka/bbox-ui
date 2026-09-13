@@ -1,6 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Port, type PortTextLayout } from "@bbox-ui/core";
 import type { CSSProperties, MouseEvent } from "react";
 
 import type { Direction, Orientation } from "./types";
@@ -104,6 +105,54 @@ export function FreeCard({
       {...listeners}
     >
       <CardBody label={label} direction={direction} />
+    </div>
+  );
+}
+
+/**
+ * A port edge's draggable unit. `showPort` swaps the plain label chip for the
+ * real `@bbox-ui/core` `Port` — same drag mechanics either way, so the
+ * interaction can be nailed down before it's actually a port underneath.
+ */
+export function SortablePortCard({
+  id,
+  label,
+  showPort,
+  textLayout,
+  onContextMenu,
+}: {
+  id: string;
+  label: string;
+  showPort: boolean;
+  textLayout: PortTextLayout;
+  onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.35 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`port-card${isDragging ? " is-dragging" : ""}`}
+      onContextMenu={onContextMenu}
+      {...attributes}
+      {...listeners}
+    >
+      {showPort ? (
+        <Port state="empty" size="md" textLayout={textLayout}>
+          {label}
+        </Port>
+      ) : (
+        <span className="port-card__label">{label}</span>
+      )}
     </div>
   );
 }
