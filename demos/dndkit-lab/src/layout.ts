@@ -1,4 +1,6 @@
-import type { SpacingScheme } from "./types";
+import type { CSSProperties } from "react";
+
+import type { Distribution, SpacingScheme } from "./types";
 
 export interface Point {
   x: number;
@@ -69,4 +71,45 @@ export function mainAxisPositions(
 export function clamp(value: number, min: number, max: number): number {
   if (max < min) return min;
   return Math.min(Math.max(value, min), max);
+}
+
+/**
+ * The main-axis CSS for a container given its Distribution. `distribute`
+ * reuses the browser's own space-* keywords (unchanged from before this
+ * existed). `aligned` packs from one end with a real `gap`, plus — when
+ * `edgePadding` is set — extra padding on that same anchor side, so the pack
+ * starts further in without needing any per-card position math; the flexbox
+ * layout the container already uses does the rest.
+ */
+export function distributionStyle(axis: "row" | "column", distribution: Distribution): CSSProperties {
+  if (distribution.mode === "distribute") {
+    return { justifyContent: distribution.scheme };
+  }
+
+  const style: CSSProperties = {
+    justifyContent: distribution.anchor === "start" ? "flex-start" : "flex-end",
+    gap: distribution.gap,
+  };
+  if (distribution.edgePadding > 0) {
+    const prop =
+      axis === "row"
+        ? distribution.anchor === "start"
+          ? "paddingLeft"
+          : "paddingRight"
+        : distribution.anchor === "start"
+          ? "paddingTop"
+          : "paddingBottom";
+    (style as Record<string, number>)[prop] = CONTAINER_PADDING + distribution.edgePadding;
+  }
+  return style;
+}
+
+/**
+ * Zach's rule for the "Offset" preset: the trailing edge's push-in is the
+ * leading edge's port count times its gap. It's an approximation (it ignores
+ * card size, and assumes both edges share one gap) meant as a starting point
+ * — `edgePadding` stays a plain, hand-editable number afterward.
+ */
+export function offsetPaddingFor(count: number, gap: number): number {
+  return count * gap;
 }

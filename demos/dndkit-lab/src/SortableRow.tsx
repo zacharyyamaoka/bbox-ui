@@ -63,7 +63,7 @@ export function SortableRow() {
           items={items}
           strategy={horizontalListSortingStrategy}
           axis="row"
-          spacing={spacing}
+          distribution={{ mode: "distribute", scheme: spacing }}
           size={{ width: 640, height: 160 }}
         >
           {items.map((id) => (

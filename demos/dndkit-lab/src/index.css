@@ -1,3 +1,8 @@
+@import "tailwindcss";
+@import "@bbox-ui/core/theme.css";
+
+@source "../../../packages";
+
 :root {
   color-scheme: dark;
   --bg: #0b0b0d;
@@ -8,6 +13,15 @@
   --text-dim: #9a9aa2;
   --accent: #7dd3fc;
   --accent-strong: #38bdf8;
+
+  /* Remap @bbox-ui/core's Port tokens onto this lab's dark palette — its
+     theme.css ships light-mode oklch values, which would paint a near-black
+     ring on this near-black background. */
+  --foreground: var(--text);
+  --muted-foreground: var(--text-dim);
+  --muted: #2a2b30;
+  --primary: var(--accent-strong);
+  --bbox-received: #34d399;
 }
 
 * {
@@ -117,6 +131,19 @@ body {
 
 .container--dashed {
   border-style: dashed;
+}
+
+/* Show container = off: the box a real Block will draw itself, so this is
+   just an invisible hit area — same size, same padding, same layout, only
+   the paint is gone. */
+.container--boxless {
+  border-color: transparent;
+  background: transparent;
+}
+
+.container--boxless.is-over {
+  border-color: var(--accent);
+  background: rgba(125, 211, 252, 0.07);
 }
 
 .container.is-over {
@@ -523,4 +550,68 @@ body {
   border-style: dashed;
   border-color: var(--accent);
   pointer-events: none;
+}
+
+/* --- Stage 5 · Port edge ------------------------------------------------- */
+
+.port-edge-board {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  padding: 24px 0 48px;
+}
+
+.port-card {
+  display: flex;
+  align-items: center;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  flex-shrink: 0;
+}
+
+.port-card.is-dragging {
+  opacity: 0.35;
+  cursor: grabbing;
+}
+
+/* The pre-showPorts placeholder — a generic chip, deliberately NOT styled
+   like the N/E/S/W polarity cards from stage 3: this edge isn't about a
+   card's direction, it's about what sits in a Block's port list. */
+.port-card__label {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #1a1b1f;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.alignment-control,
+.size-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.number-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.number-field input {
+  width: 56px;
+  background: var(--panel);
+  border: 1px solid var(--line-dim);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 4px 6px;
+  font-size: 12px;
 }

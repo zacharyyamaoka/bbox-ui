@@ -2,17 +2,24 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, type SortingStrategy } from "@dnd-kit/sortable";
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 
-import type { Size, SpacingScheme } from "./types";
+import { distributionStyle } from "./layout";
+import type { Distribution, Size } from "./types";
+
+/** The Block's edge itself, drawn as a straight line through the container. */
+export function EdgeLineMark({ axis }: { axis: "row" | "column" }) {
+  return <div className={`edge-line edge-line--${axis === "row" ? "horizontal" : "vertical"}`} />;
+}
 
 export function Container({
   id,
   items,
   strategy,
   axis,
-  spacing,
+  distribution,
   size,
   dashed,
   highlighted,
+  showBox = true,
   registerRef,
   onContextMenu,
   children,
@@ -21,11 +28,19 @@ export function Container({
   items: string[];
   strategy: SortingStrategy;
   axis: "row" | "column";
-  spacing: SpacingScheme;
+  distribution: Distribution;
   size: Size;
   dashed?: boolean;
   /** The arrow tool's tip is currently snapped to this container's edge. */
   highlighted?: boolean;
+  /**
+   * Whether the container paints its own border/background. Off is how it'll
+   * actually sit once integrated into a Block — the Block draws its own
+   * outline, this is just a hit area — but it's still droppable and still
+   * sized/laid out identically either way, so drag mechanics never change
+   * when you toggle it.
+   */
+  showBox?: boolean;
   registerRef?: (el: HTMLDivElement | null) => void;
   onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
   children: ReactNode;
@@ -35,7 +50,7 @@ export function Container({
   const style: CSSProperties = {
     width: size.width,
     height: size.height,
-    justifyContent: spacing,
+    ...distributionStyle(axis, distribution),
   };
 
   return (
@@ -45,7 +60,7 @@ export function Container({
           setNodeRef(el);
           registerRef?.(el);
         }}
-        className={`container container--${axis}${dashed ? " container--dashed" : ""}${isOver ? " is-over" : ""}${highlighted ? " is-arrow-target" : ""}`}
+        className={`container container--${axis}${dashed ? " container--dashed" : ""}${showBox ? "" : " container--boxless"}${isOver ? " is-over" : ""}${highlighted ? " is-arrow-target" : ""}`}
         style={style}
         onContextMenu={onContextMenu}
       >

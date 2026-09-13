@@ -60,7 +60,7 @@ export function SortableColumn() {
           items={items}
           strategy={verticalListSortingStrategy}
           axis="column"
-          spacing={spacing}
+          distribution={{ mode: "distribute", scheme: spacing }}
           size={{ width: 200, height: 460 }}
         >
           {items.map((id) => (

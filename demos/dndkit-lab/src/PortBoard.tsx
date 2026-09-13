@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent, ReactNode } from "react";
 
 import { CardPreview, FreeCard, SortableCard } from "./Card";
-import { Container } from "./Container";
+import { Container, EdgeLineMark } from "./Container";
 import {
   CONTAINER_BORDER,
   CONTAINER_PADDING,
@@ -25,9 +25,9 @@ import {
   type Point,
 } from "./layout";
 import { SpacingControl } from "./SpacingControl";
-import type { Direction, Orientation, Size, SpacingScheme } from "./types";
+import type { Direction, EdgeSide, Orientation, Size, SpacingScheme } from "./types";
 
-type ContainerId = "top" | "right" | "bottom" | "left";
+type ContainerId = EdgeSide;
 const CONTAINER_IDS: ContainerId[] = ["top", "right", "bottom", "left"];
 
 const AXIS: Record<ContainerId, "row" | "column"> = {
@@ -230,10 +230,6 @@ function computeEdgeLine(containerId: ContainerId, rect: DOMRect, boardRect: DOM
     return { orientation: "h", pos: top + rect.height / 2, from: left, to: left + rect.width };
   }
   return { orientation: "v", pos: left + rect.width / 2, from: top, to: top + rect.height };
-}
-
-function EdgeLineMark({ axis }: { axis: "row" | "column" }) {
-  return <div className={`edge-line edge-line--${axis === "row" ? "horizontal" : "vertical"}`} />;
 }
 
 function FreeContainer({
@@ -668,7 +664,7 @@ export function PortBoard() {
         items={items[id]}
         strategy={strategy}
         axis={axis}
-        spacing={spacing}
+        distribution={{ mode: "distribute", scheme: spacing }}
         size={CONTAINER_SIZE[id]}
         dashed
         highlighted={highlighted}
