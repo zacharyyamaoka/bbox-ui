@@ -16,7 +16,14 @@
  * imports an engine, so it structurally cannot make that mistake.
  */
 
-export type FieldKind = "segments" | "number" | "toggle" | "text";
+// WHY "textarea" is its own kind rather than a flag on "text": every
+// consumer that switches on FieldKind (this file's own doc comment on
+// `Record<FieldKind, ...>`-shaped tables) is FORCED to decide what a
+// multi-line control looks like the moment this union widens — a boolean
+// `multiline?: true` on the existing "text" kind would have let every one
+// of those switches keep compiling and silently render a single-line input
+// for TextBox's `children` once `lines="multi"`. See docs/TEXTBOX-EDITING-SPEC.md §2.
+export type FieldKind = "segments" | "number" | "toggle" | "text" | "textarea";
 
 export type FieldValue = string | number | boolean;
 

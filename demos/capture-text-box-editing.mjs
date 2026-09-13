@@ -1,0 +1,1095 @@
+#!/usr/bin/env node
+/**
+ * Drives bbox-ui.com/create in headless Chrome over raw CDP and PROVES the
+ * TextBox editing half end to end (docs/TEXTBOX-EDITING-SPEC.md §4), for
+ * each of the three renders (DOM, React Flow, tldraw):
+ *
+ *  1. pick the Block bench, select the Header's Left slot fill via the
+ *     navigator, add a TextBox to it through the Members control;
+ *  2. it renders inside the header Bar ([data-slot="bar"][data-edge="bottom"])
+ *     with NO dashed frame;
+ *  3. click it → selected; click again → editing, autofocused, control's
+ *     box matches the resting text's box within 1px;
+ *  4. type "Hello slot", Enter → committed, resting text AND the
+ *     inspector's Text field both read it;
+ *  5. click again, type "zzz", Escape → still "Hello slot" (cancel restores);
+ *  6. lines → multi in the inspector, click to edit, "a", Enter (native
+ *     newline), "b" → textarea value has a newline; Ctrl+Enter → committed,
+ *     rendered on two lines;
+ *  7. reactflow/tldraw only: press the resting text and drag 80px → the
+ *     node moved, no text selection;
+ *  9. (both themes, DOM render, a bare top-level TextBox — polish pass)
+ *     the DOM root wrapper's own two-click gesture opens editing, and the
+ *     control's ring resolves to --bbox-ring/--bbox-accent, not
+ *     currentColor.
+ *
+ * Every assertion reads the real DOM (getBoundingClientRect, textContent,
+ * a control's own .value, computed style) or genuine instance state via the
+ * inspector — never a screenshot's own claim. Screenshots are additional
+ * evidence, captured at each numbered step. Never types the headless
+ * browser binary's name directly in a Bash command — this file is invoked
+ * from Node, exactly like demos/capture-tree-and-slots.mjs.
+ *
+ * Usage: node demos/capture-text-box-editing.mjs <url> <outDir>
+ */
+import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+const [, , url, outDirArg] = process.argv;
+if (!url || !outDirArg) {
+  console.error("usage: node demos/capture-text-box-editing.mjs <url> <outDir>");
+  process.exit(2);
+}
+const outDir = path.resolve(outDirArg);
+mkdirSync(outDir, { recursive: true });
+mkdirSync(path.join(outDir, "hero"), { recursive: true });
+
+const profile = mkdtempSync(path.join(tmpdir(), "bbox-chrome-tbe-"));
+const chrome = spawn(
+  "/usr/bin/google-chrome",
+  ["--headless=new", "--no-first-run", "--disable-gpu", "--hide-scrollbars", `--user-data-dir=${profile}`, "--remote-debugging-port=0", "--window-size=1440,960", "about:blank"],
+  { stdio: ["ignore", "ignore", "pipe"] },
+);
+const wsUrl = await new Promise((resolve, reject) => {
+  let buffer = "";
+  const timer = setTimeout(() => reject(new Error("chrome did not start")), 15000);
+  chrome.stderr.on("data", (chunk) => {
+    buffer += chunk;
+    const match = buffer.match(/DevTools listening on (ws:\/\/\S+)/);
+    if (match) {
+      clearTimeout(timer);
+      resolve(match[1]);
+    }
+  });
+});
+const browser = new WebSocket(wsUrl);
+await new Promise((resolve) => (browser.onopen = resolve));
+let nextId = 0;
+const pending = new Map();
+let sessionId = null;
+const consoleErrors = [];
+browser.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  if (message.id != null && pending.has(message.id)) {
+    const { resolve, reject } = pending.get(message.id);
+    pending.delete(message.id);
+    message.error ? reject(new Error(message.error.message)) : resolve(message.result);
+  } else if (message.method === "Runtime.consoleAPICalled" && (message.params.type === "error" || message.params.type === "warning")) {
+    consoleErrors.push(message.params.args.map((a) => a.value ?? a.description ?? "").join(" ").slice(0, 300));
+  } else if (message.method === "Runtime.exceptionThrown") {
+    consoleErrors.push("EXCEPTION " + (message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text).slice(0, 300));
+  }
+};
+function takeConsole() {
+  const out = consoleErrors.splice(0);
+  return Array.from(new Set(out));
+}
+function send(method, params = {}, useSession = true) {
+  const id = ++nextId;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    const payload = { id, method, params };
+    if (useSession && sessionId) payload.sessionId = sessionId;
+    browser.send(JSON.stringify(payload));
+  });
+}
+const { targetId } = await send("Target.createTarget", { url: "about:blank" }, false);
+({ sessionId } = await send("Target.attachToTarget", { targetId, flatten: true }, false));
+await send("Runtime.enable");
+await send("Page.enable");
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function evaluate(expression) {
+  const { result, exceptionDetails } = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
+  if (exceptionDetails) throw new Error(exceptionDetails.exception?.description ?? "evaluate failed");
+  return result.value;
+}
+async function waitFor(selector, timeout = 30000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (await evaluate(`!!document.querySelector(${JSON.stringify(selector)})`)) return;
+    await sleep(120);
+  }
+  throw new Error(`timed out waiting for ${selector}`);
+}
+async function rectOf(selector) {
+  return evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) throw new Error("not found: " + ${JSON.stringify(selector)});
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height, left: r.left, top: r.top };
+  })()`);
+}
+const MOD = { shift: 8, ctrl: 2 };
+async function mouse(type, x, y, modifiers = 0) {
+  await send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1, modifiers });
+}
+async function press(selector, mods = {}) {
+  const r = await rectOf(selector);
+  const modifiers = (mods.shift ? MOD.shift : 0) | (mods.ctrl ? MOD.ctrl : 0);
+  await mouse("mouseMoved", r.x, r.y, modifiers);
+  await mouse("mousePressed", r.x, r.y, modifiers);
+  await sleep(30);
+  await mouse("mouseReleased", r.x, r.y, modifiers);
+  await sleep(200);
+  return r;
+}
+/** A real right-click (button "right", `mouseUp`/`mouseDown` — NOT the
+ *  `mouse()` helper above, which hardcodes "left") at a selector's own
+ *  centre. Chromium synthesizes a genuine, trusted `contextmenu` event
+ *  from this the same way an actual right-click would (verify round 3
+ *  F1's own repro tool, /tmp/tbe-probe.mjs, confirmed this over CDP). */
+async function rightClick(selector) {
+  const r = await rectOf(selector);
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: r.x, y: r.y, button: "none" });
+  await send("Input.dispatchMouseEvent", { type: "mousePressed", x: r.x, y: r.y, button: "right", buttons: 2, clickCount: 1 });
+  await sleep(30);
+  await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: r.x, y: r.y, button: "right", buttons: 0, clickCount: 1 });
+  await sleep(200);
+  return r;
+}
+/** Same gesture as `press`, at a raw viewport point rather than a
+ *  selector's own rect — for a click that must land on bare canvas
+ *  content with no element of its own to query (verify-round-1, F4). */
+async function pressAt(x, y, mods = {}) {
+  const modifiers = (mods.shift ? MOD.shift : 0) | (mods.ctrl ? MOD.ctrl : 0);
+  await mouse("mouseMoved", x, y, modifiers);
+  await mouse("mousePressed", x, y, modifiers);
+  await sleep(30);
+  await mouse("mouseReleased", x, y, modifiers);
+  await sleep(250);
+}
+/** Scans a grid inside `nodeSelector`'s own rect for a point that lands
+ *  inside NONE of the page's `[data-slot="member-instance"]` rects — the
+ *  Block's own bare padding, wherever the current layout happens to put
+ *  it, rather than a hand-guessed coordinate that could start landing on
+ *  a member the moment the fixture's layout changes. */
+async function findBarePoint(nodeSelector) {
+  return evaluate(`(() => {
+    const node = document.querySelector(${JSON.stringify(nodeSelector)});
+    if (!node) throw new Error("not found: " + ${JSON.stringify(nodeSelector)});
+    const r = node.getBoundingClientRect();
+    const members = Array.from(document.querySelectorAll('[data-slot="member-instance"]')).map((m) => m.getBoundingClientRect());
+    const insideAnyMember = (x, y) => members.some((m) => x >= m.left && x <= m.right && y >= m.top && y <= m.bottom);
+    for (let fy = 0.03; fy <= 0.97; fy += 0.02) {
+      for (let fx = 0.03; fx <= 0.97; fx += 0.02) {
+        const x = r.left + r.width * fx;
+        const y = r.top + r.height * fy;
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom && !insideAnyMember(x, y)) return { x, y };
+      }
+    }
+    return null;
+  })()`);
+}
+async function click(selector) {
+  await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error("not found: " + ${JSON.stringify(selector)}); el.click(); })()`);
+  await sleep(150);
+}
+async function drag(from, to, steps = 16, holdMs = 40) {
+  await mouse("mouseMoved", from.x, from.y);
+  await mouse("mousePressed", from.x, from.y);
+  await sleep(holdMs);
+  for (let i = 1; i <= steps; i++) {
+    await mouse("mouseMoved", from.x + ((to.x - from.x) * i) / steps, from.y + ((to.y - from.y) * i) / steps);
+    await sleep(25);
+  }
+  await sleep(80);
+  await mouse("mouseReleased", to.x, to.y);
+  await sleep(300);
+}
+async function setSelect(selector, value) {
+  await evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) throw new Error("not found: " + ${JSON.stringify(selector)});
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(el, ${JSON.stringify(value)});
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  })()`);
+  await sleep(220);
+}
+const VK = { Enter: 13, Escape: 27 };
+// WHY `text: "\r"` on Enter: CDP's keyDown only triggers a native default
+// action (like a textarea's own newline insertion) when the event carries
+// a `text` payload — without it, Chromium dispatches the key event but
+// performs no native text-editing side effect at all (confirmed empirically:
+// omitting it produced a keydown with no visible effect whatsoever, neither
+// commit nor newline). Escape has no such native default action to trigger.
+const KEY_TEXT = { Enter: "\r" };
+async function key(name, mods = {}) {
+  const modifiers = (mods.shift ? MOD.shift : 0) | (mods.ctrl ? MOD.ctrl : 0);
+  await send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: name,
+    code: name,
+    windowsVirtualKeyCode: VK[name],
+    modifiers,
+    ...(KEY_TEXT[name] ? { text: KEY_TEXT[name] } : {}),
+  });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: name, code: name, windowsVirtualKeyCode: VK[name], modifiers });
+  await sleep(160);
+}
+/** Types into whatever the page currently has focused, one character of
+ *  Input.insertText per key — the same idiom demos/drive-playground-inspector.mjs
+ *  uses to drive a real text field: it fires a genuine `input` event React's
+ *  controlled inputs listen for, with no synthetic keydown noise to filter. */
+async function typeText(text) {
+  for (const ch of text) {
+    await send("Input.insertText", { text: ch });
+    await sleep(35);
+  }
+}
+async function screenshot(name, clip) {
+  const params = { format: "png" };
+  if (clip) params.clip = { x: clip.left, y: clip.top, width: clip.w, height: clip.h, scale: 1 };
+  const { data } = await send("Page.captureScreenshot", params);
+  writeFileSync(path.join(outDir, `${name}.png`), Buffer.from(data, "base64"));
+  return `${name}.png`;
+}
+// WHY a full-viewport frame and not the header clip `screenshot()` above
+// uses everywhere else: the hero clip's whole point (item 1, the polish
+// pass) is showing the tldraw CANVAS around the editing TextBox — the
+// board, the selection outline, the shape — not just the cropped slot
+// content the per-step assertion screenshots already capture. Same
+// full-viewport idiom as demos/capture-tree-and-slots.mjs's own `hero()`.
+let heroFrame = 0;
+async function hero() {
+  const { data } = await send("Page.captureScreenshot", { format: "png" });
+  writeFileSync(path.join(outDir, "hero", `${String(heroFrame++).padStart(3, "0")}.png`), Buffer.from(data, "base64"));
+}
+
+const results = []; // { render, step, name, pass, detail }
+let currentRender = "?";
+function record(step, name, pass, detail) {
+  results.push({ render: currentRender, step, name, pass: !!pass, detail: String(detail ?? "") });
+  const mark = pass ? "ok" : "FAIL";
+  console.log(`  [${currentRender}] ${step} ${mark} — ${name}${detail ? ": " + detail : ""}`);
+}
+function assertStep(step, name, cond, detail) {
+  record(step, name, cond, detail);
+  return cond;
+}
+
+process.on("uncaughtException", async (err) => {
+  try {
+    const { data } = await send("Page.captureScreenshot", { format: "png" });
+    writeFileSync(path.join(outDir, `FAILED-${currentRender}.png`), Buffer.from(data, "base64"));
+  } catch {}
+  console.error(err);
+  writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify({ results, crashed: String(err) }, null, 2));
+  chrome.kill();
+  process.exit(1);
+});
+
+// ---- readers: the page's own DOM is the oracle ----------------------------
+const navRows = () =>
+  evaluate(`Array.from(document.querySelectorAll('[data-slot="instance-navigator"] [data-slot="nav-row"]')).map(e => ({
+    id: e.getAttribute('data-instance-id'),
+    type: e.getAttribute('data-instance-type'),
+    depth: Number(e.getAttribute('data-depth')),
+    selected: e.getAttribute('data-selected') === 'true',
+    title: e.querySelector('[data-slot="nav-title"]')?.textContent?.trim() ?? null,
+  }))`);
+const rowSel = (id) => `[data-slot="instance-navigator"] [data-slot="nav-row"][data-instance-id="${id}"]`;
+const selectedRows = async () => (await navRows()).filter((r) => r.selected).map((r) => r.id);
+// FigmaDense — the DEFAULT inspector variant this journey drives — now has
+// a real `<textarea>` branch for the "textarea" kind too (verify-round-1
+// fix for F5: it used to fall through to a single-line `<input>`, which
+// silently strips a committed multi-line value's newline the moment this
+// panel next touches the field). `inspectorTextControl` reads the tag
+// itself so step 6 can assert it directly rather than only reading value.
+const inspectorTextControl = () => evaluate(`document.querySelector('[data-field="children"] textarea, [data-field="children"] input')?.tagName ?? null`);
+const inspectorTextValue = () => evaluate(`(document.querySelector('[data-field="children"] textarea, [data-field="children"] input'))?.value ?? null`);
+const inspectorName = () => evaluate(`document.querySelector('[data-slot="figma-dense-header"] span')?.textContent ?? null`);
+/** Best-effort opens whatever affordance the CURRENT panel variant hides
+ *  the "children" field's real control behind, then reports the tag that
+ *  is now actually there for it (verify round 1, F1/F2 sweep, step 6c):
+ *  FigmaDense/Tiered tier-gate some fields behind an Expert toggle;
+ *  FilterFirst starts every row collapsed to a summary line; RowPopover's
+ *  real control lives in a separate popover opened by a trigger button.
+ *  Both of the latter are exactly one `<button>` inside the field's own
+ *  `[data-field="children"]` region, so a single generic click covers
+ *  both without a per-variant branch. */
+async function revealChildrenControl() {
+  await evaluate(`Array.from(document.querySelectorAll('[data-slot="tier-button"]')).find(b => /expert/i.test(b.textContent))?.click()`);
+  await sleep(150);
+  let tag = await inspectorTextControl();
+  if (!tag) {
+    await evaluate(`document.querySelector('[data-field="children"] button')?.click()`);
+    await sleep(200);
+    tag = await inspectorTextControl();
+  }
+  return tag;
+}
+
+/** The instance the resting box currently shows, however it is nested —
+ *  member-instance wraps every non-root instance, `display: contents`, so
+ *  its own rect is meaningless; the box under it is the real element. */
+const textBoxSel = (id) => `[data-slot="member-instance"][data-instance-id="${id}"] [data-slot="text-box"]`;
+const controlSel = (id) => `[data-slot="member-instance"][data-instance-id="${id}"] [data-slot="text-box-input"]`;
+const restingText = (id) => evaluate(`document.querySelector(${JSON.stringify(textBoxSel(id))})?.textContent ?? null`);
+
+/** Walks from the TextBox's own element up to (not including) the given
+ *  ancestor selector, and reports whether ANY of them computes a dashed
+ *  border — the "no dashed frame" assertion, done as a real style read
+ *  rather than trusting that skipping the bench's 220px wrapper div was
+ *  enough (an ancestor further up could still be dashed by accident). */
+async function dashedAncestor(instanceId, stopAtSelector) {
+  return evaluate(`(() => {
+    let el = document.querySelector(${JSON.stringify(textBoxSel(instanceId))});
+    const stop = document.querySelector(${JSON.stringify(stopAtSelector)});
+    const seen = [];
+    while (el && el !== stop && el !== document.body) {
+      const cs = getComputedStyle(el);
+      seen.push({ tag: el.tagName, borderStyle: cs.borderStyle, dataSlot: el.getAttribute('data-slot') });
+      if (/dashed/.test(cs.borderStyle)) return { dashed: true, at: el.getAttribute('data-slot') || el.tagName, seen };
+      el = el.parentElement;
+    }
+    return { dashed: false, seen };
+  })()`);
+}
+
+// WHY: a repro string too short to overflow the slot would let a broken
+// `lines: "single"` recipe pass silently (verify-round-2 F1) — this string
+// is deliberately far wider than any real Header/Left slot fill.
+const TRUNCATION_REPRO_TEXT = "A fairly long single-line label that must truncate";
+
+/**
+ * Proves `lines: "single"`'s "truthful truncation" recipe actually PAINTS,
+ * not merely that the style object carries the right property names
+ * (verify-round-2 F1: a unit test pinning `style.textOverflow === "ellipsis"`
+ * on the OLD `inline-flex` root stayed green while Chromium silently
+ * no-oped it — `text-overflow` only ever applies to a BLOCK container).
+ * Three real-DOM signals, none of them trusting a style object's claim:
+ *   1. the box is genuinely narrower than its text (`scrollWidth >
+ *      clientWidth` on the real `text-box-content` element) — otherwise
+ *      every assertion below would trivially pass for the wrong reason;
+ *   2. the content wrapper actually computes as `display: block` with
+ *      `overflow: hidden` / `text-overflow: ellipsis` / `white-space:
+ *      nowrap` — a real block container carrying the recipe, not the flex
+ *      root;
+ *   3. the FIRST character of the text renders at/after the box's own
+ *      left edge — this is the exact shape of the old bug: with the recipe
+ *      stuck on the flex root and `justify: "middle"` centering an
+ *      overflowing line, the audit measured the first character 105px to
+ *      the LEFT of the box (`textLeft: -105`), i.e. hard-clipped on BOTH
+ *      sides with no ellipsis glyph at all. A first character flush with
+ *      (or to the right of) the box's left edge is only possible once the
+ *      overflowing line has been re-anchored to the box, which is what
+ *      block-level `text-overflow` does and flex-level never did.
+ */
+async function assertTruthfulTruncation(step, instanceId) {
+  const boxSel = textBoxSel(instanceId);
+  const contentSel = `${boxSel} [data-slot="text-box-content"]`;
+  const geom = await evaluate(`(() => {
+    const box = document.querySelector(${JSON.stringify(boxSel)});
+    const contentEl = document.querySelector(${JSON.stringify(contentSel)});
+    if (!box || !contentEl) return null;
+    const boxRect = box.getBoundingClientRect();
+    const cs = getComputedStyle(contentEl);
+    const textNode = Array.from(contentEl.childNodes).find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.length > 0);
+    let firstCharLeft = null;
+    if (textNode) {
+      const range = document.createRange();
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, 1);
+      firstCharLeft = range.getBoundingClientRect().left;
+    }
+    return {
+      boxLeft: boxRect.left,
+      scrollWidth: contentEl.scrollWidth,
+      clientWidth: contentEl.clientWidth,
+      display: cs.display,
+      overflow: cs.overflow,
+      whiteSpace: cs.whiteSpace,
+      textOverflow: cs.textOverflow,
+      firstCharLeft,
+      text: contentEl.textContent,
+    };
+  })()`);
+  if (!geom) throw new Error(`truncation probe found no ${contentSel}`);
+  assertStep(step, "content wrapper actually overflows its own box (repro string is wider than the slot)", geom.scrollWidth > geom.clientWidth + 4, `scroll=${geom.scrollWidth} client=${geom.clientWidth}`);
+  assertStep(step, "content wrapper is a real block container carrying nowrap/hidden/ellipsis", geom.display === "block" && geom.whiteSpace === "nowrap" && geom.overflow === "hidden" && geom.textOverflow === "ellipsis", JSON.stringify(geom));
+  assertStep(
+    step,
+    "truthful truncation: first character renders at/after the box's own left edge — no symmetric hard-clip hiding the start of the text",
+    geom.firstCharLeft == null || geom.firstCharLeft >= geom.boxLeft - 2,
+    `firstCharLeft=${geom.firstCharLeft?.toFixed?.(1)} boxLeft=${geom.boxLeft.toFixed(1)} text=${JSON.stringify(geom.text)}`,
+  );
+}
+
+async function load(theme, component) {
+  await send("Page.navigate", { url });
+  await waitFor('[data-slot="create-workbench"]');
+  await evaluate(`(() => { localStorage.clear(); localStorage.setItem("theme", ${JSON.stringify(theme)}); })()`);
+  await send("Page.navigate", { url });
+  await waitFor('[data-slot="component-picker"]');
+  await sleep(500);
+  await setSelect('[data-slot="component-picker"]', component);
+  await waitFor('[data-slot="instance-navigator"]');
+  // WHY no navigator-picker/layout-picker setSelect here any more: main
+  // independently consolidated both switchers to a single fixed choice
+  // (react-arborist, Inline rows — apps/docs/src/components/create/
+  // navigator/index.ts's own doc comment, "Apply the picks") while this
+  // branch was in flight. There is no picker left to set; what ships is
+  // already the one this journey exercises.
+  await sleep(300);
+  takeConsole();
+}
+const CANVAS_READY_SEL = { dom: '[data-slot="dom-instance"]', reactflow: '[data-slot="rf-instance"]', tldraw: '[data-slot="tl-instance"]' };
+async function switchRender(id) {
+  await click(`[data-slot="render-tab"][data-render="${id}"]`);
+  await waitFor(CANVAS_READY_SEL[id]);
+  // tldraw/React Flow mount their store and shapes/nodes asynchronously
+  // after the selector above first appears; give the canvas a beat to
+  // settle before reading geometry off it.
+  await sleep(id === "dom" ? 150 : 700);
+}
+/** Selects a slot fill by walking a path of titles down the navigator's own
+ *  flattened, pre-order rows ("Header", "Left") through the same click
+ *  surface a person uses — never a direct setSelection call the panel
+ *  doesn't expose to a user.
+ *
+ *  WHY a path instead of a single title lookup (this replaced
+ *  `selectByTitle("Header · left")`): main's 2026-09-11 "Header · Body ·
+ *  Footer, one Bar" restructure (packages/panel/src/bench.tsx's
+ *  `BLOCK_SLOTS`/`BAR_SLOTS`) regrouped the Block's flat "Header · left"
+ *  slot into a Header Bar whose OWN three cells are separately titled
+ *  "Left"/"Center"/"Right" — and the Footer Bar carries an identical set of
+ *  three, so a bare title match is ambiguous (confirmed live: the
+ *  navigator reads Block › Header › Left · Center · Right › Body › Footer
+ *  › Left · Center · Right). Each path segment is matched at the depth
+ *  directly under the previous segment's own row, scoped to that row's
+ *  subtree (bounded by the next row at its depth or shallower), so
+ *  "Header","Left" can never land on the Footer's identically-titled row. */
+async function selectByPath(...titles) {
+  const rows = await navRows();
+  // Every path this journey uses names something under the bench's single
+  // root instance (depth 0) — start the search at its first child.
+  let scopeStart = 1;
+  let scopeEnd = rows.length;
+  let match = null;
+  for (const title of titles) {
+    const childDepth = rows[scopeStart]?.depth;
+    match = null;
+    for (let i = scopeStart; i < scopeEnd; i++) {
+      const r = rows[i];
+      if (r.depth < childDepth) break; // left the current scope
+      if (r.depth === childDepth && r.title === title) {
+        match = r;
+        break;
+      }
+    }
+    if (!match) {
+      const already = titles.slice(0, titles.indexOf(title)).join(" > ") || "root";
+      throw new Error(`no nav row titled "${title}" directly under [${already}] (have: ${rows.map((r) => `${"  ".repeat(r.depth)}${r.title}`).join(" | ")})`);
+    }
+    const matchIdx = rows.indexOf(match);
+    let nextEnd = matchIdx + 1;
+    while (nextEnd < scopeEnd && rows[nextEnd].depth > match.depth) nextEnd++;
+    scopeStart = matchIdx + 1;
+    scopeEnd = nextEnd;
+  }
+  await press(rowSel(match.id));
+  return match.id;
+}
+/** Ids of every row currently in the navigator — used to diff before/after
+ *  a member add. WHY not read the selection instead (this journey's
+ *  original approach): main's 2026-09-11 "Add stays put" policy
+ *  (apps/docs/src/components/create/workbench.tsx's `addMember` — Zach:
+ *  "when you add a new thing, please stay at the same level, don't click
+ *  into it") deliberately keeps the PARENT selected after an add rather
+ *  than jumping into the new child, which this branch's original journey
+ *  (verified before that policy landed) assumed. */
+async function allInstanceIds() {
+  return (await navRows()).map((r) => r.id);
+}
+/** Adds a TextBox to the currently-selected slot fill via the Members
+ *  control and returns the new row (id + type), found by diffing the
+ *  navigator's rows before/after rather than by reading the selection —
+ *  see `allInstanceIds`'s own WHY. */
+async function addTextBoxAndGetId() {
+  const before = new Set(await allInstanceIds());
+  await addTextBox();
+  const after = await navRows();
+  const created = after.filter((r) => !before.has(r.id));
+  if (created.length !== 1) throw new Error(`expected exactly one new nav row after addTextBox, got ${JSON.stringify(created)}`);
+  return created[0];
+}
+/** The "inline" inspector layout starts an EMPTY member list collapsed
+ *  (docs InlineRows.tsx) — the Add trigger lives inside its
+ *  CollapsibleContent, unmounted until opened. Same idiom
+ *  demos/capture-tree-and-slots.mjs's `reveal()` uses. */
+async function reveal() {
+  await evaluate(`(() => { const closed = document.querySelectorAll('[data-slot="inline-list-row"][aria-expanded="false"]'); closed.forEach(b => b.click()); return closed.length; })()`);
+  await sleep(300);
+}
+/** Add `type` to the currently-selected subject's (only) members list via
+ *  the Members control — same idiom as demos/capture-tree-and-slots.mjs's
+ *  `addVia`, narrowed to listIndex 0 since a slot fill carries exactly one
+ *  list (its own). */
+async function addTextBox() {
+  const sections = await evaluate(`document.querySelectorAll('[data-slot="members-section"]').length`);
+  if (sections === 0) throw new Error("no members-section for the selected slot fill");
+  await evaluate(`document.querySelector('[data-slot="members-section"]').querySelector('[data-slot="add-member-trigger"]').click()`);
+  await sleep(150);
+  const hasMenuItem = await evaluate(`!!document.querySelector('[data-slot="members-section"] [data-slot="add-member-type"][data-type="TextBox"]')`);
+  if (hasMenuItem) await evaluate(`document.querySelector('[data-slot="members-section"] [data-slot="add-member-type"][data-type="TextBox"]').click()`);
+  await sleep(250);
+}
+
+const RENDERS = ["dom", "reactflow", "tldraw"];
+const manifest = { renders: {} };
+
+for (const renderId of RENDERS) {
+  currentRender = renderId;
+  console.log(`\n=== ${renderId} ===`);
+  await load("dark", "Block");
+  await switchRender(renderId);
+
+  // ---- step 1: add a TextBox to the Header's Left slot ------------------
+  const flexId = await selectByPath("Header", "Left");
+  assertStep(1, "selected the Header's Left slot fill", (await selectedRows()).join() === flexId, flexId);
+  await reveal();
+  const newRow = await addTextBoxAndGetId();
+  const textBoxId = newRow.id;
+  assertStep(1, "adding a TextBox creates exactly one new instance", !!newRow, textBoxId);
+  assertStep(1, "the new instance is a TextBox", newRow.type === "TextBox", newRow.type);
+  // WHY this checks the SLOT stayed selected, not the new child: main's
+  // 2026-09-11 "Add stays put" policy (see `allInstanceIds`'s own WHY) —
+  // asserting the old auto-select behaviour here would be asserting a real,
+  // later product decision is a bug.
+  const selAfterAdd = await selectedRows();
+  assertStep(1, "adding a member leaves the slot fill selected (2026-09-11 'Add stays put' policy), not the new child", selAfterAdd.join() === flexId, selAfterAdd.join());
+  // The click a person makes right after adding it — reaches the same
+  // sole-selected state the rest of this journey (and the two-click-edit
+  // gesture) needs, via the navigator's own selection surface rather than
+  // a direct setSelection call.
+  await press(rowSel(textBoxId));
+  const selAfterExplicit = await selectedRows();
+  assertStep(1, "clicking the newly added TextBox row selects it", selAfterExplicit.join() === textBoxId, selAfterExplicit.join());
+
+  // ---- step 2: bare in the header, no dashed frame ----------------------
+  // WHY `[data-slot="bar"][data-edge="bottom"]` and not `[data-slot=
+  // "block-header"]`: main's 2026-09-11 restructure replaced the Block's
+  // own header wrapper with a `Bar` shared by header and footer
+  // (packages/bbox-ui/src/bar.tsx) — a header Bar is the one with
+  // `data-edge="bottom"` (its dividing line sits toward the body), a
+  // footer Bar `data-edge="top"`; `block-header` no longer exists in the
+  // DOM (confirmed live).
+  const HEADER_BAR_SEL = '[data-slot="bar"][data-edge="bottom"]';
+  const inHeaderSelector = `${HEADER_BAR_SEL} ${textBoxSel(textBoxId)}`;
+  const inHeader = await evaluate(`!!document.querySelector(${JSON.stringify(inHeaderSelector)})`);
+  assertStep(2, "TextBox renders inside the header Bar [data-slot=bar][data-edge=bottom]", inHeader, inHeader);
+  const frame = await dashedAncestor(textBoxId, HEADER_BAR_SEL);
+  assertStep(2, "no dashed frame between the TextBox and the header", !frame.dashed, frame.dashed ? `dashed at ${frame.at}` : "clean");
+  const headerClip = await rectOf(HEADER_BAR_SEL);
+  await screenshot(`${renderId}-1-added`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+
+  // ---- step 2b (verify-round-2 F1): truthful truncation ------------------
+  // The TextBox is still the sole-selected instance from `addTextBox` above
+  // (step 3's own deselect below is what turns the NEXT press into a first
+  // click) — one press here is enough to request editing directly.
+  await press(textBoxSel(textBoxId));
+  await sleep(150);
+  await typeText(TRUNCATION_REPRO_TEXT);
+  await key("Enter");
+  await sleep(250);
+  await assertTruthfulTruncation(2, textBoxId);
+  await screenshot(`${renderId}-1b-truncated`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+
+  // Deselect so "click it" (step 3) is a genuine first press, not an
+  // already-sole-selected one (step 1 explicitly selected the TextBox to
+  // drive the truncation repro above).
+  await selectByPath("Header", "Left");
+
+  // ---- step 3: click selects, click again edits -------------------------
+  // WHY tldraw only: item 1's hero clip is specifically the DoD's
+  // "click again → editing; type; Enter → commits" beat happening ON THE
+  // CANVAS — the render where a viewer can actually see the tldraw board,
+  // the shape's selection outline and the in-place control together. DOM
+  // and React Flow run the identical assertions with no hero capture.
+  const isHero = renderId === "tldraw";
+  const restRect = await rectOf(textBoxSel(textBoxId));
+  if (isHero) await hero(); // frame: deselected, resting text
+  await press(textBoxSel(textBoxId));
+  const selAfter1 = await selectedRows();
+  assertStep(3, "first click selects the TextBox", selAfter1.join() === textBoxId, selAfter1.join());
+  if (isHero) await hero(); // frame: selected, not yet editing
+  await press(textBoxSel(textBoxId));
+  await sleep(150);
+  const hasControl = await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
+  assertStep(3, "second click mounts the editing control", hasControl, hasControl);
+  const isActive = await evaluate(`document.activeElement === document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
+  assertStep(3, "the control is document.activeElement", isActive, isActive);
+  const controlRect = hasControl ? await rectOf(controlSel(textBoxId)) : null;
+  const boxMatch = controlRect && Math.abs(controlRect.top - restRect.top) <= 1 && Math.abs(controlRect.left - restRect.left) <= 1 && Math.abs(controlRect.h - restRect.h) <= 1;
+  assertStep(
+    3,
+    "control's box matches the resting text's within 1px",
+    boxMatch,
+    controlRect ? `rest(${restRect.left.toFixed(1)},${restRect.top.toFixed(1)},h${restRect.h.toFixed(1)}) vs control(${controlRect.left.toFixed(1)},${controlRect.top.toFixed(1)},h${controlRect.h.toFixed(1)})` : "no control",
+  );
+  await screenshot(`${renderId}-2-editing`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+  if (isHero) {
+    await hero(); // frame: second click just landed, control mounted+focused, still empty
+    await hero(); // held a beat longer so the GIF doesn't blink past "editing started"
+  }
+
+  // ---- step 4: type, commit, both surfaces read it -----------------------
+  // WHY a per-character loop here instead of the shared `typeText` helper,
+  // ONLY for the hero render: a hero clip proving "type" needs to actually
+  // SHOW characters appearing one at a time — calling `typeText` and
+  // capturing a single frame afterward would show a jump-cut from empty to
+  // "Hello slot", not typing. Every other render (and every other typed
+  // string in this file) keeps using the plain `typeText` helper.
+  if (isHero) {
+    for (const ch of "Hello slot") {
+      await send("Input.insertText", { text: ch });
+      await sleep(35);
+      await hero();
+    }
+  } else {
+    await typeText("Hello slot");
+  }
+  const midValue = await evaluate(`document.querySelector(${JSON.stringify(controlSel(textBoxId))})?.value ?? null`);
+  assertStep(4, "onChange write-through: control reads the typed value", midValue === "Hello slot", midValue);
+  if (isHero) await hero(); // frame: fully typed, still editing, held before Enter
+  await key("Enter");
+  await sleep(250);
+  const controlGoneAfterCommit = !(await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`));
+  assertStep(4, "Enter committed: the input is gone", controlGoneAfterCommit, controlGoneAfterCommit);
+  if (isHero) {
+    await hero(); // frame: committed, resting text reads "Hello slot"
+    await hero();
+    await hero(); // held longest — the clip's resting end state
+  }
+  const restingAfterCommit = await restingText(textBoxId);
+  assertStep(4, "resting text reads Hello slot", restingAfterCommit === "Hello slot", restingAfterCommit);
+  const inspectorAfterCommit = await inspectorTextValue();
+  assertStep(4, "inspector's Text field reads Hello slot", inspectorAfterCommit === "Hello slot", inspectorAfterCommit);
+  await screenshot(`${renderId}-3-committed`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+
+  // ---- step 5: edit again, escape cancels ---------------------------------
+  await press(textBoxSel(textBoxId)); // already sole-selected + inlineEdit -> this ONE press requests editing
+  await sleep(150);
+  const hasControl5 = await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
+  assertStep(5, "click again re-enters editing", hasControl5, hasControl5);
+  // WHY "zzz" REPLACES "Hello slot" rather than appending: the spec's own
+  // mount rule for a single-line control is select-all (the shadcn/OS
+  // rename idiom) — typing over a fresh edit is meant to replace a short
+  // label, not append to it. Escape must still restore the PRE-edit value.
+  await typeText("zzz");
+  const mid5 = await evaluate(`document.querySelector(${JSON.stringify(controlSel(textBoxId))})?.value ?? null`);
+  assertStep(5, "single-line mount selects all: typing zzz replaces Hello slot", mid5 === "zzz", mid5);
+  await key("Escape");
+  await sleep(250);
+  const restingAfterCancel = await restingText(textBoxId);
+  assertStep(5, "Escape cancels: text is still Hello slot", restingAfterCancel === "Hello slot", restingAfterCancel);
+  await screenshot(`${renderId}-4-cancelled`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+
+  // ---- step 5b (verify round 3, F1): a right-click on the editing
+  // control must give the browser's own cut/copy/paste menu — leaving the
+  // control mounted, focused and untouched — never end editing or open a
+  // HOST's own context menu (tldraw's `useCanvasEvents` synthesized one
+  // from an unstopped pointerup). Runs on ALL THREE renders: DOM and
+  // React Flow were already correct here per the round-3 audit, and this
+  // proves they STAY that way while tldraw is fixed — a check scoped to
+  // tldraw alone could not catch a future regression that broke DOM or
+  // React Flow instead.
+  await press(textBoxSel(textBoxId)); // already sole-selected + inlineEdit -> re-enters editing
+  await sleep(150);
+  const hasControl5b = await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
+  assertStep(5, "F1 setup: re-entered editing", hasControl5b, hasControl5b);
+  await typeText("typed");
+  await rightClick(controlSel(textBoxId));
+  await sleep(200);
+  const stillMounted = await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
+  assertStep(5, "F1: right-click on the control leaves it mounted (no blur-triggered commit)", stillMounted, stillMounted);
+  const stillActive = stillMounted && (await evaluate(`document.activeElement === document.querySelector(${JSON.stringify(controlSel(textBoxId))})`));
+  assertStep(5, "F1: right-click on the control leaves it focused", stillActive, stillActive);
+  const noHostMenu = await evaluate(`!document.querySelector(".tlui-menu")`);
+  assertStep(5, "F1: right-click does not open a host context menu (e.g. tldraw's .tlui-menu)", noHostMenu, noHostMenu);
+  const valueAfterRightClick = stillMounted ? await evaluate(`document.querySelector(${JSON.stringify(controlSel(textBoxId))})?.value ?? null`) : null;
+  assertStep(5, "F1: right-click left the typed value untouched", valueAfterRightClick === "typed", valueAfterRightClick);
+  await screenshot(`${renderId}-4b-rightclick-still-editing`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 20 });
+  await key("Escape");
+  await sleep(250);
+  const restingAfter5b = await restingText(textBoxId);
+  assertStep(5, "F1 cleanup: Escape restores Hello slot", restingAfter5b === "Hello slot", restingAfter5b);
+
+  // ---- step 6: lines -> multi, newline, ctrl+enter commits, two lines ----
+  // Selection is still solely the TextBox (cancel ends editing, keeps
+  // selection) — the inspector shows its scalar fields with no member-list
+  // reveal needed (a leaf has no lists to fold). `lines`'s two options are
+  // both raw tokens (value === label), which the panel's tier rule files
+  // under Expert (same rule the tree-and-slots journey hits on Flex's
+  // `justify`) — show Expert to reach it, as a person would.
+  await evaluate(`Array.from(document.querySelectorAll('[data-slot="tier-button"]')).find(b => /expert/i.test(b.textContent))?.click()`);
+  await sleep(200);
+  const linesFieldVisible = await evaluate(`!!document.querySelector('[data-field="lines"]')`);
+  assertStep(6, "Expert tier reveals the lines field", linesFieldVisible, linesFieldVisible);
+  await evaluate(`(() => {
+    const row = document.querySelector('[data-field="lines"]');
+    if (!row) throw new Error("no lines field");
+    const btn = Array.from(row.querySelectorAll('button')).find(b => b.textContent.trim() === 'multi');
+    if (!btn) throw new Error("no multi option");
+    btn.click();
+  })()`);
+  await sleep(250);
+  const linesNow = await evaluate(`document.querySelector(${JSON.stringify(textBoxSel(textBoxId))})?.getAttribute('data-lines')`);
+  assertStep(6, "lines switched to multi", linesNow === "multi", linesNow);
+  await press(textBoxSel(textBoxId)); // sole-selected + inlineEdit -> edits directly
+  await sleep(150);
+  const hasTextarea = await evaluate(`document.querySelector(${JSON.stringify(controlSel(textBoxId))})?.tagName`);
+  assertStep(6, "editing control is now a textarea", hasTextarea === "TEXTAREA", hasTextarea);
+  await typeText("a");
+  await key("Enter"); // plain Enter on multi: native newline, not commit
+  await typeText("b");
+  const multiValue = await evaluate(`document.querySelector(${JSON.stringify(controlSel(textBoxId))})?.value ?? null`);
+  assertStep(6, "plain Enter inserted a newline (textarea value has one)", typeof multiValue === "string" && multiValue.includes("\n"), JSON.stringify(multiValue));
+  const controlStillThere = await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`);
+  assertStep(6, "plain Enter did not commit — still editing", controlStillThere, controlStillThere);
+  const singleLineHeight = restRect.h;
+  await key("Enter", { ctrl: true });
+  await sleep(250);
+  const controlGoneAfterCtrlEnter = !(await evaluate(`!!document.querySelector(${JSON.stringify(controlSel(textBoxId))})`));
+  assertStep(6, "Ctrl+Enter committed: the textarea is gone", controlGoneAfterCtrlEnter, controlGoneAfterCtrlEnter);
+  const restingMulti = await restingText(textBoxId);
+  assertStep(6, "rendered text contains the newline", typeof restingMulti === "string" && restingMulti.includes("\n"), JSON.stringify(restingMulti));
+  const multiRect = await rectOf(textBoxSel(textBoxId));
+  assertStep(6, "rendered on two lines (taller than the single-line box)", multiRect.h > singleLineHeight + 4, `single ${singleLineHeight.toFixed(1)} vs now ${multiRect.h.toFixed(1)}`);
+  await screenshot(`${renderId}-5-multiline`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(multiRect.top + multiRect.h - headerClip.top) + 20 });
+
+  // ---- step 6b (verify round 1, F5): the DEFAULT inspector's own Text
+  // field must be a real <textarea> for a "textarea" field, and a further
+  // keystroke made THROUGH that control must not silently drop the
+  // newline the canvas is currently showing (Zach's truthful-rendering
+  // rule; the panel's `<input>` fallback used to sanitize it away). ------
+  const inspectorTag = await inspectorTextControl();
+  assertStep(6, "the Text field's control for kind=textarea is a TEXTAREA (spec §2)", inspectorTag === "TEXTAREA", inspectorTag);
+  const inspectorMultiValue = await inspectorTextValue();
+  assertStep(6, "inspector's Text field shows the newline", typeof inspectorMultiValue === "string" && inspectorMultiValue.includes("\n"), JSON.stringify(inspectorMultiValue));
+  await click('[data-field="children"] textarea');
+  await evaluate(`(() => { const el = document.querySelector('[data-field="children"] textarea'); el.setSelectionRange(el.value.length, el.value.length); })()`);
+  await typeText("!");
+  await sleep(200);
+  const restingAfterInspectorKeystroke = await restingText(textBoxId);
+  assertStep(
+    6,
+    "ONE keystroke in the inspector keeps the newline in the instance",
+    typeof restingAfterInspectorKeystroke === "string" && restingAfterInspectorKeystroke.includes("\n"),
+    JSON.stringify(restingAfterInspectorKeystroke),
+  );
+
+  // ---- step 6c (verify round 1, F1/F2 sweep): every one of the six panel
+  // variants must render a REAL <textarea> for a "textarea" field that
+  // actually grows to its content and never drops a newline on the next
+  // keystroke made through it. F1 (FigmaDense's fixed `height: 22` beat
+  // `fieldSizing: content`, clipping everything past the first line) and
+  // F2 (IconStrip's `FieldText` always used a single-line `<input>`, whose
+  // native value sanitization strips newlines outright) were each found
+  // in exactly ONE of the six — this sweeps all six so neither class of
+  // bug can come back unnoticed in a variant this journey does not happen
+  // to be sitting on. Panel choice is independent of canvas render, so
+  // this runs once, on "dom". ---------------------------------------------
+  if (renderId === "dom") {
+    const pickerPresent = await evaluate(`!!document.querySelector('[data-slot="variant-picker"]')`);
+    assertStep(6, "variant picker is present for the sweep", pickerPresent, pickerPresent);
+    for (const variantId of ["figma-dense", "current", "row-popover", "tiered", "filter-first", "icon-strip"]) {
+      await setSelect('[data-slot="variant-picker"]', variantId);
+      await sleep(250);
+      const tag = await revealChildrenControl();
+      assertStep(6, `[${variantId}] Text field's control for kind=textarea is a TEXTAREA`, tag === "TEXTAREA", tag);
+      if (tag !== "TEXTAREA") continue; // wrong element — geometry/keystroke checks below would be meaningless
+      const geom = await evaluate(`(() => {
+        const el = document.querySelector('[data-field="children"] textarea');
+        return { clientHeight: el.clientHeight, scrollHeight: el.scrollHeight, value: el.value };
+      })()`);
+      assertStep(
+        6,
+        `[${variantId}] textarea grows to its content — no clipped overflow`,
+        geom.scrollHeight - geom.clientHeight <= 1,
+        `client=${geom.clientHeight} scroll=${geom.scrollHeight} value=${JSON.stringify(geom.value)}`,
+      );
+      // One keystroke through THIS variant's control must not drop the
+      // newline the canvas is currently showing — F2's exact failure mode,
+      // generalized past the one variant it was found in.
+      await evaluate(`(() => { const el = document.querySelector('[data-field="children"] textarea'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); })()`);
+      await typeText(".");
+      await sleep(150);
+      const restingNow = await restingText(textBoxId);
+      assertStep(
+        6,
+        `[${variantId}] one keystroke keeps the newline in the instance`,
+        typeof restingNow === "string" && restingNow.includes("\n"),
+        JSON.stringify(restingNow),
+      );
+      if (variantId === "icon-strip") {
+        const inspClip = await rectOf('[data-slot="inspector-column"]');
+        await screenshot("dom-6c-icon-strip-textarea", inspClip);
+      }
+    }
+    await setSelect('[data-slot="variant-picker"]', "figma-dense");
+    await sleep(200);
+  }
+
+  // ---- step 7: reactflow/tldraw only — drag the resting text moves the node
+  if (renderId !== "dom") {
+    const nodeSel = renderId === "reactflow" ? `[data-slot="rf-instance"]` : `[data-slot="tl-instance"]`;
+
+    // verify-round-1, F2's own repro (React Flow only — this is the
+    // `noDragClassName`/`noPanClassName` class-collision bug, which has no
+    // tldraw equivalent since tldraw's own gesture recognizer never gates
+    // on those classes; tldraw's node geometry also isn't a reliable place
+    // to find truly bare pixels, since its shape is a fixed 180×80
+    // container around Block content that is natively larger and centers
+    // past its edges): a drag starting on the node's BARE padding (no
+    // member at all under the pointer) must still move the node — this is
+    // what isolated the collision from anything member-specific, and it
+    // must never regress silently back to "every drag is refused" the way
+    // this file's ORIGINAL member-only check could not have caught on its
+    // own (that check was ALSO broken by F3, a completely different bug,
+    // at the same time — a false pass by accident of two bugs cancelling
+    // out was never possible here only because both happened to point the
+    // same way, not because either check was actually independent).
+    if (renderId === "reactflow") {
+      const nodeRectForPadding = await rectOf(nodeSel);
+      const paddingPoint = { x: nodeRectForPadding.left + 6, y: nodeRectForPadding.top + 6 };
+      await drag(paddingPoint, { x: paddingPoint.x + 80, y: paddingPoint.y }, 16, 60);
+      const nodeAfterPaddingDrag = await rectOf(nodeSel);
+      const paddingDx = nodeAfterPaddingDrag.left - nodeRectForPadding.left;
+      assertStep(7, "dragging the node's own bare padding (no member) moved it ~80px", Math.abs(paddingDx - 80) <= 12, `dx=${paddingDx.toFixed(1)}`);
+    }
+
+    const nodeBefore = await rectOf(nodeSel);
+    const textRect = await rectOf(textBoxSel(textBoxId));
+    await evaluate(`window.getSelection().removeAllRanges()`);
+    await drag({ x: textRect.x, y: textRect.y }, { x: textRect.x + 80, y: textRect.y }, 20, 60);
+    const nodeAfter = await rectOf(nodeSel);
+    const dx = nodeAfter.left - nodeBefore.left;
+    assertStep(7, "dragging the resting text moved the node ~80px", Math.abs(dx - 80) <= 12, `dx=${dx.toFixed(1)}`);
+    const selectionText = await evaluate(`window.getSelection().toString()`);
+    assertStep(7, "no text got selected by the drag", selectionText === "", JSON.stringify(selectionText));
+    await screenshot(`${renderId}-6-dragged`);
+
+    // verify-round-1, F3's own repro: a drag starting on a DIFFERENT,
+    // NON-editable member (the still-empty Header Bar's Center slot's own
+    // Flex placeholder) must ALSO move the node — F3's confirmed root
+    // cause (the member wrapper's own `stopPropagation()`) was never
+    // TextBox-specific, so a check scoped to only the editable member
+    // could not have caught it, and could not catch its return either.
+    // WHY scoped to the header Bar and not a bare `[data-slot-label=
+    // "Center"]`: the Footer Bar carries an identically-labelled "Center"
+    // cell since main's 2026-09-11 restructure (see `selectByPath`'s WHY),
+    // so an unscoped match would be ambiguous.
+    const centerPlaceholderSel = `${nodeSel} [data-slot="bar"][data-edge="bottom"] [data-slot-label="Center"] [data-slot="flex-placeholder"]`;
+    await waitFor(centerPlaceholderSel);
+    const nodeBeforeMember = await rectOf(nodeSel);
+    const placeholderRect = await rectOf(centerPlaceholderSel);
+    await drag({ x: placeholderRect.x, y: placeholderRect.y }, { x: placeholderRect.x + 80, y: placeholderRect.y }, 16, 60);
+    const nodeAfterMember = await rectOf(nodeSel);
+    const memberDx = nodeAfterMember.left - nodeBeforeMember.left;
+    assertStep(7, "dragging a DIFFERENT, non-editable member (the header Bar's Center placeholder) moved the node ~80px", Math.abs(memberDx - 80) <= 12, `dx=${memberDx.toFixed(1)}`);
+  }
+
+  // ---- step 8 (tldraw AND React Flow, verify round 1 F3/F4 + verify round
+  // 4 F1/F2): a member has no shape/node of its own in either host — only
+  // the root does — so all four regressions turn on exactly WHERE a press
+  // lands relative to a member's own wrapper, not on any id-set arithmetic.
+  // Both need a SECOND member of the same Block to tell "the page's own
+  // additive selection" apart from the host's own reflexive re-assertion
+  // of the shared root. Originally tldraw-only (round 1's own F3/F4); round
+  // 4 found the IDENTICAL bare-padding-after-member-select defect on React
+  // Flow too (F2 — a mixed [Block, TextBox] selection, not merely a stale
+  // echo), so this now runs on both hosts through the same assertions
+  // rather than a second, drifting copy — the shared fix
+  // (packages/panel/src/bareAreaSelect.ts) is proven on both here, in one
+  // place. --------------------------------------------------------------
+  if (renderId === "tldraw" || renderId === "reactflow") {
+    const nodeSelForRender = renderId === "tldraw" ? '[data-slot="tl-instance"]' : '[data-slot="rf-instance"]';
+    const rootBefore = (await navRows()).find((r) => r.depth === 0);
+    if (!rootBefore) throw new Error("no depth-0 root row for the Block bench");
+    const rightId = await selectByPath("Header", "Right");
+    assertStep(8, "selected the Header's Right slot fill", (await selectedRows()).join() === rightId, rightId);
+    await reveal();
+    const newRow2 = await addTextBoxAndGetId();
+    const textBoxId2 = newRow2.id;
+    assertStep(8, "adding a second TextBox (Header's Right slot) creates exactly one new instance, a TextBox", newRow2.type === "TextBox", `${textBoxId2} type=${newRow2.type}`);
+    await sleep(400); // tldraw's ResizeObserver-driven shape geometry / React Flow's own measurement settles asynchronously
+
+    await press(textBoxSel(textBoxId));
+    const selAfterFirst = await selectedRows();
+    assertStep(8, "plain press selects the first TextBox alone", selAfterFirst.join() === textBoxId, selAfterFirst.join());
+
+    await press(textBoxSel(textBoxId2), { shift: true });
+    const selAfterShift = (await selectedRows()).sort();
+    const wantShift = [textBoxId, textBoxId2].sort();
+    assertStep(
+      8,
+      "F3: shift+press on a second member of the SAME block EXTENDS the selection rather than collapsing to their shared root",
+      selAfterShift.join(",") === wantShift.join(","),
+      `got [${selAfterShift.join(",")}] want [${wantShift.join(",")}]`,
+    );
+    await screenshot(`${renderId}-7a-shift-extended-selection`);
+
+    // Now click the Block's own bare padding — no member anywhere under
+    // the pointer — while a member still holds the page's selection.
+    const bare = await findBarePoint(nodeSelForRender);
+    if (!bare) throw new Error("could not find a bare (non-member) point inside the shape/node");
+    await pressAt(bare.x, bare.y);
+    const selAfterBare = await selectedRows();
+    assertStep(
+      8,
+      `verify-round-4 ${renderId === "tldraw" ? "F1" : "F2"}: clicking the Block's own bare padding re-selects the Block ALONE while a member was selected (not a stale echo, not a mixed union)`,
+      selAfterBare.join() === rootBefore.id,
+      `sel=[${selAfterBare.join(",")}] want [${rootBefore.id}] at (${bare.x.toFixed(0)},${bare.y.toFixed(0)})`,
+    );
+    // The inspector is the other place a mixed selection actually shows up
+    // to a person (verify-round-4 F2's own repro: a two-type "Mixed"
+    // header) — reading it directly, not just the navigator's own
+    // data-selected flags, closes that gap.
+    const inspectorAfterBare = await inspectorName();
+    assertStep(
+      8,
+      `verify-round-4 ${renderId === "tldraw" ? "F1" : "F2"}: the inspector shows the Block alone, not a mixed selection`,
+      inspectorAfterBare === "Block",
+      inspectorAfterBare,
+    );
+    await screenshot(`${renderId}-7b-bare-padding-reselects-block`);
+  }
+
+  manifest.renders[renderId] = { console: takeConsole() };
+}
+
+// ---- item 2 (verify round 4, F3): a navigator click while a TextBox is
+// mid-edit elsewhere must both COMMIT the edit and SELECT the clicked row
+// in ONE press. See packages/panel/src/twoClickEdit.ts's
+// `shouldSuppressNativeFocusShift` for the confirmed root cause: the
+// browser's own mousedown→focus-shift default action fires the outgoing
+// control's `blur` — and with it the edit's commit, and the re-render that
+// follows — BEFORE the row's own `click` event ever does. react-arborist's
+// virtualized rows additionally get torn down and rebuilt by that SAME
+// re-render (confirmed live with a MutationObserver: every row's DOM
+// element gets replaced), disconnecting the very row the pointer is
+// mid-press on before its `click` can fire at all — so react-arborist
+// dropped the click outright, not merely mis-timed it.
+//
+// WHY this no longer sweeps five navigator variants (it did when this fix
+// was verified): main independently deleted four of the five — shadcn,
+// dnd-kit, React Aria Tree, headless-tree — and fixed react-arborist as
+// the one that ships (apps/docs/src/components/create/navigator/index.ts:
+// "Zach picked react-arborist ... the others were deleted, not kept
+// behind a switcher") while this branch was in flight, unrelated to this
+// fix. The fix itself is one shared capture-phase check on
+// bench-sidebar.tsx's `[data-slot="navigator-host"]` wrapper, generic to
+// any navigator implementation via the shared `[data-slot="nav-row"]`
+// marker — nothing about it is react-arborist-specific — but only the one
+// navigator that actually ships can be proven live here now.
+const NAVIGATORS = ["arborist"];
+console.log(`\n=== navigator commit+select while editing (the shipped navigator) ===`);
+const restingRootText = (id) => evaluate(`document.querySelector('[data-slot="dom-instance"][data-instance-id="${id}"] [data-slot="text-box"]')?.textContent ?? null`);
+for (const navId of NAVIGATORS) {
+  currentRender = navId;
+  await load("dark", "TextBox");
+  await sleep(250);
+  await switchRender("dom");
+  // A second root TextBox so there is a genuinely different row to click —
+  // the freshly-added one becomes the sole selection, so row1 (the
+  // ORIGINAL instance) is the one this test edits and row2 is untouched.
+  await evaluate(`document.querySelector('[data-slot="instance-plus"]')?.click()`);
+  await sleep(250);
+  const rootRows = await navRows();
+  const [row1, row2] = rootRows;
+  if (!row1 || !row2) throw new Error(`[${navId}] need two root TextBox rows, got ${JSON.stringify(rootRows)}`);
+  const domSel = (id) => `[data-slot="dom-instance"][data-instance-id="${id}"]`;
+  await press(domSel(row1.id)); // first press: select row1 (not yet sole-selected)
+  await sleep(150);
+  await press(domSel(row1.id)); // second press: already sole-selected + inlineEdit -> edits
+  await sleep(150);
+  const editingBefore = await evaluate(`!!document.querySelector('[data-slot="text-box-input"]')`);
+  assertStep(10, `[${navId}] entered editing on the first TextBox`, editingBefore, editingBefore);
+  await typeText("edited"); // single-line mount selects all -> replaces the seed text
+  const midValue = await evaluate(`document.querySelector('[data-slot="text-box-input"]')?.value ?? null`);
+  assertStep(10, `[${navId}] typed the replacement value`, midValue === "edited", midValue);
+  // The click this whole check is about: a DIFFERENT row, while row1 is
+  // still mid-edit — one physical press, nothing else.
+  await press(rowSel(row2.id));
+  await sleep(250);
+  const stillEditing = await evaluate(`!!document.querySelector('[data-slot="text-box-input"]')`);
+  assertStep(10, `[${navId}] the navigator click committed and ended editing`, !stillEditing, stillEditing);
+  const restingAfter = await restingRootText(row1.id);
+  assertStep(10, `[${navId}] the typed value committed to the instance`, restingAfter === "edited", restingAfter);
+  const selectedAfterOneClick = await selectedRows();
+  assertStep(
+    10,
+    `[${navId}] ONE click on the different row both committed AND selected it — no second click needed`,
+    selectedAfterOneClick.join() === row2.id,
+    selectedAfterOneClick.join(),
+  );
+  const sidebarClip = await rectOf('[data-slot="bench-sidebar"]');
+  await screenshot(`nav-${navId}-commit-and-select`, { left: Math.floor(sidebarClip.left), top: Math.floor(sidebarClip.top), w: Math.ceil(sidebarClip.w), h: Math.min(600, Math.ceil(sidebarClip.h)) });
+  manifest.renders[navId] = { console: takeConsole() };
+}
+
+// ---- item 3 (polish pass): --bbox-ring resolves to --bbox-accent, not
+// currentColor, in BOTH themes — verified through a BARE top-level TextBox
+// bench (no Block, no slot, no member wrapper), which also exercises item
+// 6's fix: dom-preview.tsx's ROOT wrapper is the only path that can reach
+// an inline-editable instance with no member wrapper in between.
+currentRender = "ring";
+console.log(`\n=== ring (--bbox-ring, both themes) ===`);
+const ROOT_TEXT_BOX_SEL = '[data-slot="dom-instance"] [data-slot="text-box"]';
+const ROOT_CONTROL_SEL = '[data-slot="dom-instance"] [data-slot="text-box-input"]';
+for (const theme of ["dark", "light"]) {
+  await load(theme, "TextBox");
+  await switchRender("dom");
+  await waitFor(ROOT_TEXT_BOX_SEL);
+  // WHY this check before pressing: a fresh bench's default instance may
+  // or may not start pre-selected depending on the picker's own history —
+  // this makes the two-click gesture work either way, rather than
+  // hardcoding "always two presses" and risking the SECOND one landing on
+  // an ALREADY-editing control (which stops its own pointer-down).
+  const alreadySelected = await evaluate(
+    `document.querySelector('[data-slot="dom-instance"]')?.getAttribute('data-selected') === 'true'`,
+  );
+  if (!alreadySelected) await press(ROOT_TEXT_BOX_SEL);
+  await press(ROOT_TEXT_BOX_SEL);
+  await sleep(150);
+  const hasControl = await evaluate(`!!document.querySelector(${JSON.stringify(ROOT_CONTROL_SEL)})`);
+  assertStep(9, `${theme}: the DOM root wrapper's two-click gesture opens editing on a BARE top-level TextBox`, hasControl, hasControl);
+  let colors = null;
+  if (hasControl) {
+    colors = await evaluate(`(() => {
+      const probe = document.createElement("div");
+      probe.style.color = "var(--bbox-accent)";
+      document.body.appendChild(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      const ring = getComputedStyle(document.querySelector(${JSON.stringify(ROOT_CONTROL_SEL)})).outlineColor;
+      return { accent, ring };
+    })()`);
+  }
+  assertStep(
+    9,
+    `${theme}: the editing ring resolves to --bbox-accent, not currentColor`,
+    !!colors && colors.ring === colors.accent,
+    colors ? `accent=${colors.accent} ring=${colors.ring}` : "no control",
+  );
+  const ringRect = await rectOf(ROOT_TEXT_BOX_SEL);
+  await screenshot(`ring-${theme}`, { left: Math.floor(ringRect.left) - 16, top: Math.floor(ringRect.top) - 16, w: Math.ceil(ringRect.w) + 32, h: Math.ceil(ringRect.h) + 32 });
+}
+
+writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify({ results, renders: manifest.renders }, null, 2));
+chrome.kill();
+await new Promise((resolve) => chrome.once("exit", resolve));
+try {
+  rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+} catch {}
+const failed = results.filter((r) => !r.pass);
+console.log(`\n${failed.length === 0 ? "PASS" : "FAIL"} — ${results.length - failed.length}/${results.length} assertions across ${RENDERS.length} renders, ${heroFrame} hero frames → ${outDir}`);
+if (failed.length) {
+  console.log("Failures:");
+  for (const f of failed) console.log(`  [${f.render}] step ${f.step} — ${f.name}: ${f.detail}`);
+}
+process.exit(failed.length === 0 ? 0 : 1);

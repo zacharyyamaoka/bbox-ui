@@ -564,6 +564,22 @@ function PopoverControl({
       </div>
     );
   }
+  // WHY a real branch rather than letting "textarea" fall to the "text"
+  // input below: see FigmaDense.tsx's identical comment — a single-line
+  // `<input>` silently strips a committed multi-line value's newline the
+  // next time this popover touches the field.
+  if (field.kind === "textarea") {
+    return (
+      <textarea
+        rows={1}
+        value={value === undefined ? "" : String(value)}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ ...textInputStyle, resize: "none", fontFamily: "inherit", ...({ fieldSizing: "content" } as CSSProperties) }}
+      />
+    );
+  }
+
   // "text"
   return (
     <input

@@ -12,5 +12,5 @@ apps/docs/CLAUDE.md
 .claude/
 # wrangler local state
 .wrangler/
-# Reports: the page is tracked, the captures it inlines are not.
+# Reports: the page is tracked, the captures it inlines are not (Zach, 2026-09-07).
 reports/media/

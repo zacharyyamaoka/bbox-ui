@@ -38,6 +38,16 @@ export {
   type Instance,
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
+export {
+  isSecondPressToEdit,
+  claimInstancePointerDown,
+  isInstancePointerDownClaimed,
+  armEditOnRelease,
+  clearArmedEdit,
+  shouldSuppressNativeFocusShift,
+  type TwoClickPointerDown,
+} from "./twoClickEdit";
+export { priorSelectionForRootPress, nextSelectionForRootPress, type RootPress } from "./bareAreaSelect";
 export { MEMBER_SPECS } from "./bench";
 export {
   MEMBERS_CONTROLS,

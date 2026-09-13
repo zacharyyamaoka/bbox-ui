@@ -50,6 +50,17 @@ describe("toArgTypes", () => {
     expect(argTypes.label.control).toBe("text");
   });
 
+  // WHY a lone extra field rather than adding "body" to FIELDS above: FIELDS
+  // is pinned exactly by the "keyed by field id, one entry per field" test
+  // further down — growing it there would break a pin instead of proving
+  // anything about "textarea". docs/TEXTBOX-EDITING-SPEC.md §2 asks for
+  // `"textarea"` to map to Storybook's own "text" control (there is no
+  // distinct multiline control), which this is the value-map half of.
+  it('maps "textarea" to the "text" Storybook control, same as "text" — a value map, not identity', () => {
+    const argTypes = toArgTypes([{ id: "body", label: "Body", kind: "textarea", defaultValue: "" }]);
+    expect(argTypes.body.control).toBe("text");
+  });
+
   it("carries options, min/max/step and the hint through", () => {
     const argTypes = toArgTypes(FIELDS);
     expect(argTypes.state.options).toEqual(["empty", "wired"]);

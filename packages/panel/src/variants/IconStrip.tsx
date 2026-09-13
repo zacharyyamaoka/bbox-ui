@@ -535,6 +535,32 @@ function FieldText({
 }) {
   const r = resolve(field, panel);
   const value = r.isMixed ? "" : ((r.collapsed as string | undefined) ?? "");
+  // WHY a real `<textarea>` branch here rather than always rendering the
+  // `<input>` below (verify round 1, F2): `field.kind === "textarea"` is
+  // routed straight to `FieldText` both directly (`childrenField`, above)
+  // and through `GenericFallback` — an `<input>`'s value sanitization
+  // strips newlines outright, so TextBox's multi-line `children` field
+  // silently lost every newline the instant this panel touched it (Zach's
+  // truthful-rendering rule). Same growable idiom as the other variants'
+  // dedicated textarea branch: `rows={1}` + `fieldSizing: "content"`.
+  if (field.kind === "textarea") {
+    return (
+      <ClusterShell field={field} r={r} isGoverned={governed.has(field.id)} onClearOverride={() => panel.onClearOverride(field.id)}>
+        <label style={textFieldWrapStyle}>
+          <span style={textFieldLabelStyle}>{field.label}</span>
+          <textarea
+            rows={1}
+            value={value}
+            placeholder={r.isMixed ? "Mixed" : undefined}
+            onChange={(e) => panel.onChange(field.id, e.target.value)}
+            aria-label={field.label}
+            title={field.label}
+            style={{ ...textFieldInputStyle, resize: "none", fontFamily: "inherit", ...({ fieldSizing: "content" } as CSSProperties) }}
+          />
+        </label>
+      </ClusterShell>
+    );
+  }
   return (
     <ClusterShell field={field} r={r} isGoverned={governed.has(field.id)} onClearOverride={() => panel.onClearOverride(field.id)}>
       <label style={textFieldWrapStyle}>
@@ -558,7 +584,14 @@ function FieldText({
  * Panel. Never dropped (contract point 7): routed by `kind` to the closest
  * generic control, words rather than a guessed icon. */
 function GenericFallback({ field, panel, governed }: { field: FieldSpec; panel: PanelVariantProps; governed: Set<string> }) {
-  if (field.kind === "text") return <FieldText field={field} panel={panel} governed={governed} />;
+  // WHY "textarea" routes here rather than falling to `FieldWords` below:
+  // `FieldWords` renders one button per `field.options`, which a textarea
+  // field never has — an unhandled kind would silently render an empty
+  // `ClusterShell` with no control at all, not merely a degraded one.
+  // `FieldText` itself branches on `field.kind === "textarea"` (verify
+  // round 1, F2) to render a real growable `<textarea>`, so this keeps the
+  // newline instead of merely reading and writing a truncated value.
+  if (field.kind === "text" || field.kind === "textarea") return <FieldText field={field} panel={panel} governed={governed} />;
   if (field.kind === "number") return <FieldStepper field={field} panel={panel} governed={governed} glyph={<GenericGlyph />} />;
   if (field.kind === "toggle") return <FieldToggleIcon field={field} panel={panel} governed={governed} icon={<GenericGlyph />} />;
   return <FieldWords field={field} panel={panel} governed={governed} />;

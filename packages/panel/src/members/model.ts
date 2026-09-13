@@ -66,8 +66,9 @@ export function summarize(instances: Instance[], id: string): MemberSummary | un
   const inst = instances.find((i) => i.id === id);
   if (!inst) return undefined;
   const raw = inst.props.children;
-  // A slot fill is named after its slot, always — "Header · left" — so the
-  // navigator and the path read the anatomy, not "Flex 3".
+  // A slot fill is named after its slot, always — "Left" for the cell that
+  // fills a Header Bar's left position — so the navigator and the path
+  // read the anatomy, not "Flex 3".
   const own = inst.slot ? inst.slot.label : typeof raw === "string" && raw.trim() !== "" ? raw : null;
   const parents = parentMap(instances);
   const parentId = parents.get(id);

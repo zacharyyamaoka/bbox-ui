@@ -47,7 +47,13 @@ export const TIER_META: Record<Tier, { label: string; hint: string }> = {
 export function classifyField(field: FieldSpec, presets: PresetSpec[], governed: Set<string>): Tier {
   const isSelector = field.id === "state" || presets.some((p) => p.selector === field.id);
   const isEscapeHatch = /escape hatch/i.test(field.hint ?? "");
-  const isPlainName = field.kind === "text" && !field.hint;
+  // WHY "textarea" joins "text" here: a plain name is a classification about
+  // how central the field is (unhinted free text a person types), not about
+  // how many lines it wraps to — TextBox's own `children` field already hits
+  // `isBareLabel` below regardless of kind, but a future unhinted textarea
+  // field on some other component deserves the same "simple" tier a text
+  // field gets, not the leftover "advanced" bucket.
+  const isPlainName = (field.kind === "text" || field.kind === "textarea") && !field.hint;
   const isBareLabel = field.id === "children" && !isEscapeHatch;
   if (isSelector || isPlainName || isBareLabel) return "simple";
 

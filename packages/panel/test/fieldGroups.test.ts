@@ -27,8 +27,13 @@ describe("groupRows", () => {
     expect(ids(rows)).toEqual([["width", "height"], "title"]);
   });
 
-  it("renders four in a group as two rows of two, in declaration order", () => {
+  it("renders TextBox's three declared pairs as three rows of two, in declaration order", () => {
+    // WHY three pairs now, not two: docs/TEXTBOX-EDITING-SPEC.md §1 added
+    // `sizePx` beside `size` (`group: "size"`) so the escape hatch into a
+    // custom px value sits next to the selector that turns it on — the same
+    // `group` mechanism Block's width/height already uses.
     expect(ids(groupRows(TEXT_BOX_FIELDS)).filter(Array.isArray)).toEqual([
+      ["size", "sizePx"],
       ["paddingTop", "paddingBot"],
       ["paddingLeft", "paddingRight"],
     ]);

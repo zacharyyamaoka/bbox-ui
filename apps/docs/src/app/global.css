@@ -67,6 +67,13 @@
   --bbox-success: oklch(0.60 0.19 145);
   --bbox-danger: oklch(0.55 0.19 25);
   --bbox-accent: oklch(0.60 0.19 264);
+  /* Copied from packages/bbox-ui/src/theme.css alongside --bbox-accent
+     itself (this file's own WHY, above) — item 3, polish pass: without
+     it, TextBox's editing ring (textBox.tsx's `var(--bbox-ring,
+     currentColor)`) fell through to the fallback everywhere on THIS site,
+     since a copy that never mentions a token leaves it simply undefined,
+     not "inherited from theme.css". */
+  --bbox-ring: var(--bbox-accent);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -107,6 +114,7 @@
   --bbox-success: oklch(0.78 0.17 145);
   --bbox-danger: oklch(0.72 0.17 25);
   --bbox-accent: oklch(0.70 0.17 264);
+  --bbox-ring: var(--bbox-accent);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -209,4 +217,17 @@
 
 @theme inline {
   --color-bbox-received: var(--bbox-received);
+}
+
+/*
+ * docs/TEXTBOX-EDITING-SPEC.md §3: tldraw's `select.idle` state is when a
+ * shape's HTMLContainer content is safe to hand a real DOM control's
+ * pointer events to — mid-drag or mid-marquee, tldraw's own gesture must
+ * win instead. `[data-bbox-interactive]` is the same host-neutral marker
+ * `TextBoxControl` (packages/bbox-ui/src/textBox.tsx) already carries, so
+ * this rule targets exactly the editing control and nothing else in the
+ * shape's rendered content.
+ */
+.tl-container[data-state='select.idle'] [data-bbox-interactive] {
+  pointer-events: all;
 }

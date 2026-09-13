@@ -29,6 +29,17 @@
   --bbox-success: oklch(0.60 0.19 145);     /* same numbers as --bbox-received today, kept as a separate token — see T1-SPEC.md §3.3 */
   --bbox-danger: oklch(0.55 0.19 25);
   --bbox-accent: oklch(0.60 0.19 264);
+  /* WHY a ring token distinct from `--ring`: the shadcn focus-ring idiom
+     TextBox's editing control uses (textBox.tsx) reads
+     `var(--bbox-ring, currentColor)` — `currentColor` was the fallback for
+     a host that defines neither, but left undefined here it was ALWAYS the
+     fallback, so the "editing" ring painted in the box's own text color
+     instead of the design system's accent (docs/TEXTBOX-EDITING-SPEC.md
+     §1's outline spec). Defining it as the accent, not a copy of `--ring`
+     (host-neutral, near-black in bbox-ui.com's own shadcn theme), keeps
+     "you are editing" visually distinct from `--ring`'s own generic
+     keyboard-focus meaning. */
+  --bbox-ring: var(--bbox-accent);
 }
 
 @theme inline {
@@ -76,6 +87,7 @@
     --bbox-success: oklch(0.78 0.17 145);
     --bbox-danger: oklch(0.72 0.17 25);
     --bbox-accent: oklch(0.70 0.17 264);
+    --bbox-ring: var(--bbox-accent);
   }
 }
 
@@ -96,4 +108,5 @@
   --bbox-success: oklch(0.78 0.17 145);
   --bbox-danger: oklch(0.72 0.17 25);
   --bbox-accent: oklch(0.70 0.17 264);
+  --bbox-ring: var(--bbox-accent);
 }

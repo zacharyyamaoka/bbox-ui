@@ -1,4 +1,5 @@
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
+import type { FieldValue } from "@bbox-ui/schema";
 
 /**
  * The seam between the create page's shell and its viewport.
@@ -68,6 +69,29 @@ export interface ViewportProps {
   view: View;
   onRenderChange: (render: Render) => void;
   onViewChange: (view: View) => void;
+  /**
+   * In-place text editing (docs/TEXTBOX-EDITING-SPEC.md §3). The page owns
+   * all four: which instance is editing, the request to start (a no-op for
+   * an entry without `inlineEdit`), the request to stop, and the one-prop
+   * write a keystroke makes. Selecting a different instance commits and
+   * ends editing — `onSelectInstance`/`onSelectionChange` above do that.
+   */
+  editingId: string | null;
+  onRequestEdit: (id: string) => void;
+  onEditEnd: () => void;
+  /** Writes ONE instance's prop — not the selection's (`onChange`'s
+   *  `applyToSelected` sibling would write every selected instance, which
+   *  is wrong for a single in-place edit). */
+  onInstancePropChange: (id: string, fieldId: string, value: FieldValue) => void;
+  /**
+   * DEVIATION from the spec's literal four fields: `onEditEnd` alone can't
+   * tell Escape from Enter/blur apart (both just "stop editing"), but
+   * Escape must restore the value `onRequestEdit` captured while
+   * Enter/blur must keep whatever was last typed. This is that captured
+   * value, so `renderInstance` can build a real `onCancel` for the
+   * component's `RenderContext.edit`. `null` when nothing is editing.
+   */
+  editSnapshot: FieldValue | null;
 }
 
 /** Default position for an instance that has never been placed. Laid out in a
