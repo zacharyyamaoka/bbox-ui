@@ -1,20 +1,54 @@
 ---
 title: Introduction
-description: Quickly start a shadcn registry with ready-to-use docs.
+description: Presentational components for black-box system design — blocks, ports, edges.
 ---
 
-This template helps you launch a **shadcn registry with documentation** in minutes.
+bbox-ui is a set of presentational React components for drawing black-box
+systems: **blocks** with a header, glyph, title and chip; **ports** that carry a
+state and a label; and the geometry that places one on the other.
 
-It combines a registry-ready project structure with a preconfigured docs app, so you can focus on building and publishing components instead of setting up boilerplate.
+The components know nothing about canvases. They do not listen for pointers,
+never measure themselves, and never claim a z-index — they take props and return
+DOM. That is what lets the same `Block` paint identically inside React Flow,
+inside tldraw, or in a plain page, with each host owning its own dragging,
+snapping and hit-testing.
 
-## What You Get
+## How you get it
 
-- A starter setup for shipping components through a shadcn registry
-- A docs site to document usage, examples, and installation
-- A clean foundation you can extend with your own design system and content
+**You copy the source into your project. There is no package to install.**
 
-## Next Steps
+```bash
+npx shadcn@latest add https://bbox-ui.com/r/port.json
+```
 
-- Update this docs content to match your registry and components
-- Add or edit component pages under `content/docs/components`
-- Start publishing your registry items and keep docs in sync
+That writes the real files into your tree, and from then on they are yours —
+edit them, rename them, delete half of them. No version to track, no dependency
+to upgrade, nothing that can change under you.
+
+This is deliberate, and it is the only distribution channel. **bbox-ui is not
+published to npm.** If you are looking for `npm install bbox-ui`, there isn't
+one and there won't be. The components are small and opinionated; owning them
+outright beats depending on someone else's taste.
+
+The same command works straight off GitHub if you would rather skip this site:
+
+```bash
+npx shadcn@latest add zacharyyamaoka/bbox-ui/port
+```
+
+## What ships today
+
+| Item | What it is |
+|---|---|
+| `port` | A circle with a text slot. Four states, six text layouts, three diameters. |
+| `block` | The Block in Simple View — container, header band, glyph, text slots, chip. |
+| `bbox-layout` | The pure geometry module. No React, no canvas engine. |
+
+The two host adapters — `block-node-reactflow` and `block-shape-tldraw` — are in
+the registry but **not yet installable**, because they import the shared core as
+a package rather than as copied files. Use them as reference for now.
+
+## Next
+
+Start with [Port](/docs/components/port) — it is the smaller of the two and the
+conventions it establishes carry into [Block](/docs/components/block).

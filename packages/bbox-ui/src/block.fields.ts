@@ -12,13 +12,14 @@
  * else inert").
  *
  * WHY no `bodyLayout`/paint fields here: `Block`'s body-layout integration
- * (`Stack`/`RowContainer` composition) and its own literal paint fields are
+ * (`Stack`/`Flex` composition) and its own literal paint fields are
  * explicitly deferred, non-goals for this lane (T1-SPEC.md §4.8, §10) —
  * this array is intentionally narrow, not an oversight.
  */
 import type { FieldSpec } from "@bbox-ui/schema";
 import { APPEARANCE_FIELDS } from "./appearance.fields";
 import { SIMPLE_BLOCK } from "./layout";
+import { BLOCK_RADIUS_DEFAULT } from "./block";
 
 export const WIDTH_FIELD: FieldSpec = {
   id: "width",
@@ -36,6 +37,17 @@ export const HEIGHT_FIELD: FieldSpec = {
   defaultValue: SIMPLE_BLOCK.height,
   unit: "px",
   group: "size",
+};
+
+export const RADIUS_FIELD: FieldSpec = {
+  id: "radius",
+  label: "Radius",
+  kind: "number",
+  defaultValue: BLOCK_RADIUS_DEFAULT,
+  min: 0,
+  max: 32,
+  unit: "px",
+  hint: "0 is edge-to-edge. The header and footer clip to it.",
 };
 
 export const BLOCK_ORIENTATIONS = ["horizontal", "vertical"] as const;
@@ -62,6 +74,7 @@ export const ORIENTATION_FIELD: FieldSpec = {
 export const BLOCK_FIELDS: FieldSpec[] = [
   WIDTH_FIELD,
   HEIGHT_FIELD,
+  RADIUS_FIELD,
   ORIENTATION_FIELD,
   ...APPEARANCE_FIELDS,
 ];

@@ -23,22 +23,27 @@ import {
   type BBoxGlyphNodeType,
 } from "@bbox-ui/adapter-reactflow";
 import type { CanvasPosition, CanvasTransform } from "../contract";
+import { renderInstance } from "../render-instance";
 
-type BenchNodeData = { entry: ComponentEntry; instance: Instance };
+type BenchNodeData = { entries: ComponentEntry[]; byId: Map<string, Instance>; instance: Instance; selectedIds: string[]; onSelectInstance: (id: string, additive: boolean) => void };
 type BenchNode = Node<BenchNodeData, "bench">;
 type AnyNode = BenchNode | BBoxGlyphNodeType;
 
 /** The node body is the component itself, nothing else: the point of the
- *  tab is "the same instances, now on a canvas", not a card around them. */
+ *  tab is "the same instances, now on a canvas", not a card around them.
+ *  Members are drawn inside it by `renderInstance`; a pointer-down on one
+ *  selects the member and is stopped before React Flow selects the node. */
 function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
   return (
     <div
       data-slot="rf-instance"
       data-instance-id={data.instance.id}
       data-selected={selected}
-      className="rounded-md p-2 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-ring"
+      // See dom-preview.tsx: no rounded-* under the selection outline, and
+      // bbox-accent (this app's real blue) instead of the neutral ring token.
+      className="p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
     >
-      {data.entry.render(data.instance.props)}
+      {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance)}
     </div>
   );
 }
@@ -63,6 +68,8 @@ function glyphDataFor(instance: Instance, transforms: Record<string, CanvasTrans
 interface Props {
   entries: ComponentEntry[];
   instances: Instance[];
+  roots: Instance[];
+  onSelectInstance: (id: string, additive: boolean) => void;
   selectedIds: string[];
   positions: Record<string, CanvasPosition>;
   onSelectionChange: (ids: string[]) => void;
@@ -85,11 +92,11 @@ interface Props {
  */
 function Canvas(p: Props) {
   const { resolvedTheme } = useTheme();
-  const entryFor = useCallback((t: string) => p.entries.find((e) => e.name === t)!, [p.entries]);
+  const byId = useMemo(() => new Map(p.instances.map((i) => [i.id, i])), [p.instances]);
 
   const nodes: AnyNode[] = useMemo(
     () =>
-      p.instances.map((instance) => {
+      p.roots.map((instance) => {
         const position = p.positions[instance.id] ?? { x: 0, y: 0 };
         const selected = p.selectedIds.includes(instance.id);
         if (instance.type === "Glyph") {
@@ -107,11 +114,11 @@ function Canvas(p: Props) {
           type: "bench",
           position,
           selected,
-          data: { entry: entryFor(instance.type), instance },
+          data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance },
           draggable: true,
         } satisfies BenchNode;
       }),
-    [p.instances, p.positions, p.selectedIds, p.transforms, entryFor],
+    [p.roots, p.positions, p.selectedIds, p.transforms, p.entries, byId, p.onSelectInstance],
   );
 
   // Test hook only — mirrors `tldraw-canvas.tsx`'s own

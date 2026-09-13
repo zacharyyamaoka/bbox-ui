@@ -1,9 +1,21 @@
-import { resolveField, type FieldSpec, type FieldTrace, type FieldValue, type PresetSpec } from "@bbox-ui/schema";
+import {
+  resolveField,
+  type FieldSpec,
+  type FieldTrace,
+  type FieldValue,
+  type InheritedValue,
+  type PresetSpec,
+} from "@bbox-ui/schema";
 /** One thing on the bench. `props` is the RAW store — never a transformed
  *  subject; the distinction is load-bearing everywhere below. */
 export interface Subject {
   id: string;
   props: Record<string, unknown>;
+  /** Per-field values relayed down from the nearest ancestor whose
+   * component declares a same-id `cascades` field — the page's computed
+   * inherited bag for THIS subject. `resolveField` only consults an entry
+   * here when the field itself is marked `cascades` (field.ts). */
+  inherited?: Record<string, InheritedValue>;
 }
 
 /**
@@ -43,6 +55,10 @@ export interface FieldRowModel {
   paintedElsewhere: FieldValue | null;
   /** The preset that won, when one did. */
   drivenPresetId: string | null;
+  /** The ancestor's label, when the winning trace is `"inherited"` AND the
+   * selection agrees on it (same gate as `trace` itself — see `agreeing`
+   * below). Null otherwise, including for Mixed or an empty selection. */
+  inheritedFrom: string | null;
   /** Per-subject STORED traces, for a panel that needs the raw material. */
   traces: FieldTrace[];
 }
@@ -72,8 +88,8 @@ export function readFieldRow(
   // the panel highlighted a tone's colour, the chain printed the tone's
   // colour, and the value the user had stored appeared nowhere — so clearing
   // deleted it with nothing visibly changing.
-  const traces = subjects.map((s) => resolveField(field, s.props, presets));
-  const paintedTraces = subjects.map((s) => resolveField(field, asSubject(s.props), presets));
+  const traces = subjects.map((s) => resolveField(field, s.props, presets, s.inherited));
+  const paintedTraces = subjects.map((s) => resolveField(field, asSubject(s.props), presets, s.inherited));
 
   // NOT gated on a single subject. Gating it there is the exact defect this
   // module exists to make unrepeatable: with two pills selected and a tone
@@ -109,6 +125,7 @@ export function readFieldRow(
     collapsedValue,
     paintedElsewhere,
     drivenPresetId: trace && trace.winner === "preset" ? (trace.winningPresetId ?? null) : null,
+    inheritedFrom: trace && trace.winner === "inherited" ? (trace.inheritedFrom ?? null) : null,
     traces,
   };
 }

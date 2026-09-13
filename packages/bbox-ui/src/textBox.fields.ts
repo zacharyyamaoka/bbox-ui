@@ -75,6 +75,7 @@ export const TEXT_BOX_FIELDS: FieldSpec[] = [
     kind: "segments",
     defaultValue: "md",
     options: SIZE_OPTIONS,
+    cascades: true,
   },
   ...PADDING_FIELDS,
   {

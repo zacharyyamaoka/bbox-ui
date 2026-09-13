@@ -19,7 +19,7 @@ export {
 } from "./fieldTiers";
 export { FieldTraceRow } from "./FieldTraceRow";
 export { ComponentInspector, type ComponentInspectorProps } from "./ComponentInspector";
-export { registerComponent, type ComponentEntry } from "./registerComponent";
+export { registerComponent, type ComponentEntry, type RenderContext, type SlotSpec } from "./registerComponent";
 export { PANEL_VARIANTS, findVariant, VARIANT_CONTRACT } from "./variants";
 export type { PanelVariant, PanelVariantProps } from "./variants";
 export {
@@ -30,6 +30,9 @@ export {
   INITIAL_UID,
   EXCLUDED_SHOWN,
   makeInstance,
+  makeInstanceWithSlots,
+  BLOCK_SLOTS,
+  BAR_SLOTS,
   randomValue,
   sharedFields,
   type Instance,
@@ -37,3 +40,30 @@ export {
 export { groupRows, type FieldRow } from "./fieldGroups";
 export { HOST_FIELDS } from "./hostFields";
 export { HostFactsSection, type HostFactsSectionProps } from "./HostFactsSection";
+export { MEMBER_SPECS } from "./bench";
+export {
+  MEMBERS_CONTROLS,
+  MEMBERS_CONTRACT,
+  findMembersControl,
+  parentMap,
+  topLevel,
+  subtreeIds,
+  ancestry,
+  depthOf,
+  summarize,
+  addableTypes,
+  moveIndex,
+  addMemberTo,
+  removeMember,
+  moveMember,
+  reparent,
+  instanceTree,
+  memberSpecFor,
+  isSlotFill,
+  inheritedFor,
+  effectiveProps,
+  wouldCycle,
+  typeGlyph,
+  TYPE_GLYPH,
+} from "./members";
+export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary, InstanceNode } from "./members";

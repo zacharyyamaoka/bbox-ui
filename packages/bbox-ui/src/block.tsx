@@ -27,10 +27,19 @@ import type { BlockOrientation } from "./block.fields";
  * Port and Region arrive with later views.)
  */
 
+/** Corner radius in px. 0 is edge-to-edge; the bars clip to it. */
+export const BLOCK_RADIUS_DEFAULT = 8;
+
 export interface BlockProps extends ComponentProps<"div"> {
   /** Container size. Defaults to the Simple View spec, 384 × 258. */
   width?: number;
   height?: number;
+  /**
+   * Corner radius, px. Zach, 2026-09-11: "sometimes we may want radius, but
+   * sometimes in like edge to edge mode we may not want any radius" — a
+   * number, not a rung (D3), so 0 means exactly square.
+   */
+  radius?: number;
 }
 
 /**
@@ -41,6 +50,7 @@ export interface BlockProps extends ComponentProps<"div"> {
 export function Block({
   width = SIMPLE_BLOCK.width,
   height = SIMPLE_BLOCK.height,
+  radius = BLOCK_RADIUS_DEFAULT,
   className,
   style,
   ...props
@@ -48,11 +58,14 @@ export function Block({
   return (
     <div
       data-slot="block"
+      data-radius={radius}
       className={cn(
         "relative flex flex-col items-center justify-center gap-1 border-2 border-foreground bg-card px-4 text-center text-card-foreground",
         className,
       )}
-      style={{ width, height, ...style }}
+      // `overflow: clip` (not hidden) so the corners cut the bars' lines
+      // without turning the Block into a scroll container.
+      style={{ width, height, borderRadius: radius, overflow: "clip", ...style }}
       {...props}
     />
   );

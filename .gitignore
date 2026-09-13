@@ -12,3 +12,9 @@ apps/docs/CLAUDE.md
 # agent scratch hosts and captures, never tracked
 .scratch/
 .scratch-host/
+# Agent scratch — machine-local. Repo guidance lives in CLAUDE.md, which is tracked.
+.claude/
+# wrangler local state
+.wrangler/
+# Reports: the page is tracked, the captures it inlines are not.
+reports/media/

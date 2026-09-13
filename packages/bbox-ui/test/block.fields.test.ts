@@ -96,6 +96,7 @@ describe("BLOCK_FIELDS", () => {
     expect(BLOCK_FIELDS.map((f) => f.id)).toEqual([
       "width",
       "height",
+      "radius",
       "orientation",
       "state",
       "tone",
@@ -112,7 +113,7 @@ describe("BLOCK_FIELDS", () => {
   });
 
   it("its bundle tail is literally APPEARANCE_FIELDS, not a re-typed copy", () => {
-    expect(BLOCK_FIELDS.slice(3)).toEqual(APPEARANCE_FIELDS);
+    expect(BLOCK_FIELDS.slice(-APPEARANCE_FIELDS.length)).toEqual(APPEARANCE_FIELDS);
   });
 
   it("width's declared default equals Block's real default width", () => {

@@ -195,9 +195,19 @@ describe("HostFactsSection", () => {
     expect(onChange).toHaveBeenCalledWith("x", 7);
   });
 
-  it("every row carries a provenance dot — the same engine FigmaDense's Properties rows use", () => {
+  it("every row carries a provenance tag — the same engine FigmaDense's Properties rows use", () => {
+    // WHY "tag", not "dot": FigmaDense's RowLabel replaced the always-on
+    // dot with a plain-word tag shown only for override/mixed (2026-09-11,
+    // see RowLabel's own comment). A host fact still always carries a real
+    // explicit value (there is no "unset, fall back to default" state for
+    // x/y/rotation/w/h — `resolveField`'s override layer wins whenever a
+    // subject key isn't `undefined`, and it never is here), so every row's
+    // trace still resolves to "override" and still earns a tag — same
+    // outcome as the old dot, through the new mechanism.
     const { json } = renderSection();
-    expect(findAll(json, "field-provenance-dot")).toHaveLength(5);
+    const tags = findAll(json, "field-provenance-tag");
+    expect(tags).toHaveLength(5);
+    expect(tags.every((t) => t.children?.includes("override"))).toBe(true);
   });
 
   it("w and h show their own hint even with no writer supplied — the fallback the row actually renders", () => {

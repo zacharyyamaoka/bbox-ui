@@ -7,18 +7,18 @@
  * drift the first time a component was added to one of them. Adding a ninth
  * component stays one import and one `registerComponent` call, in one file.
  */
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
+  Bar,
+  BAR_FIELDS,
+  BAR_PRESETS,
   Block,
-  BlockChip,
-  BlockDescription,
-  BlockGlyph,
-  BlockHeader,
-  BlockTitle,
-  BlockType,
   BLOCK_FIELDS,
   BLOCK_PRESETS,
+  Flex,
+  FLEX_FIELDS,
+  FLEX_PRESETS,
   Glyph,
   GLYPH_FIELDS,
   GLYPH_PRESETS,
@@ -32,9 +32,6 @@ import {
   PortEdge,
   PORT_EDGE_FIELDS,
   PORT_EDGE_PRESETS,
-  RowContainer,
-  ROW_CONTAINER_FIELDS,
-  ROW_CONTAINER_PRESETS,
   Stack,
   STACK_FIELDS,
   STACK_PRESETS,
@@ -46,33 +43,57 @@ import {
   type Lens,
 } from "@bbox-ui/core";
 import { LucideGlyphResolver } from "@bbox-ui/glyph-picker";
-import { registerComponent, type ComponentEntry } from "./registerComponent";
+import { registerComponent, type ComponentEntry, type RenderContext, type SlotSpec } from "./registerComponent";
 import type { Subject } from "./fieldModel";
+import type { MembersSpec } from "./members/contract";
 
-function swatch(label: string): ReactNode {
-  return (
-    <div
-      key={label}
-      style={{
-        border: "2px solid currentColor",
-        borderRadius: 4,
-        padding: "6px 10px",
-        fontFamily: "monospace",
-        fontSize: 12,
-        flexShrink: 0,
-      }}
-    >
-      {label}
-    </div>
-  );
+/**
+ * Which components hold others, and what. `accepts` is closed on purpose:
+ * a PortEdge is a lane of Ports and nothing else; a Stack is a column of
+ * block-shaped things; a Block's body takes one layout container or a few
+ * leaves; a Flex takes leaves and Flexes. Widening a set is a one-line edit
+ * here, and the Members control offers exactly this list.
+ */
+const LEAVES = ["Port", "Pill", "Glyph", "TextBox"];
+export const MEMBER_SPECS: Record<string, MembersSpec> = {
+  Stack: { accepts: ["Block", "Stack", "Flex", ...LEAVES] },
+  PortEdge: { accepts: ["Port"], label: "Ports" },
+  Flex: { accepts: [...LEAVES, "Flex", "Block"] },
+};
+
+/**
+ * The Block's anatomy, regrouped 2026-09-11 evening: header · body ·
+ * footer. Header and footer are the same component, Bar ("they are
+ * basically the exact same, we will fill them differently"), each with
+ * three slots of its own (left · center · right, filled by Flex); the body
+ * is a Flex column that holds rows. Slots nest: a fill that has slots
+ * brings its own fills, so a Block arrives as 1 + 2 Bars + 6 Flexes + 1
+ * body Flex = 10 instances, and the navigator reads Block › Header ›
+ * Header · left …
+ */
+const cell = (side: "left" | "center" | "right"): SlotSpec => ({
+  id: side,
+  label: side[0]!.toUpperCase() + side.slice(1),
+  region: side,
+  fill: "Flex",
+  fillProps: { justify: side === "left" ? "start" : side === "right" ? "end" : "center", gap: 6 },
+});
+export const BAR_SLOTS: SlotSpec[] = [cell("left"), cell("center"), cell("right")];
+export const BLOCK_SLOTS: SlotSpec[] = [
+  { id: "header", label: "Header", region: "header", fill: "Bar" },
+  { id: "body", label: "Body", region: "body", fill: "Flex", fillProps: { direction: "column", align: "stretch", gap: 6 }, accepts: ["Flex"] },
+  { id: "footer", label: "Footer", region: "footer", fill: "Bar" },
+];
+
+interface BlockRenderProps {
+  width?: number;
+  height?: number;
+  radius?: number;
 }
 
 function stackMember(label: string): ReactNode {
   return (
-    <div
-      key={label}
-      style={{ border: "2px solid currentColor", padding: "8px 12px", whiteSpace: "nowrap" }}
-    >
+    <div key={label} style={{ border: "2px solid currentColor", padding: "8px 12px", whiteSpace: "nowrap" }}>
       {label}
     </div>
   );
@@ -94,29 +115,26 @@ function threePorts(): ReactNode {
   );
 }
 
-interface BlockRenderProps {
-  width?: number;
-  height?: number;
-  orientation?: "horizontal" | "vertical";
-  state?: AppearanceState;
-  tone?: Tone;
-  lens?: Lens;
-  lensBefore?: string;
-}
-
-function renderBlock(props: Record<string, unknown>): ReactNode {
+/**
+ * The slotted Block: a Bar above, the body Flex, a Bar below. A hidden
+ * Bar renders its marker only, so the region vanishes; the radius clips
+ * both bars' corners.
+ */
+function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?: RenderContext): ReactNode {
   const p = props as BlockRenderProps;
   return (
-    <Block width={p.width} height={p.height}>
-      <BlockHeader orientation={p.orientation}>
-        <BlockGlyph>◆</BlockGlyph>
-        <BlockTitle>Block</BlockTitle>
-        <BlockChip state={p.state} tone={p.tone} lens={p.lens} lensBefore={p.lensBefore}>
-          Chip
-        </BlockChip>
-      </BlockHeader>
-      <BlockDescription>Description</BlockDescription>
-      <BlockType>Type</BlockType>
+    <Block
+      width={p.width}
+      height={p.height}
+      radius={p.radius}
+      className="!justify-start !px-0 !text-left"
+      style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 0, height: p.height && p.height > 0 ? p.height : undefined, minHeight: 120, maxWidth: "100%" }}
+    >
+      {ctx?.slots?.header ?? null}
+      <div data-slot="block-body" style={{ flex: 1, padding: 8, display: "flex", flexDirection: "column" }}>
+        {ctx?.slots?.body ?? null}
+      </div>
+      {ctx?.slots?.footer ?? null}
     </Block>
   );
 }
@@ -172,28 +190,43 @@ export const REGISTRY: ComponentEntry[] = [
     ),
   }),
   registerComponent({
-    name: "RowContainer",
-    fields: ROW_CONTAINER_FIELDS,
-    presets: ROW_CONTAINER_PRESETS,
-    render: (props) => (
-      <div style={{ width: 320, border: "1px dashed #ccc" }}>
-        <RowContainer {...(props as Record<string, never>)}>
-          {swatch("A")}
-          {swatch("B")}
-          {swatch("C")}
-        </RowContainer>
-      </div>
+    name: "Flex",
+    fields: FLEX_FIELDS,
+    presets: FLEX_PRESETS,
+    members: MEMBER_SPECS.Flex,
+    // An empty Flex paints nothing, which on the bench reads as a bug and
+    // inside a Block hides the hole entirely. The dashed placeholder is
+    // Zach's own sketch — "left slot", "Row 1" — and steps aside the moment
+    // a member arrives.
+    render: (props, children, ctx) => (
+      <Flex {...(props as Record<string, never>)} data-slot-label={ctx?.slotLabel}>
+        {children ?? (
+          <span
+            data-slot="flex-placeholder"
+            // A placeholder must never be wider than its slot: inside a
+            // narrow parent three "Header · …" labels overlapped each other.
+            style={{ display: "inline-flex", alignItems: "center", minHeight: 24, minWidth: 0, maxWidth: "100%", padding: "0 8px", border: "1px dashed currentColor", opacity: 0.45, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", justifyContent: "center", ...(props.direction === "column" ? { alignSelf: "stretch", minHeight: 36 } : {}) }}
+          >
+            {ctx?.slotLabel ?? "Flex"}
+          </span>
+        )}
+      </Flex>
     ),
   }),
   registerComponent({
     name: "Stack",
     fields: STACK_FIELDS,
     presets: STACK_PRESETS,
-    render: (props) => (
+    members: MEMBER_SPECS.Stack,
+    render: (props, children) => (
       <div style={{ width: 240, border: "1px dashed #ccc" }}>
         <Stack {...(props as Record<string, never>)}>
-          {stackMember("Member A")}
-          {stackMember("Member B")}
+          {children ?? (
+            <>
+              {stackMember("Member A")}
+              {stackMember("Member B")}
+            </>
+          )}
         </Stack>
       </div>
     ),
@@ -202,16 +235,28 @@ export const REGISTRY: ComponentEntry[] = [
     name: "PortEdge",
     fields: PORT_EDGE_FIELDS,
     presets: PORT_EDGE_PRESETS,
-    render: (props) => (
+    members: MEMBER_SPECS.PortEdge,
+    render: (props, children) => (
       <div style={{ position: "relative", width: 260, height: 160, border: "1px dashed #ccc" }}>
-        <PortEdge {...(props as Record<string, never>)}>{threePorts()}</PortEdge>
+        <PortEdge {...(props as Record<string, never>)}>{children ?? threePorts()}</PortEdge>
       </div>
+    ),
+  }),
+  registerComponent({
+    name: "Bar",
+    fields: BAR_FIELDS,
+    presets: BAR_PRESETS,
+    slots: BAR_SLOTS,
+    // The edge is not a field: it follows from which slot the Bar fills.
+    render: (props, _children, ctx) => (
+      <Bar {...(props as Record<string, never>)} edge={ctx?.slotId === "footer" ? "top" : "bottom"} left={ctx?.slots?.left} center={ctx?.slots?.center} right={ctx?.slots?.right} />
     ),
   }),
   registerComponent({
     name: "Block",
     fields: BLOCK_FIELDS,
     presets: BLOCK_PRESETS,
+    slots: BLOCK_SLOTS,
     render: renderBlock,
   }),
 ];
@@ -244,6 +289,10 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { state: "empty", children: "Empty" },
     { state: "outOfFocus", children: "Dimmed" },
   ],
+  // WHY the first seed of a sized leaf sets no size: it is the one Add
+  // uses, and an own size would beat whatever a header hands down — the
+  // cascade must be visible on a freshly added member. The other seeds
+  // still disagree, which is what the multi-select bench needs.
   Glyph: [
     // WHY the emoji seed is still FIRST even though `REGISTRY`'s own
     // `render` now wraps every Glyph in `LucideGlyphResolver`:
@@ -259,24 +308,35 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { sizePreset: "md", content: "text:◆" },
   ],
   TextBox: [
-    { size: "md", children: "Text Box" },
+    { children: "Text Box" },
     { size: "lg", children: "Bigger text" },
     { size: "sm", children: "Small print" },
   ],
-  RowContainer: [{}, { gap: "lg" }, { align: "center" }],
   Stack: [{}, { gap: "lg" }],
   PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],
-  Block: [
-    { state: "wired", tone: "neutral" },
-    { state: "empty", tone: "accent" },
-    { state: "received", tone: "neutral" },
-  ],
+  Flex: [{}, { justify: "between" }, { direction: "column", align: "stretch" }],
+  Bar: [{}, { size: "lg" }, { line: false }],
+  Block: [{}, { width: 320 }, { width: 480, height: 260 }],
 };
 
 export interface Instance extends Subject {
   /** Which registered component this instance is. Always the active component
    *  in a focused bench; the whole point of the mixed bench is that it varies. */
   type: string;
+  /**
+   * The ids of the instances this one holds, in order. Only present on an
+   * instance whose component declares `members`. A held instance lives in
+   * the same bench array as everything else — it just is not top-level —
+   * so selecting it puts it in the inspector exactly like any other.
+   * See members/model.ts for every derived fact (parent, depth, subtree).
+   */
+  members?: string[];
+  /**
+   * Set on an instance that fills one of its parent's slots. Such an
+   * instance is created with the parent, cannot be removed, moved or
+   * dragged, and prints its slot's label as its title.
+   */
+  slot?: { id: string; label: string; accepts?: string[] };
 }
 
 export function makeInstance(type: string, index: number, uid: number): Instance {
@@ -286,6 +346,34 @@ export function makeInstance(type: string, index: number, uid: number): Instance
     type,
     props: { ...variants[index % variants.length] },
   };
+}
+
+/**
+ * A fresh instance PLUS the instances that fill its slots, ids drawn from
+ * `uid` upward (the caller advances `uid` by the returned length). The
+ * first element is the instance itself, its `members` already pointing at
+ * the fills in slot order. A component without slots returns one.
+ */
+export function makeInstanceWithSlots(type: string, index: number, uid: number): Instance[] {
+  const self = makeInstance(type, index, uid);
+  const slots = REGISTRY.find((e) => e.name === type)?.slots ?? [];
+  if (slots.length === 0) return [self];
+  let next = uid + 1;
+  const fills: Instance[] = [];
+  const fillIds: string[] = [];
+  for (const slot of slots) {
+    // A fill may itself have slots (a Bar's three cells): it brings them.
+    const made = makeInstanceWithSlots(slot.fill, 0, next);
+    next += made.length;
+    const fill: Instance = {
+      ...made[0]!,
+      props: { ...(slot.fillProps ?? {}) },
+      slot: { id: slot.id, label: slot.label, ...(slot.accepts ? { accepts: slot.accepts } : {}) },
+    };
+    fillIds.push(fill.id);
+    fills.push(fill, ...made.slice(1));
+  }
+  return [{ ...self, members: fillIds }, ...fills];
 }
 
 /**
@@ -407,7 +495,11 @@ export function randomValue(field: FieldSpec, roll: () => number): FieldValue | 
 export const INITIAL_BENCHES: Record<string, Instance[]> = (() => {
   const seeded: Record<string, Instance[]> = {};
   let n = 0;
-  for (const entry of REGISTRY) seeded[entry.name] = [makeInstance(entry.name, 0, n++)];
+  for (const entry of REGISTRY) {
+    const made = makeInstanceWithSlots(entry.name, 0, n);
+    n += made.length;
+    seeded[entry.name] = made;
+  }
   seeded[MIXED_BENCH] = [makeInstance("Port", 0, n++), makeInstance("Pill", 0, n++)];
   return seeded;
 })();

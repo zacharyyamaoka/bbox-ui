@@ -55,6 +55,24 @@ export type PillFillStyle = (typeof PILL_FILL_STYLES)[number];
 export const PILL_LINE_THICKNESSES = ["thin", "med", "thick"] as const;
 export type PillLineThickness = (typeof PILL_LINE_THICKNESSES)[number];
 
+/**
+ * Pill's own font-size rung — a small CHIP scale (11-16px), deliberately
+ * NOT the 18-44px board scale `Port`/`Glyph`/`TextBox` each carry their
+ * own copy of (docs/T1-SPEC.md §0's "three components each get their own
+ * rung, in their own file" rule, extended to a fourth here). `pill.tsx`
+ * imports this directly (never the reverse) — same one-way edge as its
+ * existing `PILL_PAINT_FIELDS`/`PillFillStyle` imports — so there is no
+ * circular dependency between the schema file and the component file.
+ */
+export const PILL_SIZES = { sm: 11, md: 12, lg: 14, xl: 16 } as const;
+export type PillSize = keyof typeof PILL_SIZES;
+export const PILL_SIZE_LABELS: Record<PillSize, string> = {
+  sm: "Small",
+  md: "Medium",
+  lg: "Large",
+  xl: "Extra Large",
+};
+
 /** Pill's own literal escape-hatch fields — governed by PILL_PRESETS in
  * the normal case, individually overridable (see the §1.4 worked example,
  * `pill.tsx`'s cascade call, and `pill.fields.test.ts`). */
@@ -114,6 +132,22 @@ export const PILL_PAINT_FIELDS: FieldSpec[] = [
   },
 ];
 
+/** No preset governs this — unlike Port's `size`, Pill's is a plain,
+ * always-editable field with a real component default (`pill.tsx`'s own
+ * `size = "md"`), still marked `cascades` so a header can hand its rung
+ * down the same way it hands one to a Port. */
+export const PILL_SIZE_FIELD: FieldSpec = {
+  id: "size",
+  label: "Size",
+  kind: "segments",
+  defaultValue: "md",
+  options: (Object.keys(PILL_SIZES) as PillSize[]).map((size) => ({
+    value: size,
+    label: PILL_SIZE_LABELS[size],
+  })),
+  cascades: true,
+};
+
 export const PILL_CHILDREN_FIELD: FieldSpec = {
   id: "children",
   label: "Label",
@@ -125,5 +159,6 @@ export const PILL_CHILDREN_FIELD: FieldSpec = {
 export const PILL_FIELDS: FieldSpec[] = [
   ...APPEARANCE_FIELDS,
   ...PILL_PAINT_FIELDS,
+  PILL_SIZE_FIELD,
   PILL_CHILDREN_FIELD,
 ];

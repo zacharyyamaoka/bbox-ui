@@ -1,9 +1,9 @@
 /**
  * @bbox-ui/schema — packages/schema/src/resolve.ts
  *
- * The cascade: resolved = instance override ?? semantic preset ??
- * component default. Zero dependencies, same discipline as ./field.ts —
- * no React, no host engine, no Storybook.
+ * The cascade: resolved = instance override ?? inherited ancestor value ??
+ * semantic preset ?? component default. Zero dependencies, same discipline
+ * as ./field.ts — no React, no host engine, no Storybook.
  *
  * WHY this exists as code and not a markdown rule (Zach, 2026-09-10:
  * "I feel instead of documenting it though you could almost just like
@@ -18,20 +18,40 @@
 
 import type { FieldSpec, FieldValue } from "./field";
 
-export type Layer = "override" | "preset" | "default";
+export type Layer = "override" | "inherited" | "preset" | "default";
 
 export interface LayerCandidate<TValue = FieldValue> {
   layer: Layer;
   /**
    * What this layer holds for this field on this subject, or `undefined`
    * when the layer has nothing to say: no explicit value on the subject
-   * (override), or no preset governs this field / the governing preset's
+   * (override), the field doesn't cascade or no ancestor supplied one
+   * (inherited), no preset governs this field / the governing preset's
    * selector doesn't currently match (preset). `default` always has a
    * value — every FieldSpec declares one.
    */
   value: TValue | undefined;
   /** Set only on the `"preset"` candidate, and only when it has a value. */
   presetId?: string;
+  /** Set only on the `"inherited"` candidate, and only when it has a
+   * value — the ancestor instance's title (`InheritedValue.fromLabel`). */
+  inheritedFrom?: string;
+}
+
+/**
+ * One field's value as relayed down from an ancestor instance — what the
+ * PAGE computes (walking up to the nearest ancestor whose component
+ * declares a same-id field) and hands to `resolveField` as one entry of
+ * its `inherited` bag. This module only reads it; see `field.ts`'s
+ * `cascades` for why the page, not the schema, owns finding the ancestor.
+ */
+export interface InheritedValue<TValue = FieldValue> {
+  value: TValue;
+  /** The ancestor instance's id. */
+  from: string;
+  /** The ancestor instance's title, e.g. "Header" — what a trace shows a
+   * person rather than an opaque id. */
+  fromLabel?: string;
 }
 
 export interface FieldTrace<TValue = FieldValue> {
@@ -42,12 +62,19 @@ export interface FieldTrace<TValue = FieldValue> {
   winner: Layer;
   /** Set only when `winner === "preset"`. */
   winningPresetId?: string;
+  /** Set only when `winner === "inherited"` — the ancestor's label. */
+  inheritedFrom?: string;
   /**
-   * Always exactly 3 entries, in cascade order: override, preset, default
-   * — the devtools-styles-pane model: the winning declaration plus the
-   * losing ones, all visible.
+   * Always exactly 4 entries, in cascade order: override, inherited,
+   * preset, default — the devtools-styles-pane model: the winning
+   * declaration plus the losing ones, all visible.
    */
-  candidates: [LayerCandidate<TValue>, LayerCandidate<TValue>, LayerCandidate<TValue>];
+  candidates: [
+    LayerCandidate<TValue>,
+    LayerCandidate<TValue>,
+    LayerCandidate<TValue>,
+    LayerCandidate<TValue>,
+  ];
 }
 
 export interface PresetSpec<TValue = FieldValue> {
@@ -77,7 +104,7 @@ export interface PresetSpec<TValue = FieldValue> {
 type Subject = Record<string, unknown>;
 
 /**
- * Resolve one field on one subject through all three layers.
+ * Resolve one field on one subject through all four layers.
  *
  * Presets are matched by SELECTOR, not by preset identity: two presets
  * that share a `selector` (e.g. every `state` preset) are treated as
@@ -86,17 +113,29 @@ type Subject = Record<string, unknown>;
  * sharing a governed set is the intended shape of a semantic ladder, not
  * a conflict. `assertDisjointPresets` (below) is what actually forbids
  * the real conflict: two DIFFERENT selectors both claiming one field.
+ *
+ * `inherited` is looked at only when `field.cascades` is true — a
+ * non-cascading field ignores the bag entirely, even if the caller
+ * happens to hand one in with a matching id (D1, Zach 2026-09-11):
+ * inherited beats a child's own preset, loses to its override.
  */
 export function resolveField<TSubject extends Subject>(
   field: FieldSpec,
   subject: TSubject,
   presets: PresetSpec[],
+  inherited?: Record<string, InheritedValue>,
 ): FieldTrace {
   const rawOverride = subject[field.id];
   const overrideCandidate: LayerCandidate = {
     layer: "override",
     value: rawOverride === undefined ? undefined : (rawOverride as FieldValue),
   };
+
+  const inheritedEntry = field.cascades ? inherited?.[field.id] : undefined;
+  const inheritedCandidate: LayerCandidate =
+    inheritedEntry === undefined
+      ? { layer: "inherited", value: undefined }
+      : { layer: "inherited", value: inheritedEntry.value, inheritedFrom: inheritedEntry.fromLabel };
 
   let presetCandidate: LayerCandidate = { layer: "preset", value: undefined };
   const governingPresets = presets.filter((p) => p.governs.includes(field.id));
@@ -115,6 +154,7 @@ export function resolveField<TSubject extends Subject>(
 
   const candidates: FieldTrace["candidates"] = [
     overrideCandidate,
+    inheritedCandidate,
     presetCandidate,
     defaultCandidate,
   ];
@@ -125,6 +165,7 @@ export function resolveField<TSubject extends Subject>(
     resolved: winning.value as FieldValue,
     winner: winning.layer,
     winningPresetId: winning.presetId,
+    inheritedFrom: winning.layer === "inherited" ? winning.inheritedFrom : undefined,
     candidates,
   };
 }
@@ -138,8 +179,9 @@ export function resolveFields<TSubject extends Subject>(
   fields: FieldSpec[],
   subject: TSubject,
   presets: PresetSpec[],
+  inherited?: Record<string, InheritedValue>,
 ): FieldTrace[] {
-  return fields.map((field) => resolveField(field, subject, presets));
+  return fields.map((field) => resolveField(field, subject, presets, inherited));
 }
 
 /**

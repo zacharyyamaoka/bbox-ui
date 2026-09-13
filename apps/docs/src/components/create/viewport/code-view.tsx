@@ -39,12 +39,32 @@ function jsxAttr(key: string, raw: unknown): string {
   return `${key}={${JSON.stringify(raw)}}`;
 }
 
-export function instanceToJsx(entry: ComponentEntry, inst: Instance): string {
+/**
+ * One instance as JSX. Members print NESTED, one per line and indented, the
+ * way a person would write a Stack of Blocks — `members` is never printed as
+ * an attribute, because it is not a prop (members/contract.ts).
+ */
+export function instanceToJsx(entry: ComponentEntry, inst: Instance, byId?: Map<string, Instance>, entries?: ComponentEntry[], indent = ""): string {
   const props = ownProps(entry, inst);
-  const children = "children" in props ? String(props.children) : null;
+  const text = "children" in props ? String(props.children) : null;
   delete props.children;
   const head = [entry.name, ...Object.entries(props).map(([k, v]) => jsxAttr(k, v))].join(" ");
-  return children === null ? `<${head} />` : `<${head}>${children}</${entry.name}>`;
+  // Members AND slot fills print nested: a slotted Block prints its seven
+  // Flex fills in slot order, each with the props its slot gave it.
+  const memberIds = entry.members || entry.slots ? (inst.members ?? []) : [];
+  const nested = memberIds
+    .map((id) => byId?.get(id))
+    .filter((c): c is Instance => !!c)
+    .map((c) => {
+      const e = entries?.find((x) => x.name === c.type);
+      return e ? instanceToJsx(e, c, byId, entries, indent + "  ") : null;
+    })
+    .filter((l): l is string => l !== null);
+  if (nested.length > 0) {
+    const inner = text === null ? nested : [`${indent}  ${text}`, ...nested];
+    return `${indent}<${head}>\n${inner.join("\n")}\n${indent}</${entry.name}>`;
+  }
+  return text === null ? `${indent}<${head} />` : `${indent}<${head}>${text}</${entry.name}>`;
 }
 
 function literal(value: unknown, indent: string): string {
@@ -90,6 +110,7 @@ function reactFlowCode(
   shown: Instance[],
   positions: Record<string, CanvasPosition>,
   transforms: Record<string, CanvasTransform>,
+  byId: Map<string, Instance>,
 ): string {
   const hasPort = shown.some((i) => i.type === "Port");
   const hasGlyph = shown.some((i) => i.type === "Glyph");
@@ -111,7 +132,7 @@ function reactFlowCode(
       const data = { ...glyphRecord(inst.props), rotation: transforms[inst.id]?.rotation ?? 0 };
       return `  { id: ${JSON.stringify(inst.id)}, type: "bboxGlyph", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: ${literal(data, "  ")} },`;
     }
-    return `  { id: ${JSON.stringify(inst.id)}, type: "bench", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: { element: ${instanceToJsx(entry, inst)} } },`;
+    return `  { id: ${JSON.stringify(inst.id)}, type: "bench", position: { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }, data: { element: ${instanceToJsx(entry, inst, byId, entries).replace(/\n/g, "\n    ")} } },`;
   });
   const lines = [
     `import { ReactFlow, Background } from "@xyflow/react";`,
@@ -148,6 +169,7 @@ function tldrawCode(
   shown: Instance[],
   positions: Record<string, CanvasPosition>,
   transforms: Record<string, CanvasTransform>,
+  byId: Map<string, Instance>,
 ): string {
   const hasPort = shown.some((i) => i.type === "Port");
   const hasGlyph = shown.some((i) => i.type === "Glyph");
@@ -175,7 +197,7 @@ function tldrawCode(
       const origin = tldrawOriginFor(pos, (rotationDeg * Math.PI) / 180, footprint);
       return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-glyph", x: ${Math.round(origin.x)}, y: ${Math.round(origin.y)}, rotation: ${radians}, /* ${rotationDeg}° */ props: ${literal(record, "  ")} },`;
     }
-    return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-bench", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: { instanceId: ${JSON.stringify(inst.id)} } }, // renders ${instanceToJsx(entry, inst)}`;
+    return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-bench", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: { instanceId: ${JSON.stringify(inst.id)} } }, // renders ${instanceToJsx(entry, inst, byId, entries).replace(/\n\s*/g, " ")}`;
   });
   const utilNames = [hasPort && "BBoxPortShapeUtil", hasGlyph && "BBoxGlyphShapeUtil", shown.some((i) => i.type !== "Port" && i.type !== "Glyph") && "BenchShapeUtil"].filter(
     (n): n is string => !!n,
@@ -205,10 +227,20 @@ function withRotationStyle(jsx: string, rotationDeg: number): string {
   return `${jsx.slice(0, -3)} style={{ transform: "rotate(${rotationDeg}deg)" }} />`;
 }
 
-function domCode(entries: ComponentEntry[], shown: Instance[], transforms: Record<string, CanvasTransform>): string {
-  const imports = Array.from(new Set(shown.map((i) => i.type))).sort();
+function domCode(entries: ComponentEntry[], shown: Instance[], transforms: Record<string, CanvasTransform>, byId: Map<string, Instance>): string {
+  // Imports cover every type that will print, members included.
+  const printed = new Set<string>();
+  const walk = (i: Instance) => {
+    printed.add(i.type);
+    for (const id of i.members ?? []) {
+      const c = byId.get(id);
+      if (c) walk(c);
+    }
+  };
+  shown.forEach(walk);
+  const imports = Array.from(printed).sort();
   const lines = shown.map((inst) => {
-    const jsx = instanceToJsx(entries.find((e) => e.name === inst.type)!, inst);
+    const jsx = instanceToJsx(entries.find((e) => e.name === inst.type)!, inst, byId, entries);
     return inst.type === "Glyph" ? withRotationStyle(jsx, transforms[inst.id]?.rotation ?? 0) : jsx;
   });
   return [`import { ${imports.join(", ")} } from "@/components/bbox-ui";`, "", ...lines].join("\n");
@@ -218,6 +250,7 @@ export function CodeView({
   render,
   entries,
   instances,
+  roots,
   selectedIds,
   positions,
   transforms,
@@ -225,18 +258,22 @@ export function CodeView({
   render: Render;
   entries: ComponentEntry[];
   instances: Instance[];
+  roots: Instance[];
   selectedIds: string[];
   positions: Record<string, CanvasPosition>;
   transforms: Record<string, CanvasTransform>;
 }) {
   const [copied, setCopied] = useState(false);
-  const shown = selectedIds.length > 0 ? instances.filter((i) => selectedIds.includes(i.id)) : instances;
+  const byId = new Map(instances.map((i) => [i.id, i]));
+  // A selected MEMBER prints on its own, as the thing you are looking at;
+  // otherwise the roots print with their members nested.
+  const shown = selectedIds.length > 0 ? instances.filter((i) => selectedIds.includes(i.id)) : roots;
   const code =
     render === "dom"
-      ? domCode(entries, shown, transforms)
+      ? domCode(entries, shown, transforms, byId)
       : render === "reactflow"
-        ? reactFlowCode(entries, shown, positions, transforms)
-        : tldrawCode(entries, shown, positions, transforms);
+        ? reactFlowCode(entries, shown, positions, transforms, byId)
+        : tldrawCode(entries, shown, positions, transforms, byId);
 
   return (
     <div data-slot="code-view" data-render={render} className="relative h-full min-h-0 overflow-auto">
@@ -259,8 +296,8 @@ export function CodeView({
       <pre className="m-0 p-6 font-mono text-[12.5px] leading-relaxed text-foreground">
         <code data-slot="code-text">{code}</code>
       </pre>
-      {selectedIds.length > 0 && selectedIds.length < instances.length && (
-        <div className="px-6 pb-4 text-[11px] text-muted-foreground">Showing the {selectedIds.length} selected of {instances.length}. Clear the selection to see all.</div>
+      {selectedIds.length > 0 && selectedIds.length < roots.length && (
+        <div className="px-6 pb-4 text-[11px] text-muted-foreground">Showing the {selectedIds.length} selected of {roots.length}. Clear the selection to see all.</div>
       )}
     </div>
   );

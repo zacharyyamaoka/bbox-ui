@@ -64,6 +64,21 @@ describe("GLYPH_FIELDS", () => {
     expect((bareGlyph.props.style as Record<string, unknown>).fontSize).toBe(GLYPH_SIZES.sm);
   });
 
+  it("sizePreset cascades — a header can hand its rung down to Glyph the same way it hands one to a Port", () => {
+    // WHY `sizePreset`, not `size`: this test predates Glyph v2's split of
+    // the old, single `size` field (a string preset, same id every other
+    // sized leaf's cascading field uses) into `sizePreset` (the preset
+    // layer, still the rung a header hands down) and a same-named `size`
+    // (a pixel override — see glyph.tsx's own header comment). `size`
+    // keeping `cascades: true` here would let an ancestor's string preset
+    // ("xl") land in a field every adapter reads as a number. Note this
+    // means Glyph does NOT actually receive a generic cross-component
+    // `size` cascade from a Bar/Header the way Port does — see
+    // packages/panel/test/members.test.ts's own "size cascades down the
+    // tree" suite, which uses Port for exactly that reason.
+    expect(field("sizePreset").cascades).toBe(true);
+  });
+
   it("padding's declared default equals Glyph's real default (glyph.tsx: padding = 0)", () => {
     expect(field("padding").defaultValue).toBe(0);
     expect((bareGlyph.props.style as Record<string, unknown>).padding).toBe(0);

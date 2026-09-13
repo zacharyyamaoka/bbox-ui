@@ -61,7 +61,14 @@ export interface CanvasTransform {
 export interface ViewportProps {
   /** The component registry, for rendering an instance by its type. */
   entries: ComponentEntry[];
+  /** Every instance on the bench, members included. */
   instances: Instance[];
+  /** The instances no other instance holds — what a render draws. Members
+   *  are drawn inside their parent by `renderInstance`, never as nodes. */
+  roots: Instance[];
+  /** Select one instance by id from inside a rendered parent (a member
+   *  click); `additive` extends the selection. */
+  onSelectInstance: (id: string, additive: boolean) => void;
   selectedIds: string[];
   positions: Record<string, CanvasPosition>;
   /** Replaces the whole selection. A canvas that supports marquee or

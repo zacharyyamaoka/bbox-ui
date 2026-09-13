@@ -21,6 +21,7 @@ import {
   PORT_DIRECTIONS,
   PORT_REVEALS,
   PORT_ROLES,
+  PORT_SIZE_RUNGS,
   PORT_TEXT_LAYOUTS,
   PORT_TEXT_SIZES,
   inwardTextLayout,
@@ -67,6 +68,7 @@ describe("PORT_FIELDS", () => {
       "defaultValue",
       "direction",
       "edge",
+      "size",
       "diameter",
       "role",
       "decoration",
@@ -106,7 +108,14 @@ describe("PORT_FIELDS", () => {
     expect(bareRoot.props["data-edge"]).toBe("left");
   });
 
-  it("diameter's declared default equals Port's real default and Port's own real rendered footprint", () => {
+  it("size's declared default equals Port's real default, cascades, and its options are the real PortSizeRung union", () => {
+    expect(field("size").defaultValue).toBe("md");
+    expect(field("size").cascades).toBe(true);
+    expect(bareRoot.props["data-size"]).toBe("md");
+    expect(field("size").options?.map((o) => o.value)).toEqual([...PORT_SIZE_RUNGS]);
+  });
+
+  it("diameter's declared default equals Port's real default and Port's own real rendered footprint — reached via the `size` cascade (size defaults to \"md\", whose preset governs diameter to \"md\")", () => {
     expect(field("diameter").defaultValue).toBe("md");
     expect(dotElement.props.diameter).toBe("md");
     expect(dotRendered.props.style.width).toBe(PORT_DIAMETERS.md);
@@ -136,9 +145,9 @@ describe("PORT_FIELDS", () => {
     expect(bareRoot.props["data-text-layout"]).toBe("right");
   });
 
-  it("textSize's declared default equals Port's real default", () => {
-    expect(field("textSize").defaultValue).toBe("sm");
-    expect(labelElement.props.textSize).toBe("sm");
+  it("textSize's declared default equals Port's real default — \"md\" (24px), not textSize's own former \"sm\" rung, now that a truly bare Port resolves it through the size cascade", () => {
+    expect(field("textSize").defaultValue).toBe("md");
+    expect(labelElement.props.textSize).toBe("md");
   });
 
   it("includes the shared APPEARANCE_FIELDS bundle verbatim (state/tone/lens) — spread, never nested under an `appearance` key (Zach's flat-property-space ruling)", () => {
@@ -198,6 +207,7 @@ describe("PORT_FIELDS", () => {
   it("every segments field's options are exactly its real source union, in the real declared order", () => {
     expect(field("direction").options?.map((o) => o.value)).toEqual(PORT_DIRECTIONS);
     expect(field("edge").options?.map((o) => o.value)).toEqual(BLOCK_SIDES);
+    expect(field("size").options?.map((o) => o.value)).toEqual([...PORT_SIZE_RUNGS]);
     expect(field("diameter").options?.map((o) => o.value)).toEqual(
       Object.keys(PORT_DIAMETERS),
     );
@@ -216,6 +226,7 @@ describe("PORT_FIELDS", () => {
   it("toArgTypes maps every segments field to a select control, number/toggle/text correctly", () => {
     const argTypes = toArgTypes(PORT_FIELDS);
     expect(argTypes.direction.control).toBe("select");
+    expect(argTypes.size.control).toBe("select");
     expect(argTypes.diameter.control).toBe("select");
     expect(argTypes.state.control).toBe("select");
     expect(argTypes.eligible.control).toBe("boolean");
@@ -227,27 +238,80 @@ describe("PORT_FIELDS", () => {
   });
 });
 
-describe("PORT_PRESETS", () => {
-  it("is empty — Port has no separate paint field for a preset to govern, colour is a hand-written lookup over STATE_TOKENS/TONE_TOKENS (see port.tsx's portDotStyle and port.presets.ts)", () => {
-    expect(PORT_PRESETS).toEqual([]);
-    expect(governedFieldIds(PORT_PRESETS)).toEqual([]);
+describe("PORT_PRESETS — governed-set discipline, now that `size` gives Port a real ladder", () => {
+  it("has exactly one preset per real PortSizeRung, id === size, selector 'size'", () => {
+    expect(PORT_PRESETS.map((p) => p.id)).toEqual([...PORT_SIZE_RUNGS]);
+    expect(PORT_PRESETS.every((p) => p.selector === "size")).toBe(true);
   });
 
-  it("does not throw assertDisjointPresets (vacuously true for an empty preset array)", () => {
+  it("every preset governs exactly {diameter, textSize} — Port's colour stays the hand-written lookup over STATE_TOKENS/TONE_TOKENS (port.tsx's portDotStyle), untouched by this ladder", () => {
+    for (const preset of PORT_PRESETS) {
+      expect([...preset.governs].sort()).toEqual(["diameter", "textSize"]);
+    }
+    expect(governedFieldIds(PORT_PRESETS).sort()).toEqual(["diameter", "textSize"]);
+  });
+
+  it("every `governs` entry has a matching key in that preset's own `values` — no authoring gap", () => {
+    for (const preset of PORT_PRESETS) {
+      for (const governedId of preset.governs) {
+        expect(Object.keys(preset.values)).toContain(governedId);
+        expect(preset.values[governedId]).not.toBeUndefined();
+      }
+    }
+  });
+
+  it("every governed value is itself a legal option of its own field", () => {
+    for (const preset of PORT_PRESETS) {
+      expect(field("diameter").options!.map((o) => o.value)).toContain(preset.values.diameter);
+      expect(field("textSize").options!.map((o) => o.value)).toContain(preset.values.textSize);
+    }
+  });
+
+  it('the "xl" rung pairs Port\'s largest real diameter ("lg", 18px — Port has no xl dot) with the largest text ("xl", 44px)', () => {
+    const xl = PORT_PRESETS.find((p) => p.id === "xl")!;
+    expect(xl.values).toEqual({ diameter: "lg", textSize: "xl" });
+  });
+
+  it("assertDisjointPresets(PORT_PRESETS) does not throw — every preset shares the single 'size' selector", () => {
     expect(() => assertDisjointPresets(PORT_PRESETS)).not.toThrow();
   });
 
-  it("resolveField on `state` is always winner \"override\" or \"default\", NEVER \"preset\" — the honest-empty case docs/T1-SPEC.md §4.7 calls out", () => {
+  it('resolveField on `state` is always winner "override" or "default", NEVER "preset"/"inherited" — PORT_PRESETS governs only diameter/textSize, never state', () => {
     const stateField = field("state");
     const withOverride = resolveField(stateField, { state: "wired" }, PORT_PRESETS);
     expect(withOverride.winner).toBe("override");
     expect(withOverride.resolved).toBe("wired");
     expect(withOverride.winningPresetId).toBeUndefined();
-    expect(withOverride.candidates[1]).toEqual({ layer: "preset", value: undefined });
+    expect(withOverride.candidates[2]).toEqual({ layer: "preset", value: undefined });
 
     const withoutOverride = resolveField(stateField, {}, PORT_PRESETS);
     expect(withoutOverride.winner).toBe("default");
     expect(withoutOverride.resolved).toBe("empty");
     expect(withoutOverride.winningPresetId).toBeUndefined();
+  });
+});
+
+describe("Port — the real component reached through the same size cascade the trace panel reads", () => {
+  it('size:"xl" paints an 18px dot (Port\'s diameter ceiling) and xl (44px) text', () => {
+    const xlRoot = call(Port, { size: "xl" });
+    const [xlDotElement, xlLabelElement] = xlRoot.props.children as [
+      { props: Record<string, unknown> },
+      { props: Record<string, unknown> },
+    ];
+    expect(xlDotElement.props.diameter).toBe("lg");
+    expect(xlLabelElement.props.textSize).toBe("xl");
+    const xlDotRendered = call(PortDot, xlDotElement.props);
+    expect(xlDotRendered.props.style.width).toBe(PORT_DIAMETERS.lg);
+    expect(xlDotRendered.props.style.height).toBe(PORT_DIAMETERS.lg);
+  });
+
+  it('an explicit diameter override reaches past size — size:"sm" with diameter:"lg" paints the explicit diameter; textSize still follows size', () => {
+    const overriddenRoot = call(Port, { size: "sm", diameter: "lg" });
+    const [dotElement2, labelElement2] = overriddenRoot.props.children as [
+      { props: Record<string, unknown> },
+      { props: Record<string, unknown> },
+    ];
+    expect(dotElement2.props.diameter).toBe("lg");
+    expect(labelElement2.props.textSize).toBe("sm");
   });
 });

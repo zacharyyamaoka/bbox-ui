@@ -21,6 +21,7 @@ import { glyphFootprint, type GlyphSize } from "@bbox-ui/core";
 import { BBoxGlyphShapeUtil, type BBoxGlyphShape, type BBoxGlyphShapeProps } from "@bbox-ui/adapter-tldraw";
 import type { CanvasPosition, CanvasTransform } from "../contract";
 import { centrePivotFor, normalizeDeg, tldrawOriginFor } from "../glyph-geometry";
+import { renderInstance } from "../render-instance";
 
 /**
  * Content rides a React context, not shape props: tldraw validates and
@@ -28,7 +29,13 @@ import { centrePivotFor, normalizeDeg, tldrawOriginFor } from "../glyph-geometry
  * shape stores only WHICH instance it is; the component method looks the
  * live one up. Same mechanism as demos/story-hosts, for the same reason.
  */
-const BenchContext = createContext<{ entries: ComponentEntry[]; instances: Instance[] }>({ entries: [], instances: [] });
+const BenchContext = createContext<{
+  entries: ComponentEntry[];
+  instances: Instance[];
+  byId: Map<string, Instance>;
+  selectedIds: string[];
+  onSelectInstance: (id: string, additive: boolean) => void;
+}>({ entries: [], instances: [], byId: new Map(), selectedIds: [], onSelectInstance: () => {} });
 
 interface BenchShapeProps {
   instanceId: string;
@@ -55,16 +62,15 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
     return false;
   }
   override component(shape: BenchShape) {
-    const { entries, instances } = useContext(BenchContext);
-    const inst = instances.find((i) => i.id === shape.props.instanceId);
-    const entry = inst && entries.find((e) => e.name === inst.type);
+    const { entries, byId, selectedIds, onSelectInstance } = useContext(BenchContext);
+    const inst = byId.get(shape.props.instanceId);
     return (
       <HTMLContainer
         data-slot="tl-instance"
         data-instance-id={shape.props.instanceId}
         style={{ width: shape.props.w, height: shape.props.h, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "all" }}
       >
-        {entry && inst ? entry.render(inst.props) : null}
+        {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance) : null}
       </HTMLContainer>
     );
   }
@@ -77,6 +83,26 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
 }
 
 const shapeUtils = [BenchShapeUtil, BBoxGlyphShapeUtil];
+
+/**
+ * The page's selection, reduced to the ids tldraw has a shape for.
+ *
+ * WHY the editor→page listeners compare against THIS and not the raw
+ * selection: a member (a Port inside a Stack) is selected on the page but
+ * has no shape — only roots do. Writing that selection into the editor
+ * means `setSelectedShapes([])`, and tldraw flushes its store listeners on
+ * the next frame. The echo then read "editor says [], page says [port]" and
+ * cleared the page. The probe that found it: select a member on the tldraw
+ * render, and the inspector went blank on pointer-down. Comparing
+ * shape-backed ids makes that echo a no-op while a real click on a shape
+ * still differs and wins.
+ */
+function shapeBackedSelection(editor: Editor, selectedIds: string[]): string {
+  return selectedIds
+    .filter((id) => editor.getShape(shapeIdFor(id)))
+    .sort()
+    .join("|");
+}
 const shapeIdFor = (instanceId: string): TLShapeId => createShapeId(`bench-${instanceId}`);
 const DEG = Math.PI / 180;
 
@@ -98,6 +124,8 @@ function glyphShapePropsFor(inst: Instance): Pick<BBoxGlyphShapeProps, "content"
 interface Props {
   entries: ComponentEntry[];
   instances: Instance[];
+  roots: Instance[];
+  onSelectInstance: (id: string, additive: boolean) => void;
   selectedIds: string[];
   positions: Record<string, CanvasPosition>;
   onSelectionChange: (ids: string[]) => void;
@@ -138,7 +166,11 @@ export function TldrawCanvas(p: Props) {
   const latest = useRef(p);
   latest.current = p;
 
-  const ctx = useMemo(() => ({ entries: p.entries, instances: p.instances }), [p.entries, p.instances]);
+  const byId = useMemo(() => new Map(p.instances.map((i) => [i.id, i])), [p.instances]);
+  const ctx = useMemo(
+    () => ({ entries: p.entries, instances: p.instances, byId, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance }),
+    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance],
+  );
 
   /** Create-or-update the one shape `inst` owns, branching only on the two
    *  facts that differ between a glyph and a bench box: which shape type it
@@ -194,18 +226,18 @@ export function TldrawCanvas(p: Props) {
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
-    const wanted = new Set(p.instances.map((i) => shapeIdFor(i.id)));
+    const wanted = new Set(p.roots.map((i) => shapeIdFor(i.id)));
     const existing = editor.getCurrentPageShapes().filter((s) => s.type === "bbox-bench" || s.type === "bbox-glyph");
     const stale = existing.filter((s) => !wanted.has(s.id)).map((s) => s.id);
     if (stale.length) editor.deleteShapes(stale);
-    for (const inst of p.instances) {
+    for (const inst of p.roots) {
       const pos = p.positions[inst.id] ?? { x: 0, y: 0 };
       syncShape(editor, inst, pos, p.transforms);
     }
     const selWanted = p.selectedIds.map(shapeIdFor).filter((id) => editor.getShape(id));
     const selCur = editor.getSelectedShapeIds();
     if ([...selWanted].sort().join("|") !== [...selCur].sort().join("|")) editor.setSelectedShapes(selWanted);
-  }, [p.instances, p.positions, p.transforms, p.selectedIds]);
+  }, [p.roots, p.positions, p.transforms, p.selectedIds]);
 
   useEffect(() => {
     editorRef.current?.user.updateUserPreferences({ colorScheme: resolvedTheme === "dark" ? "dark" : "light" });
@@ -229,7 +261,7 @@ export function TldrawCanvas(p: Props) {
             editor.user.updateUserPreferences({ colorScheme: resolvedTheme === "dark" ? "dark" : "light" });
             editor.setCurrentTool("select");
             // First fill from the page, then listen for the user's changes.
-            for (const inst of latest.current.instances) {
+            for (const inst of latest.current.roots) {
               const pos = latest.current.positions[inst.id] ?? { x: 0, y: 0 };
               syncShape(editor, inst, pos, latest.current.transforms);
             }
@@ -241,15 +273,18 @@ export function TldrawCanvas(p: Props) {
             // There is no re-entrancy flag to check here — see this file's
             // header comment for why one would guard nothing — the diff
             // checks below are what keep a page-driven write from reading
-            // back as new user intent.
+            // back as new user intent. Iterates `cur.roots`, not
+            // `cur.instances`: a member never gets its own shape, so
+            // looking one up would just fall through `if (!s) continue`
+            // every time — walking roots only skips that dead lookup.
             const onUserChange = () => {
               const cur = latest.current;
-              const shapeIdToInstanceId = new Map(cur.instances.map((i) => [shapeIdFor(i.id), i.id]));
+              const shapeIdToInstanceId = new Map(cur.roots.map((i) => [shapeIdFor(i.id), i.id]));
 
               const nextPositions: Record<string, CanvasPosition> = { ...cur.positions };
               let moved = false;
               let nextTransforms: Record<string, CanvasTransform> | null = null;
-              for (const inst of cur.instances) {
+              for (const inst of cur.roots) {
                 const s = editor.getShape(shapeIdFor(inst.id));
                 if (!s) continue;
 
@@ -315,12 +350,20 @@ export function TldrawCanvas(p: Props) {
               if (moved) cur.onPositionsChange(nextPositions);
               if (nextTransforms) cur.onTransformsChange(nextTransforms);
 
+              // WHY `shapeBackedSelection`, not the raw `cur.selectedIds`
+              // compare HEAD originally had: a member (a Port inside a
+              // Stack) is selected on the page but has no shape, so a shape
+              // list derived from `getSelectedShapeIds()` can never contain
+              // it — comparing straight against `cur.selectedIds` read that
+              // as a permanent mismatch and kept firing `onSelectionChange`,
+              // clearing the member selection on the very next tick. See
+              // `shapeBackedSelection`'s own doc comment.
               const ids = editor
                 .getSelectedShapeIds()
                 .map((id) => shapeIdToInstanceId.get(id))
                 .filter((id): id is string => !!id)
                 .sort();
-              if (ids.join("|") !== [...cur.selectedIds].sort().join("|")) cur.onSelectionChange(ids);
+              if (ids.join("|") !== shapeBackedSelection(editor, cur.selectedIds)) cur.onSelectionChange(ids);
             };
             const stop = editor.store.listen(onUserChange, { source: "user", scope: "document" });
             const stopSel = editor.store.listen(onUserChange, { source: "user", scope: "session" });

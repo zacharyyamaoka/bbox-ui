@@ -47,7 +47,7 @@ export interface StackProps extends ComponentProps<"div"> {
 /**
  * Lays `children` (structural — an ordered run of stackable members,
  * almost always `<Block>`, top to bottom, array order = paint order; not
- * a `FieldSpec` row, same reasoning as `RowContainer`'s own `children` —
+ * a `FieldSpec` row, same reasoning as `Flex`'s own `children` —
  * composed by hand in stories/hosts) down one column.
  */
 export function Stack({

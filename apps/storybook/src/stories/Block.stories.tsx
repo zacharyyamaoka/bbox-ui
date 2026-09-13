@@ -37,7 +37,7 @@ import type { ComponentType } from "react";
  * bare `<Block {...args} />`, which would leave every field but
  * width/height inert. `children`/title/description text are NOT
  * `FieldSpec` rows (structural, composed by hand) — same reasoning
- * `RowContainer`/`Stack`'s own stories already document.
+ * `Flex`/`Stack`'s own stories already document.
  *
  * DEVIATION from Port/Pill's own `Meta<typeof Component>` shape, reported
  * per the lane brief: `Port`/`Pill` genuinely accept every one of their

@@ -1,7 +1,8 @@
 "use client";
 
-import type { ComponentEntry, Instance, PanelVariant } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance, InstanceNode, PanelVariant } from "@bbox-ui/panel";
 import { MIXED_BENCH } from "@bbox-ui/panel";
+import type { NavigatorVariant } from "./navigator";
 import {
   Sidebar,
   SidebarContent,
@@ -20,8 +21,16 @@ interface BenchSidebarProps {
   onActiveNameChange: (name: string) => void;
   isMixed: boolean;
   instances: Instance[];
+  tree: InstanceNode[];
   selectedIds: Set<string>;
   onToggleSelected: (id: string) => void;
+  onSelectionChange: (ids: string[]) => void;
+  onMoveInstance: (id: string, parentId: string | null, index: number) => void;
+  canDropInstance: (id: string, parentId: string | null) => boolean;
+  glyph: (type: string) => string;
+  navigator: NavigatorVariant;
+  /** Roots only — a Block's seven slot fills are not "instances" to the stepper. */
+  rootCount: number;
   onAdd: (type: string) => void;
   onRemoveLast: () => void;
   onRandomize: () => void;
@@ -40,12 +49,6 @@ interface BenchSidebarProps {
  * height top to bottom even if we don't use the full height".
  */
 export function BenchSidebar(p: BenchSidebarProps) {
-  const showCheckboxes = p.instances.length > 1;
-  // WHY an instance row may wrap and its preview is never clipped: a Port
-  // with its label on the left, or above, is wider and taller than one row,
-  // and overflow:hidden cut the label off ("tick" painted over the dot). The
-  // preview is the truth of what the instance looks like; the row bends
-  // around it.
 
   return (
     <Sidebar collapsible="none" data-slot="bench-sidebar" className="h-full shrink-0 border-r border-sidebar-border">
@@ -84,30 +87,21 @@ export function BenchSidebar(p: BenchSidebarProps) {
         <SidebarGroup>
           <SidebarGroupLabel>{p.isMixed ? "Bench" : "Instances"}</SidebarGroupLabel>
           <SidebarGroupContent className="flex flex-col gap-1.5 px-2">
-            {p.instances.map((inst) => (
-              <label
-                key={inst.id}
-                data-slot="subject-row"
-                data-subject-id={inst.id}
-                data-subject-type={inst.type}
-                className="flex flex-wrap items-center gap-2 rounded-md px-1 py-1.5 text-xs hover:bg-sidebar-accent"
-              >
-                {showCheckboxes && (
-                  <input
-                    type="checkbox"
-                    data-slot="subject-checkbox"
-                    checked={p.selectedIds.has(inst.id)}
-                    onChange={() => p.onToggleSelected(inst.id)}
-                    className="accent-foreground"
-                  />
-                )}
-                {p.isMixed && (
-                  <span className="w-14 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{inst.type}</span>
-                )}
-                <div data-slot="subject-preview" className="flex min-h-6 min-w-0 max-w-full items-center overflow-visible [&>*]:max-w-full">{p.entryFor(inst.type).render(inst.props)}</div>
-              </label>
-            ))}
-
+            {/* The navigator: a tree, rows highlighted when selected, no
+                checkboxes. Zach, 2026-09-11: "its actually basically turning
+                into a tree … instead of check boxes … more ergonomic shift
+                multi select … highlight the rows". react-arborist draws it,
+                his pick of the five compared that day. */}
+            <div data-slot="navigator-host" data-navigator={p.navigator.id} className="min-h-0">
+              <p.navigator.Navigator
+                roots={p.tree}
+                selectedIds={Array.from(p.selectedIds)}
+                onSelectionChange={p.onSelectionChange}
+                onMove={p.onMoveInstance}
+                canDrop={p.canDropInstance}
+                glyph={p.glyph}
+              />
+            </div>
             {p.isMixed ? (
               <div data-slot="bench-adder" className="mt-1 flex flex-wrap gap-1">
                 {p.entries.map((e) => (
@@ -122,7 +116,7 @@ export function BenchSidebar(p: BenchSidebarProps) {
                     + {e.name}
                   </button>
                 ))}
-                {p.instances.length > 1 && (
+                {p.rootCount > 1 && (
                   <Button size="icon-sm" variant="outline" data-slot="instance-minus" onClick={p.onRemoveLast} title="Remove the last one">
                     −
                   </Button>
@@ -130,11 +124,11 @@ export function BenchSidebar(p: BenchSidebarProps) {
               </div>
             ) : (
               <div data-slot="instance-stepper" className="mt-1 flex items-center gap-2">
-                <Button size="icon-sm" variant="outline" data-slot="instance-minus" onClick={p.onRemoveLast} disabled={p.instances.length <= 1}>
+                <Button size="icon-sm" variant="outline" data-slot="instance-minus" onClick={p.onRemoveLast} disabled={p.rootCount <= 1}>
                   −
                 </Button>
                 <span data-slot="instance-count" className="min-w-[4.5rem] text-center text-xs text-muted-foreground">
-                  {p.instances.length} {p.instances.length === 1 ? "instance" : "instances"}
+                  {p.rootCount} {p.rootCount === 1 ? "instance" : "instances"}
                 </span>
                 <Button size="icon-sm" variant="outline" data-slot="instance-plus" onClick={() => p.onAdd(p.activeName)}>
                   +

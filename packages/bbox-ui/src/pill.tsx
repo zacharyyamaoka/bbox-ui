@@ -5,10 +5,12 @@ import { cn } from "./lib/utils";
 import { toneOverride, type AppearanceState, type Lens, type Tone, paintVar } from "./appearance";
 import {
   PILL_PAINT_FIELDS,
+  PILL_SIZES,
   type PaintToken,
   type PillFillStyle,
   type PillLineStyle,
   type PillLineThickness,
+  type PillSize,
 } from "./pill.fields";
 import { PILL_PRESETS } from "./pill.presets";
 
@@ -71,6 +73,17 @@ const LINE_THICKNESS_PX: Record<PillLineThickness, number> = {
   thin: 1,
   med: 2,
   thick: 3,
+};
+
+/** Padding per `size` rung. `md` is `"2px 12px"` — the exact pixel
+ * equivalent of the pre-`size` shell's hardcoded `px-3 py-0.5` Tailwind
+ * classes (`0.75rem`/`0.125rem` at the default 16px root), so shipping
+ * `size` changes nothing for a Pill that never sets it. */
+const PILL_SIZE_PADDING: Record<PillSize, string> = {
+  sm: "0 8px",
+  md: "2px 12px",
+  lg: "2px 14px",
+  xl: "4px 16px",
 };
 
 // WHY a total Record and not passing `lineStyleResolved` straight through
@@ -142,6 +155,10 @@ export interface PillProps extends Omit<ComponentProps<"span">, "children"> {
   fillStyle?: PillFillStyle;
   fillColor?: PaintToken;
   fillOpacity?: number;
+  /** The chip's own font-size/padding rung (`PILL_SIZES`) — ungoverned by
+   * any preset, unlike `Port`'s `size`, but still `cascades` so a header
+   * can hand its rung down the same way. */
+  size?: PillSize;
   children?: ReactNode;
 }
 
@@ -185,6 +202,7 @@ export function Pill({
   fillStyle,
   fillColor,
   fillOpacity = 1,
+  size = "md",
   className,
   style,
   children,
@@ -209,10 +227,11 @@ export function Pill({
       data-state={state}
       data-tone={tone}
       data-lens={lens}
+      data-size={size}
       data-line-style={lineStyleResolved}
       data-fill-style={fillStyleResolved}
       className={cn(
-        "box-border inline-flex w-fit items-center justify-center whitespace-nowrap rounded-full px-3 py-0.5 text-center leading-tight text-foreground",
+        "box-border inline-flex w-fit items-center justify-center whitespace-nowrap rounded-full text-center leading-tight text-foreground",
         className,
       )}
       style={{
@@ -220,6 +239,8 @@ export function Pill({
         borderWidth: hollow ? 0 : LINE_THICKNESS_PX[lineThickness],
         borderColor: paintColor(lineColorResolved, lineOpacity),
         background: paintColor(fillColorResolved, FILL_STYLE_ALPHA[fillStyleResolved] * fillOpacity),
+        padding: PILL_SIZE_PADDING[size],
+        fontSize: PILL_SIZES[size],
         ...style,
       }}
       {...props}

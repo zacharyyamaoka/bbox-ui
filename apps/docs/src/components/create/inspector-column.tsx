@@ -1,10 +1,12 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
-import { HOST_FIELDS, HostFactsSection, type Instance, type PanelVariant, type Subject } from "@bbox-ui/panel";
+import { HOST_FIELDS, HostFactsSection, isSlotFill, type ComponentEntry, type Instance, type PanelVariant, type Subject } from "@bbox-ui/panel";
 import { glyphFootprint, type GlyphSize } from "@bbox-ui/core";
 import { RENDERS, type CanvasPosition, type CanvasTransform, type Render } from "./contract";
+import { MembersPath, memberListsFor } from "./members-section";
+import type { InspectorLayoutVariant } from "./inspector-layout";
 
 interface InspectorColumnProps {
   variant: PanelVariant;
@@ -33,6 +35,21 @@ interface InspectorColumnProps {
   transforms: Record<string, CanvasTransform>;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
   onTransformsChange: (next: Record<string, CanvasTransform>) => void;
+  layout: InspectorLayoutVariant;
+  entries: ComponentEntry[];
+  instances: Instance[];
+  subject: Instance | null;
+  onAddMember: (parentId: string, type: string) => void;
+  onRemoveMember: (id: string) => void;
+  onMoveMember: (parentId: string, from: number, to: number) => void;
+  onSetProp: (id: string, fieldId: string, value: FieldValue) => void;
+  onSelectInstance: (id: string) => void;
+  /** Current column width in px, and its drag bounds — Workbench owns and
+   *  persists the value, this component only renders the handle. */
+  width: number;
+  minWidth: number;
+  maxWidth: number;
+  onWidthChange: (width: number) => void;
 }
 
 /** Renderer-section host facts for one instance — x/y/rotation from the
@@ -56,6 +73,59 @@ function hostFactsProps(
     return { x: pos.x, y: pos.y, rotation, w: footprint.w, h: footprint.h };
   }
   return { x: pos.x, y: pos.y, rotation, w: 0, h: 0 };
+}
+
+/** A thin drag handle on the column's LEFT edge — it borders the viewport,
+ *  so dragging left grows the inspector and dragging right shrinks it.
+ *  Plain pointer events, no library: the same shape as FigmaDense's own
+ *  label-scrub drag, just resizing a column instead of a number. */
+function ResizeHandle({
+  width,
+  minWidth,
+  maxWidth,
+  onWidthChange,
+}: {
+  width: number;
+  minWidth: number;
+  maxWidth: number;
+  onWidthChange: (width: number) => void;
+}) {
+  const drag = useRef<{ startX: number; startWidth: number } | null>(null);
+  const [active, setActive] = useState(false);
+
+  function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    drag.current = { startX: e.clientX, startWidth: width };
+    setActive(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!drag.current) return;
+    const dx = e.clientX - drag.current.startX;
+    const next = Math.min(maxWidth, Math.max(minWidth, drag.current.startWidth - dx));
+    onWidthChange(next);
+  }
+  function onPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    drag.current = null;
+    setActive(false);
+  }
+
+  return (
+    <div
+      data-slot="inspector-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize inspector panel"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      className={`absolute inset-y-0 left-0 z-10 w-2 -translate-x-1/2 cursor-col-resize touch-none ${active ? "bg-primary/25" : "bg-transparent hover:bg-primary/15"}`}
+    />
+  );
 }
 
 /**
@@ -86,8 +156,10 @@ export function InspectorColumn(p: InspectorColumnProps) {
     <aside
       data-slot="inspector-column"
       data-scrolls={scrolls}
-      className="flex h-full w-[22rem] shrink-0 flex-col border-l border-border bg-background"
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
+      style={{ width: p.width }}
     >
+      <ResizeHandle width={p.width} minWidth={p.minWidth} maxWidth={p.maxWidth} onWidthChange={p.onWidthChange} />
       {p.shared && (
         <div data-slot="shared-field-note" className="border-b border-border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
           <strong className="text-foreground">{p.selectedTypes.join(" + ")}</strong> —{" "}
@@ -102,26 +174,43 @@ export function InspectorColumn(p: InspectorColumnProps) {
           )}
         </div>
       )}
+      <MembersPath instances={p.instances} subject={p.subject} onSelect={p.onSelectInstance} />
       <div ref={scrollRef} data-slot="inspector-scroll" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div data-slot="panel-variant-host" data-variant={p.variant.id} className="[&>*]:!w-full [&>*]:!max-w-none [&>*]:!rounded-none [&>*]:!border-0 [&>*]:!shadow-none">
-          {p.subjects.length > 0 && p.fields.length === 0 ? (
-            <div data-slot="no-shared-fields" className="p-4 text-sm text-muted-foreground">
-              <strong className="text-foreground">{p.selectedTypes.join(" + ")}</strong>
-              <p className="mt-1">
-                No field is common to all {p.selectedCount} selected instances, so there is nothing a single control could write. Deselect a type to get a panel back.
-              </p>
-            </div>
-          ) : (
-            <p.variant.Panel
-              componentName={p.componentName}
-              fields={p.fields}
-              presets={p.presets}
-              subjects={p.subjects}
-              toSubject={p.toSubject}
-              onChange={p.onChange}
-              onClearOverride={p.onClearOverride}
-            />
-          )}
+          {(() => {
+            const panel =
+              p.subjects.length > 0 && p.fields.length === 0 ? (
+                <div data-slot="no-shared-fields" className="p-4 text-sm text-muted-foreground">
+                  <strong className="text-foreground">{p.selectedTypes.join(" + ")}</strong>
+                  <p className="mt-1">
+                    No field is common to all {p.selectedCount} selected instances, so there is nothing a single control could write. Deselect a type to get a panel back.
+                  </p>
+                </div>
+              ) : (
+                <p.variant.Panel
+                  componentName={p.componentName}
+                  fields={p.fields}
+                  presets={p.presets}
+                  subjects={p.subjects}
+                  toSubject={p.toSubject}
+                  onChange={p.onChange}
+                  onClearOverride={p.onClearOverride}
+                />
+              );
+            // The member lists a subject carries, computed automatically
+            // from its entry (slots → one per slot; members → one; else none)
+            // and handed to the chosen layout together with the panel. The
+            // panel designs never learn about lists; the layouts never
+            // learn about fields.
+            const lists = memberListsFor(p.entries, p.instances, p.subject, {
+              onAddMember: p.onAddMember,
+              onRemoveMember: p.onRemoveMember,
+              onMoveMember: p.onMoveMember,
+              onSetProp: p.onSetProp,
+              onSelect: p.onSelectInstance,
+            });
+            return <p.layout.Layout subjectName={p.componentName} panel={panel} lists={lists} isSlotFill={isSlotFill(p.subject ?? undefined)} />;
+          })()}
           {p.selectedInstances.length > 0 && <RendererSection {...p} />}
         </div>
       </div>

@@ -29,6 +29,7 @@ export const GLYPH_FIELDS: FieldSpec[] = [
     kind: "segments",
     defaultValue: "sm",
     options: SIZE_OPTIONS,
+    cascades: true,
   },
   {
     id: "size",

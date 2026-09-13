@@ -1,10 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import type { FieldValue } from "@bbox-ui/schema";
 import { GlyphPicker } from "@bbox-ui/glyph-picker";
 import type { GlyphSize } from "@bbox-ui/core";
 import type { CanvasTransform } from "../contract";
+import { renderInstance } from "../render-instance";
 
 /**
  * Plain DOM. The components exactly as they render with no host around them,
@@ -20,22 +22,26 @@ import type { CanvasTransform } from "../contract";
 export function DomPreview({
   entries,
   instances,
+  roots,
   selectedIds,
   onSelectionChange,
   transforms,
   onInstancePropsChange,
+  onSelectInstance,
 }: {
   entries: ComponentEntry[];
   instances: Instance[];
+  roots: Instance[];
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
   transforms: Record<string, CanvasTransform>;
   onInstancePropsChange: (id: string, patch: Record<string, FieldValue | undefined>) => void;
+  onSelectInstance: (id: string, additive: boolean) => void;
 }) {
-  const entryFor = (t: string) => entries.find((e) => e.name === t)!;
+  const byId = useMemo(() => new Map(instances.map((i) => [i.id, i])), [instances]);
   return (
     <div data-slot="dom-preview" className="flex h-full min-h-0 flex-wrap content-start items-start gap-6 overflow-auto p-6">
-      {instances.map((inst) => {
+      {roots.map((inst) => {
         const on = selectedIds.includes(inst.id);
         const select = (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
           if (e.shiftKey || e.metaKey || e.ctrlKey) {
@@ -87,10 +93,15 @@ export function DomPreview({
             data-instance-id={inst.id}
             data-selected={on}
             onClick={select}
-            className="rounded-md p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-ring"
+            // WHY no rounded-* here: `outline` traces the element's own
+            // border-radius, so a rounded box drew the selection as a soft
+            // pill instead of tldraw's sharp-cornered indicator (Zach,
+            // 2026-09-11). bbox-accent — not the neutral `ring` token — is
+            // this app's real blue, already used for Port's role text.
+            className="p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
             title={`${inst.type} · ${inst.id}`}
           >
-            {entryFor(inst.type).render(inst.props)}
+            {renderInstance(entries, byId, inst, selectedIds, onSelectInstance)}
           </button>
         );
       })}
