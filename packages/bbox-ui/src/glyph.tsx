@@ -1,3 +1,5 @@
+"use client";
+
 import { createContext, useContext, type ComponentProps, type ReactNode } from "react";
 import { decodeGlyphContent } from "@bbox-ui/glyph-content";
 
