@@ -22,6 +22,16 @@
  *   G7  the row's OVERRIDE tag still works inside the new section chrome
  *       (main's `RowLabel`, not a copy of it)
  *   G8  two fields sharing FieldSpec.group still render on one row
+ *   G10 a member list's header is drawn as a PROPERTY ROW — same ink, type,
+ *       weight and left edge as a real field row in the same section body,
+ *       and no taller ("I don't like how its greyed out and tab indented, I
+ *       do like how its more compact now though")
+ *   G11 the shipped default never marks a folded header; the flag that does
+ *       is opt-in and off ("leave it off by default, I prefer simplicity")
+ *   G12 an open dropdown is never cut off by the panel's own scroll box —
+ *       every row painted and hittable, nothing off-screen ("I did a drop
+ *       down on the state property, and instead of showing me the drop down
+ *       menu, its cut off with a scroll wheel")
  *   G9  both themes render with no console error
  *
  * Usage: node demos/capture-inspector-v5b.mjs <url> <outDir>
@@ -428,6 +438,15 @@ async function gateProvenanceParity(theme) {
   assert(inSections.text === "override", `${label}: G7 an overridden row grows main's plain-word OVERRIDE tag inside the section chrome (“${inSections.text}”)`);
   assert(inSections.tag === "override", `${label}: G7 it carries the tag's own data-tag, not a dot`);
   assert(inSections.value === "17", `${label}: G7 the value the row shows is the one that was typed`);
+  // The shipped default keeps `foldedOverrideMark: false` — "leave it off by
+  // default, I prefer simplicity". Folding Layout with a stored override must
+  // therefore still produce a bare header.
+  await click(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="fold-toggle"]`);
+  assert(
+    (await count(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="section-title"] [data-slot="field-provenance-tag"]`)) === 0,
+    `${label}: G11 the shipped default marks nothing on a folded header, override or not`,
+  );
+  await click(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="fold-toggle"]`);
   const overrideShot = await shotInspector(`${theme}-hairline-override`);
 
   await setSelect('[data-slot="inspector-design-picker"]', "current");
@@ -447,13 +466,19 @@ async function gateProvenanceParity(theme) {
   // the fold — the whole point of putting it on a header.
   await setSelect('[data-slot="inspector-design-picker"]', "ledger");
   await sleep(420);
-  const sectionTag = await text(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="section-title"] [data-slot="field-provenance-tag"]`);
-  assert(/override/.test(sectionTag ?? ""), `${label}: P2's Layout header aggregates its rows' tag (“${sectionTag}”)`);
-  assert((sectionTag ?? "").startsWith("1 "), `${label}: the aggregate counts the rows, not the sections (“${sectionTag}”)`);
+  // The mark is a FOLDED mark: a status line earns its ink exactly when the
+  // content it summarises cannot be seen, and not before.
+  assert(
+    (await count(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="section-title"] [data-slot="field-provenance-tag"]`)) === 0,
+    `${label}: P2 marks nothing while the section is OPEN — its rows already carry their own tags`,
+  );
   await click(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="fold-toggle"]`);
+  const sectionTag = await text(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="section-title"] [data-slot="field-provenance-tag"]`);
+  assert(/override/.test(sectionTag ?? ""), `${label}: folded, P2's Layout header aggregates its rows' tag (“${sectionTag}”)`);
+  assert((sectionTag ?? "").startsWith("1 "), `${label}: the aggregate counts the rows, not the sections (“${sectionTag}”)`);
   assert(
     (await count(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="field-provenance-tag"]`)) === 1,
-    `${label}: folded, P2's header still reports the override — which P1 structurally cannot`,
+    `${label}: folded, P2's header reports the override — which the shipped default deliberately does not`,
   );
   assert(
     (await count(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="standard-row"]`)) === 0,
@@ -462,6 +487,111 @@ async function gateProvenanceParity(theme) {
   const taggedShot = await shotInspector(`${theme}-ledger-tagged-folded`);
   await click(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="fold-toggle"]`);
   return { overrideShot, taggedShot };
+}
+
+/**
+ * G10 — a member list's header is drawn as a PROPERTY ROW, not as a demoted
+ * caption.
+ *
+ * Zach, 2026-09-12, of a Body section's "Body · empty" sitting a tab right
+ * of the "Wrap" row above it: "I don't like how its greyed out and tab
+ * indented, I do like how its more compact now though." So this measures the
+ * three demotions against a real sibling row in the SAME section body —
+ * ink, type and left edge — rather than against a remembered constant, and
+ * it keeps the height check that stops a fix from undoing the compactness he
+ * liked.
+ */
+async function gateListRowReadsAsAProperty(label) {
+  const cmp = await evaluate(`(() => {
+    const body = Array.from(document.querySelectorAll('${PANEL} [data-slot="section-body"]'))
+      .find((b) => b.querySelector('[data-slot="list-header"]') && b.querySelector('[data-slot="standard-row"]'));
+    if (!body) throw new Error("no section holds both a property row and a member list");
+    const listLabel = body.querySelector('[data-slot="list-header"] [data-slot="header-label"]');
+    const fieldLabel = body.querySelector('[data-slot="standard-row"] [data-slot="field-label"]');
+    const read = (el) => {
+      const cs = getComputedStyle(el);
+      return { size: cs.fontSize, weight: cs.fontWeight, color: cs.color, left: Math.round(el.getBoundingClientRect().left) };
+    };
+    const listRow = body.querySelector('[data-slot="list-header"]');
+    const fieldRow = body.querySelector('[data-slot="standard-row"]');
+    return {
+      list: read(listLabel),
+      field: read(fieldLabel),
+      listHeight: Math.round(listRow.getBoundingClientRect().height),
+      fieldHeight: Math.round(fieldRow.getBoundingClientRect().height),
+      summaryLeft: Math.round((listRow.querySelector('[data-slot="header-label"]').parentElement.getBoundingClientRect().right)),
+    };
+  })()`);
+  assert(cmp.list.left === cmp.field.left, `${label}: G10 a list header starts on the same left edge as a property row — no tab indent (${cmp.list.left} vs ${cmp.field.left})`);
+  assert(cmp.list.color === cmp.field.color, `${label}: G10 it is painted in the same ink, not greyed out (${cmp.list.color} vs ${cmp.field.color})`);
+  assert(cmp.list.size === cmp.field.size, `${label}: G10 and at the same type size (${cmp.list.size} vs ${cmp.field.size})`);
+  assert(cmp.list.weight === cmp.field.weight, `${label}: G10 and the same weight (${cmp.list.weight} vs ${cmp.field.weight})`);
+  assert(Math.abs(cmp.listHeight - cmp.fieldHeight) <= 2, `${label}: G10 and it stays as compact as the row beside it (${cmp.listHeight} vs ${cmp.fieldHeight})`);
+}
+
+/**
+ * G12 — an open dropdown is never cut off by the panel's own scrollbar.
+ *
+ * Zach, 2026-09-12, on Port's State row: "I did a drop down on the state
+ * property, and instead of showing me the drop down menu, its cut off with a
+ * scroll wheel." Reproduced before the fix at 22px of a six-row menu sheared
+ * off at `[data-slot="inspector-scroll"]`'s edge.
+ *
+ * WHY the assertion is `elementFromPoint` on the LAST row and not a
+ * rectangle comparison: the menu is `position: fixed` now, so it is SUPPOSED
+ * to extend past the scroller's box — a rect test would fail on the fixed
+ * version and pass on a clipped one that happened to fit. What matters is
+ * whether the last row is actually painted and clickable, which is the
+ * question a person is asking when they open a menu.
+ */
+async function gateDropdownEscapesTheScroller(label) {
+  // Bottom of the scroller is where the old bug lived.
+  await evaluate(`(() => { const sc = document.querySelector('[data-slot="inspector-scroll"]'); sc.scrollTop = sc.scrollHeight; })()`);
+  await sleep(280);
+  const opened = await evaluate(`(() => {
+    const sc = document.querySelector('[data-slot="inspector-scroll"]');
+    const top = sc.getBoundingClientRect().top;
+    const triggers = Array.from(document.querySelectorAll('${PANEL} [data-slot="named-dropdown-trigger"]'))
+      .map((el) => ({ el, r: el.getBoundingClientRect() }))
+      .filter((x) => x.r.top > top)
+      .sort((a, b) => b.r.top - a.r.top);
+    if (triggers.length === 0) return null;
+    triggers[0].el.click();
+    return { field: triggers[0].el.closest("[data-field]")?.getAttribute("data-field") ?? "?" };
+  })()`);
+  assert(opened !== null, `${label}: G12 the panel has a dropdown near the foot of its scroller to test`);
+  await sleep(260);
+  const menu = await evaluate(`(() => {
+    const menu = document.querySelector('[data-slot="named-dropdown-menu"]');
+    if (!menu) return null;
+    const rows = Array.from(menu.querySelectorAll('[data-slot="named-dropdown-row"]'));
+    const hit = (el) => {
+      const r = el.getBoundingClientRect();
+      const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return menu.contains(at);
+    };
+    const m = menu.getBoundingClientRect();
+    return {
+      rows: rows.length,
+      reachable: rows.filter(hit).length,
+      placement: menu.getAttribute("data-placement"),
+      position: getComputedStyle(menu).position,
+      offViewport: Math.round(Math.max(0, m.bottom - innerHeight) + Math.max(0, -m.top)),
+      insideScroller: document.querySelector('[data-slot="inspector-scroll"]').contains(menu),
+    };
+  })()`);
+  assert(menu !== null, `${label}: G12 the menu opened`);
+  assert(menu.position === "fixed", `${label}: G12 it is placed against the viewport, not inside the scroller's box (${menu.position})`);
+  assert(menu.rows > 0, `${label}: G12 it has rows (${menu.rows})`);
+  assert(menu.reachable === menu.rows, `${label}: G12 every row is painted and hittable — none sheared off (${menu.reachable} of ${menu.rows})`);
+  assert(menu.offViewport === 0, `${label}: G12 and none of it falls off the screen instead (${menu.offViewport}px)`);
+  assert(menu.insideScroller, `${label}: G12 while still a DOM descendant of the scroller, so outside-click still knows its own menu`);
+  await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))`);
+  await sleep(160);
+  assert((await count('[data-slot="named-dropdown-menu"]')) === 0, `${label}: G12 Escape closes it`);
+  await evaluate(`(() => { const sc = document.querySelector('[data-slot="inspector-scroll"]'); sc.scrollTop = 0; })()`);
+  await sleep(200);
+  return opened.field;
 }
 
 /** S4, which needed no new work: two fields sharing `group` on one row. */
@@ -513,6 +643,8 @@ try {
       await gateOneHeaderPerList(label);
       await gateHoverChevron(label);
       await gateGroupRow(label);
+      await gateListRowReadsAsAProperty(label);
+      await gateDropdownEscapesTheScroller(label);
 
       // Hover capture: the chevron, revealed, on a real pointer.
       await hover('[data-slot="inspector-section"][data-open="true"] [data-slot="section-title"]');
@@ -547,13 +679,19 @@ try {
       files.compact = await shotInspector(`${theme}-${design.id}-compact`);
       await click('[data-slot="density-button"][data-density="comfortable"]');
 
-      // P3's host-owned stratum, and its absence from the other two.
+      // The host-owned section ships in EVERY design now — it stopped being
+      // P3's feature on 2026-09-12 ("its just another header and fields").
+      // What P3 still owns is the RULE that marks the boundary.
       const hasRenderer = (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"]`)) > 0;
+      assert(hasRenderer, `${label}: the Renderer section is built for every design, not gated on one`);
+      const rendererLabelHere = await text(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="header-label"]`);
+      assert(rendererLabelHere === "Renderer · tldraw", `${label}: and it names the live surface (“${rendererLabelHere}”)`);
+      assert(
+        (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="field-provenance-tag"]`)) === 0,
+        `${label}: a host fact never reads as an override — it has no default to override`,
+      );
       if (design.id === "strata") {
-        assert(hasRenderer, `${label}: P3 builds the Renderer section`);
         assert((await count(`${PANEL} [data-slot="stratum-rule"]`)) === 1, `${label}: exactly one stratum rule separates the two halves`);
-        const rendererLabel = await text(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="header-label"]`);
-        assert(rendererLabel === "Renderer · tldraw", `${label}: the Renderer section names the live surface (“${rendererLabel}”)`);
         const order = await evaluate(`Array.from(document.querySelectorAll('${PANEL} [data-slot="inspector-section"]')).map((s) => s.getAttribute("data-section"))`);
         assert(order[order.length - 1] === "renderer", `${label}: the host stratum sits last (${order.join(" → ")})`);
         // X and Y are a declared `group`, so they land as a pair — the same
@@ -597,7 +735,8 @@ try {
         await click('[data-slot="render-tab"][data-render="tldraw"]');
         await sleep(420);
       } else {
-        assert(!hasRenderer, `${label}: a design that does not declare renderer:true gets no host section`);
+        assert((await count(`${PANEL} [data-slot="stratum-rule"]`)) === 0, `${label}: only P3 draws the stratum rule`);
+        files.renderer = await shotInspector(`${theme}-${design.id}-renderer`);
       }
 
       entry.designs[design.id] = { files, foldedHeight, openHeight };
@@ -605,6 +744,35 @@ try {
 
     const provenance = await gateProvenanceParity(theme);
     entry.provenance = provenance;
+
+    // His actual report was Port's State row, not a Block's — a Port carries
+    // far more fields, so its panel scrolls harder and the menu sat lower.
+    // Drive the exact component he was on.
+    await setSelect('[data-slot="inspector-design-picker"]', "hairline");
+    await sleep(360);
+    await setSelect('[data-slot="component-picker"]', "Port");
+    await waitFor(`${PANEL} [data-slot="standard-row"]`);
+    await sleep(500);
+    const portField = await gateDropdownEscapesTheScroller(`${theme}/port`);
+    await evaluate(`(() => { const sc = document.querySelector('[data-slot="inspector-scroll"]'); sc.scrollTop = sc.scrollHeight; })()`);
+    await sleep(260);
+    await evaluate(`(() => {
+      const sc = document.querySelector('[data-slot="inspector-scroll"]');
+      const top = sc.getBoundingClientRect().top;
+      const t = Array.from(document.querySelectorAll('${PANEL} [data-slot="named-dropdown-trigger"]'))
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter((x) => x.r.top > top)
+        .sort((a, b) => b.r.top - a.r.top)[0];
+      if (t) t.el.click();
+    })()`);
+    await sleep(300);
+    const { data: portShot } = await send("Page.captureScreenshot", { format: "png" });
+    writeFileSync(path.join(outDir, `${theme}-port-dropdown.png`), Buffer.from(portShot, "base64"));
+    entry.portDropdown = { file: `${theme}-port-dropdown.png`, field: portField };
+    await evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))`);
+    await sleep(200);
+    await setSelect('[data-slot="component-picker"]', "Block");
+    await sleep(500);
 
     assert(consoleErrors.length === 0, `${theme}: G9 no console error across all four designs (${consoleErrors.slice(0, 2).join(" | ")})`);
     entry.console = consoleErrors.slice();

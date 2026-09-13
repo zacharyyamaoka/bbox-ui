@@ -206,8 +206,17 @@ export interface InspectorSection {
   /** This section's anatomy is switched off (a hidden Bar, a render surface
    *  with no canvas): a design may dim it and fold it, never disable it. */
   muted?: boolean;
-  /** True for the host-owned region. Placed last, under a heavier rule, by
-   *  the one design that shows it. */
+  /**
+   * True for a region the RENDER SURFACE owns rather than the component —
+   * the canvas's X and Y. Every design renders it; this says which side of
+   * the line it falls on, for the one design that draws that line.
+   *
+   * WHY it is a label and not a mechanism: the section itself is ordinary
+   * (ordinary rows, ordinary fields, bound to a different subject, placed
+   * last by build order). Without this bit a design wanting to mark the
+   * boundary would have to match on the literal id "renderer", which is a
+   * string comparison standing in for a fact the builder already knew.
+   */
   hostOwned?: boolean;
 }
 
@@ -252,10 +261,16 @@ export interface SectionPanelVariant {
   blurb: string;
   /** The one axis this design differs from the others on. */
   axis: string;
-  /** This design asks the host to build the host-owned "Renderer · <surface>"
-   *  section. Declared on the variant so the page never switches on a
-   *  variant id. */
-  renderer?: boolean;
+  /**
+   * WHY there is no `renderer` flag here any more: it used to gate whether
+   * the host-owned "Renderer · <surface>" section was built at all, which
+   * made a region of the panel a property of the DESIGN rather than of the
+   * subject. Zach, 2026-09-12: "for p3 renderer section I don't think we
+   * need a new thing to the model, we can probably just support it within
+   * the existing model... its just another header and fields." It is built
+   * whenever the subject has host facts, and every design renders it,
+   * because there was never anything design-specific about it.
+   */
   Panel: (props: SectionPanelProps) => ReactNode;
 }
 

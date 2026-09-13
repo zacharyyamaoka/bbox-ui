@@ -1,52 +1,30 @@
 import { Fragment, type CSSProperties } from "react";
-import { FoldRow, sectionDividerStyle } from "../FoldRow";
-import {
-  PanelShell,
-  PanelTitle,
-  SectionBody,
-  derivedSummary,
-  isEffectivelyEmpty,
-  mutedSectionStyle,
-  type HeaderPolicy,
-} from "../shared";
-import type { InspectorSection, SectionPanelProps, SectionPanelVariant } from "../contract";
+import { sectionDividerStyle } from "../FoldRow";
+import { PanelShell, PanelTitle, SectionBlock, SHIPPED_HEADER_POLICY, type HeaderPolicy } from "../shared";
+import type { SectionPanelProps, SectionPanelVariant } from "../contract";
 
 /**
- * P3 · STRATA — the panel is ordered by WHO WRITES THE VALUE.
+ * P3 · STRATA — the panel MARKS the boundary between who writes the values.
  *
- * Same chrome as P1. The one difference: the panel has two strata with a
- * heavier rule between them. Above it, everything the COMPONENT owns —
- * properties an author sets, that a `.bbox` file would persist. Below it,
- * everything the RENDER SURFACE owns — the X and Y a drag writes, which
- * belong to the canvas and not to the component at all.
+ * WHAT CHANGED after Zach's 2026-09-12 review, and it is most of this file:
+ * the `Renderer · <surface>` section is no longer P3's feature. His words —
+ * "for p3 renderer section I don't think we need a new thing to the model,
+ * we can probably just support it within the existing model... its just
+ * another header and fields." He is right, and it was never gated on
+ * anything real: the section is built from an ordinary `FieldSpec` array
+ * bound to a different subject, which every design can already render. The
+ * `SectionPanelVariant.renderer` flag that used to switch it on is gone, and
+ * the host-owned section is now built whenever the subject HAS host facts —
+ * so P1, the shipped default, shows it too.
  *
- * AXIS — what a section header carries at rest: its OWNER. P1 and P2 differ
- * on how much a header says about its own contents; this one says which
- * layer the contents belong to, and pays for it with one extra rule and a
- * section most components will not have.
+ * What is left here is the only part that was ever a design question: does
+ * the panel DRAW the boundary? Everything the component owns sits above a
+ * heavier rule; everything the render surface owns sits below it. P1 just
+ * lists the sections and lets the label ("Renderer · tldraw") do the work.
  *
- * WHY the Renderer region is an ordinary `InspectorSection` and not a
- * bespoke block — Zach, 2026-09-12: "I like how there is a section that
- * displays the props from the renderer … I am thinking this could be just
- * another header though." He is right, and `apps/docs/.../contract.ts`
- * already said so before the panel did:
- *
- *     "Kept OUT of `Instance.props`: position is a fact about a host, not a
- *      property of the component, and putting it in props would put an x/y
- *      row in the inspector for every component."
- *
- * The distinction was already in the model; the panel just had no view onto
- * it. So this section needs no new mechanism: a host fact is a `FieldSpec`
- * bound to a different subject (`BoundField.targetId`/`subjects` — the same
- * machinery a Bar's `hidden` already uses inside the Block's Header
- * section), `disabled` for a surface with no drag handles (`RENDERS`' own
- * `canMove: false`), `note` for who writes it, and `muted` for a region
- * switched off. The prior implementation of this idea
- * (`HostFactsSection.tsx`, on `claude/glyph-finish`) carried two things a
- * section cannot: a paragraph of helper text under the title, and a warning
- * box — and both are exactly what Zach already deleted from member lists
- * ("No need to put this text under the members list. it just add
- * clutter."). Losing them is the finding, not a compromise.
+ * AXIS — what a section header carries at rest: its OWNER, made structural.
+ * It costs one extra rule and nothing else; the sections on both sides are
+ * identical to P1's.
  */
 function StrataPanel(p: SectionPanelProps) {
   const owned = p.sections.filter((s) => !s.hostOwned);
@@ -59,20 +37,20 @@ function StrataPanel(p: SectionPanelProps) {
       {owned.map((section, index) => (
         <Fragment key={section.id}>
           {index > 0 && <div style={sectionDividerStyle} />}
-          <Section section={section} p={p} />
+          <SectionBlock section={section} fold={p.fold} density={p.density} policy={POLICY} />
         </Fragment>
       ))}
       {host.length > 0 && (
         <>
-          {/* The stratum boundary. Heavier than the hairline between
-              sections BECAUSE it separates two different kinds of fact,
-              not two groups of the same kind — the one place this design
-              spends ink that P1 does not. */}
+          {/* The stratum boundary. Heavier than the hairline between sections
+              BECAUSE it separates two different kinds of fact, not two groups
+              of the same kind — the one place this design spends ink that P1
+              does not. */}
           <div data-slot="stratum-rule" style={stratumRuleStyle} />
           {host.map((section, index) => (
             <Fragment key={section.id}>
               {index > 0 && <div style={sectionDividerStyle} />}
-              <Section section={section} p={p} />
+              <SectionBlock section={section} fold={p.fold} density={p.density} policy={POLICY} />
             </Fragment>
           ))}
         </>
@@ -81,40 +59,7 @@ function StrataPanel(p: SectionPanelProps) {
   );
 }
 
-function Section({ section, p }: { section: InspectorSection; p: SectionPanelProps }) {
-  const defaultOpen = !isEffectivelyEmpty(section);
-  const open = p.fold.isOpen(`section:${section.id}`, defaultOpen);
-  return (
-    <div
-      data-slot="inspector-section"
-      data-section={section.id}
-      data-open={open}
-      data-host-owned={section.hostOwned || undefined}
-      data-muted={section.muted || undefined}
-      style={section.muted ? mutedSectionStyle : undefined}
-    >
-      <FoldRow
-        label={section.label}
-        summary={section.summary ?? derivedSummary(section)}
-        actions={section.actions}
-        density={p.density}
-        open={open}
-        foldable
-        onToggle={() => p.fold.toggle(`section:${section.id}`, defaultOpen)}
-        countAtRest={POLICY.countAtRest}
-        summaryWhenOpen={POLICY.summaryWhenOpen}
-        actionsAtRest={POLICY.actionsAtRest}
-      />
-      {open && <SectionBody section={section} fold={p.fold} density={p.density} policy={POLICY} />}
-    </div>
-  );
-}
-
-const POLICY: HeaderPolicy = {
-  countAtRest: false,
-  summaryWhenOpen: false,
-  actionsAtRest: false,
-};
+const POLICY: HeaderPolicy = SHIPPED_HEADER_POLICY;
 
 const stratumRuleStyle: CSSProperties = {
   height: 1,
@@ -125,9 +70,8 @@ const stratumRuleStyle: CSSProperties = {
 export const STRATA: SectionPanelVariant = {
   id: "strata",
   label: "P3 · Strata",
-  axis: "The panel splits by who writes the value: component-owned sections above, the render surface's own below",
+  axis: "The panel draws the boundary: component-owned sections above a heavier rule, the render surface's own below it",
   blurb:
-    "P1's chrome plus a second stratum. Under a heavier rule sits Renderer · tldraw / React Flow / DOM — the X and Y a drag writes — as an ordinary section with ordinary rows, each saying who writes it, and disabled outright on the DOM render, which has no canvas.",
-  renderer: true,
+    "P1's sections, in two strata. The Renderer section itself ships in every design now — this one additionally marks where the component's properties stop and the canvas's begin, instead of leaving that to the section's label.",
   Panel: StrataPanel,
 };

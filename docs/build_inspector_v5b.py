@@ -36,13 +36,17 @@ OUT = REPO / "reports" / "media" / f"{NAME}.html"
 HERE = pathlib.Path("/home/bam/bbox-ui/.claude/worktrees/inspector-panel-v6")
 ROUND1 = "file:///home/bam/bbox-ui/reports/media/inspector-v5-2026-09-12.html"
 BRANCH = "claude/inspector-panel-v6"
-COMMIT = "a5fc4eb"
+COMMIT = "HEAD"  # filled from git below
 PORT = 4141
+
+import subprocess
+
+COMMIT = subprocess.run(["git", "-C", str(HERE), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip() or "HEAD"
 
 run = json.loads((MEDIA / "manifest.json").read_text())
 MANIFEST = {entry["theme"]: entry for entry in run["manifest"]}
 ASSERTIONS = len(run["checks"])
-assert ASSERTIONS == 344, f"expected 344 checks in the manifest, found {ASSERTIONS}"
+assert ASSERTIONS > 400, f"expected the post-review journey's checks, found {ASSERTIONS}"
 
 
 def trim(im: Image.Image, margin: int = 18) -> Image.Image:
@@ -191,6 +195,17 @@ GATES = [
      "(main's <code>RowLabel</code>, not a copy of it)"),
     ("G8", "two fields sharing <code>FieldSpec.group</code> still render on "
      "one row"),
+    ("G10", "a member list's header is drawn as a PROPERTY ROW &mdash; same "
+     "ink, type, weight and left edge as a real field row in the same "
+     "section body, and no taller (&ldquo;I don't like how its greyed out "
+     "and tab indented, I do like how its more compact now though&rdquo;)"),
+    ("G11", "the shipped default never marks a folded header; the flag that "
+     "does is opt-in and off (&ldquo;leave it off by default, I prefer "
+     "simplicity&rdquo;)"),
+    ("G12", "an open dropdown is never cut off by the panel's own scroll box "
+     "&mdash; every row painted and hittable, nothing off-screen "
+     "(&ldquo;instead of showing me the drop down menu, its cut off with a "
+     "scroll wheel&rdquo;)"),
     ("G9", "both themes render with no console error"),
 ]
 
@@ -460,6 +475,22 @@ figcaption {{ color:var(--faint); font-size:12px; margin-top:7px }}
 <h1>Three inspector panels, on the combination</h1>
 <p class="lede">Round 1 put five section designs on the table. You picked from them, corrected one, named a bug and asked for three more. The picks are no longer variants &mdash; they are the floor every design below stands on. What varies is the one question they left open: what is a section header <em>for</em>?</p>
 <p class="meta">Branch <code>{BRANCH}</code> &middot; <code>{COMMIT}</code> &middot; {ASSERTIONS} browser assertions across 2 themes and 4 designs, zero console errors &middot; engine {ENGINE_LINES} lines, three designs {VARIANT_LINES} lines &middot; <a href="{ROUND1}">round 1's report</a></p>
+<div class="rec" style="margin-top:22px"><h4>You picked P1, and four things changed after you did</h4>
+<p><strong>P1 &middot; Hairline is the shipped default</strong> &mdash; not a recommendation in a report, the design <code>/create</code> renders when nothing else is chosen. Its policy has a name now (<code>SHIPPED_HEADER_POLICY</code>) and a test that fails if the order of the variant list ever silently changes what ships.</p>
+<p><strong>The Renderer section stopped being P3's.</strong> &ldquo;I don't think we need a new thing to the model, we can probably just support it within the existing model... its just another header and fields.&rdquo; Right: the flag that gated it made a region of the panel a property of the DESIGN rather than of the subject. It is gone. The host-owned section is built whenever the subject has host facts &mdash; a root has a place on the canvas, a member inside a Block does not &mdash; and <em>every</em> design renders it, P1 included.</p>
+<p><strong>P2's folded override mark ships as a flag, off.</strong> &ldquo;Leave it off by default, I prefer simplicity, but yes if you want to implement it that's fine.&rdquo; It is <code>HeaderPolicy.foldedOverrideMark</code>, <code>false</code> in <code>SHIPPED_HEADER_POLICY</code>, and it marks a header only while the section is FOLDED &mdash; a status line earns its ink when the content it summarises cannot be seen, and not before. P2 is now that flag plus three more, which is all it ever was.</p>
+<p><strong>A member list's header reads as a property row.</strong> &ldquo;I don't like how its greyed out and tab indented, I do like how its more compact now though.&rdquo; All three demotions were separate mistakes in one component &mdash; muted ink, smaller type, and a second helping of the section gutter &mdash; and they are fixed at the source in <code>FoldRow</code>, so no call site overrides anything. The height is unchanged; a gate measures it against a real sibling row so a future fix cannot quietly trade the compactness back.</p>
+<p><strong>And one real bug, reproduced before it was fixed:</strong> the dropdown cut off by the panel's scrollbar. See below.</p></div>
+
+<h2>The dropdown was cut off by the panel's own scrollbar</h2>
+<p>Your words, on Port's State row: &ldquo;I did a drop down on the state property, and instead of showing me the drop down menu, its cut off with a scroll wheel.&rdquo; Reproduced first, on Port, at the foot of the inspector's scroller: <strong>five of six rows reachable, the sixth sheared off</strong> 22px past <code>[data-slot="inspector-scroll"]</code>'s edge.</p>
+<p>The cause was a comment that had gone stale. The menu was <code>position: absolute</code> inside its row, with a note claiming &ldquo;this panel never sits inside an <code>overflow:hidden</code> ancestor that would clip it&rdquo; &mdash; true when the panel was a 280px card in page flow, false the moment it became a full-height column with its own scroller. This is the same class as the Base UI positioner trap: a popover that does not escape its scrolling ancestor is clipped by it.</p>
+<p>The fix is <code>position: fixed</code> with the placement computed from the trigger's rect &mdash; prefer below, flip above when below cannot hold it and above can, clamp to the viewport either way. <strong>Not a portal</strong>, deliberately: a fixed element escapes overflow while staying a DOM descendant of the dropdown root, which is what the outside-pointerdown handler uses to tell &ldquo;inside the menu&rdquo; from &ldquo;outside it&rdquo;. Portalling would have silently broken that and made every click on a menu row close the menu before it fired. It also needs no <code>react-dom</code> dependency, which this package does not declare.</p>
+<div class="pair">
+  <figure><img src="{shot('dropdown-before.png')}" alt="dropdown clipped"><figcaption><strong>Before</strong> &mdash; the same menu with its previous <code>position: absolute</code> restored in the browser. Six rows, five reachable; &ldquo;Warning&rdquo; is gone.</figcaption></figure>
+  <figure><img src="{shot('dropdown-after.png')}" alt="dropdown escaping"><figcaption><strong>After</strong> &mdash; six of six reachable, still 22px past the scroller and no longer clipped by it.</figcaption></figure>
+</div>
+<p class="sub">The placement is a pure function (<code>placeMenu</code>) with eight unit tests of its own &mdash; below, above, both-cramped, off-either-edge, and a 200-row list &mdash; because the bug was geometry, and geometry should not need a browser to check. G12 drives the real thing on Port in both themes and asserts every row is hittable via <code>elementFromPoint</code>, not by comparing rectangles: the menu is now <em>supposed</em> to extend past the scroller, so a rect test would fail the fix and pass the bug.</p>
 
 <h2>The picks, and where each one went</h2>
 <div class="card"><table><thead><tr><th style="width:44%">You said</th><th>Where it lives now</th></tr></thead><tbody>
@@ -497,13 +528,14 @@ figcaption {{ color:var(--faint); font-size:12px; margin-top:7px }}
 <div class="card"><table><tbody>{criteria_rows()}</tbody></table></div>
 <div class="card"><h4>Hard gates &mdash; pass/fail, asserted by the journey, not scored</h4>
 <ul class="gates">{gates_list()}</ul>
-<p class="sub" style="margin-top:10px">All nine pass in both themes. {ASSERTIONS} assertions, zero console errors.</p>
+<p class="sub" style="margin-top:10px">All twelve pass in both themes. {ASSERTIONS} assertions, zero console errors.</p>
 </div>
 
 <h2>The three, unranked</h2>
 {"".join(design_card(d) for d in DESIGNS)}
 
 <h2>The prune</h2>
+<p class="sub" style="margin-bottom:14px">Scored before your pick and kept unchanged as the record of it &mdash; rescoring after a decision is resulting. Two cells would move now: FR5 is no longer P3's alone (the Renderer section ships in all three), and FR2's gap between P1 and P2 is one boolean rather than a design.</p>
 <div class="card">{score_table()}</div>
 
 <div class="rec">

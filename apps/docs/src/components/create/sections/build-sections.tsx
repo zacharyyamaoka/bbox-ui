@@ -72,9 +72,6 @@ export interface BuildSectionsInput {
   onRemoveMember: (id: string) => void;
   onMoveMember: (parentId: string, from: number, to: number) => void;
   onSelectInstance: (id: string) => void;
-  /** The host-owned stratum — only built when the chosen design asks for
-   *  it (`SectionPanelVariant.renderer`). */
-  renderer: boolean;
   render: Render;
   positions: Record<string, CanvasPosition>;
   onSetPosition: (id: string, next: CanvasPosition) => void;
@@ -326,8 +323,14 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
     if (row) sections.push({ id: "members", label: spec!.label ?? "Members", rows: [row], actions: [] });
   }
 
-  /* ---- 4 · the HOST-owned stratum ---------------------------------- */
-  if (input.renderer) {
+  /* ---- 4 · the HOST-owned section ---------------------------------- */
+  // WHY this is unconditional now, where it used to be gated on the chosen
+  // design: "its just another header and fields" (Zach, 2026-09-12). What
+  // decides whether it appears is whether the SUBJECT has host facts — a
+  // root has a place on the canvas, a member inside a Block does not — which
+  // is the same test every other derived section already makes about its own
+  // subject.
+  {
     const roots = topLevel(input.instances);
     const isRoot = roots.some((i) => i.id === subject.id);
     if (isRoot) {

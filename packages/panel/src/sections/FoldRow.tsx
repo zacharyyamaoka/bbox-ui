@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { LABEL_WIDTH } from "../variants/FigmaDense";
 import type { Density, SectionAction } from "./contract";
 import { DENSITY } from "./contract";
 
@@ -115,7 +116,7 @@ export function FoldRow({
           aria-expanded={open}
           title={title}
           onClick={onToggle}
-          style={triggerStyle}
+          style={triggerStyle(emphasis)}
         >
           <HeaderText label={label} size={rung.titleSize} emphasis={emphasis} />
           {showCount && <CountChip count={count!} />}
@@ -123,7 +124,7 @@ export function FoldRow({
           {mark}
         </button>
       ) : (
-        <span style={{ ...triggerStyle, cursor: "default" }}>
+        <span style={{ ...triggerStyle(emphasis), cursor: "default" }}>
           <HeaderText label={label} size={rung.titleSize} emphasis={emphasis} />
           {showCount && <CountChip count={count!} />}
           {showSummary && <span style={summaryStyle}>{summary}</span>}
@@ -214,37 +215,69 @@ export function HeaderActions({ actions }: { actions: SectionAction[] }) {
 /* ------------------------------------------------------------------ */
 
 function rowStyle(height: number, gutter: number, emphasis: "section" | "list"): CSSProperties {
+  // WHY a list header takes NO left padding while a section title takes the
+  // gutter: a list header is already inside `SectionBody`, which applies the
+  // gutter once. Adding it again is where the tab indent came from — Zach,
+  // 2026-09-12, of a Body section's "Body · empty" sitting a tab right of
+  // the "Wrap" row above it: "I don't like how its greyed out and tab
+  // indented, I do like how its more compact now though." A section title
+  // sits OUTSIDE that body and still needs the gutter itself.
   return {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    minHeight: emphasis === "list" ? Math.max(22, height - 4) : height,
-    paddingLeft: gutter,
-    paddingRight: Math.max(4, gutter - 4),
+    // 22px is `FigmaDense`'s own `rowGridStyle` height, so a list header and
+    // the property rows around it sit on the same rhythm exactly.
+    minHeight: emphasis === "list" ? 22 : height,
+    paddingLeft: emphasis === "list" ? 0 : gutter,
+    paddingRight: emphasis === "list" ? 0 : Math.max(4, gutter - 4),
   };
 }
-const triggerStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  minWidth: 0,
-  background: "transparent",
-  border: "none",
-  padding: 0,
-  margin: 0,
-  cursor: "pointer",
-  textAlign: "left",
-  font: "inherit",
-  color: "inherit",
-};
-function labelStyle(size: number, emphasis: "section" | "list"): CSSProperties {
+function triggerStyle(emphasis: "section" | "list"): CSSProperties {
   return {
-    fontSize: emphasis === "list" ? size - 0.5 : size,
-    // A list header is the same words at a lighter weight: nesting read as
-    // weight, not as indentation, because the rows under it already line up
-    // on the label column and an indent would break that column.
-    fontWeight: emphasis === "list" ? 500 : 650,
-    color: emphasis === "list" ? "var(--bbox-panel-fg-muted, #5c5c66)" : "var(--bbox-panel-fg, #111)",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    minWidth: 0,
+    // WHY a list header's label cell is the row's own LABEL_WIDTH: it is
+    // what puts "empty" / "3 members" and the + in the same column as every
+    // other row's CONTROL. Without it the summary crowds the label and the
+    // row reads as a caption with something stuck to it rather than as a
+    // property with a value. A section title is not in that column at all,
+    // so it stays free.
+    ...(emphasis === "list" ? { width: LABEL_WIDTH, flexShrink: 0 } : {}),
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    margin: 0,
+    cursor: "pointer",
+    textAlign: "left",
+    font: "inherit",
+    color: "inherit",
+  };
+}
+function labelStyle(size: number, emphasis: "section" | "list"): CSSProperties {
+  // WHY a list header is styled as a FIELD label and not as a quieter
+  // sub-title: a member list is a property of the thing you are inspecting,
+  // and the first version said otherwise in three ways at once — smaller
+  // type, muted ink, and an extra indent. Zach, 2026-09-12: "I don't like
+  // how its greyed out and tab indented." These are `FigmaDense`'s own
+  // `labelTextStyle` values for an ordinary, ungoverned row; the nesting is
+  // carried by the section title above it, which is the thing that IS bold.
+  if (emphasis === "list") {
+    return {
+      fontSize: 11,
+      fontWeight: 400,
+      color: "var(--bbox-panel-fg, #444)",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+    };
+  }
+  return {
+    fontSize: size,
+    fontWeight: 650,
+    color: "var(--bbox-panel-fg, #111)",
     letterSpacing: 0,
     whiteSpace: "nowrap",
     overflow: "hidden",

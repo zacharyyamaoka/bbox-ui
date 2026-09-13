@@ -25,7 +25,7 @@ const DENSITY_KEY = "bbox-ui.create.inspectorDensity";
 export function SectionInspector({
   variant,
   ...rest
-}: { variant: SectionPanelVariant } & Omit<BuildSectionsInput, "tier" | "filter" | "renderer">) {
+}: { variant: SectionPanelVariant } & Omit<BuildSectionsInput, "tier" | "filter">) {
   // WHY the stored tier is read in an effect and not in the initialiser,
   // even though `loadStoredTier` is already try/caught: on the server the
   // catch returns "simple", so a client whose localStorage says "expert"
@@ -83,11 +83,15 @@ export function SectionInspector({
   );
 
   const sections = useMemo(
-    () => buildSections({ ...rest, tier, filter, renderer: variant.renderer === true }),
+    // WHY no `renderer` argument any more: the host-owned section is built
+    // whenever the subject has host facts, for every design. It stopped
+    // being a design's feature on 2026-09-12 — "its just another header and
+    // fields".
+    () => buildSections({ ...rest, tier, filter }),
     // `rest` is rebuilt every render by the column above, so the memo keys
     // on the values that actually change what is built.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rest.subject, rest.subjects, rest.instances, rest.fields, rest.presets, rest.componentName, rest.render, rest.positions, tier, filter, variant.renderer],
+    [rest.subject, rest.subjects, rest.instances, rest.fields, rest.presets, rest.componentName, rest.render, rest.positions, tier, filter],
   );
 
   // Fold state for a list that no longer exists is dropped, so reselecting a

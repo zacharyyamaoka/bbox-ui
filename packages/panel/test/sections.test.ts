@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import type { FieldSpec } from "@bbox-ui/schema";
 import { DENSITY, STANDARD_CONTROLS, type BoundField, type InspectorSection, type SectionRow } from "../src/sections/contract";
 import { controlKindFor } from "../src/sections/StandardRow";
-import { derivedSummary, isEffectivelyEmpty, listSummary, sectionTagCount } from "../src/sections/shared";
+import { SHIPPED_HEADER_POLICY, derivedSummary, isEffectivelyEmpty, listSummary, sectionTagCount } from "../src/sections/shared";
+import { DEFAULT_SECTION_PANEL, SECTION_PANELS } from "../src/sections/variants";
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
 const read = (rel: string) => readFileSync(path.join(SRC, rel), "utf8");
@@ -142,6 +143,38 @@ describe("the standard control list stays closed", () => {
   });
 });
 
+describe("the shipped default", () => {
+  it("is P1 · Hairline", () => {
+    // Zach picked it on 2026-09-12. `apps/docs`'s inspector column reads
+    // SECTION_PANELS[0] for its own default, so the order here IS the
+    // default and a reorder would silently change what renders.
+    expect(SECTION_PANELS[0]!.id).toBe("hairline");
+    expect(DEFAULT_SECTION_PANEL.id).toBe("hairline");
+  });
+
+  it("keeps every header flag off, including the folded override mark", () => {
+    // "leave it off by default, I prefer simplicity, but yes if you want to
+    // implement it that's fine." The mechanism ships; the default does not.
+    expect(SHIPPED_HEADER_POLICY).toEqual({
+      countAtRest: false,
+      summaryWhenOpen: false,
+      actionsAtRest: false,
+      foldedOverrideMark: false,
+    });
+  });
+
+  it("is the policy P1 actually renders with, not a second copy of it", () => {
+    const hairline = read("sections/variants/Hairline.tsx");
+    expect(hairline).toContain("const POLICY: HeaderPolicy = SHIPPED_HEADER_POLICY;");
+  });
+
+  it("lets P2 turn the folded mark on without redefining the other flags", () => {
+    const ledger = read("sections/variants/Ledger.tsx");
+    expect(ledger).toContain("...SHIPPED_HEADER_POLICY");
+    expect(ledger).toContain("foldedOverrideMark: true");
+  });
+});
+
 describe("Compact is genuinely tighter than Roomy", () => {
   it("shortens every dimension it governs", () => {
     for (const key of ["titleHeight", "gutter", "bodyBottom", "titleSize"] as const) {
@@ -182,17 +215,52 @@ describe("one row renderer, one list header", () => {
     expect(headless).not.toContain("<SectionHeader");
   });
 
-  it("draws every header through the one FoldRow", () => {
+  it("draws every section through the one SectionBlock", () => {
     const shared = read("sections/shared.tsx");
     expect(shared).toContain("FoldRow");
     for (const variant of ["Hairline", "Ledger", "Strata"]) {
       const source = read(`sections/variants/${variant}.tsx`);
-      expect(source).toMatch(/from "\.\.\/FoldRow"/);
-      // No design may hand-draw a title row; the shared component is the
-      // only thing that knows a header's shape.
+      // A design supplies a HeaderPolicy and, at most, decides what sits
+      // BETWEEN sections. It never calls FoldRow itself: five policy
+      // decisions copied three ways is how one list ended up with two
+      // headers in the first place.
+      expect(source).toMatch(/SectionBlock/);
+      expect(source).not.toMatch(/<FoldRow/);
       expect(source).not.toMatch(/data-slot="section-title"/);
       expect(source).not.toMatch(/data-slot="list-header"/);
     }
+  });
+
+  it("styles a member-list header as a property row, not as a demoted caption", () => {
+    // Zach, 2026-09-12, of a Body section's "Body · empty" sitting a tab
+    // right of the "Wrap" row above it: "I don't like how its greyed out and
+    // tab indented, I do like how its more compact now though." All three
+    // demotions are gone at the source — the muted ink, the smaller type and
+    // the second helping of the section gutter — and the label cell is the
+    // row's own LABEL_WIDTH so the summary lands in the control column.
+    const foldRow = read("sections/FoldRow.tsx");
+    expect(foldRow).toContain('paddingLeft: emphasis === "list" ? 0 : gutter');
+    expect(foldRow).toContain('minHeight: emphasis === "list" ? 22 : height');
+    expect(foldRow).toContain("width: LABEL_WIDTH");
+    const listLabel = foldRow.slice(foldRow.indexOf('if (emphasis === "list") {'), foldRow.indexOf("return {\n    fontSize: size,"));
+    expect(listLabel).toContain("fontWeight: 400");
+    expect(listLabel).toContain("var(--bbox-panel-fg, #444)");
+    expect(listLabel).not.toContain("fg-muted");
+  });
+
+  it("builds the host-owned section from the subject, never from the chosen design", () => {
+    // Zach, 2026-09-12: "for p3 renderer section I don't think we need a new
+    // thing to the model, we can probably just support it within the
+    // existing model... its just another header and fields." The gate that
+    // made a region of the panel a property of the DESIGN is gone.
+    const contract = read("sections/contract.ts");
+    expect(contract).not.toMatch(/^\s*renderer\?: boolean;/m);
+    const build = readFileSync(
+      path.join(SRC, "..", "..", "..", "apps", "docs", "src", "components", "create", "sections", "build-sections.tsx"),
+      "utf8",
+    );
+    expect(build).not.toContain("input.renderer");
+    expect(build).toContain("hostOwned: true");
   });
 
   it("keeps the chevron out of the resting state of an OPEN row", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { RotateCcw } from "lucide-react";
 import {
   MIXED,
@@ -1069,6 +1069,8 @@ function NamedDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [box, setBox] = useState<MenuBox | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -1086,16 +1088,58 @@ function NamedDropdown({
     };
   }, [open]);
 
+  // Placed against the VIEWPORT, and re-placed whenever anything moves.
+  //
+  // WHY, measured rather than assumed: this menu used to be
+  // `position: absolute` inside the row, with a comment claiming "this panel
+  // never sits inside an `overflow:hidden` ancestor that would clip it".
+  // That stopped being true the moment the panel became a full-height
+  // column — `[data-slot="inspector-scroll"]` is `overflow-y: auto`, and an
+  // absolutely-positioned child is clipped by it. Zach, 2026-09-12, on
+  // Port's State row: "I did a drop down on the state property, and instead
+  // of showing me the drop down menu, its cut off with a scroll wheel."
+  // Reproduced before fixing: 22px of a six-row Lens menu sheared off at the
+  // scroller's edge.
+  //
+  // WHY `position: fixed` and not a React portal: a fixed element's
+  // containing block is the viewport, so an ancestor's overflow does not
+  // clip it — and unlike a portal it stays a DOM DESCENDANT of `rootRef`,
+  // which is what the outside-pointerdown handler above uses to tell "inside
+  // the menu" from "outside it". A portal would have silently broken that
+  // and made every click on a menu row close the menu before it fired.
+  // `@bbox-ui/panel` also declares no `react-dom` dependency, and this needs
+  // none.
+  useLayoutEffect(() => {
+    if (!open) {
+      setBox(null);
+      return;
+    }
+    const place = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      setBox(placeMenu(trigger.getBoundingClientRect(), rows.length + (custom ? 1 : 0)));
+    };
+    place();
+    // `capture: true` so a scroll inside the inspector column reaches this
+    // even though the event does not bubble past its own scroller.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, rows.length, custom]);
+
   return (
     <div ref={rootRef} data-slot="named-dropdown" style={dropdownRootStyle}>
-      <button type="button" data-slot="named-dropdown-trigger" onClick={() => setOpen((v) => !v)} style={dropdownTriggerStyle(secondary)}>
+      <button ref={triggerRef} type="button" data-slot="named-dropdown-trigger" onClick={() => setOpen((v) => !v)} style={dropdownTriggerStyle(secondary)}>
         <span style={dropdownTriggerTextStyle}>{isMixed ? "Mixed" : triggerText}</span>
         <span aria-hidden="true" style={dropdownChevronStyle}>
           ▾
         </span>
       </button>
-      {open && (
-        <div data-slot="named-dropdown-menu" style={dropdownMenuStyle}>
+      {open && box && (
+        <div data-slot="named-dropdown-menu" data-placement={box.placement} style={dropdownMenuStyle(box)}>
           {rows.map((row) => (
             <button
               key={row.key}
@@ -1377,25 +1421,75 @@ function dropdownTriggerStyle(secondary?: boolean): CSSProperties {
 const dropdownTriggerTextStyle: CSSProperties = { flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 const dropdownChevronStyle: CSSProperties = { fontSize: 9, opacity: 0.5, flexShrink: 0 };
 
-// Absolutely positioned, not portalled — no dependency on a portal target,
-// and this panel never sits inside an `overflow:hidden` ancestor that would
-// clip it. Good enough for a demo comparing five variants side by side.
-const dropdownMenuStyle: CSSProperties = {
-  position: "absolute",
-  top: "calc(100% + 2px)",
-  left: 0,
-  right: 0,
-  zIndex: 20,
-  display: "flex",
-  flexDirection: "column",
-  background: "var(--bbox-panel-surface, white)",
-  border: "1px solid var(--bbox-panel-border, #ddd)",
-  borderRadius: 6,
-  boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
-  padding: 3,
-  maxHeight: 220,
-  overflowY: "auto",
-};
+interface MenuBox {
+  left: number;
+  width: number;
+  top: number;
+  maxHeight: number;
+  placement: "below" | "above";
+}
+
+/** How tall one row is, and the padding the menu adds around them. Used only
+ *  to guess whether the menu WANTS more room than it has below; the real
+ *  height is still whatever the rows render to, capped by `maxHeight`. */
+const MENU_ROW_HEIGHT = 24;
+const MENU_PADDING = 8;
+const MENU_GAP = 2;
+const MENU_VIEWPORT_MARGIN = 8;
+const MENU_MAX_HEIGHT = 220;
+const MENU_MIN_HEIGHT = 96;
+
+/**
+ * Where the menu goes, given where its trigger is.
+ *
+ * Prefers below, flips above when below cannot hold it and above can hold
+ * more, and clamps to the viewport either way — so the menu is never cut
+ * off, whatever the panel's scroll position. Exported for its own test:
+ * this is arithmetic, and arithmetic should not need a browser to check.
+ */
+export function placeMenu(
+  trigger: { left: number; right: number; top: number; bottom: number; width: number },
+  rowCount: number,
+  viewport: { width: number; height: number } = { width: window.innerWidth, height: window.innerHeight },
+): MenuBox {
+  const wanted = Math.min(MENU_MAX_HEIGHT, rowCount * MENU_ROW_HEIGHT + MENU_PADDING);
+  const roomBelow = viewport.height - trigger.bottom - MENU_GAP - MENU_VIEWPORT_MARGIN;
+  const roomAbove = trigger.top - MENU_GAP - MENU_VIEWPORT_MARGIN;
+  // Flip only when it actually buys room: a menu that is cramped both ways
+  // should stay where the eye already is.
+  const placement: "below" | "above" = wanted <= roomBelow || roomBelow >= roomAbove ? "below" : "above";
+  const room = placement === "below" ? roomBelow : roomAbove;
+  const height = Math.max(MENU_MIN_HEIGHT, Math.min(wanted, room));
+  const width = trigger.width;
+  const left = Math.max(
+    MENU_VIEWPORT_MARGIN,
+    Math.min(trigger.left, viewport.width - width - MENU_VIEWPORT_MARGIN),
+  );
+  const top = placement === "below" ? trigger.bottom + MENU_GAP : Math.max(MENU_VIEWPORT_MARGIN, trigger.top - MENU_GAP - height);
+  return { left, width, top, maxHeight: height, placement };
+}
+
+function dropdownMenuStyle(box: MenuBox): CSSProperties {
+  return {
+    position: "fixed",
+    left: box.left,
+    top: box.top,
+    width: box.width,
+    // Above every panel chrome, and above the canvas: the inspector column
+    // and the viewport tabs both paint over the page, and a menu that loses
+    // to either of them is as unusable as one that is clipped.
+    zIndex: 1000,
+    display: "flex",
+    flexDirection: "column",
+    background: "var(--bbox-panel-surface, white)",
+    border: "1px solid var(--bbox-panel-border, #ddd)",
+    borderRadius: 6,
+    boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+    padding: 3,
+    maxHeight: box.maxHeight,
+    overflowY: "auto",
+  };
+}
 
 function dropdownRowStyle(active: boolean): CSSProperties {
   return {

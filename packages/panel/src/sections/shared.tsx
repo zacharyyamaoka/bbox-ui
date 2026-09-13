@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { readFieldRow } from "../fieldModel";
+import { ProvenanceTag } from "../variants/FigmaDense";
 import { DENSITY, type BoundField, type Density, type FoldState, type InspectorSection, type SectionList, type SectionRow } from "./contract";
 import { FoldRow } from "./FoldRow";
 import { StandardPair, StandardRow } from "./StandardRow";
@@ -79,6 +80,108 @@ export interface HeaderPolicy {
   countAtRest: boolean;
   summaryWhenOpen: boolean;
   actionsAtRest: boolean;
+  /**
+   * When a section is FOLDED and holds overridden rows, mark its header with
+   * the rows' own OVERRIDE / MIXED tag, aggregated.
+   *
+   * WHY it is a flag here rather than one design's private behaviour: it is
+   * the one idea from P2 worth keeping on its own — a status line earns its
+   * ink exactly when the content it summarises cannot be seen, and not
+   * before. Zach, 2026-09-12: "leave it off by default, I prefer simplicity,
+   * but yes if you want to implement it that's fine." So the mechanism ships
+   * and the default is `false`; `SHIPPED_HEADER_POLICY` is what P1 — the
+   * default design — uses, and it leaves this off.
+   */
+  foldedOverrideMark: boolean;
+}
+
+/**
+ * What a header carries in the design that actually renders.
+ *
+ * P1 · Hairline is the shipped default (Zach picked it on 2026-09-12), and
+ * this is its policy: nothing at rest but the section's name. Exported so a
+ * consumer of this package can start from the shipped answer and flip one
+ * field, rather than reassembling four booleans and getting a fifth design
+ * by accident.
+ */
+export const SHIPPED_HEADER_POLICY: HeaderPolicy = {
+  countAtRest: false,
+  summaryWhenOpen: false,
+  actionsAtRest: false,
+  foldedOverrideMark: false,
+};
+
+/**
+ * One section: its single header row, and its body while it is open.
+ *
+ * WHY all three designs render through this rather than each writing their
+ * own `FoldRow` call: after the fold, the count, the summary, the verbs and
+ * now the folded override mark, a "section" is five policy decisions, and
+ * three copies of that is how the panel grew two headers for one list in the
+ * first place. A design supplies a `HeaderPolicy` and, at most, decides what
+ * sits BETWEEN sections.
+ */
+export function SectionBlock({
+  section,
+  fold,
+  density,
+  policy,
+}: {
+  section: InspectorSection;
+  fold: FoldState;
+  density: Density;
+  policy: HeaderPolicy;
+}) {
+  const defaultOpen = !isEffectivelyEmpty(section);
+  const id = `section:${section.id}`;
+  const open = fold.isOpen(id, defaultOpen);
+  // Computed only when it can be shown: `sectionTagCount` resolves every row
+  // in the section, which is wasted work on a panel that never marks one.
+  const tagged = policy.foldedOverrideMark && !open ? sectionTagCount(section) : null;
+  return (
+    <div
+      data-slot="inspector-section"
+      data-section={section.id}
+      data-open={open}
+      data-host-owned={section.hostOwned || undefined}
+      data-muted={section.muted || undefined}
+      data-tagged={tagged ? `${tagged.count} ${tagged.tag}` : undefined}
+      style={section.muted ? mutedSectionStyle : undefined}
+    >
+      <FoldRow
+        label={section.label}
+        count={policy.countAtRest ? countOf(section) : undefined}
+        summary={section.summary ?? derivedSummary(section, !policy.countAtRest)}
+        actions={section.actions}
+        density={density}
+        open={open}
+        foldable
+        onToggle={() => fold.toggle(id, defaultOpen)}
+        mark={
+          tagged ? (
+            <ProvenanceTag
+              tag={tagged.tag}
+              text={`${tagged.count} ${tagged.tag}`}
+              title={`${tagged.count} row${tagged.count === 1 ? "" : "s"} in ${section.label} ${tagged.tag === "mixed" ? "disagree across the selection" : "override their default"}`}
+            />
+          ) : undefined
+        }
+        countAtRest={policy.countAtRest}
+        summaryWhenOpen={policy.summaryWhenOpen}
+        actionsAtRest={policy.actionsAtRest}
+      />
+      {open && <SectionBody section={section} fold={fold} density={density} policy={policy} />}
+    </div>
+  );
+}
+
+/** A section chips its ROW count, the same way a member list chips its member
+ *  count — one number, one meaning, at both levels. A section with one row
+ *  does not chip it: "Appearance \u2460" says nothing you cannot see, and the
+ *  summary beside it then keeps its own property count instead. */
+export function countOf(section: InspectorSection): number | undefined {
+  const n = section.rows.reduce((sum, row) => sum + (row.kind === "pair" ? 2 : 1), 0);
+  return n > 1 ? n : undefined;
 }
 
 /** Dispatches a section's rows to the standard renderers. Lists go through
