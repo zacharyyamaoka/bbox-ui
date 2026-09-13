@@ -50,7 +50,6 @@ export {
   type SectionAction,
   type SectionList,
   type SectionPanelProps,
-  type SectionPanelVariant,
   type SectionRow,
   type StandardControl,
 } from "./sections/contract";
@@ -63,15 +62,17 @@ export {
   SectionBlock,
   SectionBody,
   SectionRows,
+  MEMBERS_LABEL,
   SHIPPED_HEADER_POLICY,
   countOf,
   derivedSummary,
   isEffectivelyEmpty,
   listSummary,
   sectionTagCount,
+  slotTitle,
   type HeaderPolicy,
 } from "./sections/shared";
-export { SECTION_PANELS, DEFAULT_SECTION_PANEL, findSectionPanel } from "./sections/variants";
+export { SectionPanel } from "./sections/SectionPanel";
 export { MEMBER_SPECS } from "./bench";
 export {
   MEMBERS_CONTROLS,

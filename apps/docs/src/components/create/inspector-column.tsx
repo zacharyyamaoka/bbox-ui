@@ -1,35 +1,28 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
-import type { ComponentEntry, Instance, PanelVariant, Subject } from "@bbox-ui/panel";
-import { SECTION_PANELS, findSectionPanel, isSlotFill } from "@bbox-ui/panel";
-import { MembersPath, memberListsFor } from "./members-section";
-import type { InspectorLayoutVariant } from "./inspector-layout";
+import type { ComponentEntry, Instance, Subject } from "@bbox-ui/panel";
+import { MembersPath } from "./members-section";
 import { SectionInspector } from "./sections/SectionInspector";
 import type { CanvasPosition, Render } from "./contract";
 
 /**
- * Which inspector design is on screen.
+ * WHY there is no inspector design picker at the foot of this column any
+ * more, and no pre-sections panel behind it: the drop-down offered "Current
+ * (before)" plus P1/P2/P3 while those were being judged, and Zach picked P1
+ * on 2026-09-12. A switcher whose decision is made can only ever put the page
+ * into a state nobody wants, and the repo already set the precedent —
+ * `demos/capture-picks-applied.mjs` asserts that once picks are applied "no
+ * switcher for navigator, layout or members control remains".
  *
- * "current" is the pre-sections panel, kept reachable rather than deleted —
- * nothing Zach has not rejected gets removed, and having the before one
- * dropdown away is what makes three proposals judgeable instead of
- * described. Everything else is a section design
- * (packages/panel/src/sections/variants).
- *
- * WHY a drop-down in the app and never a URL flag: Zach, 2026-09-09, rated
- * exactly that Bad — a prototype gated behind `?portLanes=1` he had to
- * type. The picker sits at the bottom of the column, same `<select>` +
- * localStorage pattern as `bench-sidebar.tsx`'s panel-design picker, so
- * there is one way to switch a prototype on this page.
+ * The six `PANEL_VARIANTS` are still built, exported and comparable side by
+ * side in the demo that exists for exactly that (`demos/inspector`, `pnpm
+ * demo`). What they are not any more is a second inspector living inside the
+ * product page.
  */
-const DESIGN_KEY = "bbox-ui.create.inspectorDesign";
-const CURRENT_DESIGN = "current";
-const DEFAULT_DESIGN = SECTION_PANELS[0]!.id;
 
 interface InspectorColumnProps {
-  variant: PanelVariant;
   componentName: string;
   fields: FieldSpec[];
   presets: PresetSpec[];
@@ -41,7 +34,6 @@ interface InspectorColumnProps {
   selectedTypes: string[];
   selectedCount: number;
   excludedShown: number;
-  layout: InspectorLayoutVariant;
   entries: ComponentEntry[];
   instances: Instance[];
   subject: Instance | null;
@@ -133,30 +125,6 @@ function ResizeHandle({
 export function InspectorColumn(p: InspectorColumnProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrolls, setScrolls] = useState(false);
-  // Read after mount, never in the initialiser: this is a Next page and the
-  // server has no localStorage, so the first client render would disagree
-  // with the HTML it hydrates (the same rule workbench.tsx already keeps).
-  const [design, setDesign] = useState<string>(DEFAULT_DESIGN);
-  const [restored, setRestored] = useState(false);
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(DESIGN_KEY);
-      if (stored) setDesign(stored);
-    } catch {
-      /* private window: the choice still works, it just forgets */
-    }
-    setRestored(true);
-  }, []);
-  useEffect(() => {
-    if (!restored) return;
-    try {
-      window.localStorage.setItem(DESIGN_KEY, design);
-    } catch {
-      /* see above */
-    }
-  }, [restored, design]);
-  const sectionPanel = findSectionPanel(design);
-  const showSections = design !== CURRENT_DESIGN;
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -191,85 +159,29 @@ export function InspectorColumn(p: InspectorColumnProps) {
       )}
       <MembersPath instances={p.instances} subject={p.subject} onSelect={p.onSelectInstance} />
       <div ref={scrollRef} data-slot="inspector-scroll" className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-        {showSections ? (
-          <div data-slot="panel-variant-host" data-variant={sectionPanel.id}>
-            <SectionInspector
-              variant={sectionPanel}
-              entries={p.entries}
-              instances={p.instances}
-              subject={p.subject}
-              subjects={p.subjects}
-              componentName={p.componentName}
-              fields={p.fields}
-              presets={p.presets}
-              toSubject={p.toSubject}
-              onChange={p.onChange}
-              onClearOverride={p.onClearOverride}
-              onSetProp={p.onSetProp}
-              onClearProp={p.onClearProp}
-              onAddMember={p.onAddMember}
-              onRemoveMember={p.onRemoveMember}
-              onMoveMember={p.onMoveMember}
-              onSelectInstance={p.onSelectInstance}
-              render={p.render}
-              positions={p.positions}
-              onSetPosition={p.onSetPosition}
-            />
-          </div>
-        ) : (
-        <div data-slot="panel-variant-host" data-variant={p.variant.id} className="[&>*]:!w-full [&>*]:!max-w-none [&>*]:!rounded-none [&>*]:!border-0 [&>*]:!shadow-none">
-          {(() => {
-            const panel =
-              p.subjects.length > 0 && p.fields.length === 0 ? (
-                <div data-slot="no-shared-fields" className="p-4 text-sm text-muted-foreground">
-                  <strong className="text-foreground">{p.selectedTypes.join(" + ")}</strong>
-                  <p className="mt-1">
-                    No field is common to all {p.selectedCount} selected instances, so there is nothing a single control could write. Deselect a type to get a panel back.
-                  </p>
-                </div>
-              ) : (
-                <p.variant.Panel
-                  componentName={p.componentName}
-                  fields={p.fields}
-                  presets={p.presets}
-                  subjects={p.subjects}
-                  toSubject={p.toSubject}
-                  onChange={p.onChange}
-                  onClearOverride={p.onClearOverride}
-                />
-              );
-            // The member lists a subject carries, computed automatically
-            // from its entry (slots → one per slot; members → one; else none)
-            // and handed to the chosen layout together with the panel. The
-            // panel designs never learn about lists; the layouts never
-            // learn about fields.
-            const lists = memberListsFor(p.entries, p.instances, p.subject, {
-              onAddMember: p.onAddMember,
-              onRemoveMember: p.onRemoveMember,
-              onMoveMember: p.onMoveMember,
-              onSetProp: p.onSetProp,
-              onSelect: p.onSelectInstance,
-            });
-            return <p.layout.Layout subjectName={p.componentName} panel={panel} lists={lists} isSlotFill={isSlotFill(p.subject ?? undefined)} />;
-          })()}
+        <div data-slot="panel-variant-host" data-variant="sections">
+          <SectionInspector
+            entries={p.entries}
+            instances={p.instances}
+            subject={p.subject}
+            subjects={p.subjects}
+            componentName={p.componentName}
+            fields={p.fields}
+            presets={p.presets}
+            toSubject={p.toSubject}
+            onChange={p.onChange}
+            onClearOverride={p.onClearOverride}
+            onSetProp={p.onSetProp}
+            onClearProp={p.onClearProp}
+            onAddMember={p.onAddMember}
+            onRemoveMember={p.onRemoveMember}
+            onMoveMember={p.onMoveMember}
+            onSelectInstance={p.onSelectInstance}
+            render={p.render}
+            positions={p.positions}
+            onSetPosition={p.onSetPosition}
+          />
         </div>
-        )}
-      </div>
-      <div data-slot="inspector-design-switcher" className="flex items-center gap-2 border-t border-border px-3 py-2">
-        <span className="shrink-0 text-[11px] text-muted-foreground">Inspector</span>
-        <select
-          data-slot="inspector-design-picker"
-          value={design}
-          onChange={(e) => setDesign(e.target.value)}
-          className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground"
-        >
-          <option value={CURRENT_DESIGN}>Current (before)</option>
-          {SECTION_PANELS.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.label}
-            </option>
-          ))}
-        </select>
       </div>
     </aside>
   );

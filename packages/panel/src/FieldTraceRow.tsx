@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { FieldSpec, FieldValue, Layer, PresetSpec } from "@bbox-ui/schema";
-import { readFieldRow } from "./fieldModel";
+import { readFieldRow, resetTitleFor } from "./fieldModel";
 import { NumberInput } from "./NumberInput";
 
 // `Subject` lives in fieldModel.ts — the model owns the shape it resolves —
@@ -61,7 +61,7 @@ export function FieldTraceRow({
   // and a fix applied to this file left three of the others holding the
   // identical defect. The model is shared so that cannot happen again — see
   // fieldModel.ts, which carries the reasoning for each decision.
-  const { trace, isMixed, hasOwnOverride, collapsedValue, paintedElsewhere, traces } = readFieldRow(
+  const { trace, isMixed, hasOwnOverride, resetsTo, collapsedValue, paintedElsewhere, traces } = readFieldRow(
     field,
     subjects,
     presets,
@@ -131,7 +131,7 @@ export function FieldTraceRow({
             data-slot="field-trace-clear-override"
             onClick={() => onClearOverride(field.id)}
             style={clearOverrideStyle}
-            title="Clear this instance's override — fall back to the preset"
+            title={resetTitleFor(resetsTo)}
           >
             ✕ override
           </button>

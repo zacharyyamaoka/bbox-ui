@@ -18,6 +18,41 @@ export function listSummary(count: number): string {
   return count > 0 ? `${count} member${count === 1 ? "" : "s"}` : "empty";
 }
 
+/**
+ * What a section or list that STANDS FOR A SLOT is called: the slot's own
+ * name plus the noun.
+ *
+ * WHY the noun is not optional, and why this is a function rather than the
+ * literal string at each call site — Zach, 2026-09-12, of a Flex cell whose
+ * section header read bare "Left" above a Size / Direction / Justify / Align
+ * / Wrap stack: "Left"/"Center"/"Right" are ALREADY words in that same panel,
+ * as the values of Justify, Align and Port's Edge. A dropdown one row down
+ * offers "Left" as a thing to pick, so the same bare word as a TITLE is not a
+ * heading, it is an ambiguity — you cannot tell the piece of anatomy from the
+ * value. "Left Slot" can only be the anatomy.
+ *
+ * It is one function because the Block's Header/Body/Footer, a Bar's
+ * Left/Center/Right cells, and any slot host added later must not each get to
+ * decide; three hand-written templates is how "Left" and "Left slot" and
+ * "Left cell" end up on one screen.
+ */
+export function slotTitle(slotLabel: string): string {
+  return `${slotLabel} Slot`;
+}
+
+/**
+ * What a member list under a slot section is called when the component says
+ * nothing more specific: "Members", never the parent's own name.
+ *
+ * WHY not the parent's name — the same screenshot: the "Left" section held a
+ * list also titled "Left", because the list took the slot's label too. A
+ * label that repeats the heading directly above it spends a row saying
+ * nothing, and reads as though the two are different things that happen to
+ * share a name. A `MembersSpec.label` (PortEdge's "Ports") still wins; this
+ * is only the fallback, and the fallback should be the generic noun.
+ */
+export const MEMBERS_LABEL = "Members";
+
 /** "4 properties · 3 members" — what a folded SECTION still gets to say. A
  *  field is one property, a pair is two (both halves write a value), and a
  *  list contributes its own label so two lists in one section read as

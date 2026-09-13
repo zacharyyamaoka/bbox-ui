@@ -7,11 +7,12 @@ import {
   type FieldSpec,
   type FieldTrace,
   type FieldValue,
+  type Layer,
   type PresetSpec,
 } from "@bbox-ui/schema";
 import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
-import { readFieldRow } from "../fieldModel";
+import { readFieldRow, resetTitleFor } from "../fieldModel";
 import { groupRows } from "../fieldGroups";
 import { NumberInput } from "../NumberInput";
 import {
@@ -385,6 +386,10 @@ export interface RowData {
   paintedElsewhere: FieldValue | null;
   isMixed: boolean;
   hasOwnOverride: boolean;
+  /** Whether this row offers its ↺ reset — see `FieldRowModel.canReset`. */
+  canReset: boolean;
+  /** Which layer the ↺ would land on, when the selection agrees. */
+  resetsTo: Layer | null;
   collapsedValue: FieldValue | undefined;
   /** Amendment Case B point 1: set only when EVERY selected subject's
    *  stored value for this field is currently supplied by the SAME
@@ -414,6 +419,8 @@ export function readRow(
     paintedElsewhere: row.paintedElsewhere,
     isMixed: row.isMixed,
     hasOwnOverride: row.hasOwnOverride,
+    canReset: row.canReset,
+    resetsTo: row.resetsTo,
     collapsedValue: row.collapsedValue,
     // This panel's render path reads `undefined` for "no single preset drives
     // every selected subject"; the model says `null`. One conversion here,
@@ -476,20 +483,7 @@ function FieldRow({
             drivenPresetId={data.drivenPresetId}
             onChange={(value) => onChange(field.id, value)}
           />
-          {/* WHY also when an inherited value sits under the own one: the
-              clear is the way back to "inherited from Header"; without it an
-              own size over a cascade could never be undone. */}
-          {(isGoverned || data.trace?.candidates[1]?.value !== undefined) && data.hasOwnOverride && (
-            <button
-              type="button"
-              data-slot="field-clear-override"
-              onClick={() => onClearOverride(field.id)}
-              style={clearButtonStyle}
-              title="Clear this instance's override — fall back to the preset"
-            >
-              <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
-            </button>
-          )}
+          <ResetOverrideButton data={data} fieldLabel={field.label} onReset={() => onClearOverride(field.id)} />
         </div>
       </div>
       {data.paintedElsewhere !== null && (
@@ -577,17 +571,7 @@ function PairedFieldCell({
           drivenPresetId={data.drivenPresetId}
           onChange={(value) => onChange(field.id, value)}
         />
-        {(governed || data.trace?.candidates[1]?.value !== undefined) && data.hasOwnOverride && (
-          <button
-            type="button"
-            data-slot="field-clear-override"
-            onClick={() => onClearOverride(field.id)}
-            style={clearButtonStyle}
-            title="Clear this instance's override — fall back to the preset"
-          >
-            <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
-          </button>
-        )}
+        <ResetOverrideButton data={data} fieldLabel={field.label} onReset={() => onClearOverride(field.id)} />
       </div>
       {expanded && data.trace && <TraceChain trace={data.trace} presets={presets} />}
     </div>
@@ -1305,6 +1289,45 @@ const paintedElsewhereStyle: CSSProperties = {
 // per-section reset) says that correctly; lucide's `RotateCcw` is the
 // vector version of the same glyph, added as this package's first icon
 // dependency.
+/**
+ * THE ↺ reset. One component, four callers.
+ *
+ * WHY it is a component and not three copies of a `<button>`: the three
+ * copies is precisely how the bug Zach found survived — each carried its own
+ * `governed || candidates[1]` predicate and its own tooltip, so the rule for
+ * "does this row offer a reset" was an emergent property of which file you
+ * happened to be rendering from. The predicate now lives once in
+ * `fieldModel.ts` (`canReset`) and the button once here.
+ */
+export function ResetOverrideButton({
+  data,
+  onReset,
+  fieldLabel,
+}: {
+  data: Pick<RowData, "canReset" | "resetsTo">;
+  onReset: () => void;
+  fieldLabel: string;
+}) {
+  if (!data.canReset) return null;
+  const title = resetTitleFor(data.resetsTo);
+  return (
+    <button
+      type="button"
+      data-slot="field-clear-override"
+      data-resets-to={data.resetsTo ?? "mixed"}
+      onClick={onReset}
+      title={title}
+      // The glyph is `aria-hidden`, so without this the control has no
+      // accessible name at all — it read as an empty button to a screen
+      // reader and to any journey asserting by role.
+      aria-label={`${title} of ${fieldLabel}`}
+      style={clearButtonStyle}
+    >
+      <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
+    </button>
+  );
+}
+
 export const clearButtonStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",

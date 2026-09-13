@@ -6,12 +6,14 @@ import { governedFieldIds } from "@bbox-ui/schema";
 import type { BoundField, ComponentEntry, InspectorSection, Instance, SectionAction, SectionRow, Subject } from "@bbox-ui/panel";
 import {
   MEMBERS_CONTROLS,
+  MEMBERS_LABEL,
   TIER_RANK,
   addableTypes,
   classifyField,
   groupRows,
   matchesFilter,
   memberSpecFor,
+  slotTitle,
   summarize,
   TypedAddMenu,
   topLevel,
@@ -129,12 +131,20 @@ function listRow(
   input: BuildSectionsInput,
   parent: Instance,
   entry: ComponentEntry,
-  label: string,
-  onSelectParent?: () => void,
-  moveScope?: (from: number, to: number) => void,
+  /**
+   * Only where the list's own name would not distinguish it — a Bar's three
+   * cells, which are three lists of the same kind side by side.
+   *
+   * WHY it is an override and not the normal path: it used to be required,
+   * so every caller passed the slot's label and a list under a "Left" section
+   * came out titled "Left" as well. The default now comes from the component
+   * (`MembersSpec.label`, PortEdge's "Ports") or from the generic noun.
+   */
+  labelOverride?: string,
 ): SectionRow | null {
   const spec = memberSpecFor(entry, parent);
   if (!spec) return null;
+  const label = labelOverride ?? spec.label ?? MEMBERS_LABEL;
   const members = (parent.members ?? [])
     .map((id) => summarize(input.instances, id))
     .filter((m): m is NonNullable<typeof m> => !!m);
@@ -158,22 +168,24 @@ function listRow(
         }}
         onAdd={(type) => input.onAddMember(parent.id, type)}
         onRemove={input.onRemoveMember}
-        onMove={(from, to) => (moveScope ? moveScope(from, to) : input.onMoveMember(parent.id, from, to))}
+        onMove={(from, to) => input.onMoveMember(parent.id, from, to)}
         onSelect={input.onSelectInstance}
-        onSelectParent={onSelectParent}
         chrome="none"
       />
     </div>
   );
-  const actions: SectionAction[] = [];
-  if (onSelectParent) {
-    actions.push({ id: "open-fill", glyph: "⚙", title: `Edit the ${parent.type} that fills ${label}`, onInvoke: onSelectParent });
-  }
-  actions.push({
-    id: "add-member",
-    title: atMax ? `At most ${spec.max} here` : types.length === 1 ? `Add ${types[0]}` : `Add to ${label}`,
-    node: <TypedAddMenu types={types} atMax={atMax} max={spec.max} title={`Add to ${label}`} onAdd={(type) => input.onAddMember(parent.id, type)} />,
-  });
+  // "Add to Members" is what "Add to ${label}" produced once a list under a
+  // slot stopped being called after the slot — a sentence that names the
+  // control rather than the thing. When the list has no name of its own, the
+  // verb carries it instead.
+  const addTitle = label === MEMBERS_LABEL ? "Add a member" : `Add to ${label}`;
+  const actions: SectionAction[] = [
+    {
+      id: "add-member",
+      title: atMax ? `At most ${spec.max} here` : types.length === 1 ? `Add ${types[0]}` : addTitle,
+      node: <TypedAddMenu types={types} atMax={atMax} max={spec.max} title={addTitle} onAdd={(type) => input.onAddMember(parent.id, type)} />,
+    },
+  ];
   return { kind: "list", list: { id: parent.id, label, count: members.length, node, actions } };
 }
 
@@ -289,25 +301,28 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
         const cellFill = (fill.members ?? []).map((id) => byId.get(id)).find((i) => i?.slot?.id === cell.id);
         const cellEntry = cellFill && input.entries.find((e) => e.name === cellFill.type);
         if (!cellFill || !cellEntry) continue;
-        const row = listRow(input, cellFill, cellEntry, cell.label);
+        const row = listRow(input, cellFill, cellEntry, slotTitle(cell.label));
         if (row && !hidden) rows.push(row);
       }
     } else {
-      const row = listRow(input, fill, fillEntry, slot.label);
+      const row = listRow(input, fill, fillEntry);
       if (row && !hidden) rows.push(row);
     }
 
     sections.push({
       id: slot.region,
-      label: slot.label,
+      label: slotTitle(slot.label),
       rows,
       // ⚙ opens the instance that fills the region, for everything the
       // section deliberately does not surface (its Appearance bundle).
       actions: [
         {
+          // WHY "Edit" and not "Open", which this one said while the two
+          // beside it said "Edit": one verb for one ⚙. The action selects the
+          // fill so the panel shows it, and what you then do is edit it.
           id: "open-fill",
           glyph: "⚙",
-          title: `Open the ${fill.type} that fills ${slot.label}`,
+          title: `Edit the ${fill.type} that fills ${slotTitle(slot.label)}`,
           onInvoke: () => input.onSelectInstance(fill.id),
         },
       ],
@@ -319,8 +334,8 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
   /* ---- 3 · the subject's OWN members ------------------------------- */
   if (entry.members && !entry.slots) {
     const spec = memberSpecFor(entry, subject);
-    const row = spec ? listRow(input, subject, entry, spec.label ?? "Members") : null;
-    if (row) sections.push({ id: "members", label: spec!.label ?? "Members", rows: [row], actions: [] });
+    const row = spec ? listRow(input, subject, entry) : null;
+    if (row) sections.push({ id: "members", label: spec!.label ?? MEMBERS_LABEL, rows: [row], actions: [] });
   }
 
   /* ---- 4 · the HOST-owned section ---------------------------------- */

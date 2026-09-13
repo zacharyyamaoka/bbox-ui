@@ -3,12 +3,12 @@ import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
 import type { Subject } from "../fieldModel";
 
 /**
- * SECTIONS — one panel, one section chrome, three readings of what a
- * section header is FOR.
+ * SECTIONS — one panel, one section chrome, one answer.
  *
  * Round 1 (branch `claude/inspector-panel-v5`) put five section designs on
- * the table. Zach picked from them on 2026-09-12 and the picks are settled,
- * so they are not variants any more — they are this file's premises:
+ * the table; round 2 put three more on the combination. Zach picked from
+ * both and the picks are settled, so they are not variants any more — they
+ * are this file's premises:
  *
  *   1. "The section is a title and a hairline"  (S1)
  *   2. "Lets add the folding … the chevron should appear just on hover" (S2)
@@ -66,12 +66,12 @@ export type StandardControl = (typeof STANDARD_CONTROLS)[number];
  * How much air the panel spends. Zach, 2026-09-12: "like you can make it
  * way more compact".
  *
- * WHY this is one shared control and not a per-design decision: density and
- * "what does a section header carry" are independent questions, and three
- * designs that each also picked their own row height would confound both —
- * he could not tell whether he preferred P2 or preferred 20px rows. One
- * switch, applied to all three, keeps the comparison about the axis the
- * designs actually differ on.
+ * WHY it is a switch in the control bar and not a constant in the panel: it
+ * was introduced so "do I prefer P2" and "do I prefer 24px headers" stayed
+ * separable while three designs were on the table. The reason it survives
+ * them is simpler — it is Zach's, he asked for it ("like you can make it way
+ * more compact"), and it is a per-session preference, not a design decision
+ * anyone re-makes.
  */
 export type Density = "comfortable" | "compact";
 
@@ -106,7 +106,7 @@ export const DENSITY: Record<Density, DensityRung> = {
  * not the Block. The old code solved this by giving `RegionHeader` a direct
  * `onSetProp(fill.id, …)`; here the target rides on the row, so the SAME
  * standard renderer serves the subject's own fields, a slot fill's, and a
- * render surface's X/Y alike, and no design ever learns the difference.
+ * render surface's X/Y alike, and the panel never learns the difference.
  */
 export interface BoundField {
   field: FieldSpec;
@@ -204,35 +204,36 @@ export interface InspectorSection {
    *  with ("3 ports", "hidden"). */
   summary?: string;
   /** This section's anatomy is switched off (a hidden Bar, a render surface
-   *  with no canvas): a design may dim it and fold it, never disable it. */
+   *  with no canvas): dim it and fold it, never disable it. */
   muted?: boolean;
   /**
    * True for a region the RENDER SURFACE owns rather than the component —
-   * the canvas's X and Y. Every design renders it; this says which side of
-   * the line it falls on, for the one design that draws that line.
+   * the canvas's X and Y. The panel renders it like any other section; this
+   * says which side of the line it falls on, for anything that wants to draw
+   * that boundary rather than leave it to the section's own label.
    *
    * WHY it is a label and not a mechanism: the section itself is ordinary
    * (ordinary rows, ordinary fields, bound to a different subject, placed
-   * last by build order). Without this bit a design wanting to mark the
-   * boundary would have to match on the literal id "renderer", which is a
-   * string comparison standing in for a fact the builder already knew.
+   * last by build order). Without this bit, marking the boundary would mean
+   * matching on the literal id "renderer" — a string comparison standing in
+   * for a fact the builder already knew. P3 · Strata was the one design that
+   * drew it, and it is gone; the bit stays because it is the builder's fact,
+   * not that design's.
    */
   hostOwned?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
-/* The variant seam                                                    */
+/* The panel's inputs                                                  */
 /* ------------------------------------------------------------------ */
 
 /**
  * Who is folded, for sections and member lists alike.
  *
- * WHY the HOST owns it and not each design: three designs owning three
- * copies is how this repo previously ended up with six implementations of
- * one provenance model and four answers. It also means switching design in
- * the picker keeps your folds — the panel is the same panel, drawn
- * differently — and that a section which gains its first member re-derives
- * its default instead of being stuck wherever it landed on mount.
+ * WHY the HOST owns it and not the panel: it is a filter over the content,
+ * orthogonal to how a section is drawn, and keeping it outside means a
+ * section which gains its first member re-derives its default instead of
+ * being stuck wherever it landed on mount.
  *
  * Ids are namespaced by the caller: `section:<id>`, `list:<instanceId>`.
  */
@@ -248,37 +249,18 @@ export interface SectionPanelProps {
   density: Density;
   fold: FoldState;
   /** The tier switch, the density switch and the filter box, already
-   *  rendered — every design keeps them, none of them owns them. */
+   *  rendered — the panel places them, the host owns them. */
   controlBar: ReactNode;
-  /** Non-empty when a filter or tier is hiding rows, so a design can say so
+  /** Non-empty when a filter or tier is hiding rows, so the panel can say so
    *  rather than silently showing four rows of thirty. */
   notice: ReactNode;
 }
 
-export interface SectionPanelVariant {
-  id: string;
-  label: string;
-  blurb: string;
-  /** The one axis this design differs from the others on. */
-  axis: string;
-  /**
-   * WHY there is no `renderer` flag here any more: it used to gate whether
-   * the host-owned "Renderer · <surface>" section was built at all, which
-   * made a region of the panel a property of the DESIGN rather than of the
-   * subject. Zach, 2026-09-12: "for p3 renderer section I don't think we
-   * need a new thing to the model, we can probably just support it within
-   * the existing model... its just another header and fields." It is built
-   * whenever the subject has host facts, and every design renders it,
-   * because there was never anything design-specific about it.
-   */
-  Panel: (props: SectionPanelProps) => ReactNode;
-}
-
 /**
- * What every section design owes — the settled picks, restated as a
- * checklist because three designs are built independently and each would
- * otherwise drop a different one. `demos/capture-inspector-v5b.mjs`
- * asserts every line of it in a real browser.
+ * What the section panel owes — the settled picks, restated as a checklist
+ * because they were each corrected separately and are each easy to undo by
+ * accident. `demos/capture-inspector-v5b.mjs` asserts every line of it in a
+ * real browser.
  *
  * 1. Full bleed — the panel paints no card, no border, no max-width; the
  *    inspector column is the frame.

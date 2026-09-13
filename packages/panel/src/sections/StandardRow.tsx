@@ -1,12 +1,11 @@
 import { useState, type CSSProperties } from "react";
 import type { FieldSpec } from "@bbox-ui/schema";
-import { RotateCcw } from "lucide-react";
 import {
   DenseControl,
   LABEL_WIDTH,
+  ResetOverrideButton,
   RowLabel,
   TraceChain,
-  clearButtonStyle,
   readRow,
 } from "../variants/FigmaDense";
 import type { BoundField, StandardControl } from "./contract";
@@ -65,7 +64,11 @@ export function StandardRow({ bound, geometry = "label-left" }: { bound: BoundFi
   const data = readRow(field, bound.subjects, bound.presets, bound.toSubject);
   const governed = bound.governed.has(field.id);
   const showProvenance = bound.provenance !== "none";
-  const clearable = showProvenance && (governed || data.trace?.candidates[1]?.value !== undefined) && data.hasOwnOverride;
+  // WHY this row ANDs `showProvenance` on top of the shared `canReset` and
+  // the others do not: a host fact (`provenance: "none"`) has exactly one
+  // layer, so "reset to what it was" is not a question the canvas's X can be
+  // asked. Every other condition is the model's, not this file's.
+  const clearable = showProvenance && data.canReset;
 
   const label = (
     <RowLabel
@@ -96,15 +99,7 @@ export function StandardRow({ bound, geometry = "label-left" }: { bound: BoundFi
         />
       </div>
       {clearable && !bound.disabled && (
-        <button
-          type="button"
-          data-slot="field-clear-override"
-          onClick={() => bound.onClearOverride(field.id)}
-          title="Clear this instance's override — fall back to the preset"
-          style={clearButtonStyle}
-        >
-          <RotateCcw size={11} strokeWidth={2.25} aria-hidden="true" />
-        </button>
+        <ResetOverrideButton data={data} fieldLabel={field.label} onReset={() => bound.onClearOverride(field.id)} />
       )}
     </div>
   );

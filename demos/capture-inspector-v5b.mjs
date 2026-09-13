@@ -28,6 +28,12 @@
  *       do like how its more compact now though")
  *   G11 the shipped default never marks a folded header; the flag that does
  *       is opt-in and off ("leave it off by default, I prefer simplicity")
+ *   G13 a section that stands for a SLOT says so — "Left Slot", never the
+ *       bare "Left" that is also a Justify value one row below it — and the
+ *       member list inside it does not repeat its section's name
+ *   G14 the ↺ reset appears on EVERY overridden row, whatever control kind
+ *       draws it ("when you edit a value away from default you get a little
+ *       reset icon that appears to put it back")
  *   G12 an open dropdown is never cut off by the panel's own scroll box —
  *       every row painted and hittable, nothing off-screen ("I did a drop
  *       down on the state property, and instead of showing me the drop down
@@ -49,13 +55,16 @@ if (!url || !outDirArg) {
 const outDir = path.resolve(outDirArg);
 mkdirSync(outDir, { recursive: true });
 
-const DESIGNS = [
-  { id: "current", name: "Current (before)" },
-  { id: "hairline", name: "P1 · Hairline" },
-  { id: "ledger", name: "P2 · Ledger" },
-  { id: "strata", name: "P3 · Strata" },
-];
-const PROPOSALS = DESIGNS.filter((d) => d.id !== "current");
+/**
+ * One panel, no picker.
+ *
+ * Round 2 drove four: the pre-sections panel plus P1/P2/P3, switched through
+ * `[data-slot="inspector-design-picker"]`. Zach shipped P1 on 2026-09-12 and
+ * round 3 removed the rivals and the switcher with them, so every gate below
+ * now runs against the one thing `/create` renders. The comparison captures
+ * live in the round-2 report and in git.
+ */
+const DESIGN = "sections";
 
 const profile = mkdtempSync(path.join(tmpdir(), "bbox-chrome-inspv5b-"));
 const chrome = spawn(
@@ -195,9 +204,9 @@ async function shotInspector(rawName) {
   })()`);
   await sleep(260);
   // Clip to the BOTTOM OF THE PANEL'S OWN CONTENT, not the column's: the
-  // design switcher is pinned to the column's last row, so a clip on the
-  // column always ends on a non-background pixel and a report builder's
-  // trim can never find where the content really stops.
+  // column is full height whatever it holds, so a clip on the column ends
+  // hundreds of empty pixels below the last row and a report builder's trim
+  // has nothing to find.
   const r = await evaluate(`(() => {
     const col = document.querySelector('[data-slot="inspector-column"]');
     const panel = document.querySelector('[data-slot="section-panel"]') || document.querySelector('[data-slot="panel-variant-host"]');
@@ -224,14 +233,27 @@ async function shotInspector(rawName) {
 /* Fixture                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Add a member through the app's OWN Add menu, in the "current" design,
- *  where every list renders its own header unconditionally. Seeding behind
- *  the app's back would prove nothing about the app. */
+/**
+ * Add a member through the app's OWN Add menu. Seeding behind the app's back
+ * would prove nothing about the app.
+ *
+ * WHY it targets `section-list` and not `members-section`: the Add menu is a
+ * verb on the list's ONE header, which the section layer draws — it is a
+ * sibling of the control, not inside it. It used to be reachable inside
+ * `members-section` because the fixture ran in the pre-sections design, where
+ * every list drew its own header; that design is gone.
+ *
+ * An EMPTY list shows its + at rest (`FoldRow`: a list with nothing in it is
+ * not foldable, and a non-foldable header keeps its verbs), which is exactly
+ * the state a fixture seeds from.
+ */
 async function addVia(listIndex, type) {
   await evaluate(`(() => {
-    const list = document.querySelectorAll('[data-slot="members-section"]')[${listIndex}];
+    const list = document.querySelectorAll('[data-slot="section-list"]')[${listIndex}];
     if (!list) throw new Error("no members list at index ${listIndex}");
-    list.querySelector('[data-slot="add-member-trigger"]').click();
+    const trigger = list.querySelector('[data-slot="add-member-trigger"]');
+    if (!trigger) throw new Error("list " + ${listIndex} + " shows no Add trigger");
+    trigger.click();
   })()`);
   await sleep(200);
   const one = await evaluate(`!document.querySelector('[data-slot="add-member-menu"]')`);
@@ -258,7 +280,6 @@ async function loadFixture(theme) {
   await evaluate(`(() => {
     localStorage.setItem("theme", ${JSON.stringify(theme)});
     localStorage.setItem("bbox-ui:inspector-tier", "expert");
-    localStorage.setItem("bbox-ui.create.inspectorDesign", "current");
     localStorage.setItem("bbox-ui.create.inspectorDensity", "comfortable");
     localStorage.setItem("bbox-ui.create.render", "tldraw");
   })()`).catch(() => {});
@@ -266,9 +287,9 @@ async function loadFixture(theme) {
   await waitFor('[data-slot="component-picker"]');
   await sleep(700);
   await setSelect('[data-slot="component-picker"]', "Block");
-  await waitFor('[data-slot="members-section"]');
+  await waitFor('[data-slot="section-list"]');
   await sleep(400);
-  // Header · Left is list 0, Header · Right is list 2 — a Block's Bar has
+  // Header Slot's Left is list 0 and its Right is list 2 — a Block's Bar has
   // three cells and the header Bar comes first.
   await addVia(0, "Glyph");
   await addVia(2, "Pill");
@@ -417,7 +438,6 @@ async function gateCompactFold(label) {
  */
 async function gateProvenanceParity(theme) {
   const label = `${theme}/provenance`;
-  await setSelect('[data-slot="inspector-design-picker"]', "hairline");
   await sleep(420);
   await evaluate(`(() => {
     const row = document.querySelector('${PANEL} [data-slot="standard-row"][data-field="radius"]');
@@ -433,11 +453,61 @@ async function gateProvenanceParity(theme) {
   const inSections = await evaluate(`(() => {
     const row = document.querySelector('${PANEL} [data-slot="standard-row"][data-field="radius"]');
     const t = row.querySelector('[data-slot="field-provenance-tag"]');
-    return { text: t && t.textContent.trim(), tag: t && t.getAttribute("data-tag"), reset: !!row.querySelector('[data-slot="field-clear-override"]'), value: row.querySelector("input").value };
+    const reset = row.querySelector('[data-slot="field-clear-override"]');
+    return {
+      text: t && t.textContent.trim(),
+      tag: t && t.getAttribute("data-tag"),
+      reset: !!reset,
+      resetsTo: reset && reset.getAttribute("data-resets-to"),
+      resetTitle: reset && reset.getAttribute("title"),
+      value: row.querySelector("input").value,
+    };
   })()`);
   assert(inSections.text === "override", `${label}: G7 an overridden row grows main's plain-word OVERRIDE tag inside the section chrome (“${inSections.text}”)`);
   assert(inSections.tag === "override", `${label}: G7 it carries the tag's own data-tag, not a dot`);
   assert(inSections.value === "17", `${label}: G7 the value the row shows is the one that was typed`);
+
+  // G14 — and it offers the way back.
+  //
+  // THIS ASSERTION IS INVERTED FROM ROUND 2, deliberately. It used to read
+  // "no ↺ on a row whose only fallback is its own default — main's rule,
+  // unchanged", which described what main did rather than what Zach asked
+  // for: "when you edit a value away from default you get a little reset icon
+  // that appears to put it back." Radius is governed by no preset and
+  // inherits from nothing, so under the old rule it was exactly the row that
+  // never got one. `resolve.ts` guarantees a default always exists, so there
+  // is always somewhere to go back to.
+  assert(inSections.reset === true, `${label}: G14 an overridden row offers its ↺, even with only a default under it`);
+  assert(inSections.resetsTo === "default", `${label}: G14 and says which layer it lands on (“${inSections.resetsTo}”)`);
+  assert(
+    inSections.resetTitle === "Reset to the default",
+    `${label}: G14 the tooltip names that layer rather than claiming a preset that is not there (“${inSections.resetTitle}”)`,
+  );
+
+  // Clicking it really puts the value back — a button that renders is not a
+  // button that works.
+  await click(`${PANEL} [data-slot="standard-row"][data-field="radius"] [data-slot="field-clear-override"]`);
+  await sleep(320);
+  const afterReset = await evaluate(`(() => {
+    const row = document.querySelector('${PANEL} [data-slot="standard-row"][data-field="radius"]');
+    return { value: row.querySelector("input").value, tag: !!row.querySelector('[data-slot="field-provenance-tag"]'), reset: !!row.querySelector('[data-slot="field-clear-override"]') };
+  })()`);
+  assert(afterReset.value !== "17", `${label}: G14 the ↺ actually restores the value (still “${afterReset.value}”)`);
+  assert(afterReset.tag === false, `${label}: G14 and the OVERRIDE tag goes with it`);
+  assert(afterReset.reset === false, `${label}: G14 and the button retires, having nothing left to clear`);
+
+  // Put it back so the override capture below has an override in it.
+  await evaluate(`(() => {
+    const row = document.querySelector('${PANEL} [data-slot="standard-row"][data-field="radius"]');
+    const input = row.querySelector("input");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    setter.call(input, "17");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    input.blur();
+  })()`);
+  await sleep(360);
+
   // The shipped default keeps `foldedOverrideMark: false` — "leave it off by
   // default, I prefer simplicity". Folding Layout with a stored override must
   // therefore still produce a bare header.
@@ -447,46 +517,82 @@ async function gateProvenanceParity(theme) {
     `${label}: G11 the shipped default marks nothing on a folded header, override or not`,
   );
   await click(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="fold-toggle"]`);
-  const overrideShot = await shotInspector(`${theme}-hairline-override`);
+  const overrideShot = await shotInspector(`${theme}-override`);
+  return { overrideShot };
+}
 
-  await setSelect('[data-slot="inspector-design-picker"]', "current");
-  await sleep(420);
-  const inCurrent = await evaluate(`(() => {
-    const row = document.querySelector('[data-slot="figma-dense-row"][data-field="radius"]');
-    if (!row) throw new Error("no radius row in the current design");
-    const t = row.querySelector('[data-slot="field-provenance-tag"]');
-    return { text: t && t.textContent.trim(), tag: t && t.getAttribute("data-tag"), reset: !!row.querySelector('[data-slot="field-clear-override"]') };
+/**
+ * G14 — the ↺ is a property of having an override, not of which control
+ * happens to draw the row.
+ *
+ * Zach's screenshot showed an overridden Justify (a dropdown) with no reset
+ * beside it, while an overridden Diameter (a segmented/dropdown rung) had
+ * one. The apparent split was by control kind; the real split was by cascade
+ * — Diameter is preset-governed, Justify is not. So this drives EVERY control
+ * kind the panel can draw and asserts each one, having been written, offers
+ * the way back.
+ */
+async function gateResetOnEveryControlKind(label) {
+  const report = await evaluate(`(() => {
+    const rows = Array.from(document.querySelectorAll('${PANEL} [data-slot="standard-row"]'));
+    return rows.map((r) => ({
+      field: r.getAttribute("data-field"),
+      kind: r.querySelector("[data-standard-control]")?.getAttribute("data-standard-control"),
+      disabled: r.getAttribute("data-disabled") === "true",
+      overridden: r.querySelector('[data-slot="field-provenance-tag"][data-tag="override"]') !== null,
+      reset: r.querySelector('[data-slot="field-clear-override"]') !== null,
+    }));
   })()`);
-  assert(inCurrent.text === inSections.text, `${label}: G7 the pre-sections panel says the same word (“${inCurrent.text}” vs “${inSections.text}”)`);
-  assert(inCurrent.tag === inSections.tag, `${label}: G7 and carries the same data-tag`);
-  assert(inCurrent.reset === inSections.reset, `${label}: G7 both agree on whether a ↺ is offered (${inCurrent.reset} vs ${inSections.reset})`);
-  assert(inSections.reset === false, `${label}: G7 no ↺ on a row whose only fallback is its own default — main's rule, unchanged`);
+  const kinds = Array.from(new Set(report.filter((r) => !r.disabled).map((r) => r.kind)));
+  assert(kinds.length >= 3, `${label}: G14 the panel draws enough control kinds to be worth checking (${kinds.join(", ")})`);
+  for (const row of report) {
+    if (row.disabled) continue;
+    assert(
+      row.overridden === row.reset,
+      `${label}: G14 ${row.field} (${row.kind}) — an override and a ↺ go together, always (override ${row.overridden}, reset ${row.reset})`,
+    );
+  }
+  const withReset = report.filter((r) => r.reset);
+  return { rows: report.length, kinds, withReset: withReset.map((r) => `${r.field}:${r.kind}`) };
+}
 
-  // P2's aggregate: the row's own vocabulary, one level up, and it survives
-  // the fold — the whole point of putting it on a header.
-  await setSelect('[data-slot="inspector-design-picker"]', "ledger");
-  await sleep(420);
-  // The mark is a FOLDED mark: a status line earns its ink exactly when the
-  // content it summarises cannot be seen, and not before.
-  assert(
-    (await count(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="section-title"] [data-slot="field-provenance-tag"]`)) === 0,
-    `${label}: P2 marks nothing while the section is OPEN — its rows already carry their own tags`,
-  );
-  await click(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="fold-toggle"]`);
-  const sectionTag = await text(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="section-title"] [data-slot="field-provenance-tag"]`);
-  assert(/override/.test(sectionTag ?? ""), `${label}: folded, P2's Layout header aggregates its rows' tag (“${sectionTag}”)`);
-  assert((sectionTag ?? "").startsWith("1 "), `${label}: the aggregate counts the rows, not the sections (“${sectionTag}”)`);
-  assert(
-    (await count(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="field-provenance-tag"]`)) === 1,
-    `${label}: folded, P2's header reports the override — which the shipped default deliberately does not`,
-  );
-  assert(
-    (await count(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="standard-row"]`)) === 0,
-    `${label}: and it reports it with every row gone`,
-  );
-  const taggedShot = await shotInspector(`${theme}-ledger-tagged-folded`);
-  await click(`${PANEL} [data-slot="inspector-section"][data-section="layout"] [data-slot="fold-toggle"]`);
-  return { overrideShot, taggedShot };
+/**
+ * G13 — a section that stands for a SLOT says "Slot".
+ *
+ * Zach, 2026-09-12, of a Flex cell headed bare "Left" above Size / Direction
+ * / Justify / Align / Wrap, with a member list under it also called "Left":
+ * Left, Center and Right are already VALUES in that same panel — Justify's,
+ * Align's, Port's Edge — so the bare word as a title cannot be told from the
+ * word as a thing to pick. And a list that repeats the heading directly above
+ * it spends a row saying nothing.
+ */
+async function gateSlotNaming(label) {
+  const sections = await evaluate(`(() => {
+    return Array.from(document.querySelectorAll('${PANEL} [data-slot="inspector-section"]')).map((s) => ({
+      id: s.getAttribute("data-section"),
+      title: s.querySelector('[data-slot="section-title"] [data-slot="header-label"]')?.textContent.trim(),
+      lists: Array.from(s.querySelectorAll('[data-slot="section-list"] [data-slot="list-header"] [data-slot="header-label"]')).map((l) => l.textContent.trim()),
+    }));
+  })()`);
+  const SLOT_REGIONS = ["header", "body", "footer", "left", "center", "right"];
+  const slotSections = sections.filter((s) => SLOT_REGIONS.includes(s.id));
+  assert(slotSections.length > 0, `${label}: G13 the subject has slot sections to name (${sections.map((s) => s.id).join(", ")})`);
+  for (const section of slotSections) {
+    assert(/ Slot$/.test(section.title ?? ""), `${label}: G13 the ${section.id} section is named as a slot (“${section.title}”)`);
+    for (const list of section.lists) {
+      assert(list !== section.title, `${label}: G13 the list under ${section.title} does not repeat it (“${list}”)`);
+      // The bare ambiguous word is the thing being removed, at BOTH levels.
+      assert(
+        !["Left", "Center", "Right"].includes(list),
+        `${label}: G13 no list is titled with a bare Justify/Align value (“${list}”)`,
+      );
+    }
+  }
+  const allTitles = sections.map((s) => s.title);
+  for (const bare of ["Left", "Center", "Right"]) {
+    assert(!allTitles.includes(bare), `${label}: G13 no section is titled bare “${bare}”`);
+  }
+  return { sections: sections.map((s) => ({ id: s.id, title: s.title, lists: s.lists })) };
 }
 
 /**
@@ -619,128 +725,120 @@ try {
     await loadFixture(theme);
     const entry = { theme, designs: {}, console: [] };
 
-    for (const design of DESIGNS) {
-      const label = `${theme}/${design.id}`;
-      await setSelect('[data-slot="inspector-design-picker"]', design.id);
-      await sleep(420);
-      const files = {};
-      files.hero = await shotInspector(`${theme}-${design.id}-hero`);
+    const label = `${theme}/${DESIGN}`;
+    const files = {};
+    await waitFor(PANEL);
+    files.hero = await shotInspector(`${theme}-hero`);
 
-      if (design.id === "current") {
-        // The before. It is the reason for the gates, so it is exempt from
-        // them — but it must still have the double header the fix removes,
-        // or there was nothing to fix.
-        const legacy = await count('[data-slot="members-header"]');
-        assert(legacy > 0, `${label}: the before design still draws control-owned list headers (${legacy})`);
-        entry.designs[design.id] = { files, legacyHeaders: legacy };
-        continue;
-      }
+    await gateNoHelperText(label);
+    await gateStandardControls(label);
+    await gateFullBleed(label);
+    await gateOneHeaderPerList(label);
+    await gateHoverChevron(label);
+    await gateGroupRow(label);
+    await gateListRowReadsAsAProperty(label);
+    await gateDropdownEscapesTheScroller(label);
+    const naming = await gateSlotNaming(label);
+    const resets = await gateResetOnEveryControlKind(label);
 
-      await waitFor(PANEL);
-      await gateNoHelperText(label);
-      await gateStandardControls(label);
-      await gateFullBleed(label);
-      await gateOneHeaderPerList(label);
-      await gateHoverChevron(label);
-      await gateGroupRow(label);
-      await gateListRowReadsAsAProperty(label);
-      await gateDropdownEscapesTheScroller(label);
+    // The switcher and the pre-sections panel are gone with the decision.
+    assert(
+      (await count('[data-slot="inspector-design-picker"]')) === 0,
+      `${label}: the settled design picker is gone from the column`,
+    );
+    assert((await count('[data-slot="variant-picker"]')) === 0, `${label}: and so is the settled panel-design picker in the sidebar`);
+    assert((await count('[data-slot="members-header"]')) === 0, `${label}: no control-owned list header survives anywhere on the page`);
+    assert((await count('[data-slot="stratum-rule"]')) === 0, `${label}: P3's rule went with P3`);
 
-      // Hover capture: the chevron, revealed, on a real pointer.
-      await hover('[data-slot="inspector-section"][data-open="true"] [data-slot="section-title"]');
-      files.hover = await shotInspector(`${theme}-${design.id}-hover`);
-      await unhover();
+    // Hover capture: the chevron, revealed, on a real pointer.
+    await hover('[data-slot="inspector-section"][data-open="true"] [data-slot="section-title"]');
+    files.hover = await shotInspector(`${theme}-hover`);
+    await unhover();
 
-      await gateCompactFold(label);
+    await gateCompactFold(label);
 
-      // Everything folded — the compact reading of the whole panel.
-      const sectionIds = await evaluate(`Array.from(document.querySelectorAll('${PANEL} [data-slot="inspector-section"]')).map((s) => s.getAttribute("data-section"))`);
-      for (const id of sectionIds) {
-        const open = await attr(`${PANEL} [data-slot="inspector-section"][data-section="${id}"]`, "data-open");
-        if (open === "true") await click(`${PANEL} [data-slot="inspector-section"][data-section="${id}"] [data-slot="fold-toggle"]`);
-      }
-      const foldedHeight = await evaluate(`Math.round(document.querySelector('${PANEL}').getBoundingClientRect().height)`);
-      files.folded = await shotInspector(`${theme}-${design.id}-folded`);
-      assert(
-        (await count(`${PANEL} [data-slot="section-body"]`)) === 0,
-        `${label}: every section folds — no body survives`,
-      );
-      for (const id of sectionIds) {
-        await click(`${PANEL} [data-slot="inspector-section"][data-section="${id}"] [data-slot="fold-toggle"]`);
-      }
-      const openHeight = await evaluate(`Math.round(document.querySelector('${PANEL}').getBoundingClientRect().height)`);
-      assert(foldedHeight < openHeight, `${label}: folded is shorter than open (${foldedHeight} < ${openHeight})`);
-
-      // Density — one switch, shared by all three designs.
-      const roomy = await rectOf(`${PANEL} [data-slot="section-title"]`);
-      await click('[data-slot="density-button"][data-density="compact"]');
-      const compact = await rectOf(`${PANEL} [data-slot="section-title"]`);
-      assert(compact.h < roomy.h, `${label}: Compact shortens a section header (${Math.round(compact.h)} < ${Math.round(roomy.h)})`);
-      files.compact = await shotInspector(`${theme}-${design.id}-compact`);
-      await click('[data-slot="density-button"][data-density="comfortable"]');
-
-      // The host-owned section ships in EVERY design now — it stopped being
-      // P3's feature on 2026-09-12 ("its just another header and fields").
-      // What P3 still owns is the RULE that marks the boundary.
-      const hasRenderer = (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"]`)) > 0;
-      assert(hasRenderer, `${label}: the Renderer section is built for every design, not gated on one`);
-      const rendererLabelHere = await text(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="header-label"]`);
-      assert(rendererLabelHere === "Renderer · tldraw", `${label}: and it names the live surface (“${rendererLabelHere}”)`);
-      assert(
-        (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="field-provenance-tag"]`)) === 0,
-        `${label}: a host fact never reads as an override — it has no default to override`,
-      );
-      if (design.id === "strata") {
-        assert((await count(`${PANEL} [data-slot="stratum-rule"]`)) === 1, `${label}: exactly one stratum rule separates the two halves`);
-        const order = await evaluate(`Array.from(document.querySelectorAll('${PANEL} [data-slot="inspector-section"]')).map((s) => s.getAttribute("data-section"))`);
-        assert(order[order.length - 1] === "renderer", `${label}: the host stratum sits last (${order.join(" → ")})`);
-        // X and Y are a declared `group`, so they land as a pair — the same
-        // mechanism a component's width/height uses, on rows that are not a
-        // component's at all.
-        assert(
-          (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="standard-pair"]`)) === 1,
-          `${label}: the host's X and Y share one row through FieldSpec.group`,
-        );
-        const note = await text(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="field-note"]`);
-        assert(/tldraw writes this/.test(note ?? ""), `${label}: each host row says who writes it (“${note}”)`);
-        files.renderer = await shotInspector(`${theme}-${design.id}-renderer`);
-
-        // Writing X really moves the node: one code path with a canvas drag.
-        const beforeX = await evaluate(`(() => document.querySelector('${PANEL} [data-slot="standard-row"][data-field="x"] input').value)()`);
-        await evaluate(`(() => {
-          const input = document.querySelector('${PANEL} [data-slot="standard-row"][data-field="x"] input');
-          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
-          setter.call(input, "260");
-          input.dispatchEvent(new Event("input", { bubbles: true }));
-          input.dispatchEvent(new Event("change", { bubbles: true }));
-          input.blur();
-        })()`);
-        await sleep(420);
-        const afterX = await evaluate(`(() => document.querySelector('${PANEL} [data-slot="standard-row"][data-field="x"] input').value)()`);
-        assert(afterX === "260" && afterX !== beforeX, `${label}: typing into the host's X writes the canvas position (${beforeX} → ${afterX})`);
-
-        // The DOM render has no canvas: `RENDERS.canMove === false` alone
-        // must disable the rows and mute the section — no special case.
-        await click('[data-slot="render-tab"][data-render="dom"]');
-        await sleep(420);
-        const domLabel = await text(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="header-label"]`);
-        assert(domLabel === "Renderer · DOM", `${label}: the section renames itself with the surface (“${domLabel}”)`);
-        assert(
-          (await attr(`${PANEL} [data-slot="inspector-section"][data-section="renderer"]`, "data-muted")) === "true",
-          `${label}: a surface with no canvas is muted, not hidden`,
-        );
-        const disabled = await evaluate(`Array.from(document.querySelectorAll('${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="standard-row"]')).every((r) => r.getAttribute("data-disabled") === "true")`);
-        assert(disabled, `${label}: every host row is read-only on the DOM render`);
-        files.rendererDom = await shotInspector(`${theme}-${design.id}-renderer-dom`);
-        await click('[data-slot="render-tab"][data-render="tldraw"]');
-        await sleep(420);
-      } else {
-        assert((await count(`${PANEL} [data-slot="stratum-rule"]`)) === 0, `${label}: only P3 draws the stratum rule`);
-        files.renderer = await shotInspector(`${theme}-${design.id}-renderer`);
-      }
-
-      entry.designs[design.id] = { files, foldedHeight, openHeight };
+    // Everything folded — the compact reading of the whole panel.
+    const sectionIds = await evaluate(`Array.from(document.querySelectorAll('${PANEL} [data-slot="inspector-section"]')).map((s) => s.getAttribute("data-section"))`);
+    for (const id of sectionIds) {
+      const open = await attr(`${PANEL} [data-slot="inspector-section"][data-section="${id}"]`, "data-open");
+      if (open === "true") await click(`${PANEL} [data-slot="inspector-section"][data-section="${id}"] [data-slot="fold-toggle"]`);
     }
+    const foldedHeight = await evaluate(`Math.round(document.querySelector('${PANEL}').getBoundingClientRect().height)`);
+    files.folded = await shotInspector(`${theme}-folded`);
+    assert((await count(`${PANEL} [data-slot="section-body"]`)) === 0, `${label}: every section folds — no body survives`);
+    for (const id of sectionIds) {
+      await click(`${PANEL} [data-slot="inspector-section"][data-section="${id}"] [data-slot="fold-toggle"]`);
+    }
+    const openHeight = await evaluate(`Math.round(document.querySelector('${PANEL}').getBoundingClientRect().height)`);
+    assert(foldedHeight < openHeight, `${label}: folded is shorter than open (${foldedHeight} < ${openHeight})`);
+
+    // Density — one switch in the control bar, which is where it stayed.
+    const roomy = await rectOf(`${PANEL} [data-slot="section-title"]`);
+    await click('[data-slot="density-button"][data-density="compact"]');
+    const compact = await rectOf(`${PANEL} [data-slot="section-title"]`);
+    assert(compact.h < roomy.h, `${label}: Compact shortens a section header (${Math.round(compact.h)} < ${Math.round(roomy.h)})`);
+    files.compact = await shotInspector(`${theme}-compact`);
+    await click('[data-slot="density-button"][data-density="comfortable"]');
+
+    // The host-owned section is built from the SUBJECT, not from a design —
+    // it stopped being P3's feature on 2026-09-12 ("its just another header
+    // and fields") and survives P3's removal untouched.
+    const hasRenderer = (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"]`)) > 0;
+    assert(hasRenderer, `${label}: the Renderer section is built from the subject's host facts`);
+    const rendererLabelHere = await text(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="header-label"]`);
+    assert(rendererLabelHere === "Renderer · tldraw", `${label}: and it names the live surface (“${rendererLabelHere}”)`);
+    assert(
+      (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="field-provenance-tag"]`)) === 0,
+      `${label}: a host fact never reads as an override — it has no default to override`,
+    );
+    assert(
+      (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="field-clear-override"]`)) === 0,
+      `${label}: and never grows a ↺ either — there is no layer under the canvas`,
+    );
+    const order = await evaluate(`Array.from(document.querySelectorAll('${PANEL} [data-slot="inspector-section"]')).map((s) => s.getAttribute("data-section"))`);
+    assert(order[order.length - 1] === "renderer", `${label}: the host section sits last by build order (${order.join(" → ")})`);
+    // X and Y are a declared `group`, so they land as a pair — the same
+    // mechanism a component's width/height uses, on rows that are not a
+    // component's at all.
+    assert(
+      (await count(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="standard-pair"]`)) === 1,
+      `${label}: the host's X and Y share one row through FieldSpec.group`,
+    );
+    const note = await text(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="field-note"]`);
+    assert(/tldraw writes this/.test(note ?? ""), `${label}: each host row says who writes it (“${note}”)`);
+    files.renderer = await shotInspector(`${theme}-renderer`);
+
+    // Writing X really moves the node: one code path with a canvas drag.
+    const beforeX = await evaluate(`(() => document.querySelector('${PANEL} [data-slot="standard-row"][data-field="x"] input').value)()`);
+    await evaluate(`(() => {
+      const input = document.querySelector('${PANEL} [data-slot="standard-row"][data-field="x"] input');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+      setter.call(input, "260");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.blur();
+    })()`);
+    await sleep(420);
+    const afterX = await evaluate(`(() => document.querySelector('${PANEL} [data-slot="standard-row"][data-field="x"] input').value)()`);
+    assert(afterX === "260" && afterX !== beforeX, `${label}: typing into the host's X writes the canvas position (${beforeX} → ${afterX})`);
+
+    // The DOM render has no canvas: `RENDERS.canMove === false` alone must
+    // disable the rows and mute the section — no special case.
+    await click('[data-slot="render-tab"][data-render="dom"]');
+    await sleep(420);
+    const domLabel = await text(`${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="header-label"]`);
+    assert(domLabel === "Renderer · DOM", `${label}: the section renames itself with the surface (“${domLabel}”)`);
+    assert(
+      (await attr(`${PANEL} [data-slot="inspector-section"][data-section="renderer"]`, "data-muted")) === "true",
+      `${label}: a surface with no canvas is muted, not hidden`,
+    );
+    const disabled = await evaluate(`Array.from(document.querySelectorAll('${PANEL} [data-slot="inspector-section"][data-section="renderer"] [data-slot="standard-row"]')).every((r) => r.getAttribute("data-disabled") === "true")`);
+    assert(disabled, `${label}: every host row is read-only on the DOM render`);
+    files.rendererDom = await shotInspector(`${theme}-renderer-dom`);
+    await click('[data-slot="render-tab"][data-render="tldraw"]');
+    await sleep(420);
+
+    entry.designs[DESIGN] = { files, foldedHeight, openHeight, naming, resets };
 
     const provenance = await gateProvenanceParity(theme);
     entry.provenance = provenance;
@@ -748,8 +846,6 @@ try {
     // His actual report was Port's State row, not a Block's — a Port carries
     // far more fields, so its panel scrolls harder and the menu sat lower.
     // Drive the exact component he was on.
-    await setSelect('[data-slot="inspector-design-picker"]', "hairline");
-    await sleep(360);
     await setSelect('[data-slot="component-picker"]', "Port");
     await waitFor(`${PANEL} [data-slot="standard-row"]`);
     await sleep(500);
@@ -774,13 +870,13 @@ try {
     await setSelect('[data-slot="component-picker"]', "Block");
     await sleep(500);
 
-    assert(consoleErrors.length === 0, `${theme}: G9 no console error across all four designs (${consoleErrors.slice(0, 2).join(" | ")})`);
+    assert(consoleErrors.length === 0, `${theme}: G9 no console error anywhere in the run (${consoleErrors.slice(0, 2).join(" | ")})`);
     entry.console = consoleErrors.slice();
     manifest.push(entry);
   }
 
   writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify({ manifest, checks }, null, 2));
-  console.log(`\n${checks.length} assertions passed across ${manifest.length} themes and ${DESIGNS.length} designs.`);
+  console.log(`\n${checks.length} assertions passed across ${manifest.length} themes.`);
   console.log(`captures → ${outDir}`);
 } catch (error) {
   console.error("\nFAILED:", error.message);

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -6,7 +6,6 @@ import type { FieldSpec } from "@bbox-ui/schema";
 import { DENSITY, STANDARD_CONTROLS, type BoundField, type InspectorSection, type SectionRow } from "../src/sections/contract";
 import { controlKindFor } from "../src/sections/StandardRow";
 import { SHIPPED_HEADER_POLICY, derivedSummary, isEffectivelyEmpty, listSummary, sectionTagCount } from "../src/sections/shared";
-import { DEFAULT_SECTION_PANEL, SECTION_PANELS } from "../src/sections/variants";
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
 const read = (rel: string) => readFileSync(path.join(SRC, rel), "utf8");
@@ -143,13 +142,20 @@ describe("the standard control list stays closed", () => {
   });
 });
 
-describe("the shipped default", () => {
-  it("is P1 · Hairline", () => {
-    // Zach picked it on 2026-09-12. `apps/docs`'s inspector column reads
-    // SECTION_PANELS[0] for its own default, so the order here IS the
-    // default and a reorder would silently change what renders.
-    expect(SECTION_PANELS[0]!.id).toBe("hairline");
-    expect(DEFAULT_SECTION_PANEL.id).toBe("hairline");
+describe("the shipped panel", () => {
+  it("is the only one — no registry, no picker", () => {
+    // Round 3, 2026-09-12: P1 shipped, so P2 and P3 came out with the
+    // switcher that compared them. P2 was four HeaderPolicy flags and an
+    // identical Panel body; P3 was one extra rule above the host-owned
+    // sections. Both are recoverable from git; neither is reachable code.
+    expect(existsSync(path.join(SRC, "sections", "variants"))).toBe(false);
+    expect(read("sections/SectionPanel.tsx")).toContain("export function SectionPanel");
+    const column = readFileSync(
+      path.join(SRC, "..", "..", "..", "apps", "docs", "src", "components", "create", "inspector-column.tsx"),
+      "utf8",
+    );
+    expect(column).not.toContain("inspector-design-picker");
+    expect(column).not.toContain("findSectionPanel");
   });
 
   it("keeps every header flag off, including the folded override mark", () => {
@@ -163,15 +169,19 @@ describe("the shipped default", () => {
     });
   });
 
-  it("is the policy P1 actually renders with, not a second copy of it", () => {
-    const hairline = read("sections/variants/Hairline.tsx");
-    expect(hairline).toContain("const POLICY: HeaderPolicy = SHIPPED_HEADER_POLICY;");
+  it("renders with that policy by reference, never a second copy of it", () => {
+    // A literal `{countAtRest: false, …}` inlined here would be a second
+    // definition of the shipped answer, free to drift from the exported one.
+    const panel = read("sections/SectionPanel.tsx");
+    expect(panel).toContain("policy={SHIPPED_HEADER_POLICY}");
   });
 
-  it("lets P2 turn the folded mark on without redefining the other flags", () => {
-    const ledger = read("sections/variants/Ledger.tsx");
-    expect(ledger).toContain("...SHIPPED_HEADER_POLICY");
-    expect(ledger).toContain("foldedOverrideMark: true");
+  it("still ships the folded override mark as a flag anyone can turn on", () => {
+    // "leave it off by default, I prefer simplicity, but yes if you want to
+    // implement it that's fine." Losing P2 must not lose the mechanism.
+    const shared = read("sections/shared.tsx");
+    expect(shared).toContain("foldedOverrideMark: boolean;");
+    expect(shared).toContain("policy.foldedOverrideMark && !open ? sectionTagCount(section) : null");
   });
 });
 
@@ -218,17 +228,14 @@ describe("one row renderer, one list header", () => {
   it("draws every section through the one SectionBlock", () => {
     const shared = read("sections/shared.tsx");
     expect(shared).toContain("FoldRow");
-    for (const variant of ["Hairline", "Ledger", "Strata"]) {
-      const source = read(`sections/variants/${variant}.tsx`);
-      // A design supplies a HeaderPolicy and, at most, decides what sits
-      // BETWEEN sections. It never calls FoldRow itself: five policy
-      // decisions copied three ways is how one list ended up with two
-      // headers in the first place.
-      expect(source).toMatch(/SectionBlock/);
-      expect(source).not.toMatch(/<FoldRow/);
-      expect(source).not.toMatch(/data-slot="section-title"/);
-      expect(source).not.toMatch(/data-slot="list-header"/);
-    }
+    // The panel places sections and the divider between them; it never draws
+    // a header itself. Five policy decisions copied a second way is how one
+    // list ended up with two headers in the first place.
+    const source = read("sections/SectionPanel.tsx");
+    expect(source).toMatch(/SectionBlock/);
+    expect(source).not.toMatch(/<FoldRow/);
+    expect(source).not.toMatch(/data-slot="section-title"/);
+    expect(source).not.toMatch(/data-slot="list-header"/);
   });
 
   it("styles a member-list header as a property row, not as a demoted caption", () => {

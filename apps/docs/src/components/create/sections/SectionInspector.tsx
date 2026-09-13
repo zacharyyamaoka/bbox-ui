@@ -1,31 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import type { Density, FoldState, SectionPanelVariant } from "@bbox-ui/panel";
-import { TIER_META, TIER_ORDER, loadStoredTier, storeTier, type Tier } from "@bbox-ui/panel";
+import type { Density, FoldState } from "@bbox-ui/panel";
+import { SectionPanel, TIER_META, TIER_ORDER, loadStoredTier, storeTier, type Tier } from "@bbox-ui/panel";
 import { buildSections, listIdsIn, type BuildSectionsInput } from "./build-sections";
 
 /**
  * The sections host: owns the four pieces of state a section design must
  * NOT own — the detail tier, the filter query, the density rung, and which
- * sections and member lists are folded — builds the sections once, and
- * hands them to whichever design is selected.
+ * sections and member lists are folded — builds the sections once, and hands
+ * them to the panel.
  *
- * WHY all four live here and not in each design: they are filters and
- * settings over the same content, orthogonal to how a section is drawn (the
- * exact argument `fieldTiers.ts` already makes for itself). Three designs
- * owning three copies is how this repo previously ended up with six
- * implementations of one provenance model and four answers. It also makes
- * switching design in the picker keep your folds and your density, so the
- * comparison is between two drawings of the same panel rather than between
- * two different panels.
+ * WHY all four live here and not in the panel: they are filters and settings
+ * over the same content, orthogonal to how a section is drawn (the exact
+ * argument `fieldTiers.ts` already makes for itself). While three designs
+ * were on the table this also kept your folds and density across a switch;
+ * that reason expired with the switch, the first one did not.
  */
 const DENSITY_KEY = "bbox-ui.create.inspectorDensity";
 
-export function SectionInspector({
-  variant,
-  ...rest
-}: { variant: SectionPanelVariant } & Omit<BuildSectionsInput, "tier" | "filter">) {
+export function SectionInspector(rest: Omit<BuildSectionsInput, "tier" | "filter">) {
   // WHY the stored tier is read in an effect and not in the initialiser,
   // even though `loadStoredTier` is already try/caught: on the server the
   // catch returns "simple", so a client whose localStorage says "expert"
@@ -128,11 +122,8 @@ export function SectionInspector({
           </button>
         ))}
       </div>
-      {/* WHY density is one switch here and not a choice each design makes:
-          "do I prefer P2" and "do I prefer 24px headers" are independent
-          questions, and three designs that each also picked their own row
-          height would confound both. Zach, 2026-09-12: "like you can make
-          it way more compact." */}
+      {/* Zach asked for this one directly, 2026-09-12: "like you can make it
+          way more compact." */}
       <div role="group" aria-label="Density" style={groupStyle}>
         {(["comfortable", "compact"] as const).map((d) => (
           <button
@@ -168,7 +159,7 @@ export function SectionInspector({
   ) : null;
 
   return (
-    <variant.Panel
+    <SectionPanel
       componentName={rest.componentName}
       subjectCount={rest.subjects.length}
       sections={sections}
