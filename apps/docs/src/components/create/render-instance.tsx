@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { ComponentEntry, Instance, RenderContext } from "@bbox-ui/panel";
-import { activeArrangement, blockPorts, DraggablePort, effectiveProps, portPlacementsOf } from "@bbox-ui/panel";
+import { activeArrangement, blockPorts, effectiveProps, portEdgesArrangement, portPlacementsOf } from "@bbox-ui/panel";
 import type { PortEdgeId } from "@bbox-ui/core";
 import { PortDndProvider } from "./port-dnd";
 
@@ -37,23 +37,20 @@ export function renderInstance(
   // see port-dnd.tsx's own header): a Block then renders with its lanes
   // but no PortDndProvider, so its ports are visible and selectable, just
   // not draggable.
-  onMovePort?: (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void,
+  onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void,
 ): ReactNode {
   const entry = entries.find((e) => e.name === inst.type);
   if (!entry) return null;
   const memberIds = inst.members ?? [];
   const wrap = (child: Instance): ReactNode => {
     const on = selectedIds.includes(child.id);
-    // A Port member of a Block that has reached its arrangements (Zach,
-    // 2026-09-12) is draggable; every other member keeps the plain
-    // selection wrapper unchanged.
-    if (child.type === "Port" && inst.arrangements) {
-      return (
-        <DraggablePort key={child.id} portId={child.id} selected={on} disabled={child.locked === true} onSelect={onSelect}>
-          {renderInstance(entries, byId, child, selectedIds, onSelect, onMovePort)}
-        </DraggablePort>
-      );
-    }
+    // WHY a Port member is NOT wrapped in a drag handle here any more
+    // (2026-09-12): the port-edge component owns the drag now, and its
+    // `PortCard` IS the draggable node. A node wrapped here could not be
+    // rendered a SECOND time inside a DragOverlay (two draggables, one id),
+    // which is what forced the old ghost to be a `dangerouslySetInnerHTML`
+    // clone of `outerHTML` — the technique that produced the stretched
+    // ghosts. Bare nodes make a faithful, re-rendered ghost possible.
     return (
       <span
         key={child.id}
@@ -85,47 +82,63 @@ export function renderInstance(
   // own props; the Code view prints only the store.
   const all = Array.from(byId.values());
   const props = effectiveProps(all, entries, inst);
+  const nonSlotKids: Instance[] = [];
   if (entry.slots) {
     ctx.slots = {};
-    const nonSlotKids: Instance[] = [];
     for (const child of kids) {
       if (child.slot) ctx.slots[child.slot.id] = wrap(child);
       else nonSlotKids.push(child);
     }
-    // A component with BOTH slots and members (a Block: its Bars/body,
-    // plus its own Ports) hands the non-slot members through separately,
-    // by id — never mixed into `slots`, and never as `children` (a
-    // slotted `render` never reads that arg, see the call below).
-    if (entry.members && nonSlotKids.length > 0) {
-      ctx.members = {};
-      for (const child of nonSlotKids) ctx.members[child.id] = wrap(child);
-      // Placement data only makes sense once the instance actually carries
-      // an active Arrangement (Zach's 2026-09-12 model) — absent for any
-      // other slots+members shape that might arrive later.
-      if (inst.arrangements) {
-        const arrangement = activeArrangement(inst);
-        const ports = blockPorts(all, inst.id);
-        ctx.arrangement = arrangement;
-        ctx.placements = portPlacementsOf(inst, ports, arrangement.id);
-        ctx.lockedMemberIds = ports.filter((p) => p.locked).map((p) => p.id);
-        ctx.blockId = inst.id;
-      }
-    }
-    const rendered = entry.render(props, undefined, ctx);
-    // One DndContext per Block (Zach, 2026-09-12: "nested contexts across
-    // Blocks are fine") — mounted here, around this Block's own render, so
-    // a sibling Block's Ports never collide with this one's four lanes.
-    // Absent `onMovePort` (a host not yet wired for dragging) or `arrangement`
-    // (not a Block) means the plain render, unwrapped.
-    if (ctx.arrangement && onMovePort) {
-      return (
-        <PortDndProvider blockId={inst.id} arrangement={ctx.arrangement} onMovePort={onMovePort}>
-          {rendered}
-        </PortDndProvider>
-      );
-    }
-    return rendered;
+  } else {
+    nonSlotKids.push(...kids);
   }
-  const children = kids.length === 0 ? undefined : kids.map(wrap);
-  return entry.render(props, children, ctx);
+  // A component with members that are addressed BY ID rather than as ordered
+  // children (a Block: its Bars/body slots plus its own Ports; the standalone
+  // PortEdges bench: only Ports) hands them through `ctx.members` — never
+  // mixed into `slots`, and never as `children`.
+  //
+  // WHY this is no longer inside the `entry.slots` branch (2026-09-12): the
+  // port-edge component has no slots at all, and gating the arrangement on
+  // slots meant its outline rendered with four empty lanes and no ports —
+  // arrangements are a members fact, not a slots fact.
+  const wantsMembers = entry.members && nonSlotKids.length > 0;
+  if (wantsMembers) {
+    ctx.members = {};
+    for (const child of nonSlotKids) ctx.members[child.id] = wrap(child);
+    if (inst.arrangements) {
+      const arrangement = portEdgesArrangement(inst.type, props, activeArrangement(inst));
+      const ports = blockPorts(all, inst.id);
+      ctx.arrangement = arrangement;
+      ctx.placements = portPlacementsOf(inst, ports, arrangement.id);
+      ctx.lockedMemberIds = ports.filter((p) => p.locked).map((p) => p.id);
+      ctx.blockId = inst.id;
+    }
+  }
+  // A slotted render never reads the `children` arg; a members-by-id render
+  // does not either. Only an ordinary container (a Flex, a Stack) does.
+  const childArg =
+    entry.slots || (wantsMembers && ctx.arrangement)
+      ? undefined
+      : kids.length === 0
+        ? undefined
+        : kids.map(wrap);
+  const rendered = entry.render(props, childArg, ctx);
+  // One DndContext per port host (Zach, 2026-09-12: "nested contexts across
+  // Blocks are fine") — mounted around THIS instance's own render, so a
+  // sibling Block's Ports never collide with this one's four lanes.
+  if (ctx.arrangement && ctx.placements && ctx.members && onMovePort) {
+    return (
+      <PortDndProvider
+        blockId={inst.id}
+        arrangement={ctx.arrangement}
+        placements={ctx.placements}
+        members={ctx.members}
+        lockedMemberIds={ctx.lockedMemberIds}
+        onMovePort={onMovePort}
+      >
+        {rendered}
+      </PortDndProvider>
+    );
+  }
+  return rendered;
 }

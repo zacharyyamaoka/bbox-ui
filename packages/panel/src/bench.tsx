@@ -39,10 +39,9 @@ import {
   TextBox,
   TEXT_BOX_FIELDS,
   TEXT_BOX_PRESETS,
+  ALL_EDGES,
   DEFAULT_ARRANGEMENT,
   evenT,
-  groupSlots,
-  laneOrder,
   type AppearanceState,
   type Tone,
   type Lens,
@@ -50,11 +49,13 @@ import {
   type Placement,
   type Placements,
   type PortEdgeId,
+  type SpacingScheme,
 } from "@bbox-ui/core";
 import { registerComponent, type ComponentEntry, type RenderContext, type SlotSpec } from "./registerComponent";
 import type { Subject } from "./fieldModel";
 import type { MembersSpec } from "./members/contract";
 import { PortLane } from "./portDnd";
+import { LANE_BAND_PX } from "./portEdges";
 
 /**
  * Which components hold others, and what. `accepts` is closed on purpose:
@@ -75,6 +76,10 @@ export const MEMBER_SPECS: Record<string, MembersSpec> = {
   // creation, see `makeInstanceWithSlots`), ports are appended after by
   // the ordinary `addMember` path.
   Block: { accepts: ["Port"], label: "Ports" },
+  // The standalone port-edge bench: the four-edge arrangement with nothing
+  // around it. Same members contract as a Block, so every existing path
+  // (add a Port, select one, its Placement section) works unchanged.
+  PortEdges: { accepts: ["Port"], label: "Ports" },
 };
 
 /**
@@ -132,98 +137,124 @@ function threePorts(): ReactNode {
 }
 
 /**
- * A band wide/tall enough to hold a Port dot (max 18px, `lg`) plus its hit
- * halo without the lane reading as a bare sliver. Not a Port constant of
- * its own — a lane is a layout fact about the Block, not the Port.
- */
-const LANE_BAND_PX = 26;
-
-/**
- * One of the four PortEdge lanes, absolutely positioned on the Block's
- * outline so the dots sit ON its border line: `top`/`bottom` are
- * siblings of the header/body/footer, inset from the corners by the
- * Block's own radius; `left`/`right` are children of the body wrapper
- * (see `renderBlock`), which — because `Block` itself carries no padding
- * here — spans EXACTLY from the header's bottom edge to the footer's top
- * edge, so `top: 0; bottom: 0` on them is already "below the header,
- * above the footer" with no header/footer height to read.
+ * Where one lane sits on an outline: straddling the border line it belongs
+ * to (`-band/2`), and inset along its own axis so a dot never rides a
+ * rounded corner.
  *
- * Which ports land here, in what order, and — in custom mode — at what
- * `t`, all come from the model (`laneOrder`, which itself resolves each
- * placement's `drawnEdge` — a port whose stored edge is off in this
- * Arrangement parks here if this is the nearest live edge walking
- * clockwise, per `portPlacement.ts`). Auto mode hands spacing to
- * `PortEdge`'s own flex (`layout="evenly"`) rather than reading `t` at
- * all — Zach's ruling that auto's `t` is a cache, not a truth to render
- * from.
+ * WHY this is all that is left of the old `renderLane` (2026-09-12): the
+ * lane's CONTENT — which slots are on it, in what order, at what `t`, what
+ * is draggable and what a drop means — now belongs to the port-edge
+ * component itself (`portEdges/`, five implementations behind one
+ * contract). `bench.tsx` says only where on the Block the four bands go;
+ * `<PortLane>` draws whichever implementation is live. That split is Zach's
+ * own ask: "before we integrate this into the block, let's please get the
+ * 'port edge' component working."
  */
-function renderLane(
-  blockId: string,
-  edge: PortEdgeId,
-  arrangement: Arrangement,
-  placements: Placements,
-  members: Record<string, ReactNode>,
-  locked: Set<string>,
-  radius: number,
-): ReactNode {
-  const ids = laneOrder(placements, arrangement, edge).filter((id) => !locked.has(id) && members[id]);
-  const idSet = new Set(ids);
-  // Zach, 2026-09-12: "when collapsed, a group renders as one card at its
-  // first member." `groupSlots` (portPlacement.ts) already computes exactly
-  // that clustering — with no grouping set, or an expanded one, it hands
-  // back one singleton slot per port, so this is a strict superset of the
-  // old per-port render (every existing Block, ungrouped, draws identically)
-  // rather than a behaviour change for the common case.
-  const slots = groupSlots(placements, arrangement, edge)
-    .map((slot) => ({ ...slot, portIds: slot.portIds.filter((id) => idSet.has(id)) }))
-    .filter((slot) => slot.portIds.length > 0);
+function laneStyleFor(edge: PortEdgeId, inset: number): CSSProperties {
   const horizontal = edge === "top" || edge === "bottom";
-  const custom = arrangement.mode === "custom";
-  const straddle = -LANE_BAND_PX / 2; // centers the band ON the border line
-  const laneStyle: CSSProperties = {
+  const straddle = -LANE_BAND_PX / 2;
+  return {
     position: "absolute",
-    display: "flex",
-    padding: 2,
     ...(horizontal
-      ? { [edge]: straddle, left: radius, right: radius, height: LANE_BAND_PX }
+      ? { [edge]: straddle, left: inset, right: inset, height: LANE_BAND_PX }
       : { [edge]: straddle, top: 0, bottom: 0, width: LANE_BAND_PX }),
   };
+}
+
+/**
+ * The standalone port-edge bench (Zach, 2026-09-12): just the dashed
+ * outline, four live edges and a set of seeded ports — the lab's stage 3 in
+ * the product's own idiom, with nothing of a Block's anatomy around it to
+ * confound what a drag actually did. Its Custom / Spacing / Grouping props
+ * ARE the lab's three controls, so the inspector drives them as ordinary
+ * schema fields.
+ */
+function renderPortEdges(props: Record<string, unknown>, _children?: ReactNode, ctx?: RenderContext): ReactNode {
+  const p = props as { width?: number; height?: number };
+  const width = p.width && p.width > 0 ? p.width : 420;
+  const height = p.height && p.height > 0 ? p.height : 240;
+  const live = ctx?.arrangement && ctx.placements && ctx.blockId;
   return (
-    <PortLane key={edge} blockId={blockId} edge={edge} style={laneStyle}>
-      <PortEdge edge={edge} layout={custom ? "custom" : "evenly"} style={{ position: "relative", flex: 1 }}>
-        {slots.map((slot) => {
-          // The FIRST member is the card; the rest of a collapsed group's
-          // members render nothing of their own here (Zach's own words: "a
-          // group renders as one card at its first member") — they still
-          // exist as real Port instances/placements, just not as a second
-          // dot on this lane.
-          const headId = slot.portIds[0]!;
-          return (
-            <span
-              key={slot.group}
-              data-slot="port-group"
-              data-port-id={headId}
-              data-group={slot.portIds.length > 1 ? slot.group : undefined}
-              data-group-size={slot.portIds.length}
-              style={
-                custom
-                  ? {
-                      position: "absolute",
-                      ...(horizontal
-                        ? { left: `${slot.t * 100}%`, transform: "translateX(-50%)" }
-                        : { top: `${slot.t * 100}%`, transform: "translateY(-50%)" }),
-                    }
-                  : undefined
-              }
-            >
-              {members[headId]}
-            </span>
-          );
-        })}
-      </PortEdge>
-    </PortLane>
+    <div
+      data-slot="port-edges-outline"
+      style={{
+        position: "relative",
+        width,
+        height,
+        borderRadius: 10,
+        border: "1px dashed color-mix(in srgb, currentColor 34%, transparent)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "visible",
+      }}
+    >
+      <span style={{ opacity: 0.4, fontSize: 12, letterSpacing: "0.04em" }}>PortEdges</span>
+      {live ? ALL_EDGES.map((edge) => <PortLane key={edge} edge={edge} style={laneStyleFor(edge, 14)} />) : null}
+    </div>
   );
 }
+
+/**
+ * The three lab controls, expressed as ordinary schema fields, applied over
+ * whatever Arrangement the instance stores.
+ *
+ * WHY the props override the stored Arrangement instead of duplicating it:
+ * a drop is resolved against the arrangement's `mode`, and `movePortTo` in
+ * the host reads that arrangement too — if the render used one mode and the
+ * drop handler another, a drag in Custom would be committed as an Auto
+ * reorder. One function, called by both, is what makes that impossible.
+ * A Block is NOT touched: its own inspector section stays authoritative.
+ */
+export function portEdgesArrangement(instanceType: string, props: Record<string, unknown>, stored: Arrangement): Arrangement {
+  if (instanceType !== "PortEdges") return stored;
+  const grouping = props.grouping as string | undefined;
+  return {
+    ...stored,
+    mode: props.custom === true ? "custom" : "auto",
+    spacing: (props.spacing as SpacingScheme) ?? stored.spacing,
+    grouping:
+      grouping === "off" || !stored.grouping
+        ? undefined
+        : { ...stored.grouping, collapsed: grouping === "collapsed" },
+  };
+}
+
+const PORT_EDGES_FIELDS: FieldSpec[] = [
+  {
+    id: "custom",
+    label: "Custom",
+    kind: "toggle",
+    defaultValue: false,
+    hint: "Freeform position: cards stop reflowing and stay exactly where you drop them, still moving between edges.",
+  },
+  {
+    id: "spacing",
+    label: "Spacing",
+    kind: "segments",
+    defaultValue: "evenly",
+    options: [
+      { value: "between", label: "Edge to edge" },
+      { value: "evenly", label: "Including edge" },
+      { value: "around", label: "Around" },
+    ],
+    hint: "Auto mode only — the three flexbox distributions evenT reproduces as fractions.",
+  },
+  {
+    id: "grouping",
+    label: "Grouping",
+    kind: "segments",
+    defaultValue: "off",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "grouped", label: "Grouped" },
+      { value: "collapsed", label: "Collapsed" },
+    ],
+    hint: "Grouped keeps the pair as separate cards that move together; Collapsed folds them into one card at the first member.",
+  },
+  { id: "width", label: "Width", kind: "number", defaultValue: 420, min: 240, max: 720, step: 10 },
+  { id: "height", label: "Height", kind: "number", defaultValue: 240, min: 160, max: 480, step: 10 },
+];
 
 /**
  * The slotted Block: a Bar above, the body Flex, a Bar below, plus (Zach,
@@ -278,16 +309,16 @@ function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?
         {ctx?.slots?.body ?? null}
         {arrangement && placements && blockId && (
           <>
-            {renderLane(blockId, "left", arrangement, placements, members, locked, radius)}
-            {renderLane(blockId, "right", arrangement, placements, members, locked, radius)}
+            <PortLane edge="left" style={laneStyleFor("left", radius)} />
+            <PortLane edge="right" style={laneStyleFor("right", radius)} />
           </>
         )}
       </div>
       {ctx?.slots?.footer ?? null}
       {arrangement && placements && blockId && (
         <>
-          {renderLane(blockId, "top", arrangement, placements, members, locked, radius)}
-          {renderLane(blockId, "bottom", arrangement, placements, members, locked, radius)}
+          <PortLane edge="top" style={laneStyleFor("top", radius)} />
+          <PortLane edge="bottom" style={laneStyleFor("bottom", radius)} />
         </>
       )}
     </Block>
@@ -397,6 +428,13 @@ export const REGISTRY: ComponentEntry[] = [
     slots: BLOCK_SLOTS,
     members: MEMBER_SPECS.Block,
     render: renderBlock,
+  }),
+  registerComponent({
+    name: "PortEdges",
+    fields: PORT_EDGES_FIELDS,
+    presets: [],
+    members: MEMBER_SPECS.PortEdges,
+    render: renderPortEdges,
   }),
 ];
 
@@ -512,7 +550,7 @@ export function makeInstance(type: string, index: number, uid: number): Instance
   // created bare and backfilled later, so every reader (the renderer, the
   // inspector, `activeArrangement`) can assume a fresh Block already has
   // one instead of special-casing "no arrangements yet".
-  if (type === "Block") {
+  if (type === "Block" || type === "PortEdges") {
     return { ...base, arrangements: [DEFAULT_ARRANGEMENT], arrangement: DEFAULT_ARRANGEMENT.id };
   }
   return base;
@@ -681,6 +719,66 @@ function seedBlockPorts(block: Instance, uid: number): { block: Instance; ports:
   return { block: { ...block, members: [...(block.members ?? []), ...ports.map((p) => p.id)] }, ports };
 }
 
+/**
+ * The standalone bench's own fixture, deliberately the LAB's: eight ports
+ * P1-P8 — four on top, one left, two right, one bottom — and a grouping set
+ * that pairs two of them (P2 + P3, both on the top edge, so a rigid group
+ * move and a collapse are visible on the busiest lane). Identical for every
+ * variant, so a difference between two captures is a difference in
+ * behaviour.
+ */
+function seedPortEdges(host: Instance, uid: number): { host: Instance; ports: Instance[] } {
+  const layout: { name: string; edge: PortEdgeId }[] = [
+    { name: "P1", edge: "top" },
+    { name: "P2", edge: "top" },
+    { name: "P3", edge: "top" },
+    { name: "P4", edge: "top" },
+    { name: "P5", edge: "left" },
+    { name: "P6", edge: "right" },
+    { name: "P7", edge: "right" },
+    { name: "P8", edge: "bottom" },
+  ];
+  const perEdge = new Map<PortEdgeId, number>();
+  const counts = new Map<PortEdgeId, number>();
+  for (const item of layout) counts.set(item.edge, (counts.get(item.edge) ?? 0) + 1);
+  const ports: Instance[] = layout.map((item, i) => {
+    const order = perEdge.get(item.edge) ?? 0;
+    perEdge.set(item.edge, order + 1);
+    const ts = evenT(counts.get(item.edge) ?? 1, DEFAULT_ARRANGEMENT.spacing);
+    return {
+      id: `peport-${uid + i}`,
+      type: "Port",
+      props: {
+        children: item.name,
+        edge: item.edge,
+        direction: item.edge === "left" || item.edge === "top" ? "input" : "output",
+      },
+      placements: { [DEFAULT_ARRANGEMENT.id]: { edge: item.edge, order, t: ts[order]! } },
+    };
+  });
+  const arrangement: Arrangement = {
+    ...DEFAULT_ARRANGEMENT,
+    grouping: {
+      id: "pair",
+      label: "Pair",
+      collapsed: false,
+      assignments: {
+        [ports[1]!.id]: { group: "pair", groupOrder: 1 },
+        [ports[2]!.id]: { group: "pair", groupOrder: 2 },
+      },
+    },
+  };
+  return {
+    host: {
+      ...host,
+      arrangements: [arrangement],
+      arrangement: arrangement.id,
+      members: [...(host.members ?? []), ...ports.map((p) => p.id)],
+    },
+    ports,
+  };
+}
+
 export const INITIAL_BENCHES: Record<string, Instance[]> = (() => {
   const seeded: Record<string, Instance[]> = {};
   let n = 0;
@@ -691,6 +789,12 @@ export const INITIAL_BENCHES: Record<string, Instance[]> = (() => {
       const { block, ports } = seedBlockPorts(made[0]!, n);
       n += ports.length;
       seeded[entry.name] = [block, ...made.slice(1), ...ports];
+      continue;
+    }
+    if (entry.name === "PortEdges") {
+      const { host, ports } = seedPortEdges(made[0]!, n);
+      n += ports.length;
+      seeded[entry.name] = [host, ...made.slice(1), ...ports];
       continue;
     }
     seeded[entry.name] = made;

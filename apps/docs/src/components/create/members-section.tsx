@@ -24,7 +24,7 @@ export interface MemberListActions {
   onSetArrangementMode: (blockId: string, mode: ArrangementMode) => void;
   onToggleArrangementEdge: (blockId: string, edge: PortEdgeId, on: boolean) => void;
   onSetArrangementGrouping: (blockId: string, setId: string | null) => void;
-  onMovePort: (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+  onMovePort: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
   onSetPortPlacement: (portId: string, patch: Partial<Placement> & { locked?: boolean }) => void;
 }
 

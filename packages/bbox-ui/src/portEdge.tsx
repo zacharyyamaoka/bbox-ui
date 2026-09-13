@@ -56,7 +56,7 @@ function edgeFlexDirection(edge: BlockSide): "column" | "row" {
  * function so its tests can read real defaults off the returned tree, and a
  * hook would end that.
  */
-function cascadeInto(children: ReactNode, textLayout: PortTextLayout): ReactNode {
+export function cascadeInto(children: ReactNode, textLayout: PortTextLayout): ReactNode {
   return Children.map(children, (child) => {
     if (!isValidElement(child)) return child;
     if (child.type === Fragment) {

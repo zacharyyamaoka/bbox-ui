@@ -53,7 +53,7 @@ const BenchContext = createContext<{
   byId: Map<string, Instance>;
   selectedIds: string[];
   onSelectInstance: (id: string, additive: boolean) => void;
-  onMovePort?: (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+  onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
   zoom: number;
 }>({ entries: [], instances: [], byId: new Map(), selectedIds: [], onSelectInstance: () => {}, zoom: 1 });
 
@@ -143,7 +143,7 @@ interface Props {
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
   /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
    *  tldraw is wired for it (this file); React Flow still is not. */
-  onMovePort?: (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+  onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
 }
 
 /**

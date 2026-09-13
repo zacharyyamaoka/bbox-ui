@@ -20,7 +20,7 @@ import type { CanvasPosition } from "../contract";
 import { renderInstance } from "../render-instance";
 import { HostZoomContext } from "../port-dnd";
 
-type MovePort = (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+type MovePort = (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
 type BenchNodeData = {
   entries: ComponentEntry[];
   byId: Map<string, Instance>;
@@ -99,8 +99,8 @@ function Canvas(p: Props) {
   const onMovePort = useMemo<MovePort | undefined>(() => {
     if (!p.onMovePort) return undefined;
     const move = p.onMovePort;
-    return (blockId, portId, edge, target) => {
-      move(blockId, portId, edge, target);
+    return (blockId, portIds, edge, target) => {
+      move(blockId, portIds, edge, target);
       updateNodeInternals(blockId);
     };
   }, [p.onMovePort, updateNodeInternals]);
@@ -156,6 +156,14 @@ function Canvas(p: Props) {
         onNodesChange={onNodesChange}
         colorMode={resolvedTheme === "dark" ? "dark" : "light"}
         fitView={false}
+        // A test seam, matching the one tldraw-canvas.tsx already exposes
+        // (`window.__bboxEditor`): a port drag has to be proved at a camera
+        // zoom other than 1, and React Flow ships no zoom control here to
+        // click. `zoomTo` from the journey is deterministic where a synthetic
+        // wheel gesture is not.
+        onInit={(instance) => {
+          (window as unknown as { __bboxReactFlow?: unknown }).__bboxReactFlow = instance;
+        }}
         selectionOnDrag
         panOnDrag={[1, 2]}
         selectNodesOnDrag

@@ -28,7 +28,7 @@ export function DomPreview({
   onSelectInstance: (id: string, additive: boolean) => void;
   /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
    *  The DOM render is the one host wired for it today. */
-  onMovePort?: (blockId: string, portId: string, edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+  onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
 }) {
   const byId = useMemo(() => new Map(instances.map((i) => [i.id, i])), [instances]);
   return (

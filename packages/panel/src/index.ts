@@ -38,7 +38,7 @@ export {
   type Instance,
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
-export { MEMBER_SPECS } from "./bench";
+export { MEMBER_SPECS, portEdgesArrangement } from "./bench";
 export {
   MEMBERS_CONTROLS,
   MEMBERS_CONTRACT,
@@ -68,4 +68,12 @@ export {
   portPlacementsOf,
 } from "./members";
 export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary, InstanceNode } from "./members";
-export { PortDndProvider, PortLane, DraggablePort, HostZoomContext, portLaneId, type PortDndProviderProps } from "./portDnd";
+export { PortDndProvider, PortLane, HostZoomContext, PortEdgeVariantContext, usePortEdgeVariant, portLaneId, type PortDndProviderProps } from "./portDnd";
+export {
+  PORT_EDGE_VARIANTS,
+  DEFAULT_PORT_EDGE_VARIANT,
+  findPortEdgeVariant,
+  LANE_BAND_PX,
+  type PortEdgesImpl,
+  type PortEdgesModel,
+} from "./portEdges";
