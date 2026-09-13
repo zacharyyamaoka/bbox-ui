@@ -43,10 +43,21 @@ import subprocess
 
 COMMIT = subprocess.run(["git", "-C", str(HERE), "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip() or "HEAD"
 
+# WHY two manifests: round 3 collapsed four designs into one shipped panel,
+# so `manifest.json` (this run) now carries far fewer checks than the
+# round-2 comparison the rest of this file quotes. `MANIFEST`/`ASSERTIONS`
+# keep pointing at the round-2 data (renamed to manifest-round2.json by the
+# capture script) so every existing section below is untouched, byte for
+# byte, and the round-3 section reads its own numbers from ROUND3 instead.
 run = json.loads((MEDIA / "manifest.json").read_text())
-MANIFEST = {entry["theme"]: entry for entry in run["manifest"]}
-ASSERTIONS = len(run["checks"])
-assert ASSERTIONS > 400, f"expected the post-review journey's checks, found {ASSERTIONS}"
+ROUND3 = {entry["theme"]: entry for entry in run["manifest"]}
+ROUND3_ASSERTIONS = len(run["checks"])
+assert ROUND3_ASSERTIONS > 250, f"expected round 3's one-panel journey checks, found {ROUND3_ASSERTIONS}"
+
+run2 = json.loads((MEDIA / "manifest-round2.json").read_text())
+MANIFEST = {entry["theme"]: entry for entry in run2["manifest"]}
+ASSERTIONS = len(run2["checks"])
+assert ASSERTIONS > 400, f"expected round 2's four-design journey checks, found {ASSERTIONS}"
 
 
 def trim(im: Image.Image, margin: int = 18) -> Image.Image:
@@ -102,6 +113,13 @@ def wc(path: str) -> int:
     return len(p.read_text().splitlines()) if p.exists() else 0
 
 
+def wc_at(rev: str, path: str) -> int:
+    """Line count of `path` as it existed at `rev` — for a file round 3
+    deleted outright, so the live tree has nothing left for `wc()` to read."""
+    result = subprocess.run(["git", "-C", str(HERE), "show", f"{rev}:{path}"], capture_output=True, text=True)
+    return len(result.stdout.splitlines()) if result.returncode == 0 else 0
+
+
 def grep_count(path: str, pattern: str) -> int:
     p = HERE / path
     if not p.exists():
@@ -130,8 +148,11 @@ ENGINE_LINES = sum(
         "apps/docs/src/components/create/sections/SectionInspector.tsx",
     ]
 )
+# WHY at a pinned revision, not `wc()`: round 3 deleted all three files
+# outright (see "What was deleted" below) — the live tree has nothing left
+# to count. e93218c is their last commit before the deletion.
 VARIANT_LINES = sum(
-    wc(f"packages/panel/src/sections/variants/{f}")
+    wc_at("e93218c", f"packages/panel/src/sections/variants/{f}")
     for f in ["Hairline.tsx", "Ledger.tsx", "Strata.tsx"]
 )
 ROUND1_ROW_LINES = wc(
@@ -141,6 +162,117 @@ NEW_STANDARDROW_LINES = wc("packages/panel/src/sections/StandardRow.tsx")
 
 DARK = MANIFEST["dark"]["designs"]
 LEGACY_HEADERS = DARK["current"]["legacyHeaders"]
+
+# ==========================================================================
+# ROUND 3 — one panel, clearer words, and the reset that was missing.
+#
+# WHY pinned commits, not HEAD: peers commit to this worktree concurrently
+# (several agent sessions share it — see CLAUDE.md), and an unrelated later
+# commit on this branch must not get swept into "what round 3 deleted".
+# ROUND2_TIP is the round-2 report builder's own commit; ROUND3_TIP is
+# round 3's last substantive commit — both already exist in history and
+# will not move, unlike HEAD.
+# ==========================================================================
+ROUND2_TIP = "37fe56a"
+ROUND3_TIP = "1e2fe0c"
+_round3_shortstat = subprocess.run(
+    ["git", "-C", str(HERE), "diff", "--shortstat", f"{ROUND2_TIP}..{ROUND3_TIP}"],
+    capture_output=True, text=True,
+).stdout
+ROUND3_DELETED = int(re.search(r"(\d+) deletions?\(-\)", _round3_shortstat).group(1))
+ROUND3_INSERTED = int(re.search(r"(\d+) insertions?\(\+\)", _round3_shortstat).group(1))
+ROUND3_FILES_CHANGED = int(re.search(r"(\d+) files? changed", _round3_shortstat).group(1))
+
+ROUND3_SECTIONS = ROUND3["dark"]["designs"]["sections"]
+ROUND3_LIGHT_SECTIONS = ROUND3["light"]["designs"]["sections"]
+ROUND3_NAMING = ROUND3_SECTIONS["naming"]["sections"]
+ROUND3_RESETS = ROUND3_SECTIONS["resets"]
+
+DELETED_ROWS = [
+    ("<code>packages/panel/src/sections/variants/Ledger.tsx</code> (P2)",
+     "removed outright. A <code>Panel</code> body identical to P1's but for "
+     "its function name, the shell's <code>id</code> string, and a "
+     "<code>POLICY</code> object that flips exactly four "
+     "<code>HeaderPolicy</code> booleans on."),
+    ("<code>variants/Strata.tsx</code> (P3)",
+     "removed outright. Once the Renderer section became every design's "
+     "and not just P3's, its only residue was one extra "
+     "<code>&lt;div&gt;</code> rule above the host-owned sections."),
+    ("<code>variants/index.ts</code>", "removed — nothing left to register."),
+    ("<code>variants/Hairline.tsx</code>",
+     "promoted to <code>packages/panel/src/sections/SectionPanel.tsx</code> "
+     "&mdash; the one panel that ships, not a variant among three."),
+    ("<code>SectionPanelVariant</code>, <code>SECTION_PANELS</code>, "
+     "<code>findSectionPanel</code>, <code>DEFAULT_SECTION_PANEL</code>",
+     "gone from the package &mdash; a registry for choosing among panels "
+     "that no longer has more than one to choose."),
+    ("the <code>inspector-design-picker</code> <code>&lt;select&gt;</code> "
+     "and its whole pre-sections render branch",
+     "gone from <code>apps/docs/.../inspector-column.tsx</code>."),
+    ("the settled <code>variant-picker</code> (&ldquo;Panel design&rdquo;)",
+     "gone from <code>bench-sidebar.tsx</code> &mdash; it picked among the "
+     "six <code>PANEL_VARIANTS</code>, settled 2026-09-11 (&ldquo;It's "
+     "decided. We're going forward with figma dense.&rdquo;); they are "
+     "untouched and still comparable side by side in "
+     "<code>demos/inspector</code>."),
+    ("two never-passed parameters, <code>onSelectParent</code> and "
+     "<code>moveScope</code>",
+     "gone from <code>listRow</code> in <code>build-sections.tsx</code>."),
+]
+
+WORDING_ROWS = [
+    ("slot section title (<code>build-sections.tsx</code>, via the new "
+     "shared <code>slotTitle()</code> in "
+     "<code>packages/panel/src/sections/shared.tsx</code>)",
+     "<code>Left</code> (and Center/Right/Header/Body/Footer)",
+     "<code>Left Slot</code> (and Center/Right/Header/Body/Footer)",
+     "Left/Center/Right are already values of Justify, Align and Port's "
+     "Edge in the same panel, so the bare word as a title cannot be told "
+     "from the word as a thing to pick."),
+    ("member list under a slot's own fill",
+     "<code>Left</code> &mdash; repeated its section",
+     "<code>Members</code>",
+     "a label repeating the heading above it spends a row saying "
+     "nothing."),
+    ("Bar-cell member lists",
+     "<code>Left</code> / <code>Center</code> / <code>Right</code>",
+     "<code>Left Slot</code> / <code>Center Slot</code> / "
+     "<code>Right Slot</code>",
+     "same reason as the slot title above."),
+    ("&#9881; tooltip (<code>build-sections.tsx</code>)",
+     "&ldquo;Open the &lt;T&gt; that fills Left&rdquo;",
+     "&ldquo;Edit the &lt;T&gt; that fills Left Slot&rdquo;",
+     "one verb for one glyph; two of the three call sites already said "
+     "Edit."),
+    ("add-menu tooltip",
+     "&ldquo;Add to Members&rdquo;",
+     "&ldquo;Add a member&rdquo; when the list has no name of its own",
+     "&ldquo;Add to Members&rdquo; names a placeholder, not a thing you're "
+     "doing."),
+    ("reset tooltip (<code>packages/panel/src/fieldModel.ts</code> "
+     "<code>resetTitleFor</code>)",
+     "&ldquo;Clear this instance's override &mdash; fall back to the "
+     "preset&rdquo;",
+     "&ldquo;Reset to the default&rdquo; / &ldquo;Reset to the preset's "
+     "value&rdquo; / &ldquo;Reset to the value inherited from the "
+     "parent&rdquo;",
+     "the old sentence named a preset on rows that have none &mdash; the "
+     "panel's one outright false sentence."),
+    ("<code>packages/bbox-ui/src/port.fields.ts</code> field "
+     "<code>children</code>",
+     "<code>Label</code>",
+     "<code>Custom Label</code>",
+     "a Port panel already has a <code>Name</code> row; <code>Label</code> "
+     "one row under <code>Name</code> read as the same idea twice, and "
+     "this field actually REPLACES the whole name/type/default "
+     "rendering."),
+    ("<code>packages/bbox-ui/src/glyph.fields.ts</code> field "
+     "<code>children</code>",
+     "<code>Content</code>",
+     "<code>Icon</code>",
+     "the hint already had to say &ldquo;the icon slot&rdquo; to make "
+     "<code>Content</code> legible."),
+]
 
 # ---- the seven picks, transcribed verbatim ------------------------------
 PICKS = [
@@ -356,6 +488,25 @@ WHAT_I_COULD_NOT_VERIFY = [
 ]
 
 
+def deleted_rows() -> str:
+    return "".join(f"<tr><td>{a}</td><td>{b}</td></tr>" for a, b in DELETED_ROWS)
+
+
+def wording_rows() -> str:
+    return "".join(
+        f"<tr><td>{where}</td><td>{old}</td><td>{new}</td><td>{why}</td></tr>"
+        for where, old, new, why in WORDING_ROWS
+    )
+
+
+def naming_rows() -> str:
+    rows = ""
+    for s in ROUND3_NAMING:
+        lists = ", ".join(f"<code>{l}</code>" for l in s["lists"]) or "<span class=\"sub\">&mdash;</span>"
+        rows += f'<tr><td class="k">{s["id"]}</td><td><code>{s["title"]}</code></td><td>{lists}</td></tr>'
+    return rows
+
+
 def picks_rows() -> str:
     return "".join(f"<tr><td>{a}</td><td>{b}</td></tr>" for a, b in PICKS)
 
@@ -481,6 +632,39 @@ figcaption {{ color:var(--faint); font-size:12px; margin-top:7px }}
 <p><strong>P2's folded override mark ships as a flag, off.</strong> &ldquo;Leave it off by default, I prefer simplicity, but yes if you want to implement it that's fine.&rdquo; It is <code>HeaderPolicy.foldedOverrideMark</code>, <code>false</code> in <code>SHIPPED_HEADER_POLICY</code>, and it marks a header only while the section is FOLDED &mdash; a status line earns its ink when the content it summarises cannot be seen, and not before. P2 is now that flag plus three more, which is all it ever was.</p>
 <p><strong>A member list's header reads as a property row.</strong> &ldquo;I don't like how its greyed out and tab indented, I do like how its more compact now though.&rdquo; All three demotions were separate mistakes in one component &mdash; muted ink, smaller type, and a second helping of the section gutter &mdash; and they are fixed at the source in <code>FoldRow</code>, so no call site overrides anything. The height is unchanged; a gate measures it against a real sibling row so a future fix cannot quietly trade the compactness back.</p>
 <p><strong>And one real bug, reproduced before it was fixed:</strong> the dropdown cut off by the panel's scrollbar. See below.</p></div>
+
+<h2>Round 3 &mdash; one panel, clearer words, and the reset that was missing</h2>
+<p class="lede" style="font-size:15px">This round's journey drives the one panel that ships, not four designs side by side, which is why it asserts {ROUND3_ASSERTIONS} checks rather than {ASSERTIONS} &mdash; not a regression, a smaller surface. Everything below this point that still says P1/P2/P3 or shows all three side by side is round 2's own record, kept as it was written.</p>
+
+<h3>What was deleted</h3>
+<p>The commit that shipped this (<code>{ROUND3_TIP}</code>, on top of the round-2 report's own <code>{ROUND2_TIP}</code>) is net negative: {ROUND3_INSERTED} insertions, <strong>{ROUND3_DELETED} deletions</strong> across {ROUND3_FILES_CHANGED} files.</p>
+<div class="card"><table><thead><tr><th style="width:32%">Gone</th><th>What happened</th></tr></thead><tbody>{deleted_rows()}</tbody></table></div>
+
+<h3>The wording pass</h3>
+<div class="card"><table><thead><tr><th style="width:24%">Where</th><th style="width:22%">Old</th><th style="width:22%">New</th><th>Why</th></tr></thead><tbody>{wording_rows()}</tbody></table></div>
+<p>The result, read live out of the shipped tree rather than asserted in prose &mdash; every slot section and the list beneath it, named by <code>SectionInspector</code> for a real Block right now:</p>
+<div class="pair">
+  <figure><img src="{shot(ROUND3_LIGHT_SECTIONS['files']['hero'])}" alt="round 3 hero, light theme"><figcaption>Header Slot, Body Slot, Footer Slot &mdash; and the list under each says Members or Left/Center/Right Slot, never the section's own name handed back to it.</figcaption></figure>
+  <div class="card" style="margin:0"><table><thead><tr><th>Section</th><th>Title</th><th>Lists</th></tr></thead><tbody>{naming_rows()}</tbody></table></div>
+</div>
+
+<h3>The reset icon</h3>
+<p>This is the headline fix. The button's guard was one line, <code>(governed || data.trace?.candidates[1]?.value !== undefined) && data.hasOwnOverride</code>, written independently in three places &mdash; <code>FigmaDense.tsx</code> twice (<code>FieldRow</code> and <code>PairedFieldCell</code>) and <code>StandardRow.tsx</code> once. <code>candidates</code> is a fixed 4-tuple in cascade order, <code>[override, inherited, preset, default]</code> (<code>packages/schema/src/resolve.ts</code>'s own <code>Layer</code> type), so <code>candidates[1]</code> is the <strong>inherited</strong> layer &mdash; not &ldquo;the next layer down&rdquo;. That file's own comment says it plainly: &ldquo;<code>default</code> always has a value &mdash; every <code>FieldSpec</code> declares one&rdquo;. Every overridden row has somewhere to go back to, and the old guard suppressed the button for every ungoverned, non-cascading field anyway.</p>
+<p>Zach's Diameter had the &#8634; because a Port preset governs Diameter; his Justify did not, because nothing does. The split looked like control kind and was actually cascade shape.</p>
+<p>The fix: one <code>canReset</code>/<code>resetsTo</code> pair computed once in <code>packages/panel/src/fieldModel.ts</code>, and one shared <code>ResetOverrideButton</code> in <code>FigmaDense.tsx</code> that every call site uses.</p>
+<div class="pair">
+  <figure><img src="{shot(ROUND3_LIGHT_SECTIONS['files']['hero'])}" alt="round 3 hero showing Align with a reset"><figcaption>Align &mdash; a DROPDOWN, tagged OVERRIDE &mdash; now carries the &#8634;, while un-overridden Justify correctly does not.</figcaption></figure>
+  <figure><img src="{shot(ROUND3['dark']['provenance']['overrideShot'])}" alt="round 3 dark override, Radius 17"><figcaption>Radius = 17, OVERRIDE, with the &#8634;.</figcaption></figure>
+</div>
+<div class="hinge" style="border-left-color:var(--good);background:#101b10">
+<h4 style="color:var(--good)">The assertion this round deliberately inverted</h4>
+<p>Round 2's gate read: <blockquote>G7 no &#8634; on a row whose only fallback is its own default &mdash; main's rule, unchanged</blockquote></p>
+<p>Round 3's replacement: <blockquote>G14 an overridden row offers its &#8634;, even with only a default under it</blockquote></p>
+<p>The old assertion codified main's behaviour on purpose. Zach's own sentence &mdash; &ldquo;when you edit a value away from default you get a little reset icon that appears to put it back&rdquo; &mdash; is what overrode it.</p>
+</div>
+<div class="card"><h4>Live from the journey manifest</h4>
+<p class="sub">{ROUND3_RESETS['rows']} rows scanned across {len(ROUND3_RESETS['kinds'])} control kinds ({", ".join(f"<code>{k}</code>" for k in ROUND3_RESETS['kinds'])}); in this fixture {len(ROUND3_RESETS['withReset'])} already carry an override with its own reset: {", ".join(f"<code>{w}</code>" for w in ROUND3_RESETS['withReset'])}. G14 (below) is what proves every kind gets one, not just these two.</p>
+</div>
 
 <h2>The dropdown was cut off by the panel's own scrollbar</h2>
 <p>Your words, on Port's State row: &ldquo;I did a drop down on the state property, and instead of showing me the drop down menu, its cut off with a scroll wheel.&rdquo; Reproduced first, on Port, at the foot of the inspector's scroller: <strong>five of six rows reachable, the sixth sheared off</strong> 22px past <code>[data-slot="inspector-scroll"]</code>'s edge.</p>
