@@ -920,12 +920,9 @@ function IconStripPanel(props: PanelVariantProps) {
   const fillStyleField = take("fillStyle");
   const fillOpacityField = take("fillOpacity");
   const fillColorField = take("fillColor");
-  const eligibleField = take("eligible");
+  const dimmedField = take("dimmed");
   const hintingField = take("hinting");
-  const draggingField = take("dragging");
   const producersField = take("producers");
-  const roleField = take("role");
-  const decorationField = take("decoration");
   const nameField = take("name");
   const typeField = take("type");
   const defaultValueField = take("defaultValue");
@@ -1070,36 +1067,16 @@ function IconStripPanel(props: PanelVariantProps) {
           </div>
         )}
 
-        {(eligibleField || hintingField || draggingField || producersField) && (
+        {(dimmedField || hintingField || producersField) && (
           <div style={rowStyle}>
-            {eligibleField && <FieldToggleIcon field={eligibleField} panel={props} governed={governed} icon={<TargetIcon />} />}
+            {dimmedField && <FieldToggleIcon field={dimmedField} panel={props} governed={governed} icon={<TargetIcon />} />}
             {hintingField && <FieldToggleIcon field={hintingField} panel={props} governed={governed} icon={<BulbIcon />} />}
-            {draggingField && <FieldToggleIcon field={draggingField} panel={props} governed={governed} icon={<GripIcon />} />}
             {producersField && <FieldStepper field={producersField} panel={props} governed={governed} glyph={<GripIcon />} />}
-          </div>
-        )}
-
-        {(roleField || decorationField) && (
-          <div style={rowStyle}>
-            {roleField && (
-              <FieldWords field={roleField} panel={props} governed={governed} display={(_v, label) => (label === "Configuration" ? "Config" : label)} />
-            )}
-            {decorationField && (
-              <FieldWords
-                field={decorationField}
-                panel={props}
-                governed={governed}
-                display={(v) =>
-                  v === "variadic-positional" ? "*args" : v === "variadic-keyword" ? "**kwargs" : v === "variadic-bundled" ? "Bundle" : v === "mutates" ? "Mutates" : "None"
-                }
-              />
-            )}
           </div>
         )}
       </div>
 
-      {/* Words go last — no honest icon exists for arbitrary text or for
-          role/decoration's more jargon-y members (see the report). */}
+      {/* Words go last — no honest icon exists for arbitrary text. */}
       <div data-slot="icon-strip-text-section" style={textSectionStyle}>
         {nameField && <FieldText field={nameField} panel={props} governed={governed} />}
         {typeField && <FieldText field={typeField} panel={props} governed={governed} />}

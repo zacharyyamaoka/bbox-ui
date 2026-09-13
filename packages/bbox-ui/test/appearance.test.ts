@@ -27,65 +27,48 @@ import {
 /* §1 — vocabulary pins                                                */
 /* ------------------------------------------------------------------ */
 
-describe("AppearanceState — the six-rung ladder", () => {
-  it("is exactly the board's six states, in board order", () => {
-    expect(APPEARANCE_STATES).toEqual([
-      "empty",
-      "outOfFocus",
-      "valueSet",
-      "wired",
-      "received",
-      "hidden",
-    ]);
+describe("AppearanceState — the value axis, narrowed 2026-09-12", () => {
+  it("is exactly the four value-axis states, in board order", () => {
+    expect(APPEARANCE_STATES).toEqual(["empty", "valueSet", "wired", "received"]);
   });
 
   it("labels match the board verbatim, including Zach's own spelling of 'Recived'", () => {
     expect(APPEARANCE_STATE_LABELS.received).toBe("Data Recived");
     expect(APPEARANCE_STATE_LABELS).toEqual({
       empty: "Empty",
-      outOfFocus: "Out of Focus",
       valueSet: "Default Value",
       wired: "Wired",
       received: "Data Recived",
-      hidden: "Hidden",
     });
   });
 
   it("PERSISTABLE_APPEARANCE_STATES excludes only 'received'", () => {
-    expect(PERSISTABLE_APPEARANCE_STATES).toEqual([
-      "empty",
-      "outOfFocus",
-      "valueSet",
-      "wired",
-      "hidden",
-    ]);
+    expect(PERSISTABLE_APPEARANCE_STATES).toEqual(["empty", "valueSet", "wired"]);
     expect(PERSISTABLE_APPEARANCE_STATES).not.toContain("received");
   });
 
-  it("every state has a STATE_TOKENS entry, and only 'hidden' is unpainted", () => {
+  it("every state has a STATE_TOKENS entry", () => {
     for (const state of APPEARANCE_STATES) {
       expect(STATE_TOKENS[state]).toBeDefined();
     }
-    expect(STATE_TOKENS.hidden).toEqual({ ring: null, fill: null });
   });
 
-  it("the ring-vs-fill two-bit reading matches the colour grammar table (§3)", () => {
-    const expected: Record<AppearanceState, { ring: string | null; fill: string | null }> = {
-      empty: { ring: "foreground", fill: null },
-      outOfFocus: { ring: "muted-foreground", fill: null },
-      valueSet: { ring: "muted-foreground", fill: "muted" },
-      wired: { ring: "primary", fill: "primary" },
-      received: { ring: "bbox-received", fill: "bbox-received" },
-      hidden: { ring: null, fill: null },
+  it("the ring/fill/core three-channel reading matches the colour grammar table (§3)", () => {
+    const expected: Record<
+      AppearanceState,
+      { ring: string | null; fill: string | null; core: string | null }
+    > = {
+      empty: { ring: "foreground", fill: null, core: null },
+      valueSet: { ring: "muted-foreground", fill: "muted", core: null },
+      wired: { ring: "primary", fill: null, core: "primary" },
+      received: { ring: "bbox-received", fill: "bbox-received", core: "bbox-received" },
     };
     expect(STATE_TOKENS).toEqual(expected);
   });
 
-  it("only 'wired' and 'received' carry a true hue — everything else is neutral ink", () => {
-    const hued = APPEARANCE_STATES.filter(
-      (state) => STATE_TOKENS[state].ring === "primary" || STATE_TOKENS[state].ring === "bbox-received",
-    );
-    expect(hued.sort()).toEqual(["received", "wired"]);
+  it("only 'wired' and 'received' light a core — everything else stays neutral ink", () => {
+    const lit = APPEARANCE_STATES.filter((state) => STATE_TOKENS[state].core !== null);
+    expect(lit.sort()).toEqual(["received", "wired"]);
   });
 });
 

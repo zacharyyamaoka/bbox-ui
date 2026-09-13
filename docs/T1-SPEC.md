@@ -409,7 +409,7 @@ chip forwards `state`/`tone` into an internal `<Pill>`, §4.8).
 — none of them paint a state-bearing surface; each says so in its own §4
 entry.
 
-### 2.2 `packages/bbox-ui/src/appearance.ts` (new, Lane A) — verbatim
+### 2.2 `packages/bbox-ui/src/appearance.ts` (Lane A; narrowed 2026-09-12, §2.4) — verbatim
 
 ```ts
 /**
@@ -422,73 +422,54 @@ entry.
  */
 
 /* -------------------------------------------------------------- */
-/* State — the six-rung emphasis ladder                            */
+/* State — the value axis, narrowed 2026-09-12 (§2.4)              */
 /* -------------------------------------------------------------- */
 
 /**
- * Board vocabulary (Zach, 2026-09-10 ruling): `empty · out of focus ·
- * value set · wired · data received · hidden`. One resting state is in
- * force at a time on anything that includes this bundle.
+ * Board vocabulary (Zach, 2026-09-10 ruling), NARROWED 2026-09-12 (Zach's
+ * ruling on the port-props proposal — see §2.4): `empty · value set ·
+ * wired · data received`. This is the VALUE axis only — "what is in the
+ * port/pill" — and it is the only axis a document persists. `outOfFocus`
+ * and `hidden` used to be two more rungs of this same union; see §2.4 for
+ * why they left it.
  */
-export type AppearanceState =
-  | "empty"
-  | "outOfFocus"
-  | "valueSet"
-  | "wired"
-  | "received"
-  | "hidden";
+export type AppearanceState = "empty" | "valueSet" | "wired" | "received";
 
-export const APPEARANCE_STATES: AppearanceState[] = [
-  "empty",
-  "outOfFocus",
-  "valueSet",
-  "wired",
-  "received",
-  "hidden",
-];
+export const APPEARANCE_STATES: AppearanceState[] = ["empty", "valueSet", "wired", "received"];
 
 /** Board labels verbatim, including Zach's own spelling of "Recived". */
 export const APPEARANCE_STATE_LABELS: Record<AppearanceState, string> = {
   empty: "Empty",
-  outOfFocus: "Out of Focus",
   valueSet: "Default Value",
   wired: "Wired",
   received: "Data Recived",
-  hidden: "Hidden",
 };
 
 /**
  * States a document format may persist. `received` means "data flowed
  * through this just now" — only a live host can know that; persisting it
  * would lie after reload. Runtime-only, host-sourced, never written to a
- * document. (`hidden` IS persistable — it is a fact about the document,
- * not the runtime.)
+ * document.
  */
-export const PERSISTABLE_APPEARANCE_STATES = [
-  "empty",
-  "outOfFocus",
-  "valueSet",
-  "wired",
-  "hidden",
-] as const;
+export const PERSISTABLE_APPEARANCE_STATES = ["empty", "valueSet", "wired"] as const;
 
-/** The two-bit reading every state resolves to: a ring/ink emphasis, and
- * whether a fill is present at all. `null` fill means hollow; `null` ring
- * means "not painted" (only `hidden`). Values are TOKEN NAMES (no leading
- * `--`) — resolve with `var(--${token})`, never a literal colour. See §3
- * for the actual token values and the contrast math behind them. */
+/** The three-channel reading every state resolves to: a ring/ink emphasis,
+ * whether a fill is present, and whether the small inner "core" dot lights
+ * up (§2.4). `null` in any channel means "that layer does not paint at
+ * all". Values are TOKEN NAMES (no leading `--`) — resolve with
+ * `var(--${token})`, never a literal colour. See §3 for the actual token
+ * values and the contrast math behind them. */
 export interface StateTokenPair {
   ring: string | null;
   fill: string | null;
+  core: string | null;
 }
 
 export const STATE_TOKENS: Record<AppearanceState, StateTokenPair> = {
-  empty: { ring: "foreground", fill: null },
-  outOfFocus: { ring: "muted-foreground", fill: null },
-  valueSet: { ring: "muted-foreground", fill: "muted" },
-  wired: { ring: "primary", fill: "primary" },
-  received: { ring: "bbox-received", fill: "bbox-received" },
-  hidden: { ring: null, fill: null },
+  empty: { ring: "foreground", fill: null, core: null },
+  valueSet: { ring: "muted-foreground", fill: "muted", core: null },
+  wired: { ring: "primary", fill: null, core: "primary" },
+  received: { ring: "bbox-received", fill: "bbox-received", core: "bbox-received" },
 };
 
 /* -------------------------------------------------------------- */
@@ -633,36 +614,96 @@ export const APPEARANCE_FIELDS: FieldSpec[] = [
 ];
 ```
 
+### 2.4 Narrowed 2026-09-12 — the port-props ruling
+
+`AppearanceState` shrank from six rungs to four, and `Port` gained a
+`hidden` boolean and a `dimmed` boolean beside it. This section is the
+amendment; §2.2/§2.3's code blocks above are already updated to match —
+read those as current, not historical.
+
+**Why one six-value union was wrong:** `outOfFocus` and `hidden` were
+never facts about *what a thing is* (the value axis §2.1 scopes this
+bundle to) — `outOfFocus` is a fact about what the HOST is doing to a
+port right now (never survives a reload), and `hidden` is a visibility
+toggle a container rolls into "+N more" (painting nothing is not a
+seventh kind of content). One enum was doing three unrelated jobs.
+
+**The split:**
+- **Value axis** (this bundle, shared, persisted): `empty · valueSet ·
+  wired · received` — unchanged in meaning, just four instead of six.
+- **Attention axis** (`Port`'s own props, `port.tsx`/`port.fields.ts`,
+  host-set, never persisted): `dimmed` (out of focus, OR mid-drag and not
+  a legal target — the same grey-ring-and-faded read, one boolean instead
+  of the old `outOfFocus` state plus a separate `eligible` boolean) and
+  `hinting` (the pointer is over this port mid-drag; unchanged). The old
+  third boolean, `dragging`, is gone: "not eligible ⇒ dimmed, eligible ⇒
+  rest, pointer on it ⇒ hinting" is a complete three-way partition of a
+  drag without it.
+- **Visibility** (`Port`'s own `hidden` prop, author-set, persisted): same
+  shape as `bar.fields.ts`'s existing `hidden` field — not a new pattern.
+
+**The three-circle token table:** `StateTokenPair` gained a `core` channel
+(§2.2/§3). `wired` keeps its hollow disc and lights the core instead of
+solid-filling — distinguishing it from `received`'s fully solid circle at
+a glance without a fifth resting hue.
+
+**Also removed from `Port` (not from this shared bundle — Port-only):**
+`role`/`decoration` — Python-specific port annotations (a `configuration`/
+`control`/`error` role, a `mutates`/`variadic-*` collar) that belong to
+whichever app has that domain knowledge, never to this generic design
+system's base panel. Recon before removal found zero host-adapter call
+sites for either (`packages/adapter-reactflow`, `packages/adapter-tldraw`
+never set or read them) — dead weight, not a working feature cut short.
+`PortDecorationRing`/`PortRoleCue` are gone from `port.tsx`; a consuming
+app composes its own equivalent as a thin sibling span over `PortDot`
+(`portCueSide`, `port.layout.ts`, is exported for exactly that).
+
+**The count-badge fix (D5):** `PortCountBadge` used to anchor at a fixed
+`right: 100%`, assuming the label always flows right — a `textLayout`
+other than the default silently overlapped it with the label text.
+`portBadgeSide(layout)` now anchors the badge on whichever side is
+OPPOSITE the label's actual flow, in every layout.
+
 ---
 
 ## 3. The colour grammar
 
-Six states, each legible at a 12px port dot, on both canvases, reading as
-a sequence, and still readable beside a cable of the same colour. The
-structure (from `PORT-SPEC.md §1.3`, kept — only the source of the colour
-changed under Zach's ruling) is two independent one-bit readings on two
-concentric shapes:
+Four value-axis states (narrowed 2026-09-12, §2.4 — was six), each legible
+at a 12px port dot, on both canvases, reading as a sequence, and still
+readable beside a cable of the same colour. The structure (from
+`PORT-SPEC.md §1.3`, kept — only the source of the colour changed under
+Zach's ruling) is three independent readings on concentric shapes:
 
 - **the ring says how much attention this is asking for** — quiet ink,
   quieter ink, or an active hue;
 - **the fill says whether it carries a value** — hollow means nothing is
-  in it.
+  in it;
+- **the core says whether it's actively lit** (added §2.4) — `wired` kept
+  its hollow disc but lights the core instead of solid-filling, so it
+  reads as "connected" without being visually identical to `received`'s
+  fully solid circle.
 
-That is what makes it a *sequence* rather than six arbitrary hues: only
+That is what makes it a *sequence* rather than four arbitrary hues: only
 **two true hues** exist in the resting ladder (`wired`'s orange,
 `received`'s green); everything else is a neutral ink at one of two
 weights. A greyscale copy of the whole ladder still reads correctly —
 ring-vs-fill survives colour-blindness and print in a way that hue alone
 never does.
 
-| State | Ring token | Fill token | Reads as |
-|---|---|---|---|
-| `empty` | `foreground` | *(none)* | declared, nothing in it |
-| `outOfFocus` | `muted-foreground` | *(none)* | present, not the subject |
-| `valueSet` | `muted-foreground` | `muted` | carries a literal |
-| `wired` | `primary` | `primary` | a cable feeds it |
-| `received` | `bbox-received` | `bbox-received` | data flowed just now |
-| `hidden` | *(not painted)* | *(not painted)* | rolls into the container's `+N more` |
+| State | Ring token | Fill token | Core token | Reads as |
+|---|---|---|---|---|
+| `empty` | `foreground` | *(none)* | *(none)* | declared, nothing in it |
+| `valueSet` | `muted-foreground` | `muted` | *(none)* | carries a literal |
+| `wired` | `primary` | *(none — hollow)* | `primary` | a cable feeds it |
+| `received` | `bbox-received` | `bbox-received` | `bbox-received` | data flowed just now |
+
+`outOfFocus` and `hidden` left this table entirely at §2.4 — `outOfFocus`
+became the host-only, never-persisted `dimmed` (forces the ring to
+`muted-foreground` and fades the whole dot to ~45% opacity, composed OVER
+whichever row above is resting — never a row of its own), and `hidden`
+became its own author-set boolean beside `state` (paints nothing at all,
+same as the old row, but is a visibility fact rather than a seventh kind
+of content).
 
 `tone`'s five members share the same "ring = fill = one token" shape as
 `wired`/`received`, for the same reason: a tone is a state look, just
@@ -1245,6 +1286,14 @@ style/dnd-kit transform on each child).
 the `+N more` text.
 
 ### 4.7 Port — rebuilt
+
+> **Superseded in part by §2.4 (2026-09-12).** The field table and
+> `portDotStyle` sketch below are this lane's ORIGINAL build plan, kept
+> as history — they already predate the shipped `port.tsx` (no `hinting`/
+> `eligible`/`dragging`, no `core` channel). They additionally still list
+> `role`/`decoration` (removed) and the pre-narrowing 6-value `state` —
+> §2.4 is the current shape; read it first for what `Port` actually
+> accepts today.
 
 Full rebuild per `PORT-SPEC.md`, folded through this spec's cascade/bundle
 rulings. Read `PORT-SPEC.md` in full for the measured geometry (dot

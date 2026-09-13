@@ -28,12 +28,15 @@ import { geoAt, measureText, textAt } from "./stockPartials";
  * own field, unchanged in shape by this rename). INTEGRATION (docs/
  * T1-SPEC.md §2): the old `PortState`'s `"default"` is `appearance.ts`'s
  * `AppearanceState["valueSet"]` — same meaning ("a resting value is set"),
- * new name. The rebuilt Port's two OTHER new rungs, `outOfFocus` and
- * `hidden`, are not added to the persisted tldraw shape here: that is a
- * genuine new capability (a new stock-colour mapping, a widened `T.literal`
- * validator, a schema migration for existing boards) no T1 lane touched or
- * scoped for this adapter — left for whoever picks up detach next, not
- * silently smuggled in as an import-path fix.
+ * new name. This happens to be `AppearanceState`'s full persistable range
+ * now (2026-09-12: `outOfFocus`/`hidden` left the value axis entirely —
+ * `outOfFocus` became the host-only, never-persisted `dimmed`, and
+ * `hidden` became its own author-set boolean prop beside `state`, not a
+ * value of it — see `appearance.ts`'s own WHY). Adding a persisted
+ * `hidden` fact to `BBoxShapePort` (a widened shape schema, a migration
+ * for existing boards, a stock-colour mapping for it) is still a genuine
+ * new capability no T1 lane scoped for this adapter — left for whoever
+ * picks up detach next, not silently smuggled in as an import-path fix.
  */
 export type DetachablePortState = "empty" | "valueSet" | "wired";
 

@@ -40,10 +40,13 @@ import {
  * Runtime delivery goes through the per-editor received-ports table instead.
  *
  * INTEGRATION (docs/T1-SPEC.md §2): "default" renamed to "valueSet" — the
- * rebuilt Port's `AppearanceState` name for the same resting state. Its two
- * other new rungs (`outOfFocus`, `hidden`) are not added to this persisted
- * shape here; see detach/portPrimitives.ts's `DetachablePortState` note.
- * `size` stays the literal three rungs the validator below enforces — not
+ * rebuilt Port's `AppearanceState` name for the same resting state, and
+ * (2026-09-12) its full persistable range: `outOfFocus` left the value
+ * axis for the host-only, never-persisted `dimmed`, and `hidden` became
+ * its own author-set boolean beside `state`, not a value of it — neither
+ * is added to this persisted shape here; see detach/portPrimitives.ts's
+ * `DetachablePortState` note. `size` stays the literal three rungs the
+ * validator below enforces — not
  * the live `Port`'s wider `PortSize` (which also admits an exact numeric
  * diameter, `port.layout.ts`'s "Exact" escape hatch) — a persisted shape
  * has never offered that escape hatch and the validator would reject it.
