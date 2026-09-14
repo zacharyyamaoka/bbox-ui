@@ -19,14 +19,34 @@ const REGION_DEFAULT_WIDTH = 560;
 const REGION_DEFAULT_HEIGHT = 360;
 const REGION_DEFAULT_RADIUS = 8;
 
+/** Region's own border stroke width — mirrors `layout.ts`'s
+ * `BLOCK_BORDER_PX`: the corner Block's border must land exactly ON this
+ * line for the shared corner to read as one continuous stroke. */
+export const REGION_BORDER_PX = 2;
+
+/**
+ * The corner Block's real, unscaled footprint — the SAME 192×173 the old
+ * `scale(0.5)` hack produced (384×346 at half), kept as the default so
+ * every existing caller sees an unchanged corner size. Exported so a
+ * caller building the corner itself (bench.tsx's `REGION_SLOTS`) can size
+ * that Block to match, honestly, rather than the region silently shrinking
+ * whatever full-size Block it is handed.
+ */
+export const REGION_CORNER_SIZE = { width: 192, height: 173 };
+
 export interface RegionProps extends Omit<ComponentProps<"div">, "children"> {
   kind?: RegionKind;
   width?: number;
   height?: number;
   radius?: number;
   /** The corner Block — absolutely positioned so it visually rides the
-   * region's top-left corner, the way the wireframe draws it. */
+   * region's top-left corner, the way the wireframe draws it. Expected to
+   * already be built at `cornerSize` (see `REGION_SLOTS`) — Region no
+   * longer scales it down itself. */
   corner?: ReactNode;
+  /** The corner's real footprint, for body clearance and flush alignment.
+   * Defaults to `REGION_CORNER_SIZE`, the historical `scale(0.5)` size. */
+  cornerSize?: { width: number; height: number };
   children?: ReactNode;
 }
 
@@ -36,6 +56,7 @@ export function Region({
   height = REGION_DEFAULT_HEIGHT,
   radius = REGION_DEFAULT_RADIUS,
   corner,
+  cornerSize = REGION_CORNER_SIZE,
   className,
   style,
   children,
@@ -55,20 +76,19 @@ export function Region({
       {corner && (
         <div
           data-slot="region-corner"
-          className="absolute left-0 top-0"
-          // WHY scale(0.5) with a slight negative offset, not the raw Block:
-          // the corner holds a REAL Port-view Block (384×346 by preset) on a
-          // 560×360 region — full size it eclipses most of the region and
-          // spills past the canvas, which the first /create capture showed.
-          // The wireframe draws the corner block at roughly a quarter of the
-          // region's width, riding the corner. Scale is presentation-only
-          // (the Block's own data, ports and box stay untouched), the same
-          // kind of knob a host zoom already is.
-          style={{
-            transform: "translate(-10px, -10px) scale(0.5)",
-            transformOrigin: "top left",
-            zIndex: 1,
-          }}
+          className="absolute"
+          // WHY plain `left`/`top` at `-REGION_BORDER_PX`, no transform at
+          // all (replacing the old `translate(-10px,-10px) scale(0.5)`
+          // hack): (1) flush outer-corner alignment — the corner Block's
+          // own 2px border lands exactly ON the Region's 2px border, so the
+          // shared corner reads as one line, and equal default radii (8)
+          // make the two rounded corners nest instead of a square corner
+          // floating near a round one; (2) real size instead of scale(0.5)
+          // — scaling halved the Block's border widths and text too (reads
+          // as a mock, not a component). `cornerSize` is the SAME 192×173
+          // footprint the old scale hack produced, now an honest Block box
+          // the cascade actually resolves rather than a CSS illusion of one.
+          style={{ left: -REGION_BORDER_PX, top: -REGION_BORDER_PX, zIndex: 1 }}
         >
           {corner}
         </div>
@@ -77,10 +97,11 @@ export function Region({
         data-slot="region-body"
         style={{
           padding: 16,
-          // Clear the corner Block's scaled footprint (384×346 at 0.5 ≈
-          // 192×173, minus the 10px overhang) so body content starts below
-          // it instead of flowing underneath.
-          paddingTop: corner ? 172 : 16,
+          // Clear the corner Block's real footprint so body content starts
+          // below it instead of flowing underneath — the corner's own top
+          // edge sits `REGION_BORDER_PX` above the region's padding box, so
+          // its bottom edge is `cornerSize.height - REGION_BORDER_PX` down.
+          paddingTop: corner ? cornerSize.height - REGION_BORDER_PX + 16 : 16,
           height: "100%",
           boxSizing: "border-box",
         }}

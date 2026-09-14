@@ -158,13 +158,18 @@ function renderWallPort(port: BBoxPortSpec, width?: number, height?: number): Re
       position={side === "left" ? Position.Left : Position.Right}
       data-state={state}
       className={cn(portDotClass(), "absolute overflow-visible")}
-      style={{
-        width: diameter,
-        height: diameter,
-        ...placement,
-        transform: PORT_DOT_CENTER_TRANSFORM,
-        ...portDotStyle({ state }),
-      }}
+      // WHY paint (`portDotStyle`) spreads BEFORE placement, never after:
+      // `portDotStyle` used to always emit `transform`/`opacity` keys, even
+      // as `undefined` — a literal `transform: undefined` in a later spread
+      // position wins over an earlier real value, so a paint bag spread
+      // AFTER placement deleted `PORT_DOT_CENTER_TRANSFORM` outright. React
+      // Flow's own stylesheet (`.react-flow__handle-right { transform:
+      // translate(50%,-50%) }`) then took over uncontested — measured live
+      // as +12px outward drift of every right-wall handle at zoom 1.
+      // `portDotStyle` no longer emits undefined keys (port.tsx's own fix),
+      // but placement/centering still goes LAST here so paint can never
+      // clobber it again regardless of what portDotStyle returns.
+      style={{ width: diameter, height: diameter, ...portDotStyle({ state }), ...placement, transform: PORT_DOT_CENTER_TRANSFORM }}
     >
       {port.label != null && (
         <PortLabel
@@ -394,6 +399,18 @@ const CONTAINER_CLASS: Record<BlockHeaderMode, string | undefined> = {
 };
 
 /**
+ * Mirrors blockFace.tsx's own `PORTS_OVERFLOW`, same reason as
+ * `CONTAINER_CLASS` above: only "walls" mode straddles the block's outer
+ * boundary, so only it needs Block's `overflow: clip` relaxed — clip
+ * otherwise amputates the outer half of every wall-mounted dot.
+ */
+const PORTS_OVERFLOW: Record<BlockPortsMode, "visible" | undefined> = {
+  anonymous: undefined,
+  rows: undefined,
+  walls: "visible",
+};
+
+/**
  * Parks the box the view being LEFT is at right now under its own slot,
  * then hands back the box the target view should use — the one helper
  * both host adapters must route every view switch through (`parkViewSize`'s
@@ -474,7 +491,14 @@ export function BBoxBlockNode({
           width={face.width}
           height={face.height}
           className={CONTAINER_CLASS[face.header]}
-          style={sized ? { width: "100%", height: "100%" } : undefined}
+          // WHY the conditional spread: `overflow: undefined` would merge
+          // over Block's own `overflow: "clip"` and unset it (React drops
+          // undefined-valued style keys), silently killing the Bar-corner
+          // clip in rows/anonymous modes — measured live 2026-09-14.
+          style={{
+            ...(PORTS_OVERFLOW[face.ports] ? { overflow: PORTS_OVERFLOW[face.ports] } : null),
+            ...(sized ? { width: "100%", height: "100%" } : undefined),
+          }}
         >
           {HEADER_RENDER[face.header](headerCtx)}
           {MEMBERS_RENDER[face.members](data)}
@@ -519,7 +543,10 @@ export function BBoxBlockNode({
         // The size contract: explicit size fills the node's CSS-sized box
         // (100%, so it tracks a live NodeResizer drag frame-perfectly);
         // no size means hug contents — the core's own default box.
-        style={sized ? { width: "100%", height: "100%" } : undefined}
+        // `overflow: "visible"` unconditionally: this legacy composition
+        // always renders wall-mounted ports below, which Block's own
+        // `overflow: clip` would otherwise amputate at the boundary.
+        style={{ overflow: "visible", ...(sized ? { width: "100%", height: "100%" } : undefined) }}
       >
         <BlockHeader orientation={data.orientation}>
           {data.icon != null && (

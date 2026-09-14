@@ -14,6 +14,7 @@ import {
   BAR_FIELDS,
   BAR_PRESETS,
   Block,
+  BLOCK_BORDER_PX,
   BLOCK_FIELDS,
   BLOCK_PRESETS,
   BLOCK_RADIUS_DEFAULT,
@@ -40,6 +41,7 @@ import {
   PORT_EDGE_FIELDS,
   PORT_EDGE_PRESETS,
   Region,
+  REGION_CORNER_SIZE,
   REGION_FIELDS,
   REGION_PRESETS,
   Stack,
@@ -49,6 +51,7 @@ import {
   TEXT_BOX_FIELDS,
   TEXT_BOX_PRESETS,
   ALL_EDGES,
+  cascadeInto,
   DEFAULT_ARRANGEMENT,
   evenT,
   type AlignAnchor,
@@ -149,8 +152,17 @@ function threePorts(): ReactNode {
 
 /**
  * Where one lane sits on an outline: straddling the border line it belongs
- * to (`-band/2`), and inset along its own axis so a dot never rides a
- * rounded corner.
+ * to, and inset along its own axis so a dot never rides a rounded corner.
+ *
+ * WHY `-(LANE_BAND_PX / 2) - wallBorderPx`, not `-LANE_BAND_PX / 2`: the
+ * lane's centerline must land on the wall's OUTER boundary — the same
+ * coordinate `portDotPlacement` (port.layout.ts) speaks — which sits
+ * `wallBorderPx` outside the padding box the lane is absolutely positioned
+ * in (a lane is a child of `Block`, whose border is `wallBorderPx` wide).
+ * The old `-LANE_BAND_PX / 2` centered every dot on the border's INNER
+ * edge instead, 2px inside the line — one of the drift sources measured
+ * live on the /create bench (2.5–25.3px off the wall depending on label
+ * width).
  *
  * WHY this is all that is left of the old `renderLane` (2026-09-12): the
  * lane's CONTENT — which slots are on it, in what order, at what `t`, what
@@ -161,9 +173,9 @@ function threePorts(): ReactNode {
  * own ask: "before we integrate this into the block, let's please get the
  * 'port edge' component working."
  */
-function laneStyleFor(edge: PortEdgeId, inset: number): CSSProperties {
+function laneStyleFor(edge: PortEdgeId, inset: number, wallBorderPx: number): CSSProperties {
   const horizontal = edge === "top" || edge === "bottom";
-  const straddle = -LANE_BAND_PX / 2;
+  const straddle = -(LANE_BAND_PX / 2) - wallBorderPx;
   return {
     position: "absolute",
     ...(horizontal
@@ -211,7 +223,10 @@ function renderPortEdges(props: Record<string, unknown>, _children?: ReactNode, 
       {showContainer && <span style={{ opacity: 0.4, fontSize: 12, letterSpacing: "0.04em" }}>PortEdges</span>}
       {live
         ? ALL_EDGES.map((edge) => (
-            <PortLane key={edge} edge={edge} style={laneStyleFor(edge, 14)} showCenterLine={showCenterLine} />
+            // `1`: this bench's own outline is a 1px dashed border, not a
+            // real Block — the same `wallBorderPx` compensation, sized to
+            // what this container actually draws.
+            <PortLane key={edge} edge={edge} style={laneStyleFor(edge, 14, 1)} showCenterLine={showCenterLine} />
           ))
         : null}
     </div>
@@ -377,14 +392,14 @@ function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?
   const wallsReady = arrangement && placements && blockId;
   const lanesLeftRight = wallsReady ? (
     <>
-      <PortLane edge="left" style={laneStyleFor("left", radius)} />
-      <PortLane edge="right" style={laneStyleFor("right", radius)} />
+      <PortLane edge="left" style={laneStyleFor("left", radius, BLOCK_BORDER_PX)} />
+      <PortLane edge="right" style={laneStyleFor("right", radius, BLOCK_BORDER_PX)} />
     </>
   ) : null;
   const lanesTopBottom = wallsReady ? (
     <>
-      <PortLane edge="top" style={laneStyleFor("top", radius)} />
-      <PortLane edge="bottom" style={laneStyleFor("bottom", radius)} />
+      <PortLane edge="top" style={laneStyleFor("top", radius, BLOCK_BORDER_PX)} />
+      <PortLane edge="bottom" style={laneStyleFor("bottom", radius, BLOCK_BORDER_PX)} />
     </>
   ) : null;
   /**
@@ -439,7 +454,13 @@ function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?
         // the OUTLINE on purpose (the dot reads as "ON the border", the
         // usual port convention), which clip would cut clean off. Only
         // relaxed when there is something to straddle it with.
-        overflow: arrangement && placements ? "visible" : undefined,
+        // WHY the conditional spread, not `overflow: … : undefined`: an
+        // `overflow: undefined` key merges over Block's own
+        // `overflow: "clip"` and unsets it (React drops undefined-valued
+        // style keys), so the lane-less Block would silently lose its
+        // Bar-corner clip — the same undefined-key clobber measured live
+        // on the RF host, 2026-09-14.
+        ...(arrangement && placements ? { overflow: "visible" as const } : null),
       }}
     >
       {face.header === "band" ? (
@@ -465,9 +486,19 @@ function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?
       {lockedId && members[lockedId] && (
         <div
           data-slot="port-locked"
-          style={{ position: "absolute", top: 0, left: 0, transform: "translate(-50%, -50%)", zIndex: 2 }}
+          // The pin's centering transform is on the OUTER corner — the
+          // same wall-boundary coordinate `portDotPlacement` speaks — so
+          // `top`/`left` are the padding box's origin MINUS the border
+          // width, not the padding box's own (0, 0).
+          style={{
+            position: "absolute",
+            top: -BLOCK_BORDER_PX,
+            left: -BLOCK_BORDER_PX,
+            transform: "translate(-50%, -50%)",
+            zIndex: 2,
+          }}
         >
-          {members[lockedId]}
+          {cascadeInto(members[lockedId], "right", true)}
         </div>
       )}
       <div data-slot="block-body" style={{ flex: 1, padding: 8, display: "flex", flexDirection: "column", position: "relative" }}>
@@ -512,7 +543,17 @@ function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?
  * own anatomy goes.
  */
 export const REGION_SLOTS: SlotSpec[] = [
-  { id: "corner", label: "Corner", region: "corner", fill: "Block", fillProps: { view: "port" } },
+  {
+    id: "corner",
+    label: "Corner",
+    region: "corner",
+    fill: "Block",
+    // Sized to `REGION_CORNER_SIZE` — the real, unscaled footprint
+    // `region.tsx`'s corner wrapper now expects (its own `cornerSize`
+    // prop default). Region no longer shrinks whatever it's handed via
+    // CSS `scale`; the corner Block must arrive at its true size.
+    fillProps: { view: "port", width: REGION_CORNER_SIZE.width, height: REGION_CORNER_SIZE.height },
+  },
   { id: "body", label: "Body", region: "body", fill: "Flex", fillProps: { direction: "column", align: "stretch", gap: 6 } },
 ];
 

@@ -429,6 +429,13 @@ export function LaneBox({
           flexDirection: horizontal ? "row" : "column",
           justifyContent,
           alignItems: "center",
+          // WHY: flex's default `min-width`/`min-height: auto` let the
+          // track's CROSS size grow to the widest card's min-content
+          // (measured live: 44.4px on a 22px track), so every card's
+          // centering silently depended on the widest SIBLING's label —
+          // never on the lane's own declared band.
+          minWidth: 0,
+          minHeight: 0,
           ...alignTrackStyle,
           ...trackStyle,
         }}
@@ -517,8 +524,11 @@ export function PortCard({
         * beside-it, and does NOT keep the seeded `edge` prop it arrived with.
         * The cascade looks THROUGH host elements (the member-instance span
         * that wraps every member) and stamps the first component underneath,
-        * which is the Port. A Port that sets its own textLayout still wins. */}
-      {children ?? cascadeInto(model.members[slot.headId], inwardTextLayout(edge))}
+        * which is the Port. A Port that sets its own textLayout still wins.
+        * The third argument, `true`, stamps `anchored` too — the card's OWN
+        * box must be the Port's dot for the lane's centering (laneStyleFor's
+        * wall-boundary straddle) to actually land the dot on the wall. */}
+      {children ?? cascadeInto(model.members[slot.headId], inwardTextLayout(edge), true)}
     </span>
   );
 }

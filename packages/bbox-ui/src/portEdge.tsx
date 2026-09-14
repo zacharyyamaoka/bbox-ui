@@ -43,6 +43,14 @@ function edgeFlexDirection(edge: BlockSide): "column" | "row" {
  * A Port that sets its own `textLayout` still wins, because the cascade is
  * only applied when the child's own prop is undefined.
  *
+ * `anchored`, when passed, is stamped the same way `textLayout` is (never
+ * overriding a component's own explicit value) — the lane-drawn `PortCard`
+ * (panel's `portEdges/contract.tsx`) passes `true` so the port it carries
+ * renders with the dot as its own box, matching the wall-anchor geometry
+ * the lane already centers on. `PortEdge`'s own internal call stays
+ * two-argument; only a host that needs anchored ports reaches for the
+ * third parameter.
+ *
  * WHY hosts are looked THROUGH and never stamped (2026-09-12): on /create a
  * lane's children are `<span data-slot="port-group">` → `<DraggablePort>` →
  * `<Port>`, and the old rule stamped the span — React's "does not recognize
@@ -56,19 +64,32 @@ function edgeFlexDirection(edge: BlockSide): "column" | "row" {
  * function so its tests can read real defaults off the returned tree, and a
  * hook would end that.
  */
-export function cascadeInto(children: ReactNode, textLayout: PortTextLayout): ReactNode {
+export function cascadeInto(
+  children: ReactNode,
+  textLayout: PortTextLayout,
+  anchored?: boolean,
+): ReactNode {
   return Children.map(children, (child) => {
     if (!isValidElement(child)) return child;
     if (child.type === Fragment) {
       const fragment = child as ReactElement<{ children?: ReactNode }>;
-      return cascadeInto(fragment.props.children, textLayout);
+      return cascadeInto(fragment.props.children, textLayout, anchored);
     }
-    const element = child as ReactElement<{ textLayout?: PortTextLayout; children?: ReactNode }>;
+    const element = child as ReactElement<{
+      textLayout?: PortTextLayout;
+      anchored?: boolean;
+      children?: ReactNode;
+    }>;
     const isHost = typeof element.type === "string";
     const hasChildren = element.props.children !== undefined && element.props.children !== null;
-    const nextChildren = hasChildren ? cascadeInto(element.props.children, textLayout) : undefined;
+    const nextChildren = hasChildren
+      ? cascadeInto(element.props.children, textLayout, anchored)
+      : undefined;
     if (isHost) return hasChildren ? cloneElement(element, undefined, nextChildren) : element;
-    const props = { textLayout: element.props.textLayout ?? textLayout };
+    const props = {
+      textLayout: element.props.textLayout ?? textLayout,
+      ...(anchored !== undefined ? { anchored: element.props.anchored ?? anchored } : {}),
+    };
     return hasChildren ? cloneElement(element, props, nextChildren) : cloneElement(element, props);
   });
 }

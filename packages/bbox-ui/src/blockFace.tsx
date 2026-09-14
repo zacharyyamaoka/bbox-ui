@@ -300,6 +300,22 @@ interface FaceRenderCtx {
   typeInline: ReactNode;
 }
 
+/**
+ * Block's own `overflow: clip` (block.tsx) exists so a Bar's line clips at
+ * the rounded corner rather than poking past it — but a wall-mounted port
+ * dot straddles the OUTER boundary on purpose (the usual port convention:
+ * half in, half out), which clip amputates clean off. Measured live:
+ * demos/screenshots/block-views-hosts/tl-port.png shows the flat-cut rings.
+ * Only "walls" mode ever straddles the boundary, so only it relaxes clip —
+ * a total lookup (not a ternary) so a future ports mode has to say what it
+ * wants here rather than silently inheriting "anonymous"/"rows"' clip.
+ */
+const PORTS_OVERFLOW: Record<BlockPortsMode, "visible" | undefined> = {
+  anonymous: undefined,
+  rows: undefined,
+  walls: "visible",
+};
+
 const PORTS_RENDER: Record<BlockPortsMode, (ctx: FaceRenderCtx) => ReactNode> = {
   anonymous: (ctx) => anonymousPorts(ctx.data.ports ?? [], ctx.resolved.width, ctx.resolved.height),
   rows: (ctx) => <BlockPortRows ports={ctx.data.ports ?? []} />,
@@ -539,7 +555,13 @@ export function BlockFace({
       height={resolved.height}
       radius={radius}
       className={cn(CONTAINER_CLASS[resolved.header], className)}
-      style={style}
+      // WHY the conditional spread, not a bare `overflow: PORTS_OVERFLOW[…]`:
+      // an `overflow: undefined` key would MERGE OVER Block's own
+      // `overflow: "clip"` (block.tsx spreads this style last) and unset it —
+      // React drops undefined-valued style keys, so the computed overflow
+      // falls back to `visible` and the Bar-corner clip silently dies in
+      // rows/anonymous modes. Measured live on the RF host, 2026-09-14.
+      style={{ ...(PORTS_OVERFLOW[resolved.ports] ? { overflow: PORTS_OVERFLOW[resolved.ports] } : null), ...style }}
       {...props}
     >
       {HEADER_RENDER[resolved.header](ctx)}

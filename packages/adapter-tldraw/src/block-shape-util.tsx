@@ -482,6 +482,15 @@ const FACE_CONTAINER_CLASS: Record<BlockHeaderMode, string | undefined> = {
   band: "flex-col items-stretch justify-start px-0 text-left",
 };
 
+// Mirrors blockFace.tsx's own `PORTS_OVERFLOW`: only "walls" mode straddles
+// the block's outer boundary, so only it needs Block's `overflow: clip`
+// relaxed — clip otherwise amputates the outer half of every wall dot.
+const FACE_PORTS_OVERFLOW: Record<BlockPortsMode, "visible" | undefined> = {
+  anonymous: undefined,
+  rows: undefined,
+  walls: "visible",
+};
+
 // "shown" is an austere placeholder region — no member list is wired up
 // yet. WHY no tldraw drop-in containment (isFrameLike) here: that is the
 // view-switching report's own explicit "later, for drop-in" scope-out, not
@@ -582,7 +591,10 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
         <HTMLContainer style={{ overflow: "visible" }}>
           {/* data-block-id lets the compare harness pair this block with its
               React Flow twin by id (titles are user text and can repeat). */}
-          <Block width={props.w} height={props.h} data-block-id={shape.id}>
+          {/* `overflow: "visible"` unconditionally: this legacy composition
+              always renders wall-mounted ports below, which Block's own
+              `overflow: clip` would otherwise amputate at the boundary. */}
+          <Block width={props.w} height={props.h} data-block-id={shape.id} style={{ overflow: "visible" }}>
             <BlockHeader orientation={props.orientation}>
               {props.icon !== "" && (
                 <BlockGlyph size={props.titleSize}>{props.icon}</BlockGlyph>
@@ -653,6 +665,11 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
           data-ports={face.ports}
           data-members={face.members}
           className={FACE_CONTAINER_CLASS[face.header]}
+          // WHY the conditional spread: `overflow: undefined` would merge
+          // over Block's own `overflow: "clip"` and unset it (React drops
+          // undefined-valued style keys), silently killing the Bar-corner
+          // clip in rows/anonymous modes — measured live 2026-09-14.
+          style={FACE_PORTS_OVERFLOW[face.ports] ? { overflow: FACE_PORTS_OVERFLOW[face.ports] } : undefined}
         >
           {HEADER_MODE_RENDER[face.header](headerCtx)}
           {MEMBERS_MODE_RENDER[face.members]()}
