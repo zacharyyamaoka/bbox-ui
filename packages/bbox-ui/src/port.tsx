@@ -15,6 +15,7 @@ import { PORT_PRESETS } from "./port.presets";
 import {
   PORT_DIAMETERS,
   PORT_HIT_PX,
+  PORT_RING_OVERHANG_PX,
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
@@ -22,6 +23,7 @@ import {
   portBadgeSide,
   portFlexDirection,
   portLabelGap,
+  portLabelPlacement,
   type BlockSide,
   type PortDirection,
   type PortReveal,
@@ -175,12 +177,26 @@ export function portDotStyle({
     layers.push("0 0 0 9px color-mix(in srgb, var(--bbox-primary, var(--primary)) 38%, transparent)");
   }
 
-  return {
-    boxShadow: layers.length > 0 ? layers.join(", ") : undefined,
-    background: fillColor ?? "transparent",
-    opacity: dimmed && !hinting ? 0.45 : undefined,
-    transform: hinting ? "scale(1.18)" : undefined,
-  };
+  // WHY conditionally-built, never `key: cond ? … : undefined`: a caller
+  // that spread-merges this bag over its own positioning style (the React
+  // Flow adapter merges dot paint + `PORT_DOT_CENTER_TRANSFORM` into one
+  // Handle style) had its centering transform DELETED by a literal
+  // `transform: undefined` key winning the spread — React Flow's own
+  // stylesheet (`.react-flow__handle-right { transform: translate(50%,-50%) }`)
+  // then took over, measured live as +12px outward drift of every
+  // right-wall handle at zoom 1. Only emit a key when it actually paints.
+  const style: CSSProperties = {};
+  if (layers.length > 0) style.boxShadow = layers.join(", ");
+  // The disc's resting paint is OPAQUE, never "transparent": a wall-mounted
+  // dot straddles the block's border, and a transparent interior let the
+  // wall line show through the middle of a hollow (`empty`/`wired`) dot.
+  // SystemSketch's reference circle is `fill={surface}` for exactly this
+  // reason; `var(--card)` is the same token the 2px surface ring already
+  // uses, so ring and disc read as one punch-out rather than a window.
+  style.background = fillColor ?? "var(--card)";
+  if (dimmed && !hinting) style.opacity = 0.45;
+  if (hinting) style.transform = "scale(1.18)";
+  return style;
 }
 
 /** The core's own diameter as a fraction of the dot's — small enough to
@@ -222,12 +238,16 @@ const REVEAL_CLASS: Record<PortReveal, string> = {
 
 /** One offset per `PortTextLayout` side, matching `portLabelPlacement`'s
  * own `PORT_LABEL_GAP`-style clearance so the badge/cue never reads as
- * randomly placed relative to the label it's dodging. */
+ * randomly placed relative to the label it's dodging. The 6px clearance is
+ * measured from the dot's PAINTED ring, not its layout box, same as
+ * `portLabelOut` — otherwise the badge sits 5px closer to the ring than the
+ * label does. */
+const BADGE_OFFSET_PX = PORT_RING_OVERHANG_PX + 6;
 const OVERLAY_SIDE_STYLE: Record<PortTextLayout, CSSProperties> = {
-  left: { right: "100%", marginRight: 6, top: "50%", transform: "translateY(-50%)" },
-  right: { left: "100%", marginLeft: 6, top: "50%", transform: "translateY(-50%)" },
-  top: { bottom: "100%", marginBottom: 6, left: "50%", transform: "translateX(-50%)" },
-  bot: { top: "100%", marginTop: 6, left: "50%", transform: "translateX(-50%)" },
+  left: { right: "100%", marginRight: BADGE_OFFSET_PX, top: "50%", transform: "translateY(-50%)" },
+  right: { left: "100%", marginLeft: BADGE_OFFSET_PX, top: "50%", transform: "translateY(-50%)" },
+  top: { bottom: "100%", marginBottom: BADGE_OFFSET_PX, left: "50%", transform: "translateX(-50%)" },
+  bot: { top: "100%", marginTop: BADGE_OFFSET_PX, left: "50%", transform: "translateX(-50%)" },
 };
 
 function PortCountBadge({ count, layout }: { count: number; layout: PortTextLayout }) {
@@ -572,6 +592,19 @@ export interface PortProps extends ComponentProps<"div"> {
   reveal?: PortReveal;
   /** Host-computed many-to-one count — never persisted. */
   producers?: number;
+  /**
+   * Host layout fact, never persisted (same status as `dimmed`) — do NOT
+   * add this to `port.fields.ts`. When true, `Port` renders the dot as its
+   * OWN box with the label placed out of flow at the shared wall anchor,
+   * instead of the flex dot+label pairing — see this file's own module doc:
+   * a wall-mounted port positions `PortDot`/`PortLabel` independently, never
+   * as one flex box, because the flex pairing made a card's centering
+   * depend on its label's width (measured live on the /create bench: the
+   * `in` dot sat 2.5px inside the wall, `cfg` 3px outside, `out` 25.3px
+   * outside, all three on the SAME wall). Anchored mode makes the port's
+   * box the dot, so centering the card centers the dot.
+   */
+  anchored?: boolean;
 }
 
 /**
@@ -619,6 +652,7 @@ export function Port({
   hinting = false,
   reveal = "always",
   producers = 0,
+  anchored = false,
   className,
   style,
   children,
@@ -626,10 +660,6 @@ export function Port({
 }: PortProps) {
   if (hidden) return null;
   const resolvedTextLayout = textLayout ?? inwardTextLayout(edge);
-  const flexStyle: CSSProperties = {
-    flexDirection: portFlexDirection(resolvedTextLayout),
-    gap: portLabelGap(resolvedTextLayout),
-  };
   // `size` cascades `diameter`/`textSize` together through the SAME
   // cascade the product inspector's trace panel reads — never a
   // hand-written `size === "xl" ? ... : ...` beside it (`pill.tsx`'s own
@@ -642,6 +672,22 @@ export function Port({
     .resolved as PortSize;
   const textSizeResolved = resolveField(TEXT_SIZE_FIELD, sizeSubject, PORT_PRESETS)
     .resolved as PortTextSize;
+  const diameterPx =
+    typeof diameterResolved === "number" ? diameterResolved : PORT_DIAMETERS[diameterResolved];
+  // `anchored`: the root box IS the dot (no flex pairing) — see PortProps's
+  // own doc for why. The label goes out of flow, placed by the same
+  // `portLabelPlacement` geometry every wall surface already uses.
+  const rootStyle: CSSProperties = anchored
+    ? { position: "relative", width: diameterPx, height: diameterPx }
+    : {
+        flexDirection: portFlexDirection(resolvedTextLayout),
+        // + PORT_RING_OVERHANG_PX: the gap is measured from the flex box's
+        // edge, but the ring paints PAST it (box-shadow, not a border) — see
+        // port.layout.ts's own WHY. Without this a flex-flowed specimen and
+        // a wall-anchored label (which goes through `portLabelOut`) disagree
+        // by the ring's overhang.
+        gap: portLabelGap(resolvedTextLayout) + PORT_RING_OVERHANG_PX,
+      };
   return (
     <div
       data-slot="port"
@@ -663,7 +709,7 @@ export function Port({
         REVEAL_CLASS[reveal],
         className,
       )}
-      style={{ ...flexStyle, ...style }}
+      style={{ ...rootStyle, ...style }}
       {...props}
     >
       <PortDot
@@ -684,6 +730,12 @@ export function Port({
         textSize={textSizeResolved}
         state={state}
         hidden={hidden}
+        className={anchored ? "absolute" : undefined}
+        style={
+          anchored
+            ? { ...portLabelPlacement(resolvedTextLayout, { w: diameterPx, h: diameterPx }), whiteSpace: "nowrap" }
+            : undefined
+        }
       >
         {children}
       </PortLabel>

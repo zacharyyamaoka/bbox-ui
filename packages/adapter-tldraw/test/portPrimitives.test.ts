@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PORT_LABEL_GAP, TEXT_SIZES } from "@bbox-ui/core";
+import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, TEXT_SIZES } from "@bbox-ui/core";
 
 import { primitivesForPort } from "../src/detach/portPrimitives";
 
@@ -67,7 +67,10 @@ describe("primitivesForPort", () => {
     );
     const label = built.shapes.find((partial) => partial.type === "text")!;
     expect(label).toBeDefined();
-    expect(label.x).toBe(25 + PORT_LABEL_GAP);
+    // + PORT_RING_OVERHANG_PX: the gap clears the dot's painted ring
+    // (box-shadow, outside the layout box), not the box edge — see
+    // port.layout.ts's own WHY.
+    expect(label.x).toBe(25 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP);
     // The label rides the md rung at scale 1 — no snapping to another size.
     expect(label.props).toMatchObject({ size: "m", scale: 1 });
   });
@@ -80,8 +83,8 @@ describe("primitivesForPort", () => {
     const label = built.shapes.find((partial) => partial.type === "text")!;
     const labelProps = label.props as { w: number; scale: number };
     // textAt aligns the widened text box's right edge to the layout box's
-    // right edge, which portLabelBox pinned at -gap.
-    expect(label.x! + labelProps.w * labelProps.scale).toBeCloseTo(-PORT_LABEL_GAP);
+    // right edge, which portLabelBox pinned at -(ring overhang + gap).
+    expect(label.x! + labelProps.w * labelProps.scale).toBeCloseTo(-(PORT_RING_OVERHANG_PX + PORT_LABEL_GAP));
     expect(TEXT_SIZES.md).toBe(24);
   });
 });

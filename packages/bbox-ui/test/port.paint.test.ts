@@ -39,7 +39,10 @@ describe("portDotStyle/portCoreStyle — tone modulates hue, state owns presence
   it("empty stays hollow (no fill, no core) under every tone — the presence bit survives", () => {
     for (const tone of TONES) {
       const style = portDotStyle({ state: "empty", tone });
-      expect(style.background, `tone="${tone}"`).toBe("transparent");
+      // "hollow" means a hollow RING, not a see-through window: a wall-mounted
+      // dot straddles the block's border, so the resting disc paints the
+      // surface token instead of letting the wall line show through the middle.
+      expect(style.background, `tone="${tone}"`).toBe("var(--card)");
       expect(portCoreStyle({ state: "empty", tone }), `tone="${tone}"`).toBeNull();
     }
   });
@@ -47,7 +50,9 @@ describe("portDotStyle/portCoreStyle — tone modulates hue, state owns presence
   it("wired stays hollow (disc kept, no fill) under every tone — only the core lights", () => {
     for (const tone of TONES) {
       const style = portDotStyle({ state: "wired", tone });
-      expect(style.background, `tone="${tone}"`).toBe("transparent");
+      // Same wall-line rationale as "empty" above — hollow is a punch-out
+      // disc (`var(--card)`), never a transparent window onto the wall.
+      expect(style.background, `tone="${tone}"`).toBe("var(--card)");
       expect(portCoreStyle({ state: "wired", tone }), `tone="${tone}"`).not.toBeNull();
     }
   });
@@ -77,7 +82,9 @@ describe("portDotStyle/portCoreStyle — tone modulates hue, state owns presence
   it("hinting wins over dimmed, wears wired's shape in primary ink regardless of resting state, and is never faded", () => {
     const hinted = portDotStyle({ state: "empty", dimmed: true, hinting: true });
     expect(hinted.opacity).toBeUndefined();
-    expect(hinted.background).toBe("transparent");
+    // Hollow means a hollow RING, not a window — see the "empty"/"wired"
+    // hollow cases above for the same wall-line rationale.
+    expect(hinted.background).toBe("var(--card)");
     expect(hinted.boxShadow).toContain("var(--bbox-primary, var(--primary))");
     expect(portCoreStyle({ state: "empty", hinting: true })?.background).toBe(
       "var(--bbox-primary, var(--primary))",

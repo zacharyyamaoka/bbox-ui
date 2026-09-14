@@ -33,6 +33,8 @@ const blockProps: BBoxBlockShapeProps = {
   icon: "🔍",
   tag: "Draft 1",
   orientation: "horizontal",
+  view: null,
+  views: null,
   ports: [
     {
       id: "image",

@@ -38,6 +38,12 @@ export const PORT_DIAMETER_LABELS: Record<keyof typeof PORT_DIAMETERS, string> =
 
 export const PORT_SURFACE_RING_PX = 2;
 export const PORT_STATE_RING_PX = 3;
+// WHY: the rings are box-shadow, painted OUTSIDE the dot's layout box (the
+// donor's ring is a border INSIDE its box, so its numbers never needed this
+// compensation) — any spacing measured from the box edge must add this or
+// the ring eats it, which is why the donor's 8px gap reads as 8px of air on
+// our dots but only 3px.
+export const PORT_RING_OVERHANG_PX = PORT_SURFACE_RING_PX + PORT_STATE_RING_PX;
 export const PORT_HIT_PX = 40;
 
 export const PORT_ROW_PITCH_PX = 44;
@@ -334,10 +340,12 @@ export interface PortDotBox {
  * How far the label's near edge sits from the dot box's near edge, measured
  * from the box's origin-side edge along the label's own axis: the dot's span
  * ALONG THAT AXIS plus the gap — `w` for left/right labels, `h` for top/bot.
+ * The label's near edge clears the RING's outer edge by the gap, not the
+ * box's — so the ring's painted overhang goes in before the gap.
  */
 export function portLabelOut(layout: PortTextLayout, dot: PortDotBox): number {
   const alongAxis = layout === "top" || layout === "bot" ? dot.h : dot.w;
-  return alongAxis + portLabelGap(layout);
+  return alongAxis + PORT_RING_OVERHANG_PX + portLabelGap(layout);
 }
 
 /**
