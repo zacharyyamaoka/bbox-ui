@@ -4,6 +4,7 @@ import { BLOCK_BORDER_PX } from "../src/layout";
 import {
   PORT_DIAMETERS,
   PORT_LABEL_GAP,
+  PORT_RING_OVERHANG_PX,
   PORT_TEXT_LAYOUTS,
   inwardTextLayout,
   portAnchor,
@@ -130,11 +131,14 @@ describe("port placement — dot on the boundary, label off the dot", () => {
   }
 
   it.each(PORT_TEXT_LAYOUTS)(
-    "label near edge for %s clears the dot by exactly the layout gap",
+    "label near edge for %s clears the dot's painted ring by exactly the layout gap",
     (layout) => {
       for (const size of ["sm", "md", "lg"] as const) {
         const diameter = PORT_DIAMETERS[size];
-        const expected = diameter / 2 + portLabelGap(layout);
+        // + PORT_RING_OVERHANG_PX: the ring is box-shadow, painted OUTSIDE
+        // the dot's layout box, so the near edge clears the RING's outer
+        // edge, not the box's — see port.layout.ts's own WHY.
+        const expected = diameter / 2 + PORT_RING_OVERHANG_PX + portLabelGap(layout);
         expect(nearEdgeFromDotCentre(layout, diameter, 0)).toBeCloseTo(expected, 10);
       }
     },
@@ -146,10 +150,12 @@ describe("port placement — dot on the boundary, label off the dot", () => {
     const w = 100;
     const h = 25;
     const dot = { w, h };
-    expect(portLabelPlacement("top", dot).bottom).toBe(`${h + PORT_LABEL_GAP}px`);
-    expect(portLabelPlacement("bot", dot).top).toBe(`${h + PORT_LABEL_GAP}px`);
-    expect(portLabelPlacement("right", dot).left).toBe(`${w + PORT_LABEL_GAP}px`);
-    expect(portLabelPlacement("left", dot).right).toBe(`${w + PORT_LABEL_GAP}px`);
+    // + PORT_RING_OVERHANG_PX throughout: the CSS offset clears the painted
+    // ring, not the box edge (port.layout.ts's own WHY).
+    expect(portLabelPlacement("top", dot).bottom).toBe(`${h + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP}px`);
+    expect(portLabelPlacement("bot", dot).top).toBe(`${h + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP}px`);
+    expect(portLabelPlacement("right", dot).left).toBe(`${w + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP}px`);
+    expect(portLabelPlacement("left", dot).right).toBe(`${w + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP}px`);
   });
 
   const flowSide: Record<PortTextLayout, keyof PortLabelPlacement> = {
@@ -190,11 +196,11 @@ describe("port placement — dot on the boundary, label off the dot", () => {
     },
   );
 
-  it("portLabelOut is the dot's along-axis span plus the layout gap", () => {
+  it("portLabelOut is the dot's along-axis span plus the ring overhang plus the layout gap", () => {
     const dot: PortDotBox = { w: 12, h: 12 };
     for (const layout of PORT_TEXT_LAYOUTS) {
       const alongAxis = layout === "top" || layout === "bot" ? dot.h : dot.w;
-      expect(portLabelOut(layout, dot)).toBe(alongAxis + portLabelGap(layout));
+      expect(portLabelOut(layout, dot)).toBe(alongAxis + PORT_RING_OVERHANG_PX + portLabelGap(layout));
     }
   });
 });

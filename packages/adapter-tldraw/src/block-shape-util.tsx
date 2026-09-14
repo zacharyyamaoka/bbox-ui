@@ -331,7 +331,18 @@ function shapePortRows(ports: BBoxShapePort[], portState: ShapePortState): React
   return (
     <div
       data-slot="block-shape-port-rows"
-      style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, width: "100%" }}
+      // WHY the 8px horizontal padding: rows mode renders inside Block's
+      // edge-to-edge (px-0) band, so a row dot at the row's very end paints
+      // its ring past the padding box and Block's overflow:clip flat-cuts
+      // it at the wall. 8px matches the bench body's own inset.
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "stretch",
+        gap: 4,
+        width: "100%",
+        padding: "0 8px",
+      }}
     >
       {ordered.map((port) => (
         <div

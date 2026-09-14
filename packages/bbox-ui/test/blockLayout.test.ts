@@ -10,6 +10,7 @@ import {
   LEADING_TIGHT,
   META_FONT_PX,
   PORT_LABEL_GAP,
+  PORT_RING_OVERHANG_PX,
   SIMPLE_BLOCK,
   TEXT_SIZES,
   collapseWhitespace,
@@ -363,22 +364,28 @@ describe("portLabelBox", () => {
   const w = measure("tick", 24);
   const h = Math.round(24 * LEADING_TIGHT);
 
-  it("right: near edge one gap clear of the dot, cross-axis centered", () => {
+  // The dot's ring paints OUTSIDE its layout box (box-shadow, not a
+  // border — port.layout.ts's own WHY), so the near edge clears the ring's
+  // outer edge, not the box's: every "one gap clear" expectation below adds
+  // PORT_RING_OVERHANG_PX ahead of PORT_LABEL_GAP.
+  const clear = PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
+
+  it("right: near edge one gap clear of the dot's ring, cross-axis centered", () => {
     const box = portLabelBox({ ...base, layout: "right" });
-    expect(box).toEqual({ x: 25 + PORT_LABEL_GAP, y: 12.5 - h / 2, w, h });
+    expect(box).toEqual({ x: 25 + clear, y: 12.5 - h / 2, w, h });
   });
 
-  it("left: far side, right edge one gap short of the dot", () => {
+  it("left: far side, right edge one gap short of the dot's ring", () => {
     const box = portLabelBox({ ...base, layout: "left" });
-    expect(box.x + box.w).toBeCloseTo(-PORT_LABEL_GAP);
+    expect(box.x + box.w).toBeCloseTo(-clear);
   });
 
   it("top and bot center on the dot", () => {
     const top = portLabelBox({ ...base, layout: "top" });
     const bot = portLabelBox({ ...base, layout: "bot" });
     expect(top.x + top.w / 2).toBeCloseTo(12.5);
-    expect(top.y + top.h).toBeCloseTo(-PORT_LABEL_GAP);
-    expect(bot.y).toBe(25 + PORT_LABEL_GAP);
+    expect(top.y + top.h).toBeCloseTo(-clear);
+    expect(bot.y).toBe(25 + clear);
   });
 
   it("a resized dot's top/bot label clears the HEIGHT and agrees with the live placement", () => {
@@ -388,8 +395,8 @@ describe("portLabelBox", () => {
     const resized = { ...base, dotW: 100, dotH: 25 };
     const top = portLabelBox({ ...resized, layout: "top" });
     const bot = portLabelBox({ ...resized, layout: "bot" });
-    expect(top.y + top.h).toBeCloseTo(-PORT_LABEL_GAP);
-    expect(bot.y).toBe(25 + PORT_LABEL_GAP);
+    expect(top.y + top.h).toBeCloseTo(-clear);
+    expect(bot.y).toBe(25 + clear);
     expect(top.x + top.w / 2).toBeCloseTo(50);
     // The CSS placement resolves to the same near edge: bottom offset is
     // measured up from the 25px-tall wrapper's bottom.
@@ -399,6 +406,6 @@ describe("portLabelBox", () => {
     expect(parseFloat(cssBot.top!)).toBeCloseTo(bot.y);
     // Left/right still key off the width.
     const right = portLabelBox({ ...resized, layout: "right" });
-    expect(right.x).toBe(100 + PORT_LABEL_GAP);
+    expect(right.x).toBe(100 + clear);
   });
 });

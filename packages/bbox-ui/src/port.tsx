@@ -15,6 +15,7 @@ import { PORT_PRESETS } from "./port.presets";
 import {
   PORT_DIAMETERS,
   PORT_HIT_PX,
+  PORT_RING_OVERHANG_PX,
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
@@ -237,12 +238,16 @@ const REVEAL_CLASS: Record<PortReveal, string> = {
 
 /** One offset per `PortTextLayout` side, matching `portLabelPlacement`'s
  * own `PORT_LABEL_GAP`-style clearance so the badge/cue never reads as
- * randomly placed relative to the label it's dodging. */
+ * randomly placed relative to the label it's dodging. The 6px clearance is
+ * measured from the dot's PAINTED ring, not its layout box, same as
+ * `portLabelOut` — otherwise the badge sits 5px closer to the ring than the
+ * label does. */
+const BADGE_OFFSET_PX = PORT_RING_OVERHANG_PX + 6;
 const OVERLAY_SIDE_STYLE: Record<PortTextLayout, CSSProperties> = {
-  left: { right: "100%", marginRight: 6, top: "50%", transform: "translateY(-50%)" },
-  right: { left: "100%", marginLeft: 6, top: "50%", transform: "translateY(-50%)" },
-  top: { bottom: "100%", marginBottom: 6, left: "50%", transform: "translateX(-50%)" },
-  bot: { top: "100%", marginTop: 6, left: "50%", transform: "translateX(-50%)" },
+  left: { right: "100%", marginRight: BADGE_OFFSET_PX, top: "50%", transform: "translateY(-50%)" },
+  right: { left: "100%", marginLeft: BADGE_OFFSET_PX, top: "50%", transform: "translateY(-50%)" },
+  top: { bottom: "100%", marginBottom: BADGE_OFFSET_PX, left: "50%", transform: "translateX(-50%)" },
+  bot: { top: "100%", marginTop: BADGE_OFFSET_PX, left: "50%", transform: "translateX(-50%)" },
 };
 
 function PortCountBadge({ count, layout }: { count: number; layout: PortTextLayout }) {
@@ -674,7 +679,15 @@ export function Port({
   // `portLabelPlacement` geometry every wall surface already uses.
   const rootStyle: CSSProperties = anchored
     ? { position: "relative", width: diameterPx, height: diameterPx }
-    : { flexDirection: portFlexDirection(resolvedTextLayout), gap: portLabelGap(resolvedTextLayout) };
+    : {
+        flexDirection: portFlexDirection(resolvedTextLayout),
+        // + PORT_RING_OVERHANG_PX: the gap is measured from the flex box's
+        // edge, but the ring paints PAST it (box-shadow, not a border) — see
+        // port.layout.ts's own WHY. Without this a flex-flowed specimen and
+        // a wall-anchored label (which goes through `portLabelOut`) disagree
+        // by the ring's overhang.
+        gap: portLabelGap(resolvedTextLayout) + PORT_RING_OVERHANG_PX,
+      };
   return (
     <div
       data-slot="port"

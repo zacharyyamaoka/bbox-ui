@@ -621,7 +621,10 @@ export const REGISTRY: ComponentEntry[] = [
       // (or any other member position) it would print a visible box around
       // a box, which is not what "add a TextBox to Header · left" means.
       if (ctx?.nested) return box;
-      return <div style={{ width: 220, border: "1px dashed #ccc" }}>{box}</div>;
+      // WHY the 4px/8px padding: the dashed chrome pressed the glyphs' first
+      // stem directly against the frame, which reads as a defect in every
+      // screenshot even though it is bench-only chrome.
+      return <div style={{ width: 220, border: "1px dashed #ccc", padding: "4px 8px" }}>{box}</div>;
     },
   }),
   registerComponent({

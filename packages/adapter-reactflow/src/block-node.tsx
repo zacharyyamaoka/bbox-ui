@@ -202,7 +202,11 @@ function BlockPortRowsRF({ ports }: { ports: BBoxPortSpec[] }) {
       direction="column"
       align="stretch"
       gap={4}
-      style={{ width: "100%" }}
+      // WHY the 8px horizontal padding: rows mode renders inside Block's
+      // edge-to-edge (px-0) band, so a row dot at the row's very end paints
+      // its ring past the padding box and Block's overflow:clip flat-cuts
+      // it at the wall. 8px matches the bench body's own inset.
+      style={{ width: "100%", padding: "0 8px" }}
     >
       {ordered.map((port) => {
         const state = port.state ?? "empty";
