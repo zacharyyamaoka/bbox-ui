@@ -67,6 +67,17 @@ CHECKS = measure_checks()
 CREATE_MANIFEST = json.loads((SHOTS / "block-views" / "manifest.json").read_text())
 HOSTS_MANIFEST = json.loads((SHOTS / "block-views-hosts" / "manifest.json").read_text())
 
+# Polish-pass measurements (cab959e / 61c8574): per-dot wall deltas on all
+# three surfaces plus the Region corner facts, measured by the verification
+# probe after the fix and kept beside the screenshots.
+POLISH = json.loads((SHOTS / "block-views" / "polish-verify.json").read_text())
+
+
+def polish_deltas(surface: str) -> str:
+    dots = POLISH[surface]["dots"]
+    worst = max(abs(d["delta"]) for d in dots)
+    return f"{worst:.2f}px worst of {len(dots)} dots"
+
 
 # ------------------------------------------------------------------ #
 # Images — real captures, cropped to the story, inlined as WebP      #
@@ -91,9 +102,15 @@ REGION_CROP = (280, 60, 1600, 620)
 
 def fig(uri: str, caption: str, cls: str = "") -> str:
     return (
-        f'<figure class="{cls}"><img src="{uri}" loading="lazy" alt="">'
+        f'<figure class="{cls}"><img src="{uri}" alt="">'
         f"<figcaption>{caption}</figcaption></figure>"
     )
+
+
+def png_raw(rel: str) -> str:
+    """Tiny pixel crops (a few KB) go in untouched — WebP recompression
+    would smear exactly the ring pixels the crop exists to show."""
+    return "data:image/png;base64," + base64.b64encode((SHOTS / rel).read_bytes()).decode()
 
 
 IMG = {
@@ -109,6 +126,11 @@ IMG = {
     "park_resized": webp("block-views-hosts/rf-expanded-resized.png"),
     "park_returned": webp("block-views-hosts/rf-expanded-park-returned.png"),
     "sb_views": webp("block-views-storybook/sb-views.png", (0, 0, 1500, 830)),
+    "polish_pair_rf": png_raw("block-views/polish-pair-rf-right-wall.png"),
+    "polish_pair_tl_left": png_raw("block-views/polish-pair-tl-left-wall.png"),
+    "polish_pair_tl_frame": png_raw("block-views/polish-pair-tl-frame-output.png"),
+    "polish_region": webp("block-views/polish-after-region-corner-dark.png"),
+    "polish_light": webp("block-views/polish-after-light-expanded.png"),
 }
 
 
@@ -298,7 +320,57 @@ region, spilling off-canvas) — now rides the corner at half scale, presentatio
 dot at the row's right edge in all three renders.</li>
 </ul>
 
-<h2>9 · Explicitly out of scope</h2>
+<h2>9 · Polish pass, same day</h2>
+<p>A follow-up pass (<code>cab959e</code>, <code>61c8574</code>) fixed what made the first captures read
+"pretend" once looked at closely: wall-mounted port dots were not actually landing on the wall, and the
+Region corner was a transform mock. <strong>Four compounding root causes</strong> behind the wall dots, one
+line each:</p>
+<ul class="tight">
+<li><strong>Bench lane geometry</strong> — the /create port lanes were positioned with an inset off the
+outline, so a bench wall dot's center never sat on the boundary <code>portDotPlacement</code> promises.</li>
+<li><strong>A React Flow style-key collision</strong> — <code>portDotStyle</code> emitted
+<code>transform:&nbsp;undefined</code>, which merged over the Handle's centering transform and let React
+Flow's own <code>.react-flow__handle-right {{ translate(50%,-50%) }}</code> win: every right-wall handle sat
+<strong>+12px inside the wall</strong> (measured at zoom 1).</li>
+<li><strong>Block's <code>overflow:&nbsp;clip</code></strong> amputated the straddling outer half of every
+wall dot — walls mode now relaxes it through the same total lookup, in <code>BlockFace</code> and both host
+adapters.</li>
+<li><strong>Hollow dots painted a transparent interior</strong> — the wall line ran straight through
+empty/wired ports; the resting disc is now opaque <code>var(--card)</code>, the same punch-out convention
+SystemSketch's own circles use.</li>
+</ul>
+<p>The Region corner was a literal <code>transform: translate(-10px,-10px) scale(0.5)</code> presentation
+mock; it is now a <em>real</em> governed-size box —
+{POLISH["domRegion"]["cornerBlock"]["w"]}×{POLISH["domRegion"]["cornerBlock"]["h"]}, transform
+<code>{esc(POLISH["domRegion"]["cornerTransform"])}</code>, flush at the region's top-left
+(Δ {POLISH["domRegion"]["deltaLeft"]}px / {POLISH["domRegion"]["deltaTop"]}px). A second commit
+(<code>61c8574</code>) makes label and badge spacing clear the <em>painted</em> ring (box-shadow ink outside
+the dot's layout box) instead of the layout box itself.</p>
+<div class="grid3">
+{fig(IMG["polish_pair_rf"], "React Flow right wall, before | after: the dot moves from +12px inside the card onto the wall line exactly, ring fully round, interior opaque.")}
+{fig(IMG["polish_pair_tl_left"], "tldraw left wall, before | after: the straddling half is no longer amputated by overflow:clip — dots center ON the wall.")}
+{fig(IMG["polish_pair_tl_frame"], "tldraw output port, before | after: clipped flat + see-through, then straddling with the opaque punch-out disc.")}
+</div>
+<div class="grid2">
+{fig(IMG["polish_light"], "Light theme after the hollow-dot fix: empty dots read as an opaque punch-out on the wall — the border no longer runs through them. Walls exact on both sides.")}
+{fig(IMG["polish_region"], "The honest Region corner (dark): a real 192×173 Block at the region's exact top-left — selectable, inspectable, no scale transform.")}
+</div>
+<table>
+<thead><tr><th>surface</th><th>before</th><th>after (measured, <code>polish-verify.json</code>)</th></tr></thead>
+<tbody>
+<tr><td>DOM bench (/create)</td><td>dot clipped flush inside the wall — straddling half amputated, lane inset compounding</td><td>{polish_deltas("domBlock")} off the wall</td></tr>
+<tr><td>React Flow</td><td><strong>+12px</strong> inside the wall on right-wall handles (measured at zoom 1, style-key collision)</td><td>{polish_deltas("rfBlock")} off the wall</td></tr>
+<tr><td>tldraw</td><td>dot clipped flush inside the wall (same clip amputation)</td><td>{polish_deltas("tlBlock")} off the wall</td></tr>
+<tr><td>Region corner</td><td><code>translate(-10px,-10px) scale(0.5)</code> mock</td><td>real box, Δ {POLISH["domRegion"]["deltaLeft"]}px / {POLISH["domRegion"]["deltaTop"]}px, transform {esc(POLISH["domRegion"]["cornerTransform"])}</td></tr>
+</tbody>
+</table>
+<p class="note">Only React Flow's before-offset was instrumented (+12px, from the commit's own measurement);
+the bench/tldraw defects were clipping, shown in the before crops rather than given an invented number.
+After-deltas are per-dot measurements from the re-run verification probe, kept beside the raw crops as
+<code>demos/screenshots/block-views/polish-verify.json</code>. Test suite after the pass:
+{CHECKS["tests_passed"]} passed{", " + str(CHECKS["tests_failed"]) + " failed" if CHECKS["tests_failed"] else ", 0 failed"}.</p>
+
+<h2>10 · Explicitly out of scope</h2>
 <ul class="tight">
 <li><strong>Region in the two dedicated host adapters</strong> (tldraw frame-like containment, React Flow
 <code>parentId</code> + <code>extent:"parent"</code>) — /create's three renders prove the corner
@@ -318,10 +390,10 @@ every governed field moves pixels in at least one face pair. <code>description</
 stock Port/Expanded presets (both set it false) but is override-reachable and paints in every face — an
 argument <em>for</em> the preset model, which is why both adapters render it under the band too.</p>
 
-<h2>10 · Stock parts, element by element</h2>
+<h2>11 · Stock parts, element by element</h2>
 {STOCK_TABLE}
 
-<h2>11 · Provenance</h2>
+<h2>12 · Provenance</h2>
 <table>
 <thead><tr><th>sha</th><th>commit</th></tr></thead>
 <tbody>
