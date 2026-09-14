@@ -17,6 +17,12 @@ import {
   BLOCK_FIELDS,
   BLOCK_PRESETS,
   BLOCK_RADIUS_DEFAULT,
+  BlockDescription,
+  BlockGlyph,
+  BlockHeader,
+  BlockTitle,
+  BlockType,
+  resolveBlockFace,
   Flex,
   FLEX_FIELDS,
   FLEX_PRESETS,
@@ -33,6 +39,9 @@ import {
   PortEdge,
   PORT_EDGE_FIELDS,
   PORT_EDGE_PRESETS,
+  Region,
+  REGION_FIELDS,
+  REGION_PRESETS,
   Stack,
   STACK_FIELDS,
   STACK_PRESETS,
@@ -50,6 +59,7 @@ import {
   type Placement,
   type Placements,
   type PortEdgeId,
+  type RegionKind,
   type SpacingScheme,
 } from "@bbox-ui/core";
 import { registerComponent, type ComponentEntry, type RenderContext, type SlotSpec } from "./registerComponent";
@@ -336,9 +346,20 @@ const PORT_EDGES_FIELDS: FieldSpec[] = [
  * function port pinned at the header's left corner, outside every lane.
  * A hidden Bar renders its marker only, so the region vanishes; the
  * radius clips both bars' corners.
+ *
+ * Face-governed (Zach, 2026-09-13, P2 "views are presets" —
+ * reports/view-switching-proposals-2026-09-11.html): `resolveBlockFace`
+ * runs this instance's subject through the same view/preset cascade
+ * `BlockFace` itself paints with, and every structural decision below is a
+ * lookup on the RESOLVED `face`, never on the raw `view` prop — the bench
+ * is a second renderer over the same computation, not a second, informal
+ * description of it. The slotted anatomy (header/body/footer Bars and
+ * Flexes, the PortLane machinery, the locked-port pin) is untouched; only
+ * whether/how each region mounts is now governed.
  */
 function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?: RenderContext): ReactNode {
   const p = props as BlockRenderProps;
+  const face = resolveBlockFace(props);
   const radius = p.radius ?? BLOCK_RADIUS_DEFAULT;
   const arrangement = ctx?.arrangement;
   const placements = ctx?.placements;
@@ -347,18 +368,70 @@ function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?
   const lockedIds = ctx?.lockedMemberIds ?? [];
   const locked = new Set(lockedIds);
   const lockedId = lockedIds[0];
+  // "rows": the Block's own Port members (never the locked function port,
+  // pinned separately below), in member order — ctx carries no ordered
+  // port-id list of its own, but render-instance.tsx builds `ctx.members`
+  // from exactly a Block's non-slot-fill children, which per
+  // MEMBER_SPECS.Block is Ports only, so its keys ARE that order.
+  const portRowIds = Object.keys(members).filter((id) => !locked.has(id));
+  const wallsReady = arrangement && placements && blockId;
+  const lanesLeftRight = wallsReady ? (
+    <>
+      <PortLane edge="left" style={laneStyleFor("left", radius)} />
+      <PortLane edge="right" style={laneStyleFor("right", radius)} />
+    </>
+  ) : null;
+  const lanesTopBottom = wallsReady ? (
+    <>
+      <PortLane edge="top" style={laneStyleFor("top", radius)} />
+      <PortLane edge="bottom" style={laneStyleFor("bottom", radius)} />
+    </>
+  ) : null;
+  /**
+   * ports: "walls" mounts the lane block as today. "anonymous" mounts the
+   * SAME lanes, wrapped so they paint nothing — the P2 contract is that an
+   * anonymous port stays a live, addressable DOM node (stable id, still a
+   * drop target) with only its paint suppressed, not unmounted. The
+   * wrapper's `display: contents` drops its own box (so the lanes' absolute
+   * positions still resolve against Block, the nearest positioned
+   * ancestor) while `visibility: hidden` is an inherited property that
+   * reaches every descendant PortLane paints, since PortLane sets no
+   * `visibility` of its own to override it — reasoned from portDnd.tsx's
+   * own markup (it has no `visibility`/`opacity` rule), not screenshotted.
+   * "rows" mounts neither; a Block's ports render as a list in the body
+   * instead (below).
+   */
+  const portLanesFor = (lanes: ReactNode): ReactNode => {
+    if (face.ports === "walls") return lanes;
+    if (face.ports === "anonymous")
+      return (
+        <div data-slot="ports-anonymous" style={{ display: "contents", visibility: "hidden" }}>
+          {lanes}
+        </div>
+      );
+    return null;
+  };
   return (
     <Block
-      width={p.width}
-      height={p.height}
+      width={face.width}
+      height={face.height}
       radius={p.radius}
+      data-view={face.view}
+      data-header={face.header}
+      data-ports={face.ports}
+      data-members={face.members}
       className="!justify-start !px-0 !text-left"
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "stretch",
         gap: 0,
-        height: p.height && p.height > 0 ? p.height : undefined,
+        // Was keyed on the raw `p.height` override; now on the CASCADE's
+        // resolved height so a view switch — not just an explicit
+        // width/height override — actually resizes the box. face.height
+        // always resolves (the "simple" preset's own default at worst), so
+        // the guard is defensive rather than load-bearing.
+        height: face.height && face.height > 0 ? face.height : undefined,
         minHeight: 120,
         maxWidth: "100%",
         // Block's own `overflow: clip` exists so a Bar's line clips at the
@@ -369,7 +442,26 @@ function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?
         overflow: arrangement && placements ? "visible" : undefined,
       }}
     >
-      {ctx?.slots?.header ?? null}
+      {face.header === "band" ? (
+        (ctx?.slots?.header ?? null)
+      ) : (
+        // "centered": the bench Block carries no title data of its own, so
+        // this is demo content — the same role threePorts() plays for the
+        // standalone PortEdge bench below. The Bar slot fill for this
+        // instance still exists underneath (BLOCK_SLOTS always builds one);
+        // it just isn't mounted here, kept reachable in the navigator only
+        // — hiding is canvas-only, the same rule `members` already follows.
+        <div
+          data-slot="block-centered-header"
+          style={{ display: "flex", flex: 1, flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}
+        >
+          <BlockHeader>
+            <BlockGlyph>◆</BlockGlyph>
+            <BlockTitle>Block</BlockTitle>
+          </BlockHeader>
+          {face.description ? <BlockDescription>Description</BlockDescription> : null}
+        </div>
+      )}
       {lockedId && members[lockedId] && (
         <div
           data-slot="port-locked"
@@ -379,22 +471,64 @@ function renderBlock(props: Record<string, unknown>, _children?: ReactNode, ctx?
         </div>
       )}
       <div data-slot="block-body" style={{ flex: 1, padding: 8, display: "flex", flexDirection: "column", position: "relative" }}>
-        {ctx?.slots?.body ?? null}
-        {arrangement && placements && blockId && (
-          <>
-            <PortLane edge="left" style={laneStyleFor("left", radius)} />
-            <PortLane edge="right" style={laneStyleFor("right", radius)} />
-          </>
+        {face.ports === "rows" && portRowIds.length > 0 && (
+          <div data-slot="block-port-rows-bench">
+            {portRowIds.map((id) => (
+              <div key={id} data-member-id={id}>
+                {members[id]}
+              </div>
+            ))}
+          </div>
         )}
+        {face.members === "shown" ? (ctx?.slots?.body ?? null) : null}
+        {portLanesFor(lanesLeftRight)}
       </div>
-      {ctx?.slots?.footer ?? null}
-      {arrangement && placements && blockId && (
-        <>
-          <PortLane edge="top" style={laneStyleFor("top", radius)} />
-          <PortLane edge="bottom" style={laneStyleFor("bottom", radius)} />
-        </>
-      )}
+      {/* typePlacement: "bottom" pins a demo type label, matching
+          BlockFace's own TYPE_RENDER; "header" prints nothing here because
+          that variant's type text lives inside the band's own right cell —
+          already user-composed via ctx.slots.header — so there is nothing
+          new to demo at the bench level. */}
+      {face.typePlacement === "bottom" ? <BlockType>Type</BlockType> : null}
+      {face.footer ? (ctx?.slots?.footer ?? null) : null}
+      {portLanesFor(lanesTopBottom)}
     </Block>
+  );
+}
+
+/**
+ * Region's own slots (Zach, 2026-09-13): a corner and a body, the same
+ * `SlotSpec` mechanism `BLOCK_SLOTS` already uses. The corner is filled by
+ * a REAL `Block` instance, in Port view — the 2026-09-11 report's own C7
+ * ruling, Zach's words: "a region is not a block but is composed using a
+ * block." A Region is deliberately NOT a Block preset (see
+ * `region.presets.ts`'s own empty `REGION_PRESETS`); this is the
+ * composition that stands in for one.
+ *
+ * WHY the corner Block fill recursively brings Block's own slot fills too
+ * (a Bar per end, a Flex per Bar cell, the body Flex): that is expected,
+ * the same way a Bar composed into one of Block's own header/footer slots
+ * already arrives two levels deep — `makeInstanceWithSlots` recurses on
+ * whatever a slot's `fill` names, regardless of how deep that component's
+ * own anatomy goes.
+ */
+export const REGION_SLOTS: SlotSpec[] = [
+  { id: "corner", label: "Corner", region: "corner", fill: "Block", fillProps: { view: "port" } },
+  { id: "body", label: "Body", region: "body", fill: "Flex", fillProps: { direction: "column", align: "stretch", gap: 6 } },
+];
+
+interface RegionRenderProps {
+  kind?: RegionKind;
+  width?: number;
+  height?: number;
+  radius?: number;
+}
+
+function renderRegion(props: Record<string, unknown>, _children?: ReactNode, ctx?: RenderContext): ReactNode {
+  const p = props as RegionRenderProps;
+  return (
+    <Region kind={p.kind} width={p.width} height={p.height} radius={p.radius} corner={ctx?.slots?.corner}>
+      {ctx?.slots?.body}
+    </Region>
   );
 }
 
@@ -527,6 +661,13 @@ export const REGISTRY: ComponentEntry[] = [
     members: MEMBER_SPECS.PortEdges,
     render: renderPortEdges,
   }),
+  registerComponent({
+    name: "Region",
+    fields: REGION_FIELDS,
+    presets: REGION_PRESETS,
+    slots: REGION_SLOTS,
+    render: renderRegion,
+  }),
 ];
 
 /**
@@ -581,7 +722,18 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
   PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],
   Flex: [{}, { justify: "between" }, { direction: "column", align: "stretch" }],
   Bar: [{}, { size: "lg" }, { line: false }],
-  Block: [{}, { width: 320 }, { width: 480, height: 260 }],
+  // WHY the first seed is a view, not a geometry override (2026-09-13): it
+  // is what /create opens with AND what Add uses. "expanded" keeps the
+  // band-header + body + wall-lanes composition — where the merged
+  // members/port-lane workflows actually live — visible by default. Note
+  // the footer Bar hides under Expanded's own `footer: false`; that is
+  // deliberate, the preset stays the primary source of truth over what the
+  // underlying slot fill happens to contain.
+  Block: [{ view: "expanded" }, { view: "port" }, {}, { width: 480, height: 260 }],
+  // A Region has no view selector of its own (region.presets.ts); its two
+  // seeds instead disagree on `kind`, the one closed-vocabulary field it
+  // does have.
+  Region: [{}, { kind: "while" }],
 };
 
 export interface Instance extends Subject {
