@@ -1,6 +1,12 @@
-import { Background, ReactFlow } from "@xyflow/react";
+import { Background, Panel, ReactFlow, useReactFlow } from "@xyflow/react";
 
-import { BBoxBlockNode, BBoxPortNode } from "@bbox-ui/adapter-reactflow";
+import {
+  applyBlockNodeView,
+  BBoxBlockNode,
+  BBoxPortNode,
+  type BBoxBlockData,
+} from "@bbox-ui/adapter-reactflow";
+import { BLOCK_VIEWS, BLOCK_VIEW_LABELS, type BlockView } from "@bbox-ui/core";
 import {
   sceneToReactFlowEdges,
   sceneToReactFlowNodes,
@@ -23,6 +29,48 @@ const nodes = sceneToReactFlowNodes().map((node) =>
 );
 const edges = sceneToReactFlowEdges();
 
+/**
+ * Dev-only view switcher: applies a Block view to every bbox block on the
+ * canvas through `applyBlockNodeView`, mirroring w/h into node style per
+ * the adapter's explicit-size contract.
+ *
+ * WHY it exists here: parkViewSize is host wiring — nothing else in this
+ * demo would ever exercise "resize in one view, switch away and back, the
+ * exact box returns" in a real browser. The scene itself stays legacy
+ * (no `view`) until a button is pressed, so the compare harness and
+ * demos/drive.mjs see today's pixels untouched.
+ */
+function ViewToolbar() {
+  const { setNodes } = useReactFlow();
+  const apply = (view: BlockView) =>
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.type !== "bboxBlock") return node;
+        const data = applyBlockNodeView(node.data as BBoxBlockData, view);
+        return {
+          ...node,
+          data,
+          style: { ...node.style, width: data.w, height: data.h },
+        };
+      }),
+    );
+  return (
+    <Panel position="top-left" style={{ display: "flex", gap: 4 }}>
+      {BLOCK_VIEWS.map((view) => (
+        <button
+          key={view}
+          type="button"
+          data-view-button={view}
+          onClick={() => apply(view)}
+          style={{ padding: "4px 10px", border: "1px solid #999", borderRadius: 4, background: "white", cursor: "pointer" }}
+        >
+          {BLOCK_VIEW_LABELS[view]}
+        </button>
+      ))}
+    </Panel>
+  );
+}
+
 export function App() {
   return (
     <div style={{ width: "100%", height: "100%" }}>
@@ -33,6 +81,7 @@ export function App() {
         fitView
       >
         <Background />
+        <ViewToolbar />
       </ReactFlow>
     </div>
   );
