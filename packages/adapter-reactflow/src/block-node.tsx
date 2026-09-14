@@ -205,7 +205,16 @@ function BlockPortRowsRF({ ports }: { ports: BBoxPortSpec[] }) {
         const diameter = typeof size === "number" ? size : PORT_DIAMETERS[size];
         const side = portSideForDirection(port.direction);
         return (
-          <Flex key={port.id} data-port-id={port.id} gap={8} style={{ width: "100%" }}>
+          <Flex
+            key={port.id}
+            data-port-id={port.id}
+            gap={8}
+            // WHY row-reverse for outputs: an output's dot sits at the row's
+            // RIGHT edge, name flowing inward — the same direction mirror
+            // the core's BlockPortRows gets from Port's own edge-driven
+            // flex layout, so the two hosts read identically.
+            style={{ width: "100%", flexDirection: port.direction === "output" ? "row-reverse" : "row" }}
+          >
             <Handle
               id={port.id}
               type={port.direction === "input" ? "target" : "source"}

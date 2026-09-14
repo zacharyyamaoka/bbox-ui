@@ -56,7 +56,19 @@ export function Region({
         <div
           data-slot="region-corner"
           className="absolute left-0 top-0"
-          style={{ transform: "translate(-30%, -40%)", zIndex: 1 }}
+          // WHY scale(0.5) with a slight negative offset, not the raw Block:
+          // the corner holds a REAL Port-view Block (384×346 by preset) on a
+          // 560×360 region — full size it eclipses most of the region and
+          // spills past the canvas, which the first /create capture showed.
+          // The wireframe draws the corner block at roughly a quarter of the
+          // region's width, riding the corner. Scale is presentation-only
+          // (the Block's own data, ports and box stay untouched), the same
+          // kind of knob a host zoom already is.
+          style={{
+            transform: "translate(-10px, -10px) scale(0.5)",
+            transformOrigin: "top left",
+            zIndex: 1,
+          }}
         >
           {corner}
         </div>
@@ -65,7 +77,10 @@ export function Region({
         data-slot="region-body"
         style={{
           padding: 16,
-          paddingTop: corner ? 24 : 16,
+          // Clear the corner Block's scaled footprint (384×346 at 0.5 ≈
+          // 192×173, minus the 10px overhang) so body content starts below
+          // it instead of flowing underneath.
+          paddingTop: corner ? 172 : 16,
           height: "100%",
           boxSizing: "border-box",
         }}

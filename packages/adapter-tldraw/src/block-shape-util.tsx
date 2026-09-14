@@ -337,7 +337,17 @@ function shapePortRows(ports: BBoxShapePort[], portState: ShapePortState): React
         <div
           key={port.id}
           data-port-id={port.id}
-          style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}
+          // WHY row-reverse for outputs: an output's dot sits at the row's
+          // RIGHT edge, name flowing inward — the same direction mirror the
+          // core's BlockPortRows gets from Port's edge-driven flex layout,
+          // so every host reads identically.
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            width: "100%",
+            flexDirection: port.direction === "output" ? "row-reverse" : "row",
+          }}
         >
           <PortDot state={portState(port)} diameter={port.size} className="block" />
           {port.label !== "" && <PortLabel>{port.label}</PortLabel>}
@@ -533,14 +543,22 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
 
   override onResize(shape: BBoxBlockShape, info: TLResizeInfo<BBoxBlockShape>) {
     const resized = resizeBox(shape, info);
-    const { view } = resized.props;
-    if (view === null) return resized;
-    // WHY: lockstep with `views[view]` — the tldraw-adapter half of the
-    // SAME rule `applyBlockShapeView` (below) applies on a view switch, and
+    // WHY view/views are read from the ORIGINAL shape, never from
+    // `resized.props`: tldraw's `resizeBox` returns a PARTIAL props bag —
+    // `{ w, h }` and nothing else — so `resized.props.view` is `undefined`
+    // for every shape, the `null` guard never fires, and the bag gains a
+    // literal "undefined" key the props validator then rejects, killing
+    // the whole resize gesture. Caught by the demo-host CDP journey
+    // (capture-block-views-hosts.mjs), not by typecheck — `resizeBox`'s
+    // declared return type still says full props.
+    const { view, views } = shape.props;
+    if (view == null) return resized;
+    // Lockstep with `views[view]` — the tldraw-adapter half of the SAME
+    // rule `applyBlockShapeView` (below) applies on a view switch, and
     // SystemSketch's `resizeBlockProps` before it. Resize in one view,
     // switch away and back, and the exact box returns because the bag was
     // kept current the whole time instead of only at switch time.
-    const sizes = resized.props.views ?? BLOCK_VIEW_DEFAULT_SIZES;
+    const sizes = views ?? BLOCK_VIEW_DEFAULT_SIZES;
     return {
       ...resized,
       props: {

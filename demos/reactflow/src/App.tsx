@@ -50,6 +50,12 @@ function ViewToolbar() {
         return {
           ...node,
           data,
+          // WHY width/height are ALSO set top-level: a NodeResizer drag
+          // writes the node's explicit `width`/`height` (v12's node-level
+          // dimensions), which outrank `style` when both exist — mirroring
+          // only into style left the dragged box painted after a switch.
+          width: data.w,
+          height: data.h,
           style: { ...node.style, width: data.w, height: data.h },
         };
       }),

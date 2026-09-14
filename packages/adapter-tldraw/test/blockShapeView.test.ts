@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { BLOCK_VIEW_DEFAULT_SIZES } from "@bbox-ui/core";
 
-import { applyBlockShapeView, type BBoxBlockShapeProps } from "../src/block-shape-util";
+import { applyBlockShapeView, BBoxBlockShapeUtil, type BBoxBlockShape, type BBoxBlockShapeProps } from "../src/block-shape-util";
 
 /**
  * `applyBlockShapeView` is the tldraw-adapter half of the P2 "views are
@@ -84,5 +84,42 @@ describe("applyBlockShapeView", () => {
       ...BLOCK_VIEW_DEFAULT_SIZES,
       simple: { w: 384, h: 258 },
     });
+  });
+});
+
+/**
+ * `onResize` regression: tldraw's `resizeBox` returns a PARTIAL props bag
+ * (`{ w, h }` only) even though its declared type says full props — reading
+ * `view` off the RESIZED shape therefore sees `undefined`, skips the null
+ * guard, and writes a literal "undefined" key into `views`, which the
+ * shape validator rejects and the whole resize gesture dies. Caught live by
+ * demos/capture-block-views-hosts.mjs; pinned here so a refactor cannot
+ * reintroduce it. `onResize` never touches `this`, so calling it unbound is
+ * safe and avoids constructing an Editor.
+ */
+describe("BBoxBlockShapeUtil.onResize", () => {
+  const shapeWith = (props: BBoxBlockShapeProps): BBoxBlockShape =>
+    ({ id: "shape:test", type: "bbox-block", x: 0, y: 0, rotation: 0, props } as unknown as BBoxBlockShape);
+  const grow = { handle: "bottom_right", newPoint: { x: 0, y: 0 }, scaleX: 1.5, scaleY: 1.5 };
+
+  it("parks the resized box under the ORIGINAL shape's view, never a stale partial", () => {
+    const props = applyBlockShapeView(baseProps(), "expanded");
+    const resized = BBoxBlockShapeUtil.prototype.onResize.call(
+      undefined,
+      shapeWith(props),
+      grow as never,
+    ) as { props: Partial<BBoxBlockShapeProps> };
+    const views = resized.props.views!;
+    expect(Object.keys(views).sort()).toEqual(["expanded", "port", "simple"]);
+    expect(views.expanded).toEqual({ w: resized.props.w, h: resized.props.h });
+  });
+
+  it("leaves a legacy (view: null) shape's resize untouched — no views bag appears", () => {
+    const resized = BBoxBlockShapeUtil.prototype.onResize.call(
+      undefined,
+      shapeWith(baseProps()),
+      grow as never,
+    ) as { props: Partial<BBoxBlockShapeProps> };
+    expect("views" in resized.props).toBe(false);
   });
 });
