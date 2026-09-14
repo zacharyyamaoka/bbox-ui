@@ -350,8 +350,19 @@ const TYPE_RENDER: Record<BlockTypePlacement, (data: BlockFaceData) => TypeNodes
  * harnesses, and rebuilding it atop `Bar` would be a large blast radius
  * for zero visual change.
  */
-function defaultBand(ctx: FaceRenderCtx): ReactNode {
-  const { data } = ctx;
+export interface BlockBandProps {
+  data: BlockFaceData;
+  /** The muted in-band type node (typePlacement === "header"), if any. */
+  typeInline?: ReactNode;
+}
+
+/**
+ * EXPORTED (not just BlockFace's internal default) because both host
+ * adapters paint this same band around their own connectable port
+ * elements — a hand-copied band in each adapter is exactly the drift the
+ * one-Bar-band-composition exists to prevent.
+ */
+export function BlockBand({ data, typeInline }: BlockBandProps) {
   return (
     <Bar
       edge="bottom"
@@ -366,12 +377,16 @@ function defaultBand(ctx: FaceRenderCtx): ReactNode {
       }
       right={
         <>
-          {ctx.typeInline}
+          {typeInline}
           {data.tag ? <Pill size="sm">{data.tag}</Pill> : null}
         </>
       }
     />
   );
+}
+
+function defaultBand(ctx: FaceRenderCtx): ReactNode {
+  return <BlockBand data={ctx.data} typeInline={ctx.typeInline} />;
 }
 
 const HEADER_RENDER: Record<BlockHeaderMode, (ctx: FaceRenderCtx) => ReactNode> = {
