@@ -1,14 +1,19 @@
 import { createElement, Fragment } from "react";
 import { describe, expect, it } from "vitest";
-import { assertDisjointPresets, defaultArgs, toArgTypes } from "@bbox-ui/schema";
+import { assertDisjointPresets, governedFieldIds, defaultArgs, resolveField, toArgTypes } from "@bbox-ui/schema";
 import {
   BLOCK_FIELDS,
+  BLOCK_HEADER_MODES,
+  BLOCK_MEMBERS_MODES,
   BLOCK_ORIENTATIONS,
+  BLOCK_PORTS_MODES,
+  BLOCK_TYPE_PLACEMENTS,
   HEIGHT_FIELD,
   ORIENTATION_FIELD,
   WIDTH_FIELD,
 } from "../src/block.fields";
-import { BLOCK_PRESETS } from "../src/block.presets";
+import { BLOCK_PRESET_GOVERNS, BLOCK_PRESETS } from "../src/block.presets";
+import { BLOCK_VIEWS } from "../src/block.view";
 import { Block, BlockChip, BlockHeader } from "../src/block";
 import { Pill } from "../src/pill";
 import { APPEARANCE_STATES, TONES } from "../src/appearance";
@@ -92,8 +97,15 @@ describe("BlockHeader chip reservation", () => {
 });
 
 describe("BLOCK_FIELDS", () => {
-  it("is Block's own two props, then orientation, then the shared APPEARANCE_FIELDS bundle — T1-SPEC.md §4.8's pinned row order", () => {
+  it("is view, then the six face fields it governs, then Block's own geometry, then the shared APPEARANCE_FIELDS bundle (P2 'views are presets' — T1-SPEC.md §4.8's original row order continues unchanged after the new view fields)", () => {
     expect(BLOCK_FIELDS.map((f) => f.id)).toEqual([
+      "view",
+      "header",
+      "ports",
+      "members",
+      "description",
+      "typePlacement",
+      "footer",
       "width",
       "height",
       "radius",
@@ -170,13 +182,113 @@ describe("BLOCK_FIELDS", () => {
   });
 });
 
-describe("BLOCK_PRESETS", () => {
-  it("is empty — Block forwards state/tone to its chip's own PILL_PRESETS rather than governing a paint field of its own (T1-SPEC.md §4.8)", () => {
-    expect(BLOCK_PRESETS).toEqual([]);
+function viewField(id: string) {
+  const found = BLOCK_FIELDS.find((f) => f.id === id);
+  if (!found) throw new Error(`no BLOCK_FIELDS entry for "${id}"`);
+  return found;
+}
+
+describe("VIEW_FIELD — Block's first real preset selector (P2 'views are presets')", () => {
+  it("exists, is a segments field, defaults to 'simple', with options exactly the three views in order", () => {
+    const view = viewField("view");
+    expect(view.kind).toBe("segments");
+    expect(view.defaultValue).toBe("simple");
+    expect(view.options?.map((o) => o.value)).toEqual(BLOCK_VIEWS);
+    expect(BLOCK_VIEWS).toEqual(["simple", "port", "expanded"]);
   });
 
-  it("assertDisjointPresets(BLOCK_PRESETS) does not throw", () => {
+  it("header/ports/members/typePlacement options are exactly their real closed unions", () => {
+    expect(viewField("header").options?.map((o) => o.value)).toEqual(BLOCK_HEADER_MODES);
+    expect(viewField("ports").options?.map((o) => o.value)).toEqual(BLOCK_PORTS_MODES);
+    expect(viewField("members").options?.map((o) => o.value)).toEqual(BLOCK_MEMBERS_MODES);
+    expect(viewField("typePlacement").options?.map((o) => o.value)).toEqual(BLOCK_TYPE_PLACEMENTS);
+  });
+});
+
+describe("BLOCK_PRESETS — Block's first real preset family (Definition of Done §9 item 3)", () => {
+  it("is no longer empty — one preset per real BlockView, id === view, selector 'view'", () => {
+    expect(BLOCK_PRESETS).toHaveLength(3);
+    expect(BLOCK_PRESETS.map((p) => p.id)).toEqual(BLOCK_VIEWS);
+    expect(BLOCK_PRESETS.every((p) => p.selector === "view")).toBe(true);
+  });
+
+  it("every preset governs exactly the eight face+size fields, and Object.keys(values) agrees with governs — no authoring gap", () => {
+    for (const preset of BLOCK_PRESETS) {
+      expect([...preset.governs].sort()).toEqual([...BLOCK_PRESET_GOVERNS].sort());
+      expect(Object.keys(preset.values).sort()).toEqual([...BLOCK_PRESET_GOVERNS].sort());
+      for (const id of preset.governs) {
+        expect(preset.values[id]).not.toBeUndefined();
+      }
+    }
+  });
+
+  it("assertDisjointPresets(BLOCK_PRESETS) does not throw — every preset shares the single 'view' selector", () => {
     expect(() => assertDisjointPresets(BLOCK_PRESETS)).not.toThrow();
+  });
+
+  it("governedFieldIds(BLOCK_PRESETS) is exactly the eight governed ids", () => {
+    expect(governedFieldIds(BLOCK_PRESETS).sort()).toEqual([...BLOCK_PRESET_GOVERNS].sort());
+  });
+
+  it("pins each preset's width/height to the measured view boxes", () => {
+    const byId = Object.fromEntries(BLOCK_PRESETS.map((p) => [p.id, p.values]));
+    expect(byId.simple).toMatchObject({ width: 384, height: 258 });
+    expect(byId.port).toMatchObject({ width: 384, height: 346 });
+    expect(byId.expanded).toMatchObject({ width: 707, height: 452 });
+  });
+
+  it("pins every face value from the P2 table", () => {
+    const byId = Object.fromEntries(BLOCK_PRESETS.map((p) => [p.id, p.values]));
+    expect(byId.simple).toMatchObject({
+      header: "centered",
+      ports: "anonymous",
+      members: "hidden",
+      description: true,
+      typePlacement: "bottom",
+      footer: false,
+    });
+    expect(byId.port).toMatchObject({
+      header: "band",
+      ports: "rows",
+      members: "hidden",
+      description: false,
+      typePlacement: "header",
+      footer: true,
+    });
+    expect(byId.expanded).toMatchObject({
+      header: "band",
+      ports: "walls",
+      members: "shown",
+      description: false,
+      typePlacement: "header",
+      footer: false,
+    });
+  });
+
+  it("the §1.4 worked example, executed against the real BLOCK_PRESETS: resolveField(header, {view:'port'}, BLOCK_PRESETS) resolves 'band' from the preset layer", () => {
+    const trace = resolveField(viewField("header"), { view: "port" }, BLOCK_PRESETS);
+    expect(trace.winner).toBe("preset");
+    expect(trace.winningPresetId).toBe("port");
+    expect(trace.resolved).toBe("band");
+  });
+
+  it("an instance override reaches past the view preset honestly", () => {
+    const trace = resolveField(
+      viewField("header"),
+      { view: "port", header: "centered" },
+      BLOCK_PRESETS,
+    );
+    expect(trace.winner).toBe("override");
+    expect(trace.resolved).toBe("centered");
+  });
+});
+
+describe("Face-field defaults equal the 'simple' preset's values — the \"bare Block == Simple\" invariant", () => {
+  it("every governed field's own FieldSpec default matches what view:'simple' resolves to", () => {
+    const simple = BLOCK_PRESETS.find((p) => p.id === "simple")!;
+    for (const id of BLOCK_PRESET_GOVERNS) {
+      expect(viewField(id).defaultValue).toEqual(simple.values[id]);
+    }
   });
 });
 

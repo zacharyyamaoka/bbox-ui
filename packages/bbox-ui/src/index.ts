@@ -47,6 +47,19 @@ export * from "./block.fields";
 export * from "./block.presets";
 export * from "./block";
 
+// P2 "views are presets" (reports/view-switching-proposals-2026-09-11.html):
+// the view vocabulary/bookkeeping, then the face renderer built on top of
+// block.fields.ts's/block.presets.ts's new view preset family, above.
+export * from "./block.view";
+export * from "./blockFace";
+
+// A Region composes a Block into its corner rather than being a Block
+// preset (region.presets.ts's own WHY) — no ordering dependency beyond
+// that shared import.
+export * from "./region.fields";
+export * from "./region.presets";
+export * from "./region";
+
 // The zero-dependency Port placement model (Zach, 2026-09-12) — no React,
 // no DOM, no host imports; see portPlacement.ts's own header.
 export * from "./portPlacement";
