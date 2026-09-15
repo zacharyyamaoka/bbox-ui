@@ -14,3 +14,5 @@ apps/docs/CLAUDE.md
 .wrangler/
 # Reports: the page is tracked, the captures it inlines are not (Zach, 2026-09-07).
 reports/media/
+# Python bytecode from scripts/ (the desktop launcher writes this on every run).
+__pycache__/
