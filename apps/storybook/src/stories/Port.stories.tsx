@@ -13,16 +13,18 @@ import {
   type PortSize,
   type PortTextLayout,
   type PortTextSize,
+  type SecondarySlotLayout,
   type Tone,
 } from "@bbox-ui/core";
 import type { ComponentProps } from "react";
 
 /**
- * T1 Lane P: the REBUILT Port, end to end. `argTypes`/`args` below are
- * GENERATED from `PORT_FIELDS` (packages/bbox-ui/src/port.fields.ts) —
- * the SAME array the generic product inspector (demos/inspector) reads.
- * Add a field there and both surfaces pick it up; nothing here is kept
- * in sync by hand.
+ * T1 Lane P: the REBUILT Port, end to end — now with the two-slot
+ * proposal's two independently-positioned slots (2026-09-12). `argTypes`/
+ * `args` below are GENERATED from `PORT_FIELDS`
+ * (packages/bbox-ui/src/port.fields.ts) — the SAME array the generic
+ * product inspector (demos/inspector) reads. Add a field there and both
+ * surfaces pick it up; nothing here is kept in sync by hand.
  *
  * No `Presets` story: `PORT_PRESETS` is empty (port.presets.ts) — Port's
  * colour comes from a hand-written `state`/`tone` lookup, not a
@@ -34,6 +36,12 @@ import type { ComponentProps } from "react";
  * `Record<string, FieldValue>` shape every schema-driven component
  * shares — one degree looser than `Port`'s own literal-union prop types.
  * `port.fields.test.ts` is what actually proves the values line up.
+ *
+ * WHY every story below sets `children` (was `name`/`type`) — those two
+ * props are GONE (folded into `children`, the label slot's whole
+ * `CodeField` value; see port.tsx's own module doc). Every gallery that
+ * used to do `name={(args.name as string) || option.label}` now does the
+ * identical thing against `children`.
  */
 const meta = {
   title: "Components/Port",
@@ -55,19 +63,21 @@ const STATE_FIELD = PORT_FIELDS.find((f) => f.id === "state")!;
 const TONE_FIELD = PORT_FIELDS.find((f) => f.id === "tone")!;
 const LENS_FIELD = PORT_FIELDS.find((f) => f.id === "lens")!;
 const REVEAL_FIELD = PORT_FIELDS.find((f) => f.id === "reveal")!;
+const SECONDARY_SLOT_LAYOUT_FIELD = PORT_FIELDS.find((f) => f.id === "secondarySlotLayout")!;
 
 /**
  * THE STORY THAT CARRIES THE PLAY FUNCTION. Click the painted dot —
  * reachable whether this DOM node sits three frameworks deep (plain div,
  * a React Flow node, a tldraw HTMLContainer shape) by the time this runs
- * — then assert the name/type text and the dot's `data-state` both match
- * the args this story was actually rendered with. `PORT_FIELDS`' own
- * `name`/`type` defaults are empty strings (nothing real to click
- * through to), so this story overrides both to a realistic pair without
- * touching the field defaults everything else in this file relies on.
+ * — then assert the label's real CodeField mounted with the right value
+ * and the dot's `data-state` matches the args this story was actually
+ * rendered with. `PORT_FIELDS`' own `children` default is an empty string
+ * (nothing real to click through to), so this story overrides it to a
+ * realistic one-line signature without touching the field defaults
+ * everything else in this file relies on.
  */
 export const Primary: Story = {
-  args: { name: "frameImage", type: "Image" },
+  args: { children: "frameImage: Image" },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     const dot = canvasElement.querySelector('[data-slot="port-dot"]');
@@ -75,8 +85,11 @@ export const Primary: Story = {
       throw new Error('expected a [data-slot="port-dot"] element in the DOM');
     }
     await userEvent.click(dot);
-    await expect(canvas.getByText(String(args.name))).toBeInTheDocument();
-    await expect(canvas.getByText(String(args.type))).toBeInTheDocument();
+    const field = canvasElement.querySelector('[data-testid="port-label-field"]');
+    if (!(field instanceof HTMLElement)) {
+      throw new Error('expected a [data-testid="port-label-field"] CodeField in the DOM');
+    }
+    await expect(canvas.getByText(String(args.children))).toBeInTheDocument();
     await expect(dot.getAttribute("data-state")).toBe(args.state);
   },
 };
@@ -87,10 +100,10 @@ export const Primary: Story = {
  * is disabled, because a story that paints every value at once cannot honour
  * a single control value and a control that silently does nothing reads as
  * broken (Zach, 2026-09-10: "the controls didn't work for the other
- * things"). Every row's `name` falls back to the swept option's own label
- * when Controls hasn't set one, so a field with no visual effect of its own
- * (`lens`, today — docs/T1-SPEC.md §3 defines no lens paint tokens yet)
- * still reads as doing something.
+ * things"). Every row's `children` falls back to the swept option's own
+ * label when Controls hasn't set one, so a field with no visual effect of
+ * its own (`lens`, today — docs/T1-SPEC.md §3 defines no lens paint
+ * tokens yet) still reads as doing something.
  */
 const sweep = (fieldId: string) => ({
   controls: { exclude: controlNames(PORT_FIELDS, [fieldId]) },
@@ -112,7 +125,7 @@ export const AllStates: Story = {
           {...args}
           key={option.value}
           state={option.value as AppearanceState}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
@@ -129,14 +142,16 @@ export const AllTones: Story = {
           {...args}
           key={option.value}
           tone={option.value as Tone}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
   ),
 };
 
-/** input vs output — mirrors the name/type/chip order (PORT-SPEC.md §3f). */
+/** input vs output — no longer reorders the label's CONTENT (one free-typed
+ * string has nothing left to mirror), but still sets which way the
+ * `CodeField`'s text aligns (`PortLabel`'s own doc). */
 export const AllDirections: Story = {
   parameters: sweep("direction"),
   render: (args) => (
@@ -146,7 +161,7 @@ export const AllDirections: Story = {
           {...args}
           key={option.value}
           direction={option.value as PortDirection}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
@@ -163,7 +178,7 @@ export const AllEdges: Story = {
           {...args}
           key={option.value}
           edge={option.value as BlockSide}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
@@ -180,15 +195,20 @@ export const AllDiameters: Story = {
           {...args}
           key={option.value}
           diameter={option.value as PortSize}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
   ),
 };
 
-/** Every real PortTextLayout (top/bot/right/left — narrowed from T0's six,
- * PORT-SPEC.md §3f: the app has no horizontal "offset" label). */
+/**
+ * Every real label-slot `PortTextLayout` — six now (the two-slot
+ * proposal, 2026-09-12, re-added `rightOffset`/`leftOffset` on top of the
+ * `top`/`bot`/`right`/`left` PORT-SPEC.md §3f had narrowed this to). The
+ * two "Offset" rows sit visibly further from the dot than their plain
+ * counterpart (`PORT_LABEL_OFFSET_EXTRA_PX`, port.layout.ts).
+ */
 export const AllTextLayouts: Story = {
   parameters: sweep("textLayout"),
   render: (args) => (
@@ -198,7 +218,7 @@ export const AllTextLayouts: Story = {
           {...args}
           key={option.value}
           textLayout={option.value as PortTextLayout}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
@@ -207,7 +227,8 @@ export const AllTextLayouts: Story = {
 
 /** Every real PortTextSize rung (18/24/36/44px) — Port's own ladder,
  * deliberately separate from `layout.ts`'s `TEXT_SIZES` (docs/T1-SPEC.md
- * §0). */
+ * §0). Now also the label `CodeField`'s own font size (`PortLabel`'s
+ * `style={{ fontSize: ... }}`, port.tsx). */
 export const AllTextSizes: Story = {
   parameters: sweep("textSize"),
   render: (args) => (
@@ -217,7 +238,7 @@ export const AllTextSizes: Story = {
           {...args}
           key={option.value}
           textSize={option.value as PortTextSize}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
@@ -236,7 +257,7 @@ export const AllLenses: Story = {
           {...args}
           key={option.value}
           lens={option.value as Lens}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
@@ -255,40 +276,31 @@ export const AllReveals: Story = {
           {...args}
           key={option.value}
           reveal={option.value as PortReveal}
-          name={(args.name as string) || option.label}
+          children={(args.children as string) || option.label}
         />
       ))}
     </div>
   ),
 };
 
-/**
- * The escape hatch actually engaged: `children` REPLACES the three-span
- * name/type/default-chip rendering wholesale (PORT-SPEC.md §7 Q6).
- */
-export const CustomLabel: Story = {
-  args: { name: "unused", type: "unused", defaultValue: "unused" },
-  // `args.children ?? …` and not a bare JSX child: a literal child shadows
-  // the Label control, which then sits live in the panel moving nothing —
-  // the same defect already fixed in Pill's presets gallery.
-  render: (args) => <Port {...args}>{args.children ?? "name: Type = default"}</Port>,
-};
-
-/** `producers >= 2` shows the many-to-one count badge. */
+/** `producers >= 2` composes `PortCountBadge` as the secondary slot's
+ * default content (unchanged threshold — the two-slot proposal moved
+ * WHERE/HOW it's positioned and composed, not the count that triggers it). */
 export const ManyProducers: Story = {
-  args: { name: "pose", direction: "output", producers: 3 },
+  args: { children: "pose", direction: "output", producers: 3 },
 };
 
 /**
- * The 2026-09-12 D5 fix: the count badge used to carry a FIXED offset
- * (assuming the label always flows right), so a left-flowing label landed
- * almost exactly where the badge sat. Both rows below carry `producers:
- * 3`; the badge now anchors on `portBadgeSide(textLayout)` — the side
- * OPPOSITE the label — so it stays clear of the text in either layout.
+ * The 2026-09-12 D5 fix carried forward: the count badge used to carry a
+ * FIXED offset (assuming the label always flows right), so a left-flowing
+ * label landed almost exactly where the badge sat. Both rows below carry
+ * `producers: 3`; the badge's secondary slot now defaults via
+ * `defaultSecondarySlotLayout(textLayout)` — the corner OPPOSITE the
+ * label — so it stays clear of the text in either layout.
  */
 export const ManyProducersEitherLayout: Story = {
   parameters: sweep("textLayout"),
-  args: { name: "get_aruco", producers: 3 },
+  args: { children: "get_aruco", producers: 3 },
   render: (args) => (
     <div style={galleryRow}>
       <Port {...args} textLayout="right" />
@@ -297,13 +309,48 @@ export const ManyProducersEitherLayout: Story = {
   ),
 };
 
+/**
+ * The two-slot proposal's own new axis: `secondarySlotLayout` is now
+ * independent of the label's flow side — every row below fixes
+ * `textLayout="right"` (label always flows the same way) while sweeping
+ * where the producer-count badge sits across all four of its own corners,
+ * hugging the dot more tightly than the label slot's own "Offset"
+ * positions (`PORT_SECONDARY_SLOT_GAP_PX` < `PORT_LABEL_GAP`,
+ * port.layout.ts).
+ */
+export const AllSecondarySlotLayouts: Story = {
+  parameters: sweep("secondarySlotLayout"),
+  args: { children: "pose", producers: 3, textLayout: "right" },
+  render: (args) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 32, padding: 24 }}>
+      {SECONDARY_SLOT_LAYOUT_FIELD.options!.map((option) => (
+        <Port
+          {...args}
+          key={option.value}
+          secondarySlotLayout={option.value as SecondarySlotLayout}
+        />
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * Both slots at once, on a realistic port: the label slot's real
+ * `CodeField` holding a `name: Type` one-liner, the secondary slot's
+ * producer-count badge sitting in the free corner — the two-slot
+ * proposal's actual money shot, not two separate galleries.
+ */
+export const TwoSlotsTogether: Story = {
+  args: { children: "get_aruco: ArucoSrv", direction: "output", producers: 3, state: "wired" },
+};
+
 /** `hidden: true` renders nothing at all — a container rolls it into its
  * own `+N more` summary (`PortHiddenSummary`, exported from `./port.tsx`,
  * not exercised as a standalone story: it is the CONTAINER's part, not
  * one Port's). Replaces the old `state: "hidden"` rung — see
  * appearance.ts's own WHY for the split. */
 export const Hidden: Story = {
-  args: { name: "hiddenPort", hidden: true },
+  args: { children: "hiddenPort", hidden: true },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('[data-slot="port"]')).toBeNull();
   },

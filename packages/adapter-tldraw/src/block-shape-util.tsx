@@ -242,7 +242,11 @@ const portValidator: T.Validator<BBoxShapePort> = T.object({
   state: T.literalEnum("empty", "valueSet", "wired"),
   size: T.literalEnum("sm", "md", "lg"),
   label: T.string,
-  textLayout: T.literalEnum("top", "bot", "right", "left"),
+  // Widened 2026-09-12 (the two-slot proposal) to match `PortTextLayout`
+  // itself, which grew the same two members — unlike `state`/`size` above,
+  // this field was never deliberately narrowed against the live type, so
+  // the validator just tracks it.
+  textLayout: T.literalEnum("top", "bot", "right", "left", "rightOffset", "leftOffset"),
   side: T.literalEnum("left", "right", "top", "bottom"),
   t: T.number,
 });

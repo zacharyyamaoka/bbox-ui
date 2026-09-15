@@ -63,20 +63,50 @@ export function portRowCentre(
   return opts.headerPx + opts.gapPx + opts.pitchPx * slot + opts.pitchPx / 2;
 }
 
-/** Narrowed from layout.ts's old 6-way enum — the real app has no
- * horizontal "offset" label, only a vertical lift; see PORT-SPEC.md §3f. */
-export type PortTextLayout = "top" | "bot" | "right" | "left";
+/**
+ * WIDENED 2026-09-12 (the two-slot proposal): PORT-SPEC.md §3f narrowed this
+ * from T0's 6-way enum down to 4 because "the real app has no horizontal
+ * offset label, only a vertical lift" — true of the SystemSketch board this
+ * package was built against, but Zach's own two-slot diagram for the
+ * GENERIC `Port` component (this package, not that board) names "Right
+ * Offset"/"Left Offset" as two of the label slot's six real positions
+ * (alongside `secondarySlotLayout`'s own, independently-offset four-way
+ * axis below). Re-adding them here rather than inventing a parallel
+ * `LabelSlotLayout` type: every host adapter already imports this exact
+ * type name as an opaque prop (`PortTextLayout`, no exhaustive switch of
+ * its own — confirmed by recon before this change), so widening the one
+ * shared type costs two new cases in this file's own switches instead of
+ * a second, easy-to-confuse-with-the-first enum a caller could reach for
+ * by mistake.
+ */
+export type PortTextLayout = "top" | "bot" | "right" | "left" | "rightOffset" | "leftOffset";
 
-export const PORT_TEXT_LAYOUTS: PortTextLayout[] = ["top", "bot", "right", "left"];
+export const PORT_TEXT_LAYOUTS: PortTextLayout[] = [
+  "top",
+  "bot",
+  "right",
+  "left",
+  "rightOffset",
+  "leftOffset",
+];
 
 export const PORT_TEXT_LAYOUT_LABELS: Record<PortTextLayout, string> = {
   top: "Top",
   bot: "Bot",
   right: "Right",
   left: "Left",
+  rightOffset: "Right Offset",
+  leftOffset: "Left Offset",
 };
 
 export const PORT_LABEL_GAP = 8;
+
+/** How much FURTHER OUT an "Offset" label position sits than its plain
+ * counterpart — the diagram's own visual distinction between "Right" and
+ * "Right Offset" (both flow the same direction; Offset just sits shifted
+ * further from the dot). Applied on top of `PORT_LABEL_GAP` in
+ * `portLabelGap` below, never in place of it. */
+export const PORT_LABEL_OFFSET_EXTRA_PX = 16;
 
 export function portFlexDirection(
   layout: PortTextLayout,
@@ -87,14 +117,21 @@ export function portFlexDirection(
     case "bot":
       return "column";
     case "right":
+    case "rightOffset":
       return "row";
     case "left":
+    case "leftOffset":
       return "row-reverse";
   }
 }
 
-export function portLabelGap(_layout: PortTextLayout): number {
-  return PORT_LABEL_GAP;
+/** The plain and "Offset" members of the same flow direction share a flex
+ * direction (`portFlexDirection` above) — only the CLEARANCE differs, by
+ * `PORT_LABEL_OFFSET_EXTRA_PX`. */
+export function portLabelGap(layout: PortTextLayout): number {
+  return layout === "rightOffset" || layout === "leftOffset"
+    ? PORT_LABEL_GAP + PORT_LABEL_OFFSET_EXTRA_PX
+    : PORT_LABEL_GAP;
 }
 
 export type PortDirection = "input" | "output";
@@ -210,39 +247,71 @@ export const PORT_REVEAL_LABELS: Record<PortReveal, string> = {
 // rather than reaching for a prop this package no longer carries.
 
 /**
- * Where the count badge (`Port`'s own `PortCountBadge`) lands relative to
- * the dot, given the label's own flow direction — the fix for "the badge
- * sat on top of a left-flowing label" (2026-09-12 port-props proposal,
- * D5): the badge used to carry a FIXED offset (assuming the label always
- * flows right), so a `textLayout` other than the default silently
- * overlapped it with the label text. Anchoring on the side OPPOSITE
- * whichever way the label is actually flowing keeps it clear in every
- * `textLayout`, not just the default one.
+ * `PortDot`'s SECOND independently-positioned slot (the two-slot proposal,
+ * 2026-09-12): generic content hugging a corner of the dot, closer in than
+ * the label slot's own "Offset" positions — Zach's diagram names these
+ * "Secondary Slot Placement", all four already offset variants (there is
+ * no plain, flush-against-the-dot member on this axis the way the label
+ * slot has `top`/`bot`/`right`/`left`). Spelled with its own vocabulary,
+ * not a subset of `PortTextLayout` reused wholesale — that type's members
+ * name where the LABEL flows (mirrored input/output content, wide gap);
+ * this one names which CORNER of the dot's own box a small cue hugs
+ * (content-agnostic, tight gap) — conflating the two would let a caller
+ * pass a bare `"left"` here and land on the wrong geometry entirely.
+ *
+ * REPLACES `portBadgeSide`/`portCueSide` (both removed here): those
+ * computed one FIXED axis opposite the label, assuming the only content
+ * this slot would ever hold was the producer-count badge. Now that
+ * `PortDot`'s secondary slot is genuinely generic (`PortDotProps.secondarySlot`,
+ * any `ReactNode` — port.tsx), the "opposite the label" rule survives only
+ * as `defaultSecondarySlotLayout`'s AUTO default below; an explicit
+ * `secondarySlotLayout` always wins.
  */
-export function portBadgeSide(layout: PortTextLayout): PortTextLayout {
-  switch (layout) {
-    case "left":
-      return "right";
-    case "right":
-      return "left";
-    case "top":
-      return "bot";
-    case "bot":
-      return "top";
-  }
-}
+export type SecondarySlotLayout = "leftOffset" | "rightOffset" | "topOffset" | "botOffset";
+
+export const SECONDARY_SLOT_LAYOUTS: SecondarySlotLayout[] = [
+  "leftOffset",
+  "rightOffset",
+  "topOffset",
+  "botOffset",
+];
+
+export const SECONDARY_SLOT_LAYOUT_LABELS: Record<SecondarySlotLayout, string> = {
+  leftOffset: "Left Offset",
+  rightOffset: "Right Offset",
+  topOffset: "Top Offset",
+  botOffset: "Bot Offset",
+};
+
+/** How tightly the secondary slot hugs the dot's own box — deliberately
+ * SMALLER than `PORT_LABEL_GAP` (the diagram's own visual distinction: a
+ * "small badge/cue hugging a corner", not content sitting flush beside the
+ * dot). Equal to the old hardcoded `PortCountBadge` overlay's own gap
+ * (`port.tsx`, pre-two-slot) — carried forward, not re-guessed. */
+export const PORT_SECONDARY_SLOT_GAP_PX = 6;
 
 /**
- * The free axis for a small overlay that isn't the count badge — e.g. a
- * consuming app's own semantic-role cue, composed on top of `PortDot` the
- * way `port.layout.ts`'s own module doc (D4) describes. Not used inside
- * this package (the base `PortDot` paints only the badge), exported so a
- * consumer doesn't have to re-derive "which side is free" by hand: the
- * vertical rung is free when the label flows horizontally, the horizontal
- * rung when the label itself flows top/bot.
+ * The secondary slot's AUTO default position, given wherever the label is
+ * actually flowing — the same "opposite the label" rule `portBadgeSide`
+ * used to compute (2026-09-12 port-props D5's fix for "the badge sat on
+ * top of a left-flowing label"), generalized from one fixed axis to the
+ * secondary slot's own independent, always-offset vocabulary. Only
+ * consulted when a caller omits `secondarySlotLayout` outright — an
+ * explicit value always wins (`PortDot`, port.tsx).
  */
-export function portCueSide(layout: PortTextLayout): "top" | "right" {
-  return layout === "top" || layout === "bot" ? "right" : "top";
+export function defaultSecondarySlotLayout(labelLayout: PortTextLayout): SecondarySlotLayout {
+  switch (labelLayout) {
+    case "left":
+    case "leftOffset":
+      return "rightOffset";
+    case "right":
+    case "rightOffset":
+      return "leftOffset";
+    case "top":
+      return "botOffset";
+    case "bot":
+      return "topOffset";
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -374,8 +443,10 @@ export function portLabelPlacement(
   const out = `${portLabelOut(layout, dot) - boxInsetPx}px`;
   switch (layout) {
     case "right":
+    case "rightOffset":
       return { left: out, top: "50%", transform: "translateY(-50%)" };
     case "left":
+    case "leftOffset":
       return { right: out, top: "50%", transform: "translateY(-50%)" };
     case "top":
       return { bottom: out, left: "50%", transform: "translateX(-50%)" };

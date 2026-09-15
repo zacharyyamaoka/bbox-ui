@@ -5,7 +5,11 @@ import {
   PORT_DIAMETERS,
   PORT_LABEL_GAP,
   PORT_RING_OVERHANG_PX,
+  PORT_LABEL_OFFSET_EXTRA_PX,
+  PORT_SECONDARY_SLOT_GAP_PX,
   PORT_TEXT_LAYOUTS,
+  SECONDARY_SLOT_LAYOUTS,
+  defaultSecondarySlotLayout,
   inwardTextLayout,
   portAnchor,
   portDotPlacement,
@@ -18,6 +22,7 @@ import {
   type PortDotBox,
   type PortLabelPlacement,
   type PortTextLayout,
+  type SecondarySlotLayout,
 } from "../src/port.layout";
 
 // INTEGRATION NOTE (docs/T1-SPEC.md §0): this geometry used to live in
@@ -26,10 +31,15 @@ import {
 // "verified-correct-and-unchanged" (its own file header) alongside the
 // rebuilt Port-state geometry, and `layout.ts`'s copy was deleted once
 // `port.layout.ts` landed — so this file picks the same assertions up
-// against their new home, narrowed to the four `PortTextLayout` members
-// the rebuilt Port actually has (the "-offset" variants and the
-// wired-inner-dot ratio were a deliberate redesign, not carried forward
-// — see `test/layout.test.ts`'s own note and `test/appearance.test.ts`).
+// against their new home.
+//
+// WIDENED 2026-09-12 (the two-slot proposal): PORT_TEXT_LAYOUTS grew back
+// from four to six — `rightOffset`/`leftOffset` re-added for the label
+// slot's own six-way placement axis (Zach's diagram; see port.layout.ts's
+// own WHY on `PortTextLayout`). The wired-inner-dot ratio is unrelated and
+// still not carried forward — see `test/appearance.test.ts`. A brand new,
+// always-offset `SecondarySlotLayout` axis (four members) covers the
+// dot's own second slot, tested in its own describe block below.
 
 describe("port anchors on a block boundary", () => {
   it("anchors ports on the boundary of the default block", () => {
@@ -55,8 +65,8 @@ describe("port anchors on a block boundary", () => {
 });
 
 describe("port text layouts", () => {
-  it("covers the four rebuilt-Port layouts", () => {
-    expect(PORT_TEXT_LAYOUTS).toEqual(["top", "bot", "right", "left"]);
+  it("covers the six label-slot layouts (top/bot/right/left, plus the re-added rightOffset/leftOffset)", () => {
+    expect(PORT_TEXT_LAYOUTS).toEqual(["top", "bot", "right", "left", "rightOffset", "leftOffset"]);
   });
 
   const expected: Record<PortTextLayout, string> = {
@@ -64,16 +74,47 @@ describe("port text layouts", () => {
     bot: "column",
     right: "row",
     left: "row-reverse",
+    rightOffset: "row",
+    leftOffset: "row-reverse",
   };
 
   it.each(PORT_TEXT_LAYOUTS)("places the text slot for %s", (layout) => {
     expect(portFlexDirection(layout)).toBe(expected[layout]);
   });
 
-  it("every layout uses the one label gap — no offset variant anymore", () => {
-    for (const layout of PORT_TEXT_LAYOUTS) {
+  it("the plain top/bot/right/left members use the one label gap", () => {
+    for (const layout of ["top", "bot", "right", "left"] as const) {
       expect(portLabelGap(layout)).toBe(PORT_LABEL_GAP);
     }
+  });
+
+  it("the -Offset members sit PORT_LABEL_OFFSET_EXTRA_PX further out than their plain counterpart", () => {
+    expect(portLabelGap("rightOffset")).toBe(PORT_LABEL_GAP + PORT_LABEL_OFFSET_EXTRA_PX);
+    expect(portLabelGap("leftOffset")).toBe(PORT_LABEL_GAP + PORT_LABEL_OFFSET_EXTRA_PX);
+  });
+});
+
+describe("secondary slot layouts (the two-slot proposal's own, always-offset axis)", () => {
+  it("has exactly the four named corners, none of them a bare top/bot/left/right", () => {
+    expect(SECONDARY_SLOT_LAYOUTS).toEqual(["leftOffset", "rightOffset", "topOffset", "botOffset"]);
+  });
+
+  it("defaultSecondarySlotLayout picks the corner OPPOSITE wherever the label is flowing — the same rule the old portBadgeSide used, generalized", () => {
+    const expected: Record<PortTextLayout, SecondarySlotLayout> = {
+      left: "rightOffset",
+      leftOffset: "rightOffset",
+      right: "leftOffset",
+      rightOffset: "leftOffset",
+      top: "botOffset",
+      bot: "topOffset",
+    };
+    for (const layout of PORT_TEXT_LAYOUTS) {
+      expect(defaultSecondarySlotLayout(layout)).toBe(expected[layout]);
+    }
+  });
+
+  it("hugs the dot more tightly than the label's own gap (the diagram's own visual distinction)", () => {
+    expect(PORT_SECONDARY_SLOT_GAP_PX).toBeLessThan(PORT_LABEL_GAP);
   });
 });
 
@@ -160,7 +201,9 @@ describe("port placement — dot on the boundary, label off the dot", () => {
 
   const flowSide: Record<PortTextLayout, keyof PortLabelPlacement> = {
     right: "left",
+    rightOffset: "left",
     left: "right",
+    leftOffset: "right",
     top: "bottom",
     bot: "top",
   };

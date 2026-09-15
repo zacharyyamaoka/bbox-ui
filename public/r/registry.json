@@ -36,11 +36,52 @@
           "path": "packages/bbox-ui/src/lib/utils.ts",
           "type": "registry:lib",
           "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeField.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeField.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeField.css",
+          "type": "registry:style",
+          "target": "components/bbox/codeField.css"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeFieldGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeFieldGuards.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeFieldRows.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeFieldRows.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeGrammar.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeGrammar.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/fieldGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/fieldGesture.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/caretGeometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/caretGeometry.ts"
         }
       ],
       "dependencies": [
         "clsx",
-        "tailwind-merge"
+        "tailwind-merge",
+        "@codemirror/autocomplete",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight"
       ]
     },
     {

@@ -67,7 +67,9 @@ export class BBoxPortShapeUtil extends ShapeUtil<BBoxPortShape> {
     state: T.literalEnum("empty", "valueSet", "wired"),
     size: T.literalEnum("sm", "md", "lg"),
     label: T.string,
-    textLayout: T.literalEnum("top", "bot", "right", "left"),
+    // Widened 2026-09-12 (the two-slot proposal) to match `PortTextLayout`
+    // itself — see block-shape-util.tsx's own portValidator note.
+    textLayout: T.literalEnum("top", "bot", "right", "left", "rightOffset", "leftOffset"),
   };
 
   override getDefaultProps(): BBoxPortShape["props"] {
