@@ -1,0 +1,205 @@
+/*
+ * The autocomplete menu (`completionMenu.ts`). CodeMirror's own completion
+ * tooltip, restyled: its anchoring, flip, clamp, ARIA and keyboard are
+ * untouched — only the visual vocabulary is ours. Colours are bbox-ui's
+ * own tokens (theme.css), so the menu follows light and dark with the kit.
+ *
+ * WHY every rule starts from four classes: CodeMirror injects its base
+ * theme at runtime, AFTER this sheet, scoped like
+ * `.ͼ2 .cm-tooltip-autocomplete ul li[aria-selected]` (specificity 0,3,2).
+ * A same-specificity rule here would lose on source order; the fourth class
+ * wins it outright rather than reaching for `!important` on every property.
+ */
+
+/*
+ * WHY the tooltip root is a transparent frame and the list + footer paint
+ * the card: once CodeMirror has had to squeeze a popup into a tight space,
+ * it remembers that popup's tall natural height for the rest of the
+ * session (`knownHeight` in @codemirror/view — never cleared, and used for
+ * positioning too). A list that then filters down to two rows kept a box
+ * the height of twelve: flipped above, its rows sat at the top of the
+ * viewport with an empty card down to the caret. Measured in the story,
+ * 12 → 2 rows. With the card painted by the children and pushed to the
+ * anchor side (`flex-end` when above), a stale height is only ever
+ * transparent pixels, and the rows always hug the line being typed.
+ */
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion {
+  --bbox-completion-row-height: 24px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  /* Stable width while the list filters: labels come and go, the popup
+     does not jitter between two widths on every keystroke. */
+  min-width: 360px;
+  max-width: 460px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  /* A drop-shadow follows the painted card, not the transparent frame. */
+  filter: drop-shadow(0 6px 14px oklch(0 0 0 / 0.16));
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  /* The transparent part of the frame must not swallow clicks meant for
+     the text beneath it; the card itself turns pointer events back on. */
+  pointer-events: none;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion.cm-tooltip-above {
+  justify-content: flex-end;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > ul {
+  flex: 0 1 auto;
+  box-sizing: content-box;
+  min-width: 0;
+  max-width: none;
+  min-height: 0;
+  height: auto;
+  /* `maxRows` (set per popup by completionMenu.ts) × one row. */
+  max-height: calc(var(--bbox-completion-rows, 10) * var(--bbox-completion-row-height));
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font: inherit;
+  pointer-events: auto;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion.bbox-completion-menu--has-footer > ul {
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > ul > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: var(--bbox-completion-row-height);
+  padding: 0 8px;
+  border-radius: 5px;
+  line-height: var(--bbox-completion-row-height);
+  color: var(--muted-foreground);
+}
+
+/* Also covers CodeMirror's "disabled" state (a list mid re-query), which
+   would otherwise flash its own grey selection for a frame. */
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > ul > li[aria-selected] {
+  background: color-mix(in oklch, var(--bbox-accent) 18%, transparent);
+  color: var(--muted-foreground);
+}
+
+/* VS Code's hierarchy: the matched run is bold at full ink, the rest of the
+   label recedes, and no row ever gets an underline. */
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion .cm-completionLabel {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion .cm-completionMatchedText {
+  color: var(--foreground);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* WHY a zero flex-basis on the detail and not on the label: the detail
+   only ever gets the space the label leaves over, so a tight row
+   truncates the detail first (to a visible ellipsis) and the label only
+   once the detail is already gone. */
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion .cm-completionDetail {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-style: normal;
+  opacity: 0.8;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The kind pill sits in a fixed-width cell so every label starts at the
+   same x, pill or not. */
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion .bbox-completion-menu__badge-cell {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 84px;
+  overflow: hidden;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion .bbox-completion-menu__badge {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--bbox-accent) 16%, transparent);
+  color: var(--bbox-accent);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 10.5px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > ul > li.bbox-completion-menu__deprecated {
+  opacity: 0.66;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > ul > li.bbox-completion-menu__deprecated .cm-completionLabel {
+  text-decoration: line-through;
+}
+
+/* "No matches for “x”" — a statement, not a candidate: no highlight, no
+   pointer, even though CodeMirror counts it as the selected row. */
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > ul > li.bbox-completion-menu__empty,
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > ul > li.bbox-completion-menu__empty[aria-selected] {
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: default;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+/* The footer strip: outside the listbox, so no key can select it; `order`
+   keeps it last on screen even while CodeMirror swaps its `<ul>`. */
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > .bbox-completion-menu__footer {
+  order: 1;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  /* The divider, inset to the rows' own padding rather than edge to edge. */
+  background:
+    linear-gradient(var(--border), var(--border)) top center / calc(100% - 16px) 1px no-repeat,
+    var(--card);
+  color: var(--muted-foreground);
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  user-select: none;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > .bbox-completion-menu__footer:hover {
+  color: var(--foreground);
+}
+
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > .bbox-completion-menu__footer kbd {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--muted);
+  color: var(--foreground);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 16px;
+}

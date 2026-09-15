@@ -77,4 +77,9 @@ export * from "./region";
 // no DOM, no host imports; see portPlacement.ts's own header.
 export * from "./portPlacement";
 
+// The autocomplete menu — a CodeMirror extension any code field mounts
+// (e.g. as a CodeField grammar's `language`); no React, no host import.
+// `completionMenu.css` ships as its own package.json export, like theme.css.
+export * from "./completionMenu";
+
 export { cn } from "./lib/utils";
