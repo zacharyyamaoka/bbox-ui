@@ -1278,7 +1278,17 @@ export const INITIAL_BENCHES: Record<string, Instance[]> = (() => {
     }
     seeded[entry.name] = made;
   }
-  seeded[MIXED_BENCH] = [makeInstance("Port", 0, n++), makeInstance("Pill", 0, n++)];
+  // Port AND LabeledPort, deliberately. Before the 2026-09-15 split this
+  // line said `makeInstance("Port")` and got the COMPOSITE; the split
+  // silently turned it into a bare dot. Seeding both is the honest answer
+  // and a better bench besides: the two share `state`/`tone`/`diameter`,
+  // so a multi-select across them is exactly the "what can I edit across
+  // all of these" case this bench exists to answer. LabeledPort goes
+  // through `makeInstanceWithSlots` because it has slots to bring.
+  const mixedPort = makeInstance("Port", 0, n++);
+  const mixedLabeled = makeInstanceWithSlots("LabeledPort", 0, n);
+  n += mixedLabeled.length;
+  seeded[MIXED_BENCH] = [mixedPort, ...mixedLabeled, makeInstance("Pill", 0, n++)];
   return seeded;
 })();
 

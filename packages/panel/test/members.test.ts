@@ -174,7 +174,10 @@ describe("what a parent may add is declared, closed and capped", () => {
     // seed cannot smuggle an arbitrary component onto every bench.
     const SEEDED_MEMBER_TYPES = new Set(["CodeField", "Badge"]);
     for (const [name, list] of Object.entries(INITIAL_BENCHES)) {
-      expect(topLevel(list).length, name).toBe(name === MIXED_BENCH ? 2 : 1);
+      // The mixed bench deliberately seeds three roots (Port, LabeledPort,
+      // Pill) so a multi-select spans the two port primitives as well as an
+      // unrelated component; every other bench is one root.
+      expect(topLevel(list).length, name).toBe(name === MIXED_BENCH ? 3 : 1);
       for (const inst of list)
         if (!topLevel(list).includes(inst))
           expect(
