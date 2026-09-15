@@ -42,6 +42,7 @@ type BenchNodeData = {
   onSelectInstance: (id: string, additive: boolean) => void;
   edit: EditBundle;
   onMovePort?: MovePort;
+  highlightSlots: boolean;
 };
 type BenchNode = Node<BenchNodeData, "bench">;
 
@@ -71,7 +72,7 @@ function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
       className="p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
     >
       <HostZoomContext.Provider value={zoom}>
-        {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance, data.edit, false, data.onMovePort)}
+        {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance, data.edit, false, data.onMovePort, data.highlightSlots)}
       </HostZoomContext.Provider>
     </div>
   );
@@ -93,6 +94,7 @@ interface Props {
    *  Absent means this render is not yet wired for it (matches
    *  `ViewportProps.onMovePort` and `dom-preview.tsx`'s own optional prop). */
   onMovePort?: MovePort;
+  highlightSlots: boolean;
 }
 
 /**
@@ -156,14 +158,14 @@ function Canvas(p: Props) {
         type: "bench",
         position: p.positions[instance.id] ?? { x: 0, y: 0 },
         selected: p.selectedIds.includes(instance.id),
-        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit, onMovePort },
+        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit, onMovePort, highlightSlots: p.highlightSlots },
         draggable: true,
         measured: measuredRef.current[instance.id],
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- measuredRef is
     // a ref (stable identity); `forceMeasuredTick` is read only to re-run
     // this memo the one time a node's first-ever measurement arrives.
-    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, p.edit, onMovePort, forceMeasuredTick],
+    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, p.edit, onMovePort, p.highlightSlots, forceMeasuredTick],
   );
 
   // WHY selection is read from `select` changes and NOT from

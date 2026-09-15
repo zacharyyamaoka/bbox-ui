@@ -71,6 +71,7 @@ const BenchContext = createContext<{
   edit: EditBundle;
   onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
   zoom: number;
+  highlightSlots: boolean;
 }>({
   entries: [],
   instances: [],
@@ -80,6 +81,7 @@ const BenchContext = createContext<{
   onSelectionChange: () => {},
   edit: { editingId: null, editSnapshot: null, onRequestEdit: () => {}, onEditEnd: () => {}, onInstancePropChange: () => {} },
   zoom: 1,
+  highlightSlots: false,
 });
 
 interface BenchShapeProps {
@@ -139,7 +141,7 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
     return { id: shape.id, type: shape.type };
   }
   override component(shape: BenchShape) {
-    const { entries, byId, selectedIds, onSelectInstance, onSelectionChange, edit, onMovePort, zoom } =
+    const { entries, byId, selectedIds, onSelectInstance, onSelectionChange, edit, onMovePort, zoom, highlightSlots } =
       useContext(BenchContext);
     const inst = byId.get(shape.props.instanceId);
     const editor = this.editor;
@@ -278,7 +280,7 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
             mounted by `renderInstance`, INSIDE this returned tree. */}
         <div ref={contentRef} style={{ display: "inline-flex" }}>
           <HostZoomContext.Provider value={zoom}>
-            {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, onMovePort) : null}
+            {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, onMovePort, highlightSlots) : null}
           </HostZoomContext.Provider>
         </div>
       </HTMLContainer>
@@ -376,6 +378,7 @@ interface Props {
   /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
    *  tldraw is wired for it (this file); React Flow still is not. */
   onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+  highlightSlots: boolean;
 }
 
 /**
@@ -412,8 +415,9 @@ export function TldrawCanvas(p: Props) {
       edit: p.edit,
       onMovePort: p.onMovePort,
       zoom,
+      highlightSlots: p.highlightSlots,
     }),
-    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.onSelectionChange, p.edit, p.onMovePort, zoom],
+    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.onSelectionChange, p.edit, p.onMovePort, zoom, p.highlightSlots],
   );
 
   // page → editor

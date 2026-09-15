@@ -31,6 +31,7 @@ export function DomPreview({
   onSelectInstance,
   edit,
   onMovePort,
+  highlightSlots,
 }: {
   entries: ComponentEntry[];
   instances: Instance[];
@@ -42,6 +43,7 @@ export function DomPreview({
   /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
    *  The DOM render is the one host wired for it today. */
   onMovePort?: (blockId: string, portIds: string[], edge: PortEdgeId, target: { index: number } | { t: number }) => void;
+  highlightSlots: boolean;
 }) {
   const byId = useMemo(() => new Map(instances.map((i) => [i.id, i])), [instances]);
   return (
@@ -133,7 +135,7 @@ export function DomPreview({
             className="cursor-default p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
             title={`${inst.type} · ${inst.id}`}
           >
-            {renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, onMovePort)}
+            {renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, onMovePort, highlightSlots)}
           </div>
         );
       })}
