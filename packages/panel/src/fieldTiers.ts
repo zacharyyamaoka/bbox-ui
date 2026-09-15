@@ -26,9 +26,24 @@ export const TIER_META: Record<Tier, { label: string; hint: string }> = {
 };
 
 /**
- * A field's tier is INFERRED from the FieldSpec/PresetSpec shape every
- * component already declares. Nothing is hand-listed per component, so an
- * eighth component tiers itself the day it ships.
+ * A field's tier is EXPLICITLY curated on the FieldSpec itself
+ * (`field.tier`) — Zach, 2026-09-14: "if nothing is added then you can
+ * assume its expert. Simple should only be like highly curated fields that
+ * we individually choose to promote." Falls back to the ORIGINAL
+ * shape-inferred classification below (rules 1-4) per FIELD when `tier` is
+ * absent — a component that curates every one of its own fields (Port,
+ * first) never touches the fallback at all, while a component that hasn't
+ * been migrated yet (everything else, today) keeps its exact current panel
+ * unchanged, field by field, with zero risk of a half-curated component
+ * silently losing the fields nobody got around to annotating.
+ *
+ * Superseded design, kept as the fallback: a field's tier used to be
+ * INFERRED from the FieldSpec/PresetSpec shape every component already
+ * declares, so nothing had to be hand-listed per component. That meant a
+ * field's prominence was an accident of its TYPE, not a deliberate product
+ * call — Port's own two-slot work surfaced the gap: `textLayout` (exactly
+ * the control Zach wants in Simple) fell into Advanced by shape alone, with
+ * no way to promote it short of changing what KIND of field it was.
  *
  * 1. SIMPLE — the preset selector, a plain name, a bare label. What changes
  *    constantly.
@@ -45,6 +60,8 @@ export const TIER_META: Record<Tier, { label: string; hint: string }> = {
  * field is one tap away.
  */
 export function classifyField(field: FieldSpec, presets: PresetSpec[], governed: Set<string>): Tier {
+  if (field.tier) return field.tier;
+
   const isSelector = field.id === "state" || presets.some((p) => p.selector === field.id);
   const isEscapeHatch = /escape hatch/i.test(field.hint ?? "");
   // WHY "textarea" joins "text" here: a plain name is a classification about

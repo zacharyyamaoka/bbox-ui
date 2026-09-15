@@ -118,6 +118,13 @@ export const PORT_FIELDS: FieldSpec[] = [
     options: SIZE_OPTIONS,
     cascades: true,
     hint: "Sets diameter and text size together; the rung a header hands down.",
+    // EXPLICIT "advanced", overriding the cascade-selector rule that would
+    // otherwise land this in Simple (same rule `state` gets it from) — Zach,
+    // 2026-09-14: "No need for size control here. Already I would expect
+    // the port to be sized correctly." A cascade selector being prominent
+    // is right for MOST components; Port's own diagram of what Simple
+    // should hold names Label/Label Slot Location/State only.
+    tier: "advanced",
   },
   {
     id: "diameter",
@@ -129,11 +136,18 @@ export const PORT_FIELDS: FieldSpec[] = [
   },
   {
     id: "textLayout",
-    label: "Text Layout",
+    label: "Label Slot Location",
     kind: "segments",
     defaultValue: "right",
     options: TEXT_LAYOUT_OPTIONS,
     hint: 'Sensible default is `inwardTextLayout(edge)`; this table default is that function\'s value at `edge: "left"`.',
+    // EXPLICIT "simple" — Zach, 2026-09-14, naming Port's Simple tab
+    // directly: "Label Slot Location — Where is the slot located (Bot,
+    // Top, Right, Right Offset, Left, Left Offset)". Without this it fell
+    // into Advanced by shape-inference alone (an ungoverned closed-value
+    // field, `fieldTiers.ts` rule 4) — exactly the gap that made moving it
+    // require the Advanced tab instead of the one he actually wanted.
+    tier: "simple",
   },
   {
     id: "textSize",

@@ -136,6 +136,21 @@ function FigmaDensePanel({
   const visible = searching ? matched : matched.filter((f) => TIER_RANK[tierOf(f)] <= TIER_RANK[tier]);
   const hidden = matched.filter((f) => !visible.includes(f));
 
+  // A selector's OWN PresetPicker banner used to render unconditionally,
+  // for every tier — so demoting Port's `size` field out of Simple
+  // (tier: "advanced", Zach 2026-09-14: "No need for size control here")
+  // still left its banner pinned above the Simple field list, a full
+  // Small/Medium/Large/Extra Large picker undoing the demotion the tier
+  // system exists to express. Gate it the same way `visible` gates the
+  // field rows below — a selector with no FieldSpec of its own (should
+  // not happen; every selector is a real field) falls back to always
+  // shown rather than silently vanishing.
+  const visibleSelectors = selectors.filter((selector) => {
+    const field = fields.find((f) => f.id === selector);
+    if (!field) return true;
+    return searching ? matchesFilter(field, filter) : TIER_RANK[tierOf(field)] <= TIER_RANK[tier];
+  });
+
   // Hiding a field the user has actually SET is worse than the verbosity the
   // tier exists to cut, so the panel says how many and offers one tap out.
   const hiddenButSet = hidden.filter((f) => subjects.some((s) => s.props[f.id] !== undefined));
@@ -203,7 +218,7 @@ function FigmaDensePanel({
         </button>
       )}
 
-      {selectors.map((selector) => (
+      {visibleSelectors.map((selector) => (
         <PresetPicker
           key={selector}
           selector={selector}
