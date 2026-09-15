@@ -49,6 +49,12 @@ export interface EditBundle {
  * `isSecondPressToEdit` so the two wrappers can never drift apart.
  * `nested` defaults to `false` — only this function's own recursive calls
  * (via `wrap`, below) mark a child as nested.
+ *
+ * `showEmptySlots` is the page's "fill empty slots with placeholders"
+ * toggle (undefined lets a caller that has no such toggle — a members-list
+ * preview thumbnail — fall back to `RenderContext.showEmptySlots`'s own
+ * always-on default). It rides every recursive call so a Flex nested inside
+ * a member obeys the same page-level choice as a top-level slot.
  */
 export function renderInstance(
   entries: ComponentEntry[],
@@ -58,6 +64,7 @@ export function renderInstance(
   onSelect: (id: string, additive: boolean) => void,
   edit?: EditBundle,
   nested = false,
+  showEmptySlots?: boolean,
 ): ReactNode {
   const entry = entries.find((e) => e.name === inst.type);
   if (!entry) return null;
@@ -120,12 +127,13 @@ export function renderInstance(
           edit?.onRequestEdit(child.id);
         }}
       >
-        {renderInstance(entries, byId, child, selectedIds, onSelect, edit, true)}
+        {renderInstance(entries, byId, child, selectedIds, onSelect, edit, true, showEmptySlots)}
       </span>
     );
   };
   const kids = memberIds.map((id) => byId.get(id)).filter((c): c is Instance => !!c);
   const ctx: RenderContext = { nested };
+  if (showEmptySlots !== undefined) ctx.showEmptySlots = showEmptySlots;
   if (inst.slot) {
     ctx.slotLabel = inst.slot.label;
     ctx.slotId = inst.slot.id;

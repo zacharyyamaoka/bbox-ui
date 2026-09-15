@@ -70,6 +70,14 @@ export interface ViewportProps {
   onRenderChange: (render: Render) => void;
   onViewChange: (view: View) => void;
   /**
+   * "Fill empty slots with placeholders" — off by default so an empty Flex
+   * slot renders exactly what ships (nothing), on so it paints its ghost
+   * label again while you're authoring and need to find the hole. The page
+   * owns it so it persists like `render`/`view`.
+   */
+  showEmptySlots: boolean;
+  onShowEmptySlotsChange: (showEmptySlots: boolean) => void;
+  /**
    * In-place text editing (docs/TEXTBOX-EDITING-SPEC.md §3). The page owns
    * all four: which instance is editing, the request to start (a no-op for
    * an entry without `inlineEdit`), the request to stop, and the one-prop

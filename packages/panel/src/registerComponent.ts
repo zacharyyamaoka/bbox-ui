@@ -38,6 +38,17 @@ export interface RenderContext {
    */
   nested?: boolean;
   /**
+   * Whether an empty Flex slot should paint its ghost label at all. Absent
+   * reads as `true` (a members-list preview thumbnail or a Storybook story
+   * that never sets this keeps the old always-on look). The `/create` page
+   * is the one caller that sets this explicitly, from a page-level toggle —
+   * Zach, 2026-09-14: an empty slot should default to rendering truly empty
+   * (0×0, exactly what ships) rather than a placeholder that overstates
+   * what's there, with "fill empty slots" as something you opt INTO while
+   * authoring, not the permanent default.
+   */
+  showEmptySlots?: boolean;
+  /**
    * Present for an entry that declares `inlineEdit`. The host (apps/docs's
    * workbench.tsx) owns `editingId` and the cancel snapshot; this bundle is
    * this ONE instance's slice of it, already bound to its id and its

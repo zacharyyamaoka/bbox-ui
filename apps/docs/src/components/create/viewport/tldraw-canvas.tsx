@@ -47,6 +47,7 @@ const BenchContext = createContext<{
    *  `onSelectInstance`/the engine's own echo alone. */
   onSelectionChange: (ids: string[]) => void;
   edit: EditBundle;
+  showEmptySlots: boolean;
 }>({
   entries: [],
   instances: [],
@@ -55,6 +56,7 @@ const BenchContext = createContext<{
   onSelectInstance: () => {},
   onSelectionChange: () => {},
   edit: { editingId: null, editSnapshot: null, onRequestEdit: () => {}, onEditEnd: () => {}, onInstancePropChange: () => {} },
+  showEmptySlots: false,
 });
 
 interface BenchShapeProps {
@@ -114,7 +116,7 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
     return { id: shape.id, type: shape.type };
   }
   override component(shape: BenchShape) {
-    const { entries, byId, selectedIds, onSelectInstance, onSelectionChange, edit } = useContext(BenchContext);
+    const { entries, byId, selectedIds, onSelectInstance, onSelectionChange, edit, showEmptySlots } = useContext(BenchContext);
     const inst = byId.get(shape.props.instanceId);
     const editor = this.editor;
     const contentRef = useRef<HTMLDivElement>(null);
@@ -246,7 +248,7 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
         }}
       >
         <div ref={contentRef} style={{ display: "inline-flex" }}>
-          {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit) : null}
+          {inst ? renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, showEmptySlots) : null}
         </div>
       </HTMLContainer>
     );
@@ -340,6 +342,7 @@ interface Props {
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
   edit: EditBundle;
+  showEmptySlots: boolean;
 }
 
 /**
@@ -369,8 +372,9 @@ export function TldrawCanvas(p: Props) {
       onSelectInstance: p.onSelectInstance,
       onSelectionChange: p.onSelectionChange,
       edit: p.edit,
+      showEmptySlots: p.showEmptySlots,
     }),
-    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.onSelectionChange, p.edit],
+    [p.entries, p.instances, byId, p.selectedIds, p.onSelectInstance, p.onSelectionChange, p.edit, p.showEmptySlots],
   );
 
   // page → editor
