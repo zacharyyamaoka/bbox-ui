@@ -39,7 +39,9 @@ export const GLYPH_FIELDS: FieldSpec[] = [
   },
   {
     id: "children",
-    label: "Content",
+    // "Content" named the slot's shape rather than what goes in it; the
+    // hint below already had to say "the icon slot" to make it legible.
+    label: "Icon",
     kind: "text",
     // NOTE (deviation, same shape as Port.fields.ts's own `children`
     // discussion — docs/T0-SPEC.md §3): `Glyph` has no real destructured

@@ -19,6 +19,7 @@
  * default anchor rectangle) is still IMPORTED from `./layout` — it is
  * Block's own fact, not Port-shaped, and stays alive there untouched.
  */
+import type { CSSProperties } from "react";
 import { SIMPLE_BLOCK } from "./layout";
 
 /* ------------------------------------------------------------------ */
@@ -381,8 +382,14 @@ export function portDotPlacement(
 /**
  * CSS offsets for a label absolutely positioned inside the dot's box.
  * Plain data — spreads into any host's style object.
+ *
+ * WHY it extends CSSProperties rather than standing alone: a newer @types/react
+ * gave `CSSProperties` a `--${string}` index signature (CSS custom properties),
+ * and TS refuses to assign a same-shaped but nominally distinct interface into
+ * an indexed type — every host that passed this straight into a `style` prop
+ * failed to typecheck with no change of its own.
  */
-export interface PortLabelPlacement {
+export interface PortLabelPlacement extends CSSProperties {
   left?: string;
   right?: string;
   top?: string;

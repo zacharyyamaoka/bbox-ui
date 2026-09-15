@@ -21,6 +21,31 @@ function ListControl(p: MembersControlProps) {
     if (!e.over || e.active.id === e.over.id) return;
     p.onMove(ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id)));
   };
+  // WHY a control may be asked to render WITHOUT its own header: the
+  // sections panel draws exactly one `FoldRow` per member list and hands
+  // this control the list's verbs to put on it. Left to draw its own header
+  // as well, the list ends up with two — the bug Zach screenshotted on
+  // 2026-09-12, where expanding "Right · 1 member ▼" revealed a second
+  // "▼ RIGHT ① ⚙ +" underneath it. "When you expand it though, no need to
+  // repeat the header again." The default stays `"header"` so the pre-
+  // sections inspector on `main` is untouched and the before/after is real.
+  const headless = p.chrome === "none";
+  if (headless) {
+    if (p.members.length === 0) return null;
+    return (
+      <section data-slot="members-control" data-members-control="list" data-chrome="none" style={headlessSectionStyle}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            <ul data-slot="members-list" style={listStyle}>
+              {p.members.map((m) => (
+                <Row key={m.id} member={m} onSelect={() => p.onSelect(m.id)} onRemove={() => p.onRemove(m.id)} />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
+      </section>
+    );
+  }
   return (
     <section data-slot="members-control" data-members-control="list" style={sectionStyle}>
       <SectionHeader
@@ -92,6 +117,10 @@ export const LIST: MembersControl = {
 };
 
 const listStyle: CSSProperties = { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 1 };
+// No top border and no padding: the `FoldRow` above already separates this
+// list from what precedes it, and a second rule 6px under the first is the
+// visual form of the same duplication the headless mode exists to delete.
+const headlessSectionStyle: CSSProperties = { fontSize: 12, color: "var(--bbox-panel-fg, #222)" };
 const rowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 2, minHeight: 24, borderRadius: 4, background: "var(--bbox-panel-surface, #fff)" };
 const gripStyle: CSSProperties = { ...iconButtonStyle, cursor: "grab", letterSpacing: -2, fontSize: 10, touchAction: "none" };
 const bodyStyle: CSSProperties = { flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, height: 24, padding: "0 6px", border: "1px solid var(--bbox-panel-border, #d6d6de)", borderRadius: 4, background: "transparent", color: "var(--bbox-panel-fg, #222)", cursor: "pointer", textAlign: "left", fontSize: 12 };

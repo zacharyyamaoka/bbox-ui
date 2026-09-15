@@ -4,7 +4,7 @@ import { LIST } from "./List";
 export type { MembersControl, MembersControlProps, MembersSpec, MemberSummary } from "./contract";
 export { MEMBERS_CONTRACT } from "./contract";
 export * from "./model";
-export { TYPE_GLYPH, typeGlyph } from "./shared";
+export { TYPE_GLYPH, TypedAddMenu, typeGlyph } from "./shared";
 
 /**
  * ONE control. Five were babbled on 2026-09-11 (List, Chips, Outline,

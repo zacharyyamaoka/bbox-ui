@@ -1,12 +1,11 @@
 "use client";
 
-import type { ComponentEntry, Instance, InstanceNode, PanelVariant } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance, InstanceNode } from "@bbox-ui/panel";
 import { MIXED_BENCH, shouldSuppressNativeFocusShift } from "@bbox-ui/panel";
 import type { NavigatorVariant } from "./navigator";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -34,14 +33,18 @@ interface BenchSidebarProps {
   onAdd: (type: string) => void;
   onRemoveLast: () => void;
   onRandomize: () => void;
-  variants: PanelVariant[];
-  variantId: string;
-  onVariantChange: (id: string) => void;
   entryFor: (name: string) => ComponentEntry;
 }
 
 /**
- * The left column: which component, which instances, which panel design.
+ * The left column: which component, and which instances.
+ *
+ * WHY there is no "Panel design" chooser in the footer any more: it picked
+ * among the six `PANEL_VARIANTS`, and Zach decided that on 2026-09-11 ("It's
+ * decided. We're going forward with figma dense."). The six are still built
+ * and still comparable side by side in `demos/inspector`, which is the demo
+ * that exists to keep that decision reviewable; this page just stopped being
+ * a second place to re-open it.
  *
  * WHY `collapsible="none"`: the stock sidebar is position:fixed over the
  * whole viewport, which would run underneath the site header. This mode is
@@ -172,23 +175,6 @@ export function BenchSidebar(p: BenchSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Panel design
-          <select
-            data-slot="variant-picker"
-            value={p.variantId}
-            onChange={(e) => p.onVariantChange(e.target.value)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
-          >
-            {p.variants.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </SidebarFooter>
     </Sidebar>
   );
 }

@@ -228,7 +228,11 @@ export const PORT_FIELDS: FieldSpec[] = [
   },
   {
     id: "children",
-    label: "Label",
+    // WHY not bare "Label", which it was: a Port's panel already carries a
+    // "Name", and a row called Label directly under a row called Name reads
+    // as the same idea twice. This one is not the name — it REPLACES the
+    // whole name/type/default rendering, which is what "Custom" says.
+    label: "Custom Label",
     kind: "text",
     // The label slot's ENTIRE content now — one line ("a port is one line
     // of code", `get_aruco: ArucoSrv`) — REPLACES the removed `name`/

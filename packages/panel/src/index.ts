@@ -50,6 +50,41 @@ export {
 export { priorSelectionForRootPress, nextSelectionForRootPress, type RootPress } from "./bareAreaSelect";
 export { MEMBER_SPECS, portEdgesArrangement } from "./bench";
 export {
+  DENSITY,
+  SECTION_PANEL_CONTRACT,
+  STANDARD_CONTROLS,
+  type BoundField,
+  type Density,
+  type DensityRung,
+  type FoldState,
+  type InspectorSection,
+  type SectionAction,
+  type SectionList,
+  type SectionPanelProps,
+  type SectionRow,
+  type StandardControl,
+} from "./sections/contract";
+export { StandardPair, StandardRow, controlKindFor, LABEL_WIDTH, type RowGeometry } from "./sections/StandardRow";
+export { FoldRow, HeaderActions, sectionDividerStyle } from "./sections/FoldRow";
+export {
+  ListBlock,
+  PanelShell,
+  PanelTitle,
+  SectionBlock,
+  SectionBody,
+  SectionRows,
+  MEMBERS_LABEL,
+  SHIPPED_HEADER_POLICY,
+  countOf,
+  derivedSummary,
+  isEffectivelyEmpty,
+  listSummary,
+  sectionTagCount,
+  slotTitle,
+  type HeaderPolicy,
+} from "./sections/shared";
+export { SectionPanel } from "./sections/SectionPanel";
+export {
   MEMBERS_CONTROLS,
   MEMBERS_CONTRACT,
   findMembersControl,
@@ -72,6 +107,7 @@ export {
   effectiveProps,
   wouldCycle,
   typeGlyph,
+  TypedAddMenu,
   TYPE_GLYPH,
   blockPorts,
   activeArrangement,

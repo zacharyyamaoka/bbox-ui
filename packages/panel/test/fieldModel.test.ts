@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FieldSpec, InheritedValue, PresetSpec } from "@bbox-ui/schema";
-import { readFieldRow, type Subject } from "../src/fieldModel";
+import { readFieldRow, resetTitleFor, type Subject } from "../src/fieldModel";
 
 /**
  * These tests exist because the inspector demo had NO test script at all, so
@@ -173,5 +173,77 @@ describe("readFieldRow — the store is what the control edits", () => {
     expect(row.trace).toBeNull();
     expect(row.isMixed).toBe(false);
     expect(row.hasOwnOverride).toBe(false);
+  });
+});
+
+/**
+ * The ↺ reset, and the bug Zach found on 2026-09-12: "when you edit a value
+ * away from default you get a little reset icon that appears to put it back.
+ * is that still implemented?"
+ *
+ * It was implemented as `governed || trace.candidates[1]?.value !== undefined`
+ * — in three separate files — and `candidates[1]` is the INHERITED layer, not
+ * "the next layer down". So the button appeared for preset-governed and
+ * cascading rows and for nothing else, while `resolve.ts` guarantees that
+ * "`default` always has a value — every FieldSpec declares one". An
+ * overridden Port Diameter had the ↺ because a preset governs it; an
+ * overridden Flex Justify did not, because nothing does.
+ */
+describe("readFieldRow — the ↺ reset", () => {
+  it("offers a reset on an ordinary row whose only fallback is its own default", () => {
+    // THE regression. `lineColor` here is governed by no ACTIVE preset (no
+    // `state` on the subject), cascades from nothing, and is overridden.
+    const row = readFieldRow(COLOR, [subject("a", { lineColor: "danger" })], PRESETS);
+    expect(row.hasOwnOverride).toBe(true);
+    expect(row.canReset).toBe(true);
+    expect(row.resetsTo).toBe("default");
+  });
+
+  it("names the preset when a preset is what the clear would land on", () => {
+    const row = readFieldRow(COLOR, [subject("a", { state: "wired", lineColor: "danger" })], PRESETS);
+    expect(row.canReset).toBe(true);
+    expect(row.resetsTo).toBe("preset");
+  });
+
+  it("names the inherited layer when a cascade sits under the override", () => {
+    const inherited: Record<string, InheritedValue> = { size: { value: "xl", from: "h1", fromLabel: "Header" } };
+    const row = readFieldRow(SIZE, [{ id: "a", props: { size: "sm" }, inherited }], []);
+    expect(row.canReset).toBe(true);
+    expect(row.resetsTo).toBe("inherited");
+  });
+
+  it("offers no reset when there is no override to clear", () => {
+    const row = readFieldRow(COLOR, [subject("a", {})], PRESETS);
+    expect(row.canReset).toBe(false);
+    expect(row.resetsTo).toBeNull();
+  });
+
+  it("still offers a reset across a MIXED selection, where it matters most", () => {
+    // The agreed `trace` is null when subjects disagree, so reading the
+    // fallback off it — as the old predicate did — took the button away from
+    // exactly the rows a person most wants to reset. It is read per subject.
+    const row = readFieldRow(COLOR, [subject("a", { lineColor: "danger" }), subject("b", { lineColor: "primary" })], PRESETS);
+    expect(row.isMixed).toBe(true);
+    expect(row.trace).toBeNull();
+    expect(row.canReset).toBe(true);
+    expect(row.resetsTo).toBe("default");
+  });
+
+  it("says nothing about a layer when the selection disagrees about which one", () => {
+    // One subject falls back to a preset, the other to the bare default.
+    const row = readFieldRow(
+      COLOR,
+      [subject("a", { state: "wired", lineColor: "danger" }), subject("b", { lineColor: "danger" })],
+      PRESETS,
+    );
+    expect(row.canReset).toBe(true);
+    expect(row.resetsTo).toBeNull();
+    expect(resetTitleFor(row.resetsTo)).toBe("Reset to the underlying value");
+  });
+
+  it("gives the button a sentence that names where the value is going", () => {
+    expect(resetTitleFor("default")).toBe("Reset to the default");
+    expect(resetTitleFor("preset")).toBe("Reset to the preset's value");
+    expect(resetTitleFor("inherited")).toBe("Reset to the value inherited from the parent");
   });
 });
