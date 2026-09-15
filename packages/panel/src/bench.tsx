@@ -147,9 +147,29 @@ export const BLOCK_SLOTS: SlotSpec[] = [
  * neither wraps the dot's own geometry — the fills carry the layout, the
  * members carry the content.
  */
-/** Fields a supplied slot makes inert, so the bench does not offer them.
- *  See the LabeledPort registration's own WHY. */
-const SLOT_SUPERSEDED_FIELD_IDS = new Set(["children", "placeholder", "producers"]);
+/**
+ * Fields a supplied slot makes inert, so the bench does not offer them.
+ * See the LabeledPort registration's own WHY.
+ *
+ * `disabled` and `textSize` joined the list 2026-09-15 (adversarial
+ * judge): both reach ONLY the built-in `PortLabel`, which a supplied
+ * `labelSlot` bypasses entirely — so in this bench they were two more
+ * toggles that moved nothing. The slot's own CodeField member carries its
+ * own `disabled`, and its font comes from the fill it sits in.
+ *
+ * `direction` deliberately STAYS. Its label-alignment effect is bypassed
+ * too, but it also writes `data-direction` on the root (port.tsx) — a
+ * real, persisted output a host reads to tell an input from an output —
+ * so it is not a control that does nothing, only one whose visible effect
+ * moved into the slot.
+ */
+const SLOT_SUPERSEDED_FIELD_IDS = new Set([
+  "children",
+  "placeholder",
+  "producers",
+  "disabled",
+  "textSize",
+]);
 
 export const PORT_SLOTS: SlotSpec[] = [
   {
@@ -847,17 +867,35 @@ export const REGISTRY: ComponentEntry[] = [
  * first." Isolation is the default; disagreement is one click away.
  */
 export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
+  // The bare GEOMETRY primitive: state and diameter are the whole story.
+  //
+  // These used to carry `children` and a `textLayout` — composite props
+  // the primitive does not declare, so they were seeded onto instances
+  // that could never read them and were emitted into the Code view as
+  // props the component does not take. One of them, `textLayout: "below"`,
+  // was not even a member of `PortTextLayout` — invalid before the split
+  // and doubly wrong after it. (Adversarial judge, 2026-09-15.)
   Port: [
-    // WHY no `textLayout` on the first three: a Port added into a Block
-    // lands on one of its lanes, and the lane cascades the inward layout
-    // (label below a top-edge dot, right of a left-edge dot). An own value
-    // wins over that cascade — the same trap the size rung hit, where a
-    // seeded `size` beat the header's — so a seed carries only what the
-    // bench must show. A bare Port's default is "right" regardless.
+    { state: "empty", diameter: "md" },
+    { state: "wired", diameter: "md" },
+    { state: "received", diameter: "lg" },
+    { state: "valueSet", diameter: "sm" },
+  ],
+  // The COMPOSITE keeps the label-bearing seeds.
+  //
+  // WHY no `textLayout` on the first three: a port added into a Block
+  // lands on one of its lanes, and the lane cascades the inward layout
+  // (label below a top-edge dot, right of a left-edge dot). An own value
+  // wins over that cascade — the same trap the size rung hit, where a
+  // seeded `size` beat the header's — so a seed carries only what the
+  // bench must show. A bare default is "right" regardless.
+  LabeledPort: [
     { state: "empty", diameter: "md", children: "Port A" },
     { state: "wired", diameter: "md", children: "Port B" },
     { state: "received", diameter: "lg", children: "Port C" },
-    { state: "valueSet", diameter: "sm", textLayout: "below", children: "Port D" },
+    // `bot`, not the old `"below"` — that string was never a member of
+    // `PortTextLayout` and silently fell through every switch.
+    { state: "valueSet", diameter: "sm", textLayout: "bot", children: "Port D" },
   ],
   Pill: [
     { state: "wired", children: "Wired" },
