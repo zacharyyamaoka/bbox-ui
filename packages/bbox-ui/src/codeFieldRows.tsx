@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { caretOffsetFromPoint } from "./caretGeometry";

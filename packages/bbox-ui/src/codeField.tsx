@@ -1,3 +1,5 @@
+"use client";
+
 import { acceptCompletion, completionStatus } from "@codemirror/autocomplete";
 import {
   copyLineDown,
