@@ -46,6 +46,31 @@ const DIAMETER_FIELD = PORT_FIELDS.find((f) => f.id === "diameter")!;
 const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
 
 /**
+ * Fills in `textLayout`/`secondarySlotLayout` with their real AUTO defaults
+ * (`inwardTextLayout(edge)`, `defaultSecondarySlotLayout`) when a subject
+ * omits them, so the inspector's own trace resolves against what actually
+ * PAINTS rather than each field's own static `defaultValue` (port.fields.ts:
+ * "leftOffset", correct only when textLayout happens to be "right"). Same
+ * shape as `pill.tsx`'s own `pillResolutionSubject` — imported by
+ * `packages/panel/src/bench.tsx`'s Port registration exactly the way
+ * Pill's already is, not reimplemented. Fixes the Secondary Slot dropdown
+ * showing a stale "Left Offset" no matter what Label Slot Location is
+ * actually set to — the real rendered badge position was always correct
+ * (`PortDot`'s own `secondarySlotLayout ?? defaultSecondarySlotLayout(...)`
+ * fallback), only the panel's DISPLAY of the unset field's value was wrong.
+ */
+export function portResolutionSubject(props: Record<string, unknown>): Record<string, unknown> {
+  const edge = (props.edge as BlockSide | undefined) ?? "left";
+  const textLayout = (props.textLayout as PortTextLayout | undefined) ?? inwardTextLayout(edge);
+  return {
+    ...props,
+    textLayout,
+    secondarySlotLayout:
+      (props.secondarySlotLayout as SecondarySlotLayout | undefined) ?? defaultSecondarySlotLayout(textLayout),
+  };
+}
+
+/**
  * packages/bbox-ui/src/port.tsx — the rebuilt Port (T1 Lane P), now with
  * TWO independently-positioned slots (the 2026-09-12 two-slot proposal).
  *

@@ -35,6 +35,7 @@ import {
   PILL_FIELDS,
   PILL_PRESETS,
   Port,
+  portResolutionSubject,
   PORT_FIELDS,
   PORT_PRESETS,
   PortEdge,
@@ -578,6 +579,12 @@ export const REGISTRY: ComponentEntry[] = [
     name: "Port",
     fields: PORT_FIELDS,
     presets: PORT_PRESETS,
+    // Port's `textLayout`/`secondarySlotLayout` both have a real AUTO
+    // default computed from OTHER fields (`inwardTextLayout(edge)`,
+    // `defaultSecondarySlotLayout`), not a fixed `defaultValue` — same
+    // shape as Pill's tone-driven override layer above, imported rather
+    // than reimplemented.
+    toSubject: portResolutionSubject,
     render: (props) => <Port {...(props as Record<string, never>)} />,
   }),
   registerComponent({
