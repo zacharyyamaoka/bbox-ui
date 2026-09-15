@@ -28,7 +28,7 @@ export function DomPreview({
   onSelectionChange,
   onSelectInstance,
   edit,
-  showEmptySlots,
+  highlightSlots,
 }: {
   entries: ComponentEntry[];
   instances: Instance[];
@@ -37,7 +37,7 @@ export function DomPreview({
   onSelectionChange: (ids: string[]) => void;
   onSelectInstance: (id: string, additive: boolean) => void;
   edit: EditBundle;
-  showEmptySlots: boolean;
+  highlightSlots: boolean;
 }) {
   const byId = useMemo(() => new Map(instances.map((i) => [i.id, i])), [instances]);
   return (
@@ -125,7 +125,7 @@ export function DomPreview({
             className="cursor-default p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
             title={`${inst.type} · ${inst.id}`}
           >
-            {renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, showEmptySlots)}
+            {renderInstance(entries, byId, inst, selectedIds, onSelectInstance, edit, false, highlightSlots)}
           </div>
         );
       })}

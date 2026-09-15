@@ -29,7 +29,7 @@ import { renderInstance, type EditBundle } from "../render-instance";
 // see `noPanClassName` below, deliberately left at React Flow's own default.
 const BBOX_INTERACTIVE = "bbox-interactive";
 
-type BenchNodeData = { entries: ComponentEntry[]; byId: Map<string, Instance>; instance: Instance; selectedIds: string[]; onSelectInstance: (id: string, additive: boolean) => void; edit: EditBundle; showEmptySlots: boolean };
+type BenchNodeData = { entries: ComponentEntry[]; byId: Map<string, Instance>; instance: Instance; selectedIds: string[]; onSelectInstance: (id: string, additive: boolean) => void; edit: EditBundle; highlightSlots: boolean };
 type BenchNode = Node<BenchNodeData, "bench">;
 
 /** The node body is the component itself, nothing else: the point of the
@@ -46,7 +46,7 @@ function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
       // bbox-accent (this app's real blue) instead of the neutral ring token.
       className="p-2 outline-offset-4 data-[selected=true]:outline data-[selected=true]:outline-2 data-[selected=true]:outline-[color:var(--bbox-accent)]"
     >
-      {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance, data.edit, false, data.showEmptySlots)}
+      {renderInstance(data.entries, data.byId, data.instance, data.selectedIds, data.onSelectInstance, data.edit, false, data.highlightSlots)}
     </div>
   );
 }
@@ -63,7 +63,7 @@ interface Props {
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
   edit: EditBundle;
-  showEmptySlots: boolean;
+  highlightSlots: boolean;
 }
 
 /**
@@ -111,14 +111,14 @@ function Canvas(p: Props) {
         type: "bench",
         position: p.positions[instance.id] ?? { x: 0, y: 0 },
         selected: p.selectedIds.includes(instance.id),
-        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit, showEmptySlots: p.showEmptySlots },
+        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit, highlightSlots: p.highlightSlots },
         draggable: true,
         measured: measuredRef.current[instance.id],
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- measuredRef is
     // a ref (stable identity); `forceMeasuredTick` is read only to re-run
     // this memo the one time a node's first-ever measurement arrives.
-    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, p.edit, p.showEmptySlots, forceMeasuredTick],
+    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, p.edit, p.highlightSlots, forceMeasuredTick],
   );
 
   // WHY selection is read from `select` changes and NOT from

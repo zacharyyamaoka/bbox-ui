@@ -38,7 +38,7 @@ import { useSelectionHistory } from "./selection-history";
 
 const RENDER_KEY = "bbox-ui.create.render";
 const VIEW_KEY = "bbox-ui.create.view";
-const SHOW_EMPTY_SLOTS_KEY = "bbox-ui.create.showEmptySlots";
+const HIGHLIGHT_SLOTS_KEY = "bbox-ui.create.highlightSlots";
 const INSPECTOR_WIDTH_KEY = "bbox-ui.create.inspectorWidth";
 // The single-strip key from before the two-axis split; read once to migrate.
 const LEGACY_TAB_KEY = "bbox-ui.create.viewportTab";
@@ -79,11 +79,12 @@ export function Workbench() {
 
   const [render, setRender] = useState<Render>("dom");
   const [view, setView] = useState<View>("preview");
-  // Off by default (Zach, 2026-09-14): an empty slot renders exactly what
-  // ships — nothing — and this opts you INTO seeing where the holes are
-  // while authoring, rather than the old always-on placeholder overstating
-  // what's actually there.
-  const [showEmptySlots, setShowEmptySlots] = useState(false);
+  // Off by default (Zach, 2026-09-14): a component renders exactly what
+  // ships. On overlays every slot — filled or empty — in red, box-model
+  // style, so you can see a component's anatomy at a glance while
+  // authoring (Zach, 2026-09-15: yesterday's version only tinted EMPTY
+  // slots, so a filled one had no visible seam at all).
+  const [highlightSlots, setHighlightSlots] = useState(false);
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const uid = useRef(INITIAL_UID);
 
@@ -103,8 +104,8 @@ export function Workbench() {
     if (r === "dom" || r === "reactflow" || r === "tldraw") setRender(r);
     const vw = readStored(VIEW_KEY);
     if (vw === "preview" || vw === "code") setView(vw);
-    const es = readStored(SHOW_EMPTY_SLOTS_KEY);
-    if (es === "true" || es === "false") setShowEmptySlots(es === "true");
+    const es = readStored(HIGHLIGHT_SLOTS_KEY);
+    if (es === "true" || es === "false") setHighlightSlots(es === "true");
     const w = readStored(INSPECTOR_WIDTH_KEY);
     if (w) {
       const parsed = Number(w);
@@ -125,12 +126,12 @@ export function Workbench() {
       window.localStorage.setItem(RENDER_KEY, render);
       window.localStorage.setItem(VIEW_KEY, view);
       window.localStorage.setItem(INSPECTOR_WIDTH_KEY, String(inspectorWidth));
-      window.localStorage.setItem(SHOW_EMPTY_SLOTS_KEY, String(showEmptySlots));
+      window.localStorage.setItem(HIGHLIGHT_SLOTS_KEY, String(highlightSlots));
       window.localStorage.removeItem(LEGACY_TAB_KEY);
     } catch {
       /* private window: the choice still works, it just forgets */
     }
-  }, [restored, render, view, inspectorWidth, showEmptySlots]);
+  }, [restored, render, view, inspectorWidth, highlightSlots]);
 
   const [benches, setBenches] = useState<Record<string, Instance[]>>(() =>
     Object.fromEntries(
@@ -468,8 +469,8 @@ export function Workbench() {
             view={view}
             onRenderChange={setRender}
             onViewChange={setView}
-            showEmptySlots={showEmptySlots}
-            onShowEmptySlotsChange={setShowEmptySlots}
+            highlightSlots={highlightSlots}
+            onHighlightSlotsChange={setHighlightSlots}
             editingId={editingId}
             onRequestEdit={requestEdit}
             onEditEnd={endEditing}

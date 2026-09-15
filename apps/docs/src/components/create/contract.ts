@@ -70,13 +70,15 @@ export interface ViewportProps {
   onRenderChange: (render: Render) => void;
   onViewChange: (view: View) => void;
   /**
-   * "Fill empty slots with placeholders" — off by default so an empty Flex
-   * slot renders exactly what ships (nothing), on so it paints its ghost
-   * label again while you're authoring and need to find the hole. The page
-   * owns it so it persists like `render`/`view`.
+   * "Highlight slots" — off by default so a component renders exactly what
+   * ships. On overlays every slot, filled or empty, with a red box-model-
+   * style rectangle so a component's anatomy is visible at a glance; an
+   * empty slot also gets its name as a label (Zach, 2026-09-15: "if the
+   * slot is filled then just the overlay"). The page owns it so it
+   * persists like `render`/`view`.
    */
-  showEmptySlots: boolean;
-  onShowEmptySlotsChange: (showEmptySlots: boolean) => void;
+  highlightSlots: boolean;
+  onHighlightSlotsChange: (highlightSlots: boolean) => void;
   /**
    * In-place text editing (docs/TEXTBOX-EDITING-SPEC.md §3). The page owns
    * all four: which instance is editing, the request to start (a no-op for

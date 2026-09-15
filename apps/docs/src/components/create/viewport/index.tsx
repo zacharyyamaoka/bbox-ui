@@ -59,13 +59,13 @@ export function Viewport(p: ViewportProps) {
         <div className="flex-1" />
         <button
           type="button"
-          data-slot="show-empty-slots-toggle"
-          aria-pressed={p.showEmptySlots}
-          onClick={() => p.onShowEmptySlotsChange(!p.showEmptySlots)}
+          data-slot="highlight-slots-toggle"
+          aria-pressed={p.highlightSlots}
+          onClick={() => p.onHighlightSlotsChange(!p.highlightSlots)}
           className="mr-3 rounded-md border border-transparent px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground aria-pressed:border-border aria-pressed:bg-accent aria-pressed:text-foreground"
-          title="An empty slot renders nothing by default. Turn this on to see a ghost label for where it is while you're building."
+          title="Off by default. Turn this on to overlay every slot — filled or empty — so you can see a component's anatomy at a glance."
         >
-          Fill empty slots
+          Highlight slots
         </button>
         <div role="tablist" aria-label="View" data-slot="view-tabs" className="flex items-center gap-1">
           {VIEWS.map((v) => (
@@ -125,7 +125,7 @@ function Body(p: ViewportProps) {
           onSelectionChange={p.onSelectionChange}
           onSelectInstance={p.onSelectInstance}
           edit={edit}
-          showEmptySlots={p.showEmptySlots}
+          highlightSlots={p.highlightSlots}
         />
       );
     case "reactflow":
@@ -140,7 +140,7 @@ function Body(p: ViewportProps) {
           onSelectionChange={p.onSelectionChange}
           onPositionsChange={p.onPositionsChange}
           edit={edit}
-          showEmptySlots={p.showEmptySlots}
+          highlightSlots={p.highlightSlots}
         />
       );
     case "tldraw":
@@ -155,7 +155,7 @@ function Body(p: ViewportProps) {
           onSelectionChange={p.onSelectionChange}
           onPositionsChange={p.onPositionsChange}
           edit={edit}
-          showEmptySlots={p.showEmptySlots}
+          highlightSlots={p.highlightSlots}
         />
       );
   }
