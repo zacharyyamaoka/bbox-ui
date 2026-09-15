@@ -105,6 +105,22 @@ export interface FieldSpec<TValue = FieldValue> {
    * only looks at the inherited bag at all when this is true.
    */
   cascades?: boolean;
+  /**
+   * Which inspector tier (Simple/Advanced/Expert, `@bbox-ui/panel`'s
+   * `fieldTiers.ts`) this field belongs to, EXPLICITLY curated by whoever
+   * authors the component's schema. Absent means Expert — Zach, 2026-09-14:
+   * "if nothing is added then you can assume its expert. Simple should only
+   * be like highly curated fields that we individually choose to promote."
+   * Reverses an earlier design (component-proposal era) that INFERRED a
+   * tier from a field's shape (a bare-name text field, a closed enum, a
+   * governed field) specifically so no component had to hand-list its own
+   * fields — that meant a field's prominence was an accident of its TYPE,
+   * not a deliberate product call, and Port's own two-slot work is what
+   * surfaced the gap: `textLayout` (exactly the control Zach wants front
+   * and centre) fell into Advanced by shape-inference alone, with no way
+   * to promote it short of changing what KIND of field it was.
+   */
+  tier?: "simple" | "advanced" | "expert";
 }
 
 /**
