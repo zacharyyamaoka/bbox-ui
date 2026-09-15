@@ -9,7 +9,7 @@ import {
   PORT_FIELDS,
   PORT_PRESETS,
   PortDot,
-  portLabelGap,
+  PORT_LABEL_GAP,
   portLabelPlacement,
   type AppearanceState,
   type BlockSide,
@@ -212,8 +212,10 @@ export const AllDiameters: Story = {
  * Every real label-slot `PortTextLayout` — six now (the two-slot
  * proposal, 2026-09-12, re-added `rightOffset`/`leftOffset` on top of the
  * `top`/`bot`/`right`/`left` PORT-SPEC.md §3f had narrowed this to). The
- * two "Offset" rows sit visibly further from the dot than their plain
- * counterpart (`PORT_LABEL_OFFSET_EXTRA_PX`, port.layout.ts).
+ * two "Offset" rows sit at the SAME distance out as their plain
+ * counterpart and are LIFTED above the dot's centre line instead, so a
+ * trace wire leaving the dot passes under them (`portLabelLift`,
+ * port.layout.ts).
  */
 export const AllTextLayouts: Story = {
   parameters: sweep("textLayout"),
@@ -358,7 +360,7 @@ const SECONDARY_SLOT_SIZE = { width: 16, height: 16 };
  * change here can't silently reintroduce the overlap the first pass of
  * this story actually had (caption text under the "bot"/"botOffset"
  * boxes, caught by measuring DOM rects, not by looking at a screenshot). */
-const LABEL_CAPTION_GAP = PORT_RING_OVERHANG_PX + portLabelGap("rightOffset") + LABEL_SLOT_SIZE.height + 8;
+const LABEL_CAPTION_GAP = PORT_RING_OVERHANG_PX + PORT_LABEL_GAP + LABEL_SLOT_SIZE.height + 8;
 const SECONDARY_CAPTION_GAP = PORT_RING_OVERHANG_PX + PORT_SECONDARY_SLOT_GAP_PX + SECONDARY_SLOT_SIZE.height + 8;
 
 /** One dot + one dotted label-slot box, positioned via the REAL

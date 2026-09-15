@@ -101,13 +101,6 @@ export const PORT_TEXT_LAYOUT_LABELS: Record<PortTextLayout, string> = {
 
 export const PORT_LABEL_GAP = 8;
 
-/** How much FURTHER OUT an "Offset" label position sits than its plain
- * counterpart — the diagram's own visual distinction between "Right" and
- * "Right Offset" (both flow the same direction; Offset just sits shifted
- * further from the dot). Applied on top of `PORT_LABEL_GAP` in
- * `portLabelGap` below, never in place of it. */
-export const PORT_LABEL_OFFSET_EXTRA_PX = 16;
-
 export function portFlexDirection(
   layout: PortTextLayout,
 ): "row" | "row-reverse" | "column" | "column-reverse" {
@@ -125,13 +118,39 @@ export function portFlexDirection(
   }
 }
 
-/** The plain and "Offset" members of the same flow direction share a flex
- * direction (`portFlexDirection` above) — only the CLEARANCE differs, by
- * `PORT_LABEL_OFFSET_EXTRA_PX`. */
-export function portLabelGap(layout: PortTextLayout): number {
-  return layout === "rightOffset" || layout === "leftOffset"
-    ? PORT_LABEL_GAP + PORT_LABEL_OFFSET_EXTRA_PX
-    : PORT_LABEL_GAP;
+/** True for the two label positions that LIFT the label clear of the
+ * trace wire (`portLabelLift` below). Kept as a named predicate rather
+ * than an inline `=== "rightOffset" || === "leftOffset"` because three
+ * separate geometry paths (the CSS placement, the measured box, and
+ * `Port`'s own flex row) each have to ask the same question and must
+ * never drift apart on the answer. */
+export function isOffsetTextLayout(layout: PortTextLayout): boolean {
+  return layout === "rightOffset" || layout === "leftOffset";
+}
+
+/**
+ * How far an "Offset" label's BOTTOM edge sits ABOVE the dot's vertical
+ * centre. Zero for every other layout.
+ *
+ * WHY the offset is a Y LIFT and not extra X distance (Zach, 2026-09-15,
+ * correcting the first implementation — "they should be offset up in the
+ * y direction right now you are offseting in the x direction"): a trace
+ * wire leaves the dot horizontally, along the dot's own centre line, so
+ * a plain `right` label has the wire running straight THROUGH it. Pushing
+ * the label further right does nothing about that — the wire just travels
+ * further before hitting it. Lifting the label above the centre line is
+ * what actually clears the wire, which is the entire reason the position
+ * exists. That is also why the lift is measured from the centre (where
+ * the wire is) rather than from the label's plain resting place.
+ *
+ * Scales with the dot: clearing the PAINTED ring (`PORT_RING_OVERHANG_PX`,
+ * box-shadow drawn outside the layout box) by `PORT_LABEL_GAP` keeps an
+ * `xl` port reading the same as an `sm` one, where a fixed lift would have
+ * the biggest dot's ring crowding the label.
+ */
+export function portLabelLift(layout: PortTextLayout, dot: PortDotBox): number {
+  if (!isOffsetTextLayout(layout)) return 0;
+  return dot.h / 2 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
 }
 
 export type PortDirection = "input" | "output";
@@ -421,14 +440,29 @@ export interface PortDotBox {
  */
 export function portLabelOut(layout: PortTextLayout, dot: PortDotBox): number {
   const alongAxis = layout === "top" || layout === "bot" ? dot.h : dot.w;
-  return alongAxis + PORT_RING_OVERHANG_PX + portLabelGap(layout);
+  return alongAxis + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
 }
 
 /**
  * Where the label sits relative to the dot: its near edge lands
- * `portLabelGap(layout)` px clear of the dot's outer edge — the same
- * geometry the core `Port`'s flex row produces, so a host-positioned label
- * and a flex-flowed one agree to the pixel.
+ * `PORT_LABEL_GAP` px clear of the dot's outer edge — the same geometry
+ * the core `Port`'s flex row produces, so a host-positioned label and a
+ * flex-flowed one agree to the pixel.
+ *
+ * An "Offset" layout keeps that same along-axis distance and instead
+ * LIFTS the label clear of the trace wire — see `portLabelLift`'s own WHY.
+ * It anchors by the label's BOTTOM edge (`bottom`, no `translateY`), where
+ * the plain layouts anchor by their centre, because "clear of the wire" is
+ * a statement about the bottom edge and must not drift with the label's
+ * own height.
+ *
+ * WHY `calc(50% + Npx)` and not a plain px `bottom`: 50% of the
+ * positioning context is the dot's own centre line REGARDLESS of
+ * `boxInsetPx` (the inset is symmetric), so the one expression is correct
+ * for React Flow's inset Handle and tldraw's flush wrapper alike. A px
+ * value measured from the container's bottom edge would need the inset
+ * subtracted and would silently be wrong for whichever host was not the
+ * one it was written against.
  *
  * `boxInsetPx` is how far the positioning context is inset from the dot's
  * border box: React Flow's `Handle` IS the bordered dot, so its padding box
@@ -441,13 +475,16 @@ export function portLabelPlacement(
   boxInsetPx: number = 0,
 ): PortLabelPlacement {
   const out = `${portLabelOut(layout, dot) - boxInsetPx}px`;
+  const lifted = `calc(50% + ${portLabelLift(layout, dot)}px)`;
   switch (layout) {
     case "right":
-    case "rightOffset":
       return { left: out, top: "50%", transform: "translateY(-50%)" };
+    case "rightOffset":
+      return { left: out, bottom: lifted, transform: "none" };
     case "left":
-    case "leftOffset":
       return { right: out, top: "50%", transform: "translateY(-50%)" };
+    case "leftOffset":
+      return { right: out, bottom: lifted, transform: "none" };
     case "top":
       return { bottom: out, left: "50%", transform: "translateX(-50%)" };
     case "bot":

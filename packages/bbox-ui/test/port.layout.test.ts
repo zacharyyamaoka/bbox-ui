@@ -5,16 +5,16 @@ import {
   PORT_DIAMETERS,
   PORT_LABEL_GAP,
   PORT_RING_OVERHANG_PX,
-  PORT_LABEL_OFFSET_EXTRA_PX,
   PORT_SECONDARY_SLOT_GAP_PX,
   PORT_TEXT_LAYOUTS,
   SECONDARY_SLOT_LAYOUTS,
   defaultSecondarySlotLayout,
   inwardTextLayout,
+  isOffsetTextLayout,
   portAnchor,
   portDotPlacement,
   portFlexDirection,
-  portLabelGap,
+  portLabelLift,
   portLabelOut,
   portSideForDirection,
   portLabelPlacement,
@@ -82,15 +82,45 @@ describe("port text layouts", () => {
     expect(portFlexDirection(layout)).toBe(expected[layout]);
   });
 
-  it("the plain top/bot/right/left members use the one label gap", () => {
-    for (const layout of ["top", "bot", "right", "left"] as const) {
-      expect(portLabelGap(layout)).toBe(PORT_LABEL_GAP);
+  it("only the two -Offset members are offset layouts", () => {
+    expect(PORT_TEXT_LAYOUTS.filter(isOffsetTextLayout)).toEqual(["rightOffset", "leftOffset"]);
+  });
+
+  /**
+   * The 2026-09-15 correction, pinned so it cannot silently regress: an
+   * "Offset" layout differs from its plain counterpart in Y ONLY. The
+   * first implementation spent the offset on extra X distance, which
+   * does nothing about the trace wire the position exists to dodge —
+   * the wire leaves the dot along its centre line, so a label pushed
+   * further right is still impaled by it, just later.
+   */
+  it("an -Offset layout adds NO along-axis distance — its plain counterpart's `out` to the pixel", () => {
+    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+    expect(portLabelOut("rightOffset", dot)).toBe(portLabelOut("right", dot));
+    expect(portLabelOut("leftOffset", dot)).toBe(portLabelOut("left", dot));
+  });
+
+  it("an -Offset layout lifts the label's bottom edge clear of the dot's PAINTED ring; every other layout lifts nothing", () => {
+    // sm/md/lg is Port's whole real diameter ladder — the "xl" SIZE rung
+    // pairs the same `lg` dot with bigger text (port.presets.ts's own WHY).
+    for (const size of ["sm", "md", "lg"] as const) {
+      const diameter = PORT_DIAMETERS[size];
+      const dot: PortDotBox = { w: diameter, h: diameter };
+      // Measured from the dot's CENTRE (where the wire runs) out past the
+      // ring's painted edge, plus the one shared label gap.
+      const expected = diameter / 2 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
+      expect(portLabelLift("rightOffset", dot)).toBe(expected);
+      expect(portLabelLift("leftOffset", dot)).toBe(expected);
+      for (const layout of ["top", "bot", "right", "left"] as const) {
+        expect(portLabelLift(layout, dot)).toBe(0);
+      }
     }
   });
 
-  it("the -Offset members sit PORT_LABEL_OFFSET_EXTRA_PX further out than their plain counterpart", () => {
-    expect(portLabelGap("rightOffset")).toBe(PORT_LABEL_GAP + PORT_LABEL_OFFSET_EXTRA_PX);
-    expect(portLabelGap("leftOffset")).toBe(PORT_LABEL_GAP + PORT_LABEL_OFFSET_EXTRA_PX);
+  it("the lift GROWS with the dot, so a big port clears its own ring as well as a small one", () => {
+    const small: PortDotBox = { w: PORT_DIAMETERS.sm, h: PORT_DIAMETERS.sm };
+    const large: PortDotBox = { w: PORT_DIAMETERS.lg, h: PORT_DIAMETERS.lg };
+    expect(portLabelLift("rightOffset", large)).toBeGreaterThan(portLabelLift("rightOffset", small));
   });
 });
 
@@ -179,7 +209,7 @@ describe("port placement — dot on the boundary, label off the dot", () => {
         // + PORT_RING_OVERHANG_PX: the ring is box-shadow, painted OUTSIDE
         // the dot's layout box, so the near edge clears the RING's outer
         // edge, not the box's — see port.layout.ts's own WHY.
-        const expected = diameter / 2 + PORT_RING_OVERHANG_PX + portLabelGap(layout);
+        const expected = diameter / 2 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
         expect(nearEdgeFromDotCentre(layout, diameter, 0)).toBeCloseTo(expected, 10);
       }
     },
@@ -218,16 +248,22 @@ describe("port placement — dot on the boundary, label off the dot", () => {
       expect(Number.isFinite(dot.left)).toBe(true);
       expect(Number.isFinite(dot.top)).toBe(true);
       for (const layout of PORT_TEXT_LAYOUTS) {
-        const placement = portLabelPlacement(layout, {
-          w: PORT_DIAMETERS.md,
-          h: PORT_DIAMETERS.md,
-        });
-        // exactly one flow-axis offset, on the expected edge…
-        const offsets = (["left", "right", "top", "bottom"] as const).filter(
-          (edge) => placement[edge] !== undefined && placement[edge] !== "50%",
-        );
-        expect(offsets).toEqual([flowSide[layout]]);
-        // …and a cross-axis centring pair.
+        const dot = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+        const placement = portLabelPlacement(layout, dot);
+        // The flow-axis offset is on the expected edge either way.
+        expect(placement[flowSide[layout]]).toBe(`${portLabelOut(layout, dot)}px`);
+
+        if (isOffsetTextLayout(layout)) {
+          // A lifted label anchors by its BOTTOM edge and takes no
+          // centring transform — "clear of the wire" is a fact about that
+          // one edge, so it must not move with the label's own height.
+          expect(placement.bottom).toBe(`calc(50% + ${portLabelLift(layout, dot)}px)`);
+          expect(placement.top).toBeUndefined();
+          expect(placement.transform).toBe("none");
+          continue;
+        }
+
+        // Every other layout keeps the cross-axis centring pair.
         const cross = layout === "top" || layout === "bot" ? "left" : "top";
         expect(placement[cross]).toBe("50%");
         expect(placement.transform).toBe(
@@ -239,11 +275,11 @@ describe("port placement — dot on the boundary, label off the dot", () => {
     },
   );
 
-  it("portLabelOut is the dot's along-axis span plus the ring overhang plus the layout gap", () => {
+  it("portLabelOut is the dot's along-axis span plus the ring overhang plus the one shared label gap", () => {
     const dot: PortDotBox = { w: 12, h: 12 };
     for (const layout of PORT_TEXT_LAYOUTS) {
       const alongAxis = layout === "top" || layout === "bot" ? dot.h : dot.w;
-      expect(portLabelOut(layout, dot)).toBe(alongAxis + PORT_RING_OVERHANG_PX + portLabelGap(layout));
+      expect(portLabelOut(layout, dot)).toBe(alongAxis + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP);
     }
   });
 });

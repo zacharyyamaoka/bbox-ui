@@ -18,6 +18,7 @@ import { PORT_PRESETS } from "./port.presets";
 import {
   PORT_DIAMETERS,
   PORT_HIT_PX,
+  PORT_LABEL_GAP,
   PORT_RING_OVERHANG_PX,
   PORT_SECONDARY_SLOT_GAP_PX,
   PORT_STATE_RING_PX,
@@ -26,7 +27,7 @@ import {
   defaultSecondarySlotLayout,
   inwardTextLayout,
   portFlexDirection,
-  portLabelGap,
+  portLabelLift,
   portLabelPlacement,
   type BlockSide,
   type PortDirection,
@@ -754,6 +755,10 @@ export function Port({
   // `anchored`: the root box IS the dot (no flex pairing) — see PortProps's
   // own doc for why. The label goes out of flow, placed by the same
   // `portLabelPlacement` geometry every wall surface already uses.
+  // The label's lift for an "Offset" layout, 0 otherwise — see
+  // `portLabelLift`'s own WHY (port.layout.ts). Both branches below need
+  // it, so it is resolved once against the SAME dot box either would use.
+  const labelLift = portLabelLift(resolvedTextLayout, { w: diameterPx, h: diameterPx });
   const rootStyle: CSSProperties = anchored
     ? { position: "relative", width: diameterPx, height: diameterPx }
     : {
@@ -763,7 +768,16 @@ export function Port({
         // port.layout.ts's own WHY. Without this a flex-flowed specimen and
         // a wall-anchored label (which goes through `portLabelOut`) disagree
         // by the ring's overhang.
-        gap: portLabelGap(resolvedTextLayout) + PORT_RING_OVERHANG_PX,
+        gap: PORT_LABEL_GAP + PORT_RING_OVERHANG_PX,
+        // WHY the whole row switches to `flex-end` for a lifted label
+        // rather than the label alone taking an `alignSelf`: with the row
+        // still centring, the dot would sit at the centre of a container
+        // the taller label had already grown, so the gap between the dot's
+        // centre line and the label's bottom would shrink as the label
+        // grew — the one distance the lift exists to hold fixed. Anchoring
+        // BOTH to the bottom edge makes the margin below the only thing
+        // that sets it (see the label's own `marginBottom`).
+        ...(labelLift > 0 ? { alignItems: "flex-end" as const } : null),
       };
   return (
     <div
@@ -811,7 +825,17 @@ export function Port({
         style={
           anchored
             ? { ...portLabelPlacement(resolvedTextLayout, { w: diameterPx, h: diameterPx }), whiteSpace: "nowrap" }
-            : undefined
+            : // The flex row's half of the lift. Both the dot and the label
+              // are bottom-anchored (`alignItems: "flex-end"` above), so the
+              // dot's centre line sits `diameterPx / 2` above the row's
+              // bottom and the label's bottom sits `marginBottom` above it —
+              // making their difference exactly `labelLift`, the same
+              // quantity `portLabelPlacement` puts between them in the
+              // anchored path. `undefined` (not 0) when unlifted, so an
+              // ordinary layout emits no margin at all.
+              labelLift > 0
+              ? { marginBottom: diameterPx / 2 + labelLift }
+              : undefined
         }
         disabled={disabled}
         onLabelWrite={onLabelWrite}
