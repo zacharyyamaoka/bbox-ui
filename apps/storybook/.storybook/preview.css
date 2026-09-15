@@ -8,6 +8,10 @@
 @import "tailwindcss";
 @import "@xyflow/react/dist/style.css" layer(base);
 @import "@bbox-ui/core/theme.css";
+/* Port's label slot mounts a real CodeField (see port.tsx) — its own
+   stylesheet, same shape as theme.css, imported once here so every story
+   gets a painted field instead of an unstyled CodeMirror instance. */
+@import "@bbox-ui/core/codeField.css";
 
 /* apps/storybook has no components of its own — the Tailwind classes that
    need generating (portDotClass et al.) live in packages/bbox-ui, three

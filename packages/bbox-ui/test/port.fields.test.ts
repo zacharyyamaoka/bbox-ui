@@ -6,9 +6,10 @@ import {
   resolveField,
   toArgTypes,
 } from "@bbox-ui/schema";
+import { CodeField } from "../src/codeField";
 import { PORT_FIELDS } from "../src/port.fields";
 import { PORT_PRESETS } from "../src/port.presets";
-import { Port, PortDot, PortLabel } from "../src/port";
+import { Port, PortCountBadge, PortDot, PortLabel } from "../src/port";
 import {
   APPEARANCE_STATES,
   LENSES,
@@ -22,6 +23,7 @@ import {
   PORT_SIZE_RUNGS,
   PORT_TEXT_LAYOUTS,
   PORT_TEXT_SIZES,
+  SECONDARY_SLOT_LAYOUTS,
   inwardTextLayout,
 } from "../src/port.layout";
 
@@ -59,11 +61,11 @@ const dotRendered = call(PortDot, dotElement.props);
 const labelRendered = call(PortLabel, labelElement.props);
 
 describe("PORT_FIELDS", () => {
-  it("has exactly Port's real props, in panel order — own fields, then the shared APPEARANCE_FIELDS bundle, then the author-set hidden toggle, then the host-computed interaction axis, then the escape hatch", () => {
+  it("has exactly Port's real props, in panel order — own fields, then the shared APPEARANCE_FIELDS bundle, then the author-set hidden/disabled toggles, then the host-computed interaction axis, then the label fields", () => {
     expect(PORT_FIELDS.map((f) => f.id)).toEqual([
-      "name",
-      "type",
-      "defaultValue",
+      // "name"/"type"/"defaultValue" REMOVED 2026-09-12 (the two-slot
+      // proposal) — folded into the single `children` field, now the
+      // label slot's real CodeField value. See port.tsx's own module doc.
       "direction",
       "edge",
       "size",
@@ -82,19 +84,22 @@ describe("PORT_FIELDS", () => {
     // nothing renders it, so shipping it put a live control into 27 story
     // panels that moved nothing. See its docblock for the one-line undo.
       "hidden",
+      "disabled",
       "dimmed",
       "hinting",
       "reveal",
       "producers",
+      "secondarySlotLayout",
       "children",
+      "placeholder",
     ]);
   });
 
-  it("name/type/defaultValue default to Port's real empty strings", () => {
-    expect(field("name").defaultValue).toBe("");
-    expect(field("type").defaultValue).toBe("");
-    expect(field("defaultValue").defaultValue).toBe("");
-    expect(labelRendered.props.children).toEqual([null, null, null]);
+  it("children defaults to Port's real empty string, and PortLabel renders a CodeField bound to it", () => {
+    expect(field("children").defaultValue).toBe("");
+    const codeFieldElement = labelRendered.props.children;
+    expect(codeFieldElement.type).toBe(CodeField);
+    expect(codeFieldElement.props.value).toBe("");
   });
 
   it("direction's declared default equals Port's real default (port.tsx: direction = \"input\")", () => {
@@ -155,12 +160,24 @@ describe("PORT_FIELDS", () => {
     expect(field("producers").defaultValue).toBe(0);
     expect(dotElement.props.dimmed).toBe(false);
     expect(dotElement.props.hinting).toBe(false);
-    expect(dotElement.props.producers).toBe(0);
-    // 2+ producers is the real threshold for the count badge — children:
-    // [halo, core-or-false, badge-or-false].
+    // PortDot itself no longer has a `producers` prop or any producers-
+    // aware logic (port.tsx's own module doc) — Port composes the count
+    // badge as PortDot's generic `secondarySlot` content instead. 2+
+    // producers is still the real threshold, now visible one level up.
+    expect(dotElement.props.secondarySlot).toBeUndefined();
+    type DotProps = { props: { secondarySlot?: { type: unknown; props: { count: number } } } };
+    const [twoProducersDot] = call(Port, { producers: 2 }).props.children as [DotProps, unknown];
+    expect(twoProducersDot.props.secondarySlot).toBeDefined();
+    expect(twoProducersDot.props.secondarySlot!.type).toBe(PortCountBadge);
+    expect(twoProducersDot.props.secondarySlot!.props.count).toBe(2);
+    const [oneProducerDot] = call(Port, { producers: 1 }).props.children as [DotProps, unknown];
+    expect(oneProducerDot.props.secondarySlot).toBeUndefined();
+    // The generic slot itself: PortDot renders nothing for a nullish
+    // secondarySlot, and something (non-false) once given ANY content —
+    // children: [halo, core-or-false, slot-or-false].
     expect(dotRendered.props.children[2]).toBe(false);
-    expect(call(PortDot, { producers: 2 }).props.children[2]).not.toBe(false);
-    expect(call(PortDot, { producers: 1 }).props.children[2]).toBe(false);
+    expect(call(PortDot, { secondarySlot: "cue" }).props.children[2]).not.toBe(false);
+    expect(call(PortDot, { secondarySlot: undefined }).props.children[2]).toBe(false);
   });
 
   it("`hidden: true` renders nothing — Port, PortDot and PortLabel all return null", () => {
@@ -175,13 +192,14 @@ describe("PORT_FIELDS", () => {
     expect(dotElement.props.hidden).toBe(false);
   });
 
-  it("children's default (\"\") behaves IDENTICALLY to omitting it — both fall through to the three-span rendering, so \"\" is a real default, not a demoable placeholder", () => {
+  it("children's default (\"\") is CodeField's own honest empty value, identical to omitting it — no separate fall-through case anymore", () => {
     expect(field("children").defaultValue).toBe("");
     const withEmptyString = call(PortLabel, { children: "" });
     const omitted = call(PortLabel, {});
-    expect(withEmptyString.props.children).toEqual(omitted.props.children);
+    expect(withEmptyString.props.children.props.value).toBe("");
+    expect(omitted.props.children.props.value).toBe("");
     const withRealChildren = call(PortLabel, { children: "custom" });
-    expect(withRealChildren.props.children).toBe("custom");
+    expect(withRealChildren.props.children.props.value).toBe("custom");
   });
 
   it("defaultArgs mirrors every field's own declared defaultValue, one entry per field", () => {
@@ -207,6 +225,9 @@ describe("PORT_FIELDS", () => {
     expect(field("tone").options?.map((o) => o.value)).toEqual(TONES);
     expect(field("lens").options?.map((o) => o.value)).toEqual(LENSES);
     expect(field("reveal").options?.map((o) => o.value)).toEqual(PORT_REVEALS);
+    expect(field("secondarySlotLayout").options?.map((o) => o.value)).toEqual(
+      SECONDARY_SLOT_LAYOUTS,
+    );
   });
 
   it("toArgTypes maps every segments field to a select control, number/toggle/text correctly", () => {
@@ -220,8 +241,9 @@ describe("PORT_FIELDS", () => {
     expect(argTypes.producers.control).toBe("number");
     expect(argTypes.producers.min).toBe(0);
     expect(argTypes.producers.max).toBe(9);
-    expect(argTypes.name.control).toBe("text");
     expect(argTypes.children.control).toBe("text");
+    expect(argTypes.placeholder.control).toBe("text");
+    expect(argTypes.secondarySlotLayout.control).toBe("select");
   });
 });
 

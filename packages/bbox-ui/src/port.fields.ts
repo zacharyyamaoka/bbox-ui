@@ -31,6 +31,8 @@ import {
   PORT_TEXT_LAYOUTS,
   PORT_TEXT_SIZE_LABELS,
   PORT_TEXT_SIZES,
+  SECONDARY_SLOT_LAYOUT_LABELS,
+  SECONDARY_SLOT_LAYOUTS,
   type PortTextSize,
 } from "./port.layout";
 
@@ -73,38 +75,27 @@ const REVEAL_OPTIONS: FieldOption[] = PORT_REVEALS.map((reveal) => ({
   label: PORT_REVEAL_LABELS[reveal],
 }));
 
+const SECONDARY_SLOT_LAYOUT_OPTIONS: FieldOption[] = SECONDARY_SLOT_LAYOUTS.map((layout) => ({
+  value: layout,
+  label: SECONDARY_SLOT_LAYOUT_LABELS[layout],
+}));
+
 /**
  * `Port`'s full field list, in panel order (docs/T1-SPEC.md §4.7's own
  * table order, narrowed 2026-09-12 per the port-props ruling: `role`/
  * `decoration` removed — vestigial, SystemSketch's business, not this
  * package's — and `eligible`/`dragging` folded into `dimmed`; see each
- * removal's own WHY in `port.layout.ts`/`port.tsx`): identity/own fields,
- * then the shared `APPEARANCE_FIELDS` bundle (this is what colours the
- * dot — `state`, `tone`, plus `lens`/`lensBefore`), then the author-set,
- * persisted `hidden`, then the host-computed interaction axis, then the
- * `children` escape hatch.
+ * removal's own WHY in `port.layout.ts`/`port.tsx`; FURTHER NARROWED
+ * 2026-09-12 by the two-slot proposal: `name`/`type`/`defaultValue`
+ * removed — folded into the `children` field below, a single one-line
+ * string the label slot's real `CodeField` now edits, see `port.tsx`'s
+ * own module doc): identity/own fields, then the shared `APPEARANCE_FIELDS`
+ * bundle (this is what colours the dot — `state`, `tone`, plus
+ * `lens`/`lensBefore`), then the author-set, persisted `hidden`/`disabled`,
+ * then the host-computed interaction axis (now including
+ * `secondarySlotLayout`), then the `children`/`placeholder` label fields.
  */
 export const PORT_FIELDS: FieldSpec[] = [
-  {
-    id: "name",
-    label: "Name",
-    kind: "text",
-    defaultValue: "",
-  },
-  {
-    id: "type",
-    label: "Type",
-    kind: "text",
-    defaultValue: "",
-    hint: "Muted type text beside the name — tints nothing. Colour comes from `state`, not from this (Zach, 2026-09-10 ruling).",
-  },
-  {
-    id: "defaultValue",
-    label: "Default Value",
-    kind: "text",
-    defaultValue: "",
-    hint: "The `= v` chip's content, capped at 88px with a visible ellipsis.",
-  },
   {
     id: "direction",
     label: "Direction",
@@ -165,6 +156,13 @@ export const PORT_FIELDS: FieldSpec[] = [
     hint: "The dot and label draw nothing; a container counts it into \"+N more\" (same shape as bar.fields.ts's own `hidden`).",
   },
   {
+    id: "disabled",
+    label: "Disabled",
+    kind: "toggle",
+    defaultValue: false,
+    hint: "No caret, no edits on the label's CodeField — a read-only port.",
+  },
+  {
     id: "dimmed",
     label: "Dimmed",
     kind: "toggle",
@@ -197,19 +195,41 @@ export const PORT_FIELDS: FieldSpec[] = [
     min: 0,
     max: 9,
     step: 1,
-    hint: "Host-computed many-to-one count — never persisted. 2 or more shows the count badge.",
+    hint: "Host-computed many-to-one count — never persisted. 2 or more composes PortCountBadge as the secondary slot's default content.",
     randomize: false,
+  },
+  {
+    id: "secondarySlotLayout",
+    label: "Secondary Slot",
+    kind: "segments",
+    // No real JS default in port.tsx (the prop is `secondarySlotLayout?:
+    // SecondarySlotLayout`, left `undefined` so `defaultSecondarySlotLayout`
+    // — the side OPPOSITE the label — can run) — "leftOffset" here is
+    // that function's OWN value at Port's real default textLayout ("right"),
+    // same convention `textLayout`'s own declared default above follows
+    // against `inwardTextLayout(edge)`.
+    defaultValue: "leftOffset",
+    options: SECONDARY_SLOT_LAYOUT_OPTIONS,
+    hint: "Where the producer-count badge (or any other secondary-slot content a host composes) sits, hugging the dot. Omit for the auto default: the corner opposite wherever the label is flowing.",
   },
   {
     id: "children",
     label: "Label",
     kind: "text",
-    // NOT a deviation (unlike Glyph's/T0 Port's own `children` field):
-    // `PortLabel` treats an empty string exactly like an omitted prop
-    // (`children || ordered`, ./port.tsx) — both fall through to the
-    // three-span name/type/default-chip rendering — so "" IS Port's real
-    // resolved behavior at this default, not a demoable stand-in for one.
+    // The label slot's ENTIRE content now — one line ("a port is one line
+    // of code", `get_aruco: ArucoSrv`) — REPLACES the removed `name`/
+    // `type`/`defaultValue` fields (port.tsx's own module doc). An empty
+    // string is CodeField's own honest empty state (a blank field showing
+    // `placeholder`), not a special "fall through to something else" case
+    // the way the old three-span rendering needed.
     defaultValue: "",
-    hint: "Escape hatch: when non-empty, REPLACES the name/type/default-chip rendering wholesale (a CodeMirror mount, a `name: Type = default` one-liner).",
+    hint: "The CodeField's whole value — a real, editable single-line code text box (grammar-free; wiring the Python name: Type = default grammar/autocomplete is a later step).",
+  },
+  {
+    id: "placeholder",
+    label: "Placeholder",
+    kind: "text",
+    defaultValue: "",
+    hint: "Shown in the label's CodeField when Label is empty.",
   },
 ];
