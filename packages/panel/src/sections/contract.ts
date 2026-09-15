@@ -169,7 +169,14 @@ export type SectionRow =
    * per list, and `members/List.tsx` renders headerless (`chrome: "none"`).
    * The list's verbs ride up to that one row as `actions`.
    */
-  | { kind: "list"; list: SectionList };
+  | { kind: "list"; list: SectionList }
+  /**
+   * Free-form content that is NOT tied to any list's fold/count state — a
+   * Block's Arrangement controls (active state, mode, edges, grouping),
+   * which must stay reachable even when the Block has zero Ports (an empty
+   * list renders unfoldable and never mounts `list.node`, see `ListBlock`).
+   */
+  | { kind: "custom"; id: string; node: ReactNode };
 
 /**
  * An icon action on a header row — Figma's `+` on Fill, Stroke, Effects

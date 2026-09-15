@@ -149,11 +149,6 @@ function listRow(
    * (`MembersSpec.label`, PortEdge's "Ports") or from the generic noun.
    */
   labelOverride?: string,
-  /** Extra content ahead of the list control, inside the same fold body —
-   *  a Block's Arrangement controls (active state, mode, edges, grouping)
-   *  ride here above its Ports list. Never a second header: the FoldRow
-   *  above this node still draws the one label/count/actions row. */
-  header?: ReactNode,
 ): SectionRow | null {
   const spec = memberSpecFor(entry, parent);
   if (!spec) return null;
@@ -166,7 +161,6 @@ function listRow(
   const atMax = spec.max !== undefined && members.length >= spec.max;
   const node: ReactNode = (
     <div data-slot="members-section" data-parent-id={parent.id}>
-      {header}
       <Control
         parent={parent}
         entry={entry}
@@ -372,7 +366,7 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
   // ADDS a member; only the section-level wrapper goes.
   if (entry.members) {
     const spec = memberSpecFor(entry, subject);
-    let row: SectionRow | null = null;
+    const rows: SectionRow[] = [];
     if (spec && entry.slots) {
       // A component with BOTH slots and its own members (a Block: its
       // Bars/body fill the slots above, its Ports are its OWN list) —
@@ -383,9 +377,14 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
       // above). `onMoveMember` is re-scoped to translate an index WITHIN
       // that narrowed list back to its real position in the full array —
       // the drag reorders ports amongst themselves without touching where
-      // the slot fills sit. The Arrangement controls (active state, mode,
-      // edges, grouping) ride above the list as `header`, mirroring the
-      // Bar quick-controls a slot-filling fill already gets in step 2.
+      // the slot fills sit.
+      //
+      // The Arrangement controls (active state, mode, edges, grouping) are
+      // a SEPARATE `custom` row ahead of the list, not the list's `header`
+      // — `ListBlock` never mounts `list.node` for an empty, unfoldable
+      // list (`list.count === 0`), which would make Arrangement
+      // unreachable the moment a Block's last Port is removed. A `custom`
+      // row has no such gate: it renders regardless of the list beside it.
       const fullMembers = subject.members ?? [];
       const portIds = fullMembers.filter((id) => !byId.get(id)?.slot);
       const portsOnly: Instance = { ...subject, members: portIds };
@@ -398,31 +397,39 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
           input.onMoveMember(parentId, a, b);
         },
       };
-      const header = input.arrangementActions ? (
-        <ArrangementSection
-          block={subject}
-          actions={{
-            ...input.arrangementActions,
-            onAddMember: input.onAddMember,
-            onRemoveMember: input.onRemoveMember,
-            onMoveMember: input.onMoveMember,
-            onSetProp: input.onSetProp,
-            onSelect: input.onSelectInstance,
-          }}
-        />
-      ) : undefined;
-      row = listRow(scopedInput, portsOnly, entry, undefined, header);
+      if (input.arrangementActions) {
+        rows.push({
+          kind: "custom",
+          id: `arrangement:${subject.id}`,
+          node: (
+            <ArrangementSection
+              block={subject}
+              actions={{
+                ...input.arrangementActions,
+                onAddMember: input.onAddMember,
+                onRemoveMember: input.onRemoveMember,
+                onMoveMember: input.onMoveMember,
+                onSetProp: input.onSetProp,
+                onSelect: input.onSelectInstance,
+              }}
+            />
+          ),
+        });
+      }
+      const listRowResult = listRow(scopedInput, portsOnly, entry);
+      if (listRowResult) rows.push(listRowResult);
     } else if (spec) {
-      row = listRow(input, subject, entry);
+      const listRowResult = listRow(input, subject, entry);
+      if (listRowResult) rows.push(listRowResult);
     }
-    if (row) {
+    if (rows.length > 0) {
       const own = sections.find((s) => s.id === "self");
       // The fallback is not dead code: a component whose every field declares
       // a `section` has no "self" bucket, so its panel IS several named
       // sections and its list needs a name of its own again — the same rule,
       // read the other way.
-      if (own) own.rows.push(row);
-      else sections.push({ id: "members", label: spec!.label ?? MEMBERS_LABEL, rows: [row], actions: [] });
+      if (own) own.rows.push(...rows);
+      else sections.push({ id: "members", label: spec!.label ?? MEMBERS_LABEL, rows, actions: [] });
     }
   }
 

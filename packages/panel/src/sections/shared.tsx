@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { readFieldRow } from "../fieldModel";
 import { ProvenanceTag } from "../variants/FigmaDense";
 import { DENSITY, type BoundField, type Density, type FoldState, type InspectorSection, type SectionList, type SectionRow } from "./contract";
@@ -236,6 +236,7 @@ export function SectionRows({
     <>
       {rows.map((row) => {
         if (row.kind === "list") return <ListBlock key={`list:${row.list.id}`} list={row.list} fold={fold} density={density} policy={policy} />;
+        if (row.kind === "custom") return <Fragment key={`custom:${row.id}`}>{row.node}</Fragment>;
         if (row.kind === "pair") return <StandardPair key={`pair:${row.fields[0].field.id}`} fields={row.fields} />;
         return <StandardRow key={`field:${row.field.targetId}:${row.field.field.id}`} bound={row.field} />;
       })}
