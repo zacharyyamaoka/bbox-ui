@@ -401,6 +401,32 @@ describe("a tuned labelOffset of 0 still lifts", () => {
   });
 });
 
+/**
+ * The bare `Port` primitive's field list, checked STRUCTURALLY against the
+ * component rather than by eye.
+ *
+ * An adversarial judge (2026-09-15) caught `size` and `lens` in this list
+ * while `PortProps` declared neither: the bench showed two controls that
+ * moved nothing, and `Port` spread both onto its root `<span>` as inert
+ * DOM attributes. Asserting a hand-typed id list would not have caught
+ * that — the list agreed with itself. Asserting that nothing SURVIVES the
+ * destructure does, for every field, forever.
+ */
+describe("PORT_FIELDS names only props the bare Port really consumes", () => {
+  it("no field id leaks through to the rendered root — every one is destructured", () => {
+    const leaked = PORT_FIELDS.filter((f) => {
+      const rendered = call(Port, { [f.id]: f.defaultValue });
+      return rendered !== null && f.id in rendered.props;
+    }).map((f) => f.id);
+    expect(leaked).toEqual([]);
+  });
+
+  it("is a strict subset of the composite's list, sharing the very same FieldSpec objects", () => {
+    for (const f of PORT_FIELDS) expect(LABELED_PORT_FIELDS, f.id).toContain(f);
+    expect(PORT_FIELDS.length).toBeLessThan(LABELED_PORT_FIELDS.length);
+  });
+});
+
 describe("portResolutionSubject", () => {
   /**
    * Found by an adversarial probe, 2026-09-15: `labelOffset` was resolved

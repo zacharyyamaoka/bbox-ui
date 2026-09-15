@@ -297,13 +297,26 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
  * which a bare Port does not have. `reveal`/`producers` are container
  * facts (a visibility policy, a many-to-one count) that only mean
  * something once a port is arranged with other things.
+ *
+ * `size` and `lens` are absent for a sharper reason (adversarial judge,
+ * 2026-09-15): `PortProps` declares NEITHER, so listing them put two
+ * controls in the bench that moved nothing and spread two inert
+ * attributes onto the root `<span>`. `size` is the cascade RUNG a header
+ * hands down, and it governs `diameter` + `textSize` together — half of
+ * that pair is a label fact, so the rung belongs to the composite, which
+ * resolves it and passes the bare Port a settled `diameter`. `lens` paints
+ * nothing anywhere yet (docs/T1-SPEC.md §3 defines no lens tokens), so on
+ * a primitive it would be a control that does nothing by construction.
+ *
+ * `test/port.fields.test.ts` pins this structurally: every id here must be
+ * a prop `Port` actually DESTRUCTURES, proved by checking none of them
+ * survives onto the rendered root. That is what makes this list unable to
+ * drift back out of sync with the component.
  */
 const PORT_FIELD_IDS = [
-  "size",
   "diameter",
   "state",
   "tone",
-  "lens",
   "hidden",
   "dimmed",
   "hinting",
