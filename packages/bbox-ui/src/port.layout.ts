@@ -147,9 +147,32 @@ export function isOffsetTextLayout(layout: PortTextLayout): boolean {
  * box-shadow drawn outside the layout box) by `PORT_LABEL_GAP` keeps an
  * `xl` port reading the same as an `sm` one, where a fixed lift would have
  * the biggest dot's ring crowding the label.
+ *
+ * `overridePx` is the author's own tuned distance (Port's `labelOffset`
+ * field, Expert tier — Zach, 2026-09-15: "expose the offset distance as a
+ * parameter you can tune"). It replaces the computed lift outright rather
+ * than adding to it, so the number in the panel IS the number of pixels
+ * between the wire and the label's bottom edge — a delta would make the
+ * control's value unreadable off the screen. It is ignored for a
+ * non-offset layout: there is no lift there to tune, and silently lifting
+ * a plain `right` label because a stale field value survived a layout
+ * change is exactly the kind of ghost this codebase keeps designing out.
  */
-export function portLabelLift(layout: PortTextLayout, dot: PortDotBox): number {
+export function portLabelLift(
+  layout: PortTextLayout,
+  dot: PortDotBox,
+  overridePx?: number,
+): number {
   if (!isOffsetTextLayout(layout)) return 0;
+  if (typeof overridePx === "number" && Number.isFinite(overridePx)) return overridePx;
+  return defaultPortLabelLift(dot);
+}
+
+/** The lift an Offset label takes when nobody has tuned `labelOffset` —
+ *  exported so the panel can SHOW that computed number as the field's
+ *  real resolved value (`portResolutionSubject`, port.tsx) instead of the
+ *  static `defaultValue` its FieldSpec is forced to declare. */
+export function defaultPortLabelLift(dot: PortDotBox): number {
   return dot.h / 2 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
 }
 
@@ -473,9 +496,10 @@ export function portLabelPlacement(
   layout: PortTextLayout,
   dot: PortDotBox,
   boxInsetPx: number = 0,
+  liftPx?: number,
 ): PortLabelPlacement {
   const out = `${portLabelOut(layout, dot) - boxInsetPx}px`;
-  const lifted = `calc(50% + ${portLabelLift(layout, dot)}px)`;
+  const lifted = `calc(50% + ${portLabelLift(layout, dot, liftPx)}px)`;
   switch (layout) {
     case "right":
       return { left: out, top: "50%", transform: "translateY(-50%)" };

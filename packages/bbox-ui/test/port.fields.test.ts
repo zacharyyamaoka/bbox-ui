@@ -76,6 +76,10 @@ describe("PORT_FIELDS", () => {
       // sites); Python-specific annotations are SystemSketch's business,
       // not this package's. See port.layout.ts's own WHY.
       "textLayout",
+      // Sits with the geometry it tunes — the lift `textLayout`'s two
+      // "Offset" members take (Zach, 2026-09-15: "expose the offset
+      // distance as a parameter you can tune"), Expert tier.
+      "labelOffset",
       "textSize",
       "state",
       "tone",

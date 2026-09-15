@@ -150,6 +150,23 @@ export const PORT_FIELDS: FieldSpec[] = [
     tier: "simple",
   },
   {
+    id: "labelOffset",
+    label: "Offset Distance",
+    kind: "number",
+    min: 0,
+    max: 64,
+    step: 1,
+    // The value `defaultPortLabelLift` computes at Port's own default
+    // diameter ("md", 12px): 6 + PORT_RING_OVERHANG_PX (5) + PORT_LABEL_GAP
+    // (8). Same static-approximation convention `textLayout`'s default
+    // follows against `inwardTextLayout(edge)` — and, like it, the panel
+    // shows the REAL resolved number via `portResolutionSubject`, so a
+    // Port at another size reads honestly instead of trusting this literal.
+    defaultValue: 19,
+    hint: "How far a Right/Left Offset label's bottom edge clears the dot's centre line — the gap a trace wire passes through. Only an Offset layout has a lift to tune. Omit for the auto default: half the dot, plus its painted ring, plus the standard label gap.",
+    tier: "expert",
+  },
+  {
     id: "textSize",
     label: "Text Size",
     kind: "segments",

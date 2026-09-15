@@ -8,6 +8,7 @@ import {
   PORT_SECONDARY_SLOT_GAP_PX,
   PORT_TEXT_LAYOUTS,
   SECONDARY_SLOT_LAYOUTS,
+  defaultPortLabelLift,
   defaultSecondarySlotLayout,
   inwardTextLayout,
   isOffsetTextLayout,
@@ -121,6 +122,37 @@ describe("port text layouts", () => {
     const small: PortDotBox = { w: PORT_DIAMETERS.sm, h: PORT_DIAMETERS.sm };
     const large: PortDotBox = { w: PORT_DIAMETERS.lg, h: PORT_DIAMETERS.lg };
     expect(portLabelLift("rightOffset", large)).toBeGreaterThan(portLabelLift("rightOffset", small));
+  });
+
+  /** Zach, 2026-09-15: "In expert mode please expose the offset distance as
+   *  a parameter you can tune." */
+  it("a tuned labelOffset REPLACES the computed lift outright, so the field's number is the on-screen distance", () => {
+    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+    expect(portLabelLift("rightOffset", dot, 40)).toBe(40);
+    expect(portLabelLift("leftOffset", dot, 0)).toBe(0);
+    // Not a delta on top of the default — 40 means 40, not 19 + 40.
+    expect(portLabelLift("rightOffset", dot, 40)).not.toBe(defaultPortLabelLift(dot) + 40);
+  });
+
+  it("a tuned labelOffset is IGNORED by a layout that has no lift, so a stale value cannot ghost-lift a plain label", () => {
+    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+    for (const layout of ["top", "bot", "right", "left"] as const) {
+      expect(portLabelLift(layout, dot, 40)).toBe(0);
+    }
+  });
+
+  it("omitting labelOffset (or passing a non-finite one) falls back to the computed default", () => {
+    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+    const expected = defaultPortLabelLift(dot);
+    expect(portLabelLift("rightOffset", dot)).toBe(expected);
+    expect(portLabelLift("rightOffset", dot, Number.NaN)).toBe(expected);
+  });
+
+  it("portLabelPlacement threads the tuned offset into the CSS it emits", () => {
+    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+    expect(portLabelPlacement("rightOffset", dot, 0, 40).bottom).toBe("calc(50% + 40px)");
+    // …and a non-offset layout still emits no lift, tuned or not.
+    expect(portLabelPlacement("right", dot, 0, 40).top).toBe("50%");
   });
 });
 

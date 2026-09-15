@@ -24,6 +24,7 @@ import {
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
+  defaultPortLabelLift,
   defaultSecondarySlotLayout,
   inwardTextLayout,
   portFlexDirection,
@@ -63,11 +64,20 @@ const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
 export function portResolutionSubject(props: Record<string, unknown>): Record<string, unknown> {
   const edge = (props.edge as BlockSide | undefined) ?? "left";
   const textLayout = (props.textLayout as PortTextLayout | undefined) ?? inwardTextLayout(edge);
+  // `labelOffset`'s FieldSpec must declare a static `defaultValue` (19, the
+  // computed lift at Port's default "md" dot), but the real default scales
+  // with the dot — so a Port at `lg` genuinely lifts 22px while the panel
+  // would keep printing 19. Resolving it here is what makes the Expert
+  // control read the number actually on screen.
+  const diameter = (props.diameter as PortSize | undefined) ?? "md";
+  const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
   return {
     ...props,
     textLayout,
     secondarySlotLayout:
       (props.secondarySlotLayout as SecondarySlotLayout | undefined) ?? defaultSecondarySlotLayout(textLayout),
+    labelOffset:
+      (props.labelOffset as number | undefined) ?? defaultPortLabelLift({ w: diameterPx, h: diameterPx }),
   };
 }
 
@@ -658,6 +668,14 @@ export interface PortProps extends ComponentProps<"div"> {
    * threshold from before the two-slot proposal. */
   producers?: number;
   /**
+   * The author's own tuned lift for a Right/Left Offset label, in px,
+   * measured from the dot's centre line to the label's bottom edge — the
+   * clearance a trace wire passes through. Omit for the computed default
+   * (`defaultPortLabelLift`, port.layout.ts). Ignored by every non-offset
+   * layout, which has no lift to tune.
+   */
+  labelOffset?: number;
+  /**
    * Host layout fact, never persisted (same status as `dimmed`) — do NOT
    * add this to `port.fields.ts`. When true, `Port` renders the dot as its
    * OWN box with the label placed out of flow at the shared wall anchor,
@@ -727,6 +745,7 @@ export function Port({
   reveal = "always",
   producers = 0,
   anchored = false,
+  labelOffset,
   secondarySlotLayout,
   disabled = false,
   onLabelWrite,
@@ -758,7 +777,7 @@ export function Port({
   // The label's lift for an "Offset" layout, 0 otherwise — see
   // `portLabelLift`'s own WHY (port.layout.ts). Both branches below need
   // it, so it is resolved once against the SAME dot box either would use.
-  const labelLift = portLabelLift(resolvedTextLayout, { w: diameterPx, h: diameterPx });
+  const labelLift = portLabelLift(resolvedTextLayout, { w: diameterPx, h: diameterPx }, labelOffset);
   const rootStyle: CSSProperties = anchored
     ? { position: "relative", width: diameterPx, height: diameterPx }
     : {
@@ -824,7 +843,7 @@ export function Port({
         className={anchored ? "absolute" : undefined}
         style={
           anchored
-            ? { ...portLabelPlacement(resolvedTextLayout, { w: diameterPx, h: diameterPx }), whiteSpace: "nowrap" }
+            ? { ...portLabelPlacement(resolvedTextLayout, { w: diameterPx, h: diameterPx }, 0, labelOffset), whiteSpace: "nowrap" }
             : // The flex row's half of the lift. Both the dot and the label
               // are bottom-anchored (`alignItems: "flex-end"` above), so the
               // dot's centre line sits `diameterPx / 2` above the row's
