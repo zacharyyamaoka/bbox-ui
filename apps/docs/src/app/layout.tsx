@@ -1,6 +1,7 @@
 import { Inter } from "next/font/google";
 
 import { Provider } from "@/components/provider";
+import { PreviewChannelBadge } from "@/components/dev/preview-channel-badge";
 
 import "./global.css";
 import { SiteHeader } from "@/components/site-header";
@@ -17,6 +18,7 @@ export default function Layout({ children }: LayoutProps<"/">) {
           <SiteHeader />
           {children}
         </Provider>
+        <PreviewChannelBadge />
       </body>
     </html>
   );
