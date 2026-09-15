@@ -73,6 +73,15 @@ export interface BlockFacePort {
   t?: number;
 }
 
+/** `name`/`typeLabel` composed into the single line `Port`/`PortLabel`
+ * now render as `children` — "a port is one line of code" (`port.tsx`'s
+ * own `PortLabelProps` docblock), same `name: Type` shape every other
+ * real caller in this workspace already uses. */
+function blockFacePortLabel(port: Pick<BlockFacePort, "name" | "typeLabel">): string {
+  if (!port.name) return "";
+  return port.typeLabel ? `${port.name}: ${port.typeLabel}` : port.name;
+}
+
 export interface BlockFaceData {
   title: string;
   typeLabel?: string;
@@ -223,11 +232,11 @@ export function BlockPortRows({ ports, size = "sm" }: BlockPortRowsProps) {
           <Port
             direction={port.direction}
             edge={portSideForDirection(port.direction)}
-            name={port.name ?? ""}
-            type={port.typeLabel ?? ""}
             state={port.state ?? "empty"}
             size={size}
-          />
+          >
+            {blockFacePortLabel(port)}
+          </Port>
         </div>
       ))}
     </Flex>
@@ -281,10 +290,10 @@ export function BlockPortWalls({ ports, width, height, diameter = "md" }: BlockP
               <PortLabel
                 className="absolute"
                 style={portLabelPlacement(textLayout, { w: diameterPx, h: diameterPx })}
-                name={port.name}
-                type={port.typeLabel ?? ""}
                 direction={port.direction}
-              />
+              >
+                {blockFacePortLabel(port)}
+              </PortLabel>
             )}
           </div>
         );
