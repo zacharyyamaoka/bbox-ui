@@ -57,6 +57,16 @@ export function Viewport(p: ViewportProps) {
           ))}
         </div>
         <div className="flex-1" />
+        <button
+          type="button"
+          data-slot="highlight-slots-toggle"
+          aria-pressed={p.highlightSlots}
+          onClick={() => p.onHighlightSlotsChange(!p.highlightSlots)}
+          className="mr-3 rounded-md border border-transparent px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground aria-pressed:border-border aria-pressed:bg-accent aria-pressed:text-foreground"
+          title="Off by default. Turn this on to overlay every slot — filled or empty — so you can see a component's anatomy at a glance."
+        >
+          Highlight slots
+        </button>
         <div role="tablist" aria-label="View" data-slot="view-tabs" className="flex items-center gap-1">
           {VIEWS.map((v) => (
             <button
@@ -116,6 +126,7 @@ function Body(p: ViewportProps) {
           onSelectInstance={p.onSelectInstance}
           edit={edit}
           onMovePort={p.onMovePort}
+          highlightSlots={p.highlightSlots}
         />
       );
     case "reactflow":
@@ -131,6 +142,7 @@ function Body(p: ViewportProps) {
           onPositionsChange={p.onPositionsChange}
           edit={edit}
           onMovePort={p.onMovePort}
+          highlightSlots={p.highlightSlots}
         />
       );
     case "tldraw":
@@ -146,6 +158,7 @@ function Body(p: ViewportProps) {
           onPositionsChange={p.onPositionsChange}
           edit={edit}
           onMovePort={p.onMovePort}
+          highlightSlots={p.highlightSlots}
         />
       );
   }
