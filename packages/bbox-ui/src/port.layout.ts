@@ -515,3 +515,149 @@ export function portLabelPlacement(
       return { top: out, left: "50%", transform: "translateX(-50%)" };
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* THE UNIFIED SLOT PLACEMENT MODEL (2026-09-15)                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Which side of the dot a slot anchors to — the ORIGIN. Four values,
+ * shared by BOTH slots.
+ *
+ * Zach, 2026-09-15: "Its just Top, bottom, right, left. thoose basically
+ * set the origins. and then sepertly we can always control a x and y
+ * offset. seems simpler and more general… Ok yes I think I would now
+ * consider like top/left/right/etc for both secondary and primary thoose
+ * are just presets!"
+ *
+ * WHY this replaces two separate enums: `PortTextLayout` and
+ * `SecondarySlotLayout` both spell `rightOffset`, mean different things,
+ * and carry different gaps (8px vs 6px) — a caller could pass one where
+ * the other was wanted and land on plausible-but-wrong geometry with no
+ * type error, because they are both just strings at the persistence
+ * boundary. One origin type for both slots deletes that whole class.
+ *
+ * The named placements that used to be enum members are now PRESETS over
+ * (origin, offsetX, offsetY) — "Right" is `{right, 0, 0}` and the old
+ * "Right Offset" is `{right, 0, -lift}`. That also makes NEGATIVE offsets
+ * fall out for free, which the enum could never express.
+ */
+export type SlotOrigin = "top" | "bottom" | "left" | "right";
+
+export const SLOT_ORIGINS: SlotOrigin[] = ["top", "bottom", "left", "right"];
+
+export const SLOT_ORIGIN_LABELS: Record<SlotOrigin, string> = {
+  top: "Top",
+  bottom: "Bottom",
+  left: "Left",
+  right: "Right",
+};
+
+/** Where a slot sits: an origin on the dot, plus a free displacement.
+ *  `offsetX` is +right, `offsetY` is +DOWN (screen convention), so a
+ *  label lifted clear of a trace wire carries a NEGATIVE `offsetY`. */
+export interface SlotPlacement {
+  origin: SlotOrigin;
+  offsetX: number;
+  offsetY: number;
+}
+
+/**
+ * THE ONE ANCHOR RULE, stated once so every path can agree on it: the
+ * slot's content anchors by the edge FACING its origin, centred on the
+ * other axis, sitting `gap` clear of the dot's PAINTED ring. `offsetX`/
+ * `offsetY` then translate it from there.
+ *
+ * - origin "right"  → content's LEFT edge at the ring, vertically centred
+ * - origin "left"   → content's RIGHT edge at the ring, vertically centred
+ * - origin "top"    → content's BOTTOM edge at the ring, horizontally centred
+ * - origin "bottom" → content's TOP edge at the ring, horizontally centred
+ *
+ * WHY one fixed rule and no "when offsetY ≠ 0 anchor the bottom instead"
+ * mode: a hidden anchor switch is exactly the kind of thing that reads
+ * fine in the one case it was written for and silently does the wrong
+ * thing in the next. The cost is that a lift computed for one label
+ * height is only tight for that height — which is why the lifted default
+ * is RESOLVED from the live text size rather than frozen into a preset
+ * literal (see `defaultLiftOffsetY`).
+ */
+export function slotPlacementStyle(
+  placement: SlotPlacement,
+  dot: PortDotBox,
+  gapPx: number,
+  boxInsetPx: number = 0,
+): PortLabelPlacement {
+  const { origin, offsetX, offsetY } = placement;
+  const outX = `${dot.w + PORT_RING_OVERHANG_PX + gapPx - boxInsetPx}px`;
+  const outY = `${dot.h + PORT_RING_OVERHANG_PX + gapPx - boxInsetPx}px`;
+  // Both offsets ride in the TRANSFORM rather than the edge properties, so
+  // the cross-axis `-50%` centring and the displacement compose without
+  // either needing to know the content's own size — and a percentage and
+  // a px value never have to be added by hand.
+  switch (origin) {
+    case "right":
+      return { left: outX, top: "50%", transform: `translate(${offsetX}px, calc(-50% + ${offsetY}px))` };
+    case "left":
+      return { right: outX, top: "50%", transform: `translate(${-offsetX}px, calc(-50% + ${offsetY}px))` };
+    case "top":
+      return { bottom: outY, left: "50%", transform: `translate(calc(-50% + ${offsetX}px), ${-offsetY}px)` };
+    case "bottom":
+      return { top: outY, left: "50%", transform: `translate(calc(-50% + ${offsetX}px), ${offsetY}px)` };
+  }
+}
+
+/**
+ * The `offsetY` that puts a lifted slot's BOTTOM edge exactly `gapPx`
+ * above the dot's centre line — where a trace wire runs.
+ *
+ * Negative, because +Y is down. Depends on the content's own height,
+ * which is why it is resolved live rather than baked into a preset: at
+ * `xl` text a lift frozen at the `md` value leaves the label's bottom
+ * BELOW the centre line and the wire cuts straight back through it —
+ * measured, not assumed.
+ *
+ * Only meaningful for a left/right origin; a top/bottom origin is already
+ * clear of the wire by construction.
+ */
+export function defaultLiftOffsetY(contentHeightPx: number, gapPx: number): number {
+  return -(contentHeightPx / 2 + gapPx);
+}
+
+/** A single-line label's rendered height at a given font size — the same
+ *  `leading-tight` ratio `blockLayout.ts` measures Block titles with. */
+export const PORT_LABEL_LEADING = 1.25;
+export function portLabelHeight(textSizePx: number): number {
+  return Math.round(textSizePx * PORT_LABEL_LEADING);
+}
+
+/**
+ * The old six-member `PortTextLayout` as (origin, offsetY) — the
+ * compatibility read for everything already persisted.
+ *
+ * `PortTextLayout`'s literals are written into saved tldraw shapes
+ * (`T.literalEnum` in both shape utils), so a board saved before this
+ * change still hands them back. This is the one place that translation
+ * lives; nothing downstream needs to know the old vocabulary existed.
+ * `liftedLabel` marks the two members whose `offsetY` must be RESOLVED
+ * from the live text size rather than taken as 0.
+ */
+export const TEXT_LAYOUT_AS_PLACEMENT: Record<
+  PortTextLayout,
+  { origin: SlotOrigin; liftedLabel: boolean }
+> = {
+  top: { origin: "top", liftedLabel: false },
+  bot: { origin: "bottom", liftedLabel: false },
+  right: { origin: "right", liftedLabel: false },
+  left: { origin: "left", liftedLabel: false },
+  rightOffset: { origin: "right", liftedLabel: true },
+  leftOffset: { origin: "left", liftedLabel: true },
+};
+
+/** The same compatibility read for the secondary slot's own four-member
+ *  enum — every member is a corner hug, so none is "lifted". */
+export const SECONDARY_LAYOUT_AS_ORIGIN: Record<SecondarySlotLayout, SlotOrigin> = {
+  leftOffset: "left",
+  rightOffset: "right",
+  topOffset: "top",
+  botOffset: "bottom",
+};

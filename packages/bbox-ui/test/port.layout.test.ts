@@ -8,6 +8,7 @@ import {
   PORT_SECONDARY_SLOT_GAP_PX,
   PORT_TEXT_LAYOUTS,
   SECONDARY_SLOT_LAYOUTS,
+  defaultLiftOffsetY,
   defaultPortLabelLift,
   defaultSecondarySlotLayout,
   inwardTextLayout,
@@ -16,7 +17,13 @@ import {
   portDotPlacement,
   portFlexDirection,
   portLabelLift,
+  portLabelHeight,
   portLabelOut,
+  slotPlacementStyle,
+  SLOT_ORIGINS,
+  SECONDARY_LAYOUT_AS_ORIGIN,
+  TEXT_LAYOUT_AS_PLACEMENT,
+  PORT_TEXT_SIZES,
   portSideForDirection,
   portLabelPlacement,
   type BlockSide,
@@ -24,6 +31,7 @@ import {
   type PortLabelPlacement,
   type PortTextLayout,
   type SecondarySlotLayout,
+  type SlotOrigin,
 } from "../src/port.layout";
 
 // INTEGRATION NOTE (docs/T1-SPEC.md §0): this geometry used to live in
@@ -313,5 +321,95 @@ describe("port placement — dot on the boundary, label off the dot", () => {
       const alongAxis = layout === "top" || layout === "bot" ? dot.h : dot.w;
       expect(portLabelOut(layout, dot)).toBe(alongAxis + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP);
     }
+  });
+});
+
+/**
+ * The unified placement model (Zach, 2026-09-15): "Its just Top, bottom,
+ * right, left. thoose basically set the origins. and then sepertly we can
+ * always control a x and y offset."
+ */
+describe("unified slot placement — one origin type, free x/y", () => {
+  const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+
+  it("has exactly four origins, shared by BOTH slots", () => {
+    expect(SLOT_ORIGINS).toEqual(["top", "bottom", "left", "right"]);
+  });
+
+  it("at zero offset, every origin reproduces its old flush placement to the pixel", () => {
+    const out = PORT_DIAMETERS.md + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
+    const at = (origin: SlotOrigin) =>
+      slotPlacementStyle({ origin, offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP);
+    expect(at("right").left).toBe(`${out}px`);
+    expect(at("left").right).toBe(`${out}px`);
+    expect(at("top").bottom).toBe(`${out}px`);
+    expect(at("bottom").top).toBe(`${out}px`);
+    // …and the cross axis still centres.
+    expect(at("right").top).toBe("50%");
+    expect(at("top").left).toBe("50%");
+  });
+
+  it("carries BOTH offsets in the transform, so negatives work and the centring never has to be added by hand", () => {
+    const p = slotPlacementStyle({ origin: "right", offsetX: 4, offsetY: -23 }, dot, PORT_LABEL_GAP);
+    expect(p.transform).toBe("translate(4px, calc(-50% + -23px))");
+    // The edge property is untouched by the offset — displacement is the
+    // transform's whole job, so the anchor stays one fixed rule.
+    expect(p.left).toBe(`${PORT_DIAMETERS.md + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP}px`);
+  });
+
+  it("mirrors the offset's SIGN on the origin that faces the other way, so +x is always rightward on screen", () => {
+    const right = slotPlacementStyle({ origin: "right", offsetX: 5, offsetY: 0 }, dot, PORT_LABEL_GAP);
+    const left = slotPlacementStyle({ origin: "left", offsetX: 5, offsetY: 0 }, dot, PORT_LABEL_GAP);
+    // `left` anchors by `right:`, which grows leftward — so the same
+    // on-screen direction needs the opposite sign in the transform.
+    expect(right.transform).toContain("translate(5px");
+    expect(left.transform).toContain("translate(-5px");
+  });
+
+  it("the two gaps stay distinct: a secondary slot hugs tighter than a label", () => {
+    const label = slotPlacementStyle({ origin: "right", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP);
+    const secondary = slotPlacementStyle({ origin: "right", offsetX: 0, offsetY: 0 }, dot, PORT_SECONDARY_SLOT_GAP_PX);
+    expect(parseFloat(String(label.left))).toBeGreaterThan(parseFloat(String(secondary.left)));
+    expect(parseFloat(String(label.left)) - parseFloat(String(secondary.left)))
+      .toBe(PORT_LABEL_GAP - PORT_SECONDARY_SLOT_GAP_PX);
+  });
+
+  it("boxInsetPx still resolves for a host whose positioning context is inset (React Flow's bordered Handle)", () => {
+    const flush = slotPlacementStyle({ origin: "right", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP, 0);
+    const inset = slotPlacementStyle({ origin: "right", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP, 5);
+    expect(parseFloat(String(flush.left)) - parseFloat(String(inset.left))).toBe(5);
+  });
+
+  it("defaultLiftOffsetY puts the content's BOTTOM edge exactly gap above the wire, and is negative", () => {
+    const h = portLabelHeight(PORT_TEXT_SIZES.md);
+    const y = defaultLiftOffsetY(h, PORT_LABEL_GAP);
+    expect(y).toBeLessThan(0);
+    // centred content's bottom is at +h/2; after y it is at h/2 + y.
+    expect(h / 2 + y).toBe(-PORT_LABEL_GAP);
+  });
+
+  it("the lift GROWS with the text size — the exact reason it is resolved live and not frozen into a preset", () => {
+    const small = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.sm), PORT_LABEL_GAP);
+    const huge = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.xl), PORT_LABEL_GAP);
+    expect(huge).toBeLessThan(small);
+    // Freezing the `md` value and using it at `xl` would leave the bottom
+    // edge BELOW the wire — the failure this design exists to avoid.
+    const frozenAtMd = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.md), PORT_LABEL_GAP);
+    const bottomAtXlWithFrozen = portLabelHeight(PORT_TEXT_SIZES.xl) / 2 + frozenAtMd;
+    expect(bottomAtXlWithFrozen).toBeGreaterThan(0);
+  });
+
+  it("every old PortTextLayout member maps to an origin, and only the two Offset ones are lifted", () => {
+    expect(Object.keys(TEXT_LAYOUT_AS_PLACEMENT).sort()).toEqual([...PORT_TEXT_LAYOUTS].sort());
+    const lifted = PORT_TEXT_LAYOUTS.filter((l) => TEXT_LAYOUT_AS_PLACEMENT[l].liftedLabel);
+    expect(lifted).toEqual(["rightOffset", "leftOffset"]);
+    expect(TEXT_LAYOUT_AS_PLACEMENT.bot.origin).toBe("bottom");
+    expect(TEXT_LAYOUT_AS_PLACEMENT.rightOffset.origin).toBe("right");
+  });
+
+  it("every old SecondarySlotLayout member maps to an origin too", () => {
+    expect(Object.keys(SECONDARY_LAYOUT_AS_ORIGIN).sort()).toEqual([...SECONDARY_SLOT_LAYOUTS].sort());
+    expect(SECONDARY_LAYOUT_AS_ORIGIN.botOffset).toBe("bottom");
+    expect(new Set(Object.values(SECONDARY_LAYOUT_AS_ORIGIN)).size).toBe(SLOT_ORIGINS.length);
   });
 });
