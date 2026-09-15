@@ -10,6 +10,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
 import {
+  Badge,
+  BADGE_FIELDS,
+  BADGE_PRESETS,
   Bar,
   BAR_FIELDS,
   BAR_PRESETS,
@@ -52,6 +55,9 @@ import {
   TEXT_BOX_FIELDS,
   TEXT_BOX_PRESETS,
   ALL_EDGES,
+  CodeField,
+  CODE_FIELD_FIELDS,
+  CODE_FIELD_PRESETS,
   cascadeInto,
   DEFAULT_ARRANGEMENT,
   evenT,
@@ -79,7 +85,7 @@ import { LANE_BAND_PX } from "./portEdges";
  * leaves; a Flex takes leaves and Flexes. Widening a set is a one-line edit
  * here, and the Members control offers exactly this list.
  */
-const LEAVES = ["Port", "Pill", "Glyph", "TextBox"];
+const LEAVES = ["Port", "Pill", "Glyph", "TextBox", "Badge", "CodeField"];
 export const MEMBER_SPECS: Record<string, MembersSpec> = {
   Stack: { accepts: ["Block", "Stack", "Flex", ...LEAVES] },
   PortEdge: { accepts: ["Port"], label: "Ports" },
@@ -119,6 +125,45 @@ export const BLOCK_SLOTS: SlotSpec[] = [
   { id: "header", label: "Header", region: "header", fill: "Bar" },
   { id: "body", label: "Body", region: "body", fill: "Flex", fillProps: { direction: "column", align: "stretch", gap: 6 }, accepts: ["Flex"] },
   { id: "footer", label: "Footer", region: "footer", fill: "Bar" },
+];
+
+/**
+ * A Port is three things (Zach's own diagram, 2026-09-15): the port
+ * GEOMETRY (the dot), a LABEL slot and a SECONDARY slot. Both slots are
+ * real slots — a `Flex` fill holding members — "just like the slots in
+ * the box… the advantage of this is that it gives flexibility to do what
+ * ever you want in thoose locations in the future."
+ *
+ * WHY the default content is `fillMembers` and not something `Port`
+ * composes for itself: he was explicit that both are deletable — "yes the
+ * producer badge can be delted it just a member of the slot", "even the
+ * text is just a member in the label slot that can be deleted". Content a
+ * component composes can only ever be overridden, never removed, so the
+ * badge and the label ship as ordinary seeded members instead.
+ *
+ * The label fill is `nowrap` and the secondary fill hugs its corner, so
+ * neither wraps the dot's own geometry — the fills carry the layout, the
+ * members carry the content.
+ */
+export const PORT_SLOTS: SlotSpec[] = [
+  {
+    id: "label",
+    label: "Label",
+    region: "label",
+    fill: "Flex",
+    fillProps: { align: "center", gap: 4 },
+    // `value`, not `children` — CodeField's text has always been `value`,
+    // and a FieldSpec id must name the real prop. See codeField.fields.ts.
+    fillMembers: [{ type: "CodeField", props: { value: "port" } }],
+  },
+  {
+    id: "secondary",
+    label: "Secondary",
+    region: "secondary",
+    fill: "Flex",
+    fillProps: { align: "center", gap: 4 },
+    fillMembers: [{ type: "Badge", props: { children: "4" } }],
+  },
 ];
 
 interface BlockRenderProps {
@@ -585,7 +630,47 @@ export const REGISTRY: ComponentEntry[] = [
     // shape as Pill's tone-driven override layer above, imported rather
     // than reimplemented.
     toSubject: portResolutionSubject,
-    render: (props) => <Port {...(props as Record<string, never>)} />,
+    slots: PORT_SLOTS,
+    // Both slots hand their fill straight to `Port`, which wears them in
+    // the label/secondary positions with the same geometry its own
+    // built-ins would have had. A fill is always PRESENT here (the slot
+    // exists even when empty), and `Port` treats present-but-empty as
+    // "the author emptied it" — which is what makes the seeded CodeField
+    // and Badge genuinely deletable rather than re-composed on every
+    // render. See PortProps.labelSlot's own WHY.
+    render: (props, _children, ctx) => (
+      <Port
+        {...(props as Record<string, never>)}
+        labelSlot={ctx?.slots?.label}
+        secondarySlot={ctx?.slots?.secondary}
+      />
+    ),
+  }),
+  registerComponent({
+    name: "Badge",
+    fields: BADGE_FIELDS,
+    presets: BADGE_PRESETS,
+    render: (props) => <Badge {...(props as Record<string, never>)} />,
+  }),
+  registerComponent({
+    name: "CodeField",
+    fields: CODE_FIELD_FIELDS,
+    presets: CODE_FIELD_PRESETS,
+    // `value`, not `children`: CodeField has no `children` prop — its text
+    // has always been `value` (codeField.fields.ts's own WHY). `inlineEdit`
+    // names whichever field IS the text, so it follows the component rather
+    // than TextBox's spelling.
+    inlineEdit: { field: "value" },
+    render: (props, _children, ctx) => (
+      <CodeField
+        {...(props as { value: string })}
+        // Writes go back through the instance the way every other editable
+        // member's do. Without this the field would take keystrokes and
+        // silently discard them on blur — the exact "control that does
+        // nothing" this bench keeps designing out.
+        onWrite={(next: string) => ctx?.edit?.onChange?.(next)}
+      />
+    ),
   }),
   registerComponent({
     name: "Pill",
@@ -867,13 +952,32 @@ export function makeInstanceWithSlots(type: string, index: number, uid: number):
     // A fill may itself have slots (a Bar's three cells): it brings them.
     const made = makeInstanceWithSlots(slot.fill, 0, next);
     next += made.length;
+    // …and a fill may bring default MEMBERS (a Port's label text, its
+    // count badge) — real instances, so they can be edited and deleted
+    // like anything else the author put there. See SlotSpec.fillMembers.
+    const seededMembers: Instance[] = [];
+    const memberIds: string[] = [];
+    for (const member of slot.fillMembers ?? []) {
+      const madeMember = makeInstanceWithSlots(member.type, 0, next);
+      next += madeMember.length;
+      // `madeMember[0]` is the member itself; anything after it is that
+      // member's OWN slot fills, which are not members of this fill. Only
+      // the head goes in `memberIds` — collecting by index across the
+      // flattened list would adopt a nested fill as a sibling.
+      memberIds.push(madeMember[0]!.id);
+      seededMembers.push(
+        { ...madeMember[0]!, props: { ...madeMember[0]!.props, ...(member.props ?? {}) } },
+        ...madeMember.slice(1),
+      );
+    }
     const fill: Instance = {
       ...made[0]!,
       props: { ...(slot.fillProps ?? {}) },
       slot: { id: slot.id, label: slot.label, ...(slot.accepts ? { accepts: slot.accepts } : {}) },
+      ...(memberIds.length > 0 ? { members: [...(made[0]!.members ?? []), ...memberIds] } : {}),
     };
     fillIds.push(fill.id);
-    fills.push(fill, ...made.slice(1));
+    fills.push(fill, ...made.slice(1), ...seededMembers);
   }
   return [{ ...self, members: fillIds }, ...fills];
 }
@@ -1007,18 +1111,70 @@ export function randomValue(field: FieldSpec, roll: () => number): FieldValue | 
 function seedBlockPorts(block: Instance, uid: number): { block: Instance; ports: Instance[] } {
   const leftT = evenT(2, DEFAULT_ARRANGEMENT.spacing);
   const rightT = evenT(1, DEFAULT_ARRANGEMENT.spacing);
-  const port = (id: string, name: string, edge: PortEdgeId, order: number, t: number): Instance => ({
-    id,
-    type: "Port",
-    props: { children: name, edge, direction: edge === "left" ? "input" : "output" },
-    placements: { [DEFAULT_ARRANGEMENT.id]: { edge, order, t } },
-  });
-  const ports = [
-    port(`port-${uid}`, "in", "left", 0, leftT[0]!),
-    port(`port-${uid + 1}`, "cfg", "left", 1, leftT[1]!),
-    port(`port-${uid + 2}`, "out", "right", 0, rightT[0]!),
+  const spec: { name: string; edge: PortEdgeId; order: number; t: number }[] = [
+    { name: "in", edge: "left", order: 0, t: leftT[0]! },
+    { name: "cfg", edge: "left", order: 1, t: leftT[1]! },
+    { name: "out", edge: "right", order: 0, t: rightT[0]! },
   ];
-  return { block: { ...block, members: [...(block.members ?? []), ...ports.map((p) => p.id)] }, ports };
+  const { ports, memberIds } = seedPortsWithSlots(spec, uid);
+  return { block: { ...block, members: [...(block.members ?? []), ...memberIds] }, ports };
+}
+
+/**
+ * Build seeded Ports THROUGH `makeInstanceWithSlots` rather than as bare
+ * object literals.
+ *
+ * WHY this helper exists at all (2026-09-15): the two seeds below used to
+ * hand-write `{ id, type: "Port", props, placements }`, which was fine
+ * while a Port had no slots. The moment `PORT_SLOTS` landed, every one of
+ * those 11 ports would have arrived with no label fill and no secondary
+ * fill — a Port with nowhere to put its own text, and no hole to drop a
+ * Badge into. The bug is invisible from the SlotSpec side, because
+ * declaring a slot does not reach back into code that never asked for one.
+ *
+ * Returns the flattened instance list (ports AND their slot fills AND the
+ * fills' seeded members) alongside just the PORT ids, since only the ports
+ * themselves belong in the parent's `members`.
+ */
+function seedPortsWithSlots(
+  spec: { name: string; edge: PortEdgeId; order: number; t: number }[],
+  uid: number,
+): { ports: Instance[]; memberIds: string[] } {
+  const ports: Instance[] = [];
+  const memberIds: string[] = [];
+  let next = uid;
+  for (const item of spec) {
+    const made = makeInstanceWithSlots("Port", 0, next);
+    next += made.length;
+    const self: Instance = {
+      ...made[0]!,
+      props: {
+        ...made[0]!.props,
+        // Still set, even though the label SLOT is what actually paints:
+        // `summarize` reads `props.children` for the navigator's row title
+        // (members/model.ts), so this is what makes the tree read
+        // "in / cfg / out" instead of three rows called "Port 1".
+        children: item.name,
+        edge: item.edge,
+        direction: item.edge === "left" || item.edge === "top" ? "input" : "output",
+      },
+      placements: { [DEFAULT_ARRANGEMENT.id]: { edge: item.edge, order: item.order, t: item.t } },
+    };
+    // …and the same name into the label slot's own CodeField member, which
+    // is what the port actually RENDERS now. Without this the three seeded
+    // ports all painted the member's generic "port" default while the
+    // navigator beside them said in/cfg/out — the tree and the canvas
+    // disagreeing about the same port.
+    const rest = made.slice(1).map((inst) => {
+      const isLabelMember =
+        inst.type === "CodeField" &&
+        made.some((f) => f.slot?.id === "label" && (f.members ?? []).includes(inst.id));
+      return isLabelMember ? { ...inst, props: { ...inst.props, value: item.name } } : inst;
+    });
+    memberIds.push(self.id);
+    ports.push(self, ...rest);
+  }
+  return { ports, memberIds };
 }
 
 /**
@@ -1043,30 +1199,26 @@ function seedPortEdges(host: Instance, uid: number): { host: Instance; ports: In
   const perEdge = new Map<PortEdgeId, number>();
   const counts = new Map<PortEdgeId, number>();
   for (const item of layout) counts.set(item.edge, (counts.get(item.edge) ?? 0) + 1);
-  const ports: Instance[] = layout.map((item, i) => {
+  const spec = layout.map((item) => {
     const order = perEdge.get(item.edge) ?? 0;
     perEdge.set(item.edge, order + 1);
     const ts = evenT(counts.get(item.edge) ?? 1, DEFAULT_ARRANGEMENT.spacing);
-    return {
-      id: `peport-${uid + i}`,
-      type: "Port",
-      props: {
-        children: item.name,
-        edge: item.edge,
-        direction: item.edge === "left" || item.edge === "top" ? "input" : "output",
-      },
-      placements: { [DEFAULT_ARRANGEMENT.id]: { edge: item.edge, order, t: ts[order]! } },
-    };
+    return { name: item.name, edge: item.edge, order, t: ts[order]! };
   });
+  // Same reason as `seedBlockPorts`: through `makeInstanceWithSlots`, so
+  // each of these eight ports arrives WITH its label and secondary fills.
+  const { ports, memberIds } = seedPortsWithSlots(spec, uid);
   const arrangement: Arrangement = {
     ...DEFAULT_ARRANGEMENT,
     grouping: {
       id: "pair",
       label: "Pair",
       collapsed: false,
+      // memberIds, not `ports` — `ports` now carries each Port's slot
+      // fills flattened in after it, so index 1/2 are no longer P2/P3.
       assignments: {
-        [ports[1]!.id]: { group: "pair", groupOrder: 1 },
-        [ports[2]!.id]: { group: "pair", groupOrder: 2 },
+        [memberIds[1]!]: { group: "pair", groupOrder: 1 },
+        [memberIds[2]!]: { group: "pair", groupOrder: 2 },
       },
     },
   };
@@ -1075,7 +1227,7 @@ function seedPortEdges(host: Instance, uid: number): { host: Instance; ports: In
       ...host,
       arrangements: [arrangement],
       arrangement: arrangement.id,
-      members: [...(host.members ?? []), ...ports.map((p) => p.id)],
+      members: [...(host.members ?? []), ...memberIds],
     },
     ports,
   };

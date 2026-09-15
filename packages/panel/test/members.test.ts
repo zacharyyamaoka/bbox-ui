@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_ARRANGEMENT, evenT, type Arrangement } from "@bbox-ui/core";
 import type { Instance } from "../src/bench";
-import { BAR_SLOTS, BLOCK_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstance, makeInstanceWithSlots } from "../src/bench";
+import { BAR_SLOTS, BLOCK_SLOTS, PORT_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstance, makeInstanceWithSlots } from "../src/bench";
 import {
   activeArrangement,
   addMemberTo,
@@ -165,11 +165,22 @@ describe("what a parent may add is declared, closed and capped", () => {
     // grow a Members section by accident.
     for (const e of REGISTRY) if (!(e.name in MEMBER_SPECS)) expect(e.members).toBeUndefined();
   });
-  it("a fresh bench holds one root (two on the mixed bench); anything else is a slot fill or one of the Block's seeded Ports", () => {
+  it("a fresh bench holds one root (two on the mixed bench); anything else is a slot fill, a seeded Port, or a slot's own seeded member", () => {
+    // WIDENED 2026-09-15: a slot may now arrive with default MEMBERS, not
+    // just a fill (`SlotSpec.fillMembers`) — Port's label slot seeds a
+    // CodeField and its secondary slot a Badge, both deletable. So a
+    // non-root instance is legitimately one of three things, and the set
+    // of member TYPES is pinned below rather than left open, so a future
+    // seed cannot smuggle an arbitrary component onto every bench.
+    const SEEDED_MEMBER_TYPES = new Set(["CodeField", "Badge"]);
     for (const [name, list] of Object.entries(INITIAL_BENCHES)) {
       expect(topLevel(list).length, name).toBe(name === MIXED_BENCH ? 2 : 1);
       for (const inst of list)
-        if (!topLevel(list).includes(inst)) expect(isSlotFill(inst) || inst.type === "Port", inst.id).toBe(true);
+        if (!topLevel(list).includes(inst))
+          expect(
+            isSlotFill(inst) || inst.type === "Port" || SEEDED_MEMBER_TYPES.has(inst.type),
+            inst.id,
+          ).toBe(true);
     }
   });
 });
@@ -190,8 +201,57 @@ describe("slots — a Block arrives with its anatomy filled, two levels deep", (
     expect(body.props.direction).toBe("column");
     expect(new Set(made.map((m) => m.id)).size).toBe(made.length);
   });
-  it("a leaf makes just itself", () => {
-    expect(makeInstanceWithSlots("Port", 0, 3)).toHaveLength(1);
+  it("a real leaf makes just itself", () => {
+    // Pill has no slots of its own — Port STOPPED being the example here on
+    // 2026-09-15, when its label and secondary became real slots.
+    expect(makeInstanceWithSlots("Pill", 0, 3)).toHaveLength(1);
+  });
+
+  /**
+   * Zach, 2026-09-15: "I want both of the slots fo be real slots, with flex
+   * and then members inside… yes the producer badge can be delted it just a
+   * member of the slot" and "even the text is just a member in the label
+   * slot that can be deleted".
+   */
+  it("a Port arrives as its two slot fills plus each fill's own seeded member — five instances", () => {
+    const made = makeInstanceWithSlots("Port", 0, 3);
+    expect(made).toHaveLength(5);
+    const port = made[0]!;
+    const byId = new Map(made.map((m) => [m.id, m]));
+    expect(port.members!.map((id) => byId.get(id)!.slot?.id)).toEqual(PORT_SLOTS.map((s) => s.id));
+
+    const label = byId.get(port.members![0]!)!;
+    const secondary = byId.get(port.members![1]!)!;
+    expect([label.type, secondary.type]).toEqual(["Flex", "Flex"]);
+
+    // The seeded content is a real MEMBER of the fill — which is exactly
+    // what makes it deletable through the ordinary members control.
+    const labelMember = byId.get(label.members![0]!)!;
+    const secondaryMember = byId.get(secondary.members![0]!)!;
+    expect(labelMember.type).toBe("CodeField");
+    expect(labelMember.props.value).toBe("port");
+    expect(secondaryMember.type).toBe("Badge");
+    expect(secondaryMember.props.children).toBe("4");
+
+    expect(new Set(made.map((m) => m.id)).size).toBe(made.length);
+  });
+
+  it("every seeded Port on the Block and PortEdges benches brings its slots too — not just the ones built through makeInstanceWithSlots by hand", () => {
+    // The trap this pins: `seedBlockPorts`/`seedPortEdges` used to build
+    // Port instances as bare object literals, which would have shipped 11
+    // ports with no label fill and no secondary fill the moment PORT_SLOTS
+    // landed — invisible from the SlotSpec side.
+    for (const name of ["Block", "PortEdges"]) {
+      const list = INITIAL_BENCHES[name]!;
+      const byId = new Map(list.map((i) => [i.id, i]));
+      const ports = list.filter((i) => i.type === "Port");
+      expect(ports.length, name).toBeGreaterThan(0);
+      for (const port of ports) {
+        expect(port.members?.map((id) => byId.get(id)?.slot?.id), `${name}/${port.id}`).toEqual(
+          PORT_SLOTS.map((s) => s.id),
+        );
+      }
+    }
   });
   it("a slot narrows what its fill accepts; a fill is named after its slot", () => {
     const made = makeInstanceWithSlots("Block", 0, 0);

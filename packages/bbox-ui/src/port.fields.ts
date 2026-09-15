@@ -258,13 +258,23 @@ export const PORT_FIELDS: FieldSpec[] = [
     // `placeholder`), not a special "fall through to something else" case
     // the way the old three-span rendering needed.
     defaultValue: "",
-    hint: "The CodeField's whole value — a real, editable single-line code text box (grammar-free; wiring the Python name: Type = default grammar/autocomplete is a later step).",
+    hint: "Fallback label for a host with no label slot (the tldraw/React Flow adapters, blockFace, Storybook). A host that supplies a real label slot overrides this outright — edit the slot's own CodeField member instead.",
+    // DEMOTED to Expert 2026-09-15, when the label became a real slot whose
+    // text is an ordinary, deletable member (Zach: "even the text is just a
+    // member in the label slot that can be deleted"). It is NOT dead — every
+    // prop-only host still renders its label from this string, and Storybook
+    // drives it through exactly this field — but in /create the label slot
+    // always exists and always wins, so a "Custom Label" row sitting in
+    // Simple would be a control that silently does nothing, which is the
+    // one thing this panel keeps designing out.
+    tier: "expert",
   },
   {
     id: "placeholder",
     label: "Placeholder",
     kind: "text",
     defaultValue: "",
-    hint: "Shown in the label's CodeField when Label is empty.",
+    hint: "Shown in the fallback label's CodeField when Custom Label is empty. Same prop-only-host scope as Custom Label above.",
+    tier: "expert",
   },
 ];

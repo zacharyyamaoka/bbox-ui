@@ -676,6 +676,25 @@ export interface PortProps extends ComponentProps<"div"> {
    */
   labelOffset?: number;
   /**
+   * Content for the LABEL position, supplied by a host that owns its own
+   * slot model (the /create bench's `ctx.slots.label`). When present it
+   * REPLACES the built-in `PortLabel`/`CodeField` — same position, same
+   * lift — so the label's text can be an ordinary, deletable member of a
+   * real slot rather than a string this component owns (Zach, 2026-09-15:
+   * "even the text is just a member in the label slot that can be
+   * deleted"). Absent means the built-in field, which is what every
+   * prop-only host still uses: the tldraw/React Flow adapters, blockFace,
+   * and Storybook all compose `Port` from flat props and have no instance
+   * tree to build a slot out of.
+   */
+  labelSlot?: ReactNode;
+  /**
+   * Content for the SECONDARY position, same contract as `labelSlot`.
+   * Present — INCLUDING empty — beats the built-in `producers >= 2` count
+   * badge, which is the fallback for prop-only hosts only.
+   */
+  secondarySlot?: ReactNode;
+  /**
    * Host layout fact, never persisted (same status as `dimmed`) — do NOT
    * add this to `port.fields.ts`. When true, `Port` renders the dot as its
    * OWN box with the label placed out of flow at the shared wall anchor,
@@ -746,6 +765,8 @@ export function Port({
   producers = 0,
   anchored = false,
   labelOffset,
+  labelSlot,
+  secondarySlot,
   secondarySlotLayout,
   disabled = false,
   onLabelWrite,
@@ -778,6 +799,44 @@ export function Port({
   // `portLabelLift`'s own WHY (port.layout.ts). Both branches below need
   // it, so it is resolved once against the SAME dot box either would use.
   const labelLift = portLabelLift(resolvedTextLayout, { w: diameterPx, h: diameterPx }, labelOffset);
+  // A host-given `secondarySlot` WINS outright — INCLUDING when it is
+  // empty, which is what makes the count badge deletable (Zach,
+  // 2026-09-15: "yes the producer badge can be delted it just a member of
+  // the slot"). The `producers >= 2` badge is only the fallback for a
+  // prop-only host that never supplied a slot at all (the adapters,
+  // blockFace, Storybook), so `undefined` and "the slot exists and is
+  // empty" stay distinguishable — a `??` here would have resurrected the
+  // badge the moment someone emptied it.
+  //
+  // WHY hoisted out of the JSX attribute it used to live in: written
+  // inline it was a nested ternary whose middle arm is a self-closing
+  // element, and SWC reads the `/>` that follows a `?` as the start of a
+  // regex literal ("Unterminated regexp literal", whole page 500).
+  // TypeScript's own parser accepts it, so `tsc` stayed green and only
+  // running the real app caught it.
+  const resolvedSecondarySlot: ReactNode =
+    secondarySlot !== undefined
+      ? secondarySlot
+      : producers >= 2
+        ? <PortCountBadge count={producers} />
+        : undefined;
+  // The label POSITION's geometry, resolved once and worn by whichever
+  // content occupies it — the built-in `PortLabel` or a host's own
+  // `labelSlot`. Sharing the one object is what stops a slot from drifting
+  // out of alignment with the CodeField it replaces.
+  const labelSlotStyle: CSSProperties | undefined = anchored
+    ? { ...portLabelPlacement(resolvedTextLayout, { w: diameterPx, h: diameterPx }, 0, labelOffset), whiteSpace: "nowrap" }
+    : // The flex row's half of the lift. Both the dot and the label are
+      // bottom-anchored (`alignItems: "flex-end"` below), so the dot's
+      // centre line sits `diameterPx / 2` above the row's bottom and the
+      // label's bottom sits `marginBottom` above it — making their
+      // difference exactly `labelLift`, the same quantity
+      // `portLabelPlacement` puts between them in the anchored path.
+      // `undefined` (not 0) when unlifted, so an ordinary layout emits no
+      // margin at all.
+      labelLift > 0
+      ? { marginBottom: diameterPx / 2 + labelLift }
+      : undefined;
   const rootStyle: CSSProperties = anchored
     ? { position: "relative", width: diameterPx, height: diameterPx }
     : {
@@ -830,38 +889,35 @@ export function Port({
         dimmed={dimmed}
         hinting={hinting}
         textLayout={resolvedTextLayout}
-        // The count badge is Port's own DEFAULT secondary-slot content
-        // (unchanged >= 2 threshold) — PortDot itself no longer knows
-        // what "producers" means, see this file's module doc.
-        secondarySlot={producers >= 2 ? <PortCountBadge count={producers} /> : undefined}
+        secondarySlot={resolvedSecondarySlot}
         secondarySlotLayout={secondarySlotLayout}
       />
+      {labelSlot !== undefined ? (
+        // A host-supplied label slot replaces the built-in CodeField
+        // entirely, taking its position and its lift. Same
+        // present-beats-absent rule as `secondarySlot` above, for the same
+        // reason: an emptied label slot must stay empty.
+        <span
+          data-slot="port-label-slot"
+          className={anchored ? "absolute" : undefined}
+          style={labelSlotStyle}
+        >
+          {labelSlot}
+        </span>
+      ) : (
       <PortLabel
         direction={direction}
         textSize={textSizeResolved}
         hidden={hidden}
         className={anchored ? "absolute" : undefined}
-        style={
-          anchored
-            ? { ...portLabelPlacement(resolvedTextLayout, { w: diameterPx, h: diameterPx }, 0, labelOffset), whiteSpace: "nowrap" }
-            : // The flex row's half of the lift. Both the dot and the label
-              // are bottom-anchored (`alignItems: "flex-end"` above), so the
-              // dot's centre line sits `diameterPx / 2` above the row's
-              // bottom and the label's bottom sits `marginBottom` above it —
-              // making their difference exactly `labelLift`, the same
-              // quantity `portLabelPlacement` puts between them in the
-              // anchored path. `undefined` (not 0) when unlifted, so an
-              // ordinary layout emits no margin at all.
-              labelLift > 0
-              ? { marginBottom: diameterPx / 2 + labelLift }
-              : undefined
-        }
+        style={labelSlotStyle}
         disabled={disabled}
         onLabelWrite={onLabelWrite}
         placeholder={placeholder}
       >
         {children}
       </PortLabel>
+      )}
     </div>
   );
 }
