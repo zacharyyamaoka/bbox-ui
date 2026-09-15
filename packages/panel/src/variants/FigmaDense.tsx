@@ -19,6 +19,7 @@ import {
   classifyField,
   loadStoredTier,
   matchesFilter,
+  selectorVisibleAtTier,
   storeTier,
   TIER_META,
   TIER_ORDER,
@@ -141,14 +142,17 @@ function FigmaDensePanel({
   // (tier: "advanced", Zach 2026-09-14: "No need for size control here")
   // still left its banner pinned above the Simple field list, a full
   // Small/Medium/Large/Extra Large picker undoing the demotion the tier
-  // system exists to express. Gate it the same way `visible` gates the
-  // field rows below — a selector with no FieldSpec of its own (should
-  // not happen; every selector is a real field) falls back to always
-  // shown rather than silently vanishing.
+  // system exists to express. Tier-gating is `selectorVisibleAtTier`
+  // (`../fieldTiers`) — shared with Tiered's identical gate rather than a
+  // second local copy, which duplication is exactly what let Tiered's own
+  // copy drift (it hid an unrecognised selector instead of always showing
+  // it). The search branch stays local: Tiered has no search mode to share it with.
   const visibleSelectors = selectors.filter((selector) => {
-    const field = fields.find((f) => f.id === selector);
-    if (!field) return true;
-    return searching ? matchesFilter(field, filter) : TIER_RANK[tierOf(field)] <= TIER_RANK[tier];
+    if (searching) {
+      const field = fields.find((f) => f.id === selector);
+      return !field || matchesFilter(field, filter);
+    }
+    return selectorVisibleAtTier(selector, fields, presets, governed, tier);
   });
 
   // Hiding a field the user has actually SET is worse than the verbosity the

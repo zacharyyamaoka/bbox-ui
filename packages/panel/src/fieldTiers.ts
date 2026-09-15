@@ -86,6 +86,40 @@ export function classifyField(field: FieldSpec, presets: PresetSpec[], governed:
   return "advanced";
 }
 
+/**
+ * Whether a PRESET SELECTOR's own row (the pill/banner offering its preset
+ * choices) should render at the given tier. The selector's own field is
+ * looked up in `fields` and classified exactly like any other field row; a
+ * selector with no `FieldSpec` of its own (should not happen — every
+ * selector is a real field) falls back to always visible rather than
+ * silently vanishing, so an unrecognised selector never disappears with no
+ * way back short of Expert.
+ *
+ * WHY this is its own exported function and not inlined per panel variant:
+ * `FigmaDense.tsx` and `Tiered.tsx` each grew their own copy of this exact
+ * rule (Zach, 2026-09-14, demoting Port's `size` out of Simple: "No need
+ * for size control here" surfaced that a selector's banner used to render
+ * unconditionally in BOTH). The second copy (Tiered's) reimplemented the
+ * "no field found" case differently — defaulting to `"advanced"` instead of
+ * always-visible — which silently hid any selector missing from `fields` a
+ * tier earlier than the first copy did. This module's own header comment
+ * already names that failure shape ("keeping a second copy... is how the
+ * provenance model ended up with six implementations and four answers");
+ * one shared function is what actually closes it, rather than fixing the
+ * duplicate's bug and leaving the duplication itself in place.
+ */
+export function selectorVisibleAtTier(
+  selector: string,
+  fields: FieldSpec[],
+  presets: PresetSpec[],
+  governed: Set<string>,
+  tier: Tier,
+): boolean {
+  const field = fields.find((f) => f.id === selector);
+  if (!field) return true;
+  return TIER_RANK[classifyField(field, presets, governed)] <= TIER_RANK[tier];
+}
+
 /** A field matches a typed filter on its label, its id, or any option label —
  *  looking for "danger" should find Line Color, whose OPTIONS carry the word,
  *  not only fields whose own name does. */

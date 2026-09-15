@@ -13,6 +13,7 @@ import type { PanelVariant, PanelVariantProps } from "./contract";
 import {
   classifyField,
   loadStoredTier,
+  selectorVisibleAtTier,
   storeTier,
   TIER_META,
   TIER_ORDER,
@@ -237,13 +238,12 @@ function TieredPanel({
   // demoted to "advanced" now that a field's tier can be hand-curated
   // instead of only inferred, Zach 2026-09-14: "No need for size control
   // here") still showed a full Small/Medium/Large/Extra Large pill in
-  // Simple. Gate it the same way `visibleFields` gates the plain field
-  // rows: a selector with no explicit tier still falls through to
-  // `classifyField`'s "a preset selector is always Simple" rule, so
-  // "presets first" is unchanged everywhere a component hasn't demoted
-  // its own selector on purpose.
-  const visibleSelectors = selectors.filter(
-    (selector) => TIER_RANK[tierById.get(selector) ?? "advanced"] <= TIER_RANK[tier],
+  // Simple. `selectorVisibleAtTier` (`../fieldTiers`) gates it the same way
+  // `visibleFields` gates the plain field rows below — shared with
+  // FigmaDense's identical gate rather than a second local copy, which is
+  // exactly the shape of bug this file's own module doc already names.
+  const visibleSelectors = selectors.filter((selector) =>
+    selectorVisibleAtTier(selector, fields, presets, governed, tier),
   );
 
   // WHY a note rather than silently promoting an overridden field into
