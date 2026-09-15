@@ -4,7 +4,7 @@ import {
   BlockHeader,
   BlockTitle,
   BlockType,
-  Port,
+  LabeledPort,
 } from "@bbox-ui/core";
 
 export default function BlockWithPorts() {

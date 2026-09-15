@@ -162,11 +162,18 @@ export function InspectorColumn(p: InspectorColumnProps) {
       )}
       <MembersPath instances={p.instances} subject={p.subject} onSelect={p.onSelectInstance} />
       {(() => {
-        // A Port's Placement section: a dedicated slot here rather than a
-        // member list's regionHeader, because a Port declares no `members`
+        // A port's Placement section: a dedicated slot here rather than a
+        // member list's regionHeader, because a port declares no `members`
         // of its own — there is no list to attach it to (Zach's
         // 2026-09-12 model; see arrangement-section.tsx's own doc).
-        if (p.subject?.type !== "Port") return null;
+        //
+        // "LabeledPort", not "Port", since the 2026-09-15 split: a Block's
+        // ports are the COMPOSITE (MEMBER_SPECS.Block accepts LabeledPort,
+        // and `blockPorts` filters on it). Left as "Port" this returned
+        // null for every real Block port and the Placement section simply
+        // vanished from the inspector — the silent half of a rename that
+        // changed what an existing literal means.
+        if (p.subject?.type !== "LabeledPort") return null;
         const parentId = ancestry(p.instances, p.subject.id).at(-1);
         const block = parentId ? p.instances.find((i) => i.id === parentId) : undefined;
         if (!block || block.type !== "Block") return null;
