@@ -120,6 +120,17 @@ describe("PORT_FIELDS", () => {
     expect(field("size").options?.map((o) => o.value)).toEqual([...PORT_SIZE_RUNGS]);
   });
 
+  // Pins Zach's 2026-09-14 curation of Port's Inspector Simple tab
+  // (@bbox-ui/panel's fieldTiers.ts): `size` is a preset selector, which
+  // `classifyField` would otherwise infer as Simple (the same rule `state`
+  // gets it from) — an explicit `tier` override is the ONLY thing keeping
+  // it out. A silent revert of this one line would put a Small/Medium/
+  // Large/Extra Large control back in Simple with every other assertion
+  // in this file (and the panel's own tests) still green.
+  it("size is explicitly demoted to \"advanced\" — Zach: \"No need for size control here\"", () => {
+    expect(field("size").tier).toBe("advanced");
+  });
+
   it("diameter's declared default equals Port's real default and Port's own real rendered footprint — reached via the `size` cascade (size defaults to \"md\", whose preset governs diameter to \"md\")", () => {
     expect(field("diameter").defaultValue).toBe("md");
     expect(dotElement.props.diameter).toBe("md");
@@ -131,6 +142,17 @@ describe("PORT_FIELDS", () => {
     expect(inwardTextLayout("left")).toBe("right");
     expect(field("textLayout").defaultValue).toBe("right");
     expect(bareRoot.props["data-text-layout"]).toBe("right");
+  });
+
+  // Pins the field Zach actually asked to see move in the Simple tab
+  // (2026-09-14: "Label Slot Location — Where is the slot located").
+  // Without shape-inference to fall back on for a field this important,
+  // a silent label/tier revert here would leave every other test green
+  // while the Inspector's Simple tab quietly lost its one geometry
+  // control again.
+  it("textLayout is labelled \"Label Slot Location\" and explicitly promoted to \"simple\"", () => {
+    expect(field("textLayout").label).toBe("Label Slot Location");
+    expect(field("textLayout").tier).toBe("simple");
   });
 
   it("textSize's declared default equals Port's real default — \"md\" (24px), not textSize's own former \"sm\" rung, now that a truly bare Port resolves it through the size cascade", () => {

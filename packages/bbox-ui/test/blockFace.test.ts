@@ -125,6 +125,18 @@ describe("BlockPortRows", () => {
   it("renders an empty list without throwing", () => {
     expect(() => blockPortRowsElement({ ports: [] })).not.toThrow();
   });
+
+  // Regression coverage for `blockFacePortLabel` (port.tsx/blockFace.tsx's
+  // own module doc): Port's two-slot merge removed the `name`/`type` props
+  // rows used to pass directly, folding them into one `children` string —
+  // the ordering assertion above would stay green even if that composition
+  // regressed to "undefined: list" or dropped the type entirely, since it
+  // never reads the actual rendered text.
+  it("composes each row's Port `children` as \"name: type\", or bare \"name\" with no type", () => {
+    const el = blockPortRowsElement({ ports: PORTS });
+    const rows = el.props.children as Array<{ props: { children: { props: { children: string } } } }>;
+    expect(rows.map((r) => r.props.children.props.children)).toEqual(["items: list", "bins", "result: list"]);
+  });
 });
 
 describe("BlockPortWalls", () => {
@@ -136,5 +148,17 @@ describe("BlockPortWalls", () => {
 
   it("renders an empty list without throwing", () => {
     expect(() => blockPortWallsElement({ ports: [], width: 384, height: 346 })).not.toThrow();
+  });
+
+  // Same regression coverage as BlockPortRows above, for the wall-mounted
+  // PortLabel path (only rendered when `port.name` is truthy).
+  it("composes each wall PortLabel's `children` as \"name: type\", or bare \"name\" with no type", () => {
+    const el = blockPortWallsElement({ ports: PORTS, width: 384, height: 346 });
+    const wraps = el.props.children as Array<{ props: { children: unknown[] } }>;
+    const labels = wraps.map((w) => {
+      const label = w.props.children[1] as { props: { children: string } } | false;
+      return label ? label.props.children : null;
+    });
+    expect(labels).toEqual(["items: list", "bins", "result: list"]);
   });
 });

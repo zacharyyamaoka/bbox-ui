@@ -232,6 +232,20 @@ function TieredPanel({
   const visibleFields = fields.filter((f) => TIER_RANK[tierById.get(f.id) ?? "advanced"] <= TIER_RANK[tier]);
   const hiddenFields = fields.filter((f) => TIER_RANK[tierById.get(f.id) ?? "advanced"] > TIER_RANK[tier]);
 
+  // A selector's OWN preset-picker pill used to render for every selector
+  // unconditionally (contract #1, below) — so Port's `size` (explicitly
+  // demoted to "advanced" now that a field's tier can be hand-curated
+  // instead of only inferred, Zach 2026-09-14: "No need for size control
+  // here") still showed a full Small/Medium/Large/Extra Large pill in
+  // Simple. Gate it the same way `visibleFields` gates the plain field
+  // rows: a selector with no explicit tier still falls through to
+  // `classifyField`'s "a preset selector is always Simple" rule, so
+  // "presets first" is unchanged everywhere a component hasn't demoted
+  // its own selector on purpose.
+  const visibleSelectors = selectors.filter(
+    (selector) => TIER_RANK[tierById.get(selector) ?? "advanced"] <= TIER_RANK[tier],
+  );
+
   // WHY a note rather than silently promoting an overridden field into
   // view: Simple mode hiding a value the user SET (not just its default)
   // is worse than the verbosity Simple exists to cut — the panel must
@@ -292,13 +306,17 @@ function TieredPanel({
       )}
 
       {/* Presets first (contract #1) — quiet single-line pills per
-          selector, always shown regardless of tier: the preset IS the
-          Simple path, so gating it behind a mode would be backwards.
-          AMENDMENT point 3: the active pill also reports "· modified"
-          with a reset the instant any field it governs is overridden —
-          in Simple mode this is the ONLY place that fact is visible,
-          since every governed field is Expert-tier and off screen. */}
-      {selectors.map((selector) => {
+          selector, shown at whatever tier the selector's OWN field
+          resolves to (almost always Simple, `classifyField`'s default for
+          any preset selector) — so gating it behind a mode is backwards
+          UNLESS a component's own schema explicitly demoted that selector
+          (`field.tier`), same override every other field row already
+          honours. AMENDMENT point 3: the active pill also reports
+          "· modified" with a reset the instant any field it governs is
+          overridden — in Simple mode this is the ONLY place that fact is
+          visible, since every governed field is Expert-tier and off
+          screen. */}
+      {visibleSelectors.map((selector) => {
         const presetsForSelector = presets.filter((p) => p.selector === selector);
         const selectorField = fields.find((f) => f.id === selector) ?? {
           id: selector,
