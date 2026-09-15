@@ -179,11 +179,36 @@ async function addVia(type, listIndex = 0) {
 const manifest = [];
 for (const theme of ["dark", "light"]) {
   console.log(`— ${theme}`);
-  // The picks are the only things there: no navigator or layout switcher, arborist and inline rows mounted.
+  // The picks are the only things there: no switchers left, arborist as the
+  // navigator, and the inspector rendering the one panel that shipped.
   await load(theme, "Stack");
-  assert(!(await evaluate(`!!document.querySelector('[data-slot="navigator-picker"], [data-slot="layout-picker"], [data-slot="members-control-picker"]')`)), "no switcher for navigator, layout or members control remains");
+  assert(
+    !(await evaluate(
+      `!!document.querySelector('[data-slot="navigator-picker"], [data-slot="layout-picker"], [data-slot="members-control-picker"], [data-slot="inspector-design-picker"], [data-slot="variant-picker"]')`,
+    )),
+    "no switcher for navigator, layout, members control, inspector design or panel design remains",
+  );
   assert((await evaluate(`document.querySelector('[data-slot="instance-navigator"]')?.getAttribute('data-navigator')`)) === "arborist", "react-arborist is the navigator");
-  assert((await evaluate(`document.querySelector('[data-slot="inspector-layout"]')?.getAttribute('data-inspector-layout')`)) === "inline", "inline rows is the inspector layout");
+  // WHY this stopped asserting `inspector-layout === "inline"`: Inline rows
+  // WAS the picked inspector layout, and this line was true when it was
+  // written. The sections work superseded it one round later — the inspector
+  // is now `SectionInspector`, which draws its own rows and never mounts an
+  // `InspectorLayout` — so the assertion had been failing on this branch
+  // since the sections panel became the default, describing a page that no
+  // longer exists. The successor fact is asserted instead; `INLINE_ROWS`
+  // itself is untouched and still the layout everything else uses.
+  //
+  // NOT DONE, and it is the next failure below: everything after this line
+  // still reads the PRE-SECTIONS DOM — `[data-slot="members-section"]` as a
+  // proxy for "a list exists", its `members-count`, its inline
+  // `add-member-trigger`. In the sections panel an EMPTY list mounts no
+  // control at all; it is one header row carrying the + , which is the
+  // compact reading Zach asked for and is asserted in
+  // `capture-inspector-v5b.mjs` instead. Porting the rest of this journey to
+  // those selectors is its own job — it belongs to the members-control round,
+  // not to this one, and half-porting it would be worse than leaving the
+  // boundary visible here.
+  assert((await evaluate(`document.querySelector('[data-slot="panel-variant-host"]')?.getAttribute('data-variant')`)) === "sections", "the inspector renders the shipped sections panel");
   const options = await evaluate(`Array.from(document.querySelectorAll('[data-slot="component-picker"] option')).map(o => o.value)`);
   assert(options.includes("Flex") && !options.includes("RowContainer"), `Flex is registered and RowContainer is gone (${options.join(",")})`);
 

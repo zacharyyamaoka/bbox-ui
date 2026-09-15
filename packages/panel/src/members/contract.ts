@@ -69,6 +69,24 @@ export interface MembersControlProps {
   /** When the list belongs to a slot fill shown inside ITS parent's
    *  inspector: select the fill itself (to edit its Flex props). */
   onSelectParent?: () => void;
+  /**
+   * `"none"` renders the member ROWS and nothing else — no header, no
+   * count, no Add trigger, no prose.
+   *
+   * WHY a host may need that: in the sections panel a member list is headed
+   * by the same `FoldRow` that heads a section, and that row already
+   * carries the list's label, its count and its verbs. A control that also
+   * drew its own header produced two stacked headers — Zach's 2026-09-12
+   * screenshot of "Right · 1 member ▼" sitting on top of "▼ RIGHT ① ⚙ +",
+   * with his correction: "When you expand it though, no need to repeat the
+   * header again etc."
+   *
+   * WHY the default is `"header"` and not the other way round: the
+   * pre-sections inspector still on `main` mounts these controls standalone
+   * and must be untouched, so the two designs stay honestly comparable in
+   * the same picker.
+   */
+  chrome?: "header" | "none";
 }
 
 export interface MembersControl {
