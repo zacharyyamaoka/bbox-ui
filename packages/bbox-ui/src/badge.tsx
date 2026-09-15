@@ -36,7 +36,13 @@ export interface BadgeProps extends Omit<ComponentProps<"span">, "children"> {
  * what a toned/stateful Badge looks like.
  */
 export function Badge({
-  children,
+  // A REAL default, so the component's own output and `BADGE_FIELDS`'
+  // declared default are the same fact rather than two that happen to
+  // look alike. An omitted `children` used to read back `undefined`,
+  // which no `FieldValue` can encode — so the field had to declare
+  // something else, and did ("4"), and the inspector then disagreed with
+  // the preview beside it.
+  children = "",
   size = "md",
   hidden = false,
   className,

@@ -38,9 +38,9 @@ const inst = (id: string, type: string, props: Record<string, unknown> = {}, mem
 const bench: Instance[] = [
   inst("stack-1", "Stack", {}, ["block-2", "port-3"]),
   inst("block-2", "Block", {}, ["pill-4"]),
-  inst("port-3", "Port", { children: "goal", state: "wired" }),
+  inst("port-3", "LabeledPort", { children: "goal", state: "wired" }),
   inst("pill-4", "Pill", { children: "" }),
-  inst("port-9", "Port", { children: "loose" }),
+  inst("port-9", "LabeledPort", { children: "loose" }),
 ];
 
 describe("the member tree is derived from the parent's list alone", () => {
@@ -58,7 +58,7 @@ describe("the member tree is derived from the parent's list alone", () => {
 
 describe("summarize gives a control the little it may show", () => {
   it("uses the child's own text as its title, else Type n among same-type siblings", () => {
-    expect(summarize(bench, "port-3")).toMatchObject({ title: "goal", untitled: false, badge: "wired", type: "Port" });
+    expect(summarize(bench, "port-3")).toMatchObject({ title: "goal", untitled: false, badge: "wired", type: "LabeledPort" });
     // An empty string is not a title.
     expect(summarize(bench, "pill-4")).toMatchObject({ title: "Pill 1", untitled: true, badge: null });
     expect(summarize(bench, "block-2")).toMatchObject({ title: "Block 1", memberIds: ["pill-4"] });
@@ -92,8 +92,8 @@ describe("the bench operations", () => {
     };
     const withGroups: Instance[] = [
       { ...inst("block-1", "Block", {}, ["args", "kwargs"]), arrangements: [grouped], arrangement: grouped.id },
-      inst("args", "Port"),
-      inst("kwargs", "Port"),
+      inst("args", "LabeledPort"),
+      inst("kwargs", "LabeledPort"),
     ];
     const removed = removeMember(withGroups, "args");
     expect(removed.find((i) => i.id === "block-1")?.members).toEqual(["kwargs"]);
@@ -122,10 +122,10 @@ describe("the bench operations", () => {
     expect(reparent(bench, "stack-1", "stack-1", 0)).toBe(bench);
   });
   it("instanceTree marks containers by what the registry says they can hold, not by emptiness", () => {
-    const tree = instanceTree([inst("s", "Stack"), inst("p", "Port"), inst("b", "Block", {}, ["f"]), inst("f", "Flex", {}, [])], REGISTRY);
+    const tree = instanceTree([inst("s", "Stack"), inst("p", "LabeledPort"), inst("b", "Block", {}, ["f"]), inst("f", "Flex", {}, [])], REGISTRY);
     expect(tree.map((n) => [n.type, n.container])).toEqual([
       ["Stack", true],
-      ["Port", false],
+      ["LabeledPort", false],
       // A Block IS a container now (Zach, 2026-09-12): it declares
       // `members` (its Ports) alongside its slots.
       ["Block", true],
@@ -147,11 +147,11 @@ describe("the bench operations", () => {
 
 describe("what a parent may add is declared, closed and capped", () => {
   it("offers only the accepted types, in the declared order", () => {
-    expect(addableTypes(MEMBER_SPECS.PortEdge, REGISTRY, 0)).toEqual(["Port"]);
+    expect(addableTypes(MEMBER_SPECS.PortEdge, REGISTRY, 0)).toEqual(["LabeledPort"]);
     expect(addableTypes(MEMBER_SPECS.Stack, REGISTRY, 0)[0]).toBe("Block");
   });
   it("offers nothing at max, and everything registered when accepts is open", () => {
-    expect(addableTypes({ accepts: ["Port"], max: 2 }, REGISTRY, 2)).toEqual([]);
+    expect(addableTypes({ accepts: ["LabeledPort"], max: 2 }, REGISTRY, 2)).toEqual([]);
     expect(addableTypes({ accepts: [] }, REGISTRY, 0)).toEqual(REGISTRY.map((e) => e.name));
   });
   it("every accepted type is a registered component, and every declaring entry carries its spec", () => {
@@ -178,7 +178,7 @@ describe("what a parent may add is declared, closed and capped", () => {
       for (const inst of list)
         if (!topLevel(list).includes(inst))
           expect(
-            isSlotFill(inst) || inst.type === "Port" || SEEDED_MEMBER_TYPES.has(inst.type),
+            isSlotFill(inst) || inst.type === "LabeledPort" || SEEDED_MEMBER_TYPES.has(inst.type),
             inst.id,
           ).toBe(true);
     }
@@ -214,7 +214,7 @@ describe("slots — a Block arrives with its anatomy filled, two levels deep", (
    * slot that can be deleted".
    */
   it("a Port arrives as its two slot fills plus each fill's own seeded member — five instances", () => {
-    const made = makeInstanceWithSlots("Port", 0, 3);
+    const made = makeInstanceWithSlots("LabeledPort", 0, 3);
     expect(made).toHaveLength(5);
     const port = made[0]!;
     const byId = new Map(made.map((m) => [m.id, m]));
@@ -244,12 +244,23 @@ describe("slots — a Block arrives with its anatomy filled, two levels deep", (
     for (const name of ["Block", "PortEdges"]) {
       const list = INITIAL_BENCHES[name]!;
       const byId = new Map(list.map((i) => [i.id, i]));
-      const ports = list.filter((i) => i.type === "Port");
+      const ports = list.filter((i) => i.type === "LabeledPort");
       expect(ports.length, name).toBeGreaterThan(0);
       for (const port of ports) {
-        expect(port.members?.map((id) => byId.get(id)?.slot?.id), `${name}/${port.id}`).toEqual(
-          PORT_SLOTS.map((s) => s.id),
-        );
+        const fills = (port.members ?? []).map((id) => byId.get(id)!);
+        expect(fills.map((f) => f.slot?.id), `${name}/${port.id}`).toEqual(PORT_SLOTS.map((s) => s.id));
+        // …and each fill holds the member TYPE its own SlotSpec seeds.
+        // Slot ids alone were not enough: swapping the CodeField and the
+        // Badge between the two fills left every id assertion green while
+        // /create rendered a badge where the label goes (adversarial
+        // judge, 2026-09-15).
+        for (const [i, fill] of fills.entries()) {
+          const seeded = PORT_SLOTS[i]!.fillMembers ?? [];
+          expect(
+            (fill.members ?? []).map((id) => byId.get(id)!.type),
+            `${name}/${port.id}/${fill.slot?.id}`,
+          ).toEqual(seeded.map((m) => m.type));
+        }
       }
     }
   });
@@ -310,8 +321,8 @@ describe("a Block's Ports (Zach, 2026-09-12): members, active Arrangement, per-a
     inst("bar-h", "Bar"),
     inst("flex-b", "Flex"),
     inst("bar-f", "Bar"),
-    { ...inst("port-in", "Port", { children: "in" }), placements: { default: { edge: "left", order: 0, t: 0.5 } } },
-    inst("port-out", "Port", { children: "out" }),
+    { ...inst("port-in", "LabeledPort", { children: "in" }), placements: { default: { edge: "left", order: 0, t: 0.5 } } },
+    inst("port-out", "LabeledPort", { children: "out" }),
   ];
 
   it("blockPorts returns only the Port members, in member order — never the slot fills", () => {
@@ -350,8 +361,8 @@ describe("a Block's Ports (Zach, 2026-09-12): members, active Arrangement, per-a
     // computes order 0 instead of 1: the same not-yet-stored port gets a
     // DIFFERENT answer depending only on how much of the list its caller
     // bothered to pass in.
-    const onTop: Instance = { ...inst("port-on-top", "Port", { children: "on-top" }), placements: { default: { edge: "top", order: 0, t: 0 } } };
-    const fresh: Instance = inst("port-fresh", "Port", { children: "fresh" });
+    const onTop: Instance = { ...inst("port-on-top", "LabeledPort", { children: "on-top" }), placements: { default: { edge: "top", order: 0, t: 0 } } };
+    const fresh: Instance = inst("port-fresh", "LabeledPort", { children: "fresh" });
     const fullList = portPlacementsOf(block, [onTop, fresh], "default");
     expect(fullList["port-fresh"]).toEqual({ edge: "top", order: 1, t: expect.any(Number) });
     const truncatedList = portPlacementsOf(block, [fresh], "default");
@@ -365,7 +376,7 @@ describe("a Block's Ports (Zach, 2026-09-12): members, active Arrangement, per-a
   });
 
   it("portPlacementsOf gives a locked port its fixed corner placement, ignoring anything stored", () => {
-    const lockedPort: Instance = { ...inst("port-fn", "Port"), locked: true, placements: { default: { edge: "bottom", order: 3, t: 0.9 } } };
+    const lockedPort: Instance = { ...inst("port-fn", "LabeledPort"), locked: true, placements: { default: { edge: "bottom", order: 3, t: 0.9 } } };
     expect(portPlacementsOf(block, [lockedPort], "default")).toEqual({ "port-fn": { edge: "top", order: 0, t: 0 } });
   });
 

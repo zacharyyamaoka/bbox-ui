@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Port, type PortProps } from "@bbox-ui/core";
+import { LabeledPort, type LabeledPortProps } from "@bbox-ui/core";
 import { PortInspectorPanel, type PortSubject } from "./PortInspectorPanel";
 
 interface PortInstance {
@@ -48,7 +48,7 @@ export default function App() {
             style={{ display: "flex", alignItems: "center", gap: 12 }}
           >
             <input type="checkbox" checked={port.selected} onChange={() => toggleSelected(port.id)} />
-            <Port {...(port.props as PortProps)}>{String(port.props.children)}</Port>
+            <LabeledPort {...(port.props as LabeledPortProps)}>{String(port.props.children)}</LabeledPort>
           </label>
         ))}
       </div>

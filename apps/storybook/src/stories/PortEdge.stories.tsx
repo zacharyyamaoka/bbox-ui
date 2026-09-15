@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import {
-  Port,
+  LabeledPort,
   PortEdge,
   PORT_EDGE_FIELDS,
   PORT_EDGE_PRESETS,
@@ -47,13 +47,13 @@ const sweep = (fieldId: string) => ({
 });
 
 /**
- * Three real `<Port>` children, none setting their own `textLayout` — each
+ * Three real `<LabeledPort>` children, none setting their own `textLayout` — each
  * reads whatever `textLayout` this component itself is handed.
  *
  * WHY it forwards the prop instead of just rendering a Fragment:
  * `cascadeInto` in portEdge.tsx only unwraps `child.type === Fragment` on
  * its way down — a real component like `ThreePorts` is opaque to it and the
- * clone stops here, so the three `<Port>`s below never saw PortEdge's
+ * clone stops here, so the three `<LabeledPort>`s below never saw PortEdge's
  * cascade (measured: `--primary`, `--all-edges`, `--all-layouts` and
  * `--hidden-count` all painted `[right,right,right]` regardless of the Text
  * Layout control). PortEdge still clones `textLayout` onto `<ThreePorts>`
@@ -63,15 +63,15 @@ const sweep = (fieldId: string) => ({
 function ThreePorts({ textLayout }: { textLayout?: PortTextLayout }) {
   return (
     <>
-      <Port state="empty" textLayout={textLayout}>
+      <LabeledPort state="empty" textLayout={textLayout}>
         alpha
-      </Port>
-      <Port state="wired" textLayout={textLayout}>
+      </LabeledPort>
+      <LabeledPort state="wired" textLayout={textLayout}>
         beta
-      </Port>
-      <Port state="received" textLayout={textLayout}>
+      </LabeledPort>
+      <LabeledPort state="received" textLayout={textLayout}>
         gamma
-      </Port>
+      </LabeledPort>
     </>
   );
 }
@@ -157,7 +157,7 @@ export const AllTextLayouts: Story = {
     <div style={{ display: "flex", flexWrap: "wrap", gap: 32, padding: 24 }}>
       {TEXT_LAYOUT_FIELD.options!.map((option) => (
         <PortEdge {...args} key={option.value} textLayout={option.value as PortTextLayout}>
-          <Port state="empty">{option.label}</Port>
+          <LabeledPort state="empty">{option.label}</LabeledPort>
         </PortEdge>
       ))}
     </div>
@@ -180,11 +180,11 @@ export const TextLayoutOverride: Story = {
   parameters: { controls: { exclude: controlNames(PORT_EDGE_FIELDS, ["edge"]) } },
   render: (args) => (
     <PortEdge {...args} edge="top">
-      <Port state="empty">follows cascade</Port>
-      <Port state="wired" textLayout="left">
+      <LabeledPort state="empty">follows cascade</LabeledPort>
+      <LabeledPort state="wired" textLayout="left">
         sets its own
-      </Port>
-      <Port state="received">follows cascade</Port>
+      </LabeledPort>
+      <LabeledPort state="received">follows cascade</LabeledPort>
     </PortEdge>
   ),
 };

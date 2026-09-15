@@ -1,7 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Port, type PortTextLayout } from "@bbox-ui/core";
+import { LabeledPort, type PortTextLayout } from "@bbox-ui/core";
 import type { CSSProperties, MouseEvent } from "react";
 
 import type { Direction, Orientation } from "./types";
@@ -147,9 +147,9 @@ export function SortablePortCard({
       {...listeners}
     >
       {showPort ? (
-        <Port state="empty" size="md" textLayout={textLayout}>
+        <LabeledPort state="empty" size="md" textLayout={textLayout}>
           {label}
-        </Port>
+        </LabeledPort>
       ) : (
         <span className="port-card__label">{label}</span>
       )}

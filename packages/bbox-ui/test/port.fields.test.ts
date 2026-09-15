@@ -7,9 +7,9 @@ import {
   toArgTypes,
 } from "@bbox-ui/schema";
 import { CodeField } from "../src/codeField";
-import { PORT_FIELDS } from "../src/port.fields";
+import { LABELED_PORT_FIELDS, PORT_FIELDS } from "../src/port.fields";
 import { PORT_PRESETS } from "../src/port.presets";
-import { Port, PortCountBadge, PortDot, PortLabel, portResolutionSubject } from "../src/port";
+import { LabeledPort, Port, PortCountBadge, PortLabel, portResolutionSubject } from "../src/port";
 import {
   APPEARANCE_STATES,
   LENSES,
@@ -45,25 +45,25 @@ function call(fn: any, props: Record<string, unknown> = {}) {
 }
 
 function field(id: string) {
-  const found = PORT_FIELDS.find((f) => f.id === id);
-  if (!found) throw new Error(`no PORT_FIELDS entry for "${id}"`);
+  const found = LABELED_PORT_FIELDS.find((f) => f.id === id);
+  if (!found) throw new Error(`no LABELED_PORT_FIELDS entry for "${id}"`);
   return found;
 }
 
 // The bare, fully-defaulted tree: Port -> [PortDot element, PortLabel element].
-const bareRoot = call(Port);
+const bareRoot = call(LabeledPort);
 const [dotElement, labelElement] = bareRoot.props.children as [
-  { props: Record<string, unknown> },
+  { type: unknown; props: Record<string, unknown> },
   { props: Record<string, unknown> },
 ];
 // Invoke the two child components themselves to read THEIR real output —
 // `Port` only threads props through; the geometry/paint live in these.
-const dotRendered = call(PortDot, dotElement.props);
+const dotRendered = call(Port, dotElement.props);
 const labelRendered = call(PortLabel, labelElement.props);
 
 describe("PORT_FIELDS", () => {
   it("has exactly Port's real props, in panel order — own fields, then the shared APPEARANCE_FIELDS bundle, then the author-set hidden/disabled toggles, then the host-computed interaction axis, then the label fields", () => {
-    expect(PORT_FIELDS.map((f) => f.id)).toEqual([
+    expect(LABELED_PORT_FIELDS.map((f) => f.id)).toEqual([
       // "name"/"type"/"defaultValue" REMOVED 2026-09-12 (the two-slot
       // proposal) — folded into the single `children` field, now the
       // label slot's real CodeField value. See port.tsx's own module doc.
@@ -170,13 +170,13 @@ describe("PORT_FIELDS", () => {
     expect(field("tone").defaultValue).toBe("neutral");
     expect(field("lens").defaultValue).toBe("normal");
     // lensBefore is intentionally out of the bundle; see appearance.fields.ts.
-    expect(PORT_FIELDS.some((f) => f.id === "lensBefore")).toBe(false);
+    expect(LABELED_PORT_FIELDS.some((f) => f.id === "lensBefore")).toBe(false);
     expect(dotElement.props.state).toBe("empty");
     expect(dotElement.props.tone).toBe("neutral");
     expect(bareRoot.props["data-state"]).toBe("empty");
     // "normal" lens is not surfaced as a `data-lens` attribute at all.
     expect(bareRoot.props["data-lens"]).toBeUndefined();
-    const changedRoot = call(Port, { lens: "changed" });
+    const changedRoot = call(LabeledPort, { lens: "changed" });
     expect(changedRoot.props["data-lens"]).toBe("changed");
   });
 
@@ -187,29 +187,41 @@ describe("PORT_FIELDS", () => {
     expect(field("producers").defaultValue).toBe(0);
     expect(dotElement.props.dimmed).toBe(false);
     expect(dotElement.props.hinting).toBe(false);
-    // PortDot itself no longer has a `producers` prop or any producers-
-    // aware logic (port.tsx's own module doc) — Port composes the count
-    // badge as PortDot's generic `secondarySlot` content instead. 2+
-    // producers is still the real threshold, now visible one level up.
-    expect(dotElement.props.secondarySlot).toBeUndefined();
-    type DotProps = { props: { secondarySlot?: { type: unknown; props: { count: number } } } };
-    const [twoProducersDot] = call(Port, { producers: 2 }).props.children as [DotProps, unknown];
-    expect(twoProducersDot.props.secondarySlot).toBeDefined();
-    expect(twoProducersDot.props.secondarySlot!.type).toBe(PortCountBadge);
-    expect(twoProducersDot.props.secondarySlot!.props.count).toBe(2);
-    const [oneProducerDot] = call(Port, { producers: 1 }).props.children as [DotProps, unknown];
-    expect(oneProducerDot.props.secondarySlot).toBeUndefined();
-    // The generic slot itself: PortDot renders nothing for a nullish
-    // secondarySlot, and something (non-false) once given ANY content —
-    // children: [halo, core-or-false, slot-or-false].
-    expect(dotRendered.props.children[2]).toBe(false);
-    expect(call(PortDot, { secondarySlot: "cue" }).props.children[2]).not.toBe(false);
-    expect(call(PortDot, { secondarySlot: undefined }).props.children[2]).toBe(false);
+    // The bare `Port` geometry primitive has NO producers prop, no
+    // secondary slot and no producers-aware logic at all (the 2026-09-15
+    // split: "Port is just the actual like Port geometry its self in
+    // isolation"). `LabeledPort` composes the count badge into the slot
+    // it owns. 2+ producers is still the real threshold, now one level up.
+    expect("secondarySlot" in dotElement.props).toBe(false);
+    // With no slot content, LabeledPort's first child IS the bare Port —
+    // no wrapper at all.
+    expect(dotElement.type).toBe(Port);
+
+    // With a badge, the first child becomes the geometry wrapper carrying
+    // [Port, secondary-slot span].
+    type Wrapper = {
+      props: {
+        "data-slot"?: string;
+        children: [unknown, { props: { children: { type: unknown; props: { count: number } } } }];
+      };
+    };
+    const [twoProducers] = call(LabeledPort, { producers: 2 }).props.children as [Wrapper, unknown];
+    expect(twoProducers.props["data-slot"]).toBe("port-geometry");
+    const badge = twoProducers.props.children[1].props.children;
+    expect(badge.type).toBe(PortCountBadge);
+    expect(badge.props.count).toBe(2);
+
+    // Below the threshold there is no slot content, so no wrapper either.
+    const [oneProducer] = call(LabeledPort, { producers: 1 }).props.children as [
+      { type: unknown },
+      unknown,
+    ];
+    expect(oneProducer.type).toBe(Port);
   });
 
   it("`hidden: true` renders nothing — Port, PortDot and PortLabel all return null", () => {
+    expect(call(LabeledPort, { hidden: true })).toBeNull();
     expect(call(Port, { hidden: true })).toBeNull();
-    expect(call(PortDot, { hidden: true })).toBeNull();
     expect(call(PortLabel, { hidden: true })).toBeNull();
   });
 
@@ -230,11 +242,11 @@ describe("PORT_FIELDS", () => {
   });
 
   it("defaultArgs mirrors every field's own declared defaultValue, one entry per field", () => {
-    const args = defaultArgs(PORT_FIELDS);
-    for (const f of PORT_FIELDS) {
+    const args = defaultArgs(LABELED_PORT_FIELDS);
+    for (const f of LABELED_PORT_FIELDS) {
       expect(args[f.id]).toBe(f.defaultValue);
     }
-    expect(Object.keys(args)).toHaveLength(PORT_FIELDS.length);
+    expect(Object.keys(args)).toHaveLength(LABELED_PORT_FIELDS.length);
   });
 
   it("every segments field's options are exactly its real source union, in the real declared order", () => {
@@ -258,7 +270,7 @@ describe("PORT_FIELDS", () => {
   });
 
   it("toArgTypes maps every segments field to a select control, number/toggle/text correctly", () => {
-    const argTypes = toArgTypes(PORT_FIELDS);
+    const argTypes = toArgTypes(LABELED_PORT_FIELDS);
     expect(argTypes.direction.control).toBe("select");
     expect(argTypes.size.control).toBe("select");
     expect(argTypes.diameter.control).toBe("select");
@@ -329,20 +341,20 @@ describe("PORT_PRESETS — governed-set discipline, now that `size` gives Port a
 
 describe("Port — the real component reached through the same size cascade the trace panel reads", () => {
   it('size:"xl" paints an 18px dot (Port\'s diameter ceiling) and xl (44px) text', () => {
-    const xlRoot = call(Port, { size: "xl" });
+    const xlRoot = call(LabeledPort, { size: "xl" });
     const [xlDotElement, xlLabelElement] = xlRoot.props.children as [
       { props: Record<string, unknown> },
       { props: Record<string, unknown> },
     ];
     expect(xlDotElement.props.diameter).toBe("lg");
     expect(xlLabelElement.props.textSize).toBe("xl");
-    const xlDotRendered = call(PortDot, xlDotElement.props);
+    const xlDotRendered = call(Port, xlDotElement.props);
     expect(xlDotRendered.props.style.width).toBe(PORT_DIAMETERS.lg);
     expect(xlDotRendered.props.style.height).toBe(PORT_DIAMETERS.lg);
   });
 
   it('an explicit diameter override reaches past size — size:"sm" with diameter:"lg" paints the explicit diameter; textSize still follows size', () => {
-    const overriddenRoot = call(Port, { size: "sm", diameter: "lg" });
+    const overriddenRoot = call(LabeledPort, { size: "sm", diameter: "lg" });
     const [dotElement2, labelElement2] = overriddenRoot.props.children as [
       { props: Record<string, unknown> },
       { props: Record<string, unknown> },
@@ -363,6 +375,32 @@ describe("Port — the real component reached through the same size cascade the 
  * default `edge`/`textLayout`). Not exercised by any test above this one,
  * which only ever call `Port`/`PortDot` directly — never this function.
  */
+/**
+ * Found by an adversarial judge, 2026-09-15. `labelOffset: 0` is a legal
+ * tuned lift ("bottom edge exactly on the wire" — the field's own `min`
+ * is 0), but the flex path used to gate its bottom-anchoring on
+ * `labelLift > 0`. At exactly 0 the anchored path put the label's bottom
+ * on the dot's centre line while the flex path fell back to centring the
+ * label ON the dot — the two renderings of the same Port disagreeing by
+ * half a label height at one endpoint.
+ */
+describe("a tuned labelOffset of 0 still lifts", () => {
+  it("bottom-anchors the flex row and emits a margin, exactly as any other lift does", () => {
+    const zero = call(LabeledPort, { textLayout: "rightOffset", labelOffset: 0, children: "x" });
+    expect(zero.props.style.alignItems).toBe("flex-end");
+    const [, zeroLabel] = zero.props.children as [unknown, { props: { style?: { marginBottom?: number } } }];
+    // marginBottom = diameter/2 + lift, so at lift 0 it is exactly the radius.
+    expect(zeroLabel.props.style!.marginBottom).toBe(PORT_DIAMETERS.md / 2);
+  });
+
+  it("a NON-offset layout still emits no lift at all, tuned or not", () => {
+    const plain = call(LabeledPort, { textLayout: "right", labelOffset: 0, children: "x" });
+    expect(plain.props.style.alignItems).toBeUndefined();
+    const [, plainLabel] = plain.props.children as [unknown, { props: { style?: unknown } }];
+    expect(plainLabel.props.style).toBeUndefined();
+  });
+});
+
 describe("portResolutionSubject", () => {
   /**
    * Found by an adversarial probe, 2026-09-15: `labelOffset` was resolved
@@ -377,12 +415,12 @@ describe("portResolutionSubject", () => {
     for (const size of ["sm", "md", "lg", "xl"] as const) {
       const reported = portResolutionSubject({ size, textLayout: "rightOffset" }).labelOffset;
       // What Port really puts on the label: marginBottom = diameter/2 + lift.
-      const root = call(Port, { size, textLayout: "rightOffset", children: "x" });
+      const root = call(LabeledPort, { size, textLayout: "rightOffset", children: "x" });
       const [dotElement, labelElement] = root.props.children as [
         { props: Record<string, unknown> },
         { props: { style?: { marginBottom?: number } } },
       ];
-      const dotRendered = call(PortDot, dotElement.props);
+      const dotRendered = call(Port, dotElement.props);
       const renderedDiameter = dotRendered.props.style.width as number;
       const renderedLift = labelElement.props.style!.marginBottom! - renderedDiameter / 2;
       expect(reported, `size:${size}`).toBe(renderedLift);

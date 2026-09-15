@@ -26,7 +26,7 @@ import {
   META_FONT_PX,
   PORT_DIAMETERS,
   PORT_DOT_CENTER_TRANSFORM,
-  PortDot,
+  Port,
   PortLabel,
   SIMPLE_BLOCK,
   TextBox,
@@ -364,7 +364,7 @@ function shapePortRows(ports: BBoxShapePort[], portState: ShapePortState): React
             flexDirection: port.direction === "output" ? "row-reverse" : "row",
           }}
         >
-          <PortDot state={portState(port)} diameter={port.size} className="block" />
+          <Port state={portState(port)} diameter={port.size} className="block" />
           {port.label !== "" && <PortLabel>{port.label}</PortLabel>}
         </div>
       ))}
@@ -395,7 +395,7 @@ function shapePortWalls(
             className="absolute"
             style={{ ...placement, transform: PORT_DOT_CENTER_TRANSFORM }}
           >
-            <PortDot state={portState(port)} diameter={port.size} className="block" />
+            <Port state={portState(port)} diameter={port.size} className="block" />
             {port.label !== "" && (
               <PortLabel
                 className="absolute"
@@ -639,7 +639,7 @@ export class BBoxBlockShapeUtil extends ShapeUtil<BBoxBlockShape> {
                   className="absolute"
                   style={{ ...placement, transform: PORT_DOT_CENTER_TRANSFORM }}
                 >
-                  <PortDot state={state} diameter={port.size} className="block" />
+                  <Port state={state} diameter={port.size} className="block" />
                   {port.label !== "" && (
                     <PortLabel
                       className="absolute"

@@ -145,7 +145,7 @@ function renderWallPort(port: BBoxPortSpec, width?: number, height?: number): Re
   const state = port.state ?? "empty";
   const size = port.size ?? "md";
   // PortSize is `keyof typeof PORT_DIAMETERS | number` (an "Exact" escape
-  // hatch, port.layout.ts) — mirrors PortDot's own resolution (port.tsx).
+  // hatch, port.layout.ts) — mirrors Port's own resolution (port.tsx).
   const diameter = typeof size === "number" ? size : PORT_DIAMETERS[size];
   const side = portSideForDirection(port.direction);
   const textLayout = port.textLayout ?? inwardTextLayout(side);

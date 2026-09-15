@@ -95,7 +95,7 @@ const SECONDARY_SLOT_LAYOUT_OPTIONS: FieldOption[] = SECONDARY_SLOT_LAYOUTS.map(
  * then the host-computed interaction axis (now including
  * `secondarySlotLayout`), then the `children`/`placeholder` label fields.
  */
-export const PORT_FIELDS: FieldSpec[] = [
+export const LABELED_PORT_FIELDS: FieldSpec[] = [
   {
     id: "direction",
     label: "Direction",
@@ -278,3 +278,42 @@ export const PORT_FIELDS: FieldSpec[] = [
     tier: "expert",
   },
 ];
+
+/**
+ * The bare `Port` primitive's own fields — the geometry and paint of the
+ * dot, nothing else (Zach, 2026-09-15: "Port is just the actual like Port
+ * geometry its self in isolation").
+ *
+ * WHY this is SELECTED out of `LABELED_PORT_FIELDS` rather than written
+ * as its own literal: every one of these describes the same prop on both
+ * components — `LabeledPort` forwards them straight down to the `Port` it
+ * composes. Two hand-written literals would be two places for a default,
+ * an option set or a tier to drift, and the drift would be silent because
+ * each list is internally consistent. Selecting keeps one source.
+ *
+ * WHAT IS DELIBERATELY ABSENT, and why each: `direction`/`edge`/
+ * `textLayout`/`labelOffset`/`textSize`/`secondarySlotLayout`/`children`/
+ * `placeholder`/`disabled` are all statements about a LABEL or a SLOT,
+ * which a bare Port does not have. `reveal`/`producers` are container
+ * facts (a visibility policy, a many-to-one count) that only mean
+ * something once a port is arranged with other things.
+ */
+const PORT_FIELD_IDS = [
+  "size",
+  "diameter",
+  "state",
+  "tone",
+  "lens",
+  "hidden",
+  "dimmed",
+  "hinting",
+] as const;
+
+export const PORT_FIELDS: FieldSpec[] = PORT_FIELD_IDS.map((id) => {
+  const found = LABELED_PORT_FIELDS.find((f) => f.id === id);
+  // Not a defensive `?? fallback`: a missing id means the composite
+  // renamed or dropped a field the primitive still claims to expose, and
+  // failing loudly at import is the only way that stays visible.
+  if (!found) throw new Error(`PORT_FIELD_IDS names "${id}", which LABELED_PORT_FIELDS does not declare`);
+  return found;
+});

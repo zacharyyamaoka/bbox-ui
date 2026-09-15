@@ -37,6 +37,8 @@ import {
   pillResolutionSubject,
   PILL_FIELDS,
   PILL_PRESETS,
+  LabeledPort,
+  LABELED_PORT_FIELDS,
   Port,
   portResolutionSubject,
   PORT_FIELDS,
@@ -85,10 +87,10 @@ import { LANE_BAND_PX } from "./portEdges";
  * leaves; a Flex takes leaves and Flexes. Widening a set is a one-line edit
  * here, and the Members control offers exactly this list.
  */
-const LEAVES = ["Port", "Pill", "Glyph", "TextBox", "Badge", "CodeField"];
+const LEAVES = ["Port", "LabeledPort", "Pill", "Glyph", "TextBox", "Badge", "CodeField"];
 export const MEMBER_SPECS: Record<string, MembersSpec> = {
   Stack: { accepts: ["Block", "Stack", "Flex", ...LEAVES] },
-  PortEdge: { accepts: ["Port"], label: "Ports" },
+  PortEdge: { accepts: ["LabeledPort"], label: "Ports" },
   Flex: { accepts: [...LEAVES, "Flex", "Block"] },
   // Zach, 2026-09-12: "a Block owns its Ports (they are its members)" —
   // IN ADDITION to the slot fills a Block already carries (BLOCK_SLOTS).
@@ -96,11 +98,11 @@ export const MEMBER_SPECS: Record<string, MembersSpec> = {
   // terms (only Port), not in count: slot fills stay first (written at
   // creation, see `makeInstanceWithSlots`), ports are appended after by
   // the ordinary `addMember` path.
-  Block: { accepts: ["Port"], label: "Ports" },
+  Block: { accepts: ["LabeledPort"], label: "Ports" },
   // The standalone port-edge bench: the four-edge arrangement with nothing
   // around it. Same members contract as a Block, so every existing path
   // (add a Port, select one, its Placement section) works unchanged.
-  PortEdges: { accepts: ["Port"], label: "Ports" },
+  PortEdges: { accepts: ["LabeledPort"], label: "Ports" },
 };
 
 /**
@@ -145,6 +147,10 @@ export const BLOCK_SLOTS: SlotSpec[] = [
  * neither wraps the dot's own geometry — the fills carry the layout, the
  * members carry the content.
  */
+/** Fields a supplied slot makes inert, so the bench does not offer them.
+ *  See the LabeledPort registration's own WHY. */
+const SLOT_SUPERSEDED_FIELD_IDS = new Set(["children", "placeholder", "producers"]);
+
 export const PORT_SLOTS: SlotSpec[] = [
   {
     id: "label",
@@ -183,15 +189,15 @@ function stackMember(label: string): ReactNode {
 function threePorts(): ReactNode {
   return (
     <>
-      <Port key="a" state="empty">
+      <LabeledPort key="a" state="empty">
         alpha
-      </Port>
-      <Port key="b" state="wired">
+      </LabeledPort>
+      <LabeledPort key="b" state="wired">
         beta
-      </Port>
-      <Port key="c" state="received">
+      </LabeledPort>
+      <LabeledPort key="c" state="received">
         gamma
-      </Port>
+      </LabeledPort>
     </>
   );
 }
@@ -621,8 +627,27 @@ function renderRegion(props: Record<string, unknown>, _children?: ReactNode, ctx
 
 export const REGISTRY: ComponentEntry[] = [
   registerComponent({
+    // The GEOMETRY primitive, alone — no label, no slots (Zach,
+    // 2026-09-15: "Port is just the actual like Port geometry its self in
+    // isolation"). Its field list is the narrow one SELECTED out of the
+    // composite's, so the two can never disagree about a shared prop.
     name: "Port",
     fields: PORT_FIELDS,
+    presets: PORT_PRESETS,
+    render: (props) => <Port {...(props as Record<string, never>)} />,
+  }),
+  registerComponent({
+    name: "LabeledPort",
+    // The prop-only-host fallbacks are NOT offered here. This bench always
+    // supplies both slots (see `render` below), and a supplied slot wins
+    // outright — so `children`/`placeholder` (the built-in CodeField the
+    // label slot replaces) and `producers` (the count badge the secondary
+    // slot replaces) are controls that could not move anything on screen.
+    // They stay in `LABELED_PORT_FIELDS` because they ARE live for every
+    // host that has no slot model — the tldraw/React Flow adapters,
+    // blockFace, Storybook — which is also why filtering here beats
+    // deleting them. Found by an adversarial judge, 2026-09-15.
+    fields: LABELED_PORT_FIELDS.filter((f) => !SLOT_SUPERSEDED_FIELD_IDS.has(f.id)),
     presets: PORT_PRESETS,
     // Port's `textLayout`/`secondarySlotLayout` both have a real AUTO
     // default computed from OTHER fields (`inwardTextLayout(edge)`,
@@ -639,7 +664,7 @@ export const REGISTRY: ComponentEntry[] = [
     // and Badge genuinely deletable rather than re-composed on every
     // render. See PortProps.labelSlot's own WHY.
     render: (props, _children, ctx) => (
-      <Port
+      <LabeledPort
         {...(props as Record<string, never>)}
         labelSlot={ctx?.slots?.label}
         secondarySlot={ctx?.slots?.secondary}
@@ -1125,7 +1150,7 @@ function seedBlockPorts(block: Instance, uid: number): { block: Instance; ports:
  * object literals.
  *
  * WHY this helper exists at all (2026-09-15): the two seeds below used to
- * hand-write `{ id, type: "Port", props, placements }`, which was fine
+ * hand-write `{ id, type: "LabeledPort", props, placements }`, which was fine
  * while a Port had no slots. The moment `PORT_SLOTS` landed, every one of
  * those 11 ports would have arrived with no label fill and no secondary
  * fill — a Port with nowhere to put its own text, and no hole to drop a
@@ -1144,7 +1169,7 @@ function seedPortsWithSlots(
   const memberIds: string[] = [];
   let next = uid;
   for (const item of spec) {
-    const made = makeInstanceWithSlots("Port", 0, next);
+    const made = makeInstanceWithSlots("LabeledPort", 0, next);
     next += made.length;
     const self: Instance = {
       ...made[0]!,

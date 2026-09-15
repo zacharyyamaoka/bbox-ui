@@ -58,9 +58,16 @@ export const BADGE_FIELDS: FieldSpec[] = [
     id: "children",
     label: "Text",
     kind: "text",
-    defaultValue: "4",
+    // Must equal `Badge`'s OWN real default, which is the empty string —
+    // a FieldSpec default that disagrees with the component is an
+    // inspector that lies about the preview beside it. It declared "4"
+    // and a fresh Badge rendered blank (found by an adversarial judge,
+    // 2026-09-15). "4" is not a property of every Badge; it is what
+    // Port's secondary slot happens to seed, and that belongs in
+    // `PORT_SLOTS`' own `fillMembers` — where it already is.
+    defaultValue: "",
     tier: "simple",
-    hint: "The chip's text — a plain string. Omitting it renders an empty chip at its minimum width.",
+    hint: "The chip's text — a plain string. Empty renders an empty chip at its minimum width.",
   },
 ];
 

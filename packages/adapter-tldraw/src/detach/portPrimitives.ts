@@ -2,7 +2,7 @@
  * A Port's appearance expressed as editable stock tldraw primitives.
  *
  * Geometry comes only from the core layout modules (`portLabelBox`,
- * `TEXT_SIZES`) — the same authority the live `PortDot` / `PortLabel`
+ * `TEXT_SIZES`) — the same authority the live `Port` / `PortLabel`
  * render from — never from re-measured DOM and never from hand-typed
  * offsets.
  *
