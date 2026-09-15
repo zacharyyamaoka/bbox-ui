@@ -2,7 +2,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 
-import { grammarExtensions, type CodeFieldGrammar } from "../src/codeGrammar";
+import { grammarExtensions, type CodeBlockGrammar } from "../src/codeGrammar";
 
 /** Every mark CodeMirror actually painted, read back from the real decoration facet — no DOM required. */
 function paintedRanges(state: EditorState): Array<{ from: number; to: number; class: string }> {
@@ -19,7 +19,7 @@ function paintedRanges(state: EditorState): Array<{ from: number; to: number; cl
 
 describe("grammarExtensions — decorate bridge", () => {
   it("turns declared ranges into real CodeMirror mark decorations at the same offsets", () => {
-    const grammar: CodeFieldGrammar = {
+    const grammar: CodeBlockGrammar = {
       decorate: (text) => [{ from: 0, to: 4, className: "bbox-test-name" }],
     };
     const state = EditorState.create({ doc: "pose", extensions: grammarExtensions(grammar) });
@@ -27,7 +27,7 @@ describe("grammarExtensions — decorate bridge", () => {
   });
 
   it("recomputes when the document changes", () => {
-    const grammar: CodeFieldGrammar = {
+    const grammar: CodeBlockGrammar = {
       decorate: (text) => (text.length > 0 ? [{ from: 0, to: text.length, className: "bbox-test-name" }] : []),
     };
     let state = EditorState.create({ doc: "a", extensions: grammarExtensions(grammar) });
@@ -36,7 +36,7 @@ describe("grammarExtensions — decorate bridge", () => {
   });
 
   it("drops a zero-width or inverted range rather than passing it to CodeMirror", () => {
-    const grammar: CodeFieldGrammar = {
+    const grammar: CodeBlockGrammar = {
       decorate: () => [{ from: 3, to: 3, className: "bbox-test-empty" }],
     };
     const state = EditorState.create({ doc: "abc", extensions: grammarExtensions(grammar) });
@@ -44,7 +44,7 @@ describe("grammarExtensions — decorate bridge", () => {
   });
 
   it("sorts out-of-order ranges before handing them to RangeSetBuilder", () => {
-    const grammar: CodeFieldGrammar = {
+    const grammar: CodeBlockGrammar = {
       decorate: () => [
         { from: 2, to: 3, className: "second" },
         { from: 0, to: 1, className: "first" },
@@ -59,7 +59,7 @@ describe("grammarExtensions — decorate bridge", () => {
 
 describe("grammarExtensions — fold (foldInactiveLinesAfter)", () => {
   it("replaces an inactive long line past the character limit with the ellipsis widget", () => {
-    const grammar: CodeFieldGrammar = { foldInactiveLinesAfter: 4 };
+    const grammar: CodeBlockGrammar = { foldInactiveLinesAfter: 4 };
     const state = EditorState.create({
       doc: "a: int\nsomething_long: SomeReallyLongType",
       extensions: grammarExtensions(grammar),
@@ -77,7 +77,7 @@ describe("grammarExtensions — fold (foldInactiveLinesAfter)", () => {
 
   it("never folds the line the caret is on", () => {
     const longLine = "something_long: SomeReallyLongType";
-    const grammar: CodeFieldGrammar = { foldInactiveLinesAfter: 4 };
+    const grammar: CodeBlockGrammar = { foldInactiveLinesAfter: 4 };
     const state = EditorState.create({
       doc: `a: int\n${longLine}`,
       extensions: grammarExtensions(grammar),
@@ -94,7 +94,7 @@ describe("grammarExtensions — fold (foldInactiveLinesAfter)", () => {
   });
 
   it("is a no-op extension list entry when the grammar omits it (no visible effect on a single-line field)", () => {
-    const grammar: CodeFieldGrammar = {};
+    const grammar: CodeBlockGrammar = {};
     expect(grammarExtensions(grammar)).toEqual([]);
   });
 
@@ -106,7 +106,7 @@ describe("grammarExtensions — fold (foldInactiveLinesAfter)", () => {
     // range never starts strictly inside a `\ud800`-`\udbff` high
     // surrogate.
     const line = "label: 🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉"; // 7 ASCII + 10 emoji code points
-    const grammar: CodeFieldGrammar = { foldInactiveLinesAfter: 8 };
+    const grammar: CodeBlockGrammar = { foldInactiveLinesAfter: 8 };
     // The caret sits on line 1 ("x"), so line 2 (the emoji line) is
     // INACTIVE and folds — the scenario finding 10 reported.
     const state = EditorState.create({
@@ -138,13 +138,13 @@ describe("grammarExtensions — which extensions get mounted", () => {
 
   it("mounts exactly one extension per declared hook", () => {
     // `language` accepts ANY Extension, not just a real lezer parser — see
-    // `CodeFieldGrammar.language`'s own doc. A trivial `EditorView.theme({})`
+    // `CodeBlockGrammar.language`'s own doc. A trivial `EditorView.theme({})`
     // stands in for `python()` here (the branch this was ported from used a
     // real language) so this package doesn't have to add `@codemirror/lang-
     // python` as a dependency just to prove one extension gets pushed per
     // hook — wiring a real grammar/language is explicitly out of scope for
     // this port (see port.tsx's own module doc).
-    const grammar: CodeFieldGrammar = {
+    const grammar: CodeBlockGrammar = {
       language: EditorView.theme({}),
       decorate: () => [],
       complete: () => null,
@@ -154,7 +154,7 @@ describe("grammarExtensions — which extensions get mounted", () => {
   });
 
   it("omits the completion extension entirely when the grammar has no complete()", () => {
-    const grammar: CodeFieldGrammar = { decorate: () => [] };
+    const grammar: CodeBlockGrammar = { decorate: () => [] };
     expect(grammarExtensions(grammar)).toHaveLength(1);
   });
 });

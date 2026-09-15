@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { CodeFieldLine } from "../src/codeGrammar";
-import { pruneExpandedPaths, rowIdentity } from "../src/codeFieldRows";
+import type { CodeBlockLine } from "../src/codeGrammar";
+import { pruneExpandedPaths, rowIdentity } from "../src/codeBlockRows";
 
-function line(index: number, name: string, extra: Partial<CodeFieldLine> = {}): CodeFieldLine {
+function line(index: number, name: string, extra: Partial<CodeBlockLine> = {}): CodeBlockLine {
   return {
     line: index,
     lineStart: 0,
@@ -19,7 +19,7 @@ describe("rowIdentity", () => {
   });
 
   it("falls back to the full row text when nothing is marked role: 'name'", () => {
-    const noName: CodeFieldLine = { line: 2, lineStart: 0, indent: 0, segments: [{ text: "raw text" }] };
+    const noName: CodeBlockLine = { line: 2, lineStart: 0, indent: 0, segments: [{ text: "raw text" }] };
     expect(rowIdentity(noName)).toBe("2:raw text");
   });
 });

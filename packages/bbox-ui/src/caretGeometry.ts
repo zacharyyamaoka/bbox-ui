@@ -1,7 +1,7 @@
 /**
  * Grammar-agnostic text-geometry helpers for the "click a rendered row and
  * land in source mode with the caret already there" gesture — the seam
- * `CodeField`'s `mode="rendered"` rows use to compute what `onOpenSource`
+ * `CodeBlock`'s `mode="rendered"` rows use to compute what `onOpenSource`
  * reports. Pure DOM; no grammar, no host.
  */
 

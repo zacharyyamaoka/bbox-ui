@@ -8,7 +8,7 @@
  * component stays one import and one `registerComponent` call, in one file.
  */
 import type { CSSProperties, ReactNode } from "react";
-import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
+import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
 import {
   Bar,
   BAR_FIELDS,
@@ -24,6 +24,9 @@ import {
   BlockTitle,
   BlockType,
   resolveBlockFace,
+  CodeBlock,
+  CODE_BLOCK_FIELDS,
+  CODE_BLOCK_PRESETS,
   Flex,
   FLEX_FIELDS,
   FLEX_PRESETS,
@@ -78,7 +81,7 @@ import { LANE_BAND_PX } from "./portEdges";
  * leaves; a Flex takes leaves and Flexes. Widening a set is a one-line edit
  * here, and the Members control offers exactly this list.
  */
-const LEAVES = ["Port", "Pill", "Glyph", "TextBox"];
+const LEAVES = ["Port", "Pill", "Glyph", "TextBox", "CodeBlock"];
 export const MEMBER_SPECS: Record<string, MembersSpec> = {
   Stack: { accepts: ["Block", "Stack", "Flex", ...LEAVES] },
   PortEdge: { accepts: ["Port"], label: "Ports" },
@@ -573,6 +576,12 @@ function renderRegion(props: Record<string, unknown>, _children?: ReactNode, ctx
   );
 }
 
+/** `CodeBlock`'s own bare "not being edited" default for `onWrite` — a
+ * live document still needs a write callback even outside `ctx.edit`, and
+ * a bare no-op is honest about it rather than silently threading an
+ * instance id `render` is never handed. */
+function noopWrite() {}
+
 export const REGISTRY: ComponentEntry[] = [
   registerComponent({
     name: "Port",
@@ -625,6 +634,49 @@ export const REGISTRY: ComponentEntry[] = [
       // stem directly against the frame, which reads as a defect in every
       // screenshot even though it is bench-only chrome.
       return <div style={{ width: 220, border: "1px dashed #ccc", padding: "4px 8px" }}>{box}</div>;
+    },
+  }),
+  registerComponent({
+    name: "CodeBlock",
+    fields: CODE_BLOCK_FIELDS,
+    presets: CODE_BLOCK_PRESETS as PresetSpec[],
+    // Structurally identical to `PresetSpec` (codeBlock.presets.ts's own
+    // WHY: that file ships in the `code-block` registry item and cannot
+    // import `@bbox-ui/schema`), so the cast is a name, not a coercion.
+    inlineEdit: { field: "value" },
+    render: (props, _children, ctx) => {
+      const edit = ctx?.edit;
+      // WHY `editing` comes from `ctx.edit` and never from `props`: it is
+      // host wiring, driven by the create page's own two-click rule
+      // (docs/TEXTBOX-EDITING-SPEC.md §3), not a `CODE_BLOCK_FIELDS` entry —
+      // the same line TextBox's entry draws just above. `onEnter` commits
+      // `props.value` (not some local buffer) because every keystroke
+      // already round-tripped through `onWrite` = `edit.onChange`, so the
+      // stored prop IS the live document by the time Enter fires; `onEscape`
+      // is `edit.onCancel` (restore); `onEditEnd` covers the blur exit the
+      // other two don't reach.
+      const block = (
+        <CodeBlock
+          // Unlike every other leaf registered this way, `CodeBlock.value`
+          // is REQUIRED (not optional-with-a-default like `TextBox.children`)
+          // — the bare `Record<string, never>` cast every other entry uses
+          // erases it along with everything else, so TS reports it missing
+          // even though the real runtime `props` always carries it (the
+          // field's own `defaultValue`). Naming it in the cast's type keeps
+          // the same "trust the resolved props" looseness for every other
+          // key while letting the required one type-check.
+          {...(props as Record<string, never> & { value: string })}
+          editing={edit?.editing ?? false}
+          onWrite={edit?.onChange ?? noopWrite}
+          onEnter={edit ? () => edit.onCommit(String((props as { value?: unknown }).value ?? "")) : undefined}
+          onEscape={edit?.onCancel}
+          onEditEnd={edit ? (value) => edit.onCommit(value) : undefined}
+        />
+      );
+      // WHY bare when nested: TextBox's own dashed-frame rule, above —
+      // bench-only chrome for a top-level specimen, not inside a slot/member.
+      if (ctx?.nested) return block;
+      return <div style={{ width: 360 }}>{block}</div>;
     },
   }),
   registerComponent({
@@ -762,6 +814,7 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { size: "lg", children: "Bigger text" },
     { size: "sm", children: "Small print" },
   ],
+  CodeBlock: [{}, { look: "field", value: "get_aruco: ArucoSrv" }, { language: "json", lineNumbers: false, value: '{ "greeting": "hello" }' }],
   Stack: [{}, { gap: "lg" }],
   PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],
   Flex: [{}, { justify: "between" }, { direction: "column", align: "stretch" }],

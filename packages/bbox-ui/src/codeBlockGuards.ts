@@ -7,9 +7,9 @@ import {
 } from "@codemirror/state";
 
 /**
- * Marks `CodeField`'s own imperative doc swaps (the `value`-prop sync) so
+ * Marks `CodeBlock`'s own imperative doc swaps (the `value`-prop sync) so
  * the change listener never echoes them back as typing. Lives here, not in
- * `codeField.tsx`, so `singleLineGuard` below can recognise and re-apply it
+ * `codeBlock.tsx`, so `singleLineGuard` below can recognise and re-apply it
  * on a transaction it has to rebuild — annotations are not part of
  * CodeMirror's public `Transaction` surface (only `.annotation(type)` for a
  * type you already know to ask for, never an enumerable list), so the only
@@ -60,7 +60,7 @@ function newlinesBefore(text: string, pos: number): number {
 }
 
 /**
- * A single-line `CodeField` must never contain a newline, by ANY path —
+ * A single-line `CodeBlock` must never contain a newline, by ANY path —
  * not just typed or pasted text (`EditorView.inputHandler` catches that
  * one, and stays for the tighter cursor placement it can do on a normal
  * keystroke) but also a COMMAND that inserts one directly, like

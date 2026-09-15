@@ -62,6 +62,27 @@ slot.
 <Port state="wired" size="md" textLayout="right">image</Port>
 ```
 
+### Code block
+
+A CodeMirror document in a box — and the one-line **code field** Port's label
+slot mounts, which is the same component wearing `look="field"`. The two looks
+are a preset over the same fields (line numbers, lines, padding); nothing else
+differs.
+
+- **Look**: `block` (gutter, many lines, a surface's padding) · `field` (one
+  line, no gutter, an input's padding).
+- **Language**: `plaintext` · `python` · `javascript` · `typescript` · `json`
+  · `html` · `css` · `sql` · `markdown`.
+- **Size**: `sm` 12 / `md` 16 / `lg` 20 / `xl` 24, or `custom` + `sizePx`.
+- **Width**: `columns` in ch (0 fills the host). **Editing** is host-owned:
+  at rest the block lets the host's drag/select through; while editing it
+  owns the pointer and carries the `bbox-interactive` marker.
+
+```tsx
+<CodeBlock value={code} onWrite={setCode} language="python" lineNumbers />
+<CodeBlock look="field" value="get_aruco: ArucoSrv" onWrite={setLabel} />
+```
+
 ### Block — Simple View
 
 Anatomy (the API vocabulary): **Container** (`Block`), **Header band**
@@ -284,7 +305,8 @@ npx shadcn@latest add zacharyyamaoka/bbox-ui/port       # or straight from GitHu
 `registry.json` follows the
 [shadcn registry schema](https://ui.shadcn.com/docs/registry/registry-json);
 `pnpm registry:build` (shadcn `build`) emits servable items to `public/r/`:
-`port`, `block`, `bbox-layout`, `block-node-reactflow`, `block-shape-tldraw`.
+`port`, `code-block`, `block`, `bbox-layout`, `block-node-reactflow`,
+`block-shape-tldraw`.
 
 Installed components ship `layout.ts` and `lib/utils.ts` as siblings, so they
 compile with no further wiring. Only `clsx` and `tailwind-merge` are runtime

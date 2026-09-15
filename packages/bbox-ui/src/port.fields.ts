@@ -88,7 +88,7 @@ const SECONDARY_SLOT_LAYOUT_OPTIONS: FieldOption[] = SECONDARY_SLOT_LAYOUTS.map(
  * removal's own WHY in `port.layout.ts`/`port.tsx`; FURTHER NARROWED
  * 2026-09-12 by the two-slot proposal: `name`/`type`/`defaultValue`
  * removed — folded into the `children` field below, a single one-line
- * string the label slot's real `CodeField` now edits, see `port.tsx`'s
+ * string the label slot's real `CodeBlock` now edits, see `port.tsx`'s
  * own module doc): identity/own fields, then the shared `APPEARANCE_FIELDS`
  * bundle (this is what colours the dot — `state`, `tone`, plus
  * `lens`/`lensBefore`), then the author-set, persisted `hidden`/`disabled`,
@@ -174,7 +174,7 @@ export const PORT_FIELDS: FieldSpec[] = [
     label: "Disabled",
     kind: "toggle",
     defaultValue: false,
-    hint: "No caret, no edits on the label's CodeField — a read-only port.",
+    hint: "No caret, no edits on the label's CodeBlock — a read-only port.",
   },
   {
     id: "dimmed",
@@ -237,17 +237,17 @@ export const PORT_FIELDS: FieldSpec[] = [
     // The label slot's ENTIRE content now — one line ("a port is one line
     // of code", `get_aruco: ArucoSrv`) — REPLACES the removed `name`/
     // `type`/`defaultValue` fields (port.tsx's own module doc). An empty
-    // string is CodeField's own honest empty state (a blank field showing
+    // string is CodeBlock's own honest empty state (a blank field showing
     // `placeholder`), not a special "fall through to something else" case
     // the way the old three-span rendering needed.
     defaultValue: "",
-    hint: "The CodeField's whole value — a real, editable single-line code text box (grammar-free; wiring the Python name: Type = default grammar/autocomplete is a later step).",
+    hint: "The CodeBlock's whole value — a real, editable single-line code text box (grammar-free; wiring the Python name: Type = default grammar/autocomplete is a later step).",
   },
   {
     id: "placeholder",
     label: "Placeholder",
     kind: "text",
     defaultValue: "",
-    hint: "Shown in the label's CodeField when Label is empty.",
+    hint: "Shown in the label's CodeBlock when Label is empty.",
   },
 ];

@@ -38,24 +38,39 @@
           "target": "components/bbox/lib/utils.ts"
         },
         {
-          "path": "packages/bbox-ui/src/codeField.tsx",
+          "path": "packages/bbox-ui/src/codeBlock.tsx",
           "type": "registry:component",
-          "target": "components/bbox/codeField.tsx"
+          "target": "components/bbox/codeBlock.tsx"
         },
         {
-          "path": "packages/bbox-ui/src/codeField.css",
+          "path": "packages/bbox-ui/src/codeBlock.css",
           "type": "registry:style",
-          "target": "components/bbox/codeField.css"
+          "target": "components/bbox/codeBlock.css"
         },
         {
-          "path": "packages/bbox-ui/src/codeFieldGuards.ts",
+          "path": "packages/bbox-ui/src/codeBlock.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/codeFieldGuards.ts"
+          "target": "components/bbox/codeBlock.layout.ts"
         },
         {
-          "path": "packages/bbox-ui/src/codeFieldRows.tsx",
+          "path": "packages/bbox-ui/src/codeBlock.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlock.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockLanguages.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlockLanguages.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlockGuards.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockRows.tsx",
           "type": "registry:component",
-          "target": "components/bbox/codeFieldRows.tsx"
+          "target": "components/bbox/codeBlockRows.tsx"
         },
         {
           "path": "packages/bbox-ui/src/codeGrammar.ts",
@@ -81,6 +96,86 @@
         "@codemirror/language",
         "@codemirror/state",
         "@codemirror/view",
+        "@codemirror/lang-python",
+        "@codemirror/lang-javascript",
+        "@codemirror/lang-json",
+        "@codemirror/lang-html",
+        "@codemirror/lang-css",
+        "@codemirror/lang-sql",
+        "@codemirror/lang-markdown",
+        "@lezer/highlight"
+      ]
+    },
+    {
+      "name": "code-block",
+      "type": "registry:component",
+      "title": "Code block",
+      "description": "A CodeMirror document in a box. One primitive for the canvas Code block AND the one-line code field: `look` (block / field) is a preset over line numbers, lines, and padding; nine languages; four size rungs plus custom; a `columns` width in ch. Host-owned `editing`, live write-through, commit-on-exit.",
+      "files": [
+        {
+          "path": "packages/bbox-ui/src/codeBlock.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeBlock.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlock.css",
+          "type": "registry:style",
+          "target": "components/bbox/codeBlock.css"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlock.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlock.layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlock.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlock.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockLanguages.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlockLanguages.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlockGuards.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockRows.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeBlockRows.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeGrammar.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeGrammar.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/fieldGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/fieldGesture.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/caretGeometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/caretGeometry.ts"
+        }
+      ],
+      "dependencies": [
+        "@codemirror/autocomplete",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@codemirror/lang-python",
+        "@codemirror/lang-javascript",
+        "@codemirror/lang-json",
+        "@codemirror/lang-html",
+        "@codemirror/lang-css",
+        "@codemirror/lang-sql",
+        "@codemirror/lang-markdown",
         "@lezer/highlight"
       ]
     },

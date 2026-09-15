@@ -7,6 +7,7 @@ import {
   defaultKeymap,
   history,
   historyKeymap,
+  indentWithTab,
   moveLineDown,
   moveLineUp,
 } from "@codemirror/commands";
@@ -20,6 +21,7 @@ import {
 import {
   EditorView,
   keymap,
+  lineNumbers as lineNumbersExtension,
   placeholder as placeholderExtension,
   tooltips,
 } from "@codemirror/view";
@@ -35,25 +37,83 @@ import {
   type ReactNode,
 } from "react";
 
-import { externalSync, singleLineGuard } from "./codeFieldGuards";
-import { grammarExtensions, type CodeFieldGrammar } from "./codeGrammar";
-import { CodeFieldRows, pruneExpandedPaths, rowIdentity } from "./codeFieldRows";
+import { externalSync, singleLineGuard } from "./codeBlockGuards";
+import {
+  codeBlockFontPx,
+  codeBlockWidthPx,
+  type CodeBlockLanguage,
+  type CodeBlockLines,
+  type CodeBlockLook,
+  type CodeBlockSize,
+} from "./codeBlock.layout";
+import { codeBlockLookValues } from "./codeBlock.presets";
+import { codeBlockLanguageExtension } from "./codeBlockLanguages";
+import { grammarExtensions, type CodeBlockGrammar } from "./codeGrammar";
+import { CodeBlockRows, pruneExpandedPaths, rowIdentity } from "./codeBlockRows";
 import { FieldGesture } from "./fieldGesture";
 
-export interface CodeFieldProps {
-  /** The value. The field follows it whenever nobody is editing. */
+export interface CodeBlockProps {
+  /** The document. The block follows it whenever nobody is editing. */
   value: string;
-  /** Write, per keystroke — the field's one write policy (see `fieldGesture.ts` for why `live` is the only mode offered here). */
+  /** Write, per keystroke — the block's one write policy (see `fieldGesture.ts` for why `live` is the only mode offered here). */
   onWrite(value: string): void;
   /** Open one undo step so an edit is one Ctrl+Z, not one per character. */
   beginEdit?(): void;
-  /** The commit boundary — one call per gesture, however the field was left. */
+  /** The commit boundary — one call per gesture, however the block was left. */
   onEditEnd?(value: string, startValue: string): void;
   /**
-   * What makes this field know its grammar: slot decorations, a completion
-   * source, a language. Omit it and you get the plain code text box.
+   * What makes this block know its grammar: slot decorations, a completion
+   * source, a raw extension. Omit it and you get the plain code text box.
    */
-  grammar?: CodeFieldGrammar;
+  grammar?: CodeBlockGrammar;
+  /**
+   * Which of the two looks this block wears — `block` (the canvas Code
+   * block: gutter, many lines, a surface's padding) or `field` (the compact
+   * one-line box a Port label sits in). A look is a PRESET over
+   * `lineNumbers`/`lines`/the four paddings (`codeBlock.presets.ts`); any of
+   * those passed explicitly wins over the look, override-beats-preset.
+   */
+  look?: CodeBlockLook;
+  /** The base parser. Defaults to Python; every look shares it. */
+  language?: CodeBlockLanguage;
+  size?: CodeBlockSize;
+  /** Font-size in px when `size === "custom"`; ignored otherwise. */
+  sizePx?: number;
+  /** Line-number gutter. Governed by `look` when omitted. */
+  lineNumbers?: boolean;
+  /**
+   * `single`: one line — a typed or pasted newline is dropped rather than
+   * growing the box. `multi`: a lane/document — Enter inserts a line,
+   * Alt+↑/↓ move one, Tab indents, and Ctrl/Cmd+Enter is the exit that
+   * Enter is for a single line. Governed by `look` when omitted.
+   */
+  lines?: CodeBlockLines;
+  /** Soft-wrap long lines (a viewer), instead of letting them run. */
+  wrap?: boolean;
+  /**
+   * Characters across. `> 0` fixes the box's width to that many mono cells
+   * plus padding (and the gutter when line numbers are on) — see
+   * `codeBlockWidthPx`; `0` (the default) fills whatever the host gives.
+   */
+  columns?: number;
+  paddingTop?: number;
+  paddingBot?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
+  /**
+   * Whether the document is currently editable — HOST-OWNED, like
+   * TextBox's. Defaults to `true`: a bare CodeBlock is a live document you
+   * click into, like an `<input>` (what a Port label and an inspector row
+   * want). A host that runs its own editing session over a canvas (a shape
+   * that must still drag/select at rest) passes `false` until the person
+   * enters the block, then `true`. While `false` the block does NOT stop
+   * pointer events (so the host's own drag/select reaches it) and does not
+   * carry the `bbox-interactive` marker; while `true` it does both, so a
+   * React Flow / tldraw host leaves the caret alone. Leaving editing blurs
+   * the document and commits the gesture; entering it takes focus.
+   */
+  editing?: boolean;
+  /** A read-only document: no caret, no edits, dimmed. Independent of `editing`. */
   disabled?: boolean;
   placeholder?: string;
   ariaLabel?: string;
@@ -62,29 +122,22 @@ export interface CodeFieldProps {
   className?: string;
   testId?: string;
   style?: CSSProperties;
-  /** Take focus on mount; `'select'` also selects the whole line. */
+  /** Take focus on mount; `'select'` also selects the whole document. */
   autoFocus?: boolean | "select";
   /** With `autoFocus`, put the caret here instead of selecting everything. */
   cursorAt?: number;
   /** With `autoFocus`, select exactly this range — the slot that was clicked, not the whole line. */
   selectRange?: { from: number; to: number };
-  /**
-   * A lane: several lines, one per thing. Enter inserts a line, Alt+↑/↓
-   * move one, Shift+Alt+↓ copies one (all CodeMirror's default keymap);
-   * Ctrl/Cmd+Enter is the exit that Enter is for a single line.
-   */
-  multiline?: boolean;
   /** Pin every line to this height so lines can sit on a host's own rows. */
   lineHeightPx?: number;
   align?: "left" | "right";
-  /** Soft-wrap long lines (a viewer), instead of letting them run. */
-  wrap?: boolean;
-  /** Extra chrome rendered inside the field's frame, positioned by the host's CSS. */
+  /** Extra chrome rendered inside the block's frame, positioned by the host's CSS. */
   trailing?: ReactNode;
   /**
-   * Enter and Escape both end the gesture by leaving the field (the value is
-   * never discarded — Ctrl+Z is the retract). A host that owns its own
-   * editing session supplies its own exits instead of the default `leave`.
+   * Enter (single-line) / Ctrl+Enter (multi) and Escape both end the
+   * gesture by leaving the block (the value is never discarded — Ctrl+Z is
+   * the retract). A host that owns its own editing session supplies its
+   * own exits instead of the default `leave`.
    */
   onEnter?(): void;
   onEscape?(): void;
@@ -93,22 +146,22 @@ export interface CodeFieldProps {
    * Controlled two-way toggle between the pretty RENDERED tree
    * (`grammar.lines`) and the live SOURCE document (CodeMirror) — the "code
    * block overlay" idea: rendered by default, source under the caret. Omit
-   * entirely for a field that is always source (the original, and still
+   * entirely for a block that is always source (the original, and still
    * the right choice for a plain port row with nothing worth a read view).
-   * The host owns the state; `CodeField` never flips it on its own.
+   * The host owns the state; `CodeBlock` never flips it on its own.
    */
   mode?: "rendered" | "source";
-  /** Used by the optional `CodeFieldModeToggle` sub-component; `CodeField` itself never calls this. */
+  /** Used by the optional `CodeBlockModeToggle` sub-component; `CodeBlock` itself never calls this. */
   onModeChange?(mode: "rendered" | "source"): void;
   /**
    * A rendered row (or the blank space below the last one) was clicked.
    * Only meaningful with `mode` set. `owner` is `undefined` for a row from
-   * this field's own `value` — the host typically responds by setting
+   * this block's own `value` — the host typically responds by setting
    * `mode="source"` and computing `cursorAt` from `line`/`column` (see
    * `caretGeometry.ts`'s `lineStartOffset`) against `value` itself. `owner`
    * is set for a row that came from a reference's `expandLines()` (see
-   * `CodeFieldReference.owner`) — `line`/`column` are into THAT source, not
-   * this field's `value`, and the host must resolve `owner` to open it.
+   * `CodeBlockReference.owner`) — `line`/`column` are into THAT source, not
+   * this block's `value`, and the host must resolve `owner` to open it.
    */
   onOpenSource?(line: number, column: number, owner?: unknown): void;
   /**
@@ -122,38 +175,50 @@ export interface CodeFieldProps {
 }
 
 /**
- * The code text box: one line (or a multi-line lane) of text that knows
- * what it is.
+ * The code block: a CodeMirror document in a box — and the code FIELD, which
+ * is the same box wearing `look="field"`.
  *
- * It is a real CodeMirror document, so highlighting, the completion
- * tooltip, IME, undo and the caret all come from one mature engine rather
- * than a mirror-div. What the field does NOT know is any grammar — that
- * arrives through `grammar`, so a port line, a type alias and a plain label
- * are the same component with different grammars plugged in. Commit
- * semantics are `FieldGesture`'s, unchanged: a field never stops existing
- * with an uncommitted edit.
+ * WHY one component and not `CodeField` + `CodeBlock` (Zach, 2026-09-14:
+ * "refactor codefield to actually just be codeblock ... the code field is
+ * basically just like a codeblock without line numbers, right? I feel it's
+ * the exact same thing"): it is. Every difference between the one-line box
+ * in a Port's label slot and the canvas Code block is a VALUE — a gutter on
+ * or off, one line or many, 4px or 16px of padding, 11px or 16px of type —
+ * never a different engine, gesture or commit rule. SystemSketch reached the
+ * same conclusion from the other side (its PEP 0017 converged four
+ * CodeMirror mounts onto one field); this primitive is that field with the
+ * block's presentation knobs folded in as fields, so the inspector, the
+ * registry and a Port all see one thing. The tempting alternative — keep a
+ * thin `CodeField` wrapper "for the name" — is two names for one property
+ * space, and the first refactor to touch only one of them drifts the pair.
+ *
+ * What the block does NOT know is any grammar — that arrives through
+ * `grammar`, so a port line, a type alias and a plain label are the same
+ * component with different grammars plugged in. Commit semantics are
+ * `FieldGesture`'s, unchanged: a block never stops existing with an
+ * uncommitted edit.
  *
  * With `mode` set, this is a thin dispatcher: `"rendered"` mounts
- * `CodeFieldRows` over `grammar.lines(value)` and CodeMirror never mounts at
+ * `CodeBlockRows` over `grammar.lines(value)` and CodeMirror never mounts at
  * all; `"source"` (or `mode` omitted) mounts the live document below. The
  * two never coexist — leaving rendered mode unmounts the row tree exactly
- * as `CodeFieldSourceView` unmounts when rendered mode takes over — so a
- * grammar with no `lines()` still works fine as an always-source field.
+ * as `CodeBlockSourceView` unmounts when rendered mode takes over — so a
+ * grammar with no `lines()` still works fine as an always-source block.
  *
- * WHY expansion state lives HERE and not inside `CodeFieldRows`: `CodeField`
+ * WHY expansion state lives HERE and not inside `CodeBlockRows`: `CodeBlock`
  * itself is the one component instance that survives the `mode` toggle (only
  * its RETURNED subtree switches between the row tree and the live document);
- * `CodeFieldRows` fully unmounts every trip through Source. State that lived
+ * `CodeBlockRows` fully unmounts every trip through Source. State that lived
  * only there reset to all-collapsed on every round trip even when nothing
  * was edited — the donor (`TypeBabbleV1.tsx`) lifts the same state for the
  * same reason, above its own UI/Source split.
  */
-export interface CodeFieldHandle {
+export interface CodeBlockHandle {
   /**
    * Move the caret to `offset` and focus the live document — the seam an
-   * ALREADY-MOUNTED-in-Source field needs. `cursorAt` only places the
+   * ALREADY-MOUNTED-in-Source block needs. `cursorAt` only places the
    * caret once, in the mount effect (`autoFocus`'s own next-frame retry);
-   * a host whose owner field is already open in Source when a foreign row
+   * a host whose owner block is already open in Source when a foreign row
    * is clicked has no prop change to hand it, since `cursorAt` changing
    * while mounted does nothing — the donor's `useSourceToggleEditor`
    * solves the identical problem with `enterSourceAt`'s "already open …
@@ -164,7 +229,7 @@ export interface CodeFieldHandle {
   focus(): void;
 }
 
-export const CodeField = forwardRef<CodeFieldHandle, CodeFieldProps>(function CodeField(props, ref) {
+export const CodeBlock = forwardRef<CodeBlockHandle, CodeBlockProps>(function CodeBlock(props, ref) {
   const { mode, grammar, value, onOpenSource, ariaLabel, className, testId } = props;
   const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(() => new Set());
   const toggleExpanded = (path: string) =>
@@ -181,14 +246,14 @@ export const CodeField = forwardRef<CodeFieldHandle, CodeFieldProps>(function Co
     setExpandedPaths((current) => pruneExpandedPaths(current, lines));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines.map(rowIdentity).join(",")]);
-  const sourceRef = useRef<CodeFieldHandle | null>(null);
+  const sourceRef = useRef<CodeBlockHandle | null>(null);
   useImperativeHandle(ref, () => ({
     setCaret: (offset) => sourceRef.current?.setCaret(offset),
     focus: () => sourceRef.current?.focus(),
   }), []);
   if (mode === "rendered") {
     return (
-      <CodeFieldRows
+      <CodeBlockRows
         lines={lines}
         resolveReference={grammar?.resolveReference}
         onOpenSource={onOpenSource}
@@ -199,11 +264,11 @@ export const CodeField = forwardRef<CodeFieldHandle, CodeFieldProps>(function Co
       />
     );
   }
-  return <CodeFieldSourceView {...props} ariaLabel={ariaLabel} ref={sourceRef} />;
+  return <CodeBlockSourceView {...props} ariaLabel={ariaLabel} ref={sourceRef} />;
 });
 
-/** Two-button `[Rendered | Source]` switch — the chrome `CodeField`'s `mode` toggle needs, matching how it looks on the field this was extracted from. Entirely optional: a host may drive `mode` from its own UI instead. */
-export function CodeFieldModeToggle({
+/** Two-button `[Rendered | Source]` switch — the chrome `CodeBlock`'s `mode` toggle needs, matching how it looks on the field this was extracted from. Entirely optional: a host may drive `mode` from its own UI instead. */
+export function CodeBlockModeToggle({
   mode,
   onModeChange,
   labels = { rendered: "UI", source: "Source" },
@@ -213,7 +278,7 @@ export function CodeFieldModeToggle({
   labels?: { rendered: string; source: string };
 }) {
   return (
-    <div className="bbox-code-field-toggle" data-slot="code-field-mode-toggle">
+    <div className="bbox-code-block-toggle" data-slot="code-block-mode-toggle">
       <button type="button" data-active={mode === "rendered" || undefined} onClick={() => onModeChange("rendered")}>
         {labels.rendered}
       </button>
@@ -224,12 +289,62 @@ export function CodeFieldModeToggle({
   );
 }
 
-const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function CodeFieldSourceView({
+/**
+ * The look-resolved presentation of a CodeBlock: every governed field is its
+ * explicit prop when given, else its `look`'s value. Exported so a test (and
+ * a host that lays a block out before mounting it, e.g. a tldraw adapter
+ * deciding `props.w`) reads the exact numbers the component paints from.
+ */
+export function resolveCodeBlockPresentation(props: {
+  look?: CodeBlockLook;
+  size?: CodeBlockSize;
+  sizePx?: number;
+  lineNumbers?: boolean;
+  lines?: CodeBlockLines;
+  columns?: number;
+  paddingTop?: number;
+  paddingBot?: number;
+  paddingLeft?: number;
+  paddingRight?: number;
+}) {
+  const look = props.look ?? "block";
+  const fromLook = codeBlockLookValues(look);
+  const fontPx = codeBlockFontPx(props.size ?? "md", props.sizePx ?? 16);
+  const lineNumbers = props.lineNumbers ?? fromLook.lineNumbers;
+  const paddingLeft = props.paddingLeft ?? fromLook.paddingLeft;
+  const paddingRight = props.paddingRight ?? fromLook.paddingRight;
+  return {
+    look,
+    fontPx,
+    lineNumbers,
+    lines: props.lines ?? fromLook.lines,
+    paddingTop: props.paddingTop ?? fromLook.paddingTop,
+    paddingBot: props.paddingBot ?? fromLook.paddingBot,
+    paddingLeft,
+    paddingRight,
+    width: codeBlockWidthPx(props.columns ?? 0, fontPx, lineNumbers, paddingLeft, paddingRight),
+  };
+}
+
+const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function CodeBlockSourceView({
   value,
   onWrite,
   beginEdit,
   onEditEnd,
   grammar,
+  look = "block",
+  language = "python",
+  size = "md",
+  sizePx = 16,
+  lineNumbers,
+  lines,
+  wrap = false,
+  columns = 0,
+  paddingTop,
+  paddingBot,
+  paddingLeft,
+  paddingRight,
+  editing = true,
   disabled = false,
   placeholder,
   ariaLabel,
@@ -241,19 +356,36 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
   autoFocus = false,
   cursorAt,
   selectRange,
-  multiline = false,
   lineHeightPx,
   align = "left",
-  wrap = false,
   trailing,
   onEnter,
   onEscape,
   onViewReady,
   tooltipParent,
 }, ref) {
+  const presentation = resolveCodeBlockPresentation({
+    look,
+    size,
+    sizePx,
+    lineNumbers,
+    lines,
+    columns,
+    paddingTop,
+    paddingBot,
+    paddingLeft,
+    paddingRight,
+  });
+  const multiline = presentation.lines === "multi";
+  // A live document: editable AND not read-only. `editing` is the host's
+  // session flag; `disabled` is the document's own read-only fact.
+  const live = editing && !disabled;
+
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const grammarCompartment = useRef(new Compartment());
+  const languageCompartment = useRef(new Compartment());
+  const chromeCompartment = useRef(new Compartment());
   const editableCompartment = useRef(new Compartment());
   const placeholderCompartment = useRef(new Compartment());
   const metricsCompartment = useRef(new Compartment());
@@ -265,7 +397,7 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
     onEnter,
     onEscape,
     value,
-    disabled,
+    live,
     multiline,
   });
   latest.current = {
@@ -275,7 +407,7 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
     onEnter,
     onEscape,
     value,
-    disabled,
+    live,
     multiline,
   };
 
@@ -288,6 +420,18 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
     }),
     ...(wrap ? [EditorView.lineWrapping] : []),
   ];
+
+  // The look's own chrome: the gutter, and Tab-as-indent in a document
+  // (never in a one-line box, where Tab must keep walking focus).
+  const chrome = (): Extension => [
+    ...(presentation.lineNumbers ? [lineNumbersExtension()] : []),
+    ...(multiline ? [keymap.of([indentWithTab])] : []),
+  ];
+
+  // The base parser: the `language` prop, unless the grammar mounts its
+  // own raw `language` extension (a grammar that brings a parser owns it —
+  // two parsers on one document would fight over highlighting).
+  const baseLanguage = (): Extension => (grammar?.language ? [] : codeBlockLanguageExtension(language));
 
   const gestureRef = useRef<FieldGesture | null>(null);
   if (!gestureRef.current) {
@@ -330,8 +474,8 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
         doc: value,
         extensions: [
           history(),
-          // Enter and Escape are the field's exits, handled on the raw event
-          // so the keystroke can be STOPPED: once the field closes, the same
+          // Enter and Escape are the block's exits, handled on the raw event
+          // so the keystroke can be STOPPED: once the block closes, the same
           // keydown would otherwise reach a host's own document listener
           // with nothing focused — a canvas host that re-enters editing on
           // Enter, or clears a selection on Escape, would immediately undo
@@ -341,7 +485,7 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
           // (Ctrl/Cmd+Enter) is our own dedicated exit and must never fall
           // through to it: `defaultKeymap`'s Mod-Enter is `insertBlankLine`,
           // which used to run whenever a popup happened to be open, leaving
-          // a newline in even a single-line field. Accept-or-close the
+          // a newline in even a single-line box. Accept-or-close the
           // popup ourselves first, then exit.
           Prec.high(
             EditorView.domEventHandlers({
@@ -362,7 +506,7 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
                   event.stopPropagation();
                   return false;
                 }
-                // In a lane a bare Enter is a new line; only the modifier form exits.
+                // In a document a bare Enter is a new line; only the modifier form exits.
                 if (event.key === "Enter" && latest.current.multiline && !modifierEnter) {
                   return false;
                 }
@@ -380,11 +524,11 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
           // above: whatever inserts a newline — typed/pasted text (caught
           // below by the input handler too), or a COMMAND like
           // `insertBlankLine` reached via the fallback this same keydown
-          // handler used to allow — never survives in a non-multiline field.
+          // handler used to allow — never survives in a single-line box.
           singleLineGuard(() => latest.current.multiline),
-          // A lane is a small IDE buffer, so the line keys people reach for
-          // all work: CodeMirror's own Alt+↑/↓ and Shift+Alt+↑/↓, plus the
-          // Ctrl forms for anyone whose window manager eats Alt+arrows.
+          // A document is a small IDE buffer, so the line keys people reach
+          // for all work: CodeMirror's own Alt+↑/↓ and Shift+Alt+↑/↓, plus
+          // the Ctrl forms for anyone whose window manager eats Alt+arrows.
           keymap.of([
             { key: "Ctrl-ArrowUp", run: moveLineUp },
             { key: "Ctrl-ArrowDown", run: moveLineDown },
@@ -393,9 +537,11 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
             ...defaultKeymap,
             ...historyKeymap,
           ]),
+          languageCompartment.current.of(baseLanguage()),
           syntaxHighlighting(classHighlighter),
           grammarCompartment.current.of(grammar ? grammarExtensions(grammar) : []),
-          editableCompartment.current.of(EditorView.editable.of(!disabled)),
+          chromeCompartment.current.of(chrome()),
+          editableCompartment.current.of(EditorView.editable.of(live)),
           placeholderCompartment.current.of(placeholder ? placeholderExtension(placeholder) : []),
           metricsCompartment.current.of(metrics()),
           // The completion popup is parented to an explicit `tooltipParent`
@@ -403,9 +549,9 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
           // (`[data-tooltip-host]` — a modal, a canvas layer, anything that
           // must keep the popup inside its own stacking context), else the
           // document body. WHY the ancestor lookup exists at all, beside the
-          // prop: a host mounting many fields (every row of a canvas) can
+          // prop: a host mounting many blocks (every row of a canvas) can
           // opt every one of them in at once by tagging a single container,
-          // rather than threading `tooltipParent` through each — the field
+          // rather than threading `tooltipParent` through each — the block
           // stays host-agnostic either way, since neither path names a
           // specific canvas engine.
           tooltips({
@@ -416,7 +562,7 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
               document.body,
           }),
           // One line: a typed or pasted newline is dropped rather than
-          // growing the field. A lane keeps its newlines — they are its rows.
+          // growing the box. A document keeps its newlines — they are its rows.
           EditorView.inputHandler.of((target, from, to, insertedText) => {
             if (latest.current.multiline || !/[\r\n]/.test(insertedText)) return false;
             const cleaned = insertedText.replace(/[\r\n]+/g, "");
@@ -435,7 +581,7 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
           }),
           EditorView.domEventHandlers({
             focus: () => {
-              if (latest.current.disabled) return;
+              if (!latest.current.live) return;
               gesture.focus(latest.current.value);
             },
             // A CodeMirror `contentDOM` can flicker focus during its own
@@ -457,8 +603,8 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
     onViewReady?.(view);
     // Focus now and again on the next frame: a host that is mid-transition
     // (a canvas entering its own editing state) can take focus back after
-    // the first attempt, and a field that opened without focus is a dead
-    // field.
+    // the first attempt, and a block that opened without focus is a dead
+    // block.
     let frame = 0;
     if (autoFocus) {
       const take = () => {
@@ -484,14 +630,14 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
       viewRef.current = null;
       view.destroy();
     };
-    // One mount for the field's lifetime; content, grammar and editability
+    // One mount for the block's lifetime; content, grammar and editability
     // flow through compartments and dispatches so a re-render never tears
     // the document down mid-gesture.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The document follows the store whenever nobody is typing in it. Every
-  // keystroke round-trips back through `value` (the field's one write
+  // keystroke round-trips back through `value` (the block's one write
   // policy is `live`), so the equality guard is what keeps this from
   // re-fighting the caret.
   useEffect(() => {
@@ -511,10 +657,65 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
   }, [grammar]);
 
   useEffect(() => {
+    viewRef.current?.dispatch({ effects: languageCompartment.current.reconfigure(baseLanguage()) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language, grammar?.language]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: chromeCompartment.current.reconfigure(chrome()) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presentation.lineNumbers, multiline]);
+
+  useEffect(() => {
     viewRef.current?.dispatch({
-      effects: editableCompartment.current.reconfigure(EditorView.editable.of(!disabled)),
+      effects: editableCompartment.current.reconfigure(EditorView.editable.of(live)),
     });
-  }, [disabled]);
+  }, [live]);
+
+  // Entering an editing session takes focus; leaving one gives it back.
+  // WHY a transition effect and not `autoFocus`: the block mounts ONCE for
+  // a host session's whole lifetime and toggles `editing` (the canvas Code
+  // block's shape stays mounted across select → edit → deselect), so "just
+  // entered" is a prop CHANGE, which `autoFocus` — a mount-time fact — can
+  // never see. Skipped on mount so a page full of `editing` (default true)
+  // Port labels doesn't fight over focus on load.
+  //
+  // WHY leaving ABANDONS the gesture rather than committing it: the host
+  // that flipped `editing` off already knows the final value — it received
+  // every keystroke through `onWrite`, and it decided the exit (Enter →
+  // its own commit; Escape → its own restore). A commit here would fire
+  // `onEditEnd` with the document's last typed text, which after an Escape
+  // is exactly the text the host just threw away (`FieldGesture.abandon`'s
+  // own WHY). The document is then resynced to `value` by hand, because the
+  // ordinary resync effect skips a focused, mid-gesture document on purpose.
+  const previousLive = useRef(live);
+  useEffect(() => {
+    const was = previousLive.current;
+    previousLive.current = live;
+    if (was === live) return;
+    const view = viewRef.current;
+    if (!view) return;
+    if (live) {
+      const frame = requestAnimationFrame(() => {
+        if (!viewRef.current || viewRef.current.hasFocus) return;
+        viewRef.current.focus();
+        const end = viewRef.current.state.doc.length;
+        viewRef.current.dispatch({ selection: { anchor: end } });
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    gesture.abandon();
+    if (view.hasFocus) view.contentDOM.blur();
+    const stored = latest.current.value;
+    if (view.state.doc.toString() !== stored) {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: stored },
+        annotations: externalSync.of(true),
+      });
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
 
   useEffect(() => {
     viewRef.current?.dispatch({ effects: metricsCompartment.current.reconfigure(metrics()) });
@@ -530,9 +731,9 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
   }, [placeholder]);
 
   // A canvas host typically calls `preventDefault()` on its own pointerdown,
-  // so clicking the canvas never fires this field's native blur. A
+  // so clicking the canvas never fires this block's native blur. A
   // capture-phase listener on `document` is the one place "clicked outside
-  // the field" is observable regardless of what swallowed the native event.
+  // the block" is observable regardless of what swallowed the native event.
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       const host = hostRef.current;
@@ -552,7 +753,7 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
   // A canvas host typically wires wheel on an ancestor for its own pan/zoom
   // (tldraw on its container, React Flow on its pane), which fires from a
   // wheel over ANY of its children including this one — scrolling inside a
-  // focused field would otherwise zoom or pan the whole canvas underneath
+  // focused block would otherwise zoom or pan the whole canvas underneath
   // it. `{ passive: false }` + a real listener (not React's synthetic wheel,
   // which React attaches passively by default and cannot stop natively)
   // is what actually keeps the native event from bubbling past us.
@@ -570,21 +771,49 @@ const CodeFieldSourceView = forwardRef<CodeFieldHandle, CodeFieldProps>(function
   // to report, since no blur fires for a focused element removed from the DOM.
   useEffect(() => () => gesture.commit(), [gesture]);
 
+  // WHY pointer events are only stopped while `live`: a block at rest inside
+  // a canvas shape must let the host's own drag/select gesture through
+  // (SystemSketch's Code block needed exactly this `stopPropagation ===
+  // isEditing` seam, PEP 0017); a block being edited must own its pointer so
+  // a caret click never re-runs the host's selection. The `bbox-interactive`
+  // marker (class AND attribute — TextBox's own host-neutral pair) rides the
+  // same flag, so React Flow's `noDragClassName` and tldraw's attribute
+  // gate see "editing" and "at rest" as different things.
+  const stop = live ? (event: { stopPropagation: () => void }) => event.stopPropagation() : undefined;
+
+  const boxStyle: CSSProperties = {
+    fontSize: presentation.fontPx,
+    paddingTop: presentation.paddingTop,
+    paddingBottom: presentation.paddingBot,
+    paddingLeft: presentation.paddingLeft,
+    paddingRight: presentation.paddingRight,
+    ...(presentation.width !== undefined ? { width: presentation.width } : {}),
+  };
+
   return (
     <div
-      data-slot="code-field"
-      className={`bbox-code-field bbox-code-tokens${className ? ` ${className}` : ""}`}
+      data-slot="code-block"
+      data-look={presentation.look}
+      data-language={language}
+      data-size={size}
+      data-lines={presentation.lines}
+      data-line-numbers={presentation.lineNumbers}
+      data-editing={editing}
+      {...(live ? { "data-bbox-interactive": "" } : {})}
+      className={`bbox-code-block bbox-code-tokens${live ? " bbox-interactive" : ""}${className ? ` ${className}` : ""}`}
       ref={hostRef}
       role="textbox"
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
       aria-invalid={ariaInvalid ? true : undefined}
       aria-disabled={disabled ? true : undefined}
+      aria-readonly={!editing && !disabled ? true : undefined}
+      aria-multiline={multiline ? true : undefined}
       data-testid={testId}
-      style={style}
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
+      style={{ ...boxStyle, ...style }}
+      onPointerDown={stop}
+      onClick={stop}
+      onDoubleClick={stop}
     >
       {trailing}
     </div>
