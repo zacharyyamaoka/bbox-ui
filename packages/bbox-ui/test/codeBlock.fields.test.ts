@@ -9,6 +9,7 @@ import {
   CODE_BLOCK_LINES,
   CODE_BLOCK_LOOK_LABELS,
   CODE_BLOCK_LOOKS,
+  CODE_BLOCK_OVERFLOWS,
   CODE_BLOCK_SIZES,
   codeBlockCharPx,
   codeBlockFontPx,
@@ -43,7 +44,8 @@ describe("CODE_BLOCK_FIELDS", () => {
       "sizePx",
       "lineNumbers",
       "lines",
-      "wrap",
+      "overflow",
+      "expandable",
       "columns",
       "paddingTop",
       "paddingBot",
@@ -109,8 +111,22 @@ describe("CODE_BLOCK_FIELDS", () => {
     expect(field("lines").options?.map((o) => o.value)).toEqual([...CODE_BLOCK_LINES]);
   });
 
-  it("wrap and columns default off (no wrap, fill the host)", () => {
-    expect(field("wrap").defaultValue).toBe(false);
+  it("overflow's options are exactly the real CodeBlockOverflow union, defaulting to the block look's scroll", () => {
+    expect(field("overflow").options?.map((o) => o.value)).toEqual([...CODE_BLOCK_OVERFLOWS]);
+    expect(field("overflow").defaultValue).toBe(codeBlockLookValues("block").overflow);
+    expect(bare.overflow).toBe("scroll");
+    expect(resolveCodeBlockPresentation({ look: "field" }).overflow).toBe("clip");
+    expect(resolveCodeBlockPresentation({ look: "field", overflow: "wrap" }).overflow).toBe("wrap");
+  });
+
+  it("grow sets the authored column count aside — the text decides the width", () => {
+    expect(resolveCodeBlockPresentation({ columns: 40, overflow: "grow" }).width).toBeUndefined();
+    expect(resolveCodeBlockPresentation({ columns: 40, overflow: "scroll" }).width).toBeDefined();
+  });
+
+  it("expandable and columns default off (no corner button, fill the host)", () => {
+    expect(field("expandable").defaultValue).toBe(false);
+    expect(field("expandable").kind).toBe("toggle");
     expect(field("columns").defaultValue).toBe(0);
     expect(bare.width).toBeUndefined();
   });

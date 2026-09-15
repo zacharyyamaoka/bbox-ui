@@ -44,6 +44,7 @@ import {
   type CodeBlockLanguage,
   type CodeBlockLines,
   type CodeBlockLook,
+  type CodeBlockOverflow,
   type CodeBlockSize,
 } from "./codeBlock.layout";
 import { codeBlockLookValues } from "./codeBlock.presets";
@@ -88,14 +89,26 @@ export interface CodeBlockProps {
    * Enter is for a single line. Governed by `look` when omitted.
    */
   lines?: CodeBlockLines;
-  /** Soft-wrap long lines (a viewer), instead of letting them run. */
-  wrap?: boolean;
+  /**
+   * What a line wider than the box does: `clip` at the edge (an input),
+   * `wrap` onto new lines, `scroll` behind a bar, or `grow` the box to fit
+   * the text (`columns` is then ignored — the text decides). Governed by
+   * `look` when omitted: block → scroll, field → clip.
+   */
+  overflow?: CodeBlockOverflow;
   /**
    * Characters across. `> 0` fixes the box's width to that many mono cells
    * plus padding (and the gutter when line numbers are on) — see
    * `codeBlockWidthPx`; `0` (the default) fills whatever the host gives.
    */
   columns?: number;
+  /**
+   * Show a ⤢ button in the top-right corner. The block only ASKS to expand
+   * (`onExpand`) — what a "larger view" is (a modal, a side panel, a bigger
+   * shape) is the host's, since the core owns no overlay and no z-index.
+   */
+  expandable?: boolean;
+  onExpand?(): void;
   paddingTop?: number;
   paddingBot?: number;
   paddingLeft?: number;
@@ -301,6 +314,7 @@ export function resolveCodeBlockPresentation(props: {
   sizePx?: number;
   lineNumbers?: boolean;
   lines?: CodeBlockLines;
+  overflow?: CodeBlockOverflow;
   columns?: number;
   paddingTop?: number;
   paddingBot?: number;
@@ -311,6 +325,7 @@ export function resolveCodeBlockPresentation(props: {
   const fromLook = codeBlockLookValues(look);
   const fontPx = codeBlockFontPx(props.size ?? "md", props.sizePx ?? 16);
   const lineNumbers = props.lineNumbers ?? fromLook.lineNumbers;
+  const overflow = props.overflow ?? fromLook.overflow;
   const paddingLeft = props.paddingLeft ?? fromLook.paddingLeft;
   const paddingRight = props.paddingRight ?? fromLook.paddingRight;
   return {
@@ -318,11 +333,15 @@ export function resolveCodeBlockPresentation(props: {
     fontPx,
     lineNumbers,
     lines: props.lines ?? fromLook.lines,
+    overflow,
     paddingTop: props.paddingTop ?? fromLook.paddingTop,
     paddingBot: props.paddingBot ?? fromLook.paddingBot,
     paddingLeft,
     paddingRight,
-    width: codeBlockWidthPx(props.columns ?? 0, fontPx, lineNumbers, paddingLeft, paddingRight),
+    // `grow` means the TEXT decides the width, so an authored column count
+    // is set aside rather than fought — the box is as wide as its longest
+    // line, whatever `columns` says.
+    width: overflow === "grow" ? undefined : codeBlockWidthPx(props.columns ?? 0, fontPx, lineNumbers, paddingLeft, paddingRight),
   };
 }
 
@@ -338,12 +357,14 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
   sizePx = 16,
   lineNumbers,
   lines,
-  wrap = false,
+  overflow,
   columns = 0,
   paddingTop,
   paddingBot,
   paddingLeft,
   paddingRight,
+  expandable = false,
+  onExpand,
   editing = true,
   disabled = false,
   placeholder,
@@ -370,6 +391,7 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
     sizePx,
     lineNumbers,
     lines,
+    overflow,
     columns,
     paddingTop,
     paddingBot,
@@ -377,6 +399,7 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
     paddingRight,
   });
   const multiline = presentation.lines === "multi";
+  const wrap = presentation.overflow === "wrap";
   // A live document: editable AND not read-only. `editing` is the host's
   // session flag; `disabled` is the document's own read-only fact.
   const live = editing && !disabled;
@@ -787,6 +810,16 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
     paddingBottom: presentation.paddingBot,
     paddingLeft: presentation.paddingLeft,
     paddingRight: presentation.paddingRight,
+    // `grow`: the box is exactly as wide as its content (the stylesheet's
+    // own `width: 100%` would otherwise pin it to the host). WHY `flex:
+    // none` and `minWidth` ride along: inside a flex host (a Block slot's
+    // Flex on /create) a `width: max-content` item still SHRINKS — flex
+    // items default to `flex-shrink: 1` down to their min-content width,
+    // and a scrolling CodeMirror's min-content is nearly zero, so the box
+    // measured exactly the slot's width and never grew. Refusing to shrink
+    // is what "resize the width to match the text" means; overflowing the
+    // slot is then the host's to allow or clip.
+    ...(presentation.overflow === "grow" ? { width: "max-content", minWidth: "max-content", flex: "none" } : {}),
     ...(presentation.width !== undefined ? { width: presentation.width } : {}),
   };
 
@@ -798,6 +831,7 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
       data-size={size}
       data-lines={presentation.lines}
       data-line-numbers={presentation.lineNumbers}
+      data-overflow={presentation.overflow}
       data-editing={editing}
       {...(live ? { "data-bbox-interactive": "" } : {})}
       className={`bbox-code-block bbox-code-tokens${live ? " bbox-interactive" : ""}${className ? ` ${className}` : ""}`}
@@ -816,6 +850,27 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
       onDoubleClick={stop}
     >
       {trailing}
+      {expandable ? (
+        // WHY the button stops its own pointerdown regardless of `editing`:
+        // it is the one thing on a resting block that must NOT start the
+        // host's drag — a press on it means "open the larger view", never
+        // "move the shape" — while the rest of the resting box still lets
+        // the host's gesture through (the `stop` seam above).
+        <button
+          type="button"
+          data-slot="code-block-expand"
+          className="bbox-code-block-expand"
+          aria-label="Expand to a larger view"
+          title="Expand"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onExpand?.();
+          }}
+        >
+          ⤢
+        </button>
+      ) : null}
     </div>
   );
 });

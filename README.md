@@ -74,9 +74,16 @@ differs.
 - **Language**: `plaintext` · `python` · `javascript` · `typescript` · `json`
   · `html` · `css` · `sql` · `markdown`.
 - **Size**: `sm` 12 / `md` 16 / `lg` 20 / `xl` 24, or `custom` + `sizePx`.
-- **Width**: `columns` in ch (0 fills the host). **Editing** is host-owned:
-  at rest the block lets the host's drag/select through; while editing it
-  owns the pointer and carries the `bbox-interactive` marker.
+- **Width**: `columns` in ch (0 fills the host). **Overflow** for a line
+  wider than the box: `clip` (field default) · `wrap` · `scroll` (block
+  default) · `grow` (the text decides the width).
+- **Expand**: `expandable` shows a ⤢ corner button that only calls
+  `onExpand`; the larger view itself is the host's (the create page opens a
+  full-size block over the same value).
+- **Editing** is host-owned: at rest the block lets the host's drag/select
+  through; while editing it owns the pointer and carries the
+  `bbox-interactive` marker. Syntax colours come from `codeBlock.css`'s own
+  `tok-*` palette, painted off the kit's tokens.
 
 ```tsx
 <CodeBlock value={code} onWrite={setCode} language="python" lineNumbers />

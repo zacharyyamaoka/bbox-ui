@@ -20,6 +20,8 @@ import {
   CODE_BLOCK_LINES,
   CODE_BLOCK_LOOKS,
   CODE_BLOCK_LOOK_LABELS,
+  CODE_BLOCK_OVERFLOWS,
+  CODE_BLOCK_OVERFLOW_LABELS,
   CODE_BLOCK_SIZES,
   type CodeBlockSize,
 } from "./codeBlock.layout";
@@ -38,6 +40,10 @@ const LANGUAGE_OPTIONS = CODE_BLOCK_LANGUAGES.map((language) => ({
   label: CODE_BLOCK_LANGUAGE_LABELS[language],
 }));
 const LINES_OPTIONS = CODE_BLOCK_LINES.map((lines) => ({ value: lines, label: lines }));
+const OVERFLOW_OPTIONS = CODE_BLOCK_OVERFLOWS.map((overflow) => ({
+  value: overflow,
+  label: CODE_BLOCK_OVERFLOW_LABELS[overflow],
+}));
 
 /** The specimen every surface opens with — SystemSketch's own
  * `CODE_DEFAULT_TEXT`, the two lines in the screenshot this primitive was
@@ -113,11 +119,21 @@ export const CODE_BLOCK_FIELDS: FieldSpec[] = [
     hint: "single: a typed or pasted newline is dropped. multi: a real document; Ctrl/Cmd+Enter exits.",
   },
   {
-    id: "wrap",
-    label: "Wrap",
+    id: "overflow",
+    label: "Overflow",
+    kind: "segments",
+    defaultValue: BLOCK.overflow,
+    options: OVERFLOW_OPTIONS,
+    tier: "advanced",
+    hint: "A line wider than the box: clip at the edge, wrap onto new lines, scroll (a bar), or grow the box to fit the text. Governed by Look.",
+  },
+  {
+    id: "expandable",
+    label: "Expand button",
     kind: "toggle",
     defaultValue: false,
-    hint: "Soft-wrap long lines instead of letting them run.",
+    tier: "advanced",
+    hint: "A ⤢ button in the top-right corner; the host opens a larger view (onExpand).",
   },
   {
     id: "columns",

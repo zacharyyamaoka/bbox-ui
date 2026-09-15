@@ -24,6 +24,21 @@
  *     `.cm-gutters` child is gone;
  *  6. reactflow/tldraw only: press the resting (non-editing) block and
  *     drag 80px → the node moved, no text got selected.
+ *  7. (round 2) highlighting: back on `look="block"` holding the pristine
+ *     Python default, a real `.tok-definitionKeyword`/`.tok-keyword` span
+ *     paints in a different colour than the plain `.cm-content` text, at
+ *     font-weight 600 — `codeBlock.css`'s new `tok-*` palette, proven live
+ *     on /create (Zach's own report: no colours there).
+ *  8. (round 2) overflow: a long single line, then the inspector's
+ *     `overflow` field driven through Scroll → Wrap → Grow → Clip —
+ *     `data-overflow`, `.cm-scroller` scroll geometry, `.cm-content.cm-
+ *     lineWrapping`, and the block's own bounding width each checked
+ *     against what that specific mode's own CSS/JS promises.
+ *  9. (round 2) expand: the ⤢ button opens `BenchCodeBlock`'s overlay
+ *     (`packages/panel/src/bench.tsx`) bound to the SAME instance value;
+ *     typing there reaches both the small block and the inspector; Escape
+ *     closes it without discarding the edit; a press on the button at rest
+ *     never starts a host drag (reactflow/tldraw).
  *
  * Every assertion reads the real DOM (getBoundingClientRect, textContent,
  * a control's own attributes, document.activeElement) — never a
@@ -107,6 +122,20 @@ async function evaluate(expression) {
   if (exceptionDetails) throw new Error(exceptionDetails.exception?.description ?? "evaluate failed");
   return result.value;
 }
+/** Polls a selector's presence rather than a single check — used for a
+ *  genuinely transient inspector state (round 2: reactflow's own inspector
+ *  can sit mid-resync for a beat right after a drag, `[data-field="look"]`
+ *  briefly absent even though it is tier "simple" and normally always
+ *  present) — never silently proceeds into a click that would throw
+ *  "no <field> field" against a DOM that just hadn't settled yet. */
+async function waitForField(fieldId, timeout = 3000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (await evaluate(`!!document.querySelector('[data-field="${fieldId}"]')`)) return true;
+    await sleep(150);
+  }
+  return false;
+}
 async function waitFor(selector, timeout = 30000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -152,6 +181,20 @@ async function drag(from, to, steps = 20, holdMs = 60) {
   await sleep(80);
   await mouse("mouseReleased", to.x, to.y);
   await sleep(300);
+}
+/** Writes directly into a textarea-kind inspector field via the native
+ *  value setter + a real `input` event — same idiom `setSelect` uses for a
+ *  `<select>`, generalized to `<textarea>` for round 2's step 7/8 (setting
+ *  the Code field's value without going through the block's own editing
+ *  gesture at all — a real, independent write path a person also has). */
+async function setInspectorTextarea(fieldId, text) {
+  await evaluate(`(() => {
+    const el = document.querySelector('[data-field="${fieldId}"] textarea');
+    if (!el) throw new Error("no textarea for ${fieldId}");
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(el, ${JSON.stringify(text)});
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  })()`);
+  await sleep(250);
 }
 async function setSelect(selector, value) {
   await evaluate(`(() => {
@@ -372,8 +415,47 @@ async function revealField(fieldId) {
 /** Clicks the segmented-control option with the given visible label inside
  *  `[data-field="<fieldId>"]` — the panel's own segments control renders
  *  `option.label` as the button's text (FieldTraceRow.tsx), never the raw
- *  value token, unlike TextBox's `lines` field. */
+ *  value token, unlike TextBox's `lines` field.
+ *
+ *  WHY the two-branch dispatch: `FieldTraceRow.tsx`'s own
+ *  `SEGMENT_MENU_THRESHOLD` is 2 — a field with MORE than two options (e.g.
+ *  `overflow`'s four: Clip/Wrap/Scroll/Grow) renders as an `OptionMenu`
+ *  dropdown (`[data-slot="option-menu-trigger"]` + a `role="listbox"`
+ *  popup), not inline buttons; `look`'s two options (Block/Field) stay
+ *  inline. Both branches are driven through the real control a person
+ *  clicks — never a value set directly. */
 async function clickSegmentOption(fieldId, label) {
+  // WHY the two-branch dispatch, and WHY `named-dropdown` and not
+  // `FieldTraceRow.tsx`'s `OptionMenu` (this journey's own round-1 guess):
+  // confirmed live (round 2) that /create's real live panel variant is
+  // `packages/panel/src/variants/FigmaDense.tsx` — its own segments-vs-
+  // dropdown split is `options.length <= 3 && stripWidth <= SEGMENT_CHAR_
+  // BUDGET` inline buttons, else `NamedDropdown` (`[data-slot="named-
+  // dropdown-trigger"]` + a `position:fixed`, non-portalled `[data-slot=
+  // "named-dropdown-menu"]` of `[data-slot="named-dropdown-row"]` buttons).
+  // `look` (2 options) stays inline; `overflow` (4 options) is a dropdown.
+  // `FieldTraceRow.tsx`'s `OptionMenu`/`SEGMENT_MENU_THRESHOLD` is dead
+  // code on the live page — never actually rendered, confirmed by a live
+  // DOM probe finding zero `[data-slot="option-menu"]` anywhere.
+  const isDropdown = await evaluate(`!!document.querySelector('[data-field="${fieldId}"] [data-slot="named-dropdown-trigger"]')`);
+  if (isDropdown) {
+    await evaluate(`document.querySelector('[data-field="${fieldId}"] [data-slot="named-dropdown-trigger"]').click()`);
+    await sleep(200);
+    await evaluate(`(() => {
+      const menu = document.querySelector('[data-field="${fieldId}"] [data-slot="named-dropdown-menu"]');
+      if (!menu) throw new Error("no named-dropdown-menu popup for ${fieldId}");
+      // WHY replace(/^\\u2713/, "") before startsWith, not a bare includes():
+      // the active row's own tick mark ("\\u2713Scrollscroll" — NamedDropdown's
+      // label span and lowercase sublabel span render with no separator in
+      // textContent) would otherwise need a substring match loose enough to
+      // risk one option's sublabel matching a DIFFERENT option's label.
+      const btn = Array.from(menu.querySelectorAll('[data-slot="named-dropdown-row"]')).find(b => b.textContent.trim().replace(/^\\u2713/, "").startsWith(${JSON.stringify(label)}));
+      if (!btn) throw new Error("no ${fieldId} option labelled ${label}");
+      btn.click();
+    })()`);
+    await sleep(250);
+    return;
+  }
   await evaluate(`(() => {
     const row = document.querySelector('[data-field="${fieldId}"]');
     if (!row) throw new Error("no ${fieldId} field");
@@ -383,6 +465,10 @@ async function clickSegmentOption(fieldId, label) {
   })()`);
   await sleep(250);
 }
+
+// Mirrors codeBlock.fields.ts's own CODE_BLOCK_DEFAULT_VALUE verbatim —
+// the pristine specimen step 7's highlighting check resets the value to.
+const CODE_BLOCK_DEFAULT_VALUE = `def greet(name: str) -> str:\n    return f"Hello, {name}!"`;
 
 const RENDERS = ["dom", "reactflow", "tldraw"];
 const manifest = { renders: {} };
@@ -525,7 +611,161 @@ for (const renderId of RENDERS) {
     const selectionText = await evaluate(`window.getSelection().toString()`);
     assertStep(6, "no text got selected by the drag", selectionText === "", JSON.stringify(selectionText));
     await screenshot(`${renderId}-6-dragged`);
+
+    // ---- round-2 finding: on React Flow only, dragging a MEMBER's node
+    // reassigns the page's own selection to its PARENT (the Block) — tldraw
+    // keeps the member itself selected through the identical gesture. This
+    // is a real, measured product difference between the two host
+    // adapters, reported here rather than silently worked around — then
+    // the CodeBlock is re-selected (an ordinary follow-up click) so steps
+    // 7-9 can keep testing the SAME instance on every render alike.
+    const selAfterDrag = await selectedRows();
+    const keptSelection = selAfterDrag.join() === codeBlockId;
+    assertStep(
+      6,
+      `${renderId}: dragging the member's node preserves ITS OWN selection (not just its parent's)`,
+      keptSelection,
+      `selected after drag: [${selAfterDrag.join(",")}] (want [${codeBlockId}])`,
+    );
+    if (!keptSelection) {
+      await press(rowSel(codeBlockId));
+      await sleep(200);
+    }
   }
+
+  // ---- step 7: highlighting — a real tok-* palette, not just class names -
+  // A settle beat before touching the inspector again: on reactflow, step
+  // 6's drag can leave the inspector mid-resync for a moment (a transient
+  // "no look field" was observed here without it) — poll rather than a
+  // flat sleep, so this never races a genuinely slow re-render.
+  const lookSettled = await waitForField("look");
+  assertStep(7, "the Look field settles back after step 6's drag", lookSettled, lookSettled);
+  await clickSegmentOption("look", "Block");
+  await sleep(200);
+  const valueFieldVisible7 = await revealField("value");
+  assertStep(7, "inspector Code field is visible", valueFieldVisible7, valueFieldVisible7);
+  await setInspectorTextarea("value", CODE_BLOCK_DEFAULT_VALUE);
+  const restingDefault = await restingText(codeBlockId);
+  assertStep(7, "resting block holds the pristine Python default", typeof restingDefault === "string" && restingDefault.includes("def greet"), restingDefault);
+  const highlight = await evaluate(`(() => {
+    const box = document.querySelector(${JSON.stringify(codeBlockSel(codeBlockId))});
+    const kw = box?.querySelector('.tok-definitionKeyword, .tok-keyword');
+    const content = box?.querySelector('.cm-content');
+    if (!kw || !content) return null;
+    const kwStyle = getComputedStyle(kw);
+    return { kwColor: kwStyle.color, kwWeight: kwStyle.fontWeight, contentColor: getComputedStyle(content).color };
+  })()`);
+  assertStep(7, "a keyword span (.tok-definitionKeyword/.tok-keyword) exists in the block", !!highlight, JSON.stringify(highlight));
+  assertStep(7, "the keyword's colour differs from the plain .cm-content colour", !!highlight && highlight.kwColor !== highlight.contentColor, JSON.stringify(highlight));
+  assertStep(7, "the keyword's font-weight is 600", !!highlight && highlight.kwWeight === "600", highlight?.kwWeight);
+  await screenshot(`${renderId}-7-highlighting`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 60 });
+
+  // ---- step 8: overflow — Scroll -> Wrap -> Grow -> Clip -----------------
+  const LONG_LINE = "x_very_long_identifier_that_does_not_fit_the_box_at_all_whatsoever = some_long_function_call(a, b, c, d, e)";
+  await setInspectorTextarea("value", LONG_LINE);
+  const overflowFieldVisible = await revealField("overflow");
+  assertStep(8, "the Overflow field is visible in the inspector", overflowFieldVisible, overflowFieldVisible);
+  const overflowGeom = () =>
+    evaluate(`(() => {
+      const box = document.querySelector(${JSON.stringify(codeBlockSel(codeBlockId))});
+      const scroller = box?.querySelector('.cm-scroller');
+      const content = box?.querySelector('.cm-content');
+      if (!box || !scroller || !content) return null;
+      const cs = getComputedStyle(scroller);
+      return {
+        dataOverflow: box.getAttribute('data-overflow'),
+        scrollWidth: scroller.scrollWidth,
+        clientWidth: scroller.clientWidth,
+        overflowX: cs.overflowX,
+        overflow: cs.overflow,
+        hasLineWrapping: content.classList.contains('cm-lineWrapping'),
+        contentHeight: content.getBoundingClientRect().height,
+        lineHeightPx: parseFloat(cs.lineHeight) || 0,
+        blockWidth: box.getBoundingClientRect().width,
+      };
+    })()`);
+
+  await clickSegmentOption("overflow", "Scroll");
+  const geomScroll = await overflowGeom();
+  assertStep(8, "Scroll: data-overflow is 'scroll'", geomScroll?.dataOverflow === "scroll", JSON.stringify(geomScroll));
+  assertStep(8, "Scroll: .cm-scroller scrollWidth > clientWidth", !!geomScroll && geomScroll.scrollWidth > geomScroll.clientWidth, JSON.stringify(geomScroll));
+  assertStep(8, "Scroll: computed overflow-x is auto/scroll", !!geomScroll && /auto|scroll/.test(geomScroll.overflowX), geomScroll?.overflowX);
+  await screenshot(`${renderId}-8a-overflow-scroll`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 60 });
+
+  await clickSegmentOption("overflow", "Wrap");
+  const geomWrap = await overflowGeom();
+  assertStep(8, "Wrap: data-overflow is 'wrap'", geomWrap?.dataOverflow === "wrap", JSON.stringify(geomWrap));
+  assertStep(8, "Wrap: .cm-content carries class cm-lineWrapping", !!geomWrap && geomWrap.hasLineWrapping, JSON.stringify(geomWrap));
+  assertStep(
+    8,
+    "Wrap: .cm-content is taller than one line (the long line actually wrapped)",
+    !!geomWrap && geomWrap.lineHeightPx > 0 && geomWrap.contentHeight > geomWrap.lineHeightPx * 1.4,
+    JSON.stringify(geomWrap),
+  );
+  await screenshot(`${renderId}-8b-overflow-wrap`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil((geomWrap?.contentHeight ?? 40) + headerClip.h) + 60 });
+
+  await clickSegmentOption("overflow", "Grow");
+  const geomGrow = await overflowGeom();
+  assertStep(8, "Grow: data-overflow is 'grow'", geomGrow?.dataOverflow === "grow", JSON.stringify(geomGrow));
+  assertStep(
+    8,
+    "Grow: the block's own width is wider than it was under Scroll",
+    !!geomGrow && !!geomScroll && geomGrow.blockWidth > geomScroll.blockWidth,
+    `grow=${geomGrow?.blockWidth} scroll=${geomScroll?.blockWidth}`,
+  );
+  assertStep(8, "Grow: .cm-scroller no longer needs to scroll (scrollWidth <= clientWidth + 1)", !!geomGrow && geomGrow.scrollWidth <= geomGrow.clientWidth + 1, JSON.stringify(geomGrow));
+  await screenshot(`${renderId}-8c-overflow-grow`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(Math.max(headerClip.w, geomGrow?.blockWidth ?? 0)) + 40, h: Math.ceil(headerClip.h) + 60 });
+
+  await clickSegmentOption("overflow", "Clip");
+  const geomClip = await overflowGeom();
+  assertStep(8, "Clip: data-overflow is 'clip'", geomClip?.dataOverflow === "clip", JSON.stringify(geomClip));
+  assertStep(8, "Clip: computed overflow is hidden on .cm-scroller", !!geomClip && /hidden/.test(geomClip.overflow || geomClip.overflowX), JSON.stringify(geomClip));
+  await screenshot(`${renderId}-8d-overflow-clip`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 60 });
+
+  // ---- step 9: expand — the ⤢ button opens BenchCodeBlock's overlay ------
+  const expandBtnSel = `${codeBlockSel(codeBlockId)} [data-slot="code-block-expand"]`;
+  const hasExpandBtn = await evaluate(`!!document.querySelector(${JSON.stringify(expandBtnSel)})`);
+  assertStep(9, "the block has an expand (⤤) button", hasExpandBtn, hasExpandBtn);
+
+  let nodeBeforeExpandPress = null;
+  const nodeSel9 = renderId === "reactflow" ? `[data-slot="rf-instance"]` : renderId === "tldraw" ? `[data-slot="tl-instance"]` : null;
+  if (nodeSel9 && hasExpandBtn) nodeBeforeExpandPress = await rectOf(nodeSel9);
+
+  if (hasExpandBtn) await press(expandBtnSel);
+  await sleep(200);
+
+  if (nodeSel9 && nodeBeforeExpandPress) {
+    const nodeAfterExpandPress = await rectOf(nodeSel9);
+    const nodeDx = Math.abs(nodeAfterExpandPress.left - nodeBeforeExpandPress.left);
+    assertStep(9, "pressing the expand button at rest does not start a host drag (node position unchanged)", nodeDx < 2, `dx=${nodeDx.toFixed(1)}`);
+  }
+
+  const EXPANDED_SEL = '[data-slot="code-block-expanded"]';
+  const EXPANDED_CONTENT_SEL = `${EXPANDED_SEL} .cm-content`;
+  const expandedOpen = await evaluate(`!!document.querySelector(${JSON.stringify(EXPANDED_SEL)})`);
+  assertStep(9, "clicking expand opens [data-slot=code-block-expanded]", expandedOpen, expandedOpen);
+  const expandedHasEditor = await evaluate(`!!document.querySelector('${EXPANDED_SEL} .cm-editor')`);
+  assertStep(9, "the expanded overlay contains a real .cm-editor", expandedHasEditor, expandedHasEditor);
+  const expandedFocused = await evaluate(`(() => {
+    const content = document.querySelector(${JSON.stringify(EXPANDED_CONTENT_SEL)});
+    return !!content && (document.activeElement === content || content.contains(document.activeElement));
+  })()`);
+  assertStep(9, "the overlay's .cm-content is (or contains) document.activeElement", expandedFocused, expandedFocused);
+
+  await typeText(" # big");
+  const smallAfterType = await restingText(codeBlockId);
+  assertStep(9, "the small block's .cm-content now contains '# big'", typeof smallAfterType === "string" && smallAfterType.includes("# big"), smallAfterType);
+  const inspectorAfterType = await evaluate(`document.querySelector('[data-field="value"] textarea')?.value ?? null`);
+  assertStep(9, "the inspector's Code field also contains '# big'", typeof inspectorAfterType === "string" && inspectorAfterType.includes("# big"), inspectorAfterType);
+  await screenshot(`${renderId}-9a-expanded`);
+
+  await key("Escape");
+  await sleep(300);
+  const expandedGone = !(await evaluate(`!!document.querySelector(${JSON.stringify(EXPANDED_SEL)})`));
+  assertStep(9, "Escape closes the overlay", expandedGone, expandedGone);
+  const restingAfterClose = await restingText(codeBlockId);
+  assertStep(9, "the value still contains '# big' after closing (not discarded)", typeof restingAfterClose === "string" && restingAfterClose.includes("# big"), restingAfterClose);
+  await screenshot(`${renderId}-9b-closed`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 60 });
 
   manifest.renders[renderId] = { console: takeConsole() };
   } catch (err) {

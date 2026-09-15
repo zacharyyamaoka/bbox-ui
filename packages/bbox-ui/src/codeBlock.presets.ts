@@ -11,7 +11,13 @@
  * beats a preset everywhere else in the cascade (`@bbox-ui/schema`'s
  * `resolveField`).
  */
-import { CODE_BLOCK_LOOK_LABELS, CODE_BLOCK_LOOKS, type CodeBlockLines, type CodeBlockLook } from "./codeBlock.layout";
+import {
+  CODE_BLOCK_LOOK_LABELS,
+  CODE_BLOCK_LOOKS,
+  type CodeBlockLines,
+  type CodeBlockLook,
+  type CodeBlockOverflow,
+} from "./codeBlock.layout";
 
 /**
  * Structurally `@bbox-ui/schema`'s `PresetSpec`, restated here WITHOUT the
@@ -33,6 +39,7 @@ export interface CodeBlockPreset {
 export const CODE_BLOCK_LOOK_GOVERNS = [
   "lineNumbers",
   "lines",
+  "overflow",
   "paddingTop",
   "paddingBot",
   "paddingLeft",
@@ -42,6 +49,7 @@ export const CODE_BLOCK_LOOK_GOVERNS = [
 export interface CodeBlockLookValues {
   lineNumbers: boolean;
   lines: CodeBlockLines;
+  overflow: CodeBlockOverflow;
   paddingTop: number;
   paddingBot: number;
   paddingLeft: number;
@@ -55,10 +63,12 @@ export interface CodeBlockLookValues {
 const LOOK_VALUES: Record<CodeBlockLook, CodeBlockLookValues> = {
   // The canvas Code block: SystemSketch's `code-block.css` pads the
   // scroller 10px top/bottom and the content 16px left/right.
-  block: { lineNumbers: true, lines: "multi", paddingTop: 10, paddingBot: 10, paddingLeft: 16, paddingRight: 16 },
+  // A code editor scrolls a long line rather than folding it (the source
+  // stays truthful to its own columns).
+  block: { lineNumbers: true, lines: "multi", overflow: "scroll", paddingTop: 10, paddingBot: 10, paddingLeft: 16, paddingRight: 16 },
   // The one-line box "sized to sit where a plain <input> sat" — the old
-  // `.bbox-code-field`'s own 4px 6px.
-  field: { lineNumbers: false, lines: "single", paddingTop: 4, paddingBot: 4, paddingLeft: 6, paddingRight: 6 },
+  // `.bbox-code-field`'s own 4px 6px, and an input's clip at the edge.
+  field: { lineNumbers: false, lines: "single", overflow: "clip", paddingTop: 4, paddingBot: 4, paddingLeft: 6, paddingRight: 6 },
 };
 
 export const CODE_BLOCK_PRESETS: CodeBlockPreset[] = CODE_BLOCK_LOOKS.map((look) => ({

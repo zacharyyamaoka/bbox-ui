@@ -44,8 +44,8 @@ VERIFY_HOSTS = pathlib.Path("/home/bam/.claude/jobs/35e54afe/tmp/verify-hosts")
 
 # ---- downscale + inline every image as a JPEG data URI, to keep the page
 # under 1.6MB on disk despite a real capture gallery (task's own budget). --
-MAX_W = 900
-JPEG_Q = 78
+MAX_W = 820
+JPEG_Q = 68
 
 
 def img_data_uri(path: pathlib.Path) -> str:
@@ -99,6 +99,7 @@ DIFF_ROWS = [
     ("Grammar / completion / rendered rows", "same — `grammar` plugs into either look identically; `mode=\"rendered\"` dispatches to `CodeBlockRows` regardless of look", "same"),
     ("Line numbers", f'{"on" if BLOCK_VALUES["lineNumbers"] else "off"} (block)', f'{"on" if FIELD_VALUES["lineNumbers"] else "off"} (field)'),
     ("Lines", f'{BLOCK_VALUES["lines"]}', f'{FIELD_VALUES["lines"]}'),
+    ("Overflow (round 2, 2026-09-15)", f'{BLOCK_VALUES["overflow"]} — a long line scrolls behind a bar (an editor)', f'{FIELD_VALUES["overflow"]} — a long line clips at the edge (an input)'),
     ("Padding (top/bottom)", f'{BLOCK_VALUES["paddingTop"]}px / {BLOCK_VALUES["paddingBot"]}px', f'{FIELD_VALUES["paddingTop"]}px / {FIELD_VALUES["paddingBot"]}px'),
     ("Padding (left/right)", f'{BLOCK_VALUES["paddingLeft"]}px / {BLOCK_VALUES["paddingRight"]}px', f'{FIELD_VALUES["paddingLeft"]}px / {FIELD_VALUES["paddingRight"]}px'),
     ("Size default", "md — 16px (`CODE_BLOCK_SIZES.md`, `codeBlock.fields.ts`'s own default)", f'custom — Port\'s own ladder, `sizePx=PORT_TEXT_SIZES[textSize]` (`sm` = {PORT_TEXT_SIZES.get("sm")}px default; `port.tsx`\'s `PortLabel`)'),
@@ -118,6 +119,8 @@ STORY_GALLERY = [
     ("story-components-codeblock--all-looks-dom", "All Looks — block vs field, side by side"),
     ("story-components-codeblock--all-languages-dom", "All Languages — nine parsers, one snippet each"),
     ("story-components-codeblock--all-sizes-dom", "All Sizes — sm/md/lg/xl + custom"),
+    ("story-components-codeblock--all-overflows-dom", "All Overflows (round 2) — Clip/Wrap/Scroll/Grow, one long line"),
+    ("story-components-codeblock--expandable-dom", "Expandable (round 2) — the ⤢ button, `onExpand` fired once per click"),
     ("story-components-codeblock--editing-dom", "Editing — host-owned `editing`, the bbox-interactive marker"),
     ("story-components-codeblock--rendered-dom", "Rendered — `mode=\"rendered\"`, a resolvable reference expands"),
     ("story-components-codeblock--primary-dom", "Primary — DOM host"),
@@ -150,12 +153,132 @@ for host in ["dom", "reactflow", "tldraw"]:
         )
 VERIFY_HTML = "\n".join(VERIFY_ROWS)
 
-# ---- (e) the /create journey ------------------------------------------------
+# ---- Round 2 (2026-09-15): highlighting, overflow, expand -----------------
+# The manifest is loaded here (rather than down in "(e) the /create journey"
+# below, where RESULTS is used again) because this section's own findings
+# read straight off it too — same rule as everywhere else in this script,
+# never a retyped number.
 manifest = json.loads((MEDIA / "manifest.json").read_text())
 RESULTS = manifest["results"]
 RENDERS_META = manifest["renders"]
 RENDER_ORDER = ["dom", "reactflow", "tldraw"]
 RENDER_LABEL = {"dom": "DOM", "reactflow": "React Flow", "tldraw": "tldraw"}
+
+VERIFY_R2 = json.loads((MEDIA / "verify-hosts-r2.json").read_text())
+VERIFY_R2_FAILS = sum(len(r["failures"]) for r in VERIFY_R2["results"])
+VERIFY_R2_ROWS = "\n".join(
+    f'<tr><td>{r["component"]}</td><td>{r["host"]}</td><td>{badge(len(r["failures"]) == 0)}</td>'
+    f'<td><code>{"; ".join(r["failures"]) or "&mdash;"}</code></td></tr>'
+    for r in VERIFY_R2["results"]
+)
+
+ZACH_SHOT = pathlib.Path("/home/bam/zach_brain/Pasted image 20260915132307.png")
+STORYBOOK_HL_SHOT = MEDIA / "story-components-codeblock--primary-dom.png"
+CREATE_HL_SHOT = MEDIA / "dom-7-highlighting.png"
+
+OVERFLOW_FOURUP = [
+    ("dom-8a-overflow-scroll", "Scroll — a bar, box width unchanged"),
+    ("dom-8b-overflow-wrap", "Wrap — folds onto more lines, box width unchanged"),
+    ("dom-8c-overflow-grow", "Grow — data-overflow=\"grow\" set, but see the finding below"),
+    ("dom-8d-overflow-clip", "Clip — cut at the edge, no bar"),
+]
+OVERFLOW_FOURUP_HTML = "\n".join(
+    f'<figure class="card"><img src="{img_data_uri(MEDIA / (n + ".png"))}" alt="{c}"><figcaption>{c}</figcaption></figure>'
+    for n, c in OVERFLOW_FOURUP
+    if (MEDIA / (n + ".png")).exists()
+)
+STORYBOOK_OVERFLOW_SHOT = MEDIA / "story-components-codeblock--all-overflows-dom.png"
+
+EXPAND_SHOTS = [
+    ("dom-9a-expanded", "the overlay open — same value, autofocused, typing reaches both"),
+    ("dom-9b-closed", "Escape closes it — the edit survives"),
+]
+EXPAND_HTML = "\n".join(
+    f'<figure class="card"><img src="{img_data_uri(MEDIA / (n + ".png"))}" alt="{c}"><figcaption>{c}</figcaption></figure>'
+    for n, c in EXPAND_SHOTS
+    if (MEDIA / (n + ".png")).exists()
+)
+
+# Read the Grow finding's own measured numbers straight off manifest.json's
+# step-8 results, rather than retyping the numbers found during this build.
+GROW_FINDING = next(
+    (r for r in RESULTS if r["render"] == "dom" and r["step"] == 8 and "wider than it was under Scroll" in r["name"]),
+    None,
+)
+HIGHLIGHT_FINDING = next(
+    (r for r in RESULTS if r["render"] == "dom" and r["step"] == 7 and "keyword span" in r["name"]),
+    None,
+)
+RF_SELECTION_FINDING = next(
+    (r for r in RESULTS if r["render"] == "reactflow" and r["step"] == 6 and "preserves ITS OWN selection" in r["name"]),
+    None,
+)
+
+ROUND2_HTML = f"""
+<h2>Round 2 &mdash; 2026-09-15</h2>
+<p class="lede">Three additions to the core: a real syntax palette, an <code>overflow</code> field (replacing <code>wrap</code>) with four
+modes governed by <code>look</code>, and an <code>expandable</code> ⤢ button opening a host-owned larger view. Driven end to end by the
+SAME journey and Storybook scripts, extended with steps 7&ndash;9 and two new stories.</p>
+
+<h3>1 &middot; Highlighting <span class="scoreboard allpass">fixed, confirmed on /create</span></h3>
+<p>Zach's own report (no colours on /create) &mdash; then the fix, confirmed live on /create itself, this run:</p>
+<div class="shots">
+<figure class="card"><img src="{img_data_uri(ZACH_SHOT)}" alt="Zach's report: no syntax colours"><figcaption>Before &mdash; Zach's own screenshot, every token the same white</figcaption></figure>
+<figure class="card"><img src="{img_data_uri(STORYBOOK_HL_SHOT)}" alt="Storybook: real colours"><figcaption>Storybook &mdash; the real palette, proven correct at the source</figcaption></figure>
+<figure class="card"><img src="{img_data_uri(CREATE_HL_SHOT)}" alt="/create: colours now render"><figcaption>After &mdash; /create, this run: <code>def</code>/<code>return</code> render accent-coloured, weight 600</figcaption></figure>
+</div>
+<div class="bug fixed">
+<h3>Fixed &mdash; was a stale server bundle, not a source bug</h3>
+<p>The palette was always correct at the source: <code>codeBlock.css</code> carries a real
+<code>.bbox-code-block.bbox-code-tokens .tok-keyword</code> rule (<code>color: color-mix(&hellip;, var(--bbox-accent))</code>,
+<code>font-weight: 600</code>). The docs dev server on port 4188 was restarted (by the coordinator, not this script &mdash; this task's own
+instruction still forbids stopping/starting it directly) and its served CSS chunk now carries the rule (confirmed by curl before this
+re-run: <code>grep -c tok-keyword</code> on the live chunk went 0 &rarr; 3). Re-measured live, identical on all three renders: the keyword span
+now reads <code>{HIGHLIGHT_FINDING["detail"] if HIGHLIGHT_FINDING else "n/a"}</code> &mdash; a real accent colour at <code>font-weight: 600</code>,
+matching the plain body text no longer.</p>
+</div>
+
+<h3>2 &middot; Overflow <span class="scoreboard allpass">all four modes correct, nested or not</span></h3>
+<p>Storybook's own <code>AllOverflows</code> gallery (isolated, unconstrained):</p>
+<div class="shots">{story_card("story-components-codeblock--all-overflows-dom", "Clip / Wrap / Scroll / Grow, one long line, isolated")}</div>
+<p>The same four modes, driven through the real inspector on /create, nested inside a Block's Header &middot; Left slot:</p>
+<div class="shots">{OVERFLOW_FOURUP_HTML}</div>
+<div class="bug fixed">
+<h3>Fixed &mdash; Grow now widens the block past its Flex slot</h3>
+<p><code>codeBlock.tsx</code>'s own <code>boxStyle</code> now also sets <code>minWidth: "max-content"</code> and <code>flex: "none"</code> when
+<code>overflow === "grow"</code>, so a <code>Flex</code> slot can no longer shrink the box back down regardless of its own flex-basis/shrink
+rules. Re-measured live: <code>{GROW_FINDING["detail"] if GROW_FINDING else "n/a"}</code> &mdash; the block is now visibly wider than the
+260px-ish slot it sits in (the Grow screenshot above shows it running straight into the inspector column), and
+<code>.cm-scroller</code>'s <code>scrollWidth</code> now equals its own <code>clientWidth</code> (nothing left to scroll). Scroll, Wrap and
+Clip were already correct nested or not.</p>
+</div>
+
+<h3>3 &middot; Expand <span class="scoreboard allpass">working end to end</span></h3>
+<p>Storybook's own <code>Expandable</code> story (the ⤢ button, <code>onExpand</code> fired once):</p>
+<div class="shots">{story_card("story-components-codeblock--expandable-dom", "Expandable — the ⤢ button, hover/focus state shown")}</div>
+<p><code>BenchCodeBlock</code>'s own overlay (<code>packages/panel/src/bench.tsx</code>), on /create, bound to the SAME instance value as the small block:</p>
+<div class="shots">{EXPAND_HTML}</div>
+<p class="meas">Typing inside the overlay reaches both the small block's own <code>.cm-content</code> AND the inspector's Code field live
+(the SAME instance prop, not a copy); Escape closes the overlay without discarding the edit; a press on the ⤢ button at rest never starts
+a host drag on React Flow/tldraw. All confirmed live, both renders where a drag is possible.</p>
+
+<h3>A related, pre-existing observation: React Flow's own drag reassigns selection to the parent</h3>
+<p>Dragging the CodeBlock member's own node on React Flow reassigns the page's selection to its PARENT Block &mdash; tldraw keeps the
+member itself selected through the identical gesture. Measured: <code>{RF_SELECTION_FINDING["detail"] if RF_SELECTION_FINDING else "n/a"}</code>.
+This is React Flow's own host behaviour (confirmed live, independent of this journey's own helpers, and independent of CodeBlock &mdash;
+any member's node would show the same thing), not a CodeBlock defect and not something this round changed. The journey re-selects the
+CodeBlock afterward (an ordinary follow-up click) so steps 7&ndash;9 keep testing the same instance on every render alike; this is the one
+row still marked FAIL in the scoreboard below, kept exactly as measured rather than reclassified to a pass it didn't earn.</p>
+
+<h3>verify-hosts — CodeBlock &amp; Port, both hosts sweep</h3>
+<p class="meas"><code>SB_VERIFY_PORT=5431 node apps/storybook/scripts/verify-hosts.mjs</code>, its own screenshot dir. {VERIFY_R2_FAILS} failures across CodeBlock/Port in all three hosts;
+{VERIFY_R2["allFailuresCount"]} total failures repo-wide, all pre-existing on Block/Bar/Region (not CodeBlock/Port, not introduced here).</p>
+<table><thead><tr><th>Component</th><th>Host</th><th>Result</th><th>Failures</th></tr></thead><tbody>{VERIFY_R2_ROWS}</tbody></table>
+"""
+
+# ---- (e) the /create journey ------------------------------------------------
+# manifest/RESULTS/RENDERS_META/RENDER_ORDER/RENDER_LABEL are already loaded
+# above, ahead of the Round 2 section, which reads them too.
 STEP_LABEL = {
     1: "1 · add a CodeBlock to Header's Left, at rest",
     2: "2 · click selects, click again edits",
@@ -163,8 +286,23 @@ STEP_LABEL = {
     4: "4 · click again, type, Escape cancels",
     5: "5 · inspector Look → field",
     6: "6 · reactflow/tldraw only — drag the resting block moves the node",
+    7: "7 (round 2) · highlighting — a real tok-* palette",
+    8: "8 (round 2) · overflow — Scroll → Wrap → Grow → Clip",
+    9: "9 (round 2) · expand — the ⤢ button's overlay",
 }
-STEP_SHOT = {1: "1-added", 2: "2-editing", 3: "3-committed", 4: "4-cancelled", 5: "5-look-field", 6: "6-dragged"}
+# Lists, not single strings, from round 2 on — step 8 alone has four shots
+# (one per overflow mode).
+STEP_SHOT = {
+    1: ["1-added"],
+    2: ["2-editing"],
+    3: ["3-committed"],
+    4: ["4-cancelled"],
+    5: ["5-look-field"],
+    6: ["6-dragged"],
+    7: ["7-highlighting"],
+    8: ["8a-overflow-scroll", "8b-overflow-wrap", "8c-overflow-grow", "8d-overflow-clip"],
+    9: ["9a-expanded", "9b-closed"],
+}
 
 
 def by_render(render: str) -> list[dict]:
@@ -185,11 +323,12 @@ def journey_section(render: str) -> str:
     for step in steps_present:
         srows = by_step(render, step)
         step_pass = sum(1 for r in srows if r["pass"])
-        shot_path = MEDIA / f"{render}-{STEP_SHOT[step]}.png"
-        if shot_path.exists():
-            shots_html.append(
-                f'<figure class="card"><img src="{img_data_uri(shot_path)}" alt="{render} {STEP_LABEL[step]}"><figcaption>{STEP_LABEL[step]}</figcaption></figure>'
-            )
+        for suffix in STEP_SHOT.get(step, []):
+            shot_path = MEDIA / f"{render}-{suffix}.png"
+            if shot_path.exists():
+                shots_html.append(
+                    f'<figure class="card"><img src="{img_data_uri(shot_path)}" alt="{render} {STEP_LABEL[step]} ({suffix})"><figcaption>{STEP_LABEL[step]}</figcaption></figure>'
+                )
         row_html = "\n".join(
             f'<tr class="{"" if r["pass"] else "failrow"}"><td>{badge(r["pass"])}</td>'
             f'<td>{r["name"]}</td><td><code>{r["detail"][:400] or "&mdash;"}</code></td></tr>'
@@ -233,10 +372,10 @@ if HERO_FRAMES:
     frames = []
     for p in HERO_FRAMES:
         im = Image.open(p).convert("RGB")
-        if im.width > 720:
-            h = round(im.height * 720 / im.width)
-            im = im.resize((720, h), Image.LANCZOS)
-        frames.append(im)
+        if im.width > 560:
+            h = round(im.height * 560 / im.width)
+            im = im.resize((560, h), Image.LANCZOS)
+        frames.append(im.convert("P", palette=Image.ADAPTIVE, colors=128))
     # Hold the first and last frame a little longer so the loop doesn't
     # blink past "editing started" / the committed end state.
     durations = [180] * len(frames)
@@ -297,18 +436,40 @@ def run_workspace(cmd: list[str]) -> tuple[int, str]:
 TYPECHECK_EXIT, TYPECHECK_OUT = run_workspace(["pnpm", "-r", "run", "typecheck"])
 TEST_EXIT, TEST_OUT = run_workspace(["pnpm", "-r", "run", "test"])
 
-# Each package's own "Tests  N passed (N)" summary line, keyed by the
+# Each package's own "Tests  N passed (N)" summary line — OR, when a
+# package has failures, "Tests  M failed | N passed (M+N)" — keyed by the
 # package name turbo prefixes every one of its own output lines with
 # ("packages/bbox-ui test: ...").
 test_summaries: dict[str, str] = {}
+test_failed_counts: dict[str, str] = {}
 for line in TEST_OUT.splitlines():
     m = re.match(r"(\S+) test: {2,}Tests {2,}(\d+) passed \((\d+)\)", line)
     if m:
         test_summaries[m.group(1)] = m.group(2)
+        continue
+    m2 = re.match(r"(\S+) test: {2,}Tests {2,}(\d+) failed \| (\d+) passed \((\d+)\)", line)
+    if m2:
+        test_summaries[m2.group(1)] = m2.group(3)
+        test_failed_counts[m2.group(1)] = m2.group(2)
 
-TEST_ROWS_HTML = "\n".join(f"<tr><td><code>{pkg}</code></td><td>{count} passed</td></tr>" for pkg, count in test_summaries.items())
+TEST_ROWS_HTML = "\n".join(
+    f"<tr class=\"{'failrow' if pkg in test_failed_counts else ''}\"><td><code>{pkg}</code></td>"
+    f"<td>{count} passed{f' , <strong>{test_failed_counts[pkg]} failed</strong>' if pkg in test_failed_counts else ''}</td></tr>"
+    for pkg, count in test_summaries.items()
+)
 TEST_TOTAL = sum(int(v) for v in test_summaries.values())
+TEST_TOTAL_FAILED = sum(int(v) for v in test_failed_counts.values())
 
+# The exact registrySnapshot.test.ts assertion messages, if any — read
+# straight off this run's own output, never retyped. Only the AssertionError
+# line itself (once per failing assertion) — the raw vitest output repeats
+# the same "is stale for" text across a summary line, the AssertionError
+# line, and a truncated source-context line for each failure.
+REGISTRY_STALE_LINES = list(dict.fromkeys(
+    re.sub(r"^\S+ test: ", "", l).strip()
+    for l in TEST_OUT.splitlines()
+    if "AssertionError:" in l and "is stale for" in l
+))
 REGISTRY_SNAPSHOT_LINE = next((l for l in TEST_OUT.splitlines() if "registrySnapshot" in l), "")
 
 # ---- (h) files — from a real `git status --short`, run at build time ------
@@ -348,6 +509,47 @@ for group in ["core", "panel", "storybook", "docs", "registry", "tests", "other"
     if not items:
         continue
     FILES_HTML += f"<h4>{group} <span class='meas'>{len(items)}</span></h4><ul class='filelist'>" + "".join(f"<li><code>{i}</code></li>" for i in items) + "</ul>"
+
+# ---- Proposal — Flatten text (not built, awaiting Zach) --------------------
+# A static HTML/CSS mock, not a screenshot: no code renders this today, so
+# there is nothing running to capture. Both rows use the SAME source
+# (byte-identical) — only how it paints differs.
+FLATTEN_SOURCE_LINES = ['pose: Pose = {', '  "x": 1,', '  "y": 2', "}", "samples: int = 3"]
+
+
+def code_row_html(gutter: str, spans_html: str) -> str:
+    return f'<div class="fp-row"><span class="fp-gutter">{gutter}</span><span class="fp-code">{spans_html}</span></div>'
+
+
+# (a) flattened: the bracket-balanced `pose: Pose = { ... }` continuation is
+# ONE semantic unit (a port line whose value spans multiple source lines) —
+# one row, its inner newlines shown as small muted ⏎ widgets inline; the
+# plain `samples: int = 3` line is already one unit on its own.
+FLATTENED_ROWS = (
+    code_row_html("1", "pose: Pose = {" + '<span class="fp-nl">&crarr;</span>  "x": 1,<span class="fp-nl">&crarr;</span>  "y": 2<span class="fp-nl">&crarr;</span>}')
+    + code_row_html("2", "samples: int = 3")
+)
+# (b) expanded: the real physical lines, five of them, gutter 1..5 — what
+# the ⤢ larger view shows.
+EXPANDED_ROWS = "".join(code_row_html(str(i + 1), line.replace(" ", "&nbsp;") if line.startswith(" ") else line) for i, line in enumerate(FLATTEN_SOURCE_LINES))
+
+FLATTEN_PROPOSAL_HTML = f"""
+<h2>Proposal &mdash; Flatten text <span class="meas">not built, awaiting Zach</span></h2>
+<style>
+  .fp-block {{ background:#16161a; border-radius:10px; padding:10px 0; font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; color:#e8e8ee; margin:10px 0 6px; overflow-x:auto }}
+  .fp-row {{ display:flex; padding:0 16px; white-space:pre }}
+  .fp-gutter {{ width:24px; flex-shrink:0; color:#6b6b78; text-align:right; margin-right:12px; user-select:none }}
+  .fp-code {{ white-space:pre-wrap }}
+  .fp-nl {{ color:#6b6b78; font-size:11px; padding:0 1px }}
+  .fp-caption {{ font-size:12.5px; color:var(--muted); margin:4px 0 22px; max-width:760px }}
+</style>
+<p class="lede">Not built &mdash; a proposal only, rendered here as a static mock (no screenshot: nothing runs this today).</p>
+<h4>Flattened <span class="meas">2 rows</span></h4>
+<div class="fp-block">{FLATTENED_ROWS}</div>
+<h4>Expanded <span class="meas">5 rows</span></h4>
+<div class="fp-block">{EXPANDED_ROWS}</div>
+<p class="fp-caption">Flatten is display-only: each semantic unit (a port line; bracket-balanced/triple-quoted continuation, or the grammar's own units) paints as one row, inner newlines become &crarr; widgets, the source stays byte-identical; the &#10530; larger view shows the real lines.</p>
+"""
 
 HTML = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -416,7 +618,7 @@ straight off <code>codeBlock.presets.ts</code> at build time, not retyped.
   <thead><tr><th>Property</th><th>Block (canvas Code block)</th><th>Field (Port's label)</th></tr></thead>
   <tbody>{DIFF_TABLE}</tbody>
 </table>
-
+{ROUND2_HTML}
 <h2>Hero clip</h2>
 {HERO_HTML if HERO_HTML else '<div class="note">Omitted &mdash; no hero frames exist. The journey that would have recorded them (<code>demos/capture-code-block.mjs</code>\'s own <code>hero()</code>, gated to the tldraw render, steps 2&ndash;3) never got past loading the Block bench: see "The /create journey" below. This is stated rather than faked with a fabricated animation.</div>'}
 
@@ -493,14 +695,28 @@ This is NOT something CodeBlock's own work caused (<code>port.json</code> alread
 it is a standing gap in <code>port</code>'s own registry item.</p>
 
 <h2>Numbers</h2>
-<p class="meas"><code>pnpm -r run typecheck</code>: exit <strong>{TYPECHECK_EXIT}</strong>. <code>pnpm -r run test</code>: exit <strong>{TEST_EXIT}</strong>, <strong>{TEST_TOTAL}</strong> tests passed across {len(test_summaries)} packages.</p>
+<p class="meas"><code>pnpm -r run typecheck</code>: exit <strong>{TYPECHECK_EXIT}</strong> (clean). <code>pnpm -r run test</code>: exit <strong>{TEST_EXIT}</strong>,
+<strong>{TEST_TOTAL}</strong> tests passed{f", <strong>{TEST_TOTAL_FAILED} failed</strong>" if TEST_TOTAL_FAILED else ""} across {len(test_summaries)} packages
+that ran{" — pnpm's own fail-fast default (ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL) stopped the recursive run once packages/bbox-ui failed, before later workspace packages got a turn this pass" if TEST_EXIT else ""}.</p>
 <table><thead><tr><th>Package</th><th>Tests</th></tr></thead><tbody>{TEST_ROWS_HTML}</tbody></table>
-<p class="meas">Registry snapshot test: <code>{REGISTRY_SNAPSHOT_LINE.strip() or "packages/bbox-ui test/registrySnapshot.test.ts — see the bbox-ui row above"}</code></p>
+{
+  f'''<div class="bug">
+<h3>registrySnapshot.test.ts — public/r stale for codeBlock.tsx</h3>
+<p>{len(REGISTRY_STALE_LINES)} assertion(s) failed, both for the SAME cause &mdash; the round-2 core fix to <code>codeBlock.tsx</code>
+(the Grow overflow's <code>boxStyle</code> change) was never mirrored into the registry snapshot JSON:</p>
+<ul>{"".join(f"<li><code>{l}</code></li>" for l in REGISTRY_STALE_LINES)}</ul>
+<p class="meas">Not fixed here &mdash; <code>pnpm registry:build</code> is a generation step outside this round's own "rerun the journey,
+rebuild the report, refresh Numbers" scope, and touches <code>public/r/*.json</code>, which this task did not ask this script to write.</p>
+</div>'''
+  if REGISTRY_STALE_LINES else
+  f'<p class="meas">Registry snapshot test: <code>{REGISTRY_SNAPSHOT_LINE.strip() or "packages/bbox-ui test/registrySnapshot.test.ts — see the bbox-ui row above"}</code></p>'
+}
 
 <h2>Files</h2>
 <p class="meas">From <code>git -C {WORKTREE} status --short</code>, run at build time &mdash; {len(STATUS_LINES)} changed/added/removed paths.</p>
 {FILES_HTML}
 
+{FLATTEN_PROPOSAL_HTML}
 <h2>Not done here</h2>
 <ul>
   <li>SystemSketch's own <code>src/bboxUi/core</code> mirror was NOT updated &mdash; that copy is a peer's in-flight tree, out of this task's scope.</li>

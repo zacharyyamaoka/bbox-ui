@@ -43,6 +43,23 @@ export const CODE_BLOCK_LINES = ["single", "multi"] as const;
 export type CodeBlockLines = (typeof CODE_BLOCK_LINES)[number];
 
 /**
+ * What a line that is wider than the box does — Zach, 2026-09-15: "if text
+ * wrapping then it goes onto a new line; if not then you get the scroll
+ * bar; if overflow, then it should resize the width to match the text."
+ * Plus `clip`, the input-like behaviour a Port label already had (cut at
+ * the edge, no bar, no growth), which stays the field look's default.
+ * Governed by `look` (`codeBlock.presets.ts`), overridable per instance.
+ */
+export const CODE_BLOCK_OVERFLOWS = ["clip", "wrap", "scroll", "grow"] as const;
+export type CodeBlockOverflow = (typeof CODE_BLOCK_OVERFLOWS)[number];
+export const CODE_BLOCK_OVERFLOW_LABELS: Record<CodeBlockOverflow, string> = {
+  clip: "Clip",
+  wrap: "Wrap",
+  scroll: "Scroll",
+  grow: "Grow",
+};
+
+/**
  * The languages the `language` menu offers. Same nine as SystemSketch's
  * Code block (`CODE_LANGUAGES`); `codeBlockLanguages.ts` maps each to its
  * CodeMirror package. The labels are a total Record (not a bare array) so

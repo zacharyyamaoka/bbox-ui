@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
   CodeBlock,
@@ -11,6 +11,7 @@ import {
   type CodeBlockLanguage,
   type CodeBlockLine,
   type CodeBlockLook,
+  type CodeBlockOverflow,
   type CodeBlockReference,
   type CodeBlockSize,
 } from "@bbox-ui/core";
@@ -46,6 +47,7 @@ type Story = StoryObj<typeof meta>;
 const LOOK_FIELD = CODE_BLOCK_FIELDS.find((f) => f.id === "look")!;
 const LANGUAGE_FIELD = CODE_BLOCK_FIELDS.find((f) => f.id === "language")!;
 const SIZE_FIELD = CODE_BLOCK_FIELDS.find((f) => f.id === "size")!;
+const OVERFLOW_FIELD = CODE_BLOCK_FIELDS.find((f) => f.id === "overflow")!;
 
 /**
  * The bridge every story renders through. `value` is destructured out
@@ -92,6 +94,7 @@ export const Primary: Story = {
     await expect(box.getAttribute("data-size")).toBe(args.size);
     await expect(box.getAttribute("data-lines")).toBe(presentation.lines);
     await expect(box.getAttribute("data-line-numbers")).toBe(String(presentation.lineNumbers));
+    await expect(box.getAttribute("data-overflow")).toBe(presentation.overflow);
     await expect(box.style.paddingLeft).toBe(`${presentation.paddingLeft}px`);
 
     await expect(box.querySelector(".cm-editor")).toBeInTheDocument();
@@ -170,6 +173,58 @@ export const AllSizes: Story = {
       ))}
     </div>
   ),
+};
+
+/**
+ * Every real `CodeBlockOverflow`, on a deliberately long single line inside
+ * a fixed, deliberately-too-narrow 260px wrapper — the one geometry where
+ * clip/wrap/scroll/grow actually disagree (a line that already fits its box
+ * looks identical under all four). `grow` is allowed to exceed the
+ * wrapper's own 260px — that IS the point of the option (`codeBlock.tsx`'s
+ * own `width: max-content` WHY), so this story does not clip it back.
+ */
+const OVERFLOW_DEMO_VALUE = "x_very_long_identifier_that_does_not_fit_the_box_at_all = 1234567890";
+export const AllOverflows: Story = {
+  parameters: sweep("overflow"),
+  render: (args) => (
+    <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
+      {OVERFLOW_FIELD.options!.map((option) => (
+        <div key={option.value} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 11, color: "#888" }}>{option.label}</span>
+          <div style={{ width: 260 }}>
+            <Controlled
+              {...args}
+              overflow={option.value as CodeBlockOverflow}
+              value={OVERFLOW_DEMO_VALUE}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  ),
+};
+
+/**
+ * The `expandable` ⤢ button (`codeBlock.tsx`'s own doc: "the host opens a
+ * larger view") — the core only ever ASKS via `onExpand`; this story proves
+ * the button exists and fires it exactly once per click, nothing about what
+ * a "larger view" looks like (that is `BenchCodeBlock`'s own job on
+ * /create, `packages/panel/src/bench.tsx`).
+ */
+export const Expandable: Story = {
+  args: { expandable: true, onExpand: fn() },
+  play: async ({ canvasElement, args }) => {
+    const box = canvasElement.querySelector('[data-slot="code-block"]');
+    if (!(box instanceof HTMLElement)) {
+      throw new Error('expected a [data-slot="code-block"] element in the DOM');
+    }
+    const expandButton = box.querySelector('[data-slot="code-block-expand"]');
+    if (!(expandButton instanceof HTMLElement)) {
+      throw new Error('expected a [data-slot="code-block-expand"] button');
+    }
+    await userEvent.click(expandButton);
+    await expect(args.onExpand).toHaveBeenCalledOnce();
+  },
 };
 
 /**
