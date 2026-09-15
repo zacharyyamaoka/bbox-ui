@@ -9,7 +9,7 @@ import {
 import { CodeField } from "../src/codeField";
 import { PORT_FIELDS } from "../src/port.fields";
 import { PORT_PRESETS } from "../src/port.presets";
-import { Port, PortCountBadge, PortDot, PortLabel } from "../src/port";
+import { Port, PortCountBadge, PortDot, PortLabel, portResolutionSubject } from "../src/port";
 import {
   APPEARANCE_STATES,
   LENSES,
@@ -24,6 +24,7 @@ import {
   PORT_TEXT_LAYOUTS,
   PORT_TEXT_SIZES,
   SECONDARY_SLOT_LAYOUTS,
+  defaultSecondarySlotLayout,
   inwardTextLayout,
 } from "../src/port.layout";
 
@@ -344,5 +345,41 @@ describe("Port — the real component reached through the same size cascade the 
     ];
     expect(dotElement2.props.diameter).toBe("lg");
     expect(labelElement2.props.textSize).toBe("sm");
+  });
+});
+
+/**
+ * `portResolutionSubject` (port.tsx) is what the Inspector panel resolves
+ * against instead of a subject's raw props (`packages/panel/src/bench.tsx`'s
+ * `toSubject`, same mechanism `pillResolutionSubject` already uses for
+ * Pill) — so the panel's OWN display of "what is this field's current
+ * value" agrees with what `Port` actually renders, instead of reading
+ * `textLayout`/`secondarySlotLayout`'s static `defaultValue` literals
+ * (port.fields.ts: "right"/"leftOffset", correct only at Port's own
+ * default `edge`/`textLayout`). Not exercised by any test above this one,
+ * which only ever call `Port`/`PortDot` directly — never this function.
+ */
+describe("portResolutionSubject", () => {
+  it("fills textLayout from inwardTextLayout(edge) when omitted, defaulting edge to \"left\"", () => {
+    expect(portResolutionSubject({}).textLayout).toBe(inwardTextLayout("left"));
+    expect(portResolutionSubject({ edge: "top" }).textLayout).toBe(inwardTextLayout("top"));
+  });
+
+  it("fills secondarySlotLayout from defaultSecondarySlotLayout(textLayout) using the JUST-COMPUTED textLayout, not the raw omitted one", () => {
+    const subject = portResolutionSubject({ edge: "top" });
+    expect(subject.textLayout).toBe(inwardTextLayout("top"));
+    expect(subject.secondarySlotLayout).toBe(defaultSecondarySlotLayout(inwardTextLayout("top")));
+  });
+
+  it("never overrides an explicit textLayout or secondarySlotLayout the subject already set", () => {
+    const subject = portResolutionSubject({ edge: "top", textLayout: "left", secondarySlotLayout: "botOffset" });
+    expect(subject.textLayout).toBe("left");
+    expect(subject.secondarySlotLayout).toBe("botOffset");
+  });
+
+  it("preserves every other prop on the subject untouched", () => {
+    const subject = portResolutionSubject({ state: "wired", children: "get_aruco: ArucoSrv" });
+    expect(subject.state).toBe("wired");
+    expect(subject.children).toBe("get_aruco: ArucoSrv");
   });
 });
