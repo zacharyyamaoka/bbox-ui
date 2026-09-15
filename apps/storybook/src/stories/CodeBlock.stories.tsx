@@ -340,3 +340,70 @@ export const Rendered: Story = {
     }
   },
 };
+
+/**
+ * `flatten` (round 3, 2026-09-15) — Zach's own port-lane case: a multi-line
+ * default value folded to one row per semantic unit, `⏎` widgets standing
+ * in for the newlines a Python continuation swallows. Side-by-side with
+ * flatten OFF so the same source visibly reads as 2 rows vs 5 lines.
+ */
+const FLATTEN_SAMPLE = 'pose: Pose = {\n  "x": 1,\n  "y": 2\n}\nsamples: int = 3';
+export const Flatten: Story = {
+  args: { flatten: true, lineNumbers: true, value: FLATTEN_SAMPLE },
+  render: (args) => (
+    <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+      <div>
+        <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Flatten on</div>
+        <Controlled {...args} flatten />
+      </div>
+      <div>
+        <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Flatten off</div>
+        <Controlled {...args} flatten={false} />
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const box = canvasElement.querySelector('[data-slot="code-block"]');
+    if (!(box instanceof HTMLElement)) {
+      throw new Error('expected a [data-slot="code-block"] element in the DOM');
+    }
+    await expect(box.getAttribute("data-flatten")).toBe("true");
+    const newlineWidgets = box.querySelectorAll(".bbox-code-block-newline");
+    await expect(newlineWidgets.length).toBe(3);
+    const cmLines = box.querySelectorAll(".cm-line");
+    await expect(cmLines.length).toBe(2);
+    // The hidden measuring gutter element CodeMirror keeps for width
+    // calculation renders with zero box size — `offsetHeight` filters it
+    // out without depending on an implementation-detail class name.
+    const gutterTexts = Array.from(box.querySelectorAll<HTMLElement>(".cm-lineNumbers .cm-gutterElement"))
+      .filter((el) => el.offsetHeight > 0)
+      .map((el) => el.textContent?.trim());
+    await expect(gutterTexts).toEqual(["1", "2"]);
+  },
+};
+
+/**
+ * `overflow: "grow-truncated"` (round 3) — grows like `grow`, but every
+ * line the caret is NOT on folds after `columns` characters with an
+ * ellipsis widget; the caret's own line always shows in full.
+ */
+const GROW_TRUNCATED_SAMPLE = [
+  "first_line_that_is_genuinely_long_enough_to_need_folding_here = 1",
+  "short",
+  "third_line_that_is_also_long_enough_to_need_folding_here_too = 3",
+].join("\n");
+export const GrowTruncated: Story = {
+  args: { overflow: "grow-truncated", columns: 24, value: GROW_TRUNCATED_SAMPLE, lines: "multi", lineNumbers: true },
+  play: async ({ canvasElement }) => {
+    const box = canvasElement.querySelector('[data-slot="code-block"]');
+    if (!(box instanceof HTMLElement)) {
+      throw new Error('expected a [data-slot="code-block"] element in the DOM');
+    }
+    await expect(box.getAttribute("data-overflow")).toBe("grow-truncated");
+    // At rest the caret does not count (`foldInactiveLines` only honours
+    // the selection while the document is focused — codeGrammar.ts's own
+    // WHY), so BOTH long lines fold: the story never focuses the block.
+    const ellipses = box.querySelectorAll(".bbox-code-block-ellipsis");
+    await expect(ellipses.length).toBe(2);
+  },
+};

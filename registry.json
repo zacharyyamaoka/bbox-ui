@@ -63,6 +63,16 @@
           "target": "components/bbox/codeBlockLanguages.ts"
         },
         {
+          "path": "packages/bbox-ui/src/codeBlockUnits.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlockUnits.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockFlatten.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlockFlatten.ts"
+        },
+        {
           "path": "packages/bbox-ui/src/codeBlockGuards.ts",
           "type": "registry:lib",
           "target": "components/bbox/codeBlockGuards.ts"
@@ -136,6 +146,16 @@
           "path": "packages/bbox-ui/src/codeBlockLanguages.ts",
           "type": "registry:lib",
           "target": "components/bbox/codeBlockLanguages.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockUnits.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlockUnits.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeBlockFlatten.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeBlockFlatten.ts"
         },
         {
           "path": "packages/bbox-ui/src/codeBlockGuards.ts",

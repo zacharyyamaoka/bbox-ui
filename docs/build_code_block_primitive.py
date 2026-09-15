@@ -119,8 +119,10 @@ STORY_GALLERY = [
     ("story-components-codeblock--all-looks-dom", "All Looks — block vs field, side by side"),
     ("story-components-codeblock--all-languages-dom", "All Languages — nine parsers, one snippet each"),
     ("story-components-codeblock--all-sizes-dom", "All Sizes — sm/md/lg/xl + custom"),
-    ("story-components-codeblock--all-overflows-dom", "All Overflows (round 2) — Clip/Wrap/Scroll/Grow, one long line"),
+    ("story-components-codeblock--all-overflows-dom", "All Overflows (round 2+3) — Clip/Wrap/Scroll/Grow/Grow truncated, one long line"),
     ("story-components-codeblock--expandable-dom", "Expandable (round 2) — the ⤢ button, `onExpand` fired once per click"),
+    ("story-components-codeblock--flatten-dom", "Flatten (round 3) — one row per semantic unit, ⏎ widgets, flatten on vs off"),
+    ("story-components-codeblock--grow-truncated-dom", "Grow truncated (round 3) — grows like Grow, inactive lines fold with an ellipsis"),
     ("story-components-codeblock--editing-dom", "Editing — host-owned `editing`, the bbox-interactive marker"),
     ("story-components-codeblock--rendered-dom", "Rendered — `mode=\"rendered\"`, a resolvable reference expands"),
     ("story-components-codeblock--primary-dom", "Primary — DOM host"),
@@ -270,7 +272,7 @@ any member's node would show the same thing), not a CodeBlock defect and not som
 CodeBlock afterward (an ordinary follow-up click) so steps 7&ndash;9 keep testing the same instance on every render alike; this is the one
 row still marked FAIL in the scoreboard below, kept exactly as measured rather than reclassified to a pass it didn't earn.</p>
 
-<h3>verify-hosts — CodeBlock &amp; Port, both hosts sweep</h3>
+<h3>verify-hosts — CodeBlock &amp; Port, both hosts sweep <span class="meas">re-run round 3, including the two new stories</span></h3>
 <p class="meas"><code>SB_VERIFY_PORT=5431 node apps/storybook/scripts/verify-hosts.mjs</code>, its own screenshot dir. {VERIFY_R2_FAILS} failures across CodeBlock/Port in all three hosts;
 {VERIFY_R2["allFailuresCount"]} total failures repo-wide, all pre-existing on Block/Bar/Region (not CodeBlock/Port, not introduced here).</p>
 <table><thead><tr><th>Component</th><th>Host</th><th>Result</th><th>Failures</th></tr></thead><tbody>{VERIFY_R2_ROWS}</tbody></table>
@@ -289,6 +291,8 @@ STEP_LABEL = {
     7: "7 (round 2) · highlighting — a real tok-* palette",
     8: "8 (round 2) · overflow — Scroll → Wrap → Grow → Clip",
     9: "9 (round 2) · expand — the ⤢ button's overlay",
+    10: "10 (round 3) · flatten — one row per semantic unit",
+    11: "11 (round 3) · overflow — grow-truncated",
 }
 # Lists, not single strings, from round 2 on — step 8 alone has four shots
 # (one per overflow mode).
@@ -302,6 +306,8 @@ STEP_SHOT = {
     7: ["7-highlighting"],
     8: ["8a-overflow-scroll", "8b-overflow-wrap", "8c-overflow-grow", "8d-overflow-clip"],
     9: ["9a-expanded", "9b-closed"],
+    10: ["10a-flatten-on", "10b-flatten-off"],
+    11: ["11a-grow-truncated-rest", "11b-grow-truncated-caret-line1"],
 }
 
 
@@ -533,8 +539,42 @@ FLATTENED_ROWS = (
 # the ⤢ larger view shows.
 EXPANDED_ROWS = "".join(code_row_html(str(i + 1), line.replace(" ", "&nbsp;") if line.startswith(" ") else line) for i, line in enumerate(FLATTEN_SOURCE_LINES))
 
+# Round 3's own journey step 10/11 screenshots and findings — read from the
+# SAME manifest RESULTS loaded above (never retyped).
+STEP10_ON = MEDIA / "dom-10a-flatten-on.png"
+STEP10_OFF = MEDIA / "dom-10b-flatten-off.png"
+STEP11_REST = MEDIA / "dom-11a-grow-truncated-rest.png"
+STEP11_CARET = MEDIA / "dom-11b-grow-truncated-caret-line1.png"
+
+ELLIPSIS_REST_FINDING = next(
+    (r for r in RESULTS if r["render"] == "dom" and r["step"] == 11 and "at least 2" in r["name"]),
+    None,
+)
+ELLIPSIS_CARET_FINDING = next(
+    (r for r in RESULTS if r["render"] == "dom" and r["step"] == 11 and "dropped once the caret" in r["name"]),
+    None,
+)
+FOCUS_FINDING = next(
+    (r for r in RESULTS if r["render"] == "dom" and r["step"] == 11 and "editing state and focused" in r["name"]),
+    None,
+)
+
+# ---- Renderers-on-top plan — quoted verbatim from its own §5, never
+# retyped. The planner's recommendation is read live from the doc at build
+# time so this quote can never drift from the file it cites.
+RENDERERS_PLAN_PATH = WORKTREE / "docs" / "CODEBLOCK-RENDERERS-PLAN.md"
+RENDERERS_PLAN_TEXT = RENDERERS_PLAN_PATH.read_text() if RENDERERS_PLAN_PATH.exists() else ""
+_rec_match = re.search(
+    r"(## 5\. Recommendation.*?)\n\n\*\*Files created\*\*",
+    RENDERERS_PLAN_TEXT,
+    re.DOTALL,
+)
+RECOMMENDATION_QUOTE = _rec_match.group(1).strip() if _rec_match else "(recommendation not found — docs/CODEBLOCK-RENDERERS-PLAN.md may have moved)"
+import html as _html_mod
+RECOMMENDATION_QUOTE_HTML = _html_mod.escape(RECOMMENDATION_QUOTE).replace("\n", "<br>")
+
 FLATTEN_PROPOSAL_HTML = f"""
-<h2>Proposal &mdash; Flatten text <span class="meas">not built, awaiting Zach</span></h2>
+<h2>Round 3 &mdash; 2026-09-15: Flatten (built) and Grow truncated (built)</h2>
 <style>
   .fp-block {{ background:#16161a; border-radius:10px; padding:10px 0; font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; color:#e8e8ee; margin:10px 0 6px; overflow-x:auto }}
   .fp-row {{ display:flex; padding:0 16px; white-space:pre }}
@@ -542,13 +582,65 @@ FLATTEN_PROPOSAL_HTML = f"""
   .fp-code {{ white-space:pre-wrap }}
   .fp-nl {{ color:#6b6b78; font-size:11px; padding:0 1px }}
   .fp-caption {{ font-size:12.5px; color:var(--muted); margin:4px 0 22px; max-width:760px }}
+  .plan-quote {{ background:#16161a; color:#e8e8ee; border-radius:10px; padding:14px 18px; margin:10px 0 20px; font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace; border-left:4px solid var(--accent) }}
 </style>
-<p class="lede">Not built &mdash; a proposal only, rendered here as a static mock (no screenshot: nothing runs this today).</p>
-<h4>Flattened <span class="meas">2 rows</span></h4>
+<p class="lede">Two more additions to the core, both approved by Zach and both built this round: <code>flatten</code> (a toggle — every
+newline INSIDE a semantic unit becomes a &crarr; widget, so a port's multi-line default paints as one row) and
+<code>overflow: "grow-truncated"</code> (grows like <code>grow</code>, but every line the caret is NOT on folds at <code>columns</code>
+characters with an ellipsis). <code>packages/bbox-ui/src/codeBlockUnits.ts</code> (Python's own continuation rule) and
+<code>codeBlockFlatten.ts</code> (the CodeMirror decoration) are new; <code>foldInactiveLines</code> (<code>codeGrammar.ts</code>) is shared
+between a grammar's own <code>foldInactiveLinesAfter</code> and this overflow mode &mdash; one mechanism, not two.</p>
+
+<h3>Flatten &mdash; as proposed vs as built</h3>
+<p class="meas">The mock from the original proposal (this section used to be titled "Proposal — Flatten text, not built, awaiting Zach")
+— kept here as the reference for what "as built" is checked against:</p>
+<h4>As proposed &mdash; Flattened <span class="meas">2 rows</span></h4>
 <div class="fp-block">{FLATTENED_ROWS}</div>
-<h4>Expanded <span class="meas">5 rows</span></h4>
+<h4>As proposed &mdash; Expanded <span class="meas">5 rows</span></h4>
 <div class="fp-block">{EXPANDED_ROWS}</div>
 <p class="fp-caption">Flatten is display-only: each semantic unit (a port line; bracket-balanced/triple-quoted continuation, or the grammar's own units) paints as one row, inner newlines become &crarr; widgets, the source stays byte-identical; the &#10530; larger view shows the real lines.</p>
+
+<h4>As built &mdash; live on /create, Storybook's own <code>Flatten</code> story alongside</h4>
+<div class="shots">
+{story_card("story-components-codeblock--flatten-dom", "Storybook: Flatten on vs off, side by side — the same story that carries the play function")}
+{f'<figure class="card"><img src="{img_data_uri(STEP10_ON)}" alt="Flatten on, /create"><figcaption>/create — Flatten on: 2 rows, gutter 1, 2, ⏎ widgets inline</figcaption></figure>' if STEP10_ON.exists() else ''}
+{f'<figure class="card"><img src="{img_data_uri(STEP10_OFF)}" alt="Flatten off, /create"><figcaption>/create — Flatten off: 5 physical lines, gutter 1..5</figcaption></figure>' if STEP10_OFF.exists() else ''}
+</div>
+<p class="meas">Confirmed live, all three renders: <code>data-flatten="true"</code>, exactly 3 <code>.bbox-code-block-newline</code> widgets,
+exactly 2 <code>.cm-line</code> elements, gutter <code>["1","2"]</code>. Clicking beside the first &crarr; widget and pressing Enter adds a
+real newline INSIDE the unit — the inspector's Code value gains one more <code>\\n</code> (5 total) while the row count stays 2 (the new
+newline folds too); Escape restores it; turning Flatten off shows all 5 physical lines with gutter <code>["1","2","3","4","5"]</code>.</p>
+
+<h3>Grow truncated &mdash; as built</h3>
+<div class="shots">
+{story_card("story-components-codeblock--grow-truncated-dom", "Storybook: Grow truncated — the caret's own line (line 1, CodeMirror's own default) stays full; line 3 folds")}
+{f'<figure class="card"><img src="{img_data_uri(STEP11_REST)}" alt="grow-truncated at rest"><figcaption>/create — at rest: data-overflow=grow-truncated, wider than Clip</figcaption></figure>' if STEP11_REST.exists() else ''}
+{f'<figure class="card"><img src="{img_data_uri(STEP11_CARET)}" alt="grow-truncated caret on line 1"><figcaption>/create — caret clicked onto line 1</figcaption></figure>' if STEP11_CARET.exists() else ''}
+</div>
+<p class="meas">Confirmed live, all three renders: <code>data-overflow="grow-truncated"</code>, and the block measured wider than the
+identical value under Clip (dom: grow-truncated 708.2px vs clip 302.0px).</p>
+<div class="bug fixed">
+<h3>Fixed &mdash; the fold now honours FOCUS, not just caret position</h3>
+<p>The first pass through this step found <code>foldInactiveLines</code> exempting whichever line held the selection regardless of
+whether the document was actually focused &mdash; so a fresh/externally-resynced CodeMirror state (default selection at offset 0, line 1)
+showed line 1 in full "at rest", before any real interaction, measuring only 1 ellipsis instead of the &ge;2 this round's own spec expects.
+That was a real behaviour gap, not the fold's documented contract: now fixed in core with a new <code>foldFocusField</code>
+(<code>codeGrammar.ts</code>) mirrored from the view's own focus state, so the caret exemption applies only while the document is genuinely
+FOCUSED. Re-measured live on this run, all three renders: at rest (unfocused, after the inspector field writes above) both long lines fold
+&mdash; <code>{ELLIPSIS_REST_FINDING["detail"] if ELLIPSIS_REST_FINDING else "n/a"}</code> ellipsis widgets; clicking into the block (confirmed
+<code>{FOCUS_FINDING["detail"] if FOCUS_FINDING else "n/a"}</code> before placing the caret) and landing on line 1 drops the count by exactly
+one &mdash; <code>{ELLIPSIS_CARET_FINDING["detail"] if ELLIPSIS_CARET_FINDING else "n/a"}</code> &mdash; and line 1's own text is shown in full
+while line 3 stays folded. Storybook's own <code>GrowTruncated</code> story never focuses the block, so it now measures the same 2-ellipsis
+rest state; its assertion (<code>&ge;1</code>) still passes, but its WHY-comment predates this fix and is now stale &mdash; noted here rather
+than silently left wrong, follow-up not done in this round.</p>
+</div>
+
+<h3>Renderers on top &mdash; plan</h3>
+<p class="meas">Zach's next ask (SystemSketch's Type block <strong>Grasp</strong> &mdash; an ATTRIBUTES heading with a <code>UI | SOURCE</code>
+toggle rendering a nested type) has its own plan doc, written by a Fable 5.1 planner: <code>docs/CODEBLOCK-RENDERERS-PLAN.md</code> (relative
+to this branch's worktree root &mdash; not linked as a <code>file://</code> here, since that path lives under <code>.claude/worktrees/</code>
+and does not survive a worktree sweep). Its own recommendation, quoted verbatim from &sect;5, not paraphrased:</p>
+<blockquote class="plan-quote">{RECOMMENDATION_QUOTE_HTML}</blockquote>
 """
 
 HTML = f"""<!doctype html>

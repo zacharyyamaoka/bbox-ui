@@ -113,7 +113,8 @@
   overflow: auto;
 }
 
-.bbox-code-block[data-overflow="grow"] .cm-scroller {
+.bbox-code-block[data-overflow="grow"] .cm-scroller,
+.bbox-code-block[data-overflow="grow-truncated"] .cm-scroller {
   overflow: visible;
 }
 
@@ -289,6 +290,20 @@
 
 .bbox-code-block.bbox-code-tokens .tok-invalid {
   color: var(--bbox-danger, #c94b3f);
+}
+
+/* `flatten` (codeBlockFlatten.ts): the newline INSIDE a unit, shown rather
+   than hidden — the glyph a return key prints, quiet, and never selectable
+   as text (it is not text; the newline it stands for is). */
+.bbox-code-block .bbox-code-block-newline {
+  display: inline-block;
+  margin: 0 3px;
+  color: var(--color-muted-foreground);
+  opacity: 0.75;
+  font-size: 0.85em;
+  line-height: 1;
+  user-select: none;
+  cursor: text;
 }
 
 /* Folded lane lines (`grammar.foldInactiveLinesAfter`): a quiet ellipsis,

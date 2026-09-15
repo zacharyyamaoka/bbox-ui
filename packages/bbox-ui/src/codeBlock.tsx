@@ -39,7 +39,9 @@ import {
 
 import { externalSync, singleLineGuard } from "./codeBlockGuards";
 import {
+  CODE_BLOCK_TRUNCATE_DEFAULT_COLUMNS,
   codeBlockFontPx,
+  codeBlockGrows,
   codeBlockWidthPx,
   type CodeBlockLanguage,
   type CodeBlockLines,
@@ -48,8 +50,10 @@ import {
   type CodeBlockSize,
 } from "./codeBlock.layout";
 import { codeBlockLookValues } from "./codeBlock.presets";
+import { flattenDecorations, flattenLineNumbers } from "./codeBlockFlatten";
 import { codeBlockLanguageExtension } from "./codeBlockLanguages";
-import { grammarExtensions, type CodeBlockGrammar } from "./codeGrammar";
+import { pythonUnits } from "./codeBlockUnits";
+import { foldInactiveLines, grammarExtensions, type CodeBlockGrammar } from "./codeGrammar";
 import { CodeBlockRows, pruneExpandedPaths, rowIdentity } from "./codeBlockRows";
 import { FieldGesture } from "./fieldGesture";
 
@@ -96,6 +100,16 @@ export interface CodeBlockProps {
    * `look` when omitted: block → scroll, field → clip.
    */
   overflow?: CodeBlockOverflow;
+  /**
+   * Paint every semantic UNIT as one row: the newlines inside a unit (a
+   * multi-line default value inside one port line) become small `⏎`
+   * glyphs, the source stays byte-identical, and the gutter counts units.
+   * Units come from `grammar.units`, else Python's continuation rule
+   * (`codeBlockUnits.ts`). The caret's own unit stays flat while editing;
+   * the ⤢ larger view is where the real lines live. See
+   * `codeBlockFlatten.ts`. Off by default.
+   */
+  flatten?: boolean;
   /**
    * Characters across. `> 0` fixes the box's width to that many mono cells
    * plus padding (and the gutter when line numbers are on) — see
@@ -340,8 +354,9 @@ export function resolveCodeBlockPresentation(props: {
     paddingRight,
     // `grow` means the TEXT decides the width, so an authored column count
     // is set aside rather than fought — the box is as wide as its longest
-    // line, whatever `columns` says.
-    width: overflow === "grow" ? undefined : codeBlockWidthPx(props.columns ?? 0, fontPx, lineNumbers, paddingLeft, paddingRight),
+    // line, whatever `columns` says. `grow-truncated` grows the same way;
+    // there `columns` is the fold width of the lines the caret is not on.
+    width: codeBlockGrows(overflow) ? undefined : codeBlockWidthPx(props.columns ?? 0, fontPx, lineNumbers, paddingLeft, paddingRight),
   };
 }
 
@@ -358,6 +373,7 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
   lineNumbers,
   lines,
   overflow,
+  flatten = false,
   columns = 0,
   paddingTop,
   paddingBot,
@@ -444,11 +460,18 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
     ...(wrap ? [EditorView.lineWrapping] : []),
   ];
 
-  // The look's own chrome: the gutter, and Tab-as-indent in a document
-  // (never in a one-line box, where Tab must keep walking focus).
+  // The look's own chrome: the gutter (counting units under `flatten`),
+  // Tab-as-indent in a document (never in a one-line box, where Tab must
+  // keep walking focus), and the flatten fold itself.
+  const units = grammar?.units ?? pythonUnits;
+  const truncated = presentation.overflow === "grow-truncated";
   const chrome = (): Extension => [
-    ...(presentation.lineNumbers ? [lineNumbersExtension()] : []),
+    ...(presentation.lineNumbers ? [flatten ? flattenLineNumbers(units) : lineNumbersExtension()] : []),
     ...(multiline ? [keymap.of([indentWithTab])] : []),
+    ...(flatten ? [flattenDecorations(units)] : []),
+    // Every line the caret is NOT on folds after `columns` characters; the
+    // caret's line shows in full and the box grows to it.
+    ...(truncated ? [foldInactiveLines(columns > 0 ? Math.round(columns) : CODE_BLOCK_TRUNCATE_DEFAULT_COLUMNS)] : []),
   ];
 
   // The base parser: the `language` prop, unless the grammar mounts its
@@ -687,7 +710,7 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
   useEffect(() => {
     viewRef.current?.dispatch({ effects: chromeCompartment.current.reconfigure(chrome()) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presentation.lineNumbers, multiline]);
+  }, [presentation.lineNumbers, multiline, flatten, units, truncated, columns]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
@@ -819,7 +842,7 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
     // measured exactly the slot's width and never grew. Refusing to shrink
     // is what "resize the width to match the text" means; overflowing the
     // slot is then the host's to allow or clip.
-    ...(presentation.overflow === "grow" ? { width: "max-content", minWidth: "max-content", flex: "none" } : {}),
+    ...(codeBlockGrows(presentation.overflow) ? { width: "max-content", minWidth: "max-content", flex: "none" } : {}),
     ...(presentation.width !== undefined ? { width: presentation.width } : {}),
   };
 
@@ -832,6 +855,7 @@ const CodeBlockSourceView = forwardRef<CodeBlockHandle, CodeBlockProps>(function
       data-lines={presentation.lines}
       data-line-numbers={presentation.lineNumbers}
       data-overflow={presentation.overflow}
+      data-flatten={flatten}
       data-editing={editing}
       {...(live ? { "data-bbox-interactive": "" } : {})}
       className={`bbox-code-block bbox-code-tokens${live ? " bbox-interactive" : ""}${className ? ` ${className}` : ""}`}

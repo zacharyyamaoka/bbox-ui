@@ -51,6 +51,8 @@ export * from "./codeBlockRows";
 // presets and fields follow the same trio every other primitive ships.
 export * from "./codeBlock.layout";
 export * from "./codeBlockLanguages";
+export * from "./codeBlockUnits";
+export * from "./codeBlockFlatten";
 export * from "./codeBlock.presets";
 export * from "./codeBlock.fields";
 export * from "./codeBlock";

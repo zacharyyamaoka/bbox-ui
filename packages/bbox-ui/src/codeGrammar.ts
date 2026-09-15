@@ -3,10 +3,12 @@ import {
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
-import { RangeSetBuilder, type Extension } from "@codemirror/state";
+import { RangeSetBuilder, StateEffect, StateField, type Extension } from "@codemirror/state";
+import type { UnitsFn } from "./codeBlockUnits";
 import {
   Decoration,
   EditorView,
+  ViewPlugin,
   WidgetType,
   type DecorationSet,
 } from "@codemirror/view";
@@ -185,6 +187,15 @@ export interface CodeBlockGrammar {
    * `undefined` for a type with no badge.
    */
   completionBadge?(type: string): string | null | undefined;
+  /**
+   * The document's semantic UNITS — what `flatten` paints as one row each
+   * (`codeBlockFlatten.ts`). A port lane's grammar knows a unit is one
+   * port; omit it and the block falls back to Python's own continuation
+   * rule (`codeBlockUnits.ts`'s `pythonUnits`: brackets, triple quotes,
+   * trailing backslash), which is what makes a multi-line default value
+   * part of its port's line rather than lines of its own.
+   */
+  units?: UnitsFn;
 }
 
 function decorationExtension(decorate: NonNullable<CodeBlockGrammar["decorate"]>): Extension {
@@ -289,26 +300,86 @@ function codePointOffset(text: string, maxCodePoints: number): number {
   return offset;
 }
 
-function foldExtension(maxChars: number): Extension {
-  return EditorView.decorations.compute(["doc", "selection"], (state): DecorationSet => {
-    const builder = new RangeSetBuilder<Decoration>();
-    const active = new Set<number>();
-    for (const range of state.selection.ranges) {
-      active.add(state.doc.lineAt(range.head).number);
-      active.add(state.doc.lineAt(range.anchor).number);
-    }
-    for (let number = 1; number <= state.doc.lines; number += 1) {
-      const line = state.doc.line(number);
-      if (active.has(number) || [...line.text].length <= maxChars) continue;
-      builder.add(
-        line.from + codePointOffset(line.text, maxChars),
-        line.to,
-        Decoration.replace({ widget: new CodeBlockEllipsisWidget() }),
-      );
-    }
-    return builder.finish();
-  });
+/**
+ * Live-preview folding: every line the caret is NOT on shows at most
+ * `maxChars` code points, then an ellipsis; the caret's own line always
+ * shows in full, and moving onto a folded line unfolds it (the decoration
+ * recomputes from the selection). Exported because `CodeBlock`'s
+ * `overflow="grow-truncated"` mounts the same fold with `columns` as its
+ * width — a grammar's `foldInactiveLinesAfter` and that mode are one
+ * mechanism, not two.
+ */
+export function foldInactiveLines(maxChars: number): Extension {
+  return [
+    foldFocusField,
+    foldFocusTracker,
+    EditorView.decorations.compute(["doc", "selection", foldFocusField], (state): DecorationSet => {
+      const builder = new RangeSetBuilder<Decoration>();
+      const active = new Set<number>();
+      // WHY the caret only counts while the document is FOCUSED (Zach,
+      // 2026-09-15: "truthfully display a full line, but only when the
+      // cursor is on that line, otherwise it can display more compactly"):
+      // a document always has a selection — a fresh one sits at offset 0 —
+      // so without the focus gate line 1 of every resting block showed in
+      // full, which is not "the cursor is on that line", it is "nobody has
+      // touched this yet". At rest every long line folds.
+      if (state.field(foldFocusField)) {
+        for (const range of state.selection.ranges) {
+          active.add(state.doc.lineAt(range.head).number);
+          active.add(state.doc.lineAt(range.anchor).number);
+        }
+      }
+      for (let number = 1; number <= state.doc.lines; number += 1) {
+        const line = state.doc.line(number);
+        if (active.has(number) || [...line.text].length <= maxChars) continue;
+        builder.add(
+          line.from + codePointOffset(line.text, maxChars),
+          line.to,
+          Decoration.replace({ widget: new CodeBlockEllipsisWidget() }),
+        );
+      }
+      return builder.finish();
+    }),
+  ];
 }
+
+/**
+ * Whether the view holding this state has focus — mirrored INTO the state
+ * (a `StateField`) so `foldInactiveLines`'s decorations can depend on it:
+ * `decorations.compute` only recomputes on the state facets it names, and
+ * focus is not state. Exported so a test (no DOM, no view) can flip it.
+ */
+export const setFoldFocus = StateEffect.define<boolean>();
+export const foldFocusField = StateField.define<boolean>({
+  create: () => false,
+  update: (value, transaction) => {
+    for (const effect of transaction.effects) if (effect.is(setFoldFocus)) return effect.value;
+    return value;
+  },
+});
+
+/** The bridge from the live view's focus to `foldFocusField`. Dispatching
+ * inside `update()` is forbidden, hence the microtask; a destroyed view is
+ * skipped rather than dispatched into. */
+const foldFocusTracker = ViewPlugin.define((view) => {
+  let alive = true;
+  const sync = () => {
+    queueMicrotask(() => {
+      if (!alive) return;
+      if (view.state.field(foldFocusField, false) === view.hasFocus) return;
+      view.dispatch({ effects: setFoldFocus.of(view.hasFocus) });
+    });
+  };
+  if (view.hasFocus) sync();
+  return {
+    update(update) {
+      if (update.focusChanged) sync();
+    },
+    destroy() {
+      alive = false;
+    },
+  };
+});
 
 /** Translates a declarative `CodeBlockGrammar` into the CodeMirror extensions `CodeBlock` mounts. */
 export function grammarExtensions(grammar: CodeBlockGrammar): Extension[] {
@@ -317,7 +388,7 @@ export function grammarExtensions(grammar: CodeBlockGrammar): Extension[] {
   if (grammar.decorate) extensions.push(decorationExtension(grammar.decorate));
   if (grammar.complete) extensions.push(completionExtension(grammar));
   if (grammar.foldInactiveLinesAfter != null) {
-    extensions.push(foldExtension(grammar.foldInactiveLinesAfter));
+    extensions.push(foldInactiveLines(grammar.foldInactiveLinesAfter));
   }
   return extensions;
 }

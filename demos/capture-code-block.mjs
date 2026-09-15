@@ -196,6 +196,19 @@ async function setInspectorTextarea(fieldId, text) {
   })()`);
   await sleep(250);
 }
+/** Writes an inspector number field (e.g. Width/`columns`) via its own
+ *  native value setter + input/change events — round 3's own idiom,
+ *  parallel to `setInspectorTextarea`. */
+async function setInspectorNumber(fieldId, value) {
+  await evaluate(`(() => {
+    const el = document.querySelector('[data-field="${fieldId}"] input[type="number"]');
+    if (!el) throw new Error("no number input for ${fieldId}");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, ${JSON.stringify(String(value))});
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  })()`);
+  await sleep(250);
+}
 async function setSelect(selector, value) {
   await evaluate(`(() => {
     const el = document.querySelector(${JSON.stringify(selector)});
@@ -469,6 +482,13 @@ async function clickSegmentOption(fieldId, label) {
 // Mirrors codeBlock.fields.ts's own CODE_BLOCK_DEFAULT_VALUE verbatim —
 // the pristine specimen step 7's highlighting check resets the value to.
 const CODE_BLOCK_DEFAULT_VALUE = `def greet(name: str) -> str:\n    return f"Hello, {name}!"`;
+// Round 3 (2026-09-15) samples — mirrors the Storybook stories' own values.
+const FLATTEN_SAMPLE = 'pose: Pose = {\n  "x": 1,\n  "y": 2\n}\nsamples: int = 3';
+const GROW_TRUNCATED_SAMPLE = [
+  "first_line_that_is_genuinely_long_enough_to_need_folding_here = 1",
+  "short",
+  "third_line_that_is_also_long_enough_to_need_folding_here_too = 3",
+].join("\n");
 
 const RENDERS = ["dom", "reactflow", "tldraw"];
 const manifest = { renders: {} };
@@ -766,6 +786,173 @@ for (const renderId of RENDERS) {
   const restingAfterClose = await restingText(codeBlockId);
   assertStep(9, "the value still contains '# big' after closing (not discarded)", typeof restingAfterClose === "string" && restingAfterClose.includes("# big"), restingAfterClose);
   await screenshot(`${renderId}-9b-closed`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 60 });
+
+  // ---- step 10: flatten — one row per semantic unit ------------------------
+  await setInspectorTextarea("value", FLATTEN_SAMPLE);
+  const flattenFieldVisible = await revealField("flatten");
+  assertStep(10, "the Flatten field is visible in the inspector", flattenFieldVisible, flattenFieldVisible);
+  await evaluate(`document.querySelector('[data-field="flatten"] input[type="checkbox"]')?.click()`);
+  await sleep(300);
+  const dataFlattenOn = await evaluate(`document.querySelector(${JSON.stringify(codeBlockSel(codeBlockId))})?.getAttribute('data-flatten')`);
+  assertStep(10, "data-flatten is 'true'", dataFlattenOn === "true", dataFlattenOn);
+  const newlineWidgetsOn = await evaluate(`document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .bbox-code-block-newline")}).length`);
+  assertStep(10, "3 .bbox-code-block-newline widgets (the unit's own inner newlines)", newlineWidgetsOn === 3, newlineWidgetsOn);
+  const cmLineCountOn = await evaluate(`document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .cm-line")}).length`);
+  assertStep(10, "2 .cm-line elements (one row per semantic unit)", cmLineCountOn === 2, cmLineCountOn);
+  const gutterTextsOn = await evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .cm-lineNumbers .cm-gutterElement")})).filter(el => el.offsetHeight > 0).map(el => el.textContent.trim())`);
+  assertStep(10, "gutter reads ['1','2'] (unit numbers, not physical lines)", JSON.stringify(gutterTextsOn) === JSON.stringify(["1", "2"]), JSON.stringify(gutterTextsOn));
+  await screenshot(`${renderId}-10a-flatten-on`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 60 });
+
+  // Click into the block (already sole-selected -> one press edits), place
+  // the caret beside the FIRST ⏎ widget, then Enter: a real newline INSIDE
+  // the same unit.
+  //
+  // WHY widget index 0, and WHY no ArrowLeft (both deviate from a literal
+  // "click the first ⏎, ArrowLeft once is fine" reading, per live
+  // measurement, not guesswork):
+  //  - Widget 1 (the one literally right after `"x": 1,`) sits at x=632.8
+  //    against this block's own right edge at x=636 — 3px of margin, right
+  //    at the block's overflow-clip boundary (`overflow` isn't set
+  //    explicitly yet here, so it's still "block" look's own default,
+  //    `scroll`) — a click that close to the clip edge landed
+  //    inconsistently (measured: it deselected the whole CodeBlock back to
+  //    its parent Block instead of placing a caret). Widget 0 sits safely
+  //    inside the box (x=531.9) and is structurally just as good a target —
+  //    ANY position inside the one bracket-balanced unit proves the same
+  //    thing (Enter inside it adds a real newline without adding a row).
+  //  - An ArrowLeft after landing on widget 0 moved the caret PAST the
+  //    unit's own opening `{` entirely (measured: the resulting value read
+  //    `"pose: Pose = \n{\n..."` — the newline landed BEFORE `{`, at
+  //    bracket depth 0, splitting `pythonUnits` into 3 units instead of the
+  //    intended 2). Clicking the widget directly (no ArrowLeft) reliably
+  //    lands the caret INSIDE the bracketed unit — confirmed live, the
+  //    resulting value reads `"pose: Pose = {\n  \n  \"x\": 1,\n..."`.
+  await press(codeBlockSel(codeBlockId));
+  await sleep(150);
+  const widgetRect = await evaluate(`(() => {
+    const w = document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .bbox-code-block-newline")})[0];
+    if (!w) return null;
+    const r = w.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  if (widgetRect) {
+    await mouse("mouseMoved", widgetRect.x, widgetRect.y);
+    await mouse("mousePressed", widgetRect.x, widgetRect.y);
+    await sleep(30);
+    await mouse("mouseReleased", widgetRect.x, widgetRect.y);
+    await sleep(150);
+  }
+  await key("Enter");
+  await sleep(200);
+  const inspectorValueMidEdit = await evaluate(`document.querySelector('[data-field="value"] textarea')?.value ?? null`);
+  const newlineCountMidEdit = typeof inspectorValueMidEdit === "string" ? (inspectorValueMidEdit.match(/\n/g) || []).length : -1;
+  assertStep(10, "pressing Enter inside the unit adds one newline (inspector Code value has 5 total)", newlineCountMidEdit === 5, `${newlineCountMidEdit} newlines: ${JSON.stringify(inspectorValueMidEdit)}`);
+  const cmLineCountMidEdit = await evaluate(`document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .cm-line")}).length`);
+  assertStep(10, "row count is still 2 (the new newline is another folded ⏎, not a new row)", cmLineCountMidEdit === 2, cmLineCountMidEdit);
+
+  await key("Escape");
+  await sleep(250);
+
+  await evaluate(`document.querySelector('[data-field="flatten"] input[type="checkbox"]')?.click()`);
+  await sleep(300);
+  const dataFlattenOff = await evaluate(`document.querySelector(${JSON.stringify(codeBlockSel(codeBlockId))})?.getAttribute('data-flatten')`);
+  assertStep(10, "data-flatten is back to 'false'", dataFlattenOff === "false", dataFlattenOff);
+  const cmLineCountOff = await evaluate(`document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .cm-line")}).length`);
+  assertStep(10, "5 .cm-line elements with flatten off (the real physical lines)", cmLineCountOff === 5, cmLineCountOff);
+  const gutterTextsOff = await evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .cm-lineNumbers .cm-gutterElement")})).filter(el => el.offsetHeight > 0).map(el => el.textContent.trim())`);
+  assertStep(10, "gutter reads ['1'..'5'] with flatten off", JSON.stringify(gutterTextsOff) === JSON.stringify(["1", "2", "3", "4", "5"]), JSON.stringify(gutterTextsOff));
+  await screenshot(`${renderId}-10b-flatten-off`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(headerClip.w) + 20, h: Math.ceil(headerClip.h) + 90 });
+
+  // ---- step 11: overflow — grow-truncated -----------------------------------
+  await setInspectorTextarea("value", GROW_TRUNCATED_SAMPLE);
+  const widthFieldVisible = await revealField("columns");
+  assertStep(11, "the Width field is visible in the inspector", widthFieldVisible, widthFieldVisible);
+  await setInspectorNumber("columns", 24);
+  const columnsNow = await evaluate(`document.querySelector('[data-field="columns"] input[type="number"]')?.value`);
+  assertStep(11, "Width is set to 24", columnsNow === "24", columnsNow);
+
+  await revealField("overflow");
+  await clickSegmentOption("overflow", "Clip");
+  const clipRect = await rectOf(codeBlockSel(codeBlockId));
+
+  await clickSegmentOption("overflow", "Grow truncated");
+  await sleep(300);
+  const dataOverflowGT = await evaluate(`document.querySelector(${JSON.stringify(codeBlockSel(codeBlockId))})?.getAttribute('data-overflow')`);
+  assertStep(11, "data-overflow is 'grow-truncated'", dataOverflowGT === "grow-truncated", dataOverflowGT);
+  const ellipsisCountRest = await evaluate(`document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .bbox-code-block-ellipsis")}).length`);
+  assertStep(11, "at least 2 .bbox-code-block-ellipsis widgets at rest", ellipsisCountRest >= 2, ellipsisCountRest);
+  const growTruncRect = await rectOf(codeBlockSel(codeBlockId));
+  assertStep(11, "the block is wider than under Clip", growTruncRect.w > clipRect.w, `grow-truncated=${growTruncRect.w.toFixed(1)} clip=${clipRect.w.toFixed(1)}`);
+  await screenshot(`${renderId}-11a-grow-truncated-rest`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(Math.max(headerClip.w, growTruncRect.w)) + 40, h: Math.ceil(headerClip.h) + 90 });
+
+  // Click to edit, then place the caret on line 1 (its own gutter row).
+  // WHY a left-edge point, not press()'s own rect-center: under
+  // grow-truncated the block's own bounding box (708-1112px measured) is far
+  // wider than the header bar that clips it (~273-307px) — `grow`-family
+  // overflow only widens the element's own box, it never reflows the host's
+  // layout. A click at the geometric center lands outside the header's
+  // visible/clipped region and hits whatever sits behind it (measured:
+  // elementFromPoint returned an unrelated bare <span>, and the click
+  // reselected the PARENT flex slot instead of editing the block). Click
+  // near the box's own left edge instead — guaranteed inside the header's
+  // clip, same idiom step 10's widget click and this step's own line1Rect
+  // already use.
+  // WHY the explicit editing+focus check: `foldInactiveLines` now gates its
+  // caret exemption on the view being FOCUSED (foldFocusField, codeGrammar.ts),
+  // not merely on where the selection sits. A stale "already selected" state
+  // from the field interactions above is not enough — one press only edits
+  // when the block is ALREADY the sole selection, so confirm it landed in
+  // editing with real DOM focus, and press again if it only reselected.
+  const editEntryPoint = await evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(codeBlockSel(codeBlockId))});
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + 10, y: r.top + r.height / 2 };
+  })()`);
+  async function clickEditEntryPoint() {
+    await mouse("mouseMoved", editEntryPoint.x, editEntryPoint.y);
+    await mouse("mousePressed", editEntryPoint.x, editEntryPoint.y);
+    await sleep(30);
+    await mouse("mouseReleased", editEntryPoint.x, editEntryPoint.y);
+    await sleep(200);
+  }
+  await clickEditEntryPoint();
+  await sleep(150);
+  let editingBeforeCaret = await isEditingAttr(codeBlockId);
+  let focusedBeforeCaret = await evaluate(`(() => {
+    const content = document.querySelector(${JSON.stringify(cmContentSel(codeBlockId))});
+    return !!content && document.activeElement === content;
+  })()`);
+  if (editingBeforeCaret !== "true" || !focusedBeforeCaret) {
+    await clickEditEntryPoint();
+    await sleep(150);
+    editingBeforeCaret = await isEditingAttr(codeBlockId);
+    focusedBeforeCaret = await evaluate(`(() => {
+      const content = document.querySelector(${JSON.stringify(cmContentSel(codeBlockId))});
+      return !!content && document.activeElement === content;
+    })()`);
+  }
+  assertStep(11, "the block is in editing state and focused before placing the caret", editingBeforeCaret === "true" && focusedBeforeCaret, `data-editing=${editingBeforeCaret} focused=${focusedBeforeCaret}`);
+  const line1Rect = await evaluate(`(() => {
+    const l = document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .cm-line")})[0];
+    if (!l) return null;
+    const r = l.getBoundingClientRect();
+    return { x: r.left + 5, y: r.top + r.height / 2 };
+  })()`);
+  if (line1Rect) {
+    await mouse("mouseMoved", line1Rect.x, line1Rect.y);
+    await mouse("mousePressed", line1Rect.x, line1Rect.y);
+    await sleep(30);
+    await mouse("mouseReleased", line1Rect.x, line1Rect.y);
+    await sleep(250);
+  }
+  const ellipsisCountCaret = await evaluate(`document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .bbox-code-block-ellipsis")}).length`);
+  assertStep(11, "ellipsis count dropped once the caret moved onto a folded line", ellipsisCountCaret < ellipsisCountRest, `rest=${ellipsisCountRest} caret=${ellipsisCountCaret}`);
+  const line1Text = await evaluate(`document.querySelectorAll(${JSON.stringify(codeBlockSel(codeBlockId) + " .cm-line")})[0]?.textContent ?? null`);
+  assertStep(11, "line 1's .cm-line textContent contains the full unfolded text", typeof line1Text === "string" && line1Text.includes("first_line_that_is_genuinely_long_enough_to_need_folding_here"), line1Text);
+  await screenshot(`${renderId}-11b-grow-truncated-caret-line1`, { left: Math.floor(headerClip.left) - 10, top: Math.floor(headerClip.top) - 10, w: Math.ceil(Math.max(headerClip.w, growTruncRect.w)) + 40, h: Math.ceil(headerClip.h) + 90 });
+  await key("Escape");
+  await sleep(250);
 
   manifest.renders[renderId] = { console: takeConsole() };
   } catch (err) {

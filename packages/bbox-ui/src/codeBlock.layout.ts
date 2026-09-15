@@ -50,14 +50,29 @@ export type CodeBlockLines = (typeof CODE_BLOCK_LINES)[number];
  * the edge, no bar, no growth), which stays the field look's default.
  * Governed by `look` (`codeBlock.presets.ts`), overridable per instance.
  */
-export const CODE_BLOCK_OVERFLOWS = ["clip", "wrap", "scroll", "grow"] as const;
+export const CODE_BLOCK_OVERFLOWS = ["clip", "wrap", "scroll", "grow", "grow-truncated"] as const;
 export type CodeBlockOverflow = (typeof CODE_BLOCK_OVERFLOWS)[number];
 export const CODE_BLOCK_OVERFLOW_LABELS: Record<CodeBlockOverflow, string> = {
   clip: "Clip",
   wrap: "Wrap",
   scroll: "Scroll",
   grow: "Grow",
+  // Zach, 2026-09-15: "when you have selected an active line you show the
+  // full line, but when you don't have it selected you truncate it at the
+  // character width and do … — truthfully display a full line, but only
+  // when the cursor is on that line, otherwise more compactly." The box
+  // grows like `grow`; every line the caret is NOT on folds after
+  // `columns` characters (SystemSketch's expression field, ported).
+  "grow-truncated": "Grow truncated",
 };
+
+/** The fold width `grow-truncated` uses when `columns` is 0 (fill). */
+export const CODE_BLOCK_TRUNCATE_DEFAULT_COLUMNS = 40;
+
+/** Both grow modes size the box to the text; only one of them folds. */
+export function codeBlockGrows(overflow: CodeBlockOverflow): boolean {
+  return overflow === "grow" || overflow === "grow-truncated";
+}
 
 /**
  * The languages the `language` menu offers. Same nine as SystemSketch's

@@ -44,6 +44,7 @@ describe("CODE_BLOCK_FIELDS", () => {
       "sizePx",
       "lineNumbers",
       "lines",
+      "flatten",
       "overflow",
       "expandable",
       "columns",
@@ -121,12 +122,16 @@ describe("CODE_BLOCK_FIELDS", () => {
 
   it("grow sets the authored column count aside — the text decides the width", () => {
     expect(resolveCodeBlockPresentation({ columns: 40, overflow: "grow" }).width).toBeUndefined();
+    expect(resolveCodeBlockPresentation({ columns: 40, overflow: "grow-truncated" }).width).toBeUndefined();
+    expect(field("overflow").options?.find((o) => o.value === "grow-truncated")?.label).toBe("Grow truncated");
     expect(resolveCodeBlockPresentation({ columns: 40, overflow: "scroll" }).width).toBeDefined();
   });
 
-  it("expandable and columns default off (no corner button, fill the host)", () => {
+  it("expandable, flatten and columns default off (no corner button, real lines, fill the host)", () => {
     expect(field("expandable").defaultValue).toBe(false);
     expect(field("expandable").kind).toBe("toggle");
+    expect(field("flatten").defaultValue).toBe(false);
+    expect(field("flatten").kind).toBe("toggle");
     expect(field("columns").defaultValue).toBe(0);
     expect(bare.width).toBeUndefined();
   });

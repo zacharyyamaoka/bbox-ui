@@ -138,7 +138,7 @@ async function captureStory(storyId, host, filename) {
   await screenshot(filename);
 }
 
-const CODEBLOCK_STORIES = ["all-looks", "all-languages", "all-sizes", "all-overflows", "expandable", "editing", "rendered", "primary"];
+const CODEBLOCK_STORIES = ["all-looks", "all-languages", "all-sizes", "all-overflows", "expandable", "flatten", "grow-truncated", "editing", "rendered", "primary"];
 for (const story of CODEBLOCK_STORIES) {
   await captureStory(`components-codeblock--${story}`, null, `story-components-codeblock--${story}-dom`);
 }

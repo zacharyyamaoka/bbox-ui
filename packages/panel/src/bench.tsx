@@ -932,7 +932,14 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
   // WHY the first seed turns the ⤢ button on: it is what Add uses, and
   // the larger view is the thing to try first on /create; the primitive's
   // own default stays off so a Port label never grows a button.
-  CodeBlock: [{ expandable: true }, { look: "field", value: "get_aruco: ArucoSrv" }, { language: "json", lineNumbers: false, value: '{ "greeting": "hello" }' }],
+  CodeBlock: [
+    { expandable: true },
+    { look: "field", value: "get_aruco: ArucoSrv" },
+    { language: "json", lineNumbers: false, value: '{ "greeting": "hello" }' },
+    // The port-lane case flatten exists for: a multi-line default value
+    // inside one port line, shown as one row with ⏎ glyphs.
+    { flatten: true, expandable: true, value: 'pose: Pose = {\n  "x": 1,\n  "y": 2\n}\nsamples: int = 3' },
+  ],
   Stack: [{}, { gap: "lg" }],
   PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],
   Flex: [{}, { justify: "between" }, { direction: "column", align: "stretch" }],

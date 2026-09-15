@@ -2,7 +2,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 
-import { grammarExtensions, type CodeBlockGrammar } from "../src/codeGrammar";
+import { grammarExtensions, setFoldFocus, type CodeBlockGrammar } from "../src/codeGrammar";
 
 /** Every mark CodeMirror actually painted, read back from the real decoration facet — no DOM required. */
 function paintedRanges(state: EditorState): Array<{ from: number; to: number; class: string }> {
@@ -75,14 +75,19 @@ describe("grammarExtensions — fold (foldInactiveLinesAfter)", () => {
     expect(replaced).toBe(true);
   });
 
-  it("never folds the line the caret is on", () => {
+  it("never folds the line the caret is on — once the document is focused", () => {
     const longLine = "something_long: SomeReallyLongType";
     const grammar: CodeBlockGrammar = { foldInactiveLinesAfter: 4 };
-    const state = EditorState.create({
+    let state = EditorState.create({
       doc: `a: int\n${longLine}`,
       extensions: grammarExtensions(grammar),
       selection: { anchor: 7 + longLine.length }, // caret on line 2
     });
+    // WHY the explicit focus effect: at rest (unfocused) the caret does not
+    // count — see `foldInactiveLines`'s own WHY — so a state that was never
+    // focused folds line 2 even with the caret on it. The live view flips
+    // this field on focus; a DOM-less test flips it by hand.
+    state = state.update({ effects: setFoldFocus.of(true) }).state;
     let replacedOnActiveLine = false;
     for (const decorations of state.facet(EditorView.decorations)) {
       const set = typeof decorations === "function" ? decorations(null as never) : decorations;

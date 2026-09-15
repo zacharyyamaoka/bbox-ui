@@ -76,7 +76,12 @@ differs.
 - **Size**: `sm` 12 / `md` 16 / `lg` 20 / `xl` 24, or `custom` + `sizePx`.
 - **Width**: `columns` in ch (0 fills the host). **Overflow** for a line
   wider than the box: `clip` (field default) · `wrap` · `scroll` (block
-  default) · `grow` (the text decides the width).
+  default) · `grow` (the text decides the width) · `grow-truncated` (the
+  caret's line in full, every other line cut at `columns` with an ellipsis).
+- **Flatten**: one row per semantic unit — a port line whose default value
+  spans lines (Python's continuation rule, or `grammar.units`) shows its
+  inner newlines as `⏎` glyphs; the source is untouched and the gutter
+  counts units.
 - **Expand**: `expandable` shows a ⤢ corner button that only calls
   `onExpand`; the larger view itself is the host's (the create page opens a
   full-size block over the same value).
