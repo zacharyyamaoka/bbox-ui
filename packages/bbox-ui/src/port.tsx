@@ -69,8 +69,24 @@ export function portResolutionSubject(props: Record<string, unknown>): Record<st
   // with the dot — so a Port at `lg` genuinely lifts 22px while the panel
   // would keep printing 19. Resolving it here is what makes the Expert
   // control read the number actually on screen.
-  const diameter = (props.diameter as PortSize | undefined) ?? "md";
-  const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
+  //
+  // WHY `resolveField` and not `props.diameter ?? "md"`: `diameter` is
+  // GOVERNED by the `size` cascade (PORT_PRESETS), so a Port carrying
+  // `size: "lg"` and no explicit `diameter` renders an 18px dot while its
+  // raw prop is undefined. Reading the prop directly reported the `md`
+  // lift (19) for a port that was really lifting 22 — the exact
+  // panel-disagrees-with-the-pixels bug this function exists to prevent,
+  // reintroduced one field over. Resolving through the SAME call `Port`
+  // itself makes is what keeps them in step.
+  const diameterResolved = resolveField(
+    DIAMETER_FIELD,
+    // `size` takes Port's OWN real default when absent — it is the
+    // cascade's selector, and a selector must have a value to match on.
+    { size: props.size ?? "md", diameter: props.diameter, textSize: props.textSize },
+    PORT_PRESETS,
+  ).resolved as PortSize;
+  const diameterPx =
+    typeof diameterResolved === "number" ? diameterResolved : PORT_DIAMETERS[diameterResolved];
   return {
     ...props,
     textLayout,

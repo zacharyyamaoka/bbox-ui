@@ -364,6 +364,32 @@ describe("Port — the real component reached through the same size cascade the 
  * which only ever call `Port`/`PortDot` directly — never this function.
  */
 describe("portResolutionSubject", () => {
+  /**
+   * Found by an adversarial probe, 2026-09-15: `labelOffset` was resolved
+   * from `props.diameter ?? "md"`, but `diameter` is GOVERNED by the `size`
+   * cascade — so a Port carrying `size: "lg"` and no explicit `diameter`
+   * renders an 18px dot (lift 22) while the panel printed the `md` lift
+   * (19). The panel disagreeing with the pixels is the ONE thing this
+   * function exists to prevent, so it is pinned against the component's
+   * own rendered output rather than against a retyped number.
+   */
+  it("reports the offset the component ACTUALLY renders when `size` cascades the diameter", () => {
+    for (const size of ["sm", "md", "lg", "xl"] as const) {
+      const reported = portResolutionSubject({ size, textLayout: "rightOffset" }).labelOffset;
+      // What Port really puts on the label: marginBottom = diameter/2 + lift.
+      const root = call(Port, { size, textLayout: "rightOffset", children: "x" });
+      const [dotElement, labelElement] = root.props.children as [
+        { props: Record<string, unknown> },
+        { props: { style?: { marginBottom?: number } } },
+      ];
+      const dotRendered = call(PortDot, dotElement.props);
+      const renderedDiameter = dotRendered.props.style.width as number;
+      const renderedLift = labelElement.props.style!.marginBottom! - renderedDiameter / 2;
+      expect(reported, `size:${size}`).toBe(renderedLift);
+    }
+  });
+
+
   it("fills textLayout from inwardTextLayout(edge) when omitted, defaulting edge to \"left\"", () => {
     expect(portResolutionSubject({}).textLayout).toBe(inwardTextLayout("left"));
     expect(portResolutionSubject({ edge: "top" }).textLayout).toBe(inwardTextLayout("top"));
