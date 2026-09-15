@@ -2,10 +2,20 @@
 Type=Application
 Name=bbox-ui
 GenericName=Black box design kit
-Comment=Playground for the bbox-ui primitives, on stock tldraw
-Exec=/home/bam/bbox-ui/scripts/bbox-ui-launch.sh
+Comment=Stable by default — local Preview (HMR) and the real deployed site one click away
+Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_bboxui.py --open
 Icon=bbox-ui
 Terminal=false
 Categories=Development;
+Keywords=bbox-ui;Design;Components;Registry;
 StartupWMClass=bbox-ui
 StartupNotify=true
+Actions=OpenPreview;OpenRemote;
+
+[Desktop Action OpenPreview]
+Name=Open Preview (local, HMR)
+Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_bboxui.py --preview --open
+
+[Desktop Action OpenRemote]
+Name=Open Remote (bbox-ui.com, deployed)
+Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_bboxui.py --remote --open
