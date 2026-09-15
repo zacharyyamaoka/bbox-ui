@@ -94,6 +94,15 @@ describe("Flex's slot-highlight overlay", () => {
     expect(textOf(overlay)).toBe("Left");
   });
 
+  it("empty + highlight on: also carries an invisible sizing spacer — deleting it (the Bar-CENTER-collapse fix) must not go unnoticed just because the overlay still paints", () => {
+    const el = flex.render({}, undefined, ctx(true));
+    const spacer = (el as { props: { children: [ReactNode, ReactNode] } }).props.children[0];
+    expect(spacer).not.toBeNull();
+    const spacerProps = (spacer as { props: { style?: Record<string, unknown> } }).props;
+    expect(spacerProps.style?.visibility).toBe("hidden");
+    expect(textOf(spacer)).toBe("Left");
+  });
+
   it("filled + highlight on: paints the overlay, but never the label — real content already answers \"what's here\"", () => {
     const el = flex.render({}, REAL_CHILD, ctx(true));
     const overlay = findBySlot(el, "slot-overlay");
@@ -106,8 +115,13 @@ describe("Flex's slot-highlight overlay", () => {
     expect(findBySlot(el, "slot-overlay")).toBeUndefined();
     // The only DOM node a real empty Flex has is its own div — walking its
     // children must turn up nothing at all, not an invisible placeholder.
-    const flexProps = (el as { props: { children: ReactNode } }).props;
+    const flexProps = (el as { props: { children: ReactNode; style?: Record<string, unknown> } }).props;
     expect(flexProps.children).toEqual([null, false]);
+    // A dropped `&& highlight` guard on the growth style would leave this
+    // silently `undefined` here — the actual ATTACK on "renders exactly
+    // what ships" a missing overlay alone doesn't catch, since the Flex
+    // would still look empty while quietly stretching to fill its parent.
+    expect(flexProps.style?.flex).toBeUndefined();
   });
 
   it("filled + highlight off: real content passes through untouched, no overlay grafted on", () => {
