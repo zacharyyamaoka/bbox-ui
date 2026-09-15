@@ -2,9 +2,15 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { controlNames, defaultArgs, toArgTypes } from "@bbox-ui/schema";
 import {
+  PORT_DIAMETERS,
+  PORT_RING_OVERHANG_PX,
+  PORT_SECONDARY_SLOT_GAP_PX,
   Port,
   PORT_FIELDS,
   PORT_PRESETS,
+  PortDot,
+  portLabelGap,
+  portLabelPlacement,
   type AppearanceState,
   type BlockSide,
   type Lens,
@@ -330,6 +336,106 @@ export const AllSecondarySlotLayouts: Story = {
           secondarySlotLayout={option.value as SecondarySlotLayout}
         />
       ))}
+    </div>
+  ),
+};
+
+/** A dotted gray box standing in for either slot's real content —
+ * neither slot has an intrinsic size of its own (the label sizes to its
+ * CodeField text, the secondary slot to whatever a host puts there), so
+ * this is a fixed placeholder purely to make the SLOT's position/gap
+ * checkable without a badge or label text competing for attention. */
+const SLOT_OUTLINE_STYLE = {
+  border: "1px dotted gray",
+  boxSizing: "border-box" as const,
+};
+const LABEL_SLOT_SIZE = { width: 64, height: 20 };
+const SECONDARY_SLOT_SIZE = { width: 16, height: 16 };
+/** How far below the dot's own box a caption has to start to clear the
+ * outline box in EITHER direction (a "top"/"bot" pair, or "topOffset"/
+ * "botOffset", is symmetric around the dot) — derived from the same
+ * constants the real geometry uses, not eyeballed, so a future gap/size
+ * change here can't silently reintroduce the overlap the first pass of
+ * this story actually had (caption text under the "bot"/"botOffset"
+ * boxes, caught by measuring DOM rects, not by looking at a screenshot). */
+const LABEL_CAPTION_GAP = PORT_RING_OVERHANG_PX + portLabelGap("rightOffset") + LABEL_SLOT_SIZE.height + 8;
+const SECONDARY_CAPTION_GAP = PORT_RING_OVERHANG_PX + PORT_SECONDARY_SLOT_GAP_PX + SECONDARY_SLOT_SIZE.height + 8;
+
+/** One dot + one dotted label-slot box, positioned via the REAL
+ * `portLabelPlacement` (port.layout.ts) — the exact function a
+ * wall-anchored host calls, and the one `PORT_RING_OVERHANG_PX` (the
+ * "measure from the painted ring" fix) flows through. Bypasses
+ * `Port`/`PortLabel` entirely since their label content is locked to a
+ * `CodeField` string now — this draws the SLOT, not what's in it. */
+function LabelSlotSpecimen({ layout }: { layout: PortTextLayout }) {
+  const diameterPx = PORT_DIAMETERS.md;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div style={{ position: "relative", width: diameterPx, height: diameterPx }}>
+        <PortDot diameter="md" />
+        <div
+          style={{
+            position: "absolute",
+            ...portLabelPlacement(layout, { w: diameterPx, h: diameterPx }),
+            ...LABEL_SLOT_SIZE,
+            ...SLOT_OUTLINE_STYLE,
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 11, color: "gray", marginTop: LABEL_CAPTION_GAP }}>{layout}</span>
+    </div>
+  );
+}
+
+/** One dot + one dotted secondary-slot box, via the REAL `secondarySlot`/
+ * `secondarySlotLayout` props on `PortDot` — the exact mechanism
+ * `SECONDARY_SLOT_STYLE` (port.tsx) positions, not a reimplementation. */
+function SecondarySlotSpecimen({ layout }: { layout: SecondarySlotLayout }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <PortDot
+        diameter="md"
+        secondarySlotLayout={layout}
+        secondarySlot={<div style={{ ...SECONDARY_SLOT_SIZE, ...SLOT_OUTLINE_STYLE }} />}
+      />
+      <span style={{ fontSize: 11, color: "gray", marginTop: SECONDARY_CAPTION_GAP }}>{layout}</span>
+    </div>
+  );
+}
+
+/**
+ * Slot GEOMETRY, not slot CONTENT — every real position of both slots,
+ * each drawn as a plain dotted-gray box instead of a label/badge, so the
+ * position/gap/ring-clearance is checkable on its own (Zach, 2026-09-14,
+ * post-merge: "I am not confident that this is done correctly"). Same
+ * six `PortTextLayout` / four `SecondarySlotLayout` enums the other
+ * galleries above sweep, reused here rather than a hand-typed list so
+ * this can't silently fall out of sync with a future position.
+ */
+export const SlotOutlineGeometry: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 56, padding: "24px 40px" }}>
+      <div>
+        <h4 style={{ margin: "0 0 48px", fontSize: 13, color: "gray" }}>Label slot — every position</h4>
+        {/* WHY 48px top gap on the row, not the h4: the "top" specimen's
+         * box sits ABOVE its dot (portLabelPlacement's `bottom: Npx`), so
+         * without headroom it draws straight over the caption above it —
+         * exactly what the first pass of this story did. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 40 }}>
+          {TEXT_LAYOUT_FIELD.options!.map((option) => (
+            <LabelSlotSpecimen key={option.value} layout={option.value as PortTextLayout} />
+          ))}
+        </div>
+      </div>
+      <div>
+        <h4 style={{ margin: "0 0 32px", fontSize: 13, color: "gray" }}>Secondary slot — every position</h4>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 40 }}>
+          {SECONDARY_SLOT_LAYOUT_FIELD.options!.map((option) => (
+            <SecondarySlotSpecimen key={option.value} layout={option.value as SecondarySlotLayout} />
+          ))}
+        </div>
+      </div>
     </div>
   ),
 };
