@@ -9,7 +9,7 @@ import {
   LabeledPort,
   PORT_FIELDS,
   LABELED_PORT_FIELDS,
-  PORT_PRESETS,
+  LABELED_PORT_PRESETS,
   PORT_LABEL_GAP,
   portLabelPlacement,
   type AppearanceState,
@@ -34,11 +34,19 @@ import type { ComponentProps } from "react";
  * product inspector (demos/inspector) reads. Add a field there and both
  * surfaces pick it up; nothing here is kept in sync by hand.
  *
- * No `Presets` story: `PORT_PRESETS` is empty (port.presets.ts) — LabeledPort's
- * colour comes from a hand-written `state`/`tone` lookup, not a
- * separately governed paint field, so there is nothing for a preset to
- * govern (docs/T1-SPEC.md §4.7). Every `segments` field therefore gets
- * its own gallery below (§6 point 4) instead of being folded into one.
+ * No `Presets` story: LabeledPort's colour comes from a hand-written
+ * `state`/`tone` lookup, not a separately governed paint field
+ * (docs/T1-SPEC.md §4.7). Every `segments` field therefore gets its own
+ * gallery below (§6 point 4) instead of being folded into one.
+ *
+ * `args` is built against `LABELED_PORT_PRESETS`, NOT `PORT_PRESETS`.
+ * That array adds the two slot-placement ladders (`textLayout`,
+ * `secondarySlotLayout`), which is what keeps `defaultArgs` from
+ * materialising `labelOrigin`/`labelAlign`/`labelOffsetY` as explicit
+ * args. Materialised, they outrank the very preset the control selects,
+ * and the TextLayout gallery below silently renders six identical
+ * right-hand labels. Handing it `PORT_PRESETS` (the size ladder alone)
+ * is exactly the bug that shipped on 2026-09-15.
  *
  * The cast on `args` is deliberate: `defaultArgs` returns the generic
  * `Record<string, FieldValue>` shape every schema-driven component
@@ -58,7 +66,10 @@ import type { ComponentProps } from "react";
 const meta = {
   title: "Components/LabeledPort",
   component: LabeledPort,
-  args: defaultArgs(LABELED_PORT_FIELDS, PORT_PRESETS) as Partial<ComponentProps<typeof LabeledPort>>,
+  args: defaultArgs(
+    LABELED_PORT_FIELDS,
+    LABELED_PORT_PRESETS,
+  ) as Partial<ComponentProps<typeof LabeledPort>>,
   argTypes: toArgTypes(LABELED_PORT_FIELDS),
 } satisfies Meta<typeof LabeledPort>;
 

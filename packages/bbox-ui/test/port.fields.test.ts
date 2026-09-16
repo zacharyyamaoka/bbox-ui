@@ -8,7 +8,12 @@ import {
 } from "@bbox-ui/schema";
 import { CodeField } from "../src/codeField";
 import { LABELED_PORT_FIELDS, PORT_FIELDS } from "../src/port.fields";
-import { PORT_PRESETS } from "../src/port.presets";
+import {
+  LABEL_PLACEMENT_PRESETS,
+  LABELED_PORT_PRESETS,
+  PORT_PRESETS,
+  SECONDARY_PLACEMENT_PRESETS,
+} from "../src/port.presets";
 import { LabeledPort, Port, PortCountBadge, PortLabel, portResolutionSubject } from "../src/port";
 import {
   APPEARANCE_STATES,
@@ -23,6 +28,7 @@ import {
   PORT_SIZE_RUNGS,
   PORT_TEXT_LAYOUTS,
   PORT_TEXT_SIZES,
+  SECONDARY_LAYOUT_AS_ORIGIN,
   SECONDARY_SLOT_LAYOUTS,
   defaultSecondarySlotLayout,
   TEXT_LAYOUT_AS_PLACEMENT,
@@ -553,5 +559,85 @@ describe("portResolutionSubject", () => {
     const subject = portResolutionSubject({ state: "wired", children: "get_aruco: ArucoSrv" });
     expect(subject.state).toBe("wired");
     expect(subject.children).toBe("get_aruco: ArucoSrv");
+  });
+});
+
+describe("slot-placement presets — the schema layer can finally SEE what `??` resolves", () => {
+  // The defect this whole block exists for (2026-09-15): `labelOffsetY`
+  // declared `defaultValue: -23` — the lift the old derived helper
+  // computed at "md", correct back when the value reached the renderer
+  // only on the two "Offset" layouts. Unification made it apply to every
+  // layout, and `defaultArgs` materialises declared defaults as explicit
+  // args, so a plain `right` label arrived pre-displaced 23px upward.
+  it('labelOffsetY defaults to 0 — a label nobody displaced is displaced by nothing', () => {
+    const field = LABELED_PORT_FIELDS.find((f) => f.id === "labelOffsetY")!;
+    expect(field.defaultValue).toBe(0);
+  });
+
+  // The GENERAL form of that defect, which is what keeps it fixed: any
+  // field LabeledPort resolves as `props.x ?? SOME_PRESET_TABLE[sel].x`
+  // must be declared governed, or `defaultArgs` hands it over as an
+  // explicit value that outranks the very preset the selector selects.
+  it("every preset-deferring placement field is governed, so defaultArgs omits it", () => {
+    const args = defaultArgs(LABELED_PORT_FIELDS, LABELED_PORT_PRESETS);
+    for (const id of ["labelOrigin", "labelAlign", "labelOffsetY", "secondaryOrigin"]) {
+      expect(governedFieldIds(LABELED_PORT_PRESETS)).toContain(id);
+      expect(Object.hasOwn(args, id)).toBe(false);
+    }
+    // ...and the genuinely static ones stay materialised: they take the
+    // same value on every rung, so omitting them would lose a real default.
+    for (const id of ["labelOffsetX", "secondaryAlign", "secondaryOffsetX", "secondaryOffsetY"]) {
+      expect(Object.hasOwn(args, id)).toBe(true);
+    }
+  });
+
+  it("LABEL_PLACEMENT_PRESETS is a faithful PROJECTION of TEXT_LAYOUT_AS_PLACEMENT, member for member", () => {
+    expect(LABEL_PLACEMENT_PRESETS.map((p) => p.id)).toEqual([...PORT_TEXT_LAYOUTS]);
+    for (const layout of PORT_TEXT_LAYOUTS) {
+      const preset = LABEL_PLACEMENT_PRESETS.find((p) => p.id === layout)!;
+      const table = TEXT_LAYOUT_AS_PLACEMENT[layout];
+      expect(preset.selector).toBe("textLayout");
+      expect(preset.values).toEqual({
+        labelOrigin: table.origin,
+        labelAlign: table.align,
+        labelOffsetY: table.offsetY,
+      });
+      // Every governed id carries a value, and vice versa (T1-SPEC §9).
+      expect(preset.governs.slice().sort()).toEqual(Object.keys(preset.values).sort());
+    }
+  });
+
+  it("SECONDARY_PLACEMENT_PRESETS is a faithful projection of SECONDARY_LAYOUT_AS_ORIGIN", () => {
+    expect(SECONDARY_PLACEMENT_PRESETS.map((p) => p.id)).toEqual([...SECONDARY_SLOT_LAYOUTS]);
+    for (const layout of SECONDARY_SLOT_LAYOUTS) {
+      const preset = SECONDARY_PLACEMENT_PRESETS.find((p) => p.id === layout)!;
+      expect(preset.selector).toBe("secondarySlotLayout");
+      expect(preset.values).toEqual({ secondaryOrigin: SECONDARY_LAYOUT_AS_ORIGIN[layout] });
+    }
+  });
+
+  it("assertDisjointPresets(LABELED_PORT_PRESETS) holds — three selectors, three disjoint governed sets", () => {
+    expect(() => assertDisjointPresets(LABELED_PORT_PRESETS)).not.toThrow();
+    expect(governedFieldIds(LABELED_PORT_PRESETS).sort()).toEqual([
+      "diameter",
+      "labelAlign",
+      "labelOffsetY",
+      "labelOrigin",
+      "secondaryOrigin",
+      "textSize",
+    ]);
+  });
+
+  // The declared default of a governed field still has to be TRUE at the
+  // selector's own default, because that is what the inspector prints in
+  // the row before anyone touches the control.
+  it("each governed placement default equals what the DEFAULT selector value resolves to", () => {
+    const layoutDefault = LABELED_PORT_FIELDS.find((f) => f.id === "textLayout")!
+      .defaultValue as keyof typeof TEXT_LAYOUT_AS_PLACEMENT;
+    const table = TEXT_LAYOUT_AS_PLACEMENT[layoutDefault];
+    const declared = (id: string) => LABELED_PORT_FIELDS.find((f) => f.id === id)!.defaultValue;
+    expect(declared("labelOrigin")).toBe(table.origin);
+    expect(declared("labelAlign")).toBe(table.align);
+    expect(declared("labelOffsetY")).toBe(table.offsetY);
   });
 });

@@ -18,7 +18,17 @@
  */
 import type { PresetSpec } from "@bbox-ui/schema";
 
-import { PORT_SIZE_RUNGS, PORT_SIZE_RUNG_LABELS, type PortSizeRung } from "./port.layout";
+import {
+  PORT_SIZE_RUNGS,
+  PORT_SIZE_RUNG_LABELS,
+  PORT_TEXT_LAYOUTS,
+  PORT_TEXT_LAYOUT_LABELS,
+  SECONDARY_LAYOUT_AS_ORIGIN,
+  SECONDARY_SLOT_LAYOUTS,
+  SECONDARY_SLOT_LAYOUT_LABELS,
+  TEXT_LAYOUT_AS_PLACEMENT,
+  type PortSizeRung,
+} from "./port.layout";
 
 const GOVERNS = ["diameter", "textSize"];
 
@@ -42,3 +52,64 @@ export const PORT_PRESETS: PresetSpec[] = PORT_SIZE_RUNGS.map((size) => ({
   governs: GOVERNS,
   values: PRESET_SIZE[size],
 }));
+
+/**
+ * The two SLOT-PLACEMENT ladders — `textLayout` governing the label slot's
+ * placement fields, `secondarySlotLayout` governing the secondary slot's.
+ *
+ * WHY these exist at all, when `LabeledPort` already resolves the same
+ * thing with `labelOrigin ?? TEXT_LAYOUT_AS_PLACEMENT[layout].origin`:
+ * because a runtime `??` is invisible to the SCHEMA layer, and the schema
+ * layer is what decides whether a field gets materialised as an explicit
+ * value. `defaultArgs` omits governed fields precisely so a selector can
+ * still select (see its own WHY) — but it can only omit what a
+ * `PresetSpec` declares. Left undeclared, every placement field shipped
+ * its default as an explicit arg that outranked the preset, which is how
+ * `labelOffsetY` came to pin a plain `right` label 23px high (2026-09-15).
+ *
+ * WHY a projection of `TEXT_LAYOUT_AS_PLACEMENT` rather than its own
+ * table: so the ladder the component renders from and the ladder the
+ * inspector reasons about cannot drift. There is still exactly ONE table
+ * of placements in this repo; this is a second VIEW of it, and
+ * `port.fields.test.ts` asserts the view still matches the component's
+ * own fallback chain for every member.
+ *
+ * `labelOffsetX`, `secondaryAlign` and both secondary offsets stay
+ * UNGOVERNED on purpose: they take the same static value on every rung,
+ * so they have a real default rather than a preset-varying one, and
+ * materialising them changes nothing.
+ */
+export const LABEL_PLACEMENT_PRESETS: PresetSpec[] = PORT_TEXT_LAYOUTS.map((layout) => ({
+  id: layout,
+  label: PORT_TEXT_LAYOUT_LABELS[layout],
+  selector: "textLayout",
+  governs: ["labelOrigin", "labelAlign", "labelOffsetY"],
+  values: {
+    labelOrigin: TEXT_LAYOUT_AS_PLACEMENT[layout].origin,
+    labelAlign: TEXT_LAYOUT_AS_PLACEMENT[layout].align,
+    labelOffsetY: TEXT_LAYOUT_AS_PLACEMENT[layout].offsetY,
+  },
+}));
+
+export const SECONDARY_PLACEMENT_PRESETS: PresetSpec[] = SECONDARY_SLOT_LAYOUTS.map((layout) => ({
+  id: layout,
+  label: SECONDARY_SLOT_LAYOUT_LABELS[layout],
+  selector: "secondarySlotLayout",
+  governs: ["secondaryOrigin"],
+  values: { secondaryOrigin: SECONDARY_LAYOUT_AS_ORIGIN[layout] },
+}));
+
+/**
+ * Every preset a `LabeledPort` answers to — the array `defaultArgs` and
+ * any inspector must be handed, since each selector governs a DISJOINT
+ * set (`assertDisjointPresets` proves it in the tests).
+ *
+ * `PORT_PRESETS` stays the size ladder alone: it is what a bare `Port`
+ * (geometry only, no slots) resolves `diameter` through, and that
+ * primitive has no placement fields to govern.
+ */
+export const LABELED_PORT_PRESETS: PresetSpec[] = [
+  ...PORT_PRESETS,
+  ...LABEL_PLACEMENT_PRESETS,
+  ...SECONDARY_PLACEMENT_PRESETS,
+];

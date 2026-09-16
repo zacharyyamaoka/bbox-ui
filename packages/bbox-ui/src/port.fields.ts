@@ -217,17 +217,19 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     min: -64,
     max: 64,
     step: 1,
-    // The value `defaultPortLabelLift` computes at Port's own default
-    // diameter ("md", 12px): 6 + PORT_RING_OVERHANG_PX (5) + PORT_LABEL_GAP
-    // (8). Same static-approximation convention `textLayout`'s default
-    // follows against `inwardTextLayout(edge)` — and, like it, the panel
-    // shows the REAL resolved number via `portResolutionSubject`, so a
-    // Port at another size reads honestly instead of trusting this literal.
-    // The static gap a lifted label carries in `TEXT_LAYOUT_AS_PLACEMENT`, at
-    // default text size — negative, because the lift is upward. The panel
-    // shows the REAL resolved number via `portResolutionSubject`, which is
-    // what keeps it honest at any other text size.
-    defaultValue: -23,
+    // ZERO, because this field is a DISPLACEMENT, and a label nobody has
+    // displaced is displaced by nothing.
+    //
+    // It read -23 until 2026-09-15: the lift `defaultPortLabelLift` used to
+    // compute at "md", from when the value reached the renderer ONLY on the
+    // two "Offset" layouts. Unification made it apply to EVERY layout, and
+    // that turned a harmless stale literal into a reachable bug —
+    // `defaultArgs` materialises every declared default as an explicit arg
+    // (Storybook's Port meta does exactly that), so a plain `right` label
+    // arrived already carrying -23 and rendered 23px high. A lifted layout
+    // takes its offset from `TEXT_LAYOUT_AS_PLACEMENT` (-PORT_LABEL_GAP,
+    // against the `end` reference edge) and never needed this literal.
+    defaultValue: 0,
     hint: "Vertical displacement, + down. A lifted label carries a negative value that puts its bottom edge clear of the dot's centre line, where a trace wire runs.",
     tier: "expert",
   },

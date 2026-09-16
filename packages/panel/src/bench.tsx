@@ -42,6 +42,7 @@ import {
   Port,
   portResolutionSubject,
   PORT_FIELDS,
+  LABELED_PORT_PRESETS,
   PORT_PRESETS,
   PortEdge,
   PORT_EDGE_FIELDS,
@@ -668,7 +669,15 @@ export const REGISTRY: ComponentEntry[] = [
     // blockFace, Storybook — which is also why filtering here beats
     // deleting them. Found by an adversarial judge, 2026-09-15.
     fields: LABELED_PORT_FIELDS.filter((f) => !SLOT_SUPERSEDED_FIELD_IDS.has(f.id)),
-    presets: PORT_PRESETS,
+    // The SIZE ladder plus the two SLOT-PLACEMENT ladders, which is what
+    // makes the inspector agree with how Zach described this model
+    // (2026-09-15): "these are basically all just presets, then in expert
+    // mode you just expose directly the x,y placement." Selecting a Label
+    // Slot Location now visibly governs Label Origin / Align / Offset Y —
+    // they read as inherited until you reach past one, which earns the
+    // purple OVERRIDE badge and a reset arrow, instead of four Expert
+    // controls that silently disagree with the preset above them.
+    presets: LABELED_PORT_PRESETS,
     // Port's `textLayout`/`secondarySlotLayout` both have a real AUTO
     // default computed from OTHER fields (`inwardTextLayout(edge)`,
     // `defaultSecondarySlotLayout`), not a fixed `defaultValue` — same
