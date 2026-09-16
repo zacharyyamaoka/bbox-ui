@@ -39,6 +39,7 @@ import {
   topLevel,
   randomValue,
   readFieldRow,
+  presetFamilyFor,
   sharedFields,
   EXCLUDED_SHOWN,
   INITIAL_BENCHES,
@@ -210,13 +211,14 @@ export function Workbench() {
   const panelToSubject = single ? single.toSubject : undefined;
   // The sidebar's Storybook-style "Presets" quick-switch (bench-sidebar.tsx)
   // reads and writes through the SAME selector field the Inspector's own row
-  // for it already does — never a second independent value. A component's
-  // presets all share one selector (assertDisjointPresets forbids two
-  // DIFFERENT selectors from governing overlapping fields; siblings on one
-  // ladder, e.g. every Port size rung, share it on purpose), so there is at
-  // most one such field to find.
-  const presetSelectorField = panelFields.find((f) => panelPresets.some((preset) => preset.selector === f.id));
-  const presetRow = presetSelectorField ? readFieldRow(presetSelectorField, selected, panelPresets, panelToSubject) : null;
+  // for it already does — never a second independent value. `presetFamilyFor`
+  // narrows to ONE selector's own presets (never the union of every family a
+  // component might carry — `assertDisjointPresets` permits more than one, as
+  // long as they govern disjoint fields) and returns null when no field on
+  // the selection actually backs it, so there is nothing here to wire an
+  // onChange against that would silently no-op.
+  const presetFamily = presetFamilyFor(panelFields, panelPresets);
+  const presetRow = presetFamily ? readFieldRow(presetFamily.field, selected, presetFamily.presets, panelToSubject) : null;
   // WHY the header names the selected TYPE and not the bench: a focused
   // bench used to hold one type only, so the two were the same word. A
   // Stack bench now holds Ports and Pills as members, and the inspector
@@ -740,11 +742,11 @@ export function Workbench() {
         onRemoveLast={removeLastInstance}
         onRandomize={randomizeInstances}
         entryFor={entryFor}
-        presets={panelPresets}
+        presets={presetFamily?.presets ?? []}
         presetValue={presetRow?.collapsedValue as string | undefined}
         presetMixed={presetRow?.isMixed ?? false}
         onPresetChange={(presetId) => {
-          if (presetSelectorField) applyToSelected(presetSelectorField.id, presetId);
+          if (presetFamily) applyToSelected(presetFamily.field.id, presetId);
         }}
       />
       <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">

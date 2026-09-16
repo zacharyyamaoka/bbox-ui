@@ -105,7 +105,7 @@ export function BenchSidebar(p: BenchSidebarProps) {
               are presets available". It writes the exact same selector field
               (Port's `size`, Block's `view`, Pill/Bar's `state`) through the
               exact same `applyToSelected` the Inspector's own row for that
-              field already uses — see workbench.tsx's `presetSelectorField`/
+              field already uses — see workbench.tsx's `presetFamily`/
               `presetRow`. This is deliberately NOT a second, independent
               picker: the 2026-09-12 removal of the Inspector's old violet
               PRESET row (sections/build-sections.tsx's own WHY) ruled that a
@@ -122,6 +122,7 @@ export function BenchSidebar(p: BenchSidebarProps) {
               <SidebarGroupContent className="px-2">
                 <select
                   data-slot="preset-picker"
+                  aria-label="Presets"
                   value={p.presetMixed ? "" : (p.presetValue ?? "")}
                   onChange={(e) => p.onPresetChange(e.target.value)}
                   className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
