@@ -232,8 +232,10 @@ export const AllDiameters: Story = {
  * `top`/`bot`/`right`/`left` PORT-SPEC.md §3f had narrowed this to). The
  * two "Offset" rows sit at the SAME distance out as their plain
  * counterpart and are LIFTED above the dot's centre line instead, so a
- * trace wire leaving the dot passes under them (`portLabelLift`,
- * port.layout.ts).
+ * trace wire leaving the dot passes under them. The lift is not computed:
+ * they align their BOTTOM edge (`align: "end"`) to the dot's centre line
+ * and clear it by a static `PORT_LABEL_GAP` — see `TEXT_LAYOUT_AS_PLACEMENT`
+ * in port.layout.ts.
  */
 export const AllTextLayouts: Story = {
   parameters: sweep("textLayout"),

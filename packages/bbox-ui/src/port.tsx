@@ -733,13 +733,6 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
    * threshold from before the two-slot proposal. */
   producers?: number;
   /**
-   * The author's own tuned lift for a Right/Left Offset label, in px,
-   * measured from the dot's centre line to the label's bottom edge — the
-   * clearance a trace wire passes through. Omit for the computed default
-   * (`defaultPortLabelLift`, port.layout.ts). Ignored by every non-offset
-   * layout, which has no lift to tune.
-   */
-  /**
    * The label slot's placement, reaching PAST `textLayout` (which is the
    * Simple-tier PRESET over exactly these three — Zach, 2026-09-15:
    * "thoose are just presets!"). Omit any of them and the preset decides;

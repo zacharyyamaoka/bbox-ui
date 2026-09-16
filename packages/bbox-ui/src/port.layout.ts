@@ -550,19 +550,6 @@ export type SlotAlign = "start" | "center" | "end";
 
 export const SLOT_ALIGNS: SlotAlign[] = ["start", "center", "end"];
 
-/** Per-axis labels, because "Start" alone does not say which edge it is —
- *  the control should read "Top" on a side origin and "Left" on a
- *  top/bottom one. Keyed by whether the FREE axis is vertical. */
-export const SLOT_ALIGN_LABELS: Record<"vertical" | "horizontal", Record<SlotAlign, string>> = {
-  vertical: { start: "Top", center: "Middle", end: "Bottom" },
-  horizontal: { start: "Left", center: "Middle", end: "Right" },
-};
-
-/** True when the origin leaves the VERTICAL axis free to align on. */
-export function originFreeAxisIsVertical(origin: SlotOrigin): boolean {
-  return origin === "left" || origin === "right";
-}
-
 /** The CSS translate percentage that puts the chosen edge on the
  *  reference line. Height/width independent by construction — that is the
  *  entire point. */
@@ -648,8 +635,11 @@ export function slotPlacementStyle(
  * (`T.literalEnum` in both shape utils), so a board saved before this
  * change still hands them back. This is the one place that translation
  * lives; nothing downstream needs to know the old vocabulary existed.
- * `liftedLabel` marks the two members whose `offsetY` must be RESOLVED
- * from the live text size rather than taken as 0.
+ * The two lifted members are marked by `align: "end"` and nothing else —
+ * no flag, and no offset resolved from the live text size. Aligning the
+ * slot's BOTTOM edge to the origin line is what puts a label clear of the
+ * wire whatever its height turns out to be, which is why the remaining
+ * `offsetY` is the static `-PORT_LABEL_GAP` and not a computed lift.
  */
 export const TEXT_LAYOUT_AS_PLACEMENT: Record<
   PortTextLayout,

@@ -191,7 +191,7 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     // own WHY in port.layout.ts.
     defaultValue: "center",
     options: SLOT_ALIGN_OPTIONS,
-    hint: "Which part of the slot lands on the origin's line. On a Left/Right origin these read Top/Middle/Bottom; on Top/Bottom, Left/Middle/Right.",
+    hint: "Which part of the slot lands on the origin's line. On a Left/Right origin Start/Middle/End MEAN its top/middle/bottom edge; on a Top/Bottom origin, its left/middle/right edge.",
     tier: "expert",
   },
   {
@@ -220,8 +220,9 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     // ZERO, because this field is a DISPLACEMENT, and a label nobody has
     // displaced is displaced by nothing.
     //
-    // It read -23 until 2026-09-15: the lift `defaultPortLabelLift` used to
-    // compute at "md", from when the value reached the renderer ONLY on the
+    // It read -23 until 2026-09-15: the lift the since-deleted
+    // `defaultPortLabelLift` computed at "md", from when the value
+    // reached the renderer ONLY on the
     // two "Offset" layouts. Unification made it apply to EVERY layout, and
     // that turned a harmless stale literal into a reachable bug —
     // `defaultArgs` materialises every declared default as an explicit arg
@@ -335,7 +336,7 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     // own WHY in port.layout.ts.
     defaultValue: "center",
     options: SLOT_ALIGN_OPTIONS,
-    hint: "Which part of the slot lands on the origin's line. On a Left/Right origin these read Top/Middle/Bottom; on Top/Bottom, Left/Middle/Right.",
+    hint: "Which part of the slot lands on the origin's line. On a Left/Right origin Start/Middle/End MEAN its top/middle/bottom edge; on a Top/Bottom origin, its left/middle/right edge.",
     tier: "expert",
   },
   {
