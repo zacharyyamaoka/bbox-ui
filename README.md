@@ -91,6 +91,55 @@ shortened, and the chip is never painted over live text.
 </Block>
 ```
 
+### Autocomplete menu
+
+`completionMenu(options)` — one CodeMirror extension any code field mounts.
+It is CodeMirror's own completion popup (DOM, ARIA, mouse accept, flip above
+and stay, horizontal clamp), plus what the stock popup lacks. A source is
+pure data: the menu finds the word around the caret and owns every key.
+
+- **Anchor**: `cursor` (follows the caret, VS Code) · `word` (pinned to the
+  word's start, IntelliJ — default) · `field` (pinned to the line's start).
+- **At the ends** of the list, ↑/↓ either `wrap` (default) or `caret`: close
+  and move the caret a line. PageUp/PageDown clamp.
+- **Ctrl+Space** opens; again while open re-queries with `widened: true`;
+  again narrows back. An optional **footer** strip (not a list option) says
+  so and toggles on click.
+- **Tab** replaces the whole identifier; **Enter** replaces up to the caret
+  and eats the tail only when it is a suffix of the pick (`Ty|pe` → `Type`,
+  `Pos|xx` → `Posexx`).
+- Zero matches while typing → closed; on Ctrl+Space → a muted
+  `No matches for “x”` row. Kind **badges** get a fixed-width column;
+  `deprecated` items are struck through. Visible rows cap at `maxRows` (10).
+
+Today's `CodeField` needs no change — pass the menu as a grammar's
+`language` and leave `complete` unset (stylesheet: `@bbox-ui/core/completionMenu.css`):
+
+```ts
+const grammar: CodeFieldGrammar = {
+  language: completionMenu({
+    source: ({ word, widened }) => ({ options: lookup(word.query, widened) }),
+    badge: (type) => KIND_LABEL[type] ?? null,
+    footer: { hint: "every type on this board", widenedHint: "back to likely matches" },
+  }),
+};
+```
+
+Moving every grammar onto it later is a swap inside `codeGrammar.ts`'s
+`completionExtension`, replacing its `autocompletion({...})` call:
+
+```ts
+return completionMenu({
+  source: ({ text, pos, explicit }) => {
+    const slot = grammar.slotAt?.(text, pos) ?? null;
+    return grammar.complete!(slot, slot?.query ?? "", { text, pos, explicit });
+  },
+  badge: grammar.completionBadge,
+});
+```
+
+Try every option by hand in Storybook: **Components → AutocompleteMenu**.
+
 ## One core, two hosts — the adapter diff
 
 The presentational core never imports a canvas engine. Each host wraps the

@@ -6,6 +6,7 @@
   "description": "Presentational components for black-box design: Port and Block (Simple View). Zero canvas assumptions — props in, DOM out.",
   "exports": {
     ".": "./src/index.ts",
+    "./completionMenu.css": "./src/completionMenu.css",
     "./layout": "./src/layout.ts",
     "./theme.css": "./src/theme.css",
     "./codeField.css": "./src/codeField.css"
