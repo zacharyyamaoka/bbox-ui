@@ -258,6 +258,11 @@ const menu = () =>
       footer: footer ? footer.textContent : null,
       footerSelected: footer ? footer.hasAttribute('aria-selected') || footer.matches('[aria-selected] *') : false,
       footerLast: footer ? tip.lastElementChild === footer : null,
+      // offsetHeight, not the \`hidden\` property: a display rule can override [hidden].
+      footerHeight: footer ? footer.offsetHeight : 0,
+      anySelected: tip.querySelectorAll('[aria-selected]').length,
+      activeDescendant: content?.getAttribute?.('aria-activedescendant') ?? null,
+      expanded: content?.getAttribute?.('aria-expanded') ?? null,
       left: tip.getBoundingClientRect().left,
       top: tip.getBoundingClientRect().top,
       width: tip.getBoundingClientRect().width,
@@ -558,6 +563,112 @@ await press("Escape");
 await send("Emulation.clearDeviceMetricsOverride");
 
 // ---------------------------------------------------------------------------
+// 9. The judge's four findings (+ aria-expanded) — each written to fail on
+//    e96f031 and pass after the fix.
+// ---------------------------------------------------------------------------
+console.log("judge findings");
+await openStory("anchor:word;atEnds:wrap");
+await focusLaneEnd();
+const expandedOf = (field) => evaluate(`document.querySelector('${field} .cm-content').getAttribute('aria-expanded')`);
+
+// Finding 1 — widened must reset when the menu closes for ANY reason.
+await type("pri");
+await press(" ", { ctrl: true });
+state = await menu();
+assert(state.open && state.labels.length === total, "[F1] Ctrl+Space while open on 'pri' widens", `${state.labels?.length} items`);
+const instructions = await evaluate(`(() => { const r = document.querySelector('[data-testid="autocomplete-instructions"]').getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; })()`);
+await click(instructions.x, instructions.y);
+await sleep(150);
+const blurred = !(await menu()).open && !(await evaluate(`!!document.activeElement?.closest('${LANE}')`));
+const lastLine = await evaluate(`(() => { const r = [...document.querySelectorAll('${LANE} .cm-line')].at(-1).getBoundingClientRect(); return { x: r.right - 4, y: r.top + r.height / 2 }; })()`);
+await click(lastLine.x, lastLine.y);
+await type("n");
+state = await menu();
+assert(blurred && state.open && JSON.stringify(state.labels) === JSON.stringify(["print", "print_exception"]) && state.footer?.includes("every type on this board"),
+  "[F1] blur-close, refocus the same word, type → the list is narrow again", `blurred=${blurred} ${JSON.stringify(state.labels)} footer "${state.footer}"`);
+await press(" ", { ctrl: true });
+const rewidened = (await menu()).labels?.length;
+await press("ArrowLeft");
+const closedByCaret = !(await menu()).open;
+await press("ArrowRight");
+await type("t");
+state = await menu();
+assert(rewidened === total && closedByCaret && JSON.stringify(state.labels) === JSON.stringify(["print", "print_exception"]),
+  "[F1] caret leaving the word closes, and the next letter reopens narrow", `widened ${rewidened}, closed=${closedByCaret}, then ${JSON.stringify(state.labels)}`);
+await closeMenu();
+
+// Finding 2 — on an empty word the second Ctrl+Space is a no-op and the footer is gone.
+await press("End");
+await press("Enter");
+await press(" ", { ctrl: true });
+const emptyFirst = await menu();
+await press(" ", { ctrl: true });
+const emptySecond = await menu();
+await screenshot("light-empty-word.png");
+assert(emptyFirst.open && emptyFirst.labels.length === total && emptyFirst.footerHeight === 0,
+  "[F2] Ctrl+Space on an empty word lists everything, footer not on screen", `${emptyFirst.labels?.length} items, footer ${emptyFirst.footerHeight}px`);
+assert(emptySecond.open && emptySecond.labels.length === total && emptySecond.footerHeight === 0,
+  "[F2] a second Ctrl+Space on the empty word changes nothing", `${emptySecond.labels?.length} items, footer ${emptySecond.footerHeight}px "${emptySecond.footer}"`);
+await type("p");
+state = await menu();
+assert(state.open && state.labels.length < total && state.footerHeight > 0 && state.footer?.includes("every type on this board"),
+  "[F2] typing a letter after it gives the narrow list, footer back", `${state.labels?.length} items, footer ${state.footerHeight}px "${state.footer}"`);
+await closeMenu();
+
+// Finding 3 — the No-matches row is never the selected option.
+await press("End");
+await press("Enter");
+await type("Zq");
+await press(" ", { ctrl: true });
+const noMatchOpen = await menu();
+const noMatchLabel = noMatchOpen.labels?.[0];
+const clean = (m) => m.open && m.emptyRow && m.anySelected === 0 && !m.activeDescendant;
+const afterDown = (await press("ArrowDown"), await menu());
+const afterUp = (await press("ArrowUp"), await menu());
+assert(clean(noMatchOpen) && clean(afterDown) && clean(afterUp),
+  "[F3] the No-matches row carries no aria-selected / activedescendant, before or after ↑/↓",
+  JSON.stringify([noMatchOpen, afterDown, afterUp].map((m) => ({ sel: m.anySelected, ad: m.activeDescendant }))));
+const linesBefore = await lines(LANE);
+await press("Enter");
+const afterEnter = await menu();
+const linesAfterEnter = await lines(LANE);
+// Enter closed the menu, so re-open it before testing Tab — otherwise Tab is
+// an ordinary Tab and moves focus out of the editor, which is not what this
+// assertion is about.
+await press(" ", { ctrl: true });
+await press("Tab");
+const afterTab = await menu();
+const linesAfterTab = await lines(LANE);
+assert(!afterEnter.open && !afterTab.open
+  && JSON.stringify(linesAfterEnter) === JSON.stringify(linesBefore) && JSON.stringify(linesAfterTab) === JSON.stringify(linesBefore)
+  && (await evaluate(`!!document.activeElement?.closest('${LANE}')`)),
+  "[F3] Enter and Tab on the No-matches row insert nothing and close the menu (never a dead key)",
+  `label "${noMatchLabel}", open after Enter=${afterEnter.open} Tab=${afterTab.open}, last line "${linesAfterTab.at(-1)}"`);
+await closeMenu();
+
+// Finding 4 — ↓ on a CLOSED single-line field opens the list; a lane keeps ↓ for the caret.
+const singleBox = await evaluate(`(() => { const r = document.querySelector('${SINGLE} .cm-content').getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; })()`);
+await click(singleBox.x, singleBox.y);
+await press("End");
+const singleClosedExpanded = await expandedOf(SINGLE);
+await press("ArrowDown");
+state = await menu();
+assert(state.open && JSON.stringify(state.labels) === JSON.stringify(["Frame"]),
+  "[F4] ↓ in a closed single-line field opens the list", JSON.stringify(state.labels));
+assert(singleClosedExpanded === "false" && (await expandedOf(SINGLE)) === "true",
+  "[aria] aria-expanded on the field: false closed, true open", `${singleClosedExpanded} → ${await expandedOf(SINGLE)}`);
+await press("Escape");
+assert((await expandedOf(SINGLE)) === "false", "[aria] aria-expanded back to false after Esc", String(await expandedOf(SINGLE)));
+await click(lastLine.x - 200, lastLine.y);
+await press("Home", { ctrl: true });
+await press("ArrowDown");
+const laneAfterDown = await menu();
+await type("@");
+const laneLines = await lines(LANE);
+assert(!laneAfterDown.open && laneLines[1].startsWith("@"), "[F4] ↓ in a closed multi-line lane still moves the caret (nothing opens)",
+  `open=${laneAfterDown.open} line 2 "${laneLines[1]}"`);
+
+// ---------------------------------------------------------------------------
 // 8. Dark mode captures.
 // ---------------------------------------------------------------------------
 console.log("dark");
@@ -575,6 +686,9 @@ await press(" ", { ctrl: true });
 await screenshot("dark-no-match.png");
 await press("Escape");
 await press("Enter");
+await press(" ", { ctrl: true });
+await screenshot("dark-empty-word.png");
+await press("Escape");
 await type("pri");
 const darkPri = await menu();
 assert(darkPri.open && darkPri.width >= 359 && darkPri.width <= 461, "menu width stays within 360–460px", `${darkPri.width}px`);

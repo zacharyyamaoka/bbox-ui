@@ -152,6 +152,16 @@ export interface CompletionMenuOptions {
    * @default "wrap"
    */
   atEnds?: CompletionMenuAtEnds;
+  /**
+   * Whether ↓ on a CLOSED menu opens it instead of moving the caret.
+   * `"single-line"` does so only when the document has one line — the W3C
+   * combobox rule: a one-line field has no next line to move to, so ↓ is
+   * free to mean "show me the list", while a code block keeps ↓ as caret
+   * movement. `true`/`false` force it either way.
+   *
+   * @default "single-line"
+   */
+  openOnArrowDown?: boolean | "single-line";
   /** Visible rows before the list scrolls. @default 10 */
   maxRows?: number;
   /** The kind pill for an item's `type`. Configuring it reserves a fixed-width column so every label lines up, pill or not. */
@@ -341,6 +351,7 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
   const atEnds = options.atEnds ?? DEFAULT_AT_ENDS;
   const maxRows = Math.max(1, Math.floor(options.maxRows ?? DEFAULT_MAX_ROWS));
   const wordChar = options.wordChar ?? DEFAULT_WORD_CHAR;
+  const openOnArrowDown = options.openOnArrowDown ?? "single-line";
   const { badge, footer } = options;
 
   const setWidened = StateEffect.define<boolean>();
@@ -428,6 +439,11 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
     completions.length === 1 && rows.get(completions[0]!) === "no-match";
 
   const toggleWidened = (view: EditorView) => {
+    // WHY nothing happens with no word typed: an explicit open on an empty
+    // word already lists everything the source has, so "widen" has nothing
+    // left to add and "narrow" would have no query to narrow to. Toggling
+    // anyway left the menu silently widened for the word typed next.
+    if (wordAtState(view.state, view.state.selection.main.head, wordChar).query === "") return;
     const next = !view.state.field(widenField).widened;
     view.dispatch({ effects: setWidened.of(next) });
     startCompletion(view);
@@ -437,7 +453,16 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
   const move =
     (direction: "up" | "down", paging: boolean): Command =>
     (view) => {
-      if (completionStatus(view.state) === null) return false;
+      if (completionStatus(view.state) === null) {
+        const opens =
+          direction === "down" &&
+          !paging &&
+          (openOnArrowDown === true || (openOnArrowDown === "single-line" && view.state.doc.lines === 1));
+        if (!opens) return false;
+        if (view.state.field(widenField).widened) view.dispatch({ effects: setWidened.of(false) });
+        startCompletion(view);
+        return true;
+      }
       const tooltip = menuTooltipView(view);
       // Nothing on screen yet (the first query is still pending): the key
       // belongs to the caret, exactly as if the menu were closed.
@@ -564,6 +589,13 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
       footerFor.set(dom, strip);
     }
     const { widened } = view.state.field(widenField);
+    // With no word typed the explicit list already IS everything, so the
+    // strip would promise a toggle that cannot change the list (it also
+    // stops ↓-into-an-empty-field looking like it has a hidden second mode).
+    const empty = wordAtState(view.state, view.state.selection.main.head, wordChar).query === "";
+    strip.hidden = empty;
+    dom.classList.toggle("bbox-completion-menu--has-footer", !empty);
+    if (empty) return;
     const text = widened ? (footer.widenedHint ?? footer.hint) : footer.hint;
     const label = strip.lastElementChild!;
     if (label.textContent !== text) label.textContent = text;
@@ -580,8 +612,29 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
   // created popup has its anchor hook, row cap and footer in place before
   // it is first positioned or painted.
   const decorateTooltip = EditorView.updateListener.of((update) => {
+    const openNow = completionStatus(update.state) !== null;
+    // WHY the close is watched here rather than inside `widenField`: reading
+    // the completion's own state field from that field's `update` is a cycle
+    // CodeMirror forbids. Widening is a mode of ONE open menu — when it
+    // closes for any reason at all (Esc, accept, a click away, focus lost),
+    // it goes back to narrow, so a refocus can never reopen a silently
+    // widened list.
+    if (completionStatus(update.startState) !== null && !openNow && update.state.field(widenField).widened) {
+      update.view.dispatch({ effects: setWidened.of(false) });
+    }
+    // CodeMirror sets aria-haspopup/controls/activedescendant on the content
+    // element but never the expanded state, which the combobox pattern needs.
+    if (openNow !== (completionStatus(update.startState) !== null) || !update.view.contentDOM.hasAttribute("aria-expanded")) {
+      update.view.contentDOM.setAttribute("aria-expanded", openNow ? "true" : "false");
+    }
     const tooltipView = menuTooltipView(update.view);
     if (!tooltipView) return;
+    // The "No matches" row is a statement, not a candidate. CodeMirror
+    // selects the first option on open regardless, so clear it: -1 is its
+    // own "nothing selected", which also drops aria-activedescendant.
+    if (isNoMatch(currentCompletions(update.state)) && (selectedCompletionIndex(update.state) ?? -1) >= 0) {
+      update.view.dispatch({ effects: setSelectedCompletion(-1) });
+    }
     const { dom } = tooltipView;
     if (!patched.has(tooltipView)) {
       patched.add(tooltipView);
@@ -589,7 +642,6 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
       dom.style.setProperty("--bbox-completion-rows", String(maxRows));
       dom.dataset.anchor = anchor;
     }
-    dom.classList.toggle("bbox-completion-menu--has-footer", !!footer);
     renderFooter(update.view, dom);
   });
 

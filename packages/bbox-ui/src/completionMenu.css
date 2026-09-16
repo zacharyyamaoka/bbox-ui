@@ -167,7 +167,11 @@
 
 /* The footer strip: outside the listbox, so no key can select it; `order`
    keeps it last on screen even while CodeMirror swaps its `<ul>`. */
-.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > .bbox-completion-menu__footer {
+.cm-tooltip.cm-tooltip-autocomplete.bbox-completion-menu.bbox-code-completion > .bbox-completion-menu__footer[hidden] {
+  display: none;
+}
+
+.bbox-completion-menu__footer {
   order: 1;
   display: flex;
   flex: none;
