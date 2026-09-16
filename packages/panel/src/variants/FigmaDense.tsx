@@ -12,7 +12,7 @@ import {
 } from "@bbox-ui/schema";
 import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
-import { readFieldRow, resetTitleFor } from "../fieldModel";
+import { presetLabelForField, readFieldRow, resetTitleFor } from "../fieldModel";
 import { groupRows } from "../fieldGroups";
 import { NumberInput } from "../NumberInput";
 import {
@@ -338,6 +338,11 @@ function PresetPicker({
   // judged the same way `hasOwnOverride` is everywhere else in this file —
   // an explicit stored key on any selected subject — not whether that
   // override happens to coincide with the preset's own value.
+  // Id-only lookup is SAFE here, unlike the provenance sites that had to
+  // move to `presetForField`: this component is handed
+  // `presets.filter((p) => p.selector === selector)`, so the array holds
+  // one ladder and an id can only mean one thing. Copying this line into a
+  // context holding the FULL array would reintroduce the collision.
   const activePreset = presets.find((p) => p.id === current);
   const modifiedFieldIds = activePreset
     ? activePreset.governs.filter((fieldId) => subjects.some((s) => s.props[fieldId] !== undefined))
@@ -461,9 +466,16 @@ function optionLabelFor(field: FieldSpec, value: FieldValue | undefined): string
  *  just "primary" otherwise (overridden or default — the dot already says
  *  which). Multi-select non-mixed agreement counts as driven too, per
  *  `drivenPresetId`'s own contract above. */
-function drivenText(displayValue: string, drivenPresetId: string | undefined, presets: PresetSpec[]): string {
+function drivenText(
+  displayValue: string,
+  drivenPresetId: string | undefined,
+  presets: PresetSpec[],
+  // The field whose row this text sits in. Needed because a preset id is
+  // only unique WITHIN its ladder — see `presetForField`.
+  fieldId: string,
+): string {
   if (!drivenPresetId) return displayValue;
-  const label = presets.find((p) => p.id === drivenPresetId)?.label ?? drivenPresetId;
+  const label = presetLabelForField(presets, drivenPresetId, fieldId);
   return `${label} · ${displayValue}`;
 }
 
@@ -814,7 +826,7 @@ export function TraceChain({ trace, presets }: { trace: FieldTrace; presets: Pre
           <span style={candidateLayerStyle}>
             {candidate.layer}
             {candidate.presetId
-              ? ` · ${presets.find((p) => p.id === candidate.presetId)?.label ?? candidate.presetId}`
+              ? ` · ${presetLabelForField(presets, candidate.presetId, trace.field.id)}`
               : candidate.inheritedFrom
                 ? ` · ${candidate.inheritedFrom}`
                 : ""}
@@ -917,7 +929,7 @@ export function DenseControl({
            *  no value cell to rewrite as "Wired · primary" — the preset
            *  name rides as a quiet suffix instead, same words, same idea. */}
           {!isMixed && drivenPresetId && (
-            <span style={drivenSuffixStyle}>· {presets.find((p) => p.id === drivenPresetId)?.label ?? drivenPresetId}</span>
+            <span style={drivenSuffixStyle}>· {presetLabelForField(presets, drivenPresetId, field.id)}</span>
           )}
         </div>
       );
@@ -926,7 +938,12 @@ export function DenseControl({
     // beside the label when it says something the label doesn't.
     return (
       <NamedDropdown
-        triggerText={drivenText(isMixed ? "Mixed" : optionLabelFor(field, value), isMixed ? undefined : drivenPresetId, presets)}
+        triggerText={drivenText(
+          isMixed ? "Mixed" : optionLabelFor(field, value),
+          isMixed ? undefined : drivenPresetId,
+          presets,
+          field.id,
+        )}
         isMixed={isMixed}
         secondary={secondary}
         rows={options.map((option) => ({
@@ -951,7 +968,12 @@ export function DenseControl({
           }}
           onChange={(e) => onChange(e.target.checked)}
         />
-        {drivenText(isMixed ? "mixed" : value === true ? "on" : "off", isMixed ? undefined : drivenPresetId, presets)}
+        {drivenText(
+          isMixed ? "mixed" : value === true ? "on" : "off",
+          isMixed ? undefined : drivenPresetId,
+          presets,
+          field.id,
+        )}
       </label>
     );
   }
@@ -972,6 +994,7 @@ export function DenseControl({
             isMixed ? "Mixed" : `${value ?? field.defaultValue}${field.unit ?? ""}`,
             isMixed ? undefined : drivenPresetId,
             presets,
+            field.id,
           )}
           isMixed={isMixed}
           secondary={secondary}

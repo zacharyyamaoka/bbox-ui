@@ -6,7 +6,13 @@
  * is how this repo spent six judge rounds discovering that six copies of one
  * model give four different answers. There is one copy, and two consumers.
  */
-export { readFieldRow, type FieldRowModel, type Subject } from "./fieldModel";
+export {
+  readFieldRow,
+  presetForField,
+  presetLabelForField,
+  type FieldRowModel,
+  type Subject,
+} from "./fieldModel";
 export {
   classifyField,
   matchesFilter,

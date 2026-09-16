@@ -7,7 +7,7 @@ import {
   type FieldValue,
 } from "@bbox-ui/schema";
 import { FieldTraceRow } from "../FieldTraceRow";
-import { readFieldRow } from "../fieldModel";
+import { presetLabelForField, readFieldRow } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
 /**
@@ -148,7 +148,9 @@ function FieldSummaryRow({
         : "default";
 
   const presetLabel =
-    trace?.winner === "preset" ? presets.find((p) => p.id === trace.winningPresetId)?.label ?? trace.winningPresetId : undefined;
+    trace?.winner === "preset"
+      ? presetLabelForField(presets, trace.winningPresetId, field.id)
+      : undefined;
 
   const resolvedForDisplay = trace ? trace.resolved : (field.defaultValue as FieldValue);
   const valueText = isMixed
