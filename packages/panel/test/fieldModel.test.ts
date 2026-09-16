@@ -249,16 +249,19 @@ describe("readFieldRow — the ↺ reset", () => {
 });
 
 /**
- * `presetFamilyFor` backs the `/create` sidebar's Presets quick-switch
- * (bbox-ui apps/docs `workbench.tsx`/`bench-sidebar.tsx`, 2026-09-15). These
- * cases name the two concrete failures a Codex judge round found in that
- * feature's first pass, before this helper existed to make them
- * structurally unreachable: a picker wired to a selector absent from the
- * subject's own fields (silent no-op onChange), and a picker that combined
- * TWO disjoint preset families into one control (writing one family's id
- * into the other's field).
+ * `presetFamilyFor` was written for the `/create` sidebar's ORIGINAL
+ * field-ladder quick-switch (bbox-ui apps/docs `workbench.tsx`/
+ * `bench-sidebar.tsx`, 2026-09-15) — since replaced by the richer
+ * "Scenarios" concept (`packages/panel/src/scenario.ts`), so nothing calls
+ * this today (see this function's own doc in `fieldModel.ts`). These cases
+ * still name the two concrete failures a Codex judge round found in that
+ * earlier feature's first pass: a picker wired to a selector absent from
+ * the subject's own fields (silent no-op onChange), and a picker that
+ * combined TWO disjoint preset families into one control (writing one
+ * family's id into the other's field) — real invariants any future caller
+ * of this function still needs held.
  */
-describe("presetFamilyFor — the /create sidebar's Presets quick-switch", () => {
+describe("presetFamilyFor — narrowing to one selector's own preset family", () => {
   const VIEW: FieldSpec = {
     id: "view",
     label: "View",

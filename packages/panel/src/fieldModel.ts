@@ -136,11 +136,19 @@ function agreeing<T>(list: T[], key: (item: T) => unknown): T | null {
  * picker would combine the second family's option labels into the first
  * family's control and write its id into the first family's field the
  * moment such a component existed — a concrete failure a 2026-09-15 Codex
- * review named on the `/create` sidebar's Presets quick-switch, even
- * though no component in this registry uses two families yet. Returning
- * `null` when no field matches (rather than a field paired with presets it
- * cannot actually apply) is what lets a caller hide its control instead of
- * wiring an onChange that silently does nothing.
+ * review named on an earlier version of the `/create` sidebar's quick-
+ * switch, even though no component in this registry uses two families yet.
+ * Returning `null` when no field matches (rather than a field paired with
+ * presets it cannot actually apply) is what lets a caller hide its control
+ * instead of wiring an onChange that silently does nothing.
+ *
+ * That sidebar control has SINCE been replaced by a richer "Scenarios"
+ * concept (`packages/panel/src/scenario.ts`) that sets a whole bench
+ * rather than one field, so nothing in `apps/docs` calls this function
+ * today. It stays exported — still real, tested, `PresetSpec`-cascade
+ * infra — for any future caller that needs "which field does this
+ * component's preset family govern," e.g. a field row inside the Inspector
+ * itself.
  */
 export function presetFamilyFor(
   fields: FieldSpec[],
