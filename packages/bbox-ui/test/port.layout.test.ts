@@ -9,14 +9,12 @@ import {
   PORT_SECONDARY_SLOT_GAP_PX,
   PORT_TEXT_LAYOUTS,
   SECONDARY_SLOT_LAYOUTS,
-  defaultPortLabelLift,
   defaultSecondarySlotLayout,
   inwardTextLayout,
   isOffsetTextLayout,
   portAnchor,
   portDotPlacement,
   originFlexDirection,
-  portLabelLift,
   portLabelOut,
   slotPlacementStyle,
   SLOT_ALIGNS,
@@ -114,93 +112,28 @@ describe("port text layouts", () => {
     expect(portLabelOut("leftOffset", dot)).toBe(portLabelOut("left", dot));
   });
 
-  it("an -Offset layout lifts the label's bottom edge clear of the dot's PAINTED ring; every other layout lifts nothing", () => {
-    // sm/md/lg is Port's whole real diameter ladder — the "xl" SIZE rung
-    // pairs the same `lg` dot with bigger text (port.presets.ts's own WHY).
-    for (const size of ["sm", "md", "lg"] as const) {
-      const diameter = PORT_DIAMETERS[size];
-      const dot: PortDotBox = { w: diameter, h: diameter };
-      // Measured from the dot's CENTRE (where the wire runs) out past the
-      // ring's painted edge, plus the one shared label gap.
-      const expected = diameter / 2 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
-      expect(portLabelLift("rightOffset", dot)).toBe(expected);
-      expect(portLabelLift("leftOffset", dot)).toBe(expected);
-      for (const layout of ["top", "bot", "right", "left"] as const) {
-        expect(portLabelLift(layout, dot)).toBe(0);
-      }
-    }
-  });
-
-  it("the lift GROWS with the dot, so a big port clears its own ring as well as a small one", () => {
-    const small: PortDotBox = { w: PORT_DIAMETERS.sm, h: PORT_DIAMETERS.sm };
-    const large: PortDotBox = { w: PORT_DIAMETERS.lg, h: PORT_DIAMETERS.lg };
-    expect(portLabelLift("rightOffset", large)).toBeGreaterThan(portLabelLift("rightOffset", small));
-  });
-
-  /** Zach, 2026-09-15: "In expert mode please expose the offset distance as
-   *  a parameter you can tune." */
-  it("a tuned labelOffset REPLACES the computed lift outright, so the field's number is the on-screen distance", () => {
-    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
-    expect(portLabelLift("rightOffset", dot, 40)).toBe(40);
-    expect(portLabelLift("leftOffset", dot, 0)).toBe(0);
-    // Not a delta on top of the default — 40 means 40, not 19 + 40.
-    expect(portLabelLift("rightOffset", dot, 40)).not.toBe(defaultPortLabelLift(dot) + 40);
-  });
-
-  it("a tuned labelOffset is IGNORED by a layout that has no lift, so a stale value cannot ghost-lift a plain label", () => {
-    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
-    for (const layout of ["top", "bot", "right", "left"] as const) {
-      expect(portLabelLift(layout, dot, 40)).toBe(0);
-    }
-  });
-
-  it("omitting labelOffset (or passing a non-finite one) falls back to the computed default", () => {
-    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
-    const expected = defaultPortLabelLift(dot);
-    expect(portLabelLift("rightOffset", dot)).toBe(expected);
-    expect(portLabelLift("rightOffset", dot, Number.NaN)).toBe(expected);
-  });
-
   /**
-   * `portLabelPlacement` is now a THIN WRAPPER over `slotPlacementStyle`,
-   * not a second implementation. That matters: the adapters and blockFace
-   * all still call it, and while it computed its own dot-based lift it
-   * disagreed with what `LabeledPort` rendered for the same port — 22px vs
-   * 35.5px at `xl`, the same port drawn two ways in two renderers. One
-   * model, one answer (adversarial judge, 2026-09-15).
+   * These replaced four tests of the old DOT-based lift, deleted with the
+   * function itself. That lift derived a distance from the dot's size and
+   * the label's height; the align model needs neither, so the property
+   * worth pinning changed shape entirely.
    */
-  it("delegates to the unified model, so a host adapter and LabeledPort agree on the same port", () => {
-    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
-    for (const layout of PORT_TEXT_LAYOUTS) {
-      const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
-      expect(portLabelPlacement(layout, dot), layout).toEqual(
-        slotPlacementStyle(
-          { origin: preset.origin, align: preset.align, offsetX: 0, offsetY: preset.offsetY },
-          dot,
-          PORT_LABEL_GAP,
-        ),
-      );
-    }
-  });
-
-  /**
-   * The guarantee is now STRUCTURAL, not arithmetic: a lifted label pins
-   * its own BOTTOM edge to the reference line, so it clears the wire at
-   * any size without anything recomputing. The previous version derived
-   * the lift from the label's height — a number the component cannot
-   * actually know (Zach: "We defintily don't want to kinda be dynamically
-   * calculating the x/y offset if the slot length changes").
-   */
-  it("a lifted layout pins the slot's BOTTOM edge, so the lift needs no height at all", () => {
-    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+  it("a lifted layout is expressed as a reference EDGE plus a static gap — no derived distance", () => {
     for (const layout of ["rightOffset", "leftOffset"] as const) {
-      expect(TEXT_LAYOUT_AS_PLACEMENT[layout].align).toBe("end");
-      expect(portLabelPlacement(layout, dot).transform).toBe(
-        `translate(0px, calc(-100% + ${-PORT_LABEL_GAP}px))`,
-      );
+      const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
+      expect(preset.align).toBe("end");
+      expect(preset.offsetY).toBe(-PORT_LABEL_GAP);
     }
-    // …and a plain layout still centres, lifting nothing.
-    expect(portLabelPlacement("right", dot).transform).toBe("translate(0px, calc(-50% + 0px))");
+    for (const layout of ["top", "bot", "right", "left"] as const) {
+      expect(TEXT_LAYOUT_AS_PLACEMENT[layout].align).toBe("center");
+      expect(TEXT_LAYOUT_AS_PLACEMENT[layout].offsetY).toBe(0);
+    }
+  });
+
+  it("isOffsetTextLayout is DERIVED from that table, so the two can never disagree", () => {
+    for (const layout of PORT_TEXT_LAYOUTS) {
+      expect(isOffsetTextLayout(layout), layout).toBe(TEXT_LAYOUT_AS_PLACEMENT[layout].align === "end");
+    }
   });
 });
 

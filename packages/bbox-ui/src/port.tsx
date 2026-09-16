@@ -24,15 +24,12 @@ import {
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
-  defaultPortLabelLift,
   slotPlacementStyle,
   SECONDARY_LAYOUT_AS_ORIGIN,
   TEXT_LAYOUT_AS_PLACEMENT,
   defaultSecondarySlotLayout,
   inwardTextLayout,
-  isOffsetTextLayout,
   originFlexDirection,
-  portLabelLift,
   portLabelPlacement,
   type BlockSide,
   type PortDirection,
@@ -187,7 +184,8 @@ export function portResolutionSubject(props: Record<string, unknown>): Record<st
  *     single-line `CodeField`, positioned by `textLayout`
  *     (`./port.layout.ts`'s six-member `PortTextLayout`, auto-defaulting
  *     via `inwardTextLayout(edge)`), lifted clear of a trace wire by
- *     `portLabelLift` when the layout is one of the two Offset members.
+ *     its preset's `align: "end"` when the layout is one of the two Offset
+ *     members — see `SlotAlign` (port.layout.ts).
  *     A host owning its own slot model passes `labelSlot` instead and
  *     the built-in field steps aside entirely.
  *   - The SECONDARY slot — generic `ReactNode` hugging one corner of the
@@ -889,7 +887,7 @@ export function LabeledPort({
   // own doc for why. The label goes out of flow, placed by the same
   // `portLabelPlacement` geometry every wall surface already uses.
   // The label's lift for an "Offset" layout, 0 otherwise — see
-  // `portLabelLift`'s own WHY (port.layout.ts). Both branches below need
+  // `SlotAlign`'s own WHY (port.layout.ts). Both branches below need
   // it, so it is resolved once against the SAME dot box either would use.
   // Which corner the secondary slot hugs — the AUTO default is the side
   // opposite wherever the label is flowing. Resolved HERE now that the
@@ -906,7 +904,7 @@ export function LabeledPort({
   const textLayoutPreset = TEXT_LAYOUT_AS_PLACEMENT[resolvedTextLayout];
   // The lifted default is computed from the LIVE text size, never frozen:
   // a lift correct at `md` puts an `xl` label's bottom edge back below the
-  // centre line, with the wire cutting through it (`defaultLiftOffsetY`).
+  // centre line, with the wire cutting through it (see `SlotAlign`).
   const labelPlacement: SlotPlacement = {
     origin: labelOrigin ?? textLayoutPreset.origin,
     align: labelAlign ?? textLayoutPreset.align,

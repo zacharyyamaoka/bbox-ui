@@ -134,63 +134,20 @@ export function originFlexDirection(
 }
 
 
-/** True for the two label positions that LIFT the label clear of the
- * trace wire (`portLabelLift` below). Kept as a named predicate rather
- * than an inline `=== "rightOffset" || === "leftOffset"` because three
- * separate geometry paths (the CSS placement, the measured box, and
- * `Port`'s own flex row) each have to ask the same question and must
- * never drift apart on the answer. */
-export function isOffsetTextLayout(layout: PortTextLayout): boolean {
-  return layout === "rightOffset" || layout === "leftOffset";
-}
-
 /**
- * How far an "Offset" label's BOTTOM edge sits ABOVE the dot's vertical
- * centre. Zero for every other layout.
+ * True for the two legacy label positions that LIFT the label clear of a
+ * trace wire.
  *
- * WHY the offset is a Y LIFT and not extra X distance (Zach, 2026-09-15,
- * correcting the first implementation — "they should be offset up in the
- * y direction right now you are offseting in the x direction"): a trace
- * wire leaves the dot horizontally, along the dot's own centre line, so
- * a plain `right` label has the wire running straight THROUGH it. Pushing
- * the label further right does nothing about that — the wire just travels
- * further before hitting it. Lifting the label above the centre line is
- * what actually clears the wire, which is the entire reason the position
- * exists. That is also why the lift is measured from the centre (where
- * the wire is) rather than from the label's plain resting place.
- *
- * Scales with the dot: clearing the PAINTED ring (`PORT_RING_OVERHANG_PX`,
- * box-shadow drawn outside the layout box) by `PORT_LABEL_GAP` keeps an
- * `xl` port reading the same as an `sm` one, where a fixed lift would have
- * the biggest dot's ring crowding the label.
- *
- * `overridePx` is the author's own tuned distance (Port's `labelOffset`
- * field, Expert tier — Zach, 2026-09-15: "expose the offset distance as a
- * parameter you can tune"). It replaces the computed lift outright rather
- * than adding to it, so the number in the panel IS the number of pixels
- * between the wire and the label's bottom edge — a delta would make the
- * control's value unreadable off the screen. It is ignored for a
- * non-offset layout: there is no lift there to tune, and silently lifting
- * a plain `right` label because a stale field value survived a layout
- * change is exactly the kind of ghost this codebase keeps designing out.
+ * DERIVED from `TEXT_LAYOUT_AS_PLACEMENT`, not a second hand-written list:
+ * "which members are lifted" is now expressed by their `align: "end"`, and
+ * a predicate that answered it independently would be one more spelling of
+ * one fact — the shape that cost this file two rounds of drift already.
  */
-export function portLabelLift(
-  layout: PortTextLayout,
-  dot: PortDotBox,
-  overridePx?: number,
-): number {
-  if (!isOffsetTextLayout(layout)) return 0;
-  if (typeof overridePx === "number" && Number.isFinite(overridePx)) return overridePx;
-  return defaultPortLabelLift(dot);
+export function isOffsetTextLayout(layout: PortTextLayout): boolean {
+  return TEXT_LAYOUT_AS_PLACEMENT[layout].align === "end";
 }
 
-/** The lift an Offset label takes when nobody has tuned `labelOffset` —
- *  exported so the panel can SHOW that computed number as the field's
- *  real resolved value (`portResolutionSubject`, port.tsx) instead of the
- *  static `defaultValue` its FieldSpec is forced to declare. */
-export function defaultPortLabelLift(dot: PortDotBox): number {
-  return dot.h / 2 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
-}
+
 
 export type PortDirection = "input" | "output";
 export const PORT_DIRECTIONS: PortDirection[] = ["input", "output"];
@@ -489,7 +446,7 @@ export function portLabelOut(layout: PortTextLayout, dot: PortDotBox): number {
  * flex-flowed one agree to the pixel.
  *
  * An "Offset" layout keeps that same along-axis distance and instead
- * LIFTS the label clear of the trace wire — see `portLabelLift`'s own WHY.
+ * LIFTS the label clear of the trace wire — see `SlotAlign`'s own WHY.
  * It anchors by the label's BOTTOM edge (`bottom`, no `translateY`), where
  * the plain layouts anchor by their centre, because "clear of the wire" is
  * a statement about the bottom edge and must not drift with the label's
@@ -641,7 +598,7 @@ export interface SlotPlacement {
  * thing in the next. The cost is that a lift computed for one label
  * height is only tight for that height — which is why the lifted default
  * is RESOLVED from the live text size rather than frozen into a preset
- * literal (see `defaultLiftOffsetY`).
+ * literal (see `SlotAlign`'s own WHY).
  */
 export function slotPlacementStyle(
   placement: SlotPlacement,

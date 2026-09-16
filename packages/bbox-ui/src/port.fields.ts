@@ -223,7 +223,7 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     // follows against `inwardTextLayout(edge)` — and, like it, the panel
     // shows the REAL resolved number via `portResolutionSubject`, so a
     // Port at another size reads honestly instead of trusting this literal.
-    // The value `defaultLiftOffsetY` computes for a lifted label at Port's
+    // The static gap a lifted label carries in `TEXT_LAYOUT_AS_PLACEMENT`, at
     // default text size — negative, because the lift is upward. The panel
     // shows the REAL resolved number via `portResolutionSubject`, which is
     // what keeps it honest at any other text size.

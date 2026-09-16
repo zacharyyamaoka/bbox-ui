@@ -36,7 +36,7 @@ import {
 // gave them their real geometry: an Offset label is LIFTED clear of the
 // dot's centre line, where a trace wire runs, rather than pushed further
 // out along it. `portLabelBox` below therefore carries a distinct case per
-// Offset member — same `out`, different `y` — see `portLabelLift`'s WHY.
+// Offset member — same `out`, different `y` — see `SlotAlign`'s WHY.
 import {
   PORT_LABEL_GAP,
   TEXT_LAYOUT_AS_PLACEMENT,
