@@ -121,7 +121,7 @@ const FILL_STYLE_ALPHA: Record<PillFillStyle, number> = { none: 0, semi: 0.35, s
 // nothing — same class of defect as `PillLineStyle` below. A `Record`
 // over the real union makes a new member a compile error until someone
 // states what it resolves to.
-const PAINT_TOKEN_VALUE: Record<PaintToken, string> = {
+export const PAINT_TOKEN_VALUE: Record<PaintToken, string> = {
   foreground: "var(--foreground)",
   "muted-foreground": "var(--muted-foreground)",
   primary: paintVar("primary"),
@@ -136,8 +136,10 @@ const PAINT_TOKEN_VALUE: Record<PaintToken, string> = {
 /** A resolved `PaintToken` → a real CSS colour, honouring `alpha` (0-1)
  * via `color-mix` rather than the element's own `opacity` (which would
  * also fade the label text and border together). `"transparent"` is a
- * real token (§4.3), never treated as "no value". */
-function paintColor(token: PaintToken, alpha: number): string {
+ * real token (§4.3), never treated as "no value". Exported so `trace.tsx`
+ * can reuse the SAME token→CSS mapping rather than a second copy that
+ * could silently drift from this one. */
+export function paintColor(token: PaintToken, alpha: number): string {
   const value = PAINT_TOKEN_VALUE[token];
   if (value === "transparent" || alpha <= 0) return "transparent";
   return alpha >= 1 ? value : `color-mix(in oklch, ${value} ${Math.round(alpha * 100)}%, transparent)`;
