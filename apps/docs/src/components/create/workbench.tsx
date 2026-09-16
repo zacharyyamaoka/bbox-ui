@@ -38,8 +38,6 @@ import {
   subtreeIds,
   topLevel,
   randomValue,
-  readFieldRow,
-  presetFamilyFor,
   sharedFields,
   EXCLUDED_SHOWN,
   INITIAL_BENCHES,
@@ -47,8 +45,11 @@ import {
   MIXED_BENCH,
   portEdgesArrangement,
   REGISTRY,
+  SCENARIOS,
+  instantiateScenario,
   type ComponentEntry,
   type Instance,
+  type Scenario,
 } from "@bbox-ui/panel";
 import { SidebarProvider } from "@/registry/new-york-v4/ui/sidebar";
 import { BenchSidebar } from "./bench-sidebar";
@@ -167,6 +168,12 @@ export function Workbench() {
     Object.fromEntries(Object.entries(INITIAL_BENCHES).map(([name, list]) => [name, new Set(topLevel(list).map((i) => i.id))])),
   );
   const [positions, setPositions] = useState<Record<string, CanvasPosition>>({});
+  // Which Scenario (scenario.ts) is currently loaded, per bench name — keyed
+  // like `benches`/`selectedIdsByBench` above, so switching Component and
+  // back remembers what was last picked. Absent for a bench that was never
+  // touched (every bench's Scenario opens on `activeScenarios[0]`, "Default",
+  // without needing an entry here — see `activeScenarioId` below).
+  const [scenarioIdByBench, setScenarioIdByBench] = useState<Record<string, string>>({});
   // In-place text editing (docs/TEXTBOX-EDITING-SPEC.md §3). The page owns
   // both: which instance is editing, AND the value it held the moment
   // editing began — `onChange` writes through on every keystroke (so a
@@ -209,16 +216,14 @@ export function Workbench() {
   const panelFields: FieldSpec[] = single ? single.fields : (shared?.fields ?? []);
   const panelPresets = single ? single.presets : [];
   const panelToSubject = single ? single.toSubject : undefined;
-  // The sidebar's Storybook-style "Presets" quick-switch (bench-sidebar.tsx)
-  // reads and writes through the SAME selector field the Inspector's own row
-  // for it already does — never a second independent value. `presetFamilyFor`
-  // narrows to ONE selector's own presets (never the union of every family a
-  // component might carry — `assertDisjointPresets` permits more than one, as
-  // long as they govern disjoint fields) and returns null when no field on
-  // the selection actually backs it, so there is nothing here to wire an
-  // onChange against that would silently no-op.
-  const presetFamily = presetFamilyFor(panelFields, panelPresets);
-  const presetRow = presetFamily ? readFieldRow(presetFamily.field, selected, presetFamily.presets, panelToSubject) : null;
+  // The sidebar's "Scenarios" quick-switch (bench-sidebar.tsx, 2026-09-15):
+  // BENCH-level, not selection-level — it replaces `benches[activeName]`
+  // outright, so it is keyed off `activeName` (like the Component picker
+  // right above it) rather than off whatever happens to be selected. See
+  // scenario.ts's own module doc for why this is a new, separate concept
+  // from the field-cascade `PresetSpec` the Inspector's own rows still use.
+  const activeScenarios: Scenario[] = SCENARIOS[activeName] ?? [];
+  const activeScenarioId = scenarioIdByBench[activeName] ?? activeScenarios[0]?.id;
   // WHY the header names the selected TYPE and not the bench: a focused
   // bench used to hold one type only, so the two were the same word. A
   // Stack bench now holds Ports and Pills as members, and the inspector
@@ -278,6 +283,23 @@ export function Workbench() {
   function changeActiveBench(name: string) {
     if (editingId !== null) endEditing();
     setActiveName(name);
+  }
+  /**
+   * Loads a Scenario onto the active bench: REPLACES `benches[activeName]`
+   * outright (not a merge, not an append — "load this example" the way
+   * clicking a Storybook story replaces the canvas), selects every new root,
+   * and remembers the choice per bench name. Silently a no-op for an id
+   * `activeScenarios` doesn't have — the picker can only ever offer real ids.
+   */
+  function applyScenario(scenarioId: string) {
+    const scenario = activeScenarios.find((s) => s.id === scenarioId);
+    if (!scenario) return;
+    if (editingId !== null) endEditing();
+    const made = instantiateScenario(scenario, uid.current);
+    uid.current += made.length;
+    setBenches((prev) => ({ ...prev, [activeName]: made }));
+    setSelectedIdsByBench((prev) => ({ ...prev, [activeName]: new Set(made.map((i) => i.id)) }));
+    setScenarioIdByBench((prev) => ({ ...prev, [activeName]: scenarioId }));
   }
   function toggleSelected(id: string) {
     const next = new Set(selectedIds);
@@ -742,12 +764,9 @@ export function Workbench() {
         onRemoveLast={removeLastInstance}
         onRandomize={randomizeInstances}
         entryFor={entryFor}
-        presets={presetFamily?.presets ?? []}
-        presetValue={presetRow?.collapsedValue as string | undefined}
-        presetMixed={presetRow?.isMixed ?? false}
-        onPresetChange={(presetId) => {
-          if (presetFamily) applyToSelected(presetFamily.field.id, presetId);
-        }}
+        scenarios={activeScenarios}
+        activeScenarioId={activeScenarioId}
+        onScenarioChange={applyScenario}
       />
       <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

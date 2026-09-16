@@ -1,7 +1,6 @@
 "use client";
 
-import type { PresetSpec } from "@bbox-ui/schema";
-import type { ComponentEntry, Instance, InstanceNode } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance, InstanceNode, Scenario } from "@bbox-ui/panel";
 import { MIXED_BENCH, shouldSuppressNativeFocusShift } from "@bbox-ui/panel";
 import type { NavigatorVariant } from "./navigator";
 import {
@@ -20,19 +19,16 @@ interface BenchSidebarProps {
   activeName: string;
   onActiveNameChange: (name: string) => void;
   isMixed: boolean;
-  /** The active selection's own preset family (Storybook's "saved states" —
-   *  Port's size rungs, Block's view, Pill/Bar's state). Empty when the
-   *  component has none (Glyph, Region today) or the selection spans more
-   *  than one type — see bench-sidebar's own render for the "if there are
-   *  presets available" gate. */
-  presets: PresetSpec[];
-  /** The resolved preset id the selection currently agrees on, or
-   *  `undefined` when nothing is selected or the selection disagrees. */
-  presetValue: string | undefined;
-  /** True when selected instances disagree about which preset is active —
-   *  same "Mixed" concept `readFieldRow` already reports for any field. */
-  presetMixed: boolean;
-  onPresetChange: (presetId: string) => void;
+  /** Stock, curated examples for the ACTIVE component (`activeName`) — full
+   *  bench layouts, not one field's alternatives. Empty for a component with
+   *  none authored yet (scenario.ts's own module doc says which and why);
+   *  the sidebar hides the whole control in that case. */
+  scenarios: Scenario[];
+  /** Which scenario is currently loaded, or `undefined` before anything in
+   *  `scenarios` has ever been picked (the picker then shows its first
+   *  option, "Default", without this needing to name it explicitly). */
+  activeScenarioId: string | undefined;
+  onScenarioChange: (scenarioId: string) => void;
   instances: Instance[];
   tree: InstanceNode[];
   selectedIds: Set<string>;
@@ -102,39 +98,34 @@ export function BenchSidebar(p: BenchSidebarProps) {
               Inspector: Zach, 2026-09-15, looking at Storybook's own
               Component → saved-state sidebar pairing — "can you please add
               another drop down menu below that for each component, if there
-              are presets available". It writes the exact same selector field
-              (Port's `size`, Block's `view`, Pill/Bar's `state`) through the
-              exact same `applyToSelected` the Inspector's own row for that
-              field already uses — see workbench.tsx's `presetFamily`/
-              `presetRow`. This is deliberately NOT a second, independent
-              picker: the 2026-09-12 removal of the Inspector's old violet
-              PRESET row (sections/build-sections.tsx's own WHY) ruled that a
-              preset's selector IS a field, one control, one writer. This is
-              that same control, relocated to the top of the sidebar for
-              Storybook-style visibility; the Inspector's row for it (with
-              its ↺ reset and provenance trace) is unchanged and stays in
-              sync automatically. Hidden whenever the active selection's
-              component has no preset family (Glyph, Region today) or spans
-              more than one type — `p.presets` is already `[]` in both cases. */}
-          {p.presets.length > 0 && (
+              are presets available". The FIRST version of this control
+              wrote one selector field through the Inspector's own field
+              cascade (Port's `size`, Block's `view`) — real, but "not
+              merely small, med, large": Zach then asked for something with
+              "full control basically over the entire thing... any number
+              of instances, and any value on the instances," and offered
+              renaming it "Scenarios" or "Examples". This is that broader
+              version: each option REPLACES the whole bench with a curated,
+              named, arbitrary-length list of instances (workbench.tsx's
+              `applyScenario` — see scenario.ts's own module doc for the
+              full "why a new concept, not a stretched PresetSpec"
+              reasoning). Hidden whenever the active component has no
+              scenarios authored yet — `p.scenarios` is `[]` for anything
+              not in `SCENARIOS` (scenario.ts). */}
+          {p.scenarios.length > 0 && (
             <>
-              <SidebarGroupLabel className="mt-3">Presets</SidebarGroupLabel>
+              <SidebarGroupLabel className="mt-3">Scenarios</SidebarGroupLabel>
               <SidebarGroupContent className="px-2">
                 <select
-                  data-slot="preset-picker"
-                  aria-label="Presets"
-                  value={p.presetMixed ? "" : (p.presetValue ?? "")}
-                  onChange={(e) => p.onPresetChange(e.target.value)}
+                  data-slot="scenario-picker"
+                  aria-label="Scenarios"
+                  value={p.activeScenarioId ?? p.scenarios[0]!.id}
+                  onChange={(e) => p.onScenarioChange(e.target.value)}
                   className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
                 >
-                  {(p.presetMixed || p.presetValue === undefined) && (
-                    <option value="" disabled>
-                      {p.presetMixed ? "Mixed" : "—"}
-                    </option>
-                  )}
-                  {p.presets.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
+                  {p.scenarios.map((scenario) => (
+                    <option key={scenario.id} value={scenario.id}>
+                      {scenario.label}
                     </option>
                   ))}
                 </select>

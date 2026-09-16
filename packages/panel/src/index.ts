@@ -38,6 +38,7 @@ export {
   type Instance,
 } from "./bench";
 export { groupRows, type FieldRow } from "./fieldGroups";
+export { SCENARIOS, instantiateScenario, type Scenario, type ScenarioInstanceSpec } from "./scenario";
 export {
   isSecondPressToEdit,
   claimInstancePointerDown,
