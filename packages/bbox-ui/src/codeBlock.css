@@ -169,10 +169,17 @@
 }
 
 /* The line-number gutter (`lineNumbers`): SystemSketch's own quiet gutter —
-   no fill, a hairline on its right, numbers in the faint ink, room for
-   three digits before the content's own padding starts. */
+   a hairline on its right, numbers in the faint ink, room for three digits
+   before the content's own padding starts.
+   WHY it needs a REAL (opaque) background, not `transparent`: CodeMirror
+   pins the gutter with its own `position: sticky; left: 0` so it stays put
+   while `.cm-content`'s lines scroll underneath it horizontally
+   (`data-overflow="scroll"`/`"wrap"` above). A transparent gutter lets that
+   scrolled text show through behind the numbers as it passes — matching
+   the block's own surface colour, not the page's, keeps it opaque without
+   drawing a visibly different panel. */
 .bbox-code-block .cm-gutters {
-  background: transparent;
+  background: var(--color-card);
   color: var(--color-muted-foreground);
   border-right: 1px solid var(--color-border);
   min-width: 36px;
