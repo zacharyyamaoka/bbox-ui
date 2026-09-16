@@ -149,18 +149,38 @@
   outline: none;
 }
 
+/*
+ * WHY `!important` on both white-space rules below, not just higher
+ * specificity: CodeMirror's OWN base theme sets `.ͼ1 .cm-content {
+ * white-space: pre }` — two classes, specificity (0,2,0), IDENTICAL to a
+ * bare `.bbox-code-block .cm-content` — so which one wins was never
+ * reliable, it depended on which stylesheet's rule landed later in
+ * document order. That order isn't stable: reconfiguring the `editable`
+ * compartment (this component's `editing` prop) measurably flips it —
+ * verified live, `.bbox-code-block .cm-content` won at rest (`nowrap`)
+ * and CodeMirror's own rule won while editing (`pre`) on the SAME
+ * persistent EditorView instance, no remount. That would be a cosmetic
+ * flicker if the two values agreed, but `nowrap` COLLAPSES leading
+ * whitespace (same rule as `normal`, just without wrapping) while `pre`
+ * preserves it byte-for-byte — so indentation visibly vanished every time
+ * CodeMirror's rule happened to lose, i.e. whenever the block was not
+ * currently being edited. `nowrap` was simply the wrong value regardless
+ * of which rule won.
+ */
 .bbox-code-block .cm-content {
   padding: 0;
   caret-color: var(--color-primary);
-  white-space: nowrap;
+  white-space: pre !important;
 }
 
-/* WHY this rule exists at all: CodeMirror's `lineWrapping` sets
-   `white-space: pre-wrap` through its own `.ͼ1 .cm-lineWrapping` rule —
-   specificity (0,2,0), the SAME as the `nowrap` above, so which wins would
-   otherwise depend on stylesheet order. Three classes settles it. */
+/* CodeMirror's `lineWrapping` sets `white-space: pre-wrap` through its own
+   `.ͼ1 .cm-lineWrapping` rule, specificity (0,2,0). Now that the base rule
+   above is `!important`, this override needs to be too (a non-`!important`
+   declaration never beats an `!important` one regardless of specificity),
+   and its higher specificity (0,3,0) keeps it winning against both the
+   base rule above and CodeMirror's own `!important`-free rule. */
 .bbox-code-block .cm-content.cm-lineWrapping {
-  white-space: pre-wrap;
+  white-space: pre-wrap !important;
   overflow-wrap: anywhere;
 }
 
