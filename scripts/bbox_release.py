@@ -433,7 +433,14 @@ def ensure_preview_server(state_home: Path) -> str:
     # (Stable's static export, the deployed Cloudflare site) by checking this
     # at the top of the module — it's only ever set here, for the one process
     # that actually is the local dev server.
-    env = {**os.environ, "NEXT_PUBLIC_BBOXUI_CHANNEL": "preview"}
+    # NEXT_PUBLIC_BBOXUI_STABLE_PORT rides along so the badge polls and promotes
+    # against the Stable server that launch_bboxui.py actually started, not a
+    # hardcoded 5194 — same default, same env var name it reads.
+    env = {
+        **os.environ,
+        "NEXT_PUBLIC_BBOXUI_CHANNEL": "preview",
+        "NEXT_PUBLIC_BBOXUI_STABLE_PORT": os.environ.get("BBOXUI_STABLE_PORT", "5194"),
+    }
     pid = spawn_logged(
         [pnpm, "--filter", "@bbox-ui/docs", "exec", "next", "dev", "--port", str(PREVIEW_PORT)],
         cwd=PROJECT_ROOT,
