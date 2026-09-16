@@ -267,3 +267,61 @@ describe("presetArgs", () => {
     expect(trace.winner).toBe("override");
   });
 });
+
+describe("presetArgs — two ladders may legitimately share an id", () => {
+  // A preset's id MUST equal one legal value of its selector's field, so
+  // two selectors whose fields share a member share an id. LabeledPort is
+  // the live case: `textLayout` and `secondarySlotLayout` both carry
+  // `leftOffset` and `rightOffset`. Selecting on id alone returned
+  // whichever ladder came first in the array — silently the wrong one.
+  const LABEL_RIGHT_OFFSET: PresetSpec = {
+    id: "rightOffset",
+    label: "Right Offset",
+    selector: "textLayout",
+    governs: ["labelOrigin"],
+    values: { labelOrigin: "right" },
+  };
+  const SECONDARY_RIGHT_OFFSET: PresetSpec = {
+    id: "rightOffset",
+    label: "Right Offset",
+    selector: "secondarySlotLayout",
+    governs: ["secondaryOrigin"],
+    values: { secondaryOrigin: "right" },
+  };
+  const BOTH = [LABEL_RIGHT_OFFSET, SECONDARY_RIGHT_OFFSET];
+  const PLACEMENT_FIELDS: FieldSpec[] = [
+    { id: "textLayout", label: "Label Slot Location", kind: "segments", defaultValue: "right" },
+    { id: "secondarySlotLayout", label: "Secondary Slot", kind: "segments", defaultValue: "leftOffset" },
+    { id: "labelOrigin", label: "Label Origin", kind: "segments", defaultValue: "right" },
+    { id: "secondaryOrigin", label: "Secondary Origin", kind: "segments", defaultValue: "left" },
+  ];
+
+  it("REFUSES an ambiguous id instead of picking the first match", () => {
+    expect(() => presetArgs(PLACEMENT_FIELDS, BOTH, "rightOffset")).toThrow(
+      /ambiguous.*"textLayout" and "secondarySlotLayout".*4th argument/s,
+    );
+  });
+
+  it("the selector argument picks the intended ladder, and sets only ITS selector", () => {
+    const secondary = presetArgs(PLACEMENT_FIELDS, BOTH, "rightOffset", "secondarySlotLayout");
+    expect(secondary.secondarySlotLayout).toBe("rightOffset");
+    // The other ladder's selector keeps its own default — untouched.
+    expect(secondary.textLayout).toBe("right");
+
+    const label = presetArgs(PLACEMENT_FIELDS, BOTH, "rightOffset", "textLayout");
+    expect(label.textLayout).toBe("rightOffset");
+    expect(label.secondarySlotLayout).toBe("leftOffset");
+  });
+
+  it("an unambiguous id still needs no selector — the 4th argument is optional", () => {
+    expect(presetArgs(PLACEMENT_FIELDS, [LABEL_RIGHT_OFFSET], "rightOffset").textLayout).toBe(
+      "rightOffset",
+    );
+  });
+
+  it("a wrong selector reports what IS available, selector-qualified", () => {
+    expect(() => presetArgs(PLACEMENT_FIELDS, BOTH, "rightOffset", "size")).toThrow(
+      /no preset with id "rightOffset" on selector "size".*textLayout:rightOffset/s,
+    );
+  });
+});

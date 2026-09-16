@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertDisjointPresets,
   defaultArgs,
+  presetArgs,
   governedFieldIds,
   resolveField,
   toArgTypes,
@@ -639,5 +640,38 @@ describe("slot-placement presets — the schema layer can finally SEE what `??` 
     expect(declared("labelOrigin")).toBe(table.origin);
     expect(declared("labelAlign")).toBe(table.align);
     expect(declared("labelOffsetY")).toBe(table.offsetY);
+  });
+});
+
+describe("LABELED_PORT_PRESETS — the two placement ladders SHARE ids, by contract", () => {
+  // `PortTextLayout` and `SecondarySlotLayout` both carry `leftOffset` and
+  // `rightOffset`, and a preset's id must equal one legal value of its
+  // selector's field — so the union genuinely holds duplicate ids. That is
+  // legal (`assertDisjointPresets` governs FIELDS, not ids) but it makes
+  // any id-only lookup ambiguous, which is why `presetArgs` refuses one.
+  const SHARED = ["leftOffset", "rightOffset"];
+
+  it("the collision is real, not hypothetical", () => {
+    for (const id of SHARED) {
+      const selectors = LABELED_PORT_PRESETS.filter((p) => p.id === id).map((p) => p.selector);
+      expect(selectors.sort()).toEqual(["secondarySlotLayout", "textLayout"]);
+    }
+  });
+
+  it("presetArgs refuses a shared id, and honours the selector that resolves it", () => {
+    const fields = LABELED_PORT_FIELDS;
+    for (const id of SHARED) {
+      expect(() => presetArgs(fields, LABELED_PORT_PRESETS, id)).toThrow(/ambiguous/);
+      expect(presetArgs(fields, LABELED_PORT_PRESETS, id, "textLayout").textLayout).toBe(id);
+      expect(
+        presetArgs(fields, LABELED_PORT_PRESETS, id, "secondarySlotLayout").secondarySlotLayout,
+      ).toBe(id);
+    }
+  });
+
+  // The size ladder shares its ids with nothing, so it stays callable the
+  // short way — the 4th argument is for collisions, not ceremony.
+  it("the size rungs are unambiguous and need no selector", () => {
+    expect(presetArgs(LABELED_PORT_FIELDS, LABELED_PORT_PRESETS, "lg").size).toBe("lg");
   });
 });
