@@ -9,7 +9,7 @@
     "./completionMenu.css": "./src/completionMenu.css",
     "./layout": "./src/layout.ts",
     "./theme.css": "./src/theme.css",
-    "./codeBlock.css": "./src/codeBlock.css"
+    "./codeField.css": "./src/codeField.css"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -23,13 +23,6 @@
     "@bbox-ui/schema": "workspace:*",
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.8.1",
-    "@codemirror/lang-css": "^6.3.1",
-    "@codemirror/lang-html": "^6.4.12",
-    "@codemirror/lang-javascript": "^6.2.5",
-    "@codemirror/lang-json": "^6.0.2",
-    "@codemirror/lang-markdown": "^6.5.2",
-    "@codemirror/lang-python": "^6.2.1",
-    "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/language": "^6.11.3",
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.38.6",

@@ -62,39 +62,6 @@ slot.
 <Port state="wired" size="md" textLayout="right">image</Port>
 ```
 
-### Code block
-
-A CodeMirror document in a box — and the one-line **code field** Port's label
-slot mounts, which is the same component wearing `look="field"`. The two looks
-are a preset over the same fields (line numbers, lines, padding); nothing else
-differs.
-
-- **Look**: `block` (gutter, many lines, a surface's padding) · `field` (one
-  line, no gutter, an input's padding).
-- **Language**: `plaintext` · `python` · `javascript` · `typescript` · `json`
-  · `html` · `css` · `sql` · `markdown`.
-- **Size**: `sm` 12 / `md` 16 / `lg` 20 / `xl` 24, or `custom` + `sizePx`.
-- **Width**: `columns` in ch (0 fills the host). **Overflow** for a line
-  wider than the box: `clip` (field default) · `wrap` · `scroll` (block
-  default) · `grow` (the text decides the width) · `grow-truncated` (the
-  caret's line in full, every other line cut at `columns` with an ellipsis).
-- **Flatten**: one row per semantic unit — a port line whose default value
-  spans lines (Python's continuation rule, or `grammar.units`) shows its
-  inner newlines as `⏎` glyphs; the source is untouched and the gutter
-  counts units.
-- **Expand**: `expandable` shows a ⤢ corner button that only calls
-  `onExpand`; the larger view itself is the host's (the create page opens a
-  full-size block over the same value).
-- **Editing** is host-owned: at rest the block lets the host's drag/select
-  through; while editing it owns the pointer and carries the
-  `bbox-interactive` marker. Syntax colours come from `codeBlock.css`'s own
-  `tok-*` palette, painted off the kit's tokens.
-
-```tsx
-<CodeBlock value={code} onWrite={setCode} language="python" lineNumbers />
-<CodeBlock look="field" value="get_aruco: ArucoSrv" onWrite={setLabel} />
-```
-
 ### Block — Simple View
 
 Anatomy (the API vocabulary): **Container** (`Block`), **Header band**
@@ -366,8 +333,7 @@ npx shadcn@latest add zacharyyamaoka/bbox-ui/port       # or straight from GitHu
 `registry.json` follows the
 [shadcn registry schema](https://ui.shadcn.com/docs/registry/registry-json);
 `pnpm registry:build` (shadcn `build`) emits servable items to `public/r/`:
-`port`, `code-block`, `block`, `bbox-layout`, `block-node-reactflow`,
-`block-shape-tldraw`.
+`port`, `block`, `bbox-layout`, `block-node-reactflow`, `block-shape-tldraw`.
 
 Installed components ship `layout.ts` and `lib/utils.ts` as siblings, so they
 compile with no further wiring. Only `clsx` and `tailwind-merge` are runtime

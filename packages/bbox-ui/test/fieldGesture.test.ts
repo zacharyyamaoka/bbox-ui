@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FieldGesture } from "../src/fieldGesture";
 
-describe("FieldGesture — live mode (CodeBlock's only write policy)", () => {
+describe("FieldGesture — live mode (CodeField's only write policy)", () => {
   it("writes on every change and commits once on end", () => {
     const write = vi.fn();
     const begin = vi.fn();
@@ -36,36 +36,6 @@ describe("FieldGesture — live mode (CodeBlock's only write policy)", () => {
     gesture.change("same");
     expect(write).not.toHaveBeenCalled();
     expect(begin).not.toHaveBeenCalled();
-  });
-
-  // The host-owned-session exit (CodeBlock's `editing` flipping off): the
-  // host already has every keystroke, so the gesture ends WITHOUT `end` —
-  // an Escape that restored the store must not get the typed text written
-  // back over it by a commit-on-leave (fieldGesture.ts's own WHY).
-  it("abandon ends the gesture without firing end, and a later commit is a no-op", () => {
-    const write = vi.fn();
-    const end = vi.fn();
-    const gesture = new FieldGesture({ write, end }, "live");
-    gesture.focus("start");
-    gesture.change("start-zzz");
-    expect(write).toHaveBeenCalledWith("start-zzz"); // live: the host already saw it
-    gesture.abandon();
-    expect(gesture.isEditing).toBe(false);
-    expect(end).not.toHaveBeenCalled();
-    gesture.commit();
-    expect(end).not.toHaveBeenCalled();
-  });
-
-  it("abandon in exit mode drops the buffered value — an abandoned exit gesture is a cancel", () => {
-    const write = vi.fn();
-    const end = vi.fn();
-    const gesture = new FieldGesture({ write, end }, "exit");
-    gesture.focus("start");
-    gesture.change("start-zzz");
-    gesture.abandon();
-    expect(write).not.toHaveBeenCalled();
-    expect(end).not.toHaveBeenCalled();
-    expect(gesture.value).toBe("start");
   });
 
   it("commit is idempotent — calling it twice only ends the gesture once", () => {

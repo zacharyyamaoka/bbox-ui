@@ -2,7 +2,7 @@ import { history, insertBlankLine, undo, undoDepth } from "@codemirror/commands"
 import { Annotation, EditorState, StateEffect, Transaction } from "@codemirror/state";
 import { describe, expect, it, vi } from "vitest";
 
-import { externalSync, singleLineGuard } from "../src/codeBlockGuards";
+import { externalSync, singleLineGuard } from "../src/codeFieldGuards";
 
 describe("singleLineGuard — the transaction-filter guarantee (finding 3, round 1)", () => {
   it("strips a newline from a command-inserted transaction, not just typed/pasted text", () => {
@@ -239,7 +239,7 @@ describe("singleLineGuard — preserves annotations and effects (finding 3, roun
   });
 
   it("an update listener does not mistake a newline-bearing external sync for typing", () => {
-    // Mirrors CodeBlock's own update listener: `if (transactions carry
+    // Mirrors CodeField's own update listener: `if (transactions carry
     // externalSync, skip onWrite)`. Before the fix, the guard's rebuilt
     // transaction lost the annotation and this fired anyway.
     const onWrite = vi.fn();

@@ -1,0 +1,286 @@
+/*
+ * The code text box. Sized to sit where a plain `<input>` sat — a port row,
+ * an inspector field — so a board with nothing typed in code looks
+ * unchanged. Colours are bbox-ui's own tokens (see theme.css), so the field
+ * follows whatever theme the surrounding kit is painted with.
+ */
+
+.bbox-code-field {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-card);
+  color: var(--color-foreground);
+  cursor: text;
+  overflow: hidden;
+  /* The field's own default type size — unchanged from before this rule
+     existed (`.cm-scroller` used to hardcode the same 11px directly). Set
+     HERE instead so a host that wants a bigger field (Port's `textSize`
+     rung, port.tsx's `PortLabel`) can just set a bigger `font-size` on
+     this element via its own `style` prop; `.cm-scroller` below now
+     inherits rather than re-hardcoding it, which is the only way an
+     ancestor override could ever reach CodeMirror's own internal DOM. */
+  font-size: 11px;
+}
+
+.bbox-code-field[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.bbox-code-field:focus-within {
+  border-color: var(--color-primary);
+}
+
+/*
+ * CodeMirror parents its tooltips (the completion popup) onto whatever
+ * `tooltipParent`/`[data-tooltip-host]` names — document.body by default,
+ * NOT a descendant of `.bbox-code-field`, so this deliberately is not a
+ * `.bbox-code-field .cm-tooltip` descendant selector (it would never
+ * match). A host mounting the field inside its own stacked canvas content
+ * (a tldraw `HTMLContainer` shape, a React Flow node) can paint a LATER
+ * shape or node on top of an EARLIER one at any DOM depth; this is the
+ * floor that beats it regardless of what the host's own shapes use — the
+ * donor's own value, max signed 32-bit, "it needs to go to maximum z
+ * level" (Zach's call, ported).
+ *
+ * WHY `.cm-tooltip.bbox-code-completion` + `!important`, not a bare
+ * `.cm-tooltip` rule: CodeMirror's own base theme injects a same-stylesheet
+ * rule shaped like `.ͼ1 .cm-tooltip { z-index: 500 }` — two class selectors,
+ * specificity (0,2,0). A bare `.cm-tooltip` is (0,1,0) and loses outright,
+ * source order never even gets consulted. Measured: computed z-index 500
+ * in both host demos with round 1's rule in place, beaten by anything at
+ * z ≥ 501 anywhere on the page (a tldraw `--layer-header-footer` panel at
+ * 999, an ordinary body sibling at 600). `.bbox-code-completion` is a class
+ * `codeGrammar.ts` adds to EVERY CodeField completion popup via
+ * `autocompletion`'s `tooltipClass`, so pairing it with `.cm-tooltip`
+ * reaches the same (0,2,0) specificity as CodeMirror's own rule — a tie
+ * this stylesheet's load order is not guaranteed to win — so `!important`
+ * (the donor's own choice: `.tl-container .cm-tooltip.TypeNameAutocomplete-cm
+ * { z-index: 2147483647 !important }`) is what actually decides it.
+ * A consumer with other unrelated CodeMirror instances on the page should
+ * scope this rule tighter after install.
+ */
+.cm-tooltip.bbox-code-completion {
+  z-index: 2147483647 !important;
+}
+
+.bbox-code-field .cm-editor {
+  outline: none;
+  background: transparent;
+  height: auto;
+}
+
+.bbox-code-field .cm-scroller {
+  overflow: hidden;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  /* Inherits from `.bbox-code-field` (11px there by default) instead of
+     re-hardcoding its own copy — see that rule's own WHY. */
+  font-size: inherit;
+  line-height: 1.4;
+}
+
+.bbox-code-field .cm-content {
+  padding: 0;
+  caret-color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.bbox-code-field .cm-line {
+  padding: 0;
+}
+
+.bbox-code-field .cm-placeholder {
+  color: var(--color-muted-foreground);
+  font-style: normal;
+}
+
+.bbox-code-field .cm-selectionBackground,
+.bbox-code-field .cm-focused .cm-selectionBackground,
+.bbox-code-field ::selection {
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.bbox-code-field .cm-cursor {
+  border-left-color: var(--color-primary);
+}
+
+/* Folded lane lines (`grammar.foldInactiveLinesAfter`): a quiet ellipsis,
+   not a button — clicking it just moves the caret onto that line, which
+   unfolds it. */
+.bbox-code-field .bbox-code-field-ellipsis {
+  color: var(--color-muted-foreground);
+  cursor: text;
+}
+
+/* The wrapper a grammar-aware host puts around the field to carry its own
+   diagnostics: a passive warning glyph and an accessible help line. Not
+   part of CodeField itself — see the `signature` grammar's field wrapper
+   for the pattern — but styled from the same sheet so the two ship together. */
+.bbox-code-field-frame {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.bbox-code-field-frame[data-error="true"] .bbox-code-field {
+  border-color: color-mix(in srgb, var(--bbox-danger) 60%, var(--color-border));
+}
+
+.bbox-code-field-frame__warning {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  color: var(--bbox-warning);
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.bbox-code-field-frame__help {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The `signature` grammar's three roles: the name carries the ink, the type
+ * is an accent-tinted hint, the default is a muted value, and the two
+ * glyphs between them are quieter than any of the three. These win over the
+ * generic syntax token colours on purpose — a free-text name of three words
+ * must not light up as three variable references. */
+.bbox-code-field .bbox-sig-name,
+.bbox-code-field .bbox-sig-name.tok-variableName {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.bbox-code-field .bbox-sig-type,
+.bbox-code-field .bbox-sig-type.tok-variableName {
+  color: color-mix(in srgb, var(--color-primary) 55%, var(--color-foreground));
+  font-weight: 400;
+}
+
+.bbox-code-field .bbox-sig-punct {
+  color: var(--color-muted-foreground);
+}
+
+.bbox-code-field .bbox-sig-default {
+  color: var(--color-foreground);
+}
+
+/*
+ * RENDERED mode (`CodeField`'s `mode="rendered"`, `CodeFieldRows`): the same
+ * three roles as source mode's marks, painted as React children instead of
+ * CodeMirror decorations. `.bbox-code-seg--*` mirrors `.bbox-sig-*` above —
+ * a grammar that reuses the `signature` role names gets one palette for
+ * both modes for free.
+ */
+.bbox-code-field-rows {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-foreground);
+  cursor: text;
+}
+
+.bbox-code-field-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.bbox-code-field-row-content {
+  display: flex;
+  align-items: baseline;
+  white-space: pre;
+}
+
+.bbox-code-field-chevron {
+  display: inline-flex;
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--color-muted-foreground);
+  font-size: 9px;
+  cursor: default;
+}
+
+.bbox-code-field-chevron[role="button"] {
+  cursor: pointer;
+}
+
+.bbox-code-field-preview {
+  margin-left: 12px;
+  padding-left: 8px;
+  border-left: 1px solid var(--color-border);
+}
+
+.bbox-code-seg--name {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.bbox-code-seg--type {
+  color: color-mix(in srgb, var(--color-primary) 55%, var(--color-foreground));
+}
+
+.bbox-code-seg--default {
+  color: var(--color-foreground);
+}
+
+.bbox-code-seg--punct {
+  color: var(--color-muted-foreground);
+}
+
+/* A reference segment: underlined and clickable only once it resolves —
+ * `resolveReference` returning `null` (an unknown name) leaves it looking
+ * like ordinary accent text, matching source mode's plain `tok-variableName`
+ * treatment for the same case. */
+.bbox-code-ref[role="button"] {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.bbox-code-ref--unknown {
+  color: var(--bbox-danger);
+}
+
+/* `CodeFieldModeToggle` — a small [Rendered | Source] switch. */
+.bbox-code-field-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.bbox-code-field-toggle button {
+  padding: 2px 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.bbox-code-field-toggle button[data-active] {
+  background: var(--color-muted);
+  color: var(--color-foreground);
+}
+
+/* The completion tooltip's kind pill (`CodeFieldGrammar.completionBadge`). */
+.bbox-code-completion-pill {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-muted);
+  color: var(--color-muted-foreground);
+  font-size: 10px;
+  line-height: 1.6;
+}

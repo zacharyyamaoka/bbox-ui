@@ -6,7 +6,7 @@ import {
   resolveField,
   toArgTypes,
 } from "@bbox-ui/schema";
-import { CodeBlock } from "../src/codeBlock";
+import { CodeField } from "../src/codeField";
 import { PORT_FIELDS } from "../src/port.fields";
 import { PORT_PRESETS } from "../src/port.presets";
 import { Port, PortCountBadge, PortDot, PortLabel, portResolutionSubject } from "../src/port";
@@ -66,7 +66,7 @@ describe("PORT_FIELDS", () => {
     expect(PORT_FIELDS.map((f) => f.id)).toEqual([
       // "name"/"type"/"defaultValue" REMOVED 2026-09-12 (the two-slot
       // proposal) — folded into the single `children` field, now the
-      // label slot's real CodeBlock value. See port.tsx's own module doc.
+      // label slot's real CodeField value. See port.tsx's own module doc.
       "direction",
       "edge",
       "size",
@@ -96,10 +96,10 @@ describe("PORT_FIELDS", () => {
     ]);
   });
 
-  it("children defaults to Port's real empty string, and PortLabel renders a CodeBlock bound to it", () => {
+  it("children defaults to Port's real empty string, and PortLabel renders a CodeField bound to it", () => {
     expect(field("children").defaultValue).toBe("");
     const codeFieldElement = labelRendered.props.children;
-    expect(codeFieldElement.type).toBe(CodeBlock);
+    expect(codeFieldElement.type).toBe(CodeField);
     expect(codeFieldElement.props.value).toBe("");
   });
 
@@ -215,7 +215,7 @@ describe("PORT_FIELDS", () => {
     expect(dotElement.props.hidden).toBe(false);
   });
 
-  it("children's default (\"\") is CodeBlock's own honest empty value, identical to omitting it — no separate fall-through case anymore", () => {
+  it("children's default (\"\") is CodeField's own honest empty value, identical to omitting it — no separate fall-through case anymore", () => {
     expect(field("children").defaultValue).toBe("");
     const withEmptyString = call(PortLabel, { children: "" });
     const omitted = call(PortLabel, {});

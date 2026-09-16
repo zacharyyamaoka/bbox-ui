@@ -62,6 +62,16 @@ That needs the repo to resolve the same specifier, so it is real work, not a
 registry.json tweak. Until then they are reference implementations, and the docs
 say so. Do not paper over it.
 
+## Storybook is opt-in, not default
+
+`apps/storybook` (`bbox-storybook`, a T0 spike: one story rendered across three
+hosts — plain DOM, a React Flow node, a tldraw shape) and
+`packages/schema/src/storybook.ts` exist and work, but Zach isn't using them
+much right now. Don't add or update stories, touch `.storybook/`, wire a new
+component into Storybook, or run `storybook` / `build-storybook` as part of
+routine work on this repo — only touch this surface when he explicitly asks
+for Storybook work.
+
 ## The website — apps/docs
 
 `apps/docs` is bbox-ui.com. Fumadocs + Next, statically exported, deployed to a
