@@ -1,5 +1,6 @@
 "use client";
 
+import type { PresetSpec } from "@bbox-ui/schema";
 import type { ComponentEntry, Instance, InstanceNode } from "@bbox-ui/panel";
 import { MIXED_BENCH, shouldSuppressNativeFocusShift } from "@bbox-ui/panel";
 import type { NavigatorVariant } from "./navigator";
@@ -19,6 +20,19 @@ interface BenchSidebarProps {
   activeName: string;
   onActiveNameChange: (name: string) => void;
   isMixed: boolean;
+  /** The active selection's own preset family (Storybook's "saved states" —
+   *  Port's size rungs, Block's view, Pill/Bar's state). Empty when the
+   *  component has none (Glyph, Region today) or the selection spans more
+   *  than one type — see bench-sidebar's own render for the "if there are
+   *  presets available" gate. */
+  presets: PresetSpec[];
+  /** The resolved preset id the selection currently agrees on, or
+   *  `undefined` when nothing is selected or the selection disagrees. */
+  presetValue: string | undefined;
+  /** True when selected instances disagree about which preset is active —
+   *  same "Mixed" concept `readFieldRow` already reports for any field. */
+  presetMixed: boolean;
+  onPresetChange: (presetId: string) => void;
   instances: Instance[];
   tree: InstanceNode[];
   selectedIds: Set<string>;
@@ -83,6 +97,49 @@ export function BenchSidebar(p: BenchSidebarProps) {
               <option value={MIXED_BENCH}>{MIXED_BENCH}</option>
             </select>
           </SidebarGroupContent>
+
+          {/* WHY this sits here and not only as a field row in the right-hand
+              Inspector: Zach, 2026-09-15, looking at Storybook's own
+              Component → saved-state sidebar pairing — "can you please add
+              another drop down menu below that for each component, if there
+              are presets available". It writes the exact same selector field
+              (Port's `size`, Block's `view`, Pill/Bar's `state`) through the
+              exact same `applyToSelected` the Inspector's own row for that
+              field already uses — see workbench.tsx's `presetSelectorField`/
+              `presetRow`. This is deliberately NOT a second, independent
+              picker: the 2026-09-12 removal of the Inspector's old violet
+              PRESET row (sections/build-sections.tsx's own WHY) ruled that a
+              preset's selector IS a field, one control, one writer. This is
+              that same control, relocated to the top of the sidebar for
+              Storybook-style visibility; the Inspector's row for it (with
+              its ↺ reset and provenance trace) is unchanged and stays in
+              sync automatically. Hidden whenever the active selection's
+              component has no preset family (Glyph, Region today) or spans
+              more than one type — `p.presets` is already `[]` in both cases. */}
+          {p.presets.length > 0 && (
+            <>
+              <SidebarGroupLabel className="mt-3">Presets</SidebarGroupLabel>
+              <SidebarGroupContent className="px-2">
+                <select
+                  data-slot="preset-picker"
+                  value={p.presetMixed ? "" : (p.presetValue ?? "")}
+                  onChange={(e) => p.onPresetChange(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
+                >
+                  {(p.presetMixed || p.presetValue === undefined) && (
+                    <option value="" disabled>
+                      {p.presetMixed ? "Mixed" : "—"}
+                    </option>
+                  )}
+                  {p.presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </SidebarGroupContent>
+            </>
+          )}
         </SidebarGroup>
 
         <SidebarSeparator />
