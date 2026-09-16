@@ -33,6 +33,8 @@ import {
   PORT_TEXT_SIZES,
   SECONDARY_SLOT_LAYOUT_LABELS,
   SECONDARY_SLOT_LAYOUTS,
+  SLOT_ORIGINS,
+  SLOT_ORIGIN_LABELS,
   type PortTextSize,
 } from "./port.layout";
 
@@ -73,6 +75,11 @@ const TEXT_SIZE_OPTIONS: FieldOption[] = (
 const REVEAL_OPTIONS: FieldOption[] = PORT_REVEALS.map((reveal) => ({
   value: reveal,
   label: PORT_REVEAL_LABELS[reveal],
+}));
+
+const SLOT_ORIGIN_OPTIONS: FieldOption[] = SLOT_ORIGINS.map((origin) => ({
+  value: origin,
+  label: SLOT_ORIGIN_LABELS[origin],
 }));
 
 const SECONDARY_SLOT_LAYOUT_OPTIONS: FieldOption[] = SECONDARY_SLOT_LAYOUTS.map((layout) => ({
@@ -150,10 +157,41 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     tier: "simple",
   },
   {
-    id: "labelOffset",
-    label: "Offset Distance",
+    id: "labelOrigin",
+    label: "Label Origin",
+    kind: "segments",
+    // The SIDE the label anchors to. `textLayout` above is the Simple-tier
+    // PRESET over this plus the two offsets below (Zach, 2026-09-15:
+    // "thoose are just presets!") — pick "Right Offset" there and it
+    // resolves to origin `right` with a lifted `labelOffsetY`. Omit and
+    // the preset decides; set it and you have reached past the preset,
+    // which is what Expert is for.
+    defaultValue: "right",
+    options: SLOT_ORIGIN_OPTIONS,
+    hint: "Which side of the dot the label anchors to. Label Slot Location is the preset over this and the two offsets.",
+    tier: "expert",
+  },
+  {
+    id: "labelOffsetX",
+    label: "Label Offset X",
     kind: "number",
-    min: 0,
+    // NEGATIVE allowed, deliberately (Zach: "lets support both positive
+    // and negative offsets") — the old enum could not express one at all.
+    min: -64,
+    max: 64,
+    step: 1,
+    defaultValue: 0,
+    hint: "Displacement along the origin's own axis, + meaning away from the dot. Negative pulls it back toward the dot.",
+    tier: "expert",
+  },
+  {
+    id: "labelOffsetY",
+    label: "Label Offset Y",
+    kind: "number",
+    // Spans negative too: a lift clear of a trace wire IS a negative Y,
+    // since +Y is down. Renamed from `labelOffset`, which could only ever
+    // be a positive lift and only on the two "Offset" layouts.
+    min: -64,
     max: 64,
     step: 1,
     // The value `defaultPortLabelLift` computes at Port's own default
@@ -162,8 +200,12 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     // follows against `inwardTextLayout(edge)` — and, like it, the panel
     // shows the REAL resolved number via `portResolutionSubject`, so a
     // Port at another size reads honestly instead of trusting this literal.
-    defaultValue: 19,
-    hint: "How far a Right/Left Offset label's bottom edge clears the dot's centre line — the gap a trace wire passes through. Only an Offset layout has a lift to tune. Omit for the auto default: half the dot, plus its painted ring, plus the standard label gap.",
+    // The value `defaultLiftOffsetY` computes for a lifted label at Port's
+    // default text size — negative, because the lift is upward. The panel
+    // shows the REAL resolved number via `portResolutionSubject`, which is
+    // what keeps it honest at any other text size.
+    defaultValue: -23,
+    hint: "Vertical displacement, + down. A lifted label carries a negative value that puts its bottom edge clear of the dot's centre line, where a trace wire runs.",
     tier: "expert",
   },
   {
@@ -242,6 +284,41 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     defaultValue: "leftOffset",
     options: SECONDARY_SLOT_LAYOUT_OPTIONS,
     hint: "Where the producer-count badge (or any other secondary-slot content a host composes) sits, hugging the dot. Omit for the auto default: the corner opposite wherever the label is flowing.",
+  },
+  // The secondary slot's own origin + offsets — the SAME three controls
+  // the label has, over the SAME `SlotOrigin` type. That symmetry is the
+  // point of the unification: one model for both slots, so "left" means
+  // the same thing in both and neither needs its own vocabulary.
+  {
+    id: "secondaryOrigin",
+    label: "Secondary Origin",
+    kind: "segments",
+    defaultValue: "left",
+    options: SLOT_ORIGIN_OPTIONS,
+    hint: "Which side of the dot the secondary slot hugs. Secondary Slot is the preset over this and the two offsets.",
+    tier: "expert",
+  },
+  {
+    id: "secondaryOffsetX",
+    label: "Secondary Offset X",
+    kind: "number",
+    min: -64,
+    max: 64,
+    step: 1,
+    defaultValue: 0,
+    hint: "Displacement along the origin's own axis, + meaning away from the dot.",
+    tier: "expert",
+  },
+  {
+    id: "secondaryOffsetY",
+    label: "Secondary Offset Y",
+    kind: "number",
+    min: -64,
+    max: 64,
+    step: 1,
+    defaultValue: 0,
+    hint: "Vertical displacement, + down.",
+    tier: "expert",
   },
   {
     id: "children",

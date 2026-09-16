@@ -24,7 +24,12 @@ import {
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
+  defaultLiftOffsetY,
   defaultPortLabelLift,
+  portLabelHeight,
+  slotPlacementStyle,
+  SECONDARY_LAYOUT_AS_ORIGIN,
+  TEXT_LAYOUT_AS_PLACEMENT,
   defaultSecondarySlotLayout,
   inwardTextLayout,
   isOffsetTextLayout,
@@ -39,6 +44,8 @@ import {
   type PortTextLayout,
   type PortTextSize,
   type SecondarySlotLayout,
+  type SlotOrigin,
+  type SlotPlacement,
 } from "./port.layout";
 
 /** The two fields `Port`'s own `size` rung governs — looked up once from
@@ -62,6 +69,27 @@ const TEXT_SIZE_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "textSize")!;
  * (`PortDot`'s own `secondarySlotLayout ?? defaultSecondarySlotLayout(...)`
  * fallback), only the panel's DISPLAY of the unset field's value was wrong.
  */
+/**
+ * The flex row's displacement for a slot — the SAME translate
+ * `slotPlacementStyle` emits for an absolutely-positioned host, so the two
+ * paths move a label by the identical rule.
+ *
+ * `undefined` (not a zero translate) when there is nothing to displace, so
+ * an untouched port emits no style at all.
+ *
+ * The sign mirrors on an origin that faces the other way for the same
+ * reason it does in `slotPlacementStyle`: `+x` must mean "rightward on
+ * screen" whichever side the slot hangs off, or the control would reverse
+ * itself halfway through the origin list.
+ */
+function flexOffsetTransform(placement: SlotPlacement): CSSProperties | undefined {
+  const { origin, offsetX, offsetY } = placement;
+  if (offsetX === 0 && offsetY === 0) return undefined;
+  const x = origin === "left" ? -offsetX : offsetX;
+  const y = origin === "top" ? -offsetY : offsetY;
+  return { transform: `translate(${x}px, ${y}px)` };
+}
+
 export function portResolutionSubject(props: Record<string, unknown>): Record<string, unknown> {
   const edge = (props.edge as BlockSide | undefined) ?? "left";
   const textLayout = (props.textLayout as PortTextLayout | undefined) ?? inwardTextLayout(edge);
@@ -88,13 +116,37 @@ export function portResolutionSubject(props: Record<string, unknown>): Record<st
   ).resolved as PortSize;
   const diameterPx =
     typeof diameterResolved === "number" ? diameterResolved : PORT_DIAMETERS[diameterResolved];
+  // Same cascade for textSize — the lifted default is a function of the
+  // label's real height, so reading the raw prop would repeat the very bug
+  // the diameter resolution above exists to avoid.
+  const textSizeResolved = resolveField(
+    TEXT_SIZE_FIELD,
+    { size: props.size ?? "md", diameter: props.diameter, textSize: props.textSize },
+    PORT_PRESETS,
+  ).resolved as PortTextSize;
   return {
     ...props,
     textLayout,
     secondarySlotLayout:
       (props.secondarySlotLayout as SecondarySlotLayout | undefined) ?? defaultSecondarySlotLayout(textLayout),
-    labelOffset:
-      (props.labelOffset as number | undefined) ?? defaultPortLabelLift({ w: diameterPx, h: diameterPx }),
+    // Each slot's placement, resolved the way the component resolves it, so
+    // the Expert controls read the numbers actually on screen rather than
+    // the static literals their FieldSpecs are forced to declare. Same
+    // mechanism the secondary layout above already uses.
+    labelOrigin: (props.labelOrigin as SlotOrigin | undefined) ?? TEXT_LAYOUT_AS_PLACEMENT[textLayout].origin,
+    labelOffsetX: (props.labelOffsetX as number | undefined) ?? 0,
+    labelOffsetY:
+      (props.labelOffsetY as number | undefined) ??
+      (TEXT_LAYOUT_AS_PLACEMENT[textLayout].liftedLabel
+        ? defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES[textSizeResolved]), PORT_LABEL_GAP)
+        : 0),
+    secondaryOrigin:
+      (props.secondaryOrigin as SlotOrigin | undefined) ??
+      SECONDARY_LAYOUT_AS_ORIGIN[
+        (props.secondarySlotLayout as SecondarySlotLayout | undefined) ?? defaultSecondarySlotLayout(textLayout)
+      ],
+    secondaryOffsetX: (props.secondaryOffsetX as number | undefined) ?? 0,
+    secondaryOffsetY: (props.secondaryOffsetY as number | undefined) ?? 0,
   };
 }
 
@@ -671,7 +723,21 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
    * (`defaultPortLabelLift`, port.layout.ts). Ignored by every non-offset
    * layout, which has no lift to tune.
    */
-  labelOffset?: number;
+  /**
+   * The label slot's placement, reaching PAST `textLayout` (which is the
+   * Simple-tier PRESET over exactly these three — Zach, 2026-09-15:
+   * "thoose are just presets!"). Omit any of them and the preset decides;
+   * set one and it wins. `offsetX` is + away from the dot along the
+   * origin's own axis, `offsetY` is + DOWN, and both may be negative.
+   */
+  labelOrigin?: SlotOrigin;
+  labelOffsetX?: number;
+  labelOffsetY?: number;
+  /** The secondary slot's placement — the SAME three controls over the
+   *  SAME `SlotOrigin` type, with `secondarySlotLayout` as its preset. */
+  secondaryOrigin?: SlotOrigin;
+  secondaryOffsetX?: number;
+  secondaryOffsetY?: number;
   /**
    * Content for the LABEL position, supplied by a host that owns its own
    * slot model (the /create bench's `ctx.slots.label`). When present it
@@ -761,7 +827,12 @@ export function LabeledPort({
   reveal = "always",
   producers = 0,
   anchored = false,
-  labelOffset,
+  labelOrigin,
+  labelOffsetX,
+  labelOffsetY,
+  secondaryOrigin,
+  secondaryOffsetX,
+  secondaryOffsetY,
   labelSlot,
   secondarySlot,
   secondarySlotLayout,
@@ -795,17 +866,39 @@ export function LabeledPort({
   // The label's lift for an "Offset" layout, 0 otherwise — see
   // `portLabelLift`'s own WHY (port.layout.ts). Both branches below need
   // it, so it is resolved once against the SAME dot box either would use.
-  const labelLift = portLabelLift(resolvedTextLayout, { w: diameterPx, h: diameterPx }, labelOffset);
-  // WHY this gates on the LAYOUT and not on `labelLift > 0`: a tuned
-  // `labelOffset: 0` is a legitimate lift — "put the label's bottom edge
-  // exactly on the wire" — and the field's own `min: 0` allows it. Gating
-  // on the VALUE made the two paths disagree at that one endpoint: the
-  // anchored path emitted `bottom: calc(50% + 0px)` (bottom edge on the
-  // centre line) while the flex path fell back to `items-center` and
-  // centred the label ON the dot, roughly half a label-height lower.
-  // `isOffsetTextLayout` is the honest question — does this layout HAVE a
-  // lift — and it answers the same for both paths at every value.
-  const lifted = isOffsetTextLayout(resolvedTextLayout);
+  // Which corner the secondary slot hugs — the AUTO default is the side
+  // opposite wherever the label is flowing. Resolved HERE now that the
+  // composite owns the slot; the geometry primitive has no idea a label
+  // or a second slot exists.
+  const resolvedSecondaryLayout = secondarySlotLayout ?? defaultSecondarySlotLayout(resolvedTextLayout);
+  // ── Each slot's placement, resolved once ────────────────────────────
+  //
+  // The named layout is the PRESET; an explicit origin/offset reaches past
+  // it. `textLayout` still carries the preset because it is what every
+  // host and every saved tldraw shape already speaks — this resolution is
+  // the single place that vocabulary is translated into the unified
+  // (origin, x, y) model (`TEXT_LAYOUT_AS_PLACEMENT`, port.layout.ts).
+  const textLayoutPreset = TEXT_LAYOUT_AS_PLACEMENT[resolvedTextLayout];
+  // The lifted default is computed from the LIVE text size, never frozen:
+  // a lift correct at `md` puts an `xl` label's bottom edge back below the
+  // centre line, with the wire cutting through it (`defaultLiftOffsetY`).
+  const labelHeightPx = portLabelHeight(PORT_TEXT_SIZES[textSizeResolved]);
+  const labelPlacement: SlotPlacement = {
+    origin: labelOrigin ?? textLayoutPreset.origin,
+    offsetX: labelOffsetX ?? 0,
+    offsetY:
+      labelOffsetY ??
+      (textLayoutPreset.liftedLabel ? defaultLiftOffsetY(labelHeightPx, PORT_LABEL_GAP) : 0),
+  };
+  const secondaryPlacement: SlotPlacement = {
+    origin: secondaryOrigin ?? SECONDARY_LAYOUT_AS_ORIGIN[resolvedSecondaryLayout],
+    offsetX: secondaryOffsetX ?? 0,
+    offsetY: secondaryOffsetY ?? 0,
+  };
+  // The flex row still needs a scalar LIFT: a transform does not grow the
+  // row, and a standalone specimen's box must contain what it paints.
+  // Upward displacement only — a downward one needs no headroom above.
+
   // A host-given `secondarySlot` WINS outright — INCLUDING when it is
   // empty, which is what makes the count badge deletable (Zach,
   // 2026-09-15: "yes the producer badge can be delted it just a member of
@@ -821,11 +914,6 @@ export function LabeledPort({
   // regex literal ("Unterminated regexp literal", whole page 500).
   // TypeScript's own parser accepts it, so `tsc` stayed green and only
   // running the real app caught it.
-  // Which corner the secondary slot hugs — the AUTO default is the side
-  // opposite wherever the label is flowing. Resolved HERE now that the
-  // composite owns the slot; the geometry primitive has no idea a label
-  // or a second slot exists.
-  const resolvedSecondaryLayout = secondarySlotLayout ?? defaultSecondarySlotLayout(resolvedTextLayout);
   const resolvedSecondarySlot: ReactNode =
     secondarySlot !== undefined
       ? secondarySlot
@@ -836,19 +924,20 @@ export function LabeledPort({
   // content occupies it — the built-in `PortLabel` or a host's own
   // `labelSlot`. Sharing the one object is what stops a slot from drifting
   // out of alignment with the CodeField it replaces.
+  // The flex row's half of the placement. `flexDirection` + `gap` already
+  // put the label at its ORIGIN (flush, centred on the cross axis) — the
+  // offsets are then the same translate the anchored path emits, so both
+  // paths displace by the identical rule and cannot drift apart.
+  //
+  // WHY a transform rather than the old `alignItems: flex-end` +
+  // `marginBottom` pair: a margin RESIZES the row, so the same offset
+  // meant two different things depending on which path drew it, and only
+  // one direction (up) was expressible at all. A displacement should move
+  // the label, not resize the port — and a transform is the one mechanism
+  // that says exactly that, in both directions, in both paths.
   const labelSlotStyle: CSSProperties | undefined = anchored
-    ? { ...portLabelPlacement(resolvedTextLayout, { w: diameterPx, h: diameterPx }, 0, labelOffset), whiteSpace: "nowrap" }
-    : // The flex row's half of the lift. Both the dot and the label are
-      // bottom-anchored (`alignItems: "flex-end"` below), so the dot's
-      // centre line sits `diameterPx / 2` above the row's bottom and the
-      // label's bottom sits `marginBottom` above it — making their
-      // difference exactly `labelLift`, the same quantity
-      // `portLabelPlacement` puts between them in the anchored path.
-      // `undefined` (not 0) when unlifted, so an ordinary layout emits no
-      // margin at all.
-      lifted
-      ? { marginBottom: diameterPx / 2 + labelLift }
-      : undefined;
+    ? { ...slotPlacementStyle(labelPlacement, { w: diameterPx, h: diameterPx }, PORT_LABEL_GAP), whiteSpace: "nowrap" }
+    : flexOffsetTransform(labelPlacement);
   const rootStyle: CSSProperties = anchored
     ? { position: "relative", width: diameterPx, height: diameterPx }
     : {
@@ -859,15 +948,6 @@ export function LabeledPort({
         // a wall-anchored label (which goes through `portLabelOut`) disagree
         // by the ring's overhang.
         gap: PORT_LABEL_GAP + PORT_RING_OVERHANG_PX,
-        // WHY the whole row switches to `flex-end` for a lifted label
-        // rather than the label alone taking an `alignSelf`: with the row
-        // still centring, the dot would sit at the centre of a container
-        // the taller label had already grown, so the gap between the dot's
-        // centre line and the label's bottom would shrink as the label
-        // grew — the one distance the lift exists to hold fixed. Anchoring
-        // BOTH to the bottom edge makes the margin below the only thing
-        // that sets it (see the label's own `marginBottom`).
-        ...(lifted ? { alignItems: "flex-end" as const } : null),
       };
   return (
     <div
@@ -917,7 +997,7 @@ export function LabeledPort({
           <span
             data-slot="port-secondary-slot"
             className="pointer-events-none absolute"
-            style={SECONDARY_SLOT_STYLE[resolvedSecondaryLayout]}
+            style={slotPlacementStyle(secondaryPlacement, { w: diameterPx, h: diameterPx }, PORT_SECONDARY_SLOT_GAP_PX)}
           >
             {resolvedSecondarySlot}
           </span>

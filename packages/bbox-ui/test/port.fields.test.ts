@@ -25,6 +25,7 @@ import {
   PORT_TEXT_SIZES,
   SECONDARY_SLOT_LAYOUTS,
   defaultSecondarySlotLayout,
+  slotPlacementStyle,
   inwardTextLayout,
 } from "../src/port.layout";
 
@@ -76,10 +77,13 @@ describe("PORT_FIELDS", () => {
       // sites); Python-specific annotations are SystemSketch's business,
       // not this package's. See port.layout.ts's own WHY.
       "textLayout",
-      // Sits with the geometry it tunes — the lift `textLayout`'s two
-      // "Offset" members take (Zach, 2026-09-15: "expose the offset
-      // distance as a parameter you can tune"), Expert tier.
-      "labelOffset",
+      // The label's placement, unified 2026-09-15: `textLayout` above is
+      // the Simple-tier PRESET over exactly these three (Zach: "thoose are
+      // just presets!"), which are the Expert-tier truth. `labelOffsetY`
+      // replaces the old positive-only `labelOffset`.
+      "labelOrigin",
+      "labelOffsetX",
+      "labelOffsetY",
       "textSize",
       "state",
       "tone",
@@ -95,6 +99,11 @@ describe("PORT_FIELDS", () => {
       "reveal",
       "producers",
       "secondarySlotLayout",
+      // …and the secondary slot's matching trio, over the SAME SlotOrigin
+      // type. One model for both slots is the point of the unification.
+      "secondaryOrigin",
+      "secondaryOffsetX",
+      "secondaryOffsetY",
       "children",
       "placeholder",
     ]);
@@ -384,20 +393,59 @@ describe("Port — the real component reached through the same size cascade the 
  * label ON the dot — the two renderings of the same Port disagreeing by
  * half a label height at one endpoint.
  */
-describe("a tuned labelOffset of 0 still lifts", () => {
-  it("bottom-anchors the flex row and emits a margin, exactly as any other lift does", () => {
-    const zero = call(LabeledPort, { textLayout: "rightOffset", labelOffset: 0, children: "x" });
-    expect(zero.props.style.alignItems).toBe("flex-end");
-    const [, zeroLabel] = zero.props.children as [unknown, { props: { style?: { marginBottom?: number } } }];
-    // marginBottom = diameter/2 + lift, so at lift 0 it is exactly the radius.
-    expect(zeroLabel.props.style!.marginBottom).toBe(PORT_DIAMETERS.md / 2);
+/**
+ * The unified model deleted the old `labelOffset: 0` endpoint problem
+ * outright rather than patching it. There is no longer a "lifted layout
+ * carrying a zero lift" state to disagree about: `offsetY` IS the
+ * displacement, so 0 means flush, negative means up, positive means down.
+ * The flex row's bottom-anchoring is derived from the resolved offset
+ * (`labelLift = max(0, -offsetY)`), so the two paths cannot disagree by
+ * construction — the earlier bug is unrepresentable, not just fixed.
+ */
+describe("labelOffsetY is a real displacement, in both directions", () => {
+  // Reading the label's own style out of the flex row.
+  const labelStyleOf = (props: Record<string, unknown>) => {
+    const [, label] = call(LabeledPort, { children: "x", ...props }).props.children as [
+      unknown,
+      { props: { style?: { transform?: string } } },
+    ];
+    return label.props.style;
+  };
+
+  it("offsetY 0 is flush — no style at all, whatever the preset says", () => {
+    expect(labelStyleOf({ textLayout: "rightOffset", labelOffsetY: 0 })).toBeUndefined();
   });
 
-  it("a NON-offset layout still emits no lift at all, tuned or not", () => {
-    const plain = call(LabeledPort, { textLayout: "right", labelOffset: 0, children: "x" });
-    expect(plain.props.style.alignItems).toBeUndefined();
-    const [, plainLabel] = plain.props.children as [unknown, { props: { style?: unknown } }];
-    expect(plainLabel.props.style).toBeUndefined();
+  it("a NEGATIVE offsetY lifts", () => {
+    expect(labelStyleOf({ textLayout: "right", labelOffsetY: -30 })!.transform).toBe("translate(0px, -30px)");
+  });
+
+  it("a POSITIVE offsetY pushes DOWN — the direction the old enum could not express", () => {
+    expect(labelStyleOf({ textLayout: "right", labelOffsetY: 12 })!.transform).toBe("translate(0px, 12px)");
+  });
+
+  it("a NEGATIVE offsetX pulls the label back toward the dot — the other direction the enum could not express", () => {
+    expect(labelStyleOf({ textLayout: "right", labelOffsetX: -6 })!.transform).toBe("translate(-6px, 0px)");
+  });
+
+  it("mirrors x on a left origin, so +x is rightward on screen from either side", () => {
+    expect(labelStyleOf({ textLayout: "left", labelOffsetX: 6 })!.transform).toBe("translate(-6px, 0px)");
+    expect(labelStyleOf({ textLayout: "right", labelOffsetX: 6 })!.transform).toBe("translate(6px, 0px)");
+  });
+
+  /**
+   * The flex row and an absolutely-positioned host must displace a label
+   * by the SAME rule — that equivalence is the whole reason the offsets
+   * ride in a transform in both paths instead of a margin in one of them.
+   */
+  it("the flex row and the anchored path agree on the displacement", () => {
+    const placement = { origin: "right" as const, offsetX: 4, offsetY: -18 };
+    const flex = labelStyleOf({ textLayout: "right", labelOffsetX: 4, labelOffsetY: -18 })!.transform;
+    const anchored = slotPlacementStyle(placement, { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md }, 8).transform;
+    // The anchored one folds in the cross-axis centring; strip it and the
+    // two carry the identical displacement.
+    expect(flex).toBe("translate(4px, -18px)");
+    expect(anchored).toBe("translate(4px, calc(-50% + -18px))");
   });
 });
 
@@ -437,19 +485,14 @@ describe("portResolutionSubject", () => {
    * function exists to prevent, so it is pinned against the component's
    * own rendered output rather than against a retyped number.
    */
-  it("reports the offset the component ACTUALLY renders when `size` cascades the diameter", () => {
+  it("reports the offset the component ACTUALLY renders when `size` cascades the text size", () => {
     for (const size of ["sm", "md", "lg", "xl"] as const) {
-      const reported = portResolutionSubject({ size, textLayout: "rightOffset" }).labelOffset;
-      // What Port really puts on the label: marginBottom = diameter/2 + lift.
-      const root = call(LabeledPort, { size, textLayout: "rightOffset", children: "x" });
-      const [dotElement, labelElement] = root.props.children as [
-        { props: Record<string, unknown> },
-        { props: { style?: { marginBottom?: number } } },
-      ];
-      const dotRendered = call(Port, dotElement.props);
-      const renderedDiameter = dotRendered.props.style.width as number;
-      const renderedLift = labelElement.props.style!.marginBottom! - renderedDiameter / 2;
-      expect(reported, `size:${size}`).toBe(renderedLift);
+      const reported = portResolutionSubject({ size, textLayout: "rightOffset" }).labelOffsetY as number;
+      const [, labelElement] = call(LabeledPort, { size, textLayout: "rightOffset", children: "x" }).props
+        .children as [unknown, { props: { style?: { transform?: string } } }];
+      // What Port really puts on the label, read back off the transform.
+      const rendered = Number(/translate\(0px, (-?[\d.]+)px\)/.exec(labelElement.props.style!.transform!)![1]);
+      expect(reported, `size:${size}`).toBe(rendered);
     }
   });
 
