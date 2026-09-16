@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { FieldSpec, InheritedValue, PresetSpec } from "@bbox-ui/schema";
-import { presetFamilyFor, readFieldRow, resetTitleFor, type Subject } from "../src/fieldModel";
+import {
+  presetFamilyFor,
+  presetForField,
+  presetLabelForField,
+  readFieldRow,
+  resetTitleFor,
+  type Subject,
+} from "../src/fieldModel";
 
 /**
  * These tests exist because the inspector demo had NO test script at all, so
@@ -320,5 +327,53 @@ describe("presetFamilyFor — narrowing to one selector's own preset family", ()
     expect(result?.field.id).toBe("view");
     expect(result?.presets).toEqual(VIEW_PRESETS);
     expect(result?.presets.some((p) => p.selector === "mode")).toBe(false);
+  });
+});
+
+describe("presetForField — a preset id is unique only WITHIN its ladder", () => {
+  // Six panels looked provenance up with `presets.find(p => p.id === id)`.
+  // That was correct while no component carried two ladders sharing an id.
+  // LabeledPort now does: `textLayout` and `secondarySlotLayout` both have
+  // `leftOffset`/`rightOffset` members, and a preset's id must equal one
+  // legal value of its selector's field, so the collision is by contract.
+  const LABEL: PresetSpec = {
+    id: "rightOffset",
+    label: "Right Offset (label)",
+    selector: "textLayout",
+    governs: ["labelOrigin", "labelOffsetY"],
+    values: { labelOrigin: "right", labelOffsetY: -8 },
+  };
+  const SECONDARY: PresetSpec = {
+    id: "rightOffset",
+    label: "Right Offset (secondary)",
+    selector: "secondarySlotLayout",
+    governs: ["secondaryOrigin"],
+    values: { secondaryOrigin: "right" },
+  };
+  const BOTH = [LABEL, SECONDARY];
+
+  it("the FIELD disambiguates — each row names its own ladder", () => {
+    expect(presetForField(BOTH, "rightOffset", "labelOrigin")).toBe(LABEL);
+    expect(presetForField(BOTH, "rightOffset", "secondaryOrigin")).toBe(SECONDARY);
+  });
+
+  it("an id-only lookup would have returned array order — this does not", () => {
+    // What the old code did, shown explicitly so the difference is the test.
+    expect(BOTH.find((p) => p.id === "rightOffset")).toBe(LABEL);
+    // A secondary row asking the old way got the LABEL preset's name.
+    expect(presetLabelForField(BOTH, "rightOffset", "secondaryOrigin")).toBe(
+      "Right Offset (secondary)",
+    );
+  });
+
+  it("a field no preset governs resolves to nothing, not to a coincidence", () => {
+    expect(presetForField(BOTH, "rightOffset", "labelOffsetX")).toBeUndefined();
+    // The label falls back to the raw id rather than inventing one.
+    expect(presetLabelForField(BOTH, "rightOffset", "labelOffsetX")).toBe("rightOffset");
+  });
+
+  it("an absent preset id is not a lookup at all", () => {
+    expect(presetForField(BOTH, undefined, "labelOrigin")).toBeUndefined();
+    expect(presetLabelForField(BOTH, undefined, "labelOrigin")).toBe("");
   });
 });

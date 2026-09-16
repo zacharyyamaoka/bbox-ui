@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_ARRANGEMENT, evenT, type Arrangement } from "@bbox-ui/core";
 import type { Instance } from "../src/bench";
-import { BAR_SLOTS, BLOCK_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstance, makeInstanceWithSlots } from "../src/bench";
+import { BAR_SLOTS, BLOCK_SLOTS, PORT_SLOTS, INITIAL_BENCHES, MEMBER_SPECS, MIXED_BENCH, REGISTRY, makeInstance, makeInstanceWithSlots } from "../src/bench";
 import {
   activeArrangement,
   addMemberTo,
@@ -38,9 +38,9 @@ const inst = (id: string, type: string, props: Record<string, unknown> = {}, mem
 const bench: Instance[] = [
   inst("stack-1", "Stack", {}, ["block-2", "port-3"]),
   inst("block-2", "Block", {}, ["pill-4"]),
-  inst("port-3", "Port", { children: "goal", state: "wired" }),
+  inst("port-3", "LabeledPort", { children: "goal", state: "wired" }),
   inst("pill-4", "Pill", { children: "" }),
-  inst("port-9", "Port", { children: "loose" }),
+  inst("port-9", "LabeledPort", { children: "loose" }),
 ];
 
 describe("the member tree is derived from the parent's list alone", () => {
@@ -58,7 +58,7 @@ describe("the member tree is derived from the parent's list alone", () => {
 
 describe("summarize gives a control the little it may show", () => {
   it("uses the child's own text as its title, else Type n among same-type siblings", () => {
-    expect(summarize(bench, "port-3")).toMatchObject({ title: "goal", untitled: false, badge: "wired", type: "Port" });
+    expect(summarize(bench, "port-3")).toMatchObject({ title: "goal", untitled: false, badge: "wired", type: "LabeledPort" });
     // An empty string is not a title.
     expect(summarize(bench, "pill-4")).toMatchObject({ title: "Pill 1", untitled: true, badge: null });
     expect(summarize(bench, "block-2")).toMatchObject({ title: "Block 1", memberIds: ["pill-4"] });
@@ -92,8 +92,8 @@ describe("the bench operations", () => {
     };
     const withGroups: Instance[] = [
       { ...inst("block-1", "Block", {}, ["args", "kwargs"]), arrangements: [grouped], arrangement: grouped.id },
-      inst("args", "Port"),
-      inst("kwargs", "Port"),
+      inst("args", "LabeledPort"),
+      inst("kwargs", "LabeledPort"),
     ];
     const removed = removeMember(withGroups, "args");
     expect(removed.find((i) => i.id === "block-1")?.members).toEqual(["kwargs"]);
@@ -122,10 +122,10 @@ describe("the bench operations", () => {
     expect(reparent(bench, "stack-1", "stack-1", 0)).toBe(bench);
   });
   it("instanceTree marks containers by what the registry says they can hold, not by emptiness", () => {
-    const tree = instanceTree([inst("s", "Stack"), inst("p", "Port"), inst("b", "Block", {}, ["f"]), inst("f", "Flex", {}, [])], REGISTRY);
+    const tree = instanceTree([inst("s", "Stack"), inst("p", "LabeledPort"), inst("b", "Block", {}, ["f"]), inst("f", "Flex", {}, [])], REGISTRY);
     expect(tree.map((n) => [n.type, n.container])).toEqual([
       ["Stack", true],
-      ["Port", false],
+      ["LabeledPort", false],
       // A Block IS a container now (Zach, 2026-09-12): it declares
       // `members` (its Ports) alongside its slots.
       ["Block", true],
@@ -147,11 +147,11 @@ describe("the bench operations", () => {
 
 describe("what a parent may add is declared, closed and capped", () => {
   it("offers only the accepted types, in the declared order", () => {
-    expect(addableTypes(MEMBER_SPECS.PortEdge, REGISTRY, 0)).toEqual(["Port"]);
+    expect(addableTypes(MEMBER_SPECS.PortEdge, REGISTRY, 0)).toEqual(["LabeledPort"]);
     expect(addableTypes(MEMBER_SPECS.Stack, REGISTRY, 0)[0]).toBe("Block");
   });
   it("offers nothing at max, and everything registered when accepts is open", () => {
-    expect(addableTypes({ accepts: ["Port"], max: 2 }, REGISTRY, 2)).toEqual([]);
+    expect(addableTypes({ accepts: ["LabeledPort"], max: 2 }, REGISTRY, 2)).toEqual([]);
     expect(addableTypes({ accepts: [] }, REGISTRY, 0)).toEqual(REGISTRY.map((e) => e.name));
   });
   it("every accepted type is a registered component, and every declaring entry carries its spec", () => {
@@ -165,11 +165,25 @@ describe("what a parent may add is declared, closed and capped", () => {
     // grow a Members section by accident.
     for (const e of REGISTRY) if (!(e.name in MEMBER_SPECS)) expect(e.members).toBeUndefined();
   });
-  it("a fresh bench holds one root (two on the mixed bench); anything else is a slot fill or one of the Block's seeded Ports", () => {
+  it("a fresh bench holds one root (two on the mixed bench); anything else is a slot fill, a seeded Port, or a slot's own seeded member", () => {
+    // WIDENED 2026-09-15: a slot may now arrive with default MEMBERS, not
+    // just a fill (`SlotSpec.fillMembers`) — Port's label slot seeds a
+    // CodeField and its secondary slot a Badge, both deletable. So a
+    // non-root instance is legitimately one of three things, and the set
+    // of member TYPES is pinned below rather than left open, so a future
+    // seed cannot smuggle an arbitrary component onto every bench.
+    const SEEDED_MEMBER_TYPES = new Set(["CodeField", "Badge"]);
     for (const [name, list] of Object.entries(INITIAL_BENCHES)) {
-      expect(topLevel(list).length, name).toBe(name === MIXED_BENCH ? 2 : 1);
+      // The mixed bench deliberately seeds three roots (Port, LabeledPort,
+      // Pill) so a multi-select spans the two port primitives as well as an
+      // unrelated component; every other bench is one root.
+      expect(topLevel(list).length, name).toBe(name === MIXED_BENCH ? 3 : 1);
       for (const inst of list)
-        if (!topLevel(list).includes(inst)) expect(isSlotFill(inst) || inst.type === "Port", inst.id).toBe(true);
+        if (!topLevel(list).includes(inst))
+          expect(
+            isSlotFill(inst) || inst.type === "LabeledPort" || SEEDED_MEMBER_TYPES.has(inst.type),
+            inst.id,
+          ).toBe(true);
     }
   });
 });
@@ -190,8 +204,68 @@ describe("slots — a Block arrives with its anatomy filled, two levels deep", (
     expect(body.props.direction).toBe("column");
     expect(new Set(made.map((m) => m.id)).size).toBe(made.length);
   });
-  it("a leaf makes just itself", () => {
-    expect(makeInstanceWithSlots("Port", 0, 3)).toHaveLength(1);
+  it("a real leaf makes just itself", () => {
+    // Pill has no slots of its own — Port STOPPED being the example here on
+    // 2026-09-15, when its label and secondary became real slots.
+    expect(makeInstanceWithSlots("Pill", 0, 3)).toHaveLength(1);
+  });
+
+  /**
+   * Zach, 2026-09-15: "I want both of the slots fo be real slots, with flex
+   * and then members inside… yes the producer badge can be delted it just a
+   * member of the slot" and "even the text is just a member in the label
+   * slot that can be deleted".
+   */
+  it("a Port arrives as its two slot fills plus each fill's own seeded member — five instances", () => {
+    const made = makeInstanceWithSlots("LabeledPort", 0, 3);
+    expect(made).toHaveLength(5);
+    const port = made[0]!;
+    const byId = new Map(made.map((m) => [m.id, m]));
+    expect(port.members!.map((id) => byId.get(id)!.slot?.id)).toEqual(PORT_SLOTS.map((s) => s.id));
+
+    const label = byId.get(port.members![0]!)!;
+    const secondary = byId.get(port.members![1]!)!;
+    expect([label.type, secondary.type]).toEqual(["Flex", "Flex"]);
+
+    // The seeded content is a real MEMBER of the fill — which is exactly
+    // what makes it deletable through the ordinary members control.
+    const labelMember = byId.get(label.members![0]!)!;
+    const secondaryMember = byId.get(secondary.members![0]!)!;
+    expect(labelMember.type).toBe("CodeField");
+    expect(labelMember.props.value).toBe("port");
+    expect(secondaryMember.type).toBe("Badge");
+    expect(secondaryMember.props.children).toBe("4");
+
+    expect(new Set(made.map((m) => m.id)).size).toBe(made.length);
+  });
+
+  it("every seeded Port on the Block and PortEdges benches brings its slots too — not just the ones built through makeInstanceWithSlots by hand", () => {
+    // The trap this pins: `seedBlockPorts`/`seedPortEdges` used to build
+    // Port instances as bare object literals, which would have shipped 11
+    // ports with no label fill and no secondary fill the moment PORT_SLOTS
+    // landed — invisible from the SlotSpec side.
+    for (const name of ["Block", "PortEdges"]) {
+      const list = INITIAL_BENCHES[name]!;
+      const byId = new Map(list.map((i) => [i.id, i]));
+      const ports = list.filter((i) => i.type === "LabeledPort");
+      expect(ports.length, name).toBeGreaterThan(0);
+      for (const port of ports) {
+        const fills = (port.members ?? []).map((id) => byId.get(id)!);
+        expect(fills.map((f) => f.slot?.id), `${name}/${port.id}`).toEqual(PORT_SLOTS.map((s) => s.id));
+        // …and each fill holds the member TYPE its own SlotSpec seeds.
+        // Slot ids alone were not enough: swapping the CodeField and the
+        // Badge between the two fills left every id assertion green while
+        // /create rendered a badge where the label goes (adversarial
+        // judge, 2026-09-15).
+        for (const [i, fill] of fills.entries()) {
+          const seeded = PORT_SLOTS[i]!.fillMembers ?? [];
+          expect(
+            (fill.members ?? []).map((id) => byId.get(id)!.type),
+            `${name}/${port.id}/${fill.slot?.id}`,
+          ).toEqual(seeded.map((m) => m.type));
+        }
+      }
+    }
   });
   it("a slot narrows what its fill accepts; a fill is named after its slot", () => {
     const made = makeInstanceWithSlots("Block", 0, 0);
@@ -219,16 +293,18 @@ describe("size cascades down the tree", () => {
   const byId = new Map(made.map((m) => [m.id, m]));
   const header = byId.get(made[0]!.members![0]!)!;
   const left = byId.get(header.members![0]!)!;
-  // WHY Port, not Glyph: this proves the CASCADE MECHANISM works two
-  // levels deep to an arbitrary leaf — it was Glyph until Glyph's v2
-  // rewrite (docs/GLYPH-PLAN.md, concurrent with this suite) split what
-  // used to be one cascading `size` field into `sizePreset` (the preset
-  // layer, still `cascades: true`) and a same-named `size` field with a
-  // completely different meaning (a pixel override), so `id: "size"` no
-  // longer means "the size preset" on Glyph the way it does on every
-  // other sized leaf. Port's own `size` field (port.fields.ts) is
-  // untouched and still exactly the shape this test wants.
-  const port = inst("port-99", "Port", {});
+  // WHY LabeledPort, not Glyph and no longer bare Port: this proves the
+  // CASCADE MECHANISM works two levels deep to an arbitrary leaf. It was
+  // Glyph until Glyph's v2 rewrite (docs/GLYPH-PLAN.md) split one cascading
+  // `size` field into `sizePreset` and a same-named `size` meaning a pixel
+  // override, so `id: "size"` stopped meaning "the size preset" there. It
+  // then became `Port` — correct until the 2026-09-15 two-primitive split,
+  // which left the bare `Port` geometry primitive with only
+  // diameter/state/tone/hidden/dimmed/hinting (PORT_FIELD_IDS in
+  // port.fields.ts). `size` lives on the COMPOSITE now, so a bare Port has
+  // no cascading `size` to receive and every assertion below read
+  // undefined. LabeledPort is the sized leaf this test has always meant.
+  const port = inst("port-99", "LabeledPort", {});
   const bench = [...made.map((m) => (m.id === left.id ? { ...m, members: [port.id] } : m)), port];
 
   it("a header set to xl reaches the Port two levels down, naming the header", () => {
@@ -261,8 +337,8 @@ describe("a Block's Ports (Zach, 2026-09-12): members, active Arrangement, per-a
     inst("bar-h", "Bar"),
     inst("flex-b", "Flex"),
     inst("bar-f", "Bar"),
-    { ...inst("port-in", "Port", { children: "in" }), placements: { default: { edge: "left", order: 0, t: 0.5 } } },
-    inst("port-out", "Port", { children: "out" }),
+    { ...inst("port-in", "LabeledPort", { children: "in" }), placements: { default: { edge: "left", order: 0, t: 0.5 } } },
+    inst("port-out", "LabeledPort", { children: "out" }),
   ];
 
   it("blockPorts returns only the Port members, in member order — never the slot fills", () => {
@@ -301,8 +377,8 @@ describe("a Block's Ports (Zach, 2026-09-12): members, active Arrangement, per-a
     // computes order 0 instead of 1: the same not-yet-stored port gets a
     // DIFFERENT answer depending only on how much of the list its caller
     // bothered to pass in.
-    const onTop: Instance = { ...inst("port-on-top", "Port", { children: "on-top" }), placements: { default: { edge: "top", order: 0, t: 0 } } };
-    const fresh: Instance = inst("port-fresh", "Port", { children: "fresh" });
+    const onTop: Instance = { ...inst("port-on-top", "LabeledPort", { children: "on-top" }), placements: { default: { edge: "top", order: 0, t: 0 } } };
+    const fresh: Instance = inst("port-fresh", "LabeledPort", { children: "fresh" });
     const fullList = portPlacementsOf(block, [onTop, fresh], "default");
     expect(fullList["port-fresh"]).toEqual({ edge: "top", order: 1, t: expect.any(Number) });
     const truncatedList = portPlacementsOf(block, [fresh], "default");
@@ -316,7 +392,7 @@ describe("a Block's Ports (Zach, 2026-09-12): members, active Arrangement, per-a
   });
 
   it("portPlacementsOf gives a locked port its fixed corner placement, ignoring anything stored", () => {
-    const lockedPort: Instance = { ...inst("port-fn", "Port"), locked: true, placements: { default: { edge: "bottom", order: 3, t: 0.9 } } };
+    const lockedPort: Instance = { ...inst("port-fn", "LabeledPort"), locked: true, placements: { default: { edge: "bottom", order: 3, t: 0.9 } } };
     expect(portPlacementsOf(block, [lockedPort], "default")).toEqual({ "port-fn": { edge: "top", order: 0, t: 0 } });
   });
 

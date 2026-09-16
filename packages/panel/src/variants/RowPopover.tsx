@@ -9,7 +9,7 @@ import {
   type Layer,
   type PresetSpec,
 } from "@bbox-ui/schema";
-import { readFieldRow, type FieldRowModel } from "../fieldModel";
+import { presetLabelForField, readFieldRow, type FieldRowModel } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
 /**
@@ -95,9 +95,15 @@ function fieldWinner(field: FieldSpec, row: FieldRowModel): FieldWinner {
   return { isMixed: false, winner: "default", resolved: collapsedValue };
 }
 
-function presetLabelFor(presetId: string | undefined, presets: PresetSpec[]): string {
+/** A preset id is only unique within its own ladder, so the FIELD is what
+ *  disambiguates it — see `presetForField`. */
+function presetLabelFor(
+  presetId: string | undefined,
+  presets: PresetSpec[],
+  fieldId: string,
+): string {
   if (!presetId) return "";
-  return presets.find((p) => p.id === presetId)?.label ?? presetId;
+  return presetLabelForField(presets, presetId, fieldId);
 }
 
 function RowPopoverPanel({
@@ -270,7 +276,7 @@ function RowPopoverPanel({
           const state = fieldWinner(field, row);
           const rowText =
             state.winner === "preset" && isGoverned
-              ? `${presetLabelFor(state.presetId, presets)} · ${formatValue(field, state.resolved)}`
+              ? `${presetLabelFor(state.presetId, presets, field.id)} · ${formatValue(field, state.resolved)}`
               : formatValue(field, state.resolved);
 
           return (
@@ -393,7 +399,7 @@ function FieldPopoverBody({
   const value: FieldValue | undefined = state.resolved;
   const headerTag = isGoverned
     ? state.winner === "preset" && state.presetId
-      ? `driven by ${presetLabelFor(state.presetId, presets)}`
+      ? `driven by ${presetLabelFor(state.presetId, presets, field.id)}`
       : state.winner === "override"
         ? "overridden — would otherwise inherit from the preset"
         : "governed by preset"
@@ -453,7 +459,7 @@ function FieldPopoverBody({
               <span style={candidateLayerStyle}>
                 {layerLabel(candidate.layer)}
                 {candidate.presetId
-                  ? ` · ${presets.find((p) => p.id === candidate.presetId)?.label ?? candidate.presetId}`
+                  ? ` · ${presetLabelForField(presets, candidate.presetId, field.id)}`
                   : ""}
               </span>
               <span style={candidateValueStyle}>

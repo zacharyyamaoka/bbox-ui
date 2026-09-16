@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ReactNode } from "react";
 import type { FieldSpec } from "@bbox-ui/schema";
-import { PORT_FIELDS } from "@bbox-ui/core";
+import { LABELED_PORT_FIELDS, PORT_FIELDS } from "@bbox-ui/core";
 import { randomValue, REGISTRY } from "../src/bench";
 import type { RenderContext } from "../src/registerComponent";
 
@@ -74,15 +74,22 @@ describe("randomValue", () => {
     expect((value as string).startsWith("text:")).toBe(true);
   });
 
-  it("Port's host-computed fields are all opted out, and nothing else is", () => {
+  it("LabeledPort's host-computed fields are all opted out, and nothing else is", () => {
     // The disappearing-instance report: reveal rolled to on-hover. Every
     // field whose hint says "Host-computed" is one the host derives, and must
     // be flagged; a persisted field must not be, or Randomize stops
     // exploring. (The shared `state` hint also says "never persisted" — about
     // ONE of its values — so "never persisted" alone is the wrong key.)
-    const hostComputed = PORT_FIELDS.filter((f) => /host-computed/i.test(f.hint ?? "")).map((f) => f.id);
+    const hostComputed = LABELED_PORT_FIELDS.filter((f) => /host-computed/i.test(f.hint ?? "")).map((f) => f.id);
     expect(hostComputed).toEqual(["dimmed", "hinting", "reveal", "producers"]);
+    for (const f of LABELED_PORT_FIELDS) {
+      expect(f.randomize === false, `${f.id} randomize flag`).toBe(hostComputed.includes(f.id));
+    }
+    // The bare `Port` primitive's narrow list is a strict SUBSET selected
+    // out of the composite's (port.fields.ts), so the same invariant has
+    // to hold there without restating which ids it covers.
     for (const f of PORT_FIELDS) {
+      expect(LABELED_PORT_FIELDS, `${f.id} is shared, not a copy`).toContain(f);
       expect(f.randomize === false, `${f.id} randomize flag`).toBe(hostComputed.includes(f.id));
     }
   });

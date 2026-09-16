@@ -28,7 +28,7 @@ import { Glyph } from "./glyph";
 import { TextBox } from "./textBox";
 import { Pill } from "./pill";
 import { Flex } from "./flex";
-import { Port, PortDot, PortLabel } from "./port";
+import { LabeledPort, Port, PortLabel } from "./port";
 import {
   PORT_DIAMETERS,
   PORT_DOT_CENTER_TRANSFORM,
@@ -201,11 +201,11 @@ export interface BlockPortRowsProps {
  * "rows": one row per port in the body area, dot at the row's direction
  * edge with the name flowing inward, inputs before outputs.
  *
- * WHY this reuses `Port` wholesale rather than reassembling `PortDot` +
+ * WHY this reuses `Port` wholesale rather than reassembling `Port` +
  * `PortLabel` by hand: `Port`'s own docblock (`port.tsx`) is explicit that
  * the paired flex-row rendering is for "a standalone specimen", and a row
  * in a list is exactly that — never a wall-mounted absolute position,
- * which is the one case `PortDot`/`PortLabel` must be split apart for
+ * which is the one case `Port`/`PortLabel` must be split apart for
  * (`BlockPortWalls`, below). One real `Port` per row also gets the
  * direction-mirrored name/type ordering for free instead of a second copy
  * of it here.
@@ -229,14 +229,14 @@ export function BlockPortRows({ ports, size = "sm" }: BlockPortRowsProps) {
     >
       {ordered.map((port) => (
         <div key={port.id} data-port-id={port.id} style={{ width: "100%" }}>
-          <Port
+          <LabeledPort
             direction={port.direction}
             edge={portSideForDirection(port.direction)}
             state={port.state ?? "empty"}
             size={size}
           >
             {blockFacePortLabel(port)}
-          </Port>
+          </LabeledPort>
         </div>
       ))}
     </Flex>
@@ -251,7 +251,7 @@ export interface BlockPortWallsProps {
 }
 
 /**
- * "walls": real `PortDot`s at their boundary anchor, label placed inward —
+ * "walls": real `Port`s at their boundary anchor, label placed inward —
  * the same `portDotPlacement`/`PORT_DOT_CENTER_TRANSFORM`/
  * `portLabelPlacement` geometry `block-shape-util.tsx`'s live tldraw
  * adapter already uses for the Simple view's own ports. A port without an
@@ -285,7 +285,7 @@ export function BlockPortWalls({ ports, width, height, diameter = "md" }: BlockP
             className="absolute"
             style={{ left: placement.left, top: placement.top, transform: PORT_DOT_CENTER_TRANSFORM }}
           >
-            <PortDot state={port.state ?? "empty"} diameter={diameter} />
+            <Port state={port.state ?? "empty"} diameter={diameter} />
             {port.name && (
               <PortLabel
                 className="absolute"

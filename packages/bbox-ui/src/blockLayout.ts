@@ -29,15 +29,20 @@ import {
   type TextSize,
 } from "./layout";
 // INTEGRATION (docs/T1-SPEC.md §0): `portLabelOut`/`PortTextLayout` moved
-// to the rebuilt `port.layout.ts` with Lane P's Port rebuild — narrowed
-// from six text-layout members to four (the "-offset" variants were a
-// deliberate redesign, not carried forward; see `port.layout.ts`'s own
-// PORT_TEXT_LAYOUTS and `test/port.layout.test.ts`'s note). Nothing in
-// the rebuilt Port can ever produce "right-offset"/"left-offset" anymore
-// (no field, preset, or story sets it), so `portLabelBox` below drops
-// those two case labels rather than keep an unreachable, untestable
-// branch alive under a second, hand-widened type.
-import { portLabelOut, type PortTextLayout } from "./port.layout";
+// to the rebuilt `port.layout.ts` with Lane P's Port rebuild. That rebuild
+// briefly narrowed six text-layout members to four, dropping the "Offset"
+// pair — the 2026-09-12 two-slot proposal put them back (they are two of
+// the six positions in Zach's own label-slot diagram), and 2026-09-15
+// gave them their real geometry: an Offset label is LIFTED clear of the
+// dot's centre line, where a trace wire runs, rather than pushed further
+// out along it. `portLabelBox` below therefore carries a distinct case per
+// Offset member — same `out`, different `y` — see `SlotAlign`'s WHY.
+import {
+  PORT_LABEL_GAP,
+  TEXT_LAYOUT_AS_PLACEMENT,
+  portLabelOut,
+  type PortTextLayout,
+} from "./port.layout";
 
 /** A rectangle in block-local coordinates (0,0 = container top-left). */
 export interface LayoutBox {
@@ -532,7 +537,7 @@ export interface PortLabelBoxInput {
 /**
  * Where the label's line box sits relative to the dot's box — the same
  * geometry `portLabelPlacement` produces in CSS, as a rectangle. The near
- * edge lands `portLabelGap(layout)` px clear of the dot; cross-axis
+ * edge lands `PORT_LABEL_GAP` px clear of the dot; cross-axis
  * centered. The along-axis distance comes from the shared `portLabelOut`,
  * the one place that quantity is computed — see its WHY.
  */
@@ -541,16 +546,29 @@ export function portLabelBox(input: PortLabelBoxInput): LayoutBox {
   const out = portLabelOut(layout, { w: dotW, h: dotH });
   const w = input.measure(input.label, fontPx, 400);
   const h = Math.round(fontPx * LEADING_TIGHT);
+  // An "Offset" layout shares its plain counterpart's along-axis `out` and
+  // differs ONLY in the cross axis. It reads its placement straight from
+  // `TEXT_LAYOUT_AS_PLACEMENT` — the SAME table the CSS path uses — so the
+  // measured rectangle and the painted box cannot drift, which they twice
+  // did while each computed its own lift.
+  //
+  // `align: "end"` means the slot's BOTTOM edge sits on the reference
+  // line, so in rectangle terms the box's bottom is `dotH / 2 + offsetY`
+  // and its top is that minus `h`. No height-derived lift is involved any
+  // more: the height enters once, here, as the box's own size.
+  const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
+  const alignedTop =
+    preset.align === "end" ? dotH / 2 - h : preset.align === "start" ? dotH / 2 : dotH / 2 - h / 2;
+  const liftedY = alignedTop + preset.offsetY;
   switch (layout) {
     case "right":
-    case "rightOffset":
-      // `out` already carries the "Offset" variant's wider clearance
-      // (`portLabelOut` → `portLabelGap`, port.layout.ts) — same formula,
-      // no separate case needed beyond satisfying the exhaustive switch.
       return { x: out, y: dotH / 2 - h / 2, w, h };
+    case "rightOffset":
+      return { x: out, y: liftedY, w, h };
     case "left":
-    case "leftOffset":
       return { x: dotW - out - w, y: dotH / 2 - h / 2, w, h };
+    case "leftOffset":
+      return { x: dotW - out - w, y: liftedY, w, h };
     case "top":
       return { x: dotW / 2 - w / 2, y: dotH - out - h, w, h };
     case "bot":

@@ -33,6 +33,9 @@ import {
   PORT_TEXT_SIZES,
   SECONDARY_SLOT_LAYOUT_LABELS,
   SECONDARY_SLOT_LAYOUTS,
+  SLOT_ALIGNS,
+  SLOT_ORIGINS,
+  SLOT_ORIGIN_LABELS,
   type PortTextSize,
 } from "./port.layout";
 
@@ -75,6 +78,18 @@ const REVEAL_OPTIONS: FieldOption[] = PORT_REVEALS.map((reveal) => ({
   label: PORT_REVEAL_LABELS[reveal],
 }));
 
+const SLOT_ORIGIN_OPTIONS: FieldOption[] = SLOT_ORIGINS.map((origin) => ({
+  value: origin,
+  label: SLOT_ORIGIN_LABELS[origin],
+}));
+
+const SLOT_ALIGN_OPTIONS: FieldOption[] = SLOT_ALIGNS.map((align) => ({
+  value: align,
+  // Neutral spellings: the control cannot know which axis is free until a
+  // subject has an origin, and "Start/Middle/End" is true on both.
+  label: align === "center" ? "Middle" : align === "start" ? "Start" : "End",
+}));
+
 const SECONDARY_SLOT_LAYOUT_OPTIONS: FieldOption[] = SECONDARY_SLOT_LAYOUTS.map((layout) => ({
   value: layout,
   label: SECONDARY_SLOT_LAYOUT_LABELS[layout],
@@ -95,7 +110,7 @@ const SECONDARY_SLOT_LAYOUT_OPTIONS: FieldOption[] = SECONDARY_SLOT_LAYOUTS.map(
  * then the host-computed interaction axis (now including
  * `secondarySlotLayout`), then the `children`/`placeholder` label fields.
  */
-export const PORT_FIELDS: FieldSpec[] = [
+export const LABELED_PORT_FIELDS: FieldSpec[] = [
   {
     id: "direction",
     label: "Direction",
@@ -148,6 +163,76 @@ export const PORT_FIELDS: FieldSpec[] = [
     // field, `fieldTiers.ts` rule 4) — exactly the gap that made moving it
     // require the Advanced tab instead of the one he actually wanted.
     tier: "simple",
+  },
+  {
+    id: "labelOrigin",
+    label: "Label Origin",
+    kind: "segments",
+    // The SIDE the label anchors to. `textLayout` above is the Simple-tier
+    // PRESET over this plus the two offsets below (Zach, 2026-09-15:
+    // "thoose are just presets!") — pick "Right Offset" there and it
+    // resolves to origin `right` with a lifted `labelOffsetY`. Omit and
+    // the preset decides; set it and you have reached past the preset,
+    // which is what Expert is for.
+    defaultValue: "right",
+    options: SLOT_ORIGIN_OPTIONS,
+    hint: "Which side of the dot the label anchors to. Label Slot Location is the preset over this and the two offsets.",
+    tier: "expert",
+  },
+  {
+    id: "labelAlign",
+    label: "Label Align",
+    kind: "segments",
+    // WHICH EDGE of the slot is the reference point, on the axis the
+    // origin leaves free (Zach, 2026-09-15: "we need to be able to align
+    // to the slot left edge, middle or right edge"). `end` on a side
+    // origin is what makes "clear of the trace wire" a STATIC offset
+    // instead of one derived from the slot's own height — see SlotAlign's
+    // own WHY in port.layout.ts.
+    defaultValue: "center",
+    options: SLOT_ALIGN_OPTIONS,
+    hint: "Which part of the slot lands on the origin's line. On a Left/Right origin Start/Middle/End MEAN its top/middle/bottom edge; on a Top/Bottom origin, its left/middle/right edge.",
+    tier: "expert",
+  },
+  {
+    id: "labelOffsetX",
+    label: "Label Offset X",
+    kind: "number",
+    // NEGATIVE allowed, deliberately (Zach: "lets support both positive
+    // and negative offsets") — the old enum could not express one at all.
+    min: -64,
+    max: 64,
+    step: 1,
+    defaultValue: 0,
+    hint: "Horizontal displacement in screen space: + moves right, - moves left, on every origin.",
+    tier: "expert",
+  },
+  {
+    id: "labelOffsetY",
+    label: "Label Offset Y",
+    kind: "number",
+    // Spans negative too: a lift clear of a trace wire IS a negative Y,
+    // since +Y is down. Renamed from `labelOffset`, which could only ever
+    // be a positive lift and only on the two "Offset" layouts.
+    min: -64,
+    max: 64,
+    step: 1,
+    // ZERO, because this field is a DISPLACEMENT, and a label nobody has
+    // displaced is displaced by nothing.
+    //
+    // It read -23 until 2026-09-15: the lift the since-deleted
+    // `defaultPortLabelLift` computed at "md", from when the value
+    // reached the renderer ONLY on the
+    // two "Offset" layouts. Unification made it apply to EVERY layout, and
+    // that turned a harmless stale literal into a reachable bug —
+    // `defaultArgs` materialises every declared default as an explicit arg
+    // (Storybook's Port meta does exactly that), so a plain `right` label
+    // arrived already carrying -23 and rendered 23px high. A lifted layout
+    // takes its offset from `TEXT_LAYOUT_AS_PLACEMENT` (-PORT_LABEL_GAP,
+    // against the `end` reference edge) and never needed this literal.
+    defaultValue: 0,
+    hint: "Vertical displacement, + down. A lifted label carries a negative value that puts its bottom edge clear of the dot's centre line, where a trace wire runs.",
+    tier: "expert",
   },
   {
     id: "textSize",
@@ -226,6 +311,56 @@ export const PORT_FIELDS: FieldSpec[] = [
     options: SECONDARY_SLOT_LAYOUT_OPTIONS,
     hint: "Where the producer-count badge (or any other secondary-slot content a host composes) sits, hugging the dot. Omit for the auto default: the corner opposite wherever the label is flowing.",
   },
+  // The secondary slot's own origin + offsets — the SAME three controls
+  // the label has, over the SAME `SlotOrigin` type. That symmetry is the
+  // point of the unification: one model for both slots, so "left" means
+  // the same thing in both and neither needs its own vocabulary.
+  {
+    id: "secondaryOrigin",
+    label: "Secondary Origin",
+    kind: "segments",
+    defaultValue: "left",
+    options: SLOT_ORIGIN_OPTIONS,
+    hint: "Which side of the dot the secondary slot hugs. Secondary Slot is the preset over this and the two offsets.",
+    tier: "expert",
+  },
+  {
+    id: "secondaryAlign",
+    label: "Secondary Align",
+    kind: "segments",
+    // WHICH EDGE of the slot is the reference point, on the axis the
+    // origin leaves free (Zach, 2026-09-15: "we need to be able to align
+    // to the slot left edge, middle or right edge"). `end` on a side
+    // origin is what makes "clear of the trace wire" a STATIC offset
+    // instead of one derived from the slot's own height — see SlotAlign's
+    // own WHY in port.layout.ts.
+    defaultValue: "center",
+    options: SLOT_ALIGN_OPTIONS,
+    hint: "Which part of the slot lands on the origin's line. On a Left/Right origin Start/Middle/End MEAN its top/middle/bottom edge; on a Top/Bottom origin, its left/middle/right edge.",
+    tier: "expert",
+  },
+  {
+    id: "secondaryOffsetX",
+    label: "Secondary Offset X",
+    kind: "number",
+    min: -64,
+    max: 64,
+    step: 1,
+    defaultValue: 0,
+    hint: "Horizontal displacement in screen space: + moves right, - moves left, on every origin.",
+    tier: "expert",
+  },
+  {
+    id: "secondaryOffsetY",
+    label: "Secondary Offset Y",
+    kind: "number",
+    min: -64,
+    max: 64,
+    step: 1,
+    defaultValue: 0,
+    hint: "Vertical displacement, + down.",
+    tier: "expert",
+  },
   {
     id: "children",
     // WHY not bare "Label", which it was: a Port's panel already carries a
@@ -241,13 +376,75 @@ export const PORT_FIELDS: FieldSpec[] = [
     // `placeholder`), not a special "fall through to something else" case
     // the way the old three-span rendering needed.
     defaultValue: "",
-    hint: "The CodeField's whole value — a real, editable single-line code text box (grammar-free; wiring the Python name: Type = default grammar/autocomplete is a later step).",
+    hint: "Fallback label for a host with no label slot (the tldraw/React Flow adapters, blockFace, Storybook). A host that supplies a real label slot overrides this outright — edit the slot's own CodeField member instead.",
+    // DEMOTED to Expert 2026-09-15, when the label became a real slot whose
+    // text is an ordinary, deletable member (Zach: "even the text is just a
+    // member in the label slot that can be deleted"). It is NOT dead — every
+    // prop-only host still renders its label from this string, and Storybook
+    // drives it through exactly this field — but in /create the label slot
+    // always exists and always wins, so a "Custom Label" row sitting in
+    // Simple would be a control that silently does nothing, which is the
+    // one thing this panel keeps designing out.
+    tier: "expert",
   },
   {
     id: "placeholder",
     label: "Placeholder",
     kind: "text",
     defaultValue: "",
-    hint: "Shown in the label's CodeField when Label is empty.",
+    hint: "Shown in the fallback label's CodeField when Custom Label is empty. Same prop-only-host scope as Custom Label above.",
+    tier: "expert",
   },
 ];
+
+/**
+ * The bare `Port` primitive's own fields — the geometry and paint of the
+ * dot, nothing else (Zach, 2026-09-15: "Port is just the actual like Port
+ * geometry its self in isolation").
+ *
+ * WHY this is SELECTED out of `LABELED_PORT_FIELDS` rather than written
+ * as its own literal: every one of these describes the same prop on both
+ * components — `LabeledPort` forwards them straight down to the `Port` it
+ * composes. Two hand-written literals would be two places for a default,
+ * an option set or a tier to drift, and the drift would be silent because
+ * each list is internally consistent. Selecting keeps one source.
+ *
+ * WHAT IS DELIBERATELY ABSENT, and why each: `direction`/`edge`/
+ * `textLayout`/`labelOffset`/`textSize`/`secondarySlotLayout`/`children`/
+ * `placeholder`/`disabled` are all statements about a LABEL or a SLOT,
+ * which a bare Port does not have. `reveal`/`producers` are container
+ * facts (a visibility policy, a many-to-one count) that only mean
+ * something once a port is arranged with other things.
+ *
+ * `size` and `lens` are absent for a sharper reason (adversarial judge,
+ * 2026-09-15): `PortProps` declares NEITHER, so listing them put two
+ * controls in the bench that moved nothing and spread two inert
+ * attributes onto the root `<span>`. `size` is the cascade RUNG a header
+ * hands down, and it governs `diameter` + `textSize` together — half of
+ * that pair is a label fact, so the rung belongs to the composite, which
+ * resolves it and passes the bare Port a settled `diameter`. `lens` paints
+ * nothing anywhere yet (docs/T1-SPEC.md §3 defines no lens tokens), so on
+ * a primitive it would be a control that does nothing by construction.
+ *
+ * `test/port.fields.test.ts` pins this structurally: every id here must be
+ * a prop `Port` actually DESTRUCTURES, proved by checking none of them
+ * survives onto the rendered root. That is what makes this list unable to
+ * drift back out of sync with the component.
+ */
+const PORT_FIELD_IDS = [
+  "diameter",
+  "state",
+  "tone",
+  "hidden",
+  "dimmed",
+  "hinting",
+] as const;
+
+export const PORT_FIELDS: FieldSpec[] = PORT_FIELD_IDS.map((id) => {
+  const found = LABELED_PORT_FIELDS.find((f) => f.id === id);
+  // Not a defensive `?? fallback`: a missing id means the composite
+  // renamed or dropped a field the primitive still claims to expose, and
+  // failing loudly at import is the only way that stays visible.
+  if (!found) throw new Error(`PORT_FIELD_IDS names "${id}", which LABELED_PORT_FIELDS does not declare`);
+  return found;
+});

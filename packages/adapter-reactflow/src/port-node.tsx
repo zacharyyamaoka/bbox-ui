@@ -1,7 +1,7 @@
 import type { Node, NodeProps } from "@xyflow/react";
 
 import {
-  PortDot,
+  Port,
   PortLabel,
   portLabelPlacement,
   type PortSize,
@@ -15,7 +15,7 @@ import {
  * to nodes — so a standalone `bbox-port` drawn on a tldraw board has no
  * natural counterpart there. The comparison still needs the dot's geometry,
  * so the smallest possible host concept carries it: a node that paints ONLY
- * the core `PortDot` (stretched to w×h exactly like the tldraw shape util
+ * the core `Port` (stretched to w×h exactly like the tldraw shape util
  * does) at the same world point. The compare readout discloses the wrapper
  * rather than hiding it.
  */
@@ -41,7 +41,7 @@ export function BBoxPortNode({ id, data }: NodeProps<BBoxPortNodeType>) {
       className="relative"
       style={{ width: data.w, height: data.h }}
     >
-      <PortDot
+      <Port
         state={data.state}
         diameter={data.size}
         className="block"

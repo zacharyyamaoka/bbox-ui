@@ -8,7 +8,7 @@ import {
   type PresetSpec,
 } from "@bbox-ui/schema";
 import { FieldTraceRow, type Subject } from "../FieldTraceRow";
-import { readFieldRow } from "../fieldModel";
+import { presetLabelForField, readFieldRow } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 import {
   classifyField,
@@ -158,7 +158,7 @@ function GovernedFieldRow({
     valueText = formatResolvedValue(field, trace.resolved);
   } else {
     mark = "driven";
-    const presetLabel = presets.find((p) => p.id === trace.winningPresetId)?.label ?? trace.winningPresetId;
+    const presetLabel = presetLabelForField(presets, trace.winningPresetId, field.id);
     valueText = `${presetLabel} · ${formatResolvedValue(field, trace.resolved)}`;
   }
   const colors = MARK_COLOR[mark];

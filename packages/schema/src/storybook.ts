@@ -122,13 +122,41 @@ export function presetArgs(
   // makes a partial list unrepresentable rather than merely discouraged.
   presets: PresetSpec[],
   presetId: string,
+  /**
+   * Which ladder the id belongs to. Only needed when two families share an
+   * id — REQUIRED then, because a preset's `id` must equal one legal value
+   * of its selector's field, so two selectors whose fields share a value
+   * legitimately share an id. LabeledPort is the live case: `textLayout`
+   * and `secondarySlotLayout` both have `leftOffset`/`rightOffset`
+   * members. Selecting on id alone silently returned whichever ladder sat
+   * first in the array — the secondary story would have rendered the
+   * LABEL preset and left its own selector untouched, which is the exact
+   * class of silent-wrong-layer bug this function was written to stop.
+   */
+  selector?: string,
 ): Record<string, FieldValue> {
-  const preset = presets.find((candidate) => candidate.id === presetId);
-  if (!preset) {
+  const matches = presets.filter(
+    (candidate) =>
+      candidate.id === presetId && (selector === undefined || candidate.selector === selector),
+  );
+  if (matches.length === 0) {
+    const have = presets.map((p) => `${p.selector}:${p.id}`).join(", ") || "none";
     throw new Error(
-      `presetArgs: no preset with id "${presetId}" (have: ${presets.map((p) => p.id).join(", ") || "none"})`,
+      `presetArgs: no preset with id "${presetId}"${
+        selector === undefined ? "" : ` on selector "${selector}"`
+      } (have: ${have})`,
     );
   }
+  // AMBIGUOUS, so refuse rather than guess. Throwing is the whole fix:
+  // the caller knows which ladder it meant and can say so; this function
+  // cannot, and picking the first match is how it would be wrong quietly.
+  if (matches.length > 1) {
+    throw new Error(
+      `presetArgs: "${presetId}" is ambiguous — ${matches.length} presets share it, on selectors ` +
+        `${matches.map((p) => `"${p.selector}"`).join(" and ")}. Pass the selector as the 4th argument.`,
+    );
+  }
+  const preset = matches[0]!;
   // WHY the preset's own values are NOT spread in: doing so stored the
   // resolved paint as instance overrides, so every row of a Presets story
   // looked right while being produced entirely by the override layer. The

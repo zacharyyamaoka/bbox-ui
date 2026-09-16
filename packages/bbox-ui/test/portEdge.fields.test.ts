@@ -1,13 +1,13 @@
-import { createElement, Fragment } from "react";
+import { Children, createElement, Fragment, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { defaultArgs, toArgTypes } from "@bbox-ui/schema";
 
 import { PORT_EDGE_FIELDS, PORT_EDGE_PRESETS } from "../src/portEdge.fields";
-import { PortEdge } from "../src/portEdge";
+import { PortEdge, cascadeInto } from "../src/portEdge";
 // A real Port, not a stand-in span: since 2026-09-12 the cascade stamps only
 // component elements (a host element cannot take the prop) and looks
 // through hosts by their children.
-import { Port } from "../src/port";
+import { LabeledPort } from "../src/port";
 import { PORT_TEXT_LAYOUTS } from "../src/port.layout";
 
 /**
@@ -36,7 +36,7 @@ const bareEdge = portEdgeElement();
 // mapped array sits at index 0 of the root `<div>`'s own children, the
 // `+N more` row (or `false`) at index 1. See `portEdge.tsx`.
 function mappedChild(props: Record<string, unknown> = {}, childProps: Record<string, unknown> = {}) {
-  const el = portEdgeElement({ ...props, children: createElement(Port, childProps) });
+  const el = portEdgeElement({ ...props, children: createElement(LabeledPort, childProps) });
   const mapped = el.props.children[0] as unknown[];
   return mapped[0] as { props: Record<string, unknown> };
 }
@@ -94,7 +94,7 @@ describe("PORT_EDGE_FIELDS", () => {
   it("reaches a child wrapped in a Fragment — the arrangement both real callers use", () => {
     const el = portEdgeElement({
       edge: "top",
-      children: createElement(Fragment, null, createElement(Port, {}), createElement(Port, {})),
+      children: createElement(Fragment, null, createElement(LabeledPort, {}), createElement(LabeledPort, {})),
     });
     const mapped = el.props.children[0] as unknown[];
     const flattened = mapped.flat(Infinity) as Array<{ props: Record<string, unknown> }>;
@@ -107,7 +107,7 @@ describe("PORT_EDGE_FIELDS", () => {
   it("a Fragment-wrapped child that sets its own textLayout still wins", () => {
     const el = portEdgeElement({
       edge: "top",
-      children: createElement(Fragment, null, createElement(Port, { textLayout: "left" })),
+      children: createElement(Fragment, null, createElement(LabeledPort, { textLayout: "left" })),
     });
     const mapped = el.props.children[0] as unknown[];
     const flattened = mapped.flat(Infinity) as Array<{ props: Record<string, unknown> }>;
@@ -118,7 +118,7 @@ describe("PORT_EDGE_FIELDS", () => {
     const Wrapper = ({ children }: { children?: unknown }) => children as never;
     const el = portEdgeElement({
       edge: "top",
-      children: createElement("span", { "data-slot": "port-group" }, createElement(Wrapper, null, createElement(Port, {}))),
+      children: createElement("span", { "data-slot": "port-group" }, createElement(Wrapper, null, createElement(LabeledPort, {}))),
     });
     const mapped = el.props.children[0] as unknown[];
     const span = mapped[0] as { props: Record<string, unknown> };
@@ -180,5 +180,45 @@ describe("PORT_EDGE_FIELDS", () => {
     expect(argTypes.layout.control).toBe("select");
     expect(argTypes.textLayout.control).toBe("select");
     expect(argTypes.hiddenCount.control).toBe("number");
+  });
+});
+
+describe("cascadeInto does not re-wrap a leaf's text children", () => {
+  /**
+   * The 2026-09-15 crash: `Children.map` normalises whatever it is handed
+   * into an ARRAY, so a bare `<Port>cfg</Port>` came back carrying
+   * `children: ["cfg"]`. Inert while a label was only rendered — a hard,
+   * whole-page crash once `PortLabel` grew a real CodeField, because
+   * CodeMirror's `EditorState.create` calls `(config.doc || "").split(…)`
+   * and an array has no `.split`. Every Block and PortEdges bench on
+   * /create white-screened.
+   */
+  it("leaves a Port's string label a STRING, not a one-element array", () => {
+    const cascaded = cascadeInto(createElement(LabeledPort, null, "cfg"), "right");
+    const [only] = Children.toArray(cascaded) as ReactElement<{ children?: unknown }>[];
+    expect(only!.props.children).toBe("cfg");
+    expect(Array.isArray(only!.props.children)).toBe(false);
+  });
+
+  it("still cascades textLayout into the port it stamps", () => {
+    const cascaded = cascadeInto(createElement(LabeledPort, null, "cfg"), "top");
+    const [only] = Children.toArray(cascaded) as ReactElement<{ textLayout?: string }>[];
+    expect(only!.props.textLayout).toBe("top");
+  });
+
+  it("still descends through a HOST wrapper to reach the Port underneath — the case the recursion exists for", () => {
+    const wrapped = createElement("span", null, createElement(LabeledPort, null, "cfg"));
+    const cascaded = cascadeInto(wrapped, "bot");
+    const [host] = Children.toArray(cascaded) as ReactElement<{ children?: ReactNode }>[];
+    const [port] = Children.toArray(host!.props.children) as ReactElement<{
+      textLayout?: string;
+      children?: unknown;
+    }>[];
+    expect(port!.props.textLayout).toBe("bot");
+    expect(port!.props.children).toBe("cfg");
+  });
+
+  it("returns a bare string unchanged, so nothing downstream has to guess", () => {
+    expect(cascadeInto("cfg", "right")).toBe("cfg");
   });
 });

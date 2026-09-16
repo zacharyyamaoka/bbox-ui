@@ -2,14 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   assertDisjointPresets,
   defaultArgs,
+  presetArgs,
   governedFieldIds,
   resolveField,
   toArgTypes,
 } from "@bbox-ui/schema";
 import { CodeField } from "../src/codeField";
-import { PORT_FIELDS } from "../src/port.fields";
-import { PORT_PRESETS } from "../src/port.presets";
-import { Port, PortCountBadge, PortDot, PortLabel, portResolutionSubject } from "../src/port";
+import { LABELED_PORT_FIELDS, PORT_FIELDS } from "../src/port.fields";
+import {
+  LABEL_PLACEMENT_PRESETS,
+  LABELED_PORT_PRESETS,
+  PORT_PRESETS,
+  SECONDARY_PLACEMENT_PRESETS,
+} from "../src/port.presets";
+import { LabeledPort, Port, PortCountBadge, PortLabel, portResolutionSubject } from "../src/port";
 import {
   APPEARANCE_STATES,
   LENSES,
@@ -23,8 +29,11 @@ import {
   PORT_SIZE_RUNGS,
   PORT_TEXT_LAYOUTS,
   PORT_TEXT_SIZES,
+  SECONDARY_LAYOUT_AS_ORIGIN,
   SECONDARY_SLOT_LAYOUTS,
   defaultSecondarySlotLayout,
+  TEXT_LAYOUT_AS_PLACEMENT,
+  slotPlacementStyle,
   inwardTextLayout,
 } from "../src/port.layout";
 
@@ -45,25 +54,25 @@ function call(fn: any, props: Record<string, unknown> = {}) {
 }
 
 function field(id: string) {
-  const found = PORT_FIELDS.find((f) => f.id === id);
-  if (!found) throw new Error(`no PORT_FIELDS entry for "${id}"`);
+  const found = LABELED_PORT_FIELDS.find((f) => f.id === id);
+  if (!found) throw new Error(`no LABELED_PORT_FIELDS entry for "${id}"`);
   return found;
 }
 
 // The bare, fully-defaulted tree: Port -> [PortDot element, PortLabel element].
-const bareRoot = call(Port);
+const bareRoot = call(LabeledPort);
 const [dotElement, labelElement] = bareRoot.props.children as [
-  { props: Record<string, unknown> },
+  { type: unknown; props: Record<string, unknown> },
   { props: Record<string, unknown> },
 ];
 // Invoke the two child components themselves to read THEIR real output —
 // `Port` only threads props through; the geometry/paint live in these.
-const dotRendered = call(PortDot, dotElement.props);
+const dotRendered = call(Port, dotElement.props);
 const labelRendered = call(PortLabel, labelElement.props);
 
 describe("PORT_FIELDS", () => {
   it("has exactly Port's real props, in panel order — own fields, then the shared APPEARANCE_FIELDS bundle, then the author-set hidden/disabled toggles, then the host-computed interaction axis, then the label fields", () => {
-    expect(PORT_FIELDS.map((f) => f.id)).toEqual([
+    expect(LABELED_PORT_FIELDS.map((f) => f.id)).toEqual([
       // "name"/"type"/"defaultValue" REMOVED 2026-09-12 (the two-slot
       // proposal) — folded into the single `children` field, now the
       // label slot's real CodeField value. See port.tsx's own module doc.
@@ -76,6 +85,16 @@ describe("PORT_FIELDS", () => {
       // sites); Python-specific annotations are SystemSketch's business,
       // not this package's. See port.layout.ts's own WHY.
       "textLayout",
+      // The label's placement, unified 2026-09-15: `textLayout` above is
+      // the Simple-tier PRESET over exactly these three (Zach: "thoose are
+      // just presets!"), which are the Expert-tier truth. `labelOffsetY`
+      // replaces the old positive-only `labelOffset`.
+      "labelOrigin",
+      // WHICH EDGE of the slot is the reference point — what makes the
+      // lift static instead of derived from the slot's own height.
+      "labelAlign",
+      "labelOffsetX",
+      "labelOffsetY",
       "textSize",
       "state",
       "tone",
@@ -91,6 +110,12 @@ describe("PORT_FIELDS", () => {
       "reveal",
       "producers",
       "secondarySlotLayout",
+      // …and the secondary slot's matching trio, over the SAME SlotOrigin
+      // type. One model for both slots is the point of the unification.
+      "secondaryOrigin",
+      "secondaryAlign",
+      "secondaryOffsetX",
+      "secondaryOffsetY",
       "children",
       "placeholder",
     ]);
@@ -166,13 +191,13 @@ describe("PORT_FIELDS", () => {
     expect(field("tone").defaultValue).toBe("neutral");
     expect(field("lens").defaultValue).toBe("normal");
     // lensBefore is intentionally out of the bundle; see appearance.fields.ts.
-    expect(PORT_FIELDS.some((f) => f.id === "lensBefore")).toBe(false);
+    expect(LABELED_PORT_FIELDS.some((f) => f.id === "lensBefore")).toBe(false);
     expect(dotElement.props.state).toBe("empty");
     expect(dotElement.props.tone).toBe("neutral");
     expect(bareRoot.props["data-state"]).toBe("empty");
     // "normal" lens is not surfaced as a `data-lens` attribute at all.
     expect(bareRoot.props["data-lens"]).toBeUndefined();
-    const changedRoot = call(Port, { lens: "changed" });
+    const changedRoot = call(LabeledPort, { lens: "changed" });
     expect(changedRoot.props["data-lens"]).toBe("changed");
   });
 
@@ -183,29 +208,41 @@ describe("PORT_FIELDS", () => {
     expect(field("producers").defaultValue).toBe(0);
     expect(dotElement.props.dimmed).toBe(false);
     expect(dotElement.props.hinting).toBe(false);
-    // PortDot itself no longer has a `producers` prop or any producers-
-    // aware logic (port.tsx's own module doc) — Port composes the count
-    // badge as PortDot's generic `secondarySlot` content instead. 2+
-    // producers is still the real threshold, now visible one level up.
-    expect(dotElement.props.secondarySlot).toBeUndefined();
-    type DotProps = { props: { secondarySlot?: { type: unknown; props: { count: number } } } };
-    const [twoProducersDot] = call(Port, { producers: 2 }).props.children as [DotProps, unknown];
-    expect(twoProducersDot.props.secondarySlot).toBeDefined();
-    expect(twoProducersDot.props.secondarySlot!.type).toBe(PortCountBadge);
-    expect(twoProducersDot.props.secondarySlot!.props.count).toBe(2);
-    const [oneProducerDot] = call(Port, { producers: 1 }).props.children as [DotProps, unknown];
-    expect(oneProducerDot.props.secondarySlot).toBeUndefined();
-    // The generic slot itself: PortDot renders nothing for a nullish
-    // secondarySlot, and something (non-false) once given ANY content —
-    // children: [halo, core-or-false, slot-or-false].
-    expect(dotRendered.props.children[2]).toBe(false);
-    expect(call(PortDot, { secondarySlot: "cue" }).props.children[2]).not.toBe(false);
-    expect(call(PortDot, { secondarySlot: undefined }).props.children[2]).toBe(false);
+    // The bare `Port` geometry primitive has NO producers prop, no
+    // secondary slot and no producers-aware logic at all (the 2026-09-15
+    // split: "Port is just the actual like Port geometry its self in
+    // isolation"). `LabeledPort` composes the count badge into the slot
+    // it owns. 2+ producers is still the real threshold, now one level up.
+    expect("secondarySlot" in dotElement.props).toBe(false);
+    // With no slot content, LabeledPort's first child IS the bare Port —
+    // no wrapper at all.
+    expect(dotElement.type).toBe(Port);
+
+    // With a badge, the first child becomes the geometry wrapper carrying
+    // [Port, secondary-slot span].
+    type Wrapper = {
+      props: {
+        "data-slot"?: string;
+        children: [unknown, { props: { children: { type: unknown; props: { count: number } } } }];
+      };
+    };
+    const [twoProducers] = call(LabeledPort, { producers: 2 }).props.children as [Wrapper, unknown];
+    expect(twoProducers.props["data-slot"]).toBe("port-geometry");
+    const badge = twoProducers.props.children[1].props.children;
+    expect(badge.type).toBe(PortCountBadge);
+    expect(badge.props.count).toBe(2);
+
+    // Below the threshold there is no slot content, so no wrapper either.
+    const [oneProducer] = call(LabeledPort, { producers: 1 }).props.children as [
+      { type: unknown },
+      unknown,
+    ];
+    expect(oneProducer.type).toBe(Port);
   });
 
   it("`hidden: true` renders nothing — Port, PortDot and PortLabel all return null", () => {
+    expect(call(LabeledPort, { hidden: true })).toBeNull();
     expect(call(Port, { hidden: true })).toBeNull();
-    expect(call(PortDot, { hidden: true })).toBeNull();
     expect(call(PortLabel, { hidden: true })).toBeNull();
   });
 
@@ -226,11 +263,11 @@ describe("PORT_FIELDS", () => {
   });
 
   it("defaultArgs mirrors every field's own declared defaultValue, one entry per field", () => {
-    const args = defaultArgs(PORT_FIELDS);
-    for (const f of PORT_FIELDS) {
+    const args = defaultArgs(LABELED_PORT_FIELDS);
+    for (const f of LABELED_PORT_FIELDS) {
       expect(args[f.id]).toBe(f.defaultValue);
     }
-    expect(Object.keys(args)).toHaveLength(PORT_FIELDS.length);
+    expect(Object.keys(args)).toHaveLength(LABELED_PORT_FIELDS.length);
   });
 
   it("every segments field's options are exactly its real source union, in the real declared order", () => {
@@ -254,7 +291,7 @@ describe("PORT_FIELDS", () => {
   });
 
   it("toArgTypes maps every segments field to a select control, number/toggle/text correctly", () => {
-    const argTypes = toArgTypes(PORT_FIELDS);
+    const argTypes = toArgTypes(LABELED_PORT_FIELDS);
     expect(argTypes.direction.control).toBe("select");
     expect(argTypes.size.control).toBe("select");
     expect(argTypes.diameter.control).toBe("select");
@@ -325,20 +362,20 @@ describe("PORT_PRESETS — governed-set discipline, now that `size` gives Port a
 
 describe("Port — the real component reached through the same size cascade the trace panel reads", () => {
   it('size:"xl" paints an 18px dot (Port\'s diameter ceiling) and xl (44px) text', () => {
-    const xlRoot = call(Port, { size: "xl" });
+    const xlRoot = call(LabeledPort, { size: "xl" });
     const [xlDotElement, xlLabelElement] = xlRoot.props.children as [
       { props: Record<string, unknown> },
       { props: Record<string, unknown> },
     ];
     expect(xlDotElement.props.diameter).toBe("lg");
     expect(xlLabelElement.props.textSize).toBe("xl");
-    const xlDotRendered = call(PortDot, xlDotElement.props);
+    const xlDotRendered = call(Port, xlDotElement.props);
     expect(xlDotRendered.props.style.width).toBe(PORT_DIAMETERS.lg);
     expect(xlDotRendered.props.style.height).toBe(PORT_DIAMETERS.lg);
   });
 
   it('an explicit diameter override reaches past size — size:"sm" with diameter:"lg" paints the explicit diameter; textSize still follows size', () => {
-    const overriddenRoot = call(Port, { size: "sm", diameter: "lg" });
+    const overriddenRoot = call(LabeledPort, { size: "sm", diameter: "lg" });
     const [dotElement2, labelElement2] = overriddenRoot.props.children as [
       { props: Record<string, unknown> },
       { props: Record<string, unknown> },
@@ -359,7 +396,149 @@ describe("Port — the real component reached through the same size cascade the 
  * default `edge`/`textLayout`). Not exercised by any test above this one,
  * which only ever call `Port`/`PortDot` directly — never this function.
  */
+/**
+ * Found by an adversarial judge, 2026-09-15. `labelOffset: 0` is a legal
+ * tuned lift ("bottom edge exactly on the wire" — the field's own `min`
+ * is 0), but the flex path used to gate its bottom-anchoring on
+ * `labelLift > 0`. At exactly 0 the anchored path put the label's bottom
+ * on the dot's centre line while the flex path fell back to centring the
+ * label ON the dot — the two renderings of the same Port disagreeing by
+ * half a label height at one endpoint.
+ */
+/**
+ * The unified model deleted the old `labelOffset: 0` endpoint problem
+ * outright rather than patching it. There is no longer a "lifted layout
+ * carrying a zero lift" state to disagree about: `offsetY` IS the
+ * displacement, so 0 means flush, negative means up, positive means down.
+ * The flex row's bottom-anchoring is derived from the resolved offset
+ * (`labelLift = max(0, -offsetY)`), so the two paths cannot disagree by
+ * construction — the earlier bug is unrepresentable, not just fixed.
+ */
+describe("labelOffsetY is a real displacement, in both directions", () => {
+  // Reading the label's own style out of the flex row.
+  const labelStyleOf = (props: Record<string, unknown>) => {
+    const [, label] = call(LabeledPort, { children: "x", ...props }).props.children as [
+      unknown,
+      { props: { style?: { transform?: string } } },
+    ];
+    return label.props.style;
+  };
+
+  it("offsetY 0 on a CENTRED align is flush — no style at all", () => {
+    expect(labelStyleOf({ textLayout: "right", labelOffsetY: 0 })).toBeUndefined();
+  });
+
+  /** A lifted preset is no longer "an offset" — it is a reference EDGE
+   *  (`align: "end"`) plus a static gap, so zeroing the offset still
+   *  leaves the chosen edge on the line. That is the whole point: the
+   *  placement stops depending on the slot's own height. */
+  it("a lifted preset keeps its reference edge even at offsetY 0", () => {
+    expect(labelStyleOf({ textLayout: "rightOffset", labelOffsetY: 0 })!.transform).toBe(
+      "translate(0px, calc(-50% + 0px))",
+    );
+  });
+
+  it("a NEGATIVE offsetY lifts", () => {
+    expect(labelStyleOf({ textLayout: "right", labelOffsetY: -30 })!.transform).toBe("translate(0px, -30px)");
+  });
+
+  it("a POSITIVE offsetY pushes DOWN — the direction the old enum could not express", () => {
+    expect(labelStyleOf({ textLayout: "right", labelOffsetY: 12 })!.transform).toBe("translate(0px, 12px)");
+  });
+
+  it("a NEGATIVE offsetX pulls the label back toward the dot — the other direction the enum could not express", () => {
+    expect(labelStyleOf({ textLayout: "right", labelOffsetX: -6 })!.transform).toBe("translate(-6px, 0px)");
+  });
+
+  it("uses screen-space signs on either side — +x is rightward whichever origin the label hangs off", () => {
+    expect(labelStyleOf({ textLayout: "left", labelOffsetX: 6 })!.transform).toBe("translate(6px, 0px)");
+    expect(labelStyleOf({ textLayout: "right", labelOffsetX: 6 })!.transform).toBe("translate(6px, 0px)");
+  });
+
+  /** The Expert origin must move the label in the FLEX path too — it used
+   *  to be read only by the anchored one, so setting it in /create did
+   *  nothing (adversarial judge, 2026-09-15). */
+  it("labelOrigin drives the flex row's direction, not just the anchored placement", () => {
+    const rowFor = (props: Record<string, unknown>) =>
+      call(LabeledPort, { children: "x", ...props }).props.style.flexDirection;
+    expect(rowFor({ textLayout: "right" })).toBe("row");
+    // Preset says right, Expert says left — the Expert value must win.
+    expect(rowFor({ textLayout: "right", labelOrigin: "left" })).toBe("row-reverse");
+    expect(rowFor({ textLayout: "right", labelOrigin: "top" })).toBe("column-reverse");
+    expect(rowFor({ textLayout: "right", labelOrigin: "bottom" })).toBe("column");
+  });
+
+  /**
+   * The flex row and an absolutely-positioned host must displace a label
+   * by the SAME rule — that equivalence is the whole reason the offsets
+   * ride in a transform in both paths instead of a margin in one of them.
+   */
+  it("the flex row and the anchored path agree on the displacement", () => {
+    const placement = { origin: "right" as const, align: "center" as const, offsetX: 4, offsetY: -18 };
+    const flex = labelStyleOf({ textLayout: "right", labelOffsetX: 4, labelOffsetY: -18 })!.transform;
+    const anchored = slotPlacementStyle(placement, { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md }, 8).transform;
+    // The anchored one folds in the cross-axis centring; strip it and the
+    // two carry the identical displacement.
+    expect(flex).toBe("translate(4px, -18px)");
+    expect(anchored).toBe("translate(4px, calc(-50% + -18px))");
+  });
+});
+
+/**
+ * The bare `Port` primitive's field list, checked STRUCTURALLY against the
+ * component rather than by eye.
+ *
+ * An adversarial judge (2026-09-15) caught `size` and `lens` in this list
+ * while `PortProps` declared neither: the bench showed two controls that
+ * moved nothing, and `Port` spread both onto its root `<span>` as inert
+ * DOM attributes. Asserting a hand-typed id list would not have caught
+ * that — the list agreed with itself. Asserting that nothing SURVIVES the
+ * destructure does, for every field, forever.
+ */
+describe("PORT_FIELDS names only props the bare Port really consumes", () => {
+  it("no field id leaks through to the rendered root — every one is destructured", () => {
+    const leaked = PORT_FIELDS.filter((f) => {
+      const rendered = call(Port, { [f.id]: f.defaultValue });
+      return rendered !== null && f.id in rendered.props;
+    }).map((f) => f.id);
+    expect(leaked).toEqual([]);
+  });
+
+  it("is a strict subset of the composite's list, sharing the very same FieldSpec objects", () => {
+    for (const f of PORT_FIELDS) expect(LABELED_PORT_FIELDS, f.id).toContain(f);
+    expect(PORT_FIELDS.length).toBeLessThan(LABELED_PORT_FIELDS.length);
+  });
+});
+
 describe("portResolutionSubject", () => {
+  /**
+   * Found by an adversarial probe, 2026-09-15: `labelOffset` was resolved
+   * from `props.diameter ?? "md"`, but `diameter` is GOVERNED by the `size`
+   * cascade — so a Port carrying `size: "lg"` and no explicit `diameter`
+   * renders an 18px dot (lift 22) while the panel printed the `md` lift
+   * (19). The panel disagreeing with the pixels is the ONE thing this
+   * function exists to prevent, so it is pinned against the component's
+   * own rendered output rather than against a retyped number.
+   */
+  /**
+   * The lift no longer scales with the text size — it cannot, now that the
+   * reference edge does the work. This pins the stronger property that
+   * replaced it: the resolved offset is the SAME at every size, because it
+   * is a static gap rather than something derived from the label's height
+   * (Zach: "We defintily don't want to kinda be dynamically calculating
+   * the x/y offset if the slot length changes").
+   */
+  it("reports one static offset for a lifted layout, identical at every size rung", () => {
+    const reported = (["sm", "md", "lg", "xl"] as const).map(
+      (size) => portResolutionSubject({ size, textLayout: "rightOffset" }).labelOffsetY,
+    );
+    expect(new Set(reported).size, `got ${JSON.stringify(reported)}`).toBe(1);
+    expect(reported[0]).toBe(TEXT_LAYOUT_AS_PLACEMENT.rightOffset.offsetY);
+    // …and the align that makes it sufficient comes through too.
+    expect(portResolutionSubject({ textLayout: "rightOffset" }).labelAlign).toBe("end");
+  });
+
+
   it("fills textLayout from inwardTextLayout(edge) when omitted, defaulting edge to \"left\"", () => {
     expect(portResolutionSubject({}).textLayout).toBe(inwardTextLayout("left"));
     expect(portResolutionSubject({ edge: "top" }).textLayout).toBe(inwardTextLayout("top"));
@@ -381,5 +560,118 @@ describe("portResolutionSubject", () => {
     const subject = portResolutionSubject({ state: "wired", children: "get_aruco: ArucoSrv" });
     expect(subject.state).toBe("wired");
     expect(subject.children).toBe("get_aruco: ArucoSrv");
+  });
+});
+
+describe("slot-placement presets — the schema layer can finally SEE what `??` resolves", () => {
+  // The defect this whole block exists for (2026-09-15): `labelOffsetY`
+  // declared `defaultValue: -23` — the lift the old derived helper
+  // computed at "md", correct back when the value reached the renderer
+  // only on the two "Offset" layouts. Unification made it apply to every
+  // layout, and `defaultArgs` materialises declared defaults as explicit
+  // args, so a plain `right` label arrived pre-displaced 23px upward.
+  it('labelOffsetY defaults to 0 — a label nobody displaced is displaced by nothing', () => {
+    const field = LABELED_PORT_FIELDS.find((f) => f.id === "labelOffsetY")!;
+    expect(field.defaultValue).toBe(0);
+  });
+
+  // The GENERAL form of that defect, which is what keeps it fixed: any
+  // field LabeledPort resolves as `props.x ?? SOME_PRESET_TABLE[sel].x`
+  // must be declared governed, or `defaultArgs` hands it over as an
+  // explicit value that outranks the very preset the selector selects.
+  it("every preset-deferring placement field is governed, so defaultArgs omits it", () => {
+    const args = defaultArgs(LABELED_PORT_FIELDS, LABELED_PORT_PRESETS);
+    for (const id of ["labelOrigin", "labelAlign", "labelOffsetY", "secondaryOrigin"]) {
+      expect(governedFieldIds(LABELED_PORT_PRESETS)).toContain(id);
+      expect(Object.hasOwn(args, id)).toBe(false);
+    }
+    // ...and the genuinely static ones stay materialised: they take the
+    // same value on every rung, so omitting them would lose a real default.
+    for (const id of ["labelOffsetX", "secondaryAlign", "secondaryOffsetX", "secondaryOffsetY"]) {
+      expect(Object.hasOwn(args, id)).toBe(true);
+    }
+  });
+
+  it("LABEL_PLACEMENT_PRESETS is a faithful PROJECTION of TEXT_LAYOUT_AS_PLACEMENT, member for member", () => {
+    expect(LABEL_PLACEMENT_PRESETS.map((p) => p.id)).toEqual([...PORT_TEXT_LAYOUTS]);
+    for (const layout of PORT_TEXT_LAYOUTS) {
+      const preset = LABEL_PLACEMENT_PRESETS.find((p) => p.id === layout)!;
+      const table = TEXT_LAYOUT_AS_PLACEMENT[layout];
+      expect(preset.selector).toBe("textLayout");
+      expect(preset.values).toEqual({
+        labelOrigin: table.origin,
+        labelAlign: table.align,
+        labelOffsetY: table.offsetY,
+      });
+      // Every governed id carries a value, and vice versa (T1-SPEC §9).
+      expect(preset.governs.slice().sort()).toEqual(Object.keys(preset.values).sort());
+    }
+  });
+
+  it("SECONDARY_PLACEMENT_PRESETS is a faithful projection of SECONDARY_LAYOUT_AS_ORIGIN", () => {
+    expect(SECONDARY_PLACEMENT_PRESETS.map((p) => p.id)).toEqual([...SECONDARY_SLOT_LAYOUTS]);
+    for (const layout of SECONDARY_SLOT_LAYOUTS) {
+      const preset = SECONDARY_PLACEMENT_PRESETS.find((p) => p.id === layout)!;
+      expect(preset.selector).toBe("secondarySlotLayout");
+      expect(preset.values).toEqual({ secondaryOrigin: SECONDARY_LAYOUT_AS_ORIGIN[layout] });
+    }
+  });
+
+  it("assertDisjointPresets(LABELED_PORT_PRESETS) holds — three selectors, three disjoint governed sets", () => {
+    expect(() => assertDisjointPresets(LABELED_PORT_PRESETS)).not.toThrow();
+    expect(governedFieldIds(LABELED_PORT_PRESETS).sort()).toEqual([
+      "diameter",
+      "labelAlign",
+      "labelOffsetY",
+      "labelOrigin",
+      "secondaryOrigin",
+      "textSize",
+    ]);
+  });
+
+  // The declared default of a governed field still has to be TRUE at the
+  // selector's own default, because that is what the inspector prints in
+  // the row before anyone touches the control.
+  it("each governed placement default equals what the DEFAULT selector value resolves to", () => {
+    const layoutDefault = LABELED_PORT_FIELDS.find((f) => f.id === "textLayout")!
+      .defaultValue as keyof typeof TEXT_LAYOUT_AS_PLACEMENT;
+    const table = TEXT_LAYOUT_AS_PLACEMENT[layoutDefault];
+    const declared = (id: string) => LABELED_PORT_FIELDS.find((f) => f.id === id)!.defaultValue;
+    expect(declared("labelOrigin")).toBe(table.origin);
+    expect(declared("labelAlign")).toBe(table.align);
+    expect(declared("labelOffsetY")).toBe(table.offsetY);
+  });
+});
+
+describe("LABELED_PORT_PRESETS — the two placement ladders SHARE ids, by contract", () => {
+  // `PortTextLayout` and `SecondarySlotLayout` both carry `leftOffset` and
+  // `rightOffset`, and a preset's id must equal one legal value of its
+  // selector's field — so the union genuinely holds duplicate ids. That is
+  // legal (`assertDisjointPresets` governs FIELDS, not ids) but it makes
+  // any id-only lookup ambiguous, which is why `presetArgs` refuses one.
+  const SHARED = ["leftOffset", "rightOffset"];
+
+  it("the collision is real, not hypothetical", () => {
+    for (const id of SHARED) {
+      const selectors = LABELED_PORT_PRESETS.filter((p) => p.id === id).map((p) => p.selector);
+      expect(selectors.sort()).toEqual(["secondarySlotLayout", "textLayout"]);
+    }
+  });
+
+  it("presetArgs refuses a shared id, and honours the selector that resolves it", () => {
+    const fields = LABELED_PORT_FIELDS;
+    for (const id of SHARED) {
+      expect(() => presetArgs(fields, LABELED_PORT_PRESETS, id)).toThrow(/ambiguous/);
+      expect(presetArgs(fields, LABELED_PORT_PRESETS, id, "textLayout").textLayout).toBe(id);
+      expect(
+        presetArgs(fields, LABELED_PORT_PRESETS, id, "secondarySlotLayout").secondarySlotLayout,
+      ).toBe(id);
+    }
+  });
+
+  // The size ladder shares its ids with nothing, so it stays callable the
+  // short way — the 4th argument is for collisions, not ceremony.
+  it("the size rungs are unambiguous and need no selector", () => {
+    expect(presetArgs(LABELED_PORT_FIELDS, LABELED_PORT_PRESETS, "lg").size).toBe("lg");
   });
 });

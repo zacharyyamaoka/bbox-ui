@@ -13,20 +13,23 @@ import {
   paintVar,
 } from "./appearance";
 import { CodeField } from "./codeField";
-import { PORT_FIELDS } from "./port.fields";
+import { LABELED_PORT_FIELDS } from "./port.fields";
 import { PORT_PRESETS } from "./port.presets";
 import {
   PORT_DIAMETERS,
   PORT_HIT_PX,
+  PORT_LABEL_GAP,
   PORT_RING_OVERHANG_PX,
   PORT_SECONDARY_SLOT_GAP_PX,
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
+  slotPlacementStyle,
+  SECONDARY_LAYOUT_AS_ORIGIN,
+  TEXT_LAYOUT_AS_PLACEMENT,
   defaultSecondarySlotLayout,
   inwardTextLayout,
-  portFlexDirection,
-  portLabelGap,
+  originFlexDirection,
   portLabelPlacement,
   type BlockSide,
   type PortDirection,
@@ -36,14 +39,17 @@ import {
   type PortTextLayout,
   type PortTextSize,
   type SecondarySlotLayout,
+  type SlotOrigin,
+  type SlotAlign,
+  type SlotPlacement,
 } from "./port.layout";
 
 /** The two fields `Port`'s own `size` rung governs — looked up once from
  * `PORT_FIELDS` (never re-typed) so `resolveField` runs the SAME
  * computation the product inspector's trace panel reads, exactly
  * `pill.tsx`'s own `PAINT_FIELD_BY_ID` pattern. */
-const DIAMETER_FIELD = PORT_FIELDS.find((f) => f.id === "diameter")!;
-const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
+const DIAMETER_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "diameter")!;
+const TEXT_SIZE_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "textSize")!;
 
 /**
  * Fills in `textLayout`/`secondarySlotLayout` with their real AUTO defaults
@@ -59,59 +65,159 @@ const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
  * (`PortDot`'s own `secondarySlotLayout ?? defaultSecondarySlotLayout(...)`
  * fallback), only the panel's DISPLAY of the unset field's value was wrong.
  */
+/**
+ * The flex row's displacement for a slot — the SAME translate
+ * `slotPlacementStyle` emits for an absolutely-positioned host, so the two
+ * paths move a label by the identical rule.
+ *
+ * `undefined` (not a zero translate) when there is nothing to displace, so
+ * an untouched port emits no style at all.
+ *
+ * The sign mirrors on an origin that faces the other way for the same
+ * reason it does in `slotPlacementStyle`: `+x` must mean "rightward on
+ * screen" whichever side the slot hangs off, or the control would reverse
+ * itself halfway through the origin list.
+ */
+function flexOffsetTransform(placement: SlotPlacement): CSSProperties | undefined {
+  const { origin, align, offsetX, offsetY } = placement;
+  // The align shift is a DELTA FROM CENTRE here, where `slotPlacementStyle`
+  // states it absolutely.
+  //
+  // WHY they differ: the anchored path positions from an EDGE (`top: 50%`)
+  // and translates the whole way, so `end` is -100%. A flex row has
+  // already centred the label against the dot (`items-center`), so the
+  // same reference edge is half a step away: -50% puts the label's bottom
+  // on the dot's centre line, +50% its top. Stating the delta rather than
+  // reusing the absolute number is what makes both paths land the chosen
+  // edge in the SAME place — the alternative, re-centring the row, is the
+  // layout-resizing margin this deliberately replaced.
+  const alignShift = align === "center" ? 0 : align === "end" ? -50 : 50;
+  const crossIsVertical = origin === "left" || origin === "right";
+  if (offsetX === 0 && offsetY === 0 && alignShift === 0) return undefined;
+  // Unmirrored offsets, for the same reason `slotPlacementStyle`'s are: a
+  // transform is screen-space, so the signs mean one thing on all four
+  // origins.
+  // A zero shift emits plain px rather than `calc(0% + Npx)` — same
+  // result, but the style a reader sees matches what they asked for.
+  const along = (px: number) => `${px}px`;
+  const cross = (px: number) => (alignShift === 0 ? `${px}px` : `calc(${alignShift}% + ${px}px)`);
+  const x = crossIsVertical ? along(offsetX) : cross(offsetX);
+  const y = crossIsVertical ? cross(offsetY) : along(offsetY);
+  return { transform: `translate(${x}, ${y})` };
+}
+
 export function portResolutionSubject(props: Record<string, unknown>): Record<string, unknown> {
   const edge = (props.edge as BlockSide | undefined) ?? "left";
   const textLayout = (props.textLayout as PortTextLayout | undefined) ?? inwardTextLayout(edge);
+  // `labelOffset`'s FieldSpec must declare a static `defaultValue` (19, the
+  // computed lift at Port's default "md" dot), but the real default scales
+  // with the dot — so a Port at `lg` genuinely lifts 22px while the panel
+  // would keep printing 19. Resolving it here is what makes the Expert
+  // control read the number actually on screen.
+  //
+  // WHY `resolveField` and not `props.diameter ?? "md"`: `diameter` is
+  // GOVERNED by the `size` cascade (PORT_PRESETS), so a Port carrying
+  // `size: "lg"` and no explicit `diameter` renders an 18px dot while its
+  // raw prop is undefined. Reading the prop directly reported the `md`
+  // lift (19) for a port that was really lifting 22 — the exact
+  // panel-disagrees-with-the-pixels bug this function exists to prevent,
+  // reintroduced one field over. Resolving through the SAME call `Port`
+  // itself makes is what keeps them in step.
+  const diameterResolved = resolveField(
+    DIAMETER_FIELD,
+    // `size` takes Port's OWN real default when absent — it is the
+    // cascade's selector, and a selector must have a value to match on.
+    { size: props.size ?? "md", diameter: props.diameter, textSize: props.textSize },
+    PORT_PRESETS,
+  ).resolved as PortSize;
+  const diameterPx =
+    typeof diameterResolved === "number" ? diameterResolved : PORT_DIAMETERS[diameterResolved];
+  // Same cascade for textSize — the lifted default is a function of the
+  // label's real height, so reading the raw prop would repeat the very bug
+  // the diameter resolution above exists to avoid.
+  const textSizeResolved = resolveField(
+    TEXT_SIZE_FIELD,
+    { size: props.size ?? "md", diameter: props.diameter, textSize: props.textSize },
+    PORT_PRESETS,
+  ).resolved as PortTextSize;
   return {
     ...props,
     textLayout,
     secondarySlotLayout:
       (props.secondarySlotLayout as SecondarySlotLayout | undefined) ?? defaultSecondarySlotLayout(textLayout),
+    // Each slot's placement, resolved the way the component resolves it, so
+    // the Expert controls read the numbers actually on screen rather than
+    // the static literals their FieldSpecs are forced to declare. Same
+    // mechanism the secondary layout above already uses.
+    labelOrigin: (props.labelOrigin as SlotOrigin | undefined) ?? TEXT_LAYOUT_AS_PLACEMENT[textLayout].origin,
+    labelOffsetX: (props.labelOffsetX as number | undefined) ?? 0,
+    labelAlign: (props.labelAlign as SlotAlign | undefined) ?? TEXT_LAYOUT_AS_PLACEMENT[textLayout].align,
+    labelOffsetY:
+      (props.labelOffsetY as number | undefined) ?? TEXT_LAYOUT_AS_PLACEMENT[textLayout].offsetY,
+    secondaryOrigin:
+      (props.secondaryOrigin as SlotOrigin | undefined) ??
+      SECONDARY_LAYOUT_AS_ORIGIN[
+        (props.secondarySlotLayout as SecondarySlotLayout | undefined) ?? defaultSecondarySlotLayout(textLayout)
+      ],
+    secondaryAlign: (props.secondaryAlign as SlotAlign | undefined) ?? "center",
+    secondaryOffsetX: (props.secondaryOffsetX as number | undefined) ?? 0,
+    secondaryOffsetY: (props.secondaryOffsetY as number | undefined) ?? 0,
   };
 }
 
 /**
- * packages/bbox-ui/src/port.tsx — the rebuilt Port (T1 Lane P), now with
- * TWO independently-positioned slots (the 2026-09-12 two-slot proposal).
+ * packages/bbox-ui/src/port.tsx — TWO primitives, split 2026-09-15 on
+ * Zach's ruling: "I want to split into two primatives now. Port and
+ * Labeled Port. Port is just the actual like Port geometry its self in
+ * isolation. Labeled Port is composite of the port + the primary and
+ * secondary slots, that we will then put things into thoose slots".
  *
- * Anatomy (PORT-SPEC.md §2.1): `PortDot` and `PortLabel` are SIBLINGS,
- * never parent/child — the real app positions both absolutely from the
+ * `Port` — the geometry, alone. The disc, the 2px surface ring, the 3px
+ * state ring, the lit core, the 40px hit halo. It knows nothing about
+ * labels, slots, producers or which wall it sits on. This is what used to
+ * be called `PortDot`; the rename is the point of the split, so there is
+ * no `PortDot` alias — one name per thing.
+ *
+ * `LabeledPort` — the composite: a `Port` plus its two slots. This is
+ * what `Port` used to be.
+ *   - The LABEL slot (the "primary" slot) — `PortLabel`, a real
+ *     single-line `CodeField`, positioned by `textLayout`
+ *     (`./port.layout.ts`'s six-member `PortTextLayout`, auto-defaulting
+ *     via `inwardTextLayout(edge)`), lifted clear of a trace wire by
+ *     its preset's `align: "end"` when the layout is one of the two Offset
+ *     members — see `SlotAlign` (port.layout.ts).
+ *     A host owning its own slot model passes `labelSlot` instead and
+ *     the built-in field steps aside entirely.
+ *   - The SECONDARY slot — generic `ReactNode` hugging one corner of the
+ *     dot's own box, positioned by `secondarySlotLayout`, auto-defaulting
+ *     to the side opposite the label. `producers >= 2` composes a
+ *     `PortCountBadge` as its fallback content for prop-only hosts.
+ *
+ * WHY the secondary slot moved OUT of the geometry and into the composite
+ * (this split): it is not geometry. The dot is a shape; where a badge
+ * hangs off it is an arrangement fact, and arrangement is exactly what
+ * `LabeledPort` is for. The composite wraps the `Port` in a box of the
+ * dot's own dimensions when — and only when — there is slot content to
+ * carry, so the slot's offsets resolve against the same rectangle they
+ * always did and the pixels do not move.
+ *
+ * ANATOMY (PORT-SPEC.md §2.1): `Port` and `PortLabel` are SIBLINGS, never
+ * parent/child — a real host positions both absolutely from the
  * *container's* layout at a shared anchor, and needs the dot to win
- * z-order/hit-arbitration against its own label independently. `Port`
- * below is the flex-row PAIRING of those two siblings for a standalone
- * specimen; a host placing a real port on a real block wall instead uses
- * `PortDot`/`PortLabel` directly, positioned via `./port.layout.ts`'s
- * `portDotPlacement`/`portLabelPlacement` — never nested one inside the
- * other. This is T0's own anatomy bug (PORT-SPEC.md §0.2): a single flex
- * parent could not reproduce that independence. The SECOND slot (below)
- * does NOT reopen that bug: it hugs `PortDot`'s own box exactly the way
- * the old hardcoded count-badge overlay always did — a decoration OF the
- * dot, not a second independently-flowed sibling like the label.
+ * z-order/hit-arbitration against its own label independently.
+ * `LabeledPort` is the flex-row PAIRING of those two siblings for a
+ * standalone specimen; a host placing a real port on a real block wall
+ * instead uses `Port`/`PortLabel` directly, positioned via
+ * `./port.layout.ts`'s `portDotPlacement`/`portLabelPlacement` — never
+ * nested one inside the other. This is T0's own anatomy bug
+ * (PORT-SPEC.md §0.2): a single flex parent could not reproduce that
+ * independence.
  *
- * THE TWO SLOTS:
- * - The LABEL slot (`PortLabel`) — a real single-line `CodeField` (ported
- *   from `claude/code-field`, see `./codeField.tsx`'s own doc), positioned
- *   by `textLayout` (`./port.layout.ts`'s `PortTextLayout`, now six values:
- *   `top | bot | right | left | rightOffset | leftOffset`, auto-defaulting
- *   via `inwardTextLayout(edge)` when omitted — unchanged from before).
- *   REPLACES the old three-span `PortName`/`PortType`/`PortDefaultChip`
- *   rendering built from separate `name`/`type`/`defaultValue` props —
- *   those props are GONE; `children` (a plain string) is now the field's
- *   whole `value`, matching the "a port is one line of code" ruling
- *   (`get_aruco: ArucoSrv`) and every real caller already in this
- *   workspace (host adapters, docs examples, the port-inspector demo),
- *   which already passed a single composed string as `children` and never
- *   touched `name`/`type`/`defaultValue` at all.
- * - The SECONDARY slot (`PortDot`'s new `secondarySlot` prop) — generic
- *   `ReactNode`, positioned by `secondarySlotLayout` (`SecondarySlotLayout`,
- *   `./port.layout.ts`: `leftOffset | rightOffset | topOffset | botOffset`,
- *   auto-defaulting to the side opposite the label via
- *   `defaultSecondarySlotLayout`). REPLACES the hardcoded, producer-count-
- *   only `PortCountBadge` overlay — `Port` below still composes that same
- *   badge by default (>= 2 producers, unchanged threshold), but as content
- *   it HANDS to the now-generic slot rather than logic `PortDot` itself
- *   runs. A consumer can pass anything else instead (a role cue, a status
- *   dot) without `PortDot` knowing what it's rendering.
+ * WHY the `portDot*` helpers keep their names (`portDotClass`,
+ * `portDotStyle`, `PortDotPaintInput`, `PortDotBox`): "dot" now names the
+ * disc INSIDE `Port` rather than a component of its own, and it is still
+ * the right word for the thing they paint. Renaming them to `portClass`/
+ * `portStyle` would have churned every adapter and test for a vaguer word.
  *
  * PORT COLOUR COMES FROM STATE, NOT TYPE (Zach, 2026-09-10 ruling — see
  * docs/T1-SPEC.md and PORT-SPEC.md's standing amendment). `portDotStyle`
@@ -356,7 +462,7 @@ export function PortCountBadge({ count }: { count: number }) {
 /* the generic secondary slot. Independently positionable (module doc). */
 /* ------------------------------------------------------------------ */
 
-export interface PortDotProps extends ComponentProps<"span"> {
+export interface PortProps extends ComponentProps<"span"> {
   state?: AppearanceState;
   tone?: Tone;
   diameter?: PortSize;
@@ -371,23 +477,6 @@ export interface PortDotProps extends ComponentProps<"span"> {
   dimmed?: boolean;
   /** Host-set, never persisted — the pointer is over this port mid-drag. */
   hinting?: boolean;
-  /** Which way the LABEL slot flows — only consulted to compute
-   * `secondarySlotLayout`'s AUTO default (the free side opposite the
-   * label, `defaultSecondarySlotLayout`); purely presentational, never
-   * persisted on the dot itself (a host's real layout owns this fact). */
-  textLayout?: PortTextLayout;
-  /**
-   * Generic content for the dot's SECOND slot — a decoration hugging one
-   * corner of the dot's own box (the two-slot proposal's "Secondary Slot
-   * Placement"). `null`/`undefined` renders nothing. REPLACES the old
-   * hardcoded, producers-only `PortCountBadge` overlay — see this file's
-   * module doc and `PortCountBadge`'s own doc for what still supplies it
-   * by default (`Port`, below).
-   */
-  secondarySlot?: ReactNode;
-  /** Where `secondarySlot` sits. Omit for the AUTO default — the corner
-   * opposite wherever the label (`textLayout`) is flowing. */
-  secondarySlotLayout?: SecondarySlotLayout;
 }
 
 /**
@@ -400,27 +489,23 @@ export interface PortDotProps extends ComponentProps<"span"> {
  * into `+N more`") — see `PortHiddenSummary` below for that
  * container-owned summary.
  */
-export function PortDot({
+export function Port({
   state = "empty",
   tone = "neutral",
   diameter = "md",
   hidden = false,
   dimmed = false,
   hinting = false,
-  textLayout = "right",
-  secondarySlot,
-  secondarySlotLayout,
   className,
   style,
   ...props
-}: PortDotProps) {
+}: PortProps) {
   if (hidden) return null;
   const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
   // A fixed 40px hit target regardless of the painted diameter — the
   // donor's own `inset: -14px` is this formula evaluated at diameter=12.
   const haloInset = (diameterPx - PORT_HIT_PX) / 2;
   const coreStyle = portCoreStyle({ state, tone, hinting });
-  const resolvedSecondaryLayout = secondarySlotLayout ?? defaultSecondarySlotLayout(textLayout);
   return (
     <span
       data-slot="port-dot"
@@ -455,15 +540,6 @@ export function PortDot({
             ...coreStyle,
           }}
         />
-      )}
-      {secondarySlot != null && (
-        <span
-          data-slot="port-secondary-slot"
-          className="pointer-events-none absolute"
-          style={SECONDARY_SLOT_STYLE[resolvedSecondaryLayout]}
-        >
-          {secondarySlot}
-        </span>
       )}
     </span>
   );
@@ -623,7 +699,7 @@ export function PortHiddenSummary({
 /* PortDot/PortLabel directly instead (see the module doc).             */
 /* ------------------------------------------------------------------ */
 
-export interface PortProps extends ComponentProps<"div"> {
+export interface LabeledPortProps extends ComponentProps<"div"> {
   /** The label slot's ENTIRE content, one line — see `PortLabelProps`'s
    * own doc for why `name`/`type`/`defaultValue` (removed here) folded
    * into this single string instead of staying apart. */
@@ -656,6 +732,45 @@ export interface PortProps extends ComponentProps<"div"> {
    * `PortCountBadge` as the secondary slot's default content, unchanged
    * threshold from before the two-slot proposal. */
   producers?: number;
+  /**
+   * The label slot's placement, reaching PAST `textLayout` (which is the
+   * Simple-tier PRESET over exactly these three — Zach, 2026-09-15:
+   * "thoose are just presets!"). Omit any of them and the preset decides;
+   * set one and it wins. `offsetX` is + away from the dot along the
+   * origin's own axis, `offsetY` is + DOWN, and both may be negative.
+   */
+  labelOrigin?: SlotOrigin;
+  /** Which part of the slot lands on the origin's line — the reference
+   *  edge. `end` on a side origin is what makes 'clear of the trace wire'
+   *  a static offset instead of one derived from the label's height. */
+  labelAlign?: SlotAlign;
+  labelOffsetX?: number;
+  labelOffsetY?: number;
+  /** The secondary slot's placement — the SAME three controls over the
+   *  SAME `SlotOrigin` type, with `secondarySlotLayout` as its preset. */
+  secondaryOrigin?: SlotOrigin;
+  secondaryAlign?: SlotAlign;
+  secondaryOffsetX?: number;
+  secondaryOffsetY?: number;
+  /**
+   * Content for the LABEL position, supplied by a host that owns its own
+   * slot model (the /create bench's `ctx.slots.label`). When present it
+   * REPLACES the built-in `PortLabel`/`CodeField` — same position, same
+   * lift — so the label's text can be an ordinary, deletable member of a
+   * real slot rather than a string this component owns (Zach, 2026-09-15:
+   * "even the text is just a member in the label slot that can be
+   * deleted"). Absent means the built-in field, which is what every
+   * prop-only host still uses: the tldraw/React Flow adapters, blockFace,
+   * and Storybook all compose `Port` from flat props and have no instance
+   * tree to build a slot out of.
+   */
+  labelSlot?: ReactNode;
+  /**
+   * Content for the SECONDARY position, same contract as `labelSlot`.
+   * Present — INCLUDING empty — beats the built-in `producers >= 2` count
+   * badge, which is the fallback for prop-only hosts only.
+   */
+  secondarySlot?: ReactNode;
   /**
    * Host layout fact, never persisted (same status as `dimmed`) — do NOT
    * add this to `port.fields.ts`. When true, `Port` renders the dot as its
@@ -701,7 +816,7 @@ export interface PortProps extends ComponentProps<"div"> {
  * through — see the `resolveField` calls in the body below and
  * `port.presets.ts`'s own `PORT_PRESETS`.
  */
-export function Port({
+export function LabeledPort({
   direction = "input",
   edge = "left",
   // `size` DOES take a real JS default ("md", matching `state`/`tone`
@@ -726,6 +841,16 @@ export function Port({
   reveal = "always",
   producers = 0,
   anchored = false,
+  labelOrigin,
+  labelAlign,
+  labelOffsetX,
+  labelOffsetY,
+  secondaryOrigin,
+  secondaryAlign,
+  secondaryOffsetX,
+  secondaryOffsetY,
+  labelSlot,
+  secondarySlot,
   secondarySlotLayout,
   disabled = false,
   onLabelWrite,
@@ -734,7 +859,7 @@ export function Port({
   style,
   children = "",
   ...props
-}: PortProps) {
+}: LabeledPortProps) {
   if (hidden) return null;
   const resolvedTextLayout = textLayout ?? inwardTextLayout(edge);
   // `size` cascades `diameter`/`textSize` together through the SAME
@@ -754,16 +879,92 @@ export function Port({
   // `anchored`: the root box IS the dot (no flex pairing) — see PortProps's
   // own doc for why. The label goes out of flow, placed by the same
   // `portLabelPlacement` geometry every wall surface already uses.
+  // The label's lift for an "Offset" layout, 0 otherwise — see
+  // `SlotAlign`'s own WHY (port.layout.ts). Both branches below need
+  // it, so it is resolved once against the SAME dot box either would use.
+  // Which corner the secondary slot hugs — the AUTO default is the side
+  // opposite wherever the label is flowing. Resolved HERE now that the
+  // composite owns the slot; the geometry primitive has no idea a label
+  // or a second slot exists.
+  const resolvedSecondaryLayout = secondarySlotLayout ?? defaultSecondarySlotLayout(resolvedTextLayout);
+  // ── Each slot's placement, resolved once ────────────────────────────
+  //
+  // The named layout is the PRESET; an explicit origin/offset reaches past
+  // it. `textLayout` still carries the preset because it is what every
+  // host and every saved tldraw shape already speaks — this resolution is
+  // the single place that vocabulary is translated into the unified
+  // (origin, x, y) model (`TEXT_LAYOUT_AS_PLACEMENT`, port.layout.ts).
+  const textLayoutPreset = TEXT_LAYOUT_AS_PLACEMENT[resolvedTextLayout];
+  // The lifted default is computed from the LIVE text size, never frozen:
+  // a lift correct at `md` puts an `xl` label's bottom edge back below the
+  // centre line, with the wire cutting through it (see `SlotAlign`).
+  const labelPlacement: SlotPlacement = {
+    origin: labelOrigin ?? textLayoutPreset.origin,
+    align: labelAlign ?? textLayoutPreset.align,
+    offsetX: labelOffsetX ?? 0,
+    offsetY: labelOffsetY ?? textLayoutPreset.offsetY,
+  };
+  const secondaryPlacement: SlotPlacement = {
+    origin: secondaryOrigin ?? SECONDARY_LAYOUT_AS_ORIGIN[resolvedSecondaryLayout],
+    align: secondaryAlign ?? "center",
+    offsetX: secondaryOffsetX ?? 0,
+    offsetY: secondaryOffsetY ?? 0,
+  };
+  // The flex row still needs a scalar LIFT: a transform does not grow the
+  // row, and a standalone specimen's box must contain what it paints.
+  // Upward displacement only — a downward one needs no headroom above.
+
+  // A host-given `secondarySlot` WINS outright — INCLUDING when it is
+  // empty, which is what makes the count badge deletable (Zach,
+  // 2026-09-15: "yes the producer badge can be delted it just a member of
+  // the slot"). The `producers >= 2` badge is only the fallback for a
+  // prop-only host that never supplied a slot at all (the adapters,
+  // blockFace, Storybook), so `undefined` and "the slot exists and is
+  // empty" stay distinguishable — a `??` here would have resurrected the
+  // badge the moment someone emptied it.
+  //
+  // WHY hoisted out of the JSX attribute it used to live in: written
+  // inline it was a nested ternary whose middle arm is a self-closing
+  // element, and SWC reads the `/>` that follows a `?` as the start of a
+  // regex literal ("Unterminated regexp literal", whole page 500).
+  // TypeScript's own parser accepts it, so `tsc` stayed green and only
+  // running the real app caught it.
+  const resolvedSecondarySlot: ReactNode =
+    secondarySlot !== undefined
+      ? secondarySlot
+      : producers >= 2
+        ? <PortCountBadge count={producers} />
+        : undefined;
+  // The label POSITION's geometry, resolved once and worn by whichever
+  // content occupies it — the built-in `PortLabel` or a host's own
+  // `labelSlot`. Sharing the one object is what stops a slot from drifting
+  // out of alignment with the CodeField it replaces.
+  // The flex row's half of the placement. `flexDirection` + `gap` already
+  // put the label at its ORIGIN (flush, centred on the cross axis) — the
+  // offsets are then the same translate the anchored path emits, so both
+  // paths displace by the identical rule and cannot drift apart.
+  //
+  // WHY a transform rather than the old `alignItems: flex-end` +
+  // `marginBottom` pair: a margin RESIZES the row, so the same offset
+  // meant two different things depending on which path drew it, and only
+  // one direction (up) was expressible at all. A displacement should move
+  // the label, not resize the port — and a transform is the one mechanism
+  // that says exactly that, in both directions, in both paths.
+  const labelSlotStyle: CSSProperties | undefined = anchored
+    ? { ...slotPlacementStyle(labelPlacement, { w: diameterPx, h: diameterPx }, PORT_LABEL_GAP), whiteSpace: "nowrap" }
+    : flexOffsetTransform(labelPlacement);
   const rootStyle: CSSProperties = anchored
     ? { position: "relative", width: diameterPx, height: diameterPx }
     : {
-        flexDirection: portFlexDirection(resolvedTextLayout),
+        // The RESOLVED origin, not the preset — so the Expert control
+        // actually moves the label in this path too.
+        flexDirection: originFlexDirection(labelPlacement.origin),
         // + PORT_RING_OVERHANG_PX: the gap is measured from the flex box's
         // edge, but the ring paints PAST it (box-shadow, not a border) — see
         // port.layout.ts's own WHY. Without this a flex-flowed specimen and
         // a wall-anchored label (which goes through `portLabelOut`) disagree
         // by the ring's overhang.
-        gap: portLabelGap(resolvedTextLayout) + PORT_RING_OVERHANG_PX,
+        gap: PORT_LABEL_GAP + PORT_RING_OVERHANG_PX,
       };
   return (
     <div
@@ -789,36 +990,71 @@ export function Port({
       style={{ ...rootStyle, ...style }}
       {...props}
     >
-      <PortDot
-        state={state}
-        tone={tone}
-        diameter={diameterResolved}
-        hidden={hidden}
-        dimmed={dimmed}
-        hinting={hinting}
-        textLayout={resolvedTextLayout}
-        // The count badge is Port's own DEFAULT secondary-slot content
-        // (unchanged >= 2 threshold) — PortDot itself no longer knows
-        // what "producers" means, see this file's module doc.
-        secondarySlot={producers >= 2 ? <PortCountBadge count={producers} /> : undefined}
-        secondarySlotLayout={secondarySlotLayout}
-      />
+      {/* The GEOMETRY, wrapped only when it has a secondary slot to carry.
+          The wrapper is the dot's own box exactly (same width/height), so
+          the slot's `right: 100%`-style offsets resolve against the same
+          rectangle they did when `Port` still rendered the slot itself —
+          the pixels do not move, only which component owns the concern.
+          With no slot content there is no wrapper at all, so a bare
+          LabeledPort's DOM is the dot and the label, nothing extra. */}
+      {resolvedSecondarySlot != null ? (
+        <span
+          data-slot="port-geometry"
+          className="relative inline-flex shrink-0"
+          style={{ width: diameterPx, height: diameterPx }}
+        >
+          <Port
+            state={state}
+            tone={tone}
+            diameter={diameterResolved}
+            hidden={hidden}
+            dimmed={dimmed}
+            hinting={hinting}
+          />
+          <span
+            data-slot="port-secondary-slot"
+            className="pointer-events-none absolute"
+            style={slotPlacementStyle(secondaryPlacement, { w: diameterPx, h: diameterPx }, PORT_SECONDARY_SLOT_GAP_PX)}
+          >
+            {resolvedSecondarySlot}
+          </span>
+        </span>
+      ) : (
+        <Port
+          state={state}
+          tone={tone}
+          diameter={diameterResolved}
+          hidden={hidden}
+          dimmed={dimmed}
+          hinting={hinting}
+        />
+      )}
+      {labelSlot !== undefined ? (
+        // A host-supplied label slot replaces the built-in CodeField
+        // entirely, taking its position and its lift. Same
+        // present-beats-absent rule as `secondarySlot` above, for the same
+        // reason: an emptied label slot must stay empty.
+        <span
+          data-slot="port-label-slot"
+          className={anchored ? "absolute" : undefined}
+          style={labelSlotStyle}
+        >
+          {labelSlot}
+        </span>
+      ) : (
       <PortLabel
         direction={direction}
         textSize={textSizeResolved}
         hidden={hidden}
         className={anchored ? "absolute" : undefined}
-        style={
-          anchored
-            ? { ...portLabelPlacement(resolvedTextLayout, { w: diameterPx, h: diameterPx }), whiteSpace: "nowrap" }
-            : undefined
-        }
+        style={labelSlotStyle}
         disabled={disabled}
         onLabelWrite={onLabelWrite}
         placeholder={placeholder}
       >
         {children}
       </PortLabel>
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import {
   type FieldValue,
 } from "@bbox-ui/schema";
 import { STATE_TOKENS, TONE_TOKENS, type AppearanceState, type Tone } from "@bbox-ui/core";
-import { readFieldRow } from "../fieldModel";
+import { presetForField, readFieldRow } from "../fieldModel";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 
 /**
@@ -109,7 +109,7 @@ const WINNER_COLOR: Record<Winner, { ring: string; bg: string }> = {
 function layerNote(r: Resolution, presets: PanelVariantProps["presets"]): string {
   if (!r.trace) return "";
   if (r.trace.winner === "preset") {
-    const preset = presets.find((p) => p.id === r.trace!.winningPresetId);
+    const preset = presetForField(presets, r.trace.winningPresetId, r.trace.field.id);
     return ` — driven by ${preset?.label ?? r.trace.winningPresetId}`;
   }
   if (r.trace.winner === "override") return " — overridden";

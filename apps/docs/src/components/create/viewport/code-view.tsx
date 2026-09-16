@@ -105,6 +105,23 @@ function glyphRecord(props: Record<string, unknown>) {
  * generic content node, and the code says so out loud rather than
  * inventing a node type that does not exist.
  */
+/**
+ * Which instances get the dedicated port shape/node in the emitted code.
+ *
+ * "LabeledPort", not "Port", since the 2026-09-15 two-primitive split: the
+ * adapters' `bbox-port` shape and `bboxStandalonePort` node are a dot PLUS
+ * a label, and the branch below reads `children`/`textLayout` — composite
+ * props the bare `Port` geometry primitive does not have. Left as "Port"
+ * this matched only bare dots and emitted a labelled port node for them
+ * while every real LabeledPort fell through to the generic branch.
+ *
+ * Named once rather than spelled inline six times: this file is exactly
+ * where a string-keyed rename hides.
+ */
+function isPortInstance(inst: Instance): boolean {
+  return inst.type === "LabeledPort";
+}
+
 function reactFlowCode(
   entries: ComponentEntry[],
   shown: Instance[],
@@ -112,14 +129,14 @@ function reactFlowCode(
   transforms: Record<string, CanvasTransform>,
   byId: Map<string, Instance>,
 ): string {
-  const hasPort = shown.some((i) => i.type === "Port");
+  const hasPort = shown.some(isPortInstance);
   const hasGlyph = shown.some((i) => i.type === "Glyph");
-  const others = Array.from(new Set(shown.filter((i) => i.type !== "Port" && i.type !== "Glyph").map((i) => i.type))).sort();
+  const others = Array.from(new Set(shown.filter((i) => !isPortInstance(i) && i.type !== "Glyph").map((i) => i.type))).sort();
   const nodes = shown.map((inst) => {
     const entry = entries.find((e) => e.name === inst.type)!;
     const pos = positions[inst.id] ?? { x: 0, y: 0 };
     const props = ownProps(entry, inst);
-    if (inst.type === "Port") {
+    if (isPortInstance(inst)) {
       const data = {
         state: (props.state as string) ?? "empty",
         size: (props.diameter as string) ?? "md",
@@ -171,13 +188,13 @@ function tldrawCode(
   transforms: Record<string, CanvasTransform>,
   byId: Map<string, Instance>,
 ): string {
-  const hasPort = shown.some((i) => i.type === "Port");
+  const hasPort = shown.some(isPortInstance);
   const hasGlyph = shown.some((i) => i.type === "Glyph");
   const shapes = shown.map((inst) => {
     const entry = entries.find((e) => e.name === inst.type)!;
     const pos = positions[inst.id] ?? { x: 0, y: 0 };
     const props = ownProps(entry, inst);
-    if (inst.type === "Port") {
+    if (isPortInstance(inst)) {
       const p = {
         state: (props.state as string) ?? "empty",
         size: (props.diameter as string) ?? "md",
@@ -199,7 +216,7 @@ function tldrawCode(
     }
     return `  { id: createShapeId(${JSON.stringify(inst.id)}), type: "bbox-bench", x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)}, props: { instanceId: ${JSON.stringify(inst.id)} } }, // renders ${instanceToJsx(entry, inst, byId, entries).replace(/\n\s*/g, " ")}`;
   });
-  const utilNames = [hasPort && "BBoxPortShapeUtil", hasGlyph && "BBoxGlyphShapeUtil", shown.some((i) => i.type !== "Port" && i.type !== "Glyph") && "BenchShapeUtil"].filter(
+  const utilNames = [hasPort && "BBoxPortShapeUtil", hasGlyph && "BBoxGlyphShapeUtil", shown.some((i) => !isPortInstance(i) && i.type !== "Glyph") && "BenchShapeUtil"].filter(
     (n): n is string => !!n,
   );
   const lines = [

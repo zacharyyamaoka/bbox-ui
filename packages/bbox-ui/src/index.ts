@@ -7,6 +7,9 @@ export * from "./blockLayout";
 export * from "./appearance";
 export * from "./appearance.fields";
 
+export * from "./badge.fields";
+export * from "./badge";
+
 export * from "./glyph.layout";
 export * from "./glyph.fields";
 export * from "./glyph";
@@ -47,6 +50,7 @@ export * from "./fieldGesture";
 export * from "./codeFieldGuards";
 export * from "./codeGrammar";
 export * from "./codeFieldRows";
+export * from "./codeField.fields";
 export * from "./codeField";
 
 // port.layout.ts intentionally shares names with layout.ts's now-deleted

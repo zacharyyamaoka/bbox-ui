@@ -19,6 +19,21 @@ export interface SlotSpec {
   /** Narrows what the filling instance may hold, when the fill's own
    *  `members.accepts` is too wide for this slot (a body holds rows). */
   accepts?: string[];
+  /**
+   * Instances created INSIDE the fill when the slot is first made — the
+   * slot's default content, as ordinary members.
+   *
+   * WHY members and not a `fillProps`-style baked-in node (Zach,
+   * 2026-09-15: "yes the producer badge can be delted it just a member of
+   * the slot", and "even the text is just a member in the label slot that
+   * can be deleted"): content the component composes for itself can never
+   * be removed, only overridden, so a Port would always carry its badge
+   * and its label no matter what the author wanted. Seeding them as real
+   * members makes "what a fresh Port looks like" and "what this Port
+   * holds" the same kind of fact, editable and deletable through the one
+   * members control every other slot already uses.
+   */
+  fillMembers?: { type: string; props?: Record<string, unknown> }[];
 }
 
 /** What a render may need beyond props and rendered children. */

@@ -69,6 +69,27 @@ export function cascadeInto(
   textLayout: PortTextLayout,
   anchored?: boolean,
 ): ReactNode {
+  // Nothing to cascade INTO: hand the value back exactly as given.
+  //
+  // WHY this guard, and why here rather than at the consumer: the recursion
+  // above cannot tell a WRAPPER's children (more elements, worth descending
+  // into) from a LEAF's children (its own text). `Children.map` normalises
+  // whatever it is handed into an ARRAY, so a bare `<Port>cfg</Port>` came
+  // back out of `cloneElement` carrying `children: ["cfg"]` — a one-element
+  // array where the component's contract says string. That was inert while
+  // a label was only ever rendered, and became a hard crash the moment
+  // `PortLabel` grew a real CodeField: `codeField.tsx` hands `value`
+  // straight to CodeMirror's `EditorState.create`, which calls
+  // `(config.doc || "").split(…)` and dies on an array. Whole /create page,
+  // white screen, for every Block and PortEdges bench.
+  //
+  // Coercing in `PortLabel` instead would have hidden the real fact — that
+  // EVERY component in a lane has its text children silently re-wrapped.
+  // TextBox was already degrading quietly on the same bug (its
+  // `typeof children === "string"` guards fail closed, losing inline
+  // editing with no error); Pill and Glyph happen to render an array
+  // identically and showed nothing at all.
+  if (!Children.toArray(children).some(isValidElement)) return children;
   return Children.map(children, (child) => {
     if (!isValidElement(child)) return child;
     if (child.type === Fragment) {

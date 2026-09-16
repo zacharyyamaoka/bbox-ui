@@ -6,10 +6,11 @@ import {
   PORT_RING_OVERHANG_PX,
   PORT_SECONDARY_SLOT_GAP_PX,
   Port,
+  LabeledPort,
   PORT_FIELDS,
-  PORT_PRESETS,
-  PortDot,
-  portLabelGap,
+  LABELED_PORT_FIELDS,
+  LABELED_PORT_PRESETS,
+  PORT_LABEL_GAP,
   portLabelPlacement,
   type AppearanceState,
   type BlockSide,
@@ -25,51 +26,68 @@ import {
 import type { ComponentProps } from "react";
 
 /**
- * T1 Lane P: the REBUILT Port, end to end — now with the two-slot
- * proposal's two independently-positioned slots (2026-09-12). `argTypes`/
- * `args` below are GENERATED from `PORT_FIELDS`
+ * T1 Lane P: the REBUILT LabeledPort (the composite — dot + label slot +
+ * secondary slot), end to end — now with the two-slot proposal's two
+ * independently-positioned slots (2026-09-12). `argTypes`/`args` below are
+ * GENERATED from `LABELED_PORT_FIELDS`
  * (packages/bbox-ui/src/port.fields.ts) — the SAME array the generic
  * product inspector (demos/inspector) reads. Add a field there and both
  * surfaces pick it up; nothing here is kept in sync by hand.
  *
- * No `Presets` story: `PORT_PRESETS` is empty (port.presets.ts) — Port's
- * colour comes from a hand-written `state`/`tone` lookup, not a
- * separately governed paint field, so there is nothing for a preset to
- * govern (docs/T1-SPEC.md §4.7). Every `segments` field therefore gets
- * its own gallery below (§6 point 4) instead of being folded into one.
+ * No `Presets` story: LabeledPort's colour comes from a hand-written
+ * `state`/`tone` lookup, not a separately governed paint field
+ * (docs/T1-SPEC.md §4.7). Every `segments` field therefore gets its own
+ * gallery below (§6 point 4) instead of being folded into one.
+ *
+ * `args` is built against `LABELED_PORT_PRESETS`, NOT `PORT_PRESETS`.
+ * That array adds the two slot-placement ladders (`textLayout`,
+ * `secondarySlotLayout`), which is what keeps `defaultArgs` from
+ * materialising `labelOrigin`/`labelAlign`/`labelOffsetY` as explicit
+ * args. Materialised, they outrank the very preset the control selects,
+ * and the TextLayout gallery below silently renders six identical
+ * right-hand labels. Handing it `PORT_PRESETS` (the size ladder alone)
+ * is exactly the bug that shipped on 2026-09-15.
  *
  * The cast on `args` is deliberate: `defaultArgs` returns the generic
  * `Record<string, FieldValue>` shape every schema-driven component
- * shares — one degree looser than `Port`'s own literal-union prop types.
- * `port.fields.test.ts` is what actually proves the values line up.
+ * shares — one degree looser than `LabeledPort`'s own literal-union prop
+ * types. `port.fields.test.ts` is what actually proves the values line up.
  *
  * WHY every story below sets `children` (was `name`/`type`) — those two
  * props are GONE (folded into `children`, the label slot's whole
  * `CodeField` value; see port.tsx's own module doc). Every gallery that
  * used to do `name={(args.name as string) || option.label}` now does the
  * identical thing against `children`.
+ *
+ * `Port` — the bare dot geometry underneath this composite, split out
+ * 2026-09-15 — gets its own small gallery near the bottom of this file,
+ * swept over the narrower `PORT_FIELDS`.
  */
 const meta = {
-  title: "Components/Port",
-  component: Port,
-  args: defaultArgs(PORT_FIELDS, PORT_PRESETS) as Partial<ComponentProps<typeof Port>>,
-  argTypes: toArgTypes(PORT_FIELDS),
-} satisfies Meta<typeof Port>;
+  title: "Components/LabeledPort",
+  component: LabeledPort,
+  args: defaultArgs(
+    LABELED_PORT_FIELDS,
+    LABELED_PORT_PRESETS,
+  ) as Partial<ComponentProps<typeof LabeledPort>>,
+  argTypes: toArgTypes(LABELED_PORT_FIELDS),
+} satisfies Meta<typeof LabeledPort>;
 
 export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-const DIRECTION_FIELD = PORT_FIELDS.find((f) => f.id === "direction")!;
-const EDGE_FIELD = PORT_FIELDS.find((f) => f.id === "edge")!;
-const DIAMETER_FIELD = PORT_FIELDS.find((f) => f.id === "diameter")!;
-const TEXT_LAYOUT_FIELD = PORT_FIELDS.find((f) => f.id === "textLayout")!;
-const TEXT_SIZE_FIELD = PORT_FIELDS.find((f) => f.id === "textSize")!;
-const STATE_FIELD = PORT_FIELDS.find((f) => f.id === "state")!;
-const TONE_FIELD = PORT_FIELDS.find((f) => f.id === "tone")!;
-const LENS_FIELD = PORT_FIELDS.find((f) => f.id === "lens")!;
-const REVEAL_FIELD = PORT_FIELDS.find((f) => f.id === "reveal")!;
-const SECONDARY_SLOT_LAYOUT_FIELD = PORT_FIELDS.find((f) => f.id === "secondarySlotLayout")!;
+const DIRECTION_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "direction")!;
+const EDGE_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "edge")!;
+const DIAMETER_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "diameter")!;
+const TEXT_LAYOUT_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "textLayout")!;
+const TEXT_SIZE_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "textSize")!;
+const STATE_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "state")!;
+const TONE_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "tone")!;
+const LENS_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "lens")!;
+const REVEAL_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "reveal")!;
+const SECONDARY_SLOT_LAYOUT_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "secondarySlotLayout")!;
+const PORT_STATE_FIELD = PORT_FIELDS.find((f) => f.id === "state")!;
 
 /**
  * THE STORY THAT CARRIES THE PLAY FUNCTION. Click the painted dot —
@@ -77,7 +95,7 @@ const SECONDARY_SLOT_LAYOUT_FIELD = PORT_FIELDS.find((f) => f.id === "secondaryS
  * a React Flow node, a tldraw HTMLContainer shape) by the time this runs
  * — then assert the label's real CodeField mounted with the right value
  * and the dot's `data-state` matches the args this story was actually
- * rendered with. `PORT_FIELDS`' own `children` default is an empty string
+ * rendered with. `LABELED_PORT_FIELDS`' own `children` default is an empty string
  * (nothing real to click through to), so this story overrides it to a
  * realistic one-line signature without touching the field defaults
  * everything else in this file relies on.
@@ -112,7 +130,7 @@ export const Primary: Story = {
  * tokens yet) still reads as doing something.
  */
 const sweep = (fieldId: string) => ({
-  controls: { exclude: controlNames(PORT_FIELDS, [fieldId]) },
+  controls: { exclude: controlNames(LABELED_PORT_FIELDS, [fieldId]) },
 });
 
 const galleryRow = { display: "flex", flexDirection: "column" as const, gap: 16 };
@@ -127,7 +145,7 @@ export const AllStates: Story = {
   render: (args) => (
     <div style={galleryRow}>
       {STATE_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           state={option.value as AppearanceState}
@@ -144,7 +162,7 @@ export const AllTones: Story = {
   render: (args) => (
     <div style={galleryRowInline}>
       {TONE_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           tone={option.value as Tone}
@@ -163,7 +181,7 @@ export const AllDirections: Story = {
   render: (args) => (
     <div style={galleryRowInline}>
       {DIRECTION_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           direction={option.value as PortDirection}
@@ -180,7 +198,7 @@ export const AllEdges: Story = {
   render: (args) => (
     <div style={galleryRowInline}>
       {EDGE_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           edge={option.value as BlockSide}
@@ -197,7 +215,7 @@ export const AllDiameters: Story = {
   render: (args) => (
     <div style={galleryRowInline}>
       {DIAMETER_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           diameter={option.value as PortSize}
@@ -212,15 +230,19 @@ export const AllDiameters: Story = {
  * Every real label-slot `PortTextLayout` — six now (the two-slot
  * proposal, 2026-09-12, re-added `rightOffset`/`leftOffset` on top of the
  * `top`/`bot`/`right`/`left` PORT-SPEC.md §3f had narrowed this to). The
- * two "Offset" rows sit visibly further from the dot than their plain
- * counterpart (`PORT_LABEL_OFFSET_EXTRA_PX`, port.layout.ts).
+ * two "Offset" rows sit at the SAME distance out as their plain
+ * counterpart and are LIFTED above the dot's centre line instead, so a
+ * trace wire leaving the dot passes under them. The lift is not computed:
+ * they align their BOTTOM edge (`align: "end"`) to the dot's centre line
+ * and clear it by a static `PORT_LABEL_GAP` — see `TEXT_LAYOUT_AS_PLACEMENT`
+ * in port.layout.ts.
  */
 export const AllTextLayouts: Story = {
   parameters: sweep("textLayout"),
   render: (args) => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 32, padding: 24 }}>
       {TEXT_LAYOUT_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           textLayout={option.value as PortTextLayout}
@@ -231,7 +253,7 @@ export const AllTextLayouts: Story = {
   ),
 };
 
-/** Every real PortTextSize rung (18/24/36/44px) — Port's own ladder,
+/** Every real PortTextSize rung (18/24/36/44px) — LabeledPort's own ladder,
  * deliberately separate from `layout.ts`'s `TEXT_SIZES` (docs/T1-SPEC.md
  * §0). Now also the label `CodeField`'s own font size (`PortLabel`'s
  * `style={{ fontSize: ... }}`, port.tsx). */
@@ -240,7 +262,7 @@ export const AllTextSizes: Story = {
   render: (args) => (
     <div style={galleryRowInline}>
       {TEXT_SIZE_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           textSize={option.value as PortTextSize}
@@ -259,7 +281,7 @@ export const AllLenses: Story = {
   render: (args) => (
     <div style={galleryRowInline}>
       {LENS_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           lens={option.value as Lens}
@@ -278,7 +300,7 @@ export const AllReveals: Story = {
   render: (args) => (
     <div style={galleryRowInline}>
       {REVEAL_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           reveal={option.value as PortReveal}
@@ -309,8 +331,8 @@ export const ManyProducersEitherLayout: Story = {
   args: { children: "get_aruco", producers: 3 },
   render: (args) => (
     <div style={galleryRow}>
-      <Port {...args} textLayout="right" />
-      <Port {...args} textLayout="left" />
+      <LabeledPort {...args} textLayout="right" />
+      <LabeledPort {...args} textLayout="left" />
     </div>
   ),
 };
@@ -330,7 +352,7 @@ export const AllSecondarySlotLayouts: Story = {
   render: (args) => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 32, padding: 24 }}>
       {SECONDARY_SLOT_LAYOUT_FIELD.options!.map((option) => (
-        <Port
+        <LabeledPort
           {...args}
           key={option.value}
           secondarySlotLayout={option.value as SecondarySlotLayout}
@@ -358,7 +380,7 @@ const SECONDARY_SLOT_SIZE = { width: 16, height: 16 };
  * change here can't silently reintroduce the overlap the first pass of
  * this story actually had (caption text under the "bot"/"botOffset"
  * boxes, caught by measuring DOM rects, not by looking at a screenshot). */
-const LABEL_CAPTION_GAP = PORT_RING_OVERHANG_PX + portLabelGap("rightOffset") + LABEL_SLOT_SIZE.height + 8;
+const LABEL_CAPTION_GAP = PORT_RING_OVERHANG_PX + PORT_LABEL_GAP + LABEL_SLOT_SIZE.height + 8;
 const SECONDARY_CAPTION_GAP = PORT_RING_OVERHANG_PX + PORT_SECONDARY_SLOT_GAP_PX + SECONDARY_SLOT_SIZE.height + 8;
 
 /** One dot + one dotted label-slot box, positioned via the REAL
@@ -372,7 +394,7 @@ function LabelSlotSpecimen({ layout }: { layout: PortTextLayout }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div style={{ position: "relative", width: diameterPx, height: diameterPx }}>
-        <PortDot diameter="md" />
+        <Port diameter="md" />
         <div
           style={{
             position: "absolute",
@@ -388,15 +410,16 @@ function LabelSlotSpecimen({ layout }: { layout: PortTextLayout }) {
 }
 
 /** One dot + one dotted secondary-slot box, via the REAL `secondarySlot`/
- * `secondarySlotLayout` props on `PortDot` — the exact mechanism
+ * `secondarySlotLayout` props on `LabeledPort` — the exact mechanism
  * `SECONDARY_SLOT_STYLE` (port.tsx) positions, not a reimplementation. */
 function SecondarySlotSpecimen({ layout }: { layout: SecondarySlotLayout }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <PortDot
+      <LabeledPort
         diameter="md"
         secondarySlotLayout={layout}
         secondarySlot={<div style={{ ...SECONDARY_SLOT_SIZE, ...SLOT_OUTLINE_STYLE }} />}
+        labelSlot={null}
       />
       <span style={{ fontSize: 11, color: "gray", marginTop: SECONDARY_CAPTION_GAP }}>{layout}</span>
     </div>
@@ -453,11 +476,31 @@ export const TwoSlotsTogether: Story = {
 /** `hidden: true` renders nothing at all — a container rolls it into its
  * own `+N more` summary (`PortHiddenSummary`, exported from `./port.tsx`,
  * not exercised as a standalone story: it is the CONTAINER's part, not
- * one Port's). Replaces the old `state: "hidden"` rung — see
+ * one LabeledPort's). Replaces the old `state: "hidden"` rung — see
  * appearance.ts's own WHY for the split. */
 export const Hidden: Story = {
   args: { children: "hiddenPort", hidden: true },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('[data-slot="port"]')).toBeNull();
   },
+};
+
+/**
+ * `Port` — the bare geometry underneath every `LabeledPort` above: the
+ * disc, rings, lit core, hit halo. No label, no secondary slot, no
+ * `direction`/`edge`/`textLayout` — those are the composite's job. This
+ * gallery sweeps the real `PORT_FIELDS` `state` options (the narrow list
+ * `port.fields.ts` selects out of `LABELED_PORT_FIELDS`) directly against
+ * `Port` itself. See `LabeledPort`'s stories above for the labeled
+ * composite this dot lives inside of in every real host.
+ */
+export const BareStates: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => (
+    <div style={galleryRowInline}>
+      {PORT_STATE_FIELD.options!.map((option) => (
+        <Port key={option.value} state={option.value as AppearanceState} />
+      ))}
+    </div>
+  ),
 };

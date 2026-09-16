@@ -229,3 +229,46 @@ export function readFieldRow(
     traces,
   };
 }
+
+/**
+ * The preset a FIELD's provenance means, given the id its trace reported.
+ *
+ * WHY not `presets.find((p) => p.id === presetId)`, which is what six
+ * panels did: a preset's `id` must equal one legal value of its selector's
+ * field, so two ladders whose enums share a member legitimately share an
+ * id. `LabeledPort` is the live case — `textLayout` and
+ * `secondarySlotLayout` both carry `leftOffset` and `rightOffset` — and an
+ * id-only lookup returns whichever ladder sits first in the array, which
+ * for a secondary-slot row is the wrong family.
+ *
+ * Filtering on `governs` is what makes it right BY CONSTRUCTION rather
+ * than by the caller remembering: `assertDisjointPresets` guarantees a
+ * field is governed by exactly one selector, so "the preset with this id
+ * that governs this field" can only ever name one family. That is the same
+ * filter `FigmaDense`'s own numeric-scale picker already applied, which is
+ * why that one site was never wrong.
+ *
+ * Today both colliding ids carry identical labels ("Right Offset"), so no
+ * panel currently MIS-displays anything — this closes the trap before a
+ * component whose two ladders disagree about a label walks into it.
+ */
+export function presetForField(
+  presets: PresetSpec[],
+  presetId: string | undefined,
+  fieldId: string,
+): PresetSpec | undefined {
+  if (presetId === undefined) return undefined;
+  return presets.find(
+    (candidate) => candidate.id === presetId && candidate.governs.includes(fieldId),
+  );
+}
+
+/** `presetForField`'s label, falling back to the raw id — the exact shape
+ *  every provenance site spelled by hand. */
+export function presetLabelForField(
+  presets: PresetSpec[],
+  presetId: string | undefined,
+  fieldId: string,
+): string {
+  return presetForField(presets, presetId, fieldId)?.label ?? presetId ?? "";
+}

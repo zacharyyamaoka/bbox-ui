@@ -287,7 +287,7 @@ export function inheritedFor(instances: Instance[], entries: ComponentEntry[], i
  * A Block's own Port members, in member order — never its slot fills (a
  * Block's `members` list holds both: slot fills always come first,
  * `addMember` appends Ports after them, see `bench.tsx`'s own
- * `makeInstanceWithSlots`/`addMemberTo`). Filtering by `type === "Port"`
+ * `makeInstanceWithSlots`/`addMemberTo`). Filtering by `type === "LabeledPort"`
  * rather than "not a slot fill" is deliberate: it stays correct even if a
  * future member type joins `MEMBER_SPECS.Block.accepts`.
  */
@@ -297,7 +297,11 @@ export function blockPorts(instances: Instance[], blockId: string): Instance[] {
   const byId = new Map(instances.map((i) => [i.id, i]));
   return (block.members ?? [])
     .map((id) => byId.get(id))
-    .filter((i): i is Instance => !!i && i.type === "Port");
+    // "LabeledPort", not "Port": a Block's ports are the COMPOSITE (dot +
+    // label slot + secondary slot), which is what `seedBlockPorts` creates
+    // and what MEMBER_SPECS.Block accepts. The bare `Port` geometry
+    // primitive exists too (2026-09-15 split) but is never a Block member.
+    .filter((i): i is Instance => !!i && i.type === "LabeledPort");
 }
 
 /** The Block's active Arrangement — falling back to the shared

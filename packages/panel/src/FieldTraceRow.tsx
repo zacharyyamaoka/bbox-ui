@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { FieldSpec, FieldValue, Layer, PresetSpec } from "@bbox-ui/schema";
-import { readFieldRow, resetTitleFor } from "./fieldModel";
+import { presetLabelForField, readFieldRow, resetTitleFor } from "./fieldModel";
 import { NumberInput } from "./NumberInput";
 
 // `Subject` lives in fieldModel.ts — the model owns the shape it resolves —
@@ -97,7 +97,7 @@ export function FieldTraceRow({
               title="Click to see the full chain"
             >
               {trace.winner === "preset"
-                ? `preset: ${presets.find((p) => p.id === trace.winningPresetId)?.label ?? trace.winningPresetId}`
+                ? `preset: ${presetLabelForField(presets, trace.winningPresetId, field.id)}`
                 : trace.winner === "inherited"
                   ? `inherited · ${trace.inheritedFrom ?? ""}`
                   : trace.winner}
@@ -152,7 +152,7 @@ export function FieldTraceRow({
               <span style={candidateLayerStyle}>
                 {candidate.layer}
                 {candidate.presetId
-                  ? ` · ${presets.find((p) => p.id === candidate.presetId)?.label ?? candidate.presetId}`
+                  ? ` · ${presetLabelForField(presets, candidate.presetId, field.id)}`
                   : candidate.inheritedFrom
                     ? ` · ${candidate.inheritedFrom}`
                     : ""}

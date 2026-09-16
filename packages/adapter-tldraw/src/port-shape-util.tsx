@@ -10,7 +10,7 @@ import {
 
 import {
   PORT_DIAMETERS,
-  PortDot,
+  Port,
   PortLabel,
   portLabelPlacement,
   type PortTextLayout,
@@ -52,7 +52,7 @@ export type BBoxPortShape = TLBaseShape<"bbox-port", BBoxPortShapeProps>;
 
 /**
  * tldraw host adapter for the standalone Port. The dot is the same core
- * `PortDot` component the Block adapter paints — not a second drawing of a
+ * `Port` component the Block adapter paints — not a second drawing of a
  * circle — stretched to the shape's `w`/`h` so tldraw's stock resize keeps
  * working. The label hangs outside the geometry via the shared
  * `portLabelPlacement`, exactly as on a Block boundary.
@@ -106,7 +106,7 @@ export class BBoxPortShapeUtil extends ShapeUtil<BBoxPortShape> {
           className="relative"
           style={{ width: props.w, height: props.h }}
         >
-          <PortDot
+          <Port
             state={props.state}
             diameter={props.size}
             className="block"
