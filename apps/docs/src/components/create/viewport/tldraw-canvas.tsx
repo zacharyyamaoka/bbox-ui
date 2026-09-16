@@ -11,13 +11,16 @@ import {
   T,
   Tldraw,
   createShapeId,
+  resizeBox,
   type Editor,
   type TLBaseShape,
+  type TLResizeInfo,
   type TLShapeId,
 } from "tldraw";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
-import { claimInstancePointerDown, isInstancePointerDownClaimed, nextSelectionForRootPress } from "@bbox-ui/panel";
-import type { PortEdgeId } from "@bbox-ui/core";
+import { claimInstancePointerDown, effectiveProps, isInstancePointerDownClaimed, nextSelectionForRootPress } from "@bbox-ui/panel";
+import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
+import { textBoxFontPx, type PortEdgeId } from "@bbox-ui/core";
 import type { CanvasPosition } from "../contract";
 import { renderInstance, type EditBundle } from "../render-instance";
 import { HostZoomContext } from "../port-dnd";
@@ -84,6 +87,149 @@ const BenchContext = createContext<{
   highlightSlots: false,
 });
 
+/**
+ * `canResize`/`onResize` are plain `ShapeUtil` methods — no React context
+ * reaches them. `component()` (which DOES have `BenchContext`) refreshes
+ * this per-editor side table on every render, the same WeakMap-by-editor
+ * trick `block-shape-util.tsx`'s `receivedPortsAtom` already uses to bridge
+ * a live editor to state that isn't a shape prop.
+ */
+interface BenchResizeLookup {
+  entries: ComponentEntry[];
+  instances: Instance[];
+  byId: Map<string, Instance>;
+  onInstancePropChange: (id: string, fieldId: string, value: FieldValue) => void;
+}
+const benchResizeLookupByEditor = new WeakMap<Editor, BenchResizeLookup>();
+
+/**
+ * A bench instance is only draggable-resizable when its OWN component
+ * declares a real field pair to write the drag into — "the size prop"
+ * Zach's ask names. Two shapes of that pair exist today:
+ *
+ * - BOX: numeric `width` + `height` (Block, Region, PortEdges — block.
+ *   fields.ts, region.fields.ts, this file's own PORT_EDGES_FIELDS in
+ *   bench.tsx). `benchInstanceSizeFields` below. The `kind === "number"`
+ *   check (not just matching `.id`) is deliberate: a hypothetical future
+ *   field merely NAMED "width"/"height" that meant something else (an
+ *   enum, a boolean) must not silently qualify.
+ * - SCALE: a named ladder (`kind: "segments"`) with a `"custom"` rung,
+ *   paired by a shared `FieldSpec.group` with a numeric escape-hatch field
+ *   (TextBox's `size` + `sizePx`, both `group: "size"` — textBox.fields.
+ *   ts). `benchInstanceScaleField` below. Resizing drives it the way stock
+ *   tldraw's own text shape scales font size on resize — a component that
+ *   is otherwise intrinsically sized gets a literal number to grow.
+ *
+ * Neither check names a component: a third component gains box-resize or
+ * scale-resize for free the moment it declares the matching field shape.
+ *
+ * Everything else (Port, Pill, Glyph, Flex, Stack, Bar) stays
+ * non-resizable on purpose: this shape's own `w`/`h` are a MEASUREMENT of
+ * intrinsic content (the `ResizeObserver` effect below), not a setting —
+ * dragging a handle would resize the box without the content following
+ * and immediately snap back on the next measurement. Mirrors stock
+ * tldraw's own convention (e.g. a note's fixed size vs. a rectangle's
+ * free one) rather than inventing a bbox-ui-specific rule.
+ */
+interface BenchSizeFields {
+  widthField: FieldSpec;
+  heightField: FieldSpec;
+}
+function benchInstanceSizeFields(lookup: BenchResizeLookup, instanceId: string): BenchSizeFields | null {
+  const inst = lookup.byId.get(instanceId);
+  if (!inst) return null;
+  const entry = lookup.entries.find((e) => e.name === inst.type);
+  if (!entry) return null;
+  const widthField = entry.fields.find((f) => f.id === "width" && f.kind === "number");
+  const heightField = entry.fields.find((f) => f.id === "height" && f.kind === "number");
+  return widthField && heightField ? { widthField, heightField } : null;
+}
+
+/** A written value clamped to a field's own declared `min`/`max` — the
+ *  same bound the Inspector's number input ADVERTISES (as HTML `min`/`max`
+ *  attributes) but does not itself enforce (`NumberInput.tsx` forwards
+ *  them without clamping). A drag is a second way to reach the same
+ *  write, so it clamps here rather than reproducing the Inspector's own
+ *  gap — PortEdges declares `width: 240–720`, `height: 160–480`
+ *  (bench.tsx's `PORT_EDGES_FIELDS`); Block/Region declare no `min`/`max`
+ *  at all, so this is a no-op for them, same as today. */
+function benchClampToField(value: number, field: FieldSpec): number {
+  const min = field.min ?? -Infinity;
+  const max = field.max ?? Infinity;
+  return Math.min(max, Math.max(min, value));
+}
+
+/** The ladder/escape-hatch field pair for a "SCALE" instance — see
+ *  `BenchResizeLookup`'s own doc comment — or `null` when its component
+ *  declares no such pair. Full `FieldSpec`s, not just ids: resolving the
+ *  CURRENT value (`benchCurrentScalePx` below) needs each field's own
+ *  `defaultValue` too. */
+interface BenchScaleFields {
+  ladderField: FieldSpec;
+  pxField: FieldSpec;
+}
+function benchInstanceScaleField(lookup: BenchResizeLookup, instanceId: string): BenchScaleFields | null {
+  const inst = lookup.byId.get(instanceId);
+  if (!inst) return null;
+  const entry = lookup.entries.find((e) => e.name === inst.type);
+  if (!entry) return null;
+  const ladderField = entry.fields.find(
+    (f) => f.kind === "segments" && f.group != null && f.options?.some((o) => o.value === "custom"),
+  );
+  if (!ladderField?.group) return null;
+  const pxField = entry.fields.find((f) => f.kind === "number" && f.group === ladderField.group && f.id !== ladderField.id);
+  return pxField ? { ladderField, pxField } : null;
+}
+
+/**
+ * The scale factor a resize gesture applied, from the shape's own box
+ * change — averaging width's and height's ratio rather than picking one
+ * axis, so a corner drag (which moves both) and an edge drag (which only
+ * moves one) both produce a sane single number to scale a font by.
+ */
+function benchResizeScaleFactor(initial: BenchShapeProps, current: BenchShapeProps): number {
+  const scaleW = initial.w > 0 ? current.w / initial.w : 1;
+  const scaleH = initial.h > 0 ? current.h / initial.h : 1;
+  return (scaleW + scaleH) / 2;
+}
+
+/**
+ * The CURRENT effective px for a scale-resizable instance's escape-hatch
+ * field — not just its raw `sizePx`, which is stale/irrelevant while the
+ * ladder sits on a NAMED rung (a person who set `size: "xl"` in the
+ * Inspector without ever touching `sizePx` renders at 44px, but `sizePx`
+ * itself still reads its own default, 24 — scaling from that stale 24
+ * would jump the font on the very first drag). `effectiveProps` (@bbox-ui/panel)
+ * only returns a value CASCADED from an ancestor or EXPLICITLY set on the
+ * instance — a field a person has never touched is simply absent, same as
+ * the real component's own JS default parameter fills it at render time —
+ * so `?? field.defaultValue` below is required, not defensive filler:
+ * without it, a fresh instance's `effective[ladderField.id]` is
+ * `undefined`, `textBoxFontPx(undefined, …)` returns `undefined`, and the
+ * eventual `Math.round(undefined * scale)` is `NaN` (measured live: it
+ * rendered `<TextBox size="custom" sizePx={null} />` and the browser
+ * console read "NaN is an invalid value for fontSize").
+ *
+ * `textBoxFontPx` is the one function that already resolves "named rung or
+ * custom px" for TextBox (textBox.layout.ts) — reused here rather than
+ * re-deriving its ladder. WHY a per-component resolver instead of a fully
+ * generic one: the MEANING of a named rung (TextBox's `sm`/`md`/`lg`/`xl`
+ * map to specific px) is that component's own knowledge, the same way
+ * `renderBlock`/`renderRegion` (packages/panel/src/bench.tsx) each know
+ * how to read their own props — there is exactly one component with this
+ * field shape today, so this stays a single named case rather than an
+ * abstraction built for a second one that doesn't exist yet.
+ */
+function benchCurrentScalePx(entryName: string, effective: Record<string, unknown>, fields: BenchScaleFields): number {
+  const rawPx = effective[fields.pxField.id];
+  const pxValue = typeof rawPx === "number" ? rawPx : ((fields.pxField.defaultValue as number | undefined) ?? 0);
+  if (entryName === "TextBox") {
+    const ladderValue = effective[fields.ladderField.id] ?? fields.ladderField.defaultValue;
+    return textBoxFontPx(ladderValue as Parameters<typeof textBoxFontPx>[0], pxValue);
+  }
+  return pxValue;
+}
+
 interface BenchShapeProps {
   instanceId: string;
   w: number;
@@ -105,8 +251,68 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
   override getGeometry(shape: BenchShape) {
     return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true });
   }
-  override canResize() {
-    return false;
+  // Resizable when the instance behind it has EITHER a real `width`/
+  // `height` pair or a ladder+px scale pair to write the drag into — see
+  // `BenchResizeLookup`'s own doc comment for both shapes. No registered
+  // lookup (nothing has rendered yet) fails closed, matching this
+  // override's old unconditional `false`.
+  override canResize(shape: BenchShape) {
+    const lookup = benchResizeLookupByEditor.get(this.editor);
+    if (!lookup) return false;
+    return (
+      benchInstanceSizeFields(lookup, shape.props.instanceId) !== null ||
+      benchInstanceScaleField(lookup, shape.props.instanceId) !== null
+    );
+  }
+  // Stock tldraw's own `resizeBox` scales `w`/`h` like any built-in
+  // rectangle — LIVE, on every pointer-move tick, purely so the box tracks
+  // the cursor during the drag. It does NOT touch the instance's fields;
+  // see `onResizeEnd` for that.
+  override onResize(shape: BenchShape, info: TLResizeInfo<BenchShape>) {
+    return resizeBox(shape, info);
+  }
+  // The bbox-specific step — feeding the drag's result into the
+  // component's OWN `width`/`height` fields (not just the shape's box), so
+  // the Inspector's number fields agree with a dragged size ("the size
+  // prop", per Zach's ask) — fires ONCE here, at gesture end, not on every
+  // tick of `onResize` above. WHY: a component whose rendered floor is
+  // stricter than its field declares (Block's bench wrapper imposes
+  // `minHeight: 120` on a `HEIGHT_FIELD` with no `min` of its own) can
+  // legitimately disagree with a written value — same as typing a too-small
+  // number into the Inspector today — but writing on every `onResize` tick
+  // turned that one settled disagreement into a live fight: each tick wrote
+  // the raw drag value, the component re-rendered, the `ResizeObserver`
+  // effect below corrected the shape's box back to its real floor with
+  // `history: "ignore"`, and the next still-mid-drag tick wrote the raw
+  // value right back — visible jitter for the whole shrink-below-floor
+  // gesture. Writing only once, after the pointer is released, keeps the
+  // field write and the live drag feedback from ever occupying the same
+  // frame.
+  override onResizeEnd(initial: BenchShape, current: BenchShape) {
+    const lookup = benchResizeLookupByEditor.get(this.editor);
+    if (!lookup) return;
+    const instanceId = current.props.instanceId;
+    const sizeFields = benchInstanceSizeFields(lookup, instanceId);
+    if (sizeFields) {
+      lookup.onInstancePropChange(instanceId, "width", benchClampToField(Math.round(current.props.w), sizeFields.widthField));
+      lookup.onInstancePropChange(instanceId, "height", benchClampToField(Math.round(current.props.h), sizeFields.heightField));
+      return;
+    }
+    // SCALE path (TextBox today): there is no width/height to write, so a
+    // drag instead grows/shrinks the one number that exists — scaled off
+    // the box change itself, same reasoning as stock tldraw's own text
+    // shape (installed tldraw's TextShapeUtil.onResize: a corner drag
+    // scales `props.scale`). `Math.max(pxField.min ?? 1, …)` keeps a
+    // shrink-to-nothing drag from writing a zero or negative font size.
+    const inst = lookup.byId.get(instanceId);
+    const scaleFields = inst && benchInstanceScaleField(lookup, instanceId);
+    if (!scaleFields || !inst) return;
+    const effective = effectiveProps(lookup.instances, lookup.entries, inst);
+    const currentPx = benchCurrentScalePx(inst.type, effective, scaleFields);
+    const scale = benchResizeScaleFactor(initial.props, current.props);
+    const nextPx = Math.max(scaleFields.pxField.min ?? 1, Math.round(currentPx * scale));
+    lookup.onInstancePropChange(instanceId, scaleFields.ladderField.id, "custom");
+    lookup.onInstancePropChange(instanceId, scaleFields.pxField.id, nextPx);
   }
   // WHY explicit rather than relying on the inherited default: tldraw's own
   // "edit" state is a SEPARATE mode (double-click a text shape, get its
@@ -141,11 +347,30 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
     return { id: shape.id, type: shape.type };
   }
   override component(shape: BenchShape) {
-    const { entries, byId, selectedIds, onSelectInstance, onSelectionChange, edit, onMovePort, zoom, highlightSlots } =
-      useContext(BenchContext);
+    const {
+      entries,
+      instances,
+      byId,
+      selectedIds,
+      onSelectInstance,
+      onSelectionChange,
+      edit,
+      onMovePort,
+      zoom,
+      highlightSlots,
+    } = useContext(BenchContext);
     const inst = byId.get(shape.props.instanceId);
     const editor = this.editor;
     const contentRef = useRef<HTMLDivElement>(null);
+
+    // Keeps `canResize`/`onResize`/`onResizeEnd` (plain ShapeUtil methods,
+    // no React context) current — see `BenchResizeLookup`'s own doc
+    // comment. No dependency array: cheap (one WeakMap.set), and every
+    // value here can change from a render this shape wasn't even the
+    // cause of.
+    useEffect(() => {
+      benchResizeLookupByEditor.set(editor, { entries, instances, byId, onInstancePropChange: edit.onInstancePropChange });
+    });
 
     // WHY: `getDefaultProps` guesses 180×80, but a fresh instance can be
     // anything from a small Pill to a 384×258 Block — content sized by ITS
@@ -167,8 +392,12 @@ class BenchShapeUtil extends ShapeUtil<BenchShape> {
         if (!cur || cur.type !== "bbox-bench") return;
         if (Math.abs(cur.props.w - w) < 0.5 && Math.abs(cur.props.h - h) < 0.5) return;
         // WHY `history: "ignore"`: this is the shape correcting its OWN
-        // geometry to match its real content, not a person resizing it
-        // (`canResize()` is false) — it must never show up as an undo step.
+        // geometry to match its real content — even for a resizable
+        // instance, this fires after `onResizeEnd` already wrote the drag
+        // into the instance's fields and the component re-rendered,
+        // reconciling the box to what that render actually measured —
+        // never a person resizing THIS shape directly, so it must never
+        // show up as an undo step.
         editor.run(() => editor.updateShape({ id: shape.id, type: "bbox-bench", props: { w, h } }), { history: "ignore" });
       };
       const rect = el.getBoundingClientRect();
