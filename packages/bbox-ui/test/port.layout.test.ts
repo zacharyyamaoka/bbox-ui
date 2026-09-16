@@ -156,11 +156,43 @@ describe("port text layouts", () => {
     expect(portLabelLift("rightOffset", dot, Number.NaN)).toBe(expected);
   });
 
-  it("portLabelPlacement threads the tuned offset into the CSS it emits", () => {
+  /**
+   * `portLabelPlacement` is now a THIN WRAPPER over `slotPlacementStyle`,
+   * not a second implementation. That matters: the adapters and blockFace
+   * all still call it, and while it computed its own dot-based lift it
+   * disagreed with what `LabeledPort` rendered for the same port — 22px vs
+   * 35.5px at `xl`, the same port drawn two ways in two renderers. One
+   * model, one answer (adversarial judge, 2026-09-15).
+   */
+  it("delegates to the unified model, so a host adapter and LabeledPort agree on the same port", () => {
     const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
-    expect(portLabelPlacement("rightOffset", dot, 0, 40).bottom).toBe("calc(50% + 40px)");
-    // …and a non-offset layout still emits no lift, tuned or not.
-    expect(portLabelPlacement("right", dot, 0, 40).top).toBe("50%");
+    for (const layout of PORT_TEXT_LAYOUTS) {
+      const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
+      const viaWrapper = portLabelPlacement(layout, dot, 0, PORT_TEXT_SIZES.md);
+      const viaModel = slotPlacementStyle(
+        {
+          origin: preset.origin,
+          offsetX: 0,
+          offsetY: preset.liftedLabel
+            ? defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.md), PORT_LABEL_GAP)
+            : 0,
+        },
+        dot,
+        PORT_LABEL_GAP,
+      );
+      expect(viaWrapper, layout).toEqual(viaModel);
+    }
+  });
+
+  it("its lift tracks the TEXT size, which is what the guarantee actually depends on", () => {
+    const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
+    const atSm = portLabelPlacement("rightOffset", dot, 0, PORT_TEXT_SIZES.sm).transform;
+    const atXl = portLabelPlacement("rightOffset", dot, 0, PORT_TEXT_SIZES.xl).transform;
+    expect(atSm).not.toBe(atXl);
+    // …and a non-offset layout lifts nothing at any text size.
+    expect(portLabelPlacement("right", dot, 0, PORT_TEXT_SIZES.xl).transform).toBe(
+      "translate(0px, calc(-50% + 0px))",
+    );
   });
 });
 
@@ -294,22 +326,25 @@ describe("port placement — dot on the boundary, label off the dot", () => {
         expect(placement[flowSide[layout]]).toBe(`${portLabelOut(layout, dot)}px`);
 
         if (isOffsetTextLayout(layout)) {
-          // A lifted label anchors by its BOTTOM edge and takes no
-          // centring transform — "clear of the wire" is a fact about that
-          // one edge, so it must not move with the label's own height.
-          expect(placement.bottom).toBe(`calc(50% + ${portLabelLift(layout, dot)}px)`);
-          expect(placement.top).toBeUndefined();
-          expect(placement.transform).toBe("none");
+          // A lifted label is the SAME anchor as its plain counterpart —
+          // near edge, cross-axis centred — displaced upward. Unifying it
+          // to one rule is what lets the flex row and every host adapter
+          // reproduce it without a second implementation.
+          const lift = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.sm), PORT_LABEL_GAP);
+          expect(placement.top).toBe("50%");
+          expect(placement.transform).toBe(`translate(0px, calc(-50% + ${lift}px))`);
           continue;
         }
 
         // Every other layout keeps the cross-axis centring pair.
         const cross = layout === "top" || layout === "bot" ? "left" : "top";
         expect(placement[cross]).toBe("50%");
+        // One transform shape now, from the one model: the cross-axis
+        // centring and the (here zero) displacement composed together.
         expect(placement.transform).toBe(
           layout === "top" || layout === "bot"
-            ? "translateX(-50%)"
-            : "translateY(-50%)",
+            ? "translate(calc(-50% + 0px), 0px)"
+            : "translate(0px, calc(-50% + 0px))",
         );
       }
     },
@@ -357,13 +392,22 @@ describe("unified slot placement — one origin type, free x/y", () => {
     expect(p.left).toBe(`${PORT_DIAMETERS.md + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP}px`);
   });
 
-  it("mirrors the offset's SIGN on the origin that faces the other way, so +x is always rightward on screen", () => {
+  it("mirrors the offset's SIGN on the facing origin, so +x always means AWAY FROM THE DOT", () => {
     const right = slotPlacementStyle({ origin: "right", offsetX: 5, offsetY: 0 }, dot, PORT_LABEL_GAP);
     const left = slotPlacementStyle({ origin: "left", offsetX: 5, offsetY: 0 }, dot, PORT_LABEL_GAP);
-    // `left` anchors by `right:`, which grows leftward — so the same
-    // on-screen direction needs the opposite sign in the transform.
+    // Away-from-the-dot is RIGHTWARD for a right origin and LEFTWARD for a
+    // left one, so the same intent needs opposite signs on screen. The
+    // control means one thing ("further out") on every origin, which is
+    // what stops it reversing itself halfway down the origin list.
     expect(right.transform).toContain("translate(5px");
     expect(left.transform).toContain("translate(-5px");
+  });
+
+  it("…and the same for the vertical pair: +y on a top origin moves UP, away from the dot", () => {
+    const top = slotPlacementStyle({ origin: "top", offsetX: 0, offsetY: 5 }, dot, PORT_LABEL_GAP);
+    const bottom = slotPlacementStyle({ origin: "bottom", offsetX: 0, offsetY: 5 }, dot, PORT_LABEL_GAP);
+    expect(top.transform).toContain("-5px)");
+    expect(bottom.transform).toContain("5px)");
   });
 
   it("the two gaps stay distinct: a secondary slot hugs tighter than a label", () => {

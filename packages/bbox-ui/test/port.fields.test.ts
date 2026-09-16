@@ -428,7 +428,7 @@ describe("labelOffsetY is a real displacement, in both directions", () => {
     expect(labelStyleOf({ textLayout: "right", labelOffsetX: -6 })!.transform).toBe("translate(-6px, 0px)");
   });
 
-  it("mirrors x on a left origin, so +x is rightward on screen from either side", () => {
+  it("mirrors x on a left origin, so +x means AWAY FROM THE DOT on either side", () => {
     expect(labelStyleOf({ textLayout: "left", labelOffsetX: 6 })!.transform).toBe("translate(-6px, 0px)");
     expect(labelStyleOf({ textLayout: "right", labelOffsetX: 6 })!.transform).toBe("translate(6px, 0px)");
   });

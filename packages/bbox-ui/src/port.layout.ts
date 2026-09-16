@@ -496,24 +496,19 @@ export function portLabelPlacement(
   layout: PortTextLayout,
   dot: PortDotBox,
   boxInsetPx: number = 0,
-  liftPx?: number,
+  textSizePx: number = PORT_TEXT_SIZES.sm,
 ): PortLabelPlacement {
-  const out = `${portLabelOut(layout, dot) - boxInsetPx}px`;
-  const lifted = `calc(50% + ${portLabelLift(layout, dot, liftPx)}px)`;
-  switch (layout) {
-    case "right":
-      return { left: out, top: "50%", transform: "translateY(-50%)" };
-    case "rightOffset":
-      return { left: out, bottom: lifted, transform: "none" };
-    case "left":
-      return { right: out, top: "50%", transform: "translateY(-50%)" };
-    case "leftOffset":
-      return { right: out, bottom: lifted, transform: "none" };
-    case "top":
-      return { bottom: out, left: "50%", transform: "translateX(-50%)" };
-    case "bot":
-      return { top: out, left: "50%", transform: "translateX(-50%)" };
-  }
+  const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
+  return slotPlacementStyle(
+    {
+      origin: preset.origin,
+      offsetX: 0,
+      offsetY: preset.liftedLabel ? defaultLiftOffsetY(portLabelHeight(textSizePx), PORT_LABEL_GAP) : 0,
+    },
+    dot,
+    PORT_LABEL_GAP,
+    boxInsetPx,
+  );
 }
 
 /* ------------------------------------------------------------------ */
