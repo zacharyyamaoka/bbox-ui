@@ -636,12 +636,15 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
     if (completionStatus(update.startState) !== null && !openNow && update.state.field(widenField).widened) {
       update.view.dispatch({ effects: setWidened.of(false) });
     }
+    const tooltipView = menuTooltipView(update.view);
     // CodeMirror sets aria-haspopup/controls/activedescendant on the content
     // element but never the expanded state, which the combobox pattern needs.
-    if (openNow !== (completionStatus(update.startState) !== null) || !update.view.contentDOM.hasAttribute("aria-expanded")) {
-      update.view.contentDOM.setAttribute("aria-expanded", openNow ? "true" : "false");
+    // It follows what is ON SCREEN, not `completionStatus`: a "pending" query
+    // has no popup yet, and announcing one that is not there is a lie.
+    const expanded = tooltipView ? "true" : "false";
+    if (update.view.contentDOM.getAttribute("aria-expanded") !== expanded) {
+      update.view.contentDOM.setAttribute("aria-expanded", expanded);
     }
-    const tooltipView = menuTooltipView(update.view);
     if (!tooltipView) return;
     // The "No matches" row is a statement, not a candidate. CodeMirror
     // selects the first option on open regardless, so clear it: -1 is its
@@ -663,7 +666,10 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
   // editor would carry no expanded state at all until its first transaction.
   const ariaOnMount = ViewPlugin.define((view) => {
     view.contentDOM.setAttribute("aria-expanded", "false");
-    return {};
+    // Reconfiguring the field onto a grammar WITHOUT this menu tears the
+    // plugin down while the attribute is still on the element — leaving a
+    // combobox that claims an expanded popup nothing can close.
+    return { destroy: () => view.contentDOM.removeAttribute("aria-expanded") };
   });
 
   return [
