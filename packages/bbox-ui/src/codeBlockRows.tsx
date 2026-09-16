@@ -3,10 +3,10 @@
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { caretOffsetFromPoint } from "./caretGeometry";
-import type { CodeFieldLine, CodeFieldReference } from "./codeGrammar";
+import type { CodeBlockLine, CodeBlockReference } from "./codeGrammar";
 
 /** Sum of a row's own segment text — its rendered line, stitched back together. */
-function rowText(line: CodeFieldLine): string {
+function rowText(line: CodeBlockLine): string {
   return line.segments.map((segment) => segment.text).join("");
 }
 
@@ -26,7 +26,7 @@ function rowText(line: CodeFieldLine): string {
  * row is not. Falls back to the row's full text when no segment is
  * marked `role: "name"` (a grammar with no name concept at all).
  */
-export function rowIdentity(line: CodeFieldLine): string {
+export function rowIdentity(line: CodeBlockLine): string {
   const name = line.segments.find((segment) => segment.role === "name")?.text ?? rowText(line);
   return `${line.line}:${name}`;
 }
@@ -35,7 +35,7 @@ export function rowIdentity(line: CodeFieldLine): string {
  * Drops any `expandedPaths` entry whose TOP-LEVEL `line:name` no longer
  * appears among the current top-level `lines` — an edit that deletes an
  * expanded row (not just shifts it, `rowIdentity`'s own job) would
- * otherwise leave that key sitting there forever. `CodeField` calls this
+ * otherwise leave that key sitting there forever. `CodeBlock` calls this
  * on every `lines()` recompute.
  *
  * WHY this is a narrowing, not a full fix: a stale key can still
@@ -50,7 +50,7 @@ export function rowIdentity(line: CodeFieldLine): string {
  */
 export function pruneExpandedPaths(
   expandedPaths: ReadonlySet<string>,
-  lines: readonly CodeFieldLine[],
+  lines: readonly CodeBlockLine[],
 ): ReadonlySet<string> {
   const currentTopLevel = new Set(lines.map(rowIdentity));
   let changed = false;
@@ -62,10 +62,10 @@ export function pruneExpandedPaths(
   return changed ? next : expandedPaths;
 }
 
-export interface CodeFieldRowsProps {
+export interface CodeBlockRowsProps {
   /** `grammar.lines(value)` — the top-level rows. */
-  lines: CodeFieldLine[];
-  resolveReference?(name: string): CodeFieldReference | null;
+  lines: CodeBlockLine[];
+  resolveReference?(name: string): CodeBlockReference | null;
   /**
    * A row (or the blank space below the last one) was clicked. `line` is
    * the row's own line INDEX and `column` an approximate offset within it
@@ -75,7 +75,7 @@ export interface CodeFieldRowsProps {
    * `line`/`column` are then straight into this field's own `value`,
    * compose with `lineStartOffset` for a flat offset. For a row that came
    * from a reference's `expandLines()`, `owner` carries THAT reference's
-   * own owner token (`CodeFieldReference.owner`, defaulting to the
+   * own owner token (`CodeBlockReference.owner`, defaulting to the
    * resolved segment's text) — `line`/`column` are into THAT source, not
    * this field's, and the host must resolve `owner` to open its source
    * (the donor's rule: a foreign row jumps to its real owner, never opens
@@ -85,8 +85,8 @@ export interface CodeFieldRowsProps {
   /**
    * Which rows are expanded, keyed by path (`"3"`, `"3/1"`, …). Controlled
    * — pass this alongside `onToggleExpanded` to keep expansion state alive
-   * across whatever remounts `CodeFieldRows` (`CodeField` does this across
-   * its own `mode` toggle: `CodeFieldRows` itself unmounts every trip
+   * across whatever remounts `CodeBlockRows` (`CodeBlock` does this across
+   * its own `mode` toggle: `CodeBlockRows` itself unmounts every trip
    * through Source, so state living only here reset on every round trip —
    * the donor's `TypeBabbleV1` lifts this same state for the same reason).
    * Omit both to manage it internally instead (an uncontrolled default,
@@ -99,14 +99,14 @@ export interface CodeFieldRowsProps {
 }
 
 /**
- * The RENDERED half of `CodeField`'s `mode` toggle: `grammar.lines()` painted
+ * The RENDERED half of `CodeBlock`'s `mode` toggle: `grammar.lines()` painted
  * as bold-name / accent-type / muted-value rows, a reference segment as an
  * underlined link, and a chevron for a reference that can expand in place —
  * the "code block overlay" idea: rendered by default, source only under the
- * caret. `CodeField` mounts this in place of CodeMirror while `mode ===
+ * caret. `CodeBlock` mounts this in place of CodeMirror while `mode ===
  * "rendered"`; it never runs alongside the live document.
  */
-export function CodeFieldRows({
+export function CodeBlockRows({
   lines,
   resolveReference,
   onOpenSource,
@@ -114,7 +114,7 @@ export function CodeFieldRows({
   onToggleExpanded,
   className,
   testId,
-}: CodeFieldRowsProps) {
+}: CodeBlockRowsProps) {
   const [uncontrolledExpanded, setUncontrolledExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const expanded = expandedPaths ?? uncontrolledExpanded;
   const toggle =
@@ -130,8 +130,8 @@ export function CodeFieldRows({
   const last = lines[lines.length - 1];
   return (
     <div
-      data-slot="code-field-rows"
-      className={`bbox-code-field-rows${className ? ` ${className}` : ""}`}
+      data-slot="code-block-rows"
+      className={`bbox-code-block-rows${className ? ` ${className}` : ""}`}
       data-testid={testId}
       // A click that reaches this container (not caught by a row, a
       // chevron, or a reference link on the way) landed on genuinely empty
@@ -143,7 +143,7 @@ export function CodeFieldRows({
       }}
     >
       {lines.map((line) => (
-        <CodeFieldRow
+        <CodeBlockRow
           key={rowIdentity(line)}
           line={line}
           path={rowIdentity(line)}
@@ -158,7 +158,7 @@ export function CodeFieldRows({
   );
 }
 
-function CodeFieldRow({
+function CodeBlockRow({
   line,
   path,
   owner,
@@ -167,11 +167,11 @@ function CodeFieldRow({
   expandedPaths,
   togglePath,
 }: {
-  line: CodeFieldLine;
+  line: CodeBlockLine;
   path: string;
   /** The owner of THIS row's own source — `undefined` at the top level, the enclosing reference's owner once nested inside its `expandLines()`. */
   owner: unknown;
-  resolveReference?(name: string): CodeFieldReference | null;
+  resolveReference?(name: string): CodeBlockReference | null;
   onOpenSource?(line: number, column: number, owner?: unknown): void;
   expandedPaths: ReadonlySet<string>;
   togglePath(path: string): void;
@@ -196,11 +196,11 @@ function CodeFieldRow({
   const childOwner = resolved ? resolved.owner ?? line.segments[referenceIndex]!.text : owner;
 
   return (
-    <div className="bbox-code-field-row" data-slot="code-field-row" data-depth={path.split("/").length - 1}>
-      <span className="bbox-code-field-row-content" onClick={activateRow}>
+    <div className="bbox-code-block-row" data-slot="code-block-row" data-depth={path.split("/").length - 1}>
+      <span className="bbox-code-block-row-content" onClick={activateRow}>
         <span
           aria-hidden={expandable ? undefined : true}
-          className="bbox-code-field-chevron"
+          className="bbox-code-block-chevron"
           data-caret-ignore=""
           data-open={isOpen || undefined}
           role={expandable ? "button" : undefined}
@@ -243,9 +243,9 @@ function CodeFieldRow({
         })}
       </span>
       {isOpen && children ? (
-        <div className="bbox-code-field-preview">
+        <div className="bbox-code-block-preview">
           {children.map((child) => (
-            <CodeFieldRow
+            <CodeBlockRow
               key={rowIdentity(child)}
               line={child}
               path={`${path}/${rowIdentity(child)}`}

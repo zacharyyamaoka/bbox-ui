@@ -7,8 +7,9 @@
  * drift the first time a component was added to one of them. Adding a ninth
  * component stays one import and one `registerComponent` call, in one file.
  */
-import type { CSSProperties, ReactNode } from "react";
-import type { FieldSpec, FieldValue } from "@bbox-ui/schema";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import type { FieldSpec, FieldValue, PresetSpec } from "@bbox-ui/schema";
 import {
   Bar,
   BAR_FIELDS,
@@ -24,6 +25,9 @@ import {
   BlockTitle,
   BlockType,
   resolveBlockFace,
+  CodeBlock,
+  CODE_BLOCK_FIELDS,
+  CODE_BLOCK_PRESETS,
   Flex,
   FLEX_FIELDS,
   FLEX_PRESETS,
@@ -79,7 +83,7 @@ import { LANE_BAND_PX } from "./portEdges";
  * leaves; a Flex takes leaves and Flexes. Widening a set is a one-line edit
  * here, and the Members control offers exactly this list.
  */
-const LEAVES = ["Port", "Pill", "Glyph", "TextBox"];
+const LEAVES = ["Port", "Pill", "Glyph", "TextBox", "CodeBlock"];
 export const MEMBER_SPECS: Record<string, MembersSpec> = {
   Stack: { accepts: ["Block", "Stack", "Flex", ...LEAVES] },
   PortEdge: { accepts: ["Port"], label: "Ports" },
@@ -591,6 +595,143 @@ const SLOT_LABEL_STYLE: CSSProperties = {
   padding: "0 4px",
 };
 
+/**
+ * The bench's own "larger view" behind CodeBlock's ⤢ button (Zach,
+ * 2026-09-15: "button in right corner that allows you to expand to a
+ * larger view"). WHY it lives HERE and not in the core: the block only
+ * emits `onExpand` — an overlay is chrome with a z-index and a portal, both
+ * things `packages/bbox-ui` never owns (root CLAUDE.md's one rule). The
+ * overlay is a full-size `block`-look editor over the SAME instance prop:
+ * every keystroke goes through the page's own `edit.onChange`, so the
+ * small block, the inspector's Code field and the big one are one value.
+ * Portalled to `document.body` because a `position: fixed` box inside a
+ * transformed ancestor (a tldraw `HTMLContainer`, a React Flow node) is
+ * positioned relative to that ancestor, not the viewport.
+ */
+function BenchCodeBlock({
+  props,
+  ctx,
+}: {
+  props: Record<string, unknown>;
+  ctx?: RenderContext;
+}) {
+  const edit = ctx?.edit;
+  const [expanded, setExpanded] = useState(false);
+  // A local mirror for a bench with no edit bundle (the Vite demo strip):
+  // the big editor still needs somewhere to write, and the small one
+  // follows it, so the two never disagree there either.
+  const [local, setLocal] = useState(String(props.value ?? ""));
+  useEffect(() => setLocal(String(props.value ?? "")), [props.value]);
+  const write = edit?.onChange ?? setLocal;
+  const value = edit ? String(props.value ?? "") : local;
+  const close = () => setExpanded(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [expanded]);
+  const block = (
+    <CodeBlock
+      // Unlike every other leaf registered this way, `CodeBlock.value`
+      // is REQUIRED (not optional-with-a-default like `TextBox.children`)
+      // — the bare `Record<string, never>` cast every other entry uses
+      // erases it along with everything else, so TS reports it missing
+      // even though the real runtime `props` always carries it (the
+      // field's own `defaultValue`). Naming it in the cast's type keeps
+      // the same "trust the resolved props" looseness for every other
+      // key while letting the required one type-check.
+      {...(props as Record<string, never> & { value: string })}
+      value={value}
+      editing={edit?.editing ?? false}
+      onWrite={write}
+      onEnter={edit ? () => edit.onCommit(String(props.value ?? "")) : undefined}
+      onEscape={edit?.onCancel}
+      onEditEnd={edit ? (next) => edit.onCommit(next) : undefined}
+      onExpand={() => setExpanded(true)}
+    />
+  );
+  const overlay =
+    expanded && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            data-slot="code-block-expanded"
+            role="dialog"
+            aria-label="Code, expanded"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) close();
+            }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 2147483000,
+              display: "grid",
+              placeItems: "center",
+              background: "color-mix(in srgb, var(--color-foreground, #000) 35%, transparent)",
+            }}
+          >
+            <div
+              style={{
+                width: "min(960px, 90vw)",
+                height: "min(640px, 80vh)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                padding: 12,
+                borderRadius: 12,
+                background: "var(--color-background, #fff)",
+                boxShadow: "0 24px 64px rgba(0,0,0,.35)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
+                <span style={{ color: "var(--color-muted-foreground)" }}>Larger view — same value as the block; Esc or click outside to close.</span>
+                <button
+                  type="button"
+                  data-slot="code-block-expanded-close"
+                  onClick={close}
+                  style={{ border: "1px solid var(--color-border)", borderRadius: 6, background: "transparent", color: "inherit", padding: "2px 10px", cursor: "pointer" }}
+                >
+                  Close
+                </button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+                <CodeBlock
+                  {...(props as Record<string, never> & { value: string })}
+                  look="block"
+                  lines="multi"
+                  lineNumbers
+                  overflow="scroll"
+                  columns={0}
+                  expandable={false}
+                  value={value}
+                  editing
+                  autoFocus
+                  // A larger view is somewhere you CONTINUE writing, so the
+                  // caret opens at the end (TextBox's own multi-line rule),
+                  // not at offset 0 where the first keystroke would land in
+                  // front of the code.
+                  cursorAt={value.length}
+                  onWrite={write}
+                  onEscape={close}
+                  style={{ flex: 1, height: "100%" }}
+                  className="bbox-code-block--expanded"
+                />
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+  return (
+    <>
+      {block}
+      {overlay}
+    </>
+  );
+}
+
 export const REGISTRY: ComponentEntry[] = [
   registerComponent({
     name: "Port",
@@ -649,6 +790,32 @@ export const REGISTRY: ComponentEntry[] = [
       // stem directly against the frame, which reads as a defect in every
       // screenshot even though it is bench-only chrome.
       return <div style={{ width: 220, border: "1px dashed #ccc", padding: "4px 8px" }}>{box}</div>;
+    },
+  }),
+  registerComponent({
+    name: "CodeBlock",
+    fields: CODE_BLOCK_FIELDS,
+    presets: CODE_BLOCK_PRESETS as PresetSpec[],
+    // Structurally identical to `PresetSpec` (codeBlock.presets.ts's own
+    // WHY: that file ships in the `code-block` registry item and cannot
+    // import `@bbox-ui/schema`), so the cast is a name, not a coercion.
+    inlineEdit: { field: "value" },
+    render: (props, _children, ctx) => {
+      // WHY `editing` comes from `ctx.edit` and never from `props`: it is
+      // host wiring, driven by the create page's own two-click rule
+      // (docs/TEXTBOX-EDITING-SPEC.md §3), not a `CODE_BLOCK_FIELDS` entry —
+      // the same line TextBox's entry draws just above. `onEnter` commits
+      // `props.value` (not some local buffer) because every keystroke
+      // already round-tripped through `onWrite` = `edit.onChange`, so the
+      // stored prop IS the live document by the time Enter fires; `onEscape`
+      // is `edit.onCancel` (restore); `onEditEnd` covers the blur exit the
+      // other two don't reach. All of that, plus the ⤢ larger view, lives in
+      // `BenchCodeBlock` (a component, because the overlay needs state).
+      const block = <BenchCodeBlock props={props} ctx={ctx} />;
+      // WHY bare when nested: TextBox's own dashed-frame rule, above —
+      // bench-only chrome for a top-level specimen, not inside a slot/member.
+      if (ctx?.nested) return block;
+      return <div style={{ width: 360 }}>{block}</div>;
     },
   }),
   registerComponent({
@@ -863,6 +1030,17 @@ export const SEED_VARIANTS: Record<string, Record<string, unknown>[]> = {
     { children: "Text Box" },
     { size: "lg", children: "Bigger text" },
     { size: "sm", children: "Small print" },
+  ],
+  // WHY the first seed turns the ⤢ button on: it is what Add uses, and
+  // the larger view is the thing to try first on /create; the primitive's
+  // own default stays off so a Port label never grows a button.
+  CodeBlock: [
+    { expandable: true },
+    { look: "field", value: "get_aruco: ArucoSrv" },
+    { language: "json", lineNumbers: false, value: '{ "greeting": "hello" }' },
+    // The port-lane case flatten exists for: a multi-line default value
+    // inside one port line, shown as one row with ⏎ glyphs.
+    { flatten: true, expandable: true, value: 'pose: Pose = {\n  "x": 1,\n  "y": 2\n}\nsamples: int = 3' },
   ],
   Stack: [{}, { gap: "lg" }],
   PortEdge: [{ edge: "left" }, { edge: "right" }, { edge: "top" }],

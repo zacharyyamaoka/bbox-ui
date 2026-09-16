@@ -12,7 +12,7 @@ import {
   type Tone,
   paintVar,
 } from "./appearance";
-import { CodeField } from "./codeField";
+import { CodeBlock } from "./codeBlock";
 import { PORT_FIELDS } from "./port.fields";
 import { PORT_PRESETS } from "./port.presets";
 import {
@@ -89,8 +89,8 @@ export function portResolutionSubject(props: Record<string, unknown>): Record<st
  * dot, not a second independently-flowed sibling like the label.
  *
  * THE TWO SLOTS:
- * - The LABEL slot (`PortLabel`) — a real single-line `CodeField` (ported
- *   from `claude/code-field`, see `./codeField.tsx`'s own doc), positioned
+ * - The LABEL slot (`PortLabel`) — a real single-line `CodeBlock` (ported
+ *   from `claude/code-field`, see `./codeBlock.tsx`'s own doc), positioned
  *   by `textLayout` (`./port.layout.ts`'s `PortTextLayout`, now six values:
  *   `top | bot | right | left | rightOffset | leftOffset`, auto-defaulting
  *   via `inwardTextLayout(edge)` when omitted — unchanged from before).
@@ -470,7 +470,7 @@ export function PortDot({
 }
 
 /* ------------------------------------------------------------------ */
-/* PortLabel — the label slot, now a real single-line CodeField.       */
+/* PortLabel — the label slot, now a real single-line CodeBlock.       */
 /* `PortName`/`PortType`/`PortDefaultChip` (the old three-span layout)  */
 /* are REMOVED here — confirmed zero usage outside this file before    */
 /* removal (recon, 2026-09-12), same standard `role`/`decoration`'s     */
@@ -480,7 +480,7 @@ export function PortDot({
 /** Stable no-op so an unwired `PortLabel` (no `onLabelWrite`) doesn't
  * allocate a fresh throwaway function every render — `Port` is
  * presentational ("props in, DOM out"); a field with nowhere to write
- * still has to satisfy `CodeField`'s required `onWrite`. */
+ * still has to satisfy `CodeBlock`'s required `onWrite`. */
 function noopWrite() {}
 
 export interface PortLabelProps extends ComponentProps<"span"> {
@@ -494,7 +494,7 @@ export interface PortLabelProps extends ComponentProps<"span"> {
    * Flow adapters, the docs examples, the port-inspector demo) already
    * passed one composed string as `children` and never touched
    * `name`/`type`/`defaultValue` at all — this is that same shape, now
-   * also the thing `CodeField` actually edits.
+   * also the thing `CodeBlock` actually edits.
    */
   children?: string;
   direction?: PortDirection;
@@ -504,13 +504,13 @@ export interface PortLabelProps extends ComponentProps<"span"> {
   /** No caret, no edits — a read-only port. */
   disabled?: boolean;
   /**
-   * Fired on every keystroke (`CodeField`'s own live `onWrite`). Omit for
+   * Fired on every keystroke (`CodeBlock`'s own live `onWrite`). Omit for
    * a label that shows `children` but never persists an edit anywhere —
    * `Port` does no editing state of its own (same category as `dimmed`/
    * `hinting`: host-set/host-observed, never internal). A host that wants
    * typed text to stick wires this to whatever updates its own store; one
    * left unwired simply reverts to `children` the moment the field blurs
-   * (`CodeField`'s own controlled-value contract), same as an `<input>`
+   * (`CodeBlock`'s own controlled-value contract), same as an `<input>`
    * with no `onChange`.
    */
   onLabelWrite?(value: string): void;
@@ -519,7 +519,7 @@ export interface PortLabelProps extends ComponentProps<"span"> {
 }
 
 /**
- * The label slot: a real single-line `CodeField` (`./codeField.tsx`,
+ * The label slot: a real single-line `CodeBlock` (`./codeBlock.tsx`,
  * ported from `claude/code-field`) bound to `children` as its whole
  * `value` — grammar-free (a plain code text box; wiring the Python
  * `name: Type = default` grammar/autocomplete is explicitly out of scope
@@ -559,7 +559,22 @@ export function PortLabel({
       style={style}
       {...props}
     >
-      <CodeField
+      <CodeBlock
+        // WHY `look="field"` and not a `CodeField` component: a port label
+        // IS a code block — one line, no gutter, an input's padding — so it
+        // wears the block's `field` look rather than being a second thing
+        // (codeBlock.tsx's own WHY; Zach, 2026-09-14). Everything below
+        // the look is Port's own: its text size, its alignment, its value.
+        look="field"
+        // WHY plaintext and not the block's Python default: the label was
+        // always a grammar-free box (this file's module doc — "wiring the
+        // Python `name: Type = default` grammar/autocomplete is explicitly
+        // out of scope"), and the Port story asserts its value as ONE text
+        // node. A parser would split `frameImage: Image` into token spans
+        // — a highlighting change nobody asked for, riding in on a rename.
+        // When the signature grammar lands it arrives through `grammar`,
+        // which owns the parser (codeBlock.tsx's `baseLanguage`).
+        language="plaintext"
         value={children}
         onWrite={onLabelWrite ?? noopWrite}
         disabled={disabled}
@@ -570,10 +585,11 @@ export function PortLabel({
         // `direction` still carries this intent (see the docblock above)
         // now that content order itself has nothing left to mirror.
         align={direction === "output" ? "right" : "left"}
-        // `textSize` scales the field's own font (codeField.css inherits
-        // it from this wrapper — see its own WHY) so a Port at `lg`/`xl`
-        // doesn't stay pinned to the field's compact default size.
-        style={{ fontSize: PORT_TEXT_SIZES[textSize] }}
+        // `textSize` is Port's OWN ladder (18/24/36/44, `PORT_TEXT_SIZES`),
+        // not the block's 12/16/20/24 — so it escapes the block's named
+        // rungs through `size="custom"` and hands the exact px over.
+        size="custom"
+        sizePx={PORT_TEXT_SIZES[textSize]}
         testId="port-label-field"
       />
     </span>
@@ -674,12 +690,12 @@ export interface PortProps extends ComponentProps<"div"> {
    * wherever the label is actually flowing (`defaultSecondarySlotLayout`,
    * port.layout.ts). */
   secondarySlotLayout?: SecondarySlotLayout;
-  /** No caret, no edits on the label's `CodeField` — see `PortLabelProps`. */
+  /** No caret, no edits on the label's `CodeBlock` — see `PortLabelProps`. */
   disabled?: boolean;
-  /** Fired on every keystroke of the label's `CodeField` — see
+  /** Fired on every keystroke of the label's `CodeBlock` — see
    * `PortLabelProps.onLabelWrite`'s own doc for what an unwired field does. */
   onLabelWrite?(value: string): void;
-  /** Shown in the label's `CodeField` when `children` is empty. */
+  /** Shown in the label's `CodeBlock` when `children` is empty. */
   placeholder?: string;
 }
 

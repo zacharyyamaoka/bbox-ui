@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "fumadocs-ui/css/shadcn.css";
 @import "fumadocs-ui/css/preset.css";
+/* CodeBlock's own chrome (border, gutter, caret, popup) — never imported
+   before this, so a docs-site CodeBlock/CodeField rendered with none of it.
+   Paints entirely off `--color-*` tokens this file already defines below
+   (`@theme inline`), so it needs no token additions of its own. */
+@import "@bbox-ui/core/codeBlock.css";
 
 /* WHY: Tailwind v4 only scans this app's own sources. The bbox-ui components live
    in a sibling workspace package, so utilities used *only* there — border-foreground

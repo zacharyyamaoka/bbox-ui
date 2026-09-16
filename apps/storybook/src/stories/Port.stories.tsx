@@ -45,7 +45,7 @@ import type { ComponentProps } from "react";
  *
  * WHY every story below sets `children` (was `name`/`type`) — those two
  * props are GONE (folded into `children`, the label slot's whole
- * `CodeField` value; see port.tsx's own module doc). Every gallery that
+ * `CodeBlock` value; see port.tsx's own module doc). Every gallery that
  * used to do `name={(args.name as string) || option.label}` now does the
  * identical thing against `children`.
  */
@@ -75,7 +75,7 @@ const SECONDARY_SLOT_LAYOUT_FIELD = PORT_FIELDS.find((f) => f.id === "secondaryS
  * THE STORY THAT CARRIES THE PLAY FUNCTION. Click the painted dot —
  * reachable whether this DOM node sits three frameworks deep (plain div,
  * a React Flow node, a tldraw HTMLContainer shape) by the time this runs
- * — then assert the label's real CodeField mounted with the right value
+ * — then assert the label's real CodeBlock mounted with the right value
  * and the dot's `data-state` matches the args this story was actually
  * rendered with. `PORT_FIELDS`' own `children` default is an empty string
  * (nothing real to click through to), so this story overrides it to a
@@ -93,7 +93,7 @@ export const Primary: Story = {
     await userEvent.click(dot);
     const field = canvasElement.querySelector('[data-testid="port-label-field"]');
     if (!(field instanceof HTMLElement)) {
-      throw new Error('expected a [data-testid="port-label-field"] CodeField in the DOM');
+      throw new Error('expected a [data-testid="port-label-field"] CodeBlock in the DOM');
     }
     await expect(canvas.getByText(String(args.children))).toBeInTheDocument();
     await expect(dot.getAttribute("data-state")).toBe(args.state);
@@ -157,7 +157,7 @@ export const AllTones: Story = {
 
 /** input vs output — no longer reorders the label's CONTENT (one free-typed
  * string has nothing left to mirror), but still sets which way the
- * `CodeField`'s text aligns (`PortLabel`'s own doc). */
+ * `CodeBlock`'s text aligns (`PortLabel`'s own doc). */
 export const AllDirections: Story = {
   parameters: sweep("direction"),
   render: (args) => (
@@ -233,7 +233,7 @@ export const AllTextLayouts: Story = {
 
 /** Every real PortTextSize rung (18/24/36/44px) — Port's own ladder,
  * deliberately separate from `layout.ts`'s `TEXT_SIZES` (docs/T1-SPEC.md
- * §0). Now also the label `CodeField`'s own font size (`PortLabel`'s
+ * §0). Now also the label `CodeBlock`'s own font size (`PortLabel`'s
  * `style={{ fontSize: ... }}`, port.tsx). */
 export const AllTextSizes: Story = {
   parameters: sweep("textSize"),
@@ -342,7 +342,7 @@ export const AllSecondarySlotLayouts: Story = {
 
 /** A dotted gray box standing in for either slot's real content —
  * neither slot has an intrinsic size of its own (the label sizes to its
- * CodeField text, the secondary slot to whatever a host puts there), so
+ * CodeBlock text, the secondary slot to whatever a host puts there), so
  * this is a fixed placeholder purely to make the SLOT's position/gap
  * checkable without a badge or label text competing for attention. */
 const SLOT_OUTLINE_STYLE = {
@@ -366,7 +366,7 @@ const SECONDARY_CAPTION_GAP = PORT_RING_OVERHANG_PX + PORT_SECONDARY_SLOT_GAP_PX
  * wall-anchored host calls, and the one `PORT_RING_OVERHANG_PX` (the
  * "measure from the painted ring" fix) flows through. Bypasses
  * `Port`/`PortLabel` entirely since their label content is locked to a
- * `CodeField` string now — this draws the SLOT, not what's in it. */
+ * `CodeBlock` string now — this draws the SLOT, not what's in it. */
 function LabelSlotSpecimen({ layout }: { layout: PortTextLayout }) {
   const diameterPx = PORT_DIAMETERS.md;
   return (
@@ -442,7 +442,7 @@ export const SlotOutlineGeometry: Story = {
 
 /**
  * Both slots at once, on a realistic port: the label slot's real
- * `CodeField` holding a `name: Type` one-liner, the secondary slot's
+ * `CodeBlock` holding a `name: Type` one-liner, the secondary slot's
  * producer-count badge sitting in the free corner — the two-slot
  * proposal's actual money shot, not two separate galleries.
  */

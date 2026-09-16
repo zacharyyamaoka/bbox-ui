@@ -69,6 +69,17 @@ export function cascadeInto(
   textLayout: PortTextLayout,
   anchored?: boolean,
 ): ReactNode {
+  // WHY a primitive passes through untouched (2026-09-14): `Children.map`
+  // returns an ARRAY even for a lone string — `Children.map("in", f)` is
+  // `["in"]` — and `cloneElement(port, props, ["in"])` then hands the Port
+  // `children: ["in"]` instead of `"in"`. A Port's label is one string that
+  // its `PortLabel` mounts as a CodeBlock's `value`; CodeMirror refuses an
+  // array (`(config.doc || "").split is not a function`), which took the
+  // whole Block bench down on /create the moment its seeded ports carried
+  // string labels. There is nothing to cascade INTO a primitive anyway.
+  if (typeof children === "string" || typeof children === "number" || typeof children === "boolean") {
+    return children;
+  }
   return Children.map(children, (child) => {
     if (!isValidElement(child)) return child;
     if (child.type === Fragment) {

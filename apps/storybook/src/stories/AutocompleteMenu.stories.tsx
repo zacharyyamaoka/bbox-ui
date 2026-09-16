@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import {
-  CodeField,
+  CodeBlock,
   completionMenu,
-  type CodeFieldGrammar,
+  type CodeBlockGrammar,
   type CompletionMenuAnchor,
   type CompletionMenuAtEnds,
   type CompletionMenuContext,
@@ -13,12 +13,12 @@ import { useMemo, useState } from "react";
 
 /**
  * The autocomplete menu (packages/bbox-ui/src/completionMenu.ts) in the
- * plainest host there is: a CodeField with nothing else going on, so every
+ * plainest host there is: a CodeBlock with nothing else going on, so every
  * key and every control can be tried by hand. Mounted as a grammar's
  * `language` — the same no-change seam any real field uses today.
  *
  * Every control below is one `completionMenu` option; switching one
- * rebuilds the grammar, which CodeField swaps in through its compartment
+ * rebuilds the grammar, which CodeBlock swaps in through its compartment
  * without remounting the document.
  */
 
@@ -92,7 +92,7 @@ function AutocompletePlayground(args: AutocompleteMenuArgs) {
   const { anchor, atEnds, footer, badges } = args;
   // Storybook's URL `args=` hands numbers over as strings.
   const maxRows = Number(args.maxRows) || 10;
-  const grammar = useMemo<CodeFieldGrammar>(
+  const grammar = useMemo<CodeBlockGrammar>(
     () => ({
       language: completionMenu({
         source: exampleSource,
@@ -123,19 +123,20 @@ function AutocompletePlayground(args: AutocompleteMenuArgs) {
         Type <code>pri</code>, try ↑/↓ at the ends, <kbd>Ctrl Space</kbd> twice, <kbd>Tab</kbd> vs{" "}
         <kbd>Enter</kbd> inside a word, <kbd>Esc</kbd>.
       </p>
-      <CodeField
+      <CodeBlock
         testId="autocomplete-multiline"
         ariaLabel="Multi-line text box"
-        multiline
+        lines="multi"
         value={lane}
         onWrite={setLane}
         grammar={grammar}
         style={{ fontSize: 13, minHeight: 120 }}
       />
       <p style={{ margin: "16px 0 6px", color: "var(--muted-foreground)" }}>Single line</p>
-      <CodeField
+      <CodeBlock
         testId="autocomplete-single"
         ariaLabel="Single-line text box"
+        lines="single"
         value={line}
         onWrite={setLine}
         grammar={grammar}

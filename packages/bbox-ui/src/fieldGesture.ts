@@ -1,5 +1,5 @@
 /**
- * The live-commit contract `CodeField` follows.
+ * The live-commit contract `CodeBlock` follows.
  *
  * WHY a gesture object instead of "call `onWrite` on change, `onEditEnd` on
  * blur": a text field's edit is a *gesture* with three boundaries — it
@@ -9,14 +9,14 @@
  * browser will not tell you about the last one: no `blur` fires for a
  * focused element removed from the DOM, so a naive commit-on-blur field
  * silently drops whatever was typed the instant its panel unmounts. This
- * class is driven from the React lifecycle instead (`CodeField`'s unmount
+ * class is driven from the React lifecycle instead (`CodeBlock`'s unmount
  * effect calls `commit()`), where that boundary is observable.
  *
  * Two write policies, both loss-free:
  *
  * - `live` — every keystroke writes straight into the caller's store, so
  *   the store is the only copy of the text and there is nothing left to
- *   lose. `CodeField` uses this exclusively (see WHY below).
+ *   lose. `CodeBlock` uses this exclusively (see WHY below).
  * - `exit` — the value is buffered and written once, at the end boundary,
  *   for a write that is genuinely expensive. Still loss-free, because
  *   unmount is itself an end boundary.
@@ -102,6 +102,26 @@ export class FieldGesture {
     this.editing = false;
     this.began = false;
     this.hooks.end?.(value, start);
+  }
+
+  /**
+   * End the gesture WITHOUT firing `end` — for a host that owns the editing
+   * session and has already decided what the final value is. WHY this
+   * exists beside `commit()`: a host that ends its session on Escape first
+   * restores the pre-edit value through its own store, then flips the
+   * block's `editing` off. If the block committed on that transition, `end`
+   * would report the document's LAST TYPED text (the store's restore never
+   * reached a focused document — `CodeBlock`'s resync deliberately leaves a
+   * focused, mid-gesture document alone), and the host would write the
+   * cancelled text straight back over its own restore. In `live` mode
+   * nothing is lost by abandoning: every keystroke already went through
+   * `write`. In `exit` mode the buffered value is dropped on purpose — an
+   * abandoned exit-mode gesture is a cancel.
+   */
+  abandon(): void {
+    this.editing = false;
+    this.began = false;
+    this.current = this.start;
   }
 
   private ensureBegun(): void {
