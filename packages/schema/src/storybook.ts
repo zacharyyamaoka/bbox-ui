@@ -21,6 +21,13 @@ const CONTROL: Record<FieldKind, "select" | "number" | "boolean" | "text"> = {
   // identity — `field.kind` stays "textarea" everywhere else, only the
   // Controls addon sees "text". See docs/TEXTBOX-EDITING-SPEC.md §2.
   textarea: "text",
+  // WHY "glyph" gets the plain text control rather than something bespoke:
+  // Storybook's Controls addon has no picker widget, and the VALUE a glyph
+  // field holds is exactly the same encoded string a "text" field holds
+  // (@bbox-ui/glyph-content's grammar) — only the PRODUCT inspector's row
+  // replaces the control with the picker trigger (see FieldKind's own
+  // comment in field.ts). Typing "lucide:rocket" into this box still works.
+  glyph: "text",
 };
 
 export interface StorybookArgType {

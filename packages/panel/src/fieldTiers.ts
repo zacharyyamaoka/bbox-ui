@@ -60,7 +60,20 @@ export const TIER_META: Record<Tier, { label: string; hint: string }> = {
  * field is one tap away.
  */
 export function classifyField(field: FieldSpec, presets: PresetSpec[], governed: Set<string>): Tier {
+  // Explicit curation outranks everything, including the host rule below: a
+  // host fact someone deliberately promoted to Simple is still Simple.
   if (field.tier) return field.tier;
+
+  // WHY checked before every INFERRED rule: a HOST FACT (`HOST_FIELDS` —
+  // apps/docs/src/components/create/sections/host-fields.ts) is neither the
+  // frequently-tweaked "simple" case nor a preset-governed "expert" one —
+  // it is just always there, the same row in the same place regardless of
+  // which component is selected. Letting it fall through to the ordinary
+  // rules below would sort `rotation` (a `kind: "number"`) into "expert" as
+  // a bare continuous number, next to Pill's raw opacity — a fact about the
+  // FIELD's shape, not about where it comes from, and the wrong tier for
+  // something that belongs on every single instance's Renderer section.
+  if (field.host === true) return "advanced";
 
   const isSelector = field.id === "state" || presets.some((p) => p.selector === field.id);
   const isEscapeHatch = /escape hatch/i.test(field.hint ?? "");
@@ -72,7 +85,13 @@ export function classifyField(field: FieldSpec, presets: PresetSpec[], governed:
   // field gets, not the leftover "advanced" bucket.
   const isPlainName = (field.kind === "text" || field.kind === "textarea") && !field.hint;
   const isBareLabel = field.id === "children" && !isEscapeHatch;
-  if (isSelector || isPlainName || isBareLabel) return "simple";
+  // WHY a "glyph" field is simple even though it carries a hint (unlike the
+  // bare-name text case above): its whole reason to exist is a picker
+  // trigger the user reaches for constantly — the "what changes constantly"
+  // case this tier is for — not an occasional escape hatch. Falling through
+  // to "advanced" hid Glyph's Content row behind a tier switch by default.
+  const isGlyphPicker = field.kind === "glyph";
+  if (isSelector || isPlainName || isBareLabel || isGlyphPicker) return "simple";
 
   if (governed.has(field.id)) return "expert";
 

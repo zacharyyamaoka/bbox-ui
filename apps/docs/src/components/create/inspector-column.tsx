@@ -7,7 +7,7 @@ import { activeArrangement, ancestry, blockPorts, portPlacementsOf } from "@bbox
 import { MembersPath, type MemberListActions } from "./members-section";
 import { PlacementSection } from "./arrangement-section";
 import { SectionInspector } from "./sections/SectionInspector";
-import type { CanvasPosition, Render } from "./contract";
+import type { CanvasPosition, CanvasTransform, Render } from "./contract";
 
 /**
  * WHY there is no inspector design picker at the foot of this column any
@@ -52,6 +52,12 @@ interface InspectorColumnProps {
   render: Render;
   positions: Record<string, CanvasPosition>;
   onSetPosition: (id: string, next: CanvasPosition) => void;
+  /** The rotation half of the same stratum. Only the Glyph adapters
+   *  implement a rotate handle, so `build-sections.tsx` shows this row for a
+   *  Glyph selection alone — a Rotation row on a Block that cannot turn
+   *  would be a control that lies. */
+  transforms: Record<string, CanvasTransform>;
+  onSetTransform: (id: string, next: CanvasTransform) => void;
   /** Current column width in px, and its drag bounds — Workbench owns and
    *  persists the value, this component only renders the handle. */
   width: number;
@@ -212,6 +218,8 @@ export function InspectorColumn(p: InspectorColumnProps) {
             render={p.render}
             positions={p.positions}
             onSetPosition={p.onSetPosition}
+            transforms={p.transforms}
+            onSetTransform={p.onSetTransform}
             arrangementActions={p.arrangementActions}
           />
         </div>

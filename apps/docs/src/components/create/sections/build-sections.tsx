@@ -19,8 +19,8 @@ import {
   topLevel,
   type Tier,
 } from "@bbox-ui/panel";
-import { HOST_FIELDS, RENDER_LABEL, hostWriter } from "./host-fields";
-import { defaultPosition, type CanvasPosition, type Render } from "../contract";
+import { RENDER_LABEL, hostFieldsFor, hostWriter } from "./host-fields";
+import { defaultPosition, type CanvasPosition, type CanvasTransform, type Render } from "../contract";
 import { ArrangementSection } from "../arrangement-section";
 import type { MemberListActions } from "../members-section";
 
@@ -79,6 +79,10 @@ export interface BuildSectionsInput {
   render: Render;
   positions: Record<string, CanvasPosition>;
   onSetPosition: (id: string, next: CanvasPosition) => void;
+  /** The rotation half of the host stratum — only a Glyph has a row for it
+   *  (see `hostFieldsFor`). */
+  transforms: Record<string, CanvasTransform>;
+  onSetTransform: (id: string, next: CanvasTransform) => void;
   /** The Block Arrangement / Port Placement ops (Zach, 2026-09-12) — only
    *  meaningful for a component that owns Ports as its own top-level
    *  members (a Block, alongside its Header/Body/Footer slots); see
@@ -447,9 +451,10 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
       const index = roots.findIndex((i) => i.id === subject.id);
       const position = input.positions[subject.id] ?? defaultPosition(index);
       const editable = input.render !== "dom";
-      const hostSubjects: Subject[] = [{ id: subject.id, props: { x: position.x, y: position.y } }];
+      const rotation = input.transforms[subject.id]?.rotation ?? 0;
+      const hostSubjects: Subject[] = [{ id: subject.id, props: { x: position.x, y: position.y, rotation } }];
       const note = hostWriter(input.render);
-      const rows = rowsFor(HOST_FIELDS, (field) =>
+      const rows = rowsFor(hostFieldsFor(subject.type), (field) =>
         bind(
           field,
           subject.id,
@@ -460,7 +465,13 @@ export function buildSections(input: BuildSectionsInput): InspectorSection[] {
           (fieldId, value) => {
             const n = Number(value);
             if (!Number.isFinite(n)) return;
-            input.onSetPosition(subject.id, { ...position, [fieldId]: n } as CanvasPosition);
+            // Two different owners behind one row list: x/y are a position,
+            // rotation is a transform. Dispatched on the field id rather
+            // than split into two `rowsFor` passes so the Renderer section
+            // keeps ONE declaration order (X, Y, Rotation) — the order the
+            // field array itself states.
+            if (fieldId === "rotation") input.onSetTransform(subject.id, { rotation: n });
+            else input.onSetPosition(subject.id, { ...position, [fieldId]: n } as CanvasPosition);
           },
           // A host fact has no override layer to clear — the value IS the
           // canvas. The reset button never renders for it (no preset and no

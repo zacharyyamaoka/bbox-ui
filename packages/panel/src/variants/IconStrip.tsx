@@ -579,11 +579,48 @@ function FieldText({
   );
 }
 
+/** A read-only field (HOST_FIELDS' derived `w`/`h`) — same disabled,
+ * non-committing display FigmaDense's `DenseControl` and FieldTraceRow's
+ * shared `FieldControl` use. WHY checked ahead of every `kind` branch in
+ * `GenericFallback`, not folded into `FieldText`: `readOnly` is a fact
+ * about who may edit the field, orthogonal to what kind of value it holds,
+ * so it has to win regardless of which kind-shaped control would
+ * otherwise have matched. */
+function FieldReadOnly({
+  field,
+  panel,
+  governed,
+}: {
+  field: FieldSpec;
+  panel: PanelVariantProps;
+  governed: Set<string>;
+}) {
+  const r = resolve(field, panel);
+  const value = r.isMixed ? "Mixed" : String(r.collapsed ?? field.defaultValue ?? "");
+  return (
+    <ClusterShell field={field} r={r} isGoverned={governed.has(field.id)} onClearOverride={() => panel.onClearOverride(field.id)}>
+      <label style={textFieldWrapStyle}>
+        <span style={textFieldLabelStyle}>{field.label}</span>
+        <input
+          type="text"
+          disabled
+          readOnly
+          value={value}
+          aria-label={field.label}
+          title={field.hint ?? field.label}
+          style={{ ...textFieldInputStyle, cursor: "not-allowed", opacity: 0.6 }}
+        />
+      </label>
+    </ClusterShell>
+  );
+}
+
 /** Any field this variant doesn't specifically know about — a future field
  * on Pill/Port, or a field from another registered component reusing this
  * Panel. Never dropped (contract point 7): routed by `kind` to the closest
  * generic control, words rather than a guessed icon. */
 function GenericFallback({ field, panel, governed }: { field: FieldSpec; panel: PanelVariantProps; governed: Set<string> }) {
+  if (field.readOnly) return <FieldReadOnly field={field} panel={panel} governed={governed} />;
   // WHY "textarea" routes here rather than falling to `FieldWords` below:
   // `FieldWords` renders one button per `field.options`, which a textarea
   // field never has — an unhandled kind would silently render an empty
@@ -591,7 +628,15 @@ function GenericFallback({ field, panel, governed }: { field: FieldSpec; panel: 
   // `FieldText` itself branches on `field.kind === "textarea"` (verify
   // round 1, F2) to render a real growable `<textarea>`, so this keeps the
   // newline instead of merely reading and writing a truncated value.
-  if (field.kind === "text" || field.kind === "textarea") return <FieldText field={field} panel={panel} governed={governed} />;
+  //
+  // WHY "glyph" routes here too: its stored value is an encoded string,
+  // the same shape "text" holds (packages/schema/src/storybook.ts maps it
+  // to a plain text control for the same reason). This legacy variant is
+  // no longer the /create inspector — that is `SectionInspector`, which
+  // renders the real `GlyphPicker` trigger — so a text box is the honest
+  // generic control here, not a silently empty row.
+  if (field.kind === "text" || field.kind === "textarea" || field.kind === "glyph")
+    return <FieldText field={field} panel={panel} governed={governed} />;
   if (field.kind === "number") return <FieldStepper field={field} panel={panel} governed={governed} glyph={<GenericGlyph />} />;
   if (field.kind === "toggle") return <FieldToggleIcon field={field} panel={panel} governed={governed} icon={<GenericGlyph />} />;
   return <FieldWords field={field} panel={panel} governed={governed} />;

@@ -20,6 +20,13 @@ function panelFiles(): string[] {
   const variants = readdirSync(path.join(SRC, "variants"))
     .filter((f) => f.endsWith(".tsx"))
     .map((f) => path.join("variants", f));
+  // "HostFactsSection.tsx" used to be listed here too — this package's own
+  // Renderer-section component. It was retired when the create page's
+  // section engine (apps/docs/.../sections/build-sections.tsx) became the
+  // one place host facts are rendered, through the SAME `BoundField` every
+  // other section already used: exactly the "resolve it once" outcome this
+  // gate exists to push toward, reached by deleting the second
+  // implementation rather than by keeping it in step.
   return [...variants, "FieldTraceRow.tsx", "ComponentInspector.tsx"];
 }
 
@@ -33,8 +40,9 @@ describe("one resolution model", () => {
   it("finds panels to check at all", () => {
     // Without this, a bad glob would make every assertion below vacuous.
     const files = panelFiles();
-    expect(files.length).toBeGreaterThanOrEqual(7);
+    expect(files.length).toBeGreaterThanOrEqual(8);
     expect(files).toContain("FieldTraceRow.tsx");
+    expect(files).toContain("ComponentInspector.tsx");
     expect(files.some((f) => f.includes("FigmaDense"))).toBe(true);
   });
 

@@ -3,11 +3,8 @@
  *
  * `Glyph`'s controllable props as data — every `id` below is a real
  * `GlyphProps` key (see `./glyph.tsx`), and every enum/default mirrors
- * `./glyph.layout.ts`. `GLYPH_PRESETS` is the empty-array convention
- * every schema-driven component exports (docs/T1-SPEC.md §0): nothing on
- * the board or in any donor gives Glyph a state axis (§4.1), but a
- * consumer (the generic story generator, the generic inspector) can
- * always `.map()` over it without a null check.
+ * `./glyph.layout.ts`. docs/GLYPH-PLAN.md's contract table is the source;
+ * `test/glyph.fields.test.ts` pins every default to the component's own.
  */
 import type { FieldOption, FieldSpec, PresetSpec } from "@bbox-ui/schema";
 
@@ -20,12 +17,38 @@ const SIZE_OPTIONS: FieldOption[] = (Object.keys(GLYPH_SIZES) as GlyphSize[]).ma
 
 export const GLYPH_FIELDS: FieldSpec[] = [
   {
-    id: "size",
+    id: "content",
+    // WHY still "Content" and not "Icon", which is what the SUPERSEDED
+    // `children` text field was renamed to on main (4d434d1, "'Content'
+    // named the slot's shape rather than what goes in it"): that rename was
+    // made when this slot could only hold an icon string. The v2 field
+    // below holds an icon, an emoji, an uploaded image OR text
+    // (@bbox-ui/glyph-content's grammar), so "Icon" is now the narrower,
+    // less honest label of the two — the rename's own argument, applied to
+    // the field as it actually is today.
+    label: "Content",
+    kind: "glyph",
+    defaultValue: "",
+    hint: "Click to pick an icon, emoji or image.",
+  },
+  {
+    id: "sizePreset",
     label: "Size",
     kind: "segments",
-    defaultValue: "xl",
+    defaultValue: "sm",
     options: SIZE_OPTIONS,
     cascades: true,
+  },
+  {
+    id: "size",
+    label: "Size (px)",
+    kind: "number",
+    defaultValue: GLYPH_SIZES.sm,
+    min: 8,
+    max: 512,
+    step: 1,
+    unit: "px",
+    hint: "Driven by the size preset until a resize handle or this box sets a custom value.",
   },
   {
     id: "padding",
@@ -33,28 +56,23 @@ export const GLYPH_FIELDS: FieldSpec[] = [
     kind: "number",
     defaultValue: 0,
     min: 0,
-    max: 24,
+    max: 64,
     step: 1,
     unit: "px",
   },
-  {
-    id: "children",
-    // "Content" named the slot's shape rather than what goes in it; the
-    // hint below already had to say "the icon slot" to make it legible.
-    label: "Icon",
-    kind: "text",
-    // NOTE (deviation, same shape as Port.fields.ts's own `children`
-    // discussion — docs/T0-SPEC.md §3): `Glyph` has no real destructured
-    // default for `children` — omitting it renders an empty square slot,
-    // not the literal string below. `FieldValue` has no way to express
-    // "undefined" for a `kind: "text"` control, so this is a deliberate
-    // demoable placeholder (docs/T1-SPEC.md §4.1), not a fact about the
-    // component.
-    defaultValue: "🔍",
-    hint: "The icon slot. Empty renders the bare square — see the `Empty` story.",
-  },
 ];
 
-/** No board or donor state axis governs anything on Glyph (docs/T1-SPEC.md
- * §4.1) — empty per the every-component-exports-one convention (§0). */
-export const GLYPH_PRESETS: PresetSpec[] = [];
+/**
+ * The three-layer cascade (docs/bbox-ui-three-layer-cascade), one entry
+ * per size preset — each `governs: ["size"]`, so a bare `sizePreset="lg"`
+ * resolves `size` to 36 without anyone setting `size` explicitly, and a
+ * resize handle writing `size` directly (the override layer) always wins
+ * over whichever preset is selected.
+ */
+export const GLYPH_PRESETS: PresetSpec[] = (Object.keys(GLYPH_SIZES) as GlyphSize[]).map((preset) => ({
+  id: preset,
+  label: GLYPH_SIZE_NAMES[preset],
+  selector: "sizePreset",
+  governs: ["size"],
+  values: { size: GLYPH_SIZES[preset] },
+}));

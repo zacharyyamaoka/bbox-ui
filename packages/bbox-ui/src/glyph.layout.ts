@@ -16,3 +16,38 @@ export const GLYPH_SIZE_NAMES: Record<GlyphSize, string> = {
   lg: "Large",
   xl: "Extra Large",
 };
+
+export interface GlyphFootprintInput {
+  sizePreset?: GlyphSize;
+  /** px override — when given, wins over `sizePreset` (docs/GLYPH-PLAN.md's
+   *  contract: the override layer of the size cascade, written by a
+   *  resize handle or the panel's own number box). */
+  size?: number;
+  padding?: number;
+}
+
+export interface GlyphFootprint {
+  /** Resolved side length of the glyph itself, px. */
+  size: number;
+  padding: number;
+  /** Outer box a host places on canvas — `size + 2*padding`, square. */
+  w: number;
+  h: number;
+}
+
+/**
+ * The override-vs-preset size rule, in one place, so a host adapter (the
+ * tldraw shape util, the React Flow node) never re-derives it. `size`
+ * absent/undefined is NOT the same as `size: 0` — an explicit 0 is a real
+ * override a resize handle can legally drag to, so this checks
+ * `!== undefined`, never falsy/`??`, to keep that case distinguishable.
+ */
+export function glyphFootprint({
+  sizePreset = "sm",
+  size,
+  padding = 0,
+}: GlyphFootprintInput): GlyphFootprint {
+  const resolvedSize = size !== undefined ? size : GLYPH_SIZES[sizePreset];
+  const outer = resolvedSize + 2 * padding;
+  return { size: resolvedSize, padding, w: outer, h: outer };
+}

@@ -7,6 +7,11 @@
    on an empty Port, for one — were never generated and the dot rendered invisible.
    @source adds that package to the scan. */
 @source "../../../../packages/bbox-ui/src";
+/* Same reason, for the packages the /create Glyph work adds: the picker's
+   default trigger, and the tldraw/React Flow adapters it mounts inside. */
+@source "../../../../packages/glyph-picker/src";
+@source "../../../../packages/adapter-tldraw/src";
+@source "../../../../packages/adapter-reactflow/src";
 
 /* The inspector panel (@bbox-ui/panel) is inline-styled and reads these roles
    instead of literal colours. Mapping them onto the site's own tokens is what
@@ -38,6 +43,18 @@
   --bbox-panel-danger-ring: color-mix(in oklch, var(--destructive) 45%, var(--background));
   --bbox-panel-danger-bg: color-mix(in oklch, var(--destructive) 12%, var(--background));
   --bbox-panel-accent: oklch(0.6 0.12 180);
+  /* Tokens `glyph-picker.css` reads that no other panel row needed yet
+     (docs/GLYPH-PLAN.md phase 5, item 7) — `border-strong` for the picker's
+     own search/upload inputs (one step up from `-border-soft`), `accent-
+     soft`/`accent-fg` for its selected-cell fill and the Save button's own
+     text, `shadow` for the popover's elevation. Fixed rather than flipped
+     per theme, same as `-accent` itself just above: the picker's accent
+     hue doesn't change between light and dark, so neither should what
+     reads on top of it or what tints against it. */
+  --bbox-panel-border-strong: var(--ring);
+  --bbox-panel-accent-soft: color-mix(in oklch, var(--bbox-panel-accent) 18%, transparent);
+  --bbox-panel-accent-fg: oklch(0.15 0 0);
+  --bbox-panel-shadow: 0 12px 32px oklch(0 0 0 / 32%);
   /* A solid "selected chip" fill and its text (tier tabs, segmented buttons).
      Deliberately NOT fg/surface: those are ink and paper and swap wholesale
      between themes, so a chip filled with fg turned into a near-white pill in

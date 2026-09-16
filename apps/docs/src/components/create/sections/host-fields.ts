@@ -29,9 +29,44 @@ import type { Render } from "../contract";
  * at all.
  */
 export const HOST_FIELDS: FieldSpec[] = [
-  { id: "x", label: "X", kind: "number", defaultValue: 0, unit: "px", step: 1, group: "position" },
-  { id: "y", label: "Y", kind: "number", defaultValue: 0, unit: "px", step: 1, group: "position" },
+  { id: "x", label: "X", kind: "number", defaultValue: 0, unit: "px", step: 1, group: "position", host: true },
+  { id: "y", label: "Y", kind: "number", defaultValue: 0, unit: "px", step: 1, group: "position", host: true },
 ];
+
+/**
+ * Rotation — a host fact like x/y (docs/GLYPH-PLAN.md D2: "rotation is a
+ * host fact, not a Glyph property"), but NOT part of `HOST_FIELDS` because
+ * it does not apply to every subject the way a position does.
+ *
+ * WHY it is appended only for a Glyph (`hostFieldsFor` below) rather than
+ * shown everywhere and disabled: only the Glyph adapters implement a rotate
+ * handle (`BBoxGlyphShapeUtil`'s stock tldraw handle; `rotation` read off
+ * the node data in React Flow and the DOM). A Rotation row on a Block would
+ * be a control that cannot do what it says — the same objection that keeps
+ * position out of `Instance.props` in the first place (contract.ts), one
+ * level down: a row must name something its surface can actually change.
+ *
+ * The domain is (-180, 180], not [0, 360): tldraw stores radians in [0, 2π)
+ * and `normalizeDeg` (../glyph-geometry.ts) maps them into this one, so a
+ * half-turn scrub reads -170° rather than clamping at the row's max.
+ */
+export const ROTATION_FIELD: FieldSpec = {
+  id: "rotation",
+  label: "Rotation",
+  kind: "number",
+  defaultValue: 0,
+  min: -180,
+  max: 180,
+  step: 1,
+  unit: "°",
+  host: true,
+};
+
+/** The host rows for one subject: every root gets a position, only a Glyph
+ *  also gets a rotation. */
+export function hostFieldsFor(componentType: string | undefined): FieldSpec[] {
+  return componentType === "Glyph" ? [...HOST_FIELDS, ROTATION_FIELD] : HOST_FIELDS;
+}
 
 export const RENDER_LABEL: Record<Render, string> = {
   dom: "DOM",

@@ -11,6 +11,18 @@ import { useEffect, useState, type CSSProperties } from "react";
  * commits every parseable value as it is typed, and only on blur turns an
  * empty box back into the default. Both panels that had this bug now share
  * this one component rather than two copies of the fix.
+ *
+ * WHY blur never commits `defaultValue` when `value` is `undefined`,
+ * regardless of `commitDefaultOnBlur`: `undefined` means Mixed — the
+ * selection currently disagrees, so the box opens empty on purpose, with
+ * nothing typed. A stray click into a Mixed box followed by a click
+ * elsewhere is a blur with an empty, untouched draft; the old unconditional
+ * commit read that as "reset to the default" and taught every selected
+ * instance the same value from a click that never typed anything
+ * (glyph-finish audit round 2, a two-instance Mixed padding row: select
+ * both, click in, click away, no typing — instance 1's real 10 became 0).
+ * `commitDefaultOnBlur` only ever decides what happens when `value` WAS
+ * defined and the box is now empty.
  */
 export function NumberInput({
   value,
@@ -21,6 +33,7 @@ export function NumberInput({
   placeholder,
   style,
   onCommit,
+  commitDefaultOnBlur = true,
   ...rest
 }: {
   value: number | undefined;
@@ -31,7 +44,15 @@ export function NumberInput({
   placeholder?: string;
   style?: CSSProperties;
   onCommit: (value: number) => void;
-  "data-slot"?: string;
+  /** `false` for a host fact (`HostFactsSection`): `defaultValue` there is
+   *  HOST_FIELDS' placeholder (0 for x/y/rotation), never a real position,
+   *  so committing it on an emptied box would silently move or rotate the
+   *  instance to the origin instead of leaving it where it actually is.
+   *  With this `false`, an emptied-and-blurred box with a real prior
+   *  `value` reverts to that value and commits nothing; the default `true`
+   *  keeps every existing component-field caller's original behaviour
+   *  (a real documented default IS the right thing to fall back to). */
+  commitDefaultOnBlur?: boolean;
 }) {
   const [draft, setDraft] = useState(value === undefined ? "" : String(value));
   const [focused, setFocused] = useState(false);
@@ -62,8 +83,16 @@ export function NumberInput({
       onBlur={() => {
         setFocused(false);
         if (draft.trim() === "" || !Number.isFinite(Number(draft))) {
-          setDraft(String(defaultValue));
-          onCommit(defaultValue);
+          if (value === undefined) {
+            // Mixed, nothing typed — no shared value to revert to and
+            // nothing safe to commit. Leave the selection disagreeing.
+            setDraft("");
+          } else if (commitDefaultOnBlur) {
+            setDraft(String(defaultValue));
+            onCommit(defaultValue);
+          } else {
+            setDraft(String(value));
+          }
         }
       }}
       {...rest}

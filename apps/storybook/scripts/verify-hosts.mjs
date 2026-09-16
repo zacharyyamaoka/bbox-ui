@@ -94,7 +94,7 @@ function isReactActWarning(text) {
 const COMPONENT_CHECKS = {
   Port: { slot: "port-dot", attr: "data-state", fieldId: "state" },
   Pill: { slot: "pill", attr: "data-state", fieldId: "state" },
-  Glyph: { slot: "glyph", attr: "data-size", fieldId: "size" },
+  Glyph: { slot: "glyph", attr: "data-size", fieldId: "sizePreset" },
   TextBox: { slot: "text-box", attr: "data-size", fieldId: "size" },
   Flex: { slot: "flex", attr: "data-justify", fieldId: "justify" },
   Stack: { slot: "stack", attr: "data-member-width", fieldId: "memberWidth" },

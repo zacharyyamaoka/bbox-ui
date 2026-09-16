@@ -67,6 +67,13 @@ describe("randomValue", () => {
     expect(typeof randomValue(f, roll)).toBe("string");
   });
 
+  it('rolls a "glyph" field to a valid, text:-prefixed encoded string — never a bare word', () => {
+    const f: FieldSpec = { id: "content", label: "Content", kind: "glyph", defaultValue: "" };
+    const value = randomValue(f, roll);
+    expect(typeof value).toBe("string");
+    expect((value as string).startsWith("text:")).toBe(true);
+  });
+
   it("Port's host-computed fields are all opted out, and nothing else is", () => {
     // The disappearing-instance report: reveal rolled to on-hover. Every
     // field whose hint says "Host-computed" is one the host derives, and must

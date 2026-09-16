@@ -490,6 +490,23 @@ function PopoverControl({
   placeholder?: string;
   onChange: (value: FieldValue) => void;
 }) {
+  // WHY checked before any `field.kind` branch — same rule FigmaDense and
+  // FieldTraceRow's shared `FieldControl` apply: `FieldSpec.readOnly`
+  // (HOST_FIELDS' derived `w`/`h`) is a fact about who may edit the field,
+  // not what shape its value takes, so the popover must show a disabled
+  // display rather than a picker menu or a live text box.
+  if (field.readOnly) {
+    return (
+      <input
+        type="text"
+        disabled
+        readOnly
+        value={value === undefined ? "" : String(value)}
+        placeholder={placeholder}
+        style={{ ...textInputStyle, cursor: "not-allowed", opacity: 0.6 }}
+      />
+    );
+  }
   if (field.kind === "segments") {
     // AMENDMENT CASE A: Zach's own toolbar reference — named options in a
     // vertical menu, a tick on the active one, the option's own embedded

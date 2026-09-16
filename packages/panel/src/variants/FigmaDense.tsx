@@ -10,6 +10,7 @@ import {
   type Layer,
   type PresetSpec,
 } from "@bbox-ui/schema";
+import { GlyphPicker } from "@bbox-ui/glyph-picker";
 import type { Subject } from "../FieldTraceRow";
 import type { PanelVariant, PanelVariantProps } from "./contract";
 import { readFieldRow, resetTitleFor } from "../fieldModel";
@@ -124,9 +125,24 @@ function FigmaDensePanel({
   // regardless... just because it's a lot of controls as well." They are
   // filters over the field array, orthogonal to how a row is drawn, so they
   // compose with the single-row layout instead of competing with it.
-  const [tier, setTier] = useState<Tier>(loadStoredTier);
+  // WHY the stored tier is read AFTER mount and not in the initializer: the
+  // create page server-renders this panel, and the server has no
+  // localStorage, so an initializer that reads it makes the first client
+  // render disagree with the HTML it hydrates (React logged a hydration
+  // mismatch on every reload after Expert was chosen). `restored` is STATE,
+  // not a ref, so the store effect below cannot run in the same commit and
+  // write the default over the value just read (the workbench paid for this
+  // once already — see apps/docs/src/components/create/workbench.tsx).
+  const [tier, setTier] = useState<Tier>("simple");
+  const [tierRestored, setTierRestored] = useState(false);
+  useEffect(() => {
+    setTier(loadStoredTier());
+    setTierRestored(true);
+  }, []);
   const [filter, setFilter] = useState("");
-  useEffect(() => storeTier(tier), [tier]);
+  useEffect(() => {
+    if (tierRestored) storeTier(tier);
+  }, [tierRestored, tier]);
 
   const searching = filter.trim() !== "";
   const matched = fields.filter((f) => matchesFilter(f, filter));
@@ -489,7 +505,13 @@ function FieldRow({
   const data = readRow(field, subjects, presets, toSubject);
 
   return (
-    <div data-slot="figma-dense-row" data-field={field.id} data-governed={isGoverned} style={rowWrapStyle}>
+    <div
+      data-slot="figma-dense-row"
+      data-field={field.id}
+      data-governed={isGoverned}
+      data-readonly={field.readOnly === true}
+      style={rowWrapStyle}
+    >
       <div style={rowGridStyle}>
         <RowLabel field={field} data={data} governed={isGoverned} expanded={expanded} setExpanded={setExpanded} onChange={onChange} />
         <div style={controlCellStyle}>
@@ -656,8 +678,8 @@ export function RowLabel({
    *  value came from is exactly what a read-only row is for. */
   disabled?: boolean;
 }) {
+  const scrubbable = !disabled && field.kind === "number";
   const scrub = useLabelScrub(field, data, onChange);
-  const scrubbable = field.kind === "number" && !disabled;
   const tag: "override" | "mixed" | null = !showProvenance
     ? null
     : data.isMixed
@@ -861,7 +883,17 @@ export function DenseControl({
   // is also what stops a disabled NUMBER row from mounting `NumberInput`,
   // whose blur handler would otherwise commit `field.defaultValue` over a
   // host-owned value the panel was only supposed to display.
-  if (disabled) {
+  //
+  // WHY `field.readOnly` is folded into the SAME branch rather than getting
+  // its own above it: they are different facts with one rendering —
+  // `disabled` is the caller saying "not right now" (a surface with no
+  // handles), `readOnly` is the SPEC saying "not ever, by anyone" (a value
+  // the model derives). A caller that never computes `disabled` from the
+  // spec would otherwise hand a read-only field a live control. Merged here
+  // rather than taking the separate `readOnly` branch this lane arrived
+  // with, because that one printed `String(value)` — a raw enum token for a
+  // segments field, where the branch below resolves the option LABEL.
+  if (disabled || field.readOnly) {
     const text = isMixed
       ? "Mixed"
       : field.kind === "segments"
@@ -878,6 +910,27 @@ export function DenseControl({
       </div>
     );
   }
+  // WHY "glyph" is checked ahead of every other kind, right after
+  // `readOnly`: its stored value is an encoded string
+  // (@bbox-ui/glyph-content's grammar, the same shape "text" holds), but
+  // per docs/GLYPH-PLAN.md's contract table the CONTROL is not a text
+  // box — it IS the picker trigger. This is the row this whole lane
+  // exists to land: every other variant keeps the honest text fallback
+  // (IconStrip's own comment, `fieldKindCoverage.test.ts`), FigmaDense —
+  // the chosen design — gets the real thing.
+  if (field.kind === "glyph") {
+    return (
+      <div data-slot="glyph-field-control" style={glyphControlWrapStyle}>
+        <GlyphPicker value={isMixed ? "" : String(value ?? "")} onChange={onChange} sizePreset="md" />
+        {isMixed && (
+          <span data-slot="field-mixed-badge" style={mixedNoteStyle}>
+            mixed
+          </span>
+        )}
+      </div>
+    );
+  }
+
   if (field.kind === "segments") {
     const options = field.options ?? [];
     // The one thing named outright: a wrapped row of buttons for a
@@ -1433,6 +1486,12 @@ function candidateDotStyle(winner: boolean): CSSProperties {
 }
 const candidateLayerStyle: CSSProperties = { width: 110, flexShrink: 0 };
 const candidateValueStyle: CSSProperties = { fontFamily: "monospace" };
+
+// The glyph row's control cell: the picker trigger plus, when Mixed, the
+// same quiet badge `PresetPicker` already uses for a disagreeing selector
+// — reused rather than invented, since a Glyph trigger has no text field
+// to show "Mixed" as a placeholder inside the way every other kind does.
+const glyphControlWrapStyle: CSSProperties = { display: "flex", alignItems: "center", gap: 6 };
 
 const segmentedGroupStyle: CSSProperties = { display: "flex", gap: 2 };
 

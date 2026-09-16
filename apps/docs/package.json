@@ -7,15 +7,20 @@
     "dev": "next dev --port=4100",
     "start": "serve out",
     "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",
+    "typecheck": "pnpm run types:check",
     "postinstall": "fumadocs-mdx",
     "lint": "biome check",
     "format": "biome format --write",
     "registry:build": "node ./src/scripts/build-registry.mts",
-    "registry:copy": "node scripts-copy-registry.mjs"
+    "registry:copy": "node scripts-copy-registry.mjs",
+    "journey:glyph": "node scripts/drive-create-glyph.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@bbox-ui/adapter-reactflow": "workspace:*",
+    "@bbox-ui/adapter-tldraw": "workspace:*",
     "@bbox-ui/core": "workspace:*",
+    "@bbox-ui/glyph-picker": "workspace:*",
     "@bbox-ui/panel": "workspace:*",
     "@bbox-ui/schema": "workspace:*",
     "@fumadocs/satteri": "0.x.x",
