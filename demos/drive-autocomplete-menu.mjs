@@ -659,6 +659,22 @@ assert(singleClosedExpanded === "false" && (await expandedOf(SINGLE)) === "true"
   "[aria] aria-expanded on the field: false closed, true open", `${singleClosedExpanded} → ${await expandedOf(SINGLE)}`);
 await press("Escape");
 assert((await expandedOf(SINGLE)) === "false", "[aria] aria-expanded back to false after Esc", String(await expandedOf(SINGLE)));
+
+// Round-4 finding 2 — ↓ must not swallow the key when the source has nothing to
+// show. The caret sits INSIDE a no-match word (not at the line end), so "the key
+// reached the caret" is observable: ↓ on the only line moves it to the end, and
+// the next character lands there.
+await press("End");
+await type("Zq");
+await press("ArrowLeft");
+await press("ArrowDown");
+const noSourceMenu = await menu();
+await type("!");
+const singleLineText = (await lines(SINGLE))[0];
+assert(!noSourceMenu.open && singleLineText.endsWith("!"),
+  "[F4] ↓ with nothing for the source to show leaves the key to the caret",
+  `open=${noSourceMenu.open}, line "${singleLineText}"`);
+for (let i = 0; i < 3; i += 1) await press("Backspace");
 await click(lastLine.x - 200, lastLine.y);
 await press("Home", { ctrl: true });
 await press("ArrowDown");
@@ -667,6 +683,24 @@ await type("@");
 const laneLines = await lines(LANE);
 assert(!laneAfterDown.open && laneLines[1].startsWith("@"), "[F4] ↓ in a closed multi-line lane still moves the caret (nothing opens)",
   `open=${laneAfterDown.open} line 2 "${laneLines[1]}"`);
+
+// Round-4 finding 1 — a MULTILINE field that happens to hold a single line is
+// still multiline: ↓ belongs to the caret there, so this must not open.
+await click(lastLine.x - 200, lastLine.y);
+await press("Home", { ctrl: true });
+// Join every following line into the first (Backspace at a line start).
+for (let guard = 0; guard < 20 && (await lines(LANE)).length > 1; guard += 1) {
+  await press("ArrowDown");
+  await press("Home");
+  await press("Backspace");
+}
+await press("Home", { ctrl: true });
+const oneLineLane = await lines(LANE);
+await press("ArrowDown");
+const oneLineMenu = await menu();
+assert(oneLineLane.length === 1 && !oneLineMenu.open,
+  "[F4] a multi-line field holding one line keeps ↓ for the caret",
+  `${oneLineLane.length} line(s) "${oneLineLane[0]}", open=${oneLineMenu.open}`);
 
 // ---------------------------------------------------------------------------
 // 8. Dark mode captures.

@@ -23,6 +23,7 @@ import {
   type Command,
   type Rect,
   type TooltipView,
+  ViewPlugin,
 } from "@codemirror/view";
 
 /**
@@ -152,16 +153,18 @@ export interface CompletionMenuOptions {
    * @default "wrap"
    */
   atEnds?: CompletionMenuAtEnds;
-  /**
-   * Whether ↓ on a CLOSED menu opens it instead of moving the caret.
-   * `"single-line"` does so only when the document has one line — the W3C
-   * combobox rule: a one-line field has no next line to move to, so ↓ is
-   * free to mean "show me the list", while a code block keeps ↓ as caret
-   * movement. `true`/`false` force it either way.
+   /**
+   * Whether ↓ on a CLOSED menu opens it instead of moving the caret — the
+   * W3C combobox rule for a one-line field, which has no next line to move
+   * to. The HOST declares this, because only the host knows whether the
+   * field is single-line: a multiline field whose document happens to hold
+   * one line right now is still a multiline field, and ↓ there belongs to
+   * the caret. Even when true, ↓ only claims the key if the source actually
+   * has something to show.
    *
-   * @default "single-line"
+   * @default false
    */
-  openOnArrowDown?: boolean | "single-line";
+  openOnArrowDown?: boolean;
   /** Visible rows before the list scrolls. @default 10 */
   maxRows?: number;
   /** The kind pill for an item's `type`. Configuring it reserves a fixed-width column so every label lines up, pill or not. */
@@ -351,7 +354,7 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
   const atEnds = options.atEnds ?? DEFAULT_AT_ENDS;
   const maxRows = Math.max(1, Math.floor(options.maxRows ?? DEFAULT_MAX_ROWS));
   const wordChar = options.wordChar ?? DEFAULT_WORD_CHAR;
-  const openOnArrowDown = options.openOnArrowDown ?? "single-line";
+  const openOnArrowDown = options.openOnArrowDown ?? false;
   const { badge, footer } = options;
 
   const setWidened = StateEffect.define<boolean>();
@@ -454,11 +457,18 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
     (direction: "up" | "down", paging: boolean): Command =>
     (view) => {
       if (completionStatus(view.state) === null) {
-        const opens =
-          direction === "down" &&
-          !paging &&
-          (openOnArrowDown === true || (openOnArrowDown === "single-line" && view.state.doc.lines === 1));
-        if (!opens) return false;
+        if (!openOnArrowDown || direction !== "down" || paging) return false;
+        // Ask the source first. Claiming the key and then opening nothing
+        // would leave ↓ dead in a field whose source has no answer here.
+        const pos = view.state.selection.main.head;
+        const probe = options.source({
+          text: view.state.doc.toString(),
+          pos,
+          explicit: true,
+          widened: view.state.field(widenField).widened,
+          word: wordAtState(view.state, pos, wordChar),
+        });
+        if (!probe || probe.options.length === 0) return false;
         if (view.state.field(widenField).widened) view.dispatch({ effects: setWidened.of(false) });
         startCompletion(view);
         return true;
@@ -593,6 +603,10 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
     // strip would promise a toggle that cannot change the list (it also
     // stops ↓-into-an-empty-field looking like it has a hidden second mode).
     const empty = wordAtState(view.state, view.state.selection.main.head, wordChar).query === "";
+    // Append FIRST and hide with the attribute: if an empty word skipped the
+    // append, "no footer on screen" would also be true with the hiding rule
+    // broken, and the check for it could never fail.
+    if (dom.lastElementChild !== strip) dom.appendChild(strip);
     strip.hidden = empty;
     dom.classList.toggle("bbox-completion-menu--has-footer", !empty);
     if (empty) return;
@@ -645,8 +659,16 @@ export function completionMenu(options: CompletionMenuOptions): Extension {
     renderFooter(update.view, dom);
   });
 
+  // The listener below only runs on an update, so a freshly mounted, closed
+  // editor would carry no expanded state at all until its first transaction.
+  const ariaOnMount = ViewPlugin.define((view) => {
+    view.contentDOM.setAttribute("aria-expanded", "false");
+    return {};
+  });
+
   return [
     widenField,
+    ariaOnMount,
     // Ahead of `autocompletion()` so it outranks anything at the same
     // precedence; CodeMirror's own completion keymap is switched off below
     // (`defaultKeymap: false`) so no key has two owners.

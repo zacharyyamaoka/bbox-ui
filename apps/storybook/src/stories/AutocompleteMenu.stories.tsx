@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import {
-  CodeBlock,
+  CodeField,
   completionMenu,
-  type CodeBlockGrammar,
+  type CodeFieldGrammar,
   type CompletionMenuAnchor,
   type CompletionMenuAtEnds,
   type CompletionMenuContext,
@@ -13,12 +13,12 @@ import { useMemo, useState } from "react";
 
 /**
  * The autocomplete menu (packages/bbox-ui/src/completionMenu.ts) in the
- * plainest host there is: a CodeBlock with nothing else going on, so every
+ * plainest host there is: a CodeField with nothing else going on, so every
  * key and every control can be tried by hand. Mounted as a grammar's
  * `language` — the same no-change seam any real field uses today.
  *
  * Every control below is one `completionMenu` option; switching one
- * rebuilds the grammar, which CodeBlock swaps in through its compartment
+ * rebuilds the grammar, which CodeField swaps in through its compartment
  * without remounting the document.
  */
 
@@ -92,21 +92,24 @@ function AutocompletePlayground(args: AutocompleteMenuArgs) {
   const { anchor, atEnds, footer, badges } = args;
   // Storybook's URL `args=` hands numbers over as strings.
   const maxRows = Number(args.maxRows) || 10;
-  const grammar = useMemo<CodeBlockGrammar>(
-    () => ({
-      language: completionMenu({
-        source: exampleSource,
-        anchor,
-        atEnds,
-        maxRows,
-        badge: badges ? (type) => BADGES[type] ?? null : undefined,
-        footer: footer
-          ? { hint: "every type on this board", widenedHint: "back to likely matches" }
-          : undefined,
-      }),
+  // Two grammars, one per field: only the HOST knows whether its field is
+  // single-line, and that is what decides whether ↓ on a closed menu opens
+  // the list (combobox) or moves the caret (code block).
+  const makeGrammar = (openOnArrowDown: boolean): CodeFieldGrammar => ({
+    language: completionMenu({
+      source: exampleSource,
+      anchor,
+      atEnds,
+      maxRows,
+      openOnArrowDown,
+      badge: badges ? (type) => BADGES[type] ?? null : undefined,
+      footer: footer
+        ? { hint: "every type on this board", widenedHint: "back to likely matches" }
+        : undefined,
     }),
-    [anchor, atEnds, maxRows, footer, badges],
-  );
+  });
+  const laneGrammar = useMemo<CodeFieldGrammar>(() => makeGrammar(false), [anchor, atEnds, maxRows, footer, badges]);
+  const lineGrammar = useMemo<CodeFieldGrammar>(() => makeGrammar(true), [anchor, atEnds, maxRows, footer, badges]);
   return (
     <div
       style={{
@@ -123,23 +126,22 @@ function AutocompletePlayground(args: AutocompleteMenuArgs) {
         Type <code>pri</code>, try ↑/↓ at the ends, <kbd>Ctrl Space</kbd> twice, <kbd>Tab</kbd> vs{" "}
         <kbd>Enter</kbd> inside a word, <kbd>Esc</kbd>.
       </p>
-      <CodeBlock
+      <CodeField
         testId="autocomplete-multiline"
         ariaLabel="Multi-line text box"
-        lines="multi"
+        multiline
         value={lane}
         onWrite={setLane}
-        grammar={grammar}
+        grammar={laneGrammar}
         style={{ fontSize: 13, minHeight: 120 }}
       />
       <p style={{ margin: "16px 0 6px", color: "var(--muted-foreground)" }}>Single line</p>
-      <CodeBlock
+      <CodeField
         testId="autocomplete-single"
         ariaLabel="Single-line text box"
-        lines="single"
         value={line}
         onWrite={setLine}
-        grammar={grammar}
+        grammar={lineGrammar}
         style={{ fontSize: 13, width: 280 }}
       />
     </div>
