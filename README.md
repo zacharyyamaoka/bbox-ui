@@ -17,7 +17,7 @@ Both demos, same components, two hosts:
 ## The website
 
 The public site is **bbox-ui.com** — `apps/docs`, a Fumadocs + Next.js app that
-static-exports to Cloudflare Pages. Full notes in
+static-exports to a Cloudflare Worker. Full notes in
 [`apps/docs/README.md`](apps/docs/README.md).
 
 ```bash
