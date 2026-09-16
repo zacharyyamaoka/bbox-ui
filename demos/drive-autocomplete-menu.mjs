@@ -644,6 +644,15 @@ assert(!afterEnter.open && !afterTab.open
   && (await evaluate(`!!document.activeElement?.closest('${LANE}')`)),
   "[F3] Enter and Tab on the No-matches row insert nothing and close the menu (never a dead key)",
   `label "${noMatchLabel}", open after Enter=${afterEnter.open} Tab=${afterTab.open}, last line "${linesAfterTab.at(-1)}"`);
+// …and because it closed rather than swallowing the key, the NEXT Enter is an
+// ordinary newline — the whole reason for preferring close over "do nothing".
+const linesBeforeNewline = await lines(LANE);
+await press("Enter");
+const linesAfterNewline = await lines(LANE);
+assert(linesAfterNewline.length === linesBeforeNewline.length + 1,
+  "[F3] the next Enter after that inserts a newline (the key is not dead)",
+  `${linesBeforeNewline.length} → ${linesAfterNewline.length} lines`);
+await press("Backspace");
 await closeMenu();
 
 // Finding 4 — ↓ on a CLOSED single-line field opens the list; a lane keeps ↓ for the caret.
@@ -698,9 +707,14 @@ await press("Home", { ctrl: true });
 const oneLineLane = await lines(LANE);
 await press("ArrowDown");
 const oneLineMenu = await menu();
-assert(oneLineLane.length === 1 && !oneLineMenu.open,
-  "[F4] a multi-line field holding one line keeps ↓ for the caret",
-  `${oneLineLane.length} line(s) "${oneLineLane[0]}", open=${oneLineMenu.open}`);
+// ↓ on the only line takes the caret to its end, so a typed character lands
+// there. Without this, an implementation that simply SWALLOWED ↓ would pass.
+await type("%");
+const oneLineAfter = (await lines(LANE))[0];
+assert(oneLineLane.length === 1 && !oneLineMenu.open && oneLineAfter.endsWith("%"),
+  "[F4] a multi-line field holding one line keeps ↓ for the caret (which then moves)",
+  `${oneLineLane.length} line(s), open=${oneLineMenu.open}, after "${oneLineAfter.slice(-12)}"`);
+await press("Backspace");
 
 // ---------------------------------------------------------------------------
 // 8. Dark mode captures.

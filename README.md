@@ -111,18 +111,28 @@ pure data: the menu finds the word around the caret and owns every key.
 - Zero matches while typing → closed; on Ctrl+Space → a muted
   `No matches for “x”` row. Kind **badges** get a fixed-width column;
   `deprecated` items are struck through. Visible rows cap at `maxRows` (10).
+- **`openOnArrowDown`** (default `false`): ↓ on a *closed* menu opens it
+  instead of moving the caret — the combobox rule for a one-line field, which
+  has no next line. The host passes it, because only the host knows: a
+  multiline field whose document happens to hold one line is still multiline.
+  Pass `true` for a single-line field, and give each field its own menu when
+  one editor hosts both.
 
 Today's `CodeField` needs no change — pass the menu as a grammar's
 `language` and leave `complete` unset (stylesheet: `@bbox-ui/core/completionMenu.css`):
 
 ```ts
-const grammar: CodeFieldGrammar = {
+const menu = (openOnArrowDown: boolean): CodeFieldGrammar => ({
   language: completionMenu({
     source: ({ word, widened }) => ({ options: lookup(word.query, widened) }),
     badge: (type) => KIND_LABEL[type] ?? null,
     footer: { hint: "every type on this board", widenedHint: "back to likely matches" },
+    openOnArrowDown,
   }),
-};
+});
+
+const laneGrammar = menu(false); // a code block: ↓ moves the caret
+const fieldGrammar = menu(true); // a one-line field: ↓ opens the list
 ```
 
 Moving every grammar onto it later is a swap inside `codeGrammar.ts`'s
