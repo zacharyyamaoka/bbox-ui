@@ -37,7 +37,13 @@ import {
 // dot's centre line, where a trace wire runs, rather than pushed further
 // out along it. `portLabelBox` below therefore carries a distinct case per
 // Offset member — same `out`, different `y` — see `portLabelLift`'s WHY.
-import { portLabelLift, portLabelOut, type PortTextLayout } from "./port.layout";
+import {
+  PORT_LABEL_GAP,
+  defaultLiftOffsetY,
+  isOffsetTextLayout,
+  portLabelOut,
+  type PortTextLayout,
+} from "./port.layout";
 
 /** A rectangle in block-local coordinates (0,0 = container top-left). */
 export interface LayoutBox {
@@ -542,20 +548,25 @@ export function portLabelBox(input: PortLabelBoxInput): LayoutBox {
   const w = input.measure(input.label, fontPx, 400);
   const h = Math.round(fontPx * LEADING_TIGHT);
   // An "Offset" layout shares its plain counterpart's along-axis `out`
-  // and differs ONLY in the cross axis: its bottom edge is lifted clear
-  // of the dot's centre line, where a trace wire runs (`portLabelLift`'s
-  // own WHY, port.layout.ts). `y` is a top edge and grows downward, so
-  // the lifted box's top is its bottom (`dotH / 2 - lift`) minus `h`.
-  const lift = portLabelLift(layout, { w: dotW, h: dotH });
+  // and differs ONLY in the cross axis: it is DISPLACED upward.
+  //
+  // WHY `defaultLiftOffsetY` and not `portLabelLift`: this is the
+  // measured-rectangle twin of what `LabeledPort` paints, and it used to
+  // compute its own DOT-based lift while the live component had moved to
+  // the text-based one — so a detached `rightOffset` port disagreed with
+  // the port it was detached FROM. Both now read the one function
+  // (adversarial judge, 2026-09-15). `offsetY` is signed and +down, so a
+  // lift is negative and `y` (a top edge, growing downward) adds it.
+  const offsetY = isOffsetTextLayout(layout) ? defaultLiftOffsetY(h, PORT_LABEL_GAP) : 0;
   switch (layout) {
     case "right":
       return { x: out, y: dotH / 2 - h / 2, w, h };
     case "rightOffset":
-      return { x: out, y: dotH / 2 - lift - h, w, h };
+      return { x: out, y: dotH / 2 - h / 2 + offsetY, w, h };
     case "left":
       return { x: dotW - out - w, y: dotH / 2 - h / 2, w, h };
     case "leftOffset":
-      return { x: dotW - out - w, y: dotH / 2 - lift - h, w, h };
+      return { x: dotW - out - w, y: dotH / 2 - h / 2 + offsetY, w, h };
     case "top":
       return { x: dotW / 2 - w / 2, y: dotH - out - h, w, h };
     case "bot":

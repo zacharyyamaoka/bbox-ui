@@ -181,7 +181,7 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     max: 64,
     step: 1,
     defaultValue: 0,
-    hint: "Displacement along the origin's own axis, + meaning away from the dot. Negative pulls it back toward the dot.",
+    hint: "Horizontal displacement in screen space: + moves right, - moves left, on every origin.",
     tier: "expert",
   },
   {
@@ -306,7 +306,7 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     max: 64,
     step: 1,
     defaultValue: 0,
-    hint: "Displacement along the origin's own axis, + meaning away from the dot.",
+    hint: "Horizontal displacement in screen space: + moves right, - moves left, on every origin.",
     tier: "expert",
   },
   {

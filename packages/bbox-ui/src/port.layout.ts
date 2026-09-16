@@ -101,6 +101,33 @@ export const PORT_TEXT_LAYOUT_LABELS: Record<PortTextLayout, string> = {
 
 export const PORT_LABEL_GAP = 8;
 
+/**
+ * The flex direction for a resolved ORIGIN — the unified model's own
+ * version of `portFlexDirection`, which still speaks the legacy
+ * `PortTextLayout`.
+ *
+ * Without this the Expert `labelOrigin` control was inert in the flex
+ * path: the row's direction came from the `textLayout` PRESET, so setting
+ * origin `left` while the preset said `right` put the label on the right
+ * in the DOM renderer and on the left in an anchored host — the same port
+ * drawn two ways, which is exactly what one shared model is for
+ * (adversarial judge, 2026-09-15).
+ */
+export function originFlexDirection(
+  origin: SlotOrigin,
+): "row" | "row-reverse" | "column" | "column-reverse" {
+  switch (origin) {
+    case "top":
+      return "column-reverse"; // label above the dot
+    case "bottom":
+      return "column";
+    case "right":
+      return "row";
+    case "left":
+      return "row-reverse";
+  }
+}
+
 export function portFlexDirection(
   layout: PortTextLayout,
 ): "row" | "row-reverse" | "column" | "column-reverse" {
@@ -590,12 +617,22 @@ export function slotPlacementStyle(
   // either needing to know the content's own size — and a percentage and
   // a px value never have to be added by hand.
   switch (origin) {
+    // WHY every origin uses the SAME unmirrored signs even though `left`
+    // anchors by `right:` and `top` by `bottom:` — both of which grow
+    // toward the origin: a transform is applied in SCREEN space, not in
+    // the anchor's direction, so `translate(5px)` moves right on all four.
+    // An earlier version mirrored the sign so `+x` would mean "away from
+    // the dot", which reads well until you notice the control reverses
+    // itself depending on the origin, and contradicts this very type's
+    // "+x right, +y DOWN" contract. Screen space is what every design tool
+    // means by an x/y offset, and it is the one convention that does not
+    // change meaning halfway down the origin list.
     case "right":
       return { left: outX, top: "50%", transform: `translate(${offsetX}px, calc(-50% + ${offsetY}px))` };
     case "left":
-      return { right: outX, top: "50%", transform: `translate(${-offsetX}px, calc(-50% + ${offsetY}px))` };
+      return { right: outX, top: "50%", transform: `translate(${offsetX}px, calc(-50% + ${offsetY}px))` };
     case "top":
-      return { bottom: outY, left: "50%", transform: `translate(calc(-50% + ${offsetX}px), ${-offsetY}px)` };
+      return { bottom: outY, left: "50%", transform: `translate(calc(-50% + ${offsetX}px), ${offsetY}px)` };
     case "bottom":
       return { top: outY, left: "50%", transform: `translate(calc(-50% + ${offsetX}px), ${offsetY}px)` };
   }

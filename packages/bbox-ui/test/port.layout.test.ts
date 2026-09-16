@@ -392,22 +392,25 @@ describe("unified slot placement — one origin type, free x/y", () => {
     expect(p.left).toBe(`${PORT_DIAMETERS.md + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP}px`);
   });
 
-  it("mirrors the offset's SIGN on the facing origin, so +x always means AWAY FROM THE DOT", () => {
-    const right = slotPlacementStyle({ origin: "right", offsetX: 5, offsetY: 0 }, dot, PORT_LABEL_GAP);
-    const left = slotPlacementStyle({ origin: "left", offsetX: 5, offsetY: 0 }, dot, PORT_LABEL_GAP);
-    // Away-from-the-dot is RIGHTWARD for a right origin and LEFTWARD for a
-    // left one, so the same intent needs opposite signs on screen. The
-    // control means one thing ("further out") on every origin, which is
-    // what stops it reversing itself halfway down the origin list.
-    expect(right.transform).toContain("translate(5px");
-    expect(left.transform).toContain("translate(-5px");
-  });
-
-  it("…and the same for the vertical pair: +y on a top origin moves UP, away from the dot", () => {
-    const top = slotPlacementStyle({ origin: "top", offsetX: 0, offsetY: 5 }, dot, PORT_LABEL_GAP);
-    const bottom = slotPlacementStyle({ origin: "bottom", offsetX: 0, offsetY: 5 }, dot, PORT_LABEL_GAP);
-    expect(top.transform).toContain("-5px)");
-    expect(bottom.transform).toContain("5px)");
+  /**
+   * SCREEN SPACE on every origin — `+x` right, `+y` down, always.
+   *
+   * An earlier version mirrored the sign so `+x` would read as "away from
+   * the dot". That is defensible prose and a bad control: it reverses
+   * itself depending on which origin you picked, and it contradicted this
+   * very type's own "+x right, +y DOWN" contract (adversarial judge,
+   * 2026-09-15). A transform is applied in screen space regardless of
+   * which edge property anchors the box, so unmirrored is also the
+   * simpler implementation.
+   */
+  it("uses the SAME screen-space signs on all four origins", () => {
+    for (const origin of SLOT_ORIGINS) {
+      const p = slotPlacementStyle({ origin, offsetX: 5, offsetY: 7 }, dot, PORT_LABEL_GAP);
+      const horizontal = origin === "top" || origin === "bottom";
+      expect(p.transform, origin).toBe(
+        horizontal ? "translate(calc(-50% + 5px), 7px)" : "translate(5px, calc(-50% + 7px))",
+      );
+    }
   });
 
   it("the two gaps stay distinct: a secondary slot hugs tighter than a label", () => {

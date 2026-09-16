@@ -428,9 +428,22 @@ describe("labelOffsetY is a real displacement, in both directions", () => {
     expect(labelStyleOf({ textLayout: "right", labelOffsetX: -6 })!.transform).toBe("translate(-6px, 0px)");
   });
 
-  it("mirrors x on a left origin, so +x means AWAY FROM THE DOT on either side", () => {
-    expect(labelStyleOf({ textLayout: "left", labelOffsetX: 6 })!.transform).toBe("translate(-6px, 0px)");
+  it("uses screen-space signs on either side — +x is rightward whichever origin the label hangs off", () => {
+    expect(labelStyleOf({ textLayout: "left", labelOffsetX: 6 })!.transform).toBe("translate(6px, 0px)");
     expect(labelStyleOf({ textLayout: "right", labelOffsetX: 6 })!.transform).toBe("translate(6px, 0px)");
+  });
+
+  /** The Expert origin must move the label in the FLEX path too — it used
+   *  to be read only by the anchored one, so setting it in /create did
+   *  nothing (adversarial judge, 2026-09-15). */
+  it("labelOrigin drives the flex row's direction, not just the anchored placement", () => {
+    const rowFor = (props: Record<string, unknown>) =>
+      call(LabeledPort, { children: "x", ...props }).props.style.flexDirection;
+    expect(rowFor({ textLayout: "right" })).toBe("row");
+    // Preset says right, Expert says left — the Expert value must win.
+    expect(rowFor({ textLayout: "right", labelOrigin: "left" })).toBe("row-reverse");
+    expect(rowFor({ textLayout: "right", labelOrigin: "top" })).toBe("column-reverse");
+    expect(rowFor({ textLayout: "right", labelOrigin: "bottom" })).toBe("column");
   });
 
   /**

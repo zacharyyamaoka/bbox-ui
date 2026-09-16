@@ -33,7 +33,7 @@ import {
   defaultSecondarySlotLayout,
   inwardTextLayout,
   isOffsetTextLayout,
-  portFlexDirection,
+  originFlexDirection,
   portLabelLift,
   portLabelPlacement,
   type BlockSide,
@@ -83,11 +83,13 @@ const TEXT_SIZE_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "textSize")!;
  * itself halfway through the origin list.
  */
 function flexOffsetTransform(placement: SlotPlacement): CSSProperties | undefined {
-  const { origin, offsetX, offsetY } = placement;
+  const { offsetX, offsetY } = placement;
   if (offsetX === 0 && offsetY === 0) return undefined;
-  const x = origin === "left" ? -offsetX : offsetX;
-  const y = origin === "top" ? -offsetY : offsetY;
-  return { transform: `translate(${x}px, ${y}px)` };
+  // Unmirrored, for the same reason `slotPlacementStyle` is: a transform
+  // is screen-space, so these signs mean the same thing on all four
+  // origins. `origin` is deliberately unused here — the flex row has
+  // already put the label on the right side via `flexDirection`.
+  return { transform: `translate(${offsetX}px, ${offsetY}px)` };
 }
 
 export function portResolutionSubject(props: Record<string, unknown>): Record<string, unknown> {
@@ -941,7 +943,9 @@ export function LabeledPort({
   const rootStyle: CSSProperties = anchored
     ? { position: "relative", width: diameterPx, height: diameterPx }
     : {
-        flexDirection: portFlexDirection(resolvedTextLayout),
+        // The RESOLVED origin, not the preset — so the Expert control
+        // actually moves the label in this path too.
+        flexDirection: originFlexDirection(labelPlacement.origin),
         // + PORT_RING_OVERHANG_PX: the gap is measured from the flex box's
         // edge, but the ring paints PAST it (box-shadow, not a border) — see
         // port.layout.ts's own WHY. Without this a flex-flowed specimen and
