@@ -75,6 +75,21 @@ export function instantiateScenario(scenario: Scenario, uid: number): Instance[]
   }));
 }
 
+// WHY no render assertion can guard any of this, which is the expensive half
+// of the lesson: a Port's label is never React-rendered at all. PortLabel
+// hands `children` to CodeField as `value`, and CodeField's JSX contains no
+// `{value}` whatsoever (grep it — zero occurrences); the text becomes a
+// CodeMirror document built imperatively inside a useLayoutEffect
+// (`new EditorView({ state: EditorState.create({ doc: value ... }) })`,
+// codeField.tsx). renderToStaticMarkup runs no effects, so it returns the
+// empty label container and no text for EITHER component, slots supplied or
+// not — two regression tests were written against that and both passed while
+// the bug was present. Walking `entry.render()` output is no better: it
+// returns UNEXECUTED descriptors, so the string is still sitting in
+// PortLabel's props and is found for either type. A guard here must assert on
+// component NAMES (see test/scenario.test.ts) or run in a real browser.
+// Diagnosed with the port-primary-secondary-slot session, 2026-09-16.
+//
 // LabeledPort, not Port. Every scenario below passes `children` (the port's
 // label) and most pass direction/producers/textLayout — all composite props.
 // The bare `Port` primitive is dot geometry only (PORT_FIELD_IDS in
