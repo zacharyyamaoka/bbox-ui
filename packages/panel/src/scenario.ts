@@ -75,13 +75,29 @@ export function instantiateScenario(scenario: Scenario, uid: number): Instance[]
   }));
 }
 
-const port = (props: Record<string, unknown>): ScenarioInstanceSpec => ({ type: "Port", props });
+// LabeledPort, not Port. Every scenario below passes `children` (the port's
+// label) and most pass direction/producers/textLayout — all composite props.
+// The bare `Port` primitive is dot geometry only (PORT_FIELD_IDS in
+// port.fields.ts: diameter/state/tone/hidden/dimmed/hinting), so naming it
+// here dropped every label silently: PortProps extends ComponentProps<"span">
+// and spreads, but JSX children win over a spread `children`, so the text
+// vanished rather than erroring, and direction/producers/textLayout leaked
+// onto the span as unknown DOM attributes. This file merged onto main clean
+// and was never exercised against the 2026-09-15 two-primitive split.
+const port = (props: Record<string, unknown>): ScenarioInstanceSpec => ({ type: "LabeledPort", props });
 const pill = (props: Record<string, unknown>): ScenarioInstanceSpec => ({ type: "Pill", props });
 const glyph = (props: Record<string, unknown>): ScenarioInstanceSpec => ({ type: "Glyph", props });
 const textBox = (props: Record<string, unknown>): ScenarioInstanceSpec => ({ type: "TextBox", props });
 
 export const SCENARIOS: Record<string, Scenario[]> = {
-  Port: [
+  // Keyed to LabeledPort, matching the instances above. `SCENARIOS[activeName]`
+  // (workbench.tsx) is read against the /create Component dropdown, which maps
+  // REGISTRY directly and therefore lists LabeledPort — verified in the running
+  // app, where selecting it shows all four of these. Selecting the bare `Port`
+  // primitive now offers no scenarios, which is correct: the sidebar hides the
+  // control when `SCENARIOS[name]` is absent, and every scenario here is about
+  // a LABELLED port. Geometry-only ones can be authored under "Port" later.
+  LabeledPort: [
     // Identical to SEED_VARIANTS.Port[0] (./bench.tsx) — picking "Default"
     // after wandering through the others returns exactly to what a fresh
     // Port bench opens with, never a near-miss.

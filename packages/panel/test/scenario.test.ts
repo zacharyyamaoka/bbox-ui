@@ -103,3 +103,60 @@ describe("SCENARIOS — stock data", () => {
     }
   });
 });
+
+/**
+ * The defect this guards against shipped to main and was invisible: every
+ * `SCENARIOS.Port` instance passed `direction`/`producers`/`textLayout` and a
+ * `children` label while naming the bare `Port` primitive, which after the
+ * 2026-09-15 two-primitive split is dot geometry only (PORT_FIELD_IDS in
+ * port.fields.ts: diameter/state/tone/hidden/dimmed/hinting). Nothing threw —
+ * `PortProps extends ComponentProps<"span">` so the spread is legal — so the
+ * labels silently failed to appear on /create and `producers` reached the DOM
+ * as a non-attribute. This file merged onto main clean and had never been
+ * exercised against the split.
+ *
+ * WHY the assertion is shaped this narrowly, having tried two wider ones:
+ *   - Walking `entry.render()` output for the label text passes even against
+ *     the broken version — render returns element DESCRIPTORS without
+ *     executing the component, and the label arrives via a slot fill that only
+ *     `renderInstance` builds. Verified vacuous by mutation.
+ *   - Checking props against `entry.fields` reports false positives:
+ *     `entry.fields` is a curated inspector subset, so real props the
+ *     component does accept (`producers`, `children`, `placeholder`,
+ *     `textSize`, `disabled`) are absent from it.
+ * What is decidable here is the component NAME, and that is exactly what was
+ * wrong. Typechecking cannot catch it: a scenario names its component with a
+ * string and `props` is `Record<string, unknown>` by design.
+ */
+describe("scenarios name a component that can actually carry them", () => {
+  const cases = Object.entries(SCENARIOS).flatMap(([name, list]) =>
+    list.flatMap((s) => s.instances.map((inst, i) => ({ name, scenario: s.id, index: i, inst }))),
+  );
+
+  it("covers every scenario instance in the file, so a new one cannot slip past", () => {
+    expect(cases.length).toBeGreaterThan(0);
+  });
+
+  it("every named component exists in the registry", () => {
+    for (const { inst } of cases) {
+      expect(REGISTRY.find((e) => e.name === inst.type), `${inst.type} is not in REGISTRY`).toBeDefined();
+    }
+  });
+
+  it("no scenario instance carrying a label or composite prop names the bare Port primitive", () => {
+    const COMPOSITE_ONLY = ["children", "direction", "producers", "textLayout", "edge", "labelOrigin"];
+    const offenders = cases
+      .filter(({ inst }) => inst.type === "Port" && COMPOSITE_ONLY.some((k) => k in inst.props))
+      .map(({ name, scenario, index }) => `${name}/${scenario}[${index}]`);
+    expect(offenders, "bare Port has no label slot — these belong to LabeledPort").toEqual([]);
+  });
+
+  it("the Port-family scenarios are keyed to the component that renders them", () => {
+    // The key decides whose sidebar offers these (workbench.tsx reads
+    // SCENARIOS[activeName]). It must be LabeledPort: the bare Port primitive
+    // has no label slot, so keyed to "Port" these four would be offered under
+    // a component that cannot draw them.
+    expect(Object.keys(SCENARIOS)).toContain("LabeledPort");
+    expect(Object.keys(SCENARIOS)).not.toContain("Port");
+  });
+});
