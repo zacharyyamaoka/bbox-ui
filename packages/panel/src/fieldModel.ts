@@ -122,6 +122,43 @@ function agreeing<T>(list: T[], key: (item: T) => unknown): T | null {
   return list.every((item) => key(item) === first) ? list[0]! : null;
 }
 
+/**
+ * The one FieldSpec (if any) among `fields` that some preset's `selector`
+ * names, paired with only the presets belonging to THAT SAME selector —
+ * never the union of every preset family `presets` may hold.
+ *
+ * WHY the narrowing matters: `assertDisjointPresets` (schema/resolve.ts)
+ * only forbids two DIFFERENT selectors from governing the same field — it
+ * explicitly allows a component to carry two disjoint preset families
+ * (e.g. a `state` ladder and an unrelated `mode` ladder) as long as their
+ * governed fields never overlap. A caller that takes "the first field any
+ * preset points at" and then hands the WHOLE `presets` array to a single
+ * picker would combine the second family's option labels into the first
+ * family's control and write its id into the first family's field the
+ * moment such a component existed — a concrete failure a 2026-09-15 Codex
+ * review named on an earlier version of the `/create` sidebar's quick-
+ * switch, even though no component in this registry uses two families yet.
+ * Returning `null` when no field matches (rather than a field paired with
+ * presets it cannot actually apply) is what lets a caller hide its control
+ * instead of wiring an onChange that silently does nothing.
+ *
+ * That sidebar control has SINCE been replaced by a richer "Scenarios"
+ * concept (`packages/panel/src/scenario.ts`) that sets a whole bench
+ * rather than one field, so nothing in `apps/docs` calls this function
+ * today. It stays exported — still real, tested, `PresetSpec`-cascade
+ * infra — for any future caller that needs "which field does this
+ * component's preset family govern," e.g. a field row inside the Inspector
+ * itself.
+ */
+export function presetFamilyFor(
+  fields: FieldSpec[],
+  presets: PresetSpec[],
+): { field: FieldSpec; presets: PresetSpec[] } | null {
+  const field = fields.find((f) => presets.some((p) => p.selector === f.id));
+  if (!field) return null;
+  return { field, presets: presets.filter((p) => p.selector === field.id) };
+}
+
 export function readFieldRow(
   field: FieldSpec,
   subjects: Subject[],

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentEntry, Instance, InstanceNode } from "@bbox-ui/panel";
+import type { ComponentEntry, Instance, InstanceNode, Scenario } from "@bbox-ui/panel";
 import { MIXED_BENCH, shouldSuppressNativeFocusShift } from "@bbox-ui/panel";
 import type { NavigatorVariant } from "./navigator";
 import {
@@ -19,6 +19,16 @@ interface BenchSidebarProps {
   activeName: string;
   onActiveNameChange: (name: string) => void;
   isMixed: boolean;
+  /** Stock, curated examples for the ACTIVE component (`activeName`) — full
+   *  bench layouts, not one field's alternatives. Empty for a component with
+   *  none authored yet (scenario.ts's own module doc says which and why);
+   *  the sidebar hides the whole control in that case. */
+  scenarios: Scenario[];
+  /** Which scenario is currently loaded, or `undefined` before anything in
+   *  `scenarios` has ever been picked (the picker then shows its first
+   *  option, "Default", without this needing to name it explicitly). */
+  activeScenarioId: string | undefined;
+  onScenarioChange: (scenarioId: string) => void;
   instances: Instance[];
   tree: InstanceNode[];
   selectedIds: Set<string>;
@@ -83,6 +93,45 @@ export function BenchSidebar(p: BenchSidebarProps) {
               <option value={MIXED_BENCH}>{MIXED_BENCH}</option>
             </select>
           </SidebarGroupContent>
+
+          {/* WHY this sits here and not only as a field row in the right-hand
+              Inspector: Zach, 2026-09-15, looking at Storybook's own
+              Component → saved-state sidebar pairing — "can you please add
+              another drop down menu below that for each component, if there
+              are presets available". The FIRST version of this control
+              wrote one selector field through the Inspector's own field
+              cascade (Port's `size`, Block's `view`) — real, but "not
+              merely small, med, large": Zach then asked for something with
+              "full control basically over the entire thing... any number
+              of instances, and any value on the instances," and offered
+              renaming it "Scenarios" or "Examples". This is that broader
+              version: each option REPLACES the whole bench with a curated,
+              named, arbitrary-length list of instances (workbench.tsx's
+              `applyScenario` — see scenario.ts's own module doc for the
+              full "why a new concept, not a stretched PresetSpec"
+              reasoning). Hidden whenever the active component has no
+              scenarios authored yet — `p.scenarios` is `[]` for anything
+              not in `SCENARIOS` (scenario.ts). */}
+          {p.scenarios.length > 0 && (
+            <>
+              <SidebarGroupLabel className="mt-3">Scenarios</SidebarGroupLabel>
+              <SidebarGroupContent className="px-2">
+                <select
+                  data-slot="scenario-picker"
+                  aria-label="Scenarios"
+                  value={p.activeScenarioId ?? p.scenarios[0]!.id}
+                  onChange={(e) => p.onScenarioChange(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm text-foreground"
+                >
+                  {p.scenarios.map((scenario) => (
+                    <option key={scenario.id} value={scenario.id}>
+                      {scenario.label}
+                    </option>
+                  ))}
+                </select>
+              </SidebarGroupContent>
+            </>
+          )}
         </SidebarGroup>
 
         <SidebarSeparator />

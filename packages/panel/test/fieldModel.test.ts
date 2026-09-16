@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FieldSpec, InheritedValue, PresetSpec } from "@bbox-ui/schema";
-import { readFieldRow, resetTitleFor, type Subject } from "../src/fieldModel";
+import { presetFamilyFor, readFieldRow, resetTitleFor, type Subject } from "../src/fieldModel";
 
 /**
  * These tests exist because the inspector demo had NO test script at all, so
@@ -245,5 +245,80 @@ describe("readFieldRow — the ↺ reset", () => {
     expect(resetTitleFor("default")).toBe("Reset to the default");
     expect(resetTitleFor("preset")).toBe("Reset to the preset's value");
     expect(resetTitleFor("inherited")).toBe("Reset to the value inherited from the parent");
+  });
+});
+
+/**
+ * `presetFamilyFor` was written for the `/create` sidebar's ORIGINAL
+ * field-ladder quick-switch (bbox-ui apps/docs `workbench.tsx`/
+ * `bench-sidebar.tsx`, 2026-09-15) — since replaced by the richer
+ * "Scenarios" concept (`packages/panel/src/scenario.ts`), so nothing calls
+ * this today (see this function's own doc in `fieldModel.ts`). These cases
+ * still name the two concrete failures a Codex judge round found in that
+ * earlier feature's first pass: a picker wired to a selector absent from
+ * the subject's own fields (silent no-op onChange), and a picker that
+ * combined TWO disjoint preset families into one control (writing one
+ * family's id into the other's field) — real invariants any future caller
+ * of this function still needs held.
+ */
+describe("presetFamilyFor — narrowing to one selector's own preset family", () => {
+  const VIEW: FieldSpec = {
+    id: "view",
+    label: "View",
+    kind: "segments",
+    defaultValue: "simple",
+    options: [
+      { value: "simple", label: "Simple" },
+      { value: "expanded", label: "Expanded" },
+    ],
+  };
+  const MODE: FieldSpec = {
+    id: "mode",
+    label: "Mode",
+    kind: "segments",
+    defaultValue: "auto",
+    options: [
+      { value: "auto", label: "Auto" },
+      { value: "manual", label: "Manual" },
+    ],
+  };
+  const VIEW_PRESETS: PresetSpec[] = [
+    { id: "simple", label: "Simple", selector: "view", governs: ["header"], values: { header: "centered" } },
+    { id: "expanded", label: "Expanded", selector: "view", governs: ["header"], values: { header: "band" } },
+  ];
+  const MODE_PRESETS: PresetSpec[] = [
+    { id: "auto", label: "Auto", selector: "mode", governs: ["spacing"], values: { spacing: "even" } },
+    { id: "manual", label: "Manual", selector: "mode", governs: ["spacing"], values: { spacing: "custom" } },
+  ];
+
+  it("finds the field a single preset family selects on, and returns that family whole", () => {
+    const result = presetFamilyFor([VIEW], VIEW_PRESETS);
+    expect(result?.field.id).toBe("view");
+    expect(result?.presets).toEqual(VIEW_PRESETS);
+  });
+
+  it("returns null — not a field paired with presets it cannot apply — when no field matches", () => {
+    // The concrete failure this guards: `panelFields` (the SELECTION's own
+    // fields) can lack the field a preset's selector names — e.g. a Mixed
+    // multi-type selection whose shared fields never include "view". A
+    // caller that wired a control to `presets` alone, without checking a
+    // field actually backs it, gets an onChange that resolves nothing and
+    // silently no-ops.
+    const result = presetFamilyFor([MODE], VIEW_PRESETS);
+    expect(result).toBeNull();
+  });
+
+  it("narrows to the ONE family the matched field owns, never the union of two disjoint families", () => {
+    // assertDisjointPresets (schema/resolve.ts) permits a component to carry
+    // two selectors as long as they govern disjoint fields — legal, and
+    // exactly the shape that broke a naive ".find the first field, hand back
+    // every preset" implementation: with both VIEW and MODE fields present,
+    // the combined preset list would show Mode's options in the View
+    // picker and, on selection, write a Mode id into the View field.
+    const combined = [...VIEW_PRESETS, ...MODE_PRESETS];
+    const result = presetFamilyFor([VIEW, MODE], combined);
+    expect(result?.field.id).toBe("view");
+    expect(result?.presets).toEqual(VIEW_PRESETS);
+    expect(result?.presets.some((p) => p.selector === "mode")).toBe(false);
   });
 });
