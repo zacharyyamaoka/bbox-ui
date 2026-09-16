@@ -2,7 +2,7 @@
 
 import "@xyflow/react/dist/style.css";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   Background,
@@ -17,8 +17,16 @@ import {
 } from "@xyflow/react";
 import type { ComponentEntry, Instance } from "@bbox-ui/panel";
 import { priorSelectionForRootPress } from "@bbox-ui/panel";
-import type { PortEdgeId } from "@bbox-ui/core";
-import type { CanvasPosition } from "../contract";
+import type { FieldValue } from "@bbox-ui/schema";
+import type { GlyphSize, PortEdgeId } from "@bbox-ui/core";
+import {
+  BBoxGlyphNode,
+  GlyphNodeProvider,
+  sizeChangeFromDimensions,
+  type BBoxGlyphNodeData,
+  type BBoxGlyphNodeType,
+} from "@bbox-ui/adapter-reactflow";
+import type { CanvasPosition, CanvasTransform } from "../contract";
 import { renderInstance, type EditBundle } from "../render-instance";
 import { HostZoomContext } from "../port-dnd";
 
@@ -45,6 +53,7 @@ type BenchNodeData = {
   highlightSlots: boolean;
 };
 type BenchNode = Node<BenchNodeData, "bench">;
+type AnyNode = BenchNode | BBoxGlyphNodeType;
 
 /** The node body is the component itself, nothing else: the point of the
  *  tab is "the same instances, now on a canvas", not a card around them.
@@ -78,7 +87,22 @@ function BenchFlowNode({ data, selected }: NodeProps<BenchNode>) {
   );
 }
 
-const nodeTypes = { bench: BenchFlowNode };
+const nodeTypes = { bench: BenchFlowNode, bboxGlyph: BBoxGlyphNode };
+
+/** The `bboxGlyph` node's own data, built from an instance's props plus its
+ *  host-owned rotation — the one place this shape of object is assembled,
+ *  so the node-list builder and the resize-clamp below can't disagree
+ *  about what a Glyph node's data looks like. */
+function glyphDataFor(instance: Instance, transforms: Record<string, CanvasTransform>): BBoxGlyphNodeData {
+  const props = instance.props;
+  return {
+    content: (props.content as string | undefined) ?? "",
+    sizePreset: (props.sizePreset as GlyphSize | undefined) ?? "sm",
+    size: props.size === undefined ? null : (props.size as number),
+    padding: (props.padding as number | undefined) ?? 0,
+    rotation: transforms[instance.id]?.rotation ?? 0,
+  };
+}
 
 interface Props {
   entries: ComponentEntry[];
@@ -89,6 +113,9 @@ interface Props {
   positions: Record<string, CanvasPosition>;
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
+  transforms: Record<string, CanvasTransform>;
+  onTransformsChange: (next: Record<string, CanvasTransform>) => void;
+  onInstancePropsChange: (id: string, patch: Record<string, FieldValue | undefined>) => void;
   edit: EditBundle;
   /** dnd-kit owns every Port drag (Zach, 2026-09-12) — see port-dnd.tsx.
    *  Absent means this render is not yet wired for it (matches
@@ -102,6 +129,11 @@ interface Props {
  * instances, selection and positions on every render, and every change React
  * Flow reports is forwarded up rather than kept. That is what makes a drag
  * here show up in tldraw — the page holds the only copy of the position.
+ *
+ * A `Glyph` instance rides the real `bboxGlyph` node (`@bbox-ui/adapter-
+ * reactflow`) instead of the generic `bench` node every other component
+ * still uses — same "route through the real adapter" rule the tldraw tab
+ * follows for the same reason (docs/GLYPH-PLAN.md phase 5).
  */
 function Canvas(p: Props) {
   const { resolvedTheme } = useTheme();
@@ -151,22 +183,52 @@ function Canvas(p: Props) {
     };
   }, [p.onMovePort, updateNodeInternals]);
 
-  const nodes: BenchNode[] = useMemo(
+  const nodes: AnyNode[] = useMemo(
     () =>
-      p.roots.map((instance) => ({
-        id: instance.id,
-        type: "bench",
-        position: p.positions[instance.id] ?? { x: 0, y: 0 },
-        selected: p.selectedIds.includes(instance.id),
-        data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit, onMovePort, highlightSlots: p.highlightSlots },
-        draggable: true,
-        measured: measuredRef.current[instance.id],
-      })),
+      p.roots.map((instance) => {
+        const position = p.positions[instance.id] ?? { x: 0, y: 0 };
+        const selected = p.selectedIds.includes(instance.id);
+        // WHY a Glyph node deliberately carries no `measured`, unlike every
+        // bench node above: `BBoxGlyphNode` writes its own explicit
+        // `width`/`height` into React Flow's store on mount
+        // (`updateNode`, glyph-node.tsx) — it is the one node here that is
+        // authoritatively sized rather than content-measured, so feeding it
+        // a remembered DOM measurement would put a second, competing answer
+        // next to the resizer's own.
+        if (instance.type === "Glyph") {
+          return {
+            id: instance.id,
+            type: "bboxGlyph",
+            position,
+            selected,
+            data: glyphDataFor(instance, p.transforms),
+            draggable: true,
+          } satisfies BBoxGlyphNodeType;
+        }
+        return {
+          id: instance.id,
+          type: "bench",
+          position,
+          selected,
+          data: { entries: p.entries, byId, instance, selectedIds: p.selectedIds, onSelectInstance: p.onSelectInstance, edit: p.edit, onMovePort, highlightSlots: p.highlightSlots },
+          draggable: true,
+          measured: measuredRef.current[instance.id],
+        } satisfies BenchNode;
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- measuredRef is
     // a ref (stable identity); `forceMeasuredTick` is read only to re-run
     // this memo the one time a node's first-ever measurement arrives.
-    [p.roots, p.positions, p.selectedIds, p.entries, byId, p.onSelectInstance, p.edit, onMovePort, p.highlightSlots, forceMeasuredTick],
+    [p.roots, p.positions, p.selectedIds, p.transforms, p.entries, byId, p.onSelectInstance, p.edit, onMovePort, p.highlightSlots, forceMeasuredTick],
   );
+
+  // Test hook only — mirrors `tldraw-canvas.tsx`'s own
+  // `__bboxCreateTldrawEditor`. Lets a CDP journey read React Flow's raw
+  // node array (position, data) directly, rather than parsing a computed
+  // CSS transform matrix across the pane's own zoom/pan, to check its
+  // painted centre against tldraw's for the same instance.
+  useEffect(() => {
+    (window as unknown as { __bboxCreateReactFlowNodes?: AnyNode[] }).__bboxCreateReactFlowNodes = nodes;
+  }, [nodes]);
 
   // WHY selection is read from `select` changes and NOT from
   // onSelectionChange: React Flow fires onSelectionChange on mount with an
@@ -177,7 +239,7 @@ function Canvas(p: Props) {
   // `select` changes in onNodesChange are emitted only for what the USER did
   // (click, shift-click, marquee), so they cannot echo the page's own state.
   const onNodesChange = useCallback(
-    (changes: NodeChange<BenchNode>[]) => {
+    (changes: NodeChange<AnyNode>[]) => {
       const moved: Record<string, CanvasPosition> = {};
       let selection: Set<string> | null = null;
       let firstMeasurement = false;
@@ -211,6 +273,20 @@ function Canvas(p: Props) {
           measuredRef.current = { ...measuredRef.current, [c.id]: c.dimensions };
           if (!had) firstMeasurement = true;
         }
+        // The SAME `"dimensions"` change carries a completed NodeResizer
+        // drag on a Glyph. WHY both branches run rather than one `else`:
+        // the block above is bookkeeping every node needs (see measuredRef),
+        // while `sizeChangeFromDimensions` is the adapter's own guard that
+        // tells a finished resize (`resizing === false`) apart from an
+        // ordinary remeasure — mounting a node must never pin it off its
+        // size preset (the helper's own doc comment).
+        if (c.type === "dimensions") {
+          const inst = p.instances.find((i) => i.id === c.id);
+          if (inst && inst.type === "Glyph") {
+            const size = sizeChangeFromDimensions(c, glyphDataFor(inst, p.transforms));
+            if (size !== null) p.onInstancePropsChange(c.id, { size });
+          }
+        }
       }
       if (Object.keys(moved).length) p.onPositionsChange({ ...p.positions, ...moved });
       if (selection) {
@@ -228,6 +304,7 @@ function Canvas(p: Props) {
   );
 
   return (
+    <GlyphNodeProvider value={{ onContentChange: (id, next) => p.onInstancePropsChange(id, { content: next }) }}>
     <div data-slot="reactflow-canvas" className="relative h-full min-h-0 w-full">
       <ReactFlow
         nodes={nodes}
@@ -285,6 +362,7 @@ function Canvas(p: Props) {
       </ReactFlow>
       <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">React Flow</span>
     </div>
+    </GlyphNodeProvider>
   );
 }
 

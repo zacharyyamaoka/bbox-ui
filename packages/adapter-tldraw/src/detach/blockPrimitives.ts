@@ -11,6 +11,7 @@
  * uses — the hierarchical rule made concrete: the composite composes the
  * lower primitive's detach instead of rewriting it.
  */
+import { createShapeId } from "tldraw";
 import type { TLShapeId, TLShapePartial } from "tldraw";
 
 import {
@@ -18,7 +19,6 @@ import {
   PORT_DIAMETERS,
   TEXT_SIZES,
   collapseWhitespace,
-  glyphPx,
   layoutSimpleBlock,
   portAnchor,
 } from "@bbox-ui/core";
@@ -96,16 +96,30 @@ export function primitivesForBlock(
   const shapes: TLShapePartial[] = [card];
 
   if (layout.glyph) {
-    shapes.push(
-      textAt({
-        text: props.icon,
-        px: glyphPx(props.titleSize),
-        box: layout.glyph,
-        origin,
+    // D4 (docs/GLYPH-PLAN.md): a text primitive holding `props.icon`
+    // could only ever be honest for a literal glyph character ("◆") — once
+    // a Block's glyph slot can hold a `lucide:<name>` or `data:` image
+    // (the same `content` grammar the standalone Glyph reads), printing
+    // that raw string would show "rocket" as words. The `x-box` is the
+    // same icon-shaped placeholder `primitivesForGlyph` emits for a
+    // standalone Glyph, sized to `layout.glyph` — already exactly
+    // `glyphPx(titleSize)` square, no padding to subtract (an inline
+    // Block glyph carries none).
+    shapes.push({
+      id: createShapeId(),
+      type: "geo",
+      x: origin.x + layout.glyph.x,
+      y: origin.y + layout.glyph.y,
+      props: {
+        geo: "x-box",
+        w: Math.max(1, layout.glyph.w),
+        h: Math.max(1, layout.glyph.h),
         color: "black",
-        align: "middle",
-      }),
-    );
+        fill: "none",
+        dash: "solid",
+        size: "s",
+      },
+    });
   }
   if (layout.title) {
     const titlePx = TEXT_SIZES[props.titleSize];

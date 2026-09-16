@@ -74,7 +74,7 @@ mkdirSync(SCREENSHOT_DIR, { recursive: true });
 const PREVIEW_CHECKS = {
   Port: { slot: "port", attr: "data-state", fieldId: "state" },
   Pill: { slot: "pill", attr: "data-state", fieldId: "state" },
-  Glyph: { slot: "glyph", attr: "data-size", fieldId: "size" },
+  Glyph: { slot: "glyph", attr: "data-size", fieldId: "sizePreset" },
   TextBox: { slot: "text-box", attr: "data-size", fieldId: "size" },
   Flex: { slot: "flex", attr: "data-justify", fieldId: "justify" },
   Stack: { slot: "stack", attr: "data-member-width", fieldId: "memberWidth" },
@@ -88,7 +88,7 @@ const PREVIEW_CHECKS = {
 const MULTI_INSTANCE = {
   Port: { fieldId: "state" },
   Pill: { fieldId: "state" },
-  Glyph: { fieldId: "size" },
+  Glyph: { fieldId: "sizePreset" },
 };
 
 // ---- tiny CDP client (same technique as .spike/drive-story.mjs) ----------

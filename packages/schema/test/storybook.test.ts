@@ -60,6 +60,15 @@ describe("toArgTypes", () => {
     const argTypes = toArgTypes([{ id: "body", label: "Body", kind: "textarea", defaultValue: "" }]);
     expect(argTypes.body.control).toBe("text");
   });
+  it(
+    'maps "glyph" to the plain text control — Storybook has no picker ' +
+      "widget, and the stored value is the same encoded string a text " +
+      "field holds; only the product inspector swaps in the real picker",
+    () => {
+      const glyphField: FieldSpec = { id: "content", label: "Content", kind: "glyph", defaultValue: "" };
+      expect(toArgTypes([glyphField]).content.control).toBe("text");
+    },
+  );
 
   it("carries options, min/max/step and the hint through", () => {
     const argTypes = toArgTypes(FIELDS);

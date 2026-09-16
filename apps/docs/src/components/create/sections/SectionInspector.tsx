@@ -85,7 +85,7 @@ export function SectionInspector(rest: Omit<BuildSectionsInput, "tier" | "filter
     // `rest` is rebuilt every render by the column above, so the memo keys
     // on the values that actually change what is built.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rest.subject, rest.subjects, rest.instances, rest.fields, rest.presets, rest.componentName, rest.render, rest.positions, rest.arrangementActions, tier, filter],
+    [rest.subject, rest.subjects, rest.instances, rest.fields, rest.presets, rest.componentName, rest.render, rest.positions, rest.transforms, rest.arrangementActions, tier, filter],
   );
 
   // Fold state for a list that no longer exists is dropped, so reselecting a

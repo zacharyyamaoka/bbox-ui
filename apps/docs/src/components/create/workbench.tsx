@@ -51,11 +51,12 @@ import {
   type Instance,
   type Scenario,
 } from "@bbox-ui/panel";
+import { LucideGlyphResolver } from "@bbox-ui/glyph-picker";
 import { SidebarProvider } from "@/registry/new-york-v4/ui/sidebar";
 import { BenchSidebar } from "./bench-sidebar";
 import { InspectorColumn } from "./inspector-column";
 import { Viewport } from "./viewport";
-import { defaultPosition, type CanvasPosition, type Render, type View } from "./contract";
+import { defaultPosition, type CanvasPosition, type CanvasTransform, type Render, type View } from "./contract";
 import { NAVIGATOR } from "./navigator";
 import { useSelectionHistory } from "./selection-history";
 
@@ -183,6 +184,9 @@ export function Workbench() {
   // typed, not undo it.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSnapshot, setEditSnapshot] = useState<FieldValue | null>(null);
+  // Host facts the render surface owns, beside `positions` and for the same
+  // reason (docs/GLYPH-PLAN.md D2: rotation is a host fact, not a Glyph prop).
+  const [transforms, setTransforms] = useState<Record<string, CanvasTransform>>({});
 
   const navigator = NAVIGATOR;
   const isMixed = activeName === MIXED_BENCH;
@@ -452,6 +456,14 @@ export function Workbench() {
    *  an X and dragging the node are one code path, not two. */
   function setPosition(id: string, next: CanvasPosition) {
     setPositions((prev) => ({ ...prev, [id]: next }));
+  }
+
+  /** One instance's host-owned transform — the rotation twin of
+   *  `setPosition`, written by the inspector's Renderer row. The canvases
+   *  write the whole bag through `onTransformsChange` instead, exactly as
+   *  they already do for `positions`. */
+  function setTransform(id: string, next: CanvasTransform) {
+    setTransforms((prev) => ({ ...prev, [id]: next }));
   }
 
   /*
@@ -730,109 +742,145 @@ export function Workbench() {
       }),
     }));
   }
+  /**
+   * ONE instance's own props, written by a render surface — see
+   * `ViewportProps.onInstancePropsChange`'s own doc comment for why this
+   * targets `id` alone rather than the whole selection the way
+   * `applyToSelected` does. `bench` is captured directly rather than routed
+   * through `activeName`'s current `benches[activeName]` lookup so a stale
+   * closure never writes into the wrong (already-switched) bench, matching
+   * every other setter above.
+   */
+  function setInstanceProps(id: string, patch: Record<string, FieldValue | undefined>) {
+    setBenches((prev) => ({
+      ...prev,
+      [activeName]: (prev[activeName] ?? []).map((i) => {
+        if (i.id !== id) return i;
+        const props = { ...i.props };
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === undefined) delete props[key];
+          else props[key] = value;
+        }
+        return { ...i, props };
+      }),
+    }));
+  }
 
   return (
-    // WHY the explicit height: the body is a min-h-screen column with a
-    // sticky header. "Fill the rest" has to be stated as a number here or a
-    // short bench leaves the sidebar and inspector ending mid-screen — the
-    // exact thing Zach asked not to happen.
-    <SidebarProvider
-      data-slot="create-workbench"
-      // color-scheme tells the browser which UA chrome to paint native
-      // selects and inputs with. The site never sets it, so in dark mode a
-      // native <select> kept its light popup and light default background
-      // under light text: a white box with nothing readable in it.
-      className="min-h-0 w-full [color-scheme:light] dark:[color-scheme:dark]"
-      style={{ height: "calc(100svh - var(--header-height) - 1rem)", "--sidebar-width": "17rem" } as React.CSSProperties}
-    >
-      <BenchSidebar
-        entries={REGISTRY}
-        activeName={activeName}
-        onActiveNameChange={changeActiveBench}
-        isMixed={isMixed}
-        instances={treeOrder}
-        tree={tree}
-        selectedIds={selectedIds}
-        onToggleSelected={toggleSelected}
-        onSelectionChange={setSelection}
-        onMoveInstance={moveInstance}
-        canDropInstance={canDropInstance}
-        glyph={typeGlyph}
-        navigator={navigator}
-        rootCount={rootCount}
-        onAdd={addInstance}
-        onRemoveLast={removeLastInstance}
-        onRandomize={randomizeInstances}
-        entryFor={entryFor}
-        scenarios={activeScenarios}
-        activeScenarioId={activeScenarioId}
-        onScenarioChange={applyScenario}
-      />
-      <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Viewport
+    // WHY LucideGlyphResolver wraps the WHOLE workbench, not just the
+    // viewport: the bench sidebar (BenchSidebar) renders each instance's raw
+    // core <Glyph> as its list preview, a sibling of <Viewport> below — a
+    // resolver scoped to only the viewport left every lucide-content glyph
+    // painting empty (data-unresolved) in that list even while the canvas
+    // and inspector, both inside the viewport's own wrap, painted it fine.
+    <LucideGlyphResolver>
+      {/* WHY the explicit height: the body is a min-h-screen column with a
+          sticky header. "Fill the rest" has to be stated as a number here or
+          a short bench leaves the sidebar and inspector ending mid-screen —
+          the exact thing Zach asked not to happen. */}
+      <SidebarProvider
+        data-slot="create-workbench"
+        // color-scheme tells the browser which UA chrome to paint native
+        // selects and inputs with. The site never sets it, so in dark mode a
+        // native <select> kept its light popup and light default background
+        // under light text: a white box with nothing readable in it.
+        className="min-h-0 w-full [color-scheme:light] dark:[color-scheme:dark]"
+        style={{ height: "calc(100svh - var(--header-height) - 1rem)", "--sidebar-width": "17rem" } as React.CSSProperties}
+      >
+        <BenchSidebar
+          entries={REGISTRY}
+          activeName={activeName}
+          onActiveNameChange={changeActiveBench}
+          isMixed={isMixed}
+          instances={treeOrder}
+          tree={tree}
+          selectedIds={selectedIds}
+          onToggleSelected={toggleSelected}
+          onSelectionChange={setSelection}
+          onMoveInstance={moveInstance}
+          canDropInstance={canDropInstance}
+          glyph={typeGlyph}
+          navigator={navigator}
+          rootCount={rootCount}
+          onAdd={addInstance}
+          onRemoveLast={removeLastInstance}
+          onRandomize={randomizeInstances}
+          entryFor={entryFor}
+          scenarios={activeScenarios}
+          activeScenarioId={activeScenarioId}
+          onScenarioChange={applyScenario}
+        />
+        <div data-slot="create-main" className="flex min-h-0 min-w-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <Viewport
+              entries={REGISTRY}
+              instances={instances}
+              roots={roots}
+              onSelectInstance={selectInstance}
+              selectedIds={selectedIdList}
+              positions={placedPositions}
+              onSelectionChange={setSelection}
+              onPositionsChange={setPositions}
+              transforms={transforms}
+              onTransformsChange={setTransforms}
+              onInstancePropsChange={setInstanceProps}
+              render={render}
+              view={view}
+              onRenderChange={setRender}
+              onViewChange={setView}
+              highlightSlots={highlightSlots}
+              onHighlightSlotsChange={setHighlightSlots}
+              editingId={editingId}
+              onRequestEdit={requestEdit}
+              onEditEnd={endEditing}
+              onInstancePropChange={instancePropChange}
+              editSnapshot={editSnapshot}
+              onMovePort={movePortTo}
+            />
+          </div>
+          <InspectorColumn
+            componentName={panelName}
+            fields={panelFields}
+            presets={panelPresets}
+            subjects={selected}
+            toSubject={panelToSubject}
+            onChange={applyToSelected}
+            onClearOverride={clearOverride}
+            shared={shared}
+            selectedTypes={selectedTypes}
+            selectedCount={selected.length}
+            excludedShown={EXCLUDED_SHOWN}
             entries={REGISTRY}
             instances={instances}
-            roots={roots}
-            onSelectInstance={selectInstance}
-            selectedIds={selectedIdList}
-            positions={placedPositions}
-            onSelectionChange={setSelection}
-            onPositionsChange={setPositions}
+            subject={selected.length === 1 ? selected[0]! : null}
+            onAddMember={addMember}
+            onRemoveMember={removeMemberById}
+            onMoveMember={moveMemberInParent}
+            onSetProp={setInstanceProp}
+            onClearProp={clearInstanceProp}
+            onSelectInstance={(id) => selectInstance(id)}
             render={render}
-            view={view}
-            onRenderChange={setRender}
-            onViewChange={setView}
-            highlightSlots={highlightSlots}
-            onHighlightSlotsChange={setHighlightSlots}
-            editingId={editingId}
-            onRequestEdit={requestEdit}
-            onEditEnd={endEditing}
-            onInstancePropChange={instancePropChange}
-            editSnapshot={editSnapshot}
-            onMovePort={movePortTo}
+            positions={placedPositions}
+            onSetPosition={setPosition}
+            transforms={transforms}
+            onSetTransform={setTransform}
+            width={inspectorWidth}
+            minWidth={MIN_INSPECTOR_WIDTH}
+            maxWidth={MAX_INSPECTOR_WIDTH}
+            onWidthChange={(w) => setInspectorWidth(clampInspectorWidth(w))}
+            arrangementActions={{
+              onSetArrangement: setArrangement,
+              onAddArrangement: addArrangementTo,
+              onSetArrangementMode: setArrangementMode,
+              onSetArrangementSpacing: setArrangementSpacing,
+              onToggleArrangementEdge: toggleArrangementEdge,
+              onSetArrangementGrouping: setArrangementGrouping,
+              onMovePort: movePortTo,
+              onSetPortPlacement: setPortPlacement,
+            }}
           />
         </div>
-        <InspectorColumn
-          componentName={panelName}
-          fields={panelFields}
-          presets={panelPresets}
-          subjects={selected}
-          toSubject={panelToSubject}
-          onChange={applyToSelected}
-          onClearOverride={clearOverride}
-          shared={shared}
-          selectedTypes={selectedTypes}
-          selectedCount={selected.length}
-          excludedShown={EXCLUDED_SHOWN}
-          entries={REGISTRY}
-          instances={instances}
-          subject={selected.length === 1 ? selected[0]! : null}
-          onAddMember={addMember}
-          onRemoveMember={removeMemberById}
-          onMoveMember={moveMemberInParent}
-          onSetProp={setInstanceProp}
-          onClearProp={clearInstanceProp}
-          onSelectInstance={(id) => selectInstance(id)}
-          render={render}
-          positions={placedPositions}
-          onSetPosition={setPosition}
-          width={inspectorWidth}
-          minWidth={MIN_INSPECTOR_WIDTH}
-          maxWidth={MAX_INSPECTOR_WIDTH}
-          onWidthChange={(w) => setInspectorWidth(clampInspectorWidth(w))}
-          arrangementActions={{
-            onSetArrangement: setArrangement,
-            onAddArrangement: addArrangementTo,
-            onSetArrangementMode: setArrangementMode,
-            onSetArrangementSpacing: setArrangementSpacing,
-            onToggleArrangementEdge: toggleArrangementEdge,
-            onSetArrangementGrouping: setArrangementGrouping,
-            onMovePort: movePortTo,
-            onSetPortPlacement: setPortPlacement,
-          }}
-        />
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </LucideGlyphResolver>
   );
 }

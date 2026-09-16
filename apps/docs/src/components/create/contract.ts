@@ -47,6 +47,18 @@ export interface CanvasPosition {
   y: number;
 }
 
+/**
+ * The other host fact a render surface owns, beside position
+ * (docs/GLYPH-PLAN.md D2): degrees, never radians — the same unit
+ * `HOST_FIELDS`' rotation row and the Renderer section read and write.
+ * A bare `{ rotation }` object (not a lone number) so this can grow a
+ * second host-owned transform fact later without becoming a breaking
+ * change to every caller of `onTransformsChange`.
+ */
+export interface CanvasTransform {
+  rotation: number;
+}
+
 export interface ViewportProps {
   /** The component registry, for rendering an instance by its type. */
   entries: ComponentEntry[];
@@ -64,6 +76,25 @@ export interface ViewportProps {
    *  shift-click reports the resulting set, never a delta. */
   onSelectionChange: (ids: string[]) => void;
   onPositionsChange: (next: Record<string, CanvasPosition>) => void;
+  /** Rotation per instance, keyed the same way `positions` is. Absent for an
+   *  instance that has never been turned — read as `0`, same as a position
+   *  never placed reads as `defaultPosition`. Kept OUT of `Instance.props`
+   *  for the same reason `positions` is (docs/GLYPH-PLAN.md D2: rotation is
+   *  a host fact, not a component prop). */
+  transforms: Record<string, CanvasTransform>;
+  onTransformsChange: (next: Record<string, CanvasTransform>) => void;
+  /**
+   * A write to ONE instance's own props, from a render surface rather than
+   * the inspector — a tldraw resize handle, a React Flow `NodeResizer`, a
+   * picker's `onChange`. `applyToSelected` (workbench.tsx) writes the same
+   * field to EVERY selected instance at once, which is correct for the
+   * inspector (editing a multi-selection means "set this on all of them")
+   * but wrong here: dragging one glyph's corner must not resize every other
+   * glyph that happens to be selected alongside it. `undefined` clears the
+   * key — the same "delete, don't set to a sentinel" rule `clearOverride`
+   * already follows for the inspector's own Clear.
+   */
+  onInstancePropsChange: (id: string, patch: Record<string, FieldValue | undefined>) => void;
   /** Which render and which view are showing. The page owns both so the
    *  choice can be persisted and so a deep link can open on a canvas. */
   render: Render;

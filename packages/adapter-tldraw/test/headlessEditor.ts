@@ -134,10 +134,16 @@ import {
 } from "tldraw";
 
 import { BBoxBlockShapeUtil } from "../src/block-shape-util";
+import { BBoxGlyphShapeUtil } from "../src/glyph-shape-util";
 import { BBoxPortShapeUtil } from "../src/port-shape-util";
 
 export function createHeadlessEditor(): Editor {
-  const shapeUtils = [...defaultShapeUtils, BBoxBlockShapeUtil, BBoxPortShapeUtil];
+  const shapeUtils = [
+    ...defaultShapeUtils,
+    BBoxBlockShapeUtil,
+    BBoxPortShapeUtil,
+    BBoxGlyphShapeUtil,
+  ];
   const store = createTLStore({ shapeUtils, bindingUtils: defaultBindingUtils });
   const editor = new Editor({
     store,

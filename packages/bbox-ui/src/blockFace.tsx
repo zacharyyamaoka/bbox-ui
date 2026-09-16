@@ -398,7 +398,12 @@ export function BlockBand({ data, typeInline }: BlockBandProps) {
       size="md"
       left={
         <>
-          {data.icon !== undefined && <Glyph size="md">{data.icon}</Glyph>}
+          {/* `sizePreset`, not `size`: Glyph v2 split the old single `size`
+              prop into a PRESET layer (this) and a numeric px OVERRIDE
+              layer (`size`, written by a canvas resize handle). Passing
+              "md" to `size` now means "12 pixels"-shaped nonsense, not the
+              medium preset. */}
+          {data.icon !== undefined && <Glyph sizePreset="md">{data.icon}</Glyph>}
           <TextBox size="md" lines="single">
             {data.title}
           </TextBox>

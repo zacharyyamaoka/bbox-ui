@@ -16,7 +16,7 @@ const meta = {
   argTypes: toArgTypes(BAR_FIELDS),
   render: (args) => (
     <div style={{ width: 420, border: "1px dashed currentColor" }}>
-      <Bar {...args} left={<Glyph size={args.size}>◆</Glyph>} center={<TextBox size={args.size}>Title</TextBox>} right={<Pill state="wired">Wired</Pill>} />
+      <Bar {...args} left={<Glyph sizePreset={args.size}>◆</Glyph>} center={<TextBox size={args.size}>Title</TextBox>} right={<Pill state="wired">Wired</Pill>} />
     </div>
   ),
 } satisfies Meta<typeof Bar>;
@@ -47,7 +47,7 @@ export const AllSizes: Story = {
     <div style={{ display: "flex", flexDirection: "column", gap: 16, width: 420 }}>
       {(["sm", "md", "lg", "xl"] as BarSize[]).map((size) => (
         <div key={size} style={{ border: "1px dashed currentColor" }}>
-          <Bar {...args} size={size} left={<Glyph size={size}>◆</Glyph>} center={<TextBox size={size}>{size}</TextBox>} right={<Pill state="wired">Wired</Pill>} />
+          <Bar {...args} size={size} left={<Glyph sizePreset={size}>◆</Glyph>} center={<TextBox size={size}>{size}</TextBox>} right={<Pill state="wired">Wired</Pill>} />
         </div>
       ))}
     </div>

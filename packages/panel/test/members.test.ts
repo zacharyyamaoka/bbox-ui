@@ -219,27 +219,38 @@ describe("size cascades down the tree", () => {
   const byId = new Map(made.map((m) => [m.id, m]));
   const header = byId.get(made[0]!.members![0]!)!;
   const left = byId.get(header.members![0]!)!;
-  const glyph = inst("glyph-99", "Glyph", {});
-  const bench = [...made.map((m) => (m.id === left.id ? { ...m, members: [glyph.id] } : m)), glyph];
+  // WHY Port, not Glyph: this proves the CASCADE MECHANISM works two
+  // levels deep to an arbitrary leaf — it was Glyph until Glyph's v2
+  // rewrite (docs/GLYPH-PLAN.md, concurrent with this suite) split what
+  // used to be one cascading `size` field into `sizePreset` (the preset
+  // layer, still `cascades: true`) and a same-named `size` field with a
+  // completely different meaning (a pixel override), so `id: "size"` no
+  // longer means "the size preset" on Glyph the way it does on every
+  // other sized leaf. Port's own `size` field (port.fields.ts) is
+  // untouched and still exactly the shape this test wants.
+  const port = inst("port-99", "Port", {});
+  const bench = [...made.map((m) => (m.id === left.id ? { ...m, members: [port.id] } : m)), port];
 
-  it("a header set to xl reaches the Glyph two levels down, naming the header", () => {
+  it("a header set to xl reaches the Port two levels down, naming the header", () => {
     const withXl = bench.map((m) => (m.id === header.id ? { ...m, props: { ...m.props, size: "xl" } } : m));
-    expect(inheritedFor(withXl, REGISTRY, glyph.id).size).toEqual({ value: "xl", from: header.id, fromLabel: "Header" });
-    expect(effectiveProps(withXl, REGISTRY, glyph).size).toBe("xl");
+    expect(inheritedFor(withXl, REGISTRY, port.id).size).toEqual({ value: "xl", from: header.id, fromLabel: "Header" });
+    expect(effectiveProps(withXl, REGISTRY, port).size).toBe("xl");
   });
   it("a Flex between them with its own size overrides and relays it", () => {
     const withBoth = bench.map((m) =>
       m.id === header.id ? { ...m, props: { ...m.props, size: "xl" } } : m.id === left.id ? { ...m, props: { ...m.props, size: "sm" } } : m,
     );
-    expect(inheritedFor(withBoth, REGISTRY, glyph.id).size).toMatchObject({ value: "sm", from: left.id });
+    expect(inheritedFor(withBoth, REGISTRY, port.id).size).toMatchObject({ value: "sm", from: left.id });
   });
   it("a bar with nothing set relays its default; an own value on the leaf wins in what is drawn", () => {
-    expect(inheritedFor(bench, REGISTRY, glyph.id).size).toMatchObject({ value: "md", from: header.id });
-    const own = bench.map((m) => (m.id === glyph.id ? { ...m, props: { size: "lg" } } : m));
-    expect(effectiveProps(own, REGISTRY, byId.get(glyph.id) ?? own.find((m) => m.id === glyph.id)!).size).toBe("lg");
+    expect(inheritedFor(bench, REGISTRY, port.id).size).toMatchObject({ value: "md", from: header.id });
+    const own = bench.map((m) => (m.id === port.id ? { ...m, props: { size: "lg" } } : m));
+    expect(effectiveProps(own, REGISTRY, byId.get(port.id) ?? own.find((m) => m.id === port.id)!).size).toBe("lg");
   });
   it("a field that does not cascade is untouched", () => {
-    expect(inheritedFor(bench, REGISTRY, glyph.id).padding).toBeUndefined();
+    // Port declares `diameter` (unlike `size`, no `cascades: true`) — a
+    // real declared-but-non-cascading field, not just an absent key.
+    expect(inheritedFor(bench, REGISTRY, port.id).diameter).toBeUndefined();
   });
 });
 

@@ -13,7 +13,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bbox-ui/core": "workspace:*"
+    "@bbox-ui/core": "workspace:*",
+    "@bbox-ui/glyph-picker": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
