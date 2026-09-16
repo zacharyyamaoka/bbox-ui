@@ -82,4 +82,12 @@ export * from "./portPlacement";
 // `completionMenu.css` ships as its own package.json export, like theme.css.
 export * from "./completionMenu";
 
+// Trace — the edge primitive. Path math is host-owned (getBezierPath,
+// tldraw's arrow info); this is the paint, plus the pure dash-cadence
+// geometry it's built from. See trace.fields.ts's own header for the one
+// deviation from reports/trace-edge-primitive-proposal-2026-09-14.html.
+export * from "./trace.layout";
+export * from "./trace.fields";
+export * from "./trace";
+
 export { cn } from "./lib/utils";

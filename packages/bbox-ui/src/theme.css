@@ -110,3 +110,24 @@
   --bbox-accent: oklch(0.70 0.17 264);
   --bbox-ring: var(--bbox-accent);
 }
+
+/*
+ * Trace's marching-ants (`variant: "data"`, `animated`) — one keyframe
+ * shared by every Trace instance and every host, so a React Flow Trace
+ * and a tldraw Trace animate at the same speed (`trace.tsx`'s
+ * `traceStrokeStyle` returns only the class name, never the keyframes
+ * themselves — this is that class's one real definition). Values port
+ * SystemSketch's own `systemsketch-data-cable-march` unchanged: a 5px
+ * dash (`DATA_MARCH_DASH_PX`, trace.layout.ts) means a full dash+gap is
+ * 10px, so the offset travels exactly one cadence per cycle.
+ */
+.bbox-trace-march {
+  animation: bbox-trace-march 0.5s linear infinite;
+}
+@keyframes bbox-trace-march {
+  from { stroke-dashoffset: 10; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bbox-trace-march { animation: none; }
+}
