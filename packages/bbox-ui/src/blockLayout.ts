@@ -41,6 +41,7 @@ import {
   PORT_LABEL_GAP,
   defaultLiftOffsetY,
   isOffsetTextLayout,
+  portLabelHeight,
   portLabelOut,
   type PortTextLayout,
 } from "./port.layout";
@@ -546,7 +547,13 @@ export function portLabelBox(input: PortLabelBoxInput): LayoutBox {
   const { dotW, dotH, layout, fontPx } = input;
   const out = portLabelOut(layout, { w: dotW, h: dotH });
   const w = input.measure(input.label, fontPx, 400);
-  const h = Math.round(fontPx * LEADING_TIGHT);
+  // `portLabelHeight`, not this module's own `LEADING_TIGHT`: both are
+  // 1.25 today, which is exactly how two constants for one fact stay
+  // undetected until one of them moves. The lift below is derived from
+  // this height, and the whole point of round 1 was that every path must
+  // compute it with the SAME function. `LEADING_TIGHT` stays for Block's
+  // own titles, which is a different fact that happens to share a ratio.
+  const h = portLabelHeight(fontPx);
   // An "Offset" layout shares its plain counterpart's along-axis `out`
   // and differs ONLY in the cross axis: it is DISPLACED upward.
   //

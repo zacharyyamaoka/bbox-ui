@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { BLOCK_BORDER_PX } from "../src/layout";
+import { portLabelBox } from "../src/blockLayout";
 import {
   PORT_DIAMETERS,
   PORT_LABEL_GAP,
@@ -15,7 +16,7 @@ import {
   isOffsetTextLayout,
   portAnchor,
   portDotPlacement,
-  portFlexDirection,
+  originFlexDirection,
   portLabelLift,
   portLabelHeight,
   portLabelOut,
@@ -87,8 +88,13 @@ describe("port text layouts", () => {
     leftOffset: "row-reverse",
   };
 
+  // Asserted through the composition the component actually uses —
+  // legacy layout -> origin -> flex direction — rather than a
+  // layout-keyed helper of its own. `portFlexDirection` was deleted once
+  // the row started following the resolved origin; this pins that the
+  // legacy vocabulary still lands on the same answer it always did.
   it.each(PORT_TEXT_LAYOUTS)("places the text slot for %s", (layout) => {
-    expect(portFlexDirection(layout)).toBe(expected[layout]);
+    expect(originFlexDirection(TEXT_LAYOUT_AS_PLACEMENT[layout].origin)).toBe(expected[layout]);
   });
 
   it("only the two -Offset members are offset layouts", () => {
@@ -444,6 +450,47 @@ describe("unified slot placement — one origin type, free x/y", () => {
     const frozenAtMd = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.md), PORT_LABEL_GAP);
     const bottomAtXlWithFrozen = portLabelHeight(PORT_TEXT_SIZES.xl) / 2 + frozenAtMd;
     expect(bottomAtXlWithFrozen).toBeGreaterThan(0);
+  });
+
+  /**
+   * THE round-1 invariant, pinned directly rather than inferred: the CSS
+   * placement and the measured detach rectangle must put a lifted label in
+   * the same place. They drifted twice — `portLabelPlacement` kept a
+   * dot-based lift (22px vs 35.5px at xl), then `portLabelBox` did — so
+   * this asserts the agreement itself instead of trusting that both happen
+   * to call the right function.
+   */
+  it("the CSS placement and the measured detach box agree on the lift, for every layout", () => {
+    const fontPx = PORT_TEXT_SIZES.md;
+    const h = portLabelHeight(fontPx);
+    for (const layout of PORT_TEXT_LAYOUTS) {
+      const css = slotPlacementStyle(
+        {
+          origin: TEXT_LAYOUT_AS_PLACEMENT[layout].origin,
+          offsetX: 0,
+          offsetY: TEXT_LAYOUT_AS_PLACEMENT[layout].liftedLabel
+            ? defaultLiftOffsetY(h, PORT_LABEL_GAP)
+            : 0,
+        },
+        dot,
+        PORT_LABEL_GAP,
+      );
+      const box = portLabelBox({
+        dotW: dot.w,
+        dotH: dot.h,
+        layout,
+        fontPx,
+        label: "x",
+        measure: () => 40,
+      });
+      // The box's own centre offset from the dot's centre, vs the y the
+      // CSS transform carries. Only the vertical pair differ in form, so
+      // compare the horizontal origins where both speak the same axis.
+      if (!isOffsetTextLayout(layout)) continue;
+      const boxCentreFromDotCentre = box.y + box.h / 2 - dot.h / 2;
+      const cssY = Number(/calc\(-50% \+ (-?[\d.]+)px\)/.exec(String(css.transform))![1]);
+      expect(boxCentreFromDotCentre, layout).toBeCloseTo(cssY, 6);
+    }
   });
 
   it("every old PortTextLayout member maps to an origin, and only the two Offset ones are lifted", () => {

@@ -102,9 +102,14 @@ export const PORT_TEXT_LAYOUT_LABELS: Record<PortTextLayout, string> = {
 export const PORT_LABEL_GAP = 8;
 
 /**
- * The flex direction for a resolved ORIGIN — the unified model's own
- * version of `portFlexDirection`, which still speaks the legacy
- * `PortTextLayout`.
+ * The flex direction for a resolved ORIGIN.
+ *
+ * REPLACES `portFlexDirection`, which took a legacy `PortTextLayout` and
+ * was deleted with this change: once the row follows the resolved origin
+ * there is nothing left for a layout-keyed twin to answer, and keeping an
+ * unused second spelling of one fact is how the two paths drifted apart
+ * in the first place (same standard `portBadgeSide`/`portCueSide` were
+ * removed under).
  *
  * Without this the Expert `labelOrigin` control was inert in the flex
  * path: the row's direction came from the `textLayout` PRESET, so setting
@@ -128,22 +133,6 @@ export function originFlexDirection(
   }
 }
 
-export function portFlexDirection(
-  layout: PortTextLayout,
-): "row" | "row-reverse" | "column" | "column-reverse" {
-  switch (layout) {
-    case "top":
-      return "column-reverse"; // label above the dot
-    case "bot":
-      return "column";
-    case "right":
-    case "rightOffset":
-      return "row";
-    case "left":
-    case "leftOffset":
-      return "row-reverse";
-  }
-}
 
 /** True for the two label positions that LIFT the label clear of the
  * trace wire (`portLabelLift` below). Kept as a named predicate rather
