@@ -9,7 +9,6 @@ import {
   PORT_SECONDARY_SLOT_GAP_PX,
   PORT_TEXT_LAYOUTS,
   SECONDARY_SLOT_LAYOUTS,
-  defaultLiftOffsetY,
   defaultPortLabelLift,
   defaultSecondarySlotLayout,
   inwardTextLayout,
@@ -18,9 +17,9 @@ import {
   portDotPlacement,
   originFlexDirection,
   portLabelLift,
-  portLabelHeight,
   portLabelOut,
   slotPlacementStyle,
+  SLOT_ALIGNS,
   SLOT_ORIGINS,
   SECONDARY_LAYOUT_AS_ORIGIN,
   TEXT_LAYOUT_AS_PLACEMENT,
@@ -98,7 +97,7 @@ describe("port text layouts", () => {
   });
 
   it("only the two -Offset members are offset layouts", () => {
-    expect(PORT_TEXT_LAYOUTS.filter(isOffsetTextLayout)).toEqual(["rightOffset", "leftOffset"]);
+    expect(PORT_TEXT_LAYOUTS.filter((l) => TEXT_LAYOUT_AS_PLACEMENT[l].align === "end")).toEqual(["rightOffset", "leftOffset"]);
   });
 
   /**
@@ -174,31 +173,34 @@ describe("port text layouts", () => {
     const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
     for (const layout of PORT_TEXT_LAYOUTS) {
       const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
-      const viaWrapper = portLabelPlacement(layout, dot, 0, PORT_TEXT_SIZES.md);
-      const viaModel = slotPlacementStyle(
-        {
-          origin: preset.origin,
-          offsetX: 0,
-          offsetY: preset.liftedLabel
-            ? defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.md), PORT_LABEL_GAP)
-            : 0,
-        },
-        dot,
-        PORT_LABEL_GAP,
+      expect(portLabelPlacement(layout, dot), layout).toEqual(
+        slotPlacementStyle(
+          { origin: preset.origin, align: preset.align, offsetX: 0, offsetY: preset.offsetY },
+          dot,
+          PORT_LABEL_GAP,
+        ),
       );
-      expect(viaWrapper, layout).toEqual(viaModel);
     }
   });
 
-  it("its lift tracks the TEXT size, which is what the guarantee actually depends on", () => {
+  /**
+   * The guarantee is now STRUCTURAL, not arithmetic: a lifted label pins
+   * its own BOTTOM edge to the reference line, so it clears the wire at
+   * any size without anything recomputing. The previous version derived
+   * the lift from the label's height — a number the component cannot
+   * actually know (Zach: "We defintily don't want to kinda be dynamically
+   * calculating the x/y offset if the slot length changes").
+   */
+  it("a lifted layout pins the slot's BOTTOM edge, so the lift needs no height at all", () => {
     const dot: PortDotBox = { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md };
-    const atSm = portLabelPlacement("rightOffset", dot, 0, PORT_TEXT_SIZES.sm).transform;
-    const atXl = portLabelPlacement("rightOffset", dot, 0, PORT_TEXT_SIZES.xl).transform;
-    expect(atSm).not.toBe(atXl);
-    // …and a non-offset layout lifts nothing at any text size.
-    expect(portLabelPlacement("right", dot, 0, PORT_TEXT_SIZES.xl).transform).toBe(
-      "translate(0px, calc(-50% + 0px))",
-    );
+    for (const layout of ["rightOffset", "leftOffset"] as const) {
+      expect(TEXT_LAYOUT_AS_PLACEMENT[layout].align).toBe("end");
+      expect(portLabelPlacement(layout, dot).transform).toBe(
+        `translate(0px, calc(-100% + ${-PORT_LABEL_GAP}px))`,
+      );
+    }
+    // …and a plain layout still centres, lifting nothing.
+    expect(portLabelPlacement("right", dot).transform).toBe("translate(0px, calc(-50% + 0px))");
   });
 });
 
@@ -336,9 +338,9 @@ describe("port placement — dot on the boundary, label off the dot", () => {
           // near edge, cross-axis centred — displaced upward. Unifying it
           // to one rule is what lets the flex row and every host adapter
           // reproduce it without a second implementation.
-          const lift = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.sm), PORT_LABEL_GAP);
+          // Bottom edge on the reference line, then one static gap up.
           expect(placement.top).toBe("50%");
-          expect(placement.transform).toBe(`translate(0px, calc(-50% + ${lift}px))`);
+          expect(placement.transform).toBe(`translate(0px, calc(-100% + ${-PORT_LABEL_GAP}px))`);
           continue;
         }
 
@@ -380,7 +382,7 @@ describe("unified slot placement — one origin type, free x/y", () => {
   it("at zero offset, every origin reproduces its old flush placement to the pixel", () => {
     const out = PORT_DIAMETERS.md + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
     const at = (origin: SlotOrigin) =>
-      slotPlacementStyle({ origin, offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP);
+      slotPlacementStyle({ origin, align: "center", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP);
     expect(at("right").left).toBe(`${out}px`);
     expect(at("left").right).toBe(`${out}px`);
     expect(at("top").bottom).toBe(`${out}px`);
@@ -391,7 +393,7 @@ describe("unified slot placement — one origin type, free x/y", () => {
   });
 
   it("carries BOTH offsets in the transform, so negatives work and the centring never has to be added by hand", () => {
-    const p = slotPlacementStyle({ origin: "right", offsetX: 4, offsetY: -23 }, dot, PORT_LABEL_GAP);
+    const p = slotPlacementStyle({ origin: "right", align: "center", offsetX: 4, offsetY: -23 }, dot, PORT_LABEL_GAP);
     expect(p.transform).toBe("translate(4px, calc(-50% + -23px))");
     // The edge property is untouched by the offset — displacement is the
     // transform's whole job, so the anchor stays one fixed rule.
@@ -411,7 +413,7 @@ describe("unified slot placement — one origin type, free x/y", () => {
    */
   it("uses the SAME screen-space signs on all four origins", () => {
     for (const origin of SLOT_ORIGINS) {
-      const p = slotPlacementStyle({ origin, offsetX: 5, offsetY: 7 }, dot, PORT_LABEL_GAP);
+      const p = slotPlacementStyle({ origin, align: "center", offsetX: 5, offsetY: 7 }, dot, PORT_LABEL_GAP);
       const horizontal = origin === "top" || origin === "bottom";
       expect(p.transform, origin).toBe(
         horizontal ? "translate(calc(-50% + 5px), 7px)" : "translate(5px, calc(-50% + 7px))",
@@ -420,36 +422,37 @@ describe("unified slot placement — one origin type, free x/y", () => {
   });
 
   it("the two gaps stay distinct: a secondary slot hugs tighter than a label", () => {
-    const label = slotPlacementStyle({ origin: "right", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP);
-    const secondary = slotPlacementStyle({ origin: "right", offsetX: 0, offsetY: 0 }, dot, PORT_SECONDARY_SLOT_GAP_PX);
+    const label = slotPlacementStyle({ origin: "right", align: "center", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP);
+    const secondary = slotPlacementStyle({ origin: "right", align: "center", offsetX: 0, offsetY: 0 }, dot, PORT_SECONDARY_SLOT_GAP_PX);
     expect(parseFloat(String(label.left))).toBeGreaterThan(parseFloat(String(secondary.left)));
     expect(parseFloat(String(label.left)) - parseFloat(String(secondary.left)))
       .toBe(PORT_LABEL_GAP - PORT_SECONDARY_SLOT_GAP_PX);
   });
 
   it("boxInsetPx still resolves for a host whose positioning context is inset (React Flow's bordered Handle)", () => {
-    const flush = slotPlacementStyle({ origin: "right", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP, 0);
-    const inset = slotPlacementStyle({ origin: "right", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP, 5);
+    const flush = slotPlacementStyle({ origin: "right", align: "center", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP, 0);
+    const inset = slotPlacementStyle({ origin: "right", align: "center", offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP, 5);
     expect(parseFloat(String(flush.left)) - parseFloat(String(inset.left))).toBe(5);
   });
 
-  it("defaultLiftOffsetY puts the content's BOTTOM edge exactly gap above the wire, and is negative", () => {
-    const h = portLabelHeight(PORT_TEXT_SIZES.md);
-    const y = defaultLiftOffsetY(h, PORT_LABEL_GAP);
-    expect(y).toBeLessThan(0);
-    // centred content's bottom is at +h/2; after y it is at h/2 + y.
-    expect(h / 2 + y).toBe(-PORT_LABEL_GAP);
+  it("an aligned edge makes the lift STATIC — the same offset whatever the slot's size", () => {
+    // `end` puts the slot's bottom edge on the reference line; the offset
+    // beside it is a plain gap. Nothing here reads the content's height,
+    // which is the whole reason this replaced the derived version.
+    const small = slotPlacementStyle({ origin: "right", align: "end", offsetX: 0, offsetY: -PORT_LABEL_GAP }, dot, PORT_LABEL_GAP);
+    const huge = slotPlacementStyle({ origin: "right", align: "end", offsetX: 0, offsetY: -PORT_LABEL_GAP }, { w: 64, h: 64 }, PORT_LABEL_GAP);
+    expect(small.transform).toBe(`translate(0px, calc(-100% + ${-PORT_LABEL_GAP}px))`);
+    // Same transform for a dot four times the size — only the along-axis
+    // `left` changes, which is the dot's own span, not the slot's.
+    expect(huge.transform).toBe(small.transform);
   });
 
-  it("the lift GROWS with the text size — the exact reason it is resolved live and not frozen into a preset", () => {
-    const small = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.sm), PORT_LABEL_GAP);
-    const huge = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.xl), PORT_LABEL_GAP);
-    expect(huge).toBeLessThan(small);
-    // Freezing the `md` value and using it at `xl` would leave the bottom
-    // edge BELOW the wire — the failure this design exists to avoid.
-    const frozenAtMd = defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES.md), PORT_LABEL_GAP);
-    const bottomAtXlWithFrozen = portLabelHeight(PORT_TEXT_SIZES.xl) / 2 + frozenAtMd;
-    expect(bottomAtXlWithFrozen).toBeGreaterThan(0);
+  it("each align pins a different edge of the slot to the origin's line", () => {
+    const at = (align: (typeof SLOT_ALIGNS)[number]) =>
+      slotPlacementStyle({ origin: "right", align, offsetX: 0, offsetY: 0 }, dot, PORT_LABEL_GAP).transform;
+    expect(at("start")).toBe("translate(0px, calc(0% + 0px))");
+    expect(at("center")).toBe("translate(0px, calc(-50% + 0px))");
+    expect(at("end")).toBe("translate(0px, calc(-100% + 0px))");
   });
 
   /**
@@ -462,40 +465,19 @@ describe("unified slot placement — one origin type, free x/y", () => {
    */
   it("the CSS placement and the measured detach box agree on the lift, for every layout", () => {
     const fontPx = PORT_TEXT_SIZES.md;
-    const h = portLabelHeight(fontPx);
     for (const layout of PORT_TEXT_LAYOUTS) {
-      const css = slotPlacementStyle(
-        {
-          origin: TEXT_LAYOUT_AS_PLACEMENT[layout].origin,
-          offsetX: 0,
-          offsetY: TEXT_LAYOUT_AS_PLACEMENT[layout].liftedLabel
-            ? defaultLiftOffsetY(h, PORT_LABEL_GAP)
-            : 0,
-        },
-        dot,
-        PORT_LABEL_GAP,
-      );
-      const box = portLabelBox({
-        dotW: dot.w,
-        dotH: dot.h,
-        layout,
-        fontPx,
-        label: "x",
-        measure: () => 40,
-      });
-      // The box's own centre offset from the dot's centre, vs the y the
-      // CSS transform carries. Only the vertical pair differ in form, so
-      // compare the horizontal origins where both speak the same axis.
+      const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
       if (!isOffsetTextLayout(layout)) continue;
-      const boxCentreFromDotCentre = box.y + box.h / 2 - dot.h / 2;
-      const cssY = Number(/calc\(-50% \+ (-?[\d.]+)px\)/.exec(String(css.transform))![1]);
-      expect(boxCentreFromDotCentre, layout).toBeCloseTo(cssY, 6);
+      const box = portLabelBox({ dotW: dot.w, dotH: dot.h, layout, fontPx, label: "x", measure: () => 40 });
+      // `align: "end"` means the BOX's bottom edge sits at the dot's centre
+      // line plus the offset — the rectangle twin of `translate(…,-100%)`.
+      expect(box.y + box.h, layout).toBeCloseTo(dot.h / 2 + preset.offsetY, 6);
     }
   });
 
   it("every old PortTextLayout member maps to an origin, and only the two Offset ones are lifted", () => {
     expect(Object.keys(TEXT_LAYOUT_AS_PLACEMENT).sort()).toEqual([...PORT_TEXT_LAYOUTS].sort());
-    const lifted = PORT_TEXT_LAYOUTS.filter((l) => TEXT_LAYOUT_AS_PLACEMENT[l].liftedLabel);
+    const lifted = PORT_TEXT_LAYOUTS.filter((l) => TEXT_LAYOUT_AS_PLACEMENT[l].align === "end");
     expect(lifted).toEqual(["rightOffset", "leftOffset"]);
     expect(TEXT_LAYOUT_AS_PLACEMENT.bot.origin).toBe("bottom");
     expect(TEXT_LAYOUT_AS_PLACEMENT.rightOffset.origin).toBe("right");

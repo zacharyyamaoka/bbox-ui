@@ -33,6 +33,7 @@ import {
   PORT_TEXT_SIZES,
   SECONDARY_SLOT_LAYOUT_LABELS,
   SECONDARY_SLOT_LAYOUTS,
+  SLOT_ALIGNS,
   SLOT_ORIGINS,
   SLOT_ORIGIN_LABELS,
   type PortTextSize,
@@ -80,6 +81,13 @@ const REVEAL_OPTIONS: FieldOption[] = PORT_REVEALS.map((reveal) => ({
 const SLOT_ORIGIN_OPTIONS: FieldOption[] = SLOT_ORIGINS.map((origin) => ({
   value: origin,
   label: SLOT_ORIGIN_LABELS[origin],
+}));
+
+const SLOT_ALIGN_OPTIONS: FieldOption[] = SLOT_ALIGNS.map((align) => ({
+  value: align,
+  // Neutral spellings: the control cannot know which axis is free until a
+  // subject has an origin, and "Start/Middle/End" is true on both.
+  label: align === "center" ? "Middle" : align === "start" ? "Start" : "End",
 }));
 
 const SECONDARY_SLOT_LAYOUT_OPTIONS: FieldOption[] = SECONDARY_SLOT_LAYOUTS.map((layout) => ({
@@ -169,6 +177,21 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     defaultValue: "right",
     options: SLOT_ORIGIN_OPTIONS,
     hint: "Which side of the dot the label anchors to. Label Slot Location is the preset over this and the two offsets.",
+    tier: "expert",
+  },
+  {
+    id: "labelAlign",
+    label: "Label Align",
+    kind: "segments",
+    // WHICH EDGE of the slot is the reference point, on the axis the
+    // origin leaves free (Zach, 2026-09-15: "we need to be able to align
+    // to the slot left edge, middle or right edge"). `end` on a side
+    // origin is what makes "clear of the trace wire" a STATIC offset
+    // instead of one derived from the slot's own height — see SlotAlign's
+    // own WHY in port.layout.ts.
+    defaultValue: "center",
+    options: SLOT_ALIGN_OPTIONS,
+    hint: "Which part of the slot lands on the origin's line. On a Left/Right origin these read Top/Middle/Bottom; on Top/Bottom, Left/Middle/Right.",
     tier: "expert",
   },
   {
@@ -296,6 +319,21 @@ export const LABELED_PORT_FIELDS: FieldSpec[] = [
     defaultValue: "left",
     options: SLOT_ORIGIN_OPTIONS,
     hint: "Which side of the dot the secondary slot hugs. Secondary Slot is the preset over this and the two offsets.",
+    tier: "expert",
+  },
+  {
+    id: "secondaryAlign",
+    label: "Secondary Align",
+    kind: "segments",
+    // WHICH EDGE of the slot is the reference point, on the axis the
+    // origin leaves free (Zach, 2026-09-15: "we need to be able to align
+    // to the slot left edge, middle or right edge"). `end` on a side
+    // origin is what makes "clear of the trace wire" a STATIC offset
+    // instead of one derived from the slot's own height — see SlotAlign's
+    // own WHY in port.layout.ts.
+    defaultValue: "center",
+    options: SLOT_ALIGN_OPTIONS,
+    hint: "Which part of the slot lands on the origin's line. On a Left/Right origin these read Top/Middle/Bottom; on Top/Bottom, Left/Middle/Right.",
     tier: "expert",
   },
   {

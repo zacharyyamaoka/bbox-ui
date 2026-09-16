@@ -24,9 +24,7 @@ import {
   PORT_STATE_RING_PX,
   PORT_SURFACE_RING_PX,
   PORT_TEXT_SIZES,
-  defaultLiftOffsetY,
   defaultPortLabelLift,
-  portLabelHeight,
   slotPlacementStyle,
   SECONDARY_LAYOUT_AS_ORIGIN,
   TEXT_LAYOUT_AS_PLACEMENT,
@@ -45,6 +43,7 @@ import {
   type PortTextSize,
   type SecondarySlotLayout,
   type SlotOrigin,
+  type SlotAlign,
   type SlotPlacement,
 } from "./port.layout";
 
@@ -83,13 +82,31 @@ const TEXT_SIZE_FIELD = LABELED_PORT_FIELDS.find((f) => f.id === "textSize")!;
  * itself halfway through the origin list.
  */
 function flexOffsetTransform(placement: SlotPlacement): CSSProperties | undefined {
-  const { offsetX, offsetY } = placement;
-  if (offsetX === 0 && offsetY === 0) return undefined;
-  // Unmirrored, for the same reason `slotPlacementStyle` is: a transform
-  // is screen-space, so these signs mean the same thing on all four
-  // origins. `origin` is deliberately unused here — the flex row has
-  // already put the label on the right side via `flexDirection`.
-  return { transform: `translate(${offsetX}px, ${offsetY}px)` };
+  const { origin, align, offsetX, offsetY } = placement;
+  // The align shift is a DELTA FROM CENTRE here, where `slotPlacementStyle`
+  // states it absolutely.
+  //
+  // WHY they differ: the anchored path positions from an EDGE (`top: 50%`)
+  // and translates the whole way, so `end` is -100%. A flex row has
+  // already centred the label against the dot (`items-center`), so the
+  // same reference edge is half a step away: -50% puts the label's bottom
+  // on the dot's centre line, +50% its top. Stating the delta rather than
+  // reusing the absolute number is what makes both paths land the chosen
+  // edge in the SAME place — the alternative, re-centring the row, is the
+  // layout-resizing margin this deliberately replaced.
+  const alignShift = align === "center" ? 0 : align === "end" ? -50 : 50;
+  const crossIsVertical = origin === "left" || origin === "right";
+  if (offsetX === 0 && offsetY === 0 && alignShift === 0) return undefined;
+  // Unmirrored offsets, for the same reason `slotPlacementStyle`'s are: a
+  // transform is screen-space, so the signs mean one thing on all four
+  // origins.
+  // A zero shift emits plain px rather than `calc(0% + Npx)` — same
+  // result, but the style a reader sees matches what they asked for.
+  const along = (px: number) => `${px}px`;
+  const cross = (px: number) => (alignShift === 0 ? `${px}px` : `calc(${alignShift}% + ${px}px)`);
+  const x = crossIsVertical ? along(offsetX) : cross(offsetX);
+  const y = crossIsVertical ? cross(offsetY) : along(offsetY);
+  return { transform: `translate(${x}, ${y})` };
 }
 
 export function portResolutionSubject(props: Record<string, unknown>): Record<string, unknown> {
@@ -137,16 +154,15 @@ export function portResolutionSubject(props: Record<string, unknown>): Record<st
     // mechanism the secondary layout above already uses.
     labelOrigin: (props.labelOrigin as SlotOrigin | undefined) ?? TEXT_LAYOUT_AS_PLACEMENT[textLayout].origin,
     labelOffsetX: (props.labelOffsetX as number | undefined) ?? 0,
+    labelAlign: (props.labelAlign as SlotAlign | undefined) ?? TEXT_LAYOUT_AS_PLACEMENT[textLayout].align,
     labelOffsetY:
-      (props.labelOffsetY as number | undefined) ??
-      (TEXT_LAYOUT_AS_PLACEMENT[textLayout].liftedLabel
-        ? defaultLiftOffsetY(portLabelHeight(PORT_TEXT_SIZES[textSizeResolved]), PORT_LABEL_GAP)
-        : 0),
+      (props.labelOffsetY as number | undefined) ?? TEXT_LAYOUT_AS_PLACEMENT[textLayout].offsetY,
     secondaryOrigin:
       (props.secondaryOrigin as SlotOrigin | undefined) ??
       SECONDARY_LAYOUT_AS_ORIGIN[
         (props.secondarySlotLayout as SecondarySlotLayout | undefined) ?? defaultSecondarySlotLayout(textLayout)
       ],
+    secondaryAlign: (props.secondaryAlign as SlotAlign | undefined) ?? "center",
     secondaryOffsetX: (props.secondaryOffsetX as number | undefined) ?? 0,
     secondaryOffsetY: (props.secondaryOffsetY as number | undefined) ?? 0,
   };
@@ -733,11 +749,16 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
    * origin's own axis, `offsetY` is + DOWN, and both may be negative.
    */
   labelOrigin?: SlotOrigin;
+  /** Which part of the slot lands on the origin's line — the reference
+   *  edge. `end` on a side origin is what makes 'clear of the trace wire'
+   *  a static offset instead of one derived from the label's height. */
+  labelAlign?: SlotAlign;
   labelOffsetX?: number;
   labelOffsetY?: number;
   /** The secondary slot's placement — the SAME three controls over the
    *  SAME `SlotOrigin` type, with `secondarySlotLayout` as its preset. */
   secondaryOrigin?: SlotOrigin;
+  secondaryAlign?: SlotAlign;
   secondaryOffsetX?: number;
   secondaryOffsetY?: number;
   /**
@@ -830,9 +851,11 @@ export function LabeledPort({
   producers = 0,
   anchored = false,
   labelOrigin,
+  labelAlign,
   labelOffsetX,
   labelOffsetY,
   secondaryOrigin,
+  secondaryAlign,
   secondaryOffsetX,
   secondaryOffsetY,
   labelSlot,
@@ -884,16 +907,15 @@ export function LabeledPort({
   // The lifted default is computed from the LIVE text size, never frozen:
   // a lift correct at `md` puts an `xl` label's bottom edge back below the
   // centre line, with the wire cutting through it (`defaultLiftOffsetY`).
-  const labelHeightPx = portLabelHeight(PORT_TEXT_SIZES[textSizeResolved]);
   const labelPlacement: SlotPlacement = {
     origin: labelOrigin ?? textLayoutPreset.origin,
+    align: labelAlign ?? textLayoutPreset.align,
     offsetX: labelOffsetX ?? 0,
-    offsetY:
-      labelOffsetY ??
-      (textLayoutPreset.liftedLabel ? defaultLiftOffsetY(labelHeightPx, PORT_LABEL_GAP) : 0),
+    offsetY: labelOffsetY ?? textLayoutPreset.offsetY,
   };
   const secondaryPlacement: SlotPlacement = {
     origin: secondaryOrigin ?? SECONDARY_LAYOUT_AS_ORIGIN[resolvedSecondaryLayout],
+    align: secondaryAlign ?? "center",
     offsetX: secondaryOffsetX ?? 0,
     offsetY: secondaryOffsetY ?? 0,
   };

@@ -25,6 +25,7 @@ import {
   PORT_TEXT_SIZES,
   SECONDARY_SLOT_LAYOUTS,
   defaultSecondarySlotLayout,
+  TEXT_LAYOUT_AS_PLACEMENT,
   slotPlacementStyle,
   inwardTextLayout,
 } from "../src/port.layout";
@@ -82,6 +83,9 @@ describe("PORT_FIELDS", () => {
       // just presets!"), which are the Expert-tier truth. `labelOffsetY`
       // replaces the old positive-only `labelOffset`.
       "labelOrigin",
+      // WHICH EDGE of the slot is the reference point — what makes the
+      // lift static instead of derived from the slot's own height.
+      "labelAlign",
       "labelOffsetX",
       "labelOffsetY",
       "textSize",
@@ -102,6 +106,7 @@ describe("PORT_FIELDS", () => {
       // …and the secondary slot's matching trio, over the SAME SlotOrigin
       // type. One model for both slots is the point of the unification.
       "secondaryOrigin",
+      "secondaryAlign",
       "secondaryOffsetX",
       "secondaryOffsetY",
       "children",
@@ -412,8 +417,18 @@ describe("labelOffsetY is a real displacement, in both directions", () => {
     return label.props.style;
   };
 
-  it("offsetY 0 is flush — no style at all, whatever the preset says", () => {
-    expect(labelStyleOf({ textLayout: "rightOffset", labelOffsetY: 0 })).toBeUndefined();
+  it("offsetY 0 on a CENTRED align is flush — no style at all", () => {
+    expect(labelStyleOf({ textLayout: "right", labelOffsetY: 0 })).toBeUndefined();
+  });
+
+  /** A lifted preset is no longer "an offset" — it is a reference EDGE
+   *  (`align: "end"`) plus a static gap, so zeroing the offset still
+   *  leaves the chosen edge on the line. That is the whole point: the
+   *  placement stops depending on the slot's own height. */
+  it("a lifted preset keeps its reference edge even at offsetY 0", () => {
+    expect(labelStyleOf({ textLayout: "rightOffset", labelOffsetY: 0 })!.transform).toBe(
+      "translate(0px, calc(-50% + 0px))",
+    );
   });
 
   it("a NEGATIVE offsetY lifts", () => {
@@ -452,7 +467,7 @@ describe("labelOffsetY is a real displacement, in both directions", () => {
    * ride in a transform in both paths instead of a margin in one of them.
    */
   it("the flex row and the anchored path agree on the displacement", () => {
-    const placement = { origin: "right" as const, offsetX: 4, offsetY: -18 };
+    const placement = { origin: "right" as const, align: "center" as const, offsetX: 4, offsetY: -18 };
     const flex = labelStyleOf({ textLayout: "right", labelOffsetX: 4, labelOffsetY: -18 })!.transform;
     const anchored = slotPlacementStyle(placement, { w: PORT_DIAMETERS.md, h: PORT_DIAMETERS.md }, 8).transform;
     // The anchored one folds in the cross-axis centring; strip it and the
@@ -498,15 +513,22 @@ describe("portResolutionSubject", () => {
    * function exists to prevent, so it is pinned against the component's
    * own rendered output rather than against a retyped number.
    */
-  it("reports the offset the component ACTUALLY renders when `size` cascades the text size", () => {
-    for (const size of ["sm", "md", "lg", "xl"] as const) {
-      const reported = portResolutionSubject({ size, textLayout: "rightOffset" }).labelOffsetY as number;
-      const [, labelElement] = call(LabeledPort, { size, textLayout: "rightOffset", children: "x" }).props
-        .children as [unknown, { props: { style?: { transform?: string } } }];
-      // What Port really puts on the label, read back off the transform.
-      const rendered = Number(/translate\(0px, (-?[\d.]+)px\)/.exec(labelElement.props.style!.transform!)![1]);
-      expect(reported, `size:${size}`).toBe(rendered);
-    }
+  /**
+   * The lift no longer scales with the text size — it cannot, now that the
+   * reference edge does the work. This pins the stronger property that
+   * replaced it: the resolved offset is the SAME at every size, because it
+   * is a static gap rather than something derived from the label's height
+   * (Zach: "We defintily don't want to kinda be dynamically calculating
+   * the x/y offset if the slot length changes").
+   */
+  it("reports one static offset for a lifted layout, identical at every size rung", () => {
+    const reported = (["sm", "md", "lg", "xl"] as const).map(
+      (size) => portResolutionSubject({ size, textLayout: "rightOffset" }).labelOffsetY,
+    );
+    expect(new Set(reported).size, `got ${JSON.stringify(reported)}`).toBe(1);
+    expect(reported[0]).toBe(TEXT_LAYOUT_AS_PLACEMENT.rightOffset.offsetY);
+    // …and the align that makes it sufficient comes through too.
+    expect(portResolutionSubject({ textLayout: "rightOffset" }).labelAlign).toBe("end");
   });
 
 

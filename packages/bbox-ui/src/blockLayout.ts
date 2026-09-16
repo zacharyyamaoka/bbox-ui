@@ -39,9 +39,7 @@ import {
 // Offset member — same `out`, different `y` — see `portLabelLift`'s WHY.
 import {
   PORT_LABEL_GAP,
-  defaultLiftOffsetY,
-  isOffsetTextLayout,
-  portLabelHeight,
+  TEXT_LAYOUT_AS_PLACEMENT,
   portLabelOut,
   type PortTextLayout,
 } from "./port.layout";
@@ -547,33 +545,30 @@ export function portLabelBox(input: PortLabelBoxInput): LayoutBox {
   const { dotW, dotH, layout, fontPx } = input;
   const out = portLabelOut(layout, { w: dotW, h: dotH });
   const w = input.measure(input.label, fontPx, 400);
-  // `portLabelHeight`, not this module's own `LEADING_TIGHT`: both are
-  // 1.25 today, which is exactly how two constants for one fact stay
-  // undetected until one of them moves. The lift below is derived from
-  // this height, and the whole point of round 1 was that every path must
-  // compute it with the SAME function. `LEADING_TIGHT` stays for Block's
-  // own titles, which is a different fact that happens to share a ratio.
-  const h = portLabelHeight(fontPx);
-  // An "Offset" layout shares its plain counterpart's along-axis `out`
-  // and differs ONLY in the cross axis: it is DISPLACED upward.
+  const h = Math.round(fontPx * LEADING_TIGHT);
+  // An "Offset" layout shares its plain counterpart's along-axis `out` and
+  // differs ONLY in the cross axis. It reads its placement straight from
+  // `TEXT_LAYOUT_AS_PLACEMENT` — the SAME table the CSS path uses — so the
+  // measured rectangle and the painted box cannot drift, which they twice
+  // did while each computed its own lift.
   //
-  // WHY `defaultLiftOffsetY` and not `portLabelLift`: this is the
-  // measured-rectangle twin of what `LabeledPort` paints, and it used to
-  // compute its own DOT-based lift while the live component had moved to
-  // the text-based one — so a detached `rightOffset` port disagreed with
-  // the port it was detached FROM. Both now read the one function
-  // (adversarial judge, 2026-09-15). `offsetY` is signed and +down, so a
-  // lift is negative and `y` (a top edge, growing downward) adds it.
-  const offsetY = isOffsetTextLayout(layout) ? defaultLiftOffsetY(h, PORT_LABEL_GAP) : 0;
+  // `align: "end"` means the slot's BOTTOM edge sits on the reference
+  // line, so in rectangle terms the box's bottom is `dotH / 2 + offsetY`
+  // and its top is that minus `h`. No height-derived lift is involved any
+  // more: the height enters once, here, as the box's own size.
+  const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
+  const alignedTop =
+    preset.align === "end" ? dotH / 2 - h : preset.align === "start" ? dotH / 2 : dotH / 2 - h / 2;
+  const liftedY = alignedTop + preset.offsetY;
   switch (layout) {
     case "right":
       return { x: out, y: dotH / 2 - h / 2, w, h };
     case "rightOffset":
-      return { x: out, y: dotH / 2 - h / 2 + offsetY, w, h };
+      return { x: out, y: liftedY, w, h };
     case "left":
       return { x: dotW - out - w, y: dotH / 2 - h / 2, w, h };
     case "leftOffset":
-      return { x: dotW - out - w, y: dotH / 2 - h / 2 + offsetY, w, h };
+      return { x: dotW - out - w, y: liftedY, w, h };
     case "top":
       return { x: dotW / 2 - w / 2, y: dotH - out - h, w, h };
     case "bot":

@@ -512,15 +512,10 @@ export function portLabelPlacement(
   layout: PortTextLayout,
   dot: PortDotBox,
   boxInsetPx: number = 0,
-  textSizePx: number = PORT_TEXT_SIZES.sm,
 ): PortLabelPlacement {
   const preset = TEXT_LAYOUT_AS_PLACEMENT[layout];
   return slotPlacementStyle(
-    {
-      origin: preset.origin,
-      offsetX: 0,
-      offsetY: preset.liftedLabel ? defaultLiftOffsetY(portLabelHeight(textSizePx), PORT_LABEL_GAP) : 0,
-    },
+    { origin: preset.origin, align: preset.align, offsetX: 0, offsetY: preset.offsetY },
     dot,
     PORT_LABEL_GAP,
     boxInsetPx,
@@ -567,8 +562,64 @@ export const SLOT_ORIGIN_LABELS: Record<SlotOrigin, string> = {
 /** Where a slot sits: an origin on the dot, plus a free displacement.
  *  `offsetX` is +right, `offsetY` is +DOWN (screen convention), so a
  *  label lifted clear of a trace wire carries a NEGATIVE `offsetY`. */
+/**
+ * WHICH PART OF THE SLOT is the reference point — the slot's own anchor,
+ * on the axis the origin leaves free.
+ *
+ * Zach, 2026-09-15: "we need to be able to align to the slot left edge,
+ * middle or right edge. and then we position that… We defintily don't
+ * want to kinda be dynamically calculating the x/y offset if the slot
+ * length changes right. so its important we can basically use a different
+ * part of the slot as the reference edge."
+ *
+ * That is the fix for a real defect, not a convenience. With the anchor
+ * fixed at the CENTRE, "the label's bottom edge clears the trace wire"
+ * could only be expressed as an offset DERIVED from the content's own
+ * height — and the component cannot know that height: measured live, a
+ * label was 26.2px where the `textSize * 1.25` formula said 23, because
+ * the `CodeField` inside it adds line-height 1.4, 4px padding and 1px
+ * borders, and it changes again for any other slot content. Making the
+ * reference edge selectable turns that guarantee into pure CSS —
+ * `translate(…, -100%)` puts the bottom edge ON the line whatever the
+ * height is — so the offset beside it can be a static number that never
+ * needs recomputing when the slot grows.
+ *
+ * Named on the CROSS axis, since the origin already pins the other one: a
+ * `left`/`right` origin leaves the vertical free (start = top edge,
+ * end = bottom edge), a `top`/`bottom` origin the horizontal (start =
+ * left edge, end = right edge).
+ */
+export type SlotAlign = "start" | "center" | "end";
+
+export const SLOT_ALIGNS: SlotAlign[] = ["start", "center", "end"];
+
+/** Per-axis labels, because "Start" alone does not say which edge it is —
+ *  the control should read "Top" on a side origin and "Left" on a
+ *  top/bottom one. Keyed by whether the FREE axis is vertical. */
+export const SLOT_ALIGN_LABELS: Record<"vertical" | "horizontal", Record<SlotAlign, string>> = {
+  vertical: { start: "Top", center: "Middle", end: "Bottom" },
+  horizontal: { start: "Left", center: "Middle", end: "Right" },
+};
+
+/** True when the origin leaves the VERTICAL axis free to align on. */
+export function originFreeAxisIsVertical(origin: SlotOrigin): boolean {
+  return origin === "left" || origin === "right";
+}
+
+/** The CSS translate percentage that puts the chosen edge on the
+ *  reference line. Height/width independent by construction — that is the
+ *  entire point. */
+const ALIGN_SHIFT: Record<SlotAlign, string> = {
+  start: "0%",
+  center: "-50%",
+  end: "-100%",
+};
+
 export interface SlotPlacement {
   origin: SlotOrigin;
+  /** Which part of the slot lands on the origin's line. Defaults to
+   *  `center` everywhere it is omitted, which is the historic behaviour. */
+  align: SlotAlign;
   offsetX: number;
   offsetY: number;
 }
@@ -598,7 +649,10 @@ export function slotPlacementStyle(
   gapPx: number,
   boxInsetPx: number = 0,
 ): PortLabelPlacement {
-  const { origin, offsetX, offsetY } = placement;
+  const { origin, align, offsetX, offsetY } = placement;
+  // The chosen edge, as a percentage of the slot's OWN size — so it stays
+  // correct when the slot grows, with no recomputation anywhere.
+  const shift = ALIGN_SHIFT[align];
   const outX = `${dot.w + PORT_RING_OVERHANG_PX + gapPx - boxInsetPx}px`;
   const outY = `${dot.h + PORT_RING_OVERHANG_PX + gapPx - boxInsetPx}px`;
   // Both offsets ride in the TRANSFORM rather than the edge properties, so
@@ -617,39 +671,17 @@ export function slotPlacementStyle(
     // means by an x/y offset, and it is the one convention that does not
     // change meaning halfway down the origin list.
     case "right":
-      return { left: outX, top: "50%", transform: `translate(${offsetX}px, calc(-50% + ${offsetY}px))` };
+      return { left: outX, top: "50%", transform: `translate(${offsetX}px, calc(${shift} + ${offsetY}px))` };
     case "left":
-      return { right: outX, top: "50%", transform: `translate(${offsetX}px, calc(-50% + ${offsetY}px))` };
+      return { right: outX, top: "50%", transform: `translate(${offsetX}px, calc(${shift} + ${offsetY}px))` };
     case "top":
-      return { bottom: outY, left: "50%", transform: `translate(calc(-50% + ${offsetX}px), ${offsetY}px)` };
+      return { bottom: outY, left: "50%", transform: `translate(calc(${shift} + ${offsetX}px), ${offsetY}px)` };
     case "bottom":
-      return { top: outY, left: "50%", transform: `translate(calc(-50% + ${offsetX}px), ${offsetY}px)` };
+      return { top: outY, left: "50%", transform: `translate(calc(${shift} + ${offsetX}px), ${offsetY}px)` };
   }
 }
 
-/**
- * The `offsetY` that puts a lifted slot's BOTTOM edge exactly `gapPx`
- * above the dot's centre line — where a trace wire runs.
- *
- * Negative, because +Y is down. Depends on the content's own height,
- * which is why it is resolved live rather than baked into a preset: at
- * `xl` text a lift frozen at the `md` value leaves the label's bottom
- * BELOW the centre line and the wire cuts straight back through it —
- * measured, not assumed.
- *
- * Only meaningful for a left/right origin; a top/bottom origin is already
- * clear of the wire by construction.
- */
-export function defaultLiftOffsetY(contentHeightPx: number, gapPx: number): number {
-  return -(contentHeightPx / 2 + gapPx);
-}
 
-/** A single-line label's rendered height at a given font size — the same
- *  `leading-tight` ratio `blockLayout.ts` measures Block titles with. */
-export const PORT_LABEL_LEADING = 1.25;
-export function portLabelHeight(textSizePx: number): number {
-  return Math.round(textSizePx * PORT_LABEL_LEADING);
-}
 
 /**
  * The old six-member `PortTextLayout` as (origin, offsetY) — the
@@ -664,14 +696,21 @@ export function portLabelHeight(textSizePx: number): number {
  */
 export const TEXT_LAYOUT_AS_PLACEMENT: Record<
   PortTextLayout,
-  { origin: SlotOrigin; liftedLabel: boolean }
+  { origin: SlotOrigin; align: SlotAlign; offsetY: number }
 > = {
-  top: { origin: "top", liftedLabel: false },
-  bot: { origin: "bottom", liftedLabel: false },
-  right: { origin: "right", liftedLabel: false },
-  left: { origin: "left", liftedLabel: false },
-  rightOffset: { origin: "right", liftedLabel: true },
-  leftOffset: { origin: "left", liftedLabel: true },
+  top: { origin: "top", align: "center", offsetY: 0 },
+  bot: { origin: "bottom", align: "center", offsetY: 0 },
+  right: { origin: "right", align: "center", offsetY: 0 },
+  left: { origin: "left", align: "center", offsetY: 0 },
+  // The two lifted members are now a STATIC placement: anchor the slot's
+  // BOTTOM edge (`align: "end"`) on the dot's centre line, then push it up
+  // by one gap. Height-independent by construction, where the previous
+  // form had to derive the lift from the label's own height — a number the
+  // component cannot actually know (Zach, 2026-09-15: "We defintily don't
+  // want to kinda be dynamically calculating the x/y offset if the slot
+  // length changes right").
+  rightOffset: { origin: "right", align: "end", offsetY: -PORT_LABEL_GAP },
+  leftOffset: { origin: "left", align: "end", offsetY: -PORT_LABEL_GAP },
 };
 
 /** The same compatibility read for the secondary slot's own four-member
