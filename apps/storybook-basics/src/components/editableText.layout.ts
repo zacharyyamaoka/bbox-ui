@@ -6,6 +6,21 @@
  * see docs/T1-SPEC.md §0 on why three components each get their own 18px
  * "small" rung rather than one shared file. React-free, engine-free, same
  * discipline as `layout.ts`.
+ *
+ * PROVENANCE: OURS, AD HOC. NO PRIOR ART IS CLAIMED, and this file has no
+ * donor — stated explicitly rather than left as an absence, because an
+ * uncited file is ambiguous between "written here" and "nobody wrote down
+ * where this came from", and only one of those is true.
+ *
+ * There is also no algorithm here to have prior art FOR. Every export is a
+ * lookup table or a total `Record` over a string union: the size ladder, the
+ * three font stacks, and the two align→flex maps. The one function with a
+ * rule in it, `editableTextFontPx`, is a single ternary. The CSS values on
+ * the right-hand side of those Records (`flex-start`/`center`/`flex-end`)
+ * are of course the CSS Flexbox spec's, but this file does not implement
+ * them — it names them and hands them to the browser, which is not a
+ * citation-bearing act. The reason the tables are TOTAL Records rather than
+ * ternaries is a real decision and it is documented at each seam below.
  */
 
 /** EditableText's own ladder. Values match the board's own Text Size row. */

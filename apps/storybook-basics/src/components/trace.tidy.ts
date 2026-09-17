@@ -30,6 +30,57 @@
 // the host's.
 //
 // WHAT IS LEFT is genuinely pure: same inputs, same routes, no clock, no DOM.
+//
+// ---------------------------------------------------------------------------
+// WHERE THE CHANNEL-ASSIGNMENT MATH COMES FROM
+//
+// Step 5 below (`nudgeRoutesWithoutObstacleCollisions`) is the only step that
+// reasons about several cables AT ONCE, so it is the one with a real algorithms
+// literature behind it — and reading this file you cannot see that, because the
+// algorithm lives one import away. Stated here so you do not have to go looking.
+//
+// WHAT IT DOES. After steps 1-4 every cable has been routed in ignorance of
+// every other cable, so parallel cables between the same two Blocks land on the
+// SAME midline and draw as one visible line. Step 5 finds interior segments
+// that are collinear and overlapping, groups them into a "bundle" (one shared
+// channel), orders the bundle, and spreads its members at `spacing` px apart —
+// rejecting any shift that pushes a cable back into a keep-out rect. The
+// ordering is a constraint problem, not a sort: pairwise "A must sit left of B"
+// constraints are collected from the geometry and resolved by Kahn's algorithm,
+// and a CYCLE in those constraints is the honest answer "no assignment can
+// remove this crossing" — which is exactly what `outcome.forcedCrossings`
+// reports up to the caller.
+//
+// ITS PROVENANCE IS DOCUMENTED AT ITS OWN SEAM, not restated here: see
+// `./elbow/nudge.ts:60-110`, a ~50-line PROVENANCE section naming the lineage
+// (the vertical-constraint graph of VLSI channel routing — Hashimoto & Stevens'
+// left-edge algorithm, 1971) and comparing the implementation against ELK,
+// MSAGL-js and Mermaid. That file is a BYTE-FOR-BYTE port, so those are the
+// donor's comparisons, carried intact rather than re-derived; they have not
+// been independently re-verified from the upstream sources by this file's
+// author. `elbow/provenance.test.ts` is what keeps the attribution from being
+// deleted by a tidy-up.
+//
+// ABOUT libavoid, THE OBVIOUS COMPARATOR. libavoid (Adaptagrams; the router
+// draw.io uses) is the reference implementation anyone would reach for here,
+// and it does have a directly corresponding stage. Its documentation, read
+// 2026-09-17 at https://www.adaptagrams.org/documentation/namespaceAvoid.html,
+// defines `idealNudgingDistance` as "the spacing distance that will be used for
+// nudging apart overlapping corners and line segments of connectors. By
+// default, this distance is set to a value of 4" — the same role `spacing`
+// (default 14) plays here. Its algorithms are published in M. Wybrow, K.
+// Marriott and P.J. Stuckey, "Orthogonal connector routing", GD '09, LNCS 5849,
+// pages 219-231 (citation read the same day at
+// https://www.adaptagrams.org/documentation/libavoid.html).
+//
+// The papers are fair game. THE SOURCE DELIBERATELY WAS NOT READ, and that is a
+// decision rather than an omission: libavoid and its TypeScript port
+// `obstacle-router` are LGPL, which is not an attribution licence — a credit in
+// a comment would not discharge it — so the donor derived the ordering rule
+// from the geometry and checked it against MIT/Apache-2.0/EPL-2.0 implementations
+// instead. The argument is stated in full at `./elbow/nudge.ts:63-68`. So there
+// is no libavoid code in this pipeline and no libavoid line number to cite; the
+// resemblance is convergence on the same well-known problem, not lineage.
 
 import {
   DEFAULT_ELBOW_SOFT_CLEARANCE_OPTIONS,

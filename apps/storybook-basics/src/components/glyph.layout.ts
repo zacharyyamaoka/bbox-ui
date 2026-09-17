@@ -5,6 +5,18 @@
  * `layout.ts`/`TEXT_SIZES` of its own to stay independent of, but the
  * ladder is kept in its own file anyway so `glyph.tsx` matches its source
  * shape 1:1 for anyone diffing the two later.
+ *
+ * DONOR LINES (read 2026-09-17; the donor is 53 lines and lives in this
+ * same repo, so this is a `diff` away, not an archaeology dig):
+ *   • `glyph.layout.ts:11`    `GLYPH_SIZES` — same four rungs, same values.
+ *   • `glyph.layout.ts:20-43` the two interfaces.
+ *   • `glyph.layout.ts:45-52` `glyphFootprint`, including the `!== undefined`
+ *     rule restated below. Arithmetic unchanged.
+ *
+ * NO PRIOR ART IS CLAIMED, and none applies: the "ladder plus override"
+ * rule and the square `size + 2*padding` footprint are this repo's own
+ * product decisions, not an algorithm. There is nothing here to cite but
+ * the donor.
  */
 export const GLYPH_SIZES = { sm: 18, md: 24, lg: 36, xl: 44 } as const;
 export type GlyphSize = keyof typeof GLYPH_SIZES;
