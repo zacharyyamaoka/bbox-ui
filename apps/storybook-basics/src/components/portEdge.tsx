@@ -63,7 +63,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { CodeEditor } from "./codeEditor";
 import { LabeledPort } from "./labeledPort";
 import type { PortState } from "./port";
-import { PORT_DIAMETERS, PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, inwardTextLayout, type BlockSide, type PortTextLayout } from "./port.layout";
+import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, inwardTextLayout, type BlockSide, type PortTextLayout } from "./port.layout";
 import { formatPortLane, reconcilePortLane } from "./portLane";
 import {
   CONTAINER_BORDER,
@@ -133,17 +133,21 @@ export interface PortEdgeProps {
    * The focus toggle: off = the entire LabeledPort — dot, label, secondary
    * slot, everything port-associated — is hidden, not just dimmed (B3).
    * Independent of `showCard`: this toggle alone decides whether a port
-   * renders at all; `showCard` decides whether whatever DOES render sits
-   * inside a bordered kanban-style card or bare on the rail.
+   * renders at all; `showCard` decides whether a translucent inspector-style
+   * outline is drawn OVER whatever does render.
    */
   showPorts?: boolean;
   /**
-   * B3's second toggle: wraps each slot's content in a real card — a
-   * bordered, rounded, padded surface (this app's own `Block` idiom, not a
-   * new visual language) — rather than the bare labeled port sitting
-   * directly on the rail. Independent of `showPorts`: with both off, the
-   * slot renders nothing but still occupies its layout position (a fixed
-   * minimum footprint, `EMPTY_SLOT_MIN_PX`), so distribution/pitch stay
+   * WHY overlay, not container (2026-09-17,
+   * docs/FEEDBACK-2026-09-17b-PLAN.md, Lane B — "this should apply to both
+   * the block and also the port edges"): the card is a VIEW of a port that
+   * is always there — Zach's own framing — so it must never resize the slot
+   * it describes. On = a translucent red, Chrome-inspector-style outline
+   * paints OVER the slot at its EXISTING fixed footprint (`EMPTY_SLOT_MIN_PX`,
+   * unconditional now — see that constant), rather than the old "bordered,
+   * rounded, padded surface" that grew the slot to make room for itself.
+   * Independent of `showPorts`: with both off, the slot renders nothing but
+   * still occupies its layout position, so distribution/pitch stay
    * inspectable even when nothing is visible.
    */
   showCard?: boolean;
@@ -294,13 +298,20 @@ interface PortEdgeSlotBoxProps {
 // B3: a slot must occupy its rail position even when nothing renders inside
 // it (`showPorts` and `showCard` both off) — a distribution scheme spaces
 // BOXES, and a zero-size box breaks the pitch it's supposed to hold.
+//
+// WHY unconditional now (2026-09-17, docs/FEEDBACK-2026-09-17b-PLAN.md, Lane
+// B): this used to be `showCard ? cardMainPx() : EMPTY_SLOT_MIN_PX` — the
+// slot literally grew to make room for the card's own border+padding the
+// instant `showCard` flipped on, which is the precise mechanism behind "the
+// members seem to shrink a bit to fit inside the card" (the port itself
+// didn't shrink; the box it shares with every other slot on the edge did,
+// dragging the whole edge's pitch with it). The overlay below draws INSIDE
+// this same fixed footprint instead of requiring a bigger one.
 const EMPTY_SLOT_MIN_PX = 24;
-const CARD_PADDING_PX = 8;
-const CARD_BORDER_PX = 1; // Tailwind's default `border` width (block.tsx's own card idiom).
-
-function cardMainPx(): number {
-  return PORT_DIAMETERS.md + 2 * CARD_PADDING_PX + 2 * CARD_BORDER_PX;
-}
+// Chrome DevTools' own element-highlight recipe: translucent fill + a solid
+// edge, red because that's what Zach asked for.
+const CARD_OVERLAY_FILL = "rgb(239 68 68 / 0.18)";
+const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
 
 function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel }: PortEdgeSlotBoxProps) {
   const textLayout = textLayoutOverride ?? inwardTextLayout(edge);
@@ -317,6 +328,7 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
     ) : null;
 
   const boxStyle: CSSProperties = {
+    position: "relative",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -328,16 +340,21 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
 
   return (
     <span data-slot="port-edge-member" style={boxStyle}>
-      {showCard ? (
-        // B3: "actually show a card, like a kanban card" — this app's own
-        // Block idiom (block.tsx: rounded-lg border bg-card shadow-sm), not
-        // a new visual language. Renders even with `port` null, so
-        // `showCard` alone still reads as a real (if empty) card.
-        <div data-slot="port-edge-card-surface" className="rounded-lg border border-border bg-card shadow-sm" style={{ ...boxStyle, padding: CARD_PADDING_PX }}>
-          {port}
-        </div>
-      ) : (
-        port
+      {port}
+      {showCard && (
+        // B3: "actually show a card, like a kanban card" — now an overlay,
+        // not a wrapper (see EMPTY_SLOT_MIN_PX's own comment): painted OVER
+        // the same box `port` already occupies, `absolute inset-0` so it
+        // contributes nothing to the box's size, `pointer-events: none` so
+        // it can't steal the drag that reorders slots. Renders even with
+        // `port` null, so `showCard` alone still reads as a real (if empty)
+        // card.
+        <div
+          aria-hidden
+          data-slot="port-edge-card-surface"
+          className="pointer-events-none absolute inset-0 rounded-lg border"
+          style={{ backgroundColor: CARD_OVERLAY_FILL, borderColor: CARD_OVERLAY_BORDER }}
+        />
       )}
     </span>
   );
@@ -833,7 +850,9 @@ function PortEdgeBody({
   // confirms this is the fixed point: using the PORT count here makes the
   // internal group gap and the real inter-box gap land on the exact same
   // number, by construction, not by coincidence.
-  const slotMainPx = showCard ? cardMainPx() : EMPTY_SLOT_MIN_PX;
+  // Fixed regardless of `showCard` — see EMPTY_SLOT_MIN_PX's own comment;
+  // the card overlay draws inside this footprint, it never grows it.
+  const slotMainPx = EMPTY_SLOT_MIN_PX;
   const contentMainPx = (axis === "row" ? resolvedSize.width : resolvedSize.height) - 2 * CONTAINER_BORDER - 2 * CONTAINER_PADDING;
   const gapPx = mode === "auto" ? interSlotGapPx(distribution, contentMainPx, items.length, slotMainPx) : DEFAULT_ALIGN_GAP;
 

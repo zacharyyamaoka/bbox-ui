@@ -101,7 +101,17 @@ export interface BlockMembersProps {
   insetBackground: BlockInsetBackground;
   /** Off = member content leaves the DOM entirely (not opacity 0). */
   showMembers: boolean;
-  /** On = each member sits inside a kanban-style card surface (Block's own idiom). */
+  /**
+   * WHY overlay, not container (2026-09-17,
+   * docs/FEEDBACK-2026-09-17b-PLAN.md, Lane B — "I don't like how when you
+   * show the cards it kinda changes the shape of how the members look"):
+   * the card is a VIEW of membership that's always true — those cards are
+   * always "there" in spirit — so drawing it must never move the thing it
+   * describes. On = a translucent red, Chrome-inspector-style outline is
+   * painted OVER each member's existing box; it never wraps, pads or
+   * insets the content, which is exactly what the old "sits inside a
+   * kanban-style card surface" wrapper did wrong.
+   */
   showCards: boolean;
 }
 
@@ -112,29 +122,15 @@ export interface BlockMembersProps {
 // A card whose member content is hidden still reads as a card — same as
 // portEdge.tsx's empty-card behaviour ("showCard alone still reads as a
 // real (if empty) card"), so "hide the members and just focus on the card
-// interactions" has cards left to interact with.
-const EMPTY_CARD_MIN_PX = 24;
-const CARD_PADDING_PX = 8;
-
-function slotStyle(member: BlockMember, layout: BlockMembersLayout, gutter: number): CSSProperties {
-  if (layout === "free") {
-    // The frame inside: authored position, own size — like the canvas outside.
-    return { position: "absolute", left: member.x ?? 0, top: member.y ?? 0, width: "max-content" };
-  }
-  const inset = (member.inset ?? "inset") === "inset";
-  const own = (member.width ?? "fill") === "own";
-  return {
-    // WHY block layout, not flex: a block-level child (a Block, a
-    // CodeEditor, a plain div) then fills the slot's width naturally,
-    // which is what `fill` means; a flex slot would shrink children to
-    // max-content and quietly break it.
-    marginLeft: inset ? gutter : 0,
-    marginRight: inset ? gutter : 0,
-    // Own: the slot hugs its content and left-aligns where the donor
-    // placed it (x = gutter for inset, 0 for edge-to-edge).
-    ...(own ? { alignSelf: "flex-start", width: "max-content" } : null),
-  };
-}
+// interactions" has cards left to interact with. This is the ONE place the
+// overlay is still allowed to affect geometry: with no content there is no
+// content box left to preserve, so the SLOT reserves the footprint instead
+// (the overlay itself never sizes anything — see `memberSlotChildren`).
+export const EMPTY_CARD_MIN_PX = 24;
+// Chrome DevTools' own element-highlight recipe: translucent fill + a solid
+// edge, red because that's what Zach asked for.
+const CARD_OVERLAY_FILL = "rgb(239 68 68 / 0.18)";
+const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
 
 interface MemberSlotProps {
   member: BlockMember;
@@ -144,17 +140,66 @@ interface MemberSlotProps {
   showCards: boolean;
 }
 
-function memberSlotBody({ member, showMembers, showCards }: MemberSlotProps): ReactNode {
-  const content = showMembers ? member.content : null;
-  if (!showCards) return content;
+function resolveMemberContent({ member, showMembers }: MemberSlotProps): ReactNode {
+  return showMembers ? member.content : null;
+}
+
+function slotStyle(props: MemberSlotProps): CSSProperties {
+  const { member, layout, gutter, showCards } = props;
+  // The one geometry-affecting case: no content box exists to keep
+  // identical, so the slot (not the overlay) reserves the footprint.
+  const reserveEmptyFootprint = showCards && resolveMemberContent(props) == null;
+  if (layout === "free") {
+    // The frame inside: authored position, own size — like the canvas
+    // outside. `position: absolute` already establishes the containing
+    // block the overlay positions against, same as `relative` would.
+    return {
+      position: "absolute",
+      left: member.x ?? 0,
+      top: member.y ?? 0,
+      width: "max-content",
+      ...(reserveEmptyFootprint ? { minHeight: EMPTY_CARD_MIN_PX } : null),
+    };
+  }
+  const inset = (member.inset ?? "inset") === "inset";
+  const own = (member.width ?? "fill") === "own";
+  return {
+    // `position: relative` so the overlay (`absolute inset-0`, added in
+    // `memberSlotChildren`) positions against the slot itself.
+    position: "relative",
+    // WHY block layout, not flex: a block-level child (a Block, a
+    // CodeEditor, a plain div) then fills the slot's width naturally,
+    // which is what `fill` means; a flex slot would shrink children to
+    // max-content and quietly break it.
+    marginLeft: inset ? gutter : 0,
+    marginRight: inset ? gutter : 0,
+    // Own: the slot hugs its content and left-aligns where the donor
+    // placed it (x = gutter for inset, 0 for edge-to-edge).
+    ...(own ? { alignSelf: "flex-start", width: "max-content" } : null),
+    ...(reserveEmptyFootprint ? { minHeight: EMPTY_CARD_MIN_PX } : null),
+  };
+}
+
+/**
+ * Content plus, when `showCards`, a sibling overlay — NEVER a wrapper.
+ * `position: absolute inset-0` makes the overlay contribute nothing to the
+ * slot's own size, and `pointer-events: none` keeps it out of the way of
+ * drag/reorder (B3) — an overlay the pointer could hit would steal the
+ * gesture that reorders members.
+ */
+function memberSlotChildren(props: MemberSlotProps): ReactNode {
+  const content = resolveMemberContent(props);
+  if (!props.showCards) return content;
   return (
-    <div
-      data-slot="block-member-card"
-      className="rounded-lg border border-border bg-card shadow-sm"
-      style={{ padding: CARD_PADDING_PX, ...(content == null ? { minHeight: EMPTY_CARD_MIN_PX } : null) }}
-    >
+    <>
       {content}
-    </div>
+      <div
+        aria-hidden
+        data-slot="block-member-card"
+        className="pointer-events-none absolute inset-0 rounded-lg border"
+        style={{ backgroundColor: CARD_OVERLAY_FILL, borderColor: CARD_OVERLAY_BORDER }}
+      />
+    </>
   );
 }
 
@@ -193,9 +238,9 @@ function StaticMemberSlot(props: MemberSlotProps) {
     <div
       {...memberSlotData(props.member)}
       className={slotClassName(props.member, props.layout)}
-      style={slotStyle(props.member, props.layout, props.gutter)}
+      style={slotStyle(props)}
     >
-      {memberSlotBody(props)}
+      {memberSlotChildren(props)}
     </div>
   );
 }
@@ -215,7 +260,7 @@ function neutralizeScale(transform: Parameters<typeof CSS.Transform.toString>[0]
 function SortableMemberSlot(props: MemberSlotProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.member.id });
   const style: CSSProperties = {
-    ...slotStyle(props.member, props.layout, props.gutter),
+    ...slotStyle(props),
     transform: CSS.Transform.toString(neutralizeScale(transform)),
     transition,
     opacity: isDragging ? 0.35 : 1,
@@ -232,7 +277,7 @@ function SortableMemberSlot(props: MemberSlotProps) {
       {...attributes}
       {...listeners}
     >
-      {memberSlotBody(props)}
+      {memberSlotChildren(props)}
     </div>
   );
 }

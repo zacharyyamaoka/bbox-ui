@@ -843,13 +843,17 @@ export const PortsAndCards: Story = {
       await expect(track.querySelectorAll('[data-slot="port-label"]')).toHaveLength(4);
     }
 
-    // A3: showCard=true -> a real card element, non-zero border + radius.
+    // A3/B3: showCard=true -> a real card element, non-zero border + radius,
+    // and an OVERLAY — absolutely positioned (contributes nothing to the
+    // slot's own size) and inert to the pointer (can't steal a card drag).
     for (const track of [cardOnly, both]) {
       const card = track.querySelector('[data-slot="port-edge-card-surface"]');
       if (!(card instanceof HTMLElement)) throw new Error("expected a card surface");
       const style = getComputedStyle(card);
       await expect(parseFloat(style.borderTopWidth)).toBeGreaterThan(0);
       await expect(parseFloat(style.borderTopLeftRadius)).toBeGreaterThan(0);
+      await expect(style.position).toBe("absolute");
+      await expect(style.pointerEvents).toBe("none");
     }
     for (const track of [bothOff, portsOnly]) {
       await expect(track.querySelectorAll('[data-slot="port-edge-card-surface"]')).toHaveLength(0);
@@ -869,6 +873,82 @@ export const PortsAndCards: Story = {
     const deltas = centers.slice(1).map((c, i) => c - centers[i]);
     const maxDelta = Math.max(...deltas) - Math.min(...deltas);
     await expect(maxDelta).toBeLessThan(1);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* CardOverlayPreservesGeometry — B2 (docs/FEEDBACK-2026-09-17b-PLAN.md, */
+/* Lane B): toggling `showCard` must never move or resize a port's own   */
+/* content — the overlay draws OVER it, not around it. `slotMainPx` used */
+/* to grow from EMPTY_SLOT_MIN_PX to cardMainPx() the instant a card      */
+/* turned on; this story measures that it no longer does.                */
+/* ------------------------------------------------------------------ */
+
+const OVERLAY_GEOMETRY_ITEMS: PortEdgeItem[] = [
+  { id: "g1", label: "args", state: "empty" },
+  { id: "g2", label: "kwargs", state: "wired" },
+  { id: "g3", label: "out", state: "received" },
+];
+
+function CardOverlayGeometryDemo() {
+  const [items, setItems] = useState<PortEdgeItem[]>(OVERLAY_GEOMETRY_ITEMS);
+  const [showCard, setShowCard] = useState(false);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }} data-testid="overlay-geometry">
+      <Checkbox label="Show cards" checked={showCard} onChange={setShowCard} />
+      <PortEdge edge="left" items={items} onItemsChange={setItems} showCard={showCard} size={{ width: 160, height: 260 }} />
+    </div>
+  );
+}
+
+export const CardOverlayPreservesGeometry: Story = {
+  render: () => <CardOverlayGeometryDemo />,
+  play: async ({ canvasElement }) => {
+    const root = canvasElement.querySelector('[data-testid="overlay-geometry"]');
+    if (!(root instanceof HTMLElement)) throw new Error("expected the overlay-geometry root");
+    const checkbox = root.querySelector('input[type="checkbox"]');
+    if (!(checkbox instanceof HTMLElement)) throw new Error("expected the show-cards checkbox");
+
+    // B2: every port's own content box (the LabeledPort's `data-slot="port"`
+    // root — the card overlay's own sibling, never its parent), before
+    // turning cards on vs after, must be IDENTICAL — width/height/x/y,
+    // tolerance 0. DOM presence proves nothing here; only the numbers do.
+    const memberContentRects = () =>
+      Array.from(root.querySelectorAll('[data-slot="port-edge-member"]')).map((slot) => {
+        const content = Array.from(slot.children).find((child) => child.getAttribute("data-slot") !== "port-edge-card-surface");
+        if (!content) throw new Error("expected port content");
+        return content.getBoundingClientRect();
+      });
+    const before = memberContentRects();
+    await expect(before).toHaveLength(3);
+
+    await userEvent.click(checkbox);
+    await waitFor(() => {
+      expect(root.querySelectorAll('[data-slot="port-edge-card-surface"]')).toHaveLength(3);
+    });
+    const after = memberContentRects();
+    before.forEach((b, i) => {
+      const a = after[i];
+      expect(a.width).toBe(b.width);
+      expect(a.height).toBe(b.height);
+      expect(a.x).toBe(b.x);
+      expect(a.y).toBe(b.y);
+    });
+
+    // Toggling back off removes the overlay again — content untouched
+    // throughout, matching Block's ShowCardsAndMembers story (B1's sibling).
+    await userEvent.click(checkbox);
+    await waitFor(() => {
+      expect(root.querySelectorAll('[data-slot="port-edge-card-surface"]')).toHaveLength(0);
+    });
+    const restored = memberContentRects();
+    before.forEach((b, i) => {
+      const r = restored[i];
+      expect(r.width).toBe(b.width);
+      expect(r.height).toBe(b.height);
+      expect(r.x).toBe(b.x);
+      expect(r.y).toBe(b.y);
+    });
   },
 };
 
