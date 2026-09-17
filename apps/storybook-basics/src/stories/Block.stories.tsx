@@ -6,7 +6,7 @@ import { EllipsisVertical } from "lucide-react";
 import { Badge } from "../components/badge";
 import { Bar } from "../components/bar";
 import { Block } from "../components/block";
-import type { BlockMember, BlockMembersLayout } from "../components/blockMembers";
+import { EMPTY_CARD_MIN_PX, type BlockMember, type BlockMembersLayout } from "../components/blockMembers";
 import { Button } from "../components/button";
 import { CodeEditor } from "../components/codeEditor";
 import { Text } from "../components/text";
@@ -659,7 +659,9 @@ export const MemberOptions: Story = {
 /* ------------------------------------------------------------------ */
 /* ShowCardsAndMembers — PortEdge's two-toggle idiom on members: show    */
 /* members gates the CONTENT (out of the DOM, not opacity 0), show cards */
-/* gates the kanban card surface each member sits in.                    */
+/* gates a translucent red overlay drawn OVER each member — never a      */
+/* wrapper, so showing it can't reflow the member it describes           */
+/* (docs/FEEDBACK-2026-09-17b-PLAN.md, Lane B).                          */
 /* ------------------------------------------------------------------ */
 
 function visibilityMembers(): BlockMember[] {
@@ -692,8 +694,8 @@ function ShowCardsAndMembersDemo() {
       </div>
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }} data-testid="combos">
         <MembersVisibilityPanel showMembers={true} showCards={false} caption="members on, cards off — bare members (default)" />
-        <MembersVisibilityPanel showMembers={true} showCards={true} caption="members on, cards on — each member in a kanban card" />
-        <MembersVisibilityPanel showMembers={false} showCards={true} caption="members off, cards on — empty cards, card interactions stay" />
+        <MembersVisibilityPanel showMembers={true} showCards={true} caption="members on, cards on — a red overlay traces each member, unchanged underneath" />
+        <MembersVisibilityPanel showMembers={false} showCards={true} caption="members off, cards on — overlay still draws on the reserved footprint" />
         <MembersVisibilityPanel showMembers={false} showCards={false} caption="members off, cards off — nothing member-related renders" />
       </div>
     </div>
@@ -728,10 +730,47 @@ export const ShowCardsAndMembers: Story = {
       expect(within(interactive).getByText("member a")).toBeInTheDocument();
     });
 
-    // Cards: on, each member gets a card surface.
+    // B1 — Zach's complaint, measured (docs/FEEDBACK-2026-09-17b-PLAN.md,
+    // Lane B: "the members seem to shrink a bit to fit inside the card").
+    // Every member's own content box, before turning cards on vs after,
+    // must be IDENTICAL — width/height/x/y, tolerance 0. DOM presence
+    // proves nothing here; only the numbers do.
+    const memberContentRects = () =>
+      Array.from(interactive.querySelectorAll('[data-slot="block-member"]')).map((slot) => {
+        const content = Array.from(slot.children).find((child) => child.getAttribute("data-slot") !== "block-member-card");
+        if (!content) throw new Error("expected a member content element");
+        return content.getBoundingClientRect();
+      });
+    const beforeCards = memberContentRects();
+    await expect(beforeCards).toHaveLength(2);
+
+    // Cards: on, each member gets an overlay.
     await userEvent.click(canvas.getByLabelText("Show cards"));
     await waitFor(() => {
       expect(interactive.querySelectorAll('[data-slot="block-member-card"]')).toHaveLength(2);
+    });
+    const afterCards = memberContentRects();
+    beforeCards.forEach((before, i) => {
+      const after = afterCards[i];
+      expect(after.width).toBe(before.width);
+      expect(after.height).toBe(before.height);
+      expect(after.x).toBe(before.x);
+      expect(after.y).toBe(before.y);
+    });
+
+    // B3: the overlay is absolutely positioned (contributes nothing to the
+    // slot's size) and inert to the pointer (can't steal a member drag).
+    const overlays = Array.from(interactive.querySelectorAll('[data-slot="block-member-card"]'));
+    for (const overlay of overlays) {
+      const style = getComputedStyle(overlay);
+      await expect(style.position).toBe("absolute");
+      await expect(style.pointerEvents).toBe("none");
+    }
+
+    // ...and absent again once the toggle goes back off (B3's other half).
+    await userEvent.click(canvas.getByLabelText("Show cards"));
+    await waitFor(() => {
+      expect(interactive.querySelectorAll('[data-slot="block-member-card"]')).toHaveLength(0);
     });
 
     // Static combos: members off + cards on = empty cards (no content);
@@ -743,6 +782,15 @@ export const ShowCardsAndMembers: Story = {
     await expect(within(panels[2]).queryByText("member a")).toBeNull();
     await expect(panels[3].querySelectorAll('[data-slot="block-member"]')).toHaveLength(0);
     await expect(panels[3].querySelector('[data-slot="block"]')).not.toBeNull();
+
+    // B4: members off + cards on still reserves the empty-card footprint —
+    // the one place the overlay is allowed to affect geometry, since there
+    // is no content box left to preserve.
+    const emptySlots = Array.from(panels[2].querySelectorAll('[data-slot="block-member"]')) as HTMLElement[];
+    await expect(emptySlots.length).toBeGreaterThan(0);
+    for (const slot of emptySlots) {
+      await expect(slot.getBoundingClientRect().height).toBeGreaterThanOrEqual(EMPTY_CARD_MIN_PX);
+    }
   },
 };
 
