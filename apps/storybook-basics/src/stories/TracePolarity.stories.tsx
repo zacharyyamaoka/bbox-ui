@@ -1290,14 +1290,32 @@ export const RoutingKinds: Story = {
       ).toBe(item.request.routing);
     }
 
-    /* ---- A bent straight IS the curve, measured on the two `d`s ------ */
-    // The donor's `straight` with a dragged control point calls the same
-    // `bentCurvedPath` as `curved` does. Two functions nobody has to keep
-    // identical by hand, proved rather than captioned.
-    await expect(pathOf("straight-bent").getAttribute("d")).toBe(
+    /* ---- A bent straight is NOT the curve, measured on the two `d`s --- */
+    // This assertion used to claim the opposite, and was right about the
+    // DONOR: SystemSketch's `straight` with a dragged control point calls
+    // the same `bentCurvedPath` as `curved`, so the two `d`s came out
+    // byte-identical. Zach looked at that on screen and overruled it
+    // (2026-09-17, docs/TRACE-CONTROL-POINTS-PLAN.md) — a straight trace
+    // with a control point is a POLYLINE. So the two now differ, and the
+    // difference is the feature.
+    //
+    // WHY this is asserted in two files rather than deduped: this is the
+    // SECOND copy of the claim (the first is TraceRouting.stories.tsx's
+    // `RoutingKinds`), and both exist because a silent re-convergence — a
+    // future re-sync restoring the donor's shared `bentCurvedPath` call —
+    // is exactly the regression that would be invisible in a screenshot.
+    await expect(pathOf("straight-bent").getAttribute("d")).not.toBe(
       pathOf("curved-bent").getAttribute("d"),
     );
-    // ...and an UNBENT straight is not a curve, so the check above is not free.
+    // The straight one is a polyline: only move-to and line-to commands.
+    // Asserted positively, because "differs from the curve" alone would
+    // also pass for a straight that had become some THIRD kind of curve.
+    await expect(pathOf("straight-bent").getAttribute("d")).toMatch(/^M[\d\s.,-]+(L[\d\s.,-]+)+$/);
+    // ...and the curved one still bends into a quadratic, so the check
+    // above is measuring the straight branch and not a dead `curve` prop.
+    await expect(pathOf("curved-bent").getAttribute("d")).toContain("Q");
+    // An UNBENT straight is not a curve either — the control that keeps
+    // all of the above from passing on a degenerate pair of empty strings.
     await expect(pathOf("straight").getAttribute("d")).not.toBe(
       pathOf("curved").getAttribute("d"),
     );
