@@ -339,7 +339,7 @@ function distinctPathsByDir(
 /* ------------------------------------------------------------------ */
 
 const meta: Meta = {
-  title: "Basics/Trace Routing",
+  title: "Trace/Routing",
   parameters: { layout: "fullscreen" },
 };
 

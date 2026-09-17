@@ -6,7 +6,7 @@ import { LabeledPort } from "../components/labeledPort";
 import { PORT_RING_OVERHANG_PX, PORT_LABEL_GAP, type BlockSide } from "../components/port.layout";
 
 const meta = {
-  title: "Basics/LabeledPort",
+  title: "Ports/LabeledPort",
   component: LabeledPort,
   args: { children: "value", state: "empty", edge: "left" },
 } satisfies Meta<typeof LabeledPort>;

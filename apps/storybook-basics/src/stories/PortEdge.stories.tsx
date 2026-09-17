@@ -163,7 +163,7 @@ const INITIAL_ITEMS: PortEdgeItem[] = [
 ];
 
 const meta = {
-  title: "Basics/PortEdge",
+  title: "Ports/PortEdge",
   component: PortEdge,
   // Every story below supplies its own `render` with story-local state (the
   // controlled contract needs a real host) — these args are never actually

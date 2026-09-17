@@ -393,7 +393,7 @@ function Gallery({ cards }: { cards: TidyCard[] }) {
 }
 
 const meta = {
-  title: "Basics/Trace/Tidy",
+  title: "Trace/Tidy",
   component: TraceBody,
   parameters: { layout: "fullscreen" },
   args: { id: "tidy", path: "" },

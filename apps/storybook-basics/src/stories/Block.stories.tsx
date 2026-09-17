@@ -25,7 +25,7 @@ import { EditableText } from "../components/editableText";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/tooltip";
 
 const meta = {
-  title: "Basics/Block",
+  title: "Blocks/Block",
   component: Block,
   args: {
     header: "Header",

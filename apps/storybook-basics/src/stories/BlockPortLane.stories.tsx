@@ -603,7 +603,7 @@ function Stage({ children, label }: { children: ReactNode; label?: string }) {
 }
 
 const meta = {
-  title: "Basics/BlockPortLane",
+  title: "Blocks/BlockPort/Lane",
   component: BlockPort,
   // Never read — every story supplies its own `render`, because the bench
   // owns the lane's open/closed state and the edges are controlled.
