@@ -1111,7 +1111,16 @@ const WRAP_CASES: WrapCase[] = [
   {
     key: "straight-bent",
     title: "straight + control point",
-    caption: "becomes THE curve — same bentCurvedPath call",
+    // Was "becomes THE curve — same bentCurvedPath call" (the donor
+    // behaviour). Inverted 2026-09-17 per
+    // docs/TRACE-CONTROL-POINTS-PLAN.md: a straight trace with a control
+    // point draws a polyline through it now, never a quadratic. See the
+    // module-level WHY comment on `RoutingKinds`'s play function below —
+    // its own `pathOf("straight-bent") === pathOf("curved-bent")` assertion
+    // still encodes the OLD behaviour and was left untouched (not
+    // pre-authorized to change); it is expected to fail until Zach decides
+    // whether to invert it too.
+    caption: "a polyline through the waypoint, not a curve",
     request: { from: WRAP_FROM, to: WRAP_TO, routing: "straight", curve: BEND },
   },
   {

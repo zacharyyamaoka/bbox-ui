@@ -536,7 +536,7 @@ export const ControlPoints: Story = {
       </div>
 
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-        <RowLabel title="straight" note="bending it is the same curve" />
+        <RowLabel title="straight" note="bending it draws a polyline, not a curve" />
         <Row
           specs={[
             {
@@ -551,7 +551,7 @@ export const ControlPoints: Story = {
               routing: "straight",
               options: { curve: { dx: 0, dy: -56 } },
               label: "straight · dy −56",
-              caption: "becomes a quadratic",
+              caption: "still a polyline — through the legacy waypoint",
               showWaypoint: true,
             },
             {
@@ -559,7 +559,7 @@ export const ControlPoints: Story = {
               routing: "curved",
               options: { curve: { dx: 0, dy: -56 } },
               label: "curved · dy −56",
-              caption: "identical d — same bentCurvedPath",
+              caption: "a quadratic — deliberately different d now",
               showWaypoint: true,
             },
           ]}
@@ -567,10 +567,11 @@ export const ControlPoints: Story = {
       </div>
 
       <Note>
-        The last two cells are the same path. A dragged control point routes both{" "}
-        <code>straight</code> and <code>curved</code> through one{" "}
-        <code>bentCurvedPath</code> (connectionRouting.ts:212-214), so bending a straight line
-        does not make a second kind of curve — it makes the curve.
+        The last two cells are no longer the same path. The donor's <code>straight</code> with a
+        dragged control point calls the SAME <code>bentCurvedPath</code> as <code>curved</code>{" "}
+        (connectionRouting.ts:212-214) — Zach overruled that (2026-09-17,
+        docs/TRACE-CONTROL-POINTS-PLAN.md): a straight trace with a control point is a polyline,
+        not a quadratic. <code>curved</code> still bends into the same cubic it always did.
       </Note>
     </div>
   ),
@@ -644,25 +645,41 @@ export const ControlPoints: Story = {
       }
     }
 
-    /* --- straight-with-bend IS curved-with-bend ----------------------- */
+    /* --- straight-with-bend is NOT curved-with-bend, any more ---------- */
+    // Inverted 2026-09-17 (docs/TRACE-CONTROL-POINTS-PLAN.md, "the one
+    // pre-authorized test edit"): this used to assert the donor behaviour
+    // Zach overruled — a bent straight calling the SAME `bentCurvedPath` as
+    // curved. It now asserts the opposite, on purpose: the two `d`s DIFFER,
+    // the straight one carries no `Q`, and its `points` is non-null (a real
+    // polyline, not "not computed yet").
     const bend: TraceCurve = { dx: 0, dy: -56 };
-    await expect(routeTrace("straight", A, B, { curve: bend }).path).toBe(
+    await expect(routeTrace("straight", A, B, { curve: bend }).path).not.toBe(
       routeTrace("curved", A, B, { curve: bend }).path,
     );
     const straightBent = lineOf(canvasElement, "straight-bent");
     const curvedBent = lineOf(canvasElement, "curved-bent");
-    await expect(straightBent.getAttribute("d")).toBe(curvedBent.getAttribute("d"));
-    // Rendered, not just authored: 128 samples of each agree.
+    await expect(straightBent.getAttribute("d")).not.toBe(curvedBent.getAttribute("d"));
+    await expect(straightBent.getAttribute("d")).not.toContain("Q");
+    // Rendered, not just authored: 128 samples of each genuinely disagree —
+    // not merely a different string spelling the same curve.
     const left = samplePath(straightBent, 128);
     const right = samplePath(curvedBent, 128);
+    let anyFar = false;
     for (let i = 0; i < left.length; i += 1) {
-      await expect(distance(left[i], right[i])).toBeLessThan(0.01);
+      if (distance(left[i], right[i]) > 1) anyFar = true;
     }
+    await expect(anyFar).toBe(true);
     // And the bend is a real change from the pure line it started as.
     const pureLine = lineOf(canvasElement, "straight-none");
     await expect(straightBent.getAttribute("d")).not.toBe(pureLine.getAttribute("d"));
     await expect(routeTrace("straight", A, B).points).toHaveLength(2);
-    await expect(routeTrace("straight", A, B, { curve: bend }).points).toBeNull();
+    // A1/D2 point 5: non-null, always — a bent straight genuinely has
+    // vertices now, which is the strict gain over the old "null means a
+    // curve" answer.
+    const bentRoute = routeTrace("straight", A, B, { curve: bend });
+    await expect(bentRoute.points).not.toBeNull();
+    await expect(bentRoute.points).toHaveLength(3);
+    await expect(/[QCSTA]/.test(bentRoute.path)).toBe(false);
   },
 };
 

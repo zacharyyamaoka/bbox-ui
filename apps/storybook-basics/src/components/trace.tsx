@@ -51,6 +51,7 @@ import {
   TRACE_DIRS,
   asyncDashOffsetForLength,
   clampLabelPosition,
+  pointAtFraction,
   polylineLength,
   safeElementId,
   splitDashArrays,
@@ -62,6 +63,7 @@ import {
   type TraceVariant,
 } from "./trace.layout";
 import { routeTrace, type DirectRouting, type TraceCurve } from "./trace.routing";
+import type { TraceBend } from "./trace.bends";
 import {
   elbowPath,
   routeElbow,
@@ -381,6 +383,10 @@ export interface TraceRouteRequest {
   curve?: TraceCurve | null;
   /** `slanted`: where along the departure axis the bend sits, 0..1. */
   slantT?: number | null;
+  /** `straight` only: N intermediate control points, chord-relative
+   * (docs/TRACE-CONTROL-POINTS-PLAN.md D1/D2). Ignored by every other
+   * routing — see `trace.routing.ts`'s `TraceRouteOptions.bends`. */
+  bends?: readonly TraceBend[] | null;
   /** `elbow`: persisted bends. */
   pins?: readonly ElbowPin[];
   /** `elbow`: keep-outs. A story fixture IS this list. */
@@ -511,7 +517,13 @@ export function traceGeometryBetween(
       // The middle of the polyline: for an elbow the "centre control point"
       // is a PIN, not an offset, so the honest waypoint is just the route's
       // own midpoint rather than a number a pin could be read back out of.
-      waypoint: pointAtPolylineFraction(points, 0.5),
+      // Shared with `straight`'s own polyline midpoint (D2 of
+      // docs/TRACE-CONTROL-POINTS-PLAN.md) via `trace.layout.ts`'s
+      // `pointAtFraction` — this file used to carry a second, near-identical
+      // restatement of that same arc-length walk (`pointAtPolylineFraction`
+      // below), which is exactly the kind of drift the plan calls out: "do
+      // not invent a second rule." One function now serves both branches.
+      waypoint: pointAtFraction(points, 0.5),
       start,
       end,
     };
@@ -520,6 +532,7 @@ export function traceGeometryBetween(
   const route = routeTrace(request.routing as DirectRouting, start, end, {
     curve: request.curve ?? null,
     slantT: request.slantT ?? null,
+    bends: request.bends ?? null,
   });
   return {
     routing: route.routing,
@@ -531,28 +544,6 @@ export function traceGeometryBetween(
     start,
     end,
   };
-}
-
-/** Local restatement of `trace.layout`'s `pointAtFraction` for the elbow
- * branch above — imported rather than re-derived would be better, and it is:
- * this is a thin alias kept so the elbow branch reads in one line. */
-function pointAtPolylineFraction(points: readonly Point[], t: number): Point {
-  const total = polylineLength(points);
-  if (points.length === 0) return { x: 0, y: 0 };
-  if (total === 0) return { x: points[0].x, y: points[0].y };
-  let target = total * Math.min(1, Math.max(0, t));
-  for (let i = 1; i < points.length; i += 1) {
-    const a = points[i - 1];
-    const b = points[i];
-    const seg = Math.hypot(b.x - a.x, b.y - a.y);
-    if (target <= seg) {
-      const u = seg === 0 ? 0 : target / seg;
-      return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
-    }
-    target -= seg;
-  }
-  const last = points[points.length - 1];
-  return { x: last.x, y: last.y };
 }
 
 /**
@@ -658,6 +649,7 @@ export function Trace({
   gap,
   curve,
   slantT,
+  bends,
   pins,
   obstacles,
   fromBox,
@@ -703,6 +695,7 @@ export function Trace({
       gap,
       curve,
       slantT,
+      bends,
       pins,
       obstacles,
       fromBox,
@@ -729,7 +722,7 @@ export function Trace({
       to.x, to.y, to.dir,
       routing, gap,
       curve?.dx, curve?.dy, slantT,
-      pins, obstacles, fromBox, toBox, elbowOptions,
+      bends, pins, obstacles, fromBox, toBox, elbowOptions,
     ],
   );
 
