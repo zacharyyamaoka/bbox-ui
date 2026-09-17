@@ -6,7 +6,7 @@
   "description": "Reset lane: component-based design from the simplest primitives up, one Storybook story at a time. No dependency on packages/bbox-ui — components here are deliberately unstyled and start from zero.",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "storybook": "storybook dev -p 5421 --ci",
+    "storybook": "storybook dev -p ${STORYBOOK_PORT:-5421} --ci",
     "build-storybook": "storybook build -o storybook-static",
     "test-stories": "vitest --project=storybook run"
   },

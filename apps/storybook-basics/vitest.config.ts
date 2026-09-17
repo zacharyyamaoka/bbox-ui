@@ -6,6 +6,20 @@ import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// WHY the port is read from the environment instead of being written here:
+// an agent working in its own isolated git worktree must test ITS OWN code.
+// With a hardcoded `http://localhost:5421` the plugin probes that URL, finds
+// the human reviewer's long-running dev server answering, and happily runs
+// the whole suite against a DIFFERENT worktree's source — reporting green for
+// code it never loaded. That is a silent false pass, the same failure class
+// as the `reportedException` probe described below, so it gets the same
+// treatment: make the shared default explicit and overridable.
+//   main worktree  → nothing set, reuses the reviewer's server on 5421
+//   isolated lane  → STORYBOOK_PORT=54xx, probes its own port, finds nothing,
+//                    spawns its own Storybook via `storybookScript`
+const STORYBOOK_PORT = process.env.STORYBOOK_PORT ?? "5421";
+const STORYBOOK_URL = process.env.STORYBOOK_URL ?? `http://localhost:${STORYBOOK_PORT}`;
+
 /**
  * WHY this exists: `storyRenders[].reportedException` (read directly off
  * the Storybook preview's in-page render object) is NOT a real property —
@@ -25,13 +39,13 @@ export default defineConfig({
         plugins: [
           storybookTest({
             configDir: path.join(dirname, ".storybook"),
-            // WHY a fixed URL, not just storybookScript: a dev server is
-            // already running on 5421 (see .storybook/main.ts's `-p 5421`)
-            // and must stay up for the human reviewer. The plugin probes
-            // this URL first and only falls back to spawning
-            // storybookScript if nothing answers — so reruns reuse the
-            // live server instead of racing a second instance for the port.
-            storybookUrl: "http://localhost:5421",
+            // WHY a URL at all, not just storybookScript: the plugin probes
+            // this URL first and only falls back to spawning storybookScript
+            // if nothing answers — so a rerun in the main worktree reuses the
+            // reviewer's live server instead of racing it for the port. The
+            // value is env-derived (see above) so an isolated lane points at
+            // its own port and therefore spawns, and tests, its own source.
+            storybookUrl: STORYBOOK_URL,
             storybookScript: "pnpm storybook -- --ci",
           }),
         ],

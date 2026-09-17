@@ -82,6 +82,48 @@ Two stories silently failed for hours behind that check (2026-09-17). In
 story as a real Vitest/Playwright test via `@storybook/addon-vitest`, with a
 real process exit code. See `apps/storybook-basics/vitest.config.ts`.
 
+## Isolated agent lanes — the two lines every one of them needs
+
+Zach reviews a long-running Storybook on **:5421**. A work-in-progress edit
+made directly in his worktree breaks the thing he is watching, so
+implementation agents get `isolation: "worktree"` and merge back when done.
+
+**`.claude/settings.json` must carry `{"worktree": {"baseRef": "head"}}`.**
+Without it worktrees branch from `origin/main` and an isolated agent asked to
+extend `apps/storybook-basics` finds no such directory — measured 2026-09-17,
+the reflog reading literally `branch: Created from origin/main` on a worktree
+cut 30 minutes *after* the lane commit it ignored. With it, re-measured on the
+same day: `branch: Created from 16b1243…`, the lane tip, `apps/` containing
+`storybook-basics`, 27 components present. The Agent tool has no base-ref
+parameter; this setting is the only control.
+
+Note the lane branch itself is not checked out — the worktree gets an
+auto-named branch pointing at the same commit. That is fine for working and
+merging back; it just means `git rev-parse --abbrev-ref HEAD` will not say
+the lane's name.
+
+**`pnpm install` is still required.** A fresh isolated worktree has **zero**
+`node_modules` at any level — the setting carries source, not dependencies.
+That install is the real per-lane cost; disk is nearly free because pnpm
+hardlinks into a shared store.
+
+```bash
+pnpm install --filter <target-package>...
+```
+
+**Verification does not need a server.** `pnpm test-stories` compiles the
+lane's own source through Vitest's Vite pipeline; it does not fetch stories
+from `storybookUrl` (the plugin's own default is `:6006`, which never runs
+here, and the suite passes with nothing bound to the configured port). So a
+lane's tests test the lane's code, and :5421 is never consulted. For a
+*visual* check a lane may start its own Storybook — set `STORYBOOK_PORT` to a
+free port so it cannot collide with Zach's.
+
+**Merging back** is the dispatcher's job, from the lane worktree, after the
+lane's tests pass: `git merge <agent-branch>`. Vite HMR then shows Zach
+finished work, and only finished work. Landing on `main` remains a separate
+decision that is his, not the dispatcher's.
+
 ## The website — apps/docs
 
 `apps/docs` is bbox-ui.com. Fumadocs + Next, statically exported, deployed to a
