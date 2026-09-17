@@ -1,23 +1,18 @@
 /**
- * src/components/blockPortEdges.layout.test.ts — the view→placement table
+ * src/components/blockPort.layout.test.ts — the view→placement table
  * of docs/BLOCK-PORT-EDGES-PLAN.md §3, asserted as pure math.
  *
- * DORMANT ON PURPOSE. `vitest.config.ts` currently declares exactly one
- * project — `storybook`, whose `include` is the stories glob — and that file
- * is owned by the sibling trace lane (TRACE-PLAN P3 adds the node `unit`
- * project; "no two lanes edit this file"). So `pnpm test-stories` neither
- * runs nor collects this file today. It is written now because the math it
- * pins is written now, and it costs one line of config to arm later:
- *
- *     pnpm vitest run --project=unit          # once that project exists
- *
- * It is NOT this lane's proof in the meantime. Every claim below is also
- * measured in a real browser by `src/stories/BlockPorts.stories.tsx`, which
- * does run — a dormant test standing in for a live one would be exactly the
- * false-green this repo has already paid for once.
- *
- * `tsc -p tsconfig.json` DOES compile this file, so it cannot rot silently
- * against the module's own types.
+ * NO LONGER DORMANT. Written while `vitest.config.ts` declared only the
+ * `storybook` project (TRACE-PLAN P3's `unit` node project hadn't landed
+ * yet), so this file used to sit uncollected by anything but `tsc`. The
+ * trace lane's merge added that `unit` project (its `include` globs every
+ * `.test.ts` file under `src/`) and this file matches it by extension —
+ * `pnpm exec vitest --project=unit run` now runs it for real, alongside
+ * `elbow`'s. `pnpm test-stories`
+ * deliberately still runs ONLY the `storybook` project (its own module doc
+ * says why), so every claim here is ALSO measured in a real browser by
+ * `src/stories/BlockPort.stories.tsx`, which is what proves this lane's own
+ * work rather than this file alone.
  */
 import { describe, expect, it } from "vitest";
 
@@ -29,6 +24,7 @@ import {
   RAIL_GAP_PX,
   RAIL_MAIN_INSET_PX,
   alignedFirstCentrePx,
+  functionPortCenterPx,
   offsetEdgePaddingPx,
   railAxisFor,
   railBoxFor,
@@ -36,7 +32,7 @@ import {
   railPlanFor,
   type BlockBands,
   type RailPlanInput,
-} from "./blockPortEdges.layout";
+} from "./blockPort.layout";
 import { CONTAINER_BORDER, CONTAINER_PADDING, offsetPaddingFor } from "./portEdge.layout";
 
 const INPUT_IDS = ["pose", "gain", "reset"];
@@ -55,7 +51,7 @@ function planInput(overrides: Partial<RailPlanInput> = {}): RailPlanInput {
 }
 
 /** A 220×240 Block with a 37px header and a 37px footer, at the wrapper's
- *  origin — the same shape `BlockPorts.stories.tsx` renders. */
+ *  origin — the same shape `BlockPort.stories.tsx` renders. */
 const BANDS: BlockBands = {
   blockLeft: 0,
   blockTop: 0,
@@ -63,6 +59,7 @@ const BANDS: BlockBands = {
   blockHeight: 240,
   bodyTop: 38,
   bodyBottom: 202,
+  headerTop: 0,
 };
 
 describe("constants", () => {
@@ -211,5 +208,28 @@ describe("railBoxFor", () => {
     const squashed: BlockBands = { ...BANDS, blockHeight: 20, bodyTop: 10, bodyBottom: 10 };
     const plan = railPlanFor(planInput({ view: "simple", collapsePorts: false }));
     expect(railBoxFor("left", plan, squashed).height).toBeGreaterThanOrEqual(2 * RAIL_MAIN_INSET_PX);
+  });
+});
+
+describe("functionPortCenterPx", () => {
+  it("sits on the block's left border line, centred in the header band", () => {
+    const center = functionPortCenterPx(BANDS)!;
+    expect(center.x).toBe(BANDS.blockLeft);
+    expect(center.y).toBe((BANDS.headerTop! + BANDS.bodyTop) / 2);
+    // Sanity: for this fixture's 0..38 header, that's 19 — the header's
+    // own midline, not the block's or the body's.
+    expect(center.y).toBe(19);
+  });
+
+  it("moves with the block, not just the header height", () => {
+    const shifted: BlockBands = { ...BANDS, blockLeft: 40, blockTop: 12, headerTop: 12, bodyTop: 50 };
+    const center = functionPortCenterPx(shifted)!;
+    expect(center.x).toBe(40);
+    expect(center.y).toBe(31);
+  });
+
+  it("is null when the Block renders no header", () => {
+    const { headerTop: _headerTop, ...noHeader } = BANDS;
+    expect(functionPortCenterPx(noHeader)).toBeNull();
   });
 });

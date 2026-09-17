@@ -4,7 +4,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
 import { Block } from "../components/block";
-import { PortedBlock, RAIL_SLOT_MAIN_PX, railDotCentres, railPitches } from "../components/blockPortEdges";
+import { BlockPort, RAIL_SLOT_MAIN_PX, railDotCentres, railPitches } from "../components/blockPort";
 import {
   BLOCK_PORT_LAYOUT_LABELS,
   BLOCK_PORT_LAYOUTS,
@@ -15,12 +15,12 @@ import {
   railPitchPx,
   type BlockPortLayout,
   type BlockView,
-} from "../components/blockPortEdges.layout";
+} from "../components/blockPort.layout";
 import { PORT_DIAMETERS, type BlockSide } from "../components/port.layout";
 import type { PortEdgeItem } from "../components/portEdge";
 
 /**
- * Basics/BlockPorts — phase A1 of docs/BLOCK-PORT-EDGES-PLAN.md: a `Block`
+ * Basics/BlockPort — phase A1 of docs/BLOCK-PORT-EDGES-PLAN.md: a `Block`
  * wearing real `PortEdge` rails, in each of the donor's four view rules.
  *
  * Every claim below is MEASURED off `getBoundingClientRect`, never inferred
@@ -45,14 +45,14 @@ function required<T extends Element>(root: ParentNode, selector: string, what: s
 }
 
 function wrapperOf(canvasElement: HTMLElement, index = 0): HTMLElement {
-  const all = canvasElement.querySelectorAll<HTMLElement>('[data-slot="ported-block"]');
+  const all = canvasElement.querySelectorAll<HTMLElement>('[data-slot="block-port"]');
   const found = all[index];
-  if (!found) throw new Error(`expected a PortedBlock at index ${index}; found ${all.length}`);
+  if (!found) throw new Error(`expected a BlockPort at index ${index}; found ${all.length}`);
   return found;
 }
 
 function railOf(wrapper: HTMLElement, edge: BlockSide): HTMLElement {
-  return required<HTMLElement>(wrapper, `:scope > [data-slot="ported-block-rail"][data-edge="${edge}"]`, `a ${edge} rail`);
+  return required<HTMLElement>(wrapper, `:scope > [data-slot="block-port-rail"][data-edge="${edge}"]`, `a ${edge} rail`);
 }
 
 /** The Block's own regions, in viewport px — the same band the wrapper
@@ -106,7 +106,7 @@ function expectRailPaintsAboveBlock(centre: { x: number; y: number }, inward: { 
   const y = Math.round(centre.y + inward.dy);
   const hit = document.elementFromPoint(x, y);
   if (!hit) throw new Error(`${what} — nothing painted at (${x}, ${y}); the specimen is off-screen, so stacking cannot be read`);
-  if (!hit.closest('[data-slot="ported-block-rail"]')) {
+  if (!hit.closest('[data-slot="block-port-rail"]')) {
     const slot = hit.getAttribute("data-slot") ?? hit.tagName.toLowerCase();
     const where = hit.closest('[data-slot="block"]') ? "inside the Block" : "outside both";
     throw new Error(`${what} — the topmost element at (${x}, ${y}) is \`${slot}\`, ${where}; the rail must paint above the Block`);
@@ -196,12 +196,12 @@ function Segmented<T extends string>({ options, value, onChange, slot }: { optio
 }
 
 const meta = {
-  title: "Basics/BlockPorts",
-  component: PortedBlock,
+  title: "Basics/BlockPort",
+  component: BlockPort,
   // Never read — every story supplies its own `render` with story-local
-  // state, because `PortedBlock`'s edges are controlled.
+  // state, because `BlockPort`'s edges are controlled.
   args: { view: "port" as BlockView, edges: {}, children: null },
-} satisfies Meta<typeof PortedBlock>;
+} satisfies Meta<typeof BlockPort>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -216,7 +216,7 @@ function ClassicDagDemo({ portLayout = "inline" as BlockPortLayout, height = 240
   const [outputs, setOutputs] = useState(OUTPUTS);
   return (
     <Stage label={`port view · ${BLOCK_PORT_LAYOUT_LABELS[portLayout]}`}>
-      <PortedBlock
+      <BlockPort
         id="planner"
         view="port"
         portLayout={portLayout}
@@ -226,7 +226,7 @@ function ClassicDagDemo({ portLayout = "inline" as BlockPortLayout, height = 240
         }}
       >
         <BandedFace height={height} />
-      </PortedBlock>
+      </BlockPort>
     </Stage>
   );
 }
@@ -246,7 +246,7 @@ export const ClassicDag: Story = {
 
     // Pins `PORT_EDGE_SLOT_MIN_PX` against the real slot box PortEdge draws,
     // so the constant this app re-declares cannot drift from the one
-    // portEdge.tsx keeps private (see blockPortEdges.layout.ts's own WHY).
+    // portEdge.tsx keeps private (see blockPort.layout.ts's own WHY).
     const slotBox = required<HTMLElement>(left, '[data-slot="port-edge-member"]', "a slot box on the left rail").getBoundingClientRect();
     expectWithin(slotBox.height, RAIL_SLOT_MAIN_PX, 0.5, "rail slot box main size vs PORT_EDGE_SLOT_MIN_PX");
 
@@ -328,9 +328,9 @@ const SIMPLE_OUTPUTS: PortEdgeItem[] = [{ id: "cmd", label: "cmd", state: "empty
 function SimpleViewDemo() {
   return (
     <Stage label="simple view · every wall collapses to one dot">
-      <PortedBlock id="planner" view="simple" edges={{ left: { items: INPUTS }, right: { items: SIMPLE_OUTPUTS } }}>
+      <BlockPort id="planner" view="simple" edges={{ left: { items: INPUTS }, right: { items: SIMPLE_OUTPUTS } }}>
         <SimpleFace />
-      </PortedBlock>
+      </BlockPort>
     </Stage>
   );
 }
@@ -379,13 +379,13 @@ function ExpandedViewDemo() {
   const [outputs, setOutputs] = useState(OUTPUTS);
   return (
     <Stage label="expanded view · evenly spread across the body band">
-      <PortedBlock
+      <BlockPort
         id="planner"
         view="expanded"
         edges={{ left: { items: inputs, onItemsChange: setInputs }, right: { items: outputs, onItemsChange: setOutputs } }}
       >
         <BandedFace height={280} />
-      </PortedBlock>
+      </BlockPort>
     </Stage>
   );
 }
@@ -456,9 +456,9 @@ function ViewMatrixDemo() {
         {MATRIX.map((cell) => (
           <div key={cell.label} data-slot="block-ports-matrix-cell" data-cell={cell.label} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ fontSize: 11, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--muted-foreground)" }}>{cell.label}</div>
-            <PortedBlock id={cell.label} view={cell.view} portLayout={cell.portLayout} edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}>
+            <BlockPort id={cell.label} view={cell.view} portLayout={cell.portLayout} edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}>
               {cell.view === "simple" ? <SimpleFace width={180} height={300} /> : <BandedFace width={200} height={300} />}
-            </PortedBlock>
+            </BlockPort>
           </div>
         ))}
       </div>
@@ -477,9 +477,9 @@ function ViewMatrixDemo() {
           </span>
         </div>
         <div style={{ paddingTop: 24 }}>
-          <PortedBlock id="live" view={view} portLayout={portLayout} edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}>
+          <BlockPort id="live" view={view} portLayout={portLayout} edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}>
             {view === "simple" ? <SimpleFace width={180} height={300} /> : <BandedFace width={200} height={300} />}
-          </PortedBlock>
+          </BlockPort>
         </div>
       </div>
     </div>
@@ -589,7 +589,7 @@ const FOUR_EDGES: BlockSide[] = ["top", "right", "bottom", "left"];
 function FourEdgesDemo() {
   return (
     <Stage label="four walls at once · simple face, ports spread (collapsePorts=false)">
-      <PortedBlock
+      <BlockPort
         id="hub"
         view="simple"
         collapsePorts={false}
@@ -616,7 +616,7 @@ function FourEdgesDemo() {
         }}
       >
         <HubFace />
-      </PortedBlock>
+      </BlockPort>
     </Stage>
   );
 }
@@ -626,7 +626,7 @@ export const FourEdges: Story = {
   play: async ({ canvasElement }) => {
     const wrapper = wrapperOf(canvasElement);
     const { block } = bandOf(wrapper);
-    await expect(wrapper.querySelectorAll('[data-slot="ported-block-rail"]')).toHaveLength(4);
+    await expect(wrapper.querySelectorAll('[data-slot="block-port-rail"]')).toHaveLength(4);
 
     const centresByEdge = new Map<BlockSide, { x: number; y: number }[]>();
     for (const edge of FOUR_EDGES) {
@@ -681,7 +681,7 @@ export const FourEdges: Story = {
 function StackingDemo() {
   return (
     <Stage label="the port edge paints above the block (Zach's z-rule — the donor's is the reverse)">
-      <PortedBlock
+      <BlockPort
         id="stack"
         view="port"
         edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}
@@ -698,7 +698,7 @@ function StackingDemo() {
           width={220}
           height={240}
         />
-      </PortedBlock>
+      </BlockPort>
     </Stage>
   );
 }
@@ -710,11 +710,11 @@ export const StackingAboveBlock: Story = {
     const block = required<HTMLElement>(wrapper, ':scope > [data-slot="block"]', "the Block");
 
     // DOM order is a redundant guarantee, not the mechanism (see
-    // blockPortEdges.tsx's own correction) — asserted anyway, because it is
+    // blockPort.tsx's own correction) — asserted anyway, because it is
     // the one of the three that a reader can check by eye.
     const children = Array.from(wrapper.children);
     const blockIndex = children.indexOf(block);
-    for (const rail of Array.from(wrapper.querySelectorAll<HTMLElement>(':scope > [data-slot="ported-block-rail"]'))) {
+    for (const rail of Array.from(wrapper.querySelectorAll<HTMLElement>(':scope > [data-slot="block-port-rail"]'))) {
       await expect(children.indexOf(rail)).toBeGreaterThan(blockIndex);
     }
 
@@ -725,5 +725,222 @@ export const StackingAboveBlock: Story = {
         expectRailPaintsAboveBlock(dot, { dx, dy: 0 }, `${edge} rail stacking`);
       }
     }
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* FunctionPort — the header's reserved "pin 1". Zach, 2026-09-17, on a */
+/* variable that is itself a function: "we reserve a special port on   */
+/* the header left edge... at most 1 port there and you cannot move    */
+/* it... a toggle on or off port." `LabeledPort` with its label         */
+/* disabled, per Zach: "make that a labeled port, just without a label  */
+/* for now, or disable the label."                                      */
+/* ------------------------------------------------------------------ */
+
+/** Independent of `BlockPort`'s own band math — re-measures the header
+ *  straight off the DOM, the same discipline `bandOf` already applies, so a
+ *  bug in `functionPortCenterPx` cannot hide behind itself. */
+function headerCenterOf(wrapper: HTMLElement): number {
+  const header = required<HTMLElement>(wrapper, ':scope > [data-slot="block"] > [data-slot="block-header"]', "the block header");
+  const rect = header.getBoundingClientRect();
+  return rect.top + rect.height / 2;
+}
+
+function functionPortHolderOf(wrapper: HTMLElement): HTMLElement | null {
+  return wrapper.querySelector<HTMLElement>(':scope > [data-slot="block-port-function"]');
+}
+
+/** A visibly two-line header — the second header SIZE (S5): if the dot's Y
+ *  came from some constant instead of a real measurement, this is the
+ *  fixture that would catch it. */
+function TallHeader() {
+  return (
+    <div style={{ lineHeight: "16px" }}>
+      Two
+      <br />
+      Lines
+    </div>
+  );
+}
+
+function FunctionPortPanel({
+  id,
+  view,
+  functionPort,
+  header = "Planner",
+  width = 200,
+  height = 140,
+}: {
+  id: string;
+  view: BlockView;
+  functionPort: boolean;
+  header?: ReactNode;
+  width?: number;
+  height?: number;
+}) {
+  return (
+    <BlockPort id={id} view={view} edges={{}} functionPort={functionPort}>
+      <Block header={header} body="body" width={width} height={height} />
+    </BlockPort>
+  );
+}
+
+function FunctionPortGallery() {
+  const views: BlockView[] = ["simple", "port", "expanded"];
+  return (
+    <div style={{ display: "flex", gap: 40, padding: "48px 64px" }}>
+      {views.map((view) => (
+        <div key={view} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 11, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--muted-foreground)" }}>
+            {BLOCK_VIEW_LABELS[view]}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>off</span>
+            <FunctionPortPanel id={`fn-${view}-off`} view={view} functionPort={false} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>on</span>
+            <FunctionPortPanel id={`fn-${view}-on`} view={view} functionPort={true} />
+          </div>
+        </div>
+      ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: 11, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--muted-foreground)" }}>
+          Port · tall header
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>on</span>
+          <FunctionPortPanel id="fn-port-tall-on" view="port" functionPort={true} header={<TallHeader />} height={160} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const FunctionPort: Story = {
+  render: () => <FunctionPortGallery />,
+  play: async ({ canvasElement }) => {
+    const views: BlockView[] = ["simple", "port", "expanded"];
+
+    for (const view of views) {
+      // Off: the wrapper mounts nothing for the function port at all.
+      const off = required<HTMLElement>(canvasElement, `[data-block-id="fn-${view}-off"]`, `the ${view} off panel`);
+      await expect(off.querySelectorAll('[data-slot="block-port-function"]')).toHaveLength(0);
+
+      // On: EXACTLY one — never zero, never a rail's worth.
+      const on = required<HTMLElement>(canvasElement, `[data-block-id="fn-${view}-on"]`, `the ${view} on panel`);
+      const holders = on.querySelectorAll<HTMLElement>('[data-slot="block-port-function"]');
+      await expect(holders).toHaveLength(1);
+      const dots = holders[0].querySelectorAll<HTMLElement>('[data-slot="port-dot"]');
+      await expect(dots).toHaveLength(1);
+
+      // Vertically centred on the header band's OWN centre line, measured
+      // independently of the component's internal band math — across every
+      // view the component supports, so this survives a view switch.
+      const dotCentreY = dots[0].getBoundingClientRect().top + dots[0].getBoundingClientRect().height / 2;
+      expectWithin(dotCentreY, headerCenterOf(on), 1, `${view} — function port centre vs the header band's own centre line`);
+
+      // Horizontally, the same wall convention every rail dot straddles.
+      const block = required<HTMLElement>(on, ':scope > [data-slot="block"]', "the Block");
+      const dotCentreX = dots[0].getBoundingClientRect().left + dots[0].getBoundingClientRect().width / 2;
+      expectWithin(dotCentreX, block.getBoundingClientRect().left, 1, `${view} — function port centre vs the Block's left wall`);
+    }
+
+    // A SECOND, visibly different header size (S5's own point: two sizes,
+    // so this cannot pass by a constant that happens to match one of them).
+    const tall = required<HTMLElement>(canvasElement, '[data-block-id="fn-port-tall-on"]', "the tall-header panel");
+    const tallDot = required<HTMLElement>(tall, '[data-slot="block-port-function"] [data-slot="port-dot"]', "the tall panel's function port dot");
+    const tallHeader = required<HTMLElement>(tall, ':scope > [data-slot="block"] > [data-slot="block-header"]', "the tall header");
+    await expect(tallHeader.getBoundingClientRect().height).toBeGreaterThan(30); // genuinely taller than the single-line panels above
+    const tallDotY = tallDot.getBoundingClientRect().top + tallDot.getBoundingClientRect().height / 2;
+    expectWithin(tallDotY, headerCenterOf(tall), 1, "tall header — function port centre vs the header band's own centre line");
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* FunctionPortIsFixed — Zach: "make sure to have a story to show      */
+/* this" (the port cannot be dragged). A story where NOTHING moves      */
+/* proves nothing on its own — a broken drag system would look          */
+/* identical. The left rail beside it is the CONTROL: same Block, same   */
+/* drag gesture, and it genuinely reorders — which is what gives the     */
+/* function port's non-movement teeth.                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `PortEdge.stories.tsx`'s `dragCard`, reused by value (Block.stories.tsx
+ * already does the same): a genuine `@dnd-kit/core` `PointerSensor` drag,
+ * not a style-only stand-in. `isPrimary: true` is load-bearing — dnd-kit's
+ * activator silently no-ops on a synthetic `PointerEvent` without it.
+ */
+async function dragElement(from: Element, to: Element) {
+  const fire = (el: Element, type: string, x: number, y: number) =>
+    el.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, button: 0, buttons: 1, pointerType: "mouse", clientX: x, clientY: y }),
+    );
+  const fromRect = from.getBoundingClientRect();
+  const toRect = to.getBoundingClientRect();
+  const startX = fromRect.left + fromRect.width / 2;
+  const startY = fromRect.top + fromRect.height / 2;
+  const endX = toRect.left + toRect.width / 2;
+  const endY = toRect.top + toRect.height / 2;
+  fire(from, "pointerdown", startX, startY);
+  await new Promise((r) => setTimeout(r, 30));
+  fire(from, "pointermove", startX, startY + 10); // clears activationConstraint.distance
+  await new Promise((r) => setTimeout(r, 30));
+  fire(from, "pointermove", endX, endY);
+  await new Promise((r) => setTimeout(r, 30));
+  fire(from, "pointerup", endX, endY);
+  await new Promise((r) => setTimeout(r, 100));
+}
+
+function FunctionPortIsFixedDemo() {
+  const [inputs, setInputs] = useState(INPUTS);
+  return (
+    <Stage label="pin 1 is fixed · the left rail beside it (control) genuinely reorders">
+      <BlockPort id="fn-fixed" view="port" edges={{ left: { items: inputs, onItemsChange: setInputs } }} functionPort>
+        <BandedFace />
+      </BlockPort>
+    </Stage>
+  );
+}
+
+export const FunctionPortIsFixed: Story = {
+  render: () => <FunctionPortIsFixedDemo />,
+  play: async ({ canvasElement }) => {
+    const wrapper = wrapperOf(canvasElement);
+    const rail = railOf(wrapper, "left");
+    const holder = required<HTMLElement>(wrapper, '[data-slot="block-port-function"]', "the function port");
+    const dot = required<HTMLElement>(holder, '[data-slot="port-dot"]', "the function port's dot");
+
+    // Structural proof, ahead of the gesture: the function port carries
+    // none of dnd-kit's `useSortable` attributes and sits nowhere near a
+    // `PortEdge` track — it was never wired to a drag system to begin with.
+    await expect(holder.getAttribute("role")).toBeNull();
+    await expect(holder.hasAttribute("tabindex")).toBe(false);
+    await expect(holder.closest('[data-slot="port-edge"]')).toBeNull();
+    await expect(holder.closest('[data-slot="block-port-rail"]')).toBeNull();
+
+    // CONTROL: drag the rail's first card past its last — a genuine
+    // dnd-kit reorder, proving the drag mechanism used below actually
+    // works in this story (so "nothing moved" cannot be a broken harness).
+    const railIdsBefore = Array.from(rail.querySelectorAll<HTMLElement>("[data-port-id]")).map((el) => el.getAttribute("data-port-id"));
+    await expect(railIdsBefore).toEqual(["pose", "gain", "reset"]);
+    const cards = Array.from(rail.querySelectorAll<HTMLElement>('[data-slot="port-edge-card"]'));
+    await dragElement(cards[0], cards[cards.length - 1]);
+    const railIdsAfter = Array.from(rail.querySelectorAll<HTMLElement>("[data-port-id]")).map((el) => el.getAttribute("data-port-id"));
+    await expect(railIdsAfter).not.toEqual(railIdsBefore);
+    await expect(railIdsAfter[0]).not.toBe("pose"); // "pose" moved off the top slot
+
+    // TARGET: the identical gesture on the function port — same helper,
+    // same distance, aimed at the same rail — changes nothing.
+    const before = dot.getBoundingClientRect();
+    await dragElement(dot, cards[cards.length - 1]);
+    const after = dot.getBoundingClientRect();
+    expectWithin(after.left, before.left, 1, "function port x after an attempted drag");
+    expectWithin(after.top, before.top, 1, "function port y after an attempted drag");
+
+    // And it never joined the rail it was dragged toward.
+    const railIdsAfterAttempt = Array.from(rail.querySelectorAll<HTMLElement>("[data-port-id]")).map((el) => el.getAttribute("data-port-id"));
+    await expect(railIdsAfterAttempt).toEqual(railIdsAfter);
   },
 };

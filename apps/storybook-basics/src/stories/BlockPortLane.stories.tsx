@@ -5,8 +5,8 @@ import { expect, userEvent, waitFor } from "storybook/test";
 
 import { Block } from "../components/block";
 import type { BlockMember } from "../components/blockMembers";
-import { PortedBlock, railDotCentres, railPitches } from "../components/blockPortEdges";
-import { railAxisFor, railPlanFor, type BlockPortLayout, type BlockView } from "../components/blockPortEdges.layout";
+import { BlockPort, railDotCentres, railPitches } from "../components/blockPort";
+import { railAxisFor, railPlanFor, type BlockPortLayout, type BlockView } from "../components/blockPort.layout";
 import type { BlockSide } from "../components/port.layout";
 import { PortEdge, laneAvailability, type PortEdgeItem } from "../components/portEdge";
 import { computeSlots, groupingSetFromText } from "../components/portEdge.layout";
@@ -60,7 +60,7 @@ import { computeSlots, groupingSetFromText } from "../components/portEdge.layout
  * measured, and neither is papered over by a softened assertion — each gets
  * a story that pins today's wrong behaviour so the fix flips a `toBe` rather
  * than having to be rediscovered. Neither fix belongs in this file: both
- * seams live in `portEdge.tsx` / `blockPortEdges.tsx`, which are phase A1's.
+ * seams live in `portEdge.tsx` / `blockPort.tsx`, which are phase A1's.
  *
  *   F1 · THE LANE CANNOT OPEN ON THE COMMIT ITS TRACK MOUNTS.
  *        `useLaneGeometry` (portEdge.tsx:652-682) reads `trackRef.current`
@@ -70,7 +70,7 @@ import { computeSlots, groupingSetFromText } from "../components/portEdge.layout
  *        effect sees `trackRef.current === null`, returns early, and — the
  *        deps never changing — never runs again. `geometry` stays null,
  *        `PortLaneOverlay` returns null, and the lane silently does not
- *        exist. It is not Block-specific, but `PortedBlock` makes it
+ *        exist. It is not Block-specific, but `BlockPort` makes it
  *        UNAVOIDABLE: rails only mount once `useBlockBands` has measured, so
  *        a rail whose `editing` is already true always mounts its track and
  *        its overlay in the same commit. `LaneOpenedAtMount` pins it on both
@@ -81,7 +81,7 @@ import { computeSlots, groupingSetFromText } from "../components/portEdge.layout
  *   F2 · THE RESTING LABELS ARE NOT TURNED OFF UNDER AN OPEN LANE.
  *        `hideLabel` — PortEdge's "the lane IS the labels now" seam — is
  *        honoured only by PortEdge's DEFAULT fill (portEdge.tsx:312-317),
- *        and `PortedBlock` always supplies its own `renderItem`. See
+ *        and `BlockPort` always supplies its own `renderItem`. See
  *        `restingLabels`' own doc. On a left wall the lane's opaque panel
  *        hides all but a ~2px sliver; on a right wall the labels flow inward
  *        while the lane opens outward, so every label is drawn twice, fully
@@ -103,7 +103,7 @@ function benchOf(canvasElement: HTMLElement, benchId: string): HTMLElement {
 }
 
 function wrapperOf(bench: HTMLElement): HTMLElement {
-  return required<HTMLElement>(bench, '[data-slot="ported-block"]', "a PortedBlock");
+  return required<HTMLElement>(bench, '[data-slot="block-port"]', "a BlockPort");
 }
 
 function railOf(bench: HTMLElement, edge: BlockSide): HTMLElement {
@@ -111,15 +111,15 @@ function railOf(bench: HTMLElement, edge: BlockSide): HTMLElement {
   // the Block by a mutation still has to be findable here, or the
   // structural check right below it never gets the chance to fire and a
   // reparenting defect just looks like "no rail found".
-  const rail = required<HTMLElement>(bench, `[data-slot="ported-block-rail"][data-edge="${edge}"]`, `a ${edge} rail`);
+  const rail = required<HTMLElement>(bench, `[data-slot="block-port-rail"][data-edge="${edge}"]`, `a ${edge} rail`);
   // THE property "not clipped by the Block" actually rests on (§5): rails
-  // are siblings of `[data-slot="block"]` inside `[data-slot="ported-block"]`,
+  // are siblings of `[data-slot="block"]` inside `[data-slot="block-port"]`,
   // never descendants. Geometry cannot see this for a left lane — it opens
   // INTO the card either way (module doc's CLIPPING note) — which is exactly
   // how a reparenting mutation slipped past every hit-test reading below
   // until this direct structural check was added.
   if (rail.closest('[data-slot="block"]') !== null) {
-    throw new Error(`${bench.getAttribute("data-bench")} · the ${edge} rail is a DESCENDANT of \`[data-slot="block"]\`, not a sibling in \`[data-slot="ported-block"]\` — it can be clipped by the Block's own overflow:hidden`);
+    throw new Error(`${bench.getAttribute("data-bench")} · the ${edge} rail is a DESCENDANT of \`[data-slot="block"]\`, not a sibling in \`[data-slot="block-port"]\` — it can be clipped by the Block's own overflow:hidden`);
   }
   return rail;
 }
@@ -342,15 +342,15 @@ function expectLaneEscapesCardUnclipped(rail: HTMLElement, block: DOMRect, what:
  * its own default fill — `renderItem ? renderItem(item, {textLayout}) :
  * showPorts ? <LabeledPort labelSlot={hideLabel ? null : undefined}>`
  * (portEdge.tsx:312-317). The `renderItem` context is `{ textLayout }` and
- * carries no lane state, and `PortedBlock` ALWAYS supplies a `renderItem`
+ * carries no lane state, and `BlockPort` ALWAYS supplies a `renderItem`
  * (it must: that is where `data-port-id` is stamped, which is how Group B's
- * wire layer will find a dot). So every `PortedBlock` rail keeps drawing its
+ * wire layer will find a dot). So every `BlockPort` rail keeps drawing its
  * resting labels under an open lane.
  *
  * The fix belongs in one of two places, neither of them this file:
  *   • `portEdge.tsx` — add `hideLabel` to the `renderItem` ctx, ~2 lines, so
  *     a host fill can honour the same seam the default fill does; or
- *   • `blockPortEdges.tsx` — let `portEdgeProps.renderItem` actually win.
+ *   • `blockPort.tsx` — let `portEdgeProps.renderItem` actually win.
  *     Its own doc comment already advertises `renderItem` as a reach-past
  *     override, but `BlockPortRail` spreads `{...spec.portEdgeProps}` BEFORE
  *     its own `renderItem={renderItem}`, so the override is unreachable and
@@ -562,7 +562,7 @@ function LaneBench({ benchId, view, portLayout = "inline", openEdge = null, open
         <LaneToggle edge="left" open={editing === "left"} state={leftState} onToggle={() => setEditing(editing === "left" ? null : "left")} />
         <LaneToggle edge="right" open={editing === "right"} state={rightState} onToggle={() => setEditing(editing === "right" ? null : "right")} />
       </div>
-      <PortedBlock
+      <BlockPort
         id={benchId}
         view={view}
         portLayout={portLayout}
@@ -582,7 +582,7 @@ function LaneBench({ benchId, view, portLayout = "inline", openEdge = null, open
         }}
       >
         {face}
-      </PortedBlock>
+      </BlockPort>
     </div>
   );
 }
@@ -604,11 +604,11 @@ function Stage({ children, label }: { children: ReactNode; label?: string }) {
 
 const meta = {
   title: "Basics/BlockPortLane",
-  component: PortedBlock,
+  component: BlockPort,
   // Never read — every story supplies its own `render`, because the bench
   // owns the lane's open/closed state and the edges are controlled.
   args: { view: "port" as BlockView, edges: {}, children: null },
-} satisfies Meta<typeof PortedBlock>;
+} satisfies Meta<typeof BlockPort>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -642,7 +642,7 @@ export const LaneOnPortView: Story = {
     expectLaneAboveCard(rail, block, "port view · left lane");
 
     // 3 · F2, stated as it is (see `restingLabels`' own doc): the resting
-    // labels are NOT removed under an open lane on a PortedBlock, because
+    // labels are NOT removed under an open lane on a BlockPort, because
     // `hideLabel` never reaches a host `renderItem`. On a LEFT rail the
     // opaque lane panel opens right over them, so the composited page still
     // reads correctly — every label's own text centre belongs to the lane.
@@ -782,7 +782,7 @@ export const LaneOnRightWall: Story = {
     // label is drawn a second time inside the card while the lane shows the
     // same text outside it. Pinned, so it cannot silently change. When the
     // seam is fixed in `portEdge.tsx` (ctx gains `hideLabel`) or in
-    // `blockPortEdges.tsx` (`portEdgeProps.renderItem` wins), there will be
+    // `blockPort.tsx` (`portEdgeProps.renderItem` wins), there will be
     // ZERO resting labels here and this block fails ON PURPOSE — that is the
     // signal to delete it, not to relax it.
     await expect(labelTexts(rail)).toEqual(["cmd", "status"]);
@@ -1005,7 +1005,7 @@ export const LaneKeepsWiredIdentity: Story = {
 
 /** A bare `PortEdge`, mounted with `editing` already true — no Block, no
  *  wrapper, no deferred mount. It is here to answer the one question that
- *  decides where F1 belongs: is this `PortedBlock`'s fault, or PortEdge's? */
+ *  decides where F1 belongs: is this `BlockPort`'s fault, or PortEdge's? */
 function BareEdgeOpenAtMount() {
   const [items, setItems] = useState<PortEdgeItem[]>(INPUTS);
   const [editing, setEditing] = useState(true);
@@ -1024,7 +1024,7 @@ function BareEdgeOpenAtMount() {
  * get: `PortEdge.stories.tsx:204-207` still carries that comment above a
  * `useState(false)`. The two halves of this story say exactly where it lives
  * — a bare `PortEdge` mounted with `editing` fails the same way, so the bug
- * is `useLaneGeometry`'s, and `PortedBlock` only makes it unavoidable by
+ * is `useLaneGeometry`'s, and `BlockPort` only makes it unavoidable by
  * deferring its rails one commit behind its own measurement.
  *
  * The fix is ~3 lines in `portEdge.tsx` (phase A1's file, not this one):
@@ -1064,7 +1064,7 @@ export const LaneOpenedAtMount: Story = {
     await expect(rail.querySelectorAll(".cm-line")).toHaveLength(0);
 
     // Same story on a bare PortEdge, so the defect is attributed correctly:
-    // this one has no `PortedBlock` anywhere near it.
+    // this one has no `BlockPort` anywhere near it.
     const bare = required<HTMLElement>(canvasElement, '[data-slot="bare-edge"]', "the bare PortEdge specimen");
     await waitFor(() => expect(bare.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(INPUTS.length));
     await expect(bare.querySelectorAll(".cm-line")).toHaveLength(0);

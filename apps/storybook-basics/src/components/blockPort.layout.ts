@@ -1,5 +1,5 @@
 /**
- * src/components/blockPortEdges.layout.ts — the pure half of `PortedBlock`
+ * src/components/blockPort.layout.ts — the pure half of `BlockPort`
  * (docs/BLOCK-PORT-EDGES-PLAN.md §2/§3, phase A1).
  *
  * Two jobs, both closed-form and both unit-testable without a DOM:
@@ -62,14 +62,14 @@ export const BLOCK_PORT_LAYOUT_LABELS: Record<BlockPortLayout, string> = {
  *
  * WHY this is re-declared instead of imported: it mirrors `portEdge.tsx`'s
  * module-private `EMPTY_SLOT_MIN_PX`, the size a slot takes when `showCard`
- * is false — which is exactly how a rail is configured (`PortedBlock` never
+ * is false — which is exactly how a rail is configured (`BlockPort` never
  * turns cards on, since the Block itself is the card). `portEdge.tsx` does
  * not export it, and A1 is authorised exactly one surgical edit to that file
  * (D-A7's `renderCollapsed`), which this is not.
  *
  * A duplicated constant that must match is only safe if a mismatch is loud,
  * so it is pinned where a drift fails rather than hides: the dormant unit
- * test's own case, and — the one that runs today — `BlockPorts.stories.tsx`'s
+ * test's own case, and — the one that runs today — `BlockPort.stories.tsx`'s
  * `ClassicDag`, which MEASURES a rendered `[data-slot="port-edge-member"]`
  * box and asserts it equals this number. Change `EMPTY_SLOT_MIN_PX` without
  * changing this and that story goes red.
@@ -212,7 +212,7 @@ export function railPlanFor(input: RailPlanInput): RailPlan {
       // the whole wall renders as a single box. A line naming fewer than two
       // known ids is dropped by the parser (a group of one is just an
       // ungrouped port) — harmless, because a one-port wall is already one
-      // slot, and `PortedBlock` draws it the same bare dot either way.
+      // slot, and `BlockPort` draws it the same bare dot either way.
       groups: itemIds.join(", "),
       groupMode: "collapsed",
       distribution: { mode: "distribute", scheme: "space-evenly" },
@@ -268,11 +268,14 @@ export function railPlanFor(input: RailPlanInput): RailPlan {
 /* ------------------------------------------------------------------ */
 
 /**
- * The Block's geometry as `PortedBlock`'s wrapper sees it — every number in
+ * The Block's geometry as `BlockPort`'s wrapper sees it — every number in
  * WRAPPER-LOCAL pixels, so a rail can be positioned with plain `left`/`top`.
  * `bodyTop`/`bodyBottom` bound the band between header and footer (the
  * region holding body and members), which is what the donor calls the body
- * section.
+ * section. `headerTop` is undefined when the Block renders no header at
+ * all — the function port (see `functionPortCenterPx` below) has nowhere
+ * to sit in that case and stays unrendered rather than degrading to some
+ * other line.
  */
 export interface BlockBands {
   blockLeft: number;
@@ -281,6 +284,7 @@ export interface BlockBands {
   blockHeight: number;
   bodyTop: number;
   bodyBottom: number;
+  headerTop?: number;
 }
 
 export interface RailBox {
@@ -338,4 +342,30 @@ export function alignedFirstCentrePx(
   if (plan.distribution.mode !== "aligned") return null;
   const bandStart = plan.band === "body" ? bands.bodyTop : bands.blockTop;
   return bandStart + plan.endMarginPx + plan.distribution.edgePadding + slotMainPx / 2;
+}
+
+/* ------------------------------------------------------------------ */
+/* functionPortCenterPx — the header's reserved pin-1 port              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Where the function port's dot CENTRE lands, in wrapper-local px: on the
+ * Block's left border line (`blockLeft`, the same wall convention every
+ * rail dot straddles — see `railBoxFor`'s column-axis case), vertically at
+ * the header band's own centre line (`headerTop`..`bodyTop`, since
+ * `bodyTop` IS the header's bottom edge whenever a header exists — see
+ * `BlockBands`'s own doc).
+ *
+ * Zach, 2026-09-17 (a variable that is itself a function reserves "a
+ * special port on the header left edge... at most 1 port there and you
+ * cannot move it"): position is what carries the meaning, so this is a
+ * closed form, not a slot in a `PortEdge` distribution — there is no
+ * `RailPlan` for it and it never becomes one.
+ *
+ * Returns `null` when the Block renders no header (`headerTop` absent) —
+ * there is no header centre line to sit on.
+ */
+export function functionPortCenterPx(bands: BlockBands): { x: number; y: number } | null {
+  if (bands.headerTop == null) return null;
+  return { x: bands.blockLeft, y: (bands.headerTop + bands.bodyTop) / 2 };
 }
