@@ -44,7 +44,10 @@
  * of them is a length that layout.ts / blockLayout.ts / portPlacement.ts
  * reads. That is what makes a skin safe to switch under a live canvas:
  * port anchors, edge endpoints and hit-test boxes are byte-identical
- * across all three. `skin.geometry.test.ts` measures it. It is also why
+ * across all three. `demos/capture-skins.mjs` measures the spatial half in
+ * a real browser (every port-dot centre, both hosts); `test/skin.test.ts`
+ * holds the half that can fail in CI — no skin varies the stroke width, no
+ * skin introduces a transform. It is also why
  * there is deliberately no `rotate` token, tempting as one is for sketch:
  * rotating the DOM would desynchronise it from the host's own geometry,
  * which the core does not own (see CLAUDE.md's one rule).
@@ -86,8 +89,9 @@ export const BBOX_SKIN_ATTR = "data-bbox-skin";
 
 /**
  * The closed token set a skin may define — real exported data, not a
- * comment, so `skin.tokens.test.ts` can assert that `skin.css` defines
- * exactly these for exactly the skins in `BBOX_SKINS` and no others. A
+ * comment, so `test/skin.test.ts` can assert that `skin.css` defines exactly
+ * these for exactly the skins in `BBOX_SKINS` and no others, and that each
+ * component's own `var()` fallback still matches what is advertised here. A
  * token that exists in the CSS but not here (or vice versa) is the
  * failure this list is here to catch: it renders as "the default" and
  * looks like a design decision rather than a typo.
