@@ -28,7 +28,7 @@ SKIN_NAME = {"default": "Default", "plain": "Plain", "sketch": "Sketch"}
 SKIN_BLURB = {
     "default": "What you have today, unchanged, and what renders when no skin is set at all.",
     "plain": "Square corners everywhere — the chip stops being a capsule. Your “unstylized”.",
-    "sketch": "An informal font and corners that are not the same on any two sides.",
+    "sketch": "No fill at all, and a line that is genuinely drawn — jittered, bowed, and laid down twice.",
 }
 
 tldraw = json.loads((MEDIA / "tldraw-report.json").read_text())
@@ -47,7 +47,7 @@ def sh(*args: str) -> str:
     return subprocess.run(args, capture_output=True, text=True, cwd=REPO).stdout.strip()
 
 
-COMMIT = sh("git", "-C", str(REPO), "log", "-1", "--format=%h", "claude/component-styling-options-90a72f") or "57bf246"
+COMMIT = sh("git", "-C", str(REPO), "log", "-1", "--format=%h", "claude/component-styling-options-90a72f") or "b3adc60"
 
 # ------------------------------------------------------------ measured paint
 paint_rows = []
@@ -102,7 +102,7 @@ CRITERIA = [
 ]
 
 OPTIONS = [
-    ("A · CSS token layer", "data-bbox-skin re-points seven custom properties",
+    ("A · CSS token layer", "data-bbox-skin re-points nine custom properties",
      [5, 5, 4, 4, 1, 3], "shipped"),
     ("B · Preset family", "a `skin` selector in the existing field cascade",
      [1, 2, 3, 4, 3, 0], ""),
@@ -171,10 +171,16 @@ STOCK = [
      "fourth skin edits every component file instead of one stylesheet."),
     ("Hand-drawn stroke",
      "none",
-     "<strong><code>roughjs</code></strong>, or <strong><code>react-rough-fiber</code></strong>",
-     "<strong>Rejected for v1.</strong> Both draw SVG paths, so every Block/Pill border becomes an SVG "
-     "overlay instead of a CSS border — a render-tree rewrite, plus a runtime dependency in a core whose "
-     "one rule is that it imports no engine. Asymmetric corners get 80% of the read for one token."),
+     "<strong><code>roughjs</code></strong> / <strong><code>react-rough-fiber</code></strong>, or "
+     "<strong><code>PathBuilder.toDrawD</code></strong> + <strong><code>rng</code></strong> "
+     "(tldraw 5.3.2's own — read, then ported)",
+     "<strong>Ported, not installed</strong> — <code>sketchPath.ts</code>, ~90 lines of pure math. "
+     "tldraw's is not importable here on principle: it sits behind <code>@tldraw/editor</code>'s "
+     "<code>Vec</code> and <code>PathBuilder</code>, and the core's one rule is that it imports no "
+     "engine. <code>roughjs</code> is genuinely off-the-shelf and would also work — it is a larger "
+     "surface than the one function a rectangle needs, and it would not have answered what you asked, "
+     "which was what tldraw does. The <code>rng</code> IS ported verbatim: a weaker hash makes "
+     "neighbouring seeds wobble alike and a row of blocks looks stamped rather than drawn."),
     ("Hand-drawn font",
      "<code>TEXT_BOX_FONT_STACKS.sketch</code> = <code>\"Segoe Print\", \"Bradley Hand\", cursive</code> — "
      "which resolves to nothing on this machine (<code>fc-match cursive</code> &rarr; <code>Z003</code>, "
@@ -296,11 +302,15 @@ could add this to my existing components?”</p></blockquote>
 
 <div class="box win">
 <h3>The short version</h3>
-<p>It is one inherited HTML attribute re-pointing seven CSS custom properties. Skins are
-<em>shape</em>; shadcn's tokens stay underneath all of them as <em>colour</em>. The whole
-mechanism is <strong>two new files and about 110 changed lines across four components</strong>;
-the demos gained an import and one <code>&lt;SkinPicker/&gt;</code> each; the adapters, the
-field cascade, <code>layout.ts</code> and every existing consumer were not touched at all.</p>
+<p>It is one inherited HTML attribute re-pointing nine CSS custom properties. Skins are
+<em>shape</em>; shadcn's tokens stay underneath all of them as <em>colour</em>. The adapters,
+the field cascade, <code>layout.ts</code> and every existing consumer were not touched at
+all.</p>
+<p>One part of a skin turned out not to be CSS, and that is the finding worth your time: a
+<strong>drawn line is geometry</strong>. Sketch now generates a real SVG path — the technique
+tldraw uses, read out of its source and ported as pure math with no tldraw import — while CSS
+still decides whether it paints. The section right after the skins is the answer to what they
+actually do.</p>
 <p>It is built, committed and measured, not sketched. Look at it, then answer the three
 questions at the bottom.</p>
 </div>
@@ -339,9 +349,113 @@ and Sketch, a rectangle under Plain. Note the port dots: identical to the pixel 
 <thead><tr><th>Skin</th><th>border-radius</th><th>border-width</th><th>border-color</th><th>font-family</th></tr></thead>
 <tbody>{PAINT_TABLE}</tbody>
 </table>
+<div class="box">
+<h3>What “no background” actually took</h3>
+<p><code>--bbox-skin-surface: transparent</code> was one line. Two things fell out of it that
+were not:</p>
+<ul>
+<li><strong>The border goes transparent, not absent.</strong> The 2px still occupies its 2px —
+it is what every wall-mounted port anchor is measured against — it simply paints nothing, and
+the drawn line lands exactly on it. That is the whole trick, and it is why the drift table
+below still reads 0.00px.</li>
+<li><strong>Text had been contrasting against a card that is no longer painted.</strong> A
+sketch Block has to read against the <em>canvas</em> behind it, so <code>--bbox-skin-fg</code>
+re-points it at the page foreground. It is a token rather than a rule selecting markup,
+deliberately: that keeps <code>skin.css</code>'s one real property, which is that nothing in it
+can out-specify a caller's own <code>className</code>.</li>
+</ul>
+<p>And it exposed something the demos had been getting wrong all along: both canvases are
+light while headless Chrome reports <code>prefers-color-scheme: dark</code>, so they were
+painting dark-theme tokens on a light canvas. Invisible with a surface painted;
+near-white-on-white without one. The demos now carry a light/dark toggle next to the skin
+picker — which also makes the 3&nbsp;&times;&nbsp;2 orthogonality something you can click.</p>
+</div>
 <p class="cap">The colour is the same in all three on purpose — that is the theme's job, not the
 skin's. The <code>border-width</code> being identical is <em>not</em> a coincidence either; see
 the trap below.</p>
+
+<h2>How tldraw actually draws that line</h2>
+<blockquote><p>“Can you please look into how TL Draw does their sketch line where it kind of
+renders a bit interestingly? … I feel like TL Draw does something clever where they kind of
+create this line that has variable width and stuff, but I'm not sure how they actually do that.
+Just by a pure CSS.”</p></blockquote>
+
+<p><strong>It is not CSS, and for a box it is not variable width either.</strong> Read in the
+installed <code>tldraw@5.3.2</code> — <code>lib/shapes/shared/PathBuilder.mjs</code>,
+<code>lib/shapes/geo/GeoShapeBody.mjs</code>, and <code>rng</code> in
+<code>@tldraw/utils</code>. There are two separate mechanisms and only one of them ever
+touches a rectangle.</p>
+
+<table>
+<thead><tr><th style="width:22%">&nbsp;</th><th>Freehand draw stroke</th><th>Geo shape (what a Block is)</th></tr></thead>
+<tbody>
+<tr><th>Where</th><td class=h>shared/freehand/getStrokeOutlinePoints.mjs</td><td class=h>shared/PathBuilder.mjs &rarr; toDrawD</td></tr>
+<tr><th>What it emits</th><td>A filled outline <strong>polygon</strong></td><td>A stroked <strong>path</strong></td></tr>
+<tr><th>Variable width</th><td><strong>Yes</strong> — the polygon's radius tracks pressure and
+  velocity. The width is a <em>shape</em>, not a <code>stroke-width</code>.</td>
+  <td><strong>No.</strong> Constant stroke. A geo shape never runs that code.</td></tr>
+<tr><th>The “drawn” quality</th><td>from the varying radius</td>
+  <td>from displacing each command point, and from drawing it <strong>twice</strong></td></tr>
+</tbody>
+</table>
+
+<div class="box">
+<h3>What <code>toDrawD</code> does, in four steps</h3>
+<ol>
+<li>Take the <em>exact</em> geometric path — the same commands a crisp rectangle would use.</li>
+<li>Displace each command point by a random unit direction with magnitude
+  <code>sqrt(|random()|) * offset</code>. The <code>sqrt</code> spreads points evenly over a
+  disc instead of bunching them near the centre. <code>offset</code> defaults to
+  <strong><code>strokeWidth / 3</code></strong>.</li>
+<li>Round each corner using the tangents into and out of it, by
+  <code>roundness = strokeWidth * 2</code>.</li>
+<li>Do all of that <strong><code>passes = 2</code></strong> times, each pass seeded
+  <code>rng(randomSeed + pass)</code>. <strong>This is the part doing the work</strong> — two
+  nearly-identical outlines over each other is what reads as a pen going round twice.</li>
+</ol>
+<p>The seed is the <strong>shape id</strong>, through an xorshift128 seeded from the string.
+Deterministic on purpose: unseeded randomness would re-wobble on every render and shimmer.
+And the <em>fill</em> is a separate path built at <code>passes: 1, offset: 0</code> — the fill
+follows true geometry and only the outline wobbles. Moot for us now: sketch has no fill.</p>
+</div>
+
+<p>So the answer to “can pure CSS do this” is <strong>no</strong>, and the reason is specific:
+CSS has no property that displaces points along a border, and <code>border-radius</code>
+cannot differ between two coincident strokes. What CSS <em>can</em> still do is decide whether
+the path paints and in what ink — which is how the skin stays one attribute even though this
+part needs real geometry. <code>sketchPath.ts</code> is that geometry: pure functions, no
+React, no DOM, <strong>no tldraw import</strong>.</p>
+
+<h3>Before and after, same card, same seed</h3>
+<div class="grid">
+<figure class="card">
+  <img src="{jpg('default-line-closeup.jpg')}" alt="The default skin's CSS border, magnified">
+  <figcaption><span class="name">Default</span><span class="meas">CSS border</span></figcaption>
+  <p class="cap">One stroke, mathematically straight, <code>border-radius: 8px</code>.</p>
+</figure>
+<figure class="card">
+  <img src="{jpg('sketch-line-closeup.jpg')}" alt="The sketch skin's drawn outline, magnified">
+  <figcaption><span class="name">Sketch</span><span class="meas">drawn path</span></figcaption>
+  <p class="cap">Two passes separating along the edges, corners displaced, no fill behind it.
+  The port dot still sits exactly on the line.</p>
+</figure>
+</div>
+
+<div class="box warn">
+<h3>Two places I deliberately did not copy tldraw — both because I looked</h3>
+<p><strong>1. <code>strokeWidth / 3</code> rendered a straight rectangle.</strong> On our 2px
+stroke that is a 0.67px nudge, and the first build of this shipped it faithfully: the two
+passes landed within a pixel of each other, never separated, and the result was a plain
+rounded rect with slightly soft corners. The ratio is not wrong — it is calibrated for
+tldraw's own proportions, a thicker pen on shapes a fraction of a Block's 384px. I swept
+0.67&nbsp;/&nbsp;1.2&nbsp;/&nbsp;1.8&nbsp;/&nbsp;2.4&nbsp;/&nbsp;3.0 against 0&ndash;4 edge
+points and 1&ndash;3 passes, rendered them, and looked: below ~1.8 the passes still fuse,
+above ~3 the box stops reading as a box. <strong><code>SKETCH_WOBBLE_PX = 2.4</code></strong>.</p>
+<p><strong>2. tldraw's rectangle has no points between its corners</strong>, so every edge is a
+perfectly straight ruler line between two corners that each moved less than a pixel. Fine at
+tldraw's sizes; across 384px it reads as printed. Three intermediate jittered points per edge
+give the line somewhere to bow.</p>
+</div>
 
 <h2>The same three, in React Flow — with no adapter change</h2>
 <p>This is the load-bearing claim. A tldraw shape and a React Flow node both render their DOM
@@ -430,9 +544,11 @@ sketch skin. See <strong>D3</strong>.</p>
 
 <h2>Adding a fourth skin is one block of CSS</h2>
 <p>If you want your default to read more like an actual shadcn <code>Card</code> — hairline
-border, soft fill, a small shadow — that is not a new mechanism, it is nine lines appended to
+border, soft fill, a small shadow — that is not a new mechanism, it is one block appended to
 <code>skin.css</code> plus its name in <code>BBOX_SKINS</code>. No component changes, no
-adapter changes, no registry changes.</p>
+adapter changes, no registry changes. (It would carry
+<code>--bbox-skin-outline: none</code> and inherit the rest; only sketch turns the drawn line
+on.)</p>
 <pre><code>{FOURTH}</code></pre>
 <p class="cap">Deliberately not shipped: three is what you asked for, and a fourth is more
 useful as proof that the seam is cheap than as a skin nobody chose.</p>
@@ -450,8 +566,11 @@ just built.</p>
   siblings of <code>block.tsx</code> as intended</td></tr>
 <tr><th><code>tsc --noEmit</code> over a real call site</th><td class=h><strong>exit 0</strong>
   &mdash; importing all seven exports, <code>bboxSkinAttrs</code>, both types</td></tr>
-<tr><th>installed <code>skin.css</code></th><td class=h>3 skins &times; 7 tokens, identical
+<tr><th>installed <code>skin.css</code></th><td class=h>3 skins &times; 9 tokens, identical
   sets &mdash; parsed out of the copied file, not the source</td></tr>
+<tr><th><code>sketchPath.ts</code> + <code>sketchOutline.tsx</code></th><td class=h>land as
+  siblings too, and a real <code>&lt;SketchOutline&gt;</code> call site compiles &mdash; the
+  drawn line is a code dependency of <code>Block</code>, not just a stylesheet</td></tr>
 <tr><th><code>bbox-skin</code> as a dependency of <code>port</code>/<code>block</code></th>
   <td class=h>deliberately <strong>not</strong> one. They compile without it.</td></tr>
 </tbody>
@@ -493,6 +612,15 @@ styling change.</p>
   <code>border-[length:var(--bbox-skin-stroke-width,2px)]</code> and friends. Kept as Tailwind
   utilities, not inline styles, so <code>cn</code>'s tailwind-merge still lets
   <code>className</code> win.</td></tr>
+<tr><th><code>packages/bbox-ui/src/sketchPath.ts</code></th><td>New, ~90 lines of pure math:
+  tldraw's seeded <code>rng</code> ported verbatim, plus a rounded-rect path generator with the
+  same structure as <code>toDrawD</code>. No React, no DOM, no tldraw import. Its header is the
+  written-up answer to how tldraw does it.</td></tr>
+<tr><th><code>packages/bbox-ui/src/sketchOutline.tsx</code></th><td>New. The <code>&lt;svg&gt;</code>
+  layer <code>Block</code> and <code>Region</code> both mount, whose <code>display</code> reads
+  <code>--bbox-skin-outline</code>. Always rendered, painted only by sketch — the component
+  cannot know the active skin without reading its own computed style, and self-measurement is
+  the one thing the core does not do.</td></tr>
 <tr><th><code>registry.json</code>, <code>public/r/</code></th><td>A new opt-in
   <code>bbox-skin</code> item. Not a <code>registryDependency</code> of <code>port</code> or
   <code>block</code>: they work without it.</td></tr>
@@ -506,7 +634,7 @@ styling change.</p>
 </tbody>
 </table>
 <p class="cap">Full workspace green: <code>pnpm -r typecheck</code> clean,
-<strong>1229 tests pass</strong> across 13 packages, <code>shadcn build</code> clean, zero
+<strong>1229 tests pass</strong> across the 11 packages that have suites (re-run after the sketch work), <code>shadcn build</code> clean, zero
 console errors in either host.</p>
 
 <div class="box win">
@@ -548,6 +676,19 @@ stays at 8px and ignores the skin. Fixing it means the field's default becomes
 number control and is not a skin question.
 <em>If you say nothing, panel-driven blocks keep their pinned 8px.</em></dd>
 
+<dt>D4 &middot; Should the chip go sketchy too?</dt>
+<dd>Look at the close-up: the <code>Draft 1</code> capsule is still a crisp CSS outline against
+a drawn box, and it is the one element that gives the game away. I did not change it, and the
+reason is architectural rather than lazy: a Pill's outline is painted by the <strong><code>state</code>
+preset family</strong> (<code>lineColor</code> / <code>lineStyle</code> from
+<code>pill.presets.ts</code>), not by the skin. Having the skin reach in is exactly the
+two-selectors-one-field collision <code>assertDisjointPresets</code> exists to forbid, so it
+needs a ruling on which axis wins, not a patch.
+<span class="rec">Recommendation: yes, but as an outline layer, not a paint override</span> —
+give Pill the same <code>SketchOutline</code> with a wobble scaled to its height (2.4px on a
+20px chip is far too loose), leaving <code>state</code> in sole charge of colour. That keeps
+both axes intact. <em>If you say nothing the chip stays crisp.</em></dd>
+
 <dt>D3 &middot; Should a <code>CodeField</code> resist the sketch skin?</dt>
 <dd>Right now it is accidental: it inherits the hand font in the demos and stays monospace in
 Storybook, purely because of which stylesheets each host imports. Either answer is defensible —
@@ -566,11 +707,11 @@ wrong.</em></dd>
 <code>next-themes</code> provider from the stock table plus a picker on component pages —
 a real design decision about the site, not part of the mechanism. The spike proves the
 mechanism in two canvas hosts instead.</li>
-<li><strong>No real roughened stroke.</strong> An <code>feTurbulence</code> filter was the first
-thing I tried; Block's <code>overflow: clip</code> (which is what makes its corners cut the
+<li><strong>No <code>feTurbulence</code> filter.</strong> It was the first thing I tried and
+it does not work here: Block's <code>overflow: clip</code> (what makes its corners cut the
 header and footer bars) clips a filtered pseudo-element border to the padding box and eats the
-wobble, and filtering the element itself displaces its text into blur. Asymmetric corners get
-most of the read for one token and no repaint layer.</li>
+wobble, and filtering the element itself displaces its text into blur. A generated path has
+neither problem, and is what tldraw does anyway.</li>
 <li><strong>No rotation on the sketch skin.</strong> Tempting, and the one thing a skin must
 never do: a tilted DOM stops agreeing with the host's own hit-test box and port anchors, which
 the core does not own.</li>
