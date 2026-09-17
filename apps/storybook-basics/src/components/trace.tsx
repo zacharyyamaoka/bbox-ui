@@ -681,21 +681,40 @@ export function Trace({
   className,
   ...props
 }: TraceRouteProps) {
-  const geometry = useMemo(
-    () =>
-      traceGeometry({
-        from,
-        to,
-        routing,
-        gap,
-        curve,
-        slantT,
-        pins,
-        obstacles,
-        fromBox,
-        toBox,
-        elbowOptions,
-      }),
+  // Geometry AND per-end arrow fidelity, derived together — see
+  // `TraceTerminal`'s own `showDirection` doc for the underlying claim.
+  // WHY this lives here rather than being left to each caller: `Trace` is
+  // already the one place that turns a routing KIND into geometry (this
+  // file's own P6 header), so it is the one place that can honestly answer
+  // "does the picture I'm about to draw actually depend on this end's
+  // dir" without a caller re-deriving `traceReadsTangent` itself (which
+  // would either duplicate this call or, worse, hardcode routing names —
+  // exactly the trap `TracePolarity.stories.tsx` documents at length).
+  // Measured with `traceReadsTangent`, never read off a static per-routing
+  // table: `routingTangents`'s own table is geometry-INDEPENDENT and wrong
+  // on a bent curve or a degenerate slanted chord (see that function's doc
+  // comment), and a terminal glyph that trusted the table over the actual
+  // geometry would repeat the exact bug this component exists to fix.
+  const { geometry, showFromDirection, showToDirection } = useMemo(() => {
+    const request: TraceRouteRequest = {
+      from,
+      to,
+      routing,
+      gap,
+      curve,
+      slantT,
+      pins,
+      obstacles,
+      fromBox,
+      toBox,
+      elbowOptions,
+    };
+    return {
+      geometry: traceGeometry(request),
+      showFromDirection: traceReadsTangent(request, "from"),
+      showToDirection: traceReadsTangent(request, "to"),
+    };
+  },
     // WHY the two terminals and `curve` are spread into scalars rather than
     // listed as objects: a caller writing `from={{ x, y, dir: "right" }}`
     // inline — which every story here does, and which is the natural way to
@@ -774,6 +793,7 @@ export function Trace({
             dir={from.dir}
             radius={terminalRadius}
             color={terminalColor}
+            showDirection={showFromDirection}
           />
           <TraceTerminal
             data-end="to"
@@ -782,6 +802,7 @@ export function Trace({
             dir={to.dir}
             radius={terminalRadius}
             color={terminalColor}
+            showDirection={showToDirection}
           />
         </>
       ) : null}

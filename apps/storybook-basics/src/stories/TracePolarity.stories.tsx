@@ -560,6 +560,40 @@ async function assertCellFrame(
   await expect(markers).toHaveLength(1);
   await expect(line.getAttribute("marker-end")).toBe(`url(#${markers[0].id})`);
   await expect(line.getAttribute("marker-start")).toBeNull();
+
+  // 4. T1/T3 — a terminal's own internal arrow (NOT the marker above, which
+  //    belongs to the wire) is drawn iff `traceReadsTangent` says this
+  //    routing actually reads THIS end's dir, for THIS request — options
+  //    (a dragged `curve`, a `slantT`) included. Never a per-routing-name
+  //    table: `Degenerate` and `RoutingKinds`' `curved-bent` case both carry
+  //    a routing whose table entry disagrees with its actual geometry (see
+  //    `trace.routing.ts`'s `routingTangents` doc comment), and asserting
+  //    against the table here would silently pass a terminal lying about
+  //    exactly the case this file exists to catch.
+  for (const [glyph, end] of [
+    [fromGlyph, "from"],
+    [toGlyph, "to"],
+  ] as const) {
+    const arrows = glyph.querySelectorAll('[data-slot="trace-terminal-arrow"]');
+    const shouldShow = traceReadsTangent(request, end);
+    await expect(
+      arrows.length,
+      `${cell.getAttribute("data-testid")}: ${end} terminal arrow should be ${shouldShow ? "present" : "absent"}`,
+    ).toBe(shouldShow ? 1 : 0);
+  }
+
+  // 5. T4 — hiding an arrow never resizes or moves the ring: the `from` and
+  //    `to` glyphs share one `terminalRadius`, so their rings must measure
+  //    identically regardless of which one is currently blind. Measured off
+  //    the DOM, not assumed from the shared prop, so a future per-end
+  //    `radius` divergence in `TraceTerminal` itself would fail this rather
+  //    than pass silently.
+  const fromRing = requireEl<SVGGraphicsElement>(fromGlyph, '[data-slot="trace-terminal-ring"]');
+  const toRing = requireEl<SVGGraphicsElement>(toGlyph, '[data-slot="trace-terminal-ring"]');
+  const fromRingRect = fromRing.getBoundingClientRect();
+  const toRingRect = toRing.getBoundingClientRect();
+  await expect(Math.abs(fromRingRect.width - toRingRect.width)).toBeLessThan(1);
+  await expect(Math.abs(fromRingRect.height - toRingRect.height)).toBeLessThan(1);
 }
 
 /**
@@ -748,6 +782,44 @@ export const TargetPolarity: Story = {
         measured[targetKey("slanted", dir)].arrivesDeg,
         `slanted/${dir}: arrived along to.dir, which slanted has no way to do`,
       ).toBeGreaterThan(TANGENT_TOLERANCE_DEG);
+    }
+
+    /* ---- T1/T2, pinned explicitly for the two rows Zach called out ---- */
+    // `assertCellFrame` already proves this generically for every cell in
+    // the matrix (it derives from `traceReadsTangent`, never a routing-name
+    // list). This block restates it as a literal per-row expectation, so a
+    // regression here reads as "straight/slanted broke" rather than a
+    // generic frame failure buried in a loop.
+    for (const dir of TRACE_DIRS) {
+      // straight: blind at BOTH ends — neither terminal may claim a tangent.
+      const straightCell = requireEl(canvasElement, `[data-testid="${targetKey("straight", dir)}"]`);
+      await expect(
+        requireEl(straightCell, '[data-end="from"]').querySelectorAll(
+          '[data-slot="trace-terminal-arrow"]',
+        ),
+      ).toHaveLength(0);
+      await expect(
+        requireEl(straightCell, '[data-end="to"]').querySelectorAll(
+          '[data-slot="trace-terminal-arrow"]',
+        ),
+      ).toHaveLength(0);
+
+      // slanted: the asymmetry. `from.dir` never permutes in THIS gallery
+      // (FROM_FIXED is constant) but the source arrow still has to be THERE
+      // — honored — while the target arrow, on the very same cell, must not.
+      const slantedCell = requireEl(canvasElement, `[data-testid="${targetKey("slanted", dir)}"]`);
+      await expect(
+        requireEl(slantedCell, '[data-end="from"]').querySelectorAll(
+          '[data-slot="trace-terminal-arrow"]',
+        ),
+        `slanted/${dir}: source arrow should be present`,
+      ).toHaveLength(1);
+      await expect(
+        requireEl(slantedCell, '[data-end="to"]').querySelectorAll(
+          '[data-slot="trace-terminal-arrow"]',
+        ),
+        `slanted/${dir}: target arrow should be absent`,
+      ).toHaveLength(0);
     }
 
     /* ---- The four cells of a supported row are genuinely different --- */
@@ -1220,6 +1292,34 @@ export const RoutingKinds: Story = {
     await expect(pathOf("straight").getAttribute("d")).not.toBe(
       pathOf("curved").getAttribute("d"),
     );
+
+    /* ---- T3, pinned explicitly: a bent curve loses BOTH tangents ------ */
+    // `assertCellFrame` above already checked every WRAP_CASE generically
+    // (arrow presence derived from `traceReadsTangent`, never a routing-name
+    // table), so this is redundant with that loop — deliberately: it is the
+    // exact trap the handoff calls out by name ("any polarity cell that
+    // carries a control point will claim a tangent fidelity it does not
+    // have"), so it gets its own unmissable assertion rather than riding
+    // along inside a generic per-case loop.
+    const arrowCountsOf = (key: string) => {
+      const cell = requireEl(canvasElement, `[data-testid="wrap-card-${key}"]`);
+      const count = (end: "from" | "to") =>
+        requireEl(cell, `[data-end="${end}"]`).querySelectorAll(
+          '[data-slot="trace-terminal-arrow"]',
+        ).length;
+      return { from: count("from"), to: count("to") };
+    };
+    // `curved` bare honors both ends — the kit default.
+    await expect(arrowCountsOf("curved")).toEqual({ from: 1, to: 1 });
+    // The SAME routing, with a dragged control point, honors NEITHER —
+    // `bentCurvedPath` never receives `sides` at all (`trace.routing.ts`'s
+    // own `routingTangents` doc comment).
+    await expect(arrowCountsOf("curved-bent")).toEqual({ from: 0, to: 0 });
+    // `elbow` (with or without a keep-out) still honors both — that is what
+    // it is for, and it is the control proving the drop above is about the
+    // control point, not about "any routing with a bend in it".
+    await expect(arrowCountsOf("elbow")).toEqual({ from: 1, to: 1 });
+    await expect(arrowCountsOf("elbow-obstacle")).toEqual({ from: 1, to: 1 });
 
     /* ---- slantT really does slide the bend --------------------------- */
     const leadOf = (key: string) => {
