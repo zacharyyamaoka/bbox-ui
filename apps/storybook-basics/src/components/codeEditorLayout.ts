@@ -6,6 +6,25 @@
 // width maths — no size ladder, no look/overflow enum, no `grow`/
 // `grow-truncated` (this app has no FieldSpec/preset machinery to hang
 // those on). Pure numbers, no React, no CodeMirror.
+//
+// DONOR LINES (branch `claude/code-block-primitive`, tip dc30352, read
+// 2026-09-17 — the branch is unmerged but present, so `git show
+// claude/code-block-primitive:packages/bbox-ui/src/codeBlock.layout.ts`
+// resolves these offline):
+//   • `:111` `CODE_BLOCK_GUTTER_PX = 36`  -> `CODE_EDITOR_GUTTER_PX`
+//   • `:112` `CODE_BLOCK_CHAR_RATIO = 0.61` -> `CODE_EDITOR_CHAR_RATIO`
+//   • `:116` `codeBlockCharPx` body        -> `codeEditorCharPx`
+//   • `:135` `codeBlockWidthPx` body       -> `codeEditorWidthPx`
+// Renames only; the arithmetic is byte-identical. main's 368a524 is the
+// commit that dropped the rest of that file.
+//
+// NO PRIOR ART IS CLAIMED. `0.61` is an EMPIRICAL constant — a measured
+// glyph-advance ratio for one specific font stack, not a derived or
+// published figure — and the width formula is plain addition. The honest
+// caveat that goes with an empirical constant: it is only right for the
+// `ui-monospace` stack it was measured on, and a host that swaps the font
+// silently gets a wrong width. That is a known limitation, not a bug being
+// reported here.
 
 /** The line-number gutter's reserved width, and the mono-cell approximation
  * (glyph advance ≈ 0.61 × font-size for the ui-monospace stack) — both

@@ -11,6 +11,26 @@
  * card roster of its own. Everything else — `mainAxisPositions`,
  * `distributionStyle`, the grouping/clustering algorithm, the group-syntax
  * parser — is unchanged math.
+ *
+ * DONOR LINE NUMBERS, so a re-sync is a diff and not a search. All four
+ * files read at commit 5898ecb on 2026-09-17 (`git show 5898ecb:<path>`;
+ * the branch is unmerged but the commit is in this repo, so these resolve
+ * offline forever):
+ *
+ *   • `layout.ts:39-69`   `mainAxisPositions` — byte-identical arithmetic.
+ *   • `layout.ts:71-74`   `clamp`.
+ *   • `grouping.ts:111-127` `computeSlots` — the one generalization above.
+ *     The donor's line 121 reads `CARD_IDS.filter((cid) => ...)`; here that
+ *     is `order.filter(...)`. Its third parameter is also widened, from the
+ *     donor's `clustered: boolean` to this file's three-state `mode`.
+ *   • `grouping.ts:129+`  `PALETTE`, and `buildColorMap` below it.
+ *   • `groupSyntax.ts`    (72 lines) the whole group-syntax parser.
+ *
+ * PRIOR ART, for the one function here that implements a published spec
+ * rather than a local convention — see `mainAxisPositions`' own docblock.
+ * Everything else in this file is ad hoc: `computeSlots` is a stable
+ * group-by preserving first-appearance order, and no prior art is claimed
+ * for it.
  */
 import type { CSSProperties } from "react";
 
@@ -83,6 +103,31 @@ export function innerBoxSize(size: Size): Size {
  * Reproduces CSS flexbox `justify-content` main-axis positions, so
  * switching into free-position ("Custom") mode can snapshot exactly where
  * the browser had already placed each card — no DOM measurement needed.
+ */
+/**
+ * Where each card's leading edge sits along the main axis. Ported from
+ * `demos/dndkit-lab/src/layout.ts:39-69` @ 5898ecb, arithmetic unchanged.
+ *
+ * PRIOR ART — this is not invented, it is CSS Box Alignment Level 3's
+ * content-distribution, reimplemented in numbers because a host that places
+ * ports on a canvas needs the POSITIONS, not a flex container. Spec read
+ * 2026-09-17 at https://www.w3.org/TR/css-align-3/; each branch below
+ * matches its normative definition, quoted:
+ *
+ *   space-between — "The first alignment subject is placed flush with the
+ *     start edge of the alignment container, the last alignment subject is
+ *     placed flush with the end edge" → first position 0, gap free/(n-1).
+ *   space-evenly  — "with a full-size space on either end … the spacing
+ *     between any two adjacent alignment subjects, before the first … and
+ *     after the last … is the same" → gap free/(n+1), first at gap.
+ *   space-around  — "with a half-size space on either end … the spacing
+ *     before the first and after the last alignment subject is half the
+ *     size of the other spacing" → gap free/n, first at gap/2.
+ *
+ * The `count === 1` branch is the one place the spec does not decide the
+ * answer for us (there is no "between" with one subject); it reproduces
+ * what browsers actually do, which is the donor's own stated reason at
+ * `layout.ts:49-52` — "Matches browser behaviour". Not re-measured here.
  */
 export function mainAxisPositions(count: number, mainSize: number, cardMain: number, scheme: SpacingScheme): number[] {
   if (count === 0) return [];

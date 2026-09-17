@@ -18,6 +18,21 @@
  * `textSize` are direct props in this reset lane, no header hands a size
  * down). Nothing here imports `./layout` (`SIMPLE_BLOCK`) — dropping the
  * wall-anchor math is what makes that import unnecessary.
+ *
+ * DONOR LINES for the pieces that did travel (donor read 2026-09-17, 670
+ * lines, same repo — so every number below is checkable with one `sed`):
+ *   • `port.layout.ts:31`     `PORT_DIAMETERS` (8/12/18).
+ *   • `port.layout.ts:40-41`  `PORT_SURFACE_RING_PX` / `PORT_STATE_RING_PX`.
+ *   • `port.layout.ts:508`    `SlotOrigin`.
+ *   • `port.layout.ts:549`    `SlotAlign`.
+ *   • `port.layout.ts:590+`   `slotPlacementStyle`, the placement model.
+ *
+ * NO PRIOR ART IS CLAIMED for anything in this file. The slot-placement
+ * model is a local convention over CSS absolute positioning, and the dot
+ * diameters were measured against the real SystemSketch app rather than
+ * derived — there is no algorithm here and no paper to point at. The one
+ * genuinely published spec this app leans on is CSS content-distribution,
+ * and that lives in `portEdge.layout.ts`'s `mainAxisPositions`, not here.
  */
 import type { CSSProperties } from "react";
 

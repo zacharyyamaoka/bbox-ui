@@ -37,6 +37,29 @@ import type { PortEdgeItem } from "./portEdge";
  * — prefer advancing `a` over `b` on a tie) is what makes a two-line swap
  * resolve the way a human expects, matching the donor exactly
  * (portLane.ts:62-86).
+ *
+ * PRIOR ART, named because "LCS" deserves its actual citation. This is the
+ * textbook QUADRATIC-time, QUADRATIC-space dynamic program — not one of the
+ * refinements — and the cleanest statement of exactly that baseline is the
+ * opening of D. S. Hirschberg, "A linear space algorithm for computing
+ * maximal common subsequences", Communications of the ACM 18(6):341-343,
+ * 1975: "The problem of finding a longest common subsequence of two strings
+ * has been solved in quadratic time and space." That sentence describes THIS
+ * function; the paper then improves the space, which we deliberately do not
+ * need (a port lane is tens of lines, not a genome). Its ancestor recurrence
+ * is R. A. Wagner and M. J. Fischer, "The String-to-String Correction
+ * Problem", Journal of the ACM 21(1):168-173, 1974.
+ *
+ * Both citations verified 2026-09-17 against dl.acm.org's own records
+ * (doi 10.1145/360825.360861 and 10.1145/321796.321811) — venue, volume,
+ * pages and year all confirmed there. The PAPERS' full texts were not read;
+ * nothing here depends on them beyond the baseline they name, and the
+ * implementation came from the donor, not from either paper.
+ *
+ * NOT prior art, and not claimed as any: the leftover-zipping in
+ * `reconcilePortLane` below (step 2 — pair unmatched lines POSITIONALLY by
+ * rank). That is this repo's own product rule for "a rename keeps its id",
+ * invented here, with no algorithm behind it.
  */
 function lcsTable(a: string[], b: string[]): number[][] {
   const n = a.length;
