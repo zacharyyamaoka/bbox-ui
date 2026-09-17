@@ -11,6 +11,7 @@ import {
   sceneToReactFlowEdges,
   sceneToReactFlowNodes,
 } from "@bbox-ui/demo-scene/reactflow";
+import { SkinPicker } from "@bbox-ui/demo-scene/SkinPicker";
 
 const nodeTypes = { bboxBlock: BBoxBlockNode, bboxStandalonePort: BBoxPortNode };
 
@@ -89,6 +90,11 @@ export function App() {
         <Background />
         <ViewToolbar />
       </ReactFlow>
+      {/* Outside <ReactFlow>, and that is the point: it stamps one
+          attribute on <html>, so every bbox node inside the flow re-skins
+          without this demo, the node components, or
+          @bbox-ui/adapter-reactflow changing a single line. */}
+      <SkinPicker />
     </div>
   );
 }

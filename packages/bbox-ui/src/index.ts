@@ -7,6 +7,11 @@ export * from "./blockLayout";
 export * from "./appearance";
 export * from "./appearance.fields";
 
+// The shape language (skin.css's companion) — orthogonal to both the
+// appearance ladder above and theme.css's colours. No React, no host
+// import, no DOM: a vocabulary plus one attribute name. See skin.ts.
+export * from "./skin";
+
 export * from "./badge.fields";
 export * from "./badge";
 

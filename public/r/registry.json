@@ -17,6 +17,24 @@
       ]
     },
     {
+      "name": "bbox-skin",
+      "type": "registry:lib",
+      "title": "bbox skin",
+      "description": "Optional shape language for bbox-ui components: default / plain / sketch, selected with one inherited data-bbox-skin attribute. Purely additive — every component already carries today's look as its own var() fallback, so installing this adds skins and changes nothing until you set the attribute.",
+      "files": [
+        {
+          "path": "packages/bbox-ui/src/skin.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/skin.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/skin.css",
+          "type": "registry:style",
+          "target": "components/bbox/skin.css"
+        }
+      ]
+    },
+    {
       "name": "port",
       "type": "registry:component",
       "title": "Port",

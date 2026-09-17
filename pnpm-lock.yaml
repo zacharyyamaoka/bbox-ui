@@ -491,6 +491,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.3.3(vite@6.4.3(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
+      '@tldraw/assets':
+        specifier: 5.3.2
+        version: 5.3.2
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0
@@ -528,6 +531,12 @@ importers:
         specifier: 5.3.2
         version: 5.3.2(@floating-ui/dom@1.8.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -580,6 +589,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.0.0
         version: 4.3.3(vite@6.4.3(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
+      '@tldraw/assets':
+        specifier: 5.3.2
+        version: 5.3.2
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0

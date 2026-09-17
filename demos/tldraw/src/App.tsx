@@ -11,6 +11,7 @@ import {
 } from "@bbox-ui/adapter-tldraw";
 import { BLOCK_VIEWS, BLOCK_VIEW_LABELS, type BlockView } from "@bbox-ui/core";
 import { sceneToTldrawShapes } from "@bbox-ui/demo-scene/tldraw";
+import { SkinPicker } from "@bbox-ui/demo-scene/SkinPicker";
 
 const shapeUtils = [BBoxBlockShapeUtil, BBoxPortShapeUtil];
 
@@ -90,6 +91,11 @@ export function App() {
         }}
       />
       <ViewToolbar editor={editor} />
+      {/* Outside <Tldraw>, and that is the point: the bbox shapes live in
+          tldraw's own DOM, which nothing here can wrap. One inherited
+          attribute on <html> reaches them anyway, so
+          @bbox-ui/adapter-tldraw never learns that skins exist. */}
+      <SkinPicker />
     </div>
   );
 }

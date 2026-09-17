@@ -233,7 +233,12 @@ export function Pill({
       data-line-style={lineStyleResolved}
       data-fill-style={fillStyleResolved}
       className={cn(
-        "box-border inline-flex w-fit items-center justify-center whitespace-nowrap rounded-full text-center leading-tight text-foreground",
+        // `rounded-[…]` rather than `rounded-full`: the capsule is the
+        // DEFAULT, not a law. A Pill is a text slot with a line around it,
+        // so its corner treatment is exactly what a skin is for — unlike a
+        // Port dot, which stays `rounded-full` unconditionally because a
+        // circle is what a Port IS (port.tsx's `portDotClassName`).
+        "box-border inline-flex w-fit items-center justify-center whitespace-nowrap rounded-[var(--bbox-skin-radius-pill,9999px)] text-center leading-tight text-foreground",
         className,
       )}
       style={{

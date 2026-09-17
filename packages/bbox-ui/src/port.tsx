@@ -977,6 +977,15 @@ export function LabeledPort({
       data-lens={lens !== "normal" ? lens : undefined}
       className={cn(
         "flex w-fit items-center",
+        // The skin's font, for the same reason `Block` carries it: a Port
+        // mounted on a Block wall inherits it from that Block, but a
+        // STANDALONE Port has no Block above it, so the sketch capture
+        // showed the board's "sensor bus" label still in the UI font while
+        // every wall-mounted label had gone hand-drawn. Nothing else about
+        // a Port is skinned — the dot stays `rounded-full` at
+        // `--bbox-skin-stroke-width`'s fixed 2px, because a circle at a
+        // measured anchor is what a Port IS.
+        "font-[family-name:var(--bbox-skin-font,inherit)]",
         // `reveal: "onHover"` composes opacity, not colour, over whichever
         // resting state is in force — a visibility policy triggered by the
         // CONTAINER's view, kept deliberately apart from `dimmed`

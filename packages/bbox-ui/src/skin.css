@@ -1,0 +1,108 @@
+/*
+ * bbox-ui skins — the shape language, one optional stylesheet.
+ *
+ * Import AFTER theme.css (or after whatever carries your copy of its
+ * tokens — apps/docs deliberately copies rather than imports it):
+ *
+ *   @import "@bbox-ui/core/skin.css";
+ *
+ * Then stamp one attribute on any ancestor:
+ *
+ *   <html data-bbox-skin="sketch">        a whole app
+ *   <div  data-bbox-skin="plain">…</div>  one board, one card, one story row
+ *
+ * WHY this file contains ONLY custom-property declarations, and not a
+ * single rule that reaches into a component's internals: the components
+ * already read these tokens at their own call sites with today's values
+ * hard-coded as the `var()` fallback. So this file is purely additive —
+ * a consumer who never imports it gets the pixels they have now, and one
+ * who does never has to win a specificity fight against a Tailwind
+ * utility or a caller's own `className`. The first draft of this file
+ * carried `@layer base { [data-slot="block"] { … } }` rules instead; they
+ * work, but they put the package in the business of restyling markup it
+ * also renders, and an unlayered rule there silently outranks the
+ * `className` prop every component documents as the escape hatch.
+ *
+ * ONE TOKEN BELOW IS A TRAP, AND ALL THREE SKINS THEREFORE AGREE ON IT:
+ * `--bbox-skin-stroke-width` paints a border, but border width is GEOMETRY
+ * in this codebase, not paint. `port.layout.ts`'s `BLOCK_BORDER_PX` (2)
+ * insets every wall-mounted port's anchor by it, and `region.tsx`'s
+ * `REGION_BORDER_PX` (2) positions the corner Block by it. A skin that
+ * stroked at 1px would slide every port half a pixel out from under the
+ * host's own edge endpoints, in both adapters, silently. Keep it at 2px
+ * until those two constants read the same token — that is layout work with
+ * adapter-visible consequences, not a line in this file.
+ *
+ * Skin is ORTHOGONAL to theme. Nothing below names a colour literal —
+ * every one resolves through theme.css's own tokens, so all three skins
+ * follow light/dark, and `data-theme="dark" data-bbox-skin="sketch"` is
+ * an ordinary combination rather than a fourth thing to define.
+ */
+
+/*
+ * `default` is spelled out even though it is also every token's built-in
+ * fallback. WHY: without it there is no way to switch BACK. A host with a
+ * skin picker sets the attribute to one of three values; "unset the
+ * attribute" is a fourth, different operation that a <select> cannot
+ * express, and every host would hand-roll the same special case.
+ */
+[data-bbox-skin="default"] {
+  --bbox-skin-radius: 8px;
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--foreground);
+  --bbox-skin-surface: var(--card);
+  --bbox-skin-shadow: none;
+  --bbox-skin-font: inherit;
+}
+
+/*
+ * Plain — square corners, one weight of line, no shadow. The austere
+ * reading: a schematic, or Base UI's own docs.
+ */
+[data-bbox-skin="plain"] {
+  --bbox-skin-radius: 0px;
+  --bbox-skin-radius-pill: 0px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--foreground);
+  --bbox-skin-surface: var(--card);
+  --bbox-skin-shadow: none;
+  --bbox-skin-font: inherit;
+}
+
+/*
+ * Sketch — hand-drawn.
+ *
+ * WHY four different corner radii and not an SVG roughen filter: a
+ * `feTurbulence`/`feDisplacementMap` filter is the obvious way to wobble a
+ * stroke, and it does not work here. Block sets `overflow: clip` (so its
+ * corners cut the header/footer bars), which clips a filtered
+ * pseudo-element border to the padding box and eats the wobble; applying
+ * the filter to the element itself instead displaces its TEXT, which reads
+ * as blurry rather than hand-drawn. Asymmetric elliptical corners cost one
+ * token, survive `overflow: clip`, leave text crisp, and — unlike a filter
+ * — do not force a repaint layer onto every card on a canvas.
+ *
+ * WHY no `rotate`: a degree or two of tilt is the other obvious sketch
+ * move and it is the one thing a skin must never do. The DOM would stop
+ * agreeing with the host's own hit-test box and port anchors, which the
+ * core does not own. See skin.ts's INVARIANT.
+ *
+ * The font is a STACK, not a file. This package ships no webfont on
+ * purpose — it has no build step and no asset pipeline — so a host
+ * supplies one @font-face and every skinned component picks it up. A
+ * tldraw host already has Shantell Sans loaded (tldraw draws with it);
+ * anyone else self-hosts one ~40 KB woff2. Everything after it is a real
+ * platform fallback, and `cursive` last so the skin degrades to *a* hand
+ * rather than to the body font.
+ */
+[data-bbox-skin="sketch"] {
+  --bbox-skin-radius: 14px 22px 12px 20px / 20px 12px 22px 14px;
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--foreground);
+  --bbox-skin-surface: var(--card);
+  --bbox-skin-shadow: none;
+  --bbox-skin-font: "Shantell Sans", "Excalifont", "Virgil", "Segoe Print",
+    "Bradley Hand", "Comic Sans MS", cursive;
+}

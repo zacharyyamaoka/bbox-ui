@@ -9,6 +9,7 @@
     "./completionMenu.css": "./src/completionMenu.css",
     "./layout": "./src/layout.ts",
     "./theme.css": "./src/theme.css",
+    "./skin.css": "./src/skin.css",
     "./codeField.css": "./src/codeField.css"
   },
   "scripts": {
