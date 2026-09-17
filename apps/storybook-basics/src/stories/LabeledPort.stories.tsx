@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { python } from "@codemirror/lang-python";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
+import { CodeEditor } from "../components/codeEditor";
 import { LabeledPort } from "../components/labeledPort";
 import { PORT_RING_OVERHANG_PX, PORT_LABEL_GAP, type BlockSide } from "../components/port.layout";
 
@@ -227,5 +229,132 @@ export const EditableLabel: Story = {
     });
     const canvas = within(canvasElement);
     await expect(canvas.getByText("pose: Pose = None")).toBeInTheDocument();
+  },
+};
+
+/**
+ * A-5 (docs/FEEDBACK-2026-09-17b-PLAN.md, Zach: "a story of the Labeled
+ * port that uses a single line code editor instead of the editable label
+ * … I would expect to see syntax highlighting on the label"). `labelSlot`
+ * (labeledPort.tsx, present-beats-absent) is the WHOLE mechanism — no
+ * component change here, just filling that seam with `CodeEditor` instead
+ * of the built-in `DefaultPortLabel`.
+ *
+ * `overflow="clip"` (not `"scroll"`) and `columns` sized to the sample —
+ * this label replaces an `<input>`-shaped port label, so it should behave
+ * like one (cut at the edge, no bar), not grow a text-editor scrollbar.
+ *
+ * WHY `value="var: Type = value"` renders "Type" in the SAME colour as
+ * "var", not a distinct type colour (the screenshot's `var`/`Type` visual
+ * distinction is real, but comes from the DEFINITION vs the annotation,
+ * not a type-vs-variable split): verified live against `classHighlighter`
+ * (@lezer/highlight, the seam codeEditor.tsx:297 must use unmodified) —
+ * Python's grammar has no AST node for "this identifier is a type
+ * annotation", so both `var` and `Type` parse as plain `VariableName` and
+ * get the identical `tok-variableName` class. The two colours this story
+ * (and A-5a) actually exercises are `tok-variableName` (var/Type/value)
+ * against `tok-operator` (`=`) — see CodeEditor.stories.tsx's
+ * `SyntaxThemes` for the same constraint on "control keyword"/"function".
+ */
+const CODE_LABEL_VALUE = "var: Type = value";
+
+function CodeLabelPort({ edge, theme, testId }: { edge: BlockSide; theme?: string; testId: string }) {
+  const [value, setValue] = useState(CODE_LABEL_VALUE);
+  return (
+    <LabeledPort
+      edge={edge}
+      state="wired"
+      labelSlot={
+        <CodeEditor
+          value={value}
+          onWrite={setValue}
+          multiline={false}
+          language={python()}
+          overflow="clip"
+          columns={18}
+          fontSizePx={12}
+          theme={theme}
+          testId={testId}
+        />
+      }
+    />
+  );
+}
+
+// The label ("var: Type = value") is far wider than FourEdges' one-word
+// labels, so each cell here justifies the DOT toward the wall it's meant
+// to sit on (mirroring a real Block wall) rather than centering it — a
+// centered dot would give the label room on only half the axis it
+// actually flows across and bleed into the neighbouring cell.
+const CODE_LABEL_JUSTIFY: Record<BlockSide, "flex-start" | "flex-end" | "center"> = {
+  left: "flex-start",
+  right: "flex-end",
+  top: "center",
+  bottom: "center",
+};
+
+export const CodeLabel: Story = {
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+      <div style={{ display: "flex", gap: 24 }}>
+        {EDGES.map((edge) => (
+          <div key={edge} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: CODE_LABEL_JUSTIFY[edge],
+                width: 200,
+                height: 70,
+              }}
+            >
+              <CodeLabelPort edge={edge} testId={`code-label-${edge}`} />
+            </div>
+            <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>edge={edge}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+        <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>theme=dark-modern — where A-2 and A-5 meet</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", width: 200, height: 60, background: "#1f1f1f", borderRadius: 8, paddingLeft: 16 }}>
+          <CodeLabelPort edge="left" theme="dark-modern" testId="code-label-themed" />
+        </div>
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const slot = canvasElement.querySelector('[data-testid="code-label-left"]');
+    if (!(slot instanceof HTMLElement)) throw new Error('expected [data-testid="code-label-left"]');
+
+    // A-5a: highlighting is genuinely ON, not just text presence — at
+    // least two spans with DISTINCT tok-* classes and distinct computed
+    // colours (variableName vs operator; see this story's own WHY on why
+    // that pair, not var-vs-Type, is what's actually reachable here).
+    const variableToken = slot.querySelector(".tok-variableName");
+    const operatorToken = slot.querySelector(".tok-operator");
+    if (!(variableToken instanceof HTMLElement) || !(operatorToken instanceof HTMLElement)) {
+      throw new Error("expected both a .tok-variableName and a .tok-operator span in the code label");
+    }
+    const variableColor = getComputedStyle(variableToken).color;
+    const operatorColor = getComputedStyle(operatorToken).color;
+    await expect(variableColor).not.toBe(operatorColor);
+
+    // The label behaves like the <input> it replaces: clipped, no scrollbar.
+    await expect(slot.getAttribute("data-overflow")).toBe("clip");
+
+    // Every edge actually mounted a code editor as its label, not the
+    // built-in EditableText.
+    for (const edge of EDGES) {
+      const editor = canvasElement.querySelector(`[data-testid="code-label-${edge}"]`);
+      if (!(editor instanceof HTMLElement)) throw new Error(`expected a code-label editor on edge=${edge}`);
+      await expect(editor.getAttribute("data-slot")).toBe("code-editor");
+    }
+
+    // The theme row: A-2's palette swap reaches the SAME label slot A-5
+    // proves highlighting on — dark-modern's keyword-adjacent operator
+    // colour differs from the unthemed row above it.
+    const themed = canvasElement.querySelector('[data-testid="code-label-themed"]');
+    if (!(themed instanceof HTMLElement)) throw new Error('expected [data-testid="code-label-themed"]');
+    await expect(getComputedStyle(themed).backgroundColor).toBe("rgb(31, 31, 31)");
   },
 };

@@ -19,8 +19,12 @@
   padding: 4px 6px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: var(--color-card);
-  color: var(--color-foreground);
+  /* `--bbox-tok-bg`/`--bbox-tok-fg` (codeEditorTheme.ts): a syntax theme is
+     a background + foreground pair, not just token colours — a Dark Modern
+     editor on the page's own light card is not Dark Modern. Unset, both
+     fall through to today's literals unchanged. */
+  background: var(--bbox-tok-bg, var(--color-card));
+  color: var(--bbox-tok-fg, var(--color-foreground));
   cursor: text;
   overflow: hidden;
 }
@@ -152,13 +156,29 @@
  * through generated `.ͼN .ͼM` rules at (0,2,0) — a bare
  * `.bbox-code-tokens .tok-keyword` would tie on specificity and lose or win
  * by stylesheet order. Three classes settles it in this sheet's favour.
+ *
+ * WHY each rule now reads `var(--bbox-tok-*, <today's literal>)`
+ * (docs/FEEDBACK-2026-09-17b-PLAN.md A-2, codeEditorTheme.ts): a VS Code
+ * syntax theme is a PALETTE SWAP over this exact selector set, not a
+ * second highlighter or a per-theme CodeMirror `EditorView.theme()` — see
+ * codeEditor.tsx:297's own WHY. `codeEditorThemeVars()` sets the
+ * `--bbox-tok-*` custom properties inline on the root; with none set (the
+ * default, and any unrecognised theme id) every rule falls straight
+ * through to the literal it had before this change, byte-identical.
  */
 .bbox-code-editor.bbox-code-tokens .tok-keyword,
 .bbox-code-editor.bbox-code-tokens .tok-operatorKeyword,
-.bbox-code-editor.bbox-code-tokens .tok-controlKeyword,
 .bbox-code-editor.bbox-code-tokens .tok-definitionKeyword,
 .bbox-code-editor.bbox-code-tokens .tok-moduleKeyword {
-  color: color-mix(in srgb, var(--bbox-accent, #4f6ee5) 78%, var(--color-foreground));
+  color: var(--bbox-tok-keyword, color-mix(in srgb, var(--bbox-accent, #4f6ee5) 78%, var(--color-foreground)));
+  font-weight: 600;
+}
+
+/* Split from the group above so a theme's "control keyword" row
+   (if/for/return/…) has somewhere to land — see codeEditorTheme.ts's own
+   WHY on why `classHighlighter` never actually emits this class today. */
+.bbox-code-editor.bbox-code-tokens .tok-controlKeyword {
+  color: var(--bbox-tok-control-keyword, color-mix(in srgb, var(--bbox-accent, #4f6ee5) 78%, var(--color-foreground)));
   font-weight: 600;
 }
 
@@ -166,7 +186,7 @@
 .bbox-code-editor.bbox-code-tokens .tok-docString,
 .bbox-code-editor.bbox-code-tokens .tok-character,
 .bbox-code-editor.bbox-code-tokens .tok-attributeValue {
-  color: color-mix(in srgb, var(--bbox-success, #2f9e5a) 62%, var(--color-foreground));
+  color: var(--bbox-tok-string, color-mix(in srgb, var(--bbox-success, #2f9e5a) 62%, var(--color-foreground)));
 }
 
 .bbox-code-editor.bbox-code-tokens .tok-number,
@@ -176,28 +196,28 @@
 .bbox-code-editor.bbox-code-tokens .tok-atom,
 .bbox-code-editor.bbox-code-tokens .tok-null,
 .bbox-code-editor.bbox-code-tokens .tok-unit {
-  color: color-mix(in srgb, var(--bbox-warning, #c98a1b) 58%, var(--color-foreground));
+  color: var(--bbox-tok-number, color-mix(in srgb, var(--bbox-warning, #c98a1b) 58%, var(--color-foreground)));
 }
 
 .bbox-code-editor.bbox-code-tokens .tok-comment,
 .bbox-code-editor.bbox-code-tokens .tok-lineComment,
 .bbox-code-editor.bbox-code-tokens .tok-blockComment,
 .bbox-code-editor.bbox-code-tokens .tok-meta {
-  color: var(--color-muted-foreground);
+  color: var(--bbox-tok-comment, var(--color-muted-foreground));
   font-style: italic;
 }
 
 .bbox-code-editor.bbox-code-tokens .tok-typeName,
 .bbox-code-editor.bbox-code-tokens .tok-className,
 .bbox-code-editor.bbox-code-tokens .tok-namespace {
-  color: color-mix(in srgb, var(--bbox-accent, #4f6ee5) 55%, var(--color-foreground));
+  color: var(--bbox-tok-type, color-mix(in srgb, var(--bbox-accent, #4f6ee5) 55%, var(--color-foreground)));
 }
 
 .bbox-code-editor.bbox-code-tokens .tok-variableName,
 .bbox-code-editor.bbox-code-tokens .tok-variableName2,
 .bbox-code-editor.bbox-code-tokens .tok-definition,
 .bbox-code-editor.bbox-code-tokens .tok-self {
-  color: var(--bbox-accent, #4f6ee5);
+  color: var(--bbox-tok-variable, var(--bbox-accent, #4f6ee5));
 }
 
 .bbox-code-editor.bbox-code-tokens .tok-propertyName,
@@ -208,7 +228,7 @@
 
 .bbox-code-editor.bbox-code-tokens .tok-function,
 .bbox-code-editor.bbox-code-tokens .tok-macroName {
-  color: var(--color-foreground);
+  color: var(--bbox-tok-function, var(--color-foreground));
   font-weight: 600;
 }
 
@@ -216,7 +236,7 @@
 .bbox-code-editor.bbox-code-tokens .tok-punctuation,
 .bbox-code-editor.bbox-code-tokens .tok-separator,
 .bbox-code-editor.bbox-code-tokens .tok-bracket {
-  color: var(--color-muted-foreground);
+  color: var(--bbox-tok-operator, var(--color-muted-foreground));
 }
 
 .bbox-code-editor.bbox-code-tokens .tok-invalid {

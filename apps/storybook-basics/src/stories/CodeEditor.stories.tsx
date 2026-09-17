@@ -5,6 +5,7 @@ import type { EditorView } from "@codemirror/view";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { CodeEditor } from "../components/codeEditor";
+import { CODE_EDITOR_THEMES } from "../components/codeEditorTheme";
 
 /**
  * `CodeEditor` is controlled — the host owns `value` — so every interactive
@@ -317,4 +318,150 @@ export const Gallery: Story = {
       </div>
     </div>
   ),
+};
+
+/**
+ * A-2 (docs/FEEDBACK-2026-09-17b-PLAN.md, Zach: "I like using dark modern
+ * … its important that people can set it to what they are used to").
+ * Exercises keyword / string / number / comment / type(class) / variable /
+ * operator — every row of the theme table `codeEditorTheme.ts` ships
+ * EXCEPT "control keyword" and "function", which are not omitted by
+ * choice: `classHighlighter` (codeEditor.tsx:297, the seam this task must
+ * use and not replace) never emits `tok-controlKeyword` or `tok-function`
+ * for ANY language — @lezer/highlight's own rule table has no entry for
+ * either subtag, so both fall back to their base tag's class
+ * (`tok-keyword`, `tok-variableName`/`tok-propertyName`) regardless of
+ * what a language's grammar tags them as underneath. Verified live: in
+ * this exact sample, `if`/`return`/`def`/`class` all render class
+ * `tok-keyword`, and the `move` definition renders `tok-variableName
+ * tok-definition`, never `tok-function`. Both theme rows are still shipped
+ * as CSS variables (codeEditorTheme.ts's own WHY) — they simply have no
+ * DOM class to attach to today.
+ */
+const THEME_SAMPLE = `class Router:  # a comment
+    """Follow a path and stop within tolerance."""
+    def move(self, target: Pose, speed: float = 1.5) -> bool:
+        if target is None:
+            return False
+        distance = target.x - self.x
+        return distance < speed
+`;
+
+function ThemeSwatch({ id, label, testId }: { id?: string; label: string; testId: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 12, opacity: 0.6 }}>{label}</div>
+      <ControlledCodeEditor
+        initial={THEME_SAMPLE}
+        multiline
+        language={python()}
+        theme={id}
+        lineNumbers
+        columns={44}
+        testId={testId}
+      />
+    </div>
+  );
+}
+
+function LiveThemedEditor() {
+  const [themeId, setThemeId] = useState<string>(CODE_EDITOR_THEMES[0].id);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+      <select
+        data-testid="theme-select"
+        value={themeId}
+        onChange={(event) => setThemeId(event.target.value)}
+      >
+        {CODE_EDITOR_THEMES.map((theme) => (
+          <option key={theme.id} value={theme.id}>
+            {theme.label}
+          </option>
+        ))}
+      </select>
+      <ControlledCodeEditor
+        initial={THEME_SAMPLE}
+        multiline
+        language={python()}
+        theme={themeId}
+        lineNumbers
+        columns={56}
+        fontSizePx={14}
+        testId="theme-live"
+      />
+    </div>
+  );
+}
+
+export const SyntaxThemes: Story = {
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, alignItems: "flex-start" }}>
+      <div>
+        <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.6 }}>
+          Flip the theme live — the SAME editor, only the palette changes
+        </div>
+        <LiveThemedEditor />
+      </div>
+      <div>
+        <div style={{ fontSize: 12, marginBottom: 8, opacity: 0.6 }}>Every theme, side by side</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ThemeSwatch label="No theme (default)" testId="swatch-none" />
+          <ThemeSwatch id="not-a-real-theme" label="Unknown id (typo)" testId="swatch-unknown" />
+          {CODE_EDITOR_THEMES.map((theme) => (
+            <ThemeSwatch key={theme.id} id={theme.id} label={theme.label} testId={`swatch-${theme.id}`} />
+          ))}
+        </div>
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const keywordColor = (testId: string) => {
+      const field = canvasElement.querySelector(`[data-testid="${testId}"]`);
+      if (!(field instanceof HTMLElement)) throw new Error(`expected [data-testid="${testId}"]`);
+      const token = field.querySelector(".tok-keyword");
+      if (!(token instanceof HTMLElement)) throw new Error(`expected a .tok-keyword token in ${testId}`);
+      return getComputedStyle(token).color;
+    };
+    const rootBg = (testId: string) => {
+      const field = canvasElement.querySelector(`[data-testid="${testId}"]`);
+      if (!(field instanceof HTMLElement)) throw new Error(`expected [data-testid="${testId}"]`);
+      return getComputedStyle(field).backgroundColor;
+    };
+
+    // A-2a: with NO theme, `tok-keyword`'s computed colour is
+    // byte-identical to what it was before this change. Rather than a
+    // hardcoded computed-pixel literal (which would also encode the
+    // browser's colour-space quirks, not just this file's own claim), the
+    // reference element below inlines the EXACT pre-edit CSS literal —
+    // codeEditor.css's `.tok-keyword` rule read verbatim before A-2 — so
+    // this assertion is "does the var()'s fallback still equal today's
+    // literal", which is the actual claim A-2a makes.
+    const reference = document.createElement("span");
+    reference.style.color = "color-mix(in srgb, #4f6ee5 78%, var(--color-foreground))";
+    canvasElement.appendChild(reference);
+    const referenceColor = getComputedStyle(reference).color;
+    reference.remove();
+    await expect(keywordColor("swatch-none")).toBe(referenceColor);
+
+    // A-2b: dark-modern's published token colours, exactly.
+    await expect(keywordColor("swatch-dark-modern")).toBe("rgb(86, 156, 214)");
+    await expect(rootBg("swatch-dark-modern")).toBe("rgb(31, 31, 31)");
+
+    // A-2c: the live select actually drives the SAME editor's colour.
+    const before = keywordColor("theme-live"); // dark-modern, the select's first option
+    const select = canvasElement.querySelector('[data-testid="theme-select"]');
+    if (!(select instanceof HTMLSelectElement)) throw new Error('expected the theme <select>');
+    await userEvent.selectOptions(select, "monokai");
+    await waitFor(async () => {
+      const after = keywordColor("theme-live");
+      await expect(after).not.toBe(before);
+      await expect(after).toBe("rgb(249, 38, 114)"); // monokai's #f92672
+    });
+
+    // A-2d: an unknown theme id ("not-a-real-theme", a typo) renders the
+    // default palette (same colour as no theme at all) and throws nothing
+    // getting here — the render above already had to succeed for this
+    // play function to run at all.
+    await expect(keywordColor("swatch-unknown")).toBe(referenceColor);
+  },
 };

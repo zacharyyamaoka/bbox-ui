@@ -65,6 +65,7 @@ import "./codeEditor.css";
 import { FieldGesture } from "./codeEditorGesture";
 import { externalSync, singleLineGuard } from "./codeEditorGuards";
 import { codeEditorWidthPx } from "./codeEditorLayout";
+import { codeEditorThemeVars, type CodeEditorTheme } from "./codeEditorTheme";
 
 /** The horizontal padding baked into `.bbox-code-editor` in codeEditor.css —
  * kept as a constant here too so `columns`'s pixel maths (codeEditorLayout.ts)
@@ -89,6 +90,15 @@ export interface CodeEditorProps {
   onEditEnd?(value: string, startValue: string): void;
   /** The syntax parser, e.g. `python()`/`javascript()`/`json()`. Omit for plain text. */
   language?: LanguageSupport;
+  /**
+   * A VS Code syntax palette (codeEditorTheme.ts) — an id resolved against
+   * `CODE_EDITOR_THEMES`, or a `CodeEditorTheme` object directly. Applied
+   * as CSS custom properties on the root, UNDER any caller `style` (a
+   * caller override still wins). Omit, or pass an id that doesn't match
+   * any known theme, for the ambient default palette — never blanks the
+   * editor.
+   */
+  theme?: CodeEditorTheme | string;
   /**
    * A lane/document: several lines, Enter inserts a line, Alt+↑/↓ move one,
    * Shift+Alt+↓ copies one (CodeMirror's default keymap); Ctrl/Cmd+Enter is
@@ -163,6 +173,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
   beginEdit,
   onEditEnd,
   language,
+  theme,
   multiline = false,
   lineNumbers = false,
   overflow = "clip",
@@ -445,6 +456,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
       data-line-numbers={lineNumbers}
       data-overflow={overflow}
       data-language={language ? "set" : undefined}
+      data-theme={typeof theme === "string" ? theme : theme?.id}
       className={`bbox-code-editor bbox-code-tokens${className ? ` ${className}` : ""}`}
       ref={hostRef}
       role="textbox"
@@ -454,7 +466,10 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
       aria-disabled={disabled ? true : undefined}
       aria-multiline={multiline ? true : undefined}
       data-testid={testId}
-      style={{ ...boxStyle, ...style }}
+      // Theme vars sit BETWEEN boxStyle and the caller's own `style` — a
+      // caller override (including a caller's own --bbox-tok-* variable)
+      // still wins over the theme, same as it always won over boxStyle.
+      style={{ ...boxStyle, ...codeEditorThemeVars(theme), ...style }}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}

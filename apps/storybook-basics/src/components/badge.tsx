@@ -17,9 +17,16 @@ import { BAR_SIZE_TO_BADGE_SIZE, useBarSize } from "./barSize";
  * WHY `size` was added here (stock shadcn's Badge has none): the Bar size
  * cascade (barSize.tsx) needs somewhere to land on Badge, and there was no
  * existing scale to hook into. Four rungs, matching `Bar`'s own directly.
+ *
+ * WHY `shape` defaults to `"rounded"` rather than flipping to pill
+ * (docs/FEEDBACK-2026-09-17b-PLAN.md A-1, Zach: "show some badges with a
+ * more pill shape"): he asked to *see* the pill option, not replace the
+ * landed look — every existing caller (in particular `Bar`'s title badge,
+ * which reads as a chip on purpose) must render unchanged. `rounded-full`
+ * is opt-in via `shape="pill"`, not the new floor.
  */
 const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center justify-center overflow-hidden rounded-md border font-medium whitespace-nowrap transition-[color,box-shadow] [&>svg]:pointer-events-none",
+  "inline-flex w-fit shrink-0 items-center justify-center overflow-hidden border font-medium whitespace-nowrap transition-[color,box-shadow] [&>svg]:pointer-events-none",
   {
     variants: {
       variant: {
@@ -34,17 +41,22 @@ const badgeVariants = cva(
         lg: "gap-1 px-2.5 py-1 text-sm [&>svg]:size-3.5",
         xl: "gap-1.5 px-3 py-1 text-base [&>svg]:size-4",
       },
+      shape: {
+        rounded: "rounded-md",
+        pill: "rounded-full",
+      },
     },
     defaultVariants: {
       variant: "default",
       size: "md",
+      shape: "rounded",
     },
   },
 );
 
 export interface BadgeProps extends ComponentProps<"span">, VariantProps<typeof badgeVariants> {}
 
-export function Badge({ className, variant, size, ...props }: BadgeProps) {
+export function Badge({ className, variant, size, shape, ...props }: BadgeProps) {
   // Explicit `size` wins; the ambient Bar cascade is only the fallback when
   // `size` itself is omitted, `"md"` (cva's own default) is the floor when
   // there is no Bar ancestor either.
@@ -54,7 +66,8 @@ export function Badge({ className, variant, size, ...props }: BadgeProps) {
     <span
       data-slot="badge"
       data-size={resolvedSize}
-      className={cn(badgeVariants({ variant, size: resolvedSize }), className)}
+      data-shape={shape ?? "rounded"}
+      className={cn(badgeVariants({ variant, size: resolvedSize, shape }), className)}
       {...props}
     />
   );
