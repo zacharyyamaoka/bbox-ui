@@ -1,0 +1,729 @@
+import { useState } from "react";
+import type { ReactNode } from "react";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
+
+import { Block } from "../components/block";
+import { PortedBlock, RAIL_SLOT_MAIN_PX, railDotCentres, railPitches } from "../components/blockPortEdges";
+import {
+  BLOCK_PORT_LAYOUT_LABELS,
+  BLOCK_PORT_LAYOUTS,
+  BLOCK_VIEW_LABELS,
+  BLOCK_VIEWS,
+  RAIL_END_MARGIN_PX,
+  offsetEdgePaddingPx,
+  railPitchPx,
+  type BlockPortLayout,
+  type BlockView,
+} from "../components/blockPortEdges.layout";
+import { PORT_DIAMETERS, type BlockSide } from "../components/port.layout";
+import type { PortEdgeItem } from "../components/portEdge";
+
+/**
+ * Basics/BlockPorts — phase A1 of docs/BLOCK-PORT-EDGES-PLAN.md: a `Block`
+ * wearing real `PortEdge` rails, in each of the donor's four view rules.
+ *
+ * Every claim below is MEASURED off `getBoundingClientRect`, never inferred
+ * from the DOM being populated. That distinction is the whole point here: a
+ * rail that renders three dots in a pile and a rail that renders them at a
+ * uniform pitch have identical DOM, and only one of them is the feature. The
+ * stacking claim is measured too — `document.elementFromPoint`, an actual
+ * hit test, rather than reading a `z-index` string back out of a style
+ * object (which proves only that the string was written).
+ *
+ * No wires here. `Trace` is Group B; nothing in this file imports it.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Measurement helpers                                                 */
+/* ------------------------------------------------------------------ */
+
+function required<T extends Element>(root: ParentNode, selector: string, what: string): T {
+  const found = root.querySelector<T>(selector);
+  if (!found) throw new Error(`expected ${what} (\`${selector}\`)`);
+  return found;
+}
+
+function wrapperOf(canvasElement: HTMLElement, index = 0): HTMLElement {
+  const all = canvasElement.querySelectorAll<HTMLElement>('[data-slot="ported-block"]');
+  const found = all[index];
+  if (!found) throw new Error(`expected a PortedBlock at index ${index}; found ${all.length}`);
+  return found;
+}
+
+function railOf(wrapper: HTMLElement, edge: BlockSide): HTMLElement {
+  return required<HTMLElement>(wrapper, `:scope > [data-slot="ported-block-rail"][data-edge="${edge}"]`, `a ${edge} rail`);
+}
+
+/** The Block's own regions, in viewport px — the same band the wrapper
+ *  measures, re-read independently by the assertion so a bug in the
+ *  component's own measurement cannot hide behind itself. */
+function bandOf(wrapper: HTMLElement): { block: DOMRect; top: number; bottom: number } {
+  const block = required<HTMLElement>(wrapper, ':scope > [data-slot="block"]', "the Block");
+  const blockRect = block.getBoundingClientRect();
+  const header = block.querySelector<HTMLElement>(':scope > [data-slot="block-header"]');
+  const footer = block.querySelector<HTMLElement>(':scope > [data-slot="block-footer"]');
+  return {
+    block: blockRect,
+    top: header ? header.getBoundingClientRect().bottom : blockRect.top,
+    bottom: footer ? footer.getBoundingClientRect().top : blockRect.bottom,
+  };
+}
+
+/**
+ * A measured assertion that says what it measured when it fails. A bare
+ * `expect(a).toBeCloseTo(b)` on two viewport numbers reports "expected
+ * 331.5 to be close to 329" with no way to tell which dot, which rail, or
+ * which rule broke.
+ */
+function expectWithin(actual: number, expected: number, tolerance: number, what: string): void {
+  const delta = Math.abs(actual - expected);
+  if (!(delta <= tolerance)) {
+    throw new Error(`${what} — measured ${actual.toFixed(2)}px, expected ${expected.toFixed(2)}px (±${tolerance}px), off by ${delta.toFixed(2)}px`);
+  }
+}
+
+/** Every consecutive delta, not a sample: `max - min` over the whole set is
+ *  the only reading that can tell a uniform rail from a drifting one. */
+function expectUniform(values: number[], tolerance: number, what: string): void {
+  if (values.length === 0) throw new Error(`${what} — no gaps to measure`);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (!(max - min <= tolerance)) {
+    throw new Error(`${what} — gaps [${values.map((v) => v.toFixed(2)).join(", ")}] span ${(max - min).toFixed(2)}px (±${tolerance}px allowed)`);
+  }
+}
+
+/**
+ * Zach's z-rule, hit-tested: "the port edge is literally just a line. its Z
+ * level should be above the block." Probe a point that is inside BOTH the
+ * dot and the Block's card — a few px in from the wall — and read which
+ * element actually owns that pixel. Reading `zIndex` back off a style would
+ * prove only that a string was written; this proves what paints.
+ */
+function expectRailPaintsAboveBlock(centre: { x: number; y: number }, inward: { dx: number; dy: number }, what: string): void {
+  const x = Math.round(centre.x + inward.dx);
+  const y = Math.round(centre.y + inward.dy);
+  const hit = document.elementFromPoint(x, y);
+  if (!hit) throw new Error(`${what} — nothing painted at (${x}, ${y}); the specimen is off-screen, so stacking cannot be read`);
+  if (!hit.closest('[data-slot="ported-block-rail"]')) {
+    const slot = hit.getAttribute("data-slot") ?? hit.tagName.toLowerCase();
+    const where = hit.closest('[data-slot="block"]') ? "inside the Block" : "outside both";
+    throw new Error(`${what} — the topmost element at (${x}, ${y}) is \`${slot}\`, ${where}; the rail must paint above the Block`);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Fixtures — plain names (D-B6: `name.phase` grammar belongs to the    */
+/* async gallery, Group B).                                            */
+/* ------------------------------------------------------------------ */
+
+const INPUTS: PortEdgeItem[] = [
+  { id: "pose", label: "pose", state: "wired" },
+  { id: "gain", label: "gain", state: "valueSet" },
+  { id: "reset", label: "reset", state: "empty" },
+];
+
+const OUTPUTS: PortEdgeItem[] = [
+  { id: "cmd", label: "cmd", state: "wired" },
+  { id: "status", label: "status", state: "empty" },
+];
+
+/** Simple view's face: the donor's bare title card. */
+function SimpleFace({ width = 180, height = 96 }: { width?: number; height?: number }) {
+  return <Block header="Planner" width={width} height={height} showHeaderDivider={false} />;
+}
+
+/** Port/expanded view's face: header, body, footer — so the body BAND is a
+ *  real band with something above and below it to be bounded by. */
+function BandedFace({ width = 220, height = 240 }: { width?: number; height?: number }) {
+  return <Block header="Planner" body="trajectory" footer="ready" width={width} height={height} />;
+}
+
+/** The four-wall face: NO header, deliberately. Labels flow inward, so a
+ *  header band at the top of a small card ends up sharing its pixels with
+ *  the first left/right label and the whole top wall's labels — legible
+ *  geometry, illegible picture. A body-only card gives every wall's labels
+ *  clear space to flow into. */
+function HubFace({ width = 260, height = 200 }: { width?: number; height?: number }) {
+  return <Block body="Hub" width={width} height={height} />;
+}
+
+/** Every specimen sits in a padded frame: rails hang outside the Block's
+ *  box by design, and labels flow inward over it. */
+function Stage({ children, label }: { children: ReactNode; label?: string }) {
+  return (
+    // `gap: 32` rather than a tight caption: a wall's labels can flow
+    // OUTSIDE the Block (FourEdges flows the horizontal walls outward), and
+    // those labels are absolutely positioned, so they overlap whatever sits
+    // directly above the specimen unless the stage leaves them room.
+    <div data-slot="block-ports-stage" style={{ display: "flex", flexDirection: "column", gap: 32, padding: "48px 64px" }}>
+      {label && (
+        <div data-slot="block-ports-stage-label" style={{ fontSize: 11, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--muted-foreground)" }}>
+          {label}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function Segmented<T extends string>({ options, value, onChange, slot }: { options: { value: T; label: string }[]; value: T; onChange(v: T): void; slot: string }) {
+  return (
+    <div data-slot={slot} style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden", width: "max-content" }}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          data-slot="block-ports-control-option"
+          data-value={option.value}
+          data-selected={value === option.value || undefined}
+          onClick={() => onChange(option.value)}
+          style={{
+            padding: "4px 10px",
+            fontSize: 12,
+            border: "none",
+            cursor: "pointer",
+            background: value === option.value ? "var(--accent)" : "transparent",
+            color: value === option.value ? "var(--accent-foreground)" : "var(--foreground)",
+          }}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const meta = {
+  title: "Basics/BlockPorts",
+  component: PortedBlock,
+  // Never read — every story supplies its own `render` with story-local
+  // state, because `PortedBlock`'s edges are controlled.
+  args: { view: "port" as BlockView, edges: {}, children: null },
+} satisfies Meta<typeof PortedBlock>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+/* ------------------------------------------------------------------ */
+/* ClassicDag — port view, inline. Zach's "classic input output dag":   */
+/* a port edge on the left body edge and one on the right.             */
+/* ------------------------------------------------------------------ */
+
+function ClassicDagDemo({ portLayout = "inline" as BlockPortLayout, height = 240 }: { portLayout?: BlockPortLayout; height?: number }) {
+  const [inputs, setInputs] = useState(INPUTS);
+  const [outputs, setOutputs] = useState(OUTPUTS);
+  return (
+    <Stage label={`port view · ${BLOCK_PORT_LAYOUT_LABELS[portLayout]}`}>
+      <PortedBlock
+        id="planner"
+        view="port"
+        portLayout={portLayout}
+        edges={{
+          left: { items: inputs, onItemsChange: setInputs },
+          right: { items: outputs, onItemsChange: setOutputs },
+        }}
+      >
+        <BandedFace height={height} />
+      </PortedBlock>
+    </Stage>
+  );
+}
+
+export const ClassicDag: Story = {
+  render: () => <ClassicDagDemo />,
+  play: async ({ canvasElement }) => {
+    const wrapper = wrapperOf(canvasElement);
+    const { block, top: bandTop, bottom: bandBottom } = bandOf(wrapper);
+    const left = railOf(wrapper, "left");
+    const right = railOf(wrapper, "right");
+
+    const leftDots = railDotCentres(left);
+    const rightDots = railDotCentres(right);
+    await expect(leftDots).toHaveLength(INPUTS.length);
+    await expect(rightDots).toHaveLength(OUTPUTS.length);
+
+    // Pins `PORT_EDGE_SLOT_MIN_PX` against the real slot box PortEdge draws,
+    // so the constant this app re-declares cannot drift from the one
+    // portEdge.tsx keeps private (see blockPortEdges.layout.ts's own WHY).
+    const slotBox = required<HTMLElement>(left, '[data-slot="port-edge-member"]', "a slot box on the left rail").getBoundingClientRect();
+    expectWithin(slotBox.height, RAIL_SLOT_MAIN_PX, 0.5, "rail slot box main size vs PORT_EDGE_SLOT_MIN_PX");
+
+    // The inline rule, stated as the donor states it: input row i and
+    // output row i share a slot, so both lanes' first dot is the same row.
+    expectWithin(rightDots[0].y, leftDots[0].y, 1, "inline — right lane's first dot vs left lane's first dot");
+    // ...and that row is the body band's top, packed from it.
+    expectWithin(leftDots[0].y, bandTop + RAIL_SLOT_MAIN_PX / 2, 1, "first dot centre vs the body band's top");
+
+    // Uniform pitch, every consecutive delta, on both lanes.
+    for (const [name, rail] of [["left", left], ["right", right]] as const) {
+      const pitches = railPitches(rail, "column");
+      expectUniform(pitches, 1, `${name} rail pitch uniformity`);
+      for (const pitch of pitches) expectWithin(pitch, railPitchPx(), 1, `${name} rail pitch`);
+    }
+
+    // The rail IS the wall: every dot's centre sits on the Block's border
+    // line, not beside it.
+    for (const dot of leftDots) expectWithin(dot.x, block.left, 1, "left dot centre vs the Block's left wall");
+    for (const dot of rightDots) expectWithin(dot.x, block.right, 1, "right dot centre vs the Block's right wall");
+
+    // The band is a real bound: ports stay above the footer.
+    await expect(leftDots[leftDots.length - 1].y).toBeLessThan(bandBottom);
+
+    // Zach's z-rule, hit-tested.
+    expectRailPaintsAboveBlock(leftDots[0], { dx: 4, dy: 0 }, "left rail stacking");
+    expectRailPaintsAboveBlock(rightDots[0], { dx: -4, dy: 0 }, "right rail stacking");
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* OffsetDag — port view, offset: the right lane starts one full pitch  */
+/* below the LAST left-lane port (donor `outputStart = slot +           */
+/* inputs.length`).                                                    */
+/* ------------------------------------------------------------------ */
+
+export const OffsetDag: Story = {
+  render: () => <ClassicDagDemo portLayout="offset" height={300} />,
+  play: async ({ canvasElement }) => {
+    const wrapper = wrapperOf(canvasElement);
+    const { top: bandTop, bottom: bandBottom } = bandOf(wrapper);
+    const leftDots = railDotCentres(railOf(wrapper, "left"));
+    const rightDots = railDotCentres(railOf(wrapper, "right"));
+    await expect(leftDots).toHaveLength(INPUTS.length);
+    await expect(rightDots).toHaveLength(OUTPUTS.length);
+
+    const pitch = railPitchPx();
+    const lastLeft = leftDots[leftDots.length - 1];
+
+    // THE offset rule: one full pitch below the last left-edge port — the
+    // same pitch used WITHIN a lane, which is what makes the two lanes read
+    // as one continuous column of slots rather than two that happen to
+    // overlap.
+    expectWithin(rightDots[0].y - lastLeft.y, pitch, 1, "offset — right lane's first dot below the left lane's last");
+    expectUniform(railPitches(railOf(wrapper, "right"), "column"), 1, "right rail pitch uniformity under offset");
+
+    // And the closed form that produced it (D-A3's exact helper, not
+    // `offsetPaddingFor`'s count*gap approximation — which would land 72px
+    // high here and interleave the lanes).
+    expectWithin(rightDots[0].y, bandTop + offsetEdgePaddingPx(INPUTS.length) + RAIL_SLOT_MAIN_PX / 2, 1, "offset — right lane's first dot vs the exact edgePadding formula");
+
+    // The offset lane still fits inside the band it was given.
+    await expect(rightDots[rightDots.length - 1].y).toBeLessThan(bandBottom);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* SimpleView — every port on a wall collapses to ONE dot, centred on    */
+/* that wall (donor: `midpoint = height / 2`).                          */
+/* ------------------------------------------------------------------ */
+
+/** Deliberately 3 on the left, 1 on the right: a one-port wall never
+ *  reaches PortEdge's collapsed branch at all (a groups line naming a
+ *  single id is dropped by the parser), so this fixture exercises BOTH
+ *  paths — `renderCollapsed` and the collapsed `renderItem` — and proves
+ *  they agree on what a collapsed wall looks like. */
+const SIMPLE_OUTPUTS: PortEdgeItem[] = [{ id: "cmd", label: "cmd", state: "empty" }];
+
+function SimpleViewDemo() {
+  return (
+    <Stage label="simple view · every wall collapses to one dot">
+      <PortedBlock id="planner" view="simple" edges={{ left: { items: INPUTS }, right: { items: SIMPLE_OUTPUTS } }}>
+        <SimpleFace />
+      </PortedBlock>
+    </Stage>
+  );
+}
+
+export const SimpleView: Story = {
+  render: () => <SimpleViewDemo />,
+  play: async ({ canvasElement }) => {
+    const wrapper = wrapperOf(canvasElement);
+    const { block } = bandOf(wrapper);
+    const midY = block.top + block.height / 2;
+
+    for (const [edge, items, wallX] of [
+      ["left", INPUTS, block.left],
+      ["right", SIMPLE_OUTPUTS, block.right],
+    ] as const) {
+      const rail = railOf(wrapper, edge);
+      const dots = railDotCentres(rail);
+      // Exactly one painted dot for the whole wall — not N dots stacked.
+      await expect(dots).toHaveLength(1);
+      expectWithin(dots[0].y, midY, 1, `simple — ${edge} wall's dot vs the Block's vertical midpoint`);
+      expectWithin(dots[0].x, wallX, 1, `simple — ${edge} wall's dot vs the wall line`);
+
+      // Identity is retained even though the paint is de-duplicated: the
+      // one dot names every port it stands for (how a Group B wire will
+      // re-anchor to it without any wire data changing).
+      const stand = required<HTMLElement>(rail, "[data-collapsed-ports]", `a collapsed stand-in dot on the ${edge} wall`);
+      const named = (stand.getAttribute("data-collapsed-ports") ?? "").split(",").filter(Boolean);
+      await expect(named.sort()).toEqual(items.map((i) => i.id).sort());
+    }
+
+    // The donor's simple face draws a LABEL-LESS dot (`label: null`), so
+    // PortEdge's own `+N more` chip must not appear — that is what D-A7's
+    // `renderCollapsed` seam exists for.
+    await expect(wrapper.textContent ?? "").not.toContain("more");
+    await expect(wrapper.querySelectorAll('[data-slot="port-label"]')).toHaveLength(0);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* ExpandedView — ports spread evenly from the top of the BODY to its   */
+/* bottom (donor `placeExpandedBody`).                                  */
+/* ------------------------------------------------------------------ */
+
+function ExpandedViewDemo() {
+  const [inputs, setInputs] = useState(INPUTS);
+  const [outputs, setOutputs] = useState(OUTPUTS);
+  return (
+    <Stage label="expanded view · evenly spread across the body band">
+      <PortedBlock
+        id="planner"
+        view="expanded"
+        edges={{ left: { items: inputs, onItemsChange: setInputs }, right: { items: outputs, onItemsChange: setOutputs } }}
+      >
+        <BandedFace height={280} />
+      </PortedBlock>
+    </Stage>
+  );
+}
+
+export const ExpandedView: Story = {
+  render: () => <ExpandedViewDemo />,
+  play: async ({ canvasElement }) => {
+    const wrapper = wrapperOf(canvasElement);
+    const { top: bandTop, bottom: bandBottom } = bandOf(wrapper);
+
+    for (const [edge, count] of [["left", INPUTS.length], ["right", OUTPUTS.length]] as const) {
+      const rail = railOf(wrapper, edge);
+      const dots = railDotCentres(rail);
+      await expect(dots).toHaveLength(count);
+
+      // EVERY consecutive delta — the acceptance the plan insists on,
+      // because two sampled gaps cannot distinguish "evenly spread" from
+      // "evenly spread except the last one".
+      expectUniform(railPitches(rail, "column"), 1, `expanded — ${edge} rail pitch uniformity`);
+
+      // Symmetric ends: `space-evenly` spaces boxes, so the measurable
+      // property is equal margins at both walls of the band (D-A4 — the
+      // donor's (i+1)/(n+1) point formula is deliberately NOT what this
+      // asserts, and the deviation is bounded by half a slot).
+      const topMargin = dots[0].y - bandTop;
+      const bottomMargin = bandBottom - dots[dots.length - 1].y;
+      expectWithin(topMargin, bottomMargin, 1, `expanded — ${edge} rail end margins (top ${topMargin.toFixed(1)} vs bottom ${bottomMargin.toFixed(1)})`);
+      await expect(topMargin).toBeGreaterThan(0);
+
+      // ...and the end gap EQUALS the between-gap, which is what makes this
+      // `space-evenly` and not `space-between`. Without this line the two
+      // schemes are indistinguishable: both give a uniform pitch and
+      // symmetric ends, and only this identity separates "evenly, including
+      // the edge" from "flush against the walls". `topMargin` is the wall
+      // gap plus half a slot; `pitch` is the same wall gap plus a whole
+      // slot.
+      const pitch = railPitches(rail, "column")[0];
+      expectWithin(topMargin, pitch - RAIL_SLOT_MAIN_PX / 2, 1, `expanded — ${edge} rail's end gap equals its between-gap`);
+    }
+
+    // The expanded spread is genuinely wider than the packed one it
+    // replaces — otherwise "expanded" would be a label with no behaviour.
+    const expandedPitch = railPitches(railOf(wrapper, "left"), "column")[0];
+    await expect(expandedPitch).toBeGreaterThan(railPitchPx());
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* ViewMatrix — the gallery: one port set, every view rule, side by     */
+/* side, plus a live S|P|E switch (the donor's own per-card control,    */
+/* `CommunicationPrototypeControls.tsx:51-55`).                        */
+/* ------------------------------------------------------------------ */
+
+const MATRIX: { view: BlockView; portLayout: BlockPortLayout; label: string }[] = [
+  { view: "simple", portLayout: "inline", label: "Simple" },
+  { view: "port", portLayout: "inline", label: "Port · inline" },
+  { view: "port", portLayout: "offset", label: "Port · offset" },
+  { view: "expanded", portLayout: "inline", label: "Expanded" },
+];
+
+function ViewMatrixDemo() {
+  const [view, setView] = useState<BlockView>("port");
+  const [portLayout, setPortLayout] = useState<BlockPortLayout>("inline");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 32, padding: "48px 64px" }}>
+      <div data-slot="block-ports-matrix" style={{ display: "flex", gap: 96, alignItems: "flex-start", flexWrap: "wrap" }}>
+        {MATRIX.map((cell) => (
+          <div key={cell.label} data-slot="block-ports-matrix-cell" data-cell={cell.label} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 11, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--muted-foreground)" }}>{cell.label}</div>
+            <PortedBlock id={cell.label} view={cell.view} portLayout={cell.portLayout} edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}>
+              {cell.view === "simple" ? <SimpleFace width={180} height={300} /> : <BandedFace width={200} height={300} />}
+            </PortedBlock>
+          </div>
+        ))}
+      </div>
+
+      <div data-slot="block-ports-live" style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--border)", paddingTop: 24 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <Segmented<BlockView> slot="block-ports-view-control" options={BLOCK_VIEWS.map((v) => ({ value: v, label: BLOCK_VIEW_LABELS[v] }))} value={view} onChange={setView} />
+          <Segmented<BlockPortLayout>
+            slot="block-ports-layout-control"
+            options={BLOCK_PORT_LAYOUTS.map((l) => ({ value: l, label: BLOCK_PORT_LAYOUT_LABELS[l] }))}
+            value={portLayout}
+            onChange={setPortLayout}
+          />
+          <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+            same ports, live — the view rule is the only thing that changes
+          </span>
+        </div>
+        <div style={{ paddingTop: 24 }}>
+          <PortedBlock id="live" view={view} portLayout={portLayout} edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}>
+            {view === "simple" ? <SimpleFace width={180} height={300} /> : <BandedFace width={200} height={300} />}
+          </PortedBlock>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const ViewMatrix: Story = {
+  render: () => <ViewMatrixDemo />,
+  play: async ({ canvasElement }) => {
+    const cells = canvasElement.querySelectorAll<HTMLElement>('[data-slot="block-ports-matrix-cell"]');
+    await expect(cells).toHaveLength(MATRIX.length);
+
+    // Each static card obeys its own rule, measured — the gallery is only
+    // worth looking at if the four cards genuinely differ.
+    const firstCentres: number[] = [];
+    for (let i = 0; i < MATRIX.length; i++) {
+      const cell = MATRIX[i];
+      const wrapper = wrapperOf(cells[i]);
+      const left = railOf(wrapper, "left");
+      const right = railOf(wrapper, "right");
+      const leftDots = railDotCentres(left);
+      const rightDots = railDotCentres(right);
+
+      if (cell.view === "simple") {
+        await expect(leftDots).toHaveLength(1);
+        await expect(rightDots).toHaveLength(1);
+        const { block } = bandOf(wrapper);
+        expectWithin(leftDots[0].y, block.top + block.height / 2, 1, `${cell.label} — collapsed dot at the midpoint`);
+      } else {
+        await expect(leftDots).toHaveLength(INPUTS.length);
+        await expect(rightDots).toHaveLength(OUTPUTS.length);
+        expectUniform(railPitches(left, "column"), 1, `${cell.label} — left rail pitch uniformity`);
+      }
+
+      if (cell.view === "port" && cell.portLayout === "inline") {
+        expectWithin(rightDots[0].y, leftDots[0].y, 1, `${cell.label} — lanes share row 0`);
+      }
+      if (cell.view === "port" && cell.portLayout === "offset") {
+        expectWithin(rightDots[0].y - leftDots[leftDots.length - 1].y, railPitchPx(), 1, `${cell.label} — right lane one pitch below the left lane's last`);
+      }
+      firstCentres.push(leftDots[0].y - bandOf(wrapper).block.top);
+    }
+
+    // Port·inline and Expanded must not coincidentally land in the same
+    // place, or the gallery would be showing one rule twice.
+    await expect(Math.abs(firstCentres[1] - firstCentres[3])).toBeGreaterThan(1);
+
+    // The live card's S|P|E switch actually re-lays the ports out.
+    const live = required<HTMLElement>(canvasElement, '[data-slot="block-ports-live"]', "the live card");
+    const pitchBefore = railPitches(railOf(wrapperOf(live), "left"), "column");
+    expectUniform(pitchBefore, 1, "live card — pitch before switching view");
+    expectWithin(pitchBefore[0], railPitchPx(), 1, "live card — port view pitch");
+
+    const expandedButton = required<HTMLElement>(live, '[data-slot="block-ports-view-control"] [data-value="expanded"]', "the Expanded option");
+    expandedButton.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const pitchAfter = railPitches(railOf(wrapperOf(live), "left"), "column");
+    expectUniform(pitchAfter, 1, "live card — pitch after switching to Expanded");
+    await expect(pitchAfter[0]).toBeGreaterThan(pitchBefore[0] + 1);
+
+    const simpleButton = required<HTMLElement>(live, '[data-slot="block-ports-view-control"] [data-value="simple"]', "the Simple option");
+    simpleButton.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await expect(railDotCentres(railOf(wrapperOf(live), "left"))).toHaveLength(1);
+
+    // Back to where it started — which is BOTH a real claim (collapse is
+    // reversible: the ports were never destroyed, only de-duplicated in
+    // paint) and the reason a reviewer opening this story finds the live
+    // card in its default view rather than wherever the play function
+    // happened to stop.
+    required<HTMLElement>(live, '[data-slot="block-ports-view-control"] [data-value="port"]', "the Port option").click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const restored = railDotCentres(railOf(wrapperOf(live), "left"));
+    await expect(restored).toHaveLength(INPUTS.length);
+    expectWithin(railPitches(railOf(wrapperOf(live), "left"), "column")[0], railPitchPx(), 1, "live card — pitch restored after round-tripping through Simple");
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* FourEdges — ports on all four walls at once (the arrangement the     */
+/* async-region gallery will need), spread-on-simple.                   */
+/* ------------------------------------------------------------------ */
+
+const FOUR_EDGE_ITEMS: Record<BlockSide, PortEdgeItem[]> = {
+  left: [
+    { id: "in-a", label: "a", state: "wired" },
+    { id: "in-b", label: "b", state: "empty" },
+    { id: "in-c", label: "c", state: "empty" },
+  ],
+  right: [
+    { id: "out-a", label: "x", state: "wired" },
+    { id: "out-b", label: "y", state: "empty" },
+  ],
+  top: [
+    { id: "top-a", label: "cfg", state: "valueSet" },
+    { id: "top-b", label: "clk", state: "empty" },
+  ],
+  bottom: [
+    { id: "bot-a", label: "log", state: "empty" },
+    { id: "bot-b", label: "err", state: "received" },
+  ],
+};
+
+const FOUR_EDGES: BlockSide[] = ["top", "right", "bottom", "left"];
+
+function FourEdgesDemo() {
+  return (
+    <Stage label="four walls at once · simple face, ports spread (collapsePorts=false)">
+      <PortedBlock
+        id="hub"
+        view="simple"
+        collapsePorts={false}
+        edges={{
+          left: { items: FOUR_EDGE_ITEMS.left },
+          right: { items: FOUR_EDGE_ITEMS.right },
+          // Found by looking at this story, not by measuring it: the DOTS
+          // never collide (the end insets guarantee that, and the play
+          // function proves it pairwise) — but the LABELS do. Every wall
+          // flows its labels inward by default (`inwardTextLayout`), so near
+          // a corner the top wall's first label and the left wall's first
+          // label are both trying to occupy the same inside corner. That is
+          // a corner property, not a size one: growing the Block does not
+          // separate them.
+          //
+          // Flowing the horizontal walls' labels OUTWARD is a story-level
+          // fix through the reach-past seam, not a component change — which
+          // is the right layer for it, because which way a label flows is a
+          // presentation choice a host makes per wall, and PortEdge already
+          // exposes the whole `PortTextLayout` vocabulary for it. Reported
+          // as a known limit of the inward default rather than papered over.
+          top: { items: FOUR_EDGE_ITEMS.top, portEdgeProps: { textLayout: "top" } },
+          bottom: { items: FOUR_EDGE_ITEMS.bottom, portEdgeProps: { textLayout: "bot" } },
+        }}
+      >
+        <HubFace />
+      </PortedBlock>
+    </Stage>
+  );
+}
+
+export const FourEdges: Story = {
+  render: () => <FourEdgesDemo />,
+  play: async ({ canvasElement }) => {
+    const wrapper = wrapperOf(canvasElement);
+    const { block } = bandOf(wrapper);
+    await expect(wrapper.querySelectorAll('[data-slot="ported-block-rail"]')).toHaveLength(4);
+
+    const centresByEdge = new Map<BlockSide, { x: number; y: number }[]>();
+    for (const edge of FOUR_EDGES) {
+      const rail = railOf(wrapper, edge);
+      const dots = railDotCentres(rail);
+      await expect(dots).toHaveLength(FOUR_EDGE_ITEMS[edge].length);
+      centresByEdge.set(edge, dots);
+
+      const vertical = edge === "left" || edge === "right";
+      const wallLine = edge === "left" ? block.left : edge === "right" ? block.right : edge === "top" ? block.top : block.bottom;
+      for (const dot of dots) {
+        expectWithin(vertical ? dot.x : dot.y, wallLine, 1, `${edge} wall — dot centre vs the wall line`);
+      }
+
+      // The donor's constant corner clearance, at BOTH corners: 18px of
+      // wall, then half a slot to the first dot's centre.
+      const along = dots.map((d) => (vertical ? d.y : d.x));
+      const start = vertical ? block.top : block.left;
+      const end = vertical ? block.bottom : block.right;
+      expectWithin(along[0] - start, RAIL_END_MARGIN_PX + RAIL_SLOT_MAIN_PX / 2, 2, `${edge} wall — first dot vs the leading corner`);
+      expectWithin(end - along[along.length - 1], RAIL_END_MARGIN_PX + RAIL_SLOT_MAIN_PX / 2, 2, `${edge} wall — last dot vs the trailing corner`);
+      expectUniform(railPitches(rail, vertical ? "column" : "row"), 1, `${edge} wall — pitch uniformity`);
+    }
+
+    // Corner collision, measured pairwise: no dot from one wall lands
+    // within a dot-diameter of a dot on another wall. This is the claim
+    // §4 makes about the end insets, asserted rather than assumed.
+    for (let i = 0; i < FOUR_EDGES.length; i++) {
+      for (let j = i + 1; j < FOUR_EDGES.length; j++) {
+        for (const a of centresByEdge.get(FOUR_EDGES[i])!) {
+          for (const b of centresByEdge.get(FOUR_EDGES[j])!) {
+            const distance = Math.hypot(a.x - b.x, a.y - b.y);
+            if (!(distance > PORT_DIAMETERS.md)) {
+              throw new Error(`${FOUR_EDGES[i]} and ${FOUR_EDGES[j]} walls collide — dots ${distance.toFixed(2)}px apart, need more than ${PORT_DIAMETERS.md}px`);
+            }
+          }
+        }
+      }
+    }
+
+    // Nothing collapsed: `collapsePorts={false}` on a Simple face is the
+    // donor's communication reading, and it must keep every port's own dot.
+    await expect(wrapper.querySelectorAll("[data-collapsed-ports]")).toHaveLength(0);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* StackingAboveBlock — the z-rule on its own, over a filled body so    */
+/* the overlap is visible as well as measurable.                        */
+/* ------------------------------------------------------------------ */
+
+function StackingDemo() {
+  return (
+    <Stage label="the port edge paints above the block (Zach's z-rule — the donor's is the reverse)">
+      <PortedBlock
+        id="stack"
+        view="port"
+        edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}
+      >
+        <Block
+          header="Planner"
+          // An opaque, mid-contrast panel in BOTH themes: the z-rule is only
+          // visible if the pixels a dot's inner half lands on would
+          // otherwise be the card's. `var(--accent)` is near-invisible
+          // against `var(--card)` in the dark theme, which made the point
+          // of this story impossible to see.
+          body={<div style={{ width: "100%", height: "100%", background: "color-mix(in srgb, var(--foreground) 22%, var(--card))", borderRadius: 4 }} />}
+          footer="ready"
+          width={220}
+          height={240}
+        />
+      </PortedBlock>
+    </Stage>
+  );
+}
+
+export const StackingAboveBlock: Story = {
+  render: () => <StackingDemo />,
+  play: async ({ canvasElement }) => {
+    const wrapper = wrapperOf(canvasElement);
+    const block = required<HTMLElement>(wrapper, ':scope > [data-slot="block"]', "the Block");
+
+    // DOM order is a redundant guarantee, not the mechanism (see
+    // blockPortEdges.tsx's own correction) — asserted anyway, because it is
+    // the one of the three that a reader can check by eye.
+    const children = Array.from(wrapper.children);
+    const blockIndex = children.indexOf(block);
+    for (const rail of Array.from(wrapper.querySelectorAll<HTMLElement>(':scope > [data-slot="ported-block-rail"]'))) {
+      await expect(children.indexOf(rail)).toBeGreaterThan(blockIndex);
+    }
+
+    // ...and the hit test is the proof. Probe every dot on both walls, a
+    // few px INSIDE the card, where the Block would win if it painted last.
+    for (const [edge, dx] of [["left", 4], ["right", -4]] as const) {
+      for (const dot of railDotCentres(railOf(wrapper, edge))) {
+        expectRailPaintsAboveBlock(dot, { dx, dy: 0 }, `${edge} rail stacking`);
+      }
+    }
+  },
+};
