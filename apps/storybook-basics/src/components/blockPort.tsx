@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * src/components/blockPortEdges.tsx — `PortedBlock`: a Block with real
+ * src/components/blockPort.tsx — `BlockPort`: a Block with real
  * `PortEdge` rails mounted on its walls (docs/BLOCK-PORT-EDGES-PLAN.md §2,
  * phase A1).
  *
@@ -45,10 +45,17 @@
  * the three back to the donor.
  *
  * WHAT IS NOT HERE, on purpose: no layout engine. Every placement rule is a
- * `PortEdge` prop combination computed by `./blockPortEdges.layout.ts`; the
+ * `PortEdge` prop combination computed by `./blockPort.layout.ts`; the
  * donor's `layoutBlock.ts` is the spec for the behaviour and the source of
  * exactly zero lines. No wires either — `Trace` and the wire layer are
  * Group B, and no file in Group A imports them.
+ *
+ * WHY this is its own component and not `Block` itself (the reciprocal of
+ * block.tsx's own note): Zach, 2026-09-17 — "just the Block itself can be
+ * used even without the ports" and this is "starting to add more and more
+ * things to" — a plain Block should stay exactly a header/body/footer card.
+ * `Block` stays a stock seam this file composes from the outside, never a
+ * file this one edits.
  */
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
@@ -60,6 +67,7 @@ import { PortEdge, type PortEdgeItem, type PortEdgeProps } from "./portEdge";
 import {
   PORT_EDGE_SLOT_MIN_PX,
   RAIL_CROSS_PX,
+  functionPortCenterPx,
   railAxisFor,
   railBoxFor,
   railPlanFor,
@@ -67,9 +75,9 @@ import {
   type BlockPortLayout,
   type BlockView,
   type RailPlan,
-} from "./blockPortEdges.layout";
+} from "./blockPort.layout";
 
-export type { BlockPortLayout, BlockView } from "./blockPortEdges.layout";
+export type { BlockPortLayout, BlockView } from "./blockPort.layout";
 
 /* ------------------------------------------------------------------ */
 /* Surface                                                             */
@@ -92,7 +100,7 @@ export interface BlockEdgeSpec {
   portEdgeProps?: Partial<PortEdgeProps>;
 }
 
-export interface PortedBlockProps {
+export interface BlockPortProps {
   /**
    * The Block itself — composed, never rebuilt from props. The story builds
    * each view's face (a bare card, a header+body, an expanded members
@@ -122,6 +130,18 @@ export interface PortedBlockProps {
    * alternative is a second pass over this file the day wires land.
    */
   id?: string;
+  /**
+   * The header's reserved "pin 1" — the port a variable that is ITSELF a
+   * function gets, per Zach (2026-09-17): "we reserve a special port on the
+   * header left edge... at most 1 port there and you cannot move it... a
+   * toggle on or off port." Defaults `false`, so nothing existing changes.
+   * Deliberately NOT a `BlockEdgeSpec` — it is not a `PortEdge` lane, has no
+   * `items`, cannot reorder, and never gains a second one; its meaning
+   * comes from always being in this one spot. See `functionPortCenterPx`
+   * (blockPort.layout.ts) for where, and this file's own `BlockPort`
+   * render for why it bypasses `PortEdge`/the rail machinery entirely.
+   */
+  functionPort?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -138,7 +158,10 @@ function sameBands(a: BlockBands | null, b: BlockBands | null): boolean {
     Math.abs(a.blockWidth - b.blockWidth) < BAND_EPSILON_PX &&
     Math.abs(a.blockHeight - b.blockHeight) < BAND_EPSILON_PX &&
     Math.abs(a.bodyTop - b.bodyTop) < BAND_EPSILON_PX &&
-    Math.abs(a.bodyBottom - b.bodyBottom) < BAND_EPSILON_PX
+    Math.abs(a.bodyBottom - b.bodyBottom) < BAND_EPSILON_PX &&
+    (a.headerTop == null || b.headerTop == null
+      ? a.headerTop === b.headerTop
+      : Math.abs(a.headerTop - b.headerTop) < BAND_EPSILON_PX)
   );
 }
 
@@ -156,7 +179,7 @@ function sameBands(a: BlockBands | null, b: BlockBands | null): boolean {
  * (`useLaneGeometry`).
  *
  * `:scope >` on header/footer is load-bearing: a member of this Block may
- * itself be a `PortedBlock` with its own `block-header`, and an unscoped
+ * itself be a `BlockPort` with its own `block-header`, and an unscoped
  * query would happily measure the child's band for the parent's rails.
  */
 function useBlockBands(wrapperRef: RefObject<HTMLDivElement | null>, layoutKey: string): BlockBands | null {
@@ -183,6 +206,7 @@ function useBlockBands(wrapperRef: RefObject<HTMLDivElement | null>, layoutKey: 
         blockHeight: blockRect.height,
         bodyTop: (header ? header.getBoundingClientRect().bottom : blockRect.top) - wrapperRect.top,
         bodyBottom: (footer ? footer.getBoundingClientRect().top : blockRect.bottom) - wrapperRect.top,
+        headerTop: header ? header.getBoundingClientRect().top - wrapperRect.top : undefined,
       };
       setBands((prev) => (sameBands(prev, next) ? prev : next));
     };
@@ -226,10 +250,10 @@ function collapsedState(members: PortEdgeItem[]): PortState {
 }
 
 /* ------------------------------------------------------------------ */
-/* PortedBlock                                                         */
+/* BlockPort                                                         */
 /* ------------------------------------------------------------------ */
 
-export function PortedBlock({
+export function BlockPort({
   children,
   view,
   portLayout = "inline",
@@ -237,7 +261,8 @@ export function PortedBlock({
   collapsePorts,
   diameter = "md",
   id,
-}: PortedBlockProps) {
+  functionPort = false,
+}: BlockPortProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const collapse = collapsePorts ?? view === "simple";
 
@@ -255,7 +280,7 @@ export function PortedBlock({
 
   return (
     <div
-      data-slot="ported-block"
+      data-slot="block-port"
       data-view={view}
       data-port-layout={portLayout}
       data-block-id={id}
@@ -276,6 +301,33 @@ export function PortedBlock({
           });
           return <BlockPortRail key={side} edge={side} spec={spec} plan={plan} bands={bands} diameter={diameter} />;
         })}
+      {bands && functionPort && <BlockFunctionPort bands={bands} diameter={diameter} />}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* The function port — the header's pin 1                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Renders the header's single reserved port, positioned by
+ * `functionPortCenterPx` alone — no `PortEdge`, no rail, no distribution.
+ * `LabeledPort` with `labelSlot={null}` is the donor-decided shape ("make
+ * that a labeled port, just without a label for now, or disable the
+ * label" — Zach, 2026-09-17): the label slot exists in the DOM contract
+ * from day one, present-but-empty, so a real label is later one prop
+ * change here, not a second component.
+ */
+function BlockFunctionPort({ bands, diameter }: { bands: BlockBands; diameter: PortSize }) {
+  const center = functionPortCenterPx(bands);
+  if (center == null) return null;
+  return (
+    <div
+      data-slot="block-port-function"
+      style={{ position: "absolute", left: center.x, top: center.y, transform: "translate(-50%, -50%)", zIndex: 1 }}
+    >
+      <LabeledPort edge="left" diameter={diameter} labelSlot={null} />
     </div>
   );
 }
@@ -324,11 +376,11 @@ function BlockPortRail({
    */
   const renderItem: PortEdgeProps["renderItem"] = (item, ctx) =>
     plan.collapsed ? (
-      <span data-slot="ported-block-port" data-port-id={item.id} data-collapsed-ports={item.id} style={{ display: "inline-flex" }}>
+      <span data-slot="block-port-item" data-port-id={item.id} data-collapsed-ports={item.id} style={{ display: "inline-flex" }}>
         <Port state={item.state ?? "empty"} diameter={diameter} />
       </span>
     ) : (
-      <span data-slot="ported-block-port" data-port-id={item.id} style={{ display: "inline-flex" }}>
+      <span data-slot="block-port-item" data-port-id={item.id} style={{ display: "inline-flex" }}>
         <LabeledPort edge={edge} state={item.state ?? "empty"} diameter={diameter} textLayout={ctx.textLayout}>
           {item.label}
         </LabeledPort>
@@ -338,7 +390,7 @@ function BlockPortRail({
   /** D-A7's seam: simple view's bare centred dot, standing for the wall. */
   const renderCollapsed: PortEdgeProps["renderCollapsed"] = (members) => (
     <span
-      data-slot="ported-block-collapsed-port"
+      data-slot="block-port-collapsed"
       data-collapsed-ports={members.map((m) => m.id).join(",")}
       style={{ display: "inline-flex" }}
     >
@@ -358,7 +410,7 @@ function BlockPortRail({
   };
 
   return (
-    <div data-slot="ported-block-rail" data-edge={edge} data-rail-band={plan.band} data-collapsed={plan.collapsed || undefined} style={style}>
+    <div data-slot="block-port-rail" data-edge={edge} data-rail-band={plan.band} data-collapsed={plan.collapsed || undefined} style={style}>
       <PortEdge
         {...spec.portEdgeProps}
         id={`${edge}-rail`}

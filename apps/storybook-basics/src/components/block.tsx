@@ -19,6 +19,16 @@ import {
  * Block draws no stray divider line. Painted with Tailwind + the shadcn CSS
  * variables from src/globals.css.
  *
+ * WHY this file imports no port concept, and must keep not doing so (Zach,
+ * 2026-09-17, docs/BLOCK-PORT-EDGES-PLAN.md D-A1): Block is usable on its
+ * own — a card with a header, a body, a footer — and ports are something
+ * "we're starting to add more and more things to", not a fact about every
+ * Block. `./blockPort.tsx`'s `BlockPort` is the wrapper that mounts ports on
+ * a Block's walls; it composes THIS component from the outside rather than
+ * this component growing port props, because Block's own root below is
+ * `overflow-hidden` and would clip a rail dot that deliberately straddles
+ * the border line. See blockPort.tsx's own header for the reciprocal note.
+ *
  * WHY `body` is conditional like the other two, and `height` has no default:
  * Zach's folding-chevron requirement is "make sure that it hides the body and
  * footer when you click it." Body used to render unconditionally and `height`
