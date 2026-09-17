@@ -14,6 +14,11 @@ apps/docs/CLAUDE.md
 .scratch-host/
 # Agent scratch — machine-local. Repo guidance lives in CLAUDE.md, which is tracked.
 .claude/
+# ...except the feedback ledger: CLAUDE.md @-imports it, so it has to travel
+# with a clone or a worktree rather than staying on one machine (rate skill,
+# "Leave the trace in the repo too").
+!.claude/
+!.claude/feedback.md
 # wrangler local state
 .wrangler/
 # Reports: the page is tracked, the captures it inlines are not (Zach, 2026-09-07).

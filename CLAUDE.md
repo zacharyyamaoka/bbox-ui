@@ -221,3 +221,5 @@ normal case, not an edge case.
   shell running it, and your cwd silently resets. This has happened twice.
 - **Implementing is not integrating.** Commit to a branch and report. Do not
   merge to `main`, push, or deploy unless Zach asks in those words.
+
+@.claude/feedback.md
