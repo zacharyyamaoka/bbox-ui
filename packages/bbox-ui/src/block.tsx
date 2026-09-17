@@ -9,6 +9,7 @@ import {
 
 import { cn } from "./lib/utils";
 import {
+  BLOCK_BORDER_PX,
   CHIP,
   CHIP_RIGHT_IN_HEADER_PX,
   HEADER_CHIP_RESERVED_PX,
@@ -19,6 +20,7 @@ import {
   type TextSize,
 } from "./layout";
 import { Pill, type PillProps } from "./pill";
+import { SKETCH_OUTLINE_BLEED_PX, SketchOutline } from "./sketchOutline";
 import type { BlockOrientation } from "./block.fields";
 
 /**
@@ -53,6 +55,19 @@ export interface BlockProps extends ComponentProps<"div"> {
    * Unset means "let the skin decide" — `var(--bbox-skin-radius, 8px)`.
    */
   radius?: number;
+  /**
+   * Stable string the sketch skin's hand-drawn outline is generated from.
+   * Same seed, same wobble, every render — see `sketchPath.ts` on why an
+   * unseeded random shimmers.
+   *
+   * Defaults to `id` when one is given, else the box's own size. WHY that
+   * fallback and not a counter: a counter is not stable across a server
+   * render and its hydration, and it would renumber when a list reorders.
+   * The cost is that two same-sized Blocks with no `id` wobble identically
+   * — visible as repetition in a grid, which is why a host that has real
+   * ids (both adapters do) should pass one.
+   */
+  sketchSeed?: string;
 }
 
 /**
@@ -64,16 +79,25 @@ export function Block({
   width = SIMPLE_BLOCK.width,
   height = SIMPLE_BLOCK.height,
   radius,
+  sketchSeed,
+  id,
   className,
   style,
+  children,
   ...props
 }: BlockProps) {
   return (
     <div
       data-slot="block"
+      id={id}
       data-radius={radius}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-1 px-4 text-center text-card-foreground",
+        "relative flex flex-col items-center justify-center gap-1 px-4 text-center",
+        // Text colour is a skin token because a skin may remove the surface
+        // it was contrasting against: the sketch skin paints no fill, so
+        // `text-card-foreground` would be reading against a card that is not
+        // there. Fallback is the exact class this replaced.
+        "text-[color:var(--bbox-skin-fg,var(--color-card-foreground))]",
         // The skin seam (skin.ts / skin.css). Each token carries today's
         // value as its own `var()` fallback, which is what lets skin.css
         // stay optional: a consumer who never imports it renders the exact
@@ -109,10 +133,29 @@ export function Block({
         height,
         borderRadius: radius ?? "var(--bbox-skin-radius, 8px)",
         overflow: "clip",
+        // Lets the sketch outline paint over the border box it is drawn on,
+        // plus the slack its wobble needs. `overflow: clip` otherwise clips
+        // children at the PADDING box, which would shave the drawn line by
+        // the border width and flatten its outward bulges — a hand-drawn
+        // line with a perfectly straight segment where it was loosest. A
+        // length (measured from the padding box) rather than `border-box`,
+        // because `border-box` alone still trims the bulge. The bars keep
+        // clipping to the corners, which is what `clip` was here for; a
+        // browser without `overflow-clip-margin` trims the outline instead
+        // of breaking.
+        overflowClipMargin: `${BLOCK_BORDER_PX + SKETCH_OUTLINE_BLEED_PX}px`,
         ...style,
       }}
       {...props}
-    />
+    >
+      <SketchOutline
+        width={width}
+        height={height}
+        borderWidth={BLOCK_BORDER_PX}
+        seed={sketchSeed ?? id ?? `${width}x${height}`}
+      />
+      {children}
+    </div>
   );
 }
 

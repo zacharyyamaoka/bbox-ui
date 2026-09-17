@@ -90,7 +90,10 @@ function fallbacksFor(name: string, text: string): string[] {
 }
 
 describe("components read the tokens skin.ts documents", () => {
-  const sources = ["block.tsx", "region.tsx", "pill.tsx", "port.tsx"]
+  // sketchOutline.tsx belongs here: it is where --bbox-skin-outline and
+  // --bbox-skin-ink are read, and leaving it out is what made this list
+  // stale the first time a token moved out of a Tailwind class.
+  const sources = ["block.tsx", "region.tsx", "pill.tsx", "port.tsx", "sketchOutline.tsx"]
     .map((f) => readFileSync(path.join(srcDir, f), "utf8"))
     .join("\n");
 

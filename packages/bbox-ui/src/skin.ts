@@ -117,6 +117,13 @@ export const BBOX_SKIN_TOKENS: readonly SkinToken[] = [
   { name: "bbox-skin-surface", fallback: "var(--color-card)", paints: "background" },
   { name: "bbox-skin-shadow", fallback: "none", paints: "box-shadow" },
   { name: "bbox-skin-font", fallback: "inherit", paints: "font-family (inherited by every text slot)" },
+  // The two that switch between a CSS border and a drawn one. `outline` is
+  // a `display` value, not a colour: only the sketch skin sets it to
+  // `block`, so every other skin renders `SketchOutline` and never paints
+  // it. See sketchOutline.tsx on why it cannot be conditional in React.
+  { name: "bbox-skin-outline", fallback: "none", paints: "display (SketchOutline's <svg>)" },
+  { name: "bbox-skin-ink", fallback: "var(--color-foreground)", paints: "stroke (the drawn line)" },
+  { name: "bbox-skin-fg", fallback: "var(--color-card-foreground)", paints: "color (Block's text, which a fill-less skin must re-point)" },
 ] as const;
 
 /**

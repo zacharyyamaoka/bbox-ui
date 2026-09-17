@@ -54,6 +54,9 @@
   --bbox-skin-surface: var(--card);
   --bbox-skin-shadow: none;
   --bbox-skin-font: inherit;
+  --bbox-skin-outline: none;
+  --bbox-skin-ink: var(--foreground);
+  --bbox-skin-fg: var(--card-foreground);
 }
 
 /*
@@ -68,6 +71,9 @@
   --bbox-skin-surface: var(--card);
   --bbox-skin-shadow: none;
   --bbox-skin-font: inherit;
+  --bbox-skin-outline: none;
+  --bbox-skin-ink: var(--foreground);
+  --bbox-skin-fg: var(--card-foreground);
 }
 
 /*
@@ -97,12 +103,34 @@
  * rather than to the body font.
  */
 [data-bbox-skin="sketch"] {
-  --bbox-skin-radius: 14px 22px 12px 20px / 20px 12px 22px 14px;
+  /* Only the bars still read this — the visible corner is drawn, not
+     CSS. Kept round so a header band clips to something sympathetic to
+     the drawn corner rather than to a square one. */
+  --bbox-skin-radius: 12px;
   --bbox-skin-radius-pill: 9999px;
   --bbox-skin-stroke-width: 2px;
-  --bbox-skin-stroke: var(--foreground);
-  --bbox-skin-surface: var(--card);
+  /* Transparent, NOT absent. The 2px border still occupies its 2px — it is
+     what every wall-mounted port anchor is measured against — it simply
+     paints nothing, and `SketchOutline` draws on exactly that line. That is
+     the whole trick: the sketch skin replaces the border's PAINT without
+     touching a pixel of its GEOMETRY. */
+  --bbox-skin-stroke: transparent;
+  /* Zach, 2026-09-17: "I don't want there to be any background color... just
+     the sketch line." A sketch block is a line on the canvas, so whatever is
+     behind it shows through — which also means the canvas, not the card, is
+     what the text has to contrast with; see --bbox-skin-ink below. */
+  --bbox-skin-surface: transparent;
   --bbox-skin-shadow: none;
+  --bbox-skin-outline: block;
+  --bbox-skin-ink: var(--foreground);
+  /* With no fill, `--card-foreground` is contrasting against a card that is
+     not there. A sketch Block has to read against the CANVAS behind it, so
+     the text follows the page's own foreground. A consequence of
+     transparency, not a taste choice — but still a token, so this file
+     keeps its one real property: nothing in it selects markup, and so
+     nothing in it can out-specify a caller's own `className`. */
+  --bbox-skin-fg: var(--foreground);
   --bbox-skin-font: "Shantell Sans", "Excalifont", "Virgil", "Segoe Print",
     "Bradley Hand", "Comic Sans MS", cursive;
 }
+

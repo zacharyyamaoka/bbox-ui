@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "./lib/utils";
+import { SketchOutline } from "./sketchOutline";
 import type { RegionKind } from "./region.fields";
 
 /**
@@ -103,6 +104,17 @@ export function Region({
       }}
       {...props}
     >
+      {/* WHY a Region needs this too, and is not merely nice-to-have: the
+          sketch skin turns `--bbox-skin-stroke` transparent so the drawn
+          line can take the CSS border's place. A Region is already
+          `bg-transparent`, so without an outline of its own it would have
+          transparent paint on transparent fill and vanish completely. */}
+      <SketchOutline
+        width={width}
+        height={height}
+        borderWidth={REGION_BORDER_PX}
+        seed={`region:${width}x${height}`}
+      />
       {corner && (
         <div
           data-slot="region-corner"
