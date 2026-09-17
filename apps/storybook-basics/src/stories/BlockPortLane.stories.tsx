@@ -545,12 +545,19 @@ function LaneBench({ benchId, view, portLayout = "inline", openEdge = null, open
     if (editing === "right" && !rightState.available) setEditing(null);
   }, [editing, leftState.available, rightState.available]);
 
+  // C-6 (docs/FEEDBACK-2026-09-17b-PLAN.md, Lane C): no body TEXT on the
+  // port/expanded face — Zach's rule is that a centred body title fights
+  // the ports unless the block is bigger. `body={null}`, not an omitted
+  // prop: the body still has to render as the flex-1 filler that pins the
+  // footer to the bottom of the fixed `height` box (BlockPort.stories.tsx's
+  // `BandedFace` has the full account of why omitting it collapses the
+  // band every rail/lane geometry here measures).
   const face = members ? (
     <Block header="Planner" footer="ready" width={width} height={height} members={memberList} membersLayout="stack" onMembersChange={setMemberList} showCards />
   ) : view === "simple" ? (
     <Block header="Planner" width={width} height={height} showHeaderDivider={false} />
   ) : (
-    <Block header="Planner" body="trajectory" footer="ready" width={width} height={height} />
+    <Block header="Planner" body={null} footer="ready" width={width} height={height} />
   );
 
   return (
@@ -627,6 +634,12 @@ export const LaneOnPortView: Story = {
     const bench = benchOf(canvasElement, "port-view");
     const rail = railOf(bench, "left");
     const block = blockRectOf(bench);
+
+    // C2 (docs/FEEDBACK-2026-09-17b-PLAN.md, Lane C): dropping the body
+    // text from the port-view face must not collapse the Block — the
+    // explicit `height`/`width` this bench was given still win.
+    await expect(block.height).toBe(260);
+    await expect(block.width).toBe(220);
 
     // The lane is open on first paint — wait for CodeMirror's own mount,
     // then for `useLaneGeometry`'s post-measure repaint to settle.

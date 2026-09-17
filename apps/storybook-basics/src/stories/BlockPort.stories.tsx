@@ -135,9 +135,18 @@ function SimpleFace({ width = 180, height = 96 }: { width?: number; height?: num
 }
 
 /** Port/expanded view's face: header, body, footer — so the body BAND is a
- *  real band with something above and below it to be bounded by. */
+ *  real band with something above and below it to be bounded by. C-6
+ *  (docs/FEEDBACK-2026-09-17b-PLAN.md, Lane C): body carries no TEXT —
+ *  Zach's rule is that Port view wouldn't show a centred body title unless
+ *  the block is bigger, because the text gets in the way of the ports.
+ *  `body={null}` (not an omitted prop): the body region still has to
+ *  render as the flex-1 filler that pins the footer to the bottom of the
+ *  fixed `height` box and keeps the band the rails measure genuinely
+ *  tall — omitting the prop entirely collapses header+footer together
+ *  with no filler between them (measured live: every rail/band assertion
+ *  in this file broke that way). */
 function BandedFace({ width = 220, height = 240 }: { width?: number; height?: number }) {
-  return <Block header="Planner" body="trajectory" footer="ready" width={width} height={height} />;
+  return <Block header="Planner" body={null} footer="ready" width={width} height={height} />;
 }
 
 /** The four-wall face: NO header, deliberately. Labels flow inward, so a
@@ -236,6 +245,12 @@ export const ClassicDag: Story = {
   play: async ({ canvasElement }) => {
     const wrapper = wrapperOf(canvasElement);
     const { block, top: bandTop, bottom: bandBottom } = bandOf(wrapper);
+
+    // C2 (docs/FEEDBACK-2026-09-17b-PLAN.md, Lane C): dropping the body
+    // text from `BandedFace` must not collapse the Block — its explicit
+    // `height`/`width` (`ClassicDagDemo`'s defaults) still win.
+    await expect(block.height).toBe(240);
+    await expect(block.width).toBe(220);
     const left = railOf(wrapper, "left");
     const right = railOf(wrapper, "right");
 
