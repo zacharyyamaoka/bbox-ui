@@ -5,7 +5,7 @@ import { expect, userEvent } from "storybook/test";
 
 import { Button } from "../components/button";
 import { TraceBody } from "../components/trace";
-import { DIR_VECTOR, OPPOSITE_DIR, type Point, type TraceDir } from "../components/trace.layout";
+import { DIR_VECTOR, OPPOSITE_DIR, TRACE_DIRS, type Point, type TraceDir } from "../components/trace.layout";
 import { TraceTerminal } from "../components/traceTerminal";
 import {
   DEFAULT_ELBOW_OPTIONS,
@@ -684,6 +684,52 @@ const SOFT_CLEARANCE_OFF: TidyTracesOptions = {
   softClearance: { clearance: 0, nearMissWeight: 0, crossingWeight: 0 },
 };
 
+/**
+ * H-11's other half of the trade-off: the case soft clearance earns its
+ * default. Reuses the DONOR'S OWN regression fixture, verbatim —
+ * `elbowRouter.test.ts`'s "prefers a clear equivalent rail" (`SOURCE`/
+ * `TARGET` translated `(0, 160)`, the same four-point `reference` route).
+ * Re-running that exact geometry through `tidyTraces` rather than a fresh
+ * scene means the crossing these two cards show is not staged for the
+ * story — it is the same one the donor's independent test already proves
+ * the cost function detects.
+ */
+const CLEAR_SOURCE: ElbowRect = { x: 0, y: 0, w: 160, h: 80 };
+const CLEAR_TARGET: ElbowRect = { x: 320, y: 160, w: 160, h: 80 };
+
+const CLEAR_AUTO_INPUT: ElbowRouteInput = {
+  start: { point: { x: 160, y: 40 }, side: "right", box: CLEAR_SOURCE },
+  end: { point: { x: 320, y: 200 }, side: "left", box: CLEAR_TARGET },
+};
+
+/** The reference cable the auto cable must avoid, drawn as a LOCKED
+ * (hand-routed) edge so Tidy treats it as a real routing constraint rather
+ * than an invented prop the pipeline never actually sees. */
+const CLEAR_REFERENCE_POINTS: Point[] = [
+  { x: 160, y: 140 },
+  { x: 260, y: 140 },
+  { x: 260, y: 260 },
+  { x: 480, y: 260 },
+];
+const CLEAR_REFERENCE_INPUT: ElbowRouteInput = {
+  start: { point: CLEAR_REFERENCE_POINTS[0], side: "right" },
+  end: { point: CLEAR_REFERENCE_POINTS[CLEAR_REFERENCE_POINTS.length - 1], side: "left" },
+};
+const CLEAR_REFERENCE_ROUTE: ElbowRoute = {
+  points: CLEAR_REFERENCE_POINTS,
+  segments: [],
+  pins: [],
+  droppedPins: [],
+  fallback: false,
+};
+
+/** Fresh edges per card — `tidyTraces` never mutates its input, but two
+ * independent cards should not share one array by accident either. */
+const clearEdges = (): TidyTraceInput[] => [
+  { input: CLEAR_REFERENCE_INPUT, current: CLEAR_REFERENCE_ROUTE, locked: true },
+  auto(CLEAR_AUTO_INPUT),
+];
+
 const SHARED_CARDS: TidyCard[] = [
   {
     key: "two",
@@ -710,13 +756,90 @@ const SHARED_CARDS: TidyCard[] = [
     options: SOFT_CLEARANCE_OFF,
     settles: "one pass",
   },
+  {
+    key: "clear",
+    title: "Auto cable steered clear of a hand-routed one",
+    caption: "the cable's own unweighted route crosses the locked one twice; the soft cost detours around it",
+    edges: clearEdges(),
+    boxes: [CLEAR_SOURCE, CLEAR_TARGET],
+    settles: "one pass",
+  },
+  {
+    key: "clearlegacy",
+    title: "Same pair, soft clearance off",
+    caption: "both weights zeroed — nothing prices the crossing, so it survives Tidy untouched",
+    edges: clearEdges(),
+    boxes: [CLEAR_SOURCE, CLEAR_TARGET],
+    options: SOFT_CLEARANCE_OFF,
+    settles: "one pass",
+  },
 ];
 
+/**
+ * The prose H-11 asks for, rendered where Zach actually looks rather than
+ * left in a code comment — every number below is asserted against the
+ * pixels in this story's own `play` function, not hand-typed and hoped.
+ */
+function SoftClearanceExplainer() {
+  return (
+    <div
+      data-testid="soft-clearance-explainer"
+      style={{
+        maxWidth: 900,
+        margin: "18px 18px 0",
+        padding: "12px 14px",
+        border: "1px solid var(--border)",
+        borderRadius: 8,
+        background: "var(--muted)",
+        fontSize: 12,
+        lineHeight: 1.55,
+        color: "var(--foreground)",
+      }}
+    >
+      <div>
+        <strong>What it optimises for:</strong> when Tidy re-plans an
+        automatic cable, a candidate route is charged a cost for crossing or
+        running near an already-placed one — the router prefers a detour
+        that avoids that cost when the board leaves room for one. <em>Auto
+        cable steered clear</em> below is the case this earns its keep in:
+        the cable's own unweighted route crosses a hand-routed one twice;
+        with the cost priced in, Tidy detours and the crossing count drops
+        to 0. Zero both weights (<em>same pair, soft clearance off</em>) and
+        nothing prices the crossing — it survives the pass untouched.
+      </div>
+      <div style={{ marginTop: 6 }}>
+        <strong>What it trades away:</strong> a deterministic, even channel
+        cadence. <em>Five parallel cables</em> below settles on rails
+        460 / 555 / 576 / 583 / 597 — gaps of 95 / 21 / 7px against the
+        intended 14px cadence — because that same cost tie-break interacts
+        with the later channel-spacing pass. Zero both weights (<em>the same
+        five, soft clearance off</em>) and the rails land on an even
+        432 / 446 / 460 / 474 / 488. Neither configuration is free: one
+        buys crossing-avoidance at the price of an uneven cadence, the other
+        buys the cadence back at the price of a crossing nothing steers
+        around.
+      </div>
+    </div>
+  );
+}
+
+/** Cards in `SHARED_CARDS` whose defect is two routes drawn on top of each
+ * other (the coincident-midline case `nudge.ts` was written for). The
+ * crossing-avoidance pair (`clear` / `clearlegacy`) is a different defect —
+ * a genuine perpendicular crossing, never an overlap — so it is asserted
+ * separately below rather than forced through this loop's overlap ruler. */
+const OVERLAP_CARD_KEYS = new Set(["two", "five", "fivelegacy"]);
+
 export const TidySharedCorridor: Story = {
-  render: () => <Gallery cards={SHARED_CARDS} />,
+  render: () => (
+    <div>
+      <SoftClearanceExplainer />
+      <Gallery cards={SHARED_CARDS} />
+    </div>
+  ),
   play: async ({ canvasElement }) => {
     assertRulerUnchanged();
-    for (const card of SHARED_CARDS) {
+    for (const card of SHARED_CARDS.filter((c) => OVERLAP_CARD_KEYS.has(c.key))) {
       const count = card.edges.length;
       const before = measure(canvasElement, card.key, "before", count);
       const after = measure(canvasElement, card.key, "after", count);
@@ -736,6 +859,33 @@ export const TidySharedCorridor: Story = {
       // Spreading must not buy the separation with new crossings.
       await expect(after.crossings, `${card.key}: ${after.crossings} crossings after tidy`).toBe(0);
     }
+
+    /* ---- H-11: the crossing-avoidance pair, measured off the pixels ----
+     *
+     * `clear`'s BEFORE is the auto cable's plain unweighted route — the
+     * same route `clearlegacy` never moves away from, since zeroed weights
+     * never price the crossing at all. `clear`'s AFTER is what soft
+     * clearance is FOR: Tidy detours around the locked reference cable and
+     * the crossing count drops to 0.
+     */
+    const clearBefore = measure(canvasElement, "clear", "before", 2);
+    const clearAfter = measure(canvasElement, "clear", "after", 2);
+    await expect(clearBefore.crossings, `clear: crossings before tidy`).toBeGreaterThan(0);
+    await expect(clearAfter.crossings, `clear: crossings after tidy`).toBe(0);
+
+    const clearLegacyBefore = measure(canvasElement, "clearlegacy", "before", 2);
+    const clearLegacyAfter = measure(canvasElement, "clearlegacy", "after", 2);
+    await expect(clearLegacyBefore.crossings, "clearlegacy: crossings before tidy").toBe(clearBefore.crossings);
+    await expect(
+      clearLegacyAfter.crossings,
+      `clearlegacy: soft clearance off leaves ${clearLegacyAfter.crossings} crossing(s) untouched`,
+    ).toBe(clearLegacyBefore.crossings);
+    // And it is genuinely worse than the weighted pass on the identical pair.
+    await expect(clearLegacyAfter.crossings).toBeGreaterThan(clearAfter.crossings);
+
+    const explainer = requireEl<HTMLElement>(canvasElement, '[data-testid="soft-clearance-explainer"]');
+    await expect(explainer.textContent).toContain("460");
+    await expect(explainer.textContent).toContain("432");
 
     /* ---- channel cadence: what the two configurations actually give ----
      *
@@ -1061,5 +1211,247 @@ export const TidyLockedRespected: Story = {
     await expect(second.reported).toBe(false);
 
     await resetCards(canvasElement, [LOCKED_CARD]);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* 5. All sixteen direction pairs                                      */
+/*                                                                      */
+/* H-10: "there are 4 possible output directions and 4 possible input   */
+/* directions" — a 4x4 matrix over `{top,right,bottom,left}`, every cell */
+/* RENDERED, including the ones Tidy cannot improve (the same rule       */
+/* `TracePolarity` follows for its unsupported routings: a missing cell  */
+/* reads as "handled", a labelled no-op reads as the truth).             */
+/* ------------------------------------------------------------------ */
+
+/** One box pair, shared by all sixteen cells and NOT rotated per pair — a
+ * `top -> top` cable genuinely has to wrap around, which is the harder case
+ * Zach asked to see. Rotating the boxes to make every pair a short, tidy
+ * hop would quietly answer a different, easier question. */
+const DIR16_BOX_A: ElbowRect = { x: 0, y: 60, w: 160, h: 120 };
+const DIR16_BOX_B: ElbowRect = { x: 460, y: 60, w: 160, h: 120 };
+
+function sideMidpoint(box: ElbowRect, side: TraceDir): Point {
+  switch (side) {
+    case "top":
+      return { x: box.x + box.w / 2, y: box.y };
+    case "bottom":
+      return { x: box.x + box.w / 2, y: box.y + box.h };
+    case "left":
+      return { x: box.x, y: box.y + box.h / 2 };
+    case "right":
+      return { x: box.x + box.w, y: box.y + box.h / 2 };
+  }
+}
+
+interface Dir16Cell {
+  from: TraceDir;
+  to: TraceDir;
+  input: ElbowRouteInput;
+  /** The naive, un-routed chord between the two ports — what a cable would
+   * look like before anyone ever pressed Tidy. */
+  before: ElbowRoute;
+  /** `tidyTraces`'s answer for this ONE pair. */
+  after: ElbowRoute;
+  /** Read off the rendered `d` strings in the play function — this field is
+   * only the render's own best guess, and exists so the label has
+   * something to show before the DOM exists to measure. */
+  changed: boolean;
+}
+
+/**
+ * Every cell computed INDEPENDENTLY — one `tidyTraces` call per pair, not
+ * sixteen edges sharing a single call. Sharing would let soft clearance
+ * treat one cell's cable as a reference for another's, which has nothing to
+ * do with the question a cell asks ("does Tidy handle THIS side pair?").
+ *
+ * `before` is the plain two-point chord between the ports. For `right ->
+ * left` — the one pair with an unobstructed straight shot — that chord
+ * already IS what Tidy draws, which is exactly the no-op cell H-10 requires
+ * to be rendered and labelled rather than dropped.
+ */
+const DIR16_CELLS: Dir16Cell[] = TRACE_DIRS.flatMap((from) =>
+  TRACE_DIRS.map((to): Dir16Cell => {
+    const startPoint = sideMidpoint(DIR16_BOX_A, from);
+    const endPoint = sideMidpoint(DIR16_BOX_B, to);
+    const input: ElbowRouteInput = {
+      start: { point: startPoint, side: from, box: DIR16_BOX_A },
+      end: { point: endPoint, side: to, box: DIR16_BOX_B },
+    };
+    const before: ElbowRoute = {
+      points: [startPoint, endPoint],
+      segments: [],
+      pins: [],
+      droppedPins: [],
+      fallback: false,
+    };
+    const result = tidyTraces([{ input, current: before, locked: false }]);
+    const after = result.routes[0];
+    return { from, to, input, before, after, changed: elbowPath(before) !== elbowPath(after) };
+  }),
+);
+
+/** One shared frame for all sixteen cells — `TracePolarity`'s rule: a
+ * per-cell frame would silently rescale a wrap-around route smaller than a
+ * direct one, and the eye would read that as "shorter" when it is not. */
+const DIR16_VIEWBOX = (() => {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const box of [DIR16_BOX_A, DIR16_BOX_B]) {
+    xs.push(box.x, box.x + box.w);
+    ys.push(box.y, box.y + box.h);
+  }
+  for (const cell of DIR16_CELLS) {
+    for (const p of [...cell.before.points, ...cell.after.points]) {
+      xs.push(p.x);
+      ys.push(p.y);
+    }
+  }
+  const pad = 20;
+  const minX = Math.min(...xs) - pad;
+  const minY = Math.min(...ys) - pad;
+  return `${minX} ${minY} ${Math.max(...xs) + pad - minX} ${Math.max(...ys) + pad - minY}`;
+})();
+
+function Dir16CellView({ cell }: { cell: Dir16Cell }) {
+  const key = `${cell.from}-${cell.to}`;
+  const { from, to } = terminalsFor(cell.input);
+  return (
+    <div
+      data-testid={`tidy16-cell-${key}`}
+      data-from={cell.from}
+      data-to={cell.to}
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 8,
+        background: "var(--card)",
+        overflow: "hidden",
+      }}
+    >
+      <svg
+        data-slot="tidy16-canvas"
+        viewBox={DIR16_VIEWBOX}
+        width="100%"
+        style={{ display: "block", aspectRatio: "3 / 2" }}
+      >
+        <rect
+          x={DIR16_BOX_A.x}
+          y={DIR16_BOX_A.y}
+          width={DIR16_BOX_A.w}
+          height={DIR16_BOX_A.h}
+          rx={6}
+          fill="var(--muted)"
+          stroke="var(--border)"
+        />
+        <rect
+          x={DIR16_BOX_B.x}
+          y={DIR16_BOX_B.y}
+          width={DIR16_BOX_B.w}
+          height={DIR16_BOX_B.h}
+          rx={6}
+          fill="var(--muted)"
+          stroke="var(--border)"
+        />
+        {/* Same `elbowPath` renderer as "after" — a genuine no-op then
+           produces byte-identical `d` strings, which is what H-10b measures. */}
+        <path
+          data-testid={`tidy16-before-${key}`}
+          d={elbowPath(cell.before)}
+          fill="none"
+          stroke="var(--muted-foreground)"
+          strokeDasharray="2 3"
+          strokeWidth={1.5}
+          opacity={0.6}
+        />
+        <g data-testid={`tidy16-after-group-${key}`}>
+          <TraceBody id={`dir16-${key}`} path={elbowPath(cell.after)} points={routePoints(cell.after)} />
+        </g>
+        <TraceTerminal {...from} />
+        <TraceTerminal {...to} />
+      </svg>
+      <div
+        data-testid={`tidy16-status-${key}`}
+        data-changed={cell.changed ? "true" : "false"}
+        style={{
+          fontSize: 11,
+          padding: "4px 8px",
+          borderTop: "1px solid var(--border)",
+          color: "var(--muted-foreground)",
+        }}
+      >
+        {cell.from} → {cell.to} · {cell.changed ? "Tidy changed the route" : "Already tidy — no change"}
+      </div>
+    </div>
+  );
+}
+
+export const TidyDirectionMatrix: Story = {
+  render: () => (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(190px, 1fr))",
+        gap: 10,
+        padding: 18,
+        background: "var(--background)",
+      }}
+    >
+      {DIR16_CELLS.map((cell) => (
+        <Dir16CellView key={`${cell.from}-${cell.to}`} cell={cell} />
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    assertRulerUnchanged();
+
+    // H10a: sixteen cells exist, and their (from, to) pairs are exactly the
+    // 16 distinct combinations — a Set, so a silently duplicated pair (and
+    // therefore a silently dropped one) fails.
+    const cellEls = canvasElement.querySelectorAll('[data-testid^="tidy16-cell-"]');
+    await expect(cellEls).toHaveLength(16);
+    const renderedPairs = new Set<string>();
+    cellEls.forEach((el) => {
+      const dataset = (el as HTMLElement).dataset;
+      renderedPairs.add(`${dataset.from}-${dataset.to}`);
+    });
+    const expectedPairs = new Set(TRACE_DIRS.flatMap((from) => TRACE_DIRS.map((to) => `${from}-${to}`)));
+    await expect(renderedPairs.size).toBe(16);
+    await expect(renderedPairs).toEqual(expectedPairs);
+
+    // H10b: the label matches the measurement — read off the REAL rendered
+    // `d` strings, never off `cell.changed`, which is only the render's own
+    // report and exactly the kind of self-grading this repo distrusts.
+    let changedCount = 0;
+    let noopCount = 0;
+    for (const cell of DIR16_CELLS) {
+      const key = `${cell.from}-${cell.to}`;
+      const beforePath = requireEl<SVGPathElement>(canvasElement, `[data-testid="tidy16-before-${key}"]`);
+      const afterGroup = requireEl<SVGGElement>(canvasElement, `[data-testid="tidy16-after-group-${key}"]`);
+      const afterPath = requireEl<SVGPathElement>(afterGroup, '[data-slot="trace-line"]');
+      const status = requireEl<HTMLElement>(canvasElement, `[data-testid="tidy16-status-${key}"]`);
+
+      const beforeD = beforePath.getAttribute("d");
+      const afterD = afterPath.getAttribute("d");
+      const changed = beforeD !== afterD;
+
+      await expect(
+        status.dataset.changed,
+        `${key}: label says changed=${status.dataset.changed}, drawn d strings ${changed ? "differ" : "match"}`,
+      ).toBe(changed ? "true" : "false");
+      await expect(status.textContent).toContain(changed ? "Tidy changed the route" : "Already tidy — no change");
+
+      if (changed) changedCount += 1;
+      else noopCount += 1;
+    }
+
+    // Both buckets are non-empty — this matrix is not secretly all one
+    // thing wearing sixteen labels. `right -> left` (the one pair with a
+    // clear straight shot) is the documented no-op; every pair that has to
+    // turn at least once is documented changed.
+    await expect(changedCount, "at least one direction pair should need tidying").toBeGreaterThan(0);
+    await expect(noopCount, "at least one direction pair should already be tidy").toBeGreaterThan(0);
+
+    const rightToLeft = requireEl<HTMLElement>(canvasElement, '[data-testid="tidy16-status-right-left"]');
+    await expect(rightToLeft.dataset.changed).toBe("false");
   },
 };
