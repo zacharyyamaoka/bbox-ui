@@ -70,6 +70,28 @@ export interface TraceTerminalProps extends Omit<ComponentProps<"g">, "x" | "y">
    * trace's own stroke running underneath it, so the line reads as
    * arriving AT the terminal rather than through it. */
   fill?: string;
+  /**
+   * Draw the arrow that claims this end's flow tangent. Defaults to
+   * `true` so every existing caller is unaffected.
+   *
+   * WHY this exists: `dir` is a fact about the TERMINAL — it is always
+   * well-defined — but the arrow is a claim about the ROUTE, namely that
+   * the painted path actually leaves or arrives along it. `straight` and
+   * `slanted` don't honor that claim at every end (`TRACE_ROUTING_TANGENTS`
+   * / `routingTangents` in `trace.routing.ts` — the fidelity is per END and
+   * per ROUTING, not a blanket "these two kinds never show polarity": a
+   * `slanted` trace honors its SOURCE and is blind only at its target). A
+   * caller whose routing doesn't read this end's `dir` passes `false`
+   * rather than let the glyph assert a polarity the geometry ignores —
+   * this was Zach's own correction on the `TracePolarity` gallery, which
+   * drew an arrow on every terminal regardless of whether anything
+   * downstream ever looked at it.
+   *
+   * The ring's radius and centre never move when this is `false` — only
+   * the arrow `<path>` is omitted — so a blind and an honored terminal
+   * still line up size-for-size in a gallery row.
+   */
+  showDirection?: boolean;
 }
 
 /**
@@ -85,6 +107,7 @@ export function TraceTerminal({
   radius = TRACE_TERMINAL_RADIUS,
   color = "var(--bbox-primary, var(--primary))",
   fill = "var(--card)",
+  showDirection = true,
   className,
   ...props
 }: TraceTerminalProps) {
@@ -105,15 +128,17 @@ export function TraceTerminal({
         stroke={color}
         strokeWidth={TRACE_TERMINAL_RING_PX}
       />
-      <path
-        data-slot="trace-terminal-arrow"
-        d={arrowPath(radius)}
-        fill="none"
-        stroke={color}
-        strokeWidth={Math.max(1, radius * 0.2)}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {showDirection ? (
+        <path
+          data-slot="trace-terminal-arrow"
+          d={arrowPath(radius)}
+          fill="none"
+          stroke={color}
+          strokeWidth={Math.max(1, radius * 0.2)}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
     </g>
   );
 }
