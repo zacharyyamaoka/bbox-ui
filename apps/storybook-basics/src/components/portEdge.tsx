@@ -159,6 +159,23 @@ export interface PortEdgeProps {
    *  inward text layout (or, with `showPorts` off, the bare label). */
   renderItem?(item: PortEdgeItem, ctx: { textLayout: PortTextLayout }): ReactNode;
   /**
+   * D-A7 (docs/BLOCK-PORT-EDGES-PLAN.md §4b·S1): what a COLLAPSED real
+   * family draws, when the host needs something other than this component's
+   * own `+N more` chip. The case that asked for it is VIEW-collapse: a
+   * Block's simple face draws ONE label-less dot standing for the whole
+   * wall (donor `layoutBlock.ts:1301-1330`, `label: null` at `:1305`), and a
+   * `+N more` chip there would be a different idiom entirely.
+   *
+   * WHY a second seam rather than finally letting `renderItem` through in
+   * `SlotBody`'s collapsed branch: that refusal is still right, and for the
+   * stated reason — `renderItem` renders ONE port's real content, and a
+   * collapsed slot is not one port. This seam adds the missing case (draw
+   * the WHOLE family yourself, handed every member) without renegotiating
+   * what `renderItem` means. Omit it and the collapsed idiom is
+   * byte-identical to before, which is why no landed story changed.
+   */
+  renderCollapsed?(members: PortEdgeItem[], ctx: { textLayout: PortTextLayout }): ReactNode;
+  /**
    * Label placement for every port's DEFAULT `LabeledPort` — Phase 2's
    * existing `PortTextLayout` vocabulary (`LabeledPort`'s own `textLayout`
    * prop), reused rather than a second one. Omit for the edge's own inward
@@ -346,6 +363,8 @@ interface SlotRenderProps {
   gapPx: number;
   color?: string;
   renderItem?: PortEdgeProps["renderItem"];
+  /** D-A7 — see `PortEdgeProps.renderCollapsed`. */
+  renderCollapsed?: PortEdgeProps["renderCollapsed"];
   textLayoutOverride?: PortTextLayout;
   hideLabel?: boolean;
 }
@@ -444,6 +463,12 @@ function SlotBody(props: SlotRenderProps) {
       label: `+${slot.members.length} more`,
       state: sourceItem?.state ?? "empty",
     };
+    // D-A7: the whole family, in the order it renders — what
+    // `renderCollapsed` is handed, and the reason it is a different seam
+    // from `renderItem` (which only ever sees one port).
+    const members = slot.members
+      .map((m) => itemsById.get(m.id))
+      .filter((it): it is PortEdgeItem => it != null);
     return (
       <PortEdgeSlotBox
         item={collapsedItem}
@@ -454,6 +479,11 @@ function SlotBody(props: SlotRenderProps) {
         // Deliberately NOT `props.renderItem` — a host override renders
         // ONE port's real content; the collapsed summary is a fixed idiom
         // of this component's own, same as before this change.
+        //
+        // D-A7: `props.renderCollapsed` IS consulted, because it is given
+        // the whole family instead. Absent, the `+N more` chip above stands
+        // unchanged — this branch is byte-identical without the prop.
+        renderItem={props.renderCollapsed ? (_item, ctx) => props.renderCollapsed?.(members, ctx) : undefined}
         textLayoutOverride={props.textLayoutOverride}
         hideLabel={props.hideLabel}
       />
@@ -748,6 +778,7 @@ function PortEdgeBody({
   showCenterLine = true,
   size,
   renderItem,
+  renderCollapsed,
   textLayout,
   editing = false,
   onEditingChange,
@@ -887,6 +918,7 @@ function PortEdgeBody({
                 color={colorMap.get(slot.slotId)}
                 x={freeOffsets[slot.slotId] ?? 0}
                 renderItem={renderItem}
+                renderCollapsed={renderCollapsed}
                 textLayoutOverride={resolvedTextLayout}
                 hideLabel={laneOpen}
               />
@@ -905,6 +937,7 @@ function PortEdgeBody({
                 gapPx={gapPx}
                 color={colorMap.get(slot.slotId)}
                 renderItem={renderItem}
+                renderCollapsed={renderCollapsed}
                 textLayoutOverride={resolvedTextLayout}
                 hideLabel={laneOpen}
               />
