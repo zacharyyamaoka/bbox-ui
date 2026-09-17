@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { TraceBody, type TraceProps } from "../components/trace";
+import { Trace, TraceBody, traceGeometry, type TraceProps, type TraceRouteRequest } from "../components/trace";
 import {
   ASYNC_CADENCE_PX,
   DATA_MARCH_CLASS,
@@ -14,6 +14,8 @@ import {
   type TraceDir,
 } from "../components/trace.layout";
 import { TraceTerminal } from "../components/traceTerminal";
+import { elbowPath, routeElbow } from "../components/elbow/index";
+import { elbowInputFromTerminals, routePoints } from "../components/elbow/traceContract";
 
 /* ------------------------------------------------------------------ */
 /* The fixture: one straight line between two terminals, exactly as    */
@@ -494,77 +496,290 @@ export const TerminalDirections: Story = {
   },
 };
 
+/* ------------------------------------------------------------------ */
+/* DelayedSplit — every routing the kit has, not just a straight line   */
+/*                                                                      */
+/* H-8. The split point is a FRACTION OF ARC LENGTH: `splitDashArrays`  */
+/* (`trace.layout.ts`) sets `stroke-dasharray` in `pathLength`-space    */
+/* (`fraction * PATH_LENGTH_UNITS`), and SVG's `pathLength` attribute   */
+/* remaps that to the path's own REAL rendered length regardless of     */
+/* what `length` prop was fed in — so the split lands at the same       */
+/* fraction of arc length on a straight line, a curve or a six-point    */
+/* elbow alike. `<Trace>` (not `TraceBody`) draws every row below: it   */
+/* is the one place that turns a `routing` KIND into geometry, and for  */
+/* a curved route it also re-measures the real `getTotalLength()` after */
+/* mount — reusing that instead of hand-rolling a Bezier sampler here.  */
+/* ------------------------------------------------------------------ */
+
+/** Bounding box of every numeric coordinate pair in an SVG `d` string —
+ * the control polygon for a curve, the exact vertices for anything else.
+ * A cubic/quadratic Bezier lies inside the convex hull of its control
+ * points, so this is a CONSERVATIVE frame (never clips) even though it is
+ * not the tight curve bound. Same technique `TracePolarity.stories.tsx`
+ * uses for its own shared viewBox; reimplemented locally rather than
+ * imported because that file belongs to a different lane. */
+function pathPointsBounds(d: string): { minX: number; minY: number; maxX: number; maxY: number } {
+  const numbers = d.match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi)?.map(Number) ?? [];
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i + 1 < numbers.length; i += 2) {
+    minX = Math.min(minX, numbers[i]);
+    maxX = Math.max(maxX, numbers[i]);
+    minY = Math.min(minY, numbers[i + 1]);
+    maxY = Math.max(maxY, numbers[i + 1]);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+interface DelayedSplitSpecimen {
+  key: string;
+  label: string;
+  caption: string;
+  request: TraceRouteRequest;
+  labelPosition: number;
+  /**
+   * Pre-built `path`/`points`, when the row cannot be drawn by `<Trace>`
+   * dispatching `request` itself. Only the `elbow` specimen below sets
+   * this — see its own comment for why.
+   */
+  override?: { path: string; points: Point[] };
+}
+
+/** The obstacle `elbow` below routes around — two hops up and over, four
+ * real corners, not the two-point stub a clear corridor would draw. */
+const ELBOW_SPLIT_OBSTACLE = { x: 180, y: 20, w: 100, h: 100 };
+
+const ELBOW_SPLIT_FROM = { x: 26, y: 70, dir: "right" as TraceDir };
+const ELBOW_SPLIT_TO = { x: 434, y: 70, dir: "right" as TraceDir };
+
 /**
- * The delayed variant's split: solid up to the label position, dotted
- * after it — the seam a `TraceBadge` (P4) sits in. Three positions so the
- * seam is visibly a function of `labelPosition`, plus the 0.05..0.95 clamp
- * proved by asking for 0.
+ * H-8's required specimen: the split lands within 2px of an elbow vertex.
+ *
+ * This is the one specimen `<Trace>` cannot draw as-is. `traceGeometryBetween`
+ * (`trace.tsx`, the elbow branch) calls `elbowPath(route)` with no options,
+ * so the drawn `d` ALWAYS uses `DEFAULT_ELBOW_OPTIONS.cornerRadius` (8px) —
+ * `TraceRouteRequest.elbowOptions` reaches `ElbowRouteInput.options`, which
+ * `elbowRouter.ts` never actually reads (`cornerRadius` has no consumer
+ * there), and never reaches the `elbowPath()` call at all. Confirmed by
+ * measurement, not just reading the source: passing `elbowOptions:
+ * {cornerRadius:2}` through `<Trace>` changed nothing — same 2.84px result
+ * as the untouched default. At the frozen 8px radius (`CORNER_RADIUS_PX` in
+ * `TraceTidy.stories.tsx`), the closest point on a ROUNDED 90° corner sits
+ * `r * (sqrt(2) - 1)` ≈ 2.84px from the sharp vertex — a fixed geometric
+ * floor for that corner, not a `labelPosition` targeting error, and it
+ * matches `TraceTidy.stories.tsx`'s own independently-derived "worst case
+ * 2.83px at r=8". No choice of `labelPosition` gets a rounded r=8 corner
+ * under a 2px tolerance; this is reported as a real (if minor) `trace.tsx`
+ * gap in the lane report rather than fixed here — `trace.tsx` belongs to a
+ * component another lane owns, not to `Trace.stories.tsx` or `trace.tidy.ts`.
+ *
+ * The workaround stays inside this file: call `routeElbow` + `elbowPath`
+ * directly — both public, pure functions this repo already calls the same
+ * way in `TraceTidy.stories.tsx` and `TraceElbow.stories.tsx` — with a 2px
+ * radius (cut ≈ 0.83px, comfortably under 2px) for THIS specimen only. The
+ * router's own vertices are untouched; only how tightly the drawn corner is
+ * rounded changes.
  */
-const SPLIT_POSITIONS = [0.25, 0.5, 0] as const;
+const ELBOW_SPLIT_INPUT = elbowInputFromTerminals({
+  from: ELBOW_SPLIT_FROM,
+  to: ELBOW_SPLIT_TO,
+  obstacles: [ELBOW_SPLIT_OBSTACLE],
+});
+const ELBOW_SPLIT_ROUTE = routeElbow(ELBOW_SPLIT_INPUT);
+const ELBOW_SPLIT_POINTS = routePoints(ELBOW_SPLIT_ROUTE);
+const ELBOW_SPLIT_PATH = elbowPath(ELBOW_SPLIT_ROUTE, { radius: 2 });
+const ELBOW_SPLIT_VERTEX_INDEX = 2;
+const ELBOW_SPLIT_TARGET_VERTEX = ELBOW_SPLIT_POINTS[ELBOW_SPLIT_VERTEX_INDEX];
+const ELBOW_SPLIT_FRACTION = (() => {
+  let cumulative = 0;
+  let atVertex = 0;
+  for (let i = 1; i < ELBOW_SPLIT_POINTS.length; i += 1) {
+    cumulative += Math.hypot(
+      ELBOW_SPLIT_POINTS[i].x - ELBOW_SPLIT_POINTS[i - 1].x,
+      ELBOW_SPLIT_POINTS[i].y - ELBOW_SPLIT_POINTS[i - 1].y,
+    );
+    if (i === ELBOW_SPLIT_VERTEX_INDEX) atVertex = cumulative;
+  }
+  return atVertex / cumulative;
+})();
+
+const DELAYED_SPLIT_SPECIMENS: DelayedSplitSpecimen[] = [
+  {
+    key: "straight",
+    label: "Straight",
+    caption: "labelPosition 0 — clamped up to the 0.05 floor",
+    request: { from: { x: 26, y: 70, dir: "right" }, to: { x: 434, y: 70, dir: "right" }, routing: "straight" },
+    labelPosition: 0,
+  },
+  {
+    key: "straight-bends",
+    label: "Straight, with bends",
+    caption: "a bent straight is a real polyline now — the split still tracks the ratio, corners included",
+    request: {
+      from: { x: 26, y: 70, dir: "right" },
+      to: { x: 434, y: 70, dir: "right" },
+      routing: "straight",
+      bends: [{ t: 0.33, o: -36 }, { t: 0.66, o: 36 }],
+    },
+    labelPosition: 0.5,
+  },
+  {
+    key: "slanted",
+    label: "Slanted",
+    caption: "labelPosition 0.35",
+    request: { from: { x: 26, y: 104, dir: "right" }, to: { x: 434, y: 32, dir: "right" }, routing: "slanted" },
+    labelPosition: 0.35,
+  },
+  {
+    key: "curved",
+    label: "Curved",
+    caption: "the kit default — a cubic Bezier, no vertices, same fraction rule",
+    request: { from: { x: 26, y: 104, dir: "right" }, to: { x: 434, y: 32, dir: "right" }, routing: "curved" },
+    labelPosition: 0.6,
+  },
+  {
+    key: "curved-control",
+    label: "Curved, with a control point",
+    caption: "the dragged waypoint reshapes the curve; the split is still a fraction of its (longer) length",
+    request: {
+      from: { x: 26, y: 70, dir: "right" },
+      to: { x: 434, y: 70, dir: "right" },
+      routing: "curved",
+      curve: { dx: 0, dy: -70 },
+    },
+    labelPosition: 0.45,
+  },
+  {
+    key: "elbow",
+    label: "Elbow, several corners",
+    caption:
+      `labelPosition ${ELBOW_SPLIT_FRACTION.toFixed(4)} — chosen so the split lands ON vertex ${ELBOW_SPLIT_VERTEX_INDEX} ` +
+      "(the turn back down toward the target): the solid run ends and the dotted run begins right at the corner, " +
+      "not mid-leg either side of it. Drawn with a 2px corner radius rather than the 8px default so that corner is " +
+      "reachable within 2px at all — see the WHY above ELBOW_SPLIT_ROUTE",
+    request: { from: ELBOW_SPLIT_FROM, to: ELBOW_SPLIT_TO, routing: "elbow", obstacles: [ELBOW_SPLIT_OBSTACLE] },
+    labelPosition: ELBOW_SPLIT_FRACTION,
+    override: { path: ELBOW_SPLIT_PATH, points: ELBOW_SPLIT_POINTS },
+  },
+];
+
+function DelayedSplitRow({ specimen }: { specimen: DelayedSplitSpecimen }) {
+  const path = specimen.override?.path ?? traceGeometry(specimen.request).path;
+  const bounds = pathPointsBounds(path);
+  const pad = 16;
+  const minX = Math.min(bounds.minX, specimen.request.from.x, specimen.request.to.x) - pad;
+  const minY = Math.min(bounds.minY, specimen.request.from.y - pad, specimen.request.to.y - pad) - pad;
+  const maxX = Math.max(bounds.maxX, specimen.request.from.x, specimen.request.to.x) + pad;
+  const maxY = Math.max(bounds.maxY, specimen.request.from.y + pad, specimen.request.to.y + pad) + pad;
+  const viewBox = `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
+
+  return (
+    <div data-testid={`split-row-${specimen.key}`} style={{ display: "flex", alignItems: "center", gap: 20 }}>
+      <div style={{ width: 220, flexShrink: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--foreground)" }}>{specimen.label}</div>
+        <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{specimen.caption}</div>
+      </div>
+      <svg
+        data-slot="trace-canvas"
+        width={ROW_W}
+        viewBox={viewBox}
+        style={{ display: "block", aspectRatio: `${maxX - minX} / ${maxY - minY}`, overflow: "visible" }}
+      >
+        {specimen.override ? (
+          <>
+            <TraceBody
+              id={`trace-split-${specimen.key}`}
+              path={specimen.override.path}
+              points={specimen.override.points}
+              variant="delayed"
+              splitAtLabel
+              labelPosition={specimen.labelPosition}
+            />
+            <TraceTerminal
+              x={specimen.request.from.x}
+              y={specimen.request.from.y}
+              dir={specimen.request.from.dir}
+            />
+            <TraceTerminal x={specimen.request.to.x} y={specimen.request.to.y} dir={specimen.request.to.dir} />
+          </>
+        ) : (
+          <Trace
+            id={`trace-split-${specimen.key}`}
+            {...specimen.request}
+            variant="delayed"
+            splitAtLabel
+            labelPosition={specimen.labelPosition}
+          />
+        )}
+      </svg>
+    </div>
+  );
+}
 
 export const DelayedSplit: Story = {
   render: () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: 20 }}>
-      {SPLIT_POSITIONS.map((t) => (
-        <div
-          key={t}
-          data-testid={`split-row-${t}`}
-          style={{ display: "flex", alignItems: "center", gap: 20 }}
-        >
-          <div style={{ width: 160, flexShrink: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>labelPosition {t}</div>
-            <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
-              {t === 0 ? "clamped up to 0.05" : "solid → dotted"}
-            </div>
-          </div>
-          <svg
-            data-slot="trace-canvas"
-            width={ROW_W}
-            height={ROW_H}
-            viewBox={`0 0 ${ROW_W} ${ROW_H}`}
-            style={{ overflow: "visible" }}
-          >
-            <TraceBody
-              id={`trace-split-${t}`}
-              path={LINE_PATH}
-              points={LINE_POINTS}
-              variant="delayed"
-              splitAtLabel
-              labelPosition={t}
-            />
-            <TraceTerminal {...FROM_TERMINAL} />
-            <TraceTerminal {...TO_TERMINAL} />
-          </svg>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: 20 }}>
+      {DELAYED_SPLIT_SPECIMENS.map((specimen) => (
+        <DelayedSplitRow key={specimen.key} specimen={specimen} />
       ))}
     </div>
   ),
   play: async ({ canvasElement }) => {
-    for (const t of SPLIT_POSITIONS) {
-      const row = requireEl(canvasElement, `[data-testid="split-row-${t}"]`);
+    // H8a: every routing the kit has, and nothing silently dropped.
+    const rows = canvasElement.querySelectorAll('[data-testid^="split-row-"]');
+    await expect(rows).toHaveLength(DELAYED_SPLIT_SPECIMENS.length);
+
+    for (const specimen of DELAYED_SPLIT_SPECIMENS) {
+      const row = requireEl(canvasElement, `[data-testid="split-row-${specimen.key}"]`);
       const segments = row.querySelectorAll('[data-slot="trace-line"]');
       // Two real paths, not one path with a clever dash — that is what lets
       // the before/after runs carry different caps and markers.
-      await expect(segments).toHaveLength(2);
+      await expect(segments, `${specimen.key}: expected 2 trace-line paths`).toHaveLength(2);
       const before = requireEl<SVGPathElement>(row, '[data-trace-segment="before"]');
       const after = requireEl<SVGPathElement>(row, '[data-trace-segment="after"]');
 
       // The solid run's length in path units IS the split point, and the
-      // dotted run starts exactly there.
+      // dotted run starts exactly there — true for every routing, because
+      // `pathLength` remaps `fraction * 1000` to the path's OWN real
+      // length regardless of what geometry drew it.
       const beforeDash = dashNumbers(getComputedStyle(before).strokeDasharray);
       const afterDash = dashNumbers(getComputedStyle(after).strokeDasharray);
-      const expectedSplit = Math.max(0.05, t) * 1000;
-      await expect(Math.abs(beforeDash[0] - expectedSplit)).toBeLessThan(0.01);
-      await expect(afterDash[0]).toBe(0);
-      await expect(Math.abs(afterDash[1] - expectedSplit)).toBeLessThan(0.01);
+      const expectedSplit = Math.max(0.05, specimen.labelPosition) * 1000;
+      await expect(Math.abs(beforeDash[0] - expectedSplit), `${specimen.key}: before dash`).toBeLessThan(0.01);
+      await expect(afterDash[0], `${specimen.key}: after dash start`).toBe(0);
+      await expect(Math.abs(afterDash[1] - expectedSplit), `${specimen.key}: after dash`).toBeLessThan(0.01);
 
       // Only the `after` run wears the arrowhead — the head belongs to the
       // trace's end, not to the seam.
       await expect(after.getAttribute("marker-end")).toBe(
-        `url(#${safeElementId("bbox-trace-head", `trace-split-${t}`)})`,
+        `url(#${safeElementId("bbox-trace-head", `trace-split-${specimen.key}`)})`,
       );
       await expect(before.getAttribute("marker-end")).toBeNull();
     }
+
+    // H8b: on the elbow specimen, the split's actual SCREEN-INDEPENDENT
+    // position — read off the real path with `getPointAtLength`, in the
+    // path's own local coordinates, which is exactly the space
+    // `ELBOW_SPLIT_TARGET_VERTEX` is expressed in — lands within 2px of the
+    // router's own vertex. `pathLength` only rescales how the dasharray
+    // NUMBERS are interpreted; `getPointAtLength`/`getTotalLength` always
+    // use the path's real geometric length, so this is the actual visual
+    // transition point, not a proxy for it.
+    const elbowRow = requireEl(canvasElement, '[data-testid="split-row-elbow"]');
+    const elbowAfter = requireEl<SVGPathElement>(elbowRow, '[data-trace-segment="after"]');
+    const totalLength = elbowAfter.getTotalLength();
+    const splitPoint = elbowAfter.getPointAtLength(ELBOW_SPLIT_FRACTION * totalLength);
+    const distance = Math.hypot(
+      splitPoint.x - ELBOW_SPLIT_TARGET_VERTEX.x,
+      splitPoint.y - ELBOW_SPLIT_TARGET_VERTEX.y,
+    );
+    await expect(
+      distance,
+      `split point (${splitPoint.x.toFixed(1)}, ${splitPoint.y.toFixed(1)}) vs vertex ` +
+        `(${ELBOW_SPLIT_TARGET_VERTEX.x}, ${ELBOW_SPLIT_TARGET_VERTEX.y})`,
+    ).toBeLessThan(2);
   },
 };
 
