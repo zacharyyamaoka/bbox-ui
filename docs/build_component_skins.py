@@ -437,6 +437,46 @@ adapter changes, no registry changes.</p>
 <p class="cap">Deliberately not shipped: three is what you asked for, and a fourth is more
 useful as proof that the seam is cheap than as a skin nobody chose.</p>
 
+<h2>The registry item, installed for real</h2>
+<p><code>CLAUDE.md</code> is blunt about this: <em>“<code>npx shadcn add</code> exiting 0 proves
+nothing — this repo already shipped a registry that installed cleanly and then failed to
+compile.”</em> So the new item was installed into a throwaway project and type-checked, not
+just built.</p>
+<table>
+<thead><tr><th>Step</th><th>Result</th></tr></thead>
+<tbody>
+<tr><th><code>shadcn add …/r/bbox-skin.json</code></th><td class=h>exit 0 &mdash;
+  <code>skin.ts</code> and <code>skin.css</code> land in <code>components/bbox/</code>,
+  siblings of <code>block.tsx</code> as intended</td></tr>
+<tr><th><code>tsc --noEmit</code> over a real call site</th><td class=h><strong>exit 0</strong>
+  &mdash; importing all seven exports, <code>bboxSkinAttrs</code>, both types</td></tr>
+<tr><th>installed <code>skin.css</code></th><td class=h>3 skins &times; 7 tokens, identical
+  sets &mdash; parsed out of the copied file, not the source</td></tr>
+<tr><th><code>bbox-skin</code> as a dependency of <code>port</code>/<code>block</code></th>
+  <td class=h>deliberately <strong>not</strong> one. They compile without it.</td></tr>
+</tbody>
+</table>
+
+<div class="box warn">
+<h3>What that check turned up about <code>block</code> — pre-existing, not from this work</h3>
+<p>Installing <code>block</code> alongside it fails to compile, and has nothing to do with
+skins. <code>block.tsx</code> imports <code>./pill</code> and <code>./block.fields</code>;
+the <code>block</code> registry item ships only <code>block.tsx</code>,
+<code>layout.ts</code> and <code>lib/utils.ts</code>. Both imports are missing from the
+payload, so a consumer gets <code>TS2307: Cannot find module './pill'</code> plus five
+knock-on errors.</p>
+<p>I confirmed it predates this branch: on <code>main</code>, <code>block.tsx</code> already
+carries both imports and the item already lists the same three files.</p>
+<p><strong>And adding the missing files does not fix it.</strong> <code>pill.tsx</code>
+imports <code>@bbox-ui/schema</code>, which is <code>private: true</code> and unpublished — so
+<code>block</code> belongs in the same category <code>CLAUDE.md</code> already documents for
+<code>block-node-reactflow</code> and <code>block-shape-tldraw</code>: items that cannot be
+installed by anyone until the source stops naming an unpublishable specifier. Three of five
+items, not two.</p>
+<p>Out of scope here and left alone — flagged as its own task rather than folded into a
+styling change.</p>
+</div>
+
 <h2>What actually changed</h2>
 <table>
 <thead><tr><th>File</th><th>What</th></tr></thead>
@@ -459,11 +499,34 @@ useful as proof that the seam is cheap than as a skin nobody chose.</p>
 <tr><th><code>demos/*</code></th><td>One shared <code>SkinPicker</code>, an import per demo, and
   two driver scripts (<code>capture-skins.mjs</code> measures, <code>record-skins.mjs</code>
   records the clip above).</td></tr>
+<tr><th><code>packages/bbox-ui/test/skin.test.ts</code></th><td>New, 8 assertions binding the
+  three pieces nothing in TypeScript connects: the vocabulary, the stylesheet, and four call
+  sites. Including the one that keeps <code>skin.css</code> optional — every component's
+  <code>var()</code> fallback still equals what <code>BBOX_SKIN_TOKENS</code> advertises.</td></tr>
 </tbody>
 </table>
 <p class="cap">Full workspace green: <code>pnpm -r typecheck</code> clean,
-<strong>1221 tests pass</strong> across 13 packages, <code>shadcn build</code> clean, zero
+<strong>1229 tests pass</strong> across 13 packages, <code>shadcn build</code> clean, zero
 console errors in either host.</p>
+
+<div class="box win">
+<h3>The new assertions can actually fail — mutation-tested, not assumed</h3>
+<p>A guard nobody has seen go red is a guess. Each of these was introduced on purpose, one at
+a time, and each turned exactly one assertion red; restoring went green.</p>
+<table>
+<thead><tr><th>Mutation</th><th>Result</th></tr></thead>
+<tbody>
+<tr><th><code>sketch</code> strokes a 1px hairline</th><td class=h>1 failed &mdash; the geometry trap</td></tr>
+<tr><th><code>plain</code> drops <code>--bbox-skin-shadow</code></th><td class=h>1 failed &mdash; incomplete token set</td></tr>
+<tr><th><code>block.tsx</code>'s stroke fallback drifts to 1px</th><td class=h>1 failed &mdash; fallback no longer matches</td></tr>
+<tr><th>someone adds <code>rotate(-0.3deg)</code> to <code>sketch</code></th><td class=h>1 failed &mdash; no transforms</td></tr>
+</tbody>
+</table>
+<p class="cap">The fallback check itself needed a second pass: the regex first written for it
+truncated <code>var(--color-foreground)</code> to <code>var(--color-foreground</code> and
+compared equal to nothing. It is a paren-balanced scan now, and it caught its own weakening
+before it ever went green.</p>
+</div>
 
 <h2>What needs you</h2>
 <dl class="dl">
@@ -513,8 +576,11 @@ never do: a tilted DOM stops agreeing with the host's own hit-test box and port 
 the core does not own.</li>
 <li><strong>Raw captures not committed.</strong> ~1.4&nbsp;MB of regenerable PNGs; the script
 rebuilds them in about 40 seconds.</li>
-<li><strong>Not merged.</strong> It sits on <code>claude/component-styling-options-90a72f</code>
-at <code>{COMMIT}</code>.</li>
+<li><strong>Did not fix the <code>block</code> registry item.</strong> Real, pre-existing, and
+a different problem (an unpublishable import, not a missing file). Folding it into a styling
+change would hide it.</li>
+<li><strong>Not merged.</strong> Three commits on
+<code>claude/component-styling-options-90a72f</code>, head <code>{COMMIT}</code>.</li>
 </ul>
 
 </main></body></html>
