@@ -954,7 +954,11 @@ function ExampleNodePanel({ testId, caption, children }: { testId: string; capti
           />
         }
         members={[
-          { id: "attributes", content: children },
+          // C-4 (docs/FEEDBACK-2026-09-17b-PLAN.md, Lane C): Zach wants the
+          // Attributes card flush with the parent — `inset: "edge-to-edge"`
+          // is the existing per-member knob (blockMembers.tsx), not a new
+          // one; `slotClassName` there already squares its corners.
+          { id: "attributes", content: children, inset: "edge-to-edge" },
           { id: "note", content: <Text tone="muted" style={{ fontSize: 12 }}>any other member sits beside it</Text> },
         ]}
         membersLayout="stack"
@@ -985,9 +989,13 @@ function CodeInsideBlockDemo() {
 export const CodeInsideBlock: Story = {
   render: () => <CodeInsideBlockDemo />,
   play: async ({ canvasElement }) => {
-    const nestedIn = (panelId: string) => {
+    const outerIn = (panelId: string) => {
       const outer = canvasElement.querySelector(`[data-testid="${panelId}"] [data-slot="block"]`);
       if (!(outer instanceof HTMLElement)) throw new Error(`expected the outer block in ${panelId}`);
+      return outer;
+    };
+    const nestedIn = (panelId: string) => {
+      const outer = outerIn(panelId);
       const nested = outer.querySelector('[data-slot="block-members"] [data-slot="block"]');
       if (!(nested instanceof HTMLElement)) throw new Error(`expected a nested block member in ${panelId}`);
       return nested;
@@ -1006,6 +1014,20 @@ export const CodeInsideBlock: Story = {
     await expect(within(nestedDefault).getByText("pose: Pose")).toBeInTheDocument();
     await expect(nestedDefault.querySelector(".cm-gutters")).toBeNull();
     await expect(nestedDefault.querySelector('[data-slot="block-footer"]')).toBeNull();
+
+    // C3 (docs/FEEDBACK-2026-09-17b-PLAN.md, Lane C): the Attributes card
+    // is `inset: "edge-to-edge"` — its rendered box must be FLUSH with the
+    // outer Block's inner edge, measured, not a prop/class assertion. The
+    // outer Block's own 1px border is the only slack allowed.
+    const outerDefault = outerIn("variant-default");
+    const outerStyle = getComputedStyle(outerDefault);
+    const outerRect = outerDefault.getBoundingClientRect();
+    const outerInnerLeft = outerRect.left + parseFloat(outerStyle.borderLeftWidth);
+    const outerInnerRight = outerRect.right - parseFloat(outerStyle.borderRightWidth);
+    const attributesRect = nestedDefault.getBoundingClientRect();
+    await expect(Math.abs(attributesRect.left - outerInnerLeft)).toBeLessThanOrEqual(1);
+    await expect(Math.abs(attributesRect.right - outerInnerRight)).toBeLessThanOrEqual(1);
+
     // M5: no divider prop passed → the divider still renders. Measured,
     // not class-sniffed: the wrapper's real painted border width.
     await expect(getComputedStyle(headerOf(nestedDefault)).borderBottomWidth).toBe("1px");
