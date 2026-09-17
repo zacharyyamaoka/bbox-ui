@@ -226,9 +226,22 @@
   color: color-mix(in srgb, var(--bbox-danger, #c94b3f) 42%, var(--color-foreground));
 }
 
+/* WHY the fallback reads `var(--bbox-accent, #4f6ee5))` (the tok-variableName
+   rule's own default above) and not `var(--color-foreground)`: this
+   selector was dead until codeEditorHighlight.ts (its own WHY) started
+   actually emitting `tok-function` — nothing ever exercised this rule's
+   own literal, so it was never noticed that it disagreed with what a
+   function name actually rendered as (`.tok-variableName`'s colour, since
+   `.tok-function`/`.tok-definition`/`.tok-variableName` are now emitted
+   together on the SAME element — see that file's own WHY on unioning
+   classes). Every theme sets `--bbox-tok-function` explicitly, so this
+   fallback only matters with no theme selected, and it has to match
+   tok-variableName's fallback exactly or turning the class "on" silently
+   recolours every function name (and call site) the moment no theme is
+   set — a real regression, not a fidelity gain. */
 .bbox-code-editor.bbox-code-tokens .tok-function,
 .bbox-code-editor.bbox-code-tokens .tok-macroName {
-  color: var(--bbox-tok-function, var(--color-foreground));
+  color: var(--bbox-tok-function, var(--bbox-accent, #4f6ee5));
   font-weight: 600;
 }
 

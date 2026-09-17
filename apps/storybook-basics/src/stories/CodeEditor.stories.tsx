@@ -322,21 +322,21 @@ export const Gallery: Story = {
 
 /**
  * A-2 (docs/FEEDBACK-2026-09-17b-PLAN.md, Zach: "I like using dark modern
- * … its important that people can set it to what they are used to").
- * Exercises keyword / string / number / comment / type(class) / variable /
- * operator — every row of the theme table `codeEditorTheme.ts` ships
- * EXCEPT "control keyword" and "function", which are not omitted by
- * choice: `classHighlighter` (codeEditor.tsx:297, the seam this task must
- * use and not replace) never emits `tok-controlKeyword` or `tok-function`
- * for ANY language — @lezer/highlight's own rule table has no entry for
- * either subtag, so both fall back to their base tag's class
- * (`tok-keyword`, `tok-variableName`/`tok-propertyName`) regardless of
- * what a language's grammar tags them as underneath. Verified live: in
- * this exact sample, `if`/`return`/`def`/`class` all render class
- * `tok-keyword`, and the `move` definition renders `tok-variableName
- * tok-definition`, never `tok-function`. Both theme rows are still shipped
- * as CSS variables (codeEditorTheme.ts's own WHY) — they simply have no
- * DOM class to attach to today.
+ * … its important that people can set it to what they are used to"; and,
+ * asking for this specific story: "can you please create a story that
+ * shows how you can change the syntax highlighting color for the Pseudo
+ * Code code editor view?"). Exercises every row of the theme table
+ * `codeEditorTheme.ts` ships — keyword / control keyword / string / number
+ * / comment / type(class) / variable / function / operator — across the
+ * "every theme" gallery below (`THEME_SAMPLE`, kept short and readable
+ * side by side four times) and the live theme-switching editor above it,
+ * which is the actual `PseudoCode` view (same props, same `PSEUDO_CODE`
+ * document as the `PseudoCode` story below) rather than a shorter
+ * unrelated sample: that view is what Zach named, and `PSEUDO_CODE`
+ * exercises `if`/`elif`/`else`/`for`/`return`/`raise` (all
+ * `controlKeyword`) and a real `def summarize_readings(...)` function name
+ * — precisely the two tags `codeEditorHighlight.ts` had to add (its own
+ * WHY), so this story is the visible proof of that fix, not a demo beside it.
  */
 const THEME_SAMPLE = `class Router:  # a comment
     """Follow a path and stop within tolerance."""
@@ -364,6 +364,13 @@ function ThemeSwatch({ id, label, testId }: { id?: string; label: string; testId
   );
 }
 
+/**
+ * The SAME shape as the `PseudoCode` story below (multiline, Python,
+ * gutter, 100 columns, a horizontal scrollbar) over the SAME `PSEUDO_CODE`
+ * document — not a shorter stand-in — because that is the exact view Zach
+ * asked to see themed, and its control keywords / function name are the
+ * two tokens this whole feature exists to fix (this story's own WHY above).
+ */
 function LiveThemedEditor() {
   const [themeId, setThemeId] = useState<string>(CODE_EDITOR_THEMES[0].id);
   return (
@@ -380,13 +387,13 @@ function LiveThemedEditor() {
         ))}
       </select>
       <ControlledCodeEditor
-        initial={THEME_SAMPLE}
+        initial={PSEUDO_CODE}
         multiline
         language={python()}
         theme={themeId}
         lineNumbers
-        columns={56}
-        fontSizePx={14}
+        columns={100}
+        overflow="scroll"
         testId="theme-live"
       />
     </div>
@@ -415,17 +422,30 @@ export const SyntaxThemes: Story = {
     </div>
   ),
   play: async ({ canvasElement }) => {
-    const keywordColor = (testId: string) => {
+    const tokenColor = (testId: string, selector: string) => {
       const field = canvasElement.querySelector(`[data-testid="${testId}"]`);
       if (!(field instanceof HTMLElement)) throw new Error(`expected [data-testid="${testId}"]`);
-      const token = field.querySelector(".tok-keyword");
-      if (!(token instanceof HTMLElement)) throw new Error(`expected a .tok-keyword token in ${testId}`);
+      const token = field.querySelector(selector);
+      if (!(token instanceof HTMLElement)) throw new Error(`expected a ${selector} token in ${testId}`);
       return getComputedStyle(token).color;
     };
+    const keywordColor = (testId: string) => tokenColor(testId, ".tok-keyword");
     const rootBg = (testId: string) => {
       const field = canvasElement.querySelector(`[data-testid="${testId}"]`);
       if (!(field instanceof HTMLElement)) throw new Error(`expected [data-testid="${testId}"]`);
       return getComputedStyle(field).backgroundColor;
+    };
+    // A reusable off-DOM probe: append a span with a literal `color`,
+    // read its computed value back, remove it. Lets an assertion compare
+    // against an exact CSS formula rather than a hand-copied rgb() literal,
+    // which would also bake in this browser's own colour-space rounding.
+    const literalColor = (color: string) => {
+      const probe = document.createElement("span");
+      probe.style.color = color;
+      canvasElement.appendChild(probe);
+      const resolved = getComputedStyle(probe).color;
+      probe.remove();
+      return resolved;
     };
 
     // A-2a: with NO theme, `tok-keyword`'s computed colour is
@@ -436,16 +456,46 @@ export const SyntaxThemes: Story = {
     // codeEditor.css's `.tok-keyword` rule read verbatim before A-2 — so
     // this assertion is "does the var()'s fallback still equal today's
     // literal", which is the actual claim A-2a makes.
-    const reference = document.createElement("span");
-    reference.style.color = "color-mix(in srgb, #4f6ee5 78%, var(--color-foreground))";
-    canvasElement.appendChild(reference);
-    const referenceColor = getComputedStyle(reference).color;
-    reference.remove();
+    const referenceColor = literalColor("color-mix(in srgb, #4f6ee5 78%, var(--color-foreground))");
     await expect(keywordColor("swatch-none")).toBe(referenceColor);
 
     // A-2b: dark-modern's published token colours, exactly.
     await expect(keywordColor("swatch-dark-modern")).toBe("rgb(86, 156, 214)");
     await expect(rootBg("swatch-dark-modern")).toBe("rgb(31, 31, 31)");
+
+    // A-2d: an unknown theme id ("not-a-real-theme", a typo) renders the
+    // default palette (same colour as no theme at all) and throws nothing
+    // getting here — the render above already had to succeed for this
+    // play function to run at all.
+    await expect(keywordColor("swatch-unknown")).toBe(referenceColor);
+
+    // H4: with NO theme, the fix must not have moved anything that was
+    // already correct — `class`/`def` (definitionKeyword, folded under the
+    // same `.tok-keyword` rule as before — codeEditorHighlight.ts's own
+    // WHY) and `if`/`return` (controlKeyword, its own selector but the
+    // SAME literal fallback formula, verified in that file's own WHY)
+    // still match the exact pre-fix `.tok-keyword` literal above; `move`
+    // (a function definition) still matches `.tok-variableName`'s own
+    // literal, because codeEditor.css's `.tok-function` fallback was
+    // edited to match it byte-for-byte (that rule's own WHY) specifically
+    // so turning the class "on" couldn't repaint every function name the
+    // moment no theme is set.
+    await expect(tokenColor("swatch-none", ".tok-definitionKeyword")).toBe(referenceColor);
+    await expect(tokenColor("swatch-none", ".tok-controlKeyword")).toBe(referenceColor);
+    const variableReferenceColor = literalColor("#4f6ee5");
+    await expect(tokenColor("swatch-none", ".tok-function")).toBe(variableReferenceColor);
+    // `Router` (a class name) touches none of this fix's rules — confirms
+    // the untouched path really is untouched, not just assumed so.
+    const typeReferenceColor = literalColor("color-mix(in srgb, #4f6ee5 55%, var(--color-foreground))");
+    await expect(tokenColor("swatch-none", ".tok-className")).toBe(typeReferenceColor);
+
+    // H3: with the live editor's initial theme (dark-modern) over the
+    // REAL PseudoCode view, a control keyword is VS Code's control-purple
+    // and the function name is VS Code's function-yellow — the two colours
+    // the bug collapsed to keyword-blue / variable-blue (this story's own
+    // WHY, and codeEditorHighlight.ts's).
+    await expect(tokenColor("theme-live", ".tok-controlKeyword")).toBe("rgb(197, 134, 192)");
+    await expect(tokenColor("theme-live", ".tok-function")).toBe("rgb(220, 220, 170)");
 
     // A-2c: the live select actually drives the SAME editor's colour.
     const before = keywordColor("theme-live"); // dark-modern, the select's first option
@@ -457,11 +507,5 @@ export const SyntaxThemes: Story = {
       await expect(after).not.toBe(before);
       await expect(after).toBe("rgb(249, 38, 114)"); // monokai's #f92672
     });
-
-    // A-2d: an unknown theme id ("not-a-real-theme", a typo) renders the
-    // default palette (same colour as no theme at all) and throws nothing
-    // getting here — the render above already had to succeed for this
-    // play function to run at all.
-    await expect(keywordColor("swatch-unknown")).toBe(referenceColor);
   },
 };
