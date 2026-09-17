@@ -47,6 +47,7 @@
 // points out.
 
 import {
+  pointAtFraction,
   polylinePath,
   traceSideOf,
   type Point,
@@ -54,6 +55,7 @@ import {
   type TraceRouting,
   type TraceTerminalSpec,
 } from "./trace.layout";
+import { traceBendPoint, type TraceBend } from "./trace.bends";
 
 /**
  * PORTED substitution for tldraw's `clamp` (`connectionRouting.ts:15`
@@ -279,7 +281,8 @@ export interface TraceRouteOptions {
   /**
    * `straight` and `curved`: offset of the visible midpoint from the
    * endpoint midpoint — the centre control point, once dragged. Absent or
-   * `null` is the un-bent default.
+   * `null` is the un-bent default. On `straight`, `curve` is only READ when
+   * `bends` is absent or empty — see `bends` below.
    */
   curve?: TraceCurve | null;
   /**
@@ -288,6 +291,14 @@ export interface TraceRouteOptions {
    * readable lead.
    */
   slantT?: number | null;
+  /**
+   * `straight` only: N intermediate control points, in chord space
+   * (docs/TRACE-CONTROL-POINTS-PLAN.md D2). Resolved in ARRAY order — the
+   * caller owns the ordering, because a hairpin deliberately has
+   * non-monotonic `t`. Ignored by `slanted` and `curved` — not an error,
+   * not a warning, just ignored: a bend is a `straight`-only concept.
+   */
+  bends?: readonly TraceBend[] | null;
 }
 
 /**
@@ -331,28 +342,44 @@ export function routeTrace(
   const end: Point = { x: to.x, y: to.y };
   const sides = { start: traceSideOf(from, "from"), end: traceSideOf(to, "to") };
   const curve = options.curve ?? null;
+  const bends = options.bends ?? null;
+  // Only `slanted`'s degenerate branch still reads this — `straight` used
+  // to (the un-bent two-point case) but now gets its waypoint from
+  // `pointAtFraction`, which agrees with the chord midpoint exactly in that
+  // case anyway, so nothing downstream changes.
   const midpoint: Point = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
 
   switch (routing) {
     case "straight": {
-      // WHY this branch is not simply a line: the donor's `straight` with
-      // a dragged control point calls the SAME `bentCurvedPath` as
-      // `curved` (`connectionRouting.ts:212-214`). Bending a straight line
-      // does not produce a second kind of curve — it produces THE curve.
-      // The gallery states that in one caption and one assertion on the
-      // two `d` strings, rather than shipping two functions somebody has
-      // to keep identical by hand.
-      if (curve) {
-        return {
-          routing,
-          path: bentCurvedPath(start, end, curve),
-          points: null,
-          waypoint: getCurveWaypoint(start, end, curve),
-          sides,
-        };
-      }
-      const points = [start, end];
-      return { routing, path: polylinePath(points), points, waypoint: midpoint, sides };
+      // WHY this branch does NOT call `bentCurvedPath` (`curved`'s own
+      // bender), even though the donor's `straight` with a dragged control
+      // point calls that SAME function (`connectionRouting.ts:212-214`) —
+      // bending a straight line there produces the identical quadratic a
+      // curved cable would. Zach looked at that and said no (2026-09-17,
+      // docs/TRACE-CONTROL-POINTS-PLAN.md): a straight trace with a control
+      // point is a POLYLINE, not a quadratic. SystemSketch is the spec for
+      // TARGET BEHAVIOUR here, not an authority that outranks him
+      // (`systemsketch-is-spec-not-source`). So a straight route now draws
+      // literally through every resolved bend — D1's chord-relative
+      // `TraceBend`s in array order, or the legacy single `curve` waypoint
+      // when no `bends` were given, kept for the stories that predate
+      // `bends` and never edited to add one — as straight segments, never a
+      // curve. `curved` below still bends into `bentCurvedPath`, and THAT
+      // difference between the two branches is now the point, not an
+      // accident this file used to converge away.
+      const resolvedBends: Point[] =
+        bends && bends.length > 0
+          ? bends.map((bend) => traceBendPoint(bend, start, end))
+          : curve
+            ? [getCurveWaypoint(start, end, curve)]
+            : [];
+      const points = [start, ...resolvedBends, end];
+      const path = polylinePath(points);
+      // Non-null, always — a bent straight genuinely has vertices now,
+      // which is a strict gain over the old quadratic (D2 point 5):
+      // `TraceBadge`, the tidy pass and the pill stop needing a sampled
+      // approximation for this case.
+      return { routing, path, points, waypoint: pointAtFraction(points, 0.5), sides };
     }
     case "slanted": {
       const points = getSlantedArrowPoints(start, end, options.slantT ?? null, from.dir);
