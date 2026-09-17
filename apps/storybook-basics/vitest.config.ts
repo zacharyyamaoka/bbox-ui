@@ -66,6 +66,32 @@ export default defineConfig({
           // keeps the decorator wired up.
         },
       },
+      {
+        // WHY a second project (docs/TRACE-PLAN.md D4): `src/components/elbow/`
+        // is 2,500+ lines of orthogonal-routing math ported VERBATIM from
+        // SystemSketch, and its 1,200-line donor test suite came with it. That
+        // suite is an INDEPENDENT ORACLE — written against the donor, by the
+        // donor, before this repo existed — so it cannot have been shaped to
+        // whatever this port happens to do. Re-deriving those checks inside
+        // play functions would produce something weaker AND authored by the
+        // same hand as the port, which is the implementation grading its own
+        // homework.
+        //
+        // It is a separate project because these are pure node tests: no DOM,
+        // no browser, no Storybook. Running them in the Chromium project would
+        // pay a browser tab per file for math that imports nothing.
+        //
+        // Run:  pnpm exec vitest --project=unit run
+        // `pnpm test-stories` deliberately still runs ONLY the storybook
+        // project — its name says stories, and silently widening what a
+        // green `test-stories` covers is the kind of drift this config's
+        // other comment exists to prevent.
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+        },
+      },
     ],
   },
 });
