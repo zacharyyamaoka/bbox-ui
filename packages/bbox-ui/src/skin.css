@@ -57,6 +57,20 @@
   --bbox-skin-outline: none;
   --bbox-skin-ink: var(--foreground);
   --bbox-skin-fg: var(--card-foreground);
+  /* `initial` is the INERT value, and the only one that works. On a custom
+     property it is the guaranteed-invalid value, so `var(--x, <the real
+     paint>)` falls straight through to the component's own resolved
+     colour. A first pass used `currentColor` here reasoning that it "names
+     the real thing" — it does not: it names the TEXT colour, so every
+     wired Pill in the default skin painted its ring in the label's ink
+     instead of the accent, and the capture is what showed it. `none` on
+     the box-shadow line below was worse: it blanked every Port's rings in
+     every skin. */
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: initial;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-crisp: inline;
+  --bbox-skin-dot-rings: initial;
 }
 
 /*
@@ -68,12 +82,26 @@
   --bbox-skin-radius-pill: 0px;
   --bbox-skin-stroke-width: 2px;
   --bbox-skin-stroke: var(--foreground);
-  --bbox-skin-surface: var(--card);
+  /* Zach, 2026-09-17: "For default, you can actually have a background...
+     Its only for plain and sketch I don't want a background." So `default`
+     keeps the card and is free to get as styled as it likes; these two are
+     the line-only pair. */
+  --bbox-skin-surface: transparent;
   --bbox-skin-shadow: none;
   --bbox-skin-font: inherit;
   --bbox-skin-outline: none;
   --bbox-skin-ink: var(--foreground);
-  --bbox-skin-fg: var(--card-foreground);
+  /* Same consequence as sketch's: with no card painted, text has to read
+     against the canvas. */
+  --bbox-skin-fg: var(--foreground);
+  /* Deliberately the SAME colour the component would have painted: these
+     two exist so the sketch skin can redirect them, and "unset" is not a
+     value a `var()` can carry. Naming the real thing keeps them inert. */
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: initial;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-crisp: inline;
+  --bbox-skin-dot-rings: initial;
 }
 
 /*
@@ -130,7 +158,68 @@
      keeps its one real property: nothing in it selects markup, and so
      nothing in it can out-specify a caller's own `className`. */
   --bbox-skin-fg: var(--foreground);
+  /* Blank the CSS border on everything whose line colour belongs to the
+     `state` cascade (Pill, Bar, Port) — the drawn line replaces it and
+     carries that same resolved colour down as a prop, so `state` keeps
+     sole ownership of the hue and the skin only takes the shape. */
+  --bbox-skin-line-override: transparent;
   --bbox-skin-font: "Shantell Sans", "Excalifont", "Virgil", "Segoe Print",
     "Bradley Hand", "Comic Sans MS", cursive;
+  /* Zach, D3: a code field inherits the skin rather than pinning monospace.
+     Stated once here instead of depending on whether a host happened to
+     import codeField.css — which is what made the same board render
+     hand-drawn port labels in one host and monospace ones in another. */
+  /* A TextBox writes `font-family` inline, so inheritance alone never
+     reached a Port-view title. Both named rungs point at the hand. */
+  --bbox-skin-font-sans: "Shantell Sans", "Excalifont", "Virgil",
+    "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --bbox-skin-font-mono: "Shantell Sans", "Excalifont", "Virgil",
+    "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --bbox-skin-crisp: none;
+  /*
+   * INERT on purpose, and this is the one place the "sketch reaches every
+   * component" story has a real hole.
+   *
+   * `PortDot` does draw a hand-drawn ring (port.tsx), and in a host that
+   * renders the component — tldraw's adapter mounts a real <Port>, so does
+   * plain DOM — blanking the box-shadow here would hand the ring over to
+   * it cleanly. But `@bbox-ui/adapter-reactflow` never renders <PortDot>:
+   * it spreads `portDotStyle({state})` onto React Flow's own <Handle>
+   * (block-node.tsx), so it gets the box-shadow rings and nothing else.
+   * Blanking them there deletes the port's paint outright, and the capture
+   * is exactly how that was found — every React Flow port went invisible
+   * while tldraw's looked fine.
+   *
+   * So it ships off. Turning it on is one line, and correct the day the
+   * React Flow adapter renders the component (or grows its own outline):
+   *
+   *   [data-bbox-skin="sketch"] { --bbox-skin-dot-rings: none; }
+   *
+   * Zach, 2026-09-17, on the same seam from the other side: "I can always
+   * tune it later to prevent certain ones from being sketchy, say like if
+   * I want the ports to still be normal."
+   */
+  --bbox-skin-dot-rings: initial;
 }
+
+/*
+ * EXEMPTING ONE COMPONENT (Zach, 2026-09-17: "I can always tune it later
+ * to prevent certain ones from being sketchy, say like if I want the ports
+ * to still be normal").
+ *
+ * Every token above INHERITS, so an exemption is a scoped re-declaration —
+ * no new API, no prop, no component change. Ports back to normal:
+ *
+ *   [data-bbox-skin="sketch"] [data-slot="port"] {
+ *     --bbox-skin-outline: none;             (stop drawing the ring)
+ *     --bbox-skin-crisp: inline;             (put the crisp one back)
+ *     --bbox-skin-line-override: initial;    (let the CSS paint resolve)
+ *     --bbox-skin-dot-rings: initial;
+ *   }
+ *
+ * `initial` is what makes the last two work: on a custom property it is
+ * the guaranteed-invalid value, so `var(--x, <real paint>)` falls through
+ * to the real paint. That is the whole revert, and it is why none of these
+ * tokens is allowed to name a colour a component's own cascade owns.
+ */
 

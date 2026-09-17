@@ -77,7 +77,17 @@
 
 .bbox-code-field .cm-scroller {
   overflow: hidden;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  /* D3 (Zach, 2026-09-17: "let it inherit, agreed"). Was a hard-pinned
+     monospace stack, which meant a sketch board rendered hand-drawn port
+     labels in a host that does not import this file and monospace ones in
+     a host that does. The decision now lives in one token instead of in
+     whether a stylesheet happened to be imported; the fallback is the exact
+     stack this replaced, so a host with no skin loaded is unchanged. */
+  /* Consolas added to match `textBox.layout.ts`'s stack exactly: the two
+     had drifted, which nothing noticed until one skin token had to name a
+     single fallback for both. A Windows host now gets the same face from
+     a code field and a mono TextBox. */
+  font-family: var(--bbox-skin-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   /* Inherits from `.bbox-code-field` (11px there by default) instead of
      re-hardcoding its own copy — see that rule's own WHY. */
   font-size: inherit;

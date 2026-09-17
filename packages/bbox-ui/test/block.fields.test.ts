@@ -67,6 +67,47 @@ const bareBlock = blockElement();
 const bareHeader = headerElement();
 const bareChip = chipElement();
 
+
+/**
+ * The label a Pill/Badge actually renders, with the decorative sketch layer
+ * stripped — and asserting that layer IS there, so this helper can never
+ * quietly hide its disappearance.
+ *
+ * WHY it exists: `Pill` and `Badge` now render `[<SketchOutline/>, children]`
+ * so the sketch skin can draw their outline (Zach's D4). The outline is
+ * chrome, never content, so a test about the LABEL must not see it — but
+ * `children === "Event"` is no longer literally true, and relaxing it to a
+ * "contains" check would stop catching a stray extra child.
+ */
+function labelOf(el: { props: Record<string, unknown> }): unknown {
+  const kids = el.props.children as unknown;
+  expect(Array.isArray(kids), `expected [outline, label], got ${String(kids)}`).toBe(true);
+  const arr = kids as unknown[];
+  expect(arr).toHaveLength(2);
+  const outline = arr[0] as { type?: unknown } | false | null;
+  const isOutline =
+    outline === false || outline === null || typeof (outline as { type?: unknown })?.type === "function";
+  expect(isOutline, "first child should be the sketch outline layer").toBe(true);
+  return arr[1];
+}
+
+/**
+ * The painted line colour, unwrapped from the skin's suppression variable,
+ * asserting the wrapper is present.
+ *
+ * WHY: the sketch skin blanks a state-painted border by defining
+ * `--bbox-skin-line-override`, so such a colour now ships as
+ * `var(--bbox-skin-line-override, <the resolved colour>)`. Every colour
+ * assertion below still pins the exact value the cascade resolved — this
+ * only peels the wrapper, and fails loudly if the wrapper goes missing.
+ */
+function lineColorOf(el: { props: { style?: Record<string, unknown> } }): string {
+  const raw = String(el.props.style?.borderColor ?? "");
+  const m = /^var\(--bbox-skin-line-override, (.*)\)$/.exec(raw);
+  expect(m, `borderColor should be wrapped by the skin override: ${raw}`).not.toBeNull();
+  return (m as RegExpExecArray)[1];
+}
+
 describe("BlockHeader chip reservation", () => {
   // The header reserves space for a chip so it cannot paint over the title's
   // last letters. `Children.toArray` flattens arrays but does not descend
@@ -327,27 +368,27 @@ describe("BlockChip — a thin wrapper around the real Pill (T1-SPEC.md §4.8 po
     const rendered = renderedChip();
     expect(rendered.props.style.borderStyle).toBe("solid");
     expect(rendered.props.style.borderWidth).toBe(2);
-    expect(rendered.props.style.borderColor).toBe("var(--foreground)");
+    expect(lineColorOf(rendered)).toBe("var(--foreground)");
     expect(rendered.props.style.background).toBe("transparent");
   });
 
   it("paints through the SAME cascade a bare Pill runs — not a second, parallel colour system", () => {
     const wiredChip = renderedChip({ state: "wired" });
     const wiredPill = pillElement({ state: "wired" });
-    expect(wiredChip.props.style.borderColor).toBe(wiredPill.props.style.borderColor);
+    expect(lineColorOf(wiredChip)).toBe(lineColorOf(wiredPill));
     expect(wiredChip.props.style.background).toBe(wiredPill.props.style.background);
   });
 
   it("an explicit lineColor override reaches past the state preset on BlockChip too, the §1.4 worked example composed one level up", () => {
     const rendered = renderedChip({ state: "wired", lineColor: "bbox-danger" });
-    expect(rendered.props.style.borderColor).toBe("var(--bbox-danger)");
+    expect(lineColorOf(rendered)).toBe("var(--bbox-danger)");
     expect(rendered.props.style.background).toBe("var(--bbox-primary, var(--primary))");
   });
 
   it("tone recolours the chip exactly as it recolours a bare Pill", () => {
     const tonedChip = renderedChip({ state: "wired", tone: "success" });
     const tonedPill = pillElement({ state: "wired", tone: "success" });
-    expect(tonedChip.props.style.borderColor).toBe(tonedPill.props.style.borderColor);
+    expect(lineColorOf(tonedChip)).toBe(lineColorOf(tonedPill));
     expect(tonedChip.props.style.background).toBe(tonedPill.props.style.background);
   });
 
@@ -366,6 +407,10 @@ describe("BlockChip — a thin wrapper around the real Pill (T1-SPEC.md §4.8 po
 
   it("still forwards children as the chip's label", () => {
     const el = chipElement({ children: "Draft 1" });
+    // NOT `labelOf`: `chipElement` returns the <Pill> ELEMENT BlockChip
+    // built, not a rendered Pill, so the sketch outline layer (which Pill
+    // adds inside its own render) is not in this tree yet. The forwarding
+    // this asserts is unchanged.
     expect(el.props.children).toBe("Draft 1");
   });
 });

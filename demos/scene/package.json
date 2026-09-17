@@ -9,7 +9,8 @@
     "./reactflow": "./src/reactflow.ts",
     "./tldraw": "./src/tldraw.ts",
     "./fromEditor": "./src/fromEditor.ts",
-    "./SkinPicker": "./src/SkinPicker.tsx"
+    "./SkinPicker": "./src/SkinPicker.tsx",
+    "./TraceEdge": "./src/TraceEdge.tsx"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

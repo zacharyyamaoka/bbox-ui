@@ -125,6 +125,280 @@ interface Pt {
   y: number;
 }
 
+/**
+ * Wobble scaled to the thing being drawn.
+ *
+ * WHY a function and not the one constant: `SKETCH_WOBBLE_PX` was tuned
+ * against a 384 x 258 Block, and the same 2.4px on a 20px chip or a 14px
+ * port dot is not "sketchy", it is destroyed — the displacement approaches
+ * the radius and the shape stops being a capsule or a circle at all. A
+ * hand's error is roughly constant in absolute terms, which is why tldraw
+ * ties its own offset to the pen rather than the shape; but tldraw's shapes
+ * do not span two orders of magnitude the way a Block and a Port dot do.
+ *
+ * `min(w, h) * 0.035`, clamped: 2.4px at Block size, ~0.7px on a chip,
+ * ~0.5px on a port dot. The floor keeps the smallest things from going
+ * perfectly crisp and reading as un-skinned.
+ */
+export function sketchWobbleFor(width: number, height: number): number {
+  const scaled = Math.min(width, height) * 0.035;
+  return Math.min(SKETCH_WOBBLE_PX, Math.max(0.4, scaled));
+}
+
+/** tldraw's own displacement: random unit direction, magnitude
+ * `sqrt(|random()|) * amp` so points spread evenly over a disc rather than
+ * bunching at the centre. Shared by every generator below — one definition
+ * is what keeps a sketched rectangle, ellipse and trace looking like the
+ * same hand. */
+function jitterWith(random: () => number, amp: number) {
+  return (p: Pt): Pt => {
+    const dx = random();
+    const dy = random();
+    const len = Math.hypot(dx, dy) || 1;
+    const mag = Math.sqrt(Math.abs(random())) * amp;
+    return { x: p.x + (dx / len) * mag, y: p.y + (dy / len) * mag };
+  };
+}
+
+/**
+ * A smooth path through a run of points: quadratics whose control points
+ * are the points themselves and whose ends are the midpoints between them.
+ *
+ * WHY not `L` between jittered points: a flattened curve re-emitted as line
+ * segments reads as a polygon, which is exactly what a hand-drawn curve is
+ * not. Rounding through the midpoints restores the curve while keeping
+ * every jittered point's influence.
+ */
+function smoothThrough(points: Pt[], close: boolean): string {
+  if (points.length === 0) return "";
+  if (points.length < 3) {
+    return `M${n(points[0].x)} ${n(points[0].y)}` +
+      points.slice(1).map((p) => `L${n(p.x)} ${n(p.y)}`).join("");
+  }
+  const parts = [`M${n(points[0].x)} ${n(points[0].y)}`];
+  for (let i = 1; i < points.length - 1; i++) {
+    const p = points[i];
+    const q = points[i + 1];
+    parts.push(`Q${n(p.x)} ${n(p.y)} ${n((p.x + q.x) / 2)} ${n((p.y + q.y) / 2)}`);
+  }
+  const last = points[points.length - 1];
+  parts.push(`${close ? "Q" : "L"}${n(last.x)} ${n(last.y)}` + (close ? ` ${n(points[0].x)} ${n(points[0].y)}Z` : ""));
+  return parts.join("");
+}
+
+export interface SketchEllipseOptions {
+  /** Bounding box width of the ellipse. */
+  width: number;
+  /** Bounding box height. */
+  height: number;
+  seed: string;
+  passes?: number;
+  wobble?: number;
+  /** Points sampled around the circumference before jittering. */
+  steps?: number;
+}
+
+/**
+ * A hand-drawn ellipse, in a `width` x `height` box at the origin — what a
+ * Port dot and any other round thing needs.
+ *
+ * WHY a separate generator rather than `sketchRectPath` with a huge radius:
+ * a rounded rect clamps its radius to half the short side and then draws
+ * four arcs joined by straight runs of zero length, which is an ellipse
+ * only in the limit and wobbles unevenly (the four seams get two jittered
+ * points each, the rest none). Sampling the circumference gives the hand an
+ * even chance everywhere.
+ */
+export function sketchEllipsePath({
+  width,
+  height,
+  seed,
+  passes = 2,
+  wobble,
+  steps,
+}: SketchEllipseOptions): string {
+  const rx = width / 2;
+  const ry = height / 2;
+  const amp = wobble ?? sketchWobbleFor(width, height);
+  // Enough samples that the jitter reads as a wobble rather than as a
+  // polygon, scaled to size so a 14px dot is not carrying 24 points.
+  const count = steps ?? Math.max(8, Math.round(Math.min(18, (rx + ry) / 3)));
+  const parts: string[] = [];
+  for (let pass = 0; pass < passes; pass++) {
+    const random = sketchRng(`${seed}:e${pass}`);
+    const jitter = jitterWith(random, amp);
+    const pts: Pt[] = [];
+    // Start each pass at a different angle so the two laps do not both
+    // begin and end at the same seam — a real second lap overshoots.
+    const phase = random() * Math.PI;
+    for (let i = 0; i < count; i++) {
+      const t = phase + (i / count) * Math.PI * 2;
+      pts.push(jitter({ x: rx + Math.cos(t) * rx, y: ry + Math.sin(t) * ry }));
+    }
+    parts.push(smoothThrough(pts, true));
+  }
+  return parts.join(" ");
+}
+
+/* -------------------------------------------------------------- */
+/* Arbitrary path data — what a Trace needs                        */
+/* -------------------------------------------------------------- */
+
+/** Commands this module can flatten. Anything else and `sketchPathData`
+ * hands the path back untouched rather than guessing — see there. */
+const FLATTENABLE = new Set(["M", "m", "L", "l", "H", "h", "V", "v", "C", "c", "Q", "q", "Z", "z"]);
+
+function cubicAt(p0: Pt, c1: Pt, c2: Pt, p1: Pt, t: number): Pt {
+  const u = 1 - t;
+  const a = u * u * u;
+  const b = 3 * u * u * t;
+  const c = 3 * u * t * t;
+  const d = t * t * t;
+  return {
+    x: a * p0.x + b * c1.x + c * c2.x + d * p1.x,
+    y: a * p0.y + b * c1.y + c * c2.y + d * p1.y,
+  };
+}
+
+function quadAt(p0: Pt, c: Pt, p1: Pt, t: number): Pt {
+  const u = 1 - t;
+  return {
+    x: u * u * p0.x + 2 * u * t * c.x + t * t * p1.x,
+    y: u * u * p0.y + 2 * u * t * c.y + t * t * p1.y,
+  };
+}
+
+/** Flatten a `d` string into runs of points. `null` means "this path uses a
+ * command we do not flatten" — the caller must then leave it alone. */
+function flattenPathData(d: string, spacing: number): Pt[][] | null {
+  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi);
+  if (!tokens) return null;
+
+  const runs: Pt[][] = [];
+  let run: Pt[] = [];
+  let cur: Pt = { x: 0, y: 0 };
+  let start: Pt = { x: 0, y: 0 };
+  let cmd = "";
+  let i = 0;
+  const num = () => Number(tokens[i++]);
+
+  const sampleCount = (a: Pt, b: Pt) =>
+    Math.max(2, Math.min(64, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / spacing)));
+
+  while (i < tokens.length) {
+    if (/[a-zA-Z]/.test(tokens[i])) {
+      cmd = tokens[i++];
+      if (!FLATTENABLE.has(cmd)) return null;
+    }
+    if (cmd === "" ) return null;
+    const rel = cmd === cmd.toLowerCase() && cmd !== "Z" && cmd !== "z";
+    const ox = rel ? cur.x : 0;
+    const oy = rel ? cur.y : 0;
+
+    switch (cmd.toUpperCase()) {
+      case "M": {
+        if (run.length > 1) runs.push(run);
+        cur = { x: num() + ox, y: num() + oy };
+        start = cur;
+        run = [cur];
+        // A repeated coordinate pair after M is an implicit L.
+        cmd = rel ? "l" : "L";
+        break;
+      }
+      case "L": {
+        cur = { x: num() + ox, y: num() + oy };
+        run.push(cur);
+        break;
+      }
+      case "H": {
+        cur = { x: num() + ox, y: cur.y };
+        run.push(cur);
+        break;
+      }
+      case "V": {
+        cur = { x: cur.x, y: num() + oy };
+        run.push(cur);
+        break;
+      }
+      case "C": {
+        const c1 = { x: num() + ox, y: num() + oy };
+        const c2 = { x: num() + ox, y: num() + oy };
+        const end = { x: num() + ox, y: num() + oy };
+        const steps = sampleCount(cur, end);
+        for (let s = 1; s <= steps; s++) run.push(cubicAt(cur, c1, c2, end, s / steps));
+        cur = end;
+        break;
+      }
+      case "Q": {
+        const c = { x: num() + ox, y: num() + oy };
+        const end = { x: num() + ox, y: num() + oy };
+        const steps = sampleCount(cur, end);
+        for (let s = 1; s <= steps; s++) run.push(quadAt(cur, c, end, s / steps));
+        cur = end;
+        break;
+      }
+      case "Z": {
+        run.push(start);
+        cur = start;
+        break;
+      }
+      default:
+        return null;
+    }
+    if (i > tokens.length + 8) return null;
+  }
+  if (run.length > 1) runs.push(run);
+  return runs.length ? runs : null;
+}
+
+export interface SketchPathDataOptions {
+  seed: string;
+  passes?: number;
+  wobble?: number;
+  /** Target spacing, in px, between sampled points on a curve. */
+  spacing?: number;
+}
+
+/**
+ * Roughen an arbitrary SVG path — the generic `to_sketch`, and what a Trace
+ * needs, since its `d` is computed by the HOST (React Flow's
+ * `getBezierPath`, tldraw's arrow info) and the core never sees the
+ * geometry that produced it.
+ *
+ * Flatten to points, jitter, re-smooth, repeat per pass. Structurally the
+ * same move as tldraw's `toDrawD`, with one difference forced by the input:
+ * tldraw jitters its own COMMAND points because it still has them, while
+ * all we have is a string, so the curve is sampled first. That is also why
+ * this reads better than jittering the two endpoints and two control points
+ * of a bezier would — a long cable needs somewhere to wander in the middle.
+ *
+ * Returns the ORIGINAL path unchanged if it uses a command outside
+ * `FLATTENABLE` (arcs, most notably). WHY not throw, and why not
+ * approximate: a Trace that renders crisp when it should be sketchy is a
+ * cosmetic miss; one that throws takes the canvas down, and one that
+ * guesses at an arc silently moves an edge off its endpoints.
+ */
+export function sketchPathData(
+  d: string,
+  { seed, passes = 2, wobble = 1.8, spacing = 16 }: SketchPathDataOptions,
+): string {
+  const runs = flattenPathData(d, spacing);
+  if (!runs) return d;
+  const parts: string[] = [];
+  for (let pass = 0; pass < passes; pass++) {
+    const random = sketchRng(`${seed}:p${pass}`);
+    const jitter = jitterWith(random, wobble);
+    for (const run of runs) {
+      // Endpoints stay put. A Trace is attached to two ports; wandering
+      // ends would detach it from the dots it is drawn between, which is
+      // a correctness bug wearing a style's clothes.
+      const moved = run.map((pt, idx) => (idx === 0 || idx === run.length - 1 ? pt : jitter(pt)));
+      parts.push(smoothThrough(moved, false));
+    }
+  }
+  return parts.join(" ");
+}
+
 const n = (v: number) => Math.round(v * 100) / 100;
 
 /**

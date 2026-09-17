@@ -33,10 +33,23 @@ export function textBoxFontPx(size: TextBoxSize, sizePx: number): number {
 // catch growth in either direction. Same shape as BLOCK_ORIENTATIONS.
 export const TEXT_BOX_FONTS = ["sans", "sketch", "mono"] as const;
 export type TextBoxFont = (typeof TEXT_BOX_FONTS)[number];
+/**
+ * WHY `sans` and `mono` read a skin token while `sketch` does not: a
+ * TextBox sets `font-family` INLINE, which beats inheritance — so a block
+ * under the sketch skin had a hand-drawn outline and a crisply sans title,
+ * and only the Port view showed it (Simple view's title is a plain element
+ * that inherits). The two NAMED rungs therefore defer to the skin and fall
+ * back to the exact stacks they replaced, so nothing changes without one.
+ *
+ * `sketch` stays a literal because it means "this instance is hand-written"
+ * — an author's per-instance choice, not the skin's. It is also why the
+ * skin token is consulted rather than this entry being rewritten: a board
+ * in the default skin can still have one hand-lettered label.
+ */
 export const TEXT_BOX_FONT_STACKS: Record<TextBoxFont, string> = {
-  sans: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-  sketch: '"Segoe Print", "Bradley Hand", cursive',
-  mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+  sans: 'var(--bbox-skin-font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif)',
+  sketch: '"Shantell Sans", "Excalifont", "Virgil", "Segoe Print", "Bradley Hand", cursive',
+  mono: 'var(--bbox-skin-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace)',
 };
 
 type FlexPlacement = "flex-start" | "center" | "flex-end";

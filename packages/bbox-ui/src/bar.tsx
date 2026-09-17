@@ -5,6 +5,7 @@ import type { AppearanceState, Lens, Tone } from "./appearance";
 import { paintVar, toneOverride } from "./appearance";
 import { BAR_LINE_FIELD_BY_ID, BAR_PRESETS } from "./bar.presets";
 import { cn } from "./lib/utils";
+import { SketchLine } from "./sketchOutline";
 import type { PaintToken, PillLineStyle, PillLineThickness } from "./pill.fields";
 
 /**
@@ -109,21 +110,35 @@ export function Bar({
       data-line={line}
       data-state={state}
       data-tone={tone}
-      className={cn("grid w-full min-w-0 items-center", className)}
+      className={cn("relative grid w-full min-w-0 items-center", className)}
       style={{
         gridTemplateColumns: "1fr auto 1fr",
         gap: 8,
         padding: `${padding}px ${padding + 4}px`,
         minHeight: BAR_MIN_HEIGHT[size],
-        borderColor: paintVar(lineColorResolved),
+        // Same split as Pill's ring: only the sketch skin defines
+        // `--bbox-skin-line-override`, and it names no colour — the drawn
+        // rule below is handed the colour this cascade resolved.
+        borderColor: `var(--bbox-skin-line-override, ${paintVar(lineColorResolved)})`,
         // WHY opacity on the colour and not on the bar: the members keep
         // their own paint; only the line fades.
-        ...(lineOpacity < 1 ? { borderColor: `color-mix(in srgb, ${paintVar(lineColorResolved)} ${Math.round(lineOpacity * 100)}%, transparent)` } : {}),
+        ...(lineOpacity < 1 ? { borderColor: `var(--bbox-skin-line-override, color-mix(in srgb, ${paintVar(lineColorResolved)} ${Math.round(lineOpacity * 100)}%, transparent))` } : {}),
         ...lineCss,
         ...style,
       }}
       {...props}
     >
+      {lineWidth > 0 && (
+        // A Bar's line is a single RULE along one edge, not a closed
+        // outline — the header band's separator. One stretched, jittered
+        // segment is the whole shape.
+        <SketchLine
+          edge={edge}
+          thickness={lineWidth}
+          stroke={paintVar(lineColorResolved)}
+          seed={`bar:${edge}:${lineColorResolved}`}
+        />
+      )}
       <div data-slot="bar-cell" data-cell="left" style={{ minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-start" }}>
         {left}
       </div>

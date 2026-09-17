@@ -26,6 +26,47 @@ function field(id: string) {
 
 const bareBadge = badgeElement();
 
+
+/**
+ * The label a Pill/Badge actually renders, with the decorative sketch layer
+ * stripped — and asserting that layer IS there, so this helper can never
+ * quietly hide its disappearance.
+ *
+ * WHY it exists: `Pill` and `Badge` now render `[<SketchOutline/>, children]`
+ * so the sketch skin can draw their outline (Zach's D4). The outline is
+ * chrome, never content, so a test about the LABEL must not see it — but
+ * `children === "Event"` is no longer literally true, and relaxing it to a
+ * "contains" check would stop catching a stray extra child.
+ */
+function labelOf(el: { props: Record<string, unknown> }): unknown {
+  const kids = el.props.children as unknown;
+  expect(Array.isArray(kids), `expected [outline, label], got ${String(kids)}`).toBe(true);
+  const arr = kids as unknown[];
+  expect(arr).toHaveLength(2);
+  const outline = arr[0] as { type?: unknown } | false | null;
+  const isOutline =
+    outline === false || outline === null || typeof (outline as { type?: unknown })?.type === "function";
+  expect(isOutline, "first child should be the sketch outline layer").toBe(true);
+  return arr[1];
+}
+
+/**
+ * The painted line colour, unwrapped from the skin's suppression variable,
+ * asserting the wrapper is present.
+ *
+ * WHY: the sketch skin blanks a state-painted border by defining
+ * `--bbox-skin-line-override`, so such a colour now ships as
+ * `var(--bbox-skin-line-override, <the resolved colour>)`. Every colour
+ * assertion below still pins the exact value the cascade resolved — this
+ * only peels the wrapper, and fails loudly if the wrapper goes missing.
+ */
+function lineColorOf(el: { props: { style?: Record<string, unknown> } }): string {
+  const raw = String(el.props.style?.borderColor ?? "");
+  const m = /^var\(--bbox-skin-line-override, (.*)\)$/.exec(raw);
+  expect(m, `borderColor should be wrapped by the skin override: ${raw}`).not.toBeNull();
+  return (m as RegExpExecArray)[1];
+}
+
 describe("BADGE_FIELDS", () => {
   it("has exactly Badge's three real props, in panel order", () => {
     expect(BADGE_FIELDS.map((f) => f.id)).toEqual(["hidden", "size", "children"]);
@@ -64,7 +105,7 @@ describe("BADGE_FIELDS", () => {
     // lying about the preview beside it (adversarial judge, 2026-09-15).
     // "4" is what Port's secondary slot SEEDS (`PORT_SLOTS.fillMembers`),
     // not a property of every Badge.
-    expect(bareBadge.props.children).toBe(field("children").defaultValue);
+    expect(labelOf(bareBadge)).toBe(field("children").defaultValue);
     expect(field("children").defaultValue).toBe("");
   });
 
@@ -97,7 +138,7 @@ describe("BADGE_FIELDS", () => {
 
   it("children is additive content, never baked into size", () => {
     const el = badgeElement({ children: "Event" });
-    expect(el.props.children).toBe("Event");
+    expect(labelOf(el)).toBe("Event");
     expect(el.props.style.height).toBe(BADGE_SIZES.md.height);
   });
 

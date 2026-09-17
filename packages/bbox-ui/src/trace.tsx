@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 import { toneOverride, type Tone } from "./appearance";
+import { sketchPathData } from "./sketchPath";
 import { paintColor, Pill, type PillProps } from "./pill";
 import type { PaintToken } from "./pill.fields";
 import type { TraceMarkerEnd } from "./trace.fields";
@@ -144,6 +145,70 @@ export function traceStrokeStyle(
  * inherit whatever stroke paints the line beside it, so it never needs a
  * second colour derivation or a duplicate
  * marker per colour. */
+/**
+ * `style` for the crisp path and for its hand-drawn twin.
+ *
+ * WHY both are rendered and CSS picks, rather than the component choosing:
+ * it cannot know the active skin. Everywhere else a skin blanks the crisp
+ * version by recolouring it (`--bbox-skin-stroke: transparent`), which
+ * works because a border can be transparent and still occupy its space. An
+ * SVG path has no equivalent — and a Trace's geometry belongs to the HOST
+ * (React Flow's `getBezierPath`, tldraw's arrow info), so there is nothing
+ * here to re-derive. Paths do not affect layout, so the hidden twin costs
+ * only the memoised math.
+ *
+ * WHY the twin is written out at each call site instead of behind a
+ * `<TraceSegment>` component: `trace.test.ts` reads this component's
+ * returned tree directly and asserts on real `<path>` elements. A
+ * component boundary would have replaced every one of them with an
+ * unrendered function and forced a rewrite of assertions that are about
+ * the DOM contract, not about the internals. Flat stays testable.
+ *
+ * Zach, 2026-09-17: "it would be great of course if even the traces can
+ * support a more sketchy appearance... perhaps thats just like another
+ * styling thing for them. just like async, or animated" — so it is exactly
+ * that: orthogonal to `variant`, to `animated` and to the dash cadence. A
+ * sketched trace can still be an animated async one.
+ */
+const CRISP_STYLE = { display: "var(--bbox-skin-crisp, inline)" } as const;
+const SKETCH_STYLE = { display: "var(--bbox-skin-outline, none)" } as const;
+
+/** Wobble for a cable. Lower than a Block's: the same absolute wander read
+ * across a long curve is a wave, not a drawn line. */
+const TRACE_WOBBLE_PX = 1.4;
+
+/**
+ * Sketched paths, cached by the geometry that produced them.
+ *
+ * WHY a module-level Map and NOT `useMemo`: `TraceBody` is called
+ * plain-function style, with no renderer at all — `trace.test.ts` does
+ * exactly that, and its own describe block says so ("called plain-function
+ * style (no DOM/jsdom)"). A hook there throws on a null dispatcher. That
+ * property is worth keeping: it is what lets the paint be tested without
+ * jsdom, and a cache keyed on the input is strictly better than a hook
+ * here anyway — it is shared across instances and survives remounts.
+ *
+ * Bounded because a live drag produces a NEW `d` every frame, so an
+ * unbounded cache would be a leak that looks like a memo. Insertion order
+ * is eviction order, which is all this needs: the entries worth keeping
+ * are the ones for edges sitting still, and those get re-inserted on their
+ * next hit.
+ */
+const SKETCH_CACHE = new Map<string, string>();
+const SKETCH_CACHE_MAX = 512;
+
+function sketchedTracePath(d: string): string {
+  const hit = SKETCH_CACHE.get(d);
+  if (hit !== undefined) return hit;
+  const out = sketchPathData(d, { seed: d, wobble: TRACE_WOBBLE_PX });
+  if (SKETCH_CACHE.size >= SKETCH_CACHE_MAX) {
+    const oldest = SKETCH_CACHE.keys().next().value;
+    if (oldest !== undefined) SKETCH_CACHE.delete(oldest);
+  }
+  SKETCH_CACHE.set(d, out);
+  return out;
+}
+
 export function TraceMarkerDef({ id }: { id: string }) {
   return (
     <marker
@@ -189,11 +254,23 @@ export function TraceBody({
 }: TraceProps) {
   const markerId = safeElementId("bbox-trace-head", id);
   const stroke = resolveTraceStrokeColor(tone, strokeColor);
+  // Seeded from the geometry itself, so a cable keeps its own wander while
+  // it sits still and re-draws honestly when it moves.
+  const sketched = sketchedTracePath(path);
   const hasMarker = markerEnd !== "none";
   const markerAttr = hasMarker ? `url(#${markerId})` : undefined;
 
   if (variant === "delayed" && splitAtLabel) {
     const dash = splitDashArrays(length, clampLabelPosition(labelPosition));
+    const splitSegment = {
+      pathLength: PATH_LENGTH_UNITS,
+      fill: "none",
+      stroke,
+      strokeLinecap: "round" as const,
+      strokeLinejoin: "round" as const,
+      strokeWidth,
+      vectorEffect,
+    };
     return (
       <g data-slot="trace" data-variant={variant} {...props}>
         {hasMarker && (
@@ -201,36 +278,27 @@ export function TraceBody({
             <TraceMarkerDef id={markerId} />
           </defs>
         )}
-        <path
-          d={path}
-          pathLength={PATH_LENGTH_UNITS}
-          fill="none"
-          stroke={stroke}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash.before}
-          vectorEffect={vectorEffect}
-          data-trace-segment="before"
-        />
-        <path
-          d={path}
-          pathLength={PATH_LENGTH_UNITS}
-          fill="none"
-          stroke={stroke}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash.after}
-          vectorEffect={vectorEffect}
-          markerEnd={markerAttr}
-          data-trace-segment="after"
-        />
+        <path {...splitSegment} d={path} strokeDasharray={dash.before} data-trace-segment="before" style={CRISP_STYLE} />
+        <path {...splitSegment} d={sketched} strokeDasharray={dash.before} data-trace-segment="before" data-sketch="true" style={SKETCH_STYLE} />
+        <path {...splitSegment} d={path} strokeDasharray={dash.after} markerEnd={markerAttr} data-trace-segment="after" style={CRISP_STYLE} />
+        <path {...splitSegment} d={sketched} strokeDasharray={dash.after} markerEnd={markerAttr} data-trace-segment="after" data-sketch="true" style={SKETCH_STYLE} />
       </g>
     );
   }
 
   const dashStyle = traceStrokeStyle(variant, length, animated);
+  const segment = {
+    fill: "none",
+    stroke,
+    strokeWidth,
+    strokeLinecap: dashStyle.strokeLinecap,
+    strokeLinejoin: "round" as const,
+    strokeDasharray: dashStyle.strokeDasharray,
+    strokeDashoffset: dashStyle.strokeDashoffset,
+    vectorEffect,
+    className: dashStyle.className,
+    markerEnd: markerAttr,
+  };
   return (
     <g data-slot="trace" data-variant={variant} {...props}>
       {hasMarker && (
@@ -238,19 +306,8 @@ export function TraceBody({
           <TraceMarkerDef id={markerId} />
         </defs>
       )}
-      <path
-        d={path}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={strokeWidth}
-        strokeLinecap={dashStyle.strokeLinecap}
-        strokeLinejoin="round"
-        strokeDasharray={dashStyle.strokeDasharray}
-        strokeDashoffset={dashStyle.strokeDashoffset}
-        vectorEffect={vectorEffect}
-        className={dashStyle.className}
-        markerEnd={markerAttr}
-      />
+      <path {...segment} d={path} style={CRISP_STYLE} />
+      <path {...segment} d={sketched} data-sketch="true" style={SKETCH_STYLE} />
     </g>
   );
 }

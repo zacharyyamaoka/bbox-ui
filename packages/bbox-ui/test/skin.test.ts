@@ -16,7 +16,20 @@ import { BBOX_SKINS, BBOX_SKIN_LABELS, BBOX_SKIN_BLURBS, BBOX_SKIN_TOKENS, BBOX_
  */
 
 const srcDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
-const css = readFileSync(path.join(srcDir, "skin.css"), "utf8");
+const cssSource = readFileSync(path.join(srcDir, "skin.css"), "utf8");
+
+/**
+ * The stylesheet with comments removed, which is what every check below
+ * parses.
+ *
+ * WHY: skin.css documents how to turn a token back on by quoting the rule
+ * you would write — `[data-bbox-skin="sketch"] { --bbox-skin-dot-rings:
+ * none; }` — and the block matcher happily matched that, inside the
+ * comment, as a second declaration block for `sketch` whose only token was
+ * `dot-rings`. It overwrote the real one and the suite went red over a
+ * sentence. A parser that sees comments is not parsing CSS.
+ */
+const css = cssSource.replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Every `[data-bbox-skin="…"] { … }` block, as id -> declared token names. */
 function skinBlocks(): Map<string, string[]> {
@@ -93,7 +106,21 @@ describe("components read the tokens skin.ts documents", () => {
   // sketchOutline.tsx belongs here: it is where --bbox-skin-outline and
   // --bbox-skin-ink are read, and leaving it out is what made this list
   // stale the first time a token moved out of a Tailwind class.
-  const sources = ["block.tsx", "region.tsx", "pill.tsx", "port.tsx", "sketchOutline.tsx"]
+  // Every component that reads a skin token. Adding a token without adding
+  // its reader here is what the first test below catches; adding a reader
+  // file without listing it is what made that test go red the first time.
+  const sources = [
+    "block.tsx",
+    "region.tsx",
+    "pill.tsx",
+    "port.tsx",
+    "badge.tsx",
+    "bar.tsx",
+    "trace.tsx",
+    "sketchOutline.tsx",
+    "textBox.layout.ts",
+    "codeField.css",
+  ]
     .map((f) => readFileSync(path.join(srcDir, f), "utf8"))
     .join("\n");
 
@@ -110,10 +137,34 @@ describe("components read the tokens skin.ts documents", () => {
     // which nothing else checks, because a wrong fallback still compiles and
     // still paints something.
     for (const token of BBOX_SKIN_TOKENS) {
+      // A `null` fallback is a token whose default is computed by the
+      // component's own cascade (a resolved lineColor, a built box-shadow
+      // list), so there is no literal to compare. Those are covered by the
+      // "read somewhere" test above and by the separate assertion below
+      // that they never name a colour.
+      if (token.fallback === null) continue;
       const fallbacks = fallbacksFor(token.name, sources);
       if (fallbacks.length === 0) continue; // covered by the test above
       for (const fallback of fallbacks) {
         expect(fallback, `fallback at a --${token.name} call site`).toBe(token.fallback);
+      }
+    }
+  });
+});
+
+describe("the axis boundary", () => {
+  it("a suppression token never names a colour", () => {
+    // `--bbox-skin-line-override` and `--bbox-skin-dot-rings` exist so a
+    // skin can say "do not paint the CSS line"; the colour belongs to the
+    // `state` preset family. If a skin ever set one of them to a real
+    // colour, the skin would be governing a field `state` governs — the
+    // exact two-selectors-one-field collision `assertDisjointPresets`
+    // forbids, and invisible without this check because it would simply
+    // look like a styling choice.
+    const ALLOWED = new Set(["transparent", "none", "currentColor", "initial"]);
+    for (const name of ["bbox-skin-line-override", "bbox-skin-dot-rings"]) {
+      for (const m of css.matchAll(new RegExp(`--${name}\\s*:\\s*([^;]+);`, "g"))) {
+        expect(ALLOWED.has(m[1].trim()), `--${name} is set to "${m[1].trim()}"`).toBe(true);
       }
     }
   });

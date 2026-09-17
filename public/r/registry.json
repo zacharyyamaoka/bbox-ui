@@ -99,6 +99,16 @@
           "path": "packages/bbox-ui/src/caretGeometry.ts",
           "type": "registry:lib",
           "target": "components/bbox/caretGeometry.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/sketchPath.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchOutline.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/sketchOutline.tsx"
         }
       ],
       "dependencies": [

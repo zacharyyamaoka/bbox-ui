@@ -3,6 +3,7 @@
 import type { ComponentProps } from "react";
 
 import { cn } from "./lib/utils";
+import { SketchOutline } from "./sketchOutline";
 import { BADGE_SIZES, type BadgeSize } from "./badge.fields";
 
 export interface BadgeProps extends Omit<ComponentProps<"span">, "children"> {
@@ -56,7 +57,7 @@ export function Badge({
       data-slot="badge"
       data-size={size}
       className={cn(
-        "flex items-center justify-center bg-foreground/10 font-semibold text-foreground",
+        "relative flex items-center justify-center bg-foreground/10 font-semibold text-foreground",
         className,
       )}
       style={{
@@ -71,6 +72,18 @@ export function Badge({
       }}
       {...props}
     >
+      {/* A Badge has no border of its own — it is a tinted chip — so the
+          sketch skin gives it one rather than replacing one. Its ink is the
+          skin's, not a state's: nothing in the cascade governs a Badge's
+          colour, which is exactly why it may use `--bbox-skin-ink`. */}
+      <SketchOutline
+        stretch
+        width={40}
+        height={20}
+        borderWidth={1.5}
+        radius={radius}
+        seed={`badge:${size}`}
+      />
       {children}
     </span>
   );

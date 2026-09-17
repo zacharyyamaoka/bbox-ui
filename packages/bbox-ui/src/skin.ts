@@ -103,8 +103,21 @@ export const BBOX_SKIN_ATTR = "data-bbox-skin";
 export interface SkinToken {
   /** Custom property name, without the leading `--`. */
   name: string;
-  /** What the component falls back to when no skin stylesheet is loaded. */
-  fallback: string;
+  /**
+   * What the component falls back to when no skin stylesheet is loaded —
+   * the literal text after the comma in its `var()`.
+   *
+   * `null` means the fallback is COMPUTED by the component's own cascade
+   * rather than written in the source: `--bbox-skin-line-override` falls
+   * back to whatever colour `resolveField` produced for that instance, and
+   * `--bbox-skin-dot-rings` to a box-shadow layer list built at render
+   * time. That is not a gap in this table, it is the distinction the table
+   * exists to record — a `null` here marks a token the skin is allowed to
+   * SUPPRESS but never to colour, because the colour belongs to the
+   * `state` preset family and two selectors owning one field is what
+   * `assertDisjointPresets` forbids.
+   */
+  fallback: string | null;
   /** Which CSS property it ends up in, for the docs table. */
   paints: string;
 }
@@ -124,6 +137,25 @@ export const BBOX_SKIN_TOKENS: readonly SkinToken[] = [
   { name: "bbox-skin-outline", fallback: "none", paints: "display (SketchOutline's <svg>)" },
   { name: "bbox-skin-ink", fallback: "var(--color-foreground)", paints: "stroke (the drawn line)" },
   { name: "bbox-skin-fg", fallback: "var(--color-card-foreground)", paints: "color (Block's text, which a fill-less skin must re-point)" },
+  // Lets a skin blank out a border whose COLOUR belongs to another axis.
+  // Pill, Bar and Port paint their line from the `state` preset family, so
+  // the skin may not name a colour for them — but it may say "do not paint
+  // the CSS one, the drawn one is taking its place". Undefined on every
+  // skin but sketch, so the `var()` fallback is the real colour.
+  { name: "bbox-skin-line-override", fallback: null, paints: "border-color on state-painted components (Pill, Bar)" },
+  { name: "bbox-skin-font-sans", fallback: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', paints: "font-family for a TextBox's `sans` rung, which is set inline and so beats inheritance" },
+  { name: "bbox-skin-font-mono", fallback: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace', paints: "font-family inside a CodeField and a TextBox's `mono` rung" },
+  // The inverse of `--bbox-skin-outline`, for the one case where a skin
+  // cannot recolour the crisp version away: an SVG path has no
+  // "transparent but still there" the way a border does, and a Trace's `d`
+  // is computed by the HOST, so the component renders both the crisp path
+  // and the drawn one and CSS picks. Paths do not affect layout, so the
+  // hidden one costs nothing but the memoised math.
+  { name: "bbox-skin-crisp", fallback: "inline", paints: "display (the un-sketched twin of a drawn element)" },
+  // A Port's rings are box-shadow layers, not a border, so `transparent`
+  // is not a way to blank them. Same contract as line-override: the skin
+  // names no colour, only "do not paint the CSS one".
+  { name: "bbox-skin-dot-rings", fallback: null, paints: "box-shadow (a Port dot's state rings)" },
 ] as const;
 
 /**

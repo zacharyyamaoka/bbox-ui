@@ -80,5 +80,9 @@ export function sceneToReactFlowEdges(scene: Scene = SCENE): Edge[] {
     sourceHandle: edge.sourcePort,
     target: edge.target,
     targetHandle: edge.targetPort,
+    // Paint through the core's own Trace rather than React Flow's default
+    // edge, so the board's cables are bbox-ui all the way down and a skin
+    // reaches them. See TraceEdge.tsx.
+    type: "bboxTrace" as const,
   }));
 }
