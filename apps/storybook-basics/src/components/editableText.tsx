@@ -82,6 +82,33 @@ type ControlElement = HTMLInputElement | HTMLTextAreaElement;
 // control's bounding box against the resting text's within 1px. Recomputing
 // font-size/line-height/color/text-align independently would only coincide
 // with the box's own values by luck the day someone changes one of them.
+//
+// WHY `paddingInline`/`marginInline` are NOT 0 (verify-round-2c G-9, "I don't
+// like when I type the label how the edges of the EditableText... are being
+// cut off"): a text `<input>`/`<textarea>`'s computed `overflow` is forced to
+// `clip` by the browser — measured live, setting `overflowClipMargin`
+// directly on the control left its COMPUTED value at `0px`, so bar.tsx's own
+// fix for this bug class (`overflow-clip` + `[overflow-clip-margin:4px]`)
+// cannot be reused verbatim here; that fix's CSS property does not apply to
+// a form control at all. `field-sizing: content` sizes the control to the
+// text's ADVANCE width (the metric `ch`-width layout uses), not its ink
+// extent — measured live with Canvas `measureText` on the control's own
+// value: a leading `(` renders with `actualBoundingBoxLeft` NEGATIVE (e.g.
+// "(label)" at 24px: -1px, growing to -3px at this component's "xl" rung),
+// meaning the glyph's ink starts outside the box the control sized itself
+// to, and the control's forced clip then shaves it at typing time — a
+// truthful-rendering violation (repo rule: authored characters must not
+// disappear), not a cosmetic one. `CONTROL_INK_MARGIN_PX` of padding paired
+// with the same amount of NEGATIVE margin grows the control's own clip
+// boundary without moving where the text renders or how wide the host sees
+// the control as being: padding pushes the content box in by the margin
+// amount, the equal-and-opposite negative margin pulls the whole border box
+// back out by the same amount, so the two cancel in both the visible text
+// origin AND in `EditableText`'s own `w-fit` root's shrink-to-fit width —
+// confirmed live via `getBoundingClientRect` before/after. `4` matches
+// bar.tsx's own clip-margin number rather than the 1-3px measured above, so
+// headroom holds across every accented/descender-heavy string too.
+const CONTROL_INK_MARGIN_PX = 4;
 const CONTROL_TYPOGRAPHY_STYLE: CSSProperties = {
   font: "inherit",
   fontSize: "inherit",
@@ -89,10 +116,13 @@ const CONTROL_TYPOGRAPHY_STYLE: CSSProperties = {
   color: "inherit",
   textAlign: "inherit",
   background: "transparent",
-  margin: 0,
-  padding: 0,
+  marginBlock: 0,
+  marginInline: -CONTROL_INK_MARGIN_PX,
+  paddingBlock: 0,
+  paddingInline: CONTROL_INK_MARGIN_PX,
   border: 0,
   borderRadius: 0,
+  boxSizing: "border-box",
   // `fieldSizing` (Chromium 123+) is not yet in React's/TS's CSSProperties —
   // the cast is deliberate, not a typo. `min-width: 4ch` on the input (below)
   // and `rows={1}` on the textarea are the declared fallback for engines
