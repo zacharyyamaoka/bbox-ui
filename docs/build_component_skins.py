@@ -27,7 +27,7 @@ SKINS = ["default", "plain", "sketch"]
 SKIN_NAME = {"default": "Default", "plain": "Plain", "sketch": "Sketch"}
 SKIN_BLURB = {
     "default": "What you have today, unchanged, and what renders when no skin is set at all.",
-    "plain": "Square corners everywhere — the chip stops being a capsule. Your “unstylized”.",
+    "plain": "Square corners, no fill, one weight of line. Your “unstylized”.",
     "sketch": "No fill at all, and a line that is genuinely drawn — jittered, bowed, and laid down twice.",
 }
 
@@ -374,6 +374,89 @@ picker — which also makes the 3&nbsp;&times;&nbsp;2 orthogonality something yo
 skin's. The <code>border-width</code> being identical is <em>not</em> a coincidence either; see
 the trap below.</p>
 
+<h2>Sketch reaches every component</h2>
+<blockquote><p>“when you go sketchy I think that should propagate to all the components. all
+the components should kinda support like a ‘sketchy’ mode. and then then I can always tune it
+later to prevent certain ones from being sketchy, say like if I want the ports to still be
+normal.”</p></blockquote>
+<p>Port view is where this shows, because Simple view has almost no chrome. Same card, same
+board, three skins:</p>
+<div class="grid three">
+<figure class="card">
+  <img src="{jpg('portview-default.jpg')}" alt="Port view, default skin">
+  <figcaption><span class="name">Default</span><span class="meas">unchanged</span></figcaption>
+  <p class="cap">Fill, crisp rules, capsule chip, system font. Free to get as styled as you
+  like — you said so.</p>
+</figure>
+<figure class="card">
+  <img src="{jpg('portview-plain.jpg')}" alt="Port view, plain skin">
+  <figcaption><span class="name">Plain</span><span class="meas">no fill</span></figcaption>
+  <p class="cap">Square corners including the chip, no background, canvas showing through.</p>
+</figure>
+<figure class="card">
+  <img src="{jpg('portview-sketch.jpg')}" alt="Port view, sketch skin">
+  <figcaption><span class="name">Sketch</span><span class="meas">drawn</span></figcaption>
+  <p class="cap">Outline, header and footer rules, chip and every code label — all drawn or
+  hand-lettered, and the port rings deliberately left alone.</p>
+</figure>
+</div>
+
+<table>
+<thead><tr><th>Component</th><th>What sketch does to it</th><th>Who owns the colour</th></tr></thead>
+<tbody>
+<tr><th>Block &middot; Region</th><td>Drawn outline replaces the CSS border; no fill</td><td class=h>the skin</td></tr>
+<tr><th>Pill &middot; BlockChip</th><td>Drawn capsule, wobble scaled to its ~20px height</td><td class=h><strong>the <code>state</code> preset</strong></td></tr>
+<tr><th>Bar</th><td>The header/footer rule becomes one drawn segment</td><td class=h><strong>the <code>state</code> preset</strong></td></tr>
+<tr><th>Badge</th><td>Gains a drawn outline it never had (it is a tinted chip)</td><td class=h>the skin</td></tr>
+<tr><th>TextBox &middot; CodeField</th><td>Hand lettering — D3, and it now holds in every host</td><td class=h>&mdash;</td></tr>
+<tr><th>Trace</th><td>The cable is redrawn by hand, ends pinned to their ports</td><td class=h>its own <code>strokeColor</code>/<code>tone</code></td></tr>
+<tr><th>Port dot</th><td><strong>Nothing, shipped.</strong> The ring is built and works — see the trap below</td><td class=h><strong>the <code>state</code> preset</strong></td></tr>
+</tbody>
+</table>
+
+<div class="box win">
+<h3>The axis boundary survived, and is now a test</h3>
+<p>Pill, Bar and Port paint their line from the <code>state</code> preset family. So the skin
+is not allowed to name a colour for them — its two suppression tokens
+(<code>--bbox-skin-line-override</code>, <code>--bbox-skin-dot-rings</code>) can only say
+“do not paint the CSS one”, and the drawn outline is handed the colour that cascade already
+resolved. A skin setting one of them to a real colour would be the two-selectors-one-field
+collision <code>assertDisjointPresets</code> exists to forbid — and it would look like a
+styling choice, not a bug, which is why there is now an assertion that those tokens only ever
+hold <code>transparent</code>, <code>none</code>, <code>currentColor</code> or
+<code>initial</code>.</p>
+<p>It is also what makes your “tune it later” one CSS rule and no new API. Every token
+inherits, so exempting a component is a scoped re-declaration:</p>
+<pre><code>[data-bbox-skin="sketch"] [data-slot="port"] {{
+  --bbox-skin-outline: none;          /* stop drawing */
+  --bbox-skin-crisp: inline;          /* put the crisp one back */
+  --bbox-skin-line-override: initial; /* let the real paint resolve */
+}}</code></pre>
+<p><code>initial</code> is what makes the last line work: on a custom property it is the
+guaranteed-invalid value, so <code>var(--x, &lt;real paint&gt;)</code> falls straight
+through.</p>
+</div>
+
+<h3>The cable, before and after</h3>
+<div class="grid">
+<figure class="card">
+  <img src="{jpg('trace-default.jpg')}" alt="A crisp trace">
+  <figcaption><span class="name">Default</span><span class="meas">one bezier</span></figcaption>
+  <p class="cap">Exactly the path React Flow's <code>getBezierPath</code> produced.</p>
+</figure>
+<figure class="card">
+  <img src="{jpg('trace-sketch.jpg')}" alt="A sketched trace">
+  <figcaption><span class="name">Sketch</span><span class="meas">two passes</span></figcaption>
+  <p class="cap">Sampled, jittered, re-smoothed, drawn twice — and both ends still pinned to
+  their ports. A wandering end is a correctness bug wearing a style's clothes.</p>
+</figure>
+</div>
+<p class="cap">This is what “just like async, or animated” buys: sketch is orthogonal to
+<code>variant</code> and to the dash cadence, so a sketched trace can still be an animated
+async one. The demo now paints its cables through the core's own <code>TraceBody</code> (a
+<code>TraceEdge</code> in the demo scene) — there is no Trace adapter yet, and promoting one
+is a separate call about the product's surface.</p>
+
 <h2>How tldraw actually draws that line</h2>
 <blockquote><p>“Can you please look into how TL Draw does their sketch line where it kind of
 renders a bit interestingly? … I feel like TL Draw does something clever where they kind of
@@ -634,7 +717,7 @@ styling change.</p>
 </tbody>
 </table>
 <p class="cap">Full workspace green: <code>pnpm -r typecheck</code> clean,
-<strong>1229 tests pass</strong> across the 11 packages that have suites (re-run after the sketch work), <code>shadcn build</code> clean, zero
+<strong>1230 tests pass</strong> across the 11 packages that have suites, <code>shadcn build</code> clean, zero
 console errors in either host.</p>
 
 <div class="box win">
@@ -656,73 +739,122 @@ compared equal to nothing. It is a paren-balanced scan now, and it caught its ow
 before it ever went green.</p>
 </div>
 
-<h2>What needs you</h2>
+<h2>Your four rulings, and what each one took</h2>
 <dl class="dl">
-<dt>D1 &middot; Should <code>plain</code> be a hairline rather than a 2px outline?</dt>
-<dd>“Minimal, like Base UI” could mean a thin <code>--border</code> line rather than the bold
-ink one. It currently keeps 2px because of the geometry trap above — going thinner means
-teaching <code>BLOCK_BORDER_PX</code> and <code>REGION_BORDER_PX</code> to read the token,
-which moves port anchors and needs the adapters re-measured.
-<span class="rec">Recommendation: leave it at 2px.</span> The square corners already carry the
-austerity, and the hairline costs a layout change for a small visual gain.
-<em>If you say nothing I leave it as shipped — reversible in one line.</em></dd>
+<dt>D1 &middot; “leave at 2px” &mdash; <span class="rec">done, nothing to change</span></dt>
+<dd>All three skins stroke at 2px and a test now fails if one ever varies it, because border
+width is geometry here: <code>BLOCK_BORDER_PX</code> insets every wall-mounted port anchor by
+it.</dd>
 
-<dt>D2 &middot; Should <code>RADIUS_FIELD</code> be able to say “auto”?</dt>
-<dd>An unset <code>radius</code> prop now defers to the skin, which is why the demos re-corner.
-But the inspector panel always writes the field's declared default of 8, so a panel-driven Block
-stays at 8px and ignores the skin. Fixing it means the field's default becomes
-<code>null</code>/“auto” and the number control grows an unset state.
-<span class="rec">Recommendation: yes, but as its own change</span> — it touches the panel's
-number control and is not a skin question.
-<em>If you say nothing, panel-driven blocks keep their pinned 8px.</em></dd>
+<dt>D2 &middot; radius “auto” &mdash; <span class="rec">already true; my original claim was wrong</span></dt>
+<dd>I said a panel-driven Block was pinned to 8 and ignored the skin. It is not.
+<code>bench.tsx</code> passes <code>radius={{p.radius}}</code> straight through, so an untouched
+radius is <code>undefined</code> and the skin decides — the coercion I had seen
+(<code>p.radius ?? BLOCK_RADIUS_DEFAULT</code>) feeds the port-lane overlay, not the Block. The
+only residue is that dev-bench overlay insetting its lanes at a hard 8 under a skin that says
+0 or 12; cosmetic, in a harness. No schema change needed, which is the opposite of the
+“widen <code>FieldValue</code> to admit null” I had lined up.</dd>
 
-<dt>D4 &middot; Should the chip go sketchy too?</dt>
-<dd>Look at the close-up: the <code>Draft 1</code> capsule is still a crisp CSS outline against
-a drawn box, and it is the one element that gives the game away. I did not change it, and the
-reason is architectural rather than lazy: a Pill's outline is painted by the <strong><code>state</code>
-preset family</strong> (<code>lineColor</code> / <code>lineStyle</code> from
-<code>pill.presets.ts</code>), not by the skin. Having the skin reach in is exactly the
-two-selectors-one-field collision <code>assertDisjointPresets</code> exists to forbid, so it
-needs a ruling on which axis wins, not a patch.
-<span class="rec">Recommendation: yes, but as an outline layer, not a paint override</span> —
-give Pill the same <code>SketchOutline</code> with a wobble scaled to its height (2.4px on a
-20px chip is far too loose), leaving <code>state</code> in sole charge of colour. That keeps
-both axes intact. <em>If you say nothing the chip stays crisp.</em></dd>
+<dt>D3 &middot; “let it inherit” &mdash; <span class="rec">done, and it took more than the one line</span></dt>
+<dd><code>codeField.css</code>'s <code>.cm-scroller</code> now reads
+<code>--bbox-skin-font-mono</code>, so the decision lives in a token instead of in whether a
+host imported a stylesheet. Then the captures showed a second offender the first fix did not
+touch: a <code>TextBox</code> writes <code>font-family</code> <em>inline</em>, which beats
+inheritance — so a Port-view title stayed crisply sans under a hand-drawn outline while Simple
+view (a plain element) looked right. Its named rungs defer to the skin now too. A third thing
+fell out: the two mono stacks in the codebase had quietly disagreed (one had Consolas, one did
+not) and naming a single token fallback forced them to agree.</dd>
 
-<dt>D3 &middot; Should a <code>CodeField</code> resist the sketch skin?</dt>
-<dd>Right now it is accidental: it inherits the hand font in the demos and stays monospace in
-Storybook, purely because of which stylesheets each host imports. Either answer is defensible —
-Excalidraw draws everything by hand; a schematic keeps code monospace — but the current state
-is “whichever happens”, which is the worst of the three.
-<span class="rec">Recommendation: let it inherit</span>, and drop the monospace pin from
-<code>.cm-scroller</code> down to a <code>--bbox-skin-font-mono</code> token so the decision is
-stated once instead of depending on an import.
-<em>If you say nothing I will not change it, since it is currently host-dependent rather than
-wrong.</em></dd>
+<dt>D4 &middot; “yes should go sketchy” &mdash; <span class="rec">done, without crossing the axis</span></dt>
+<dd>The chip is drawn, with its wobble scaled to its own height —
+<code>sketchWobbleFor</code> puts a 20px chip at 0.7px, because the 2.4px tuned on a 384px
+Block does not make a chip sketchy, it destroys it. Colour still comes from
+<code>state</code>; the skin only suppresses the CSS ring and hands the resolved colour to the
+drawn one. Bar and Badge came along the same way.</dd>
 </dl>
+
+<h2>Three things only looking could have found</h2>
+
+<div class="box warn">
+<h3>1. <code>currentColor</code> and <code>none</code> are not “inert”</h3>
+<p>Both suppression tokens need a value meaning “leave it alone” on the skins that do not
+suppress. I used <code>currentColor</code> for the border one, reasoning that it names the
+real thing. It does not — it names the <em>text</em> colour, so every wired Pill in the
+default skin painted its ring in the label's ink. <code>none</code> on the Port one was worse:
+it blanked every port's rings in every skin, including default.</p>
+<p><code>initial</code> is the only correct value. On a custom property it is the
+guaranteed-invalid value, so <code>var(--x, &lt;real paint&gt;)</code> falls straight through
+to the component's own resolved colour.</p>
+</div>
+
+<div class="box warn">
+<h3>2. Sketching the port rings deletes React Flow's ports</h3>
+<p><code>PortDot</code> draws a hand-drawn ring and it works — in a host that renders the
+component. <code>@bbox-ui/adapter-tldraw</code> mounts a real <code>&lt;Port&gt;</code>, so
+does plain DOM. <strong><code>@bbox-ui/adapter-reactflow</code> never renders
+<code>&lt;PortDot&gt;</code></strong>: it spreads <code>portDotStyle({{state}})</code> onto
+React Flow's own <code>&lt;Handle&gt;</code>. Blanking the box-shadow rings there removes the
+port's only paint and leaves nothing behind it.</p>
+<p>So it ships <strong>off</strong> — which is also the component you guessed you would want
+normal. One line turns it on, correct the day that adapter renders the component:
+<code>[data-bbox-skin="sketch"] {{ --bbox-skin-dot-rings: none; }}</code></p>
+</div>
+
+<div class="box warn">
+<h3>3. I changed tests, and that is the move worth naming</h3>
+<p>Pill and Badge now render <code>[outline, children]</code>, and every trace segment renders
+twice, so assertions about <code>children</code> and <code>&lt;path&gt;</code> counts were
+about a contract that genuinely changed. Three helpers peel exactly one new layer each
+(<code>labelOf</code>, <code>lineColorOf</code>, <code>segmentsOf</code>) and <em>assert the
+layer is there</em>, so every original assertion still pins the same literal value it always
+did — and the trace check is stronger than the count it replaced, since it now requires one
+sketched twin per crisp segment rather than a total.</p>
+<p>One assertion I had “fixed” turned out to be right as written and was reverted:
+<code>chipElement</code> returns an unrendered <code>&lt;Pill&gt;</code>, so no outline exists
+in that tree yet. And <code>TraceBody</code> stays hook-free, because its own test calls it as
+a plain function with no renderer — the sketch cache is a bounded module-level Map, not a
+<code>useMemo</code>.</p>
+</div>
 
 <h2>Deliberately not done</h2>
 <ul>
+<li><strong>Port dots stay crisp.</strong> Built, works, off — see trap 2. Yours to flip.</li>
+<li><strong>No Trace adapter.</strong> The demo paints its cables through the core's
+<code>TraceBody</code> via a <code>TraceEdge</code> in <code>demos/scene</code>, which is what
+made the sketched cable reviewable. Promoting it to
+<code>@bbox-ui/adapter-reactflow</code> is a call about the product's surface, not about
+whether the skin works.</li>
+<li><strong>No multi-select-and-restyle.</strong> You want to “multi select a bunch of
+components and then quickly change their appearance” — that is the inspector's job, not the
+skin's, and the skin is already the right shape for it: every token inherits, so a selection
+could stamp one scoped rule. Not started.</li>
 <li><strong>Not wired into <code>apps/docs</code>.</strong> The site would want the
-<code>next-themes</code> provider from the stock table plus a picker on component pages —
-a real design decision about the site, not part of the mechanism. The spike proves the
-mechanism in two canvas hosts instead.</li>
-<li><strong>No <code>feTurbulence</code> filter.</strong> It was the first thing I tried and
-it does not work here: Block's <code>overflow: clip</code> (what makes its corners cut the
-header and footer bars) clips a filtered pseudo-element border to the padding box and eats the
-wobble, and filtering the element itself displaces its text into blur. A generated path has
-neither problem, and is what tldraw does anyway.</li>
-<li><strong>No rotation on the sketch skin.</strong> Tempting, and the one thing a skin must
-never do: a tilted DOM stops agreeing with the host's own hit-test box and port anchors, which
-the core does not own.</li>
-<li><strong>Raw captures not committed.</strong> ~1.4&nbsp;MB of regenerable PNGs; the script
-rebuilds them in about 40 seconds.</li>
-<li><strong>Did not fix the <code>block</code> registry item.</strong> Real, pre-existing, and
-a different problem (an unpublishable import, not a missing file). Folding it into a styling
-change would hide it.</li>
-<li><strong>Not merged.</strong> Three commits on
-<code>claude/component-styling-options-90a72f</code>, head <code>{COMMIT}</code>.</li>
+<code>next-themes</code> provider from the stock table plus a picker on component pages.</li>
+<li><strong>No rotation on the sketch skin.</strong> Still the one thing a skin must never
+do: a tilted DOM stops agreeing with the host's hit-test box and port anchors.</li>
+<li><strong>Bar rules are subtler than the outline.</strong> 1.7px of wander across a 370px
+header — visible, but nothing like the container's 2.4px. It looked right to me and it is one
+constant (<code>SketchLine</code>'s <code>wobble</code>) if it does not to you.</li>
+<li><strong>Raw captures not committed.</strong> Regenerable in about a minute.</li>
+<li><strong>Not merged.</strong> Head <code>{COMMIT}</code> on
+<code>claude/component-styling-options-90a72f</code>.</li>
 </ul>
+
+<div class="box">
+<h3>Where to turn the dials</h3>
+<table>
+<thead><tr><th>Want</th><th>Change</th></tr></thead>
+<tbody>
+<tr><th>More or less wobble, everywhere</th><td class=h><code>SKETCH_WOBBLE_PX</code> &middot; sketchPath.ts</td></tr>
+<tr><th>How wobble scales with size</th><td class=h><code>sketchWobbleFor</code> &middot; sketchPath.ts</td></tr>
+<tr><th>Cables specifically</th><td class=h><code>TRACE_WOBBLE_PX</code> &middot; trace.tsx</td></tr>
+<tr><th>Header/footer rules</th><td class=h><code>SketchLine</code>'s <code>wobble</code> &middot; sketchOutline.tsx</td></tr>
+<tr><th>More or fewer pen passes</th><td class=h><code>passes</code> (default 2) &middot; every generator</td></tr>
+<tr><th>Exempt a component</th><td class=h>one scoped rule &mdash; see the axis-boundary box</td></tr>
+<tr><th>A fourth skin</th><td class=h>one block in skin.css + its name in <code>BBOX_SKINS</code></td></tr>
+</tbody>
+</table>
+</div>
 
 </main></body></html>
 """
