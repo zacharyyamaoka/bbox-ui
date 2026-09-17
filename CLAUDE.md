@@ -72,6 +72,16 @@ component into Storybook, or run `storybook` / `build-storybook` as part of
 routine work on this repo — only touch this surface when he explicitly asks
 for Storybook work.
 
+## Verifying story play functions — never trust `storyRenders`
+
+`window.__STORYBOOK_PREVIEW__.storyRenders[0].reportedException` is **not a
+real property** — it reads `undefined` whether or not the play function
+threw, so `phase === "finished" && !reportedException` always looks green.
+Two stories silently failed for hours behind that check (2026-09-17). In
+`apps/storybook-basics`, run `pnpm test-stories` instead — it runs every
+story as a real Vitest/Playwright test via `@storybook/addon-vitest`, with a
+real process exit code. See `apps/storybook-basics/vitest.config.ts`.
+
 ## The website — apps/docs
 
 `apps/docs` is bbox-ui.com. Fumadocs + Next, statically exported, deployed to a
