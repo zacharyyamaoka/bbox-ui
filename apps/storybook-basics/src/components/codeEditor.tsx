@@ -51,7 +51,6 @@ import {
   lineNumbers as lineNumbersExtension,
   placeholder as placeholderExtension,
 } from "@codemirror/view";
-import { classHighlighter } from "@lezer/highlight";
 import {
   forwardRef,
   useImperativeHandle,
@@ -64,6 +63,7 @@ import "./codeEditor.css";
 
 import { FieldGesture } from "./codeEditorGesture";
 import { externalSync, singleLineGuard } from "./codeEditorGuards";
+import { codeEditorHighlightStyle } from "./codeEditorHighlight";
 import { codeEditorWidthPx } from "./codeEditorLayout";
 import { codeEditorThemeVars, type CodeEditorTheme } from "./codeEditorTheme";
 
@@ -305,7 +305,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
             ...historyKeymap,
           ]),
           languageCompartment.current.of(language ?? []),
-          syntaxHighlighting(classHighlighter),
+          // WHY `codeEditorHighlightStyle` and not the stock `classHighlighter`
+          // this used to mount directly: see codeEditorHighlight.ts's own WHY.
+          syntaxHighlighting(codeEditorHighlightStyle),
           gutterCompartment.current.of(lineNumbers ? [lineNumbersExtension()] : []),
           editableCompartment.current.of(EditorView.editable.of(!disabled)),
           placeholderCompartment.current.of(placeholder ? placeholderExtension(placeholder) : []),
