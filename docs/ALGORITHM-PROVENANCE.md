@@ -250,7 +250,6 @@ of the five requirements have none in the libraries actually read):
    node close enough"*: distance from the dragged node's OWN ports, which sit
    at an arbitrary offset from wherever the user grabbed. `MagnetPort.at` is
    the right primitive for that, and it is a different problem.
-||||||| fe7386d
 ## `apps/storybook-basics/src/layout` — fit to content (2026-09-18, fit-to-content lane)
 
 New directory. `src/layout/` holds geometry that is about a Block's **box**
@@ -272,7 +271,6 @@ container's **ends** and therefore need a taller band than `aligned` does for
 the same visual pitch. The donor has no equivalent because it has no
 distribution concept: it places rows arithmetically at a single computed
 `pitch`. Ours, ad hoc, found by testing rather than by reading.
-||||||| fe7386d
 ## Validation stack (2026-09-18) — the story lane's own rows
 
 Added by the story lane (worktree `wf_166de375-080-8`) per D7/D8 of the
@@ -295,7 +293,6 @@ this table indexes them, it does not restate them).
 | `components/port.tsx` — `availability` paint (`resolveAvailabilityPaint`) | (c) | Ours — the precedence rule (`availability > hinting > dimmed > state`) is a product decision (ruling 5), not a port; JointJS's own `available-magnet`/`available-cell` are CSS class names only (dist `joint.js:31927-31952`), no precedence model to port | Header pre-existing |
 | `components/blockPort.tsx` — `renderItem`/`renderCollapsed` now forward `diagnostics`/`availability` | (c) | Ours, ad hoc — a genuine integration gap this lane's own stories surfaced: `PortEdgeItem` has carried `diagnostics`/`availability` since the component lane's `port.tsx`/`portEdge.tsx`/`labeledPort.tsx` work landed, but `blockPort.tsx` (untouched by either implementation lane; not in either lane's declared write set) never forwarded either field from an item to the `Port`/`LabeledPort` it renders — so `decorate`'s paint seam could set every field correctly and the rendered dot still showed nothing. `collapsedDiagnostics` (concatenate) and `collapsedAvailability` (`"available"` wins) are new, ad hoc aggregations for the one-dot-stands-for-many case, modelled on the file's own pre-existing `collapsedState`'s "any wired wins" shape | Found via `ValidityPreview.stories.tsx`'s own failing assertion (a live browser test, not a guess) — `pnpm exec vitest --project=unit run` (623/623) and `pnpm test-stories` (243/243, all 56 files) both green after the fix; see this session's own report for the reproduction |
 | `hosts/nodeViews.tsx` — `Decorate`/`SceneNodeDecoration` seam | (c) | Ours — the adds-only host paint seam D7/D8 asked for, undefined = byte-identical to every prior story | New file addition, not a port |
-||||||| fb7b12d
 
 ---
 
