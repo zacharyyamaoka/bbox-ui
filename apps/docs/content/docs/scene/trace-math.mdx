@@ -1,0 +1,50 @@
+---
+title: Trace math
+description: Elbow routing, pins, collision avoidance and nudging — the pure router family behind Trace.
+---
+
+<Callout title="Status — built, shipped with the Trace components">
+  The router family exists and is heavily tested. It has no registry item of
+  its own: it ships as the `elbow/` folder inside the `trace`, `trace-editor`,
+  `trace-tidy` and `wire-layer` registry items. In the repo it lives beside
+  the components (`src/components/elbow/`), not in `src/scene/` — but it
+  obeys the scene-kit law (zero React, zero DOM, zero engine imports), which
+  is why it is documented here.
+</Callout>
+
+The [Trace component](/docs/components) deliberately never computes a path —
+it is paint for a two-ended shape whose path a **host** computes. This is the
+math the host computes it with.
+
+## The seam
+
+```ts
+const route = routeElbow({ start, end, obstacles, pins }); // pure
+const d = elbowPath(route);                                // SVG path data
+```
+
+Nothing in the folder imports tldraw, React or `@xyflow/react`. The router is
+the part that has to be provable; the substrate is the part that keeps
+changing.
+
+## What each module owns
+
+| Module | Owns |
+|---|---|
+| `elbowRouter` | Multi-bend orthogonal routing between two endpoints around obstacles. |
+| `elbowPath` | Route → SVG path data. |
+| `elbowPins` | The persisted form: a cable persists `ElbowPin[]` and nothing else about its geometry — `{ index, axis, t, offset }` in the frame spanned by the endpoints, so endpoints move and pins move with them. |
+| `collisionRouting` | Keeping a route clear of the blocks it passes. |
+| `boundaryCrossing` | Where a route may enter and leave a container. |
+| `nudge` | Separating overlapping parallel runs without creating new collisions. |
+| `softClearance` | The cost function that prefers roomy routes. |
+| `geometry`, `binaryHeap` | The primitives under all of the above. |
+| `trace.routing` / `trace.bends` / `trace.handles` | The Trace-side vocabulary: route kinds, bend editing math, handle placement. |
+
+## Provenance
+
+The `elbow/` folder is a **verbatim port** from SystemSketch (itself carrying
+`@ported Excalidraw` tags), copied byte-for-byte with its documentation — the
+banner in `elbow/index.ts` records the rule. Keeping the directory shape
+file-for-file is what makes a future re-sync a plain `diff` rather than an
+archaeology dig, and `provenance.test.ts` exists to keep that claim true.

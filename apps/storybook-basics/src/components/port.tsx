@@ -18,7 +18,9 @@
 import type { ComponentProps, CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
+import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { PORT_DIAMETERS, PORT_HIT_PX, PORT_STATE_RING_PX, PORT_SURFACE_RING_PX, type PortSize } from "./port.layout";
+import { SketchOutline } from "../skin/sketchOutline";
 
 /* ------------------------------------------------------------------ */
 /* Colour — state -> token, inlined from packages/bbox-ui's appearance.ts */
@@ -89,6 +91,21 @@ export function portDotClass(): string {
 }
 
 /**
+ * The dot's ring colour, as one exported derivation.
+ *
+ * WHY extracted rather than left inline (ported from packages/bbox-ui/src/
+ * port.tsx's own `portRingColor`): the sketch skin draws the ring as a
+ * path instead of as box-shadow layers, and it has to be the SAME colour.
+ * A second copy of this precedence (hinting > dimmed > state) is exactly
+ * how a `hinting` port would end up orange in one skin and grey in
+ * another. `null` means "this state paints no ring at all".
+ */
+export function portRingColor({ state = "empty", dimmed = false, hinting = false }: PortDotPaintInput): string | null {
+  const { ring } = STATE_TOKENS[state];
+  return hinting ? paintVar("primary") : dimmed ? paintVar("muted-foreground") : ring ? paintVar(ring) : null;
+}
+
+/**
  * The dot's ring/fill. `dimmed` forces the ring to `muted-foreground` and
  * fades the whole dot to ~45% opacity, leaving the resting fill/core colour
  * underneath untouched (a dimmed `wired` port still reads "wired, just not
@@ -97,8 +114,8 @@ export function portDotClass(): string {
  * BECOMING wired, with a wide halo.
  */
 export function portDotStyle({ state = "empty", dimmed = false, hinting = false }: PortDotPaintInput): CSSProperties {
-  const { ring, fill } = STATE_TOKENS[state];
-  const ringColor = hinting ? paintVar("primary") : dimmed ? paintVar("muted-foreground") : ring ? paintVar(ring) : null;
+  const { fill } = STATE_TOKENS[state];
+  const ringColor = portRingColor({ state, dimmed, hinting });
   // `hinting` renders hollow (no fill), matching `wired`'s own shape.
   const fillColor = hinting ? null : fill ? paintVar(fill) : null;
 
@@ -113,7 +130,10 @@ export function portDotStyle({ state = "empty", dimmed = false, hinting = false 
   }
 
   const style: CSSProperties = {};
-  if (layers.length > 0) style.boxShadow = layers.join(", ");
+  // Behind a token so the sketch skin can blank the CSS rings and let the
+  // drawn one (below, in `Port`) take their place. Undefined on every other
+  // skin, so the `var()` fallback IS the layer list and nothing changes.
+  if (layers.length > 0) style.boxShadow = `var(--bbox-skin-dot-rings, ${layers.join(", ")})`;
   // Opaque resting paint, never transparent — a wall-mounted dot straddles a
   // block's border, and a transparent interior would let it show through a
   // hollow (`empty`/`wired`) dot. `var(--card)` is the same token the 2px
@@ -159,6 +179,22 @@ export interface PortProps extends ComponentProps<"span"> {
   /** Host-set, never persisted — the pointer is over this port mid-drag,
    * previewing it becoming `wired`. */
   hinting?: boolean;
+  /**
+   * The hit halo's diameter in the component's OWN px. Defaults to
+   * `PORT_HIT_PX` (40). The constant is scene-space: under a host's
+   * viewport transform it scales with zoom. A host that wants a
+   * screen-constant target divides by its own zoom before passing —
+   * per ARCHITECTURE.md the host owns the viewport transform, so the
+   * current zoom is an input here, never something Port measures.
+   */
+  hitPx?: number;
+  /**
+   * Paint the hit halo (translucent wash + dashed outline) so the region
+   * is visible. Pure paint on the EXISTING halo span — geometry and
+   * hit-testing are identical with this on or off, same rule as
+   * `PortEdge`'s `showCard` overlay.
+   */
+  showHitRegion?: boolean;
 }
 
 /**
@@ -172,6 +208,8 @@ export function Port({
   hidden = false,
   dimmed = false,
   hinting = false,
+  hitPx = PORT_HIT_PX,
+  showHitRegion = false,
   className,
   style,
   ...props
@@ -179,8 +217,9 @@ export function Port({
   if (hidden) return null;
   const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
   // A fixed 40px hit target regardless of the painted diameter.
-  const haloInset = (diameterPx - PORT_HIT_PX) / 2;
+  const haloInset = (diameterPx - hitPx) / 2;
   const coreStyle = portCoreStyle({ state, hinting });
+  const ringColor = portRingColor({ state, dimmed, hinting });
   return (
     <span
       data-slot="port-dot"
@@ -197,7 +236,38 @@ export function Port({
       }}
       {...props}
     >
-      <span data-slot="port-dot-halo" aria-hidden className="absolute rounded-full" style={{ inset: haloInset }} />
+      {/* The drawn ring (ported from packages/bbox-ui/src/port.tsx). Lands
+          on the SAME centre-line the box-shadow rings use: those paint an
+          annulus from `d/2 + SURFACE` out to `d/2 + SURFACE + STATE`, so
+          its centre-line diameter is `d + 2*SURFACE + STATE`; SketchOutline
+          insets the path by one border width per side, hence the extra
+          `2*STATE`. Colour comes from `portRingColor` — the same
+          derivation the box-shadow rings use — so `state` keeps sole
+          ownership of it; the skin only supplies the shape. */}
+      {ringColor != null && (
+        <SketchOutline
+          shape="ellipse"
+          width={diameterPx + PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
+          height={diameterPx + PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
+          borderWidth={PORT_STATE_RING_PX}
+          stroke={ringColor}
+          seed={`port:${state}:${diameter}`}
+        />
+      )}
+      <span
+        data-slot="port-dot-halo"
+        aria-hidden
+        className="absolute rounded-full"
+        style={{
+          inset: haloInset,
+          // Paint-only when shown: background/outline never move geometry,
+          // and the halo is the REAL hit element either way — so the drawn
+          // region cannot disagree with the target it visualises.
+          ...(showHitRegion
+            ? { background: HIT_REGION_FILL, outline: HIT_REGION_OUTLINE, outlineOffset: -1 }
+            : null),
+        }}
+      />
       {coreStyle && (
         <span
           data-slot="port-dot-core"

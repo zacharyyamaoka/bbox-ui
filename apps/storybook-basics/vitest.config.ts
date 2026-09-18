@@ -49,6 +49,20 @@ export default defineConfig({
             storybookScript: "pnpm storybook -- --ci",
           }),
         ],
+        // WHY @xyflow/react is pre-declared: the host stories
+        // (src/hosts/reactFlowHost.tsx) are the first runtime import of
+        // React Flow in this app (scene.reactflow.test.ts imports types
+        // only, which erase). Without the entry, a COLD first run
+        // discovers the dep mid-suite, Vite re-optimizes and invalidates
+        // the module graph, and React's hook dispatcher goes null inside
+        // whatever story was mid-render — measured 2026-09-17: first run
+        // 10 files failed with "Cannot read properties of null (reading
+        // 'useMemo')", second run green on the warm cache. A fresh lane's
+        // first `pnpm test-stories` must not depend on being the second
+        // run.
+        optimizeDeps: {
+          include: ["@xyflow/react"],
+        },
         test: {
           name: "storybook",
           browser: {

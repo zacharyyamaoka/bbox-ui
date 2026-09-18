@@ -106,6 +106,108 @@ around.
    one pass, so the "install" tab and the live preview never again show two
    different components under one name.
 
+## Kits and consumers — what is core, and who depends on it
+
+Zach, 2026-09-17: *"I want to make it clear what is the core package and what
+are consumers."* This is that chart. It answers "I changed X — what else needs
+updating?" and it is the thing to re-read before starting any cross-cutting
+change.
+
+### The three kits — the core
+
+| Kit | What it is | Rule |
+|---|---|---|
+| **`components`** | The atoms that DRAW a scene element: `Block`, `Port`, `Trace`, `Bar`, `CodeEditor`, and their composites. | Props in, DOM out. No state beyond its own gesture. **Imports no canvas engine, and imports no scene.** |
+| **`scene`** | The ensemble: what exists, what connects, what nests, what identity is — plus every pure function over it (`topologicalOrder`, `findCycles`, `wiredPorts`, tidy, lint, rank). | `f(scene) → data`. **No React, no DOM, no engine, not even their types.** Runs in Node, which is why its tests are milliseconds. |
+| **`edit`** | The authoring surfaces: inspector panel, glyph picker, the quick-pick menu, style controls. *Not "menus"* — what unites them is that they **produce scene mutations**. | Reads a scene, renders with `components`, emits a mutation. Imports both other kits; nothing imports it. |
+
+The dependency DAG, which is the whole architecture in four lines:
+
+```
+  scene  ←──────  components        components never imports scene
+    ↑                 ↑
+    └───── edit ──────┘             edit imports both; nothing imports edit
+```
+
+`components` not importing `scene` is the load-bearing one. It is what lets the
+same `Block` be driven by a story literal, a React Flow node, a tldraw shape or
+a server-side render, and it is checked by grep in CI's stead — see
+`docs/SCENE-KIT.md`.
+
+### The naming, and what it rejects
+
+`components` / `scene` / `edit` — atom, ensemble, mutation. Considered and
+rejected, recorded so it is not relitigated:
+
+- **`view`** for the first — says what it does, not what it is, and "UI kit" is
+  vaguer still since every kit here is UI.
+- **`elements`** — Zach's own suggestion, and the atom/ensemble pairing behind
+  it is why the second kit is `scene`. Rejected on a collision: in React an
+  *element* is the OUTPUT of a component (`<Block />`), not the component
+  (`Block`), so a package of components called `elements` inverts React's own
+  vocabulary. Compounded by the diagramming world using "element" for DATA
+  (Excalidraw's `ExcalidrawElement`, tldraw's shapes) — the side we did not
+  pick, when we already ship `SceneNode` for it.
+- **`graph`** for the second — suggests charts, and does not cover placement.
+
+### Consumers — two kinds, and the difference matters
+
+They consume **different contracts**, which is why conflating them causes
+questions like "does the registry need to support scenes?" (it does not; it
+never runs one).
+
+**Hosts** — consume the *scene contract* at runtime. Each owns the viewport
+transform, pan/zoom, canvas-spanning drag, and spatial hit-testing.
+
+| Host | Why it exists |
+|---|---|
+| **DOM** | The reference host, and the fastest iteration surface. Already exists as `Scene.stories.tsx`. Deliberately has no viewport — the moment it grows pan/zoom it is a canvas engine and should be tldraw. |
+| **React Flow** | A barebones viewport, and the cheap proof. |
+| **tldraw** | The full whiteboard — draw alongside the graph, move things, the rest of the surface. |
+| **SystemSketch** | The real product. Eventually. |
+
+**Why two engine hosts rather than one:** not for their features — tldraw alone
+would do. **One host cannot falsify a contract; two can.** If the same scene
+drives both a barebones viewport and a full whiteboard, "backend-agnostic"
+stops being an aspiration and becomes a measurement.
+
+**Channels** — consume *source*, not a runtime contract. They copy files.
+
+| Channel | What it takes |
+|---|---|
+| **shadcn registry** | Source, copied verbatim. The only distribution channel; npm is deliberately not one. |
+| **bbox-ui.com** (`apps/docs`) and `/create` | Source + live demos. |
+| **Storybook** (`apps/storybook-basics`) | The workbench, and the trunk itself. |
+
+### Where an interaction belongs
+
+Two tests, coarse then fine:
+
+1. **Does it need a viewport transform?** Yes → host.
+2. **Is it bounded by one component's own box, or does it span the canvas?**
+   Bounded → ours. Spanning → host's.
+
+The second is the one that settles real cases: reordering ports on a rail and
+dragging members inside a block are bounded (ours, already built on dnd-kit);
+dragging a node across the board, resizing it, panning are spanning (host's).
+
+**Drawing an edge splits**, and it is the case worth knowing: the gesture spans
+the canvas so the host owns it, but the port-side affordances — what is a valid
+target, what the rail does as the pointer approaches, where a new port would be
+inserted — are ours, and they are the expensive part. "Interactions are blocked
+on the whiteboard framework" is therefore only about a third true.
+
+### Measurement is the host's job too
+
+A layout function needs to know how big a node is, and size is a VIEW fact
+(rendered text width, font, padding). That looks like it breaks the split. It
+does not, and React Flow already shows the way — the vocabulary `scene`
+borrowed carries the answer: **the host measures and writes the result back
+into the scene as data** (`node.measured.width/height`). The algorithm reads a
+number; it never touches a DOM node.
+
+So: the scene may CONTAIN measurements, it just never TAKES them.
+
 ## The line
 
 **Layout geometry is portable and lives in the core; interaction geometry

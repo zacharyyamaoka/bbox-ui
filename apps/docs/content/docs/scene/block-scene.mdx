@@ -1,0 +1,67 @@
+---
+title: BlockScene
+description: One record for what exists, what connects and what nests — and the pure functions that answer questions about it.
+---
+
+<Callout title="Status — built, trunk-only">
+  `BlockScene` exists and is tested (`apps/storybook-basics/src/scene/` in the
+  repo), but it is **not yet a registry item** — there is no `shadcn add` for
+  it today. These are pure functions with no DOM, so this page documents them
+  as prose and real source rather than a live demo.
+</Callout>
+
+A `BlockScene` is `{ nodes, edges }` and nothing else. Each `SceneNode` has an
+opaque `id`, an authored at-rest `position` (parent-relative under
+`parentId`), optional `measured` sizes written back by a host, and a `data`
+bag. Each `SceneEdge` connects `source` → `target`, optionally down to a port
+via `sourceHandle` / `targetHandle` — a handle **is** a port id.
+
+The shape is React Flow's on purpose, and falsifiably so: a type-level test
+assigns `SceneNode` to `@xyflow/react`'s `Node` and `SceneEdge` to its `Edge`
+**with no cast**, while `scene.ts` itself imports nothing — no React, no
+tldraw, no `@xyflow/react`, not even their types. Matching the shape without
+taking the dependency is the whole point: adapting into React Flow is a
+type-level identity, adapting into tldraw is a field map, and every pure
+function below works unchanged on either.
+
+## Identity
+
+- **`id` is identity, `data.name` is a label.** Ids are opaque, unique per
+  scene, minted by the host, never derived from a name. Names are free to
+  collide and free to change; no edge notices.
+- **`duplicateNode`** mints a fresh id and copies everything else verbatim —
+  including `definitionId`. Copying never launders a link away and never adds
+  one. Edges and children do not multiply.
+- **`linkedCopy`** additionally sets `definitionId` to the source's root
+  definition, so chains flatten and "all linked copies" is one equality test,
+  never a walk.
+
+## The pure functions
+
+| Function | Answers |
+|---|---|
+| `wiredPorts(scene)` | Which ports have at least one edge — as a `Set` of `portKey`s. |
+| `producersOf` / `consumersOf` | The edges feeding / fed by one port. |
+| `topologicalOrder(scene)` | An execution order, with the cyclic remainder named honestly. |
+| `rank(scene)` | Depth per node — the layer a layered layout would place it in. |
+| `findCycles(scene)` | Every elementary cycle, for lint. |
+| `duplicateEdges(scene)` | Groups of edges that say the same thing twice. |
+| `childrenOf(scene, id)` | The nodes nested under a container, via `parentId`. |
+
+## The layering rule
+
+Components never import the scene — not even transitively. The bridge is
+`sceneWires.ts`, an adapter explicitly allowed to know both vocabularies: it
+derives the `WireLayer` component's `Wire[]` props from a scene's edges, and
+marks port items as wired from `wiredPorts`. Hosts (stories, apps) read a
+scene and pass props.
+
+## Source
+
+The record and every function above, as they exist in the trunk:
+
+<ComponentSource
+  src="../../apps/storybook-basics/src/scene/scene.ts"
+  title="scene/scene.ts"
+  language="ts"
+/>

@@ -213,7 +213,11 @@ export const DelayedSplit: Story = {
   ),
   play: async ({ canvasElement }) => {
     const group = required<SVGGElement>(canvasElement, '[data-slot="trace"][data-split="true"]', "the split trace group");
-    const segments = group.querySelectorAll<SVGPathElement>('[data-slot="trace-line"]');
+    // `:not([data-sketch])` — the skin port (src/skin/**) added a hidden
+    // hand-drawn twin beside every crisp trace-line path (trace.tsx's
+    // `CRISP_STYLE`/`SKETCH_STYLE`); this assertion is about the two real
+    // segments (before/after), not the twins riding along with them.
+    const segments = group.querySelectorAll<SVGPathElement>('[data-slot="trace-line"]:not([data-sketch])');
     await expect(segments).toHaveLength(2);
 
     const before = required<SVGPathElement>(group, '[data-trace-segment="before"]', "the before segment");

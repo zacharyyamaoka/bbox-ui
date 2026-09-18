@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "../lib/utils";
+import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import {
   BLOCK_MEMBER_GAP_PX,
   BLOCK_MEMBER_INSET_PX,
@@ -9,6 +10,7 @@ import {
   type BlockMember,
   type BlockMembersLayout,
 } from "./blockMembers";
+import { SketchOutline, SKETCH_OUTLINE_BLEED_PX } from "../skin/sketchOutline";
 
 /**
  * Block — header / body / footer, stacked. All three are plain slots: pass
@@ -87,7 +89,37 @@ export interface BlockProps {
   insetBackground?: BlockInsetBackground;
   showMembers?: boolean;
   showCards?: boolean;
+  /**
+   * Stable string the sketch skin's hand-drawn outline is generated from —
+   * same seed, same wobble, every render (see sketchPath.ts). Defaults to
+   * a size-derived string so two same-sized Blocks don't draw identical
+   * wobble by coincidence of both falling back the same way; pass an id
+   * when two same-sized Blocks need visibly different hand-drawn lines.
+   */
+  sketchSeed?: string;
+  /**
+   * Paint Block's hit region. Block has NO hit constant — deliberately: as
+   * a DOM element its pointer target is the browser's own hit test, which
+   * stops at the border box exactly (the same "there was no number to
+   * choose" React Flow's DOM nodes have; contrast tldraw's ±3 screen px
+   * `hitTestMargin`). So what this paints IS that fact: a wash over the
+   * border box, nothing outside it. Pure paint — absolutely positioned,
+   * `pointer-events: none`, moves no layout and eats no clicks.
+   */
+  showHitRegion?: boolean;
 }
+
+/**
+ * The root's own border width, px — what `SketchOutline` draws on top of
+ * and insets its bleed margin by. A literal, not `--bbox-skin-stroke-width`
+ * read back out of CSS: this app carries no wall-anchor geometry that
+ * needs the two to be the SAME variable (donor's block.tsx / skin.css both
+ * flag that trap — see skin.css's own port-of-omission note), so a plain
+ * constant is honest here. It still has to match the token's stroke-width
+ * fallback (2px) or the drawn line and the CSS border would part ways the
+ * moment a skin activates.
+ */
+const BLOCK_BORDER_PX = 2;
 
 export function Block({
   header,
@@ -105,19 +137,103 @@ export function Block({
   insetBackground = "none",
   showMembers = true,
   showCards = false,
+  sketchSeed,
+  showHitRegion = false,
 }: BlockProps) {
   return (
     <div
       data-slot="block"
-      className="flex flex-col overflow-hidden rounded-lg border border-border bg-card text-sm text-card-foreground shadow-sm"
-      style={{ width, height, ...style }}
+      className={cn(
+        "relative flex flex-col text-sm",
+        // Text colour is a skin token because a skin may remove the
+        // surface it was contrasting against: the sketch skin paints no
+        // fill, so `text-card-foreground` would be reading against a card
+        // that is not there. Fallback is the exact class this replaced.
+        "text-[color:var(--bbox-skin-fg,var(--color-card-foreground))]",
+        // The skin seam (src/skin/skin.ts + skin.css). Each token carries
+        // TODAY'S value as its own `var()` fallback — captured live off
+        // this story before this port (`blocks-block--default`,
+        // getComputedStyle) — so a consumer who never imports skin.css
+        // renders the exact pixels this replaced: `rounded-lg border
+        // border-border bg-card shadow-sm`. `border-solid` is explicit
+        // because a host without Tailwind's preflight defaults to
+        // `border-style: none`, where a width alone paints nothing.
+        // WHY the fallback is 1px, not the token table's 2px: Block's own
+        // border-width TODAY is Tailwind's plain `border` utility (1px) —
+        // captured live (`blocks-block--default`, getComputedStyle) before
+        // this port. skin.css's three blocks still all agree on 2px once
+        // ANY skin is active (including the explicit "default" one) — see
+        // skin.css's own header on why stroke-width has to be uniform
+        // across every skinned component the moment a skin is switched
+        // on. Only the UNSET case (no attribute at all) has to stay 1px.
+        "border-solid border-[length:var(--bbox-skin-stroke-width,1px)] border-[color:var(--bbox-skin-stroke,var(--color-border))]",
+        "bg-[var(--bbox-skin-surface,var(--color-card))] shadow-[var(--bbox-skin-shadow,0_1px_3px_0_rgb(0_0_0_/_0.1),0_1px_2px_-1px_rgb(0_0_0_/_0.1))]",
+        // Set once on the container; every text slot inherits it, so the
+        // sketch skin needs no per-slot font prop.
+        "font-[family-name:var(--bbox-skin-font,inherit)]",
+      )}
+      // `overflow: clip` (not `hidden`) so the header/footer bars' corners
+      // still cut cleanly without turning Block into a scroll container —
+      // and so the drawn sketch outline's bleed isn't clipped at the
+      // padding box; see `overflowClipMargin` below.
+      style={{
+        width,
+        height,
+        borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
+        overflow: "clip",
+        overflowClipMargin: `${BLOCK_BORDER_PX + SKETCH_OUTLINE_BLEED_PX}px`,
+        ...style,
+      }}
     >
+      {/*
+       * `stretch` when `height` is omitted (Block hugs its content): the
+       * real pixel height isn't known until layout, and self-measurement
+       * (ResizeObserver/getBoundingClientRect) is exactly what the core
+       * does not do — sketchOutline.tsx's own `stretch` mode exists for
+       * this (a Pill/Badge/Bar are in the same boat). The nominal 200
+       * below only scales the wobble amplitude and is invisible once
+       * `preserveAspectRatio="none"` stretches the path to whatever Block
+       * actually renders at.
+       */}
+      <SketchOutline
+        width={width}
+        height={height ?? 200}
+        borderWidth={BLOCK_BORDER_PX}
+        stretch={height === undefined}
+        seed={sketchSeed ?? `${width}x${height ?? "auto"}`}
+      />
+      {showHitRegion && (
+        <div
+          data-slot="block-hit-region"
+          aria-hidden
+          style={{
+            position: "absolute",
+            // `inset: 0` covers the PADDING box; the hit region is the
+            // BORDER box, so reach back out by the live border width —
+            // the same token the root's own border reads.
+            inset: "calc(-1 * var(--bbox-skin-stroke-width, 1px))",
+            pointerEvents: "none",
+            background: HIT_REGION_FILL,
+            outline: HIT_REGION_OUTLINE,
+            outlineOffset: -1,
+            borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
+          }}
+        />
+      )}
       {header !== undefined && (
         <div
           data-slot="block-header"
           className={cn(
             "px-3 py-2 has-[>[data-slot=bar]]:p-0",
-            showHeaderDivider && "border-b border-border",
+            // `border-b-[color:…]`, NOT the bare `border-[color:…]` this
+            // was first written as: a bracketed arbitrary value with no
+            // side prefix sets the property on all FOUR sides, which
+            // silently added a 1px left/right/top border the div never
+            // had — measured live (BlockPort.stories.tsx's
+            // `FunctionPortHeaderInset`, off by 2px) before this fix.
+            // `border-b` alone still supplies the bottom width + solid
+            // style; this only overrides ITS colour.
+            showHeaderDivider && "border-b border-b-[color:var(--bbox-skin-stroke,var(--color-border))]",
           )}
         >
           {header}
@@ -146,7 +262,7 @@ export function Block({
       {footer !== undefined && (
         <div
           data-slot="block-footer"
-          className="border-t border-border px-3 py-2 has-[>[data-slot=bar]]:p-0"
+          className="border-t border-t-[color:var(--bbox-skin-stroke,var(--color-border))] px-3 py-2 has-[>[data-slot=bar]]:p-0"
         >
           {footer}
         </div>

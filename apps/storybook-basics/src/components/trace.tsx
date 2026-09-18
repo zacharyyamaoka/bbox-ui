@@ -39,6 +39,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 
 import { cn } from "../lib/utils";
+import { HIT_REGION_STROKE } from "./hitRegion";
 import {
   ASYNC_PACKET_DASHARRAY,
   DATA_MARCH_CLASS,
@@ -53,6 +54,7 @@ import {
   clampLabelPosition,
   pointAtFraction,
   polylineLength,
+  polylinePath,
   safeElementId,
   splitDashArrays,
   type Point,
@@ -65,6 +67,21 @@ import {
 import { routeTrace, type DirectRouting, type TraceCurve } from "./trace.routing";
 import type { TraceBend } from "./trace.bends";
 import {
+  CROSSING_CASING_COLOR,
+  CROSSING_CASING_WIDTH,
+  casingDashArray,
+  type CrossingMark,
+} from "./trace.crossing";
+import {
+  TUNNEL_STUB_LENGTH,
+  TUNNEL_VIA_RADIUS,
+  tunnelHidesRun,
+  tunnelMouths,
+  tunnelShowsVias,
+  tunnelVisualForPoints,
+  type TunnelDisplayState,
+} from "./tunnel";
+import {
   elbowPath,
   routeElbow,
   type ElbowPin,
@@ -74,6 +91,55 @@ import {
 } from "./elbow/index";
 import { elbowInputFromTerminals, routePoints } from "./elbow/traceContract";
 import { TraceTerminal } from "./traceTerminal";
+import { sketchPathData } from "../skin/sketchPath";
+
+/**
+ * `style` for the crisp path and for its hand-drawn twin (ported from
+ * packages/bbox-ui/src/trace.tsx).
+ *
+ * WHY both are rendered and CSS picks, rather than the component choosing:
+ * it cannot know the active skin. Everywhere else a skin blanks the crisp
+ * version by recolouring it (`--bbox-skin-stroke: transparent`), which
+ * works because a border can be transparent and still occupy its space. An
+ * SVG path has no equivalent — and a Trace's geometry belongs to the HOST
+ * (this app's `trace.routing.ts`/`elbow/`), so there is nothing here to
+ * re-derive. Paths do not affect layout, so the hidden twin costs only the
+ * memoised math.
+ *
+ * Zach, 2026-09-17 (ported verbatim): "it would be great of course if even
+ * the traces can support a more sketchy appearance... perhaps thats just
+ * like another styling thing for them. just like async, or animated" — so
+ * it is exactly that: orthogonal to `variant`, to `animated` and to the
+ * dash cadence.
+ */
+const CRISP_STYLE = { display: "var(--bbox-skin-crisp, inline)" } as const;
+const SKETCH_STYLE = { display: "var(--bbox-skin-outline, none)" } as const;
+
+/** Wobble for a cable. Lower than a Block's: the same absolute wander read
+ * across a long curve is a wave, not a drawn line. */
+const TRACE_WOBBLE_PX = 1.4;
+
+/**
+ * Sketched paths, cached by the geometry that produced them (ported
+ * verbatim from the donor — see its own WHY on the module-level `Map`
+ * versus `useMemo`: `TraceBody` here is likewise called as a plain
+ * function, no hook, so its wobble twin is memoised outside React instead).
+ * Bounded because a live drag produces a NEW `d` every frame.
+ */
+const SKETCH_CACHE = new Map<string, string>();
+const SKETCH_CACHE_MAX = 512;
+
+function sketchedTracePath(d: string): string {
+  const hit = SKETCH_CACHE.get(d);
+  if (hit !== undefined) return hit;
+  const out = sketchPathData(d, { seed: d, wobble: TRACE_WOBBLE_PX });
+  if (SKETCH_CACHE.size >= SKETCH_CACHE_MAX) {
+    const oldest = SKETCH_CACHE.keys().next().value;
+    if (oldest !== undefined) SKETCH_CACHE.delete(oldest);
+  }
+  SKETCH_CACHE.set(d, out);
+  return out;
+}
 
 /** The transparent hit path's stroke width. Wider than the 2px visible
  * line by design: the line is the thing you SEE, this is the thing you can
@@ -139,6 +205,54 @@ export interface TraceProps extends Omit<ComponentProps<"g">, "id" | "points"> {
    * nothing listens to should not be silently eating pointer events from
    * whatever sits under it. */
   interactive?: boolean;
+  /**
+   * Tunnel display state — `off` (an ordinary cable), `hidden` (the long
+   * run leaves the surface, two stubs and two vias remain), `preview` (the
+   * whole route, mouths still marked) or `revealed` (the whole route, no
+   * mouths). Resolve it with `tunnelDisplayState` in `./tunnel`, which is
+   * where the four-state rule and its provenance live.
+   *
+   * WHY this arrives RESOLVED rather than as `{selected, hovered, layer}`:
+   * three of those four inputs are interaction state, which
+   * `ARCHITECTURE.md` makes host-owned. `TraceBody` stays props-in/DOM-out
+   * and never learns what "focused" meant here.
+   *
+   * `hidden` needs `points` — shortening the drawn `d` requires the route's
+   * vertices, not just its serialization. Without them the cable paints in
+   * full, which is the honest failure (`Trace` supplies them for every
+   * routing, sampling a curve's after layout).
+   */
+  tunnel?: TunnelDisplayState;
+  /**
+   * How this cable shows it passes OVER another where they cross. `none`
+   * (default) or `halo` — a background-coloured casing under this cable's
+   * own stroke and over every cable painted before it. See
+   * `./trace.crossing` for the research, the 11px calibration, and why the
+   * seam is a style name rather than a boolean (so `hop`/`gap` can land
+   * later without a rewrite).
+   *
+   * Defaults to `none` even though the donor's `DEFAULT_CROSSING_MARK` is
+   * `halo`: a casing asserts knowledge of the canvas colour, which this
+   * component can only guess through a CSS variable. Hosts opt in.
+   */
+  crossing?: CrossingMark;
+  /**
+   * The hit path's stroke width in the SVG's own units. Defaults to
+   * `TRACE_HIT_STROKE_PX` (12). Scene-space, like every geometry number
+   * here: under a host's viewport transform the band scales with zoom
+   * (note it does NOT get the `vectorEffect` prop — that keeps the INK
+   * screen-constant while the hit band still scales; see the hit-regions
+   * stories). A host wanting a screen-constant band divides by its zoom.
+   */
+  hitStrokePx?: number;
+  /**
+   * Paint the hit path (translucent stroke) instead of leaving it
+   * transparent. Pure paint on the EXISTING hit element — width, cap and
+   * hit-testing are identical with this on or off. Only meaningful with
+   * `interactive`; a non-interactive Trace HAS no hit band, and painting
+   * one would be the decoration this prop exists to avoid.
+   */
+  showHitRegion?: boolean;
 }
 
 export interface TraceStrokeStyle {
@@ -236,6 +350,10 @@ export function TraceBody({
   strokeWidth = 2,
   vectorEffect,
   interactive = false,
+  tunnel = "off",
+  crossing = "none",
+  hitStrokePx = TRACE_HIT_STROKE_PX,
+  showHitRegion = false,
   className,
   ...props
 }: TraceProps) {
@@ -244,97 +362,198 @@ export function TraceBody({
   const markerAttr = hasMarker ? `url(#${markerId})` : undefined;
   const resolvedLength = length ?? (points ? polylineLength(points) : 0);
 
+  // ---- Tunnel -----------------------------------------------------------
+  // `revealed` passes `true` and gets null back — that IS the donor's
+  // contract ("`null` means the route should remain fully visible"), so
+  // revealed needs no branch of its own here.
+  const tunnelVisual =
+    tunnel !== "off" && points ? tunnelVisualForPoints(points, tunnel === "revealed") : null;
+  // Only `hidden` shortens the path. `preview` keeps the whole route AND
+  // the mouths — the single most confusable thing about this feature, which
+  // is why it reads as a named predicate rather than a string compare.
+  const mouths =
+    tunnelVisual && tunnelHidesRun(tunnel) && points ? tunnelMouths(points, false) : null;
+  // Two subpaths in ONE `d`, not two elements: the marker then still lands
+  // on the target end (a marker-end attaches to the final vertex of the last
+  // subpath), the dash channel stays free for the variant, and
+  // `flattenPathData` already treats each `M` as a separate sketch run.
+  const drawnPath = mouths
+    ? `${polylinePath(mouths.start)} ${polylinePath(mouths.end)}`
+    : path;
+  const drawnLength = mouths ? TUNNEL_STUB_LENGTH * 2 : resolvedLength;
+  const showVias = tunnelVisual !== null && tunnelShowsVias(tunnel);
+
+  // ---- Crossing mark ----------------------------------------------------
+  // Measured on the DRAWN length, which makes the tunnel case correct for
+  // free: two 34px stubs fall under `CROSSING_CASING_MIN_LENGTH`, so a
+  // tunnelled cable gets no casing — there is no middle left to protect.
+  const casingDash = crossing === "halo" ? casingDashArray(drawnLength) : null;
+
   const defs = hasMarker ? (
     <defs data-slot="trace-defs">
       <TraceMarkerDef id={markerId} />
     </defs>
   ) : null;
 
+  // Painted FIRST — before the hit path, before this cable's own stroke —
+  // because paint order IS the algorithm: the cable drawn later lays its
+  // background casing across the one drawn earlier, so the upper line reads
+  // as passing over the lower one with no intersection computed anywhere.
+  //
+  // WHY there is no sketched twin of it, unlike every other path here: the
+  // casing is the canvas colour, so it is invisible on its own and exists
+  // only to occlude. An 11px stroke swallows the sketch skin's ~1.4px
+  // wobble whole, so a second wobbled copy would cost a path and change
+  // nothing. `pointerEvents: none` because a wide invisible stroke that ate
+  // clicks would be a hit target nobody asked for.
+  const casing = casingDash ? (
+    <path
+      data-slot="trace-casing"
+      d={drawnPath}
+      fill="none"
+      stroke={CROSSING_CASING_COLOR}
+      strokeWidth={CROSSING_CASING_WIDTH}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeDasharray={casingDash}
+      style={{ pointerEvents: "none" }}
+    />
+  ) : null;
+
+  // The honest remainder of a hidden long run: two outlined landing points
+  // make "continues elsewhere" distinct from "disconnected".
+  const vias = showVias ? (
+    <g data-slot="trace-vias" style={{ color: color, pointerEvents: "none" }}>
+      <circle
+        data-via="start"
+        cx={tunnelVisual.startVia.x}
+        cy={tunnelVisual.startVia.y}
+        r={TUNNEL_VIA_RADIUS}
+        fill={CROSSING_CASING_COLOR}
+        stroke="currentColor"
+        strokeWidth={2}
+      />
+      <circle
+        data-via="end"
+        cx={tunnelVisual.endVia.x}
+        cy={tunnelVisual.endVia.y}
+        r={TUNNEL_VIA_RADIUS}
+        fill={CROSSING_CASING_COLOR}
+        stroke="currentColor"
+        strokeWidth={2}
+      />
+    </g>
+  ) : null;
+
   // Painted FIRST so the visible line always sits on top of it. It is
   // transparent, not `opacity:0` — a transparent stroke still hit-tests
   // with `pointer-events: stroke`, which is the entire point.
+  // WHY `drawnPath` and not `path`: a tunnelled cable's hidden middle is not
+  // there, so it must not be hoverable either. Zach's own note on the
+  // feature is "hover previews the route with its tunnel mouths" — the mouth
+  // is the affordance; a hit target tracing the invisible run would make
+  // empty canvas react and would make the preview impossible to escape.
   const hit = interactive ? (
     <path
       data-slot="trace-hit"
-      d={path}
+      d={drawnPath}
       fill="none"
-      stroke="transparent"
-      strokeWidth={TRACE_HIT_STROKE_PX}
+      stroke={showHitRegion ? HIT_REGION_STROKE : "transparent"}
+      strokeWidth={hitStrokePx}
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ pointerEvents: "stroke" }}
     />
   ) : null;
 
-  if (variant === "delayed" && splitAtLabel) {
+  // Seeded from the geometry itself, so a cable keeps its own wander while
+  // it sits still and re-draws honestly when it moves. Sketched from the
+  // DRAWN path, so a tunnelled cable's two mouths each wobble as their own
+  // run rather than the skin re-deriving a route that is no longer painted.
+  const sketched = sketchedTracePath(drawnPath);
+
+  // A hidden middle has no label seam to split at — `splitAtLabel` puts the
+  // solid/dotted boundary at `labelPosition` along the FULL route, which is
+  // exactly the stretch that has left the surface. So a tunnelled `delayed`
+  // trace falls through to the single-path branch and keeps its dots; it
+  // does not silently draw a split across two 34px stubs.
+  if (variant === "delayed" && splitAtLabel && !mouths) {
     const dash = splitDashArrays(resolvedLength, clampLabelPosition(labelPosition));
+    const splitSegment = {
+      pathLength: PATH_LENGTH_UNITS,
+      fill: "none",
+      stroke: color,
+      strokeLinecap: "round" as const,
+      strokeLinejoin: "round" as const,
+      strokeWidth,
+      vectorEffect,
+    };
     return (
       <g
         data-slot="trace"
         data-variant={variant}
         data-split="true"
+        data-tunnel={tunnel}
+        data-crossing={crossing}
         className={cn(className)}
         {...props}
       >
         {defs}
+        {casing}
         {hit}
-        <path
-          data-slot="trace-line"
-          data-trace-segment="before"
-          d={path}
-          pathLength={PATH_LENGTH_UNITS}
-          fill="none"
-          stroke={color}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash.before}
-          vectorEffect={vectorEffect}
-        />
-        <path
-          data-slot="trace-line"
-          data-trace-segment="after"
-          d={path}
-          pathLength={PATH_LENGTH_UNITS}
-          fill="none"
-          stroke={color}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash.after}
-          vectorEffect={vectorEffect}
-          markerEnd={markerAttr}
-        />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="before" d={path} strokeDasharray={dash.before} style={CRISP_STYLE} />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="before" data-sketch="true" d={sketched} strokeDasharray={dash.before} style={SKETCH_STYLE} />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="after" d={path} strokeDasharray={dash.after} markerEnd={markerAttr} style={CRISP_STYLE} />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="after" data-sketch="true" d={sketched} strokeDasharray={dash.after} markerEnd={markerAttr} style={SKETCH_STYLE} />
+        {vias}
       </g>
     );
   }
 
-  const dashStyle = traceStrokeStyle(variant, resolvedLength, animated);
+  // WHY `drawnLength` and not `resolvedLength`: the dash phase has to
+  // describe the path that is actually painted. A tunnelled cable draws two
+  // 34px stubs, and 34 is well under one async cadence (74px) — fed the
+  // full route length, `asyncDashOffsetForLength` returns 0, both stubs
+  // land inside the 56px carrier, and an async cable silently renders
+  // solid. Caught by LOOKING at the capture, not by a test: every
+  // attribute-level assertion passed. Fed the drawn length instead, the
+  // short-run branch that already exists for exactly this case centres one
+  // gap-packet-gap mark in each mouth. Identical to `resolvedLength`
+  // whenever nothing is tunnelled.
+  //
+  // It is ONE MOUTH's length, not both: `asyncDashOffsetForLength`'s
+  // contract is "centre a mark in a run of this length", and SVG restarts
+  // the dash pattern at each subpath — so the run it phases is a single
+  // stub, twice, not their sum.
+  const dashStyle = traceStrokeStyle(variant, mouths ? TUNNEL_STUB_LENGTH : drawnLength, animated);
+  const segment = {
+    fill: "none",
+    stroke: color,
+    strokeWidth,
+    strokeLinecap: dashStyle.strokeLinecap,
+    strokeLinejoin: "round" as const,
+    strokeDasharray: dashStyle.strokeDasharray,
+    strokeDashoffset: dashStyle.strokeDashoffset,
+    vectorEffect,
+    className: dashStyle.className,
+    markerEnd: markerAttr,
+  };
   return (
     <g
       data-slot="trace"
       data-variant={variant}
       data-animated={animated || undefined}
+      data-tunnel={tunnel}
+      data-crossing={crossing}
       className={cn(className)}
       {...props}
     >
       {defs}
+      {casing}
       {hit}
-      <path
-        data-slot="trace-line"
-        data-trace-segment="whole"
-        d={path}
-        fill="none"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap={dashStyle.strokeLinecap}
-        strokeLinejoin="round"
-        strokeDasharray={dashStyle.strokeDasharray}
-        strokeDashoffset={dashStyle.strokeDashoffset}
-        vectorEffect={vectorEffect}
-        className={dashStyle.className}
-        markerEnd={markerAttr}
-      />
+      <path {...segment} data-slot="trace-line" data-trace-segment="whole" d={drawnPath} style={CRISP_STYLE} />
+      <path {...segment} data-slot="trace-line" data-trace-segment="whole" data-sketch="true" d={sketched} style={SKETCH_STYLE} />
+      {vias}
     </g>
   );
 }
@@ -618,6 +837,16 @@ export interface TraceRouteProps
   strokeWidth?: number;
   vectorEffect?: "non-scaling-stroke";
   interactive?: boolean;
+  /** See `TraceProps.tunnel`. `Trace` additionally SUPPLIES the points a
+   * `hidden` tunnel needs — including a curve's, sampled off the mounted
+   * path — so tunnelling works on every routing kind here. */
+  tunnel?: TunnelDisplayState;
+  /** See `TraceProps.crossing`. */
+  crossing?: CrossingMark;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  hitStrokePx?: number;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  showHitRegion?: boolean;
   /** Draw the two endpoint glyphs. On by default — `Trace` is "the whole
    * thing"; a host with real `Port`s passes `false`. */
   terminals?: boolean;
@@ -665,6 +894,10 @@ export function Trace({
   strokeWidth,
   vectorEffect,
   interactive,
+  tunnel = "off",
+  crossing = "none",
+  hitStrokePx,
+  showHitRegion,
   terminals = true,
   terminalRadius,
   terminalColor,
@@ -728,6 +961,13 @@ export function Trace({
 
   const hostRef = useRef<SVGGElement | null>(null);
   const [measuredLength, setMeasuredLength] = useState<number | null>(null);
+  // A curve has no vertices until the browser has one — and `tunnel:
+  // "hidden"` needs vertices to slice its two mouths out of. The effect
+  // below already samples them for `onGeometry`; keeping them lets a curved
+  // cable tunnel exactly like a straight one. Cost, stated: a curved tunnel
+  // paints its full route for one frame, the same extra pass `Trace`
+  // already documents for curve length.
+  const [measuredPoints, setMeasuredPoints] = useState<readonly Point[] | null>(null);
   // The callback in a ref so a caller passing an inline arrow does not make
   // the effect below re-fire on every render.
   const onGeometryRef = useRef(onGeometry);
@@ -746,8 +986,10 @@ export function Trace({
       }
       resolved = { ...geometry, length: total, points: sampled };
       setMeasuredLength(total);
+      setMeasuredPoints(sampled);
     } else {
       setMeasuredLength(null);
+      setMeasuredPoints(null);
     }
     onGeometryRef.current?.(resolved);
   }, [geometry, curveSamples]);
@@ -766,7 +1008,9 @@ export function Trace({
         id={id}
         path={geometry.path}
         length={measuredLength ?? geometry.length}
-        points={geometry.points ?? undefined}
+        points={geometry.points ?? measuredPoints ?? undefined}
+        tunnel={tunnel}
+        crossing={crossing}
         variant={variant}
         color={color}
         animated={animated}
@@ -776,6 +1020,8 @@ export function Trace({
         strokeWidth={strokeWidth}
         vectorEffect={vectorEffect}
         interactive={interactive}
+        hitStrokePx={hitStrokePx}
+        showHitRegion={showHitRegion}
       />
       {terminals ? (
         <>

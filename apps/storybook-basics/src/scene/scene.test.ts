@@ -11,6 +11,7 @@ import {
   duplicateEdges,
   duplicateNode,
   findCycles,
+  findDanglingEdges,
   linkedCopies,
   linkedCopy,
   portKey,
@@ -330,43 +331,63 @@ describe("duplicateEdges", () => {
 /* ------------------------------------------------------------------ */
 
 describe("identity under duplication", () => {
+  // Group-id semantics: `definitionId` is an id every occurrence SHARES —
+  // minted like a node id, never equal to one, no privileged root node.
   const scene: BlockScene = {
-    nodes: [node("def", { data: { name: "Amp" } }), node("copy1", { definitionId: "def" }), node("member", { parentId: "def" })],
-    edges: [{ id: "e", source: "def", sourceHandle: "out", target: "copy1", targetHandle: "in" }],
+    nodes: [
+      node("amp1", { data: { name: "Amp" }, definitionId: "g-amp" }),
+      node("amp2", { data: { name: "Amp" }, definitionId: "g-amp" }),
+      node("member", { parentId: "amp1" }),
+      node("solo", { data: { name: "Solo" } }),
+    ],
+    edges: [{ id: "e", source: "amp1", sourceHandle: "out", target: "amp2", targetHandle: "in" }],
   };
 
   test("duplicateNode mints a fresh id via the CALLER and copies everything else verbatim", () => {
-    const out = duplicateNode(scene, "def", () => "minted-1");
-    expect(out.nodes.map((n) => n.id)).toEqual(["def", "copy1", "member", "minted-1"]);
-    const copy = out.nodes[3];
+    const out = duplicateNode(scene, "amp1", () => "minted-1");
+    expect(out.nodes.map((n) => n.id)).toEqual(["amp1", "amp2", "member", "solo", "minted-1"]);
+    const copy = out.nodes[4];
     expect(copy.data).toEqual({ name: "Amp" }); // the NAME copies — names may collide, ids may not
-    expect(copy.definitionId).toBeUndefined(); // a plain duplicate of a definition stays independent
+    expect(copy.definitionId).toBe("g-amp"); // duplicating an occurrence yields another occurrence
     expect(copy.position).toEqual(scene.nodes[0].position);
   });
 
-  test("duplicating a linked copy keeps its link to the SAME definition", () => {
-    const out = duplicateNode(scene, "copy1", () => "minted-2");
-    expect(out.nodes[3].definitionId).toBe("def");
+  test("duplicating an ungrouped node adds no link — the copy carries the same absent id", () => {
+    const out = duplicateNode(scene, "solo", () => "minted-2");
+    expect(out.nodes[4].definitionId).toBeUndefined();
   });
 
   test("edges and children never multiply with the node", () => {
-    const out = duplicateNode(scene, "def", () => "minted-3");
+    const out = duplicateNode(scene, "amp1", () => "minted-3");
     expect(out.edges).toBe(scene.edges); // untouched, by reference
     expect(childrenOf(out, "minted-3")).toEqual([]); // the member stayed with the original
-    expect(childrenOf(out, "def").map((n) => n.id)).toEqual(["member"]);
+    expect(childrenOf(out, "amp1").map((n) => n.id)).toEqual(["member"]);
   });
 
-  test("linkedCopy flattens the chain to the root definition", () => {
-    const one = linkedCopy(scene, "def", () => "lc-1");
-    expect(one.nodes[3].definitionId).toBe("def");
-    const two = linkedCopy(one, "lc-1", () => "lc-2"); // a copy OF a copy…
-    expect(two.nodes[4].definitionId).toBe("def"); // …still points at the root
+  test("linkedCopy of an occurrence shares its group id and touches nobody else", () => {
+    const out = linkedCopy(scene, "amp1", () => "lc-1");
+    expect(out.nodes[4].definitionId).toBe("g-amp");
+    expect(out.nodes[0]).toBe(scene.nodes[0]); // the source is already a member — untouched
   });
 
-  test("linkedCopies is one equality test over the flattened links", () => {
-    const out = linkedCopy(scene, "def", () => "lc-1");
-    expect(linkedCopies(out, "def").map((n) => n.id)).toEqual(["copy1", "lc-1"]);
-    expect(linkedCopies(out, "copy1")).toEqual([]); // a copy is nobody's definition
+  test("linkedCopy of an ungrouped node mints ONE group id and stamps BOTH members", () => {
+    const minted: string[] = [];
+    const out = linkedCopy(scene, "solo", () => {
+      const id = `mint-${minted.length + 1}`;
+      minted.push(id);
+      return id;
+    });
+    expect(minted).toEqual(["mint-1", "mint-2"]); // copy id first, then the group id
+    const solo = out.nodes.find((n) => n.id === "solo")!;
+    const copy = out.nodes.find((n) => n.id === "mint-1")!;
+    expect(solo.definitionId).toBe("mint-2");
+    expect(copy.definitionId).toBe("mint-2");
+  });
+
+  test("linkedCopies lists every occurrence — the original among them, none privileged", () => {
+    const out = linkedCopy(scene, "amp1", () => "lc-1");
+    expect(linkedCopies(out, "g-amp").map((n) => n.id)).toEqual(["amp1", "amp2", "lc-1"]);
+    expect(linkedCopies(out, "amp1")).toEqual([]); // a node id is never a group id
   });
 
   test("total: an unknown id returns the SAME scene object — the reconcilePortLane no-op contract", () => {
@@ -376,9 +397,84 @@ describe("identity under duplication", () => {
 
   test("purity: the input scene's arrays are never mutated", () => {
     const before = [...scene.nodes];
-    duplicateNode(scene, "def", () => "minted");
-    linkedCopy(scene, "def", () => "minted");
+    duplicateNode(scene, "amp1", () => "minted");
+    linkedCopy(scene, "solo", () => "minted");
     expect(scene.nodes).toEqual(before);
+    expect(scene.nodes[3].definitionId).toBeUndefined(); // linkedCopy stamped a COPY of solo, not solo itself
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* findDanglingEdges                                                   */
+/* ------------------------------------------------------------------ */
+
+describe("findDanglingEdges", () => {
+  const ports = new Map<string, string[]>([
+    ["a", ["out"]],
+    ["b", ["in", "cfg"]],
+  ]);
+  const portsOf = (nodeId: string) => ports.get(nodeId);
+
+  test("a healthy scene yields the honest empty report", () => {
+    const scene = {
+      nodes: [node("a"), node("b")],
+      edges: [{ id: "e1", source: "a", sourceHandle: "out", target: "b", targetHandle: "in" }],
+    };
+    expect(findDanglingEdges(scene, portsOf)).toEqual([]);
+    expect(findDanglingEdges(scene)).toEqual([]); // no vocabulary given — node check alone still passes
+  });
+
+  test("a missing node is reported per end, by edge id, in scene order", () => {
+    const scene = {
+      nodes: [node("a")],
+      edges: [
+        { id: "e1", source: "a", sourceHandle: "out", target: "gone", targetHandle: "in" },
+        { id: "e2", source: "ghost", target: "also-gone" },
+      ],
+    };
+    expect(findDanglingEdges(scene)).toEqual([
+      { edgeId: "e1", end: "target", nodeId: "gone", portId: "in", reason: "missing-node" },
+      { edgeId: "e2", end: "source", nodeId: "ghost", reason: "missing-node" },
+      { edgeId: "e2", end: "target", nodeId: "also-gone", reason: "missing-node" },
+    ]);
+  });
+
+  test("a dead PORT on a live node is caught — the case a node-only check misses", () => {
+    const scene = {
+      nodes: [node("a"), node("b")],
+      edges: [{ id: "e1", source: "a", sourceHandle: "out", target: "b", targetHandle: "removed" }],
+    };
+    expect(findDanglingEdges(scene, portsOf)).toEqual([
+      { edgeId: "e1", end: "target", nodeId: "b", portId: "removed", reason: "missing-port" },
+    ]);
+    // Without the vocabulary the same scene looks healthy — which is why
+    // `portsOf` exists.
+    expect(findDanglingEdges(scene)).toEqual([]);
+  });
+
+  test("an unknown vocabulary suspends port judgement for that node only", () => {
+    const scene = {
+      nodes: [node("a"), node("mystery")],
+      edges: [
+        { id: "e1", source: "a", sourceHandle: "bogus", target: "mystery", targetHandle: "whatever" },
+      ],
+    };
+    expect(findDanglingEdges(scene, portsOf)).toEqual([
+      { edgeId: "e1", end: "source", nodeId: "a", portId: "bogus", reason: "missing-port" },
+      // `mystery` has no stated vocabulary — no judgement, not a defect
+    ]);
+  });
+
+  test("a handle-less end wires the NODE, so it can only dangle by missing-node", () => {
+    const scene = { nodes: [node("a"), node("b")], edges: [{ id: "e1", source: "a", target: "b" }] };
+    expect(findDanglingEdges(scene, () => [])).toEqual([]); // empty vocabularies, yet nothing to judge
+  });
+
+  test("total: empty and malformed scenes report, never throw", () => {
+    expect(findDanglingEdges({ nodes: [], edges: [] })).toEqual([]);
+    expect(
+      findDanglingEdges({ nodes: [], edges: [{ id: "e", source: "x", target: "y" }] }).map((d) => d.edgeId),
+    ).toEqual(["e", "e"]);
   });
 });
 

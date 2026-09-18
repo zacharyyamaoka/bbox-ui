@@ -1,0 +1,42 @@
+---
+title: Inspector
+description: One field-resolution model, one tier rule, and the panel designs that render them.
+---
+
+<Callout title="Status — built, not yet in the registry">
+  The inspector exists as two workspace packages and is **live on this site's
+  [/create](/create) page** — open it and the right-hand column is this
+  component. There is no registry item yet, so the only way to take it today
+  is to copy `packages/panel` (and `packages/inspector` for the tldraw-host
+  variant) from the repo.
+</Callout>
+
+Two packages share the job:
+
+## `@bbox-ui/panel` — the engine
+
+Host-neutral field resolution: which fields a selection exposes, how multiple
+selected instances merge, which tier a field renders in, how presets apply,
+and the panel designs that render the result. No Vite, no Next, no Storybook
+— it is consumed by the repo's inspector demos and by the
+[/create](/create) page, so the two can never drift.
+
+The engine owns the editor kit's defining move: it reads the selection, renders
+controls with the [components kit's](/docs/components) vocabulary, and emits
+prop mutations — it never reaches into a canvas.
+
+Six panel design variants are built and comparable side by side in the repo's
+`demos/inspector`. The `/create` page ships the one that won.
+
+## `@bbox-ui/inspector` — the tldraw-host inspector
+
+The right-hand inspector, main menu and window chrome for a tldraw host,
+ported from the tldraw styling lab: style overrides per shape, theme panel,
+document name, show-as-stock. It is host-bound by design — the tldraw-side
+counterpart of the engine above.
+
+## What "inspector menu" resolves to
+
+The vocabulary list names an *inspector menu*; in the tree that is these two
+packages. If you want the pure engine, take `panel`. If you want a working
+tldraw inspector, take `inspector` (which brings its own chrome).

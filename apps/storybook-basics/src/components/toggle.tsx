@@ -35,10 +35,16 @@ const toggleVariants = cva(
   },
 );
 
+// Same clamp Button's own CLAMPED_RADIUS_SIZES documents — `sm`'s
+// `rounded-[min(var(--radius-md),12px)]` is a deliberate anti-balloon cap,
+// not a plain `rounded-lg`, so the skin token does not reach it.
+const CLAMPED_RADIUS_SIZES = new Set(["sm"]);
+
 function Toggle({
   className,
   variant = "default",
   size,
+  style,
   ...props
 }: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
   // Explicit `size` wins; the ambient Bar cascade (barSize.tsx) is only the
@@ -51,6 +57,16 @@ function Toggle({
       data-slot="toggle"
       data-size={resolvedSize}
       className={cn(toggleVariants({ variant, size: resolvedSize, className }))}
+      style={{
+        // The skin seam (src/skin/skin.ts + skin.css) — see button.tsx's
+        // identical note on why the clamped size is excluded.
+        ...(CLAMPED_RADIUS_SIZES.has(resolvedSize ?? "default") ? null : { borderRadius: "var(--bbox-skin-radius, var(--radius-lg))" }),
+        // `outline` is the one variant with a real border (`border-input`)
+        // — `default` is `bg-transparent` with no border at all. Same
+        // split Badge's own `outline` variant makes.
+        ...(variant === "outline" ? { borderColor: "var(--bbox-skin-line-override, var(--color-input))" } : null),
+        ...style,
+      }}
       {...props}
     />
   );

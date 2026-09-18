@@ -1,0 +1,62 @@
+{
+  "title": "Lane reports + What's New",
+  "summary": "A shared report builder any lane can call, plus a story changelog derived from git instead of hand-tagged — so review can start from a report instead of Storybook's sidebar.",
+  "base_ref": "main",
+  "branch_label": "bar-block-storybook-17d0ae (isolated lane worktree)",
+  "storybook_port": 5463,
+  "changes": [
+    "docs/build_lane_report.py — new: the shared report builder this file's own report was built with",
+    "docs/lane_report_manifest.example.json — new: this file — doubles as the worked example and the actual input used to build the report",
+    "docs/build_whats_new.mjs — new: derives apps/storybook-basics/src/stories/whats-new.generated.json from git, never hand-tagged",
+    "apps/storybook-basics/src/stories/WhatsNew.stories.tsx — new: renders it (Timeline/Empty/MalformedData/FixtureExample — 4 story tests)",
+    "docs/capture_storybook_shots.mjs — added an opt-in --shots <file> flag so a lane can capture its OWN story list against its OWN port; unchanged for every existing caller that omits it",
+    "apps/storybook-basics/package.json — wired `pnpm whats-new`",
+    "apps/storybook-basics/tsconfig.json — added \"types\": [\"vite/client\"] so import.meta.glob (the JSON-absent-is-not-a-build-error mechanism WhatsNew relies on) type-checks",
+    ".gitignore — whats-new.generated.json is generated, not committed — committing it is exactly the staleness hand-tagging would have had"
+  ],
+  "findings": [
+    "story-id derivation cross-checked against ALL 151 story exports in the app: 151/151 resolve, and all 7 ids hardcoded in capture_storybook_shots.mjs's own SHOTS list match byte-for-byte",
+    "one file (TraceRouting.stories.tsx) declares `const meta: Meta = {` with no trailing `satisfies Meta` — a plain string search for that marker (the first draft of this script) missed it; a string-aware brace matcher over the object literal does not",
+    "baseline preserved: pnpm test-stories 151 -> 155 (+4 new), pnpm exec vitest --project=unit 235 unchanged, pnpm exec tsc --noEmit -p . clean",
+    "R3 verified LIVE, not just asserted: with Storybook running on :5463, clicked 4 of the WhatsNew story links (Trace · Terminal Directions, Styles · Side By Side, Trace · Delayed Split, back to Timeline) and confirmed each one navigates the WHOLE Storybook window (target=\"_top\", not just the preview iframe) to the real, distinct target story",
+    "R4 asserted, not just claimed: the Empty and MalformedData stories PASS explicit `data: undefined` / `data: { oldField: true }` as args and assert the empty-state test id renders — they do not merely delete the JSON and eyeball it",
+    "could not do this round: .storybook/preview.tsx storySort pinning (What's New sorts alphabetically today, after Trace, since no storySort is configured) and per-story tag injection — both explicitly out of scope, a concurrent lane owns .storybook/**"
+  ],
+  "stories": [
+    {
+      "id": "what-s-new--timeline",
+      "title": "What's New · Timeline",
+      "look_for": "the changelog itself — real commits from THIS lane's own history, newest first, each with real story links",
+      "w": 820,
+      "h": 620
+    },
+    {
+      "id": "what-s-new--empty",
+      "title": "What's New · Empty",
+      "look_for": "the graceful empty state a fresh clone sees before anyone has run `pnpm whats-new`",
+      "w": 560,
+      "h": 260
+    },
+    {
+      "id": "what-s-new--fixture-example",
+      "title": "What's New · Fixture Example",
+      "look_for": "a stable fixture commit whose story file broke the expected shape — proves an unresolved file surfaces (in red) instead of silently vanishing",
+      "w": 680,
+      "h": 420
+    },
+    {
+      "id": "styles--side-by-side",
+      "title": "Styles · Side By Side",
+      "look_for": "one of the 4 links clicked live to prove WhatsNew's links actually resolve — real Default/Plain/Sketch panels, not a stub",
+      "w": 700,
+      "h": 280
+    },
+    {
+      "id": "trace--delayed-split",
+      "title": "Trace · Delayed Split",
+      "look_for": "another of the verified links — confirms the click landed on Trace's OWN gallery, not a placeholder",
+      "w": 700,
+      "h": 340
+    }
+  ]
+}

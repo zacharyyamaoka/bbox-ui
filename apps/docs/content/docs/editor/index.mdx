@@ -1,0 +1,36 @@
+---
+title: Editor Components
+description: The authoring surfaces — inspector panel, glyph picker, menus, toolbars. What unites them is that they produce scene mutations.
+---
+
+The editor kit (`edit` in the architecture) is the authoring surfaces:
+inspector panel, glyph picker, menus, style controls. *Not "menus"* — what
+unites them is that they **produce scene mutations**.
+
+**The rule:** reads a scene, renders with [components](/docs/components),
+emits a mutation. **It imports both other kits; nothing imports it.** A
+component never knows an inspector exists; a scene never knows it is being
+edited.
+
+## Status map
+
+This is the honest inventory — verified against the source tree, not a
+feature list. Two of these are not just built, they are **running on this
+site**: the [/create](/create) page is the inspector engine and the glyph
+picker, live. Two others exist in earlier or host-bound forms. Two do not
+exist at all yet, and their pages say so.
+
+| Member | Status | What exists today | Docs |
+|---|---|---|---|
+| Inspector | **Built** | `@bbox-ui/panel` (the field-resolution engine + panel designs, live on [/create](/create)) and `@bbox-ui/inspector` (a tldraw-host inspector with chrome). Workspace packages — no registry item yet. | [Inspector](/docs/editor/inspector) |
+| Glyph picker | **Built** | `@bbox-ui/glyph-picker` — Lucide / emoji / upload in one Notion-style picker, live on [/create](/create). No registry item yet. | [Glyph picker](/docs/editor/glyph-picker) |
+| Autocomplete menu | **Partial** | Built in the frozen v1 lineage (`completionMenu` + `codeGrammar`); the trunk Code Editor deliberately dropped it and has not re-grown it. | [Autocomplete menu](/docs/editor/autocomplete-menu) |
+| Toolbar | **Partial** | A tldraw-host toolbar with bbox tool families exists as app code in the repo's playground. No kit component. | [Toolbar](/docs/editor/toolbar) |
+| Floating toolbar | **Planned** | Nothing. Does not exist in any lineage. | [Floating toolbar](/docs/editor/floating-toolbar) |
+| Search menu | **Planned** | Nothing standalone. (The architecture doc calls this the quick-pick menu.) | [Search menu](/docs/editor/search-menu) |
+
+**None of the editor kit is installable from the registry yet.** The two
+built members are workspace packages consumed by this site and the repo's
+demos; publishing them as registry items is real work that has not happened.
+A planned member's page exists so the vocabulary has a place to point — it is
+a design commitment, not documentation of software.

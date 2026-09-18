@@ -39,6 +39,7 @@
 // only proximity — two policies here would be ceremony, not fidelity.
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -48,6 +49,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import { HIT_REGION_FILL, HIT_REGION_LINE } from "./hitRegion";
 import { traceBendFrom, traceBendPoint, type TraceBend } from "./trace.bends";
 import { traceHandles, type TraceHandle } from "./trace.handles";
 import type { Point, TraceTerminalSpec } from "./trace.layout";
@@ -83,6 +85,13 @@ export interface TraceEditorProps extends Omit<TraceRouteProps, "bends" | "onGeo
   /** Overrides BOTH the bend (default 4) and virtual (default 3) handle
    * radius with one number — there is exactly one knob here, not two. */
   handleRadius?: number;
+  /**
+   * The invisible grab circle over each TERMINAL, px radius. Defaults to
+   * `TERMINAL_HANDLE_HIT_RADIUS` (13) — deliberately wider than the drawn
+   * glyph (`TRACE_TERMINAL_RADIUS`, 9). Scene-space like every number
+   * here; a host wanting a screen-constant grab divides by its zoom.
+   */
+  terminalHitRadius?: number;
   onGeometry?: TraceRouteProps["onGeometry"];
 }
 
@@ -150,6 +159,7 @@ export function TraceEditor({
   lockBends = false,
   revealed,
   handleRadius,
+  terminalHitRadius = TERMINAL_HANDLE_HIT_RADIUS,
   onGeometry,
   from: fromProp,
   to: toProp,
@@ -440,12 +450,30 @@ export function TraceEditor({
             const locked = handle.kind === "terminal" ? lockEndpoints : lockBends;
             const isTerminal = handle.kind === "terminal";
             const radius = isTerminal
-              ? TERMINAL_HANDLE_HIT_RADIUS
+              ? terminalHitRadius
               : (handleRadius ??
                 (handle.kind === "virtual" ? DEFAULT_VIRTUAL_HANDLE_RADIUS : DEFAULT_BEND_HANDLE_RADIUS));
-            return (
+            // WHY the paint circle below shares `handle`/`radius` with the
+            // real one instead of measuring anything: region and target are
+            // the same numbers by construction, so the overlay cannot drift
+            // from the hit-testing it claims to show.
+            const hitPaint = rest.showHitRegion ? (
               <circle
-                key={handle.id}
+                data-slot="trace-handle-hit-region"
+                aria-hidden
+                cx={handle.x}
+                cy={handle.y}
+                r={radius}
+                fill={HIT_REGION_FILL}
+                stroke={HIT_REGION_LINE}
+                strokeWidth={1}
+                strokeDasharray="3 3"
+                style={{ pointerEvents: "none" }}
+              />
+            ) : null;
+            return (
+              <Fragment key={handle.id}>
+              <circle
                 data-slot="trace-handle"
                 data-handle-kind={handle.kind}
                 data-handle-id={handle.id}
@@ -470,6 +498,8 @@ export function TraceEditor({
                 onPointerDown={(event) => handlePointerDown(event, handle)}
                 onDoubleClick={(event) => handleDoubleClick(event, handle)}
               />
+              {hitPaint}
+              </Fragment>
             );
           })
         : null}

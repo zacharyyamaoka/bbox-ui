@@ -45,6 +45,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { CodeEditor } from "./codeEditor";
+import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { Port, type PortState } from "./port";
 import {
   PORT_DIAMETERS,
@@ -98,6 +99,7 @@ function DefaultPortLabel({
   onLabelWrite,
   placeholder,
   language,
+  showHitRegion = false,
   className,
   style,
 }: {
@@ -108,6 +110,10 @@ function DefaultPortLabel({
   onLabelWrite?(value: string): void;
   placeholder?: string;
   language?: LanguageSupport;
+  /** Paint this label's click-to-edit target (its own box). Paints
+   * nothing while `disabled` — a disabled label has no click handler, so
+   * there is no region to show; painting one would be a lie. */
+  showHitRegion?: boolean;
   className?: string;
   style?: CSSProperties;
 }) {
@@ -172,7 +178,16 @@ function DefaultPortLabel({
       data-direction={direction}
       data-editing="false"
       className={cn("flex min-w-0 items-center", className)}
-      style={style}
+      style={{
+        ...style,
+        // The label's hit region IS this span's own box (the onClick
+        // below) — an implicit region with no named constant, painted on
+        // the real target so it cannot drift. Nothing while `disabled`:
+        // no handler, no region.
+        ...(showHitRegion && !disabled
+          ? { background: HIT_REGION_FILL, outline: HIT_REGION_OUTLINE, outlineOffset: -1 }
+          : null),
+      }}
       onClick={() => {
         if (disabled) return;
         snapshotRef.current = value;
@@ -189,6 +204,18 @@ function DefaultPortLabel({
         data-placeholder={isEmpty && placeholder ? "" : undefined}
         style={{
           fontSize: fontSizePx,
+          // The skin seam (src/skin/skin.ts + skin.css) — the ONE token
+          // this resting display text needs. `--bbox-skin-font-sans` is
+          // set INLINE (beating inheritance) rather than the plain
+          // `--bbox-skin-font` Block/Badge/Port already inherit, because a
+          // LabeledPort is not always mounted inside a Block's own
+          // font-cascaded subtree — PortEdge.stories.tsx and
+          // LabeledPort.stories.tsx both mount it as a bare specimen with
+          // no ancestor that sets ANY font token. Fallback is `inherit`,
+          // this label's exact behaviour today (no font-family of its own
+          // at all), so a consumer who never imports skin.css is
+          // byte-identical.
+          fontFamily: "var(--bbox-skin-font-sans, inherit)",
           display: "block",
           minWidth: 0,
           maxWidth: "100%",
@@ -256,6 +283,16 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
   secondarySlotLayout?: SecondarySlotLayout;
   /** No caret, no edits on the label's built-in field. */
   disabled?: boolean;
+  /** Forwarded to `Port` — the halo's diameter in px (default 40). */
+  hitPx?: number;
+  /**
+   * Paint every pointer target this composite owns: the dot's halo (via
+   * `Port`) and — when the built-in label is editable — the label's own
+   * click-to-edit box. Pure paint; geometry is identical on or off. A
+   * host-supplied `labelSlot` owns its own interactivity, so nothing is
+   * painted over it.
+   */
+  showHitRegion?: boolean;
   /** Fired on every keystroke of the built-in label field. */
   onLabelWrite?(value: string): void;
   /** Shown in the built-in label field when `children` is empty. */
@@ -298,6 +335,8 @@ export function LabeledPort({
   secondarySlot,
   secondarySlotLayout,
   disabled = false,
+  hitPx,
+  showHitRegion = false,
   onLabelWrite,
   placeholder,
   labelLanguage,
@@ -361,7 +400,7 @@ export function LabeledPort({
       style={{ width: diameterPx, height: diameterPx, ...style }}
       {...props}
     >
-      <Port state={state} diameter={diameter} dimmed={dimmed} hinting={hinting} />
+      <Port state={state} diameter={diameter} dimmed={dimmed} hinting={hinting} hitPx={hitPx} showHitRegion={showHitRegion} />
       {labelSlot !== undefined ? (
         <span data-slot="port-label-slot" className="absolute" style={labelSlotStyle}>
           {labelSlot}
@@ -374,6 +413,7 @@ export function LabeledPort({
           onLabelWrite={onLabelWrite}
           placeholder={placeholder}
           language={labelLanguage}
+          showHitRegion={showHitRegion}
           className="absolute"
           style={labelSlotStyle}
         >
