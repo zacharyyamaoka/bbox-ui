@@ -636,6 +636,12 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
         <div
           data-slot="port-edge-group-outline"
           data-group-id={slot.slotId}
+          // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. This
+          // component's own seed (`port-edge-group:${slot.slotId}`) — the
+          // edge's geometry fallback would otherwise reuse `${w}x${h}`,
+          // which two differently-membered groups of the same enclosing
+          // size would collide on.
+          data-bbox-seed={`port-edge-group:${slot.slotId}`}
           aria-hidden
           style={{
             position: "absolute",

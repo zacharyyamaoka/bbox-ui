@@ -146,6 +146,14 @@ export function TraceTerminal({
         cy={0}
         r={radius}
         fill={fill}
+        // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. This
+        // component's own seed (`trace-terminal:${dir}:${radius}`),
+        // published on the RING ITSELF rather than the parent `<g>` the
+        // plan's table names — `sketchAtEdge.ts`'s RING_SELECTOR loop
+        // reads `data-bbox-seed` off the circle it measures, matching
+        // where the M5b build deviation (see the build report) actually
+        // reads geometry from.
+        data-bbox-seed={`trace-terminal:${dir}:${radius}`}
         // WHY `--bbox-skin-line-override` stays (deviation from the
         // migration plan's literal table, which said to drop it — see the
         // build report): dropping it would leave the crisp ring visible

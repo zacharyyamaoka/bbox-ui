@@ -375,6 +375,12 @@ export function Port({
       // `STATE`-wide pen) and the parser is deleted.
       data-bbox-ring-expand={PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
       data-bbox-ring-pen={PORT_STATE_RING_PX}
+      // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. Same gap as
+      // Badge's — the edge's default seed is geometry (`${w}x${h}`), this
+      // component's own is semantic (`port:${state}:${diameter}`).
+      // Publishing it makes the wobble pattern match what the deleted
+      // in-core `SketchOutline` call used to draw, not just its amplitude.
+      data-bbox-seed={`port:${state}:${diameter}`}
       className={cn(portDotClass(), className)}
       style={{
         width: diameterPx,

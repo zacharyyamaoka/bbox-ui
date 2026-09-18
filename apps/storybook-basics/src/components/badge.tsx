@@ -87,6 +87,14 @@ export function Badge({ className, variant, size, shape, style, ...props }: Badg
       data-slot="badge"
       data-size={resolvedSize}
       data-shape={resolvedShape}
+      // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. The edge has
+      // no props, so its default seed is geometry-derived
+      // (`${width}x${height}`) — a different wobble PATTERN than this
+      // component's own semantic seed, `badge:${resolvedSize}:${resolvedShape}`
+      // (same character and amplitude either way, just a different jitter
+      // sequence). Publishing it closes that gap: `sketchAtEdge.ts`'s
+      // `seedForBox` reads this attribute first.
+      data-bbox-seed={`badge:${resolvedSize}:${resolvedShape}`}
       className={cn(badgeVariants({ variant, size: resolvedSize, shape: resolvedShape }), className)}
       style={{
         borderRadius:
