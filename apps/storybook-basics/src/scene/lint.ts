@@ -8,13 +8,13 @@
 // This file is the ANNOTATION half named by docs/INVALID-STATES-PLAN.md's
 // Appendix B ("annotation... reports on state that already exists and was
 // not necessarily created by a gesture") — every rule here is a producer of
-// `../components/diagnostic.tsx`'s `Diagnostic` vocabulary, extended with
+// `../components/highlighter.tsx`'s `Diagnostic` vocabulary, extended with
 // the bookkeeping (`ruleId`, `subject`) a runner and a host need but a paint
 // layer does not. `edgeValidation.ts` is this file's PREVENTION twin (the
 // pre-commit question); it imports rules from here rather than
 // re-implementing them — see its own header for why that is safe.
 //
-// WHY this file DOES import `../components/diagnostic.tsx` (type-only),
+// WHY this file DOES import `../components/highlighter.tsx` (type-only),
 // unlike `sceneDiff.ts`'s deliberate "imports NOTHING diagnostic-shaped":
 // that rule exists to keep the DIFF lane decoupled from the LINT lane (two
 // producers that must not serialize on each other, sceneDiff.ts:64-75). It
@@ -57,7 +57,7 @@
 //     "fabricate a rule the data cannot support" the brief warned against.
 //     Add this rule the day a port carries a declared type.
 
-import type { Diagnostic, DiagnosticSeverity } from "../components/diagnostic";
+import type { Diagnostic, DiagnosticSeverity } from "../components/highlighter";
 import { duplicateEdges, findCycles, findDanglingEdges, portKey, producersOf, type ScenePortRef, type SceneEdgeEnds } from "./scene";
 
 /* ------------------------------------------------------------------ */
@@ -94,7 +94,7 @@ export interface LintSubject {
 }
 
 /**
- * One finding. Extends `Diagnostic` (`../components/diagnostic.tsx`) rather
+ * One finding. Extends `Diagnostic` (`../components/highlighter.tsx`) rather
  * than merely resembling it, so a host that only wants the paint-facing
  * fields can hand a `LintFinding[]` straight to a `diagnostics` prop with
  * zero mapping — TypeScript's structural typing accepts it as-is because

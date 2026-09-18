@@ -46,7 +46,7 @@
 // interaction layer can call; wiring it up is out of this lane's scope
 // (CLAUDE.md's write-set boundary: `src/interaction/**` is untouched).
 
-import type { Diagnostic } from "../components/diagnostic";
+import type { Diagnostic } from "../components/highlighter";
 import { LINT_RULES, type LintScene, type PortsOf } from "./lint";
 import { portKey, type SceneEdgeEnds } from "./scene";
 
