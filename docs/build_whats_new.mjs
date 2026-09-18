@@ -148,11 +148,16 @@ function parseStoryFile(relPath) {
     return { file: relPath, error: "meta object literal's braces never balance" };
   }
   const metaBlock = text.slice(braceOpen, braceEnd);
-  const titleMatch = metaBlock.match(/title:\s*["'`]([^"'`]+)["'`]/);
+  // WHY the backreference: the first cut was /title:\s*["'`]([^"'`]+)["'`]/,
+  // which opens on ANY quote and closes on ANY quote — so `title: "What's New"`
+  // captured `What` and stopped at the apostrophe. Measured: the What's New
+  // story rendered its own links as "What · Timeline". Match the opening quote
+  // and require the SAME character to close, allowing escapes.
+  const titleMatch = metaBlock.match(/title:\s*(["'`])((?:\\.|(?!\1).)*?)\1/);
   if (!titleMatch) {
     return { file: relPath, error: "meta block has no parseable `title:` string" };
   }
-  const title = titleMatch[1];
+  const title = titleMatch[2];
 
   // WHY `: Story` in the export regex: every export in every stories file in
   // this app is typed this way (grepped 151/151) — this is what tells a
