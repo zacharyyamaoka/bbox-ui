@@ -48,6 +48,7 @@ honest admission invites it.
 | `trace.bends.ts` | (c) | Model (not code) from the ported `elbow/elbowPins.ts` | Header pre-existing, already honest |
 | `trace.handles.ts` | (c) | Model from SystemSketch `ConnectionShapeUtil.tsx:556-631` | Header pre-existing, already honest |
 | `editableText.layout.ts` | **(c)** | **none** | Lookup tables and one ternary. Now says so explicitly |
+| `src/scene/focus.ts` | (a) + (b) | SystemSketch `src/propagation/propagationGraph.ts` (full file, 134 lines, near-verbatim: `edgeId`/`sourceId`/`sinkId` → this repo's own `id`/`source`/`target`); `propagationFocus.ts:16-28` (`normalizePropagationSteps`/`clampPropagationSteps`) copied; `:266-345` (`rootsFor`/`getPropagationFocusStepLimits`/`stepLimitsFor`/`snapshotFor`) re-expressed as (b) — same decision policy, ported from an `Editor`+`TLShapeId` API to a plain `BlockScene`+seed-id one (no shape lookups, no store) | Opened all four ranges 2026-09-18; `focus.test.ts` ports `propagationGraph.test.ts`'s `walkPropagationGraph` suite verbatim (id/field renames only) plus new tests for the re-expressed policy layer |
 
 ## The verified prior art, in full
 
