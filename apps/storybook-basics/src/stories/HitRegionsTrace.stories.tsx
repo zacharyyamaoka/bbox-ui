@@ -160,33 +160,49 @@ const BAND_CASES = ([0.5, 4] as const).flatMap((zoom) =>
   (["scene", "screen"] as const).map((policy) => ({ zoom, policy })),
 );
 
+/** Every cell gets the SAME screen footprint (260×80), so a 4× cell is a
+ * closer look at the same-length-on-screen cable rather than a huge void:
+ * the scene box is footprint/zoom, and the path spans it edge to edge. */
+const BAND_CELL_W = 260;
+const BAND_CELL_H = 80;
+
+function bandCellScene(zoom: number) {
+  const w = BAND_CELL_W / zoom;
+  const h = BAND_CELL_H / zoom;
+  const inset = 12 / zoom;
+  return { w, h, path: `M ${inset} ${h / 2} L ${w - inset} ${h / 2}`, points: [
+    { x: inset, y: h / 2 },
+    { x: w - inset, y: h / 2 },
+  ] };
+}
+
 function TraceZoomPolicies() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {BAND_CASES.map(({ zoom, policy }) => (
-        <div key={`${policy}-${zoom}`} style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <span style={{ fontFamily: "monospace", fontSize: 12, width: 190 }}>
-            {policy} · {zoom}× → {policy === "scene" ? TRACE_HIT_STROKE_PX * zoom : TRACE_HIT_STROKE_PX}px band
-          </span>
-          <div data-testid={`band-${policy}-${zoom}`}>
-            <ZoomStage zoom={zoom} width={220} height={80}>
-              <svg width={220} height={80} style={{ display: "block" }}>
-                <TraceBody
-                  id={`hit-band-${policy}-${zoom}`}
-                  path="M 16 40 L 204 40"
-                  points={[
-                    { x: 16, y: 40 },
-                    { x: 204, y: 40 },
-                  ]}
-                  interactive
-                  hitStrokePx={effectiveHitValue(TRACE_HIT_STROKE_PX, zoom, policy)}
-                  showHitRegion
-                />
-              </svg>
-            </ZoomStage>
+      {BAND_CASES.map(({ zoom, policy }) => {
+        const scene = bandCellScene(zoom);
+        return (
+          <div key={`${policy}-${zoom}`} style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            <span style={{ fontFamily: "monospace", fontSize: 12, width: 190 }}>
+              {policy} · {zoom}× → {policy === "scene" ? TRACE_HIT_STROKE_PX * zoom : TRACE_HIT_STROKE_PX}px band
+            </span>
+            <div data-testid={`band-${policy}-${zoom}`}>
+              <ZoomStage zoom={zoom} width={scene.w} height={scene.h}>
+                <svg width={scene.w} height={scene.h} style={{ display: "block" }}>
+                  <TraceBody
+                    id={`hit-band-${policy}-${zoom}`}
+                    path={scene.path}
+                    points={scene.points}
+                    interactive
+                    hitStrokePx={effectiveHitValue(TRACE_HIT_STROKE_PX, zoom, policy)}
+                    showHitRegion
+                  />
+                </svg>
+              </ZoomStage>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -202,8 +218,8 @@ export const ZoomPolicies: Story = {
       const svg = cell.querySelector("svg");
       if (!(svg instanceof SVGSVGElement)) throw new Error("expected the band svg");
       const rect = svg.getBoundingClientRect();
-      const cx = rect.left + 110 * zoom;
-      const cy = rect.top + 40 * zoom;
+      const cx = rect.left + BAND_CELL_W / 2;
+      const cy = rect.top + BAND_CELL_H / 2;
       // Walk outward until the hit test misses; the last hit is the band's
       // half-width in SCREEN px.
       let lastHit = -1;

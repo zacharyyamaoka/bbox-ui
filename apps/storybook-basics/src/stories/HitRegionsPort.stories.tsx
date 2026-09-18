@@ -155,6 +155,10 @@ const POLICY_CASES = ([0.5, 4] as const).flatMap((zoom) =>
   (["scene", "screen"] as const).map((policy) => ({ zoom, policy })),
 );
 
+/** Every cell gets the SAME 200px screen footprint — the scene box is
+ * 200/zoom, so a 4× cell doesn't reserve a 720px void around one port. */
+const CELL_SCREEN_PX = 200;
+
 function PortZoomPolicies() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -164,8 +168,16 @@ function PortZoomPolicies() {
             {policy} · {zoom}× → {screenHitValue(PORT_HIT_PX, zoom, policy)}px on screen
           </span>
           <div data-testid={`cell-${policy}-${zoom}`} data-zoom={zoom} data-policy={policy}>
-            <ZoomStage zoom={zoom} width={180} height={180}>
-              <div style={{ width: 180, height: 180, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <ZoomStage zoom={zoom} width={CELL_SCREEN_PX / zoom} height={CELL_SCREEN_PX / zoom}>
+              <div
+                style={{
+                  width: CELL_SCREEN_PX / zoom,
+                  height: CELL_SCREEN_PX / zoom,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <Port state="wired" diameter="md" hitPx={effectiveHitValue(PORT_HIT_PX, zoom, policy)} showHitRegion />
               </div>
             </ZoomStage>
