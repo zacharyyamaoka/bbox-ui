@@ -16,6 +16,96 @@ packages/adapter-tldraw       tldraw ShapeUtil wrapping the core
 └── src/detach/               detach-to-primitives + rebuild (tldraw-only)
 ```
 
+This diagram describes what's **published** — `packages/bbox-ui` plus its two
+adapters, wired into `registry.json` and `apps/docs` today. It does not say
+where design *decisions* get made. That question has its own answer, below,
+and as of 2026-09-17 the two answers point at different trees.
+
+## The trunk — one canonical lineage, three consumers
+
+**`apps/storybook-basics` is the design trunk.** Every component decision of
+the last four days — LabeledPort's root-is-the-dot-box fix, grouped-spacing
+in PortEdge, the multi-line lane, PortedBlock's rail-placement rules, Trace's
+elbow routing and the wire layer — landed there, not in `packages/bbox-ui`.
+`packages/bbox-ui` is **frozen as the v1 lineage**: it keeps everything it
+has (the adapters, `blockLayout.ts`, detach, the schema — none of that exists
+in the trunk yet) and stays published exactly as-is, but it stops being where
+a design decision lands. A future regeneration of `packages/bbox-ui` from the
+trunk is P7's kind of work, not a mandate of this page.
+
+Three trees consume the trunk, each differently:
+
+| Consumer | What it does today | State |
+|---|---|---|
+| `packages/bbox-ui` (+ its two adapters) | Still what `registry.json`'s `port`/`block`/adapter items ship and what `apps/docs`'s live previews render via `@bbox-ui/core` | Frozen v1. Not edited as a design surface; a full migration to the trunk is unscheduled follow-up work, not done here |
+| `registry.json` (this file's sibling) | New items (`port-v2`, `block-v2`, `trace`, `port-edge`, `block-port`, …) now publish trunk source directly — see `CLAUDE.md`'s "The registry is the product" | Live as of this page (P7) |
+| `systemsketch/src/bboxUi/` | A **hand-vendored snapshot**, not an install — wired into a live "BBOX-UI" toolbar family since `47c3e2c9` (SystemSketch, 09-14) | **Actively diverging**, verified below |
+
+### The divergence is real, not just staleness — verified 2026-09-17
+
+Measured directly against `/home/bam/systemsketch` (read-only):
+
+- **Structural staleness.** `src/bboxUi/core/port.tsx` is 687 lines with
+  **zero** hits of `SlotOrigin`/`secondarySlot` (`wc -l` and `grep -c`, run
+  2026-09-17) — it predates the trunk's split of that concept out into
+  `port.layout.ts` (which carries it now, 10 hits) plus `port.tsx` /
+  `portEdge.tsx` / `blockPort.tsx`. That much matches what `PORT-EDGE-PLAN.md`
+  already recorded.
+- **It is not merely stale — it took its own fixes after that split, and
+  they exist in no bbox-ui lineage.** `git log --since=2026-09-15
+  --until=2026-09-16 -- src/bboxUi/` inside SystemSketch shows 20 commits
+  between `641e6a83` (17:35) and `10748b8c` (22:30), all after the split was
+  already known-stale:
+  - `4c01e6fe` (18:49) fixes four real bugs in the vendored copy's `Code`
+    shape — click-to-position, indentation at rest, a missing floating menu —
+    touching both `src/bboxUi/core/codeBlock.css` and three
+    `src/bboxUi/adapter/` files. `docs/bbox-code-click-to-edit-live-2026-09-15.png`
+    is the driven-not-guessed evidence cited in the commit itself.
+  - `234460ae` through `11dfa229`/`10748b8c` (19:47–22:30) are **nine rounds
+    of adversarial-review fixes** hardening the click-to-edit invalidation
+    timer in `src/bboxUi/adapter/bboxCodeClickToEdit.ts` — round 9 adds a
+    real browser smoke test (`tests/bbox_code_click_to_edit_smoke.mjs`, 290
+    lines) that this repo has no counterpart for.
+
+  None of those 20 commits' changes exist anywhere in `packages/bbox-ui` or
+  `apps/storybook-basics` — confirmed by grepping this repo for the touched
+  filenames and finding no match. Most of the fixed surface
+  (`bboxCodeClickToEdit.ts`, the invalidation timer, the pointer-events CSS)
+  is host-owned interaction code by this repo's own rule ("interaction
+  geometry is host-owned and never travels") — so it was never going to be a
+  core-component port. But the underlying bugs it fixes (click-to-position
+  inside an editable code block, entry-point lifecycle around delete/reload)
+  are exactly the class of thing `code-editor`/`labeled-port`/`port-edge`
+  will hit the moment a real host drives them, and nothing today routes that
+  learning back. That is the semantic-merge-conflict setup P2 warned about:
+  two individually-correct copies, no shared channel between them.
+
+One correction to the record this page supersedes: `docs/PROPOSALS-2026-09-17.md`
+(written earlier the same day) states Group B — the wire layer — was "not
+built... zero hits for `wireLayer` in `src/`". That is now stale, not wrong
+for its time: `wireLayer.tsx` and `wiring.ts` landed at `e6aea8e` (17:19,
+"Wires between real ports"), before this page was written. Filed here so the
+correction doesn't get lost the way the proposal it corrects is passed
+around.
+
+### What to do when you find the same component in two places
+
+1. **The trunk (`apps/storybook-basics/src/components/`) wins the design.**
+   If `packages/bbox-ui` or `systemsketch/src/bboxUi/` disagrees with it on
+   anything but publish-surface (adapters, schema), the trunk is right and
+   the other tree is behind.
+2. **A fix made on a vendored copy (`systemsketch/src/bboxUi/`, or any other
+   hand-copy) does not travel on its own.** Leave a one-line `// owed
+   upstream: <what, where>` comment at the fix so a grep for "owed upstream"
+   finds it, and port the *lesson* — not necessarily the code, since
+   interaction-layer fixes are host-owned by design — back into the trunk or
+   its story coverage.
+3. **Never edit `packages/bbox-ui` to chase a trunk change.** It is frozen
+   v1: bug-for-bug stable until an explicit regeneration project (P7-class
+   work) replaces its registry items and `apps/docs`'s previews together, in
+   one pass, so the "install" tab and the live preview never again show two
+   different components under one name.
+
 ## The line
 
 **Layout geometry is portable and lives in the core; interaction geometry

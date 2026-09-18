@@ -19,6 +19,23 @@ An adapter may import the core and its own engine — never the other engine,
 never the other adapter. That rule is what keeps a third host a ~150-line
 afternoon instead of a fork.
 
+## The trunk is `apps/storybook-basics`
+
+Full context and the verified evidence: `ARCHITECTURE.md`, "The trunk — one
+canonical lineage, three consumers." The checkable version:
+
+- **New design work happens in `apps/storybook-basics/src/components/`.**
+  Not `packages/bbox-ui`, not `systemsketch/src/bboxUi/`.
+- **`packages/bbox-ui` is frozen v1.** Keep publishing it as-is; never edit
+  it to chase a trunk change. Regenerating it from the trunk is its own
+  project (P7-class work), not a drive-by fix.
+- **`systemsketch/src/bboxUi/` is a vendored consumer, not a co-author.** A
+  fix made there gets a `// owed upstream: <what>` comment; it does not
+  silently become the trunk's behavior just because it shipped first.
+- **Same component in two places, disagreeing → the trunk wins.** Port the
+  trunk's version forward. Never average the two, and never keep both "for
+  now" — that is exactly how the vendored copy above started to diverge.
+
 ## The registry is the product
 
 **There is exactly one distribution channel, and npm is not it.** Every
@@ -39,6 +56,23 @@ So every file a component imports relatively must land as its **sibling**. That
 is why `port` and `block` each ship `layout.ts` and `lib/utils.ts` targeted into
 `components/bbox/`. Change a `target:` and you can silently break the install
 while every build stays green.
+
+**The sibling rule depends on which relative path the source actually
+wrote, not just which folder it's in.** `packages/bbox-ui/src/port.tsx`
+imports `./lib/utils` (utils nested one level *below* the component), so its
+registry item can flatten straight into `components/bbox/` and target
+`lib/utils.ts` at `components/bbox/lib/utils.ts` — that keeps `./lib/utils`
+resolving. The trunk (`apps/storybook-basics/src/`) is laid out differently:
+`components/` and `lib/` are **siblings**, so every trunk component imports
+`../lib/utils` (up-and-over, not down-and-in). Flattening `components/*` into
+`components/bbox/*` moves every file down one level, so `lib/utils.ts` has to
+land at `components/lib/utils.ts` — a sibling of `bbox/`, *not* nested inside
+it — for `../lib/utils` to still resolve after the move. Landing it at
+`components/bbox/lib/utils.ts` instead (right for `packages/bbox-ui`, wrong
+here) is the exact "build stays green, install breaks" trap this section
+already warned about: it shipped that way once, `npx shadcn@latest build`
+exited 0, and a throwaway `tsc` caught it as `TS2307` on all twelve trunk
+files that import `cn` — the check below is what caught it, not the build.
 
 After editing `registry.json`:
 
@@ -61,6 +95,34 @@ package, and declare `block` as a `registryDependency` so it lands beside them.
 That needs the repo to resolve the same specifier, so it is real work, not a
 registry.json tweak. Until then they are reference implementations, and the docs
 say so. Do not paper over it.
+
+**Sixteen items now publish the trunk directly** (`badge`, `bar`, `text`,
+`editable-text`, `folding-chevron`, `block-v2`, `port-v2`, `code-editor`,
+`labeled-port`, `port-edge`, `block-port`, `trace`, `trace-badge`,
+`trace-editor`, `trace-tidy`, `wire-layer`) — sourced from
+`apps/storybook-basics/src/`, each self-contained the same way `port`/`block`
+are (no `registryDependencies` between bbox items; a shared file like
+`elbow/*` or `lib/utils.ts` is simply re-listed, with its own `target`, by
+every item that needs it). `port-v2`/`block-v2` exist because `port`/`block`
+already name the pre-reset `packages/bbox-ui` lineage and repointing those
+names would silently break `apps/docs`'s live preview (which still imports
+`@bbox-ui/core`) against its own install tab — that mismatch is real,
+unresolved follow-up work for whoever migrates `apps/docs`, not something to
+paper over with a rename here.
+
+Two things the reset shipped are deliberately **not** registry items:
+- **`glyph.tsx`** — imports `@bbox-ui/glyph-content`, `private: true` and
+  unpublished, the same blocker class as the two adapters above. Fixing it
+  needs the same source change (copy the package's ~110 lines as a sibling)
+  and is out of scope here for the same reason.
+- **`button`, `toggle`, `dropdown-menu`, `tooltip`, `collapsible`** — each
+  file says so in its own header comment: copied verbatim from
+  `apps/docs/src/registry/new-york-v4/ui/*` (or, for `toggle`,
+  `packages/inspector`), the stock shadcn `new-york` / Base UI primitives,
+  vendored only so this app's own demo stories have controls to put inside a
+  `Bar`. None of the reset's own design work lives in them. A consumer that
+  wants them gets them from the stock shadcn registry
+  (`npx shadcn add button`, etc.), not from bbox-ui.
 
 ## Storybook is opt-in, not default
 
