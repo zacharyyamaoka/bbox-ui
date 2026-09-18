@@ -128,9 +128,14 @@ export interface BlockMembersProps {
 // (the overlay itself never sizes anything — see `memberSlotChildren`).
 export const EMPTY_CARD_MIN_PX = 24;
 // Chrome DevTools' own element-highlight recipe: translucent fill + a solid
-// edge, red because that's what Zach asked for.
+// edge, red because that's what Zach asked for. Same split as portEdge.tsx's
+// identical overlay: the skin seam touches SHAPE only (radius, stroke-width)
+// — this red stays exactly this red in every skin, a deliberate ruling, not
+// a state the skin owns.
 const CARD_OVERLAY_FILL = "rgb(239 68 68 / 0.18)";
 const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
+const CARD_OVERLAY_RADIUS = "var(--bbox-skin-radius, var(--radius-lg))";
+const CARD_OVERLAY_STROKE_WIDTH = "var(--bbox-skin-stroke-width, 1px)";
 
 interface MemberSlotProps {
   member: BlockMember;
@@ -196,8 +201,13 @@ function memberSlotChildren(props: MemberSlotProps): ReactNode {
       <div
         aria-hidden
         data-slot="block-member-card"
-        className="pointer-events-none absolute inset-0 rounded-lg border"
-        style={{ backgroundColor: CARD_OVERLAY_FILL, borderColor: CARD_OVERLAY_BORDER }}
+        className="pointer-events-none absolute inset-0 border"
+        style={{
+          borderRadius: CARD_OVERLAY_RADIUS,
+          borderWidth: CARD_OVERLAY_STROKE_WIDTH,
+          backgroundColor: CARD_OVERLAY_FILL,
+          borderColor: CARD_OVERLAY_BORDER,
+        }}
       />
     </>
   );

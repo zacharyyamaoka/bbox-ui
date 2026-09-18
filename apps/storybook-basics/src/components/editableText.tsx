@@ -369,7 +369,17 @@ export function EditableText({
 
   const boxStyle: CSSProperties = {
     fontSize: editableTextFontPx(resolvedSize, sizePx),
-    fontFamily: EDITABLE_TEXT_FONT_STACKS[font],
+    // The skin seam (src/skin/skin.ts + skin.css). `--bbox-skin-font-sans`
+    // is the token deferred here from Tranche 2 — this is the "TextBox/
+    // EditableText rung" its own deferred-list comment named. Reached ONLY
+    // when `font === "sans"` (the default): `font` is this component's own
+    // explicit per-instance choice — a caller who deliberately picked
+    // `"sketch"` or `"mono"` made a decision the ambient skin does not own,
+    // same as Badge's non-outline variants keeping their own
+    // `border-transparent` regardless of skin. `EDITABLE_TEXT_FONT_STACKS.
+    // sans` is the exact literal this replaces, so a consumer who never
+    // imports skin.css is byte-identical.
+    fontFamily: font === "sans" ? `var(--bbox-skin-font-sans, ${EDITABLE_TEXT_FONT_STACKS.sans})` : EDITABLE_TEXT_FONT_STACKS[font],
     alignItems: editableTextAlignItems(align),
     justifyContent: editableTextJustifyContent(justify),
     paddingTop,

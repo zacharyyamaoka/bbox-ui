@@ -62,6 +62,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 
 import { CodeEditor } from "./codeEditor";
 import { LabeledPort } from "./labeledPort";
+import { SketchOutline } from "../skin/sketchOutline";
 import type { PortState } from "./port";
 import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, inwardTextLayout, type BlockSide, type PortTextLayout } from "./port.layout";
 import { formatPortLane, reconcilePortLane } from "./portLane";
@@ -304,6 +305,12 @@ export function reorderItemsBySlot(items: PortEdgeItem[], slots: Slot[], activeS
 /* through the track.                                                  */
 /* ------------------------------------------------------------------ */
 
+// The skin seam (src/skin/skin.ts + skin.css). Ported from `var(--border)`
+// to `--bbox-skin-stroke` — the same token Block's own header/footer
+// dividers read — with today's value as the fallback, so a consumer who
+// never imports skin.css renders the exact line this replaced.
+const EDGE_LINE_COLOR = "var(--bbox-skin-stroke, var(--border))";
+
 function EdgeLineMark({ axis }: { axis: "row" | "column" }) {
   return (
     <div
@@ -311,8 +318,8 @@ function EdgeLineMark({ axis }: { axis: "row" | "column" }) {
       aria-hidden
       style={
         axis === "row"
-          ? { position: "absolute", left: 0, right: 0, top: "50%", height: 1, background: "var(--border)", pointerEvents: "none" }
-          : { position: "absolute", top: 0, bottom: 0, left: "50%", width: 1, background: "var(--border)", pointerEvents: "none" }
+          ? { position: "absolute", left: 0, right: 0, top: "50%", height: 1, background: EDGE_LINE_COLOR, pointerEvents: "none" }
+          : { position: "absolute", top: 0, bottom: 0, left: "50%", width: 1, background: EDGE_LINE_COLOR, pointerEvents: "none" }
       }
     />
   );
@@ -415,9 +422,18 @@ interface PortEdgeSlotBoxProps {
 // this same fixed footprint instead of requiring a bigger one.
 const EMPTY_SLOT_MIN_PX = 24;
 // Chrome DevTools' own element-highlight recipe: translucent fill + a solid
-// edge, red because that's what Zach asked for.
+// edge, red because that's what Zach asked for. The skin seam touches only
+// SHAPE here (radius, stroke-width) — never colour: this red is a deliberate
+// ruling (Zach, 2026-09-17), not a state the skin owns, so it is exempt from
+// `--bbox-skin-stroke`/`-surface` the way Badge's tinted variants are exempt
+// from `--bbox-skin-line-override`. `rounded-lg`/`border` (Tailwind) below
+// is replaced by these two so the fallback literal is provably identical —
+// `--radius-lg` IS what `rounded-lg` resolves to, `1px` IS what the bare
+// `border` utility sets.
 const CARD_OVERLAY_FILL = "rgb(239 68 68 / 0.18)";
 const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
+const CARD_OVERLAY_RADIUS = "var(--bbox-skin-radius, var(--radius-lg))";
+const CARD_OVERLAY_STROKE_WIDTH = "var(--bbox-skin-stroke-width, 1px)";
 
 function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage, editMode = "single", onRequestLaneOpen }: PortEdgeSlotBoxProps) {
   const textLayout = textLayoutOverride ?? inwardTextLayout(edge);
@@ -497,8 +513,13 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
         <div
           aria-hidden
           data-slot="port-edge-card-surface"
-          className="pointer-events-none absolute inset-0 rounded-lg border"
-          style={{ backgroundColor: CARD_OVERLAY_FILL, borderColor: CARD_OVERLAY_BORDER }}
+          className="pointer-events-none absolute inset-0 border"
+          style={{
+            borderRadius: CARD_OVERLAY_RADIUS,
+            borderWidth: CARD_OVERLAY_STROKE_WIDTH,
+            backgroundColor: CARD_OVERLAY_FILL,
+            borderColor: CARD_OVERLAY_BORDER,
+          }}
         />
       )}
     </span>
@@ -581,12 +602,41 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
   return (
     <div data-slot="port-edge-group" ref={containerRef} style={{ position: "relative", display: "flex", flexDirection: axis === "row" ? "row" : "column", gap: gapPx }}>
       {box && (
+        // The skin seam (src/skin/skin.ts + skin.css) — same recipe
+        // Block/Badge/Port already use: the CSS border's COLOUR is state-
+        // owned (`color`, the group's own accent, same split as Port's own
+        // ring — see traceTerminal.tsx's identical reasoning), so it reads
+        // `--bbox-skin-line-override` rather than `--bbox-skin-stroke`;
+        // width and radius are the skin's to set outright, same as every
+        // other bordered box in this port. `SketchOutline` — a CHILD of
+        // this `position: absolute` box, which already establishes the
+        // containing block its own `left/top: -borderWidth` positions
+        // against, the exact recipe `block.tsx` uses — draws the hand-drawn
+        // twin; it renders always and CSS decides which one paints, so
+        // there is nothing here that has to know the active skin.
         <div
           data-slot="port-edge-group-outline"
           data-group-id={slot.slotId}
           aria-hidden
-          style={{ position: "absolute", left: box.left, top: box.top, width: box.width, height: box.height, border: `2px solid ${color ?? "var(--border)"}`, borderRadius: 10, pointerEvents: "none" }}
-        />
+          style={{
+            position: "absolute",
+            left: box.left,
+            top: box.top,
+            width: box.width,
+            height: box.height,
+            border: `var(--bbox-skin-stroke-width, 2px) solid var(--bbox-skin-line-override, ${color ?? "var(--border)"})`,
+            borderRadius: "var(--bbox-skin-radius, 10px)",
+            pointerEvents: "none",
+          }}
+        >
+          <SketchOutline
+            width={box.width}
+            height={box.height}
+            borderWidth={2}
+            stroke={color ?? "var(--border)"}
+            seed={`port-edge-group:${slot.slotId}`}
+          />
+        </div>
       )}
       {showCard && (
         // "What does dnd-kit actually use for a grouped family" (Lane I):
@@ -604,8 +654,13 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
         <div
           aria-hidden
           data-slot="port-edge-card-surface"
-          className="pointer-events-none absolute inset-0 rounded-lg border"
-          style={{ backgroundColor: CARD_OVERLAY_FILL, borderColor: CARD_OVERLAY_BORDER }}
+          className="pointer-events-none absolute inset-0 border"
+          style={{
+            borderRadius: CARD_OVERLAY_RADIUS,
+            borderWidth: CARD_OVERLAY_STROKE_WIDTH,
+            backgroundColor: CARD_OVERLAY_FILL,
+            borderColor: CARD_OVERLAY_BORDER,
+          }}
         />
       )}
       {slot.members.map((m) => (
@@ -1191,8 +1246,14 @@ function PortEdgeBody({
     flexDirection: axis === "row" ? "row" : "column",
     alignItems: "center",
     padding: CONTAINER_PADDING,
-    border: `${CONTAINER_BORDER}px ${showContainer ? "dashed var(--border)" : "solid transparent"}`,
-    borderRadius: 6,
+    // The skin seam — `showContainer`'s dashed dev outline reads
+    // `--bbox-skin-stroke` (the same token Block's own border reads) with
+    // today's `var(--border)` as its fallback; `radius: 6` -> the token,
+    // same fallback literal. The `showContainer=false` branch stays
+    // `solid transparent` untouched — a transparent border needs no skin,
+    // it is already invisible in every one.
+    border: `${CONTAINER_BORDER}px ${showContainer ? "dashed var(--bbox-skin-stroke, var(--border))" : "solid transparent"}`,
+    borderRadius: "var(--bbox-skin-radius, 6px)",
     background: isOver ? "color-mix(in srgb, var(--accent) 14%, transparent)" : undefined,
     ...(mode === "custom" ? {} : distributionStyle(axis, distribution)),
   };

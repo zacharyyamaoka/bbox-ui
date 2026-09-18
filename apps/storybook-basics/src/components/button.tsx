@@ -47,10 +47,21 @@ const buttonVariants = cva(
   },
 );
 
+// Sizes whose radius is already a deliberate, non-skin CLAMP —
+// `rounded-[min(var(--radius-md),10-12px)]`, tuned so a tiny icon button
+// never balloons toward a circle. The skin seam below does not reach these:
+// letting `--bbox-skin-radius` win here would fight that clamp every render
+// (a skin's radius could easily exceed the clamp's own ceiling) and, worse,
+// silently drop it back to nothing on a "default"-fallback skin. Only the
+// UNCLAMPED sizes — the ones that fall through to `buttonVariants`' own
+// plain `rounded-lg` — get the token.
+const CLAMPED_RADIUS_SIZES = new Set(["xs", "sm", "icon-xs", "icon-sm"]);
+
 function Button({
   className,
   variant = "default",
   size,
+  style,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   // Explicit `size` wins; the ambient Bar cascade (barSize.tsx) is only the
@@ -63,6 +74,25 @@ function Button({
       data-slot="button"
       data-size={resolvedSize}
       className={cn(buttonVariants({ variant, size: resolvedSize, className }))}
+      style={{
+        // The skin seam (src/skin/skin.ts + skin.css). `var(--radius-lg)`
+        // is exactly what the base class's own `rounded-lg` resolves to,
+        // so a consumer who never imports skin.css is byte-identical.
+        ...(CLAMPED_RADIUS_SIZES.has(resolvedSize ?? "default") ? null : { borderRadius: "var(--bbox-skin-radius, var(--radius-lg))" }),
+        // `outline` is the one variant with a REAL, visible border
+        // (`border-border dark:border-input`) — every other variant is
+        // `border-transparent` and has nothing for a skin to suppress.
+        // Same split Badge's own `outline` variant makes for
+        // `--bbox-skin-line-override`. Fallback is `--color-input`, not
+        // `--color-border`, on purpose: this app's theme (`globals.css`)
+        // gives `--input` the SAME value as `--border` in light mode and
+        // the dark-mode-CORRECT value already (the exact value
+        // `dark:border-input` supplied), so one literal is
+        // byte-identical in both — an inline style can't express a media
+        // query the way the two Tailwind classes did.
+        ...(variant === "outline" ? { borderColor: "var(--bbox-skin-line-override, var(--color-input))" } : null),
+        ...style,
+      }}
       {...props}
     />
   );

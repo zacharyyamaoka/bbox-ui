@@ -189,6 +189,18 @@ function DefaultPortLabel({
         data-placeholder={isEmpty && placeholder ? "" : undefined}
         style={{
           fontSize: fontSizePx,
+          // The skin seam (src/skin/skin.ts + skin.css) — the ONE token
+          // this resting display text needs. `--bbox-skin-font-sans` is
+          // set INLINE (beating inheritance) rather than the plain
+          // `--bbox-skin-font` Block/Badge/Port already inherit, because a
+          // LabeledPort is not always mounted inside a Block's own
+          // font-cascaded subtree — PortEdge.stories.tsx and
+          // LabeledPort.stories.tsx both mount it as a bare specimen with
+          // no ancestor that sets ANY font token. Fallback is `inherit`,
+          // this label's exact behaviour today (no font-family of its own
+          // at all), so a consumer who never imports skin.css is
+          // byte-identical.
+          fontFamily: "var(--bbox-skin-font-sans, inherit)",
           display: "block",
           minWidth: 0,
           maxWidth: "100%",
