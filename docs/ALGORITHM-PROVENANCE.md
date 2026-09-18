@@ -295,3 +295,21 @@ this table indexes them, it does not restate them).
 | `components/port.tsx` — `availability` paint (`resolveAvailabilityPaint`) | (c) | Ours — the precedence rule (`availability > hinting > dimmed > state`) is a product decision (ruling 5), not a port; JointJS's own `available-magnet`/`available-cell` are CSS class names only (dist `joint.js:31927-31952`), no precedence model to port | Header pre-existing |
 | `components/blockPort.tsx` — `renderItem`/`renderCollapsed` now forward `diagnostics`/`availability` | (c) | Ours, ad hoc — a genuine integration gap this lane's own stories surfaced: `PortEdgeItem` has carried `diagnostics`/`availability` since the component lane's `port.tsx`/`portEdge.tsx`/`labeledPort.tsx` work landed, but `blockPort.tsx` (untouched by either implementation lane; not in either lane's declared write set) never forwarded either field from an item to the `Port`/`LabeledPort` it renders — so `decorate`'s paint seam could set every field correctly and the rendered dot still showed nothing. `collapsedDiagnostics` (concatenate) and `collapsedAvailability` (`"available"` wins) are new, ad hoc aggregations for the one-dot-stands-for-many case, modelled on the file's own pre-existing `collapsedState`'s "any wired wins" shape | Found via `ValidityPreview.stories.tsx`'s own failing assertion (a live browser test, not a guess) — `pnpm exec vitest --project=unit run` (623/623) and `pnpm test-stories` (243/243, all 56 files) both green after the fix; see this session's own report for the reproduction |
 | `hosts/nodeViews.tsx` — `Decorate`/`SceneNodeDecoration` seam | (c) | Ours — the adds-only host paint seam D7/D8 asked for, undefined = byte-identical to every prior story | New file addition, not a port |
+||||||| fb7b12d
+
+---
+
+## `src/hosts/reactFlowHost.tsx` — `TraceEdge`
+
+Added 2026-09-18 by the host-fixes lane (defect 3: the host was drawing
+React Flow's stock bezier for every wire — no `edgeTypes` entry ever claimed
+a `type`, so none of `trace.tsx`, `wireLayer.tsx`, or any per-edge
+`WireStyleData` ever reached this host). This app's own title scopes this
+document to `src/components`; `TraceEdge` lives in `src/hosts` instead, but
+the brief that reopened this file asked for it here specifically, so it gets
+its own section rather than a silent omission.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `reactFlowHost.tsx`'s `TraceEdge` | (a) | `demos/scene/src/TraceEdge.tsx:1-46` (this repo, same worktree) — the `getBezierPath` + `TraceBody` split and its own stated rule, *"the HOST owns the geometry (`getBezierPath` here, tldraw's arrow info there) and the core owns the paint"* | Opened on disk before writing `TraceEdge`; the donor calls `@bbox-ui/core`'s `TraceBody` (the published package) where this port calls the trunk's own `../components/trace.tsx:376` `TraceBody` — same component, different lineage, cited in-header |
+| — the `length` estimate (`Math.hypot` of the two endpoints) | (c) | None claimed — the donor itself passes a hardcoded `length={0}` with the comment "React Flow gives no path length"; using the chord length instead of `0` is this port's own call, not read anywhere | `trace.tsx:316-318` confirmed the async dash PATTERN (`ASYNC_PACKET_DASHARRAY`) is a fixed constant independent of `length` — only the dash PHASE reads it — so the estimate's blast radius is bounded and was reasoned from the code, not measured against a reference length |

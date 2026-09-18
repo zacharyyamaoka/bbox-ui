@@ -22,7 +22,7 @@ import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 const meta = {
   title: "Blocks/Scene/In A Host",
-  tags: ["area:blocks", "lane:baseline"],
+  tags: ["area:blocks", "lane:host-fixes"],
 } satisfies Meta;
 
 export default meta;
@@ -127,11 +127,20 @@ export const SceneReactFlow: Story = {
     /* H1 (RF half): every edge endpoint resolves. The handles are
      * MEASURED off the rendered dots (async), so the edges appear once
      * measurement lands: each edge renders a real path, and both handle
-     * ids exist inside the node the edge names. */
+     * ids exist inside the node the edge names.
+     *
+     * The path itself is the trunk's own `TraceBody` paint (`TraceEdge`,
+     * host-fixes lane defect 3), not React Flow's stock bezier — hence
+     * `[data-slot="trace-line"]`, not the `react-flow__edge-path` class a
+     * plain `<BaseEdge>` would carry. `:not([data-sketch="true"])` excludes
+     * `TraceBody`'s own sketch-skin overlay, the same crisp/sketch pair
+     * `wireLayer.tsx`'s DOM host paints. */
     await waitFor(
       () => {
         for (const edge of HOST_SCENE.edges) {
-          const path = host.querySelector<SVGPathElement>(`.react-flow__edge[data-id="${edge.id}"] path.react-flow__edge-path`);
+          const path = host.querySelector<SVGPathElement>(
+            `.react-flow__edge[data-id="${edge.id}"] [data-slot="trace-line"]:not([data-sketch="true"])`,
+          );
           if (!path) throw new Error(`edge ${edge.id} has no rendered path yet`);
           expect(path.getTotalLength()).toBeGreaterThan(0);
           const source = required<HTMLElement>(host, `.react-flow__node[data-id="${edge.source}"]`, `source node ${edge.source}`);
@@ -142,6 +151,20 @@ export const SceneReactFlow: Story = {
       },
       { timeout: 3000 },
     );
+
+    /* Host-fixes lane, defect 3's other visible consequence: `e-cfg`
+     * carries `data: { variant: "async" }` and the stock bezier ignored it
+     * entirely (no `edgeTypes` entry ever reads `Edge.data`) — the async
+     * wire rendered identically to a plain one. `TraceEdge` threads it
+     * through to `TraceBody`, which stamps the variant onto `[data-slot=
+     * "trace"]` and gives the line a real dash array — both checked here,
+     * not just "some path exists" (which passed before this fix too). */
+    await waitFor(() => {
+      const group = required<SVGGElement>(host, '[data-id="e-cfg"] [data-slot="trace"]', "e-cfg's trace group");
+      expect(group.getAttribute("data-variant")).toBe("async");
+      const line = required<SVGPathElement>(host, '[data-id="e-cfg"] [data-slot="trace-line"]:not([data-sketch="true"])', "e-cfg's line");
+      expect(line.getAttribute("stroke-dasharray")).toBeTruthy();
+    });
   },
 };
 
@@ -182,7 +205,7 @@ export const ZoomAndNodeDrag: Story = {
   play: async ({ canvasElement }) => {
     const host = required<HTMLElement>(canvasElement, '[data-host="react-flow"]', "the React Flow host");
     await waitFor(() => {
-      if (!host.querySelector(`.react-flow__edge[data-id="e-set"] path.react-flow__edge-path`)) throw new Error("edges not rendered yet");
+      if (!host.querySelector(`.react-flow__edge[data-id="e-set"] [data-slot="trace-line"]:not([data-sketch="true"])`)) throw new Error("edges not rendered yet");
     });
 
     /* -- Node drag, at zoom 1 so screen px ARE flow px ---------------- */
@@ -203,7 +226,11 @@ export const ZoomAndNodeDrag: Story = {
      * on proc/out's dot at its new place — measured from the real path,
      * against the real dot. */
     await waitFor(() => {
-      const path = required<SVGPathElement>(host, '.react-flow__edge[data-id="e-set"] path.react-flow__edge-path', "e-set's path");
+      const path = required<SVGPathElement>(
+        host,
+        '.react-flow__edge[data-id="e-set"] [data-slot="trace-line"]:not([data-sketch="true"])',
+        "e-set's path",
+      );
       const start = screenPointAt(path, 0);
       const dot = dotCentre(host, "proc", "out");
       expect(Math.abs(start.x - dot.x)).toBeLessThanOrEqual(10);
@@ -266,6 +293,63 @@ export const RailReorderInsideANode: Story = {
     expect(viewport.style.transform).toBe(viewportBefore);
   },
 };
+
+/* ------------------------------------------------------------------ */
+/* Host-fixes lane, defect 6 — a member's header must not drag its parent */
+/* ------------------------------------------------------------------ */
+
+export const MemberHeaderDoesNotDragParent: Story = {
+  name: "A Member's Header Does Not Drag Its Parent (ReactFlow)",
+  render: () => <StatefulReactFlow initial={HOST_SCENE} width={720} height={400} />,
+  play: async ({ canvasElement }) => {
+    const host = required<HTMLElement>(canvasElement, '[data-host="react-flow"]', "the React Flow host");
+    const procNode = required<HTMLElement>(host, '.react-flow__node[data-id="proc"]', "proc's RF node");
+
+    /* `kid` (a member of `proc`, `parentId: "proc"` in `HOST_SCENE`) also
+     * declares a `header` (`nodeViews.tsx`'s `header={node.data.name}` is
+     * unconditional), so its own `[data-slot="block-header"]` lives nested
+     * inside proc's DOM subtree — the exact shape that used to move the
+     * wrong node. Found by `data-block-id`, not by slot alone, so this
+     * resolves kid's OWN header even though proc has one too. */
+    const kidHeader = required<HTMLElement>(procNode, '[data-block-id="kid"] [data-slot="block-header"]', "kid's own header");
+    const procHeader = required<HTMLElement>(procNode, '[data-block-id="proc"] > [data-slot="block"] > [data-slot="block-header"]', "proc's own header");
+    expect(kidHeader).not.toBe(procHeader);
+
+    /* Real hit-testing first (the same discipline defect 4 established):
+     * a press at kid's header centre must land on kid's header itself,
+     * not be intercepted by anything above it. */
+    const kr = kidHeader.getBoundingClientRect();
+    expect(document.elementsFromPoint(kr.left + kr.width / 2, kr.top + kr.height / 2)[0]).toBe(kidHeader);
+
+    const before = procNode.getBoundingClientRect();
+    await dragFrom(kidHeader, { x: kr.left + kr.width / 2 + 60, y: kr.top + kr.height / 2 + 40 });
+
+    /* THE bug: `dragHandle: '[data-slot="block-header"]'` matches ANY
+     * element with that slot inside proc's subtree, including kid's own —
+     * React Flow's `hasSelector` walk stops at the first match, which is
+     * kid's header itself, and starts dragging proc (the React Flow node
+     * kid lives inside). Measured before this fix: proc moved by (57, 24)
+     * from this exact gesture. Fixed: the press falls through (nothing
+     * else claims it either), and proc does not move at all. */
+    await tick(150);
+    const afterKid = procNode.getBoundingClientRect();
+    expect(Math.abs(afterKid.left - before.left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(afterKid.top - before.top)).toBeLessThanOrEqual(1);
+
+    /* The control: proc's OWN header still drags proc normally — this is
+     * a scoping fix, not a regression in the real gesture. */
+    const pr = procHeader.getBoundingClientRect();
+    await dragFrom(procHeader, { x: pr.left + pr.width / 2 + 60, y: pr.top + pr.height / 2 + 40 });
+    await waitFor(() => {
+      const afterProc = procNode.getBoundingClientRect();
+      expect(Math.abs(afterProc.left - before.left)).toBeGreaterThan(40);
+    });
+  },
+};
+
+function tick(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /* ------------------------------------------------------------------ */
 /* H5 — React Flow's global CSS stays inside the host                   */

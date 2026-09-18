@@ -57,3 +57,32 @@ function centreOf(el: Element): { x: number; y: number } {
   const rect = el.getBoundingClientRect();
   return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 }
+
+/**
+ * `dragFrom`'s same press/glide/release, but with an `onStep` callback
+ * after EVERY intermediate move — for a story that needs to measure
+ * something DURING the gesture, not only its start and end. `dragFrom`
+ * itself glides through one waypoint before the target; this samples
+ * `steps` evenly-spaced points along the same straight line so a mid-drag
+ * assertion (host-fixes lane, defect 5: does the box move before release,
+ * when it should not) has real points to check, not just "before" and
+ * "after".
+ */
+export async function dragSteps(
+  from: Element,
+  to: { x: number; y: number },
+  options: { pressAt?: { x: number; y: number }; steps?: number; onStep?: (at: { x: number; y: number }) => void | Promise<void> },
+): Promise<void> {
+  const start = options.pressAt ?? centreOf(from);
+  const steps = options.steps ?? 4;
+  fireBoth(from, "down", start.x, start.y);
+  await tick(30);
+  for (let i = 1; i <= steps; i++) {
+    const at = { x: start.x + ((to.x - start.x) * i) / steps, y: start.y + ((to.y - start.y) * i) / steps };
+    fireBoth(from, "move", at.x, at.y);
+    await tick(30);
+    await options.onStep?.(at);
+  }
+  fireBoth(from, "up", to.x, to.y);
+  await tick(100);
+}
