@@ -368,6 +368,16 @@ export function Port({
         width: diameterPx,
         height: diameterPx,
         ...portDotStyle({ state, dimmed, hinting, availability, diagnostics, highlighterKind }),
+        // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6. The ring's
+        // colour is STATE-owned (computed above by `portRingColor`, not the
+        // skin), so it is published in a channel the skin never writes,
+        // rather than left for a boundary pass to read back off
+        // `getComputedStyle(el).borderColor` — the sketch skin blanks that
+        // to transparent on purpose (its mechanism for hiding a crisp line
+        // while keeping its width), which would draw an invisible ring.
+        // Naming a colour this component already computed is not a skin
+        // import.
+        ...({ "--bbox-ink-state": ringColor ?? undefined } as CSSProperties),
         ...style,
       }}
       {...props}

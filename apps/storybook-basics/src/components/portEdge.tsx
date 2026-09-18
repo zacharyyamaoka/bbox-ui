@@ -644,6 +644,13 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
             border: `var(--bbox-skin-stroke-width, 2px) solid var(--bbox-skin-line-override, ${color ?? "var(--border)"})`,
             borderRadius: "var(--bbox-skin-radius, 10px)",
             pointerEvents: "none",
+            // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6. Same
+            // reasoning as `port.tsx`'s ring — this box's accent colour is
+            // STATE-owned (`color`, the group's own accent), so it is
+            // published in a channel the sketch skin never blanks, rather
+            // than left for a boundary pass to read back a `border-color`
+            // the skin has already made transparent.
+            ...({ "--bbox-ink-state": color ?? "var(--border)" } as CSSProperties),
           }}
         >
           <SketchOutline

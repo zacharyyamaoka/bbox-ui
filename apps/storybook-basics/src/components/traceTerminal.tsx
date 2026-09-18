@@ -19,7 +19,7 @@
 // `TraceDir` in `./trace.layout.ts`. The arrowhead that distinguishes the
 // ends is painted by the trace (`markerEnd` at the `to` end), never here.
 
-import { useMemo, type ComponentProps } from "react";
+import { useMemo, type ComponentProps, type CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
 import { sketchEllipsePath } from "../skin/sketchPath";
@@ -142,6 +142,12 @@ export function TraceTerminal({
       data-dir={dir}
       transform={`translate(${x} ${y}) rotate(${DIR_ROTATION[dir]})`}
       className={cn(className)}
+      // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6. `color` is
+      // this glyph's own STATE-owned colour (the caller's prop, same split
+      // `portRingColor` makes), published here so a boundary sketch pass
+      // can draw the ring in the right colour without reading a
+      // `stroke`/`border-color` the skin has already blanked.
+      style={{ "--bbox-ink-state": color } as CSSProperties}
       {...props}
     >
       <circle

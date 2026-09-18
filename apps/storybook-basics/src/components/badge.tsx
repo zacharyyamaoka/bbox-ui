@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import type { ComponentProps, CSSProperties } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
@@ -94,6 +94,14 @@ export function Badge({ className, variant, size, shape, style, ...props }: Badg
           resolvedShape === "pill"
             ? "var(--bbox-skin-radius-pill, 9999px)"
             : "var(--bbox-skin-radius, var(--radius-md))",
+        // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6.
+        // `currentColor` IS this variant's resolved line colour — every
+        // variant above sets its own `text-*` class, and a real CSS border
+        // (the `outline` variant) is already drawn in `currentColor`. A
+        // boundary twin is appended as a CHILD of this span, so it inherits
+        // the same `color` and lands on the same value without this
+        // component importing the skin or hardcoding a token.
+        ...({ "--bbox-ink-state": "currentColor" } as CSSProperties),
         ...style,
       }}
       {...props}
