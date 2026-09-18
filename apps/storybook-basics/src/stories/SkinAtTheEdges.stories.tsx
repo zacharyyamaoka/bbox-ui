@@ -131,12 +131,6 @@ function BoxStage({ testid }: { testid: string }) {
 /* Assertion helpers — measured, never asserted by DOM presence        */
 /* ------------------------------------------------------------------ */
 
-function coreTwins(root: HTMLElement): SVGPathElement[] {
-  // The core's own drawn twin. Always present today, painted only when
-  // `--bbox-skin-outline` says so.
-  return [...root.querySelectorAll<SVGPathElement>('path[data-slot="trace-line"][data-sketch="true"]')];
-}
-
 function boundaryTwins(root: HTMLElement): SVGPathElement[] {
   return [...root.querySelectorAll<SVGPathElement>(`path[${SKETCH_TWIN_ATTR}]`)];
 }
@@ -251,15 +245,21 @@ function Labelled({ title, children }: { title: string; children: React.ReactNod
 }
 
 /**
- * Three columns, one frame. The middle column is today's mechanism (the
- * core computing its own sketch under `data-bbox-skin="sketch"`); the right
- * column's core subtree carries NO skin attribute at all — it is in its
- * default, un-skinned state — and the drawn layer comes entirely from
- * `<SketchAtEdge>`.
+ * Three columns, one frame.
  *
- * That contrast is the architectural claim made visible: the right column
- * proves the core does not need to know a skin exists in order to be drawn
- * by hand.
+ * WHY there are three, not the four this story used to render: it used to
+ * put the CORE's own in-core mechanism (a middle "today" column) beside the
+ * boundary's, specifically so their outputs could be diffed live in one
+ * frame. Migration M1-M5b deleted that mechanism outright — there is no
+ * "today" left to render — so that column is gone rather than left empty.
+ * What replaces the live diff is `GOLDEN_TRACE_D` above: the core's last
+ * output, captured before deletion, is the oracle these columns are
+ * checked against instead.
+ *
+ * The two that remain make the SAME architectural claim
+ * `BoundaryMatchesCoreExactly` makes for traces, extended to boxes and
+ * Port rings: the core does not need to know a skin exists in order to be
+ * drawn by hand.
  */
 export const SideBySide: Story = {
   render: () => (
@@ -271,29 +271,17 @@ export const SideBySide: Story = {
         </div>
       </Labelled>
 
-      <Labelled title="2 · In-core sketch (today)">
-        <div data-testid="col-incore" {...bboxSkinAttrs("sketch")}>
-          <TraceStage testid="incore-traces" />
-          <BoxStage testid="incore-boxes" />
-        </div>
-      </Labelled>
-
       {/*
-       * Column 3 is the REAL production configuration, and the distinction
+       * Column 2 is the REAL production configuration, and the distinction
        * matters: the skin ATTRIBUTE is still stamped here, because the
        * token half of a skin (no fill, the informal font, the radius, the
-       * 2px stroke width) is already edge-driven and correct — CSS
-       * resolving a value the edge supplied is how a skin is supposed to
-       * work, and docs/peps/0001 keeps it exactly as it is.
-       *
-       * What is gone is GEOMETRY. No component in this subtree computes a
-       * wobble; every drawn line comes from `<SketchAtEdge>`, and the
-       * core's own outline elements are suppressed by the pass's CSS. An
-       * earlier draft left the attribute off entirely, which made column 3
-       * render with the default card fill and sans font and so compared two
-       * different things — the capture caught it.
+       * 2px stroke width) is edge-driven CSS and docs/peps/0001 keeps it
+       * exactly as it is. What SketchAtEdge supplies is GEOMETRY: no
+       * component in this subtree computes a wobble, and there is no
+       * core-rendered outline left for the pass's CSS to suppress — the
+       * elements it hides now are the crisp originals themselves.
        */}
-      <Labelled title="3 · Boundary sketch (proposed)">
+      <Labelled title="2 · Boundary sketch (production configuration)">
         <SketchAtEdge>
           <div data-testid="col-boundary" {...bboxSkinAttrs("sketch")}>
             <TraceStage testid="boundary-traces" />
@@ -305,7 +293,7 @@ export const SideBySide: Story = {
       {/* And the independence claim on its own: geometry from the edge with
           NO skin attribute anywhere in the subtree. The core does not know a
           skin exists; it is simply being drawn over. */}
-      <Labelled title="4 · Boundary geometry, core fully un-skinned">
+      <Labelled title="3 · Boundary geometry, core fully un-skinned">
         <SketchAtEdge>
           <div data-testid="col-naked">
             <TraceStage testid="naked-traces" />
@@ -316,17 +304,19 @@ export const SideBySide: Story = {
     </div>
   ),
   play: async ({ canvasElement }) => {
-    const incore = canvasElement.querySelector<HTMLElement>('[data-testid="col-incore"]')!;
     const boundary = canvasElement.querySelector<HTMLElement>('[data-testid="col-boundary"]')!;
 
     await waitFor(() => {
       expect(boundaryTwins(boundary).length).toBe(TRACE_CASES.length);
     });
 
-    // Paths: byte-identical between the two mechanisms.
-    const a = coreTwins(incore).map((p) => p.getAttribute("d"));
+    // Paths: byte-identical to the frozen golden strings, not to a live
+    // "today" column that no longer exists (see this story's own WHY).
+    // Only the first TRACE_CASES.length golden entries apply — this
+    // column's TraceStage renders untunnelled only (no `tunnel` prop),
+    // unlike BoundaryMatchesCoreExactly's two stages.
     const b = boundaryTwins(boundary).map((p) => p.getAttribute("d"));
-    expect(b).toEqual(a);
+    expect(b).toEqual(GOLDEN_TRACE_D.slice(0, TRACE_CASES.length));
 
     // Boxes: the boundary drew an outline for every Block and Port dot.
     // One drawn outline per shape, across all three shape classes the six
@@ -344,29 +334,27 @@ export const SideBySide: Story = {
     });
 
     // Port rings: the boundary derives the ring's centre-line from the
-    // element's own box-shadow spreads and lands on exactly the geometry the
-    // core computes from its private constants. Asserted as equality of the
-    // emitted viewBox and pen width, per state — drawing on the element box
-    // instead put the drawn ring INSIDE the coloured one and read as a
-    // bullseye, which is what the first capture of this PoC showed.
-    const coreDotGeom = [...incore.querySelectorAll('[data-slot="port-dot"]')].map((el) => {
-      const svg = el.querySelector('[data-slot="sketch-outline"]');
-      return {
-        vb: svg?.getAttribute("viewBox"),
-        pen: svg?.querySelector("path")?.getAttribute("stroke-width"),
-      };
-    });
-    const edgeDotGeom = [...boundary.querySelectorAll('[data-slot="port-dot"]')].map((el) => {
+    // element's own published data-bbox-ring-expand/-pen (port.tsx, M4) —
+    // SURFACE*2 + STATE*3 and STATE, SURFACE=2/STATE=3
+    // (port.layout.ts) — the SAME formula docs/peps/0001-sketch-skin-at-
+    // the-boundary.md verified against the (now-deleted) core mechanism
+    // for a 12px dot: expand = 2*2 + 3*3 = 13, so viewBox "0 0 25 25" and
+    // pen "3". Every `BoxStage` Port is the default `md` (12px) diameter,
+    // so every dot in this story shares that one answer.
+    const dotGeom = [...boundary.querySelectorAll('[data-slot="port-dot"]')].map((el) => {
       const svg = el.querySelector<SVGSVGElement>(`svg[${SKETCH_TWIN_ATTR}="box"]`);
       return {
         vb: svg?.getAttribute("viewBox"),
         pen: svg?.querySelector("path")?.getAttribute("stroke-width"),
       };
     });
-    expect(coreDotGeom.length).toBeGreaterThan(0);
-    expect(edgeDotGeom).toEqual(coreDotGeom);
+    expect(dotGeom.length).toBeGreaterThan(0);
+    for (const g of dotGeom) {
+      expect(g.vb).toBe("0 0 25 25");
+      expect(g.pen).toBe("3");
+    }
 
-    // Column 4 is the independence claim, asserted: drawn geometry present,
+    // Column 3 is the independence claim, asserted: drawn geometry present,
     // and no skin attribute anywhere above it in that subtree. This is the
     // one that says the core does not need to know a skin exists.
     const naked = canvasElement.querySelector<HTMLElement>('[data-testid="col-naked"]')!;
@@ -382,11 +370,6 @@ export const SideBySide: Story = {
     // The crisp column is genuinely crisp: no drawn geometry at all.
     const crispCol = canvasElement.querySelector<HTMLElement>('[data-testid="col-crisp"]')!;
     expect(boundaryTwins(crispCol).length).toBe(0);
-    // Its own sketch-outline elements exist (the core always renders them)
-    // but paint nothing, because no skin set `--bbox-skin-outline`.
-    for (const svg of crispCol.querySelectorAll('[data-slot="sketch-outline"]')) {
-      expect(getComputedStyle(svg).display).toBe("none");
-    }
   },
 };
 
@@ -396,26 +379,32 @@ export const SideBySide: Story = {
 
 /**
  * The boundary is not merely as good as the in-core version; for
- * content-sized elements it is strictly better, and that is measurable.
+ * content-sized elements it was strictly better, and that was measured
+ * before the in-core version existed to compare against.
  *
- * The core cannot self-measure, so `badge.tsx:102-107` draws every chip at
- * a nominal 40x20 and `block.tsx:198-203` draws an auto-height Block at a
- * nominal 200, then stretches the path with `preserveAspectRatio="none"`.
- * Stretching a path scales its wobble anisotropically — the documented cost
- * in `sketchOutline.tsx`'s own `stretch` prop. A boundary pass runs after
- * layout and draws at the real pixels, so there is no stretch and no
- * distortion.
+ * WHY there is only one column now, where this story used to render two:
+ * the "in-core: nominal + preserveAspectRatio='none'" column rendered
+ * `badge.tsx`'s and `block.tsx`'s OWN drawn outline — code migration M3/M2
+ * deleted. Recreating that DOM here would mean un-deleting the defect this
+ * whole migration exists to remove, just to have something to diff
+ * against, which defeats the point more than it proves it.
  *
- * This story asserts that difference numerically.
+ * The comparison is preserved as a MEASUREMENT instead, taken before
+ * deletion and recorded in docs/peps/0001-sketch-skin-at-the-boundary.md:
+ * the core could not self-measure, so `badge.tsx` drew every chip's
+ * outline at a nominal 40x20 viewBox with `preserveAspectRatio="none"`,
+ * regardless of the chip's real width. Two `Badge`s in one row —
+ * 41.7px and 121.2px wide — both got that same 40-wide viewBox, giving
+ * x-scales of 1.04 and 3.03 against a y-scale of 1.10 either way: the
+ * wider chip's "hand-drawn" wobble was stretched 2.75x more horizontally
+ * than vertically, a real distortion no eye would call hand-drawn. A
+ * boundary pass runs after layout, where `getBoundingClientRect()` is
+ * ordinary, and draws every shape's viewBox equal to its own real box —
+ * scale exactly 1:1, asserted below.
  */
 export const MeasuredNotNominal: Story = {
   render: () => (
     <div style={{ display: "flex", gap: 48, flexWrap: "wrap", alignItems: "flex-start" }}>
-      <Labelled title="In-core: nominal + preserveAspectRatio='none'">
-        <div data-testid="nominal" {...bboxSkinAttrs("sketch")}>
-          <BoxStage testid="nominal-boxes" />
-        </div>
-      </Labelled>
       <Labelled title="Boundary: drawn at measured pixels">
         <SketchAtEdge>
           <div data-testid="measured">
@@ -426,34 +415,20 @@ export const MeasuredNotNominal: Story = {
     </div>
   ),
   play: async ({ canvasElement }) => {
-    const nominal = canvasElement.querySelector<HTMLElement>('[data-testid="nominal"]')!;
     const measured = canvasElement.querySelector<HTMLElement>('[data-testid="measured"]')!;
 
     await waitFor(() => {
       expect(measured.querySelectorAll(`svg[${SKETCH_TWIN_ATTR}="box"]`).length).toBeGreaterThan(0);
     });
 
-    // --- The in-core side really is stretching a nominal path -----------
-    // A Badge's outline is authored at 40x20 regardless of how wide the
-    // chip is, and carries preserveAspectRatio="none".
-    const badgeOutlines = [
-      ...nominal.querySelectorAll<SVGSVGElement>('[data-slot="badge"] [data-slot="sketch-outline"]'),
-    ];
-    expect(badgeOutlines.length).toBe(2);
-    for (const svg of badgeOutlines) {
-      expect(svg.getAttribute("viewBox")).toBe("0 0 40 20");
-      expect(svg.getAttribute("preserveAspectRatio")).toBe("none");
-    }
-    // The two chips have genuinely different real widths, so the identical
-    // 40-wide viewBox above is being stretched by two different factors.
-    const badgeBoxes = [...nominal.querySelectorAll('[data-slot="badge"]')].map(
+    // The two Badges here are genuinely different real widths — the SAME
+    // fixture the deleted in-core mechanism would have stretched a shared
+    // 40-wide viewBox across (see this story's own WHY).
+    const badgeBoxes = [...measured.querySelectorAll('[data-slot="badge"]')].map(
       (el) => el.getBoundingClientRect().width,
     );
+    expect(badgeBoxes.length).toBe(2);
     expect(badgeBoxes[1]).toBeGreaterThan(badgeBoxes[0] + 20);
-    // Which is the distortion, quantified: px-per-viewBox-unit differs.
-    const stretchA = badgeBoxes[0] / 40;
-    const stretchB = badgeBoxes[1] / 40;
-    expect(Math.abs(stretchB - stretchA)).toBeGreaterThan(0.4);
 
     // --- REGRESSION GUARD: the twin's RENDERED box, not just its attrs ---
     // A boundary-injected node lives in the host's cascade. A `Badge`
