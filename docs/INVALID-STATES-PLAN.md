@@ -250,6 +250,17 @@ mark one element, the diagnostic halo renders outside their outline.
   "like the IDE, where you can quickly click to any of the issues."
   `src/scene/bubble.ts`'s `surfaceFindings` is what such a navigator would
   read; not built in this wave.
+- **Owed to the component kit** (2026-09-18, story lane, found while
+  building `FoldBubbling.stories.tsx`): `BlockPort`/`Block` do not fold a
+  node's MEMBERS out of the DOM by `BlockView` at all today — grepped,
+  `blockPort.tsx` has no such branch; `view` only ever governs PORT
+  presentation (collapsed rail vs individual dots, `blockPort.layout.ts`'s
+  own `railPlanFor`). D3's own "view → hides" table (this doc's ruling 3
+  section) assumes a view can hide members visually; that assumption is
+  currently true only in the STORY's own abstract `HidesOf` fact, which
+  correctly drives where a finding surfaces, independent of whatever the
+  Block component currently paints. Wiring an actual visual member-fold by
+  view is real, separate work for whoever next touches `blockPort.tsx`.
 
 ---
 

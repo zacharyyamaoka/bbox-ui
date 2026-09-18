@@ -131,7 +131,19 @@ function FoldBubblingDemo({ procView }: { procView: BlockView }) {
     <div>
       <p style={{ fontSize: 12, color: "var(--muted-foreground)", marginBottom: 8 }}>
         proc's view: <code>{procView}</code> — kid1 and kid2 each wire themselves (cycle, error).{" "}
-        {VIEW_HIDES[procView].members ? "Both are HIDDEN — their findings bubble to proc." : "Both are SHOWN — findings mark in place."}
+        {VIEW_HIDES[procView].members
+          ? 'This view\'s row says "members: true" — their findings bubble to proc (watch its own flag).'
+          : "This view's row says \"members: false\" — findings mark in place, on each kid."}
+        {VIEW_HIDES[procView].members && (
+          <>
+            {" "}
+            <em>
+              (BlockPort itself does not yet fold members out of the DOM by view — grepped, `blockPort.tsx` has no such
+              branch — so kid1/kid2 stay visibly rendered below; what this story demonstrates is the FINDING'S placement,
+              which already follows the visibility fact independent of that separate, owed rendering concern.)
+            </em>
+          </>
+        )}
       </p>
       <DomCanvas scene={scene} width={340} height={280} decorate={decorate} />
     </div>
