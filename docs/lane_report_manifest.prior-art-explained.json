@@ -1,0 +1,39 @@
+{
+  "title": "Prior art, explained — the three cards you asked about",
+  "summary": "Cards #4 (edge-promotion resolver), #6 (ports are a manifest) and #11 (the parametric drag-handles) from node-editor-prior-art-2026-09-17.html, re-read in real source and taught, not proposed — including the two places the original cards overstated.",
+  "slug": "prior-art-explained",
+  "date": "2026-09-18",
+  "base_ref": "454ab9c",
+  "branch_label": "prior-art-explained lane (teaching, no product code touched)",
+  "intro": [
+    "You ruled on nine cards and asked to be taught three. This page is those three, each re-read in the actual donor source before drawing — maxGraph (Apache-2.0) and litegraph.js (MIT) in scratch checkouts, JointJS (MPL-2.0) read and cited only, SystemSketch read-only at <code>10748b8c</code>. Every figure names the file:line it was checked against.",
+    "The one-paragraph version of each: <b>#4</b> — an edge-promotion resolver answers “this cable's end is hidden inside a collapsed container; where does it attach instead?” maxGraph's is a render-time projection (the document never changes), and your header-port ruling deletes the hard geometric half of it — what remains general is a ~40-line walk, not a subsystem. <b>#6</b> — “ports are a manifest” means the container OWNS its port list as a little table and everything else reads it; the alternative (derive the interface from whatever the children expose) quietly breaks four things you have already ruled for. Your Block is already a manifest; the card is the invariant to keep. <b>#11</b> — a JointJS package of 13 (not 14) tiny classes that each turn one shape property into a draggable, clampable, double-click-resettable point over a shared 3-method base; the “ready-made donor” reading did not survive contact, but your trace editor already implements half the contract independently, which is better evidence the pattern fits.",
+    "Where a card is weaker than the original report implied, the card below says so in its own caption — that was the brief."
+  ],
+  "changes": [
+    "<code>docs/build_prior_art_explained_fragments.py</code> — new: generates the 10 teaching figures below (imports the SVG kit from <code>build_prior_art_visuals_fragments.py</code>, the drawn hand already approved — not a second style).",
+    "<code>docs/fragments/prior-art-explained-{promotion,manifest,handles}.html</code> — the three fragments this report inlines.",
+    "<code>docs/lane_report_manifest.prior-art-explained.json</code> — this manifest.",
+    "Nothing under <code>apps/storybook-basics/src/**</code> was touched — two lanes are implementing your rulings there; this lane writes docs and the report only."
+  ],
+  "findings": [
+    "<b>#4 survived and shrank.</b> maxGraph's whole resolver is a ~15-line ancestor walk (<code>getVisibleTerminal</code>, GraphView.ts:1656-1679) plus perimeter geometry for the landing point — and the geometry is exactly the half your land-on-a-declared-port ruling deletes. Your v1 rule plus its inbound mirror is complete for a single-level fold of a DAG; it first breaks when both ends are folded, and second on nested folds (today's <code>branchFoldAttachPoint</code> returns null for anything that is not a Branch arm).",
+    "<b>#6 is an invariant you already hold, named.</b> litegraph ships the manifest model end to end (a row table on the graph, 8 sync hooks mirroring it onto the collapsed face, N inner taps reading one row) — and also ships its cautionary tale: rows keyed by display NAME, so a rename silently orphans every other tap onto its default value. Your ports resolve by stable id already; the card's content is keeping <code>ports[]</code> the source of truth when Regions gain members.",
+    "<b>#11 is weaker than the card implied as a donor, real as a pattern.</b> The count on disk is 13 exported Control subclasses, not 14; TableDividerTool drives a 2×2 Table's single dividerX/dividerY pair with ONE corner handle (an N×M grid needs N+M handles the donor does not contain); no Grid primitive exists in this trunk to donate to; and MPL-2.0 means the 51 lines could never be copied anyway. What holds: 13 tools average ~45 lines because a shared 3-method base absorbs the lifecycle — and <code>trace.handles.ts</code> already implements the pure half of that exact split, independently.",
+    "Every donor citation in this report was opened on disk this session: maxGraph @1559b37, litegraph.js @0555a2f (upstream tip), JointJS @881e49d, SystemSketch @10748b8c."
+  ],
+  "sections": [
+    {
+      "heading": "#4 · “Collapse needs a generalized edge-promotion resolver” — what that sentence means",
+      "html_file": "docs/fragments/prior-art-explained-promotion.html"
+    },
+    {
+      "heading": "#6 · “A container's ports are a manifest; the shapes inside are just placements”",
+      "html_file": "docs/fragments/prior-art-explained-manifest.html"
+    },
+    {
+      "heading": "#11 · The parametric drag-handles — drawn, counted, and checked against our own editor",
+      "html_file": "docs/fragments/prior-art-explained-handles.html"
+    }
+  ]
+}
