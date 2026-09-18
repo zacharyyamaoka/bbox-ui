@@ -85,6 +85,34 @@ export type Distribution = DistributeConfig | AlignConfig;
 
 export const DEFAULT_ALIGN_GAP = 18;
 
+/**
+ * Lane E → Lane D (docs/FEEDBACK-2026-09-17c-PLAN.md, Lane E's own scoping
+ * note): a `PortEdge` is one edge — it has no idea which of a Block's other
+ * three edges carry ports, so it cannot decide its own default
+ * `Distribution`. `BlockPort` is the one component that sees all four, so
+ * this is the rule IT must apply; exported here (not duplicated as a
+ * literal in blockPort.tsx) so both sides read the same source of truth:
+ *
+ *   • any populated edge is top or bottom → EVERY edge defaults to
+ *     `{ mode: "distribute", scheme: "space-around" }` — `SPACING_SCHEMES`'
+ *     own "Around" entry, Zach's "Distribute and Around" wording for it.
+ *   • populated edges are left/right only → EVERY edge defaults to
+ *     `{ mode: "aligned", anchor: "start" }` (the classic single-port-view
+ *     packing: `DEFAULT_ALIGN_GAP`, no extra edge padding).
+ *   • an explicit per-edge `distribution` from the caller always wins —
+ *     this function only supplies what a caller omitted.
+ *
+ * `mainAxisPositions`'s own `space-around` branch already centres a lone
+ * item with no `count === 1` special case beyond the one CSS itself
+ * requires (see that function's own docblock) — verified, not
+ * re-implemented, by `PortEdge.stories.tsx`'s `EdgeDistributionControls`.
+ */
+export function defaultDistributionForEdges(hasRowEdgePopulated: boolean): Distribution {
+  return hasRowEdgePopulated
+    ? { mode: "distribute", scheme: "space-around" }
+    : { mode: "aligned", anchor: "start", gap: DEFAULT_ALIGN_GAP, edgePadding: 0 };
+}
+
 export interface Size {
   width: number;
   height: number;
