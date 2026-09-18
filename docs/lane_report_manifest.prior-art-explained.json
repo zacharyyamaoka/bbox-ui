@@ -3,7 +3,7 @@
   "summary": "Cards #4 (edge-promotion resolver), #6 (ports are a manifest) and #11 (the parametric drag-handles) from node-editor-prior-art-2026-09-17.html, re-read in real source and taught, not proposed — including the two places the original cards overstated.",
   "slug": "prior-art-explained",
   "date": "2026-09-18",
-  "base_ref": "main",
+  "base_ref": "454ab9c",
   "branch_label": "prior-art-explained lane (teaching, no product code touched)",
   "intro": [
     "You ruled on nine cards and asked to be taught three. This page is those three, each re-read in the actual donor source before drawing — maxGraph (Apache-2.0) and litegraph.js (MIT) in scratch checkouts, JointJS (MPL-2.0) read and cited only, SystemSketch read-only at <code>10748b8c</code>. Every figure names the file:line it was checked against.",
