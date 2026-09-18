@@ -1,0 +1,50 @@
+<!-- Mock: the two-producer ruling and its merge rule, drawn. Shares the
+     <style> block from comparison-mock-diff-paint.html (listed first). -->
+<p class="sub" style="margin-top:4px">The ruling: <b>diff keeps its own prop; the diff
+producer never writes into <code>diagnostics</code></b>. The list-with-stable-ids is the
+mechanism for many producers <em>of judgements</em>; <code>added/removed/modified</code>
+is not a severity, so the one merge rule the diagnostics prop owns —
+<code>max(severity)</code> — cannot rank it. Full reasoning:
+<code>docs/COMPARISON-NEXT-STEPS.md</code> §2. Below, the case the whole design exists
+to handle: <b>changed AND broken</b>, both marks, disjoint channels, no precedence.</p>
+
+<div class="mockrow">
+  <div class="mockfig" style="max-width:380px">
+    <div class="mockstage" style="min-height:210px; padding:38px 34px">
+      <div class="bblock" style="width:210px; margin:0 auto;
+           background:color-mix(in srgb, var(--ok) 7%, var(--panel2));
+           box-shadow:0 0 0 1.5px var(--err), 0 0 18px color-mix(in srgb, var(--err) 55%, transparent)">
+        <div class="btitle">run<span class="inkadd">Predict</span>
+          <span class="chip" style="margin-left:6px">was …<span class="strike">Inference</span></span>
+        </div>
+        <div class="bport"><span class="bdot"></span><span class="plabel">in</span></div>
+        <div class="bport added"><span class="bdot"></span><span class="plabel">confidence</span><span style="margin-left:auto;font-weight:700">+</span></div>
+        <div style="position:absolute; top:-11px; right:-11px; width:22px; height:22px;
+             border-radius:50%; background:var(--err); color:#fff; font:700 12px/22px var(--mono);
+             text-align:center; box-shadow:0 0 0 2px #0a0b0e">2</div>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-top:26px; gap:10px">
+        <span class="note" style="color:var(--ok)">wash + chips — diff channel, <b>inside</b></span>
+        <span class="note" style="color:var(--err)">halo + flag — diagnostics channel, <b>outside</b></span>
+      </div>
+    </div>
+    <div class="mockcap"><b>One element, both producers, both fully rendered</b>
+      The diagnostic halo draws <em>outside</em> the diff outline (INVALID-STATES §6's
+      closing rule, honored verbatim); the flag owns the top-right corner — three library
+      traditions converged there — so the <code>delta-badge</code> variant's pose badge
+      yields to top-left. No cross-axis <code>max()</code> exists: composition is channel
+      disjointness, not precedence.</div>
+  </div>
+
+  <div class="mockfig" style="max-width:520px; flex:1 1 380px">
+    <table class="look">
+      <tr><th></th><th><code>diagnostics?: Diagnostic[]</code></th><th><code>diff?: DiffMark</code></th></tr>
+      <tr><td><b>Vocabulary</b></td><td>ranked — <code>error &gt; warning &gt; info</code>, chrome paints <code>max(severity)</code></td><td>unranked — <code>added | removed | modified</code>; no "worst"</td></tr>
+      <tr><td><b>Payload</b></td><td>prose about a judgement: <code>{id, severity, message?, code?}</code></td><td>structured ink: <code>FieldDiff[]</code> tokens, <code>PriorPose</code> ghost, variant</td></tr>
+      <tr><td><b>Lifecycle</b></td><td>re-derived continuously on the live document; never persisted</td><td>exists only under the comparison lens; cleared whole-document (<code>withoutDiffState</code>)</td></tr>
+      <tr><td><b>Producers</b></td><td>every <em>judgement</em> producer — graph linter, type checker, future analyzers — kept safe by stable ids</td><td>exactly one: <code>diffScene</code>, stating facts about a <em>pair</em> of documents</td></tr>
+      <tr><td><b>Channels owned</b></td><td>outer halo, corner flag, wavy underline, cable backdrop, popover</td><td>fills, washes, chips, ghosts, token ink</td></tr>
+      <tr><td><b>Shared</b></td><td colspan="2">the three severity tokens where both need severity ink; nothing else — the diff lane never imports a <code>diagnostics</code> type (donor's WHY, <code>diagnosticsModel.ts:48-64</code>)</td></tr>
+    </table>
+  </div>
+</div>
