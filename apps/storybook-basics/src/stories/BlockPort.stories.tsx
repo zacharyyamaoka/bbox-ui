@@ -3,20 +3,26 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
+import { Badge } from "../components/badge";
+import { Bar, type BarSize } from "../components/bar";
 import { Block } from "../components/block";
-import { BlockPort, RAIL_SLOT_MAIN_PX, railDotCentres, railPitches } from "../components/blockPort";
+import { BlockPort, RAIL_SLOT_MAIN_PX, functionPortHeaderInsetPx, railDotCentres, railPitches } from "../components/blockPort";
 import {
   BLOCK_PORT_LAYOUT_LABELS,
   BLOCK_PORT_LAYOUTS,
   BLOCK_VIEW_LABELS,
   BLOCK_VIEWS,
   RAIL_END_MARGIN_PX,
+  RAIL_GAP_PX,
   offsetEdgePaddingPx,
   railPitchPx,
   type BlockPortLayout,
   type BlockView,
 } from "../components/blockPort.layout";
-import { PORT_DIAMETERS, type BlockSide } from "../components/port.layout";
+import { EditableText } from "../components/editableText";
+import { Glyph } from "../components/glyph";
+import { PORT_DIAMETERS, type BlockSide, type PortSize } from "../components/port.layout";
+import type { Distribution } from "../components/portEdge.layout";
 import type { PortEdgeItem } from "../components/portEdge";
 
 /**
@@ -765,15 +771,20 @@ function functionPortHolderOf(wrapper: HTMLElement): HTMLElement | null {
   return wrapper.querySelector<HTMLElement>(':scope > [data-slot="block-port-function"]');
 }
 
-/** A visibly two-line header — the second header SIZE (S5): if the dot's Y
- *  came from some constant instead of a real measurement, this is the
- *  fixture that would catch it. */
+/**
+ * A genuinely TALL header that is still ONE LINE of text — the second
+ * header SIZE (S5: if the dot's Y came from some constant instead of a
+ * real measurement, this is the fixture that would catch it). Previously
+ * this was two lines with an explicit `<br/>` — Zach, 2026-09-17: "please
+ * get rid of this Two line function port. this is not a part of our
+ * visual language, two lines per port." The specimen only ever needed
+ * HEIGHT, not a second line — larger type and generous `lineHeight` reach
+ * the same S5 point without it.
+ */
 function TallHeader() {
   return (
-    <div style={{ lineHeight: "16px" }}>
-      Two
-      <br />
-      Lines
+    <div data-slot="tall-header-text" style={{ fontSize: 20, lineHeight: "40px" }}>
+      Tall Header
     </div>
   );
 }
@@ -869,6 +880,19 @@ export const FunctionPort: Story = {
     await expect(tallHeader.getBoundingClientRect().height).toBeGreaterThan(30); // genuinely taller than the single-line panels above
     const tallDotY = tallDot.getBoundingClientRect().top + tallDot.getBoundingClientRect().height / 2;
     expectWithin(tallDotY, headerCenterOf(tall), 1, "tall header — function port centre vs the header band's own centre line");
+
+    // "Tall" must not mean "two lines" (Zach, 2026-09-17: "two lines per
+    // port" is not the visual language) — a `Range` over the text node's
+    // own client rects is the measurement, stronger than a height guess:
+    // a wrapped or `<br/>`-split node reports more than one rect, a
+    // genuinely single-line one reports exactly one, however tall it is.
+    const tallHeaderText = required<HTMLElement>(tall, '[data-slot="tall-header-text"]', "the tall header's text");
+    // The WHOLE element's contents, not just its first child — a `<br/>`
+    // between two text nodes would otherwise hide behind a range that only
+    // ever looked at the first one.
+    const range = document.createRange();
+    range.selectNodeContents(tallHeaderText);
+    await expect(range.getClientRects().length).toBe(1);
   },
 };
 
@@ -957,5 +981,304 @@ export const FunctionPortIsFixed: Story = {
     // And it never joined the rail it was dragged toward.
     const railIdsAfterAttempt = Array.from(rail.querySelectorAll<HTMLElement>("[data-port-id]")).map((el) => el.getAttribute("data-port-id"));
     await expect(railIdsAfterAttempt).toEqual(railIdsAfter);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* FunctionPortHeaderInset — D-5: the header's own content starts on    */
+/* the same x as a body port's LABEL, not the dot. Zach's screenshot     */
+/* (153855) draws the rule literally — CURRENT BAD has "Planner" hard    */
+/* against the dot, DESIRED insets it, and a third panel's red line runs */
+/* through the labels below ("offset is same as ports.."), not the      */
+/* dots. "If there is no label then... the bar content should start     */
+/* where the label would start" — measured the SAME way either way,     */
+/* below, since `LabeledPort`'s label span exists (and sits at its final */
+/* x) whether or not it holds text.                                     */
+/* ------------------------------------------------------------------ */
+
+type HeaderShapeKind = "iconTitle" | "titleBadge" | "full";
+
+/**
+ * A stable seam the play function measures off, whatever sits inside it.
+ * Three shapes, matching screenshot 153655's own stack (glyph + title +
+ * badge + type) plus two smaller cuts of it — Zach's own ask was to "test
+ * the function port out with a couple different styles of headers".
+ */
+function HeaderContentRow({ shape }: { shape: HeaderShapeKind }) {
+  const row = { display: "flex", alignItems: "center", gap: 6, minWidth: 0 } as const;
+  switch (shape) {
+    case "iconTitle":
+      return (
+        <div data-slot="block-port-header-content" style={row}>
+          <Glyph content="lucide:rocket" />
+          <EditableText size="sm">Planner</EditableText>
+        </div>
+      );
+    case "titleBadge":
+      return (
+        <div data-slot="block-port-header-content" style={row}>
+          <EditableText size="sm">Planner</EditableText>
+          <Badge variant="secondary">Draft 1</Badge>
+        </div>
+      );
+    case "full":
+      return (
+        <div data-slot="block-port-header-content" style={row}>
+          <Glyph content="lucide:anchor" />
+          <EditableText size="sm">Planner</EditableText>
+          <Badge variant="secondary">Draft 1</Badge>
+          <EditableText size="sm" className="text-muted-foreground" style={{ fontSize: 12 }}>
+            Type
+          </EditableText>
+        </div>
+      );
+  }
+}
+
+/**
+ * D-5's fix, applied the way `BlockPort` itself never can — it does not
+ * touch a header's content (D-A1's own rule: `Block` is composed from the
+ * outside). `Bar`'s own public `style` prop overrides its `px-3` gutter on
+ * this ONE side, to exactly where a body port's label starts
+ * (`functionPortHeaderInsetPx`, blockPort.layout.ts) — not a hardcoded
+ * pixel, and not a second padding stacked on top of Bar's own (`Block`
+ * zeroes its own header padding whenever a `<Bar>` is the direct child, so
+ * Bar's inline override is the ONLY source of the inset).
+ */
+function insettedHeaderBar(shape: HeaderShapeKind, barSize: BarSize, diameter: PortSize): ReactNode {
+  return <Bar size={barSize} left={<HeaderContentRow shape={shape} />} style={{ paddingLeft: functionPortHeaderInsetPx(diameter) }} />;
+}
+
+const HEADER_INSET_SPECS: { id: string; shape: HeaderShapeKind; barSize: BarSize; label: string }[] = [
+  { id: "hi-icon-sm-label", shape: "iconTitle", barSize: "sm", label: "pose" },
+  { id: "hi-icon-sm-empty", shape: "iconTitle", barSize: "sm", label: "" },
+  { id: "hi-badge-md-label", shape: "titleBadge", barSize: "md", label: "pose" },
+  { id: "hi-badge-md-empty", shape: "titleBadge", barSize: "md", label: "" },
+  { id: "hi-full-lg-label", shape: "full", barSize: "lg", label: "pose" },
+  { id: "hi-full-lg-empty", shape: "full", barSize: "lg", label: "" },
+];
+
+function HeaderInsetPanel({ id, shape, barSize, label }: { id: string; shape: HeaderShapeKind; barSize: BarSize; label: string }) {
+  const diameter: PortSize = "md";
+  // "full" (glyph + title + badge + type) is the widest shape — a fixed
+  // 240px truncates it mid-word, which is a card-width choice, not
+  // something D-5's inset is responsible for proving.
+  const width = shape === "full" ? 320 : 240;
+  return (
+    <BlockPort id={id} view="port" functionPort diameter={diameter} edges={{ left: { items: [{ id: "in", label, state: "empty" }] } }}>
+      <Block header={insettedHeaderBar(shape, barSize, diameter)} body="body" width={width} height={140} />
+    </BlockPort>
+  );
+}
+
+function FunctionPortHeaderInsetGallery() {
+  return (
+    <div style={{ display: "flex", gap: 32, flexWrap: "wrap", padding: "48px 64px" }}>
+      {HEADER_INSET_SPECS.map((spec) => (
+        <div key={spec.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+            {spec.shape} · {spec.barSize} · {spec.label ? "label" : "no label"}
+          </span>
+          <HeaderInsetPanel id={spec.id} shape={spec.shape} barSize={spec.barSize} label={spec.label} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function headerContentLeftOf(wrapper: HTMLElement): number {
+  const content = required<HTMLElement>(wrapper, '[data-slot="block-port-header-content"]', "the header's content row");
+  return content.getBoundingClientRect().left;
+}
+
+/**
+ * Measured off the REAL rendered label, whether or not it holds text — a
+ * `DefaultPortLabel` span exists, and sits at its final x, even when
+ * `children` is empty (D2). So "where the label would start" and "where a
+ * real label starts" are the SAME measurement here, never a formula
+ * standing in for one of them.
+ */
+function bodyPortLabelLeftOf(wrapper: HTMLElement): number {
+  const label = required<HTMLElement>(
+    wrapper,
+    '[data-slot="block-port-rail"][data-edge="left"] [data-slot="port-label"]',
+    "the left rail's port label",
+  );
+  return label.getBoundingClientRect().left;
+}
+
+export const FunctionPortHeaderInset: Story = {
+  render: () => <FunctionPortHeaderInsetGallery />,
+  play: async ({ canvasElement }) => {
+    for (const spec of HEADER_INSET_SPECS) {
+      const wrapper = required<HTMLElement>(canvasElement, `[data-block-id="${spec.id}"]`, `the ${spec.id} panel`);
+      const headerLeft = headerContentLeftOf(wrapper);
+      const labelLeft = bodyPortLabelLeftOf(wrapper);
+      // D1 (a real label) and D2 (no label) are literally the same
+      // assertion, run over both — see bodyPortLabelLeftOf's own note.
+      expectWithin(headerLeft, labelLeft, 1, `${spec.id} — header content left vs body port label left`);
+    }
+
+    // Two distinct Bar SIZES are actually exercised above (sm, md, lg) —
+    // proving the inset doesn't quietly depend on the Bar's own height.
+    const sizes = new Set(HEADER_INSET_SPECS.map((s) => s.barSize));
+    await expect(sizes.size).toBeGreaterThanOrEqual(2);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* PortPopulationDefaults — E-3, assigned here because `BlockPort` is    */
+/* the one component that sees every edge at once. Zach, 2026-09-17:    */
+/* "if port edges on all 4 sides. then the edges should all be          */
+/* distribute and around. if port edges just on left or right, then it  */
+/* should be aligned to edge and to the start... if there is only 1     */
+/* port it should be in the middle."                                    */
+/* ------------------------------------------------------------------ */
+
+const POP_LEFT: PortEdgeItem[] = [
+  { id: "a", label: "a", state: "empty" },
+  { id: "b", label: "b", state: "empty" },
+];
+const POP_RIGHT: PortEdgeItem[] = [
+  { id: "x", label: "x", state: "empty" },
+  { id: "y", label: "y", state: "empty" },
+];
+// Deliberately ONE port — "if there is only 1 port it should be in the
+// middle" (D3's own claim, not a special case: `mainAxisPositions`'s
+// `space-around` branch already centres a lone box).
+const POP_TOP: PortEdgeItem[] = [{ id: "cfg", label: "cfg", state: "empty" }];
+const POP_BOTTOM: PortEdgeItem[] = [
+  { id: "log", label: "log", state: "empty" },
+  { id: "err", label: "err", state: "empty" },
+];
+
+/** D4's explicit win: the same aligned/start pairing E-3's OWN "left/right
+ *  only" default would have produced — deliberately, so what proves the
+ *  override worked is that it DISAGREES with the population default
+ *  (`distribute/space-around`) the same right edge gets in `pop-four`. */
+const EXPLICIT_RIGHT_OVERRIDE: Distribution = { mode: "aligned", anchor: "start", gap: RAIL_GAP_PX, edgePadding: 0 };
+
+function PortPopulationDemo() {
+  return (
+    <div style={{ display: "flex", gap: 48, flexWrap: "wrap", padding: "48px 64px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>left/right only — aligned to the start</span>
+        <BlockPort id="pop-lr" view="port" edges={{ left: { items: POP_LEFT }, right: { items: POP_RIGHT } }}>
+          <BandedFace width={200} height={220} />
+        </BlockPort>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>all four walls — distribute/around, the lone top port centred</span>
+        <BlockPort
+          id="pop-four"
+          view="port"
+          edges={{ left: { items: POP_LEFT }, right: { items: POP_RIGHT }, top: { items: POP_TOP }, bottom: { items: POP_BOTTOM } }}
+        >
+          <BandedFace width={200} height={220} />
+        </BlockPort>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>same four walls, right edge's `distribution` set explicitly — D4</span>
+        <BlockPort
+          id="pop-override"
+          view="port"
+          edges={{
+            left: { items: POP_LEFT },
+            right: { items: POP_RIGHT, distribution: EXPLICIT_RIGHT_OVERRIDE },
+            top: { items: POP_TOP },
+            bottom: { items: POP_BOTTOM },
+          }}
+        >
+          <BandedFace width={200} height={220} />
+        </BlockPort>
+      </div>
+    </div>
+  );
+}
+
+export const PortPopulationDefaults: Story = {
+  render: () => <PortPopulationDemo />,
+  play: async ({ canvasElement }) => {
+    const lrWrapper = required<HTMLElement>(canvasElement, '[data-block-id="pop-lr"]', "the left/right-only panel");
+    const fourWrapper = required<HTMLElement>(canvasElement, '[data-block-id="pop-four"]', "the all-four-walls panel");
+    const overrideWrapper = required<HTMLElement>(canvasElement, '[data-block-id="pop-override"]', "the override panel");
+
+    const lrLeftDots = railDotCentres(railOf(lrWrapper, "left"));
+    const fourLeftDots = railDotCentres(railOf(fourWrapper, "left"));
+    await expect(lrLeftDots).toHaveLength(2);
+    await expect(fourLeftDots).toHaveLength(2);
+
+    // D3: same items (POP_LEFT), same block size — the ONLY difference
+    // between `pop-lr` and `pop-four` is whether a top/bottom wall is ALSO
+    // populated, and that alone must move the left rail's own dots
+    // (aligned/start packs from the body top; distribute/space-around
+    // leaves margin before the first dot). Measured, not read off a prop.
+    await expect(Math.abs(lrLeftDots[0].y - fourLeftDots[0].y)).toBeGreaterThan(2);
+
+    // D3's other half: the lone top port centres on the wall.
+    const fourBlock = bandOf(fourWrapper).block;
+    const topDots = railDotCentres(railOf(fourWrapper, "top"));
+    await expect(topDots).toHaveLength(1);
+    expectWithin(topDots[0].x, fourBlock.left + fourBlock.width / 2, 1, "pop-four — the lone top port centred on the wall");
+
+    // D4: an explicit per-edge `distribution` still wins over the
+    // population default. Same all-four-walls population as `pop-four`,
+    // but the RIGHT edge is pinned to aligned/start explicitly — its dots
+    // must land somewhere different from `pop-four`'s own (default) right
+    // rail, which reads distribute/space-around.
+    const fourRightDots = railDotCentres(railOf(fourWrapper, "right"));
+    const overrideRightDots = railDotCentres(railOf(overrideWrapper, "right"));
+    await expect(fourRightDots).toHaveLength(2);
+    await expect(overrideRightDots).toHaveLength(2);
+    await expect(Math.abs(fourRightDots[0].y - overrideRightDots[0].y)).toBeGreaterThan(2);
+
+    // And the override left every OTHER edge alone — the left rail still
+    // reads the population default, matching `pop-four`'s own left rail.
+    const overrideLeftDots = railDotCentres(railOf(overrideWrapper, "left"));
+    expectWithin(overrideLeftDots[0].y, fourLeftDots[0].y, 1, "pop-override — untouched left rail matches the default four-wall reading");
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* SimpleFaceCollapsedCount — "+X ports" (screenshot 153001): "In       */
+/* simple view perhaps have option to show text here showing +X ports". */
+/* `renderCollapsed` already draws the one stand-in dot (D-A7); this     */
+/* proves the count sitting beside it names the TRUE hidden count.      */
+/* ------------------------------------------------------------------ */
+
+function SimpleFaceCollapsedCountDemo() {
+  return (
+    <Stage label="simple face · a wall's single dot names how many ports it stands for">
+      <BlockPort id="collapsed-count" view="simple" edges={{ left: { items: INPUTS }, right: { items: OUTPUTS } }}>
+        <SimpleFace width={220} height={200} />
+      </BlockPort>
+    </Stage>
+  );
+}
+
+export const SimpleFaceCollapsedCount: Story = {
+  render: () => <SimpleFaceCollapsedCountDemo />,
+  play: async ({ canvasElement }) => {
+    const wrapper = wrapperOf(canvasElement);
+
+    for (const [edge, items] of [
+      ["left", INPUTS],
+      ["right", OUTPUTS],
+    ] as const) {
+      const rail = railOf(wrapper, edge);
+      // Exactly one painted dot for the whole wall.
+      await expect(railDotCentres(rail)).toHaveLength(1);
+
+      const count = required<HTMLElement>(rail, '[data-slot="block-port-collapsed-count"]', `the ${edge} wall's collapsed count`);
+      const trueHiddenCount = items.length;
+
+      // The text says the NUMBER, not just "some" — parsed back out rather
+      // than string-matched against the literal template, so a wording
+      // change can't silently stop checking the count.
+      const match = (count.textContent ?? "").match(/\+(\d+) ports/);
+      if (!match) throw new Error(`${edge} wall — expected "+N ports", got "${count.textContent}"`);
+      await expect(Number(match[1])).toBe(trueHiddenCount);
+      await expect(Number(count.getAttribute("data-collapsed-count"))).toBe(trueHiddenCount);
+    }
   },
 };

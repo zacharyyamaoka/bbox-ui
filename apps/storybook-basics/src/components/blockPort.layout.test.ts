@@ -25,6 +25,7 @@ import {
   RAIL_MAIN_INSET_PX,
   alignedFirstCentrePx,
   functionPortCenterPx,
+  functionPortHeaderInsetPx,
   offsetEdgePaddingPx,
   railAxisFor,
   railBoxFor,
@@ -151,14 +152,26 @@ describe("railPlanFor — expanded", () => {
 });
 
 describe("railPlanFor — horizontal walls", () => {
-  it("spreads along the full wall with a constant corner margin, in every view", () => {
-    for (const view of ["port", "expanded"] as const) {
-      for (const edge of ["top", "bottom"] as const) {
-        const plan = railPlanFor(planInput({ view, edge }));
-        expect(plan.band).toBe("block");
-        expect(plan.endMarginPx).toBe(RAIL_END_MARGIN_PX);
-        expect(plan.distribution).toEqual({ mode: "distribute", scheme: "space-between" });
-      }
+  it("spreads along the full wall with a constant corner margin, in expanded view", () => {
+    for (const edge of ["top", "bottom"] as const) {
+      const plan = railPlanFor(planInput({ view: "expanded", edge }));
+      expect(plan.band).toBe("block");
+      expect(plan.endMarginPx).toBe(RAIL_END_MARGIN_PX);
+      expect(plan.distribution).toEqual({ mode: "distribute", scheme: "space-between" });
+    }
+  });
+
+  // E-3, 2026-09-17: superseded for "port" view specifically — a populated
+  // top/bottom wall is itself "a populated top/bottom wall" (its own plan's
+  // `populatedEdges` defaults to `[edge]`), so it now always distributes
+  // `space-around` rather than `space-between`. Corner clearance (band
+  // "block", RAIL_END_MARGIN_PX) is unchanged — only the SCHEME moved.
+  it("switches a horizontal wall in port view to space-around", () => {
+    for (const edge of ["top", "bottom"] as const) {
+      const plan = railPlanFor(planInput({ view: "port", edge }));
+      expect(plan.band).toBe("block");
+      expect(plan.endMarginPx).toBe(RAIL_END_MARGIN_PX);
+      expect(plan.distribution).toEqual({ mode: "distribute", scheme: "space-around" });
     }
   });
 
@@ -166,6 +179,36 @@ describe("railPlanFor — horizontal walls", () => {
     const plan = railPlanFor(planInput({ view: "simple", edge: "top", collapsePorts: true }));
     expect(plan.collapsed).toBe(true);
     expect(plan.endMarginPx).toBe(0);
+  });
+});
+
+// E-3, 2026-09-17 — Zach: "if port edges on all 4 sides. then the edges
+// should all be distribute and around. if port edges just on left or
+// right, then it should be aligned to edge and to the start." A single
+// edge's OWN plan cannot see its siblings, so `populatedEdges` carries the
+// whole block's populated set into `railPlanFor`.
+describe("railPlanFor — port view population defaults (E-3)", () => {
+  it("keeps left/right aligned to the start when only left/right are populated", () => {
+    for (const edge of ["left", "right"] as const) {
+      const plan = railPlanFor(planInput({ edge, populatedEdges: ["left", "right"] }));
+      expect(plan.distribution).toMatchObject({ mode: "aligned", anchor: "start" });
+    }
+  });
+
+  it("switches left/right to distribute/space-around once a top or bottom wall is populated too", () => {
+    for (const edge of ["left", "right"] as const) {
+      const plan = railPlanFor(planInput({ edge, populatedEdges: ["left", "right", "top"] }));
+      expect(plan.distribution).toEqual({ mode: "distribute", scheme: "space-around" });
+    }
+  });
+
+  it("a single edge with no `populatedEdges` override reads as populated-by-itself-only", () => {
+    // The default (`populatedEdges = [edge]`) is what keeps every existing
+    // single-edge caller — this file's own fixtures, BlockPortLane's
+    // lane-availability probe — reading exactly as before with no call-site
+    // change: "left" alone is not a horizontal wall, so it stays aligned.
+    const plan = railPlanFor(planInput({ edge: "left" }));
+    expect(plan.distribution).toMatchObject({ mode: "aligned" });
   });
 });
 
@@ -231,5 +274,22 @@ describe("functionPortCenterPx", () => {
   it("is null when the Block renders no header", () => {
     const { headerTop: _headerTop, ...noHeader } = BANDS;
     expect(functionPortCenterPx(noHeader)).toBeNull();
+  });
+});
+
+describe("functionPortHeaderInsetPx (D-5)", () => {
+  it("is the dot's radius, plus its ring overhang, plus the label gap — never a bare pixel", () => {
+    // md: 12px dot -> 6 radius + 5 ring (2 surface + 3 state) + 8 label gap.
+    expect(functionPortHeaderInsetPx("md")).toBe(19);
+    expect(functionPortHeaderInsetPx("sm")).toBe(4 + 5 + 8); // 8px dot
+    expect(functionPortHeaderInsetPx("lg")).toBe(9 + 5 + 8); // 18px dot
+  });
+
+  it("defaults to md when omitted", () => {
+    expect(functionPortHeaderInsetPx()).toBe(functionPortHeaderInsetPx("md"));
+  });
+
+  it("grows with an exact pixel diameter too, not just the named rungs", () => {
+    expect(functionPortHeaderInsetPx(40)).toBe(20 + 5 + 8);
   });
 });
