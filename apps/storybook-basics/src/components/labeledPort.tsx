@@ -18,25 +18,39 @@
 // renders nothing), and `anchored` (wall geometry for a real Block — a
 // Storybook specimen is exactly the standalone flex pairing this file keeps).
 //
-// What's REBUILT (D1, superseded 2026-09-16): the label slot's built-in
-// fill is no longer a `CodeField` port — Zach: "I have another agent that is
-// starting to port over the codefield... for now you can just use plain text
-// as a placeholder... integrate correctly with the codefield once that work
-// is done." `DefaultPortLabel` below wraps this app's own `EditableText`
-// instead. The SLOT BOUNDARY (`labelSlot`, present-beats-absent) is what
-// Phase 2 actually proves — swapping the fill for a real CodeField later is
-// one import in this file, not a rewrite of the placement math below.
+// What's REBUILT (D1, superseded 2026-09-16, superseded AGAIN 2026-09-17
+// (docs/FEEDBACK-2026-09-17c-PLAN.md F-1)): the label slot's built-in fill
+// went CodeField -> plain-text-via-`EditableText` -> plain-text-at-rest,
+// `CodeEditor` while editing. Zach's own diagnosis of the 2026-09-16 build:
+// "I also think in multi line edit mode, for simplicity we should be using
+// labeled ports that use the CodeEditor single line. Right now you may be
+// having difficulties because you are using EditableText in the label
+// slot." `DefaultPortLabel` below now conditionally renders ONE of a plain
+// `<span>` (rest) or a single-line `CodeEditor` (editing) at the SAME
+// position — never both at once, so entering edit mode REPLACES the display
+// text rather than painting an editor over it (F-1 item 2), and the type
+// size cannot drift between the two the way it could across two unrelated
+// components: both branches read `fontSizePx` off the exact same
+// `PORT_TEXT_SIZES[textSize]` number (F-1's own acceptance test — resting
+// `getComputedStyle().fontSize` vs the editor's — passes BY CONSTRUCTION,
+// not by two components happening to agree). The SLOT BOUNDARY (`labelSlot`,
+// present-beats-absent) is unchanged — a host that wants something else
+// entirely still swaps the fill with zero changes to the placement math
+// below (`LabeledPort.stories.tsx`'s own `CodeLabel` story already does
+// this).
 
+import type { LanguageSupport } from "@codemirror/language";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
-import { EditableText } from "./editableText";
+import { CodeEditor } from "./codeEditor";
 import { Port, type PortState } from "./port";
 import {
   PORT_DIAMETERS,
   PORT_LABEL_GAP,
   PORT_SECONDARY_SLOT_GAP_PX,
+  PORT_TEXT_SIZES,
   slotPlacementStyle,
   SECONDARY_LAYOUT_AS_ORIGIN,
   TEXT_LAYOUT_AS_PLACEMENT,
@@ -59,14 +73,22 @@ import {
 /* different editor passes `labelSlot` instead — see LabeledPortProps.   */
 /* ------------------------------------------------------------------ */
 
+/** Below this, the editor grows no narrower — a 1-2 char value still reads
+ *  as a text field, not a single blinking-caret sliver. */
+const MIN_LABEL_COLUMNS = 3;
+
 /**
- * Click-to-edit, same loop `EditableText.stories.tsx`'s own
- * `ControlledEditableText` demonstrates: local `value` mirrors `children`
- * whenever not mid-edit (so an unwired label simply reflects whatever the
- * host passes), and `onLabelWrite` fires live on every keystroke — the same
- * "fired on every keystroke" contract the donor's `CodeField`-backed
- * `PortLabel` documented for `onLabelWrite`. Escape reverts to the value
- * captured at the moment editing started.
+ * Click-to-edit. Two MUTUALLY EXCLUSIVE branches, never both mounted: at
+ * rest a plain `<span>` (`port-label-display`), while editing a single-line
+ * `CodeEditor` — swapping the element TYPE at the same tree position, so
+ * React unmounts one and mounts the other rather than layering one over the
+ * other (F-1 item 1/2: "the actual ports should basically look identical
+ * ... when you are in multi line edit mode, the display text shouldn't show
+ * any more"). Local `value` mirrors `children` whenever not mid-edit (so an
+ * unwired label simply reflects whatever the host passes), and
+ * `onLabelWrite` fires live on every keystroke — the same "fired on every
+ * keystroke" contract the donor's `CodeField`-backed `PortLabel` documented.
+ * Escape reverts to the value captured at the moment editing started.
  */
 function DefaultPortLabel({
   children = "",
@@ -75,6 +97,7 @@ function DefaultPortLabel({
   disabled = false,
   onLabelWrite,
   placeholder,
+  language,
   className,
   style,
 }: {
@@ -84,6 +107,7 @@ function DefaultPortLabel({
   disabled?: boolean;
   onLabelWrite?(value: string): void;
   placeholder?: string;
+  language?: LanguageSupport;
   className?: string;
   style?: CSSProperties;
 }) {
@@ -97,45 +121,86 @@ function DefaultPortLabel({
     if (!editing) setValue(children);
   }, [children, editing]);
 
+  // F-1's own acceptance test: `getComputedStyle().fontSize` on the resting
+  // label and on the editor's own text must be EQUAL. Both branches below
+  // read this SAME number — there is no second ladder to drift out of sync
+  // with (the bug Zach saw was two DIFFERENT components each picking their
+  // own size; one component reading one variable can't repeat that).
+  const fontSizePx = PORT_TEXT_SIZES[textSize];
+  // Text hugs the dot on the side the label actually flows toward — same
+  // intent `direction` carried on the donor's CodeField.
+  const align = direction === "output" ? "right" : "left";
+  const exitEditing = () => setEditing(false);
+
+  if (editing && !disabled) {
+    return (
+      <span data-slot="port-label" data-direction={direction} data-editing="true" className={cn("flex min-w-0 items-center", className)} style={style}>
+        <CodeEditor
+          value={value}
+          onWrite={(next) => {
+            setValue(next);
+            onLabelWrite?.(next);
+          }}
+          // Loses focus (click elsewhere, tab away) commits and exits —
+          // the ONE path `onEnter`/`onEscape` below don't already cover.
+          onEditEnd={exitEditing}
+          multiline={false}
+          language={language}
+          fontSizePx={fontSizePx}
+          align={align}
+          // An <input>-like port label: cut at the edge, no scrollbar —
+          // same convention `LabeledPort.stories.tsx`'s `CodeLabel` story
+          // already established for a CodeEditor filling this slot.
+          overflow="clip"
+          columns={Math.max(MIN_LABEL_COLUMNS, value.length)}
+          autoFocus="select"
+          onEnter={exitEditing}
+          onEscape={() => {
+            setValue(snapshotRef.current);
+            onLabelWrite?.(snapshotRef.current);
+            exitEditing();
+          }}
+        />
+      </span>
+    );
+  }
+
+  const isEmpty = value === "";
   return (
-    // WHY `overflow-clip [overflow-clip-margin:4px]`, not `overflow-hidden`
-    // (follow-up feedback item 4, same shape flagged in bar.tsx's own
-    // `cellClass`): `EditableText`'s focus ring is a real CSS `outline`,
-    // which paints OUTSIDE the input's border box — measured live, this
-    // span's rect and the editing `<input>`'s rect are IDENTICAL on all
-    // four sides, so a plain `overflow-hidden` here clips the ring away
-    // entirely (confirmed: the resting `EditableLabel` story showed no
-    // ring at all while editing). `overflow-clip-margin` is the CSS-spec
-    // native fix — it lets painting spill a few px past the box while
-    // still clipping genuine content overflow (a long label still
-    // ellipsizes via `EditableText`'s own truncation, this margin doesn't
-    // touch that).
-    <span data-slot="port-label" data-direction={direction} className={cn("flex min-w-0 items-center overflow-clip [overflow-clip-margin:4px]", className)} style={style}>
-      <EditableText
-        size={textSize}
-        editing={editing && !disabled}
-        placeholder={placeholder}
-        // Text hugs the dot on the side the label actually flows toward —
-        // same intent `direction` carried on the donor's CodeField.
-        justify={direction === "output" ? "right" : "left"}
-        onChange={(next) => {
-          setValue(next);
-          onLabelWrite?.(next);
-        }}
-        onCommit={() => setEditing(false)}
-        onCancel={() => {
-          setValue(snapshotRef.current);
-          onLabelWrite?.(snapshotRef.current);
-          setEditing(false);
-        }}
-        onClick={() => {
-          if (disabled) return;
-          snapshotRef.current = value;
-          setEditing(true);
+    <span
+      data-slot="port-label"
+      data-direction={direction}
+      data-editing="false"
+      className={cn("flex min-w-0 items-center", className)}
+      style={style}
+      onClick={() => {
+        if (disabled) return;
+        snapshotRef.current = value;
+        setEditing(true);
+      }}
+    >
+      {/* Truthful rendering: a long value still ellipsizes visually, but
+       *  the full string stays one hover away via `title` — the same
+       *  recipe `editableText.tsx`'s own `editable-text-content` span
+       *  uses, not reinvented here. */}
+      <span
+        data-slot="port-label-display"
+        title={!isEmpty ? value : undefined}
+        data-placeholder={isEmpty && placeholder ? "" : undefined}
+        style={{
+          fontSize: fontSizePx,
+          display: "block",
+          minWidth: 0,
+          maxWidth: "100%",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          textAlign: align,
+          opacity: isEmpty ? 0.5 : undefined,
         }}
       >
-        {value}
-      </EditableText>
+        {isEmpty ? (placeholder ?? "") : value}
+      </span>
     </span>
   );
 }
@@ -195,6 +260,14 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
   onLabelWrite?(value: string): void;
   /** Shown in the built-in label field when `children` is empty. */
   placeholder?: string;
+  /**
+   * The built-in label field's syntax parser while editing (F-1/F-3), e.g.
+   * `python()` from `@codemirror/lang-python` — the same prop `CodeEditor`
+   * itself already exposes, forwarded straight through. Omit for plain
+   * text. Ignored when `labelSlot` is set — that override owns its own
+   * editor entirely, same as `CodeLabel` story's pattern below.
+   */
+  labelLanguage?: LanguageSupport;
 }
 
 /**
@@ -227,6 +300,7 @@ export function LabeledPort({
   disabled = false,
   onLabelWrite,
   placeholder,
+  labelLanguage,
   className,
   style,
   children = "",
@@ -299,6 +373,7 @@ export function LabeledPort({
           disabled={disabled}
           onLabelWrite={onLabelWrite}
           placeholder={placeholder}
+          language={labelLanguage}
           className="absolute"
           style={labelSlotStyle}
         >
@@ -306,9 +381,20 @@ export function LabeledPort({
         </DefaultPortLabel>
       )}
       {resolvedSecondarySlot != null && (
+        // F-6: "the slot position may change but its always just a single
+        // horizontal text line, similar to the primary label slot" —
+        // `whiteSpace: nowrap` is the structural guarantee (Zach's
+        // screenshot showed "Event 4" wrapping to two lines the instant a
+        // host's own width constraint squeezed this slot; a shrink-to-fit
+        // absolute box never needs to wrap ON ITS OWN, but nothing stopped
+        // an ANCESTOR from imposing one — see `SecondarySlot` story's
+        // `SingleLineContent` case). `display: inline-flex` + `alignItems:
+        // center` keeps arbitrary content (a `<Pill>`, an icon+digit pair)
+        // vertically centred on one line rather than stacking as block
+        // children would.
         <span
           data-slot="port-secondary-slot"
-          className="pointer-events-none absolute"
+          className="pointer-events-none absolute inline-flex items-center whitespace-nowrap"
           style={slotPlacementStyle(secondaryPlacement, { w: diameterPx, h: diameterPx }, PORT_SECONDARY_SLOT_GAP_PX)}
         >
           {resolvedSecondarySlot}
