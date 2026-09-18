@@ -33,6 +33,7 @@ import { compactFormerValue, wordDiff } from "../scene/wordDiff";
 
 const meta = {
   title: "Blocks/Scene/Diff",
+  tags: ["area:blocks", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

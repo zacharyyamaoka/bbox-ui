@@ -76,6 +76,7 @@ function assertNoPlaceholderText(canvasElement: HTMLElement): void {
 
 const meta = {
   title: "Blocks/Block/Layouts",
+  tags: ["area:blocks", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

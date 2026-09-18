@@ -6,6 +6,7 @@ import { Glyph } from "../components/glyph";
 
 const meta = {
   title: "Basics/Glyph",
+  tags: ["area:basics", "lane:baseline"],
   component: Glyph,
   args: {
     content: "lucide:rocket",
