@@ -688,7 +688,7 @@ function ShowCardsAndMembersDemo() {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }} data-testid="interactive">
         <div style={{ display: "flex", gap: 16 }}>
           <Checkbox label="Show members" checked={showMembers} onChange={setShowMembers} />
-          <Checkbox label="Show cards" checked={showCards} onChange={setShowCards} />
+          <Checkbox label="Show dnd-kit card" checked={showCards} onChange={setShowCards} />
         </div>
         <Block width={260} header="toggle me" members={visibilityMembers()} membersLayout="stack" showMembers={showMembers} showCards={showCards} />
       </div>
@@ -745,7 +745,7 @@ export const ShowCardsAndMembers: Story = {
     await expect(beforeCards).toHaveLength(2);
 
     // Cards: on, each member gets an overlay.
-    await userEvent.click(canvas.getByLabelText("Show cards"));
+    await userEvent.click(canvas.getByLabelText("Show dnd-kit card"));
     await waitFor(() => {
       expect(interactive.querySelectorAll('[data-slot="block-member-card"]')).toHaveLength(2);
     });
@@ -768,7 +768,7 @@ export const ShowCardsAndMembers: Story = {
     }
 
     // ...and absent again once the toggle goes back off (B3's other half).
-    await userEvent.click(canvas.getByLabelText("Show cards"));
+    await userEvent.click(canvas.getByLabelText("Show dnd-kit card"));
     await waitFor(() => {
       expect(interactive.querySelectorAll('[data-slot="block-member-card"]')).toHaveLength(0);
     });

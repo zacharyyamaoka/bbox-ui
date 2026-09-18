@@ -1,7 +1,7 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { Profiler, useEffect, useLayoutEffect, useRef, useState, type ProfilerOnRenderCallback } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
-import type { DragEndEvent, DragOverEvent } from "@dnd-kit/core";
+import { useDndContext, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
 import { python } from "@codemirror/lang-python";
 
 import { Block } from "../components/block";
@@ -17,6 +17,12 @@ import {
   type Size,
 } from "../components/portEdge.layout";
 import type { BlockSide, PortTextLayout } from "../components/port.layout";
+
+function required<T extends Element>(root: ParentNode, selector: string, what: string): T {
+  const found = root.querySelector<T>(selector);
+  if (!found) throw new Error(`expected ${what} (\`${selector}\`)`);
+  return found;
+}
 
 /**
  * A genuine `@dnd-kit/core` `PointerSensor` drag, not a style-only stand-in:
@@ -264,7 +270,7 @@ function SingleEdgeDemo() {
       )}
       <div style={{ display: "flex", gap: 16 }}>
         <Checkbox label="Show ports" checked={showPorts} onChange={setShowPorts} />
-        <Checkbox label="Show cards" checked={showCard} onChange={setShowCard} />
+        <Checkbox label="Show dnd-kit card" checked={showCard} onChange={setShowCard} />
         <Checkbox label="Show container" checked={showContainer} onChange={setShowContainer} />
         <Checkbox label="Show center line" checked={showCenterLine} onChange={setShowCenterLine} />
       </div>
@@ -904,7 +910,7 @@ function CardOverlayGeometryDemo() {
   const [showCard, setShowCard] = useState(false);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }} data-testid="overlay-geometry">
-      <Checkbox label="Show cards" checked={showCard} onChange={setShowCard} />
+      <Checkbox label="Show dnd-kit card" checked={showCard} onChange={setShowCard} />
       <PortEdge edge="left" items={items} onItemsChange={setItems} showCard={showCard} size={{ width: 160, height: 260 }} />
     </div>
   );
@@ -1179,6 +1185,399 @@ export const DragPreservesSize: Story = {
     const grouped = await dragCardMeasuringMidGesture(nowGroupCard, nowSingleCard);
     await expect(Math.abs(grouped.mid.width - grouped.before.width)).toBeLessThanOrEqual(1);
     await expect(Math.abs(grouped.mid.height - grouped.before.height)).toBeLessThanOrEqual(1);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* DndKitCollisionRects — 2026-09-17, Lane I: "what does dnd-kit         */
+/* actually use for a grouped family... the goal with showing the cards */
+/* is to show what dnd is using for like the collision calculations."   */
+/* Read straight off dnd-kit's OWN registry (`useDndContext()`), mid-    */
+/* drag — not inferred from the DOM, not guessed. See the final report  */
+/* for the finding this settles.                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `useDndContext().droppableRects` is a live `Map<id, ClientRect>` dnd-kit
+ * itself measures — but ONLY while a drag is active (`MeasuringStrategy.
+ * WhileDragging`, the default: `disabled && !dragging` short-circuits to an
+ * empty map otherwise). A plain child of `PortEdgeDndProvider`'s own
+ * `DndContext` can read it directly; no instrumentation of `portEdge.tsx`
+ * itself is needed; `PortEdgeDndProvider` is already exported for exactly
+ * this kind of multi-edge / shared-context composition (`LeftAndRight`,
+ * `AroundABox`).
+ */
+let lastDroppableRects: Map<string, { top: number; left: number; width: number; height: number }> | null = null;
+
+function DndRectsProbe() {
+  const { active, droppableRects } = useDndContext();
+  useEffect(() => {
+    if (!active) return;
+    lastDroppableRects = new Map(
+      Array.from(droppableRects.entries()).map(([id, rect]) => [String(id), { top: rect.top, left: rect.left, width: rect.width, height: rect.height }]),
+    );
+  }, [active, droppableRects]);
+  return null;
+}
+
+const COLLISION_ITEMS: PortEdgeItem[] = [
+  { id: "ra", label: "args", state: "empty" },
+  { id: "rb", label: "kwargs", state: "empty" },
+  { id: "rc", label: "solo", state: "empty" },
+];
+
+function DndKitCollisionRectsDemo() {
+  const [items, setItems] = useState<PortEdgeItem[]>(COLLISION_ITEMS);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+        args/kwargs grouped (not collapsed), solo ungrouped — drag any card to populate dnd-kit's own `droppableRects`
+      </span>
+      <PortEdgeDndProvider>
+        <PortEdge edge="left" items={items} onItemsChange={setItems} groups="ra, rb" groupMode="grouped" size={{ width: 200, height: 300 }} />
+        <DndRectsProbe />
+      </PortEdgeDndProvider>
+    </div>
+  );
+}
+
+/** Same synthetic-drag technique as `dragCard`, but stops MID gesture
+ *  (after clearing the activation distance, before pointerup) so
+ *  `droppableRects` is captured while `active` is actually set, then
+ *  releases — a completed drag would work too, but a still-active one is
+ *  the more direct read. */
+async function dragMidGestureAndRelease(card: Element): Promise<void> {
+  const fire = (type: string, x: number, y: number) =>
+    card.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, button: 0, buttons: 1, pointerType: "mouse", clientX: x, clientY: y }),
+    );
+  const r = card.getBoundingClientRect();
+  const startX = r.left + r.width / 2;
+  const startY = r.top + r.height / 2;
+  fire("pointerdown", startX, startY);
+  await new Promise((res) => setTimeout(res, 30));
+  fire("pointermove", startX, startY + 10); // clears activationConstraint.distance -> active gets set
+  await new Promise((res) => setTimeout(res, 60));
+  fire("pointerup", startX, startY + 10);
+  await new Promise((res) => setTimeout(res, 60));
+}
+
+export const DndKitCollisionRects: Story = {
+  render: () => <DndKitCollisionRectsDemo />,
+  play: async ({ canvasElement }) => {
+    lastDroppableRects = null;
+    const track = canvasElement.querySelector('[data-slot="port-edge"]');
+    if (!(track instanceof HTMLElement)) throw new Error('expected a [data-slot="port-edge"]');
+    const cards = Array.from(track.querySelectorAll('[data-slot="port-edge-card"]'));
+    await expect(cards).toHaveLength(2); // 2 SLOTS: the (ra,rb) group + the solo "rc" — never 3.
+    const groupCard = cards.find((c) => c.querySelectorAll('[data-slot="port-dot"]').length === 2);
+    if (!groupCard) throw new Error("expected the grouped slot's own card wrapper");
+
+    await dragMidGestureAndRelease(groupCard);
+    await waitFor(() => expect(lastDroppableRects).not.toBeNull());
+    const rects = lastDroppableRects!;
+
+    // THE FINDING: exactly as many droppable rects as SLOTS (2), never as
+    // many as raw ports (3) — dnd-kit's own registry, not the DOM, proves a
+    // grouped-not-collapsed family collides as ONE rectangle, because it is
+    // registered as one `useSortable({id: slot.slotId})`, not one per member.
+    // dnd-kit registers THREE droppables total here, not two: the whole
+    // TRACK (`PortEdgeBody`'s own `useDroppable({id: containerId})`, id
+    // `"left"` — this edge's `id`) PLUS one per SLOT (`useSortable` inside
+    // `SortableSlotCard`). Measured live: `{"g0": h=146, "rc": h=24, "left":
+    // h=300}` — the track-level entry is a coarse whole-edge drop target,
+    // unrelated to which PORTS are grouped, so the question this story
+    // actually answers — "one rect per family, or one per member?" — is
+    // decided by the SLOT-level entries alone. Filtering the track's own id
+    // out is what makes that comparison honest.
+    const slotRects = new Map(Array.from(rects.entries()).filter(([id]) => id !== "left"));
+    await expect(slotRects.size).toBe(2); // 2 SLOTS (the group + the solo) — never 3 (the raw port count).
+
+    const memberRects = Array.from(track.querySelectorAll('[data-slot="port-edge-member"]')).map((m) => m.getBoundingClientRect());
+    await expect(memberRects).toHaveLength(3); // 3 rendered PORT boxes...
+    // ...but no SLOT-level id names an individual grouped member — dnd-kit
+    // never registered "ra" or "rb" on their own, only their group's slotId.
+    await expect(slotRects.has("ra")).toBe(false);
+    await expect(slotRects.has("rb")).toBe(false);
+
+    // The group's own registered rect is WIDER than a single member box
+    // (slotMainPx=24) — it encloses BOTH members, not one of them.
+    const groupSlotId = Array.from(slotRects.keys()).find((id) => id !== "rc");
+    if (!groupSlotId) throw new Error("expected a group slot id in droppableRects");
+    const groupRect = slotRects.get(groupSlotId)!;
+    await expect(groupRect.height).toBeGreaterThan(24 * 1.5); // taller than one member's own 24px box.
+    // ...and equal to the SAME wrapping div's own live rect — the group's
+    // rendered box IS what dnd-kit measured, not a coincidence of numbers.
+    const groupCardBox = groupCard.getBoundingClientRect();
+    await expect(Math.abs(groupRect.height - groupCardBox.height)).toBeLessThan(1);
+    await expect(Math.abs(groupRect.width - groupCardBox.width)).toBeLessThan(1);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* GroupedFamilyCard — I3: grouping collapsed vs expanded, the card      */
+/* toggle available in BOTH. The overlay drawn is EXACTLY the rect       */
+/* `DndKitCollisionRects` (above) measured — one box per SLOT.           */
+/* ------------------------------------------------------------------ */
+
+const FAMILY_CARD_ITEMS: PortEdgeItem[] = [
+  { id: "fa", label: "args", state: "empty" },
+  { id: "fb", label: "kwargs", state: "wired" },
+  { id: "fc", label: "solo", state: "received" },
+];
+
+function GroupedFamilyPanel({ groupMode, showCard, caption }: { groupMode: "grouped" | "collapsed"; showCard: boolean; caption: string }) {
+  const [items, setItems] = useState<PortEdgeItem[]>(FAMILY_CARD_ITEMS);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{caption}</span>
+      <PortEdge edge="left" items={items} onItemsChange={setItems} groups="fa, fb" groupMode={groupMode} showCard={showCard} size={{ width: 180, height: 280 }} />
+    </div>
+  );
+}
+
+function GroupedFamilyCardDemo() {
+  const [showCard, setShowCard] = useState(false);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <Checkbox label="Show dnd-kit card" checked={showCard} onChange={setShowCard} />
+      <div style={{ display: "flex", gap: 32 }}>
+        <GroupedFamilyPanel groupMode="grouped" showCard={showCard} caption="Grouped — expanded (every member its own dot, one shared card)" />
+        <GroupedFamilyPanel groupMode="collapsed" showCard={showCard} caption="Grouped — collapsed (one +N chip, same card idiom)" />
+      </div>
+    </div>
+  );
+}
+
+export const GroupedFamilyCard: Story = {
+  render: () => <GroupedFamilyCardDemo />,
+  play: async ({ canvasElement }) => {
+    const tracks = Array.from(canvasElement.querySelectorAll('[data-slot="port-edge"]')) as HTMLElement[];
+    await expect(tracks).toHaveLength(2);
+    const [expanded, collapsed] = tracks;
+
+    // Card off by default: no surfaces anywhere yet.
+    await expect(canvasElement.querySelectorAll('[data-slot="port-edge-card-surface"]')).toHaveLength(0);
+
+    const checkbox = required<HTMLInputElement>(canvasElement, 'input[type="checkbox"]', "the show-dnd-kit-card checkbox");
+    await userEvent.click(checkbox);
+
+    // Expanded: TWO real dots (args, kwargs) rendered — but only ONE card
+    // surface, drawn once at the GROUP level (portEdge.tsx's `GroupSlotBody`
+    // fix), not one per member.
+    await waitFor(() => {
+      expect(expanded.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(3); // fa, fb, fc all real dots
+    });
+    const expandedGroup = required<HTMLElement>(expanded, '[data-slot="port-edge-group"]', "the expanded group container");
+    await expect(expandedGroup.querySelectorAll('[data-slot="port-edge-card-surface"]')).toHaveLength(1);
+    await expect(expandedGroup.querySelectorAll('[data-slot="port-edge-member"] > [data-slot="port-edge-card-surface"]')).toHaveLength(0);
+    // That one surface is WIDER than a single 24px member box — "like one
+    // larger card", not two small ones with a gap.
+    const surfaceRect = required<HTMLElement>(expandedGroup, '[data-slot="port-edge-card-surface"]', "the group's card surface").getBoundingClientRect();
+    await expect(surfaceRect.height).toBeGreaterThan(24 * 1.5);
+
+    // Collapsed: ONE dot standing for the whole family, ONE card — the
+    // idiom this already had (B8), unchanged by this fix.
+    await waitFor(() => {
+      expect(collapsed.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(2); // the collapsed chip + solo
+    });
+    await expect(collapsed.querySelectorAll('[data-slot="port-edge-card-surface"]')).toHaveLength(2); // one per slot, same as expanded's slot count
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* DragSmoothnessProfile — "the dragging of the grouped ports is not as  */
+/* smooth as I would like it to be." A MEASUREMENT, not a guess: React's */
+/* own `<Profiler>` records every commit's real render cost while        */
+/* dragging a card on an all-singleton edge vs an edge carrying a real   */
+/* 3-member group — same 7 raw ports either way, so the only variable is */
+/* whether a group is on the track. See the final report for the        */
+/* numbers this run produced and the cause they point to.                */
+/* ------------------------------------------------------------------ */
+
+const PROFILE_ITEMS_FLAT: PortEdgeItem[] = [
+  { id: "f1", label: "args", state: "empty" },
+  { id: "f2", label: "kwargs", state: "empty" },
+  { id: "f3", label: "extra", state: "empty" },
+  { id: "f4", label: "in", state: "wired" },
+  { id: "f5", label: "out", state: "received" },
+  { id: "f6", label: "cfg", state: "empty" },
+  { id: "f7", label: "err", state: "empty" },
+];
+const PROFILE_ITEMS_GROUPED: PortEdgeItem[] = [
+  { id: "g1", label: "args", state: "empty" },
+  { id: "g2", label: "kwargs", state: "empty" },
+  { id: "g3", label: "extra", state: "empty" },
+  { id: "g4", label: "in", state: "wired" },
+  { id: "g5", label: "out", state: "received" },
+  { id: "g6", label: "cfg", state: "empty" },
+  { id: "g7", label: "err", state: "empty" },
+];
+
+interface CommitRecord {
+  actualDuration: number;
+}
+// Module-level, reset before each measured drag — `<Profiler>`'s own
+// callback has no way to hand data back except a side channel, and this
+// story only ever runs one drag at a time (no concurrent profiling).
+let profileCommits: CommitRecord[] = [];
+const recordCommit: ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
+  profileCommits.push({ actualDuration });
+};
+
+function DragProfileDemo() {
+  const [flatItems, setFlatItems] = useState<PortEdgeItem[]>(PROFILE_ITEMS_FLAT);
+  const [groupedItems, setGroupedItems] = useState<PortEdgeItem[]>(PROFILE_ITEMS_GROUPED);
+  return (
+    <div style={{ display: "flex", gap: 32 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>7 ports, no groups — the baseline</span>
+        <Profiler id="drag-profile-flat" onRender={recordCommit}>
+          <PortEdge edge="left" items={flatItems} onItemsChange={setFlatItems} size={{ width: 180, height: 460 }} />
+        </Profiler>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>7 ports, args/kwargs/extra grouped — same raw port count</span>
+        <Profiler id="drag-profile-grouped" onRender={recordCommit}>
+          <PortEdge edge="left" items={groupedItems} onItemsChange={setGroupedItems} groups="g1, g2, g3" groupMode="grouped" size={{ width: 180, height: 460 }} />
+        </Profiler>
+      </div>
+    </div>
+  );
+}
+
+function raf(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+/** Real PointerSensor drag, held for `steps` real frames apart (`raf`) —
+ *  `dragCard`'s own technique, extended to isolate PER-MOVE commit cost
+ *  instead of only the end state. `profileCommits` is cleared right after
+ *  activation, so only the steady-state drag frames are counted — not the
+ *  one-time activation commit, which both configurations pay identically. */
+async function dragAndCollectCommits(card: Element, steps: number): Promise<CommitRecord[]> {
+  const fire = (type: string, x: number, y: number) =>
+    card.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, button: 0, buttons: 1, pointerType: "mouse", clientX: x, clientY: y }),
+    );
+  const r = card.getBoundingClientRect();
+  const startX = r.left + r.width / 2;
+  const startY = r.top + r.height / 2;
+  fire("pointerdown", startX, startY);
+  await raf();
+  fire("pointermove", startX, startY + 10); // clears activationConstraint.distance
+  await raf();
+  profileCommits = [];
+  for (let i = 1; i <= steps; i++) {
+    fire("pointermove", startX, startY + 10 + i * 4);
+    await raf();
+  }
+  const commits = profileCommits;
+  fire("pointerup", startX, startY + 10 + steps * 4);
+  await raf();
+  return commits;
+}
+
+export const DragSmoothnessProfile: Story = {
+  render: () => <DragProfileDemo />,
+  play: async ({ canvasElement }) => {
+    const tracks = Array.from(canvasElement.querySelectorAll('[data-slot="port-edge"]')) as HTMLElement[];
+    await expect(tracks).toHaveLength(2);
+    const [flatTrack, groupedTrack] = tracks;
+
+    const flatCard = required<HTMLElement>(flatTrack, '[data-slot="port-edge-card"]', "the flat edge's first card");
+    const groupedCards = Array.from(groupedTrack.querySelectorAll('[data-slot="port-edge-card"]'));
+    const groupCard = groupedCards.find((c) => c.querySelectorAll('[data-slot="port-dot"]').length === 3);
+    if (!groupCard) throw new Error("expected the 3-member group's own card wrapper");
+
+    const STEPS = 15;
+    const flatCommits = await dragAndCollectCommits(flatCard, STEPS);
+    const groupedCommits = await dragAndCollectCommits(groupCard, STEPS);
+
+    const totalMs = (records: CommitRecord[]) => records.reduce((sum, r) => sum + r.actualDuration, 0);
+    const flatTotalMs = totalMs(flatCommits);
+    const groupedTotalMs = totalMs(groupedCommits);
+
+    const pctDelta = ((groupedTotalMs - flatTotalMs) / flatTotalMs) * 100;
+    // The measurement — printed for the report, not gated on a strict
+    // wall-clock budget (a hard ms threshold on a shared CI runner is
+    // exactly the flaky-gate class this repo's own rules warn against).
+    // The real assertion is the structural one below.
+    // eslint-disable-next-line no-console
+    console.log(
+      `[DragSmoothnessProfile] flat(7 singles, 7 slots): ${flatCommits.length} commits / ${flatTotalMs.toFixed(2)}ms total / ${(flatTotalMs / STEPS).toFixed(3)}ms per move` +
+        ` · grouped(3+4, 5 slots): ${groupedCommits.length} commits / ${groupedTotalMs.toFixed(2)}ms total / ${(groupedTotalMs / STEPS).toFixed(3)}ms per move` +
+        ` · grouped is ${Math.abs(pctDelta).toFixed(0)}% ${pctDelta < 0 ? "CHEAPER" : "more expensive"} in total commit cost (React render, not paint/composite)`,
+    );
+
+    // Both drags actually ran and were measured (a zero-commit result would
+    // mean the Profiler never fired, which would make the numbers above
+    // meaningless rather than merely small).
+    await expect(flatCommits.length).toBeGreaterThan(0);
+    await expect(groupedCommits.length).toBeGreaterThan(0);
+
+    // React's own render cost is CHEAPER for the grouped edge (fewer top-
+    // level sortable SLOTS — 5, vs the flat edge's 7 — means fewer sibling
+    // rects `useDerivedTransform` has to re-measure per frame). So the
+    // "not as smooth" complaint is not a compute-cost problem. The second,
+    // corroborating measurement below tests the other candidate: does
+    // reordering PAST a group move an unrelated BYSTANDER card farther than
+    // reordering past a single port does — a bigger visual jump per event,
+    // even though there are fewer events overall. Re-queried fresh (never
+    // by fixed index) because the profiling drags above may themselves have
+    // already reordered either track — a real `PointerSensor` drag that
+    // crosses a neighbour's midpoint DOES commit a reorder on release.
+    //
+    // PREDICTION, worked out from `distributionStyle`'s real CSS
+    // `justify-content` (portEdge.layout.ts): a bystander's position is the
+    // cumulative sum of every PRECEDING slot's own height plus gaps. An
+    // ADJACENT swap (index i <-> i+1, what `dragCard` produces here) leaves
+    // that sum UNCHANGED for anything after index i+1 — the two swapped
+    // slots' combined height is the same regardless of which one comes
+    // first — so a bystander at i+2 should measure ~0px of movement for
+    // EITHER edge, group or no group. Asserted below, not just logged: a
+    // non-zero result here would mean the prediction (and the closed-form
+    // gap model `interSlotGapPx` documents) is wrong.
+    const siblingShift = (before: DOMRect, after: DOMRect) => Math.hypot(after.left - before.left, after.top - before.top);
+
+    // Flat: drag the FIRST rendered card past the SECOND — measure how far
+    // an uninvolved THIRD (bystander) card ends up moving.
+    const flatCardsBefore = Array.from(flatTrack.querySelectorAll('[data-slot="port-edge-card"]'));
+    if (flatCardsBefore.length < 3) throw new Error("expected at least 3 cards on the flat edge");
+    const flatBystanderBefore = flatCardsBefore[2].getBoundingClientRect();
+    await dragCard(flatCardsBefore[0], flatCardsBefore[1]);
+    await waitFor(() => expect(flatTrack.querySelectorAll('[data-slot="port-edge-card"]')).toHaveLength(7));
+    const flatBystanderAfter = flatTrack.querySelectorAll('[data-slot="port-edge-card"]')[2].getBoundingClientRect();
+    const flatShift = siblingShift(flatBystanderBefore, flatBystanderAfter);
+
+    // Grouped: drag the GROUP (found by dot count, never by index) past its
+    // immediate NEXT sibling in DOM order — measure a bystander two slots
+    // away from the group's own starting position.
+    const groupedCardsBefore = Array.from(groupedTrack.querySelectorAll('[data-slot="port-edge-card"]'));
+    const groupIndexBefore = groupedCardsBefore.findIndex((c) => c.querySelectorAll('[data-slot="port-dot"]').length === 3);
+    if (groupIndexBefore === -1 || groupIndexBefore + 2 >= groupedCardsBefore.length) throw new Error("expected the group plus two more slots after it");
+    const groupedBystanderBefore = groupedCardsBefore[groupIndexBefore + 2].getBoundingClientRect();
+    // Adjacent-index swap (arrayMove(items, i, i+1) on two neighbours) only
+    // ever exchanges THOSE two positions — every other index, the
+    // bystander's included, keeps its own index across the reorder, so
+    // re-reading the same index post-drag is correct here (not an
+    // assumption borrowed from the flat case; re-verified for this specific
+    // adjacent-swap shape).
+    await dragCard(groupedCardsBefore[groupIndexBefore], groupedCardsBefore[groupIndexBefore + 1]);
+    await waitFor(() => expect(groupedTrack.querySelectorAll('[data-slot="port-edge-card"]')).toHaveLength(5));
+    const groupedBystanderAfter = groupedTrack.querySelectorAll('[data-slot="port-edge-card"]')[groupIndexBefore + 2].getBoundingClientRect();
+    const groupedShift = siblingShift(groupedBystanderBefore, groupedBystanderAfter);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[DragSmoothnessProfile] bystander displacement after an adjacent swap — flat: ${flatShift.toFixed(1)}px · grouped: ${groupedShift.toFixed(1)}px` +
+        " (both ~0px confirms the prediction above: an adjacent swap's combined height is order-independent, group or not)",
+    );
+    // Confirmed, not assumed: neither edge moves its bystander meaningfully
+    // — "moving a large object among small ones" is NOT what makes an
+    // adjacent reorder feel heavier, at least not via this mechanism.
+    await expect(flatShift).toBeLessThan(2);
+    await expect(groupedShift).toBeLessThan(2);
   },
 };
 

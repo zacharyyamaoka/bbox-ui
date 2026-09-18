@@ -5,8 +5,10 @@ import { expect, userEvent, waitFor } from "storybook/test";
 
 import { Block } from "../components/block";
 import { BlockPort } from "../components/blockPort";
+import { RAIL_GAP_PX } from "../components/blockPort.layout";
 import type { BlockSide } from "../components/port.layout";
-import type { PortEdgeItem } from "../components/portEdge";
+import type { PortEdgeItem, PortEdgeProps } from "../components/portEdge";
+import type { Distribution } from "../components/portEdge.layout";
 import { ASYNC_PACKET_DASHARRAY, type TraceRouting } from "../components/trace.layout";
 import { wiredPortKeys, withWiredState, type Wire } from "../components/wiring";
 import { WireLayer } from "../components/wireLayer";
@@ -105,6 +107,40 @@ function toScreen(svg: SVGSVGElement, x: number, y: number): { x: number; y: num
 function dotCentre(dot: HTMLElement): { x: number; y: number } {
   const r = dot.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+/** Plain rect overlap — no tolerance, since "touching but not overlapping"
+ *  (`a.right === b.left`) is not a collision. */
+function rectsIntersect(a: DOMRect, b: DOMRect): boolean {
+  return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+}
+
+/**
+ * The defect this file's own header-clearance fix (see `headerClearOverridesFor`/
+ * `headerClearDistributionFor` below) exists for: every port label's rect,
+ * measured against its OWN block's header text rect — never DOM presence,
+ * the two numbers. Scoped `[data-slot="block-port"]` by `[data-slot="block-port"]`
+ * so a label is only ever checked against the header of the block it
+ * actually sits on, not any other bench's.
+ */
+function assertNoLabelHeaderCollisions(canvasElement: HTMLElement): { checked: number } {
+  let checked = 0;
+  for (const blockPort of Array.from(canvasElement.querySelectorAll('[data-slot="block-port"]'))) {
+    const header = blockPort.querySelector('[data-slot="block-header"]');
+    if (!header) continue;
+    const headerRect = header.getBoundingClientRect();
+    const labels = Array.from(blockPort.querySelectorAll('[data-slot="port-label"]'));
+    for (const label of labels) {
+      checked++;
+      const labelRect = label.getBoundingClientRect();
+      if (rectsIntersect(headerRect, labelRect)) {
+        throw new Error(
+          `label "${label.textContent}" (${JSON.stringify(labelRect)}) intersects header "${header.textContent}" (${JSON.stringify(headerRect)}) on block \`${blockPort.getAttribute("data-block-id")}\``,
+        );
+      }
+    }
+  }
+  return { checked };
 }
 
 /** B4 — measured from the RENDERED path, not assumed from a prop: which
@@ -243,6 +279,68 @@ function railGroupsFor(spec: Specimen): string {
   return ids.length > 1 ? ids.join(", ") : "";
 }
 
+/* ------------------------------------------------------------------ */
+/* Header clearance — a real defect found while building this gallery,  */
+/* worked around at the FIXTURE, not in the component (see the report). */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `BlockPort`'s "simple" view rail (`blockPort.layout.ts`'s `railPlanFor`,
+ * the "spread-on-simple" branch) gives every populated edge a `band:
+ * "block"` content box — spanning the Block's FULL height/width, header
+ * included — with no header-aware alternative. Every wall in this gallery
+ * hits it, measured live in the real Storybook (`getBoundingClientRect`,
+ * not eyeballed): a `top`-edge rail's inward label sits a small FIXED
+ * offset off its dot, itself pinned to the border line, so NO distribution
+ * can move it — `move.goal`/`move.feedback`/`move.result` land squarely on
+ * `controller`'s 36px-tall header, `camera.stream` on `planner`'s. A
+ * `left`/`right` rail's FIRST port starts a fixed 18px from the block's own
+ * top regardless of block height (`space-between`'s own first-position
+ * formula), which also lands inside that 36px header band —
+ * `health.request`/`health.response` on `dashboard` AND `battery`,
+ * `power.request`/`power.response` on `charger` AND `grid`.
+ *
+ * This is a genuine gap in `railPlanFor` (no `body`-band, header-aware
+ * option for "simple" view) — flagged in the report rather than patched
+ * there, since this lane owns stories only. Worked around here with the
+ * TWO override seams `BlockPort` actually exposes to a caller:
+ * `BlockEdgeSpec.distribution` (`blockPort.tsx`: "an explicit per-edge
+ * distribution from the caller always wins") re-packs a left/right rail
+ * clear of the header; `portEdgeProps.textLayout` (never touched by
+ * `BlockPortRail`'s own JSX, so a caller's value survives the spread) flips
+ * a top-edge rail's label OUTWARD — into the gap toward the other block —
+ * since its position is otherwise immovable by distribution alone. A
+ * `bottom`-edge rail (ui, perception) needs neither: its inward label
+ * already flows UP into its OWN body, nowhere near a header or footer.
+ */
+const HEADER_HEIGHT_PX = 36; // measured: Block's `px-3 py-2` header at text-sm.
+// blockPort.layout.ts's own `RAIL_END_MARGIN_PX` (not exported for reuse —
+// restated by value; it's the donor's own constant and unlikely to drift
+// silently, since GroupedSpacing/ClassicDag already pin it elsewhere) is
+// still added on TOP of this `edgePadding` (`alignedFirstCentrePx`'s own
+// formula: `bandStart + endMarginPx + edgePadding + slotMainPx / 2`), so
+// this only needs to make up the REST of the clearance past the header,
+// plus a few px for the label's own half-height (~13.5px) — checked live
+// against the header/label rects this file's own report captures.
+const RAIL_END_MARGIN_PX_LOCAL = 18;
+const HEADER_CLEAR_EDGE_PADDING_PX = HEADER_HEIGHT_PX - RAIL_END_MARGIN_PX_LOCAL + 8;
+
+/** Whether `edge` needs a header-clearance override in THIS gallery, and
+ *  which kind — `undefined` for the one edge (`bottom`) that already clears
+ *  everything on its own. */
+function headerClearOverridesFor(edge: BlockSide): Partial<PortEdgeProps> | undefined {
+  if (edge === "top") return { textLayout: "top" }; // outward — into the gap, off the header.
+  if (edge === "left" || edge === "right") return undefined; // handled via `distribution`, not `textLayout`.
+  return undefined; // "bottom" — inward already flows into the block's OWN body, clear of any header.
+}
+
+/** Same predicate, the `distribution` half — `BlockEdgeSpec`'s own
+ *  higher-precedence override seam (see the module doc above). */
+function headerClearDistributionFor(edge: BlockSide): Distribution | undefined {
+  if (edge !== "left" && edge !== "right") return undefined;
+  return { mode: "aligned", anchor: "start", gap: RAIL_GAP_PX, edgePadding: HEADER_CLEAR_EDGE_PADDING_PX };
+}
+
 /** `from`/`to` per leg, honouring the donor's arrow rule (§7, finding 2):
  *  `forward` points initiator→responder; `back` always reverses that. */
 function wireForLeg(spec: Specimen, legIndex: number): Wire {
@@ -283,26 +381,27 @@ function RelationshipBench({ spec, routing }: { spec: Specimen; routing: TraceRo
   const groupMode = groups ? "grouped" : "off";
   const responderEdge = OPPOSITE_EDGE[spec.initiatorEdge];
 
+  // Header-clearance override, per edge — see the module doc above. Folded
+  // into one spec builder so the initiator/responder walls (which don't
+  // share an edge, only the override RULE) read identically.
+  function edgeSpec(edge: BlockSide, blockId: string) {
+    return {
+      items: withWiredState(items, blockId, wiredSet),
+      portEdgeProps: { groups, groupMode, ...headerClearOverridesFor(edge) },
+      distribution: headerClearDistributionFor(edge),
+    };
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div data-slot="wire-bench" data-bench={`comm-${spec.key}`} ref={containerRef} style={{ position: "relative", width: spec.bench.width, height: spec.bench.height }}>
         <Positioned x={spec.initiatorBox.x} y={spec.initiatorBox.y}>
-          <BlockPort
-            id={spec.initiatorId}
-            view="simple"
-            collapsePorts={false}
-            edges={{ [spec.initiatorEdge]: { items: withWiredState(items, spec.initiatorId, wiredSet), portEdgeProps: { groups, groupMode } } }}
-          >
+          <BlockPort id={spec.initiatorId} view="simple" collapsePorts={false} edges={{ [spec.initiatorEdge]: edgeSpec(spec.initiatorEdge, spec.initiatorId) }}>
             <Block header={spec.initiatorId} width={spec.initiatorBox.w} height={spec.initiatorBox.h} showHeaderDivider={false} />
           </BlockPort>
         </Positioned>
         <Positioned x={spec.responderBox.x} y={spec.responderBox.y}>
-          <BlockPort
-            id={spec.responderId}
-            view="simple"
-            collapsePorts={false}
-            edges={{ [responderEdge]: { items: withWiredState(items, spec.responderId, wiredSet), portEdgeProps: { groups, groupMode } } }}
-          >
+          <BlockPort id={spec.responderId} view="simple" collapsePorts={false} edges={{ [responderEdge]: edgeSpec(responderEdge, spec.responderId) }}>
             <Block header={spec.responderId} width={spec.responderBox.w} height={spec.responderBox.h} showHeaderDivider={false} />
           </BlockPort>
         </Positioned>
@@ -392,6 +491,12 @@ export const CommunicationPatterns: Story = {
     for (const edge of ["top", "right", "bottom", "left"]) {
       await expect(edgesSeen.has(edge)).toBe(true);
     }
+
+    // I4 (docs/FEEDBACK-2026-09-17c-PLAN.md, Lane I, job 3): no port
+    // label's rect may intersect its own block's header text rect. Every
+    // label in the gallery, not a sample — see `assertNoLabelHeaderCollisions`.
+    const { checked } = assertNoLabelHeaderCollisions(canvasElement);
+    await expect(checked).toBe(16); // 6 (move) + 4 (health) + 2 (camera) + 4 (power)
 
     for (const spec of SPECIMENS) {
       const bench = benchOf(canvasElement, `comm-${spec.key}`);

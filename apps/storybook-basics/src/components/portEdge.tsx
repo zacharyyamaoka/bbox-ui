@@ -311,6 +311,21 @@ interface PortEdgeSlotBoxProps {
    *  since Phase 2 for exactly this kind of swap
    *  (`labelSlot !== undefined` -> present-beats-absent, B4/labeledPort.tsx). */
   hideLabel?: boolean;
+  /**
+   * 2026-09-17 (Lane I, "what does dnd-kit actually use for a grouped
+   * family" — see the report): a real (not collapsed) group's dnd-kit
+   * registration is ONE `useSortable({id: slot.slotId})` on the SLOT's own
+   * wrapping div (`SortableSlotCard`/`FreeSlotCard` below) — never one per
+   * member, measured live via `useDndContext().droppableRects`. Drawing a
+   * `showCard` overlay per MEMBER here (the pre-fix behaviour) therefore
+   * drew a rectangle dnd-kit never registers — N small boxes with gaps
+   * between them, when the thing actually being dragged/collision-tested is
+   * ONE rectangle enclosing the whole family. `GroupSlotBody` sets this to
+   * suppress the per-member surface and draws that one rectangle itself,
+   * sized to its own container (the same box the wrapping div's `getBoundingClientRect()`
+   * — and therefore dnd-kit's own measurement — returns).
+   */
+  hideCardSurface?: boolean;
 }
 
 // B3: a slot must occupy its rail position even when nothing renders inside
@@ -331,7 +346,7 @@ const EMPTY_SLOT_MIN_PX = 24;
 const CARD_OVERLAY_FILL = "rgb(239 68 68 / 0.18)";
 const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
 
-function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel }: PortEdgeSlotBoxProps) {
+function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface }: PortEdgeSlotBoxProps) {
   const textLayout = textLayoutOverride ?? inwardTextLayout(edge);
   // B3: `showPorts=false` hides the ENTIRE LabeledPort — dot, label,
   // secondary slot — not just the dot. A host's own `renderItem` still wins
@@ -359,7 +374,7 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
   return (
     <span data-slot="port-edge-member" style={boxStyle}>
       {port}
-      {showCard && (
+      {showCard && !hideCardSurface && (
         // B3: "actually show a card, like a kanban card" — now an overlay,
         // not a wrapper (see EMPTY_SLOT_MIN_PX's own comment): painted OVER
         // the same box `port` already occupies, `absolute inset-0` so it
@@ -454,6 +469,26 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
           style={{ position: "absolute", left: box.left, top: box.top, width: box.width, height: box.height, border: `2px solid ${color ?? "var(--border)"}`, borderRadius: 10, pointerEvents: "none" }}
         />
       )}
+      {showCard && (
+        // "What does dnd-kit actually use for a grouped family" (Lane I):
+        // ONE rectangle, registered by `SortableSlotCard`/`FreeSlotCard`'s
+        // own `useSortable({id: slot.slotId})` on the div that wraps THIS
+        // component whole — measured live via `useDndContext().droppableRects`
+        // (see the report), not the N per-member boxes the pre-fix overlay
+        // drew. `inset-0` of THIS `position:relative` container is exactly
+        // that wrapping div's own box (no padding/border sits between them),
+        // so the drawn rectangle and the one dnd-kit registers are the same
+        // rectangle by construction, not by coincidence — unlike the
+        // `port-edge-group-outline` above (deliberately padded around the
+        // dots for legibility), this one must NOT add `GROUP_OUTLINE_PAD` or
+        // it would stop matching what dnd-kit measures.
+        <div
+          aria-hidden
+          data-slot="port-edge-card-surface"
+          className="pointer-events-none absolute inset-0 rounded-lg border"
+          style={{ backgroundColor: CARD_OVERLAY_FILL, borderColor: CARD_OVERLAY_BORDER }}
+        />
+      )}
       {slot.members.map((m) => (
         <PortEdgeSlotBox
           key={m.id}
@@ -465,6 +500,7 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
           renderItem={renderItem}
           textLayoutOverride={textLayoutOverride}
           hideLabel={hideLabel}
+          hideCardSurface
         />
       ))}
     </div>
