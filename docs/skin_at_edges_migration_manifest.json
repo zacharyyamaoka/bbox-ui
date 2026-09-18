@@ -1,0 +1,60 @@
+{
+  "title": "Skin at the boundary — migration build",
+  "summary": "Executed docs/SKIN-AT-THE-EDGES-MIGRATION.md end to end (M6 barrier, M1-M5b, M7, M8): the six guilty components no longer import ../skin at all, and the sketch skin's geometry is now drawn entirely by src/skin/sketchAtEdge.ts reading the rendered DOM back after layout.",
+  "base_ref": "main",
+  "branch_label": "worktree-agent-a16fc383811a08d9b (isolated lane worktree)",
+  "storybook_port": 5522,
+  "changes": [
+    "M6 (barrier, landed first alone) — port.tsx, portEdge.tsx, traceTerminal.tsx, badge.tsx publish --bbox-ink-state so the boundary can read a state-owned colour the skin has already blanked to transparent",
+    "M1 — trace.tsx: deleted both twins and the second path rewriter (sketchPathData import, CRISP_STYLE/SKETCH_STYLE, TRACE_WOBBLE_PX, the bounded cache, the three data-sketch=\"true\" twin <path> elements). Golden d strings captured off the live DOM before deletion (GOLDEN_TRACE_D in SkinAtTheEdges.stories.tsx) since the story's own byte-identity oracle was the twin being deleted",
+    "M2 — block.tsx: deleted the SketchOutline import/element; SKETCH_OUTLINE_BLEED_PX renamed to a local OUTLINE_BLEED_PX (same literal, no longer a skin import)",
+    "M3 — badge.tsx: deleted the nominal-40x20-stretch SketchOutline element — the PEP's own measured payoff case (2.75x anisotropic wobble on a wide chip)",
+    "M4 — port.tsx: deleted the drawn ring; ringExpansion's box-shadow-parsing fallback replaced with two data attributes (data-bbox-ring-expand/-pen) the component now publishes directly",
+    "M5 — portEdge.tsx: deleted the group-outline's child SketchOutline; added [data-slot=\"port-edge-group-outline\"] to sketchAtEdge.ts's BOX_SELECTOR",
+    "M5b — traceTerminal.tsx: deleted the hand-rolled sketchEllipsePath twin. Landed as a dedicated RING_SELECTOR loop in sketchAtEdge.ts (not the DOT_SELECTOR entry the plan's table named) after two other approaches measured wrong — see Findings",
+    "M7 — badge.tsx/port.tsx/portEdge.tsx/traceTerminal.tsx publish data-bbox-seed so the boundary's wobble PATTERN matches what the deleted in-core mechanism drew, not just its amplitude",
+    "M8 — .storybook/preview.tsx's skin decorator wraps in <SketchAtEdge active={skin===\"sketch\"}>; skin.css/skin.ts/skin.test.ts retire --bbox-skin-crisp and --bbox-skin-outline (15 tokens -> 13); sketchOutline.tsx deleted outright (zero remaining consumers, checked first)",
+    "Fixed the 4 stories the M8 wiring left red: SkinAtTheEdges.stories.tsx's SideBySide (4 columns -> 3, byte-identity now against the frozen golden strings) and MeasuredNotNominal (the impossible-to-recreate 'in-core: nominal' column replaced with prose citing the PEP's own measured numbers); Styles.stories.tsx's AllComponents and Sketch (both now wrap their sketch column/scene in <SketchAtEdge>)",
+    "docs/ALGORITHM-PROVENANCE.md's src/skin section updated: sketchOutline.tsx marked deleted, sketchAtEdge.ts's row gets a build-lane addendum for the two measured deviations"
+  ],
+  "findings": [
+    "Headline acceptance test: grep -rl 'from \"../skin' apps/storybook-basics/src/components/ returns nothing — the whole point of the exercise, true since the M4+M5+M5b commit",
+    "Permanent-twin tax measured gone, not just claimed: an unskinned board carrying Block+2xBadge+3xPort+Trace+Terminal+PortEdge (a superset of the PEP's own fixture) now renders 0 data-bbox-sketch-twin nodes, 0 bytes of drawn `d` data, 0 [data-slot=\"sketch-outline\"] elements — down from the PEP's measured 10 nodes / 5,124 bytes / 7 outline SVGs / 0 painted",
+    "DEVIATION 1 (plan's literal table vs the code that actually renders): traceTerminal.tsx's crisp ring stroke keeps var(--bbox-skin-line-override, ...) — the plan's table said to drop it. Dropping it left the crisp ring visibly painted forever, since a display:none (the mechanism trace-line uses) can't hide just a stroke without also hiding the circle's opaque fill. Block/Badge/PortEdge all keep the equivalent token read for the identical reason.",
+    "DEVIATION 2: the plan's table said 'Add [data-slot=\"trace-terminal-ring\"] to DOT_SELECTOR'. Measured: appending a nested <svg> into a live <circle> renders at {width:0,height:0} (SVG shape elements don't host rendered children). Tried the parent <g> instead — also measured wrong: `measureBox` reads getBoundingClientRect() off the SAME element the twin is appended into, so the <g>'s own box grows every pass (an 18x18 ring's <g> inflated to 57x57 on its very first pass). Landed as a dedicated RING_SELECTOR loop reading the circle's own r/cx/cy attributes directly (no getBoundingClientRect, nothing to contaminate), inserting a sibling <path> the same way trace-line's own upsertTwin already does — which is what the plan's PROSE for this step describes ('it appends into the same <g>, which inherits the transform'), just not what its table said. Verified: ring 18x18 at (41,41), twin ~17.1x17.3 at (41.4,41.2) — the small delta is the intended wobble.",
+    "Both limits the PEP named are unchanged and unaddressed by this build, as expected: in-flight geometry trails one frame during drag/resize (SketchAtEdge's pass runs in a layout effect, after React's commit), and first paint is crisp under SSR (the pass cannot run before hydration) — invisible in this client-only Storybook app, real in apps/docs. Neither was in scope to fix; both are named in SketchAtEdge.tsx's own LIMITS constant and docs/peps/0001's 'What we give up' section.",
+    "Visually verified live in Storybook (not just asserted): Styles/Sketch's full wired scene, Styles/All Components' three-skin comparison grid (Port's ring now visibly drawn in the Sketch column, which is the specific row this migration had to fix), and Skin/At the edges' rewritten Side By Side and Measured Not Nominal stories all screenshotted below. The toolbar's Skin picker (Default/Plain/Sketch/No skin) confirmed present and switching stories live.",
+    "sketchSeed prop on block.tsx is now dead (had zero consumers even before this migration, grepped) — left in place since the plan does not call for removing it; flagged as a follow-up, not fixed here",
+    "Gate per step: typecheck clean at every commit. Unit tests: one KNOWN, PLANNED regression tracked from M1 through M7 (skin.test.ts's bbox-skin-crisp coverage check, since M8 alone retires that token) — gone by M8, unit back to 38/721 clean. test-stories: SideBySide/MeasuredNotNominal (Skin/At the edges) and AllComponents/Sketch (Styles) went red exactly when M8's wiring made the gap between 'skin attribute present' and 'boundary pass ran' visible, fixed in the very next commit — final state 59/258, matching baseline exactly"
+  ],
+  "stories": [
+    {
+      "id": "styles--sketch",
+      "title": "Styles · Sketch",
+      "look_for": "the full wired scene (Source/Sink blocks, Function block with CodeEditor, data/async/delayed trace gallery, a Panel with ports, a TraceTerminal pair) drawn entirely by the boundary pass — no component in this tree imports ../skin",
+      "w": 900,
+      "h": 700
+    },
+    {
+      "id": "styles--all-components",
+      "title": "Styles · All Components",
+      "look_for": "the Port row specifically — its Sketch column's ring is the one thing this migration had to keep visible; every other row differs via the token layer alone",
+      "w": 900,
+      "h": 400
+    },
+    {
+      "id": "skin-at-the-edges--side-by-side",
+      "title": "Skin/At the edges · Side By Side",
+      "look_for": "3 columns now, not 4 — the deleted 'in-core sketch (today)' column is gone rather than left broken; columns 1 and 2 show the same traces/blocks/badges/ports crisp vs hand-drawn",
+      "w": 1100,
+      "h": 700
+    },
+    {
+      "id": "skin-at-the-edges--measured-not-nominal",
+      "title": "Skin/At the edges · Measured Not Nominal",
+      "look_for": "one column now, not two — both badges (narrow 'chip' and wide 'a much wider chip') get outlines proportioned to their OWN real width, no stretching",
+      "w": 700,
+      "h": 500
+    }
+  ]
+}
