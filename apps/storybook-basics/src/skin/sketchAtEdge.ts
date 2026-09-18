@@ -597,15 +597,25 @@ const round = (v: number) => Math.round(v * 100) / 100;
  * node: those nodes are React-owned, and writing to a property React also
  * manages is a fight this pass would eventually lose. A stylesheet keyed on
  * the core's existing `data-slot` contract needs no cooperation from React
- * at all — and post-migration these three rules simply live in `skin.css`,
- * which is where the rest of the skin already is.
+ * at all.
+ *
+ * WHY this string still exists post-migration M8, now that the identical
+ * rules also live permanently in `skin.css`: `SketchAtEdge.tsx` still
+ * injects it at runtime as a self-contained fallback for a consumer who
+ * mounts `<SketchAtEdge>` without importing this app's `skin.css` at all,
+ * and `sketchAtEdge.test.ts` asserts against this string directly (reading
+ * it off disk would make that test depend on `skin.css`'s exact formatting
+ * rather than on the CSS this module actually emits). The two copies must
+ * agree — `skin.css`'s own comment points back here for the same reason.
+ * `[data-slot="sketch-outline"]` — the in-core outline's own suppression
+ * rule — is GONE: migration M1-M5b deleted every core component that ever
+ * rendered that slot, so the rule matched nothing to keep.
  */
 export const SKETCH_AT_EDGE_CSS = `
 /* Crisp suppression. Gated on a SEPARATE attribute from "the pass is
    active", so a comparison view can run the pass and still show both
    layers at once -- which is what proves they agree. */
 [data-bbox-sketch-suppress] [data-slot="trace-line"]:not([${SKETCH_TWIN_ATTR}]) { display: none; }
-[data-bbox-sketch-suppress] [data-slot="sketch-outline"] { display: none !important; }
 
 /* A drawn twin is absolutely positioned against the element it outlines.
    Block and Port already carry \`relative\` for the core's own outline, so

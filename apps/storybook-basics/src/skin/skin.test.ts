@@ -14,12 +14,17 @@
 //
 // WHAT CHANGED, exhaustively:
 //   1. The source file list is this app's own components, not the
-//      donor's — block.tsx, badge.tsx, port.tsx, trace.tsx,
-//      sketchOutline.tsx, codeEditor.css (this port's Tranche 2). NOT an
-//      exhaustive list of every component in the repo — see
-//      Styles.stories.tsx's own coverage list/assertion for that; this
-//      test only has to prove the ones in the list actually read what
-//      they claim to.
+//      donor's — block.tsx, badge.tsx, port.tsx, trace.tsx, codeEditor.css
+//      (this port's Tranche 2). NOT an exhaustive list of every component
+//      in the repo — see Styles.stories.tsx's own coverage list/assertion
+//      for that; this test only has to prove the ones in the list actually
+//      read what they claim to. `sketchOutline.tsx` was on this list
+//      before migration M8 (docs/peps/0001-sketch-skin-at-the-boundary.md)
+//      deleted the file; `sketchAtEdge.ts` (src/skin/, not
+//      src/components/) joined in its place as `--bbox-skin-ink`'s new
+//      sole reader, and `--bbox-skin-outline` — the token the deleted file
+//      carried alone — was retired outright rather than needing one; see
+//      point 3 below.
 //   2. DROPPED: "each call site's var() fallback is the one
 //      BBOX_SKIN_TOKENS advertises". The donor's whole package already
 //      painted one consistent look (every component read `--foreground`/
@@ -34,6 +39,9 @@
 //      Styles.stories.tsx against real `getComputedStyle` output in a
 //      real browser, which is a stronger check than a textual regex match
 //      would have been anyway.
+//   3. The token set is 13, not the donor's 15: migration M8 deletes
+//      `bbox-skin-crisp`/`bbox-skin-outline` (see skin.ts's own header)
+//      now that the core renders no in-core twin for either to switch.
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -74,8 +82,8 @@ describe("skin vocabulary", () => {
     expect(BBOX_SKIN_ATTR).toBe("data-bbox-skin");
   });
 
-  it("the token set is exactly 15 — the closed set this port is not allowed to grow (S5)", () => {
-    expect(BBOX_SKIN_TOKENS).toHaveLength(15);
+  it("the token set is exactly 13 — the closed set this port is not allowed to grow (S5)", () => {
+    expect(BBOX_SKIN_TOKENS).toHaveLength(13);
   });
 });
 
@@ -124,14 +132,22 @@ describe("components read the tokens skin.ts documents", () => {
   ]
     .map((f) => readFileSync(path.join(componentsDir, f), "utf8"))
     .join("\n");
-  const sketchOutlineSource = readFileSync(path.join(skinDir, "sketchOutline.tsx"), "utf8");
-  const allSources = `${sources}\n${sketchOutlineSource}`;
+  // WHY sketchAtEdge.ts joins the scan where sketchOutline.tsx (deleted at
+  // migration M8) used to: `--bbox-skin-ink` is no longer read by any
+  // component directly — its one remaining reader is the boundary pass's
+  // own fallback chain (`createBoxTwinSvg`'s and the ring loop's
+  // `var(--bbox-ink-state, var(--bbox-skin-ink, …))`), which lives in
+  // `src/skin/`, not `src/components/`. `bbox-skin-outline`, the OTHER
+  // token sketchOutline.tsx used to carry, is gone from BBOX_SKIN_TOKENS
+  // entirely (skin.ts's own header) rather than needing a new reader.
+  const sketchAtEdgeSource = readFileSync(path.join(skinDir, "sketchAtEdge.ts"), "utf8");
+  const allSources = `${sources}\n${sketchAtEdgeSource}`;
 
   // Tranche 5 (presets/value) reads NOTHING new here — see the coverage
   // (S4) describe block below for why `ValueCapsule` is on the excluded
   // list rather than a sixth source file.
 
-  it("every token in the closed 15 is actually read by at least one component in this port (S5 x coverage)", () => {
+  it("every token in the closed 13 is actually read by at least one component in this port (S5 x coverage)", () => {
     for (const token of BBOX_SKIN_TOKENS) {
       expect(allSources.includes(`--${token.name}`), `${token.name} is read somewhere`).toBe(true);
     }
@@ -235,11 +251,12 @@ describe("the geometry invariant", () => {
   it("no skin changes the stroke width", () => {
     // Border WIDTH is geometry, not paint — a skin that stroked a
     // hairline would slide every drawn ring/outline out from under the
-    // CSS geometry it is meant to land on exactly (block.tsx's
-    // `BLOCK_BORDER_PX`, port.tsx's `PORT_STATE_RING_PX`-derived
-    // SketchOutline sizing). Until every one of those constants reads
-    // this token back out of CSS instead of hardcoding it, every skin
-    // must agree on its value.
+    // CSS geometry it is meant to land on exactly. The boundary pass
+    // (src/skin/sketchAtEdge.ts) now measures this width live off
+    // `getComputedStyle(el).borderTopWidth` for boxes, and off
+    // `port.tsx`'s own published `data-bbox-ring-pen` for a Port's ring —
+    // both of which assume every skin agrees on this token's value, which
+    // is exactly what this test pins.
     const widths = new Set<string>();
     for (const match of css.matchAll(/\[data-bbox-skin="[\w-]+"\]\s*\{([^}]*)\}/g)) {
       const width = match[1].match(/--bbox-skin-stroke-width\s*:\s*([^;]+);/);
