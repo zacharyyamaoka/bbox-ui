@@ -224,3 +224,63 @@ mark one element, the diagnostic halo renders outside their outline.
   `received`/`dimmed`/`hinting`.
 - **Naming the diff states** — the comparison lane's call; §6 states only
   the composition contract.
+
+---
+
+## Appendix — JointJS highlighters, and the one gap they expose
+
+Zach, 2026-09-17: *"here is a cool reference that we should support:
+<https://docs.jointjs.com/learn/features/highlighters/>"*
+
+Fetched and read rather than recalled. JointJS ships **five** highlighter
+types, and the correspondence with what this plan proposed independently is
+close enough to be worth stating — two designs reaching the same
+decomposition from different directions is evidence the decomposition is the
+domain's, not ours:
+
+| JointJS | What it does | This plan's equivalent |
+|---|---|---|
+| `addClass` | applies a CSS class to the element's SVG node | how the skin system already works (`data-bbox-skin` + tokens) |
+| `opacity` | changes the node's opacity | `dimmed` — already exists, `port.tsx:169-181` |
+| `mask` | stroke outline via SVG masking, **equidistant padding** | the halo |
+| `stroke` | the same outline, cheaper and less precise | the halo's fast path |
+| `list` | arbitrary SVG overlaid — their stated use case is status badges | `DiagnosticFlag` |
+
+**Three things worth taking, beyond the validation.**
+
+1. **`mask` vs `stroke` is a real trade-off, and they document which is
+   which.** `mask` gives a genuinely equidistant outline around an arbitrary
+   shape — hard to hand-roll, which is why they reach for SVG masking — at a
+   performance cost. `stroke` is the cheap approximation. A `box-shadow`
+   halo is closer to `stroke`: fine on a rectangle, wrong on a capsule or a
+   cable. Since this kit has both (the Value preset is a pill, traces are
+   paths), plan for the mask technique where the shape is not a rectangle,
+   and say which each component uses.
+
+2. **Highlighters target a SELECTOR, not the element.** `{ port: 'port-id' }`
+   marks one port of a node; a markup selector marks a sub-shape or a label.
+   That is the same conclusion this plan reached from the other end — a
+   diagnostic is a judgement *about* something, addressed to it — and it
+   means the mark must be addressable at `portKey(nodeId, portId)`
+   granularity, which the scene kit already has (`scene.ts:145`).
+
+3. **THE GAP: JointJS holds N highlighters per element, added and removed by
+   id.** This plan proposes a single `diagnostic` prop, which is one mark per
+   component. A block with a type error *and* a duplicate-edge warning cannot
+   be expressed. That is not hypothetical — both are on Zach's own lint list.
+
+   So the prop should take a **list**, not a scalar, and each entry needs a
+   stable id so a producer can add and remove its own marks without
+   disturbing another producer's. That matters because the plan already
+   establishes there are two producers (lint and diff) sharing one visual
+   language: without ids they would clobber each other, which is precisely
+   the failure the split-props decision exists to prevent.
+
+   Severity then resolves per-element for the summarising marks (a halo shows
+   the worst severity present) while the flag popover lists all of them —
+   which is also what the VS Code hover does when several diagnostics overlap
+   a span, and Zach's reference screenshot is that hover.
+
+**Not taken:** JointJS's imperative `add(cellView, selector, id, opts)` API.
+This kit is declarative — props in, DOM out — so the equivalent is a list
+prop whose entries carry the id, not a registry the caller mutates.
