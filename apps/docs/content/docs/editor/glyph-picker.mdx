@@ -1,0 +1,27 @@
+---
+title: Glyph picker
+description: Click a Glyph, choose a Lucide icon, an emoji, or an upload — one Notion-style picker.
+---
+
+<Callout title="Status — built, not yet in the registry">
+  `@bbox-ui/glyph-picker` exists as a workspace package and is **live on this
+  site's [/create](/create) page** — click a block's glyph there and this is
+  the picker that opens. No registry item yet; to take it today you copy
+  `packages/glyph-picker` from the repo.
+</Callout>
+
+The picker pairs with the components kit's `Glyph` — the icon slot a Block
+renders. Clicking a Glyph opens one Notion-style surface with three tabs:
+
+- **Lucide** — the full icon set, windowed so the grid stays fast, with
+  search.
+- **Emoji** — the emoji library, same windowed grid, same search.
+- **Upload** — bring an image; the picker hands back a stable reference.
+
+It is a textbook editor-kit member: it reads the current glyph, renders with
+the components kit's vocabulary, and emits exactly one mutation — "the glyph
+is now this". It owns no canvas, no selection model, and no persistence;
+the host decides what to do with the choice.
+
+It was ported by value from SystemSketch's block icon picker onto this
+project's own `GlyphPickerProps`, so the behavior arrived proven.

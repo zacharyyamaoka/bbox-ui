@@ -1,0 +1,26 @@
+---
+title: Floating toolbar
+description: A selection-attached toolbar for in-place edits. Planned — does not exist yet.
+---
+
+<Callout type="warn" title="Status — planned: this does not exist">
+  There is no floating toolbar in any lineage of this project — no component,
+  no package, no registry item, no demo. This page exists so the editor kit's
+  vocabulary has a stable place to point; it documents an intention, not
+  software.
+</Callout>
+
+## What it will be
+
+A small toolbar that floats next to the current selection — the way a text
+editor floats bold/italic over selected text — offering the handful of edits
+that should not require a trip to the [Inspector](/docs/editor/inspector):
+the most-used style controls, and shortcuts into the
+[glyph picker](/docs/editor/glyph-picker) and other pickers.
+
+As an editor-kit member it will follow the kit's rule: read the selection
+from the scene, render with the [components kit](/docs/components), emit
+mutations. Positioning relative to a selection on a canvas is the host's job
+— the same split every other kit member obeys.
+
+Until code exists, there is nothing more truthful to say here.
