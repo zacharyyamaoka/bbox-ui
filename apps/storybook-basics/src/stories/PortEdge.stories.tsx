@@ -6,7 +6,16 @@ import { python } from "@codemirror/lang-python";
 
 import { Block } from "../components/block";
 import { PortEdge, PortEdgeDndProvider, laneAvailability, type PortEdgeItem } from "../components/portEdge";
-import { CONTAINER_PADDING, SPACING_SCHEMES, DEFAULT_ALIGN_GAP, computeSlots, groupingSetFromText, type Distribution, type Size } from "../components/portEdge.layout";
+import {
+  CONTAINER_PADDING,
+  SPACING_SCHEMES,
+  DEFAULT_ALIGN_GAP,
+  computeSlots,
+  groupingSetFromText,
+  defaultDistributionForEdges,
+  type Distribution,
+  type Size,
+} from "../components/portEdge.layout";
 import type { BlockSide, PortTextLayout } from "../components/port.layout";
 
 /**
@@ -1331,6 +1340,267 @@ export const Visibility: Story = {
       expect(canvasElement.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(2);
       const nowIndicator = canvasElement.querySelector('[data-slot="port-edge-more-indicator"]');
       expect(nowIndicator?.textContent).toBe("+3 more ports");
+    });
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* EdgeDistributionControls — follow-up feedback item 3 (Lane E):        */
+/* "the ports on the top and bottom and right edges are not evenly       */
+/* spacing correctly... the two ports seem at opposing sides" is exactly */
+/* `space-between`'s effect on two items — the DEFAULT this story starts */
+/* each panel at, so the bug reproduces before anyone touches a control. */
+/* A live, per-edge segmented control (the SAME `DistributionControl`    */
+/* `SingleEdge` already uses, just one instance per edge) then switches  */
+/* the scheme to "Around" (`space-around`) — his own "Distribute and     */
+/* Around" wording — live, in place, on top/bottom/right, matching every */
+/* edge his screenshots named. A fifth panel proves the SIBLING default  */
+/* (left/right-only populated -> aligned, anchored to start) and the     */
+/* sixth pair asserts `defaultDistributionForEdges` itself — the exact   */
+/* function `blockPort.tsx` (lane D) is expected to call, so this file   */
+/* pins its contract directly rather than only through a consumer.       */
+/* ------------------------------------------------------------------ */
+
+function EdgeControlPanel({
+  edge,
+  items,
+  caption,
+  testId,
+  initial = { mode: "distribute", scheme: "space-between" },
+}: {
+  edge: BlockSide;
+  items: PortEdgeItem[];
+  caption: string;
+  testId: string;
+  initial?: Distribution;
+}) {
+  const [value, setValue] = useState<PortEdgeItem[]>(items);
+  const [distribution, setDistribution] = useState<Distribution>(initial);
+  const isRow = edge === "top" || edge === "bottom";
+  return (
+    <div data-testid={testId} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{caption}</span>
+      <DistributionControl value={distribution} onChange={setDistribution} />
+      <PortEdge edge={edge} items={value} onItemsChange={setValue} distribution={distribution} size={isRow ? { width: 260, height: 80 } : { width: 100, height: 260 }} />
+    </div>
+  );
+}
+
+const twoPorts = (prefix: string): PortEdgeItem[] => [
+  { id: `${prefix}-1`, label: "a", state: "empty" },
+  { id: `${prefix}-2`, label: "b", state: "wired" },
+];
+const onePort = (prefix: string): PortEdgeItem[] => [{ id: `${prefix}-1`, label: "solo", state: "empty" }];
+
+function EdgeDistributionControlsDemo() {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 32, alignItems: "flex-start" }}>
+      <EdgeControlPanel testId="top-two" edge="top" items={twoPorts("t")} caption='Top · 2 ports — starts "Edge to edge" (his screenshot), switch to "Around"' />
+      <EdgeControlPanel testId="bottom-two" edge="bottom" items={twoPorts("b")} caption="Bottom · 2 ports — same control, same fix" />
+      <EdgeControlPanel testId="right-two" edge="right" items={twoPorts("r")} caption="Right · 2 ports — same control, same fix" />
+      <EdgeControlPanel
+        testId="top-one"
+        edge="top"
+        items={onePort("s")}
+        caption='Top · 1 port, "Around" from the start — centred, no n===1 special case in the code'
+        initial={{ mode: "distribute", scheme: "space-around" }}
+      />
+      <EdgeControlPanel
+        testId="left-aligned"
+        edge="left"
+        items={twoPorts("l")}
+        caption="Left-only populated (documentation of the sibling default): aligned, anchored to start"
+        initial={{ mode: "aligned", anchor: "start", gap: DEFAULT_ALIGN_GAP, edgePadding: 0 }}
+      />
+    </div>
+  );
+}
+
+export const EdgeDistributionControls: Story = {
+  render: () => <EdgeDistributionControlsDemo />,
+  play: async ({ canvasElement }) => {
+    const panel = (testId: string) => {
+      const el = canvasElement.querySelector(`[data-testid="${testId}"]`);
+      if (!(el instanceof HTMLElement)) throw new Error(`expected panel ${testId}`);
+      return el;
+    };
+    const track = (p: HTMLElement) => {
+      const t = p.querySelector('[data-slot="port-edge"]');
+      if (!(t instanceof HTMLElement)) throw new Error("expected a port-edge track");
+      return t;
+    };
+    const dotCenters = (p: HTMLElement, axis: "row" | "column") =>
+      Array.from(p.querySelectorAll('[data-slot="port-dot"]')).map((d) => {
+        const r = d.getBoundingClientRect();
+        return axis === "row" ? r.left + r.width / 2 : r.top + r.height / 2;
+      });
+    const clickAround = async (p: HTMLElement) => {
+      const btn = Array.from(p.querySelectorAll("button")).find((b) => b.textContent?.trim() === "Around");
+      if (!(btn instanceof HTMLButtonElement)) throw new Error('expected an "Around" segmented button');
+      await userEvent.click(btn);
+    };
+
+    // E3 — Top · 2 ports: the live control measurably MOVES the ports.
+    // Captured BEFORE switching (still "Edge to edge" / space-between,
+    // his screenshot's own starting point).
+    const topTwo = panel("top-two");
+    const before = dotCenters(topTwo, "row");
+    await expect(before).toHaveLength(2);
+
+    await clickAround(topTwo);
+    await waitFor(() => {
+      const after = dotCenters(topTwo, "row");
+      // Both dots must have actually moved — the control isn't a no-op.
+      expect(Math.abs(after[0] - before[0])).toBeGreaterThan(1);
+      expect(Math.abs(after[1] - before[1])).toBeGreaterThan(1);
+    });
+
+    // E1 — same panel, now on "Around": the two ports sit symmetric about
+    // the edge's own centre — |left gap - right gap| < 1px, measured from
+    // the TRACK's own box (not the container padding assumed, the real
+    // rendered rect).
+    const topTwoTrack = track(topTwo);
+    const topTwoTrackRect = topTwoTrack.getBoundingClientRect();
+    const topTwoAfter = dotCenters(topTwo, "row");
+    const topTwoLeftGap = topTwoAfter[0] - topTwoTrackRect.left;
+    const topTwoRightGap = topTwoTrackRect.right - topTwoAfter[1];
+    await expect(Math.abs(topTwoLeftGap - topTwoRightGap)).toBeLessThan(1);
+
+    // E1 repeated on Bottom and Right — his screenshots named all three.
+    for (const testId of ["bottom-two", "right-two"]) {
+      const p = panel(testId);
+      const axis: "row" | "column" = testId === "right-two" ? "column" : "row";
+      const beforeMove = dotCenters(p, axis);
+      await clickAround(p);
+      await waitFor(() => {
+        const afterMove = dotCenters(p, axis);
+        expect(Math.abs(afterMove[0] - beforeMove[0])).toBeGreaterThan(1);
+      });
+      const t = track(p);
+      const r = t.getBoundingClientRect();
+      const centers = dotCenters(p, axis);
+      const leftGap = axis === "row" ? centers[0] - r.left : centers[0] - r.top;
+      const rightGap = axis === "row" ? r.right - centers[1] : r.bottom - centers[1];
+      await expect(Math.abs(leftGap - rightGap)).toBeLessThan(1);
+    }
+
+    // E2 — Top · 1 port, "Around" from the very first render (no click):
+    // the single port sits at the track's own centre, ±1px. This is
+    // `mainAxisPositions`'s `count === 1` branch under `space-around`
+    // exercised directly — proof there is no separate n===1 special case
+    // anywhere in `portEdge.tsx`/`portEdge.layout.ts` beyond that one
+    // CSS-spec-mandated branch.
+    const topOne = panel("top-one");
+    const topOneTrack = track(topOne).getBoundingClientRect();
+    const topOneDot = topOne.querySelector('[data-slot="port-dot"]');
+    if (!(topOneDot instanceof HTMLElement)) throw new Error("expected a single port dot");
+    const topOneCenter = topOneDot.getBoundingClientRect();
+    const topOneCenterX = topOneCenter.left + topOneCenter.width / 2;
+    const trackCenterX = topOneTrack.left + topOneTrack.width / 2;
+    await expect(Math.abs(topOneCenterX - trackCenterX)).toBeLessThanOrEqual(1);
+
+    // Sibling default, documented structurally: left-only populated stays
+    // aligned/start — both ports render, packed from the column's start.
+    const leftAligned = panel("left-aligned");
+    await expect(leftAligned.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(2);
+    const leftDots = Array.from(leftAligned.querySelectorAll('[data-slot="port-dot"]')).map((d) => d.getBoundingClientRect().top);
+    await expect(leftDots[0]).toBeLessThan(leftDots[1]);
+
+    // `defaultDistributionForEdges` — the exact function lane D's
+    // `blockPort.tsx` calls — pinned directly, independent of any DOM.
+    await expect(defaultDistributionForEdges(true)).toEqual({ mode: "distribute", scheme: "space-around" });
+    await expect(defaultDistributionForEdges(false)).toEqual({ mode: "aligned", anchor: "start", gap: DEFAULT_ALIGN_GAP, edgePadding: 0 });
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* MaxVisible — follow-up feedback items 2/4 (Lane E): "+X more" for a  */
+/* capped edge. `PortEdge`'s own `maxVisible` prop now cuts the track    */
+/* itself (not a story-local filter, the way the earlier `Visibility`   */
+/* story above modelled it) and draws the "+N more" line in the same    */
+/* wording the group-collapse chip already uses (`SlotBody`'s "+N more")*/
+/* rather than inventing a second phrase for what Zach called "the same */
+/* fact". `renderCollapsed` was read first and does not fit — it is     */
+/* handed one named group's members, and a `maxVisible` cut has no      */
+/* group, just whatever fell after the cutoff (this file's own module   */
+/* doc on `PortEdgeProps.maxVisible` says so at the seam itself).        */
+/* ------------------------------------------------------------------ */
+
+const MAX_VISIBLE_ROSTER: PortEdgeItem[] = [
+  { id: "mv1", label: "args", state: "empty" },
+  { id: "mv2", label: "kwargs", state: "wired" },
+  { id: "mv3", label: "in", state: "received" },
+  { id: "mv4", label: "out", state: "empty" },
+  { id: "mv5", label: "cfg", state: "valueSet" },
+  { id: "mv6", label: "err", state: "empty" },
+];
+
+function MaxVisibleDemo() {
+  const [items, setItems] = useState<PortEdgeItem[]>(MAX_VISIBLE_ROSTER);
+  const [maxVisible, setMaxVisible] = useState(3);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+      <label style={{ fontSize: 11, display: "flex", gap: 6, alignItems: "center" }}>
+        maxVisible
+        <input
+          data-testid="max-visible-input"
+          type="number"
+          min={0}
+          max={items.length}
+          value={maxVisible}
+          style={{ width: 48 }}
+          onChange={(e) => setMaxVisible(Math.max(0, Math.min(items.length, Number(e.target.value) || 0)))}
+        />
+      </label>
+      <PortEdge edge="left" items={items} onItemsChange={setItems} maxVisible={maxVisible} size={{ width: 200, height: 320 }} />
+    </div>
+  );
+}
+
+export const MaxVisible: Story = {
+  render: () => <MaxVisibleDemo />,
+  play: async ({ canvasElement }) => {
+    const track = canvasElement.querySelector('[data-slot="port-edge"]');
+    if (!(track instanceof HTMLElement)) throw new Error('expected a [data-slot="port-edge"]');
+
+    // maxVisible=3 of 6 -> 3 dots rendered, "+3 more" (the true hidden
+    // count, not merely "a chip exists"). The indicator's own position is
+    // measured (a real `useLayoutEffect` + `ResizeObserver`, D8's "measure,
+    // don't assume"), so it lands one commit after mount — waited for.
+    await expect(track.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(3);
+    const indicator = await waitFor(() => {
+      const el = track.querySelector('[data-slot="port-edge-more"]');
+      if (!(el instanceof HTMLElement)) throw new Error('expected a [data-slot="port-edge-more"] line');
+      return el;
+    });
+    await expect(indicator.textContent).toBe("+3 more");
+
+    // It renders UNDER the last visible port (a column edge: below it, and
+    // left-aligned with it), not floating disconnected from the list.
+    const members = Array.from(track.querySelectorAll('[data-slot="port-edge-member"]'));
+    const lastMember = members[members.length - 1];
+    if (!(lastMember instanceof HTMLElement)) throw new Error("expected the last visible port slot");
+    const lastRect = lastMember.getBoundingClientRect();
+    const indicatorRect = indicator.getBoundingClientRect();
+    await expect(indicatorRect.top).toBeGreaterThanOrEqual(lastRect.bottom - 1);
+    await expect(Math.abs(indicatorRect.left - lastRect.left)).toBeLessThanOrEqual(2);
+
+    // Live: raising the cap shrinks the hidden count and moves the line;
+    // dropping it to the full roster removes the line entirely.
+    const input = canvasElement.querySelector('[data-testid="max-visible-input"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("expected the maxVisible input");
+    await userEvent.clear(input);
+    await userEvent.type(input, "5");
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(5);
+      expect(canvasElement.querySelector('[data-slot="port-edge-more"]')?.textContent).toBe("+1 more");
+    });
+
+    await userEvent.clear(input);
+    await userEvent.type(input, "6");
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(6);
+      expect(canvasElement.querySelector('[data-slot="port-edge-more"]')).toBeNull();
     });
   },
 };

@@ -207,6 +207,24 @@ export interface PortEdgeProps {
    * straight to the lane's `CodeEditor`.
    */
   laneLanguage?: LanguageSupport;
+  /**
+   * Follow-up feedback items 2/4 (docs/FEEDBACK-2026-09-17c-PLAN.md, Lane
+   * E): caps how many slots this edge renders. The REST are cut from the
+   * track entirely — not grouped, not collapsed, just gone — and replaced
+   * by one "+N more" line after the last visible slot, N the real number
+   * of PORTS still hidden (a cut slot's own member count, not 1-per-slot,
+   * so a cut through a real group still reports accurately).
+   *
+   * Deliberately its own seam rather than reusing `renderCollapsed`: that
+   * prop is handed ONE collapsed family's members (`groupMode==="collapsed"`
+   * folding a caller-named group into a single still-occupied slot);
+   * `maxVisible` has no family to hand it — the cut can land anywhere,
+   * across however many unrelated slots happen to sit past the cutoff, and
+   * those slots stop occupying track space altogether rather than shrinking
+   * into one. Read and confirmed before adding this: `renderCollapsed`
+   * does not fit the shape of this problem.
+   */
+  maxVisible?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -775,6 +793,71 @@ function PortLaneOverlay({
 }
 
 /* ------------------------------------------------------------------ */
+/* useMoreIndicatorPosition — maxVisible's own "+N more" line. Measures    */
+/* the real DOM rather than re-deriving flex math (D8's own "measure,      */
+/* don't assume" — `useEnclosingCircleBox`/`useLaneGeometry` already do    */
+/* exactly this), so it stays correct across every Distribution/axis       */
+/* combination without a second formula to keep in sync with               */
+/* `mainAxisPositions`/`distributionStyle`.                                 */
+/*                                                                          */
+/* WHY a HOOK called from `PortEdgeBody` itself, not a separate child      */
+/* component reading `trackRef` (`PortLaneOverlay`'s own shape, which this */
+/* first mirrored): a callback ref's attachment and a DESCENDANT's own     */
+/* `useLayoutEffect` commit in the same pass, children-before-parent — so  */
+/* a child sitting UNDER the ref-owning div can observe `trackRef.current` */
+/* as still `null` on the very render it and the div both first mount      */
+/* (measured live: logged `null` every time `maxVisible` was already set   */
+/* on first render, since nothing then makes the effect ever re-fire with  */
+/* the ref populated). `PortLaneOverlay` never hits this in practice only  */
+/* because `editing` starts `false` — it always mounts on a LATER render,  */
+/* by which point the div's ref is already attached from a prior commit.   */
+/* `maxVisible` has no such gate (it can be true from the first paint), so */
+/* it needs the ordering that's actually guaranteed: a hook called INSIDE  */
+/* the same component that owns the ref (`PortEdgeBody`, exactly           */
+/* `useEnclosingCircleBox`'s own shape in `GroupSlotBody`) sits ABOVE the  */
+/* div in the fiber tree, so its layout effect always commits AFTER the    */
+/* div's — the ref is guaranteed attached by then, mount or update alike.  */
+/* ------------------------------------------------------------------ */
+
+const MORE_INDICATOR_GAP_PX = 6;
+
+function useMoreIndicatorPosition(trackRef: RefObject<HTMLDivElement | null>, axis: "row" | "column", hiddenCount: number) {
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    if (hiddenCount <= 0) {
+      setPos(null);
+      return;
+    }
+    const track = trackRef.current;
+    if (!track) {
+      setPos(null);
+      return;
+    }
+    const measure = () => {
+      const members = Array.from(track.querySelectorAll<HTMLElement>('[data-slot="port-edge-member"]'));
+      const last = members[members.length - 1];
+      if (!last) {
+        setPos(null);
+        return;
+      }
+      const trackRect = track.getBoundingClientRect();
+      const lastRect = last.getBoundingClientRect();
+      setPos(
+        axis === "column"
+          ? { left: lastRect.left - trackRect.left, top: lastRect.bottom - trackRect.top + MORE_INDICATOR_GAP_PX }
+          : { left: lastRect.right - trackRect.left + MORE_INDICATOR_GAP_PX, top: lastRect.top - trackRect.top + lastRect.height / 2 },
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(track);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackRef, axis, hiddenCount]);
+  return pos;
+}
+
+/* ------------------------------------------------------------------ */
 /* PortEdgeBody — the track: droppable + sortable, no opinion about      */
 /* who owns the surrounding DndContext.                                */
 /* ------------------------------------------------------------------ */
@@ -800,6 +883,7 @@ function PortEdgeBody({
   editing = false,
   onEditingChange,
   laneLanguage,
+  maxVisible,
 }: PortEdgeProps) {
   const containerId = id ?? edge;
   const axis = AXIS_FOR_EDGE[edge];
@@ -809,8 +893,17 @@ function PortEdgeBody({
   const itemIds = items.map((i) => i.id);
   const itemsById = new Map(items.map((i) => [i.id, i] as const));
   const { set: groupingSet, unknownIds } = groupingSetFromText(groups, itemIds);
-  const slots = computeSlots(itemIds, groupingSet, groupMode);
+  const allSlots = computeSlots(itemIds, groupingSet, groupMode);
   const colorMap = buildColorMap(itemIds, groupingSet);
+
+  // `maxVisible` cuts SLOTS (the rendered boxes), not raw items — a cut
+  // through a real (not collapsed) group hides every member of whichever
+  // slot falls past the cutoff, and `hiddenPortCount` sums those members'
+  // real count rather than counting 1 per cut slot, so the "+N more" text
+  // stays a true port count even when the cut lands inside a group.
+  const slots = maxVisible != null ? allSlots.slice(0, maxVisible) : allSlots;
+  const hiddenSlots = maxVisible != null ? allSlots.slice(maxVisible) : [];
+  const hiddenPortCount = hiddenSlots.reduce((n, s) => n + s.members.length, 0);
 
   const lane = laneAvailability(axis, mode, groupMode, slots);
   const laneOpen = editing && lane.available;
@@ -835,26 +928,32 @@ function PortEdgeBody({
   // begin with (free positions), so it keeps the DEFAULT_ALIGN_GAP fallback
   // rather than this edge's real distribution math.
   //
-  // WHY the gap's "count" is `items.length` (every PORT), not `slots.length`
-  // (every rendered DOM box): under a `distribute` scheme, grouping merges N
-  // ports into 1 box, so `slots.length` SHRINKS — feeding that shrunk count
-  // into the space-between/evenly/around division changes how much free
-  // space each remaining gap absorbs, which would make a grouped edge's
-  // pitch drift from its OWN ungrouped pitch (A5's actual requirement is
-  // "equals the ungrouped pitch for the same items", not merely "uniform").
-  // The total content size (`items.length * slotMainPx`) and the total
-  // number of gaps a fully-ungrouped edge would have (`items.length - 1`)
-  // are both invariant to how those ports happen to be visually clustered —
-  // solving the self-consistency equation (internal group gap == the gap
-  // flexbox computes BETWEEN the fewer top-level boxes it actually sees)
-  // confirms this is the fixed point: using the PORT count here makes the
-  // internal group gap and the real inter-box gap land on the exact same
-  // number, by construction, not by coincidence.
+  // WHY the gap's "count" is the PORT count of the RENDERED slots, not
+  // `slots.length` (every rendered DOM box): under a `distribute` scheme,
+  // grouping merges N ports into 1 box, so `slots.length` SHRINKS — feeding
+  // that shrunk count into the space-between/evenly/around division changes
+  // how much free space each remaining gap absorbs, which would make a
+  // grouped edge's pitch drift from its OWN ungrouped pitch (A5's actual
+  // requirement is "equals the ungrouped pitch for the same items", not
+  // merely "uniform"). The total content size (`portCount * slotMainPx`) and
+  // the total number of gaps a fully-ungrouped edge would have
+  // (`portCount - 1`) are both invariant to how those ports happen to be
+  // visually clustered — solving the self-consistency equation (internal
+  // group gap == the gap flexbox computes BETWEEN the fewer top-level boxes
+  // it actually sees) confirms this is the fixed point: using the PORT count
+  // here makes the internal group gap and the real inter-box gap land on the
+  // exact same number, by construction, not by coincidence.
+  //
+  // `maxVisible` (follow-up feedback item 2/4): the count is scoped to the
+  // VISIBLE slots' own members, not `items.length` — a cut edge's pitch is
+  // computed for what's actually on the track, the same way it would be if
+  // the caller had simply passed fewer `items` to begin with.
   // Fixed regardless of `showCard` — see EMPTY_SLOT_MIN_PX's own comment;
   // the card overlay draws inside this footprint, it never grows it.
   const slotMainPx = EMPTY_SLOT_MIN_PX;
   const contentMainPx = (axis === "row" ? resolvedSize.width : resolvedSize.height) - 2 * CONTAINER_BORDER - 2 * CONTAINER_PADDING;
-  const gapPx = mode === "auto" ? interSlotGapPx(distribution, contentMainPx, items.length, slotMainPx) : DEFAULT_ALIGN_GAP;
+  const visiblePortCount = slots.reduce((n, s) => n + s.members.length, 0);
+  const gapPx = mode === "auto" ? interSlotGapPx(distribution, contentMainPx, visiblePortCount, slotMainPx) : DEFAULT_ALIGN_GAP;
 
   const { setNodeRef, isOver } = useDroppable({ id: containerId });
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -878,6 +977,11 @@ function PortEdgeBody({
     },
     [setNodeRef],
   );
+
+  // See `useMoreIndicatorPosition`'s own doc for why this is called HERE
+  // (inside PortEdgeBody, the component that owns `trackRef`) rather than
+  // inside a separate child component.
+  const moreIndicatorPos = useMoreIndicatorPosition(trackRef, axis, hiddenPortCount);
 
   const trackStyle: CSSProperties = {
     boxSizing: "border-box",
@@ -921,6 +1025,24 @@ function PortEdgeBody({
       >
         {showCenterLine ? <EdgeLineMark axis={axis} /> : null}
         {laneOpen && <PortLaneOverlay trackRef={trackRef} visualOrder={visualOrder} onItemsChange={onItemsChange} onClose={() => onEditingChange?.(false)} language={laneLanguage} />}
+        {hiddenPortCount > 0 && moreIndicatorPos && (
+          <span
+            data-slot="port-edge-more"
+            style={{
+              position: "absolute",
+              left: moreIndicatorPos.left,
+              top: moreIndicatorPos.top,
+              transform: axis === "row" ? "translateY(-50%)" : undefined,
+              fontSize: 12,
+              fontStyle: "italic",
+              color: "var(--muted-foreground)",
+              whiteSpace: "nowrap",
+              pointerEvents: "none",
+            }}
+          >
+            +{hiddenPortCount} more
+          </span>
+        )}
         {mode === "custom"
           ? slots.map((slot) => (
               <FreeSlotCard
