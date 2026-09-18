@@ -317,7 +317,7 @@
       ]
     },
     {
-      "name": "block-v2",
+      "name": "block-card",
       "type": "registry:component",
       "title": "Block (Simple View) \u2014 design trunk",
       "description": "The design-trunk Block (apps/storybook-basics): Container, Header band, BlockMembers, Glyph, Text slots, Chip. Supersedes the `block` item's packages/bbox-ui source as the current design \u2014 packages/bbox-ui stays published as-is until apps/docs migrates to this lineage (ARCHITECTURE.md, \"Name the trunk\").",
@@ -347,7 +347,7 @@
       ]
     },
     {
-      "name": "port-v2",
+      "name": "port-dot",
       "type": "registry:component",
       "title": "Port \u2014 design trunk",
       "description": "The design-trunk Port (apps/storybook-basics): the disc, surface ring, state ring, lit core and hit halo alone \u2014 no labels or slots (`labeled-port` adds those). Supersedes the `port` item's packages/bbox-ui source as the current design; packages/bbox-ui stays published as-is until apps/docs migrates (ARCHITECTURE.md, \"Name the trunk\").",

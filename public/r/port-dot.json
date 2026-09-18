@@ -1,6 +1,6 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-  "name": "port-v2",
+  "name": "port-dot",
   "title": "Port — design trunk",
   "description": "The design-trunk Port (apps/storybook-basics): the disc, surface ring, state ring, lit core and hit halo alone — no labels or slots (`labeled-port` adds those). Supersedes the `port` item's packages/bbox-ui source as the current design; packages/bbox-ui stays published as-is until apps/docs migrates (ARCHITECTURE.md, \"Name the trunk\").",
   "dependencies": [
