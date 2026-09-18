@@ -111,18 +111,50 @@ const CRISP_PATH_SELECTOR =
 /**
  * Bordered boxes. Measured, not nominal.
  *
- * WHY these two slots and not a longer list: every one of the six leaking
- * components reduces to one of THREE shape classes — an arbitrary path
- * (`trace.tsx`), a rounded rect (`block.tsx`, `badge.tsx`, `portEdge.tsx`'s
- * group box) or an ellipse (`port.tsx`, `traceTerminal.tsx`). Proving the
- * three classes proves all six; adding the remaining slots to these
- * selectors is a one-line change per component with no new mechanism, which
- * is exactly what makes the migration mechanical.
+ * WHY these three slots: every one of the six leaking components reduces to
+ * one of THREE shape classes — an arbitrary path (`trace.tsx`), a rounded
+ * rect (`block.tsx`, `badge.tsx`, `portEdge.tsx`'s group box) or an ellipse
+ * (`port.tsx`, `traceTerminal.tsx`). `portEdge.tsx`'s
+ * `[data-slot="port-edge-group-outline"]` joined at migration M5 — the same
+ * rounded-rect mechanism `block.tsx`/`badge.tsx` already prove, on a box
+ * this component builds itself (its own `position: absolute` container) so
+ * there is no new class to demonstrate.
  */
-const BOX_SELECTOR = `[data-slot="block"], [data-slot="badge"]`;
+const BOX_SELECTOR = `[data-slot="block"], [data-slot="badge"], [data-slot="port-edge-group-outline"]`;
 
 /** Round things: a Port dot. */
 const DOT_SELECTOR = `[data-slot="port-dot"]`;
+
+/**
+ * A TraceTerminal's own drawn ring (migration M5b) — a fourth measured
+ * shape class, handled separately from `BOX_SELECTOR`/`DOT_SELECTOR`
+ * rather than folded into either.
+ *
+ * WHY its own selector and its own loop below, rather than adding
+ * `[data-slot="trace-terminal-ring"]` to `DOT_SELECTOR` as the migration
+ * plan's table literally says: `upsertBoxTwin` appends its twin as a CHILD
+ * of the matched element (`createBoxTwinSvg`'s `el.appendChild(svg)`),
+ * which works for an HTML `<span>` (`port-dot`) but not for an SVG shape
+ * element — measured: appending a nested `<svg>` into a live `<circle>`
+ * leaves it `isConnected` with a `getBoundingClientRect()` of `{width:0,
+ * height:0}`. Matching the selector to `[data-slot="trace-terminal"]`
+ * (the `<g>`) instead — which CAN host a child — was tried too and is
+ * ALSO wrong: `measureBox` reads `getBoundingClientRect()` off the SAME
+ * element the twin is appended into, so once a twin exists the next pass
+ * measures a box that already includes its own prior output and grows
+ * without bound (measured: a `<g>` around an 18×18 ring inflated to
+ * 57×57 on the very first pass).
+ *
+ * The ring is a CIRCLE, not a box: `sketchEllipsePath` needs only its own
+ * `r` (read directly off the SVG attribute, not `getBoundingClientRect`,
+ * so there is nothing for a sibling twin to contaminate), and the plan's
+ * own prose for this step — "it appends into the same `<g>`, which
+ * inherits the transform" — describes a SIBLING inserted next to the
+ * ring, which is exactly `upsertTwin`'s existing mechanism (the one
+ * `trace-line` already uses): adjacency-based, self-contained, no
+ * measurement feedback loop possible.
+ */
+const RING_SELECTOR = `circle[data-slot="trace-terminal-ring"]`;
 
 /**
  * Wobble for a cable, copied from `trace.tsx:118` (`TRACE_WOBBLE_PX`).
@@ -217,48 +249,30 @@ export function measureBox(el: Element): MeasuredBox {
  * one and it reads as a bullseye rather than as one drawn ring. (Measured:
  * that is exactly what the first capture of this PoC showed.)
  *
- * The core solves it by arithmetic on its own constants — `port.tsx:249-251`
- * passes `diameterPx + SURFACE*2 + STATE*3` with `borderWidth: STATE`, and
- * `SketchOutline` then insets by one border width per side, landing the path
- * on the annulus centre-line. The edge cannot import those constants, but it
- * does not need to: the same two numbers are in the computed `box-shadow` as
- * its two spread radii, which is the DOM contract already carrying them.
- * With spreads s1 < s2, SURFACE == s1 and STATE == s2 - s1, so the core's
- * own expression reduces exactly — and `expand` is the OUTER box the twin is
- * built at, because `upsertBoxTwin` then insets by one pen per side just as
- * `SketchOutline` does:
+ * WHY this reads two data attributes rather than parsing `box-shadow`
+ * (docs/peps/0001-sketch-skin-at-the-boundary.md M4): before migration this
+ * function parsed the element's computed `box-shadow` spreads back into
+ * `expand`/`pen` — "DOM archaeology", by its own prior header, kept only
+ * because the PoC lane could not edit `port.tsx`. `port.tsx` now publishes
+ * `data-bbox-ring-expand`/`data-bbox-ring-pen` directly: the SAME two
+ * numbers (`SURFACE*2 + STATE*3` and `STATE`, unchanged arithmetic — see
+ * that file's own WHY), read as plain data rather than reverse-engineered
+ * from a rendered style. `expand` is the OUTER box the twin is built at,
+ * because `upsertBoxTwin` insets by one pen per side, landing the drawn
+ * ellipse on the same annulus centre-line the box-shadow rings use.
  *
- *     SURFACE*2 + STATE*3  ==  2*s1 + 3*(s2 - s1)  ==  3*s2 - s1
- *     STATE                ==  s2 - s1                  (the pen's width)
- *
- * Verified against the live DOM: a 12px dot with spreads 2px/5px gives
- * expand = 3*5 - 2 = 13, so the twin is built at 25x25 and its drawn ellipse
- * is 25 - 2*3 = 19 across — byte-identical to the viewBox and stroke-width
- * the core's own `SketchOutline` emits for the same dot.
- *
- * WHY a fallback and not the real answer: parsing another component's
- * `box-shadow` is DOM archaeology, and it is here only so this PoC can show
- * the correct geometry WITHOUT editing a component (a concurrent lane owns
- * those files). At migration, `port.tsx` publishes the two numbers the same
- * way M6 publishes its colour — one custom property, no skin import — and
- * this parser is DELETED. Do not carry it forward as the mechanism.
+ * `null` for anything else, including a bare `[data-slot="port-dot"]` that
+ * predates M4 — no ring room is granted rather than guessed.
  */
 export function ringExpansion(el: Element): { expand: number; pen: number } | null {
-  const shadow = getComputedStyle(el).boxShadow;
-  if (!shadow || shadow === "none") return null;
-  // Each layer's 4th length is its spread. Split on commas that separate
-  // layers, not the ones inside a colour function.
-  const layers = shadow.split(/,(?![^(]*\))/);
-  const spreads: number[] = [];
-  for (const layer of layers) {
-    const lengths = layer.match(/-?[\d.]+px/g);
-    if (lengths && lengths.length >= 4) spreads.push(parsePx(lengths[3]));
-  }
-  if (spreads.length < 2) return null;
-  const lo = Math.min(...spreads);
-  const hi = Math.max(...spreads);
-  if (hi <= lo) return null;
-  return { expand: 3 * hi - lo, pen: hi - lo };
+  const data = (el as HTMLElement).dataset;
+  const expand = data?.bboxRingExpand;
+  const pen = data?.bboxRingPen;
+  if (expand === undefined || pen === undefined) return null;
+  const expandNum = Number(expand);
+  const penNum = Number(pen);
+  if (!Number.isFinite(expandNum) || !Number.isFinite(penNum)) return null;
+  return { expand: expandNum, pen: penNum };
 }
 
 function parsePx(v: string): number {
@@ -352,6 +366,44 @@ export function applySketchAtEdge(root: ParentNode): SketchPassStats {
         }
       : box;
     upsertBoxTwin(el, expanded, "ellipse", stats);
+  }
+
+  // A TraceTerminal's ring — see `RING_SELECTOR`'s own WHY for why this is
+  // not folded into the `DOT_SELECTOR` loop above. Read straight off the
+  // circle's own SVG attributes (`r`, `cx`, `cy`, `stroke-width`) rather
+  // than `getBoundingClientRect()`: this glyph is positioned entirely by
+  // its parent `<g>`'s `transform`, so the LOCAL radius is already exactly
+  // what `sketchEllipsePath` needs, with no viewport pixels, no
+  // containing-block percentage math, and nothing for a sibling twin to
+  // feed back into.
+  for (const el of root.querySelectorAll<SVGCircleElement>(RING_SELECTOR)) {
+    const r = el.r.baseVal.value;
+    if (r <= 0) continue;
+    const cx = el.cx.baseVal.value;
+    const cy = el.cy.baseVal.value;
+    const penAttr = el.getAttribute("stroke-width");
+    const pen = penAttr ? Number(penAttr) : 2;
+    // Same fallback order as `seedForBox`: a published seed first, else a
+    // geometry string — here the ring's own diameter, since a
+    // TraceTerminal has no width/height pair to fall back to.
+    const seed = el.dataset.bboxSeed || `${round(r * 2)}x${round(r * 2)}`;
+    const amp = sketchWobbleFor(r * 2, r * 2);
+    const srcKey = `ring:${seed}:r${round(r)}:p${round(pen)}`;
+    upsertTwin(
+      el,
+      srcKey,
+      () => sketchEllipsePath({ width: r * 2, height: r * 2, seed, wobble: amp }),
+      stats,
+      (twin) => {
+        // `sketchEllipsePath` centres its output at (r, r) — the same
+        // top-left-anchored convention `upsertBoxTwin` uses — so this
+        // shifts it back to the circle's own (cx, cy), exactly the
+        // `translate(-radius, -radius)` the deleted in-core twin used.
+        twin.setAttribute("transform", `translate(${round(cx - r)} ${round(cy - r)})`);
+        twin.setAttribute("stroke", "var(--bbox-ink-state, var(--bbox-skin-ink, var(--color-foreground)))");
+        twin.setAttribute("stroke-width", String(pen));
+      },
+    );
   }
 
   return stats;

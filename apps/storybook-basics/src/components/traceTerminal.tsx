@@ -19,10 +19,9 @@
 // `TraceDir` in `./trace.layout.ts`. The arrowhead that distinguishes the
 // ends is painted by the trace (`markerEnd` at the `to` end), never here.
 
-import { useMemo, type ComponentProps, type CSSProperties } from "react";
+import { type ComponentProps, type CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
-import { sketchEllipsePath } from "../skin/sketchPath";
 import { DIR_ROTATION, type TraceDir } from "./trace.layout";
 
 /** The glyph's ring radius in user units. 9 keeps it a touch smaller than
@@ -112,30 +111,21 @@ export function TraceTerminal({
   className,
   ...props
 }: TraceTerminalProps) {
-  // The skin seam (src/skin/skin.ts + skin.css). The ring's colour is
-  // STATE-owned (`color`, from the caller — same split Port's own
-  // `portRingColor` makes: the skin only ever supplies the shape, never
-  // the hue), so it gets `--bbox-skin-line-override` rather than
-  // `--bbox-skin-stroke` — exactly Badge's `outline` variant's own
-  // reasoning. Undefined on every skin but sketch, so the fallback IS
-  // `color` and a consumer who never imports skin.css renders the exact
-  // circle this replaced.
-  //
-  // The drawn twin below (`sketchEllipsePath`, the same generator
-  // `SketchOutline` uses internally) can't just BE `SketchOutline` — that
-  // component assumes an HTML/CSS positioning context (`position:
-  // absolute` against a `position: relative` ancestor) and this glyph is
-  // pure SVG, positioned by its own `<g transform>`. So this hand-rolls
-  // the same crisp/sketch pair `trace.tsx`'s own `TraceBody` uses: the
-  // circle's FILL always paints (an opaque disc, never sketched — see
-  // this file's own `fill` doc), only its stroke is suppressed, and a
-  // `<path>` twin — toggled by the same `--bbox-skin-outline` display
-  // switch — draws the ring by hand. The inner arrow stays crisp always,
-  // same precedent as Port's lit core never getting a drawn twin either.
-  const ringD = useMemo(
-    () => sketchEllipsePath({ width: radius * 2, height: radius * 2, seed: `trace-terminal:${dir}:${radius}` }),
-    [radius, dir],
-  );
+  // WHY this glyph's drawn twin now lives at the boundary, not here
+  // (docs/peps/0001-sketch-skin-at-the-boundary.md M5b): before this
+  // migration, `SketchOutline` couldn't be used — it assumes HTML/CSS
+  // positioning (`position: absolute` against a `position: relative`
+  // ancestor) and this glyph is pure SVG, positioned by its own `<g
+  // transform>` — so this hand-rolled the same crisp/sketch pair
+  // `trace.tsx`'s own `TraceBody` used to. The boundary has no such
+  // problem: `sketchAtEdge.ts` appends a twin `<svg>` into THIS `<g>`
+  // (added to `DOT_SELECTOR`), which already inherits the `translate`/
+  // `rotate` transform above — the hand-rolled duplicate existed only
+  // because the core's own abstraction could not reach this case. The
+  // circle's fill still always paints (an opaque disc, never sketched —
+  // see this file's own `fill` doc); only its stroke is suppressed, now
+  // by the boundary's own crisp-suppression CSS rather than a per-skin
+  // `display` switch on a twin this file drew itself.
   return (
     <g
       data-slot="trace-terminal"
@@ -156,19 +146,19 @@ export function TraceTerminal({
         cy={0}
         r={radius}
         fill={fill}
+        // WHY `--bbox-skin-line-override` stays (deviation from the
+        // migration plan's literal table, which said to drop it — see the
+        // build report): dropping it would leave the crisp ring visible
+        // forever, even under the sketch skin. Block/Badge/PortEdge all
+        // keep the identical read for the identical reason — this token is
+        // the UNCHANGED, token-layer mechanism (docs/peps/0001's own "token
+        // styling stays exactly as it is") that blanks a state-owned line
+        // to transparent under sketch, and it is the only way to hide just
+        // the STROKE while the circle's opaque `fill` keeps painting; a
+        // `display:none` on the whole element (the mechanism `trace-line`
+        // uses) would hide the fill too.
         style={{ stroke: `var(--bbox-skin-line-override, ${color})` }}
         strokeWidth={TRACE_TERMINAL_RING_PX}
-      />
-      <path
-        data-slot="trace-terminal-ring-sketch"
-        d={ringD}
-        transform={`translate(${-radius} ${-radius})`}
-        fill="none"
-        stroke={color}
-        strokeWidth={TRACE_TERMINAL_RING_PX}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ display: "var(--bbox-skin-outline, none)" }}
       />
       {showDirection ? (
         <path

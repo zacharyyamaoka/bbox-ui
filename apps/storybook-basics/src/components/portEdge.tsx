@@ -63,7 +63,6 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { CodeEditor } from "./codeEditor";
 import type { Diagnostic } from "./highlighter";
 import { LabeledPort } from "./labeledPort";
-import { SketchOutline } from "../skin/sketchOutline";
 import type { PortState } from "./port";
 import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, inwardTextLayout, type BlockSide, type PortTextLayout } from "./port.layout";
 import { formatPortLane, reconcilePortLane } from "./portLane";
@@ -625,12 +624,15 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
         // ring — see traceTerminal.tsx's identical reasoning), so it reads
         // `--bbox-skin-line-override` rather than `--bbox-skin-stroke`;
         // width and radius are the skin's to set outright, same as every
-        // other bordered box in this port. `SketchOutline` — a CHILD of
-        // this `position: absolute` box, which already establishes the
-        // containing block its own `left/top: -borderWidth` positions
-        // against, the exact recipe `block.tsx` uses — draws the hand-drawn
-        // twin; it renders always and CSS decides which one paints, so
-        // there is nothing here that has to know the active skin.
+        // other bordered box in this port. WHY no drawn twin lives here any
+        // more (docs/peps/0001-sketch-skin-at-the-boundary.md M5): this
+        // used to render a `SketchOutline` child always, with CSS deciding
+        // which of the two painted — the arrangement the ruling retires.
+        // This `position: absolute` box still establishes the containing
+        // block a drawn twin needs (the same recipe `block.tsx` uses); the
+        // boundary pass now appends into it directly, selecting on
+        // `[data-slot="port-edge-group-outline"]` in `BOX_SELECTOR`
+        // (`sketchAtEdge.ts`) rather than being told to by a child element.
         <div
           data-slot="port-edge-group-outline"
           data-group-id={slot.slotId}
@@ -652,15 +654,7 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
             // the skin has already made transparent.
             ...({ "--bbox-ink-state": color ?? "var(--border)" } as CSSProperties),
           }}
-        >
-          <SketchOutline
-            width={box.width}
-            height={box.height}
-            borderWidth={2}
-            stroke={color ?? "var(--border)"}
-            seed={`port-edge-group:${slot.slotId}`}
-          />
-        </div>
+        />
       )}
       {showCard && (
         // "What does dnd-kit actually use for a grouped family" (Lane I):
