@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "../lib/utils";
+import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import {
   BLOCK_MEMBER_GAP_PX,
   BLOCK_MEMBER_INSET_PX,
@@ -96,6 +97,16 @@ export interface BlockProps {
    * when two same-sized Blocks need visibly different hand-drawn lines.
    */
   sketchSeed?: string;
+  /**
+   * Paint Block's hit region. Block has NO hit constant — deliberately: as
+   * a DOM element its pointer target is the browser's own hit test, which
+   * stops at the border box exactly (the same "there was no number to
+   * choose" React Flow's DOM nodes have; contrast tldraw's ±3 screen px
+   * `hitTestMargin`). So what this paints IS that fact: a wash over the
+   * border box, nothing outside it. Pure paint — absolutely positioned,
+   * `pointer-events: none`, moves no layout and eats no clicks.
+   */
+  showHitRegion?: boolean;
 }
 
 /**
@@ -127,6 +138,7 @@ export function Block({
   showMembers = true,
   showCards = false,
   sketchSeed,
+  showHitRegion = false,
 }: BlockProps) {
   return (
     <div
@@ -190,6 +202,24 @@ export function Block({
         stretch={height === undefined}
         seed={sketchSeed ?? `${width}x${height ?? "auto"}`}
       />
+      {showHitRegion && (
+        <div
+          data-slot="block-hit-region"
+          aria-hidden
+          style={{
+            position: "absolute",
+            // `inset: 0` covers the PADDING box; the hit region is the
+            // BORDER box, so reach back out by the live border width —
+            // the same token the root's own border reads.
+            inset: "calc(-1 * var(--bbox-skin-stroke-width, 1px))",
+            pointerEvents: "none",
+            background: HIT_REGION_FILL,
+            outline: HIT_REGION_OUTLINE,
+            outlineOffset: -1,
+            borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
+          }}
+        />
+      )}
       {header !== undefined && (
         <div
           data-slot="block-header"

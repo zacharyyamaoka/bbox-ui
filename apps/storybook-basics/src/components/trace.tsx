@@ -39,6 +39,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 
 import { cn } from "../lib/utils";
+import { HIT_REGION_STROKE } from "./hitRegion";
 import {
   ASYNC_PACKET_DASHARRAY,
   DATA_MARCH_CLASS,
@@ -188,6 +189,23 @@ export interface TraceProps extends Omit<ComponentProps<"g">, "id" | "points"> {
    * nothing listens to should not be silently eating pointer events from
    * whatever sits under it. */
   interactive?: boolean;
+  /**
+   * The hit path's stroke width in the SVG's own units. Defaults to
+   * `TRACE_HIT_STROKE_PX` (12). Scene-space, like every geometry number
+   * here: under a host's viewport transform the band scales with zoom
+   * (note it does NOT get the `vectorEffect` prop — that keeps the INK
+   * screen-constant while the hit band still scales; see the hit-regions
+   * stories). A host wanting a screen-constant band divides by its zoom.
+   */
+  hitStrokePx?: number;
+  /**
+   * Paint the hit path (translucent stroke) instead of leaving it
+   * transparent. Pure paint on the EXISTING hit element — width, cap and
+   * hit-testing are identical with this on or off. Only meaningful with
+   * `interactive`; a non-interactive Trace HAS no hit band, and painting
+   * one would be the decoration this prop exists to avoid.
+   */
+  showHitRegion?: boolean;
 }
 
 export interface TraceStrokeStyle {
@@ -285,6 +303,8 @@ export function TraceBody({
   strokeWidth = 2,
   vectorEffect,
   interactive = false,
+  hitStrokePx = TRACE_HIT_STROKE_PX,
+  showHitRegion = false,
   className,
   ...props
 }: TraceProps) {
@@ -307,8 +327,8 @@ export function TraceBody({
       data-slot="trace-hit"
       d={path}
       fill="none"
-      stroke="transparent"
-      strokeWidth={TRACE_HIT_STROKE_PX}
+      stroke={showHitRegion ? HIT_REGION_STROKE : "transparent"}
+      strokeWidth={hitStrokePx}
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ pointerEvents: "stroke" }}
@@ -656,6 +676,10 @@ export interface TraceRouteProps
   strokeWidth?: number;
   vectorEffect?: "non-scaling-stroke";
   interactive?: boolean;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  hitStrokePx?: number;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  showHitRegion?: boolean;
   /** Draw the two endpoint glyphs. On by default — `Trace` is "the whole
    * thing"; a host with real `Port`s passes `false`. */
   terminals?: boolean;
@@ -703,6 +727,8 @@ export function Trace({
   strokeWidth,
   vectorEffect,
   interactive,
+  hitStrokePx,
+  showHitRegion,
   terminals = true,
   terminalRadius,
   terminalColor,
@@ -814,6 +840,8 @@ export function Trace({
         strokeWidth={strokeWidth}
         vectorEffect={vectorEffect}
         interactive={interactive}
+        hitStrokePx={hitStrokePx}
+        showHitRegion={showHitRegion}
       />
       {terminals ? (
         <>

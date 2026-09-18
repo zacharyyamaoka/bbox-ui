@@ -18,6 +18,7 @@
 import type { ComponentProps, CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
+import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { PORT_DIAMETERS, PORT_HIT_PX, PORT_STATE_RING_PX, PORT_SURFACE_RING_PX, type PortSize } from "./port.layout";
 import { SketchOutline } from "../skin/sketchOutline";
 
@@ -178,6 +179,22 @@ export interface PortProps extends ComponentProps<"span"> {
   /** Host-set, never persisted — the pointer is over this port mid-drag,
    * previewing it becoming `wired`. */
   hinting?: boolean;
+  /**
+   * The hit halo's diameter in the component's OWN px. Defaults to
+   * `PORT_HIT_PX` (40). The constant is scene-space: under a host's
+   * viewport transform it scales with zoom. A host that wants a
+   * screen-constant target divides by its own zoom before passing —
+   * per ARCHITECTURE.md the host owns the viewport transform, so the
+   * current zoom is an input here, never something Port measures.
+   */
+  hitPx?: number;
+  /**
+   * Paint the hit halo (translucent wash + dashed outline) so the region
+   * is visible. Pure paint on the EXISTING halo span — geometry and
+   * hit-testing are identical with this on or off, same rule as
+   * `PortEdge`'s `showCard` overlay.
+   */
+  showHitRegion?: boolean;
 }
 
 /**
@@ -191,6 +208,8 @@ export function Port({
   hidden = false,
   dimmed = false,
   hinting = false,
+  hitPx = PORT_HIT_PX,
+  showHitRegion = false,
   className,
   style,
   ...props
@@ -198,7 +217,7 @@ export function Port({
   if (hidden) return null;
   const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
   // A fixed 40px hit target regardless of the painted diameter.
-  const haloInset = (diameterPx - PORT_HIT_PX) / 2;
+  const haloInset = (diameterPx - hitPx) / 2;
   const coreStyle = portCoreStyle({ state, hinting });
   const ringColor = portRingColor({ state, dimmed, hinting });
   return (
@@ -235,7 +254,20 @@ export function Port({
           seed={`port:${state}:${diameter}`}
         />
       )}
-      <span data-slot="port-dot-halo" aria-hidden className="absolute rounded-full" style={{ inset: haloInset }} />
+      <span
+        data-slot="port-dot-halo"
+        aria-hidden
+        className="absolute rounded-full"
+        style={{
+          inset: haloInset,
+          // Paint-only when shown: background/outline never move geometry,
+          // and the halo is the REAL hit element either way — so the drawn
+          // region cannot disagree with the target it visualises.
+          ...(showHitRegion
+            ? { background: HIT_REGION_FILL, outline: HIT_REGION_OUTLINE, outlineOffset: -1 }
+            : null),
+        }}
+      />
       {coreStyle && (
         <span
           data-slot="port-dot-core"
