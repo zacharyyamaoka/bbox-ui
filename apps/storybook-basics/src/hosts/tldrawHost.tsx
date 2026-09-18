@@ -595,7 +595,12 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400 }: 
   return (
     <div data-host="tldraw" style={{ position: "relative", width, height }}>
       <TldrawHostContext.Provider value={context}>
-        <Tldraw shapeUtils={SHAPE_UTILS} components={COMPONENTS} onMount={handleMount} />
+        {/* `colorScheme="system"` (a real 5.3.2 editor option; the older
+         * `inferDarkMode` prop no longer exists) — without it tldraw pins
+         * its LIGHT chrome inside this app's dark Storybook, and the trunk
+         * faces' dim labels sit on a white canvas while the other two
+         * benches render dark (seen in the 2026-09-17 three-host capture). */}
+        <Tldraw shapeUtils={SHAPE_UTILS} components={COMPONENTS} onMount={handleMount} colorScheme="system" />
       </TldrawHostContext.Provider>
     </div>
   );
