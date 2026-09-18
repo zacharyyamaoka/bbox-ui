@@ -310,6 +310,23 @@ export function railPlanFor(input: RailPlanInput): RailPlan {
 
   // Spread-on-simple, and every horizontal wall OUTSIDE port view: along
   // the whole wall, with the donor's constant corner clearance.
+  //
+  // WHY `band: "block"` is right here even for a COLUMN-axis edge, and is
+  // NOT the cause of a label colliding with a block's title (investigated
+  // and reverted 2026-09-17): a *simple face* has no visible header/body
+  // divide — that is what makes it simple — so its side walls are meant to
+  // span the block's whole height. Zach's own reference for this view
+  // ("FOUR WALLS AT ONCE · SIMPLE FACE, PORTS SPREAD") shows exactly that:
+  // the left wall's ports run from near the top corner to near the bottom
+  // one, not confined to a body band. `BlockPort.stories.tsx`'s `FourEdges`
+  // pins it at 30px from the leading corner and correctly rejected a change
+  // to `"body"` (which measured 12px).
+  //
+  // So when a caller puts a simple-view rail on a block that DOES draw a
+  // header — as `AsyncRegion.stories.tsx` does — an inward label can land
+  // on the title. That is the fixture reaching for two things at once, not
+  // this rule being wrong, and it is fixed there via the caller-facing
+  // override seams (`BlockEdgeSpec.distribution`, `portEdgeProps.textLayout`).
   if (view === "simple" || railAxisFor(edge) === "row") {
     return {
       groups: "",
