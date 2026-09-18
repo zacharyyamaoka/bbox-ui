@@ -360,3 +360,53 @@ of `hosts/memberDrag.ts` belongs beside `blockMembers.tsx` as `free`
 layout's own `onMembersChange` counterpart to `stack`'s dnd-kit boundary,
 not a second, host-side implementation. See the lane's own report for the
 exact proposed shape.
+## `src/detach` — detach-to-primitive (2026-09-18, detach-to-primitive lane)
+
+New directory, `apps/storybook-basics/src/detach/`. This app's own title
+scopes this document to `src/components`; the detach kit lives beside it in
+`src/detach` for architectural reasons stated in that directory's own
+`index.ts` header, so it gets its own section here rather than a silent
+omission (the same accommodation `reactFlowHost.tsx`'s section above makes).
+
+Two donors were read in full before writing anything: the pre-reset adapter
+still in THIS repo (`packages/adapter-tldraw/src/detach/*`, frozen v1,
+1,697 lines) and SystemSketch's generic sweep machinery (`/home/bam/systemsketch/
+src/detach/*`, read-only, 964 lines). Only the first is cited below with line
+numbers, because only the first shares a live class hierarchy with this app's
+own code closely enough to port by value; SystemSketch's sweep is architecture
+**prior art** (the phased-sweep rationale, cited in `detachableKind.ts`'s own
+header) rather than a source of ported lines — its own kinds match by a
+different mechanism again (SystemSketch has genuinely separate shape types per
+concept, same as the pre-reset adapter; this app has neither).
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `detachModel.ts` | (a) | `packages/adapter-tldraw/src/detach/detachModel.ts` (this repo) — `toJsonSafe`/`sanitize` (`:91-124`), `detachMeta`/`readDetachedRecord` (`:127-138`) ported near-verbatim; the RECORD SHAPE itself differs (see file header) because this app's `bbox-node` shape carries almost none of its own persisted state | Opened in full 2026-09-18 before writing; donor is 216 lines |
+| `detachableKind.ts` | (a) rationale, (c) mechanism | `packages/adapter-tldraw/src/detach/detachableKind.ts` — the phased-sweep INVARIANTS and their justification (`:1-29`) ported near-verbatim as prose; the `matches`/`lowerNode` contract is re-typed around a `SceneReader` this app's kinds need and the donor's did not (donor matched by `shape.type`; this app's one shape type is always `"bbox-node"`, so a kind matches by the SCENE node's `type` instead) | Opened in full; donor is 71 lines |
+| `detachPlan.ts` | (a) | `packages/adapter-tldraw/src/detach/detachPlan.ts` — `planDetach`'s walk-and-dedupe and `orderNodes`'s stable sort ported near-verbatim (`:28-70`) | Opened in full; donor is 70 lines; `detachPlan.test.ts` restates its own 4-case suite adapted to the `SceneReader` signature |
+| `detachSweep.ts` | (a) + (c) | `packages/adapter-tldraw/src/detach/detachSweep.ts` — the `editor.run` wrapping, single history mark, tool guard and "replace selection with replacements" rule ported near-verbatim (`:26-66`); the scene-removal half (filtering `scene.nodes` after the sweep) is ours — the donor has no scene layer to update | Opened in full; donor is 66 lines |
+| `lowerShared.ts` | (a) | `packages/adapter-tldraw/src/detach/lowerShared.ts` — `lowerToGroup`'s rotation math (`:49-62`), the one-child-group fallback and the per-row nested-group device ported near-verbatim; `rekeyReceivedPorts` deliberately NOT ported (see file header — nothing in this app's current wiring computes the runtime flag it would carry) | Opened in full; donor is 133 lines |
+| `rebuild.ts` | (a) + (c) | `packages/adapter-tldraw/src/detach/rebuild.ts` — the anchor-based position/rotation recovery (`anchorIdWithin`, the page-transform math, `:88-99`) ported near-verbatim; the scene-node re-creation half (minting the `bbox-node` shape directly AND pushing the node back into `HostScene`) is ours — see file header for the reconciliation gap this closes | Opened in full; donor is 151 lines |
+| `stockShapes.ts` — `TLDRAW_TEXT_LINE`, `STOCK_TEXT_BASES`, `stockTextStyle` | (a) | `packages/adapter-tldraw/src/detach/stockPartials.ts:34`, `:72-87` | Opened in full; donor is 368 lines |
+| `stockShapes.ts` — `renderedLineMeasureFor` | (a) | `stockPartials.ts:103-123` | Same read |
+| `stockShapes.ts` — `textAtDom`'s centering formula | (a) | `stockPartials.ts:311-324` (`textAt`'s `x`/`y` derivation) — this app's version centers on BOTH axes rather than reading an `align` enum; see the function's own doc for why that is a deliberate simplification, not an oversight | Same read |
+| `stockShapes.ts` — `geoAtBox` | (a) | `stockPartials.ts:348-368` | Same read |
+| `stockShapes.ts` — `measureText`/`truncateToWidth`/`splitGraphemes` | **not ported** | Deliberately omitted — see `stockShapes.ts`'s own header for why this kit never needs to guess a text box's width | — |
+| `definitions/port.ts` — `emitPortPrimitives`'s structure | (a) rationale, (c) mechanism | `packages/adapter-tldraw/src/detach/portPrimitives.ts` — "bottom of the hierarchy, invoked per port" framing (`:1-13`) carried over as prose; the STATE→colour table (`STATE_STOCK_RING`) reproduces the donor's `STATE_STOCK_RING` (`:79-86`) for the three states it shares | Opened in full; donor is 141 lines |
+| `definitions/port.ts` — `received` state → stock `"green"` | (c) | **Ours, no donor precedent** — the donor's own `PortState` excludes `received` as runtime-only (see that file's own doc); this app's `PortState` persists it. A fresh judgement call, stated as one in the code, not dressed up as a port | — |
+| `definitions/block.ts` | (a) rationale, (c) mechanism | `packages/adapter-tldraw/src/detach/blockPrimitives.ts` — "card first, ports NOT drawn here, invoke the port reduction per port" (`:1-13`, `:90-96`) carried over as the file's own organizing rule; **not one line of the donor's actual geometry math is ported**, because this app's Block/BlockPort has no closed-form layout function to copy from (see `stockShapes.ts`'s header) — every box here comes from `getBoundingClientRect`/`Range` measurement of the LIVE DOM instead | Opened in full; donor is 219 lines |
+| `editorContainer.ts` | (c) | Ours, ad hoc — no donor equivalent (the donor never mounts more than one `Editor` on a page at once) | Found by a real, reproduced defect: see this file's own header and `DetachToPrimitive.stories.tsx`'s mutation-test note in the lane report |
+
+### The one geometry step neither donor needed
+
+`definitions/block.ts`'s "shift every measured box into the parent frame by
+`shape.x`/`shape.y`" step (the `inParentFrame` map) has a DIRECT donor
+precedent in spirit (`blockPrimitives.ts`'s own `origin` parameter, added at
+every call site) but was NOT copied mechanically — it was independently
+re-derived, got wrong on the first pass (every primitive landed off by
+exactly the original shape's own position), and was only caught by the
+measurement harness this lane's brief asked to build first. Recorded here
+because it is the single most instructive proof that DOM measurement does
+not exempt this kit from the donor's own coordinate-frame discipline — see
+the lane report's "adversarial loop" section for the full repro (24px error,
+one `sed`-sized fix, mutation-verified by reverting it).
