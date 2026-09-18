@@ -18,6 +18,7 @@ import { BlockPort, type BlockEdgeSpec } from "../components/blockPort";
 import { CodeEditor } from "../components/codeEditor";
 import { Glyph } from "../components/glyph";
 import type { PortEdgeItem } from "../components/portEdge";
+import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
 import { ValueCapsule } from "../presets/value/value";
 import { childrenOf, type SceneNode, wiredPorts } from "../scene/scene";
@@ -45,6 +46,10 @@ import { type HostNodeData, type HostScene } from "./hostScene";
  * (…)` — SystemSketch's mechanism, keyed off this one shared boundary.
  */
 export const POINTER_OWNED_CLASS = "nodrag";
+
+/** The donor bench's header-hugging distribution (Scene.stories.tsx's
+ *  ANCHOR_START, same values). */
+const ANCHOR_START: Distribution = { mode: "aligned", anchor: "start", gap: 24, edgePadding: 16 };
 
 /**
  * How a host reorders one wall of one node, expressed as a scene write —
@@ -96,6 +101,7 @@ function BlockNodeView({ scene, node, wired, onSceneChange }: SceneNodeViewProps
       side,
       {
         items: withWiredState(portIds.map((id): PortEdgeItem => ({ id, label: id })), node.id, wired ?? new Set()),
+        distribution: node.data.anchorStart?.includes(side as BlockSide) ? ANCHOR_START : undefined,
         onItemsChange: onSceneChange
           ? (items: PortEdgeItem[]) => onSceneChange(reorderNodePorts(scene, node.id, side as BlockSide, items.map((item) => item.id)))
           : undefined,

@@ -30,6 +30,10 @@ export type HostNodeData = {
   /** Which wall each port sits on — VIEW geometry, host-owned. The scene
    *  only ever names ports; it never places them. */
   ports?: Partial<Record<BlockSide, string[]>>;
+  /** Walls whose ports hug the header end instead of centring — the donor
+   *  bench's own device (Scene.stories.tsx), kept for the same reason:
+   *  proc's own `in` dot stays visually clear of its member's dot. */
+  anchorStart?: BlockSide[];
   /* -- type: "glyph" ------------------------------------------------ */
   /** `@bbox-ui/glyph-content` grammar, e.g. `lucide:rocket`. */
   content?: string;
@@ -64,7 +68,7 @@ export const HOST_SCENE: HostScene = {
       id: "proc",
       type: "block",
       position: { x: 16, y: 92 },
-      data: { name: "proc", view: "expanded", w: 240, h: 180, ports: { left: ["in"], right: ["out", "aux"] } },
+      data: { name: "proc", view: "expanded", w: 240, h: 180, ports: { left: ["in"], right: ["out", "aux"] }, anchorStart: ["left"] },
     },
     // The nesting: kid renders as a member of proc in BOTH hosts (the view
     // kit draws it; no host treats it as a canvas node of its own).
