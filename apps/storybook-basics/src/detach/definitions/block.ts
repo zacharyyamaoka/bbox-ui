@@ -87,13 +87,13 @@ export const blockDetachableKind: DetachableKind = {
     // Card first — the anchor primitive, exactly as the donor orders it
     // (`blockPrimitives.ts:90-96`, "Card first — it is the anchor that
     // stands where the Block stood").
-    const cardBox = boxRelativeTo(wrapper, cardEl);
+    const cardBox = boxRelativeTo(wrapper, cardEl, editor);
     const card = geoAtBox(cardBox, { geo: "rectangle", color: "black", fill: "semi" });
     shapes.push(card);
 
     const headerEl = cardEl.querySelector<HTMLElement>('[data-slot="block-header"]');
     if (headerEl && headerEl.textContent && headerEl.textContent.trim() !== "") {
-      const headerTextBox = textBoxRelativeTo(wrapper, headerEl);
+      const headerTextBox = textBoxRelativeTo(wrapper, headerEl, editor);
       const fontPx = Math.round(parseFloat(window.getComputedStyle(headerEl).fontSize) || 14);
       shapes.push(
         textAtDom({

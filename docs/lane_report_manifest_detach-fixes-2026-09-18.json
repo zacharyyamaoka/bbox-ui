@@ -1,0 +1,119 @@
+{
+  "title": "Detach-to-Primitive: Zoom, Wrap, Text Checks, Rebuild Menu",
+  "summary": "Three confirmed bugs from an independent audit of the detach-to-primitive kit, each reproduced, fixed and mutation-verified, plus the right-click \"Rebuild\" menu Zach asked for, wired onto tldraw's own stock context menu.",
+  "slug": "detach-fixes",
+  "date": "2026-09-18",
+  "base_ref": "main",
+  "branch_label": "detach-fixes lane (worktree agent-ab8d3a3ff3d6ba31a)",
+  "storybook_port": 5521,
+  "intro": [
+    "The previous lane's own report claimed 0px offsets on card and port-ring geometry, all real. A Fable audit dug past that and found two things it missed and one thing its own test suite could not have caught: (F1) the kit never read the camera's zoom, so a detach anywhere but z=1 baked the zoom straight into the model; (F2) a wrapping label detached to one overhanging line; (F3) the suite's ONLY text-placement check was a port ring's centre, and a comment falsely claimed that stood in for checking the text itself.",
+    "This lane fixed all three, added the right-click \"Rebuild\" menu item Zach asked for (composed onto tldraw's own stock context menu, not a replacement for it), and mutation-verified every fix by reverting it and watching the exact reported symptom reproduce."
+  ],
+  "changes": [
+    "<code>apps/storybook-basics/src/detach/stockShapes.ts</code> \u2014 <code>boxRelativeTo</code>/<code>textBoxRelativeTo</code> now read <code>editor.getZoomLevel()</code> themselves instead of taking a <code>scale = 1</code> default (F1); <code>textAtDom</code> gained a wrap branch that lets a multi-line label wrap at its own measured width instead of forcing one overhanging line (F2)",
+    "<code>apps/storybook-basics/src/detach/definitions/{block,port}.ts</code> \u2014 the four call sites now pass <code>editor</code> through to the fixed helpers; <code>port.ts</code>'s stale \"24px default\" comment corrected to 18px (F5, the code already read the computed style)",
+    "<code>apps/storybook-basics/src/hosts/tldrawHost.tsx</code> \u2014 one additive prop, <code>components?: TLComponents</code>, merged over the host's own <code>{ OnTheCanvas }</code>, plus an exported <code>useTldrawHostScene()</code> hook so a component mounted through that prop can still reach <code>{scene, onSceneChange}</code>",
+    "<code>apps/storybook-basics/src/detach/rebuildContextMenu.tsx</code> \u2014 new: composes tldraw's own <code>DefaultContextMenu</code>/<code>DefaultContextMenuContent</code> with one conditional \"Rebuild\" group, gated on <code>selectedRebuildableIds(editor).length &gt; 0</code>",
+    "<code>apps/storybook-basics/src/stories/DetachToPrimitive.stories.tsx</code> \u2014 per-string text-node ink-box assertions (F3) replacing the false \"the ring IS the text check\" comment; two new permanent gallery rows (wrapping header, long single-line header); a new <code>ZoomInvariance</code> story (z=0.5/1/2); a new <code>RebuildMenuStates</code> story (both menu states, driven at z=2) plus a capture-only variant; a hidden-tab guard on the shared <code>nextPaint()</code> helper",
+    "<code>docs/ALGORITHM-PROVENANCE.md</code> \u2014 three new <code>src/detach</code> rows citing why F1/F2/the menu have no donor precedent (the donor's pure layout function has no DOM, camera or context-menu concept at all)"
+  ],
+  "findings": [
+    "<b>F1 (zoom), mutation-verified:</b> reverting the zoom division reproduces the exact reported symptom &mdash; a 220&times;140 card detaches to 440&times;280 at z=2, and to 110&times;70 at z=0.5. Fixed: identical 220&times;140 card / 22&times;22 rings at z=0.5, 1 and 2 &mdash; see the zoom table below",
+    "<b>F2 (wrap), mutation-verified:</b> reverting the wrap branch reproduces the exact reported symptom &mdash; the 3-line live header (measured ink 162.6&times;59) detaches to one 393px-wide line, overhanging a 220px card by ~115px on the left alone. Fixed: the detached label wraps to 166.4&times;56 &mdash; inside the card, not one line",
+    "<b>F3 (text placement), mutation-verified two ways:</b> an injected 8px text-offset bug is CAUGHT by the new per-string ink-box checks (dx=8 &gt; the 6px floor) and is INVISIBLE to the old card+ring-only checks (same bug, same suite with the new checks disabled, passes clean) &mdash; direct proof the old \"the ring is the text check\" comment was false",
+    "<b>The audit's own drift projection did not materialize:</b> a genuinely long (~163px) single-line header measured 2&ndash;3.6px of before/after drift, not the projected ~6&ndash;7px per edge &mdash; the chosen tolerance (<code>max(6, ceil(width&times;4.5%))</code>) passes it honestly without needing to be loosened",
+    "<b>Rebuild menu, both states + a real click:</b> absent on a live (non-detached) selection, present after detaching, and clicking it through the REAL context menu (not a direct function call) rebuilds the live component &mdash; driven at z=2 throughout, so this is also F1's integration proof through the actual entry point a user would use",
+    "Full baseline held and grew cleanly: <code>tsc</code> clean; unit project unchanged at 40 files / 744 tests; storybook project 62 files / 271 tests (was 62/268 &mdash; +3 tests, all mine), every number below is this run's own <code>console.table</code>/JSON output, not retyped from memory"
+  ],
+  "sections": [
+    {
+      "heading": "F1 \u2014 camera zoom baked into the model",
+      "html": "<div class=\"intro\"><p><b>The bug:</b> <code>boxRelativeTo</code>/<code>textBoxRelativeTo</code> convert a screen-space <code>getBoundingClientRect()</code> into model units by dividing by the camera zoom &mdash; except they never did: the parameter defaulted to <code>scale = 1</code> and all four call sites omitted it, so nothing in the kit ever read <code>editor.getZoomLevel()</code>. A screen rect already includes the zoom, so dividing by 1 instead of the real zoom bakes the zoom straight into the model.</p><p><b>The fix:</b> both functions now read <code>editor.getZoomLevel()</code> themselves &mdash; the fix lives at the SOURCE, not at four call sites that would each have to remember to pass a number by hand (exactly the mistake that caused this).</p><p><b>Mutation-tested:</b> reverting the read back to a hardcoded 1 reproduces the exact symptom &mdash; <code>z=0.5 shape #0 (rectangle) w vs z=1: expected 110 to be less than or equal to 1</code>, i.e. the card measured HALF size at half zoom, exactly the inverse-of-zoom bug shape. Restoring the fix returns every shape to the SAME 220&times;140/22&times;22 geometry regardless of zoom (see the table below, and the captures &mdash; note the visual capture needed a wider stage AND a held camera to actually show the difference; see the caption).</p></div>",
+      "images": [
+        {
+          "file": "/home/bam/bbox-ui/reports/media/detach-fixes-2026-09-18/zoom-bug-before.png",
+          "title": "Before \u2014 z=2 detaches to ~2x the model (BUG)",
+          "caption": "Reintroduced the bug for this capture (reverted, screenshotted, restored). z=0.5 (left): the card and both rings shrink to a sliver \u2014 the model was halved along with the halved zoom. z=2 (right): the header alone overflows the whole 960px stage \u2014 the model was doubled along with the doubled zoom. z=1 (middle) looks fine, because dividing by the bugged constant 1 happens to equal dividing by the real zoom exactly when zoom IS 1 \u2014 which is exactly why a bench fixed at z=1 forever would never have caught this."
+        },
+        {
+          "file": "/home/bam/bbox-ui/reports/media/detach-fixes-2026-09-18/zoom-fixed-after.png",
+          "title": "After \u2014 identical model geometry at every zoom (FIXED)",
+          "caption": "Same story, same code path, only the fix restored. z=0.5, z=1 and z=2 all show the SAME proportioned card and ports \u2014 bigger on screen at higher zoom (correct: that is what zooming in looks like), never a different MODEL size. The zoom-percent readout in each toolbar (50% / 100% / 200%) is tldraw's own camera; the shapes underneath are what \"model geometry\" means here."
+        }
+      ]
+    },
+    {
+      "heading": "F1 \u2014 measured model geometry across zoom (this run's own numbers)",
+      "html": "<table class=\"look\"><tr><th>Camera zoom</th><th>Shape #0 (card, rectangle)</th><th>Shape #1 (ring, ellipse)</th><th>Shape #2 (ring, ellipse)</th></tr><tr><td>z = 0.5</td><td>220 &times; 140</td><td>22 &times; 22</td><td>22 &times; 22</td></tr><tr><td>z = 1</td><td>220 &times; 140</td><td>22 &times; 22</td><td>22 &times; 22</td></tr><tr><td>z = 2</td><td>220 &times; 140</td><td>22 &times; 22</td><td>22 &times; 22</td></tr></table><p class=\"sub\">Literal output of <code>ZoomInvariance</code>'s own <code>console.table</code> (<code>DetachToPrimitive.stories.tsx</code>), read via a temporary debug throw during verification, not retyped from memory. The regression test asserts each of these within &plusmn;1px of the z=1 row \u2014 a tolerance sized for measurement noise (sub-pixel rounding differs slightly at different scale factors), never for a real placement difference.</p>"
+    },
+    {
+      "heading": "F2 \u2014 a wrapping label detached to one overhanging line",
+      "html": "<div class=\"intro\"><p><b>The bug:</b> <code>textAtDom</code> floored a detached label's width at <code>Math.max(box.w, tldrawWidth)</code>, where <code>tldrawWidth</code> is tldraw's own SINGLE-LINE measure of the whole string \u2014 the right safety floor for a label that fits on one line (so tldraw's different font metrics can never wrap it early), and exactly backwards for a label that already wraps: it forces the WHOLE string onto one line no matter how tall the live DOM's own measured ink box was.</p><p><b>The fix:</b> derive a line count from the live DOM's measured ink-box height (<code>Math.round(box.h / lineHeight)</code>); when it is more than 1, hand tldraw the DOM's own measured WIDTH instead of the single-line floor, so it wraps at roughly the same width the live component did.</p><p><b>Mutation-tested:</b> reverting the wrap branch reproduces the exact reported symptom \u2014 <code>wrapping-header detached header must not overhang the card (F2): expected 392.8 to be less than or equal to 226</code>, matching the bug report's own \"one 393px-wide line\" almost to the pixel. Restoring the fix returns the detached label to 166.4px wide (inside the 220px card) and 56px tall (still ~3 lines, matching the live header's 59px) \u2014 see the captures.</p></div>",
+      "images": [
+        {
+          "file": "/home/bam/bbox-ui/reports/media/detach-fixes-2026-09-18/wrap-bug-before.png",
+          "title": "Before \u2014 the wrapping-header row's Detached column (BUG)",
+          "caption": "\"Wrapping header (F2)\" row, 4th from top. Before/Rebuilt (left/right) show the live header correctly wrapped to 3 lines. Detached (middle) is ONE line, spilling out both sides of the card \u2014 exactly the reported symptom, on the exact fixture from the bug report."
+        },
+        {
+          "file": "/home/bam/bbox-ui/reports/media/detach-fixes-2026-09-18/wrap-fixed-after.png",
+          "title": "After \u2014 all 3 columns agree (FIXED)",
+          "caption": "Same row, only the fix restored. Detached now wraps to 3 lines, contained inside the card, matching Before and Rebuilt."
+        }
+      ]
+    },
+    {
+      "heading": "F3 \u2014 per-string text placement, and the false comment it replaces",
+      "html": "<div class=\"intro\"><p><b>What was there before:</b> the ONLY thing standing in for \"is the text placed correctly\" was the port ring's own centre \u2014 a geometry check on a dot, not on any text node. The story's own comment claimed this WAS the text-placement check Zach asked an adversarial loop over (\"I don't like how when you convert there are these pixel offsets\"). That claim was false, and F3 replaces it with real per-string checks.</p><p><b>The fix:</b> <code>Range.getBoundingClientRect()</code> on the actual header/label text nodes \u2014 the same technique <code>stockShapes.ts</code>'s own <code>textBoxRelativeTo</code> uses internally to BUILD the primitives \u2014 measured before&rarr;detached and before&rarr;rebuilt, for the header and every port label, on every gallery row.</p><p><b>Proven necessary, not just added:</b> an injected 8px horizontal text-placement bug (moving <code>textAtDom</code>'s <code>x</code> by a flat +8px, leaving card and ring geometry untouched) is CAUGHT immediately by the new checks (<code>dx: expected 8 to be less than or equal to 6</code>) and is INVISIBLE to the old suite \u2014 the exact same bug, with F3's checks disabled to simulate the pre-fix suite, passes clean. That is direct proof the old comment was wrong, not an assumption.</p><p><b>Tolerance, chosen deliberately:</b> a flat 6px (this repo's existing geometry tolerance) passes today's short strings but is the wrong SHAPE of bound \u2014 the residual is font-substitution advance mismatch (tldraw's bundled <code>tldraw_sans</code> vs. this app's system-sans stack), a PERCENTAGE of a string's width, split in half by centering. The chosen tolerance is <code>max(6px, ceil(width &times; 4.5%))</code> \u2014 floored at the existing bar for short strings, scaling for long ones so a real placement bug on a long string still fails loudly.</p><p><b>The audit's own projection, tested and NOT confirmed:</b> the audit projected a ~150px single-line label would drift ~6&ndash;7px per edge, past a flat 6px cap. A genuine ~163px single-line header (\"Long single-line header (F3 tolerance)\" row, added specifically to test this) measured 2&ndash;3.6px of drift \u2014 well inside even the OLD flat 6px tolerance. The projection does not hold at this string length; whether it holds further out is unmeasured.</p></div>"
+    },
+    {
+      "heading": "F3 \u2014 measured offsets, this run's own numbers",
+      "html": "<table class=\"look\"><tr><th>Row</th><th>Metric</th><th>dx</th><th>dy</th><th>dw</th><th>dh</th><th>tolerance</th></tr><tr><td>simple</td><td>header text ink, before&rarr;detached</td><td>2.00</td><td>0.05</td><td>3.35</td><td>0.33</td><td>6</td></tr><tr><td>port</td><td>header text ink, before&rarr;detached</td><td>2.00</td><td>0.05</td><td>3.35</td><td>0.33</td><td>6</td></tr><tr><td>port</td><td>port 'in' label text ink, before&rarr;detached</td><td>2.00</td><td>0.15</td><td>3.22</td><td>0.00</td><td>6</td></tr><tr><td>port</td><td>port 'out' label text ink, before&rarr;detached</td><td>2.00</td><td>0.15</td><td>3.48</td><td>0.00</td><td>6</td></tr><tr><td>expanded</td><td>header text ink, before&rarr;detached</td><td>2.00</td><td>0.05</td><td>3.35</td><td>0.33</td><td>6</td></tr><tr><td>wrapping-header</td><td>header text ink, before&rarr;detached</td><td colspan=\"4\">not asserted \u2014 see \"overhang\" check above; wrap layout may legitimately differ between font engines</td><td>8</td></tr><tr><td>long-single-line-header</td><td>header text ink, before&rarr;detached</td><td>2.00</td><td>0.05</td><td>3.58</td><td>0.33</td><td><b>8</b> (163px string &times; 4.5%)</td></tr></table><p class=\"sub\">Literal output of the play function's own <code>console.table(offsets)</code> (<code>DetachToPrimitive.stories.tsx</code>'s <code>BlockGallery</code> story), read via a temporary debug throw during verification \u2014 not retyped from memory. Every row's dx/dw is dominated by the SAME ~2&ndash;3.5px residual regardless of string length, which is what makes the audit's projected 6&ndash;7px drift at ~150px look like an over-estimate rather than a real ceiling.</p>"
+    },
+    {
+      "heading": "The right-click \"Rebuild\" menu",
+      "html": "<div class=\"intro\"><p>Zach's own words: <i>\"When you do rebuild, it detects if there is rebuild info in the group you selected and displays the option in the right click menu.\"</i> The previous lane flagged this as blocked (\"no context-menu override hook in this tldraw version\") \u2014 true of <code>TLUiOverrides</code>, wrong about tldraw: the context menu is a replaceable COMPONENT SLOT (<code>TLUiComponents.ContextMenu</code>), verified directly against tldraw 5.3.2's own <code>.d.ts</code> mid-lane.</p><p>Composed rather than replaced: <code>RebuildContextMenu</code> renders tldraw's own <code>DefaultContextMenu</code> wrapping <code>DefaultContextMenuContent</code> (every stock item \u2014 Edit, Arrange, Reorder, Cut/Copy/Paste, Duplicate, Delete, Copy as, Export as, Select all) plus one conditional \"Rebuild\" group. Wired through a new <code>components</code> prop on <code>TldrawHost</code>, additive, mirroring the existing <code>onEditorReady</code> seam.</p><p><b>Both states verified with a real right-click</b> (<code>fireEvent.contextMenu</code>, not a direct function call): absent on a live, not-yet-detached selection; present after detaching; clicking it rebuilds the live component. Both mutation-tested (forced the group to always/never render \u2014 each caught by the corresponding assertion). <b>Driven at z=2 throughout</b> \u2014 this is also F1's integration proof through the real entry point a user would actually use, not just the dedicated <code>ZoomInvariance</code> bench.</p></div>",
+      "images": [
+        {
+          "file": "/home/bam/bbox-ui/reports/media/detach-fixes-2026-09-18/rebuild-menu-open.png",
+          "title": "The real tldraw context menu, with Rebuild",
+          "caption": "Captured mid-play-function (a dedicated capture-only story variant that opens the menu and stops there). Every stock item is intact; \"Rebuild\" is the only addition, at the bottom, appearing only because the selected group carries rebuild info."
+        }
+      ]
+    },
+    {
+      "heading": "Mutation-test log \u2014 every fix, reverted and restored",
+      "html": "<table class=\"look\"><tr><th>Fix</th><th>Mutation</th><th>Result while broken</th><th>Result restored</th></tr><tr><td>F1 (zoom)</td><td><code>boxRelativeTo</code>'s <code>scale</code> hardcoded back to 1</td><td><code>ZoomInvariance</code> fails: <code>z=0.5 ... expected 110 to be less than or equal to 1</code></td><td>Passes</td></tr><tr><td>F1 (zoom), via the real menu</td><td>same mutation</td><td><code>RebuildMenuStates</code> fails: <code>detached card model width at z=2 (F1): expected 440 to be close to 220</code></td><td>Passes</td></tr><tr><td>F2 (wrap)</td><td><code>textAtDom</code>'s wrap branch removed (single-branch floor restored)</td><td><code>BlockGallery</code> fails: <code>detached header must not overhang the card (F2): expected 392.8 to be less than or equal to 226</code></td><td>Passes</td></tr><tr><td>F3 (text checks catch a real bug)</td><td><code>textAtDom</code>'s <code>x</code> shifted +8px (text-only; card/ring untouched)</td><td><code>BlockGallery</code> fails: <code>header text ink before&rarr;detached dx: expected 8 to be less than or equal to 6</code></td><td>Passes</td></tr><tr><td>F3 (proving the OLD suite would have missed it)</td><td>SAME +8px text mutation, WITH F3's own checks disabled (header/label loops short-circuited to simulate the pre-fix suite)</td><td><code>BlockGallery</code> passes \u2014 the bug is real and invisible to card+ring-only checks</td><td>N/A (both mutations reverted together)</td></tr><tr><td>Rebuild menu, absent&rarr;always-present</td><td><code>RebuildMenuGroup</code>'s <code>canRebuild</code> gate removed</td><td><code>RebuildMenuStates</code> fails: <code>Rebuild item must be ABSENT before detach: expected &lt;div role=\"menuitem\"&gt; to be null</code></td><td>Passes</td></tr><tr><td>Rebuild menu, present&rarr;always-absent</td><td><code>RebuildMenuGroup</code> forced to <code>return null</code></td><td><code>RebuildMenuStates</code> fails: <code>Rebuild item must be PRESENT after detach: expected null not to be null</code></td><td>Passes</td></tr></table><p class=\"sub\">Every row above was actually run this session \u2014 reverted, watched fail with the stated message (copied verbatim from the real terminal output), restored, re-verified green. Not a description of what mutation testing would show; the literal output of doing it.</p>"
+    }
+  ],
+  "stories": [
+    {
+      "id": "blocks-detach-to-primitive--block-gallery",
+      "title": "Blocks / Detach To Primitive \u2014 Before / Detached / Rebuilt",
+      "look_for": "5 rows now (was 3): simple / port / expanded / wrapping-header (F2) / long-single-line-header (F3), x 3 columns. Look at the 4th row's Detached column especially \u2014 that's F2's fix.",
+      "w": 1050,
+      "h": 1650,
+      "settle": 4500,
+      "name": "gallery-fixed"
+    },
+    {
+      "id": "blocks-detach-to-primitive--zoom-invariance",
+      "title": "Blocks / Detach To Primitive \u2014 F1 regression (z=0.5/1/2)",
+      "look_for": "3 cells, one per camera zoom. The card and ports should look the SAME shape at every zoom, just bigger on screen at higher zoom \u2014 never a different model size.",
+      "w": 3000,
+      "h": 700,
+      "settle": 3500,
+      "name": "zoom-fixed-after"
+    },
+    {
+      "id": "blocks-detach-to-primitive--rebuild-menu-open-for-capture",
+      "title": "Blocks / Detach To Primitive \u2014 Rebuild menu, open",
+      "look_for": "The capture-only twin of the real acceptance test (blocks-detach-to-primitive--rebuild-menu-states, which runs the same sequence then CLOSES the menu and finishes \u2014 not a useful still frame). This variant stops with the menu open so there is something to look at; see the capture above for exactly this frame.",
+      "w": 900,
+      "h": 700,
+      "settle": 2500,
+      "name": "rebuild-menu-open"
+    }
+  ]
+}

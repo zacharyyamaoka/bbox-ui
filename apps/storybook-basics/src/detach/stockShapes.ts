@@ -40,7 +40,7 @@ import { createShapeId, getFontFamily, toRichText } from "tldraw";
 import type { Editor, TLDefaultColorStyle, TLDefaultSizeStyle, TLShapePartial } from "tldraw";
 
 /** A box in the DETACHING shape's own local coordinates (parent-relative,
- *  unscaled screen px at the fixed camera zoom 1 every gallery mounts at). */
+ *  MODEL px — camera zoom already divided out, see `boxRelativeTo`). */
 export interface LocalBox {
   x: number;
   y: number;
@@ -48,11 +48,27 @@ export interface LocalBox {
   h: number;
 }
 
-/** `el`'s border box, in `origin`'s local coordinate frame — the one DOM
- *  read this whole kit is built on. `origin` and `el` must share the same
- *  camera transform (true for every element inside one `bbox-node`'s
- *  wrapper, since tldraw scales the whole HTML layer uniformly). */
-export function boxRelativeTo(origin: Element, el: Element, scale = 1): LocalBox {
+/**
+ * `el`'s border box, in `origin`'s local coordinate frame — the one DOM
+ * read this whole kit is built on. `origin` and `el` must share the same
+ * camera transform (true for every element inside one `bbox-node`'s
+ * wrapper, since tldraw scales the whole HTML layer uniformly).
+ *
+ * FIXED 2026-09-18 (CONFIRMED BUG, found by an independent Fable audit and
+ * verified directly): `getBoundingClientRect` returns SCREEN px, which
+ * already bake in the camera zoom, but this function used to take
+ * `scale = 1` and every one of its four call sites (`definitions/block.ts`,
+ * `definitions/port.ts`) omitted the argument — nothing anywhere in this
+ * kit ever read `editor.getZoomLevel()`. Measured: at
+ * `editor.setCamera({x:0,y:0,z:2})`, a 220×140 card detached to a 440×280
+ * model box, exactly 2×. Reading the zoom HERE, from the same `editor`
+ * every caller already has in scope, is the actual fix — it makes a future
+ * fifth call site correct by construction instead of by a call site
+ * remembering to pass a `scale` number by hand, which is exactly the
+ * mistake that produced this bug.
+ */
+export function boxRelativeTo(origin: Element, el: Element, editor: Editor): LocalBox {
+  const scale = editor.getZoomLevel();
   const originRect = origin.getBoundingClientRect();
   const rect = el.getBoundingClientRect();
   return {
@@ -66,13 +82,15 @@ export function boxRelativeTo(origin: Element, el: Element, scale = 1): LocalBox
 /** The exact painted ink box of `el`'s OWN text content (excludes padding —
  *  `getBoundingClientRect` on an element includes it), via a `Range` over
  *  its child nodes. This is what a label's tldraw text shape should center
- *  on, not the padded container around it. */
-export function textBoxRelativeTo(origin: Element, el: Element, scale = 1): LocalBox {
+ *  on, not the padded container around it. Same zoom division as
+ *  `boxRelativeTo` above, for the same reason — see that function's doc. */
+export function textBoxRelativeTo(origin: Element, el: Element, editor: Editor): LocalBox {
+  const scale = editor.getZoomLevel();
   const range = document.createRange();
   range.selectNodeContents(el);
   const rect = range.getBoundingClientRect();
   const originRect = origin.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return boxRelativeTo(origin, el, scale);
+  if (rect.width === 0 && rect.height === 0) return boxRelativeTo(origin, el, editor);
   return {
     x: (rect.left - originRect.left) / scale,
     y: (rect.top - originRect.top) / scale,
@@ -140,14 +158,45 @@ export interface TextAtDomOptions {
  * box are measured by two different text engines (system sans vs. tldraw's
  * bundled Plex Sans) and can differ by a few px, so centering keeps that
  * residual error split evenly instead of concentrating it on one edge.
+ *
+ * WRAPPING, fixed 2026-09-18 (CONFIRMED BUG): `options.box.h` — the live
+ * DOM's own measured ink box, from `textBoxRelativeTo`'s `Range` — grows
+ * past one line's height exactly when the live label wrapped. The line
+ * count derived from it (`measuredLines` below) decides whether this
+ * primitive should be allowed to wrap too. Before this fix, `width` was
+ * ALWAYS floored at `tldrawWidth` (tldraw's own SINGLE-LINE measure of the
+ * whole string) — a floor that is the right safety net for a one-line
+ * label (tldraw's font metrics must never wrap a string the live DOM
+ * painted on one line) but is exactly backwards for a label that already
+ * wraps: it forces the entire string onto one line no matter how it was
+ * measured. Measured repro: a 3-line live header (ink 162.6×59 on a 220px
+ * block) detached to one 393px-wide line, overhanging the card by ~115px
+ * on the left alone. A wrapping label instead gets the DOM's own measured
+ * width (so tldraw re-wraps at roughly the same width the live DOM did)
+ * and a height scaled to the measured line count — the single-line branch
+ * below is unchanged.
  */
 export function textAtDom(options: TextAtDomOptions): TLShapePartial {
   const stock = stockTextStyle(options.px);
-  const tldrawWidth = options.measureRendered(options.text, options.px);
-  // +4px slack: DOM sub-pixel rounding plus tldraw's own internal padding
-  // on an `autoSize:false` label (see stockPartials.ts's own "+1" note).
-  const width = Math.max(options.box.w, tldrawWidth) + 4;
-  const height = options.px * TLDRAW_TEXT_LINE;
+  const singleLineHeight = options.px * TLDRAW_TEXT_LINE;
+  const measuredLines = Math.max(1, Math.round(options.box.h / singleLineHeight));
+  let width: number;
+  let height: number;
+  if (measuredLines > 1) {
+    // Wraps in the live DOM — hand tldraw the DOM's own measured width so
+    // it wraps too, instead of the single-line safety floor below (which
+    // would force the whole string onto one line). +4px slack matches the
+    // single-line branch (DOM sub-pixel rounding + tldraw's own internal
+    // padding on an `autoSize:false` label).
+    width = options.box.w + 4;
+    height = measuredLines * singleLineHeight;
+  } else {
+    const tldrawWidth = options.measureRendered(options.text, options.px);
+    // +4px slack: DOM sub-pixel rounding plus tldraw's own internal padding
+    // on an `autoSize:false` label (see stockPartials.ts's own "+1" note).
+    width = Math.max(options.box.w, tldrawWidth) + 4;
+    height = singleLineHeight;
+  }
   return {
     id: createShapeId(),
     type: "text",
