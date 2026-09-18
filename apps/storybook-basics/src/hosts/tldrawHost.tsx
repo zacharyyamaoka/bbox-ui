@@ -513,10 +513,24 @@ export interface TldrawHostProps {
   /** The story lane's paint seam — see `nodeViews.tsx`'s `Decorate`. Omit
    *  for byte-identical output to before this prop existed. */
   decorate?: Decorate;
+  /**
+   * Fires once, at the end of the same `handleMount` that seeds the
+   * initial shapes — the editor-ready seam a caller needs to drive the
+   * editor programmatically (the detach-to-primitive lane's own reason for
+   * this: `../detach/**` has no other way to reach a live `Editor` +
+   * this host's own DOM root, since `editorRef` below is private and
+   * `bridgeByEditor` is keyed the other way around). Omit for
+   * byte-identical behaviour to before this prop existed — additive only,
+   * nothing else in this file changed for it.
+   */
+  onEditorReady?(editor: Editor, container: HTMLElement): void;
 }
 
-export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, decorate }: TldrawHostProps) {
+export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, decorate, onEditorReady }: TldrawHostProps) {
   const editorRef = useRef<Editor | null>(null);
+  const hostRootRef = useRef<HTMLDivElement | null>(null);
+  const onEditorReadyRef = useRef(onEditorReady);
+  onEditorReadyRef.current = onEditorReady;
   const [anchors, setAnchors] = useState<Record<string, readonly PortAnchor[]>>({});
 
   const reportAnchors = useCallback((nodeId: string, next: PortAnchor[]) => {
@@ -563,6 +577,7 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, de
         }
       }
       editor.selectNone();
+      if (hostRootRef.current) onEditorReadyRef.current?.(editor, hostRootRef.current);
     },
     // Mount-time snapshot on purpose: shapes are created once; later scene
     // changes flow through the sync effect below.
@@ -597,7 +612,7 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, de
   }, []);
 
   return (
-    <div data-host="tldraw" style={{ position: "relative", width, height }}>
+    <div data-host="tldraw" ref={hostRootRef} style={{ position: "relative", width, height }}>
       <TldrawHostContext.Provider value={context}>
         {/* `colorScheme="system"` (a real 5.3.2 editor option; the older
          * `inferDarkMode` prop no longer exists) — without it tldraw pins
