@@ -66,6 +66,7 @@ import { LabeledPort } from "./labeledPort";
 import type { PortState } from "./port";
 import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, inwardTextLayout, type BlockSide, type PortTextLayout } from "./port.layout";
 import { formatPortLane, reconcilePortLane } from "./portLane";
+import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 import {
   CONTAINER_BORDER,
   CONTAINER_PADDING,
@@ -843,7 +844,10 @@ function FreeSlotCard(props: SlotRenderProps & { axis: "row" | "column"; x: numb
     ...(props.axis === "row"
       ? { left: props.x + CONTAINER_PADDING, top: "50%", transform: `translateY(-50%)${drag ? ` ${drag}` : ""}` }
       : { top: props.x + CONTAINER_PADDING, left: "50%", transform: `translateX(-50%)${drag ? ` ${drag}` : ""}` }),
-    zIndex: isDragging ? 10 : 1,
+    // `dragActive` is the one place a gesture leaks into paint order —
+    // named explicitly (paintOrder.ts) rather than left as an inline
+    // ternary, per the brief's own instruction.
+    zIndex: isDragging ? paintTier("dragActive") : paintTier("memberContent"),
     opacity: isDragging ? 0.6 : 1,
     cursor: "grab",
     touchAction: "none",
@@ -1000,7 +1004,7 @@ function PortLaneOverlay({
     position: "absolute",
     top: geometry.top,
     left: geometry.dotRight + LANE_GAP_PX,
-    zIndex: 5,
+    zIndex: paintTier("laneOverlay"),
   };
   return (
     <div data-slot="port-edge-lane" style={wrapperStyle}>
@@ -1262,6 +1266,11 @@ function PortEdgeBody({
   const moreIndicatorPos = useMoreIndicatorPosition(trackRef, axis, hiddenPortCount);
 
   const trackStyle: CSSProperties = {
+    // The isolation invariant (paintOrder.ts): this root emits the
+    // `memberContent`/`dragActive` (cards) and `laneOverlay` tiers, so
+    // it must wall them off from anything outside it — same reasoning
+    // as Block's own root and BlockPort's wrapper.
+    ...ISOLATED_ROOT_STYLE,
     boxSizing: "border-box",
     width: resolvedSize.width,
     height: resolvedSize.height,

@@ -78,6 +78,7 @@ import {
   type BlockView,
   type RailPlan,
 } from "./blockPort.layout";
+import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 
 export type { BlockPortLayout, BlockView } from "./blockPort.layout";
 // D-5: the header-content inset a caller applies to its OWN header (see
@@ -356,7 +357,11 @@ export function BlockPort({
       data-port-layout={portLayout}
       data-block-id={id}
       ref={wrapperRef}
-      style={{ position: "relative", width: "max-content" }}
+      // The isolation invariant (paintOrder.ts): this wrapper emits the
+      // `portDot` tier below (the function port and every rail), so it
+      // must wall that off from anything outside it, same reasoning as
+      // Block's own root.
+      style={{ ...ISOLATED_ROOT_STYLE, position: "relative", width: "max-content" }}
     >
       {children}
       {bands &&
@@ -409,7 +414,7 @@ function BlockFunctionPort({ bands, diameter }: { bands: BlockBands; diameter: P
   return (
     <div
       data-slot="block-port-function"
-      style={{ position: "absolute", left: center.x, top: center.y, transform: "translate(-50%, -50%)", zIndex: 1 }}
+      style={{ position: "absolute", left: center.x, top: center.y, transform: "translate(-50%, -50%)", zIndex: paintTier("portDot") }}
     >
       <LabeledPort edge="left" diameter={diameter} labelSlot={null} />
     </div>
@@ -534,8 +539,10 @@ function BlockPortRail({
     // D-A6, with the module doc's correction: `position: absolute` is what
     // already lifts this above the static Block, and this index is what
     // keeps that true if either of those facts ever changes — plus it is
-    // the stacking context the lane overlay's own `zIndex: 5` needs.
-    zIndex: 1,
+    // the stacking context the lane overlay's own `laneOverlay` tier
+    // needs. Named `portDot` (paintOrder.ts) — same tier as the function
+    // port above; a rail IS a run of port dots.
+    zIndex: paintTier("portDot"),
   };
 
   return (

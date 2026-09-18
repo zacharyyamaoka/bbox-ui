@@ -21,6 +21,7 @@ import {
   type BlockMember,
   type BlockMembersLayout,
 } from "./blockMembers";
+import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 
 /**
  * Block — header / body / footer, stacked. All three are plain slots: pass
@@ -279,6 +280,15 @@ export function Block({
       // (a boundary-drawn twin; see `OUTLINE_BLEED_PX`) isn't clipped;
       // see `overflowClipMargin` below.
       style={{
+        // The isolation invariant (paintOrder.ts's own header comment):
+        // this root emits paint tiers (the diagnostic flag below, and
+        // headerChrome on the header/footer slots), so it MUST wall them
+        // off in their own stacking context — otherwise a deeply nested
+        // Block (via `BlockMembers`, "boxes all the way down") could leak
+        // an interior z-index past this box and outrank an ANCESTOR's
+        // own header. See PaintOrder.stories.tsx's
+        // `NestedChildStaysBehindHeader`.
+        ...ISOLATED_ROOT_STYLE,
         width,
         height,
         borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
@@ -331,7 +341,7 @@ export function Block({
         // the corner.
         <div
           data-slot="block-diagnostic-flag"
-          style={{ position: "absolute", top: -flagOverhangPx, right: -flagOverhangPx, zIndex: 1 }}
+          style={{ position: "absolute", top: -flagOverhangPx, right: -flagOverhangPx, zIndex: paintTier("flagBadge") }}
         >
           <DiagnosticFlag diagnostics={diagnostics} />
         </div>
@@ -369,6 +379,19 @@ export function Block({
             // style; this only overrides ITS colour.
             showHeaderDivider && "border-b border-b-[color:var(--bbox-skin-stroke,var(--color-border))]",
           )}
+          // `headerChrome` (paintOrder.ts) — the nesting tier: a Block's
+          // own header must paint ABOVE its own `BlockMembers` region no
+          // matter how deeply that region nests other Blocks inside it
+          // (Card 04). Needs BOTH `position` (z-index is a no-op on a
+          // static element) and the explicit tier (a `BlockMembers`
+          // region in `free` mode is itself `position: relative` with
+          // z-index:auto, i.e. stack level 0 — a merely-positioned
+          // header with no z-index would still lose the DOM-order
+          // tie-break, since members renders AFTER header). This was
+          // NOT one of the five pre-existing literals; it is the one
+          // new capability this lane adds. See
+          // `PaintOrder.stories.tsx`'s `NestedChildStaysBehindHeader`.
+          style={{ position: "relative", zIndex: paintTier("headerChrome") }}
         >
           {header}
         </div>
@@ -397,6 +420,12 @@ export function Block({
         <div
           data-slot="block-footer"
           className="border-t border-t-[color:var(--bbox-skin-stroke,var(--color-border))] px-3 py-2 has-[>[data-slot=bar]]:p-0"
+          // Same tier as the header — see the header's own comment above.
+          // Not covered by the nesting acceptance test (only the header
+          // relationship is), but a footer is the same "chrome" role and
+          // leaving it non-positioned would make it lose to members the
+          // header no longer does.
+          style={{ position: "relative", zIndex: paintTier("headerChrome") }}
         >
           {footer}
         </div>
