@@ -5,7 +5,6 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
 import { BAR_SIZE_TO_BADGE_SIZE, useBarSize } from "./barSize";
-import { SketchOutline } from "../skin/sketchOutline";
 
 /**
  * src/components/badge.tsx — a plain, stock shadcn Badge. Not vendored
@@ -106,21 +105,6 @@ export function Badge({ className, variant, size, shape, style, ...props }: Badg
       }}
       {...props}
     >
-      {/* A tinted chip has no border of its own to replace (default /
-          secondary / destructive are `border-transparent`) — the sketch
-          skin gives it one instead. `stretch` because a Badge is sized by
-          its own content, and self-measurement is what the core does not
-          do (sketchOutline.tsx's own WHY). Nominal 40x20 is a typical chip;
-          `preserveAspectRatio="none"` stretches it to whatever this one
-          actually renders at. */}
-      <SketchOutline
-        stretch
-        width={40}
-        height={20}
-        borderWidth={1}
-        radius={resolvedShape === "pill" ? 20 : 8}
-        seed={`badge:${resolvedSize}:${resolvedShape}`}
-      />
       {props.children}
     </span>
   );
