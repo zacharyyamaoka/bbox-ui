@@ -273,6 +273,9 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
   hidden?: boolean;
   dimmed?: boolean;
   hinting?: boolean;
+  /** Forwarded to `Port` untouched — see `PortDotPaintInput.availability`'s
+   *  own doc (docs/INVALID-STATES-PLAN.md D5, ruling 5). */
+  availability?: "available" | "unavailable";
   /**
    * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's LabeledPort
    * row) — forwarded to `Port` (the dot mark) and to the built-in label
@@ -362,6 +365,7 @@ export function LabeledPort({
   hidden = false,
   dimmed = false,
   hinting = false,
+  availability,
   diagnostics,
   highlighterKind,
   labelOrigin,
@@ -446,6 +450,7 @@ export function LabeledPort({
         diameter={diameter}
         dimmed={dimmed}
         hinting={hinting}
+        availability={availability}
         diagnostics={diagnostics}
         highlighterKind={highlighterKind}
         hitPx={hitPx}

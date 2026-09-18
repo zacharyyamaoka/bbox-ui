@@ -99,6 +99,12 @@ export interface PortEdgeItem {
    * for forwarding this itself if it wants the mark.
    */
   diagnostics?: Diagnostic[];
+  /** Forwarded straight to the `LabeledPort` the default render draws for
+   *  this item — same "nothing on the rail itself, the PORT is the
+   *  subject" rule `diagnostics` follows, one row up. See
+   *  `PortDotPaintInput.availability`'s own doc
+   *  (docs/INVALID-STATES-PLAN.md D5, ruling 5). */
+  availability?: "available" | "unavailable";
 }
 
 export type PortEdgeArrangeMode = "auto" | "custom";
@@ -459,6 +465,7 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
         edge={edge}
         state={item.state ?? "empty"}
         diagnostics={item.diagnostics}
+        availability={item.availability}
         diameter="md"
         textLayout={textLayout}
         labelSlot={hideLabel ? null : undefined}

@@ -85,6 +85,19 @@ export interface PortDotPaintInput {
   state?: PortState;
   dimmed?: boolean;
   hinting?: boolean;
+  /**
+   * Drag-time validity preview (docs/INVALID-STATES-PLAN.md D5, ruling 5)
+   * — "on by default": whether THIS port is a legal target for the
+   * connection currently being dragged. `undefined` means no gesture is
+   * in flight (zero paint change — every pre-existing snapshot stays
+   * byte-identical). Computed ONCE per gesture by the host
+   * (`connectionAvailability`, scene kit) and handed down as paint; this
+   * component never asks WHY a port is unavailable, only THAT it is —
+   * ruling 2's layering rule, one prop over. Wins over `hinting`/`dimmed`
+   * (see `portRingColor`'s own precedence doc) because it is the more
+   * specific, more ephemeral, in-gesture fact.
+   */
+  availability?: "available" | "unavailable";
   /** The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Port row) — a
    *  judgement ABOUT the port, made by an external producer, never a fifth
    *  `state`. Only the worst severity present paints (`maxDiagnosticSeverity`,
@@ -109,18 +122,51 @@ export function portDotClass(): string {
 }
 
 /**
+ * The single place `availability` is folded into the pre-existing
+ * `hinting`/`dimmed` paint facts (docs/INVALID-STATES-PLAN.md D5, ruling
+ * 5's precedence: `availability > hinting > dimmed > state`). `undefined`
+ * (no gesture in flight) passes `hinting`/`dimmed` through untouched — the
+ * zero-paint-change contract every existing snapshot depends on.
+ * `"available"` reuses `hinting`'s own shape outright; `"unavailable"`
+ * reuses `dimmed`'s — each OVERRIDING the caller's own `hinting`/`dimmed`
+ * rather than composing with them, because a port cannot simultaneously be
+ * "the drag target" and "faded for being off-focus".
+ */
+function resolveAvailabilityPaint(
+  availability: PortDotPaintInput["availability"],
+  hinting: boolean,
+  dimmed: boolean,
+): { hinting: boolean; dimmed: boolean } {
+  if (availability === "available") return { hinting: true, dimmed: false };
+  if (availability === "unavailable") return { hinting: false, dimmed: true };
+  return { hinting, dimmed };
+}
+
+/**
  * The dot's ring colour, as one exported derivation.
  *
  * WHY extracted rather than left inline (ported from packages/bbox-ui/src/
  * port.tsx's own `portRingColor`): the sketch skin draws the ring as a
  * path instead of as box-shadow layers, and it has to be the SAME colour.
- * A second copy of this precedence (hinting > dimmed > state) is exactly
- * how a `hinting` port would end up orange in one skin and grey in
- * another. `null` means "this state paints no ring at all".
+ * A second copy of this precedence is exactly how a `hinting` port would
+ * end up orange in one skin and grey in another. `null` means "this state
+ * paints no ring at all". Precedence: see `resolveAvailabilityPaint`'s doc.
  */
-export function portRingColor({ state = "empty", dimmed = false, hinting = false }: PortDotPaintInput): string | null {
+export function portRingColor({
+  state = "empty",
+  dimmed = false,
+  hinting = false,
+  availability,
+}: PortDotPaintInput): string | null {
   const { ring } = STATE_TOKENS[state];
-  return hinting ? paintVar("primary") : dimmed ? paintVar("muted-foreground") : ring ? paintVar(ring) : null;
+  const effective = resolveAvailabilityPaint(availability, hinting, dimmed);
+  return effective.hinting
+    ? paintVar("primary")
+    : effective.dimmed
+      ? paintVar("muted-foreground")
+      : ring
+        ? paintVar(ring)
+        : null;
 }
 
 /**
@@ -129,27 +175,31 @@ export function portRingColor({ state = "empty", dimmed = false, hinting = false
  * underneath untouched (a dimmed `wired` port still reads "wired, just not
  * focused right now"). `hinting` wears `wired`'s own shape (hollow ring, lit
  * core) in the accent colour regardless of `state` — previewing the port
- * BECOMING wired, with a wide halo.
+ * BECOMING wired, with a wide halo. `availability` picks between these two
+ * shapes outright — see `resolveAvailabilityPaint`'s doc.
  */
 export function portDotStyle({
   state = "empty",
   dimmed = false,
   hinting = false,
+  availability,
   diagnostics,
   highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
 }: PortDotPaintInput): CSSProperties {
   const { fill } = STATE_TOKENS[state];
-  const ringColor = portRingColor({ state, dimmed, hinting });
-  // `hinting` renders hollow (no fill), matching `wired`'s own shape.
-  const fillColor = hinting ? null : fill ? paintVar(fill) : null;
-  const stateRingPx = hinting ? 4 : PORT_STATE_RING_PX;
+  const effective = resolveAvailabilityPaint(availability, hinting, dimmed);
+  const ringColor = portRingColor({ state, dimmed, hinting, availability });
+  // `hinting` (or `availability: "available"`) renders hollow (no fill),
+  // matching `wired`'s own shape.
+  const fillColor = effective.hinting ? null : fill ? paintVar(fill) : null;
+  const stateRingPx = effective.hinting ? 4 : PORT_STATE_RING_PX;
 
   const layers: string[] = [];
   if (ringColor != null) {
     layers.push(`0 0 0 ${PORT_SURFACE_RING_PX}px var(--card)`);
     layers.push(`0 0 0 ${PORT_SURFACE_RING_PX + stateRingPx}px ${ringColor}`);
   }
-  if (hinting) {
+  if (effective.hinting) {
     layers.push("0 0 0 9px color-mix(in srgb, var(--bbox-primary, var(--primary)) 38%, transparent)");
   }
   // WHY APPENDED, not prepended (docs/INVALID-STATES-PLAN.md §3: "state
@@ -192,8 +242,8 @@ export function portDotStyle({
   // hollow (`empty`/`wired`) dot. `var(--card)` is the same token the 2px
   // surface ring already uses, so ring and disc read as one punch-out.
   style.background = fillColor ?? "var(--card)";
-  if (dimmed && !hinting) style.opacity = 0.45;
-  if (hinting) style.transform = "scale(1.18)";
+  if (effective.dimmed && !effective.hinting) style.opacity = 0.45;
+  if (effective.hinting) style.transform = "scale(1.18)";
   return style;
 }
 
@@ -205,9 +255,17 @@ const PORT_CORE_RATIO = 0.42;
  * instead of a solid fill) and `received` (core matches the already-solid
  * fill, reading as "fully lit"). `null` means no core layer at all, not a
  * transparent one — `empty`/`valueSet` never mount the extra span.
+ * `availability: "available"` lights the core the same way `hinting` does
+ * (see `resolveAvailabilityPaint`'s doc); `"unavailable"` has no core
+ * treatment of its own, same as `dimmed`.
  */
-export function portCoreStyle({ state = "empty", hinting = false }: PortDotPaintInput): CSSProperties | null {
-  const core = hinting ? "primary" : STATE_TOKENS[state].core;
+export function portCoreStyle({
+  state = "empty",
+  hinting = false,
+  availability,
+}: PortDotPaintInput): CSSProperties | null {
+  const effectiveHinting = resolveAvailabilityPaint(availability, hinting, false).hinting;
+  const core = effectiveHinting ? "primary" : STATE_TOKENS[state].core;
   if (core == null) return null;
   return { background: paintVar(core) };
 }
@@ -232,6 +290,11 @@ export interface PortProps extends ComponentProps<"span"> {
   /** Host-set, never persisted — the pointer is over this port mid-drag,
    * previewing it becoming `wired`. */
   hinting?: boolean;
+  /** See `PortDotPaintInput.availability`'s own doc — drag-time validity
+   *  preview (ruling 5), on by default at the host level. `undefined`
+   *  (no gesture) is a zero-paint-change no-op; wins over `hinting`/
+   *  `dimmed` when set. Emits `data-availability`. */
+  availability?: "available" | "unavailable";
   /** The diagnostic axis — see `PortDotPaintInput.diagnostics`'s own doc.
    *  Absent or `[]` paints no mark at all. Hovering the dot shows every
    *  message (`DiagnosticTooltip`, ./highlighter.tsx); there is no flag
@@ -269,6 +332,7 @@ export function Port({
   hidden = false,
   dimmed = false,
   hinting = false,
+  availability,
   diagnostics,
   highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
   hitPx = PORT_HIT_PX,
@@ -281,8 +345,8 @@ export function Port({
   const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
   // A fixed 40px hit target regardless of the painted diameter.
   const haloInset = (diameterPx - hitPx) / 2;
-  const coreStyle = portCoreStyle({ state, hinting });
-  const ringColor = portRingColor({ state, dimmed, hinting });
+  const coreStyle = portCoreStyle({ state, hinting, availability });
+  const ringColor = portRingColor({ state, dimmed, hinting, availability });
   const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
   return (
     // Hover -> Tooltip (message + code, no actions) is §5's interaction
@@ -296,13 +360,14 @@ export function Port({
       data-diameter={diameter}
       data-dimmed={dimmed || undefined}
       data-hinting={hinting || undefined}
+      data-availability={availability}
       data-diagnostic={diagnosticSeverity}
       data-highlighter-kind={diagnosticSeverity ? highlighterKind : undefined}
       className={cn(portDotClass(), className)}
       style={{
         width: diameterPx,
         height: diameterPx,
-        ...portDotStyle({ state, dimmed, hinting, diagnostics, highlighterKind }),
+        ...portDotStyle({ state, dimmed, hinting, availability, diagnostics, highlighterKind }),
         ...style,
       }}
       {...props}
