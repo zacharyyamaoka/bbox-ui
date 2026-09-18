@@ -60,6 +60,7 @@
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 
+import type { Diagnostic } from "./highlighter";
 import { LabeledPort } from "./labeledPort";
 import { Port, type PortState } from "./port";
 import { BLOCK_SIDES, type BlockSide, type PortSize } from "./port.layout";
@@ -284,6 +285,41 @@ function collapsedState(members: PortEdgeItem[]): PortState {
   return members[0]?.state ?? "empty";
 }
 
+/**
+ * The IDE-tree-view rule (docs/INVALID-STATES-PLAN.md ruling 3), one level
+ * down: a collapsed stand-in dot is itself a fold — every member's
+ * diagnostics are things "hidden" behind this one dot, so they all surface
+ * here, concatenated rather than picking a sample the way `collapsedState`
+ * picks a representative STATE. `[]` when nothing has anything (never
+ * `undefined`) so a caller can hand this straight to `Port.diagnostics`
+ * without an extra `|| undefined` — `Port` itself already treats an empty
+ * list as "nothing to mark" (`maxDiagnosticSeverity`'s own `[0]` guard).
+ *
+ * 2026-09-18 (validation-stack story lane): added alongside
+ * `collapsedAvailability` below when the ValidityPreview/FoldBubbling
+ * stories found `renderItem`'s default fill dropping `item.diagnostics`/
+ * `item.availability` entirely — `PortEdgeItem` has carried both fields
+ * since the component lane's port.tsx/portEdge.tsx work landed, but
+ * nothing in this file (untouched by either lane) forwarded them. Real
+ * finding, not a story-only fixture: without this, `decorate`'s paint
+ * seam (nodeViews.tsx) can set every field correctly and the rendered
+ * `Port` will still show nothing.
+ */
+function collapsedDiagnostics(members: PortEdgeItem[]): Diagnostic[] {
+  return members.flatMap((m) => m.diagnostics ?? []);
+}
+
+/** Same fold, for `availability` — "available" wins over "unavailable"
+ *  (an ambiguous stand-in should invite the gesture rather than block it;
+ *  the individual ports underneath still carry their own true verdicts
+ *  once a view stops hiding them). `undefined` only when no member — the
+ *  drag itself isn't in flight — has an opinion at all. */
+function collapsedAvailability(members: PortEdgeItem[]): "available" | "unavailable" | undefined {
+  if (members.some((m) => m.availability === "available")) return "available";
+  if (members.some((m) => m.availability === "unavailable")) return "unavailable";
+  return undefined;
+}
+
 /* ------------------------------------------------------------------ */
 /* BlockPort                                                         */
 /* ------------------------------------------------------------------ */
@@ -425,11 +461,18 @@ function BlockPortRail({
   const renderItem: PortEdgeProps["renderItem"] = (item, ctx) =>
     plan.collapsed ? (
       <span data-slot="block-port-item" data-port-id={item.id} data-collapsed-ports={item.id} style={{ display: "inline-flex" }}>
-        <Port state={item.state ?? "empty"} diameter={diameter} />
+        <Port state={item.state ?? "empty"} diameter={diameter} diagnostics={item.diagnostics} availability={item.availability} />
       </span>
     ) : (
       <span data-slot="block-port-item" data-port-id={item.id} style={{ display: "inline-flex" }}>
-        <LabeledPort edge={edge} state={item.state ?? "empty"} diameter={diameter} textLayout={ctx.textLayout}>
+        <LabeledPort
+          edge={edge}
+          state={item.state ?? "empty"}
+          diameter={diameter}
+          textLayout={ctx.textLayout}
+          diagnostics={item.diagnostics}
+          availability={item.availability}
+        >
           {item.label}
         </LabeledPort>
       </span>
@@ -459,7 +502,12 @@ function BlockPortRail({
       data-collapsed-ports={members.map((m) => m.id).join(",")}
       style={{ position: "relative", display: "inline-flex" }}
     >
-      <Port state={collapsedState(members)} diameter={diameter} />
+      <Port
+        state={collapsedState(members)}
+        diameter={diameter}
+        diagnostics={collapsedDiagnostics(members)}
+        availability={collapsedAvailability(members)}
+      />
       <span
         data-slot="block-port-collapsed-count"
         data-collapsed-count={members.length}

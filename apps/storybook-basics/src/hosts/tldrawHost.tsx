@@ -81,7 +81,7 @@ import { Trace } from "../components/trace";
 import { fanWires } from "../components/wiring";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
-import { POINTER_OWNED_CLASS, SceneNodeView, wiredPortsOf } from "./nodeViews";
+import { POINTER_OWNED_CLASS, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { sightPortDots } from "./portDotSightings";
 
 /* ------------------------------------------------------------------ */
@@ -103,6 +103,7 @@ interface TldrawHostContextValue {
   onSceneChange?(next: HostScene): void;
   anchors: Readonly<Record<string, readonly PortAnchor[]>>;
   reportAnchors(nodeId: string, anchors: PortAnchor[]): void;
+  decorate?: Decorate;
 }
 
 const TldrawHostContext = createContext<TldrawHostContextValue | null>(null);
@@ -301,7 +302,7 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
           }
         }}
       >
-        <SceneNodeView scene={host.scene} node={node} wired={host.wired} onSceneChange={host.onSceneChange} />
+        <SceneNodeView scene={host.scene} node={node} wired={host.wired} onSceneChange={host.onSceneChange} decorate={host.decorate} />
       </div>
     </HTMLContainer>
   );
@@ -509,9 +510,12 @@ export interface TldrawHostProps {
   onSceneChange?(next: HostScene): void;
   width?: number;
   height?: number;
+  /** The story lane's paint seam — see `nodeViews.tsx`'s `Decorate`. Omit
+   *  for byte-identical output to before this prop existed. */
+  decorate?: Decorate;
 }
 
-export function TldrawHost({ scene, onSceneChange, width = 720, height = 400 }: TldrawHostProps) {
+export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, decorate }: TldrawHostProps) {
   const editorRef = useRef<Editor | null>(null);
   const [anchors, setAnchors] = useState<Record<string, readonly PortAnchor[]>>({});
 
@@ -521,8 +525,8 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400 }: 
 
   const wired = useMemo(() => wiredPortsOf(scene), [scene]);
   const context = useMemo<TldrawHostContextValue>(
-    () => ({ scene, wired, onSceneChange, anchors, reportAnchors }),
-    [scene, wired, onSceneChange, anchors, reportAnchors],
+    () => ({ scene, wired, onSceneChange, anchors, reportAnchors, decorate }),
+    [scene, wired, onSceneChange, anchors, reportAnchors, decorate],
   );
 
   // The ShapeUtil-side bridge (see bridgeByEditor) — a ref updated per

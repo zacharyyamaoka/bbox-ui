@@ -37,6 +37,12 @@
 // badge is an absolutely-positioned sibling of the svg, and `points` are read
 // in the coordinate space an absolutely-positioned child's `left`/`top`
 // resolve against — its `offsetParent`'s padding box.
+//
+// UPDATED (docs/INVALID-STATES-PLAN.md D4, ruling 4): `t` widened from a
+// plain fraction to `PathAddress` (./trace.layout.ts), the one address
+// scheme shared with the new `TraceMark`. A plain number is unaffected —
+// `resolvePathAddress` is the identity for anything already in `[0, 1]` —
+// so this is additive, not a behaviour change.
 
 import {
   useEffect,
@@ -55,6 +61,8 @@ import {
   clampLabelPosition,
   fractionNearest,
   pointAtFraction,
+  resolvePathAddress,
+  type PathAddress,
   type Point,
 } from "./trace.layout";
 
@@ -78,15 +86,23 @@ export interface TraceBadgeProps extends Omit<ComponentProps<"div">, "ref" | "on
    */
   points: readonly Point[];
   /**
-   * Normalised arc-length position, 0..1. Clamped to 0.05..0.95 for
-   * rendering exactly as `TraceBody.labelPosition` is — a label sitting on a
-   * terminal reads as part of the terminal rather than as a fact about the
-   * trace. `data-t` reports the clamped value actually used.
+   * The pill's position along the polyline (docs/INVALID-STATES-PLAN.md
+   * D4 — one address scheme, shared with `TraceMark`, ./trace.layout.ts's
+   * own module doc). A plain number is the arc-length fraction this prop
+   * always accepted — resolving it through `resolvePathAddress` first is
+   * the identity for anything already in `[0, 1]`, so no existing caller's
+   * behaviour changes. `{px}` is accepted too, for symmetry with
+   * `TraceMark`, though a draggable label has little use for it in
+   * practice. The RESOLVED fraction is then clamped to 0.05..0.95 for
+   * rendering exactly as before — a label sitting on a terminal reads as
+   * part of the terminal rather than as a fact about the trace. `data-t`
+   * reports the clamped value actually used.
    */
-  t?: number;
+  t?: PathAddress;
   /** Controlled. Omit it and the badge is not draggable at all — that is the
    * gate, rather than a separate `draggable` prop that could disagree with
-   * whether anyone is actually listening. */
+   * whether anyone is actually listening. Still emits a plain fraction, the
+   * pill's own currency for a drag (arc-length projection, not an address). */
   onTChange?: (t: number) => void;
   value: string;
   onValueChange?: (value: string) => void;
@@ -159,7 +175,7 @@ export function TraceBadge({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [dragPointerId, setDragPointerId] = useState<number | null>(null);
 
-  const effectiveT = clampLabelPosition(t);
+  const effectiveT = clampLabelPosition(resolvePathAddress(points, t));
   const anchor = pointAtFraction(points, effectiveT);
   const canDrag = Boolean(onTChange);
   const canEdit = Boolean(onEditingChange);

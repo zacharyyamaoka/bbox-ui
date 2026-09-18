@@ -19,7 +19,7 @@ import { useRef, type ReactNode } from "react";
 import { WireLayer } from "../components/wireLayer";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
-import { SceneNodeView, wiredPortsOf } from "./nodeViews";
+import { SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 
 export interface DomCanvasProps {
   scene: HostScene;
@@ -29,6 +29,9 @@ export interface DomCanvasProps {
   height?: number;
   /** Extra layer painted over the bench (a story's own probe/caption). */
   children?: ReactNode;
+  /** The story lane's paint seam — see `nodeViews.tsx`'s `Decorate`. Omit
+   *  for byte-identical output to before this prop existed. */
+  decorate?: Decorate;
 }
 
 /**
@@ -38,14 +41,14 @@ export interface DomCanvasProps {
  * view kit's job (`childrenOf` inside `SceneNodeView`), identically in
  * every host.
  */
-export function DomCanvas({ scene, onSceneChange, width = 640, height = 300, children }: DomCanvasProps) {
+export function DomCanvas({ scene, onSceneChange, width = 640, height = 300, children, decorate }: DomCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wired = wiredPortsOf(scene);
   return (
     <div data-host="dom-canvas" ref={containerRef} style={{ position: "relative", width, height }}>
       {topLevelNodes(scene).map((node) => (
         <div key={node.id} data-scene-node={node.id} style={{ position: "absolute", left: node.position.x, top: node.position.y }}>
-          <SceneNodeView scene={scene} node={node} wired={wired} onSceneChange={onSceneChange} />
+          <SceneNodeView scene={scene} node={node} wired={wired} onSceneChange={onSceneChange} decorate={decorate} />
         </div>
       ))}
       <WireLayer

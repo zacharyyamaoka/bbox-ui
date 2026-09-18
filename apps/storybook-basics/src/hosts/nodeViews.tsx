@@ -17,6 +17,7 @@ import { Block } from "../components/block";
 import { BlockPort, type BlockEdgeSpec } from "../components/blockPort";
 import { CodeEditor } from "../components/codeEditor";
 import { Glyph } from "../components/glyph";
+import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
@@ -24,6 +25,38 @@ import { ValueCapsule } from "../presets/value/value";
 import { childrenOf, type SceneNode, wiredPorts } from "../scene/scene";
 import { withWiredState } from "../scene/sceneWires";
 import { type HostNodeData, type HostScene } from "./hostScene";
+
+/**
+ * The story-lane decoration seam (2026-09-18, "final spec" lane, D7's
+ * "Story lane... adds-only `decorate` seam"). One node in, an optional
+ * decoration out — the SAME shape every host thread untouched, so a
+ * story wires `connectionAvailability`/`surfaceFindings` (scene kit) to
+ * paint (`Block.diagnostics`, `Port.availability`/`.diagnostics`) without
+ * this file, or any host, ever importing the scene kit itself (the
+ * layering.test.ts import wall this lane's sibling built covers
+ * `src/components/**` only — `src/hosts/**` is story-adjacent glue, not
+ * component-kit source, and is where the scene->paint translation is
+ * meant to happen). `undefined` (the default, every existing story) is
+ * zero paint change — nothing here alters a byte of prior output when no
+ * `decorate` is passed.
+ */
+export interface SceneNodeDecoration {
+  /** Forwarded to this node's own `Block.diagnostics` — ruling 3's "if
+   *  something is hidden the parent that hides it should get the error"
+   *  lands here once a story runs `surfaceFindings` and looks up this
+   *  node's carrier bucket. */
+  diagnostics?: Diagnostic[];
+  /** Per-port availability, keyed by the port's OWN id (not portKey — a
+   *  decoration is already scoped to one node by the call). Forwarded onto
+   *  each port's `PortEdgeItem.availability`. */
+  availability?: Readonly<Record<string, "available" | "unavailable">>;
+  /** Per-port diagnostics, same per-node key shape as `availability`. */
+  portDiagnostics?: Readonly<Record<string, Diagnostic[]>>;
+}
+
+/** `undefined` for a node this decorator has no opinion on — same
+ *  "absence is not evidence" convention `PortsOf` (lint.ts) already uses. */
+export type Decorate = (node: SceneNode<HostNodeData>) => SceneNodeDecoration | undefined;
 
 /**
  * The one cross-host pointer-ownership marker.
@@ -89,18 +122,33 @@ export interface SceneNodeViewProps {
   /** The write-back seam. Omitted = a read-only specimen (reorders and
    *  keystrokes no-op, exactly like an uncontrolled gallery card). */
   onSceneChange?(next: HostScene): void;
+  /** The story lane's paint seam — see `Decorate`'s own doc. Omitted =
+   *  byte-identical to before this prop existed. */
+  decorate?: Decorate;
 }
 
-function BlockNodeView({ scene, node, wired, onSceneChange }: SceneNodeViewProps) {
+function BlockNodeView({ scene, node, wired, onSceneChange, decorate }: SceneNodeViewProps) {
+  const decoration = decorate?.(node);
   const members = childrenOf(scene, node.id).map((kid) => ({
     id: kid.id,
-    content: <SceneNodeView scene={scene} node={kid} wired={wired} onSceneChange={onSceneChange} />,
+    content: <SceneNodeView scene={scene} node={kid} wired={wired} onSceneChange={onSceneChange} decorate={decorate} />,
   }));
   const edges = Object.fromEntries(
     Object.entries(node.data.ports ?? {}).map(([side, portIds]) => [
       side,
       {
-        items: withWiredState(portIds.map((id): PortEdgeItem => ({ id, label: id })), node.id, wired ?? new Set()),
+        items: withWiredState(
+          portIds.map(
+            (id): PortEdgeItem => ({
+              id,
+              label: id,
+              availability: decoration?.availability?.[id],
+              diagnostics: decoration?.portDiagnostics?.[id],
+            }),
+          ),
+          node.id,
+          wired ?? new Set(),
+        ),
         distribution: node.data.anchorStart?.includes(side as BlockSide) ? ANCHOR_START : undefined,
         onItemsChange: onSceneChange
           ? (items: PortEdgeItem[]) => onSceneChange(reorderNodePorts(scene, node.id, side as BlockSide, items.map((item) => item.id)))
@@ -117,6 +165,7 @@ function BlockNodeView({ scene, node, wired, onSceneChange }: SceneNodeViewProps
         members={members.length > 0 ? members : undefined}
         membersLayout="stack"
         memberGutter={36}
+        diagnostics={decoration?.diagnostics}
       />
     </BlockPort>
   );
