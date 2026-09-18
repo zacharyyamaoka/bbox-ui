@@ -1,5 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/*
+ * The skin system (src/skin/**, ported from packages/bbox-ui — frozen v1,
+ * read-only donor). Imported right after the framework so every component
+ * file's own `var(--bbox-skin-*, <today's literal>)` call sites (block.tsx,
+ * badge.tsx, port.tsx, trace.tsx, codeEditor.css) can be overridden by it —
+ * and BEFORE the `:root` block below, so `--border`/`--card`/etc. are
+ * declared first and this file's `[data-bbox-skin]` blocks can reference
+ * them. Purely additive: nothing here paints unless a `data-bbox-skin`
+ * attribute is present on an ancestor (see skin.css's own header).
+ */
+@import "./skin/skin.css";
 
 /*
  * Standard shadcn/ui default theme (new-york, neutral base color) —
