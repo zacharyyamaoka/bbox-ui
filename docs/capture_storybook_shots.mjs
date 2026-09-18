@@ -12,8 +12,17 @@
  * (sidebar, addon panel) lands in the frame — the component is the subject.
  *
  *   node docs/capture_storybook_shots.mjs [--port 5421] [--out reports/media/shots]
+ *   node docs/capture_storybook_shots.mjs --port 5463 --out DIR --shots shots.json
+ *
+ * `--shots <file>` (added for docs/build_lane_report.py, 2026-09-17): a JSON
+ * file holding an array shaped like SHOTS below, REPLACING it for this run.
+ * Every other lane report needs its OWN story list against its OWN
+ * STORYBOOK_PORT, never against :5421 or against this file's hardcoded set
+ * — without this flag a lane could only ever recapture what this script
+ * already knew about. Omit it and behaviour is unchanged: this file's own
+ * SHOTS list, as every existing caller already assumes.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -64,11 +73,14 @@ const SHOTS = [
   { id: "presets-value--editing", w: 760, h: 380, name: "value-editing" },
 ];
 
+const shotsFile = argOf("--shots", null);
+const shots = shotsFile ? JSON.parse(await readFile(path.resolve(shotsFile), "utf8")) : SHOTS;
+
 const browser = await chromium.launch();
 await mkdir(OUT, { recursive: true });
 const manifest = [];
 
-for (const shot of SHOTS) {
+for (const shot of shots) {
   const page = await browser.newPage({
     viewport: { width: shot.w, height: shot.h },
     deviceScaleFactor: 2, // retina — the report is read on a high-dpi screen

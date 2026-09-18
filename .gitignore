@@ -36,3 +36,7 @@ apps/docs/CLAUDE.md
 reports/media/
 # Python bytecode from scripts/ (the desktop launcher writes this on every run).
 __pycache__/
+# Generated from git by docs/build_whats_new.mjs (`pnpm whats-new`) — committing
+# it would let it go stale, which is exactly what hand-tagging stories would
+# have done too. WhatsNew.stories.tsx degrades gracefully when it is absent.
+apps/storybook-basics/src/stories/whats-new.generated.json
