@@ -18,6 +18,7 @@
 import type { ComponentProps, CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
+import { DiagnosticTooltip, diagnosticColorVar, maxDiagnosticSeverity, type Diagnostic } from "./diagnostic";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { PORT_DIAMETERS, PORT_HIT_PX, PORT_STATE_RING_PX, PORT_SURFACE_RING_PX, type PortSize } from "./port.layout";
 import { SketchOutline } from "../skin/sketchOutline";
@@ -77,6 +78,11 @@ export interface PortDotPaintInput {
   state?: PortState;
   dimmed?: boolean;
   hinting?: boolean;
+  /** The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Port row) — a
+   *  judgement ABOUT the port, made by an external producer, never a fifth
+   *  `state`. Only the worst severity present paints (`maxDiagnosticSeverity`,
+   *  ./diagnostic.tsx); the rest ride the flag's popover, not this halo. */
+  diagnostics?: Diagnostic[];
 }
 
 /**
@@ -113,7 +119,7 @@ export function portRingColor({ state = "empty", dimmed = false, hinting = false
  * core) in the accent colour regardless of `state` — previewing the port
  * BECOMING wired, with a wide halo.
  */
-export function portDotStyle({ state = "empty", dimmed = false, hinting = false }: PortDotPaintInput): CSSProperties {
+export function portDotStyle({ state = "empty", dimmed = false, hinting = false, diagnostics }: PortDotPaintInput): CSSProperties {
   const { fill } = STATE_TOKENS[state];
   const ringColor = portRingColor({ state, dimmed, hinting });
   // `hinting` renders hollow (no fill), matching `wired`'s own shape.
@@ -127,6 +133,21 @@ export function portDotStyle({ state = "empty", dimmed = false, hinting = false 
   }
   if (hinting) {
     layers.push("0 0 0 9px color-mix(in srgb, var(--bbox-primary, var(--primary)) 38%, transparent)");
+  }
+  // WHY APPENDED, not prepended (docs/INVALID-STATES-PLAN.md §3: "state
+  // ring/fill untouched"): CSS box-shadow layers paint front-to-back in
+  // list order — the FIRST layer wins any overlap. The state ring's own
+  // two layers above are already opaque out to their own radius; appending
+  // this translucent wash puts it strictly BEHIND them, so it can only
+  // ever show in the band beyond the state ring (identical geometry to
+  // `hinting`'s own halo just above — same reuse §5's Port row calls for).
+  // Prepending would alpha-blend it OVER the opaque state ring instead,
+  // recolouring the very fact this axis must not touch.
+  // `info` paints NOTHING on a Port (§5's own table) — only error/warning
+  // earn the halo.
+  const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
+  if (diagnosticSeverity && diagnosticSeverity !== "info") {
+    layers.push(`0 0 0 9px color-mix(in srgb, ${diagnosticColorVar(diagnosticSeverity)} 38%, transparent)`);
   }
 
   const style: CSSProperties = {};
@@ -179,6 +200,12 @@ export interface PortProps extends ComponentProps<"span"> {
   /** Host-set, never persisted — the pointer is over this port mid-drag,
    * previewing it becoming `wired`. */
   hinting?: boolean;
+  /** The diagnostic axis — see `PortDotPaintInput.diagnostics`'s own doc.
+   *  Absent or `[]` paints no halo at all. Hovering the dot shows every
+   *  message (`DiagnosticTooltip`, ./diagnostic.tsx); there is no flag
+   *  here — Port is the dot alone, and §5 puts the flag on the composites
+   *  that HAVE a corner or a slot to anchor it (`LabeledPort`, `Block`). */
+  diagnostics?: Diagnostic[];
   /**
    * The hit halo's diameter in the component's OWN px. Defaults to
    * `PORT_HIT_PX` (40). The constant is scene-space: under a host's
@@ -208,6 +235,7 @@ export function Port({
   hidden = false,
   dimmed = false,
   hinting = false,
+  diagnostics,
   hitPx = PORT_HIT_PX,
   showHitRegion = false,
   className,
@@ -220,18 +248,25 @@ export function Port({
   const haloInset = (diameterPx - hitPx) / 2;
   const coreStyle = portCoreStyle({ state, hinting });
   const ringColor = portRingColor({ state, dimmed, hinting });
+  const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
   return (
+    // Hover -> Tooltip (message + code, no actions) is §5's interaction
+    // contract for "any marked text/dot"; absent/empty `diagnostics`
+    // returns `children` untouched, so a Port with no marks pays zero DOM
+    // cost (see ./diagnostic.tsx's own header).
+    <DiagnosticTooltip diagnostics={diagnostics}>
     <span
       data-slot="port-dot"
       data-state={state}
       data-diameter={diameter}
       data-dimmed={dimmed || undefined}
       data-hinting={hinting || undefined}
+      data-diagnostic={diagnosticSeverity}
       className={cn(portDotClass(), className)}
       style={{
         width: diameterPx,
         height: diameterPx,
-        ...portDotStyle({ state, dimmed, hinting }),
+        ...portDotStyle({ state, dimmed, hinting, diagnostics }),
         ...style,
       }}
       {...props}
@@ -277,5 +312,6 @@ export function Port({
         />
       )}
     </span>
+    </DiagnosticTooltip>
   );
 }

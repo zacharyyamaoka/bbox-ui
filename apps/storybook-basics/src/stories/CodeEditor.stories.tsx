@@ -453,11 +453,20 @@ export const SyntaxThemes: Story = {
     // byte-identical to what it was before this change. Rather than a
     // hardcoded computed-pixel literal (which would also encode the
     // browser's colour-space quirks, not just this file's own claim), the
-    // reference element below inlines the EXACT pre-edit CSS literal —
-    // codeEditor.css's `.tok-keyword` rule read verbatim before A-2 — so
-    // this assertion is "does the var()'s fallback still equal today's
-    // literal", which is the actual claim A-2a makes.
-    const referenceColor = literalColor("color-mix(in srgb, #4f6ee5 78%, var(--color-foreground))");
+    // reference element below inlines the EXACT CSS formula
+    // codeEditor.css's `.tok-keyword` rule reads today — so this assertion
+    // is "does the var()'s resolved value still equal the formula", which
+    // is the actual claim A-2a makes.
+    //
+    // WHY `var(--bbox-accent)`, not the literal `#4f6ee5` this read before
+    // docs/INVALID-STATES-PLAN.md §2: that literal was ONLY reachable
+    // because `--bbox-accent` was undefined everywhere in this app —
+    // §2 ports it into src/globals.css as a real global token (needed for
+    // the diagnostic axis's `info` severity), so the SAME `var(--bbox-
+    // accent, #4f6ee5)` fallback chain in codeEditor.css now resolves
+    // through the token instead of past it. This is not a second colour
+    // decision for syntax highlighting — it is the token existing at all.
+    const referenceColor = literalColor("color-mix(in srgb, var(--bbox-accent) 78%, var(--color-foreground))");
     await expect(keywordColor("swatch-none")).toBe(referenceColor);
 
     // A-2b: dark-modern's published token colours, exactly.
@@ -483,11 +492,11 @@ export const SyntaxThemes: Story = {
     // moment no theme is set.
     await expect(tokenColor("swatch-none", ".tok-definitionKeyword")).toBe(referenceColor);
     await expect(tokenColor("swatch-none", ".tok-controlKeyword")).toBe(referenceColor);
-    const variableReferenceColor = literalColor("#4f6ee5");
+    const variableReferenceColor = literalColor("var(--bbox-accent)");
     await expect(tokenColor("swatch-none", ".tok-function")).toBe(variableReferenceColor);
     // `Router` (a class name) touches none of this fix's rules — confirms
     // the untouched path really is untouched, not just assumed so.
-    const typeReferenceColor = literalColor("color-mix(in srgb, #4f6ee5 55%, var(--color-foreground))");
+    const typeReferenceColor = literalColor("color-mix(in srgb, var(--bbox-accent) 55%, var(--color-foreground))");
     await expect(tokenColor("swatch-none", ".tok-className")).toBe(typeReferenceColor);
 
     // H3: with the live editor's initial theme (dark-modern) over the

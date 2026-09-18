@@ -1,6 +1,13 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "../lib/utils";
+import {
+  DiagnosticFlag,
+  DIAGNOSTIC_FLAG_SIZE_PX,
+  diagnosticColorVar,
+  maxDiagnosticSeverity,
+  type Diagnostic,
+} from "./diagnostic";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import {
   BLOCK_MEMBER_GAP_PX,
@@ -90,6 +97,33 @@ export interface BlockProps {
   showMembers?: boolean;
   showCards?: boolean;
   /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Block row).
+   * `error` gets a glow (a colour ring + soft wash PREPENDED to the resting
+   * shadow list) plus the corner `DiagnosticFlag`; `warning` gets the flag
+   * ALONE — no glow, because "warning must not shout" is the plan's own
+   * words for this row; `info` paints nothing at all, matching §5's
+   * board-scale calm rule. The flag carries a COUNT once the list is
+   * longer than one (`DiagnosticFlag`'s own doc).
+   */
+  diagnostics?: Diagnostic[];
+  /**
+   * Suppress the corner `DiagnosticFlag` while keeping the glow (default
+   * `true` — every existing caller unchanged). `ValueCapsule`
+   * (presets/value/value.tsx) is the one caller that sets this `false`:
+   * §5's own words are "no flag — a capsule is too small, the glow is the
+   * beacon and the message rides a hover Tooltip" — the glow is still
+   * this component's, the flag specifically is not.
+   */
+  showDiagnosticFlag?: boolean;
+  /**
+   * Let `warning` earn the glow too (default `false` — Block's own row:
+   * "warning must not shout"). `ValueCapsule` sets this `true`: its OWN
+   * row reads "warning: amber glow", because a capsule has no flag at all
+   * to carry warning instead — the glow is the only channel left, so it
+   * has to carry both severities there. Block itself never sets this.
+   */
+  diagnosticWarningGlow?: boolean;
+  /**
    * Stable string the sketch skin's hand-drawn outline is generated from —
    * same seed, same wobble, every render (see sketchPath.ts). Defaults to
    * a size-derived string so two same-sized Blocks don't draw identical
@@ -137,12 +171,28 @@ export function Block({
   insetBackground = "none",
   showMembers = true,
   showCards = false,
+  diagnostics,
+  showDiagnosticFlag = true,
+  diagnosticWarningGlow = false,
   sketchSeed,
   showHitRegion = false,
 }: BlockProps) {
+  const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
+  // "Warning must not shout" (§5's own words for this row): the glow is
+  // an error-only escalation by default, never amber — unless the caller
+  // (ValueCapsule) has no other channel and opts warning in.
+  const showGlow = diagnosticSeverity === "error" || (diagnosticSeverity === "warning" && diagnosticWarningGlow);
+  const showFlag = showDiagnosticFlag && (diagnosticSeverity === "error" || diagnosticSeverity === "warning");
+  // Half the flag's own diameter pokes outside the border — "straddling
+  // the corner the way wall ports straddle walls" (§5). `overflowClipMargin`
+  // below has to widen to let it, exactly the mechanism already in place
+  // for the sketch outline's own bleed (this file's existing WHY on
+  // `overflow: clip`).
+  const flagOverhangPx = DIAGNOSTIC_FLAG_SIZE_PX / 2;
   return (
     <div
       data-slot="block"
+      data-diagnostic={diagnosticSeverity}
       className={cn(
         "relative flex flex-col text-sm",
         // Text colour is a skin token because a skin may remove the
@@ -181,7 +231,25 @@ export function Block({
         height,
         borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
         overflow: "clip",
-        overflowClipMargin: `${BLOCK_BORDER_PX + SKETCH_OUTLINE_BLEED_PX}px`,
+        // Widened to let the corner flag straddle the border (see
+        // `flagOverhangPx` above) — the same clip-margin mechanism this
+        // rule already uses for the sketch outline's own bleed; the two
+        // reasons to widen it are independent, so this takes whichever is
+        // larger rather than stacking them.
+        overflowClipMargin: `${BLOCK_BORDER_PX + Math.max(SKETCH_OUTLINE_BLEED_PX, showFlag ? flagOverhangPx : 0)}px`,
+        // PREPENDED ahead of the resting `shadow-[…]` utility (§3: "outer
+        // halo... prepended") — an inline `boxShadow` beats a class at
+        // equal specificity by cascade ORDER regardless, so this only sets
+        // one when there is something to prepend; `undefined` otherwise
+        // leaves the Tailwind utility above untouched, byte-identical to
+        // before this axis existed. The wash is a soft, blurred colour-mix
+        // of the SAME token as the ring, never a hardcoded red/amber — dark
+        // mode gets the dark token variant for free.
+        ...(showGlow && diagnosticSeverity
+          ? {
+              boxShadow: `0 0 0 1.5px ${diagnosticColorVar(diagnosticSeverity)}, 0 0 18px color-mix(in srgb, ${diagnosticColorVar(diagnosticSeverity)} 45%, transparent), var(--bbox-skin-shadow, 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1))`,
+            }
+          : null),
         ...style,
       }}
     >
@@ -202,6 +270,20 @@ export function Block({
         stretch={height === undefined}
         seed={sketchSeed ?? `${width}x${height ?? "auto"}`}
       />
+      {showFlag && diagnostics && (
+        // Straddles the top-right corner — half in, half out — the same
+        // convergence Appendix B's own table names (maxGraph's
+        // `defaultOverlap: 0.5`, JointJS's `Button` at `x:'100%'`, Vyuh's
+        // "-8px offset"). `zIndex` clears the sketch outline's own drawn
+        // stroke, which otherwise paints OVER a flag sitting this close to
+        // the corner.
+        <div
+          data-slot="block-diagnostic-flag"
+          style={{ position: "absolute", top: -flagOverhangPx, right: -flagOverhangPx, zIndex: 1 }}
+        >
+          <DiagnosticFlag diagnostics={diagnostics} />
+        </div>
+      )}
       {showHitRegion && (
         <div
           data-slot="block-hit-region"

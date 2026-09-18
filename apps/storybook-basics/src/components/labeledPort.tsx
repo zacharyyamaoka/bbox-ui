@@ -45,6 +45,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { CodeEditor } from "./codeEditor";
+import { DiagnosticTooltip, diagnosticUnderlineStyle, maxDiagnosticSeverity, type Diagnostic } from "./diagnostic";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { Port, type PortState } from "./port";
 import {
@@ -100,6 +101,7 @@ function DefaultPortLabel({
   placeholder,
   language,
   showHitRegion = false,
+  diagnostics,
   className,
   style,
 }: {
@@ -114,6 +116,12 @@ function DefaultPortLabel({
    * nothing while `disabled` — a disabled label has no click handler, so
    * there is no region to show; painting one would be a lie. */
   showHitRegion?: boolean;
+  /** §5's LabeledPort row: "wavy underline under the label text" — applied
+   *  to the REST span only (`port-label-display` below). The editing
+   *  branch swaps in a `CodeEditor`, which carries its own positional
+   *  `diagnostics` shape (ranges, not a per-element list) — out of scope
+   *  here, same boundary §5's own table draws. */
+  diagnostics?: Diagnostic[];
   className?: string;
   style?: CSSProperties;
 }) {
@@ -172,6 +180,7 @@ function DefaultPortLabel({
   }
 
   const isEmpty = value === "";
+  const labelSeverity = maxDiagnosticSeverity(diagnostics);
   return (
     <span
       data-slot="port-label"
@@ -198,12 +207,19 @@ function DefaultPortLabel({
        *  the full string stays one hover away via `title` — the same
        *  recipe `editableText.tsx`'s own `editable-text-content` span
        *  uses, not reinvented here. */}
+      <DiagnosticTooltip diagnostics={diagnostics}>
       <span
         data-slot="port-label-display"
+        data-diagnostic={labelSeverity}
         title={!isEmpty ? value : undefined}
         data-placeholder={isEmpty && placeholder ? "" : undefined}
         style={{
           fontSize: fontSizePx,
+          // §5's wavy/dotted underline mark (./diagnostic.tsx's own
+          // `diagnosticUnderlineStyle`) — `undefined` when there is
+          // nothing to mark, so a plain label's `text-decoration` is
+          // exactly what it was before this axis existed.
+          ...(labelSeverity ? diagnosticUnderlineStyle(labelSeverity) : null),
           // The skin seam (src/skin/skin.ts + skin.css) — the ONE token
           // this resting display text needs. `--bbox-skin-font-sans` is
           // set INLINE (beating inheritance) rather than the plain
@@ -228,6 +244,7 @@ function DefaultPortLabel({
       >
         {isEmpty ? (placeholder ?? "") : value}
       </span>
+      </DiagnosticTooltip>
     </span>
   );
 }
@@ -250,6 +267,17 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
   hidden?: boolean;
   dimmed?: boolean;
   hinting?: boolean;
+  /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's LabeledPort
+   * row) — forwarded to `Port` (the dot halo) and to the built-in label
+   * (the wavy/dotted underline). Ignored by the underline when `labelSlot`
+   * overrides the built-in field — a host-supplied slot owns its own
+   * typography. `DiagnosticFlag` (./diagnostic.tsx) is NOT wired here
+   * automatically; §5 says it "may ride the existing secondarySlot", so a
+   * host composes `secondarySlot={<DiagnosticFlag diagnostics={...} />}`
+   * itself rather than this component silently placing one.
+   */
+  diagnostics?: Diagnostic[];
   /**
    * The label slot's placement, reaching PAST `textLayout` (the preset over
    * exactly these three). Omit any of them and the preset decides; set one
@@ -323,6 +351,7 @@ export function LabeledPort({
   hidden = false,
   dimmed = false,
   hinting = false,
+  diagnostics,
   labelOrigin,
   labelAlign,
   labelOffsetX,
@@ -400,7 +429,7 @@ export function LabeledPort({
       style={{ width: diameterPx, height: diameterPx, ...style }}
       {...props}
     >
-      <Port state={state} diameter={diameter} dimmed={dimmed} hinting={hinting} hitPx={hitPx} showHitRegion={showHitRegion} />
+      <Port state={state} diameter={diameter} dimmed={dimmed} hinting={hinting} diagnostics={diagnostics} hitPx={hitPx} showHitRegion={showHitRegion} />
       {labelSlot !== undefined ? (
         <span data-slot="port-label-slot" className="absolute" style={labelSlotStyle}>
           {labelSlot}
@@ -414,6 +443,7 @@ export function LabeledPort({
           placeholder={placeholder}
           language={labelLanguage}
           showHitRegion={showHitRegion}
+          diagnostics={diagnostics}
           className="absolute"
           style={labelSlotStyle}
         >

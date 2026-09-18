@@ -39,6 +39,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 
 import { cn } from "../lib/utils";
+import { diagnosticColorVar, maxDiagnosticSeverity, type Diagnostic } from "./diagnostic";
 import { HIT_REGION_STROKE } from "./hitRegion";
 import {
   ASYNC_PACKET_DASHARRAY,
@@ -253,6 +254,17 @@ export interface TraceProps extends Omit<ComponentProps<"g">, "id" | "points"> {
    * one would be the decoration this prop exists to avoid.
    */
   showHitRegion?: boolean;
+  /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Trace row): a
+   * translucent backdrop path under the wire, same geometry as the hit
+   * path, painted at `max(severity)`. The stroke itself keeps its own
+   * variant colour/dash — `data`/`async`/`delayed` stay legible — so the
+   * backdrop is the ONLY thing this axis owns here. `info` paints nothing
+   * (§5's table). The message rides a hover `Tooltip` on the visible
+   * stroke, or a `TraceBadge` in severity dress at `labelPosition` — a
+   * host composition, not this file's job.
+   */
+  diagnostics?: Diagnostic[];
 }
 
 export interface TraceStrokeStyle {
@@ -354,10 +366,12 @@ export function TraceBody({
   crossing = "none",
   hitStrokePx = TRACE_HIT_STROKE_PX,
   showHitRegion = false,
+  diagnostics,
   className,
   ...props
 }: TraceProps) {
   const markerId = safeElementId("bbox-trace-head", id);
+  const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
   const hasMarker = markerEnd !== "none";
   const markerAttr = hasMarker ? `url(#${markerId})` : undefined;
   const resolvedLength = length ?? (points ? polylineLength(points) : 0);
@@ -466,6 +480,27 @@ export function TraceBody({
     />
   ) : null;
 
+  // §5's Trace row: a translucent backdrop under the wire, same geometry
+  // as the hit path above (`drawnPath`, so a tunnelled cable's backdrop
+  // stops at the same mouths the wire itself does), painted at
+  // `max(severity)`. `info` paints nothing (§5's own table). The visible
+  // stroke's `color`/dash stay whatever the variant already set — this is
+  // the ONLY layer the diagnostic axis owns here, never a recoloured line.
+  const diagnosticBackdrop =
+    diagnosticSeverity && diagnosticSeverity !== "info" ? (
+      <path
+        data-slot="trace-diagnostic-backdrop"
+        aria-hidden
+        d={drawnPath}
+        fill="none"
+        stroke={`color-mix(in srgb, ${diagnosticColorVar(diagnosticSeverity)} 30%, transparent)`}
+        strokeWidth={10}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ pointerEvents: "none" }}
+      />
+    ) : null;
+
   // Seeded from the geometry itself, so a cable keeps its own wander while
   // it sits still and re-draws honestly when it moves. Sketched from the
   // DRAWN path, so a tunnelled cable's two mouths each wobble as their own
@@ -495,10 +530,12 @@ export function TraceBody({
         data-split="true"
         data-tunnel={tunnel}
         data-crossing={crossing}
+        data-diagnostic={diagnosticSeverity}
         className={cn(className)}
         {...props}
       >
         {defs}
+        {diagnosticBackdrop}
         {casing}
         {hit}
         <path {...splitSegment} data-slot="trace-line" data-trace-segment="before" d={path} strokeDasharray={dash.before} style={CRISP_STYLE} />
@@ -545,10 +582,12 @@ export function TraceBody({
       data-animated={animated || undefined}
       data-tunnel={tunnel}
       data-crossing={crossing}
+      data-diagnostic={diagnosticSeverity}
       className={cn(className)}
       {...props}
     >
       {defs}
+      {diagnosticBackdrop}
       {casing}
       {hit}
       <path {...segment} data-slot="trace-line" data-trace-segment="whole" d={drawnPath} style={CRISP_STYLE} />
@@ -847,6 +886,8 @@ export interface TraceRouteProps
   hitStrokePx?: number;
   /** Forwarded to `TraceBody` — see its own doc. */
   showHitRegion?: boolean;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  diagnostics?: Diagnostic[];
   /** Draw the two endpoint glyphs. On by default — `Trace` is "the whole
    * thing"; a host with real `Port`s passes `false`. */
   terminals?: boolean;
@@ -898,6 +939,7 @@ export function Trace({
   crossing = "none",
   hitStrokePx,
   showHitRegion,
+  diagnostics,
   terminals = true,
   terminalRadius,
   terminalColor,
@@ -1022,6 +1064,7 @@ export function Trace({
         interactive={interactive}
         hitStrokePx={hitStrokePx}
         showHitRegion={showHitRegion}
+        diagnostics={diagnostics}
       />
       {terminals ? (
         <>

@@ -61,6 +61,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CodeEditor } from "./codeEditor";
+import type { Diagnostic } from "./diagnostic";
 import { LabeledPort } from "./labeledPort";
 import { SketchOutline } from "../skin/sketchOutline";
 import type { PortState } from "./port";
@@ -90,6 +91,14 @@ export interface PortEdgeItem {
   id: string;
   label: string;
   state?: PortState;
+  /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's PortEdge row):
+   * "nothing on the rail itself" — forwarded straight to the `LabeledPort`
+   * the default render draws for this item; the PORT is the subject, the
+   * rail is furniture. A host's own `renderItem` override is responsible
+   * for forwarding this itself if it wants the mark.
+   */
+  diagnostics?: Diagnostic[];
 }
 
 export type PortEdgeArrangeMode = "auto" | "custom";
@@ -449,6 +458,7 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
       <LabeledPort
         edge={edge}
         state={item.state ?? "empty"}
+        diagnostics={item.diagnostics}
         diameter="md"
         textLayout={textLayout}
         labelSlot={hideLabel ? null : undefined}

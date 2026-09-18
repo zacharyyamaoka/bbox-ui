@@ -42,7 +42,8 @@ import type { CSSProperties } from "react";
 
 import { Block } from "../../components/block";
 import { BlockPort, type BlockEdgeSpec } from "../../components/blockPort";
-import { CodeEditor, type CodeEditorProps } from "../../components/codeEditor";
+import { CodeEditor, type CodeEditorDiagnostic, type CodeEditorProps } from "../../components/codeEditor";
+import { maxDiagnosticSeverity, type Diagnostic } from "../../components/diagnostic";
 import type { PortSize } from "../../components/port.layout";
 import type { PortEdgeItem } from "../../components/portEdge";
 
@@ -117,6 +118,20 @@ export interface ValueCapsuleProps {
    *  preset's own and deliberately wins — a capsule that is not a pill is
    *  not a Value capsule. */
   style?: CSSProperties;
+  /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's ValueCapsule
+   * row). Forwarded to `Block` — the pill glow is free, since this preset
+   * already renders one (`Block`'s own `showDiagnosticFlag={false}` below
+   * suppresses ONLY the corner flag: "a capsule is too small, the glow is
+   * the beacon and the message rides a hover Tooltip"). Also forwarded to
+   * the underlying `CodeEditor` as a squiggle range — `diagnosticRange`
+   * lets a host name the exact invalid span; omitted, the whole expression
+   * is marked, which is the honest default when nothing narrower is known.
+   */
+  diagnostics?: Diagnostic[];
+  /** The squiggled character range within `value`, when `diagnostics` is
+   *  set. Omit to mark the whole expression. */
+  diagnosticRange?: { from: number; to: number };
 }
 
 export function ValueCapsule({
@@ -132,16 +147,31 @@ export function ValueCapsule({
   language,
   codeEditorProps,
   style,
+  diagnostics,
+  diagnosticRange,
 }: ValueCapsuleProps) {
   const edges: Partial<Record<"left" | "right", BlockEdgeSpec>> = {};
   if (writers && writers.length > 0) edges.left = { items: writers };
   if (readers && readers.length > 0) edges.right = { items: readers };
+
+  const capsuleSeverity = maxDiagnosticSeverity(diagnostics);
+  const codeEditorDiagnostics: CodeEditorDiagnostic[] | undefined = capsuleSeverity
+    ? [{ from: diagnosticRange?.from ?? 0, to: diagnosticRange?.to ?? value.length, severity: capsuleSeverity }]
+    : undefined;
 
   return (
     <BlockPort id={id} view={expanded ? "expanded" : "simple"} edges={edges} diameter={diameter}>
       <Block
         width={width}
         height={height}
+        diagnostics={diagnostics}
+        // §5: "no flag — a capsule is too small". The glow above is still
+        // Block's own; only the corner chip is suppressed here.
+        showDiagnosticFlag={false}
+        // §5's OWN row for this preset: "warning: amber glow" — unlike
+        // Block's default (glow is error-only), a capsule has no flag to
+        // carry warning instead, so the glow is the only channel left.
+        diagnosticWarningGlow
         // WHY `width: "max-content"` when no width is given: Block's own
         // default is a fixed 320 — a card assumption, not a capsule one. A
         // hugging pill should be exactly as wide as its expression, and the
@@ -159,6 +189,7 @@ export function ValueCapsule({
             onWrite={onWrite ?? (() => {})}
             multiline={false}
             language={language}
+            diagnostics={codeEditorDiagnostics}
             // An <input>-like face: a too-long expression is cut at the
             // pill's edge (never wrapped — a wrapped line would grow the
             // box and break the radius-follows-height contract).

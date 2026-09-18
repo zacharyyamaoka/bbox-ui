@@ -39,6 +39,7 @@ import {
   moveLineUp,
 } from "@codemirror/commands";
 import { syntaxHighlighting, type LanguageSupport } from "@codemirror/language";
+import { linter as cmLinter, setDiagnostics as cmSetDiagnostics, type Diagnostic as CMDiagnostic } from "@codemirror/lint";
 import {
   Compartment,
   EditorState,
@@ -66,6 +67,7 @@ import { externalSync, singleLineGuard } from "./codeEditorGuards";
 import { codeEditorHighlightStyle } from "./codeEditorHighlight";
 import { codeEditorWidthPx } from "./codeEditorLayout";
 import { codeEditorThemeVars, type CodeEditorTheme } from "./codeEditorTheme";
+import type { DiagnosticSeverity } from "./diagnostic";
 
 /** The horizontal padding baked into `.bbox-code-editor` in codeEditor.css —
  * kept as a constant here too so `columns`'s pixel maths (codeEditorLayout.ts)
@@ -78,6 +80,22 @@ const PADDING_X = 6;
  * `columns`' fixed width; `wrap` folds the line onto new rows instead and
  * ignores `columns` for width purposes since the text no longer runs past it. */
 export type CodeEditorOverflow = "clip" | "wrap" | "scroll";
+
+/**
+ * One diagnostic-marked RANGE (docs/INVALID-STATES-PLAN.md §5's CodeEditor
+ * row). This is the one mark-bearing shape in this axis that stays
+ * POSITIONAL rather than the shared `Diagnostic` list every other
+ * component takes: several squiggles at different character offsets in
+ * one field are not competing judgements about a single element, so there
+ * is nothing to rank down to a `max(severity)` — every range paints its
+ * own severity, independently.
+ */
+export interface CodeEditorDiagnostic {
+  from: number;
+  to: number;
+  severity: DiagnosticSeverity;
+  message?: string;
+}
 
 export interface CodeEditorProps {
   /** The document. The field follows it whenever nobody is editing. */
@@ -127,7 +145,20 @@ export interface CodeEditorProps {
   placeholder?: string;
   ariaLabel?: string;
   ariaDescribedBy?: string;
+  /** Forced `true` when any `diagnostics` range is `severity: "error"` —
+   *  a whole-field error still sets this existing attribute (§5's own
+   *  words); an explicit `true` here is never downgraded by an absent
+   *  error range. */
   ariaInvalid?: boolean;
+  /**
+   * The diagnostic axis's positional shape — see `CodeEditorDiagnostic`'s
+   * own doc. Painted with the stock `@codemirror/lint` squiggle
+   * (`setDiagnostics`/`linter`, §5's own choice), retinted to this kit's
+   * three severity tokens in codeEditor.css rather than CodeMirror's
+   * hardcoded reds/oranges. No gutter, no Problems panel — §8 stops this
+   * kit at the component-scale mark.
+   */
+  diagnostics?: CodeEditorDiagnostic[];
   className?: string;
   testId?: string;
   style?: CSSProperties;
@@ -186,6 +217,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
   ariaLabel,
   ariaDescribedBy,
   ariaInvalid,
+  diagnostics,
   className,
   testId,
   style,
@@ -308,6 +340,25 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
           // WHY `codeEditorHighlightStyle` and not the stock `classHighlighter`
           // this used to mount directly: see codeEditorHighlight.ts's own WHY.
           syntaxHighlighting(codeEditorHighlightStyle),
+          // WHY `null`, not a no-op `() => []` (measured, not assumed —
+          // see this lane's own report for the timeline): `linter()`'s
+          // ViewPlugin schedules `source(view)` to run ONCE, UNCONDITIONALLY,
+          // `delay`ms (default 750) after every mount/relevant update —
+          // it is not "only on a real edit". A `() => []` source WOULD
+          // run at that mark and dispatch `setDiagnostics(state, [])`,
+          // silently ERASING whatever this file's own sync effect (below)
+          // had written — reproduced live: a squiggle painted at t=0
+          // vanished at exactly t=750ms in every run. `null` is filtered
+          // out of the `sources` facet entirely (lintConfig's own
+          // `combine`), so the plugin's scheduled `run()` finds
+          // `sources.length === 0` and dispatches NOTHING — this
+          // component's diagnostics are pushed in from OUTSIDE (a host/
+          // producer), never computed by a live in-editor linter, so
+          // there must be no active source at all. The state field and
+          // decorations (`lintState`/`lintExtensions`) still mount
+          // unconditionally either way, which is all `setDiagnostics`
+          // (the sync effect below) needs to have somewhere to write.
+          cmLinter(null),
           gutterCompartment.current.of(lineNumbers ? [lineNumbersExtension()] : []),
           editableCompartment.current.of(EditorView.editable.of(!disabled)),
           placeholderCompartment.current.of(placeholder ? placeholderExtension(placeholder) : []),
@@ -392,6 +443,25 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     viewRef.current?.dispatch({ effects: languageCompartment.current.reconfigure(language ?? []) });
   }, [language]);
 
+  // `setDiagnostics` REPLACES the lint state field wholesale — a plain
+  // `Diagnostic[]`, not a compartment reconfigure, because it is data, not
+  // an extension. `message` is required by `@codemirror/lint`'s own type
+  // (ours is optional, §1's `Diagnostic.message` doc) — falling back to
+  // the severity word keeps the squiggle's built-in hover from rendering
+  // an empty popup when a producer marks a range before its prose exists.
+  useLayoutEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const mapped: CMDiagnostic[] = (diagnostics ?? []).map((d) => ({
+      from: d.from,
+      to: d.to,
+      severity: d.severity,
+      message: d.message ?? d.severity,
+    }));
+    view.dispatch(cmSetDiagnostics(view.state, mapped));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagnostics]);
+
   useLayoutEffect(() => {
     viewRef.current?.dispatch({
       effects: gutterCompartment.current.reconfigure(lineNumbers ? [lineNumbersExtension()] : []),
@@ -445,6 +515,12 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
   useLayoutEffect(() => () => gesture.commit(), [gesture]);
 
   const width = wrap ? undefined : codeEditorWidthPx(columns, fontSizePx, lineNumbers, PADDING_X, PADDING_X);
+  // §5's own words: "whole-field error also sets the existing
+  // `ariaInvalid`" — an explicit `true` is never downgraded by an absent
+  // error range; an explicit `false`/omitted still turns on the instant
+  // ANY range in the list is `severity: "error"`.
+  const hasErrorDiagnostic = (diagnostics ?? []).some((d) => d.severity === "error");
+  const resolvedAriaInvalid = ariaInvalid || hasErrorDiagnostic;
 
   const boxStyle: CSSProperties = {
     fontSize: fontSizePx,
@@ -464,7 +540,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
       role="textbox"
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
-      aria-invalid={ariaInvalid ? true : undefined}
+      aria-invalid={resolvedAriaInvalid ? true : undefined}
       aria-disabled={disabled ? true : undefined}
       aria-multiline={multiline ? true : undefined}
       data-testid={testId}
