@@ -1,5 +1,7 @@
 # bbox-ui — working notes for agents
 
+@.claude/feedback.md
+
 Presentational components for black-box system design: blocks, ports, edges.
 Copy-paste components people own, not a library they depend on.
 

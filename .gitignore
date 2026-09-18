@@ -13,7 +13,14 @@ apps/docs/CLAUDE.md
 .scratch/
 .scratch-host/
 # Agent scratch — machine-local. Repo guidance lives in CLAUDE.md, which is tracked.
-.claude/
+# `.claude/*` rather than `.claude/`: git cannot re-include a file whose PARENT
+# DIRECTORY is excluded, so the negation below is silently dead with a trailing
+# slash. The glob excludes the contents while leaving the directory itself
+# eligible, which is what makes the exception work.
+.claude/*
+# ...except the feedback ledger: it is repo guidance, loaded by CLAUDE.md's @ line,
+# and must travel with a clone. Untracked would not survive a peer's `git stash -u`.
+!.claude/feedback.md
 # wrangler local state
 .wrangler/
 # Reports: the page is tracked, the captures it inlines are not (Zach, 2026-09-07).
