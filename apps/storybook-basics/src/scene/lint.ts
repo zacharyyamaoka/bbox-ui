@@ -83,7 +83,11 @@ import { duplicateEdges, findCycles, findDanglingEdges, portKey, producersOf, ty
  *  `BlockScene`, a React Flow store's nodes/edges, or a hand-built fixture
  *  all satisfy it with no adapter. */
 export interface LintScene {
-  nodes: readonly { id: string }[];
+  /** `parentId` is optional and read by ONE rule (`cross-scope`'s prevention
+   *  half, `edgeValidation.ts`) — every pre-existing fixture that passes
+   *  `{id}` alone still satisfies this and is judged identically, because an
+   *  absent parent reads as "top level" on both ends and therefore agrees. */
+  nodes: readonly { id: string; parentId?: string }[];
   edges: readonly (SceneEdgeEnds & { id: string })[];
 }
 
@@ -104,6 +108,36 @@ export type PortsOf = (nodeId: string) => readonly string[] | undefined;
  * header for why maxGraph's `Multiplicity` was rejected as the donor.
  */
 export type PortTypeOf = (ref: ScenePortRef) => readonly string[] | undefined;
+
+/**
+ * Which way a port faces: does it EMIT a value or RECEIVE one?
+ *
+ * This kit had no such vocabulary at all before 2026-09-18. `ScenePortRef`
+ * is `{nodeId, portId}`, `PortsOf` returns bare NAMES, and `SceneNode` has
+ * no ports field — so nothing in `src/scene/` could tell an output from an
+ * input, and `validateConnection` consequently judged output→output LEGAL
+ * (measured on `ValidityPreview`'s own fixture: dragging `num1/out` painted
+ * `num2/out` available). See `docs/peps/0002-the-judge-owns-edge-orientation.md`.
+ *
+ * Declared as a RESOLVER, not a field, for the same reason `PortTypeOf` is:
+ * a `LintScene` is a structural slice that a `BlockScene`, a React Flow
+ * store, or a hand-built fixture all satisfy with no adapter, and adding a
+ * required field to it would break that. `undefined` means "unknown
+ * direction, no judgement" — the identical convention `PortsOf` and
+ * `PortTypeOf` already document, so a caller that supplies nothing gets
+ * byte-identical findings to before this existed.
+ *
+ * Vocabulary is the donor's: SystemSketch `PortPolarity = 'source' | 'sink'`
+ * (`src/blocks/connections/connectionModel.ts:88`, opened). The donor DERIVES
+ * it — `portPolarity(port.side, face)`, a function of the port's lane and
+ * which face of the block is showing (`connectionRules.ts:175,183`) — which
+ * this kit cannot do: it has neither lanes nor faces in the scene model. So
+ * the answer is asked for rather than computed.
+ */
+export type PortDirection = "source" | "sink";
+
+/** A port's direction, or `undefined` for "unknown" — see `PortDirection`. */
+export type PortDirectionOf = (ref: ScenePortRef) => PortDirection | undefined;
 
 /** Compatible iff... whatever this returns says so. Default is
  *  `typesIntersect` below; a caller may substitute equality, a hierarchy
@@ -132,6 +166,9 @@ export interface LintRuleContext {
   portsOf?: PortsOf;
   typeOf?: PortTypeOf;
   compatible?: TypeCompatible;
+  /** `polarity`'s vocabulary — omitted, that rule contributes nothing, the
+   *  same way `type-mismatch` contributes nothing without `typeOf`. */
+  directionOf?: PortDirectionOf;
 }
 
 /** What render carrier a finding attaches to — the address, not the paint.
@@ -175,7 +212,7 @@ export interface LintFinding extends Diagnostic {
 /* The registry — closed, documented, individually toggleable           */
 /* ------------------------------------------------------------------ */
 
-export type LintRuleId = "dangling-edge" | "cycle" | "duplicate-edge" | "many-to-one" | "self-connection" | "type-mismatch";
+export type LintRuleId = "dangling-edge" | "cycle" | "duplicate-edge" | "many-to-one" | "self-connection" | "type-mismatch" | "polarity";
 
 /** Scene order — also the registry's own iteration/display order, so a
  *  rule-picker UI (the story's Storybook controls) lists them the same way
@@ -187,6 +224,7 @@ export const LINT_RULE_IDS: readonly LintRuleId[] = [
   "many-to-one",
   "self-connection",
   "type-mismatch",
+  "polarity",
 ];
 
 /** One raw hit, before the runner turns it into a full `LintFinding` — a
@@ -345,6 +383,69 @@ const typeMismatchRule: LintRule = {
   },
 };
 
+
+/**
+ * `polarity` — an edge whose ends do not read SOURCE port -> SINK port.
+ *
+ * Two genuinely different at-rest wrongs, one rule, because both are the
+ * same question ("which way does this port face?") and splitting them would
+ * put one rule's answer out of reach of the other:
+ *
+ *   same-direction  both ends emit, or both receive. Nothing can flow. This
+ *                   is the one `validateConnection` REFUSES (donor name
+ *                   `same-polarity`, `connectionRules.ts:186`, opened).
+ *   reversed        the ends are legitimately opposite, but the edge names
+ *                   them backwards: its `source` is a SINK. The pair is
+ *                   legal; only the writing is wrong. At DRAG time this is
+ *                   never a refusal — the judge simply orients it (donor
+ *                   `decideDirection`, `connectionRules.ts:222-234`, opened,
+ *                   which flips rather than refuses). It can only reach a
+ *                   scene by some path that did not go through the judge —
+ *                   an import, a hand-authored fixture, or a caller that
+ *                   ignored the verdict's oriented pair — which is exactly
+ *                   why the ANNOTATION half has to be able to say it.
+ *
+ * Inert without `directionOf`, per this file's "undefined = unknown, no
+ * judgement" convention: every scene linted before 2026-09-18 yields
+ * byte-identical findings.
+ */
+const polarityRule: LintRule = {
+  id: "polarity",
+  severity: "error",
+  title: "Polarity \u2014 an edge does not run from a source port to a sink port",
+  provenance:
+    "SystemSketch src/blocks/connections/connectionRules.ts:186 (the `same-polarity` refusal) and :222-234 (`decideDirection`, which resolves the reversed case by FLIPPING rather than refusing) \u2014 both opened on disk. The donor derives polarity from `portPolarity(port.side, face)` (connectionModel.ts:99); this kit has neither lanes nor faces in its scene model, so direction is supplied by a caller-side `PortDirectionOf` resolver instead of computed. Reversed-as-a-FINDING is ours: the donor has a gesture to flip and a scene at rest does not.",
+  run(scene, context) {
+    const directionOf = context?.directionOf;
+    if (!directionOf) return [];
+    const hits: LintRuleHit[] = [];
+    for (const edge of scene.edges) {
+      if (edge.sourceHandle == null || edge.targetHandle == null) continue;
+      const from = directionOf({ nodeId: edge.source, portId: edge.sourceHandle });
+      const to = directionOf({ nodeId: edge.target, portId: edge.targetHandle });
+      // Either end unresolved -> no judgement, exactly as `type-mismatch`
+      // treats a half-known type vocabulary.
+      if (from === undefined || to === undefined) continue;
+      if (from === to) {
+        hits.push({
+          subject: { kind: "edge", id: edge.id },
+          message: `Edge "${edge.id}" joins two ${from} ports \u2014 "${edge.source}/${edge.sourceHandle}" and "${edge.target}/${edge.targetHandle}"`,
+          detail: "same-direction",
+        });
+        continue;
+      }
+      if (from === "sink") {
+        hits.push({
+          subject: { kind: "edge", id: edge.id },
+          message: `Edge "${edge.id}" runs backwards \u2014 its source "${edge.source}/${edge.sourceHandle}" is a sink`,
+          detail: "reversed",
+        });
+      }
+    }
+    return hits;
+  },
+};
+
 /** The closed registry — a documented value per id, never an open string
  *  soup. `Readonly` so a consumer cannot quietly monkey-patch a rule. */
 export const LINT_RULES: Readonly<Record<LintRuleId, LintRule>> = {
@@ -354,6 +455,7 @@ export const LINT_RULES: Readonly<Record<LintRuleId, LintRule>> = {
   "many-to-one": manyToOneRule,
   "self-connection": selfConnectionRule,
   "type-mismatch": typeMismatchRule,
+  polarity: polarityRule,
 };
 
 /* ------------------------------------------------------------------ */
@@ -376,6 +478,9 @@ export interface LintOptions {
    *  gets byte-identical findings to before this field existed. */
   typeOf?: PortTypeOf;
   compatible?: TypeCompatible;
+  /** `polarity`'s vocabulary — same "omitted = that rule contributes
+   *  nothing" contract as `typeOf` directly above. */
+  directionOf?: PortDirectionOf;
 }
 
 /**
@@ -392,7 +497,7 @@ export interface LintOptions {
  */
 export function lintScene(scene: LintScene, options: LintOptions = {}): LintFinding[] {
   const ruleIds = options.rules ?? LINT_RULE_IDS;
-  const context: LintRuleContext = { portsOf: options.portsOf, typeOf: options.typeOf, compatible: options.compatible };
+  const context: LintRuleContext = { portsOf: options.portsOf, typeOf: options.typeOf, compatible: options.compatible, directionOf: options.directionOf };
   const findings: LintFinding[] = [];
   for (const ruleId of ruleIds) {
     const rule = LINT_RULES[ruleId];

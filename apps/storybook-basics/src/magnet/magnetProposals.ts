@@ -64,7 +64,7 @@ import { portKey, type SceneEdgeEnds, type ScenePortRef } from "../scene/scene";
 // `validateConnection` would cost a rebuild. `Diagnostic` is deliberately
 // NOT named here at all — post-rename it lives in `components/highlighter.tsx`
 // (edgeValidation.ts:49), and `src/components/**` is another lane's write set.
-import type { ConnectionMessage, ConnectionVerdict } from "../scene/edgeValidation";
+import { gestureOrientation, type ConnectionMessage, type ConnectionVerdict } from "../scene/edgeValidation";
 import { arePortTypesCompatible, type PortTypeMatching } from "./magnetPortTypes";
 
 export interface Point {
