@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { effectiveHitValue, ZOOM_LEVELS } from "../hitRegions/hitPolicy";
 import { portKey, type ScenePortRef } from "../scene/scene";
+import type { ConnectionMessage, ConnectionVerdict } from "../scene/edgeValidation";
 import {
   composeJudges,
   effectiveMagnetRadius,
@@ -50,6 +51,16 @@ function seeded(seed: number): () => number {
     state ^= state << 5;
     return ((state >>> 0) % 100000) / 100000;
   };
+}
+
+
+/** Narrow a verdict to its refusal. Ruling 1 made `ConnectionVerdict` a
+ *  discriminated union, so `.refusal` is unreachable without proving the
+ *  verdict actually refused — which is the point. A cast would silence the
+ *  compiler and lose exactly the guarantee the union exists to give. */
+function refusalOf(verdict: ConnectionVerdict): ConnectionMessage {
+  if (verdict.allowed) throw new Error("expected a refusal, got an allowed verdict");
+  return verdict.refusal;
 }
 
 /* ================================================================== */
@@ -146,11 +157,22 @@ describe("A2 · proximity AND validation, in that order (R2)", () => {
     for (const call of spy.mock.calls) expect(call[0].target).not.toBe("far");
   });
 
-  it("carries a SILENT refusal through as `refusal` absent — maxGraph's '' case", () => {
-    const silent: ConnectionJudge = () => ({ allowed: false });
-    const scan = scanMagnets({ moving, resting: [port("near", "in", 10, 0)], judge: silent });
+  // WHY this test inverted: it used to pin maxGraph's silent `''` refusal
+  // (`{allowed: false}` with no reason). Zach's ruling 1 abolished that —
+  // "by default everything should connect and everything after that should
+  // have a reason" — and `ConnectionVerdict` is now a discriminated union,
+  // so the old fixture is not merely wrong, it does not compile. The
+  // coverage it was protecting (a refusal still reaches `scan.refused`) is
+  // kept; what changed is that the refusal must now explain itself.
+  it("carries every refusal through with its reason attached — no silent case exists", () => {
+    const refusing: ConnectionJudge = () => ({
+      allowed: false,
+      refusal: { severity: "error", code: "test-refusal", message: "refused for a stated reason" },
+    });
+    const scan = scanMagnets({ moving, resting: [port("near", "in", 10, 0)], judge: refusing });
     expect(scan.refused).toHaveLength(1);
-    expect(scan.refused[0].refusal).toBeUndefined();
+    expect(scan.refused[0].refusal.code).toBe("test-refusal");
+    expect(scan.refused[0].refusal.message).toBeTruthy();
   });
 
   it("composeJudges returns the FIRST refusal and short-circuits", () => {
@@ -164,7 +186,7 @@ describe("A2 · proximity AND validation, in that order (R2)", () => {
       return { allowed: false, refusal: { severity: "error", code: "second" } };
     };
     const verdict = composeJudges(first, second)({ id: "e", source: "a", sourceHandle: "out", target: "b", targetHandle: "in" });
-    expect(verdict.refusal?.code).toBe("first");
+    expect(refusalOf(verdict).code).toBe("first");
     expect(calls).toEqual(["first"]);
     expect(composeJudges()({ id: "e", source: "a", target: "b" }).allowed).toBe(true);
   });
@@ -289,8 +311,8 @@ describe("A4 · magnetTypeJudge maps verdicts to the donor's two refusal codes (
   it("mismatch -> `type-mismatch`", () => {
     const verdict = judge("lenient")(candidate("bytesSink"));
     expect(verdict.allowed).toBe(false);
-    expect(verdict.refusal?.code).toBe("type-mismatch");
-    expect(verdict.refusal?.message).toContain("Pose");
+    expect(refusalOf(verdict).code).toBe("type-mismatch");
+    expect(refusalOf(verdict).message).toContain("Pose");
   });
 
   it("matching types are allowed", () => {
@@ -301,7 +323,7 @@ describe("A4 · magnetTypeJudge maps verdicts to the donor's two refusal codes (
     expect(judge("lenient")(candidate("blank")).allowed).toBe(true);
     const strict = judge("strict")(candidate("blank"));
     expect(strict.allowed).toBe(false);
-    expect(strict.refusal?.code).toBe("untyped-port");
+    expect(refusalOf(strict).code).toBe("untyped-port");
   });
 
   it("a null handle names the NODE, so there is nothing to judge -> allowed", () => {
@@ -311,7 +333,7 @@ describe("A4 · magnetTypeJudge maps verdicts to the donor's two refusal codes (
 
   it("an unknown port reads as undeclared, not as a crash", () => {
     expect(judge("lenient")(candidate("nobody")).allowed).toBe(true);
-    expect(judge("strict")(candidate("nobody")).refusal?.code).toBe("untyped-port");
+    expect(refusalOf(judge("strict")(candidate("nobody"))).code).toBe("untyped-port");
   });
 });
 
@@ -339,7 +361,7 @@ describe("A5 · an illegal near candidate never shadows a legal far one (R2 + R4
     expect(topProposal(scan)?.to.nodeId).toBe("poseSink");
     // And the nearer one is REFUSED, with the donor's own code — the
     // refusal is explained, not swallowed.
-    expect(scan.refused.map((r) => `${r.to.nodeId}:${r.refusal?.code}`)).toEqual(["bytesSink:type-mismatch"]);
+    expect(scan.refused.map((r) => `${r.to.nodeId}:${r.refusal.code}`)).toEqual(["bytesSink:type-mismatch"]);
   });
 
   it("the fixture is genuinely the hard case: the illegal candidate is strictly nearer", () => {
@@ -353,6 +375,6 @@ describe("A5 · an illegal near candidate never shadows a legal far one (R2 + R4
     const noPoseSink: ConnectionJudge = (c) => (c.target === "poseSink" ? { allowed: false, refusal: { severity: "error", code: "banned" } } : { allowed: true });
     const scan = scanMagnets({ moving, resting, judge: composeJudges(magnetTypeJudge({ typeOf, mode: "lenient" }), noPoseSink) });
     expect(scan.proposals).toEqual([]);
-    expect(scan.refused.map((r) => r.refusal?.code)).toEqual(["type-mismatch", "banned"]);
+    expect(scan.refused.map((r) => r.refusal.code)).toEqual(["type-mismatch", "banned"]);
   });
 });

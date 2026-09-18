@@ -298,13 +298,15 @@ export interface MagnetRefusal {
   to: ScenePortRef;
   distance: number;
   /**
-   * PRESENT = maxGraph's `"message"` case; ABSENT = its `''` "invalid but
-   * silent" case — the two-valued distinction `ConnectionVerdict` already
-   * carries (scene/edgeValidation.ts:79-84), passed through verbatim rather
-   * than flattened. Mint an `id` and a `MagnetRefusal.refusal` IS an at-rest
-   * `Diagnostic`.
+   * ALWAYS PRESENT. This was optional to carry maxGraph's `''` "invalid but
+   * silent" case through verbatim; Zach's ruling 1 abolished that — "by
+   * default everything should connect and everything after that should have
+   * a reason" — and `ConnectionVerdict` is now a discriminated union where a
+   * refusal without a reason does not typecheck. So a refusal that reached
+   * here necessarily explains itself, and callers no longer branch on its
+   * absence. Mint an `id` and this IS an at-rest `Diagnostic`.
    */
-  refusal?: ConnectionMessage;
+  refusal: ConnectionMessage;
 }
 
 export interface MagnetScan {
