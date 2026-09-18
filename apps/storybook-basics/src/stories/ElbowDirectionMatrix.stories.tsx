@@ -43,6 +43,7 @@ import {
   buildElbowScene,
   routeEnd,
   routeStart,
+  sharedFrameSize,
   type Placement,
 } from "./elbowDirections.fixture";
 
@@ -303,43 +304,59 @@ function isAwkward(fromDir: TraceDir, toDir: TraceDir): boolean {
   return fromDir === "left" || toDir === "left";
 }
 
+/** All 16 scenes this gallery renders, up front — `sharedFrameSize` needs
+ * every cell's own extent before any cell can pick its frame, which is
+ * exactly the two-pass measurement `BuildElbowSceneOptions.distance`'s
+ * comment always intended ("a viewer can compare bend counts across cells
+ * without mentally correcting for scale") but the old per-cell autofit
+ * never actually delivered. */
+function allSidePairsScenes() {
+  return TRACE_DIRS.flatMap((fromDir) =>
+    TRACE_DIRS.map((toDir) => buildElbowScene(fromDir, toDir, MATRIX_PLACEMENT, { distance: MATRIX_DISTANCE })),
+  );
+}
+
 export const AllSidePairs: Story = {
-  render: () => (
-    <Gallery
-      title="from.dir × to.dir — the full 4×4"
-      description={
-        <>
-          Same two terminals every time — the sink sits due east of the source, distance {MATRIX_DISTANCE}px — with
-          only the direction tangents changing. <code>right → right</code> is the trivial straight case; every cell
-          touching <code>“left”</code> is the router doing real work, dashed and captioned rather than hidden.
-        </>
-      }
-    >
-      <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 10 }}>
-        <MatrixHeader />
-        {TRACE_DIRS.map((fromDir) => (
-          <div key={fromDir} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <RowLabel title={`from.dir “${fromDir}”`} />
-            {TRACE_DIRS.map((toDir) => {
-              const scene = buildElbowScene(fromDir, toDir, MATRIX_PLACEMENT, { distance: MATRIX_DISTANCE });
-              const key = `${fromDir}-${toDir}`;
-              return (
-                <div key={toDir} style={{ width: 200 }}>
-                  <DirectionCell
-                    testKey={key}
-                    label={`${fromDir} → ${toDir}`}
-                    from={scene.from}
-                    to={scene.to}
-                    awkward={isAwkward(fromDir, toDir)}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </Gallery>
-  ),
+  render: () => {
+    const frameSize = sharedFrameSize(allSidePairsScenes());
+    return (
+      <Gallery
+        title="from.dir × to.dir — the full 4×4"
+        description={
+          <>
+            Same two terminals every time — the sink sits due east of the source, distance {MATRIX_DISTANCE}px — with
+            only the direction tangents changing. <code>right → right</code> is the trivial straight case; every cell
+            touching <code>“left”</code> is the router doing real work, dashed and captioned rather than hidden.
+          </>
+        }
+      >
+        <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 10 }}>
+          <MatrixHeader />
+          {TRACE_DIRS.map((fromDir) => (
+            <div key={fromDir} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <RowLabel title={`from.dir “${fromDir}”`} />
+              {TRACE_DIRS.map((toDir) => {
+                const scene = buildElbowScene(fromDir, toDir, MATRIX_PLACEMENT, { distance: MATRIX_DISTANCE });
+                const key = `${fromDir}-${toDir}`;
+                return (
+                  <div key={toDir} style={{ width: 200 }}>
+                    <DirectionCell
+                      testKey={key}
+                      label={`${fromDir} → ${toDir}`}
+                      from={scene.from}
+                      to={scene.to}
+                      awkward={isAwkward(fromDir, toDir)}
+                      frameSize={frameSize}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </Gallery>
+    );
+  },
   play: async ({ canvasElement }) => {
     assertRulerUnchanged();
     await expect(canvasElement.querySelectorAll('[data-slot="direction-cell"]')).toHaveLength(16);
@@ -386,33 +403,41 @@ const EXPECTED_SWEEP_BENDS: Record<Placement, number> = {
   nw: 2,
 };
 
+function placementSweepScenes() {
+  return PLACEMENTS.map((placement) => buildElbowScene(SWEEP_FROM_DIR, SWEEP_TO_DIR, placement, { distance: SWEEP_DISTANCE }));
+}
+
 export const PlacementSweep: Story = {
-  render: () => (
-    <Gallery
-      title={`${SWEEP_FROM_DIR} → ${SWEEP_TO_DIR}, swept through all 8 placements`}
-      description={
-        <>
-          Same direction tangents at both ends every time; only WHERE the sink sits relative to the source changes.
-          Due east/west (the sink directly ahead of or behind the source) is where this pair costs the most — every
-          diagonal placement lets the router turn the same corner it needed anyway into part of a shorter path.
-        </>
-      }
-    >
-      {PLACEMENTS.map((placement) => {
-        const scene = buildElbowScene(SWEEP_FROM_DIR, SWEEP_TO_DIR, placement, { distance: SWEEP_DISTANCE });
-        return (
-          <DirectionCell
-            key={placement}
-            testKey={`sweep-${placement}`}
-            label={`placement ${PLACEMENT_LABEL[placement]}`}
-            from={scene.from}
-            to={scene.to}
-            awkward={placement === "e" || placement === "w"}
-          />
-        );
-      })}
-    </Gallery>
-  ),
+  render: () => {
+    const frameSize = sharedFrameSize(placementSweepScenes());
+    return (
+      <Gallery
+        title={`${SWEEP_FROM_DIR} → ${SWEEP_TO_DIR}, swept through all 8 placements`}
+        description={
+          <>
+            Same direction tangents at both ends every time; only WHERE the sink sits relative to the source changes.
+            Due east/west (the sink directly ahead of or behind the source) is where this pair costs the most — every
+            diagonal placement lets the router turn the same corner it needed anyway into part of a shorter path.
+          </>
+        }
+      >
+        {PLACEMENTS.map((placement) => {
+          const scene = buildElbowScene(SWEEP_FROM_DIR, SWEEP_TO_DIR, placement, { distance: SWEEP_DISTANCE });
+          return (
+            <DirectionCell
+              key={placement}
+              testKey={`sweep-${placement}`}
+              label={`placement ${PLACEMENT_LABEL[placement]}`}
+              from={scene.from}
+              to={scene.to}
+              awkward={placement === "e" || placement === "w"}
+              frameSize={frameSize}
+            />
+          );
+        })}
+      </Gallery>
+    );
+  },
   play: async ({ canvasElement }) => {
     assertRulerUnchanged();
     await expect(canvasElement.querySelectorAll('[data-slot="direction-cell"]')).toHaveLength(PLACEMENTS.length);
@@ -491,31 +516,37 @@ const VERTICAL_SCENES: VerticalScene[] = [
 ];
 
 export const TopToBottom: Story = {
-  render: () => (
-    <Gallery
-      title="from.dir “bottom” → to.dir “top” — vertical flow"
-      description={
-        <>
-          The direction Zach named directly: "I also want to see top to bottom." A small horizontal offset makes this
-          the vertical twin of the classic left-to-right riser (2 bends); a purely vertical pair does not get the same
-          discount, and a keep-out at the SAME tight gap forces a real detour rather than a tidy corner.
-        </>
-      }
-    >
-      {VERTICAL_SCENES.map((scene) => (
-        <DirectionCell
-          key={scene.key}
-          testKey={scene.key}
-          label={scene.label}
-          from={scene.from}
-          to={scene.to}
-          obstacles={scene.obstacles}
-          note={scene.note}
-          awkward={scene.awkward}
-        />
-      ))}
-    </Gallery>
-  ),
+  render: () => {
+    const frameSize = sharedFrameSize(
+      VERTICAL_SCENES.map((scene) => ({ from: scene.from, to: scene.to, obstacles: scene.obstacles })),
+    );
+    return (
+      <Gallery
+        title="from.dir “bottom” → to.dir “top” — vertical flow"
+        description={
+          <>
+            The direction Zach named directly: "I also want to see top to bottom." A small horizontal offset makes
+            this the vertical twin of the classic left-to-right riser (2 bends); a purely vertical pair does not get
+            the same discount, and a keep-out at the SAME tight gap forces a real detour rather than a tidy corner.
+          </>
+        }
+      >
+        {VERTICAL_SCENES.map((scene) => (
+          <DirectionCell
+            key={scene.key}
+            testKey={scene.key}
+            label={scene.label}
+            from={scene.from}
+            to={scene.to}
+            obstacles={scene.obstacles}
+            note={scene.note}
+            awkward={scene.awkward}
+            frameSize={frameSize}
+          />
+        ))}
+      </Gallery>
+    );
+  },
   play: async ({ canvasElement }) => {
     assertRulerUnchanged();
     await expect(canvasElement.querySelectorAll('[data-slot="direction-cell"]')).toHaveLength(VERTICAL_SCENES.length);

@@ -57,6 +57,7 @@ import {
   measureRoute,
   routeEnd,
   routeStart,
+  sharedFrameSize,
   type RouteMeasurement,
 } from "./elbowDirections.fixture";
 
@@ -299,43 +300,57 @@ function fanoutScene(dir: TraceDir, offset: number): { from: TraceTerminalSpec; 
   return { from, to };
 }
 
+/** Every scene this gallery renders, up front — `sharedFrameSize` needs the
+ * whole set before any one cell can pick its frame. This is the gallery the
+ * bug was found in: the centre (0-bend, 188px) cell's tiny autofit bounds
+ * were being magnified to fill its box while the flanking 2-bend cells got
+ * shrunk — backwards from the "compare bend counts without correcting for
+ * scale" promise `BuildElbowSceneOptions.distance` makes. */
+function fanOutScenes() {
+  return TRACE_DIRS.flatMap((dir) => FANOUT_OFFSETS.map((offset) => fanoutScene(dir, offset)));
+}
+
 export const FanOutPerDirection: Story = {
-  render: () => (
-    <Gallery
-      title="One source, three sinks — every from.dir"
-      description={
-        <>
-          Fan-out is the case where cables LEGITIMATELY share their first leg out of the port — this is the correct
-          shape, not the bundle-crossing defect a sibling gallery is checking for. The centre sink sits directly on the
-          source's own heading (0 bends); the two flanking sinks each cost one jog out and one jog back (2 bends). The{" "}
-          <code>bottom</code> row is the one nobody had looked at before this sweep.
-        </>
-      }
-    >
-      {TRACE_DIRS.map((dir) => (
-        <div key={dir} style={{ gridColumn: "1 / -1" }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)", margin: "4px 0" }}>
-            from.dir “{dir}”
+  render: () => {
+    const frameSize = sharedFrameSize(fanOutScenes());
+    return (
+      <Gallery
+        title="One source, three sinks — every from.dir"
+        description={
+          <>
+            Fan-out is the case where cables LEGITIMATELY share their first leg out of the port — this is the correct
+            shape, not the bundle-crossing defect a sibling gallery is checking for. The centre sink sits directly on
+            the source's own heading (0 bends); the two flanking sinks each cost one jog out and one jog back (2
+            bends). The <code>bottom</code> row is the one nobody had looked at before this sweep.
+          </>
+        }
+      >
+        {TRACE_DIRS.map((dir) => (
+          <div key={dir} style={{ gridColumn: "1 / -1" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)", margin: "4px 0" }}>
+              from.dir “{dir}”
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              {FANOUT_OFFSETS.map((offset) => {
+                const scene = fanoutScene(dir, offset);
+                const key = `fanout-${dir}-${offset}`;
+                return (
+                  <DirectionCell
+                    key={key}
+                    testKey={key}
+                    label={`${dir}, offset ${offset}px`}
+                    from={scene.from}
+                    to={scene.to}
+                    frameSize={frameSize}
+                  />
+                );
+              })}
+            </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-            {FANOUT_OFFSETS.map((offset) => {
-              const scene = fanoutScene(dir, offset);
-              const key = `fanout-${dir}-${offset}`;
-              return (
-                <DirectionCell
-                  key={key}
-                  testKey={key}
-                  label={`${dir}, offset ${offset}px`}
-                  from={scene.from}
-                  to={scene.to}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </Gallery>
-  ),
+        ))}
+      </Gallery>
+    );
+  },
   play: async ({ canvasElement }) => {
     assertRulerUnchanged();
     await expect(canvasElement.querySelectorAll('[data-slot="direction-cell"]')).toHaveLength(TRACE_DIRS.length * FANOUT_OFFSETS.length);
@@ -380,41 +395,49 @@ function faninScene(dir: TraceDir, offset: number): { from: TraceTerminalSpec; t
   return { from, to };
 }
 
+function fanInScenes() {
+  return TRACE_DIRS.flatMap((dir) => FANOUT_OFFSETS.map((offset) => faninScene(dir, offset)));
+}
+
 export const FanInPerDirection: Story = {
-  render: () => (
-    <Gallery
-      title="Three sources, one sink — every to.dir"
-      description={
-        <>
-          The mirror of fan-out. Convergence is not the same geometry problem as divergence — three cables merge
-          instead of splitting — so it is measured separately rather than assumed symmetric with the gallery above.
-        </>
-      }
-    >
-      {TRACE_DIRS.map((dir) => (
-        <div key={dir} style={{ gridColumn: "1 / -1" }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)", margin: "4px 0" }}>
-            to.dir “{dir}”
+  render: () => {
+    const frameSize = sharedFrameSize(fanInScenes());
+    return (
+      <Gallery
+        title="Three sources, one sink — every to.dir"
+        description={
+          <>
+            The mirror of fan-out. Convergence is not the same geometry problem as divergence — three cables merge
+            instead of splitting — so it is measured separately rather than assumed symmetric with the gallery above.
+          </>
+        }
+      >
+        {TRACE_DIRS.map((dir) => (
+          <div key={dir} style={{ gridColumn: "1 / -1" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)", margin: "4px 0" }}>
+              to.dir “{dir}”
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              {FANOUT_OFFSETS.map((offset) => {
+                const scene = faninScene(dir, offset);
+                const key = `fanin-${dir}-${offset}`;
+                return (
+                  <DirectionCell
+                    key={key}
+                    testKey={key}
+                    label={`${dir}, offset ${offset}px`}
+                    from={scene.from}
+                    to={scene.to}
+                    frameSize={frameSize}
+                  />
+                );
+              })}
+            </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-            {FANOUT_OFFSETS.map((offset) => {
-              const scene = faninScene(dir, offset);
-              const key = `fanin-${dir}-${offset}`;
-              return (
-                <DirectionCell
-                  key={key}
-                  testKey={key}
-                  label={`${dir}, offset ${offset}px`}
-                  from={scene.from}
-                  to={scene.to}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </Gallery>
-  ),
+        ))}
+      </Gallery>
+    );
+  },
   play: async ({ canvasElement }) => {
     assertRulerUnchanged();
     await expect(canvasElement.querySelectorAll('[data-slot="direction-cell"]')).toHaveLength(TRACE_DIRS.length * FANOUT_OFFSETS.length);
@@ -476,48 +499,67 @@ function obstacleScene(dir: TraceDir): { from: TraceTerminalSpec; to: TraceTermi
   return { from, to };
 }
 
+/** Both spans, every direction — one shared frame across narrow AND wide
+ * walls means the wide wall's dramatically longer detour reads as visibly
+ * bigger at the SAME scale, rather than each getting cropped to its own
+ * size and looking deceptively similar. */
+function obstacleScenes() {
+  return TRACE_DIRS.flatMap((dir) => {
+    const scene = obstacleScene(dir);
+    return [
+      { from: scene.from, to: scene.to, obstacles: [obstacleWall(dir, OBSTACLE_NARROW_SPAN)] },
+      { from: scene.from, to: scene.to, obstacles: [obstacleWall(dir, OBSTACLE_WIDE_SPAN)] },
+    ];
+  });
+}
+
 export const ObstaclePerDirection: Story = {
-  render: () => (
-    <Gallery
-      title="A wall between source and sink — every flow direction"
-      description={
-        <>
-          Same source, same sink, same distance every time — only the flow direction and the wall's own span change.
-          Both walls sit ON the direct line, so the detour shape (out, across, back, in) is identical either way; the
-          wide wall is the "tight enough to force a real detour" case — same 4 bends as the narrow one, more than
-          double the length.
-        </>
-      }
-    >
-      {TRACE_DIRS.map((dir) => {
-        const scene = obstacleScene(dir);
-        return (
-          <div key={dir} style={{ gridColumn: "1 / -1" }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)", margin: "4px 0" }}>
-              dir “{dir}”
+  render: () => {
+    const frameSize = sharedFrameSize(obstacleScenes());
+    return (
+      <Gallery
+        title="A wall between source and sink — every flow direction"
+        description={
+          <>
+            Same source, same sink, same distance every time — only the flow direction and the wall's own span
+            change. Both walls sit ON the direct line, so the detour shape (out, across, back, in) is identical
+            either way; the wide wall is the "tight enough to force a real detour" case — same 4 bends as the narrow
+            one, more than double the length.
+          </>
+        }
+      >
+        {TRACE_DIRS.map((dir) => {
+          const scene = obstacleScene(dir);
+          return (
+            <div key={dir} style={{ gridColumn: "1 / -1" }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)", margin: "4px 0" }}>
+                dir “{dir}”
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+                <DirectionCell
+                  testKey={`obstacle-narrow-${dir}`}
+                  label={`${dir}, narrow wall (${OBSTACLE_NARROW_SPAN}px)`}
+                  from={scene.from}
+                  to={scene.to}
+                  obstacles={[obstacleWall(dir, OBSTACLE_NARROW_SPAN)]}
+                  frameSize={frameSize}
+                />
+                <DirectionCell
+                  testKey={`obstacle-wide-${dir}`}
+                  label={`${dir}, wide wall (${OBSTACLE_WIDE_SPAN}px)`}
+                  from={scene.from}
+                  to={scene.to}
+                  obstacles={[obstacleWall(dir, OBSTACLE_WIDE_SPAN)]}
+                  awkward
+                  frameSize={frameSize}
+                />
+              </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-              <DirectionCell
-                testKey={`obstacle-narrow-${dir}`}
-                label={`${dir}, narrow wall (${OBSTACLE_NARROW_SPAN}px)`}
-                from={scene.from}
-                to={scene.to}
-                obstacles={[obstacleWall(dir, OBSTACLE_NARROW_SPAN)]}
-              />
-              <DirectionCell
-                testKey={`obstacle-wide-${dir}`}
-                label={`${dir}, wide wall (${OBSTACLE_WIDE_SPAN}px)`}
-                from={scene.from}
-                to={scene.to}
-                obstacles={[obstacleWall(dir, OBSTACLE_WIDE_SPAN)]}
-                awkward
-              />
-            </div>
-          </div>
-        );
-      })}
-    </Gallery>
-  ),
+          );
+        })}
+      </Gallery>
+    );
+  },
   play: async ({ canvasElement }) => {
     assertRulerUnchanged();
     await expect(canvasElement.querySelectorAll('[data-slot="direction-cell"]')).toHaveLength(TRACE_DIRS.length * 2);

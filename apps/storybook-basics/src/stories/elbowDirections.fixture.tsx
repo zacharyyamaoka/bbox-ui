@@ -223,22 +223,96 @@ function Keepout({ rect }: { rect: ElbowRect }) {
   );
 }
 
-/** Frame the cell on the route's own geometry, same rule as
- * `TraceElbow.stories.tsx`'s `viewBoxFor`: a route that overshoots the
- * nominal box (several direction pairs here legitimately do — that is the
- * whole point of sweeping "target behind the source") must stay fully
- * visible rather than clip the exact thing the cell exists to show. */
-function viewBoxFor(route: ElbowRoute, extra: readonly Point[], obstacles: readonly ElbowRect[]): string {
+const CELL_PAD = 26;
+
+/** A gallery-level shared frame — same width/height for every cell in one
+ * gallery, so px-per-unit is constant across the grid. See `sharedFrameSize`
+ * for how one gets computed, and `viewBoxFor` for how a cell uses it. */
+export interface SharedFrameSize {
+  width: number;
+  height: number;
+}
+
+/** The bare geometric extent of one cell's content — route points, its own
+ * terminals, and any obstacles — before padding. `viewBoxFor`'s per-cell
+ * autofit and `sharedFrameSize`'s gallery-level max both build from this
+ * SAME function so neither can quietly disagree about what "extent" means. */
+function cellExtent(
+  route: ElbowRoute,
+  extra: readonly Point[],
+  obstacles: readonly ElbowRect[],
+): { minX: number; maxX: number; minY: number; maxY: number } {
   const xs = [...route.points.map((p) => p.x), ...extra.map((p) => p.x)];
   const ys = [...route.points.map((p) => p.y), ...extra.map((p) => p.y)];
   for (const rect of obstacles) {
     xs.push(rect.x, rect.x + rect.w);
     ys.push(rect.y, rect.y + rect.h);
   }
-  const pad = 26;
-  const minX = Math.min(...xs) - pad;
-  const minY = Math.min(...ys) - pad;
-  return `${minX} ${minY} ${Math.max(...xs) + pad - minX} ${Math.max(...ys) + pad - minY}`;
+  return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+}
+
+/**
+ * Frame the cell. With no `frameSize` this is the original per-cell
+ * autofit: sized and centered on the route's OWN bounds, so a route that
+ * overshoots the nominal box (several direction pairs here legitimately do
+ * — that is the whole point of sweeping "target behind the source") stays
+ * fully visible rather than clipping the exact thing the cell exists to
+ * show.
+ *
+ * WHY frameSize exists: `BuildElbowSceneOptions.distance`'s own comment
+ * promises every cell renders at the SAME scale so bend counts are
+ * comparable at a glance — but per-cell autofit means a short/straight
+ * route (tiny bounds) gets magnified to fill its box while a long,
+ * many-bend neighbor gets shrunk, which is exactly backwards. `frameSize`
+ * (from `sharedFrameSize`, computed once per gallery over every cell it
+ * will contain) gives every cell the SAME width/height — constant
+ * px-per-unit — while still centering the frame on THIS cell's own content
+ * bounds rather than the gallery's, so a cell's own route can never be
+ * pushed outside it. The `Math.max` below is a defensive floor for a
+ * caller that passes a `frameSize` not actually derived from this cell's
+ * scene; the normal path never needs it, because `sharedFrameSize` already
+ * took the max over the same scenes.
+ */
+function viewBoxFor(
+  route: ElbowRoute,
+  extra: readonly Point[],
+  obstacles: readonly ElbowRect[],
+  frameSize?: SharedFrameSize,
+): string {
+  const { minX, maxX, minY, maxY } = cellExtent(route, extra, obstacles);
+  const ownWidth = maxX - minX + CELL_PAD * 2;
+  const ownHeight = maxY - minY + CELL_PAD * 2;
+  if (!frameSize) {
+    return `${minX - CELL_PAD} ${minY - CELL_PAD} ${ownWidth} ${ownHeight}`;
+  }
+  const width = Math.max(frameSize.width, ownWidth);
+  const height = Math.max(frameSize.height, ownHeight);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  return `${centerX - width / 2} ${centerY - height / 2} ${width} ${height}`;
+}
+
+/**
+ * Gallery-level pass: the shared frame size every cell in one gallery
+ * should render at — the max width and max height any INDIVIDUAL scene in
+ * `scenes` needs on its own (same padding `viewBoxFor`'s autofit uses), so
+ * feeding the result back into every `DirectionCell` in that gallery keeps
+ * every cell's own content inside it (each one's own need is <= the max)
+ * while every cell renders at the identical scale (every frame is the same
+ * size). Callers build `scenes` the same way they build the cells
+ * themselves, one call per gallery — see `ElbowDirectionMatrix.stories.tsx`
+ * / `ElbowFanOutDirections.stories.tsx` for the pattern.
+ */
+export function sharedFrameSize(scenes: readonly ElbowDirectionScene[]): SharedFrameSize {
+  let width = 0;
+  let height = 0;
+  for (const scene of scenes) {
+    const route = routeElbow(elbowInputFromTerminals(elbowRequestFor(scene)));
+    const { minX, maxX, minY, maxY } = cellExtent(route, [scene.from, scene.to], scene.obstacles ?? []);
+    width = Math.max(width, maxX - minX + CELL_PAD * 2);
+    height = Math.max(height, maxY - minY + CELL_PAD * 2);
+  }
+  return { width, height };
 }
 
 export interface DirectionCellProps {
@@ -264,18 +338,22 @@ export interface DirectionCellProps {
    * had more work to do, which the bend count right below it backs up.
    */
   awkward?: boolean;
+  /** Gallery-level shared frame from `sharedFrameSize` — every cell that
+   * gets the SAME value renders at the SAME scale. Omit for the original
+   * per-cell autofit (sized to this cell's own route alone). */
+  frameSize?: SharedFrameSize;
 }
 
 /** One route, its terminals, and a caption stating what was measured — the
  * cell every gallery in this sweep is made of. */
-export function DirectionCell({ testKey, label, from, to, obstacles, note, awkward }: DirectionCellProps) {
+export function DirectionCell({ testKey, label, from, to, obstacles, note, awkward, frameSize }: DirectionCellProps) {
   const scene: ElbowDirectionScene = obstacles ? { from, to, obstacles } : { from, to };
   const request = elbowRequestFor(scene);
   const route = routeElbow(elbowInputFromTerminals(request));
   const path = elbowPath(route);
   const measurement = measureRoute(route);
   const rects = obstacles ?? [];
-  const viewBox = viewBoxFor(route, [from, to], rects);
+  const viewBox = viewBoxFor(route, [from, to], rects, frameSize);
   const [, , vw, vh] = viewBox.split(" ").map(Number);
 
   return (
