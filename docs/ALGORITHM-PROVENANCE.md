@@ -154,3 +154,38 @@ re-verified here, every range opened, all correct. The real gap was narrower
 than it looked: missing **line numbers** on four intra-repo ports, missing
 **prior-art names** on the two files implementing published techniques, and no
 explicit "this is ours" on the one file that genuinely has no donor.
+
+## `apps/storybook-basics/src/scene` additions (2026-09-17, comparison-view port S1/S2)
+
+This document's title says `src/components`; these four files live in
+`src/scene` instead, so they get their own table rather than being folded
+into the one above. Donor is the SystemSketch checkout at
+`/home/bam/systemsketch`, read-only, at revision
+`10748b8ccdb374e71714f3d351abc43947ecfb0e` — the same revision
+`docs/COMPARISON-VIEW-PLAN.md` was written against. S1/S2 are that plan's
+§6 sizing table, rows 1–2.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `scene/wordDiff.ts` | (a) | SystemSketch `src/diff/wordDiff.ts` (197 lines) | Opened whole file; body diffed byte-for-byte against the donor after the port banner — identical |
+| `scene/fieldDiff.ts` | (a) | SystemSketch `src/diff/fieldDiff.ts` (208 lines) | Opened whole file; body diffed byte-for-byte against the donor after the port banner — identical |
+| `scene/lineDiff.ts` | (a) | SystemSketch `src/compare/lineDiff.ts` (163 lines) | Opened whole file; body diffed byte-for-byte against the donor after the port banner — identical |
+| `scene/sceneDiff.ts` | (a) + (c) | (a) the three-state MODEL and its WHY reasoning from SystemSketch `src/compare/compareModel.ts:1-42, 264-420`; the `withoutDiffState` RULE (not code) from `src/diff/clearDiffStates.ts:1-13`. (c) the actual code: `BlockScene`-shaped input, `asText`/field-diff helpers, and the two-resolver `portsOf` shape are new, written for this app's own scene contract | Opened all cited ranges; `compareModel.ts`'s tldraw-record-reading half (`RecordMap`/`recordsOfSnapshot`) was read and deliberately left behind, not ported — see the module's own header for why |
+
+**Tests.** `scene/wordDiff.test.ts` is a **verbatim port** of SystemSketch's
+`src/diff/wordDiff.test.ts` (the donor combines `wordDiff.ts` and
+`fieldDiff.ts` coverage in one file; both import specifiers resolve
+unchanged because both ported modules land as siblings here too) —
+diffed byte-for-byte against the donor after its own port banner,
+identical; 15/15 pass (`pnpm exec vitest --project=unit run
+src/scene/wordDiff.test.ts`). `scene/lineDiff.test.ts` and
+`scene/sceneDiff.test.ts` are **not** donor ports — verified 2026-09-17 that
+no dedicated test file for `lineDiff.ts` exists in the donor at all (`grep
+-rl "lineDiff\|stableJson\|collapseContext" src --include=*.test.ts` inside
+`/home/bam/systemsketch` returns nothing; it is exercised only indirectly
+through the tldraw-bound `CodeView.tsx` and through fixtures in
+`compareModel.test.ts`), and `sceneDiff.ts` has no donor file to have a test
+at all, being a re-expression. Both are written fresh against the ported/
+re-expressed source: 13/13 and 18/18 pass respectively. This closes the gap
+`docs/COMPARISON-VIEW-PLAN.md`'s own "What I could not verify" section
+named: "I did not run the donor's own test suites... green is not claimed."
