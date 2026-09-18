@@ -146,16 +146,43 @@ function boundaryTwins(root: HTMLElement): SVGPathElement[] {
 /* ------------------------------------------------------------------ */
 
 /**
- * The core's own twin and the boundary's twin, in the SAME subtree, from
- * the same props — so there is no question of the two having been given
- * different geometry. Assert the `d` strings are equal character for
- * character.
+ * The exact `d` strings the CORE's own hidden twin produced for
+ * `TRACE_CASES` (straight, elbow, curved), untunnelled then tunnelled —
+ * captured live off the rendered DOM immediately before
+ * docs/SKIN-AT-THE-EDGES-MIGRATION.md's M1 deleted that mechanism from
+ * `trace.tsx`.
+ *
+ * WHY hardcoded strings and not a live comparison: `BoundaryMatchesCoreExactly`
+ * used to read the core's OWN twin out of the DOM and diff the boundary's
+ * twin against it, live, in the same frame — an oracle with no risk of
+ * having been re-derived by the same hand that wrote the boundary. M1
+ * deleted the thing that oracle read (`trace.tsx` no longer renders a
+ * twin at all), so the evidence would be lost with it. These are that
+ * oracle's OUTPUT, frozen at the moment before deletion — not a
+ * re-implementation, a capture. Reproduce by checking out the commit
+ * before M1 and reading `path[data-slot="trace-line"][data-sketch="true"]`
+ * off this same `BoxStage`/`TraceStage` fixture.
+ */
+const GOLDEN_TRACE_D = [
+  // Untunnelled: straight, elbow, curved.
+  "M8 24Q24.52 24.56 32.51 23.98Q40.5 23.4 47.87 23.7Q55.24 24 63.62 23.6Q72 23.21 80.34 24.08Q88.67 24.95 96.54 23.88Q104.41 22.81 112.21 23.08Q120.01 23.35 127.53 23.31Q135.05 23.28 143.92 24.17Q152.8 25.07 160.56 25.19Q168.33 25.3 175.99 24.89Q183.65 24.48 191.38 23.92Q199.11 23.37 207.37 23.9Q215.62 24.44 223.81 24.22L232 24 M8 24Q24.1 24.89 32.45 24.7Q40.81 24.51 48.51 24.68Q56.22 24.85 63.87 24.06Q71.53 23.28 79.34 23.55Q87.16 23.82 95.6 23.55Q104.04 23.27 111.77 23.95Q119.5 24.63 128.38 24.54Q137.27 24.46 144.14 24.32Q151 24.18 159.1 24.5Q167.2 24.81 175.06 24.79Q182.92 24.77 191.17 24.51Q199.43 24.25 207.81 23.99Q216.2 23.74 224.1 23.87L232 24",
+  "M8 16Q24.65 15.17 32.33 15.37Q40.01 15.57 48.12 15.86Q56.22 16.16 63.61 16.25Q70.99 16.34 80.02 16.36Q89.05 16.39 96.66 15.79Q104.27 15.19 112.7 15.62Q121.14 16.05 121.08 22.54Q121.03 29.04 120.52 35.36Q120.02 41.69 120.19 48.87Q120.36 56.05 128.21 56.39Q136.06 56.73 144.35 56.05Q152.64 55.38 159.83 55.97Q167.01 56.56 175.86 56.67Q184.72 56.78 191.85 56.82Q198.98 56.86 206.96 56.11Q214.93 55.35 223.46 55.68L232 56 M8 16Q24.01 14.83 32.31 15.58Q40.6 16.34 48.08 16.01Q55.56 15.68 64.25 16.15Q72.94 16.62 80.26 15.89Q87.59 15.15 96.29 15.17Q104.98 15.18 112.14 15.07Q119.29 14.96 119.09 22.4Q118.89 29.84 119.27 36.22Q119.65 42.6 119.73 49.68Q119.81 56.77 128.37 56.6Q136.94 56.44 144.56 56.82Q152.17 57.21 160.37 56.16Q168.56 55.12 176.69 55.8Q184.81 56.48 192.88 56.05Q200.96 55.63 208.1 55.78Q215.24 55.93 223.62 55.97L232 56",
+  "M8 16Q23.25 16.38 30.95 17.3Q38.64 18.22 46.94 19.2Q55.24 20.17 62.45 21.04Q69.65 21.9 77.44 24.19Q85.23 26.48 91.95 28.02Q98.67 29.56 106.15 31.42Q113.63 33.28 119.77 35.61Q125.91 37.94 133.81 39.71Q141.71 41.48 148.47 43.47Q155.23 45.46 162.35 47.29Q169.48 49.12 177.55 50.6Q185.62 52.09 192.95 52.72Q200.27 53.35 208.31 55.01Q216.34 56.66 224.17 56.33L232 56 M8 16Q23.58 16.05 31.19 16.83Q38.79 17.6 46.72 18.67Q54.64 19.73 62.61 21.04Q70.57 22.35 76.96 24.06Q83.35 25.78 91.15 27.38Q98.95 28.98 105.32 31.8Q111.7 34.62 120.04 36.51Q128.39 38.4 134.59 39.91Q140.79 41.43 148.45 43.14Q156.11 44.85 162.8 47.3Q169.5 49.75 177.68 50.48Q185.87 51.21 192.69 52.84Q199.5 54.47 207.95 55.13Q216.4 55.8 224.2 55.9L232 56",
+  // Tunnelled: straight, elbow, curved — two mouths x two passes each.
+  "M8 24Q20.03 25.1 24.98 24.54Q29.93 23.99 35.97 24L42 24 M198 24Q208.9 24.87 214.54 24.91Q220.17 24.94 226.09 24.47L232 24 M8 24Q19.49 25.39 24.7 24.9Q29.9 24.42 35.95 24.21L42 24 M198 24Q209.59 23.24 215.69 23.64Q221.79 24.05 226.89 24.02L232 24",
+  "M8 16Q19.22 17.1 25.05 16.46Q30.89 15.81 36.44 15.91L42 16 M198 56Q209.13 56.63 215.41 56.1Q221.68 55.56 226.84 55.78L232 56 M8 16Q18.65 16.98 24.84 16.72Q31.03 16.47 36.52 16.23L42 16 M198 56Q209.56 55.65 214.68 55.53Q219.8 55.41 225.9 55.7L232 56",
+  "M8 16Q18.73 18.82 24.87 19.6Q31.02 20.39 36.24 21.18L41.47 21.98 M198.53 50.02Q210.25 52.25 215.82 53.36Q221.4 54.46 226.7 55.23L232 56 M8 16Q18.98 18.78 25.11 19.31Q31.23 19.84 36.35 20.91L41.47 21.98 M198.53 50.02Q209.3 51.73 214.65 53.07Q220 54.42 226 55.21L232 56",
+] as const;
+
+/**
+ * The BoUNDARY's twin against the FROZEN golden strings above — the
+ * byte-identity proof, kept alive after M1 deleted the core's half of the
+ * comparison. See `GOLDEN_TRACE_D`'s own header for why these are literals
+ * rather than a second live read.
  */
 export const BoundaryMatchesCoreExactly: Story = {
   render: () => (
-    // `suppressCrisp={false}` so nothing is hidden and both layers are
-    // readable in one pass.
-    <SketchAtEdge suppressCrisp={false}>
+    <SketchAtEdge>
       <div style={{ display: "flex", gap: 40, flexWrap: "wrap" }}>
         <Labelled title="Untunnelled">
           <TraceStage testid="match-plain" />
@@ -175,28 +202,21 @@ export const BoundaryMatchesCoreExactly: Story = {
       expect(boundaryTwins(canvasElement).length).toBeGreaterThan(0);
     });
 
-    const core = coreTwins(canvasElement);
     const edge = boundaryTwins(canvasElement);
+    expect(edge.length).toBe(TRACE_CASES.length * 2);
 
-    // Every crisp path got exactly one twin, and the core's own twin count
-    // matches — so neither side quietly skipped a case.
-    expect(edge.length).toBe(core.length);
-    expect(core.length).toBe(TRACE_CASES.length * 2);
-
-    // THE claim: byte-identical geometry.
-    for (let i = 0; i < core.length; i++) {
-      const want = core[i].getAttribute("d");
+    // THE claim: byte-identical to what the core's own mechanism drew,
+    // frozen the moment before this migration deleted it.
+    for (let i = 0; i < edge.length; i++) {
       const got = edge[i].getAttribute("d");
-      expect(want, `core twin ${i} has no d`).toBeTruthy();
-      expect(got, `boundary twin ${i} differs from the core's`).toBe(want);
+      expect(got, `boundary twin ${i} differs from the frozen golden path`).toBe(GOLDEN_TRACE_D[i]);
     }
 
     // And the boundary's twins are non-trivial — not a copy of the crisp
-    // path, which would pass the equality above only if the core were also
-    // broken.
+    // path, which would pass the equality above only by coincidence.
     const crisp = [
       ...canvasElement.querySelectorAll<SVGPathElement>(
-        'path[data-slot="trace-line"]:not([data-sketch]):not([' + SKETCH_TWIN_ATTR + "])",
+        'path[data-slot="trace-line"]:not([' + SKETCH_TWIN_ATTR + "])",
       ),
     ];
     expect(crisp.length).toBe(edge.length);
