@@ -17,6 +17,7 @@
 
 import type { BlockSide } from "../components/port.layout";
 import type { BlockView } from "../components/blockPort.layout";
+import type { BlockMembersLayout } from "../components/blockMembers";
 import type { BlockScene } from "../scene/scene";
 import type { WireStyleData } from "../scene/sceneWires";
 
@@ -34,6 +35,25 @@ export type HostNodeData = {
    *  bench's own device (Scene.stories.tsx), kept for the same reason:
    *  proc's own `in` dot stays visually clear of its member's dot. */
   anchorStart?: BlockSide[];
+  /**
+   * How THIS node's own members are laid out. Absent → `"stack"`, the
+   * behaviour every existing story already renders (`BlockNodeView`
+   * hardcoded it before this field existed) — so leaving it unset is
+   * byte-identical to before this lane. `"free"` opts a node into the
+   * `fit-to-content-hosts` lane's wiring: its members carry their own
+   * `position`, read as the member's (x, y) inside this node's members
+   * region — which is exactly `SceneNode.position`'s own documented
+   * contract (scene.ts:60-72, "the node's authored at-rest placement, in
+   * the PARENT's coordinate space when `parentId` is set"). That sentence
+   * predates this lane; nothing before it ever wrote or read a member's
+   * position, so free layout was contractually possible but never wired.
+   */
+  membersLayout?: BlockMembersLayout;
+  /** Fit this node's height to its free-mode members' measured extents
+   *  (`fitToContent.ts`'s `blockExpandedFitHeight`) instead of `data.h`.
+   *  Ignored unless `membersLayout === "free"`. See `nodeViews.tsx`'s
+   *  `BlockNodeView` for the wiring and the reentrancy guard. */
+  autoFit?: boolean;
   /* -- type: "glyph" ------------------------------------------------ */
   /** `@bbox-ui/glyph-content` grammar, e.g. `lucide:rocket`. */
   content?: string;
@@ -81,6 +101,37 @@ export const HOST_SCENE: HostScene = {
     { id: "e-val", source: "gain", sourceHandle: "val", target: "sink", targetHandle: "in" },
     { id: "e-cfg", source: "proc", sourceHandle: "aux", target: "sink", targetHandle: "cfg", data: { variant: "async" } },
   ],
+};
+
+/**
+ * The `fit-to-content-hosts` lane's own fixture (2026-09-18) — a second,
+ * dedicated literal rather than adding free-layout members to `HOST_SCENE`
+ * above: `HOST_SCENE` is asserted against by `SceneHosts.stories.tsx`
+ * (`expectSceneRendered`'s "kid rendered inside proc" with no fit/drag
+ * behaviour), and this lane's write set is `src/hosts/**` only — extending
+ * a fixture another lane's assertions already pin is exactly the
+ * "same-shared-literal" risk `HOST_SCENE`'s own doc warns H1 about, just
+ * inverted: touching it here would make THOSE assertions the ones at risk
+ * of drifting out from under a lane that never asked to change them.
+ *
+ * `sorter` is `membersLayout: "free"` + `autoFit: true` — the two fields
+ * this lane added — with two members, `ingest` and `classify`, each an
+ * ordinary `type: "block"` node whose `position` is read as its (x, y)
+ * inside `sorter`'s own members region (see `HostNodeData.membersLayout`'s
+ * doc). `classify` is the one every story below drags.
+ */
+export const DRAG_MEMBER_SCENE: HostScene = {
+  nodes: [
+    {
+      id: "sorter",
+      type: "block",
+      position: { x: 24, y: 24 },
+      data: { name: "sorter", view: "expanded", w: 300, membersLayout: "free", autoFit: true },
+    },
+    { id: "ingest", type: "block", parentId: "sorter", position: { x: 16, y: 16 }, data: { name: "ingest", view: "simple", w: 110, h: 44 } },
+    { id: "classify", type: "block", parentId: "sorter", position: { x: 150, y: 96 }, data: { name: "classify", view: "simple", w: 110, h: 44 } },
+  ],
+  edges: [],
 };
 
 /** Top-level = a canvas node of the host's own; members are the view

@@ -11,20 +11,24 @@
 // mapping. A third host imports this file and owns nothing but its
 // viewport.
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 import { Block } from "../components/block";
 import { BlockPort, type BlockEdgeSpec } from "../components/blockPort";
+import type { BlockMember } from "../components/blockMembers";
 import { CodeEditor } from "../components/codeEditor";
 import { Glyph } from "../components/glyph";
 import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
+import { resolveBlockHeight } from "../layout/fitToContent";
 import { ValueCapsule } from "../presets/value/value";
 import { childrenOf, type SceneNode, wiredPorts } from "../scene/scene";
 import { withWiredState } from "../scene/sceneWires";
+import { useAutoFitHeight } from "./blockAutoFit";
 import { type HostNodeData, type HostScene } from "./hostScene";
+import { useFreeMemberDrag } from "./memberDrag";
 
 /**
  * The story-lane decoration seam (2026-09-18, "final spec" lane, D7's
@@ -113,6 +117,26 @@ export function writeNodeData(scene: HostScene, nodeId: string, patch: Partial<H
   };
 }
 
+/**
+ * A free-layout member settling at rest, written into its OWN `position` —
+ * `SceneNode.position`'s already-documented meaning for a `parentId` node
+ * (scene.ts:60-72: "the node's authored at-rest placement, in the PARENT's
+ * coordinate space... a host mid-drag owns the moving copy and writes back
+ * here at rest"). `memberDrag.ts`'s `useFreeMemberDrag` is the "mid-drag"
+ * half; this is the "writes back here at rest" half. No-op, same
+ * referentially-honest shape as `writeNodeData`/`reorderNodePorts`, if the
+ * position did not actually change (a click that never moved, or a drag
+ * clamped straight back to where it started).
+ */
+export function moveMember(scene: HostScene, memberId: string, position: { x: number; y: number }): HostScene {
+  const node = scene.nodes.find((candidate) => candidate.id === memberId);
+  if (!node || (node.position.x === position.x && node.position.y === position.y)) return scene;
+  return {
+    ...scene,
+    nodes: scene.nodes.map((candidate) => (candidate.id === memberId ? { ...candidate, position } : candidate)),
+  };
+}
+
 export interface SceneNodeViewProps {
   scene: HostScene;
   node: SceneNode<HostNodeData>;
@@ -127,12 +151,68 @@ export interface SceneNodeViewProps {
   decorate?: Decorate;
 }
 
+/**
+ * `fit-to-content-hosts` lane, 2026-09-18: `membersLayout: "free"` opts a
+ * node into member-dragging + auto-fit height — see `HostNodeData`'s own
+ * doc in `hostScene.ts`. Every hook below is called UNCONDITIONALLY (rules
+ * of hooks forbid otherwise) but is INERT unless `isFree`/`autoFit`:
+ * `useAutoFitHeight({enabled: false})` is a no-op returning `null`, and
+ * `useFreeMemberDrag`'s state never moves unless `beginDrag` is actually
+ * wired to a pointerdown, which only happens in the `isFree` branch below.
+ * So a node with no `membersLayout` (every story that predates this lane)
+ * renders through the EXACT same `members`/`membersLayout="stack"`/
+ * `height={node.data.h}` path as before — verified by the full story
+ * suite staying green with none of those stories' own code touched.
+ */
 function BlockNodeView({ scene, node, wired, onSceneChange, decorate }: SceneNodeViewProps) {
   const decoration = decorate?.(node);
-  const members = childrenOf(scene, node.id).map((kid) => ({
-    id: kid.id,
-    content: <SceneNodeView scene={scene} node={kid} wired={wired} onSceneChange={onSceneChange} decorate={decorate} />,
-  }));
+  const isFree = node.data.membersLayout === "free";
+  const autoFit = isFree && node.data.autoFit === true;
+  const kids = childrenOf(scene, node.id);
+
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const drag = useFreeMemberDrag({ onDragEnd: (id, next) => onSceneChange?.(moveMember(scene, id, next)) });
+  // See `useAutoFitHeight`'s own doc for why this key — not just the
+  // ResizeObserver it also runs — is what makes a live drag track
+  // continuously rather than only catching up at release.
+  const measureKey = isFree
+    ? kids.map((kid) => {
+        const p = drag.liveFor(kid.id, kid.position);
+        return `${kid.id}:${p.x}:${p.y}`;
+      }).join(",")
+    : undefined;
+  const fitHeightPx = useAutoFitHeight({ rootRef, enabled: autoFit, measureKey });
+
+  const members: BlockMember[] = kids.map((kid) => {
+    const content = <SceneNodeView scene={scene} node={kid} wired={wired} onSceneChange={onSceneChange} decorate={decorate} />;
+    if (!isFree) return { id: kid.id, content };
+    const live = drag.liveFor(kid.id, kid.position);
+    return {
+      id: kid.id,
+      x: live.x,
+      y: live.y,
+      content: (
+        <div
+          data-slot="block-member-drag-handle"
+          data-dragging={drag.draggingId === kid.id || undefined}
+          // POINTER_OWNED_CLASS: this drag is bounded to the member's own
+          // box (ARCHITECTURE.md's "component-owned" gesture class), never
+          // the canvas underneath — see memberDrag.ts's own header. The
+          // SAME marker React Flow's `nodrag` filter and tldraw's
+          // `contentOwnsPress` (this file, `POINTER_OWNED_CLASS`'s own doc)
+          // already both honor, with zero per-host code added for it.
+          className={POINTER_OWNED_CLASS}
+          style={{ width: "max-content", cursor: drag.draggingId === kid.id ? "grabbing" : "grab", touchAction: "none" }}
+          onPointerDown={drag.beginDrag(kid.id, kid.position)}
+          onPointerMove={drag.onPointerMove}
+          onPointerUp={drag.onPointerUp}
+          onPointerCancel={drag.onPointerCancel}
+        >
+          {content}
+        </div>
+      ),
+    };
+  });
   const edges = Object.fromEntries(
     Object.entries(node.data.ports ?? {}).map(([side, portIds]) => [
       side,
@@ -156,19 +236,28 @@ function BlockNodeView({ scene, node, wired, onSceneChange, decorate }: SceneNod
       } satisfies BlockEdgeSpec,
     ]),
   );
-  return (
+  const height = autoFit ? resolveBlockHeight({ autoFit: true, fitHeightPx, manualHeightPx: node.data.h }) : node.data.h;
+
+  const block = (
     <BlockPort id={node.id} view={node.data.view ?? "simple"} edges={edges}>
       <Block
         header={node.data.name}
         width={node.data.w}
-        height={node.data.h}
+        height={height}
         members={members.length > 0 ? members : undefined}
-        membersLayout="stack"
+        membersLayout={isFree ? "free" : "stack"}
         memberGutter={36}
         diagnostics={decoration?.diagnostics}
       />
     </BlockPort>
   );
+
+  // `useAutoFitHeight` needs an ancestor to query `[data-slot="block"]`/
+  // `[data-slot="block-members"]` inside of, and `BlockPort`'s own root
+  // forwards no ref — so a `membersLayout: "free"` node gets ONE extra,
+  // unstyled wrapper div. Every other node (unset, or `"stack"`) returns
+  // `block` directly: zero DOM change from before this lane.
+  return isFree ? <div ref={rootRef}>{block}</div> : block;
 }
 
 /**
