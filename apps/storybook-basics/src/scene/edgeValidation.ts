@@ -85,8 +85,8 @@
 // (CLAUDE.md's write-set boundary: `src/interaction/**` is untouched).
 
 import type { Diagnostic } from "../components/highlighter";
-import { LINT_RULES, type LintScene, type PortsOf, type PortTypeOf, type TypeCompatible } from "./lint";
-import { portKey, type SceneEdgeEnds } from "./scene";
+import { LINT_RULES, type LintScene, type PortDirectionOf, type PortsOf, type PortTypeOf, type TypeCompatible } from "./lint";
+import { duplicateEdges, findCycles, portKey, type SceneEdgeEnds } from "./scene";
 
 /* ------------------------------------------------------------------ */
 /* The verdict — the silent case made unrepresentable (ruling 1)       */
@@ -103,15 +103,85 @@ import { portKey, type SceneEdgeEnds } from "./scene";
 export type ConnectionMessage = Omit<Diagnostic, "id">;
 
 /**
+ * Which way the allowed cable actually points, and how that was decided.
+ *
+ * WHY: docs/peps/0002-the-judge-owns-edge-orientation.md. The short version:
+ * a gesture names its ends in the order a person touched them, and that
+ * order is not the dataflow direction. Deciding legality under a polarity
+ * rule REQUIRES working out which end emits — so the judge already knows,
+ * and the only question was whether it returns that or throws it away and
+ * lets the caller guess. It guessed wrong twice, in two independent lanes.
+ */
+export interface ConnectionOrientation {
+  /** Spread-ready: `{ id, ...verdict.oriented.ends }` IS the edge to commit. */
+  readonly ends: SceneEdgeEnds;
+  /** `"polarity"` — both ends resolved a direction and it decided.
+   *  `"gesture"` — direction was unknown on at least one end, so the order
+   *  the candidate was written in stands. Never silent about which. */
+  readonly by: "polarity" | "gesture";
+  /** Did orienting FLIP the candidate? The backwards-edge signal. */
+  readonly reversed: boolean;
+}
+
+/**
  * Two outcomes, not three. `allowed: false` ALWAYS carries `refusal` — the
  * TypeScript discriminant makes the old silent case (`allowed: false`,
  * `refusal` absent) impossible to construct, not merely unused. See this
  * file's header for why that is a deliberate override of maxGraph's own
  * three-valued contract, not an oversight.
+ *
+ * `allowed: true` ALWAYS carries `oriented`, by the same discriminant
+ * trick and for the same reason: there is no way to read "yes" out of this
+ * function without also being handed the direction to commit it in, so a
+ * caller cannot write a backwards edge by forgetting a step. That is why
+ * there is no shared `ALLOWED` singleton any more — an allowed verdict is
+ * per-candidate data now, not a constant.
  */
-export type ConnectionVerdict = { readonly allowed: true } | { readonly allowed: false; readonly refusal: ConnectionMessage };
+export type ConnectionVerdict =
+  | { readonly allowed: true; readonly oriented: ConnectionOrientation }
+  | { readonly allowed: false; readonly refusal: ConnectionMessage };
 
-const ALLOWED: ConnectionVerdict = { allowed: true };
+/**
+ * Which rules gate. Every field is a PERMISSION the caller may withdraw or
+ * grant, shaped after the donor's own `EdgePolicy`
+ * (SystemSketch `src/settings/edgePolicy.ts`, reached from
+ * `connectionRules.ts:102-147`, opened) and its `REFUSAL_PERMISSION` map:
+ * one judge, one vocabulary, and a caller that wants different rules turns
+ * them off rather than forking a second engine. Forking a second engine is
+ * exactly what `batchWire.standIn.ts` was, and why it is now deleted.
+ *
+ * The DEFAULTS are today's shipped behaviour, unchanged, so no existing
+ * caller moves: `allowDuplicates` and `allowCycles` stay TRUE because this
+ * file's header already argues at length that neither may gate
+ * (`wiring.ts:20-22`'s permission-free stance; a feedback loop is a
+ * legitimate graph). `allowSamePolarity` is FALSE — the one behaviour
+ * change — but it is inert unless the caller supplies `directionOf`, which
+ * nothing did before 2026-09-18.
+ */
+export interface ConnectionPolicy {
+  /** Two sources, or two sinks. Needs `directionOf`; donor `same-polarity`. */
+  allowSamePolarity: boolean;
+  /** An edge whose two ends are the same node. */
+  allowSelfConnection: boolean;
+  /** 2+ producers into one sink port. `lint.ts`'s `many-to-one`. */
+  allowFanIn: boolean;
+  /** A second edge over an already-wired port pair. */
+  allowDuplicates: boolean;
+  /** A cable that closes a dependency loop. */
+  allowCycles: boolean;
+  /** Ends whose nodes sit under different parents. */
+  allowCrossScope: boolean;
+}
+
+/** Today's shipped behaviour, field by field. See `ConnectionPolicy`. */
+export const DEFAULT_CONNECTION_POLICY: ConnectionPolicy = Object.freeze({
+  allowSamePolarity: false,
+  allowSelfConnection: false,
+  allowFanIn: false,
+  allowDuplicates: true,
+  allowCycles: true,
+  allowCrossScope: true,
+});
 
 /** Options a caller may supply to shape validation — the same context a
  *  `lint.ts` rule reads (`LintRuleContext`), because `validateConnection`
@@ -120,6 +190,42 @@ export interface ValidateConnectionOptions {
   portsOf?: PortsOf;
   typeOf?: PortTypeOf;
   compatible?: TypeCompatible;
+  /** Port direction. Omitted, polarity contributes nothing and orientation
+   *  falls back to the gesture — the kit-wide "undefined = unknown, no
+   *  judgement" convention (`lint.ts`'s `PortsOf`). */
+  directionOf?: PortDirectionOf;
+  /** Which rules gate. Merged over `DEFAULT_CONNECTION_POLICY`. */
+  policy?: Partial<ConnectionPolicy>;
+}
+
+function refuse(ruleId: keyof typeof LINT_RULES, message: string): ConnectionVerdict {
+  return { allowed: false, refusal: { severity: LINT_RULES[ruleId].severity, message, code: ruleId } };
+}
+
+/**
+ * The candidate's own order, as an orientation — "nobody knew better, so
+ * the way it was written stands." The honest answer for any judge that
+ * cannot see port direction (a type-only judge, a host's extra policy),
+ * and the fallback `validateConnection` itself uses when `directionOf`
+ * resolves nothing. `by: "gesture"` is what makes that visible rather than
+ * letting an unknowing judge's guess pass for a decision.
+ */
+export function gestureOrientation(candidate: SceneEdgeEnds): ConnectionOrientation {
+  return {
+    ends: { source: candidate.source, sourceHandle: candidate.sourceHandle, target: candidate.target, targetHandle: candidate.targetHandle },
+    by: "gesture",
+    reversed: false,
+  };
+}
+
+/** The one refusal code with no `lint.ts` rule behind it — see the
+ *  `cross-scope` gate below for why it has no at-rest twin. Donor's own
+ *  word (`ConnectionRefusal`, connectionRules.ts:41). */
+export const CROSS_SCOPE: string = "no-shared-scope";
+
+/** Do `a` and `b` sit in one strongly connected component? */
+function mutuallyReachable(scene: LintScene, a: string, b: string): boolean {
+  return findCycles(scene).some((component) => component.includes(a) && component.includes(b));
 }
 
 /* ------------------------------------------------------------------ */
@@ -142,47 +248,103 @@ export function validateConnection(
   candidate: SceneEdgeEnds & { id: string },
   options: ValidateConnectionOptions = {},
 ): ConnectionVerdict {
+  const policy: ConnectionPolicy = { ...DEFAULT_CONNECTION_POLICY, ...options.policy };
+  const { directionOf } = options;
+
   // dangling-edge — EXPLAINED (ruling 1: every gate explains itself, this
-  // one included — the previous version of this file returned the silent
-  // case here specifically; see the header for why that changed). The
-  // rule's own message is already precise ("...names node \"ghost\",
-  // which is not in the scene"); reuse the first hit's message/severity
-  // exactly like self-connection and many-to-one already do below.
+  // one included; see the header for why that changed). Judged on the
+  // candidate AS WRITTEN: whether a port exists cannot depend on which way
+  // the cable ends up pointing.
   const danglingHits = LINT_RULES["dangling-edge"].run({ nodes: scene.nodes, edges: [candidate] }, { portsOf: options.portsOf });
-  if (danglingHits.length > 0) {
-    return { allowed: false, refusal: { severity: LINT_RULES["dangling-edge"].severity, message: danglingHits[0].message, code: "dangling-edge" } };
+  if (danglingHits.length > 0) return refuse("dangling-edge", danglingHits[0].message);
+
+  // self-connection — EXPLAINED. Also orientation-independent.
+  if (!policy.allowSelfConnection) {
+    const selfHits = LINT_RULES["self-connection"].run({ nodes: scene.nodes, edges: [candidate] });
+    if (selfHits.length > 0) return refuse("self-connection", selfHits[0].message);
   }
 
-  // self-connection — EXPLAINED.
-  const selfHits = LINT_RULES["self-connection"].run({ nodes: scene.nodes, edges: [candidate] });
-  if (selfHits.length > 0) {
-    return { allowed: false, refusal: { severity: LINT_RULES["self-connection"].severity, message: selfHits[0].message, code: "self-connection" } };
+  // polarity — EXPLAINED, and the gate that did not exist before
+  // 2026-09-18. Only the SAME-direction case refuses; a legal pair written
+  // backwards is oriented below rather than refused, which is the donor's
+  // own behaviour (`decideDirection`, connectionRules.ts:222-234).
+  const from = candidate.sourceHandle == null ? undefined : directionOf?.({ nodeId: candidate.source, portId: candidate.sourceHandle });
+  const to = candidate.targetHandle == null ? undefined : directionOf?.({ nodeId: candidate.target, portId: candidate.targetHandle });
+  if (!policy.allowSamePolarity && from !== undefined && from === to) {
+    const polarityHits = LINT_RULES.polarity.run({ nodes: scene.nodes, edges: [candidate] }, { directionOf });
+    return refuse("polarity", polarityHits[0].message);
   }
+
+  // ORIENT. Everything below asks about the cable that would actually be
+  // committed, not the order it happened to be drawn in — which is the
+  // whole point of the pep: `many-to-one` in particular was asking about
+  // `candidate.targetHandle`, so a backwards drag checked fan-in on the
+  // wrong end entirely.
+  const reversed = from !== undefined && to !== undefined && from === "sink" && to === "source";
+  const ends: SceneEdgeEnds = reversed
+    ? { source: candidate.target, sourceHandle: candidate.targetHandle, target: candidate.source, targetHandle: candidate.sourceHandle }
+    : { source: candidate.source, sourceHandle: candidate.sourceHandle, target: candidate.target, targetHandle: candidate.targetHandle };
+  const oriented: ConnectionOrientation = {
+    ends,
+    by: from !== undefined && to !== undefined && from !== to ? "polarity" : "gesture",
+    reversed,
+  };
+  const wire: SceneEdgeEnds & { id: string } = { id: candidate.id, ...ends };
+  const hypothetical: LintScene = { nodes: scene.nodes, edges: [...scene.edges, wire] };
 
   // many-to-one — EXPLAINED. Checked against the HYPOTHETICAL scene (the
   // candidate provisionally added) so the check reads "would this port end
   // up with 2+ producers", not "does it already have them" — a first wire
   // into an empty port must never be refused.
-  if (candidate.targetHandle != null) {
-    const hypothetical: LintScene = { nodes: scene.nodes, edges: [...scene.edges, candidate] };
-    const targetKey = portKey(candidate.target, candidate.targetHandle);
+  if (!policy.allowFanIn && wire.targetHandle != null) {
+    const targetKey = portKey(wire.target, wire.targetHandle);
     const manyToOneHits = LINT_RULES["many-to-one"].run(hypothetical).filter((hit) => hit.subject.id === targetKey);
-    if (manyToOneHits.length > 0) {
-      return { allowed: false, refusal: { severity: LINT_RULES["many-to-one"].severity, message: manyToOneHits[0].message, code: "many-to-one" } };
+    if (manyToOneHits.length > 0) return refuse("many-to-one", manyToOneHits[0].message);
+  }
+
+  // duplicate-edge — OFF by default (this file's header argues why:
+  // wiring.ts:20-22's permission-free stance). Reuses `duplicateEdges`,
+  // the same scene.ts function the lint rule wraps.
+  if (!policy.allowDuplicates) {
+    const shares = duplicateEdges(hypothetical).some((group) => group.some((edge) => edge.id === wire.id));
+    if (shares) return refuse("duplicate-edge", `Edge "${wire.id}" duplicates a wire already joining "${portKey(wire.source, wire.sourceHandle ?? "")}" and "${portKey(wire.target, wire.targetHandle ?? "")}"`);
+  }
+
+  // cycle — OFF by default (header: a feedback loop is a legitimate graph).
+  // EXACT, not approximate: adding source->target creates mutual
+  // reachability between those two nodes iff target could already reach
+  // source, so "same SCC after, not before" is precisely "this cable closed
+  // a loop". Reuses `findCycles` (Tarjan, scene.ts:288) verbatim.
+  if (!policy.allowCycles && wire.source !== wire.target) {
+    if (mutuallyReachable(hypothetical, wire.source, wire.target) && !mutuallyReachable(scene, wire.source, wire.target)) {
+      return refuse("cycle", `Edge "${wire.id}" closes a dependency loop between "${wire.source}" and "${wire.target}"`);
     }
   }
 
-  // type-mismatch — EXPLAINED, LAST. Only fires when `options.typeOf`
-  // resolves a vocabulary for BOTH ends (see lint.ts's own rule) — with no
-  // resolver supplied this contributes nothing, so every existing caller
-  // of this function is unaffected.
-  const typeHits = LINT_RULES["type-mismatch"].run(
-    { nodes: scene.nodes, edges: [candidate] },
-    { typeOf: options.typeOf, compatible: options.compatible },
-  );
-  if (typeHits.length > 0) {
-    return { allowed: false, refusal: { severity: LINT_RULES["type-mismatch"].severity, message: typeHits[0].message, code: "type-mismatch" } };
+  // cross-scope — OFF by default, and the ONE gate with no `lint.ts` twin.
+  // WHY it is prevention-only: at rest, whether a cable between two
+  // differently-parented nodes is an ERROR depends on a boundary-FACE
+  // concept this kit does not have. The donor's `no-shared-scope` falls out
+  // of `pairBlockFaces` (connectionRules.ts:164-169), which decides which
+  // face each end shows; with no faces there is nothing to say at rest, so
+  // this stays a permission a caller opts into rather than a finding the
+  // linter mints. Stated here rather than left silent, because every other
+  // gate in this function deliberately HAS an at-rest twin.
+  if (!policy.allowCrossScope) {
+    const parentOf = new Map(scene.nodes.map((node) => [node.id, node.parentId]));
+    if (parentOf.get(wire.source) !== parentOf.get(wire.target)) {
+      return { allowed: false, refusal: { severity: "error", message: `Edge "${wire.id}" joins "${wire.source}" and "${wire.target}", which sit in different scopes`, code: CROSS_SCOPE } };
+    }
   }
 
-  return ALLOWED;
+  // type-mismatch — EXPLAINED, LAST, and on the ORIENTED ends: "carries X
+  // into Y" is a directional sentence, so a backwards candidate would
+  // otherwise report its types the wrong way round.
+  const typeHits = LINT_RULES["type-mismatch"].run(
+    { nodes: scene.nodes, edges: [wire] },
+    { typeOf: options.typeOf, compatible: options.compatible },
+  );
+  if (typeHits.length > 0) return refuse("type-mismatch", typeHits[0].message);
+
+  return { allowed: true, oriented };
 }
