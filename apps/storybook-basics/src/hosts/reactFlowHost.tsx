@@ -45,7 +45,7 @@ import {
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { topLevelNodes, type HostScene } from "./hostScene";
-import { SceneNodeView, wiredPortsOf } from "./nodeViews";
+import { SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 
 /* ------------------------------------------------------------------ */
 /* Scene context — how the node renderer reaches the record             */
@@ -60,6 +60,7 @@ const HostSceneContext = createContext<{
   wired: ReadonlySet<string>;
   onSceneChange?(next: HostScene): void;
   resizable?: boolean;
+  decorate?: Decorate;
 } | null>(null);
 
 /* ------------------------------------------------------------------ */
@@ -270,7 +271,7 @@ function BboxNode({ id }: NodeProps) {
           }}
         />
       )}
-      <SceneNodeView scene={host.scene} node={node} wired={host.wired} onSceneChange={host.onSceneChange} />
+      <SceneNodeView scene={host.scene} node={node} wired={host.wired} onSceneChange={host.onSceneChange} decorate={host.decorate} />
       <MeasuredPortHandles nodeId={id} rootRef={rootRef} />
     </div>
   );
@@ -315,6 +316,9 @@ export interface ReactFlowHostProps {
   resizable?: boolean;
   /** Extra children mounted inside <ReactFlow> (a story's probe layer). */
   children?: ReactNode;
+  /** The story lane's paint seam — see `nodeViews.tsx`'s `Decorate`. Omit
+   *  for byte-identical output to before this prop existed. */
+  decorate?: Decorate;
 }
 
 /** Position changes only: mid-drag React Flow owns the moving copy and
@@ -331,9 +335,9 @@ function applyPositionChanges(scene: HostScene, changes: NodeChange[]): HostScen
   return nodes === scene.nodes ? scene : { ...scene, nodes };
 }
 
-export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children }: ReactFlowHostProps) {
+export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children, decorate }: ReactFlowHostProps) {
   const wired = useMemo(() => wiredPortsOf(scene), [scene]);
-  const context = useMemo(() => ({ scene, wired, onSceneChange, resizable }), [scene, wired, onSceneChange, resizable]);
+  const context = useMemo(() => ({ scene, wired, onSceneChange, resizable, decorate }), [scene, wired, onSceneChange, resizable, decorate]);
 
   // The decoration, not a translation: the scene node object itself passes
   // through (`{...node}`), proven assignable by scene.reactflow.test.ts;
