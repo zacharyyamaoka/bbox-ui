@@ -5,17 +5,8 @@ import { useDndContext, type DragEndEvent, type DragOverEvent } from "@dnd-kit/c
 import { python } from "@codemirror/lang-python";
 
 import { Block } from "../components/block";
-import { PortEdge, PortEdgeDndProvider, laneAvailability, type PortEdgeItem } from "../components/portEdge";
-import {
-  CONTAINER_PADDING,
-  SPACING_SCHEMES,
-  DEFAULT_ALIGN_GAP,
-  computeSlots,
-  groupingSetFromText,
-  defaultDistributionForEdges,
-  type Distribution,
-  type Size,
-} from "../components/portEdge.layout";
+import { PortEdge, PortEdgeDndProvider, type PortEdgeItem } from "../components/portEdge";
+import { CONTAINER_PADDING, SPACING_SCHEMES, DEFAULT_ALIGN_GAP, defaultDistributionForEdges, type Distribution, type Size } from "../components/portEdge.layout";
 import type { BlockSide, PortTextLayout } from "../components/port.layout";
 
 function required<T extends Element>(root: ParentNode, selector: string, what: string): T {
@@ -216,18 +207,16 @@ function SingleEdgeDemo() {
   const [labelSide, setLabelSide] = useState<"left" | "right">("right");
   const [labelOffset, setLabelOffset] = useState(false);
   const [labelRowSide, setLabelRowSide] = useState<"top" | "bot">("bot");
-  // Phase 4: the multi-line lane. Default ON — the point of this story is
-  // to show the feature working, not to make Zach turn it on himself to
-  // see it (follow-up feedback item 3).
+  // F-1 (docs/FEEDBACK-2026-09-17c-PLAN.md, superseding Phase 4's original
+  // shape): `editing` now ARMS click-to-edit on every port, rather than
+  // showing a rail-wide editor by itself — see `PortEdgeProps.editing`'s own
+  // doc in portEdge.tsx for the full redesign and the reported capability
+  // gap (the old multi-line paste/reorder lane has no trigger any more).
   const [editing, setEditing] = useState(false);
   const [pythonSyntax, setPythonSyntax] = useState(true);
 
   const edge: BlockSide = orientation === "column" ? "left" : "top";
   const textLayout: PortTextLayout = orientation === "column" ? (labelOffset ? (labelSide === "right" ? "rightOffset" : "leftOffset") : labelSide) : labelRowSide;
-
-  const itemIds = items.map((i) => i.id);
-  const slots = computeSlots(itemIds, groupingSetFromText(groups, itemIds).set, groupMode);
-  const lane = laneAvailability(orientation, mode, groupMode, slots);
 
   function handleModeChange(next: "auto" | "custom") {
     if (next === "custom") {
@@ -310,11 +299,13 @@ function SingleEdgeDemo() {
         />
       )}
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        {/* F-1: no `lane.available` gate any more — arming per-port
+         *  click-to-edit has none of the old multi-line lane's geometry
+         *  requirements (vertical edge, auto mode, no collapsed group), so
+         *  the toggle stays enabled on every orientation/mode/groupMode. */}
         <button
           type="button"
           data-testid="lane-toggle"
-          disabled={!lane.available}
-          title={lane.reason}
           onClick={() => setEditing((v) => !v)}
           style={{
             padding: "4px 10px",
@@ -322,12 +313,11 @@ function SingleEdgeDemo() {
             borderRadius: 6,
             border: "1px solid var(--border)",
             background: editing ? "var(--accent)" : "transparent",
-            color: lane.available ? "var(--foreground)" : "var(--muted-foreground)",
-            cursor: lane.available ? "pointer" : "not-allowed",
+            color: "var(--foreground)",
+            cursor: "pointer",
           }}
         >
-          {editing ? "Close multi-line editor" : "Edit as lines"}
-          {!lane.available ? ` (${lane.reason})` : ""}
+          {editing ? "Disable label editing" : "Enable label editing"}
         </button>
         <Checkbox label="Python syntax" checked={pythonSyntax} onChange={setPythonSyntax} />
       </div>
@@ -377,55 +367,111 @@ export const SingleEdge: Story = {
       expect(nowCards[0]?.textContent).not.toBe(firstIdBefore);
     });
 
-    // Phase 4 — the multi-line lane. P1: every line sits on its own dot.
-    const laneToggle = canvasElement.querySelector('[data-testid="lane-toggle"]');
-    if (!(laneToggle instanceof HTMLButtonElement)) throw new Error("expected the lane toggle button");
-    await expect(laneToggle.disabled).toBe(false);
-    await userEvent.click(laneToggle);
+    // F-1 (docs/FEEDBACK-2026-09-17c-PLAN.md): "I like the toggle but the
+    // actual ports should basically look identical. The only difference is
+    // when you click the port to edit it." — the toggle ARMS click-to-edit;
+    // it must not, by itself, paint anything.
+    const editToggle = canvasElement.querySelector('[data-testid="lane-toggle"]');
+    if (!(editToggle instanceof HTMLButtonElement)) throw new Error("expected the editing toggle button");
 
-    const editorHost = await waitFor(() => {
+    const rectOf = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height };
+    };
+    const restingLabels = Array.from(canvasElement.querySelectorAll('[data-slot="port-label-display"]'));
+    const restingText = restingLabels.map((el) => el.textContent);
+    const restingRects = restingLabels.map(rectOf);
+
+    // F1a: resting state is identical with the toggle off vs on, nothing
+    // clicked — same rects, same text, measured, not eyeballed.
+    await userEvent.click(editToggle);
+    await waitFor(() => {
+      const nowLabels = Array.from(canvasElement.querySelectorAll('[data-slot="port-label-display"]'));
+      expect(nowLabels.map((el) => el.textContent)).toEqual(restingText);
+      expect(nowLabels.map(rectOf)).toEqual(restingRects);
+    });
+
+    // F1b: arming alone mounts no floating editor over the rail — the old
+    // bug (152404.png) was exactly a `PortLaneOverlay` painted the instant
+    // the toggle flipped, with every label hidden under it.
+    expect(canvasElement.querySelector('[data-slot="port-edge-lane"]')).toBeNull();
+    expect(canvasElement.querySelector('[data-slot="code-editor"]')).toBeNull();
+
+    // F1c/F1d/F1e: click ONE port's label (index 2, "in" — not first or
+    // last, so a neighbour on both sides is in scope to prove untouched).
+    const targetIndex = 2;
+    const armedLabels = Array.from(canvasElement.querySelectorAll('[data-slot="port-label-display"]'));
+    const target = armedLabels[targetIndex];
+    if (!target) throw new Error("expected a port label to click");
+    const otherTextBefore = restingText.filter((_, i) => i !== targetIndex);
+    const otherRectsBefore = restingRects.filter((_, i) => i !== targetIndex);
+    const targetCardBefore = track.querySelectorAll('[data-slot="port-edge-card"]')[targetIndex];
+
+    await userEvent.click(target);
+
+    // F1c: exactly one CodeEditor mounts — this port's own, not a rail-wide
+    // one, and not one per port either.
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(1);
+    });
+
+    // F1d: the edited port's own display text is gone from the DOM while
+    // editing — not merely covered. One fewer `port-label-display` span,
+    // and the other 7 are untouched (rects and text).
+    const duringLabels = Array.from(canvasElement.querySelectorAll('[data-slot="port-label-display"]'));
+    expect(duringLabels).toHaveLength(restingLabels.length - 1);
+    expect(duringLabels.map((el) => el.textContent)).toEqual(otherTextBefore);
+    expect(duringLabels.map(rectOf)).toEqual(otherRectsBefore);
+
+    // Type a rename and commit with Enter — the single-line editor's own
+    // exit path (labeledPort.tsx's `DefaultPortLabel`).
+    const editorContent = await waitFor(() => {
       const el = canvasElement.querySelector('[data-slot="code-editor"] .cm-content');
-      if (!(el instanceof HTMLElement)) throw new Error("expected the lane's editable content");
+      if (!(el instanceof HTMLElement)) throw new Error("expected the port's own single-line editor");
       return el;
     });
+    await userEvent.click(editorContent);
+    await userEvent.keyboard("{Control>}{a}{/Control}renamed");
+    await userEvent.keyboard("{Enter}");
 
-    const centerY = (el: Element) => {
-      const r = el.getBoundingClientRect();
-      return r.top + r.height / 2;
-    };
     await waitFor(() => {
-      const dots = Array.from(canvasElement.querySelectorAll('[data-slot="port-dot"]'));
-      const lines = Array.from(canvasElement.querySelectorAll(".cm-line"));
-      expect(dots).toHaveLength(lines.length);
-      for (let i = 0; i < dots.length; i++) {
-        expect(Math.abs(centerY(dots[i]) - centerY(lines[i]))).toBeLessThanOrEqual(1);
-      }
+      expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(0);
     });
 
-    // P3: a real Enter mints exactly one new port.
-    const dotsBefore = canvasElement.querySelectorAll('[data-slot="port-dot"]').length;
-    await userEvent.click(editorHost);
-    await userEvent.keyboard("{End}{Enter}");
-    await waitFor(() => {
-      expect(canvasElement.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(dotsBefore + 1);
-    });
+    // F1d (return half): the display text is back, now the committed value.
+    const afterLabels = Array.from(canvasElement.querySelectorAll('[data-slot="port-label-display"]'));
+    expect(afterLabels).toHaveLength(restingLabels.length);
+    expect(afterLabels[targetIndex]?.textContent).toBe("renamed");
 
-    // Close — the per-port single-line labels return in the same frame,
-    // the lane's own editor unmounts.
-    await userEvent.click(laneToggle);
-    await waitFor(() => {
-      expect(canvasElement.querySelector('[data-slot="code-editor"]')).toBeNull();
-      expect(canvasElement.querySelectorAll('[data-slot="port-label"]').length).toBeGreaterThan(0);
-    });
+    // F1e: the port's own id survived the rename — proven by DOM identity,
+    // not by re-reading the label. `portEdge.tsx`'s `handlePortLabelWrite`
+    // matches the existing item by id and replaces only its `label`; React's
+    // `key={m.id}` on the card means the SAME element only survives a
+    // re-render when its id did not change. A minted id (the old lane's
+    // `reconcilePortLane` path) would have unmounted this node and mounted a
+    // new one in its place.
+    const targetCardAfter = track.querySelectorAll('[data-slot="port-edge-card"]')[targetIndex];
+    expect(targetCardAfter).toBe(targetCardBefore);
 
-    // P6: disabled, with a reason, in Row orientation — the control never
-    // just silently vanishes.
+    // Still no floating overlay at any point in this flow.
+    expect(canvasElement.querySelector('[data-slot="port-edge-lane"]')).toBeNull();
+
+    // The old multi-line lane's own row/column restriction is gone along
+    // with its only trigger — per-port editing has no axis requirement.
+    // Prove it rather than assume it: arm on a Row edge and click a label.
     const rowBtn = Array.from(canvasElement.querySelectorAll("button")).find((b) => b.textContent?.trim() === "Row");
     if (!rowBtn) throw new Error("expected the Row button");
     await userEvent.click(rowBtn);
+    await waitFor(() => expect(canvasElement.querySelector('[data-slot="port-edge"][data-edge="top"]')).not.toBeNull());
+    const rowLabel = canvasElement.querySelector('[data-slot="port-label-display"]');
+    if (!(rowLabel instanceof HTMLElement)) throw new Error("expected a port label on the row edge");
+    await userEvent.click(rowLabel);
     await waitFor(() => {
-      expect(laneToggle.disabled).toBe(true);
-      expect(laneToggle.title).toBe("a lane needs a vertical edge");
+      expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(1);
+    });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(0);
     });
   },
 };
