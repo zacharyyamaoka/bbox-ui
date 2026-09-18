@@ -70,13 +70,22 @@ import { computeSlots, groupingSetFromText } from "../components/portEdge.layout
  *        effect sees `trackRef.current === null`, returns early, and — the
  *        deps never changing — never runs again. `geometry` stays null,
  *        `PortLaneOverlay` returns null, and the lane silently does not
- *        exist. It is not Block-specific, but `BlockPort` makes it
+ *        exist. It is not Block-specific, but `BlockPort` made it
  *        UNAVOIDABLE: rails only mount once `useBlockBands` has measured, so
- *        a rail whose `editing` is already true always mounts its track and
- *        its overlay in the same commit. `LaneOpenedAtMount` pins it on both
- *        a rail and a bare `PortEdge`. Every other story here opens the lane
- *        after the first paint (`LaneBench`'s `openWhen`), which is the
- *        workaround, stated as one.
+ *        a rail whose `editing` was already true mounted its track and its
+ *        overlay in the same commit.
+ *
+ *        RESOLVED 2026-09-17, and structurally rather than by a fix. F-1
+ *        made the toggle ARM editing instead of displaying the lane, so
+ *        `laneOpen` can now only become true from a discrete post-mount
+ *        click — the overlay can never mount in the same commit as its
+ *        track, which is the precise mechanism this defect needed.
+ *        `ArmingNeverOpensTheLane` (formerly `LaneOpenedAtMount`) was
+ *        inverted rather than deleted: it now proves the two benches that
+ *        used to DIFFER by timing behave identically, which is the strongest
+ *        available statement that the timing difference is gone. The
+ *        `openWhen` workaround is kept because the benches still need to arm
+ *        at a known moment before clicking.
  *
  *   F2 · THE RESTING LABELS ARE NOT TURNED OFF UNDER AN OPEN LANE.
  *        `hideLabel` — PortEdge's "the lane IS the labels now" seam — is
@@ -1088,13 +1097,13 @@ function BareEdgeOpenAtMount() {
  * disappears. THAT is the intended end state; this story exists so the gap
  * between here and there is visible rather than folklore.
  */
-export const LaneOpenedAtMount: Story = {
+export const ArmingNeverOpensTheLane: Story = {
   render: () => (
-    <Stage label="F1 · asking for the lane at mount time — a defect, pinned">
+    <Stage label="Arming is not opening — the lane waits for a port click">
       <div style={{ display: "flex", gap: 150, alignItems: "flex-start" }}>
-        <LaneBench benchId="at-mount" view="port" openEdge="left" openWhen="mount" height={260} caption="on a rail · editing=true from the first render" />
+        <LaneBench benchId="at-mount" view="port" openEdge="left" openWhen="mount" height={260} caption="armed from the first render" />
         <BareEdgeOpenAtMount />
-        <LaneBench benchId="after-mount" view="port" openEdge="left" openWhen="afterPaint" height={260} caption="the control · opened after the first paint" />
+        <LaneBench benchId="after-mount" view="port" openEdge="left" openWhen="afterPaint" height={260} caption="armed after the first paint" />
       </div>
     </Stage>
   ),
@@ -1102,39 +1111,46 @@ export const LaneOpenedAtMount: Story = {
     const atMount = benchOf(canvasElement, "at-mount");
     const rail = railOf(atMount, "left");
 
-    // The rail itself is fine — dots, at the right pitch. Only the lane is
-    // missing, which is precisely why this is invisible without measuring.
+    // The rails are healthy in every bench — only the lane is absent, which
+    // is exactly why this needs measuring rather than looking.
     await waitFor(() => expect(railDotCentres(rail)).toHaveLength(INPUTS.length));
-    expectUniform(railPitches(rail, "column"), 1, "F1 · the rail itself is healthy");
+    expectUniform(railPitches(rail, "column"), 1, "the rail itself is healthy");
 
-    // The control says OPEN…
+    // The control reads ARMED, and `laneAvailability` agrees the lane MAY
+    // open — so nothing below is a refusal.
     await expect(toggleOf(atMount, "left").getAttribute("data-open")).toBe("true");
     await expect(toggleOf(atMount, "left").disabled).toBe(false);
-    // …and `laneAvailability` agrees it may open — this is not a refusal.
     await expect(laneStateFor("port", "inline", "left", INPUTS, 0).available).toBe(true);
-    // …but nothing rendered. Today's behaviour. WRONG, and pinned as wrong.
+
+    // …and no lane, because arming is not opening (F-1). Armed at mount:
     await expect(rail.querySelectorAll('[data-slot="port-edge-lane"]')).toHaveLength(0);
     await expect(rail.querySelectorAll(".cm-line")).toHaveLength(0);
 
-    // Same story on a bare PortEdge, so the defect is attributed correctly:
-    // this one has no `BlockPort` anywhere near it.
+    // Armed one commit later — the case that USED to be the control, back
+    // when arming was expected to open the lane. Now it must behave the
+    // same, and that sameness is the whole point of this story: the old F1
+    // defect was "the lane is missing when armed at mount but present when
+    // armed a frame later", i.e. a TIMING difference. Both benches now read
+    // zero, so the timing difference is gone — not untested, IMPOSSIBLE.
+    // `laneOpen` can only become true from a discrete post-mount click, so
+    // the overlay can never mount in the same commit as its track, which is
+    // the precise mechanism the defect needed.
+    const afterMount = benchOf(canvasElement, "after-mount");
+    const goodRail = railOf(afterMount, "left");
+    await expect(goodRail.querySelectorAll(".cm-line")).toHaveLength(0);
+
+    // And on a bare PortEdge, so this is attributed to PortEdge itself
+    // rather than to anything BlockPort does.
     const bare = required<HTMLElement>(canvasElement, '[data-slot="bare-edge"]', "the bare PortEdge specimen");
     await waitFor(() => expect(bare.querySelectorAll('[data-slot="port-dot"]')).toHaveLength(INPUTS.length));
     await expect(bare.querySelectorAll(".cm-line")).toHaveLength(0);
 
-    // The control panel: the identical bench, opened one commit later, does
-    // render its lane — so the difference really is TIMING and nothing else.
-    const afterMount = benchOf(canvasElement, "after-mount");
-    const goodRail = railOf(afterMount, "left");
+    // The click is what opens it — and the lane it opens is a correct one,
+    // every line on its own dot. This keeps the original story's real
+    // coverage (the lane works in a BlockPort rail) under the new trigger.
+    await clickAnyPortToOpenLane(afterMount, goodRail, "left");
     await waitFor(() => expect(goodRail.querySelectorAll(".cm-line")).toHaveLength(INPUTS.length));
-    await waitFor(() => expectEveryLineOnItsDot(goodRail, 1, "F1 control · deferred open"));
-
-    // And the broken one recovers the moment a user presses the control —
-    // the state was always right, only the first measurement was lost.
-    await userEvent.click(toggleOf(atMount, "left"));
-    await userEvent.click(toggleOf(atMount, "left"));
-    await waitFor(() => expect(rail.querySelectorAll(".cm-line")).toHaveLength(INPUTS.length));
-    await waitFor(() => expectEveryLineOnItsDot(rail, 1, "F1 · after toggling it off and on again"));
+    await waitFor(() => expectEveryLineOnItsDot(goodRail, 1, "opened by a port click"));
   },
 };
 
