@@ -64,6 +64,7 @@ import { LabeledPort } from "./labeledPort";
 import { Port, type PortState } from "./port";
 import { BLOCK_SIDES, type BlockSide, type PortSize } from "./port.layout";
 import { PortEdge, type PortEdgeItem, type PortEdgeProps } from "./portEdge";
+import type { Distribution } from "./portEdge.layout";
 import {
   PORT_EDGE_SLOT_MIN_PX,
   RAIL_CROSS_PX,
@@ -78,6 +79,10 @@ import {
 } from "./blockPort.layout";
 
 export type { BlockPortLayout, BlockView } from "./blockPort.layout";
+// D-5: the header-content inset a caller applies to its OWN header (see
+// blockPort.layout.ts's own doc) — re-exported here so a story only needs
+// one import path for everything this component's callers reach for.
+export { functionPortHeaderInsetPx } from "./blockPort.layout";
 
 /* ------------------------------------------------------------------ */
 /* Surface                                                             */
@@ -90,12 +95,24 @@ export interface BlockEdgeSpec {
   editing?: boolean;
   onEditingChange?(next: boolean): void;
   /**
+   * E-3 (Zach, 2026-09-17): "an explicit per-edge `distribution` from the
+   * caller always wins" over the population-derived default
+   * `railPlanFor` computes. A sibling field to `portEdgeProps`, not folded
+   * into it — `portEdgeProps.distribution` is one of the reach-past props
+   * the wrapper's own derivation deliberately overwrites (see that prop's
+   * own doc below), so an override that is meant to actually win needs its
+   * own, higher-precedence seam.
+   */
+  distribution?: Distribution;
+  /**
    * Reach-past overrides forwarded to the underlying `PortEdge`
    * (`textLayout`, `showCard`, `renderItem`, `laneLanguage`…). The
    * wrapper's OWN derivation — `edge`, `size`, `distribution`, `groups`,
    * `groupMode`, `showContainer`, `showCenterLine` — always wins over
    * these, because those are the view rule and the attachment geometry,
-   * which is the whole thing this component is for.
+   * which is the whole thing this component is for. (`distribution`
+   * itself has its own override seam above, for the one case — E-3 — where
+   * a caller legitimately needs to win.)
    */
   portEdgeProps?: Partial<PortEdgeProps>;
 }
@@ -298,8 +315,16 @@ export function BlockPort({
             itemIds: spec.items.map((i) => i.id),
             leadCount,
             collapsePorts: collapse,
+            // E-3: the whole block's populated set, not just `side` — see
+            // blockPort.layout.ts's own note on why a single edge cannot
+            // decide this alone.
+            populatedEdges: populated,
           });
-          return <BlockPortRail key={side} edge={side} spec={spec} plan={plan} bands={bands} diameter={diameter} />;
+          // E-3: an explicit caller `distribution` always wins over the
+          // population default above — the one field of the derived plan a
+          // caller may reach past (`BlockEdgeSpec.distribution`'s own doc).
+          const finalPlan = spec.distribution ? { ...plan, distribution: spec.distribution } : plan;
+          return <BlockPortRail key={side} edge={side} spec={spec} plan={finalPlan} bands={bands} diameter={diameter} />;
         })}
       {bands && functionPort && <BlockFunctionPort bands={bands} diameter={diameter} />}
     </div>
@@ -387,14 +412,47 @@ function BlockPortRail({
       </span>
     );
 
-  /** D-A7's seam: simple view's bare centred dot, standing for the wall. */
+  /**
+   * D-A7's seam: simple view's bare centred dot, standing for the wall —
+   * plus the "+X ports" count (Zach, 2026-09-17, screenshot 153001: "In
+   * simple view perhaps have option to show text here showing +X ports").
+   * `members` is every port this ONE dot stands in for, so `members.length`
+   * IS the true hidden count — no separate accounting needed, and nothing
+   * to keep in sync if a caller adds or removes an item on this wall.
+   *
+   * The count is an ABSOLUTELY POSITIONED overlay off the dot's own box —
+   * `LabeledPort`'s own pattern (labeledPort.tsx's B4 note), not a flex
+   * sibling. A flex sibling would widen this span, and the RAIL centres
+   * this whole span on the wall line (`alignItems:"center"` on the
+   * track's cross axis) — so the DOT itself would drift off the wall the
+   * moment the label made the span asymmetric (measured live: 23px off,
+   * failing `SimpleView`'s own wall-line assertion). Absolute positioning
+   * keeps the span's LAYOUT box exactly the dot's box, same as before this
+   * label existed.
+   */
   const renderCollapsed: PortEdgeProps["renderCollapsed"] = (members) => (
     <span
       data-slot="block-port-collapsed"
       data-collapsed-ports={members.map((m) => m.id).join(",")}
-      style={{ display: "inline-flex" }}
+      style={{ position: "relative", display: "inline-flex" }}
     >
       <Port state={collapsedState(members)} diameter={diameter} />
+      <span
+        data-slot="block-port-collapsed-count"
+        data-collapsed-count={members.length}
+        style={{
+          position: "absolute",
+          left: "calc(100% + 4px)",
+          top: "50%",
+          transform: "translateY(-50%)",
+          fontSize: 11,
+          lineHeight: 1,
+          whiteSpace: "nowrap",
+          color: "var(--muted-foreground)",
+        }}
+      >
+        +{members.length} ports
+      </span>
     </span>
   );
 

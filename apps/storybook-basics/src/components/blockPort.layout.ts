@@ -28,7 +28,7 @@
  * Insetting the border box by `RAIL_MAIN_INSET_PX` makes the stated rule the
  * measured one: first dot centre at `bandTop + slotMainPx / 2`, exactly.
  */
-import type { BlockSide } from "./port.layout";
+import { PORT_DIAMETERS, PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, type BlockSide, type PortSize } from "./port.layout";
 import { CONTAINER_BORDER, CONTAINER_PADDING, DEFAULT_ALIGN_GAP, type Distribution } from "./portEdge.layout";
 
 /* ------------------------------------------------------------------ */
@@ -161,6 +161,20 @@ export interface RailPlanInput {
    *  Simple face spreads its ports along the walls instead of collapsing
    *  them (donor `layoutBlock.ts:1286-1296`). */
   collapsePorts: boolean;
+  /**
+   * E-3 (Zach, 2026-09-17): every populated edge on the BLOCK, not just this
+   * one — "port" view's spacing default depends on the SET ("if port edges
+   * on all 4 sides... distribute and around. if port edges just on left or
+   * right... aligned to edge and to the start"), and a single edge cannot
+   * see its siblings to answer that on its own. Optional, defaulting to
+   * `[edge]` (this edge and no sibling), so an existing caller that only
+   * ever planned one edge at a time — `blockPort.layout.test.ts`'s own
+   * fixtures, `BlockPortLane.stories.tsx`'s lane-availability probe — keeps
+   * its prior single-edge reading with no call-site change required.
+   * `BlockPort` (blockPort.tsx) is the one caller that DOES see every edge,
+   * and always passes the real set.
+   */
+  populatedEdges?: BlockSide[];
 }
 
 /** Exactly the subset of `PortEdgeProps` a view rule decides, plus the two
@@ -189,6 +203,8 @@ export interface RailPlan {
  * |                  | (`planBodySlots`, `:461`), packed from the body top  |                                                            |
  * |                  | (`:1434-1435`)                                       |                                                            |
  * | port + offset    | outputs start at slot `inputs.length` (`:461`)       | right rail's `edgePadding = leadCount * (slot + gap)`      |
+ * | port + populated | a populated top/bottom wall anywhere on the block    | EVERY edge `distribute / space-around` (E-3 below)         |
+ * | top/bottom       |                                                       |                                                             |
  * | expanded         | evenly across the section (`:592`)                   | both rails `distribute / space-evenly`, body band          |
  * | spread-on-simple | walls, constant 18px end margin (`:1286-1296`)       | `distribute / space-between` + `RAIL_END_MARGIN_PX`        |
  *
@@ -197,14 +213,31 @@ export interface RailPlan {
  * it to the top of the rail) and `[free / 2]` for `space-evenly` — and the
  * donor's midpoint is the entire point of simple view.
  *
- * WHY top/bottom walls ignore `view` when choosing their band: a horizontal
- * rail has no "body band" to speak of — the donor spreads them along the
- * full wall with a constant end margin in every view
- * (`placeHorizontalRails`). Only the collapse case differs, and it differs
- * the same way on every wall.
+ * WHY top/bottom walls ignore `view` when choosing their BAND (not their
+ * distribution — see E-3 below): a horizontal rail has no "body band" to
+ * speak of — the donor spreads them along the full wall with a constant end
+ * margin in every view (`placeHorizontalRails`). Only the collapse case
+ * differs, and it differs the same way on every wall.
+ *
+ * E-3 (Zach, 2026-09-17): "if port edges on all 4 sides. then the edges
+ * should all be distribute and around. if port edges just on left or right,
+ * then it should be aligned to edge and to the start... (thats the classic
+ * port view of course then in expanded we do distribute)." So in PORT view
+ * specifically, the whole block's set of populated edges — `populatedEdges`
+ * — decides every populated edge's distribution, not the view alone: a
+ * populated top or bottom wall (including a row-axis edge's own trivial
+ * membership in that set — a top rail's plan IS itself "a populated top
+ * wall") switches every populated edge, left/right included, to
+ * `distribute/space-around`; left/right-only stays the existing
+ * `aligned/start` pairing. "if there is only 1 port it should be in the
+ * middle" needs no special case — `mainAxisPositions`' own `space-around`
+ * branch already centres a lone box (`portEdge.layout.ts`'s own docblock
+ * quotes the CSS spec on exactly this). "in expanded we do distribute" is
+ * an acknowledgement, not a second case to build — `view === "expanded"`
+ * already always distributes, below, untouched by this rule.
  */
 export function railPlanFor(input: RailPlanInput): RailPlan {
-  const { view, portLayout, edge, itemIds, leadCount, collapsePorts } = input;
+  const { view, portLayout, edge, itemIds, leadCount, collapsePorts, populatedEdges = [edge] } = input;
 
   if (view === "simple" && collapsePorts) {
     return {
@@ -222,8 +255,43 @@ export function railPlanFor(input: RailPlanInput): RailPlan {
     };
   }
 
-  // Spread-on-simple, and every horizontal wall: along the whole wall, with
-  // the donor's constant corner clearance.
+  if (view === "port") {
+    const hasHorizontalWall = populatedEdges.some((e) => e === "top" || e === "bottom");
+    if (hasHorizontalWall) {
+      const row = railAxisFor(edge) === "row";
+      return {
+        groups: "",
+        groupMode: "off",
+        distribution: { mode: "distribute", scheme: "space-around" },
+        // Row-axis rails keep spanning the whole block — the band a
+        // horizontal wall has always used (see the WHY above); column-axis
+        // rails stay in the body band exactly as the left/right-only case
+        // below does. Only the SCHEME changed, never where the rail sits.
+        band: row ? "block" : "body",
+        endMarginPx: row ? RAIL_END_MARGIN_PX : 0,
+        collapsed: false,
+      };
+    }
+    // Left/right only, no sibling top/bottom wall — the pre-E-3 pairing,
+    // unchanged.
+    const offset = portLayout === "offset" && edge === OFFSET_TRAILING_EDGE;
+    return {
+      groups: "",
+      groupMode: "off",
+      distribution: {
+        mode: "aligned",
+        anchor: "start",
+        gap: RAIL_GAP_PX,
+        edgePadding: offset ? offsetEdgePaddingPx(leadCount) : 0,
+      },
+      band: "body",
+      endMarginPx: 0,
+      collapsed: false,
+    };
+  }
+
+  // Spread-on-simple, and every horizontal wall OUTSIDE port view: along
+  // the whole wall, with the donor's constant corner clearance.
   if (view === "simple" || railAxisFor(edge) === "row") {
     return {
       groups: "",
@@ -235,28 +303,11 @@ export function railPlanFor(input: RailPlanInput): RailPlan {
     };
   }
 
-  if (view === "expanded") {
-    return {
-      groups: "",
-      groupMode: "off",
-      distribution: { mode: "distribute", scheme: "space-evenly" },
-      band: "body",
-      endMarginPx: 0,
-      collapsed: false,
-    };
-  }
-
-  // view === "port"
-  const offset = portLayout === "offset" && edge === OFFSET_TRAILING_EDGE;
+  // view === "expanded", column axis (row axis was already handled above)
   return {
     groups: "",
     groupMode: "off",
-    distribution: {
-      mode: "aligned",
-      anchor: "start",
-      gap: RAIL_GAP_PX,
-      edgePadding: offset ? offsetEdgePaddingPx(leadCount) : 0,
-    },
+    distribution: { mode: "distribute", scheme: "space-evenly" },
     band: "body",
     endMarginPx: 0,
     collapsed: false,
@@ -368,4 +419,42 @@ export function alignedFirstCentrePx(
 export function functionPortCenterPx(bands: BlockBands): { x: number; y: number } | null {
   if (bands.headerTop == null) return null;
   return { x: bands.blockLeft, y: (bands.headerTop + bands.bodyTop) / 2 };
+}
+
+/* ------------------------------------------------------------------ */
+/* functionPortHeaderInsetPx — where the header's OWN content starts     */
+/* (D-5)                                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * How far a header's own content must sit from the Block's left wall so it
+ * starts exactly where a body port's LABEL would start — not where the
+ * port's DOT does. Zach's screenshot (153855) draws this literally: a red
+ * line runs through "Planner" and through "gain"/"reset"/"pose" below it —
+ * the labels, not the dots — captioned "offset is same as ports.."
+ *
+ * A body port on the left wall centres its DOT on `blockLeft`
+ * (`functionPortCenterPx`'s own note; `railBoxFor`'s column-axis case puts
+ * every rail's cross-centre on the same line), and `LabeledPort`
+ * (labeledPort.tsx) anchors its label `PORT_RING_OVERHANG_PX +
+ * PORT_LABEL_GAP` clear of the dot's own RING, past the dot's radius — so
+ * the label's left edge sits exactly `radius + PORT_RING_OVERHANG_PX +
+ * PORT_LABEL_GAP` past `blockLeft`. That delta does not depend on the
+ * Block's box at all — the dot and the header both start flush on the same
+ * wall — so it is a closed form over the port's OWN diameter, not a value
+ * read off `BlockBands`, and it is exactly what "if there is no label then
+ * the bar content should start where the label WOULD start" asks for: the
+ * number is the same whether a real label is rendered or not.
+ *
+ * `BlockPort` itself never touches a header's content (D-A1's own rule —
+ * `Block` is composed from the outside) — this is the number a CALLER
+ * applies to its own header content, e.g. as a `<Bar style={{ paddingLeft:
+ * functionPortHeaderInsetPx(diameter) }}>`'s explicit inline override of
+ * `Bar`'s own `px-3` gutter (bar.tsx's own public `style` escape hatch,
+ * not a hardcoded pixel — see `BlockPort.stories.tsx`'s
+ * `FunctionPortHeaderInset`).
+ */
+export function functionPortHeaderInsetPx(diameter: PortSize = "md"): number {
+  const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
+  return diameterPx / 2 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
 }
