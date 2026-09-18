@@ -2,12 +2,16 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "../lib/utils";
 import {
+  DEFAULT_HIGHLIGHTER_KIND,
   DiagnosticFlag,
   DIAGNOSTIC_FLAG_SIZE_PX,
   diagnosticColorVar,
+  highlighterMaskFrameStyle,
+  highlighterStrokeOutlineStyle,
   maxDiagnosticSeverity,
   type Diagnostic,
-} from "./diagnostic";
+  type HighlighterKind,
+} from "./highlighter";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import {
   BLOCK_MEMBER_GAP_PX,
@@ -97,30 +101,42 @@ export interface BlockProps {
   showMembers?: boolean;
   showCards?: boolean;
   /**
-   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Block row).
-   * `error` gets a glow (a colour ring + soft wash PREPENDED to the resting
-   * shadow list) plus the corner `DiagnosticFlag`; `warning` gets the flag
-   * ALONE — no glow, because "warning must not shout" is the plan's own
-   * words for this row; `info` paints nothing at all, matching §5's
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Block row,
+   * amended by Zach's report feedback — see `HighlighterKind`'s own doc
+   * in ./highlighter.tsx). `error`/`warning` get a mark in whichever
+   * `highlighterKind` the caller asked for, plus the corner
+   * `DiagnosticFlag`; `info` paints nothing at all, matching §5's
    * board-scale calm rule. The flag carries a COUNT once the list is
    * longer than one (`DiagnosticFlag`'s own doc).
+   *
+   * The `"halo"` kind keeps its ORIGINAL, narrower rule — `error` alone,
+   * "warning must not shout" — because a soft ambient glow is genuinely
+   * loud; `"stroke"`/`"mask"` mark both severities uniformly (a crisp
+   * outline does not have the same shouting problem), matching how
+   * JointJS's own highlighters behave.
    */
   diagnostics?: Diagnostic[];
+  /** Which `HighlighterKind` draws the mark. Defaults to
+   *  `DEFAULT_HIGHLIGHTER_KIND` ("stroke") — Zach's own lean from the
+   *  report feedback; `"halo"` is the pre-existing treatment, kept as a
+   *  sibling, not deleted. */
+  highlighterKind?: HighlighterKind;
   /**
-   * Suppress the corner `DiagnosticFlag` while keeping the glow (default
+   * Suppress the corner `DiagnosticFlag` while keeping the mark (default
    * `true` — every existing caller unchanged). `ValueCapsule`
    * (presets/value/value.tsx) is the one caller that sets this `false`:
    * §5's own words are "no flag — a capsule is too small, the glow is the
-   * beacon and the message rides a hover Tooltip" — the glow is still
+   * beacon and the message rides a hover Tooltip" — the mark is still
    * this component's, the flag specifically is not.
    */
   showDiagnosticFlag?: boolean;
   /**
-   * Let `warning` earn the glow too (default `false` — Block's own row:
-   * "warning must not shout"). `ValueCapsule` sets this `true`: its OWN
-   * row reads "warning: amber glow", because a capsule has no flag at all
-   * to carry warning instead — the glow is the only channel left, so it
-   * has to carry both severities there. Block itself never sets this.
+   * Let `warning` earn the `"halo"` kind's mark too (default `false` —
+   * Block's own row: "warning must not shout"). Only meaningful with
+   * `highlighterKind="halo"` — `"stroke"`/`"mask"` already mark both
+   * severities regardless. `ValueCapsule` sets this `true` for its OWN
+   * row ("warning: amber glow"), because a capsule has no flag at all to
+   * carry warning instead. Block itself never sets this.
    */
   diagnosticWarningGlow?: boolean;
   /**
@@ -172,27 +188,43 @@ export function Block({
   showMembers = true,
   showCards = false,
   diagnostics,
+  highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
   showDiagnosticFlag = true,
   diagnosticWarningGlow = false,
   sketchSeed,
   showHitRegion = false,
 }: BlockProps) {
   const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
-  // "Warning must not shout" (§5's own words for this row): the glow is
-  // an error-only escalation by default, never amber — unless the caller
-  // (ValueCapsule) has no other channel and opts warning in.
-  const showGlow = diagnosticSeverity === "error" || (diagnosticSeverity === "warning" && diagnosticWarningGlow);
-  const showFlag = showDiagnosticFlag && (diagnosticSeverity === "error" || diagnosticSeverity === "warning");
+  const markedSeverity = diagnosticSeverity !== "info" ? diagnosticSeverity : undefined;
+  // "Warning must not shout" (§5's own words for this row) is the
+  // "halo" kind's OWN, narrower rule — an error-only escalation by
+  // default, never amber, unless the caller (ValueCapsule) has no other
+  // channel and opts warning in. `stroke`/`mask` mark both severities
+  // uniformly — a crisp outline is not the loud thing "must not shout"
+  // was written about.
+  const showGlow =
+    highlighterKind === "halo" &&
+    (markedSeverity === "error" || (markedSeverity === "warning" && diagnosticWarningGlow));
+  const showStroke = highlighterKind === "stroke" && markedSeverity != null;
+  const showMask = highlighterKind === "mask" && markedSeverity != null;
+  const showFlag = showDiagnosticFlag && markedSeverity != null;
   // Half the flag's own diameter pokes outside the border — "straddling
   // the corner the way wall ports straddle walls" (§5). `overflowClipMargin`
   // below has to widen to let it, exactly the mechanism already in place
   // for the sketch outline's own bleed (this file's existing WHY on
-  // `overflow: clip`).
+  // `overflow: clip`). The "mask" kind renders a SIBLING frame (below) that
+  // pokes out by the same amount for the same reason; "stroke" needs no
+  // widening at all — a CSS `outline` paints outside the border box but is
+  // NOT part of what the element's own `overflow` clips (same rule that
+  // already let the pre-existing glow's box-shadow skip this entirely).
   const flagOverhangPx = DIAGNOSTIC_FLAG_SIZE_PX / 2;
+  const MASK_OFFSET_PX = 4;
+  const maskOverhangPx = showMask ? MASK_OFFSET_PX : 0;
   return (
     <div
       data-slot="block"
       data-diagnostic={diagnosticSeverity}
+      data-highlighter-kind={markedSeverity ? highlighterKind : undefined}
       className={cn(
         "relative flex flex-col text-sm",
         // Text colour is a skin token because a skin may remove the
@@ -232,11 +264,13 @@ export function Block({
         borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
         overflow: "clip",
         // Widened to let the corner flag straddle the border (see
-        // `flagOverhangPx` above) — the same clip-margin mechanism this
-        // rule already uses for the sketch outline's own bleed; the two
-        // reasons to widen it are independent, so this takes whichever is
-        // larger rather than stacking them.
-        overflowClipMargin: `${BLOCK_BORDER_PX + Math.max(SKETCH_OUTLINE_BLEED_PX, showFlag ? flagOverhangPx : 0)}px`,
+        // `flagOverhangPx` above) and, with `highlighterKind="mask"`, the
+        // sibling mask frame (below) poke out too — the same clip-margin
+        // mechanism this rule already uses for the sketch outline's own
+        // bleed; every reason to widen it is independent, so this takes
+        // whichever is largest rather than stacking them. `"stroke"` needs
+        // no widening — see this file's own WHY on `showStroke` above.
+        overflowClipMargin: `${BLOCK_BORDER_PX + Math.max(SKETCH_OUTLINE_BLEED_PX, showFlag ? flagOverhangPx : 0, maskOverhangPx)}px`,
         // PREPENDED ahead of the resting `shadow-[…]` utility (§3: "outer
         // halo... prepended") — an inline `boxShadow` beats a class at
         // equal specificity by cascade ORDER regardless, so this only sets
@@ -245,11 +279,15 @@ export function Block({
         // before this axis existed. The wash is a soft, blurred colour-mix
         // of the SAME token as the ring, never a hardcoded red/amber — dark
         // mode gets the dark token variant for free.
-        ...(showGlow && diagnosticSeverity
+        ...(showGlow && markedSeverity
           ? {
-              boxShadow: `0 0 0 1.5px ${diagnosticColorVar(diagnosticSeverity)}, 0 0 18px color-mix(in srgb, ${diagnosticColorVar(diagnosticSeverity)} 45%, transparent), var(--bbox-skin-shadow, 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1))`,
+              boxShadow: `0 0 0 1.5px ${diagnosticColorVar(markedSeverity)}, 0 0 18px color-mix(in srgb, ${diagnosticColorVar(markedSeverity)} 45%, transparent), var(--bbox-skin-shadow, 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1))`,
             }
           : null),
+        // `"stroke"` (HighlighterKind's own doc): a plain CSS outline, the
+        // cheap JointJS-style approximation — same corner radius as the
+        // box itself, not truly equidistant on a rounded rect.
+        ...(showStroke && markedSeverity ? highlighterStrokeOutlineStyle(diagnosticColorVar(markedSeverity), 4) : null),
         ...style,
       }}
     >
@@ -270,6 +308,17 @@ export function Block({
         stretch={height === undefined}
         seed={sketchSeed ?? `${width}x${height ?? "auto"}`}
       />
+      {showMask && markedSeverity && (
+        // `"mask"` (HighlighterKind's own doc): a sibling frame whose
+        // `border-radius` grows by EXACTLY the offset — the Minkowski-sum
+        // arithmetic that makes this genuinely equidistant at the corners,
+        // unlike `"stroke"`'s plain `outline-offset` above.
+        <div
+          data-slot="block-highlighter-mask"
+          aria-hidden
+          style={highlighterMaskFrameStyle(diagnosticColorVar(markedSeverity), MASK_OFFSET_PX, "var(--bbox-skin-radius, var(--radius-lg))")}
+        />
+      )}
       {showFlag && diagnostics && (
         // Straddles the top-right corner — half in, half out — the same
         // convergence Appendix B's own table names (maxGraph's

@@ -43,7 +43,7 @@ import type { CSSProperties } from "react";
 import { Block } from "../../components/block";
 import { BlockPort, type BlockEdgeSpec } from "../../components/blockPort";
 import { CodeEditor, type CodeEditorDiagnostic, type CodeEditorProps } from "../../components/codeEditor";
-import { maxDiagnosticSeverity, type Diagnostic } from "../../components/diagnostic";
+import { maxDiagnosticSeverity, type Diagnostic, type HighlighterKind } from "../../components/highlighter";
 import type { PortSize } from "../../components/port.layout";
 import type { PortEdgeItem } from "../../components/portEdge";
 
@@ -132,6 +132,9 @@ export interface ValueCapsuleProps {
   /** The squiggled character range within `value`, when `diagnostics` is
    *  set. Omit to mark the whole expression. */
   diagnosticRange?: { from: number; to: number };
+  /** Forwarded to `Block` — see `BlockProps.highlighterKind`'s own doc.
+   *  Defaults to `DEFAULT_HIGHLIGHTER_KIND` ("stroke") there when omitted. */
+  highlighterKind?: HighlighterKind;
 }
 
 export function ValueCapsule({
@@ -149,6 +152,7 @@ export function ValueCapsule({
   style,
   diagnostics,
   diagnosticRange,
+  highlighterKind,
 }: ValueCapsuleProps) {
   const edges: Partial<Record<"left" | "right", BlockEdgeSpec>> = {};
   if (writers && writers.length > 0) edges.left = { items: writers };
@@ -165,7 +169,8 @@ export function ValueCapsule({
         width={width}
         height={height}
         diagnostics={diagnostics}
-        // §5: "no flag — a capsule is too small". The glow above is still
+        highlighterKind={highlighterKind}
+        // §5: "no flag — a capsule is too small". The mark above is still
         // Block's own; only the corner chip is suppressed here.
         showDiagnosticFlag={false}
         // §5's OWN row for this preset: "warning: amber glow" — unlike

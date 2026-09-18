@@ -67,7 +67,7 @@ import { externalSync, singleLineGuard } from "./codeEditorGuards";
 import { codeEditorHighlightStyle } from "./codeEditorHighlight";
 import { codeEditorWidthPx } from "./codeEditorLayout";
 import { codeEditorThemeVars, type CodeEditorTheme } from "./codeEditorTheme";
-import type { DiagnosticSeverity } from "./diagnostic";
+import type { DiagnosticSeverity } from "./highlighter";
 
 /** The horizontal padding baked into `.bbox-code-editor` in codeEditor.css —
  * kept as a constant here too so `columns`'s pixel maths (codeEditorLayout.ts)

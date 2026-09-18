@@ -61,7 +61,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CodeEditor } from "./codeEditor";
-import type { Diagnostic } from "./diagnostic";
+import type { Diagnostic } from "./highlighter";
 import { LabeledPort } from "./labeledPort";
 import { SketchOutline } from "../skin/sketchOutline";
 import type { PortState } from "./port";

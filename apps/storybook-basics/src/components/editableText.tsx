@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { BAR_SIZE_TO_EDITABLE_TEXT_SIZE, useBarSize } from "./barSize";
-import { diagnosticUnderlineStyle, maxDiagnosticSeverity, type Diagnostic } from "./diagnostic";
+import { diagnosticUnderlineStyle, maxDiagnosticSeverity, type Diagnostic } from "./highlighter";
 import {
   EDITABLE_TEXT_FONT_STACKS,
   editableTextAlignItems,
