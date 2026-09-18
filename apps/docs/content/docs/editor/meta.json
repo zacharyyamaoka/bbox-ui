@@ -1,7 +1,6 @@
 {
   "title": "Editor Components",
   "pages": [
-    "index",
     "inspector",
     "glyph-picker",
     "autocomplete-menu",

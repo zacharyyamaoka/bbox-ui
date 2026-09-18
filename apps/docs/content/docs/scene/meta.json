@@ -1,4 +1,4 @@
 {
   "title": "Scene",
-  "pages": ["index", "block-scene", "trace-math", "tidy"]
+  "pages": ["block-scene", "trace-math", "tidy"]
 }
