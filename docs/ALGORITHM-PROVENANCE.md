@@ -189,3 +189,29 @@ at all, being a re-expression. Both are written fresh against the ported/
 re-expressed source: 13/13 and 18/18 pass respectively. This closes the gap
 `docs/COMPARISON-VIEW-PLAN.md`'s own "What I could not verify" section
 named: "I did not run the donor's own test suites... green is not claimed."
+
+---
+
+## `src/skin` — the sketch skin
+
+Added 2026-09-17 by the skin-at-the-edges lane, which found this document
+scoped to `src/components` and therefore covering **none** of `src/skin/`.
+That was a gap in the index, not in the code: `sketchPath.ts` already
+carries an unusually thorough in-file header naming exact tldraw module
+paths, with every divergence marked `DEVIATION` and reasoned. The rows
+below make it findable from here.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `skin/sketchPath.ts` | (a) + (c) | (a) tldraw 5.3.2 `rng` ported verbatim; `toDrawD`'s displacement model from `lib/shapes/shared/PathBuilder.mjs`, `lib/shapes/geo/GeoShapeBody.mjs`. (c) `sketchWobbleFor`, `SKETCH_EDGE_POINTS`, `smoothThrough`, `flattenPathData` are ours — marked `DEVIATION` in-file with the calibration reasoning | In-file header cites the exact tldraw module paths; deviations self-declared |
+| `skin/sketchOutline.tsx` | (a) | `packages/bbox-ui/src/sketchOutline.tsx` @ `c83c8b2`, byte-identical body | Header states the verbatim port |
+| `skin/sketchAtEdge.ts` | (c) + model | (c) the DOM walk, the twin protocol and the measured seeding are **ours, ad hoc**. Model only: SystemSketch keeps hand-drawn at the host renderer via tldraw's own `dash: "draw"` shape prop — `/home/bam/systemsketch/src/inspector/inspectorModel.ts:742`, read read-only 2026-09-17 | Donor line opened; SystemSketch confirmed to carry **zero** custom sketch geometry — no roughjs, no `feTurbulence` |
+
+**Why `sketchAtEdge.ts` is honestly "ours".** No library was found that
+does this: a post-layout DOM pass that appends drawn twins keyed on a
+`data-slot` contract. The alternative that *does* exist — an SVG
+`feTurbulence` displacement filter — was built and rejected on measured
+grounds, not taste: it erodes the stroke into a thin broken line, cannot
+produce a second pass (countable: tldraw's look needs two or more `M`
+commands, a filter yields exactly one), cannot pin endpoints, and visibly
+distorts label text. See `docs/peps/0001-sketch-skin-at-the-boundary.md`.
