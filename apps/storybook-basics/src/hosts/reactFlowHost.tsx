@@ -32,6 +32,7 @@ import {
   Background,
   Controls,
   Handle,
+  NodeResizer,
   Position,
   ReactFlow,
   useUpdateNodeInternals,
@@ -58,6 +59,7 @@ const HostSceneContext = createContext<{
   scene: HostScene;
   wired: ReadonlySet<string>;
   onSceneChange?(next: HostScene): void;
+  resizable?: boolean;
 } | null>(null);
 
 /* ------------------------------------------------------------------ */
@@ -224,11 +226,60 @@ function BboxNode({ id }: NodeProps) {
       // hosts with a drag gesture.
       style={{ position: "relative", padding: node.type === "code" ? 10 : 0 }}
     >
+      {host.resizable && (node.type ?? "block") === "block" && (
+        // Resize is the HOST's gesture (it spans the node's own box against
+        // the canvas), and `NodeResizer` is React Flow's stock control for
+        // it — nothing hand-rolled. The result is written back into the
+        // scene as data (`w`/`h` + the new at-rest position), which is the
+        // same write-back seam every other interaction uses. `isVisible`
+        // unconditionally because this host deliberately does not mirror
+        // React Flow's selection state into the scene record; a phase-2
+        // host that tracks selection can gate the handles on it.
+        // Rotation has NO stock React Flow control (their rotatable node is
+        // a documented custom example, not a shipped component) — reported
+        // as a finding rather than built here.
+        //
+        // WHY onResizeEnd and not onResize: the scene doc's own rule — "a
+        // host mid-drag owns the moving copy and writes back here at
+        // rest". Writing per-move was tried first and feeds back: each
+        // write re-renders the Block at the new `w`/`h`, XYResizer's
+        // gesture math then measures the moved box mid-gesture, and the
+        // node collapses to its minimum within a few frames (driven live,
+        // 2026-09-17). One write at release has no loop to enter.
+        <NodeResizer
+          isVisible
+          minWidth={RESIZE_MIN_WIDTH}
+          minHeight={RESIZE_MIN_HEIGHT}
+          onResizeEnd={(_event, params) => {
+            // A gesture that started before React Flow MEASURED the node
+            // reports start values of 0 (`node.measured.width ?? 0` in
+            // XYResizer) and can end below its own minimums — writing that
+            // back collapses the Block to nothing (driven live,
+            // 2026-09-17: inline width 0px after an early drag). A result
+            // the resizer's own constraints could never legitimately
+            // produce is a mismeasured gesture, not a resize — drop it.
+            if (params.width < RESIZE_MIN_WIDTH || params.height < RESIZE_MIN_HEIGHT) return;
+            host.onSceneChange?.({
+              ...host.scene,
+              nodes: host.scene.nodes.map((candidate) =>
+                candidate.id === id
+                  ? { ...candidate, position: { x: params.x, y: params.y }, data: { ...candidate.data, w: params.width, h: params.height } }
+                  : candidate,
+              ),
+            });
+          }}
+        />
+      )}
       <SceneNodeView scene={host.scene} node={node} wired={host.wired} onSceneChange={host.onSceneChange} />
       <MeasuredPortHandles nodeId={id} rootRef={rootRef} />
     </div>
   );
 }
+
+/** The resizer's floor — also the write-back guard's threshold (see the
+ *  NodeResizer above): anything smaller cannot be a legitimate result. */
+export const RESIZE_MIN_WIDTH = 120;
+export const RESIZE_MIN_HEIGHT = 80;
 
 /** Every host-facing name renders through the one shared node component;
  *  `SceneNodeView` owns the type switch, so a fifth kind is one case
@@ -259,6 +310,9 @@ export interface ReactFlowHostProps {
   height?: number;
   defaultViewport?: Viewport;
   fitView?: boolean;
+  /** Mount React Flow's stock `NodeResizer` on block nodes. Opt-in per
+   *  bench: always-visible handles are review chrome, not a default. */
+  resizable?: boolean;
   /** Extra children mounted inside <ReactFlow> (a story's probe layer). */
   children?: ReactNode;
 }
@@ -277,9 +331,9 @@ function applyPositionChanges(scene: HostScene, changes: NodeChange[]): HostScen
   return nodes === scene.nodes ? scene : { ...scene, nodes };
 }
 
-export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, children }: ReactFlowHostProps) {
+export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children }: ReactFlowHostProps) {
   const wired = useMemo(() => wiredPortsOf(scene), [scene]);
-  const context = useMemo(() => ({ scene, wired, onSceneChange }), [scene, wired, onSceneChange]);
+  const context = useMemo(() => ({ scene, wired, onSceneChange, resizable }), [scene, wired, onSceneChange, resizable]);
 
   // The decoration, not a translation: the scene node object itself passes
   // through (`{...node}`), proven assignable by scene.reactflow.test.ts;
