@@ -203,3 +203,24 @@ another lane holds today.
   `scene.test.ts`. Linking is mutation-tested too (2026-09-17):
   broadcast-rename (L1), blind content signature (L2), and a port-blind
   `findDanglingEdges` (L9) each turn the suite red.
+
+## Layers — where the decision lives
+
+Tunnel edges need layers. The decision — **a layer is `data.layer` on the
+edge, and the SET of layers is derived, not registered** — is recorded in
+full at `apps/storybook-basics/src/scene/layers.ts:1-80`, at the seam rather
+than here, so it cannot drift from the code it governs.
+
+The short form, and the trigger to watch:
+
+- **Not a registry on `BlockScene`.** Two structures owning one fact is what
+  this document already rejected a `placements` table for, and a registry
+  admits orphan states (an entry no edge is on; an edge naming an absent
+  layer) that need a reconcile and a lint, bought for no capability.
+- **Not host state.** Membership is authored and must survive a reload. Only
+  *focus* is host state — which is exactly where the donor splits too.
+- **The cost, stated:** an empty "+ New layer" does not survive reload.
+- **The migration trigger:** the day a layer needs properties of its own —
+  colour, visibility, ordering — the derived set stops being enough and the
+  registry becomes right. Same trigger if a consumer needs empty layers to
+  persist.
