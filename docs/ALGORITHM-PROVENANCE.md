@@ -217,3 +217,36 @@ grounds, not taste: it erodes the stroke into a thin broken line, cannot
 produce a second pass (countable: tldraw's look needs two or more `M`
 commands, a filter yields exactly one), cannot pin endpoints, and visibly
 distorts label text. See `docs/peps/0001-sketch-skin-at-the-boundary.md`.
+
+---
+
+## `src/magnet` — magnetic wire proposals
+
+Added 2026-09-18 by the magnetic-wires lane. Classes are this document's own:
+**(a)** ported, **(b)** a real named technique with verified implementations,
+**(c)** ours, ad hoc. `src/magnet/magnetProvenance.test.ts` is the runnable
+half — it `existsSync`s every donor path these rows cite and asserts the
+donor's own words still travel in the headers, the same way
+`src/components/elbow/provenance.test.ts` does for the Excalidraw port.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `magnet/magnetPortTypes.ts` | (a) | `/home/bam/systemsketch/src/blocks/connections/connectionModel.ts` — `arePortTypesCompatible` :138-153, `PortTypeVerdict` :155, `WILDCARD_PORT_TYPES` :158, `isWildcardPortType` :160-162, `normalizePortType` :164-166. Branch for branch, including the ORDER (undeclared checked before wildcard) and the donor's stated reason for case-insensitivity | Opened on disk 2026-09-17/18 (`sed -n` on the real file, donor tree read-only). `magnetPortTypes.test.ts` is table-driven against the donor's own branches, 15/15; the branch-order case is pinned separately because swapping the two branches passes every other row |
+| `magnet/magnetProposals.ts` | (a) + (b) + (c) | **(a)** the radius form — `connectionHit.ts` `targetPageUnits` :133-137 (`pageUnits ?? screenPx / safeZoom`, then `Math.min(raw, MAX_HIT_TARGET_PAGE)`; `MAX_HIT_TARGET_PAGE = 24` at :102) and `blockPorts.ts:516-527` (`getBlockPortDotsNear`; `CONNECTION_PORT_MAGNET_RADIUS = 13` at :39); the per-candidate bounds±radius reject `blockPorts.ts:538-541`; `if (port.hidden) continue` :551 → `inert`; and the NEAREST-LEGAL ordering, `connectionRules.ts:337-360` (*"An illegal dot never shadows a legal one behind it: refusal is judged per candidate, in distance order"*). **(b)** fixed-radius near-neighbour search by linear scan with an axis-aligned early reject and a squared-distance test — four independent implementations, cited in the `scanMagnets` header. **(c)** the tie-break ladder (lexicographic `portKey`, a deliberate divergence from all three libraries studied), `MAGNET_DEFAULT_RADIUS = 48`, `MAGNET_RADIUS_MAX_SCENE = 240`, `ConnectionJudge`/`composeJudges`, and PER-PORT radius itself | All four donor paths opened on disk. React Flow read in the version installed in THIS worktree (`@xyflow/system@0.0.82`, `dist/esm/index.mjs` — `getNodesWithinDistance` :2367, `ADDITIONAL_DISTANCE = 250` :2386, `getClosestHandle` :2387-2419, `isValidHandle` :2618), and `magnetProvenance.test.ts` asserts that version against the real `package.json` so a bump fails the citation instead of rotting it. The "no spatial index" decision is a MEASUREMENT, not a reading: grid-vs-linear crossover at n≈500-1000, our regime tens-to-low-hundreds, linear ~6-8 µs/frame at 10× our regime |
+| `magnet/useMagnetDrag.ts` | (c) | **None claimed for the code.** The composition target (`interaction/useDragIntent.ts`) is this repo's own; measure-once is derived from the measurement above, not from a donor. Only the CONVENTION is borrowed — transient drag state kept host-scoped, reset on cancel/end, never written to the document — which `/home/bam/systemsketch/src/blocks/ports/portState.ts` and `/home/bam/systemsketch/src/behaviorTree/treeDragRefusal.ts:1-23` establish independently of each other | Both donor files exist on disk (asserted by the provenance test). The "host measures, the model never self-measures" contract is `/home/bam/systemsketch/src/behaviorTree/liveDragWires.ts:1-31`, opened and quoted |
+| `magnet/magnetProposalLayer.tsx` | (c) | **None claimed.** It invents no renderer: the dotted line is `components/trace.tsx`'s existing `variant="delayed"` (`traceStrokeStyle` :322-326, from `DELAY_DOT_PX`/`DELAY_DOT_GAP_PX` at `trace.layout.ts:307-308`; `TRACE_VARIANT_LABELS.delayed` is literally `"Dotted"`), and the dev overlay reuses `components/hitRegion.ts`'s tokens. Borrowing `delayed` for a transient meaning is honest borrowing of a semantically wrong name and is owed upstream | The dash is MEASURED, never inferred from the prop: story A9 reads `getComputedStyle(...).strokeDasharray` (`0.1px, 6px`) and `strokeLinecap` (`round`) off the live DOM, and `docs/capture_magnet_shots.mjs` re-reads it under a real mouse on every capture |
+
+**What is honestly OURS, said plainly** (the brief asked for prior art, and two
+of the five requirements have none in the libraries actually read):
+
+1. **Per-port magnet radius (R1) has no library precedent.** JointJS's
+   `SnapLinksOptions` is a single global-per-paper `radius`
+   (`types/dia.d.ts:1728-1730`), and maxGraph's `graph.tolerance` is one
+   graph-global scalar. SystemSketch is the only donor for the
+   scene-radius-with-a-screen-floor *form*, not for its per-port-ness.
+2. **Node-proximity, not cursor-proximity.** Every proximity system read this
+   run resolves candidates from the live POINTER — React Flow
+   (`index.mjs:2537`), litegraph.js, tldraw. Zach asked for *"if you move a
+   node close enough"*: distance from the dragged node's OWN ports, which sit
+   at an arbitrary offset from wherever the user grabbed. `MagnetPort.at` is
+   the right primitive for that, and it is a different problem.

@@ -1,0 +1,125 @@
+{
+  "title": "Magnetic wire proposals",
+  "summary": "Move a node close enough and a dotted proposal draws itself \u2014 gated by BOTH a per-port magnet radius and a data-type check, tracking the drag live, ranked nearest-first with a deterministic tie-break, and vanishing the moment you leave range. Prior art was read on disk (JointJS, maxGraph, React Flow, SystemSketch) and the 'break it into regions' question was settled by measurement, not by argument.",
+  "base_ref": "main",
+  "branch_label": "worktree-wf_90bee8a9-bb2-8 (isolated lane worktree, cut from fe7386d)",
+  "storybook_port": 5499,
+  "slug": "magnetic-wires",
+  "changes": [
+    "apps/storybook-basics/src/magnet/magnetProposals.ts \u2014 new: the pure model. scanMagnets (radius + judge, interleaved in distance order), topProposal, the tie-break ladder, effectiveMagnetRadius/pairMagnetRadius, ConnectionJudge/composeJudges/magnetTypeJudge, translatePorts. No React, no DOM, no canvas engine.",
+    "apps/storybook-basics/src/magnet/magnetPortTypes.ts \u2014 new: the data-type gate, ported near-verbatim from SystemSketch connectionModel.ts:138-166. validateConnection has NO type rule, so R4 had no engine until this.",
+    "apps/storybook-basics/src/magnet/useMagnetDrag.ts \u2014 new: the React binding. Composes useDragIntent (never re-implements it) and measures the DOM exactly ONCE per gesture, on pointer down.",
+    "apps/storybook-basics/src/magnet/magnetProposalLayer.tsx \u2014 new: the paint. Reuses Trace variant=\"delayed\" (its stroke IS the dotted form) and hitRegion.ts's tokens for the radius overlay; stamps data-magnet-* so every claim is measurable.",
+    "apps/storybook-basics/src/magnet/magnetProposals.test.ts \u00b7 magnetPortTypes.test.ts \u00b7 magnetProvenance.test.ts \u2014 new: 61 unit tests (A1-A5, A12), including the 100-shuffle determinism test and the attribution gate that existsSync's every cited donor path.",
+    "apps/storybook-basics/src/stories/MagnetProposals.stories.tsx \u2014 new: 6 stories with measured play functions (A6-A11). Controls on the canvas: Magnets on/off, per-port radius + swap, show radius, show all proposals, type matching, reset.",
+    "docs/capture_magnet_shots.mjs \u2014 new: captures the stories MID-GESTURE with a REAL mouse (page.mouse, real pointer capture), because a released magnet story photographs an empty canvas.",
+    "docs/MAGNET-WIRES-SPEC.md \u2014 new: the spec as built, with the corrections the implementation forced.",
+    "docs/ALGORITHM-PROVENANCE.md \u2014 appended one row per new file, plus the two things that are honestly ours.",
+    "NOT TOUCHED: src/scene/**, src/components/**, src/hosts/**, package.json, pnpm-lock.yaml. Zero dependencies added."
+  ],
+  "findings": [
+    "GATES, measured before and after in this worktree. typecheck: clean -> clean. unit (pnpm exec vitest --project=unit run): 550 passed (30 files) -> 611 passed (33 files), +61 mine. stories (pnpm test-stories): 229 -> 235, +6 mine.",
+    "PRE-EXISTING FLAKE, not mine: on the untouched lane tip, `DragPolicy.stories.tsx > Block (simple/port/value) - the whole face grabs` failed one baseline run and passed the next, in isolation, with my files moved out of the tree. Measured deliberately before touching anything. The final full run was 53 files / 235 tests green.",
+    "THE GATES ARE NOT VACUOUS \u2014 mutation-tested red twice. (1) Swapping the scan to React Flow's ordering (pick the nearest, THEN judge it) turned 8 unit tests and 2 story tests red, including TypeDecides. (2) Deleting the two identity rungs from the tie-break turned 3 unit tests red, including the 100-shuffle determinism test. Both mutations reverted.",
+    "THE CAPTURE SCRIPT FOUND A BUG THE PLAY FUNCTIONS COULD NOT. Its first run photographed four empty canvases: each story's own play function AUTOPLAYS on load and leaves the bench committed elsewhere (and RadiusAndToggle leaves magnets OFF), and a reload just replays it. That is invisible to a play function, which never inspects the bench it inherits. Fixed by adding a Reset control to the bench \u2014 which is also simply what you want after dragging a node into a corner.",
+    "TWO MORE FIXES CAME FROM LOOKING AT THE PICTURES, not from a test: a real mouse drag across a Block header text-SELECTS it (synthetic dispatched events never reproduce this), fixed with userSelect:none; and with `show=\"all\"` every candidate was painting `hinting`, which is a small lie \u2014 `hinting` means 'this port is previewing becoming wired', and exactly one is. Now only the winner hints.",
+    "R2's refusal is now visible ON THE CANVAS, not only stamped in an attribute \u2014 Zach: 'if you would release it would error... Drag time validity preview!'. The readout reads `refused: sink/in many-to-one` while the pointer is still down, and the story asserts that before the release rather than after it.",
+    "NOT VERIFIED IN-APP UNDER ZOOM. DomCanvas has no viewport by design and its own tripwire says a story needing pan/zoom moves to the React Flow bench. effectiveMagnetRadius's zoom rule is covered by unit test A1 only, where it is asserted EQUAL to hitRegions/hitPolicy.ts's effectiveHitValue at every zoom stop, so the reuse is mechanical rather than decorative.",
+    "DEMONSTRATED ON A STORY-LOCAL BENCH, NOT THROUGH THE REAL HOST. PortEdgeItem carries no `hinting` and nodeViews.tsx has no per-port hook, so eligible-port paint cannot travel through DomCanvas today; both files are another lane's write set. Lint.stories.tsx hit the identical wall for the identical reason. That gap is real and is owed wiring, not something this report should gloss.",
+    "OWED MERGE, named rather than papered over: magnetTypeJudge is exported so the linter lane can absorb it as an at-rest `type-mismatch` rule. If that lane ships its own type rule concurrently, there will be two judges and the merge is owed."
+  ],
+  "sections": [
+    {
+      "heading": "The prior-art answer, first \u2014 because it is the question that was asked",
+      "html": "<p>Zach asked two things directly: <em>\u201ccheck prior art jointjs, maxgraph, etc\u201d</em>, and <em>\u201ccomputation wise to avoid being KNN I think maybe you can break it up into regions.\u201d</em> Everything below was opened on disk or fetched this run. Nothing is cited from memory.</p><h3>What the libraries actually do for this exact query</h3><table><thead><tr><th>Library</th><th>Its broad phase</th><th>Its ordering: geometry vs. validity</th></tr></thead><tbody><tr><td><strong>JointJS</strong> (MIT core)</td><td><code>findClosestMagnetToPoint</code> \u2192 <code>findCellViewsInArea</code> \u2192 <code>Graph._filterInArea</code>, which bottoms out in <code>cells.filter(el =&gt; rect.intersect(el.getBBox()))</code> \u2014 a <strong>linear scan over every cell</strong>, then a second scan over every <code>[magnet]</code> node on each survivor. <code>_markAvailableMagnets</code> does not even bbox-prefilter.</td><td><strong>Interleaved.</strong> The distance scan takes a <code>filter</code> callback and the gate is <code>isBetterCandidate &amp;&amp; (!filterFn || filterFn(view, magnet))</code> \u2014 an illegal nearer magnet is skipped, not chosen-then-rejected.</td></tr><tr><td><strong>maxGraph</strong> (Apache-2.0)</td><td><strong>Zero</strong> region-partitioning structures anywhere. A full-tree grep of all 1189 paths for quad/rtree/spatialindex/kdtree/hash-grid returns nothing; <code>getCellAt</code>/<code>getCells</code> are recursive rectangle-intersection scans.</td><td>Its <code>getEdgeValidationError</code> contract is three-valued (<code>null</code> / <code>''</code> silent / a message) \u2014 the shape this lane's <code>ConnectionVerdict</code> already had.</td></tr><tr><td><strong>React Flow</strong> <code>@xyflow/system@0.0.82</code> (installed here)</td><td><code>getNodesWithinDistance</code> is a <code>for\u2026of</code> over <code>nodeLookup.values()</code> with an AABB pre-filter inflated by a hardcoded <code>ADDITIONAL_DISTANCE = 250</code> (<code>index.mjs:2367-2386</code>).</td><td><strong>Nearest first, THEN validate.</strong> <code>getClosestHandle</code> (:2387-2419) runs to completion, and <code>isValidHandle</code> (:2618) only flips a flag on the already-chosen candidate. <strong>Under this order Zach's own example fails whenever the wrong-type port is nearer.</strong></td></tr><tr><td><strong>SystemSketch</strong></td><td>Linear scan over <code>getCurrentPageShapesSorted()</code> with a per-shape bounds\u00b1radius reject (<code>blockPorts.ts:516-560</code>).</td><td><strong>Interleaved</strong>, and it says so: <em>\u201cAn illegal dot never shadows a legal one behind it: refusal is judged per candidate, in distance order\u201d</em> (<code>connectionRules.ts:337-360</code>).</td></tr></tbody></table><h3>So: no spatial index. Zach's second guess was right; the first was wrong at our n</h3><p>Grid-vs-linear was <strong>measured</strong>, not argued: the crossover sits at n\u2248500-1000, and our regime is tens to low hundreds of ports. At <em>ten times</em> our regime (~5,000 ports) a plain linear scan still costs ~6-8&nbsp;\u00b5s per frame \u2014 <strong>0.05% of a 16.6&nbsp;ms budget</strong>. Four mature libraries ship brute force for the identical query. Shipping an index would add a real bug class (cell-iteration order leaking into tie ordering, boundary straddling) for zero measured gain.</p><p><strong>What the arithmetic actually costs was never the problem \u2014 <code>getBoundingClientRect</code> was.</strong> That is the one optimization this lane ships: the resting geometry is measured from the DOM <strong>exactly once</strong>, on pointer down, and the moving ports are derived from <code>dragDelta</code>. A scanning frame performs <strong>zero DOM reads</strong>. That also removes the render storm there would otherwise be something to rAF-throttle away \u2014 and with no rAF in the loop, every play function's post-<code>pointermove</code> assertion is deterministic instead of racy.</p><p><code>rbush</code> (an MIT R-tree already present transitively via tldraw) was the strongest off-the-shelf candidate and is rejected on <em>access pattern</em>, independently of scale: its value is cheap online mutation, and our resting set is frozen for the whole gesture. If an index is ever genuinely needed the upgrade is a <strong>uniform grid</strong>, not a tree. A <code>// WHY:</code> comment on <code>scanMagnets</code> carries the crossover so a future reader does not \u201cfix\u201d this into a grid.</p><h3>The one decision that changes the product</h3><p>We take SystemSketch's and JointJS's interleaved order over React Flow's. It is not a style preference: <strong>under React Flow's order, \u201cit would only connect to the port with the correct datatype\u201d is false whenever the wrong-type port is nearer</strong> \u2014 which is precisely the example Zach wrote. The <code>TypeDecides</code> fixture therefore puts the wrong-type sink <em>strictly nearer</em>, and the play function <strong>measures and asserts that</strong> before asserting the outcome, so the fixture cannot rot into the easy case and a builder reaching for the more familiar library's order fails a test instead of shipping a green lie. Mutation-tested: making the swap turns 10 tests red.</p>"
+    },
+    {
+      "heading": "Seen mid-gesture, under a real mouse",
+      "html": "<p>These are not story screenshots. <code>docs/capture_magnet_shots.mjs</code> presses with <code>page.mouse</code> (real CDP input, real pointer capture), glides, and screenshots <strong>without lifting</strong> \u2014 because a magnet proposal only exists while a pointer is down. Each capture also reads the live DOM at the moment of the shot and records it, so a capture cannot silently become a picture of nothing. The facts quoted in each caption are from that run.</p>",
+      "images": [
+        {
+          "file": "reports/media/magnet/type-decides.png",
+          "title": "R4 \u00b7 the type decides, not the distance",
+          "caption": "`bytesSink/in` is measurably NEARER and is skipped; the dotted proposal reaches past it to `poseSink/in` at 77.2u. Observed at capture: proposals=1, to=poseSink/in, refusals=`bytesSink/in:type-mismatch`, strokeDasharray=`0.1px, 6px`. Under React Flow's ordering this picture would show nothing at all."
+        },
+        {
+          "file": "reports/media/magnet/in-range.png",
+          "title": "R3 \u00b7 in range, tracking the drag",
+          "caption": "Observed at capture: proposals=1, distance=80.00, from-at=`321,209`, to-at=`401,209`. The from-point moves with the dragged node and the to-point does not \u2014 which is what the story asserts, at \u00b11px, against the node's own `getBoundingClientRect` delta."
+        },
+        {
+          "file": "reports/media/magnet/out-of-range.png",
+          "title": "R3 \u00b7 out of range, mid-drag, pointer still down",
+          "caption": "Same gesture, dragged away: proposals=0 and zero `[data-magnet-proposal]` nodes. The story then drags back in and asserts the SAME `data-magnet-id` returns \u2014 the id is derived from the port pair, never minted, so a proposal that leaves and comes back is the same proposal."
+        },
+        {
+          "file": "reports/media/magnet/nearest-wins.png",
+          "title": "R5 \u00b7 ranked nearest-first, with an exact tie",
+          "caption": "Four legal candidates, every proposal drawn. `alphaTie/in` and `zetaTie/in` are measured at exactly 104.40 each; `midway` 120.00, `outer` 216.33. The tie resolves to the smaller port key \u2014 a deliberate divergence from all three libraries studied, every one of which breaks ties by array/enumeration order and would therefore change its answer when the candidate list is rebuilt (which it is, every frame). Proved by shuffling the input 100 times and demanding a byte-identical result."
+        },
+        {
+          "file": "reports/media/magnet/radius-overlay.png",
+          "title": "R1 \u00b7 per-port magnet radius, drawn",
+          "caption": "The dragged port declares a deliberately tiny 10u magnet so the CANDIDATES decide. At 80.0u from both, `small`'s 40u circle visibly does not reach and `big`'s 120u circle does. Swap the two numbers with the on-canvas control and the proposal flips \u2014 same geometry, different declaration. Per-port radius is OURS: JointJS's `snapLinks.radius` and maxGraph's `graph.tolerance` are both single global scalars."
+        },
+        {
+          "file": "reports/media/magnet/refusal.png",
+          "title": "R2 \u00b7 in range, type-correct, and still refused",
+          "caption": "`producer/out` already feeds `sink/in` (the solid wire). Dragging `src` into range gets no proposal \u2014 and the reason is on the canvas: `refused: sink/in many-to-one`, from `scene/edgeValidation.ts`'s landed `validateConnection`, reached through the same one-line `ConnectionJudge` seam as the type gate. Proximity and validation are both required, and the story measures that it really is inside the radius first, so 'no proposal' cannot be a proximity failure dressed up as a rule."
+        }
+      ]
+    },
+    {
+      "heading": "Off-the-shelf vs. hand-rolled, element by element",
+      "html": "<table><thead><tr><th>Element</th><th>Today / naive</th><th>The stock part used, by its exact exported name</th><th>Behaviour that must survive</th></tr></thead><tbody><tr><td>The dotted line</td><td>A second renderer with its own <code>strokeDasharray</code></td><td><code>Trace</code> with <code>variant=\"delayed\"</code> (<code>components/trace.tsx</code>) \u2014 its <code>traceStrokeStyle</code> already returns <code>{strokeDasharray: \"0.1 6\", strokeLinecap: \"round\"}</code>, and <code>TRACE_VARIANT_LABELS.delayed</code> is literally <code>\"Dotted\"</code>, Zach's own word</td><td>The proposal's geometry and a real wire's geometry stay identical by construction. <strong>Owed upstream:</strong> `delayed` is a semantically wrong name for a transient proposal; a future reader will assume a magnet proposal IS a delayed connection. `trace.tsx` is another lane's write set, so this is borrowing, marked at the seam.</td></tr><tr><td>The zoom rule for a screen-px radius</td><td>Re-typing <code>px / zoom</code> locally</td><td><code>effectiveHitValue(px, zoom, \"screen\")</code> (<code>hitRegions/hitPolicy.ts:51</code>) \u2014 this is its <strong>second consumer and first real one</strong>; an audit found zero hosts using it</td><td>One spelling of the zoom rule in the app. Unit test A1 calls <em>both</em> functions and compares at every zoom stop, so the reuse is mechanical, not decorative.</td></tr><tr><td>Press \u2192 drag intent, threshold, cancel</td><td>A new pointer state machine</td><td><code>useDragIntent</code> / <code>dragDelta</code> / <code>thresholdFor</code> (<code>interaction/</code>) \u2014 composed, never replaced</td><td>The delta is measured from the ORIGIN, not the threshold crossing (React Flow loses the first move's travel permanently). Magnet geometry inherits that correctness free, and Escape still rolls the whole gesture back in one step.</td></tr><tr><td>The structural rules (dangling / self / many-to-one)</td><td>A second rule engine inside the magnet module</td><td><code>validateConnection</code> (<code>scene/edgeValidation.ts:102</code>), reached through a structural <code>ConnectionJudge</code> callback \u2014 never imported by the module itself</td><td>Three lanes are writing <code>src/scene/</code> concurrently. A rename over there costs ONE line in the story, not a rebuild. `ConnectionVerdict`/`ConnectionMessage` are type-only imports; `Diagnostic` is deliberately never named, because post-rename it lives in the fenced `components/highlighter.tsx`.</td></tr><tr><td>The data-type comparison</td><td>Inventing a matching rule</td><td><code>arePortTypesCompatible</code> / <code>normalizePortType</code> / <code>WILDCARD_PORT_TYPES</code>, ported from SystemSketch <code>connectionModel.ts:138-166</code></td><td>Case- and whitespace-insensitive, for the donor's own stated reason (a port's type is text a person typed on a whiteboard). Two refusal codes, not one \u2014 `type-mismatch` and `untyped-port`, the donor's own pair.</td></tr><tr><td>The dev radius overlay</td><td>New colour tokens</td><td><code>HIT_REGION_FILL</code> / <code>HIT_REGION_LINE</code> (<code>components/hitRegion.ts</code>)</td><td>A magnet circle reads as the same class of dev chrome as a hit region \u2014 one visual language, no new tokens.</td></tr><tr><td><strong>Unchanged (stock seam)</strong></td><td>\u2014</td><td><code>Block</code>, <code>Port</code>, <code>Toggle</code>, <code>WireLayer</code>'s <code>resolveDot</code>/<code>centreOf</code> technique, <code>DomCanvas</code>, <code>registry.json</code>, <code>package.json</code></td><td>Deliberately not touched. `Port`'s existing `hinting` prop is what paints the winner; no component was edited to make this feature work.</td></tr><tr><td><strong>Rejected off-the-shelf part</strong></td><td>A spatial index</td><td><code>rbush</code> (MIT R-tree, already a transitive dep via tldraw) \u2014 and <code>kdbush</code>/<code>flatbush</code>, quadtrees, sweep-and-prune</td><td>Named rather than left unconsidered: rbush IS the textbook-correct structure for a 2D window query. Rejected on access pattern (its value is cheap online mutation; our resting set is frozen for the gesture) and on the measurement above. Zero dependencies added.</td></tr></tbody></table>"
+    },
+    {
+      "heading": "What is left, and what needs you",
+      "html": "<h3>Done and proved</h3><ul><li><strong>R1</strong> per-port radius + toggle \u2014 unit A1 (zoom stops, cap, commutativity over 100 seeded pairs) and story A10 (the radii decide; swapping them flips the answer; magnets off still drags the node).</li><li><strong>R2</strong> proximity AND validation \u2014 unit A2 (a spy judge's call count equals the in-range count, so an out-of-range candidate provably never reaches validation) and story `RefusalPreview` (a real `many-to-one` from the landed engine).</li><li><strong>R3</strong> dotted, tracking, vanishing \u2014 story A7/A8/A9, with the dash read off `getComputedStyle` rather than inferred from the variant prop.</li><li><strong>R4</strong> type filtering \u2014 unit A4/A5 and story A6, with the wrong-type sink measured strictly nearer first.</li><li><strong>R5</strong> nearest wins, deterministic ties, no index \u2014 unit A3 (100 shuffles, byte-identical) plus the measurement in \u00a71.</li></ul><h3>Left, and merely next (not blocked)</h3><ul><li><strong>Wire it through the real host.</strong> `PortEdgeItem.hinting?: boolean` + forwarding in `nodeViews.tsx` is the whole change; both files are another lane's write set today. Until then this is proved on a story-local bench.</li><li><strong>Zoom in-app.</strong> Needs the React Flow bench, per `DomCanvas`'s own tripwire. Unit-tested only right now.</li><li><strong>Absorb `magnetTypeJudge` into the linter</strong> so at-rest boards can be linted for type mismatches too. Exported and ready; the linter lane's call.</li></ul><h3>Needs you \u2014 with the default I will take if you say nothing</h3><ul><li><strong>Is 48u the right default magnet?</strong> It is ours, ad hoc \u2014 sanity-checked against React Flow's 20 flow units and SystemSketch's 13 screen px, deliberately larger than a hit target because it fires while you are still moving. <em>Default if you say nothing: leave it at 48 and tune from the stories.</em></li><li><strong>Should the winner be the only thing drawn?</strong> Right now yes, with \u201cShow all proposals\u201d as an opt-in. <em>Default if you say nothing: keep top-only.</em></li><li><strong>Should a refused candidate's own line be drawn in red rather than not drawn?</strong> maxGraph does exactly this (it shifts the dragged preview edge's stroke green 3px / red 1px). Not what you described, so it is not built. <em>Default if you say nothing: leave refusals to the port dimming plus the on-canvas reason.</em></li></ul><h3>Deliberately not done</h3><ul><li><strong>Any spatial index</strong> \u2014 measured unnecessary at our n and at 10\u00d7 it; four mature libraries ship none.</li><li><strong>Caching judge verdicts at drag start</strong> \u2014 rejected on correctness, not cost: `ConnectionJudge` is a caller-supplied callback whose type promises nothing about position-independence, so caching would silently break a position-dependent judge.</li><li><strong>A `variant:\"proposed\"` on `Trace`</strong>, a `type-mismatch` rule in `lint.ts`, and any edit to `src/scene/scene.ts` \u2014 all in other lanes' write sets.</li><li><strong>Any dependency.</strong> `package.json` and `pnpm-lock.yaml` are untouched.</li></ul>"
+    }
+  ],
+  "stories": [
+    {
+      "id": "blocks-scene-magnet-proposals--type-decides",
+      "title": "Magnet Proposals \u00b7 Type decides",
+      "look_for": "drag `src` toward the two sinks \u2014 the dotted proposal skips the NEARER wrong-type port and reaches the type-correct one; flip Type matching to `off` and it snaps back to the nearer one",
+      "w": 780,
+      "h": 470
+    },
+    {
+      "id": "blocks-scene-magnet-proposals--tracks-and-vanishes",
+      "title": "Magnet Proposals \u00b7 Tracks and vanishes",
+      "look_for": "drag slowly toward `sink` and watch the dotted line appear, shorten, then vanish as you pull away \u2014 the readout counts the gap in scene units the whole time",
+      "w": 820,
+      "h": 440
+    },
+    {
+      "id": "blocks-scene-magnet-proposals--nearest-wins",
+      "title": "Magnet Proposals \u00b7 Nearest wins",
+      "look_for": "four candidates at once with Show all proposals on; the readout names the winner, and the two tied candidates resolve the same way every time you re-drag",
+      "w": 820,
+      "h": 500
+    },
+    {
+      "id": "blocks-scene-magnet-proposals--radius-and-toggle",
+      "title": "Magnet Proposals \u00b7 Radius and toggle",
+      "look_for": "tick Show magnet radius, then press Swap the two radii mid-review \u2014 the proposal jumps to the other port with nothing moved",
+      "w": 780,
+      "h": 470
+    },
+    {
+      "id": "blocks-scene-magnet-proposals--refusal-preview",
+      "title": "Magnet Proposals \u00b7 Refusal preview",
+      "look_for": "in range and type-correct, and still refused \u2014 the readout says `refused: sink/in many-to-one` while the pointer is down",
+      "w": 780,
+      "h": 450
+    },
+    {
+      "id": "blocks-scene-magnet-proposals--click-never-proposes",
+      "title": "Magnet Proposals \u00b7 A click is not a drag",
+      "look_for": "click the header without moving: no wire ever flashes, because the scan only runs once the drag threshold is crossed",
+      "w": 820,
+      "h": 440
+    }
+  ]
+}
