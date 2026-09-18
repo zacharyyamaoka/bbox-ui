@@ -5,7 +5,7 @@
 // hold.
 import { describe, expect, test } from "vitest";
 
-import { LINT_RULE_IDS, LINT_RULES, findingsBySubject, findingsFor, lintScene, subjectKey, type LintFinding, type LintScene } from "./lint";
+import { LINT_RULE_IDS, LINT_RULES, findingsBySubject, findingsFor, lintScene, subjectKey, typesIntersect, type LintFinding, type LintScene } from "./lint";
 
 /* ------------------------------------------------------------------ */
 /* Fixtures                                                            */
@@ -64,8 +64,8 @@ describe("LINT_RULES / LINT_RULE_IDS", () => {
     }
   });
 
-  test("a closed set — five rules, no more, no fewer", () => {
-    expect(LINT_RULE_IDS).toEqual(["dangling-edge", "cycle", "duplicate-edge", "many-to-one", "self-connection"]);
+  test("a closed set — six rules, no more, no fewer (D6 added type-mismatch)", () => {
+    expect(LINT_RULE_IDS).toEqual(["dangling-edge", "cycle", "duplicate-edge", "many-to-one", "self-connection", "type-mismatch"]);
   });
 
   test("every rule carries a non-empty provenance string", () => {
@@ -209,6 +209,68 @@ describe("self-connection", () => {
 
   test("a clean scene has none", () => {
     expect(lintScene(clean, { rules: ["self-connection"] })).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* type-mismatch (D6) — the seam exists, the vocabulary is caller-supplied */
+/* ------------------------------------------------------------------ */
+
+describe("type-mismatch", () => {
+  const typedScene: LintScene = {
+    nodes: [n("a"), n("b")],
+    edges: [e("mismatched", "a", "b", "out", "in"), e("half-known", "a", "b", "out", "unknown-port")],
+  };
+
+  test("with no typeOf at all, the rule contributes nothing — pre-existing callers are unaffected", () => {
+    expect(LINT_RULES["type-mismatch"].run(typedScene)).toEqual([]);
+  });
+
+  test("both ends resolved, disjoint tag arrays → one finding, on the EDGE", () => {
+    const typeOf = (ref: { nodeId: string; portId: string }) =>
+      ref.nodeId === "a" && ref.portId === "out" ? ["number"] : ref.nodeId === "b" && ref.portId === "in" ? ["string"] : undefined;
+    const hits = LINT_RULES["type-mismatch"].run(typedScene, { typeOf });
+    expect(hits).toHaveLength(1);
+    expect(hits[0].subject).toEqual({ kind: "edge", id: "mismatched" });
+    expect(hits[0].message).toBe('Edge "mismatched" carries "number" into "string"');
+  });
+
+  test("both ends resolved, overlapping tag arrays → no finding", () => {
+    const typeOf = () => ["number", "string"] as readonly string[];
+    expect(LINT_RULES["type-mismatch"].run(typedScene, { typeOf })).toEqual([]);
+  });
+
+  test("only ONE end resolvable → no judgement, zero findings for that edge", () => {
+    const typeOf = (ref: { nodeId: string; portId: string }) => (ref.nodeId === "a" && ref.portId === "out" ? ["number"] : undefined);
+    const hits = LINT_RULES["type-mismatch"].run(typedScene, { typeOf });
+    expect(hits).toEqual([]);
+  });
+
+  test("a custom `compatible` overrides the default typesIntersect", () => {
+    const typeOf = () => ["number"] as readonly string[];
+    const alwaysIncompatible = () => false;
+    const hits = LINT_RULES["type-mismatch"].run(typedScene, { typeOf, compatible: alwaysIncompatible });
+    // both edges have both ends resolvable to ["number"]; alwaysIncompatible fires on both
+    expect(hits).toHaveLength(2);
+  });
+});
+
+describe("typesIntersect — the default TypeCompatible (Blockly list-intersection)", () => {
+  test("identical single tags intersect", () => {
+    expect(typesIntersect(["number"], ["number"])).toBe(true);
+  });
+
+  test("disjoint single tags do not intersect", () => {
+    expect(typesIntersect(["number"], ["string"])).toBe(false);
+  });
+
+  test("a multi-tag side intersecting a single-tag side is compatible", () => {
+    expect(typesIntersect(["number", "string"], ["string"])).toBe(true);
+  });
+
+  test("empty arrays never intersect with anything, including each other", () => {
+    expect(typesIntersect([], ["number"])).toBe(false);
+    expect(typesIntersect([], [])).toBe(false);
   });
 });
 
