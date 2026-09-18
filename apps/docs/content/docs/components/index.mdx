@@ -1,11 +1,102 @@
 ---
 title: Components
-description: Presentational components for black-box system design.
+description: The atoms that draw a scene element — props in, DOM out, zero canvas assumptions.
 ---
 
-Every component here is copy-paste: you own the source, there is no runtime
-dependency on this project. The core imports no canvas engine, so the same
-component paints identically inside React Flow, inside tldraw, or in a plain
-page.
+The components kit is the atoms that **draw** a scene element: `Block`, `Port`,
+`Trace`, `Bar`, `CodeEditor`, and their composites.
 
-<ComponentsList />
+**The rule:** props in, DOM out. No state beyond a component's own gesture.
+**Imports no canvas engine, and imports no scene.** That second constraint is
+the load-bearing edge of the whole architecture — it is what lets the same
+`Block` be driven by a story literal, a React Flow node, a tldraw shape or a
+server-side render. The [Scene kit](/docs/scene) may know about components'
+prop vocabularies through explicit adapters; a component never knows a scene
+exists.
+
+Every component is copy-paste: you own the source, there is no runtime
+dependency on this project. Anything with a registry item installs with
+
+```bash
+npx shadcn@latest add zacharyyamaoka/bbox-ui/<item>
+```
+
+## Status map
+
+This is the real inventory, read from the source tree — not a roadmap. The
+grouping below is the same one the project's own Storybook uses to review
+these components.
+
+Two lineages appear, per [ARCHITECTURE.md](https://github.com/zacharyyamaoka/bbox-ui/blob/main/ARCHITECTURE.md):
+**trunk** is `apps/storybook-basics`, where design decisions land now; **v1**
+is `packages/bbox-ui`, the original core, frozen and kept stable because this
+site's live previews and the oldest registry items render it. A component
+listed once in each lineage is the same idea at two ages — the trunk version
+is the current design.
+
+Only [Port](/docs/components/port) and [Block](/docs/components/block) have
+full documentation pages today, and both document the v1 lineage. Every other
+row is built and installable, but its documentation is its story file and its
+source.
+
+### Ports
+
+| Component | What it is | Status | Registry item | Docs |
+|---|---|---|---|---|
+| Port | The dot: disc, surface ring, state ring, lit core. Four states. | Built — trunk | `port-dot` | — |
+| Port (v1) | A circle with a text slot. Four states, six text layouts, three diameters. | Built — v1, frozen | `port` | [Port](/docs/components/port) |
+| Labeled Port | Port plus two independently positioned label slots. | Built — trunk | `labeled-port` | — |
+| Port Edge | A rail of ports along one edge of a container, with lane reconciliation and grouping. | Built — trunk | `port-edge` | — |
+
+### Blocks
+
+| Component | What it is | Status | Registry item | Docs |
+|---|---|---|---|---|
+| Block | Container, header band, members, glyph, text slots, chip. | Built — trunk | `block-card` | — |
+| Block (v1) | The Simple View Block the live previews on this site render. | Built — v1, frozen | `block` | [Block](/docs/components/block) |
+| Ported Block | A Block with real Port Edge rails mounted on its walls. | Built — trunk | `block-port` | — |
+| Block Members | The member rows inside a Block's body. | Built — trunk | with `block-card` | — |
+| Bar | A horizontal strip with three slots that casts its size down to Badges. | Built — trunk | `bar` | — |
+| Wire Layer | Paints wires as Traces between two Blocks' real, measured port dots. | Built — trunk | `wire-layer` | — |
+
+### Traces
+
+| Component | What it is | Status | Registry item | Docs |
+|---|---|---|---|---|
+| Trace | The paint for a two-ended shape whose path a host computes: direct, routed, elbow. | Built — trunk | `trace` | — |
+| Trace Badge | A small editable label riding a Trace at a point along its path. | Built — trunk | `trace-badge` | — |
+| Trace Terminal | The arrowhead / endpoint marker vocabulary. | Built — trunk | with `trace` | — |
+| Trace Editor | Trace wrapped with pointer-driven bend editing — the one thing Trace never does itself. | Built — trunk | `trace-editor` | — |
+
+The math behind Trace — elbow routing, collision avoidance, tidy — is pure and
+engine-free, and is documented with the [Scene kit](/docs/scene/trace-math).
+
+### Basics
+
+| Component | What it is | Status | Registry item | Docs |
+|---|---|---|---|---|
+| Text | Plain, non-editable text: a data-slot span plus a tone. | Built — trunk | `text` | — |
+| Editable Text | Click-to-edit text control. | Built — trunk | `editable-text` | — |
+| Glyph | The icon slot: Lucide, emoji, or uploaded image. | Built — trunk | with `badge`, `bar` | — |
+| Badge | A small status/count pill that reads its size from an ancestor Bar. | Built — trunk | `badge` | — |
+| Code Editor | CodeMirror-backed code field. | Built — trunk | `code-editor` | — |
+| Folding Chevron | A disclosure trigger meant to pair with a Collapsible. | Built — trunk | `folding-chevron` | — |
+| Button, Toggle, Tooltip, Dropdown Menu, Collapsible | Stock shadcn/ui primitives kept as siblings so composites have something to compose. | Built — stock | install from shadcn/ui | — |
+
+### Cross-cutting
+
+| Item | What it is | Status | Registry item | Docs |
+|---|---|---|---|---|
+| Skin | An optional shape language — default / plain / sketch — selected with one inherited attribute. | Built — both lineages | `bbox-skin` (v1 copy) | — |
+| Layout | Portable layout geometry. Pure module — no React, no canvas engine. | Built — v1 | `bbox-layout` | — |
+
+### Host adapters
+
+The React Flow and tldraw adapters wrap the v1 core. They are in the registry
+but **not yet installable** — they import the shared core as a workspace
+package rather than as copied files. Use them as reference implementations.
+
+| Item | Status | Registry item |
+|---|---|---|
+| Block node (React Flow) | Built — reference only, not installable | `block-node-reactflow` |
+| Block shape (tldraw) | Built — reference only, not installable | `block-shape-tldraw` |

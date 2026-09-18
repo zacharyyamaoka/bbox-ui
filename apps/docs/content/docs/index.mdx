@@ -1,17 +1,42 @@
 ---
 title: Introduction
-description: Presentational components for black-box system design — blocks, ports, edges.
+description: Presentational components for black-box system design — blocks, ports, edges — organized as three kits.
 ---
 
-bbox-ui is a set of presentational React components for drawing black-box
+bbox-ui is a set of React components and pure functions for drawing black-box
 systems: **blocks** with a header, glyph, title and chip; **ports** that carry a
-state and a label; and the geometry that places one on the other.
+state and a label; **traces** that connect them; and the geometry that places
+one on the other.
 
-The components know nothing about canvases. They do not listen for pointers,
-never measure themselves, and never claim a z-index — they take props and return
-DOM. That is what lets the same `Block` paint identically inside React Flow,
-inside tldraw, or in a plain page, with each host owning its own dragging,
-snapping and hit-testing.
+## The three kits
+
+Everything in this project belongs to exactly one of three kits. The split is
+the vocabulary of the whole codebase — every file, every doc section, every
+design decision names which kit it lives in.
+
+| Kit | What it is | Rule |
+|---|---|---|
+| **[Components](/docs/components)** | The atoms that draw a scene element: `Block`, `Port`, `Trace`, `Bar`, `CodeEditor`, and their composites. | Props in, DOM out. Imports no canvas engine, and imports no scene. |
+| **[Scene](/docs/scene)** | The ensemble: what exists, what connects, what nests, what identity is — plus every pure function over it. | `f(scene) → data`. No React, no DOM, no engine — runs in Node. |
+| **[Editor Components](/docs/editor)** | The authoring surfaces: inspector panel, glyph picker, menus, style controls. What unites them is that they **produce scene mutations**. | Reads a scene, renders with components, emits a mutation. Imports both other kits; nothing imports it. |
+
+The dependency DAG is the whole architecture in four lines:
+
+```
+  scene  ←──────  components        components never imports scene
+    ↑                 ↑
+    └───── edit ──────┘             edit imports both; nothing imports edit
+```
+
+`components` not importing `scene` is the load-bearing edge. It is what lets
+the same `Block` be driven by a story literal, a React Flow node, a tldraw
+shape or a server-side render. The components know nothing about canvases:
+they do not listen for pointers, never measure themselves, and never claim a
+z-index — each host owns its own dragging, snapping and hit-testing.
+
+Each kit's index page carries a status table of its members — what is built,
+what is partial, and what is planned but does not exist yet. The tables are
+verified against the source tree, not aspirations.
 
 ## How you get it
 
@@ -36,19 +61,24 @@ The same command works straight off GitHub if you would rather skip this site:
 npx shadcn@latest add zacharyyamaoka/bbox-ui/port
 ```
 
-## What ships today
+## Two lineages, honestly
 
-| Item | What it is |
-|---|---|
-| `port` | A circle with a text slot. Four states, six text layouts, three diameters. |
-| `block` | The Block in Simple View — container, header band, glyph, text slots, chip. |
-| `bbox-layout` | The pure geometry module. No React, no canvas engine. |
+The registry currently publishes from two source trees, and the docs say which
+one each page documents:
 
-The two host adapters — `block-node-reactflow` and `block-shape-tldraw` — are in
-the registry but **not yet installable**, because they import the shared core as
-a package rather than as copied files. Use them as reference for now.
+- **The design trunk** (`apps/storybook-basics` in the repo) — where every
+  component decision lands now. Most registry items (`bar`, `badge`,
+  `labeled-port`, `port-edge`, `block-port`, `trace`, …) publish trunk source
+  directly.
+- **The frozen v1 lineage** (`packages/bbox-ui`) — the original core, kept
+  bug-for-bug stable. The `port` and `block` registry items and the live
+  previews on this site render it.
+
+The split, and the plan for reuniting the two, is recorded in
+[ARCHITECTURE.md](https://github.com/zacharyyamaoka/bbox-ui/blob/main/ARCHITECTURE.md).
 
 ## Next
 
-Start with [Port](/docs/components/port) — it is the smaller of the two and the
-conventions it establishes carry into [Block](/docs/components/block).
+Start with the [Components kit](/docs/components) for the full status map, or
+go straight to [Port](/docs/components/port) — the smaller of the two documented
+components, whose conventions carry into [Block](/docs/components/block).

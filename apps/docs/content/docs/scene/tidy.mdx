@@ -1,0 +1,47 @@
+---
+title: Tidy
+description: The Tidy pass over edge routes, restated as a pure function — and the honest line about what Tidy does not cover yet.
+---
+
+<Callout title="Status — trace tidy built; scene tidy planned">
+  Tidying **edge routes** exists and installs as the `trace-tidy` registry
+  item. Tidying the **scene itself** — auto-placing the blocks — does not
+  exist yet in any lineage. Nothing on this page describes block auto-layout
+  as usable.
+</Callout>
+
+## Trace tidy — built
+
+`tidyTraces` takes the edges the caller passes, plans an orthogonal route for
+each, keeps hand-routed edges that still clear their obstacles, and nudges the
+result apart — returning new routes plus an outcome the host can print
+("Tidied 3 edges, kept 1 hand-routed…"). It is `f(fixtures) → routes`: no
+editor, no canvas, no persistence.
+
+```bash
+npx shadcn@latest add zacharyyamaoka/bbox-ui/trace-tidy
+```
+
+It is a verbatim port of SystemSketch's tidy pipeline with the three
+`Editor`-bound things factored out to the caller, named rather than hidden:
+
+1. **Selection scope** — which edges to even look at. The caller passes the
+   list.
+2. **Page transforms** — shape-local ↔ page coordinates. Fixtures are already
+   in one space.
+3. **Persistence** — the caller owns the new routes; in a story that is
+   `setState`.
+
+The planner is portable; the scene collector is the host's. That is the same
+core/host line the whole architecture draws.
+
+Everything the pipeline calls — route planning, stabilization, collision
+checks, nudging, clearance costs — is the [Trace math](/docs/scene/trace-math)
+family.
+
+## Scene tidy — planned
+
+A scene-level tidy — given a `BlockScene`, propose positions for the nodes
+themselves (the `rank` function already computes the layering such a layout
+would use) — **is not built**. No API exists, no registry item exists, and
+this page will say so until one does.

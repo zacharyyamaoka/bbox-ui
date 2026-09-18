@@ -1,0 +1,11 @@
+{
+  "title": "Editor Components",
+  "pages": [
+    "inspector",
+    "glyph-picker",
+    "autocomplete-menu",
+    "toolbar",
+    "floating-toolbar",
+    "search-menu"
+  ]
+}

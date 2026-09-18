@@ -1,0 +1,28 @@
+---
+title: Search menu
+description: The quick-pick — type to find a block, a port, a command. Planned — does not exist yet.
+---
+
+<Callout type="warn" title="Status — planned: this does not exist">
+  There is no standalone search menu in any lineage — no component, no
+  package, no registry item. The architecture doc names this member the
+  **quick-pick menu**. Search exists today only *inside* other members (the
+  glyph picker's icon search, filter-first inspector variants) — none of that
+  is a reusable search menu. This page documents an intention, not software.
+</Callout>
+
+## What it will be
+
+One type-to-filter surface in the command-palette idiom: open it, type, pick.
+The same component should serve the editor kit's finding jobs —
+
+- find a block in a large scene and jump to it,
+- pick a block type or port type while authoring,
+- run a command by name.
+
+As an editor-kit member it follows the kit's rule: it reads its candidates
+from the scene (or from a host-provided command list), renders with the
+[components kit](/docs/components), and emits exactly one mutation or
+navigation per pick.
+
+Until code exists, there is nothing more truthful to say here.
