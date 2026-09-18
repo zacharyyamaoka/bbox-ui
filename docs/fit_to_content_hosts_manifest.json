@@ -1,0 +1,75 @@
+{
+  "title": "Fit to content, host half: drag a member, parent redraws itself",
+  "summary": "Zach's second success criterion — drag a free-layout member around inside a Block, in a real React Flow AND a real tldraw canvas, and watch the parent auto-fit around it live, non-buggy, with a mutation-verified reentrancy story rather than a hand-waved \"it converges\".",
+  "base_ref": "8064ab6",
+  "branch_label": "fit-to-content-hosts (isolated lane worktree, agent-a2b3bf583efe93445)",
+  "storybook_port": 5516,
+  "slug": "fit-to-content-hosts",
+  "date": "2026-09-18",
+  "intro": [
+    "The plain-DOM half of this ask (port view / expanded view / ports offset vs inline / a crowded-rail bug demo, all before-and-after in one story) already shipped as <code>FitToContent.stories.tsx</code> from a prior lane — confirmed still green, untouched, 59/59 of its own stories passing before this lane added a line. <b>This lane is the host half:</b> drag a real child member inside a real React Flow node and a real tldraw shape, and have the parent's box grow and shrink around it while the gesture is still in flight — not just at release.",
+    "<b>Neither host file changed.</b> <code>reactFlowHost.tsx</code> and <code>tldrawHost.tsx</code> are byte-identical to the tip this lane started from. A <code>membersLayout: \"free\"</code> node is still just a <code>type: \"block\"</code> node to both engines — the drag, the auto-fit, and the reentrancy guard all live in the shared <code>src/hosts/nodeViews.tsx</code> translation layer three new/changed files feed. That is the concrete shape of “the host owns the box, the box drives the wiring”: dragging works under either engine for free.",
+    "<div style=\"overflow-x:auto;margin:18px 0 6px\"><table class=\"look\"><tr><th>Piece</th><th>What it does</th><th>Where</th></tr><tr><td><b>The math</b></td><td><code>blockExpandedFitHeight</code>, <code>resolveBlockHeight</code> — landed by a prior lane, untouched here</td><td><code>src/layout/fitToContent.ts</code></td></tr><tr><td><b>The drag</b></td><td>Plain pointer capture bounded to the member's own box — one boundary, one active id, like <code>blockMembers.tsx</code>'s own <code>stack</code>-mode dnd-kit boundary but answering a continuous (x, y) instead of a reorder</td><td><code>hosts/memberDrag.ts</code>, new</td></tr><tr><td><b>The fit</b></td><td>Measures chrome + member rects, calls the landed math, carries the reentrancy latch</td><td><code>hosts/blockAutoFit.ts</code>, new</td></tr><tr><td><b>The wiring</b></td><td><code>BlockNodeView</code> composes the two, <code>moveMember</code> writes a settled drag back into the scene</td><td><code>hosts/nodeViews.tsx</code>, additive edit</td></tr></table></div>"
+  ],
+  "changes": [
+    "<code>apps/storybook-basics/src/hosts/memberDrag.ts</code> — new. <code>useFreeMemberDrag</code>: plain <code>PointerEvent</code> + <code>setPointerCapture</code>, one boundary per members region, at most one member dragging at a time. Live position is ephemeral (drives a continuous re-fit); the scene is written once, at release — this repo's own established idiom (<code>reactFlowHost.tsx</code>'s <code>NodeResizer.onResizeEnd</code>, <code>tldrawHost.tsx</code>'s <code>onTranslateEnd</code>/<code>onResizeEnd</code>), applied to a gesture that isn't an engine gesture at all.",
+    "<code>apps/storybook-basics/src/hosts/blockAutoFit.ts</code> — new. <code>useAutoFitHeight</code>: measures a Block's own header/footer chrome and its free members' real DOM rects, calls <code>blockExpandedFitHeight</code>, and carries a named reentrancy latch (<code>applyingRef</code>) modelled on Vyuh Flow's <code>_isMovingGroupNodes</code>/<code>shouldSkipUpdates</code>. Also owns <code>measureKey</code> — a live drag moves a descendant's <i>position</i>, which never wakes a <code>ResizeObserver</code> watching for <i>size</i> changes; without this key the parent does not track the child until release.",
+    "<code>apps/storybook-basics/src/hosts/hostScene.ts</code> — additive: <code>HostNodeData.membersLayout</code>/<code>.autoFit</code> (absent → today's <code>\"stack\"</code> behaviour, unchanged), and a second, dedicated <code>DRAG_MEMBER_SCENE</code> fixture — not an edit to the shared <code>HOST_SCENE</code>, which <code>SceneHosts.stories.tsx</code>'s own assertions already pin.",
+    "<code>apps/storybook-basics/src/hosts/nodeViews.tsx</code> — additive: <code>BlockNodeView</code> wires the drag + fit hooks (called unconditionally, inert unless <code>membersLayout: \"free\"</code>), and <code>moveMember</code> writes a settled drag into <code>SceneNode.position</code> — that field's meaning for a <code>parentId</code> node was already documented at <code>scene.ts:60-72</code> and never read or written until this lane.",
+    "<code>apps/storybook-basics/src/stories/FitToContentHosts.stories.tsx</code> — new, 4 stories, tagged <code>area:blocks</code> / <code>lane:fit-to-content-hosts</code>: a round trip (drag down, assert tracking + containment + convergence, drag back) for each host, plus a capture-only “Settled” variant per host that stops mid-fit so the screenshot shows the grown box rather than the fully-reset end state.",
+    "<code>docs/ALGORITHM-PROVENANCE.md</code> — new section for this lane's three files, including the two mutation tests (see Findings).",
+    "Zero files touched under <code>src/components</code> or <code>src/scene</code> — the concurrent skin-migration and polarity lanes' write sets were respected exactly; <code>reactFlowHost.tsx</code> and <code>tldrawHost.tsx</code> are also untouched."
+  ],
+  "findings": [
+    "<b>Both engines drag a free member with zero engine-specific code.</b> The drag wrapper carries <code>POINTER_OWNED_CLASS</code> (<code>\"nodrag\"</code>) — the SAME marker React Flow's own <code>dragHandle</code> filter and tldraw's own <code>contentOwnsPress</code> already both honor for the Code face and the Value capsule. Neither host file needed a single line added for member-dragging specifically to work; tldraw did <b>not</b> resist, contrary to what the brief flagged as a real possibility — checked directly rather than assumed, by writing the story and running it.",
+    "<b>A real bug was caught mid-build, not hidden:</b> the first working version tracked the parent correctly on drag END but NOT during the gesture — <code>ResizeObserver</code> fires on SIZE changes of the element it watches, and a live drag only ever changes a descendant's <i>position</i>. <b>Mutation-verified</b>: removing the <code>measureKey</code> argument from <code>useAutoFitHeight</code> and rerunning the exact same two stories reproduced the class of bug this whole feature exists to prevent — <code>slot.bottom</code> exceeded <code>box.bottom</code> mid-drag, i.e. the member started to walk past the wall while the gesture was still in flight. Restored, reverified green.",
+    "<b>The reentrancy latch is real defensive code, verified NOT currently load-bearing — stated as exactly that, not oversold.</b> Named after Vyuh Flow's <code>_isMovingGroupNodes</code>/<code>shouldSkipUpdates</code> (this lane's own prior-art report, card 6) and reactFlowHost.tsx's own prior <code>NodeResizer</code> defect (writing per-move fed back into XYResizer's gesture math and collapsed the node), the latch guards against a write-triggered <code>ResizeObserver</code> re-entering itself. <b>Mutation-tested</b>: this lane deleted the <code>if (applyingRef.current) return</code> line, reran both <code>Drag A Member</code> stories including the convergence assertion (the SAME box height, sampled two animation frames apart), and they still passed — because free members are <code>position: absolute</code> from a fixed region origin and the Block only ever grows downward, so re-measuring after any write finds IDENTICAL member rects. The latch is kept, named, and documented as verified-inert insurance for a future change (an upward-growing region, a header whose height depends on the Block's own height) that would silently reintroduce the exact bug class this repo has already shipped once.",
+    "<b>The write-back destination for a member's position already existed and was never used.</b> <code>scene/scene.ts:60-72</code> already documents <code>SceneNode.position</code>, for a <code>parentId</code> node, as “the node's authored at-rest placement, in the PARENT's coordinate space… a host mid-drag owns the moving copy and writes back here at rest.” That sentence predates this lane by at least a day and nothing ever read or wrote it — free-layout dragging was contractually possible the whole time, just unwired.",
+    "<b>Fit-during-drag, not fit-at-settle — and why:</b> the fit height recomputes continuously while the gesture is in flight (driven by <code>measureKey</code>), because Zach's ask is explicitly about the parent redrawing itself “automatically” during the drag, not just afterward, and the acceptance test samples 5 intermediate points and asserts containment at every one, not only at the end. The member's OWN scene position is still written once, at release — splitting “what renders live” from “what gets recorded” is what keeps an aborted or jittery drag from leaving a half-finished write in a story or an undo stack to reconcile.",
+    "<b>Baseline preserved exactly:</b> <code>tsc</code> clean before and after; <code>pnpm exec vitest --project=unit</code> 38 files / 721 tests, byte-identical; <code>pnpm test-stories</code> 59 → 60 files, 258 → 262 tests (the 4 new stories), every pre-existing story unchanged — confirming the “inert unless <code>membersLayout</code> is set” claim isn't just asserted in a comment. Reran the two round-trip stories 4 times back-to-back with no flake."
+  ],
+  "stories": [
+    {
+      "id": "blocks-fit-to-content-hosts--drag-member-react-flow-settled",
+      "title": "Drag A Member — Settled (React Flow)",
+      "look_for": "“classify” dragged 120px down; “sorter” has grown to contain it with the region's own 12px gutter beneath — not clipped, not overflowing. The readout prints the exact before/after heights.",
+      "w": 560,
+      "h": 480,
+      "settle": 2500
+    },
+    {
+      "id": "blocks-fit-to-content-hosts--drag-member-tldraw-settled",
+      "title": "Drag A Member — Settled (tldraw)",
+      "look_for": "the SAME drag, inside a real tldraw shape this time — the parent Block grows by the same amount, proving the fit is host-agnostic.",
+      "w": 560,
+      "h": 480,
+      "settle": 2500
+    },
+    {
+      "id": "blocks-fit-to-content-hosts--drag-member-react-flow",
+      "title": "Drag A Member (React Flow) — round trip",
+      "look_for": "the full round trip has finished: classify dragged back to its authored position, sorter back to its original height — the floor gives the space back, it isn't a one-way ratchet.",
+      "w": 560,
+      "h": 480,
+      "settle": 3200
+    },
+    {
+      "id": "blocks-fit-to-content-hosts--drag-member-tldraw",
+      "title": "Drag A Member (tldraw) — round trip",
+      "look_for": "same round trip, tldraw host — back to the start, both hosts agree.",
+      "w": 560,
+      "h": 480,
+      "settle": 3200
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Owed wiring — what a component-owning lane has to do",
+      "html": "<p>One item, stated with the exact change, not a direction.</p><div style=\"overflow-x:auto\"><table class=\"look\"><tr><th>File</th><th>Change</th><th>Why it cannot be done from here</th></tr><tr><td><code>src/components/blockMembers.tsx</code></td><td>Give <code>free</code> layout its own drag mechanism — the exact shape <code>hosts/memberDrag.ts</code>'s <code>useFreeMemberDrag</code> already is — as a real <code>BlockMembersProps.onMembersChange</code> counterpart to what <code>stack</code> layout's dnd-kit boundary already does. Today <code>free</code>'s own <code>slotStyle</code> branch is a bare <code>position: absolute</code> with zero pointer listeners; every consumer that wants free-layout dragging (not just this app's own hosts) has to reimplement it outside the component, which is exactly the trap this repo's core rule (“interaction geometry is host-owned”) is meant to prevent for a gesture that is actually BOUNDED to one component's own box, not the canvas.</td><td>A skin-migration lane owns <code>src/components/**</code> this session (<code>trace.tsx</code>, <code>block.tsx</code>, <code>badge.tsx</code>, <code>port.tsx</code>, <code>portEdge.tsx</code>, <code>traceTerminal.tsx</code> all live). Moving this hook in now would collide with in-flight edits to files this lane never touched.</td></tr></table></div>"
+    },
+    {
+      "heading": "What could not be verified",
+      "html": "<ul class=\"plain\"><li><b>A third host was not tried.</b> The claim “both hosts drag it with zero engine-specific code” is verified for React Flow and tldraw, the two engines this app ships; nothing here proves the same is true of an engine that intercepts pointer events differently (Konva, a plain SVG canvas, etc.).</li><li><b>Width was not exercised, only height.</b> <code>blockExpandedFitHeight</code> only ever returns a height; <code>fitBoxToMembers</code> (the layout lane's own function) also returns a width, but this lane's demo drags a member DOWN only — dragging one to the right, growing the parent's width, was not built or measured here.</li><li><b>No stress test for many simultaneous free members.</b> The fixture has two; the fit math itself is unit-tested against larger member lists by the prior lane's <code>fitToContent.test.ts</code>, but this lane's own host-level story does not exercise more than two DOM elements moving at once.</li><li><b>Performance under a real high-frequency pointer stream was not profiled.</b> <code>dragSteps</code> samples 5 evenly-spaced points; a real mouse fires far more <code>pointermove</code> events per second, and whether the measure-and-re-render cost per event stays imperceptible at that rate was not measured, only reasoned about (the whole computation is a handful of <code>getBoundingClientRect</code> calls, not a layout of many nodes).</li></ul>"
+    }
+  ]
+}
