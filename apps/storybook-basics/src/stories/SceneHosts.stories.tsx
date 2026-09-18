@@ -22,6 +22,7 @@ import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 const meta = {
   title: "Blocks/Scene/In A Host",
+  tags: ["area:blocks", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

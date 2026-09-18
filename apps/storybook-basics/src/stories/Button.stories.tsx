@@ -6,6 +6,7 @@ import { Button } from "../components/button";
 
 const meta = {
   title: "Basics/Button",
+  tags: ["area:basics", "lane:baseline"],
   component: Button,
   args: { children: "Button", onClick: fn() },
 } satisfies Meta<typeof Button>;

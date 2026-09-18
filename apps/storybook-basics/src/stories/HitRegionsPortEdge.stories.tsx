@@ -27,6 +27,7 @@ import { effectiveHitValue, type HitPolicy } from "../hitRegions/hitPolicy";
 
 const meta = {
   title: "Hit Regions/PortEdge",
+  tags: ["area:hit-regions", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

@@ -60,6 +60,7 @@ function typeIntoCodeEditor(field: HTMLElement, text: string) {
 
 const meta = {
   title: "Basics/CodeEditor",
+  tags: ["area:basics", "lane:baseline"],
   component: CodeEditor,
   // Every story below supplies its own `render` (CodeEditor is controlled,
   // so each wraps it in `ControlledCodeEditor`) — these are just the

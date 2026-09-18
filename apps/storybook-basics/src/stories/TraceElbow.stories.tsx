@@ -293,6 +293,7 @@ function Grid({ children }: { children: ReactNode }) {
 
 const meta = {
   title: "Trace/Elbow",
+  tags: ["area:trace", "lane:baseline"],
   component: TraceBody,
   parameters: { layout: "fullscreen" },
   args: { id: "elbow", path: "" },

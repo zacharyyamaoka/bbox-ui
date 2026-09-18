@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../com
 
 const meta = {
   title: "Blocks/Block",
+  tags: ["area:blocks", "lane:baseline"],
   component: Block,
   args: {
     header: "Header",
