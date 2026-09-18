@@ -459,6 +459,75 @@ export function functionPortCenterPx(bands: BlockBands): { x: number; y: number 
 }
 
 /* ------------------------------------------------------------------ */
+/* collapsedWallCenterPx — where a collapsed wall's one dot sits         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Where a wall's SINGLE collapsed stand-in dot centres, in wrapper-local
+ * px, given only the Block's box and which wall — the closed form of the
+ * `railPlanFor` "simple" branch's own geometry, restated so the invariant
+ * ("every wire into a hidden wall lands on ITS centre, never drops") is
+ * provable without a DOM.
+ *
+ * Zach, 2026-09-17, on a screenshot of exactly this: "expanded view to
+ * simple view is not an issue. All of the ports collapse to one that is
+ * centered in the block body." — every populated wall in "simple" gets one
+ * dot, and it sits on that wall's own midline, full stop.
+ *
+ * Derivation, not a new rule: the "simple" branch of `railPlanFor` always
+ * returns `band: "block"` and `endMarginPx: 0`, so (via `railBoxFor`) the
+ * rail's CONTENT box spans the wall's own full length with no inset; a
+ * `distribute / space-evenly` plan centres a single box in that span
+ * (`railPlanFor`'s own WHY on why `space-evenly`, not `space-between`, is
+ * what makes a lone box land at the midpoint). This function is that
+ * arithmetic without a `RailPlan` or a rendered `PortEdge` in the loop —
+ * `column`-axis walls (left/right) land at `blockTop + blockHeight / 2`;
+ * `row`-axis walls (top/bottom) land at `blockLeft + blockWidth / 2`. The
+ * cross-axis coordinate is the wall's own border line, the same convention
+ * every rail dot straddles (`railBoxFor`'s column-axis case;
+ * `functionPortCenterPx`'s note above).
+ *
+ * SystemSketch's own analogue for "this wall has nothing placed on it, so
+ * every port here shares one fallback anchor" is
+ * `projectBlockConnectionPorts`'s `fallback` (`blockPorts.ts:141-145`):
+ * `{ x: side === "input" ? 0 : layout.bounds.w, y: layout.bounds.h / 2 }` —
+ * left/right only, vertical midpoint, exactly this formula's column-axis
+ * case in the donor's own local (0,0)-origin coordinates. Its dedicated
+ * "simple view" collapse (`layoutBlock.ts:1282,1301-1330`, already the
+ * citation for `railPlanFor`'s "simple" branch above) computes the SAME
+ * `midpoint = height / 2` with `x: 0` / `x: width` per side — so this is
+ * class (b), a known technique with real prior art, not invented here; the
+ * row-axis (top/bottom) case has no donor citation and is this repo's own
+ * symmetric extension, needed because `railPlanFor` collapses a horizontal
+ * wall in "simple" too (`blockPort.layout.test.ts`'s "still collapses on a
+ * horizontal wall" case) and the donor's own ports never populate that
+ * wall.
+ *
+ * Used to PROVE the rendered stand-in dot is where the rule says it must
+ * be (`blockPort.layout.test.ts`, and `CollapseWireEndpoints.stories.tsx`'s
+ * play functions measure the real DOM against this closed form) — not
+ * consumed by `wireLayer.tsx` as a synthetic fallback. Every wall this
+ * function describes already renders a real, measurable stand-in dot
+ * (`blockPort.tsx`'s `renderCollapsed`/`renderItem`), so `resolveDot`'s
+ * existing `[data-collapsed-ports]` reading (wireLayer.tsx:86-90) already
+ * finds it; inventing a second, computed answer there would contradict
+ * that file's own stated rule — "WireLayer never invents a point" — for a
+ * case that never actually goes unresolved in this kit.
+ */
+export function collapsedWallCenterPx(bands: BlockBands, edge: BlockSide): { x: number; y: number } {
+  if (railAxisFor(edge) === "column") {
+    return {
+      x: edge === "left" ? bands.blockLeft : bands.blockLeft + bands.blockWidth,
+      y: bands.blockTop + bands.blockHeight / 2,
+    };
+  }
+  return {
+    x: bands.blockLeft + bands.blockWidth / 2,
+    y: edge === "top" ? bands.blockTop : bands.blockTop + bands.blockHeight,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* functionPortHeaderInsetPx — where the header's OWN content starts     */
 /* (D-5)                                                                */
 /* ------------------------------------------------------------------ */

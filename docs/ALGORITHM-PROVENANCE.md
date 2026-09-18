@@ -413,3 +413,52 @@ because it is the single most instructive proof that DOM measurement does
 not exempt this kit from the donor's own coordinate-frame discipline — see
 the lane report's "adversarial loop" section for the full repro (24px error,
 one `sed`-sized fix, mutation-verified by reverting it).
+
+## `blockPort.layout.ts` — `collapsedWallCenterPx` (2026-09-18, collapse-wires lane)
+
+Zach, reacting to a screenshot of a Block's view toggle: "expanded view to
+simple view is not an issue. All of the ports collapse to one that is
+centered in the block body. You can refer to SystemSketch for this right
+now." Brief asked for a pure closed form for that midpoint, usable as
+`wireLayer.tsx`'s fallback when a wire's port has no rendered dot because the
+view collapsed it.
+
+**Measured before writing anything**: that fallback already exists.
+`wireLayer.tsx`'s `resolveDot` (`:80-91`) has carried a second
+`[data-collapsed-ports]` lookup since Group B wiring landed (`e6aea8e`,
+2026-09-17), and `BlockWiring.stories.tsx`'s pre-existing `ViewsWired` story
+already exercises it (its "sig,aux" case). `pnpm test-stories` on the
+unmodified lane tip: 62 files / 268 tests, all green, including that story.
+So this lane's actual gap was proof at the exact tolerance Zach's screenshot
+asks for (three cables converging to ONE point, measured, not merely "a wire
+exists") plus the missing pure statement of the invariant — not a bug fix.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `blockPort.layout.ts` — `collapsedWallCenterPx` (left/right case) | (b) | SystemSketch `layoutBlock.ts:1282,1301-1330` (dataflow-lens "simple" collapse: `midpoint = height / 2`, `x: 0` input / `x: width` output — already the citation for `railPlanFor`'s own "simple" branch in this same file) and `blockPorts.ts:141-145` (`projectBlockConnectionPorts`'s `fallback`: `{ x: side === "input" ? 0 : layout.bounds.w, y: layout.bounds.h / 2 }`, the donor's OWN "nothing placed here, use one shared anchor" rule) | Both opened on disk 2026-09-18; the citations pre-date this lane in the first case (this file's own `railPlanFor` docblock) and were freshly read in the second |
+| `blockPort.layout.ts` — `collapsedWallCenterPx` (top/bottom case) | (c) | None — the donor's own ports never populate a horizontal wall, so there is no `layoutBlock.ts` line to point at for it. This repo's `railPlanFor` DOES collapse a horizontal wall in "simple" view (`blockPort.layout.test.ts`'s pre-existing "still collapses on a horizontal wall" case), so the symmetric extension (swap axis, same "space-evenly over the whole `block` band" derivation) is this lane's own, stated as such in the function's own header | `blockPort.layout.test.ts`'s new `collapsedWallCenterPx` describe block cross-derives this case against `railBoxFor`'s real arithmetic for all four edges, not just asserted numbers |
+| `wireLayer.tsx`'s existing `[data-collapsed-ports]` fallback (`:86-90`) | — not touched — | Landed 2026-09-17 by the Group B wiring lane (`e6aea8e`); this lane did not modify it | **Mutation-verified this session** anyway: temporarily replaced the loop with `return null`, reran `CollapseWireEndpoints.stories.tsx` — both `SideBySide` and `ToggleLive` failed (wire count 4→1, `data-unresolved-wires` naming the three collapsed inbound wires), confirming the new stories actually exercise this path rather than passing vacuously. Reverted; `git diff` on `wireLayer.tsx` is empty |
+
+**Why `collapsedWallCenterPx` is NOT wired into `wireLayer.tsx` as a runtime
+fallback, despite the brief asking for exactly that**: every wall
+`railPlanFor` can collapse already renders a real, measurable stand-in dot in
+every view (`blockPort.tsx`'s `renderCollapsed`/`renderItem`, both always
+called for any populated edge regardless of `view`), so `resolveDot`'s
+existing DOM lookup already covers 100% of "the view collapsed this port" —
+there is no case left over for a computed answer to catch, and `wireLayer.tsx`'s
+own module doc states the reason not to add one speculatively: *"WireLayer
+never invents a point... An end that cannot be found is skipped, not guessed
+at."* Adding an always-dark fallback branch would either sit as dead code or,
+worse, mask a genuinely different unresolved case (e.g. a wire into an
+unrendered child) behind a plausible-looking synthetic point. `collapsedWallCenterPx`
+is instead the PROOF surface: `blockPort.layout.test.ts` derives it from
+`railBoxFor`'s real arithmetic (not just asserted numbers), and
+`CollapseWireEndpoints.stories.tsx`'s play functions measure the real
+rendered DOM against it. Flagged here rather than silently narrowed, per this
+lane's own brief on not silently widening or narrowing scope.
+
+New story: `apps/storybook-basics/src/stories/CollapseWireEndpoints.stories.tsx`
+(`area:blocks`, `lane:collapse-wires`) — `SideBySide` rebuilds Zach's own
+screenshot (two rows, one scene, port then simple); `ToggleLive` is the
+rigorous half, flipping ONE hub instance's view live and asserting the wire
+count is unchanged across the toggle before measuring convergence.
