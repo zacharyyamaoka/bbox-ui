@@ -16,7 +16,7 @@ record for an implementing lane; the report is the review surface.
 
 ---
 
-## 1 · The axis: `diagnostic`, orthogonal to `state`
+## 1 · The axis: `diagnostics`, orthogonal to `state`
 
 `PortState` today is `"empty" | "valueSet" | "wired" | "received"`
 (`apps/storybook-basics/src/components/port.tsx:37`) — **semantic** states,
@@ -40,6 +40,12 @@ axis is the third instance of the same rule.
 export type DiagnosticSeverity = "error" | "warning" | "info";
 
 export interface Diagnostic {
+  /** Stable, producer-owned. Appendix B records the cost of not having
+   *  one: maxGraph's `setCellWarning(cell, null)` deletes EVERY overlay
+   *  on the cell, and per-item identity is what prevents that. It is
+   *  also what lets a host diff the list per item (JointJS's `list`
+   *  highlighter skips `createListItem` for unchanged entries). */
+  id: string;
   severity: DiagnosticSeverity;
   /** One-line human explanation — the FR's "text explanation for what
    *  the issue is" (FR - Block, Ports & Edges Primitive § Linting/Error
@@ -50,10 +56,10 @@ export interface Diagnostic {
 }
 
 // On each mark-bearing component:
-diagnostic?: Diagnostic;   // absent = no mark. Never persisted — the
-                           // producer re-derives it, same contract as
-                           // `received` (appearance.ts:43-49) and
-                           // `dimmed`/`hinting` (host-computed).
+diagnostics?: Diagnostic[];  // absent or [] = no mark. Never persisted —
+                             // the producer re-derives it, same contract
+                             // as `received` (appearance.ts:43-49) and
+                             // `dimmed`/`hinting` (host-computed).
 ```
 
 Deliberately **not** in the set: `"hint"` (VS Code has it; no producer of
@@ -61,9 +67,23 @@ ours does — add it the day one exists), and any `diagnosticColor` escape
 hatch (severity → token is the component's own mapping, exactly like
 `STATE_TOKENS`, `port.tsx:53`).
 
-One `diagnostic` per element, not a list. Merging many findings down to
-one mark (max severity) is the producer/host's job — a presentational
-component must not carry a policy for ranking someone else's findings.
+**One mark, N messages.** A list per element, and the chrome is painted
+once at `max(severity)` — so every rule in §3 and every row in §5 reads
+the max instead of the only one. A component still carries no *contested*
+policy: max-severity-for-the-chrome is what VS Code, maxGraph and JointJS
+all do, and §5's interaction contract is already declared IDE-shaped.
+
+This reverses an earlier draft of this section, which specified a singular
+`diagnostic` and made merging the producer's job. Two things killed it.
+§5 promises a Popover with "the full anatomy", and a producer that has
+already merged N findings to one has destroyed the rest — the popover can
+then only ever show a single finding. And the badge carries a **count**
+(Vyuh's status badges, maxGraph's `containsValidationErrors`), which a
+scalar cannot render at all. Three independent library designs converged
+on N-marks-per-element (Appendix B's convergence table) and a peer
+session reading the same docs reached the same conclusion; ours is the
+only one of the four with stable ids, so ours is the only one that can
+diff the list instead of rebuilding it.
 
 ## 2 · Tokens: three, ported not invented
 
@@ -86,7 +106,7 @@ pattern). Implementation ports three more the same way:
 
 Four orthogonal appearance axes exist or are planned on these components:
 `state` (semantic), `skin` (shape language), the comparison lane's diff
-marks, and this `diagnostic`. They stay composable because each owns
+marks, and this `diagnostics`. They stay composable because each owns
 disjoint CSS channels:
 
 | axis | owns | file evidence |
@@ -94,7 +114,7 @@ disjoint CSS channels:
 | `state` | the dot's ring/fill/core colours, badge variant colours | `port.tsx:53-58,102-159` |
 | `skin` | border width/colour slots, radius, font, the *resting* shadow | `src/skin/skin.ts:89-118` |
 | diff (comparison lane) | fills/washes, chips, ghosts, token-level ink — their vocabulary, their names | `systemsketch/src/diff/diffPresentation.ts` traits |
-| **`diagnostic`** | **outer halo (box-shadow layers prepended), the corner flag, the wavy underline, the cable backdrop, the popover** | this plan |
+| **`diagnostics`** | **outer halo (box-shadow layers prepended), the corner flag, the wavy underline, the cable backdrop, the popover** | this plan |
 
 A diagnostic never recolours a state ring, never tints a surface, never
 touches a border the skin owns. That is what lets "changed AND broken" —
@@ -106,7 +126,7 @@ Every mark Zach listed, against what already exists:
 
 | mark | rendered by (exists today) | new prop or new component |
 |---|---|---|
-| colour change | Port's `portRingColor`/`portDotStyle` (`port.tsx:102-144`); Badge `variant="destructive"` (`badge.tsx:36`) | **prop** — a `diagnostic` branch in the existing style fns |
+| colour change | Port's `portRingColor`/`portDotStyle` (`port.tsx:102-144`); Badge `variant="destructive"` (`badge.tsx:36`) | **prop** — a `diagnostics` branch in the existing style fns |
 | halo behind a Port dot | the `hinting` halo layer — `0 0 0 9px color-mix(in srgb, … 38%, transparent)` (`port.tsx:127-129`) | **prop** — same geometry, severity token |
 | red halo / drop shadow behind a Block | Block's shadow seam — `box-shadow: var(--bbox-skin-shadow, …)` (`block.tsx:158`) | **prop** — prepend a glow layer; composes with every skin |
 | red backdrop on cables | Trace's hit-path twin — a wider sibling path on the same geometry (`trace.tsx:131,311`) | **prop** — a translucent backdrop path; stroke keeps its variant dash/colour |
@@ -134,7 +154,7 @@ Every mark Zach listed, against what already exists:
    than three inlined copies because Block's corner, LabeledPort's
    secondary slot and TraceBadge all want the identical flag.
 
-Everything else on the list is styling behind the one `diagnostic` prop —
+Everything else on the list is styling behind the one `diagnostics` prop —
 inside Zach's "maybe a couple" budget.
 
 ## 5 · Per component
@@ -147,15 +167,15 @@ board scale `info` marks only text, never chrome.
 
 | component | error | warning | info | carried by |
 |---|---|---|---|---|
-| **Port** | halo ring in `--bbox-danger` (the `hinting` geometry, `port.tsx:127-129`); state ring/fill untouched | same halo in `--bbox-warning` | nothing | `diagnostic` prop → one extra box-shadow layer |
-| **LabeledPort** | dot halo + wavy underline under the label text | dot halo (amber) + wavy underline | dotted underline in `--bbox-accent`, no halo | forwards `diagnostic` to its Port; underline on the rest span; `DiagnosticFlag` may ride the existing `secondarySlot` (`labeledPort.tsx:262-265`) with zero new placement math |
-| **Block** | glow behind the card (`0 0 0 1.5px` danger + `0 0 18px` wash, prepended to `block.tsx:158`'s layer list) + `DiagnosticFlag` at top-right, straddling the corner the way wall ports straddle walls (`blockPort.tsx`) | flag only — no glow; warning must not shout | nothing | new `diagnostic` prop on Block |
-| **PortEdge** | nothing on the rail itself | nothing | nothing | `PortEdgeItem` (`portEdge.tsx:89-93`) grows `diagnostic?`, forwarded to the LabeledPort it renders — the port is the subject, the rail is furniture |
-| **Trace** | translucent backdrop path under the wire (~10px, `color-mix` 30%), same geometry as the hit path; the stroke keeps its variant colour/dash so `data`/`async`/`delayed` stay legible | same, amber | nothing | `diagnostic` prop → one extra `<path>`; message rides `TraceBadge` in severity dress at `labelPosition` |
+| **Port** | halo ring in `--bbox-danger` (the `hinting` geometry, `port.tsx:127-129`); state ring/fill untouched | same halo in `--bbox-warning` | nothing | `diagnostics` prop → one extra box-shadow layer, painted at `max(severity)` |
+| **LabeledPort** | dot halo + wavy underline under the label text | dot halo (amber) + wavy underline | dotted underline in `--bbox-accent`, no halo | forwards `diagnostics` to its Port; underline on the rest span; `DiagnosticFlag` may ride the existing `secondarySlot` (`labeledPort.tsx:262-265`) with zero new placement math |
+| **Block** | glow behind the card (`0 0 0 1.5px` danger + `0 0 18px` wash, prepended to `block.tsx:158`'s layer list) + `DiagnosticFlag` at top-right, straddling the corner the way wall ports straddle walls (`blockPort.tsx`) | flag only — no glow; warning must not shout | nothing | new `diagnostics` prop on Block; the flag carries a count when the list is longer than one |
+| **PortEdge** | nothing on the rail itself | nothing | nothing | `PortEdgeItem` (`portEdge.tsx:89-93`) grows `diagnostics?`, forwarded to the LabeledPort it renders — the port is the subject, the rail is furniture |
+| **Trace** | translucent backdrop path under the wire (~10px, `color-mix` 30%), same geometry as the hit path; the stroke keeps its variant colour/dash so `data`/`async`/`delayed` stay legible | same, amber | nothing | `diagnostics` prop → one extra `<path>` at `max(severity)`; message rides `TraceBadge` in severity dress at `labelPosition` |
 | **CodeEditor** | wavy squiggle under the offending range (`@codemirror/lint` `setDiagnostics`) — red | amber squiggle | blue squiggle | new `diagnostics?: {from,to,severity,message}[]` prop; whole-field error also sets the existing `ariaInvalid` (`codeEditor.tsx:130`) |
-| **EditableText** | wavy underline on the rest span; the editing control inherits it | amber wavy | blue dotted | `diagnostic` prop → `text-decoration` styling only |
+| **EditableText** | wavy underline on the rest span; the editing control inherits it | amber wavy | blue dotted | `diagnostics` prop → `text-decoration` styling only |
 | **Badge** | `variant="destructive"` — exists today (`badge.tsx:36`) | new `variant="warning"` — one cva row, amber bg, dark text | `variant="secondary"` — exists | one variant addition; no new component |
-| **ValueCapsule** | pill glow (free — it renders Block, `value.tsx:142`) + squiggle across the invalid span of the expression | amber glow | nothing | `ValueCapsuleProps` grows `diagnostic?`, forwarded to Block and to the CodeEditor range; **no flag** — a capsule is too small, the glow is the beacon and the message rides a hover Tooltip |
+| **ValueCapsule** | pill glow (free — it renders Block, `value.tsx:142`) + squiggle across the invalid span of the expression | amber glow | nothing | `ValueCapsuleProps` grows `diagnostics?`, forwarded to Block and to the CodeEditor range; **no flag** — a capsule is too small, the glow is the beacon and the message rides a hover Tooltip |
 
 Interaction contract, IDE-shaped: **hover** any marked text/dot → Tooltip
 with message + code (no actions — a hover must be glanceable); **click**
@@ -220,7 +240,7 @@ mark one element, the diagnostic halo renders outside their outline.
   lives on the Python side").
 - **Gutter marks, overview ruler, Problems panel** — editor-chrome-scale
   surfaces; this kit stops at the component-scale marks.
-- **Persistence** — `diagnostic` is never written to a document, same as
+- **Persistence** — `diagnostics` is never written to a document, same as
   `received`/`dimmed`/`hinting`.
 - **Naming the diff states** — the comparison lane's call; §6 states only
   the composition contract.
@@ -264,10 +284,14 @@ domain's, not ours:
    means the mark must be addressable at `portKey(nodeId, portId)`
    granularity, which the scene kit already has (`scene.ts:145`).
 
-3. **THE GAP: JointJS holds N highlighters per element, added and removed by
-   id.** This plan proposes a single `diagnostic` prop, which is one mark per
-   component. A block with a type error *and* a duplicate-edge warning cannot
-   be expressed. That is not hypothetical — both are on Zach's own lint list.
+3. **THE GAP — now closed: JointJS holds N highlighters per element, added
+   and removed by id.** An earlier draft of §1 proposed a single
+   `diagnostic` prop, one mark per component, so a block with a type error
+   *and* a duplicate-edge warning could not be expressed. That was not
+   hypothetical — both are on Zach's own lint list. §1 now specifies
+   `diagnostics?: Diagnostic[]` with an `id`; this paragraph is what
+   changed it, and Appendix B's convergence table plus a peer session's
+   independent reading of the same libraries both agreed.
 
    So the prop should take a **list**, not a scalar, and each entry needs a
    stable id so a producer can add and remove its own marks without
@@ -372,27 +396,20 @@ non-events**, which is strictly better than rendering them well.
   supports the `drop | dangle | park` decision already taken here — but
   nothing renders it as diagnosed.
 
-### One contradiction Appendix B introduced, resolved
+### The contradiction Appendix B exposed — and §1 lost
 
-Appendix B's convergence table says *"N marks per element — only ours has
-stable ids"* and item 8 calls this *"this plan's diagnostics-array-with-ids"*.
-**§1 says the opposite and §1 wins:** one `diagnostic` per element, not a
-list, because ranking somebody else's findings is a policy and a
-presentational component must not carry one. Nothing in §1 was ever an
-array-with-ids, so the appendix is describing a shape this plan does not
-have.
+Appendix B's convergence table (*"N marks per element — only ours has
+stable ids"*) and item 8 (*"this plan's diagnostics-array-with-ids"*) both
+describe a list. §1 as first drafted specified a scalar. They cannot both
+be true, and **the appendix was right**: §1 has been amended to
+`diagnostics?: Diagnostic[]` with an `id`, and the reasoning now lives
+there rather than here.
 
-That is not a retraction of what the libraries showed — it relocates it. The
-array, the stable ids and the per-item diff belong to the **producer**, which
-merges N findings down to the one max-severity mark the component renders.
-JointJS's `list` highlighter is then prior art for how a *host* should feed a
-rail of marks, not a reason to widen the component prop.
-
-The one genuine exception stays as §5 already writes it: `CodeEditor` takes
-`diagnostics?: {from,to,severity,message}[]` because those marks are
-**positional** — several squiggles at different character ranges in one
-field are not competing judgements about one element, so there is nothing to
-rank. Every geometry-bearing component keeps the singular prop.
+What does *not* change is where the ranking sits. The component reads
+`max(severity)` for its chrome and shows every message in the popover; a
+producer that wants to suppress, group or re-rank its own findings still
+does that before handing the list over. The distinction is only that it
+hands over a list it may not have pre-collapsed.
 
 ### Deliberately not taken
 
