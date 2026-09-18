@@ -148,6 +148,1032 @@
           "target": "components/bbox/block-shape-util.tsx"
         }
       ]
+    },
+    {
+      "name": "badge",
+      "type": "registry:component",
+      "title": "Badge",
+      "description": "A small status/count pill. Reads its size from an ancestor Bar through BarSizeProvider, or takes its own size prop standalone.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge",
+        "class-variance-authority"
+      ]
+    },
+    {
+      "name": "bar",
+      "type": "registry:component",
+      "title": "Bar",
+      "description": "A horizontal strip with three slots (left / center / right) that casts its size down to Badge, EditableText, Glyph and Text through BarSizeProvider \u2014 no appearance cascade, size propagation only.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "text",
+      "type": "registry:component",
+      "title": "Text",
+      "description": "Plain, non-editable text: a data-slot span plus a tone, for title/type labels and captions that aren't editable.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/text.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/text.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "editable-text",
+      "type": "registry:component",
+      "title": "Editable Text",
+      "description": "Click-to-edit text control ported by value from packages/bbox-ui/src/textBox.tsx (docs/TEXTBOX-EDITING-SPEC.md) \u2014 the control never moves the surrounding text.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/editableText.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "folding-chevron",
+      "type": "registry:component",
+      "title": "Folding Chevron",
+      "description": "A single Lucide ChevronRight built as a disclosure trigger, meant to pair with a Collapsible \u2014 install Collapsible from the stock shadcn registry (`npx shadcn add collapsible`); this item does not ship one.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/foldingChevron.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/foldingChevron.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge",
+        "lucide-react"
+      ]
+    },
+    {
+      "name": "block-v2",
+      "type": "registry:component",
+      "title": "Block (Simple View) \u2014 design trunk",
+      "description": "The design-trunk Block (apps/storybook-basics): Container, Header band, BlockMembers, Glyph, Text slots, Chip. Supersedes the `block` item's packages/bbox-ui source as the current design \u2014 packages/bbox-ui stays published as-is until apps/docs migrates to this lineage (ARCHITECTURE.md, \"Name the trunk\").",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/block.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/block.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockMembers.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities"
+      ]
+    },
+    {
+      "name": "port-v2",
+      "type": "registry:component",
+      "title": "Port \u2014 design trunk",
+      "description": "The design-trunk Port (apps/storybook-basics): the disc, surface ring, state ring, lit core and hit halo alone \u2014 no labels or slots (`labeled-port` adds those). Supersedes the `port` item's packages/bbox-ui source as the current design; packages/bbox-ui stays published as-is until apps/docs migrates (ARCHITECTURE.md, \"Name the trunk\").",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "code-editor",
+      "type": "registry:component",
+      "title": "Code Editor",
+      "description": "CodeMirror-backed code field ported by value from packages/bbox-ui's codeField, reconciling the write-policy engine with a since-diverged text-selection fix.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/codeEditor.css"
+        }
+      ],
+      "dependencies": [
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight"
+      ]
+    },
+    {
+      "name": "labeled-port",
+      "type": "registry:component",
+      "title": "Labeled Port",
+      "description": "Composite of Port plus its two independently positioned label slots, both absolutely positioned off the dot's own box.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/labeledPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/codeEditor.css"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight"
+      ]
+    },
+    {
+      "name": "port-edge",
+      "type": "registry:component",
+      "title": "Port Edge",
+      "description": "A rail of ports laid along one edge of a container, with lane reconciliation and grouping.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/labeledPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/portEdge.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/portEdge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portLane.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/codeEditor.css"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities"
+      ]
+    },
+    {
+      "name": "block-port",
+      "type": "registry:component",
+      "title": "Ported Block",
+      "description": "A Block with real PortEdge rails mounted on its walls \u2014 view/placement rules keep the rails tracking the block's own hug (docs/BLOCK-PORT-EDGES-PLAN.md \u00a72).",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/blockPort.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/labeledPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/portEdge.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/portEdge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portLane.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/codeEditor.css"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities"
+      ]
+    },
+    {
+      "name": "trace",
+      "type": "registry:component",
+      "title": "Trace",
+      "description": "The paint for a two-ended shape whose path a host computes: direct, routed and elbow (orthogonal) curves, arrowheads, bends and terminals. Ported by value from packages/bbox-ui/src/trace.tsx, itself from SystemSketch's connectionPresentation.ts.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/elbow/binaryHeap.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/binaryHeap.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/boundaryCrossing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/boundaryCrossing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowPath.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPins.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowPins.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowRouter.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowRouter.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/geometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/geometry.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/index.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/nudge.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/nudge.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/softClearance.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/softClearance.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/traceContract.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/traceContract.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.bends.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.bends.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.routing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.routing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/trace.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/traceTerminal.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/traceTerminal.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "trace-badge",
+      "type": "registry:component",
+      "title": "Trace Badge",
+      "description": "A small editable label riding a Trace at its nearest-fraction point along the path.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/editableText.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/traceBadge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/traceBadge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge",
+        "class-variance-authority"
+      ]
+    },
+    {
+      "name": "trace-editor",
+      "type": "registry:component",
+      "title": "Trace Editor",
+      "description": "Trace wrapped with the one thing it deliberately never does itself: pointer-driven bend editing (docs/TRACE-CONTROL-POINTS-PLAN.md D4).",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/elbow/binaryHeap.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/binaryHeap.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/boundaryCrossing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/boundaryCrossing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowPath.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPins.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowPins.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowRouter.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowRouter.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/geometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/geometry.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/index.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/nudge.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/nudge.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/softClearance.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/softClearance.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/traceContract.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/traceContract.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.bends.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.bends.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.handles.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.handles.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.routing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.routing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/trace.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/traceEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/traceEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/traceTerminal.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/traceTerminal.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "trace-tidy",
+      "type": "registry:lib",
+      "title": "Trace Tidy",
+      "description": "The Tidy pass restated as a pure function over fixture data \u2014 ported verbatim from SystemSketch's src/blocks/connections/tidyEdges.ts. No DOM, no React; feed it measured obstacle rects.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/elbow/binaryHeap.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/binaryHeap.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/boundaryCrossing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/boundaryCrossing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/collisionRouting.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/collisionRouting.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowPath.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPins.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowPins.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowRouter.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowRouter.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/geometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/geometry.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/index.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/nudge.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/nudge.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/softClearance.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/softClearance.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.tidy.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.tidy.ts"
+        }
+      ]
+    },
+    {
+      "name": "wire-layer",
+      "type": "registry:component",
+      "title": "Wire Layer",
+      "description": "Paints a Wire[] as Traces between two Blocks' real, measured Port dots (docs/BLOCK-PORT-EDGES-PLAN.md \u00a75).",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/binaryHeap.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/binaryHeap.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/boundaryCrossing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/boundaryCrossing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowPath.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPins.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowPins.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowRouter.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/elbowRouter.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/geometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/geometry.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/index.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/nudge.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/nudge.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/softClearance.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/softClearance.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/traceContract.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/elbow/traceContract.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/labeledPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/portEdge.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/portEdge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portLane.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.bends.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.bends.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.routing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/trace.routing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/trace.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/traceTerminal.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/traceTerminal.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/wireLayer.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/wireLayer.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/wiring.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/wiring.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/codeEditor.css"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities"
+      ]
     }
   ]
 }
