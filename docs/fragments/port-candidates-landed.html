@@ -1,0 +1,16 @@
+
+<p class="pc-body">The 09-17 capability map (<code>docs/REMAINING-2026-09-17.md</code>) asked
+"what capability is missing?" — this survey asks "what donor code exists that we could
+take?" Where they overlap it is cited, not restated. But a day passed, and <b>a day here
+is a lot</b>: seventeen of its rows have since landed. Every evidence path below was
+checked to exist in this lane's tree at build time — if an older doc still lists one of
+these as missing, this table wins.</p>
+<div class="pc-scroll"><table class="pc-tbl">
+<tr><th>Was missing on 09-17</th><th>Evidence in this tree today</th></tr><tr><td><b>Wire layer + wire record (P1 / Group B)</b></td><td><code>wireLayer.tsx</code> · <code>wiring.ts</code> · <code>sceneWires.ts</code></td></tr><tr><td><b>Scene record `BlockScene` (P4)</b></td><td><code>scene.ts</code></td></tr><tr><td><b>Lint engine + edge validation (§2.8)</b></td><td><code>lint.ts</code> · <code>edgeValidation.ts</code></td></tr><tr><td><b>Drag-time validity preview</b></td><td><code>availability.ts</code></td></tr><tr><td><b>Errors bubble through folds</b></td><td><code>bubble.ts</code></td></tr><tr><td><b>Diagnostics paint — error/warning rungs (§3.4)</b></td><td><code>highlighter.tsx</code> · <code>traceMark.tsx</code></td></tr><tr><td><b>Value capsule preset (§3.3, first half)</b></td><td><code>value.tsx</code></td></tr><tr><td><b>Linked copies — definition identity (§3.5)</b></td><td><code>linking.ts</code></td></tr><tr><td><b>Compare model + word/field/line diff</b></td><td><code>sceneDiff.ts</code> · <code>wordDiff.ts</code> · <code>fieldDiff.ts</code> · <code>lineDiff.ts</code></td></tr><tr><td><b>Batch-wiring model (from the untracked donor)</b></td><td><code>batchWire.ts</code></td></tr><tr><td><b>Tunnels — edge presentation + layer derivations</b></td><td><code>tunnel.ts</code> · <code>layers.ts</code></td></tr><tr><td><b>Fit-to-content math (§2.4)</b></td><td><code>fitToContent.ts</code></td></tr><tr><td><b>Magnetic wire proposals</b></td><td><code>magnetProposals.ts</code></td></tr><tr><td><b>Member reorder via dnd-kit (kanban-card stack)</b></td><td><code>blockMembers.tsx</code></td></tr><tr><td><b>Click-drag press ownership (§2.7's gesture half, the portable part)</b></td><td><code>dragPolicy.ts</code> · <code>dragIntent.ts</code></td></tr><tr><td><b>Icon picker — Emoji / Lucide / Upload tabs</b></td><td><code>GlyphPicker.tsx</code></td></tr><tr><td><b>Inspector engine, host-neutral (as packages)</b></td><td><code>panel/src</code> · <code>inspector/src</code></td></tr>
+</table></div>
+<p class="pc-body" style="margin-top:10px"><b>In flight right now</b> (peer lanes, treated
+as done here, not re-proposed): the focus slider / propagation lens (<code>scene/focus.ts</code>
++ the new <code>editor/</code> kit), the skin-at-the-edges migration, fit-to-content host
+wiring, and the polarity/orientation unification. Also already referenced by other lanes and
+so not candidates: <code>behaviorTree/</code>'s drag-sensitivity and live-drag-wire mechanics
+(cited by <code>magnet/</code> and <code>interaction/</code> headers).</p>
