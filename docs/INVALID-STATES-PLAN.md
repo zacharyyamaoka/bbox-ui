@@ -372,6 +372,28 @@ non-events**, which is strictly better than rendering them well.
   supports the `drop | dangle | park` decision already taken here — but
   nothing renders it as diagnosed.
 
+### One contradiction Appendix B introduced, resolved
+
+Appendix B's convergence table says *"N marks per element — only ours has
+stable ids"* and item 8 calls this *"this plan's diagnostics-array-with-ids"*.
+**§1 says the opposite and §1 wins:** one `diagnostic` per element, not a
+list, because ranking somebody else's findings is a policy and a
+presentational component must not carry one. Nothing in §1 was ever an
+array-with-ids, so the appendix is describing a shape this plan does not
+have.
+
+That is not a retraction of what the libraries showed — it relocates it. The
+array, the stable ids and the per-item diff belong to the **producer**, which
+merges N findings down to the one max-severity mark the component renders.
+JointJS's `list` highlighter is then prior art for how a *host* should feed a
+rail of marks, not a reason to widen the component prop.
+
+The one genuine exception stays as §5 already writes it: `CodeEditor` takes
+`diagnostics?: {from,to,severity,message}[]` because those marks are
+**positional** — several squiggles at different character ranges in one
+field are not competing judgements about one element, so there is nothing to
+rank. Every geometry-bearing component keeps the singular prop.
+
 ### Deliberately not taken
 
 maxGraph's `validationAlert` (a `window.alert` by default) and JointJS's
