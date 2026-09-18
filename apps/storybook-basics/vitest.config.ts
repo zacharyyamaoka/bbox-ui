@@ -83,6 +83,7 @@ export default defineConfig({
             "tldraw",
             "@codemirror/lint",
             "@base-ui/react/popover",
+            "@base-ui/react/slider",
           ],
         },
         test: {
