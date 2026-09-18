@@ -38,5 +38,10 @@ reports/media/
 __pycache__/
 # Generated from git by docs/build_whats_new.mjs (`pnpm whats-new`) — committing
 # it would let it go stale, which is exactly what hand-tagging stories would
-# have done too. WhatsNew.stories.tsx degrades gracefully when it is absent.
+# have done too. WhatsNew.stories.tsx (2026-09-17 - 2026-09-17, one lane) is
+# RETIRED: Zach asked directly for the Storybook tag filter instead (see
+# CLAUDE.md's "Story tags" section) once the empty-state story shipped with
+# nothing wired to run its generator for him. build_whats_new.mjs itself is
+# left in place — its git-derived "what changed" answer is still correct,
+# just not currently rendered anywhere — in case a future surface wants it.
 apps/storybook-basics/src/stories/whats-new.generated.json

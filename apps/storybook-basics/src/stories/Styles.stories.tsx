@@ -74,6 +74,7 @@ import { BBOX_SKINS, BBOX_SKIN_LABELS, bboxSkinAttrs, type BboxSkin } from "../s
 
 const meta = {
   title: "Styles",
+  tags: ["area:styles", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

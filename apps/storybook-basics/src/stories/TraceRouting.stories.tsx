@@ -340,6 +340,7 @@ function distinctPathsByDir(
 
 const meta: Meta = {
   title: "Trace/Routing",
+  tags: ["area:trace", "lane:baseline"],
   parameters: { layout: "fullscreen" },
 };
 

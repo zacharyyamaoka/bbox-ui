@@ -5,6 +5,7 @@ import { Badge } from "../components/badge";
 
 const meta = {
   title: "Basics/Badge",
+  tags: ["area:basics", "lane:baseline"],
   component: Badge,
   args: { children: "Badge" },
 } satisfies Meta<typeof Badge>;

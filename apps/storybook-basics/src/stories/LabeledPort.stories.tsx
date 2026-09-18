@@ -24,6 +24,7 @@ function expectWithin(actual: number, expected: number, tolerance: number, what:
 
 const meta = {
   title: "Ports/LabeledPort",
+  tags: ["area:ports", "lane:baseline"],
   component: LabeledPort,
   args: { children: "value", state: "empty", edge: "left" },
 } satisfies Meta<typeof LabeledPort>;

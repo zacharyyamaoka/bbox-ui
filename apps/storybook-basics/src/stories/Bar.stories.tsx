@@ -100,6 +100,7 @@ function SizeCascadeCluster() {
 
 const meta = {
   title: "Blocks/Bar",
+  tags: ["area:blocks", "lane:baseline"],
   component: Bar,
   args: {
     left: "Left",

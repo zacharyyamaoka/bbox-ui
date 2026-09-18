@@ -18,6 +18,7 @@ import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 const meta = {
   title: "Basics/CodeEditor/In A Host",
+  tags: ["area:basics", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

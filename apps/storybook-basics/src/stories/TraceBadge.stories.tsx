@@ -388,6 +388,7 @@ function GallerySection({ title, rows }: { title: string; rows: GalleryRowSpec[]
 
 const meta = {
   title: "Trace/Badge",
+  tags: ["area:trace", "lane:baseline"],
   component: TraceBadge,
   // `points` and `value` are required props, so every story would otherwise
   // restate them purely to satisfy the type. These are the fixture defaults

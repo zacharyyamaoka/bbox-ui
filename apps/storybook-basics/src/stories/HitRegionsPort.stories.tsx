@@ -29,6 +29,7 @@ import { ZOOM_LEVELS, effectiveHitValue, screenHitValue, type HitPolicy } from "
 
 const meta = {
   title: "Hit Regions/Port",
+  tags: ["area:hit-regions", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

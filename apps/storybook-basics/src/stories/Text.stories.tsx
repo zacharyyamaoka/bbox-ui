@@ -5,6 +5,7 @@ import { Text } from "../components/text";
 
 const meta = {
   title: "Basics/Text",
+  tags: ["area:basics", "lane:baseline"],
   component: Text,
   args: { children: "Plain information" },
 } satisfies Meta<typeof Text>;
