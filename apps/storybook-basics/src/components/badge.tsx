@@ -34,6 +34,12 @@ const badgeVariants = cva(
         default: "border-transparent bg-primary text-primary-foreground",
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         destructive: "border-transparent bg-destructive text-white dark:bg-destructive/60",
+        // docs/INVALID-STATES-PLAN.md §5's Badge row: "amber bg, dark
+        // text" — one cva row, no new component. `--bbox-warning` (ported
+        // in src/globals.css) stays light enough in BOTH themes that black
+        // text keeps its contrast; `destructive` above needs the opposite
+        // (white-on-dark-red) for the same reason.
+        warning: "border-transparent bg-[var(--bbox-warning)] text-black",
         // The one variant with a REAL (non-transparent) border, so it's
         // the one that gets `--bbox-skin-line-override`: default/secondary/
         // destructive are already `border-transparent` and need nothing —

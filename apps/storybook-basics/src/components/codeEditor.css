@@ -286,3 +286,49 @@
 .bbox-code-editor.bbox-code-tokens .tok-invalid {
   color: var(--bbox-danger, #c94b3f);
 }
+
+/*
+ * The diagnostic axis's squiggle (docs/INVALID-STATES-PLAN.md §5's
+ * CodeEditor row, §7's stock-parts table). `@codemirror/lint`'s OWN
+ * baseTheme already paints `.cm-lintRange-*` with a `background-image`
+ * data-URI squiggle baked from a LITERAL hex at import time (`#f11`,
+ * `orange`, `#999`) — no CSS variable can reach inside an already-encoded
+ * SVG string, so retinting means replacing the whole declaration, not
+ * overriding one property. This kit already draws its OTHER resting-text
+ * marks (EditableText, LabeledPort) as a plain `text-decoration: underline
+ * wavy/dotted` — reusing that recipe here, instead of hand-building a
+ * second SVG squiggle, is one fewer visual language for the same mark.
+ *
+ * WHY three classes (0,3,0): identical tie-break to `.cm-content.
+ * cm-lineWrapping` a few rules up in this file — CodeMirror injects its
+ * own `.ͼN.cm-lintRange-error` rule at (0,2,0) when the `EditorView`
+ * mounts, AFTER this stylesheet loads, so stylesheet order alone would
+ * let it win a same-specificity tie. `info` reuses the wavy/dotted split
+ * `diagnosticUnderlineStyle` already draws elsewhere in this kit — dotted,
+ * not wavy, so a merely-informational range never LOOKS as urgent as an
+ * error or warning range beside it.
+ */
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-error,
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-warning,
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-info {
+  background-image: none;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-error,
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-warning {
+  text-decoration-style: wavy;
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-info {
+  text-decoration-style: dotted;
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-error {
+  text-decoration-color: var(--bbox-danger, #c94b3f);
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-warning {
+  text-decoration-color: var(--bbox-warning, #c98a1b);
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-info {
+  text-decoration-color: var(--bbox-accent, #4f6ee5);
+}
