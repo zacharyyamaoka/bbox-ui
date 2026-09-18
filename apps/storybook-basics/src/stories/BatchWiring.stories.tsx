@@ -40,7 +40,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { DomCanvas } from "../hosts/domCanvas";
-import type { HostScene } from "../hosts/hostScene";
+import { hostPolarityOf, hostPortsOf, type HostScene } from "../hosts/hostScene";
 import {
   applyBatchWire,
   batchWireSources,
@@ -49,8 +49,34 @@ import {
   type BatchWireIntent,
   type PortRef,
 } from "../scene/batchWire";
-import { hostPortsOf, standInJudge, type StandInRules } from "../scene/batchWire.standIn";
+import { validateConnectionJudge } from "../scene/batchWireJudge";
 import { portKey } from "../scene/scene";
+
+/** The story's own rule vocabulary — PROHIBITIONS, the way the bench's
+ *  checkboxes name them. `judgeWith` (below) inverts them into
+ *  `ConnectionPolicy`'s PERMISSIONS at the one seam that needs to know
+ *  both vocabularies exist. Replaces `batchWire.standIn.ts`'s own
+ *  `StandInRules` (deleted; same shape, same defaults). */
+export interface StandInRules {
+  singleFeed?: boolean;
+  acyclic?: boolean;
+  sameScope?: boolean;
+}
+
+/** `validateConnectionJudge`, wearing the bench's own rule vocabulary —
+ *  what used to be `standInJudge(scene, rules)`. This IS the "one line"
+ *  `batchWire.ts`'s and `availability.ts`'s own comments promised, now
+ *  real: the engine is `validateConnection`, not a second copy of its
+ *  rules. Named `judgeWith` rather than `judgeFor` to avoid colliding with
+ *  `applyBatchWire`'s own `judgeFor` option key below. */
+function judgeWith(scene: HostScene, rules: StandInRules = {}): ReturnType<typeof validateConnectionJudge> {
+  const { singleFeed = true, acyclic = true, sameScope = true } = rules;
+  return validateConnectionJudge(scene, {
+    portsOf: hostPortsOf(scene),
+    directionOf: hostPolarityOf(scene),
+    policy: { allowFanIn: !singleFeed, allowCycles: !acyclic, allowCrossScope: !sameScope },
+  });
+}
 
 const meta = {
   title: "Blocks/Scene/Batch Wiring",
@@ -242,10 +268,11 @@ function BatchWiringBench() {
   const minted = useRef(0);
 
   const portsOf = useMemo(() => hostPortsOf(scene), [scene]);
-  // The seam: when `edgeValidation.ts` lands this becomes
-  //   (candidate) => validateConnection(scene, candidate)
-  // and `batchWire.standIn.ts` is deleted. Nothing else on this page moves.
-  const judge = useMemo(() => standInJudge(scene, rules), [scene, rules]);
+  // The seam, now real: `judgeWith` (this file, above) wraps
+  // `validateConnection` (`edgeValidation.ts`) behind this bench's own
+  // rule vocabulary — `batchWire.standIn.ts` is deleted. Nothing else on
+  // this page moved to make that land.
+  const judge = useMemo(() => judgeWith(scene, rules), [scene, rules]);
 
   /** The selection read — a list, or one container standing for its members. */
   const sources = useMemo(() => batchWireSources(scene, selected), [scene, selected]);
@@ -299,7 +326,7 @@ function BatchWiringBench() {
           portsOf,
           // Rebuilt per cable, so cable N sees cables 1..N-1 — the
           // single-feed rule is meaningless otherwise. See `SceneJudge`.
-          judgeFor: (working) => standInJudge(working, rules),
+          judgeFor: (working) => judgeWith(working, rules),
           mintEdgeId: () => `batch-${(minted.current += 1)}`,
           // Only "together" CHOSE this end, so only it names a hub —
           // donor :456-462.

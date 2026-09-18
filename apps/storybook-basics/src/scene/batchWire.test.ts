@@ -28,9 +28,32 @@ import {
   type PortsOf,
   type WireJudge,
 } from "./batchWire";
-import { hostPortsOf, standInJudge } from "./batchWire.standIn";
+import { hostPolarityOf, hostPortsOf } from "../hosts/hostScene";
+import { validateConnectionJudge } from "./batchWireJudge";
 import { portKey, producersOf, type BlockScene } from "./scene";
 import type { HostScene } from "../hosts/hostScene";
+
+/**
+ * The real engine, behind the batch story's own rule vocabulary — what
+ * used to be `standInJudge` (`batchWire.standIn.ts`, deleted). Named
+ * `judgeWith` rather than `judgeFor` to avoid colliding with
+ * `applyBatchWire`'s own `judgeFor` option key below. Kept as a
+ * small local wrapper so every call site below stays a one-word rename
+ * rather than a re-derivation of the policy inversion at each of them.
+ */
+interface JudgeRules {
+  singleFeed?: boolean;
+  acyclic?: boolean;
+  sameScope?: boolean;
+}
+function judgeWith(scene: HostScene, rules: JudgeRules = {}): WireJudge {
+  const { singleFeed = true, acyclic = true, sameScope = true } = rules;
+  return validateConnectionJudge(scene, {
+    portsOf: hostPortsOf(scene),
+    directionOf: hostPolarityOf(scene),
+    policy: { allowFanIn: !singleFeed, allowCycles: !acyclic, allowCrossScope: !sameScope },
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /* Tiny hand-built judges — the point is that the judge is INJECTED,   */
@@ -409,7 +432,7 @@ describe("applyBatchWire", () => {
       mintEdgeId: (_pair: BatchWirePair, index: number) => `e${index}`,
       hubLabel: "hub",
     };
-    const { scene, outcome } = applyBatchWire(fan, { ...shared, judgeFor: (working) => standInJudge(working, { singleFeed: true }) });
+    const { scene, outcome } = applyBatchWire(fan, { ...shared, judgeFor: (working) => judgeWith(working, { singleFeed: true }) });
     expect(outcome.created).toBe(1);
     expect(outcome.refused).toEqual([{ reason: "input-occupied", count: 2 }]);
     expect(describeBatchWireOutcome(outcome)).toBe("Wired 1 cable into hub · skipped 2 input already fed");
@@ -418,7 +441,7 @@ describe("applyBatchWire", () => {
     // The mutation proof: a judge PINNED to the starting board — which is
     // exactly what the broken version did — wires all three. Without this
     // half, the assertion above could pass for the wrong reason.
-    const frozen = applyBatchWire(fan, { ...shared, judgeFor: () => standInJudge(fan, { singleFeed: true }) });
+    const frozen = applyBatchWire(fan, { ...shared, judgeFor: () => judgeWith(fan, { singleFeed: true }) });
     expect(frozen.outcome.created).toBe(3);
     expect(frozen.outcome.refused).toEqual([]);
   });
@@ -498,7 +521,7 @@ describe("batchWireEdges", () => {
       sources: ["fuse"],
       target: { nodeId: "probe", portId: "logs" },
       portsOf: hostPortsOf(backwards),
-      judgeFor: (working) => standInJudge(working),
+      judgeFor: (working) => judgeWith(working),
       mintEdgeId: () => "e",
     });
     expect(scene.edges).toEqual([
@@ -546,8 +569,8 @@ const HOST: HostScene = {
   edges: [],
 };
 
-describe("standInJudge", () => {
-  const judge = standInJudge(HOST);
+describe("judgeWith (the real engine, behind the batch story's rule vocabulary)", () => {
+  const judge = judgeWith(HOST);
 
   it("reads polarity off the wall: left/top sink, right/bottom source", () => {
     expect(judge({ source: { nodeId: "a", portId: "out" }, target: { nodeId: "hub", portId: "in" } })).toEqual({
@@ -592,7 +615,7 @@ describe("standInJudge", () => {
 
   it("refuses a duplicate and a second feed into an occupied input", () => {
     const wired: HostScene = { ...HOST, edges: [{ id: "e", source: "a", sourceHandle: "out", target: "hub", targetHandle: "in" }] };
-    const onWired = standInJudge(wired);
+    const onWired = judgeWith(wired);
     expect(onWired({ source: { nodeId: "a", portId: "out" }, target: { nodeId: "hub", portId: "in" } })).toEqual({
       ok: false,
       reason: "duplicate",
@@ -602,7 +625,7 @@ describe("standInJudge", () => {
       reason: "input-occupied",
     });
     // Both rules are switchable, because the story exposes them as toggles.
-    expect(standInJudge(wired, { singleFeed: false })({ source: { nodeId: "b", portId: "out" }, target: { nodeId: "hub", portId: "in" } })).toMatchObject({
+    expect(judgeWith(wired, { singleFeed: false })({ source: { nodeId: "b", portId: "out" }, target: { nodeId: "hub", portId: "in" } })).toMatchObject({
       ok: true,
     });
   });
@@ -615,11 +638,11 @@ describe("standInJudge", () => {
       ],
       edges: [{ id: "e", source: "x", sourceHandle: "out", target: "y", targetHandle: "in" }],
     };
-    expect(standInJudge(loopy)({ source: { nodeId: "y", portId: "out" }, target: { nodeId: "x", portId: "in" } })).toEqual({
+    expect(judgeWith(loopy)({ source: { nodeId: "y", portId: "out" }, target: { nodeId: "x", portId: "in" } })).toEqual({
       ok: false,
       reason: "cycle",
     });
-    expect(standInJudge(loopy, { acyclic: false, singleFeed: true, sameScope: true })({
+    expect(judgeWith(loopy, { acyclic: false, singleFeed: true, sameScope: true })({
       source: { nodeId: "y", portId: "out" },
       target: { nodeId: "x", portId: "in" },
     })).toMatchObject({ ok: true });
@@ -642,7 +665,7 @@ describe("standInJudge", () => {
       intent: "into",
       candidateNodeIds: HOST.nodes.map((node) => node.id),
       portsOf: hostPortsOf(HOST),
-      judge: standInJudge(HOST),
+      judge: judgeWith(HOST),
     });
     expect([...keys].sort()).toEqual(["gain/set", "hub/cfg", "hub/in"]);
   });

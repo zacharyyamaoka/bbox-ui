@@ -1,5 +1,8 @@
 // src/scene/bubble.test.ts — fold bubbling, tested in the node project (no
 // DOM): `pnpm exec vitest --project=unit run`.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, test } from "vitest";
 
 import { sceneSurfaceModel, surfaceFindings, visibilityFromHides, type HidesOf, type SurfaceModel, type SurfacedFinding, type VisibilityOf } from "./bubble";
@@ -15,13 +18,48 @@ function finding(id: string, subject: LintSubject, overrides: Partial<LintFindin
 /* No view-mode name anywhere in bubble.ts itself — R3a                */
 /* ------------------------------------------------------------------ */
 
+// The view-name literals bubble.ts's CODE must never contain. Its header
+// comment legitimately quotes Zach saying "simple" and "expanded" (that's
+// prose about the rule, not the rule itself), so the check below strips
+// comments first — a raw-text grep would false-alarm on that quote.
+const FORBIDDEN_VIEW_NAMES = ['"simple"', "'simple'", "`simple`", '"expanded"', "'expanded'", "`expanded`"];
+
+/**
+ * Strip `/* ... *‍/` block comments (including the `/** ... *‍/` header) and
+ * `// ...` line comments from a TypeScript source string, leaving only code.
+ *
+ * WHY this exact order and NOT a single combined regex: block comments can
+ * span lines and must go first, or a `//` that happens to sit inside one
+ * (this file's header has several, e.g. inside backtick-quoted identifiers)
+ * would truncate the block-comment match early. What this does NOT handle:
+ * a `//` or `/*` occurring inside a real string/template literal would be
+ * misread as a comment start. Checked against bubble.ts (see grep above
+ * this test file's own history) — it has no string or template literal
+ * containing `//` or `/*`, so the simple stripper is safe for the file it
+ * actually checks, not a general-purpose TS comment stripper.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
+const bubbleSource = readFileSync(fileURLToPath(new URL("./bubble.ts", import.meta.url)), "utf8");
+const bubbleCode = stripComments(bubbleSource);
+
 describe("bubble.ts names no view mode", () => {
-  test("grep-equivalent: no quoted view-mode literal appears in the module under test's own vocabulary", () => {
-    // This module's public surface (HidesOf/VisibilityOf) never mentions a
-    // view by name; the real, mechanical check is a repo-level grep run at
-    // review time (`grep -cE '"simple"|"expanded"' .../bubble.ts` === 0).
-    // This test documents the contract so it fails loudly if the exported
-    // vocabulary ever grows a view-shaped field.
+  test("no quoted view-mode literal appears in bubble.ts's CODE (comments stripped first)", () => {
+    // The real, mechanical check: read the actual file off disk, strip
+    // comments (the header quotes Zach saying "simple"/"expanded" as prose
+    // about the rule — that's allowed), and grep what's left. This fails
+    // loudly the moment a view-name string literal lands in the code.
+    for (const literal of FORBIDDEN_VIEW_NAMES) {
+      expect(bubbleCode).not.toContain(literal);
+    }
+  });
+
+  test("secondary check: the exported vocabulary (HidesOf/VisibilityOf) stays view-name-free too", () => {
+    // Not the primary proof (this asserts a literal the test itself wrote,
+    // not bubble.ts's actual contents) — kept as a documented contract on
+    // the exported shape, on top of the real file-read check above.
     const hidesOf: HidesOf = () => ({ members: true, ports: true });
     expect(Object.keys(hidesOf("x") ?? {}).sort()).toEqual(["members", "ports"]);
   });

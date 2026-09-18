@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
@@ -6,8 +6,9 @@ import { ReactFlowHost } from "../hosts/reactFlowHost";
 import { TldrawHost } from "../hosts/tldrawHost";
 import type { Decorate } from "../hosts/nodeViews";
 import type { HostScene } from "../hosts/hostScene";
+import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "../hosts/validationScene";
 import { connectionAvailability, type PortAvailability } from "../scene/availability";
-import { typesIntersect, type PortTypeOf, type PortsOf } from "../scene/lint";
+import { typesIntersect } from "../scene/lint";
 import { portKey, type ScenePortRef } from "../scene/scene";
 
 /**
@@ -17,11 +18,24 @@ import { portKey, type ScenePortRef } from "../scene/scene";
  * examples in a host reactflow/tldraw so I can check that the gestures
  * still transfer."
  *
- * The SAME fixture (`VH_SCENE`, structurally the same three-node "which
- * targets are legal" shape `ValidityPreview.stories.tsx` runs on the DOM
- * Canvas) through TWO more engines, via the host `decorate` seam
- * (`src/hosts/nodeViews.tsx`) this lane added — zero component-kit code
- * changes, zero scene-kit awareness of either engine.
+ * The SAME fixture (`VALIDATION_SCENE`, `hosts/validationScene.ts`) that
+ * `ValidityPreview.stories.tsx` runs on the DOM Canvas, through TWO more
+ * engines, via the host `decorate` seam (`src/hosts/nodeViews.tsx`) this
+ * lane added — zero component-kit code changes, zero scene-kit awareness
+ * of either engine.
+ *
+ * WHY the fixture moved out of this file (2026-09-18,
+ * docs/peps/0002-the-judge-owns-edge-orientation.md): it used to be a
+ * SEPARATE three-node `VH_SCENE`, structurally similar to but not the SAME
+ * RECORD as `ValidityPreview.stories.tsx`'s own fixture — `sink/in` was
+ * wired to zero producers here and to two (the at-rest many-to-one
+ * grammar) there. The two benches were judging a different scene under
+ * the same port name, so "does the gesture transfer" proved nothing:
+ * `sink/in` read `"available"` in this file and `"unavailable"` in that
+ * one, for the identical gesture. One shared literal fixes that — here
+ * `sink/in` reads exactly what it reads on the DOM Canvas (already
+ * oversubscribed, so unavailable as a further target too), and `sink/in2`
+ * is the legal drag target in every host.
  *
  * React Flow gets the GESTURE-adjacent story: a real pointer sequence,
  * same `connectionAvailability`-once-at-drag-start contract as the DOM
@@ -42,28 +56,6 @@ const meta = {
 
 export default meta;
 type Story = StoryObj;
-
-const VH_SCENE: HostScene = {
-  nodes: [
-    { id: "num1", type: "block", position: { x: 24, y: 24 }, data: { name: "num1", view: "port", w: 132, h: 60, ports: { right: ["out"] } } },
-    { id: "str", type: "block", position: { x: 24, y: 120 }, data: { name: "str", view: "port", w: 132, h: 60, ports: { right: ["out"] } } },
-    { id: "sink", type: "block", position: { x: 380, y: 72 }, data: { name: "sink", view: "port", w: 132, h: 60, ports: { left: ["in"] } } },
-  ],
-  edges: [],
-};
-
-const TYPE_OF: PortTypeOf = (ref) => {
-  if (ref.nodeId === "num1") return ["number"];
-  if (ref.nodeId === "str") return ["string"];
-  if (ref.nodeId === "sink") return ["number"];
-  return undefined;
-};
-
-const PORTS_OF: PortsOf = (nodeId) => {
-  const node = VH_SCENE.nodes.find((candidate) => candidate.id === nodeId);
-  if (!node) return undefined;
-  return Object.values(node.data.ports ?? {}).flat();
-};
 
 function decorateFromAvailability(availability: Map<string, PortAvailability> | null): Decorate {
   return (node) => {
@@ -107,7 +99,7 @@ function firePointer(el: Element | Window, kind: "down" | "move" | "up", x: numb
 /* ------------------------------------------------------------------ */
 
 function ReactFlowGestureDemo() {
-  const [scene] = useState<HostScene>(VH_SCENE);
+  const [scene] = useState<HostScene>(VALIDATION_SCENE);
   const [availability, setAvailability] = useState<Map<string, PortAvailability> | null>(null);
   const decorate = useMemo(() => decorateFromAvailability(availability), [availability]);
 
@@ -115,7 +107,7 @@ function ReactFlowGestureDemo() {
     (event: React.PointerEvent) => {
       const ref = portRefAt(event.target as Element);
       if (!ref) return;
-      const map = connectionAvailability(scene, ref, { portsOf: PORTS_OF, typeOf: TYPE_OF, compatible: typesIntersect });
+      const map = connectionAvailability(scene, ref, { portsOf: validationPortsOf, typeOf: validationTypeOf, compatible: typesIntersect, directionOf: validationDirectionOf });
       setAvailability(map);
       const onUp = () => {
         setAvailability(null);
@@ -137,21 +129,30 @@ export const ReactFlowDragTimePreview: Story = {
   name: "React Flow — drag-time preview (gesture)",
   render: () => <ReactFlowGestureDemo />,
   play: async ({ canvasElement }) => {
-    await waitFor(() => dotAt(canvasElement, "sink", "in"));
+    await waitFor(() => {
+      dotAt(canvasElement, "sink", "in");
+      dotAt(canvasElement, "sink", "in2");
+    });
 
     const from = dotAt(canvasElement, "num1", "out");
     const p = centreOf(from);
     firePointer(from, "down", p.x, p.y);
 
-    // Same contract as the DOM Canvas bench (ValidityPreview.stories.tsx):
-    // computed ONCE at drag start, painted through `decorate` with zero
-    // component-kit changes — GESTURE TRANSFERRED, measured.
+    // Same contract as the DOM Canvas bench (ValidityPreview.stories.tsx),
+    // now the SAME fixture too — GESTURE TRANSFERRED, measured, on the
+    // named ports that actually agree between the two hosts:
+    //   sink/in2  legal, empty, type-compatible          -> available
+    //   sink/in   already at 2 producers at rest          -> unavailable
+    //   str/out   type-mismatch (wants "number", is "string") -> unavailable
+    //   num2/out  OUTPUT->OUTPUT — ruling docs/peps/0002    -> unavailable
     await waitFor(() => {
-      expect(dotAt(canvasElement, "sink", "in").getAttribute("data-availability")).toBe("available");
+      expect(dotAt(canvasElement, "sink", "in2").getAttribute("data-availability")).toBe("available");
+      expect(dotAt(canvasElement, "sink", "in").getAttribute("data-availability")).toBe("unavailable");
       expect(dotAt(canvasElement, "str", "out").getAttribute("data-availability")).toBe("unavailable");
+      expect(dotAt(canvasElement, "num2", "out").getAttribute("data-availability")).toBe("unavailable");
     });
 
-    const up = centreOf(dotAt(canvasElement, "sink", "in"));
+    const up = centreOf(dotAt(canvasElement, "sink", "in2"));
     firePointer(window, "up", up.x, up.y);
     await waitFor(() => {
       expect(canvasElement.querySelectorAll("[data-availability]").length).toBe(0);
@@ -171,7 +172,7 @@ function TldrawControlDemo({ from }: TldrawArgs) {
   const availability = useMemo(() => {
     if (from === "none") return null;
     const [nodeId, portId] = from.split("/");
-    return connectionAvailability(VH_SCENE, { nodeId, portId }, { portsOf: PORTS_OF, typeOf: TYPE_OF, compatible: typesIntersect });
+    return connectionAvailability(VALIDATION_SCENE, { nodeId, portId }, { portsOf: validationPortsOf, typeOf: validationTypeOf, compatible: typesIntersect, directionOf: validationDirectionOf });
   }, [from]);
   const decorate = useMemo(() => decorateFromAvailability(availability), [availability]);
 
@@ -181,7 +182,7 @@ function TldrawControlDemo({ from }: TldrawArgs) {
         availability via controls — NOT a gesture; tldraw host has no cable gesture. Use the <code>from</code> control below to
         pick which port's availability map to paint.
       </p>
-      <TldrawHost scene={VH_SCENE} width={620} height={260} decorate={decorate} />
+      <TldrawHost scene={VALIDATION_SCENE} width={620} height={320} decorate={decorate} />
     </div>
   );
 }
@@ -192,11 +193,15 @@ export const TldrawControlDrivenAvailability: StoryObj<TldrawArgs> = {
   args: { from: "num1/out" },
   render: (args) => <TldrawControlDemo {...args} />,
   play: async ({ canvasElement }) => {
-    await waitFor(() => dotAt(canvasElement, "sink", "in"));
+    await waitFor(() => {
+      dotAt(canvasElement, "sink", "in");
+      dotAt(canvasElement, "sink", "in2");
+    });
     // The control's default (`from: "num1/out"`) already painted the map —
     // no pointer event anywhere in this play function.
     await waitFor(() => {
-      expect(dotAt(canvasElement, "sink", "in").getAttribute("data-availability")).toBe("available");
+      expect(dotAt(canvasElement, "sink", "in2").getAttribute("data-availability")).toBe("available");
+      expect(dotAt(canvasElement, "sink", "in").getAttribute("data-availability")).toBe("unavailable");
       expect(dotAt(canvasElement, "str", "out").getAttribute("data-availability")).toBe("unavailable");
     });
   },

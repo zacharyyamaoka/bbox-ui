@@ -2,7 +2,7 @@
 // node project (no DOM): `pnpm exec vitest --project=unit run`.
 import { describe, expect, test } from "vitest";
 
-import { validateConnection, type ConnectionVerdict } from "./edgeValidation";
+import { gestureOrientation, validateConnection, type ConnectionVerdict } from "./edgeValidation";
 import type { LintScene } from "./lint";
 import type { ScenePortRef } from "./scene";
 
@@ -32,8 +32,9 @@ function expectExplainedRefusal(verdict: ConnectionVerdict, code: string) {
 
 describe("validateConnection — allowed", () => {
   test("a fresh wire into an unwired port is allowed", () => {
-    const verdict = validateConnection(scene, e("cand", "b", "sink", "out", "cfg"));
-    expect(verdict).toEqual({ allowed: true });
+    const candidate = e("cand", "b", "sink", "out", "cfg");
+    const verdict = validateConnection(scene, candidate);
+    expect(verdict).toEqual({ allowed: true, oriented: gestureOrientation(candidate) });
   });
 
   test("a node-level candidate (no targetHandle) skips the many-to-one check entirely", () => {
@@ -42,19 +43,22 @@ describe("validateConnection — allowed", () => {
   });
 
   test("an exact duplicate of an existing wire (same source AND target port) is ALLOWED — a re-wire from the same source carries the identical value, so it is duplicate-edge's concern (a warning), never many-to-one's", () => {
-    const verdict = validateConnection(scene, e("cand", "a", "sink", "out", "in"));
-    expect(verdict).toEqual({ allowed: true });
+    const candidate = e("cand", "a", "sink", "out", "in");
+    const verdict = validateConnection(scene, candidate);
+    expect(verdict).toEqual({ allowed: true, oriented: gestureOrientation(candidate) });
   });
 
   test("a candidate that would close a cycle is ALLOWED — cycle does not gate", () => {
-    const verdict = validateConnection(scene, e("cand", "sink", "a", "out", "in"));
-    expect(verdict).toEqual({ allowed: true });
+    const candidate = e("cand", "sink", "a", "out", "in");
+    const verdict = validateConnection(scene, candidate);
+    expect(verdict).toEqual({ allowed: true, oriented: gestureOrientation(candidate) });
   });
 
   test("with a typeOf vocabulary supplied, a COMPATIBLE candidate is allowed", () => {
     const typeOf = (ref: ScenePortRef) => (ref.nodeId === "b" && ref.portId === "out" ? ["number"] : ref.nodeId === "sink" && ref.portId === "cfg" ? ["number"] : undefined);
-    const verdict = validateConnection(scene, e("cand", "b", "sink", "out", "cfg"), { typeOf });
-    expect(verdict).toEqual({ allowed: true });
+    const candidate = e("cand", "b", "sink", "out", "cfg");
+    const verdict = validateConnection(scene, candidate, { typeOf });
+    expect(verdict).toEqual({ allowed: true, oriented: gestureOrientation(candidate) });
   });
 });
 
@@ -97,8 +101,9 @@ describe("validateConnection — every gate is EXPLAINED (ruling 1: no silent re
   });
 
   test("the SAME candidate is allowed with no typeOf supplied at all — type-mismatch contributes nothing when unconfigured", () => {
-    const verdict = validateConnection(scene, e("cand", "b", "sink", "out", "cfg"));
-    expect(verdict).toEqual({ allowed: true });
+    const candidate = e("cand", "b", "sink", "out", "cfg");
+    const verdict = validateConnection(scene, candidate);
+    expect(verdict).toEqual({ allowed: true, oriented: gestureOrientation(candidate) });
   });
 });
 

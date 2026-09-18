@@ -43,19 +43,19 @@
 // 2026-09-18):
 //   1. These stories — `connectionAvailability` → a `Port`'s own
 //      `availability` prop (component-lane work, not this file).
-//   2. Batch wiring — `batchWire.ts` already declares its own
+//   2. Batch wiring — `batchWire.ts` declares its own
 //      `WireJudge = (candidate) => WireVerdict` closing over its scene
 //      (`batchWire.ts:150-160`) and imports NOTHING from
-//      `edgeValidation.ts` (grepped: comments only). `batchWire.standIn.ts`
-//      names its own one-line replacement once this lane lands — that
-//      swap belongs to the batch-wiring lane, not this one; this file
-//      never touches `batchWire*`.
+//      `edgeValidation.ts` (grepped: comments only). The bridge is
+//      `batchWireJudge.ts`'s `validateConnectionJudge`, which replaced
+//      the now-deleted `batchWire.standIn.ts` — this file never touches
+//      `batchWire*` either way.
 //   3. Magnetic wires — consumes `ValidateConnection` (or this file's
 //      precomputed `Map`) as its own snap-search filter, per the
 //      `snapLinks` note above. This file never touches `magnet*`.
 
 import { validateConnection, type ConnectionVerdict } from "./edgeValidation";
-import type { LintScene, PortsOf, PortTypeOf, TypeCompatible } from "./lint";
+import type { LintScene, PortDirectionOf, PortsOf, PortTypeOf, TypeCompatible } from "./lint";
 import { portKey, type ScenePortRef, type SceneEdgeEnds } from "./scene";
 
 /**
@@ -87,6 +87,17 @@ export interface AvailabilityOptions {
   fromRole?: "source" | "target";
   typeOf?: PortTypeOf;
   compatible?: TypeCompatible;
+  /**
+   * Port polarity, forwarded straight to `validateConnection`'s own
+   * `directionOf`. Omitted, `validateConnection`'s polarity gate is inert
+   * (the kit-wide "undefined = unknown, no judgement" convention) — which
+   * was the whole bug this option fixes: probed against
+   * `ValidityPreview.stories.tsx`'s real fixture before this existed,
+   * dragging from `num1/out` painted `num2/out` (another OUTPUT)
+   * `"available"`, because nothing here ever told `validateConnection`
+   * which end emits. See docs/peps/0002-the-judge-owns-edge-orientation.md.
+   */
+  directionOf?: PortDirectionOf;
 }
 
 export interface PortAvailability {
@@ -104,8 +115,8 @@ export interface PortAvailability {
  * gesture is never offered itself as a legal target.
  */
 export function connectionAvailability(scene: LintScene, from: ScenePortRef, options: AvailabilityOptions): Map<string, PortAvailability> {
-  const { portsOf, fromRole = "source", typeOf, compatible } = options;
-  const validate: ValidateConnection = options.validate ?? ((s, candidate) => validateConnection(s, candidate, { portsOf, typeOf, compatible }));
+  const { portsOf, fromRole = "source", typeOf, compatible, directionOf } = options;
+  const validate: ValidateConnection = options.validate ?? ((s, candidate) => validateConnection(s, candidate, { portsOf, typeOf, compatible, directionOf }));
   const fromKey = portKey(from.nodeId, from.portId);
 
   const result = new Map<string, PortAvailability>();

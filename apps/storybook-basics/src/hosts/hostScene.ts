@@ -17,6 +17,7 @@
 
 import type { BlockSide } from "../components/port.layout";
 import type { BlockView } from "../components/blockPort.layout";
+import type { PortDirection, PortDirectionOf, PortsOf } from "../scene/lint";
 import type { BlockScene } from "../scene/scene";
 import type { WireStyleData } from "../scene/sceneWires";
 
@@ -87,4 +88,67 @@ export const HOST_SCENE: HostScene = {
  *  kit's business (`childrenOf`), in every host the same way. */
 export function topLevelNodes<S extends { nodes: readonly { parentId?: string }[] }>(scene: S): S["nodes"] {
   return scene.nodes.filter((node) => node.parentId === undefined) as S["nodes"];
+}
+
+/* ------------------------------------------------------------------ */
+/* Port vocabulary + polarity — READING the host's own records, not     */
+/* judging them. Moved here from the now-deleted `batchWire.standIn.ts` */
+/* (docs/peps/0002-the-judge-owns-edge-orientation.md): that file's own  */
+/* header was explicit that these two functions are "NOT the connection-*/
+/* rule engine", only host-geometry readers — `edgeValidation.ts`'s      */
+/* `validateConnection` is the engine, and `hostPolarityOf` is what      */
+/* supplies its `directionOf` resolver for this host family.            */
+/* ------------------------------------------------------------------ */
+
+/** Which wall means which direction. Host-side view geometry decides
+ *  polarity here because the SCENE does not carry it — `HostNodeData.ports`
+ *  is `Partial<Record<BlockSide, string[]>>` and nothing in it says "in" or
+ *  "out" (this file's own note above: "The scene only ever names ports; it
+ *  never places them").
+ *
+ *  WHY this is host-geometry and not a `lint.ts`/`edgeValidation.ts`
+ *  finding: in the donor (SystemSketch), polarity is `portPolarity(port.side,
+ *  face)` — a function of the port's lane AND which face of the block is
+ *  showing, so the same port is a source from outside and a sink from
+ *  inside. That second argument has no equivalent here yet, so this reads
+ *  walls only. */
+const SINK_SIDES: readonly BlockSide[] = ["left", "top"];
+
+/** Every port a host node speaks, in render order. `[]` = speaks none. */
+export function hostPortsOf(scene: HostScene): PortsOf {
+  const byId = new Map(scene.nodes.map((node) => [node.id, node]));
+  return (nodeId) => {
+    const node = byId.get(nodeId);
+    if (!node) return undefined;
+    return portIdsOf(node.type, node.data);
+  };
+}
+
+function portIdsOf(type: string | undefined, data: HostNodeData): string[] {
+  if (type === "value") return [...(data.writers ?? []), ...(data.readers ?? [])];
+  // glyph and code speak no ports at all — an honest empty, not "unknown".
+  if (type === "glyph" || type === "code") return [];
+  return (Object.keys(data.ports ?? {}) as BlockSide[]).flatMap((side) => data.ports?.[side] ?? []);
+}
+
+/** A port's direction, or `undefined` when the node does not speak it —
+ *  this host family's `PortDirectionOf` (`lint.ts`), for `validateConnection`
+ *  and `lint.ts`'s own `polarity` rule to consume. */
+export function hostPolarityOf(scene: HostScene): PortDirectionOf {
+  const byId = new Map(scene.nodes.map((node) => [node.id, node]));
+  return ({ nodeId, portId }) => {
+    const node = byId.get(nodeId);
+    if (!node) return undefined;
+    if (node.type === "value") {
+      if ((node.data.writers ?? []).includes(portId)) return "sink";
+      if ((node.data.readers ?? []).includes(portId)) return "source";
+      return undefined;
+    }
+    for (const side of Object.keys(node.data.ports ?? {}) as BlockSide[]) {
+      if ((node.data.ports?.[side] ?? []).includes(portId)) {
+        return (SINK_SIDES.includes(side) ? "sink" : "source") satisfies PortDirection;
+      }
+    }
+    return undefined;
+  };
 }

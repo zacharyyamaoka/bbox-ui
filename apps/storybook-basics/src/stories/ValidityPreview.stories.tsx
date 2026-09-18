@@ -5,8 +5,9 @@ import { expect, waitFor } from "storybook/test";
 import { DomCanvas } from "../hosts/domCanvas";
 import type { Decorate, SceneNodeDecoration } from "../hosts/nodeViews";
 import type { HostScene } from "../hosts/hostScene";
+import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "../hosts/validationScene";
 import { connectionAvailability, type PortAvailability } from "../scene/availability";
-import { typesIntersect, type PortTypeOf, type PortsOf } from "../scene/lint";
+import { typesIntersect } from "../scene/lint";
 import { portKey, type ScenePortRef } from "../scene/scene";
 
 /**
@@ -53,46 +54,11 @@ const UNAVAILABLE_COLOR = "var(--bbox-danger)";
 const NEUTRAL_COLOR = "var(--muted-foreground)";
 
 /* ------------------------------------------------------------------ */
-/* Fixture — one legal target (types match), one illegal (type-mismatch),*/
-/* and a pre-existing many-to-one on sink/in (the at-rest grammar).      */
+/* Fixture — SHARED with `ValidationHosts.stories.tsx` (ruling 8's        */
+/* success criterion: the "does the gesture transfer" comparison is only */
+/* honest if both host benches judge the SAME named ports). See           */
+/* `hosts/validationScene.ts` for the fixture and why it moved there.    */
 /* ------------------------------------------------------------------ */
-
-const VP_SCENE: HostScene = {
-  nodes: [
-    { id: "num1", type: "block", position: { x: 16, y: 16 }, data: { name: "num1", view: "port", w: 132, h: 60, ports: { right: ["out"] } } },
-    { id: "num2", type: "block", position: { x: 16, y: 232 }, data: { name: "num2", view: "port", w: 132, h: 60, ports: { right: ["out"] } } },
-    { id: "str", type: "block", position: { x: 16, y: 124 }, data: { name: "str", view: "port", w: 132, h: 60, ports: { right: ["out"] } } },
-    // Two input ports, deliberately: `in` is ALREADY over-subscribed (the
-    // at-rest grammar's own fixture) and stays that way through every
-    // gesture below; `in2` is the empty, legal DRAG target — a port
-    // already sitting at 2+ producers can never read "available" again
-    // (any further candidate keeps `distinctSources.size >= 2`,
-    // `lint.ts`'s own many-to-one rule, correctly — inviting a THIRD wire
-    // into an already-illegal port is not "legal"), so testing the legal-
-    // target path needs a port that ISN'T the one already broken.
-    { id: "sink", type: "block", position: { x: 380, y: 124 }, data: { name: "sink", view: "port", w: 132, h: 80, ports: { left: ["in", "in2"] } } },
-  ],
-  edges: [
-    // Both already wired into `in` — many-to-one from the first render, at
-    // rest, and untouched by any gesture below (`in2` is the drag target).
-    { id: "e-num1-sink", source: "num1", sourceHandle: "out", target: "sink", targetHandle: "in" },
-    { id: "e-num2-sink", source: "num2", sourceHandle: "out", target: "sink", targetHandle: "in" },
-  ],
-};
-
-const TYPE_OF: PortTypeOf = (ref) => {
-  if (ref.nodeId === "num1" || ref.nodeId === "num2") return ["number"];
-  if (ref.nodeId === "str") return ["string"];
-  if (ref.nodeId === "sink") return ["number"];
-  return undefined;
-};
-
-const PORTS_OF: PortsOf = (nodeId) => {
-  const node = VP_SCENE.nodes.find((candidate) => candidate.id === nodeId);
-  if (!node) return undefined;
-  const ports = node.data.ports ?? {};
-  return Object.values(ports).flat();
-};
 
 /* ------------------------------------------------------------------ */
 /* The host adapter: real pointer gesture -> connectionAvailability     */
@@ -120,7 +86,7 @@ function portRefAt(el: Element): ScenePortRef | null {
 }
 
 function ValidityPreviewDemo({ validityPreview }: { validityPreview: boolean }) {
-  const [scene, setScene] = useState<HostScene>(VP_SCENE);
+  const [scene, setScene] = useState<HostScene>(VALIDATION_SCENE);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<{ from: ScenePortRef; availability: Map<string, PortAvailability> } | null>(null);
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
@@ -205,7 +171,7 @@ function ValidityPreviewDemo({ validityPreview }: { validityPreview: boolean }) 
     if (!validityPreview) return;
     const ref = portRefAt(event.target as Element);
     if (!ref) return;
-    const availability = connectionAvailability(scene, ref, { portsOf: PORTS_OF, typeOf: TYPE_OF, compatible: typesIntersect });
+    const availability = connectionAvailability(scene, ref, { portsOf: validationPortsOf, typeOf: validationTypeOf, compatible: typesIntersect, directionOf: validationDirectionOf });
     setDrag({ from: ref, availability });
     const rect = containerRef.current!.getBoundingClientRect();
     setPointer({ x: event.clientX - rect.left, y: event.clientY - rect.top });
@@ -304,11 +270,16 @@ export const Interactive: StoryObj<{ validityPreview: boolean }> = {
     // type-compatible; sink/in is ALREADY many-to-one at rest, so — per
     // lint.ts's own rule — it correctly reads unavailable too (a further
     // wire into an already-oversubscribed port is not "legal" either);
-    // str/out is the type-mismatch case.
+    // str/out is the type-mismatch case; num2/out is the OUTPUT→OUTPUT
+    // case (docs/peps/0002-the-judge-owns-edge-orientation.md) — same
+    // declared type as num1 ("number"), so before `directionOf` existed
+    // on `AvailabilityOptions` this read "available" too. Pinned here so
+    // the real host bench — not just the unit tests — proves the fix.
     await waitFor(() => {
       expect(dotAt(canvasElement, "sink", "in2").getAttribute("data-availability")).toBe("available");
       expect(dotAt(canvasElement, "sink", "in").getAttribute("data-availability")).toBe("unavailable");
       expect(dotAt(canvasElement, "str", "out").getAttribute("data-availability")).toBe("unavailable");
+      expect(dotAt(canvasElement, "num2", "out").getAttribute("data-availability")).toBe("unavailable");
     });
     // num1's OWN port is never offered to itself.
     expect(dotAt(canvasElement, "num1", "out").getAttribute("data-availability")).toBeNull();
@@ -363,4 +334,40 @@ export const PreviewOff: StoryObj<{ validityPreview: boolean }> = {
   args: { validityPreview: false },
   render: (args) => <ValidityPreviewDemo validityPreview={args.validityPreview} />,
   play: Interactive.play,
+};
+
+/**
+ * The output→output regression, held mid-gesture rather than settled —
+ * `Interactive`'s own play function releases the pointer and clears the
+ * map before it ends, so its OWN screenshot can never show the live paint
+ * this story exists to freeze. Report capture (`docs/build_lane_report.py`)
+ * screenshots a story's SETTLED state, so a dedicated story that stops
+ * after the down (never fires `pointerup`) is what makes the fix a
+ * capturable picture: `num2/out` painted unavailable (polarity — another
+ * OUTPUT), `sink/in2` available (the legal opposite-polarity target),
+ * `sink/in` unavailable (already oversubscribed at rest, unrelated to
+ * polarity), `num1/out` never offered to itself.
+ * docs/peps/0002-the-judge-owns-edge-orientation.md.
+ */
+export const OutputToOutputRefused: Story = {
+  name: "Output→Output Refused (mid-gesture, for capture)",
+  render: () => <ValidityPreviewDemo validityPreview={true} />,
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      dotAt(canvasElement, "num1", "out");
+      dotAt(canvasElement, "num2", "out");
+      dotAt(canvasElement, "sink", "in2");
+    });
+    const from = dotAt(canvasElement, "num1", "out");
+    const p = centreOf(from);
+    firePointer(from, "down", p.x, p.y);
+    await waitFor(() => {
+      expect(dotAt(canvasElement, "num2", "out").getAttribute("data-availability")).toBe("unavailable");
+      expect(dotAt(canvasElement, "sink", "in2").getAttribute("data-availability")).toBe("available");
+      expect(dotAt(canvasElement, "sink", "in").getAttribute("data-availability")).toBe("unavailable");
+      expect(dotAt(canvasElement, "str", "out").getAttribute("data-availability")).toBe("unavailable");
+    });
+    // Deliberately no `pointerup` — the drag (and its paint) stays live for
+    // the screenshot this story exists to provide.
+  },
 };

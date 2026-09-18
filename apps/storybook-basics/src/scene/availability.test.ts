@@ -3,6 +3,7 @@
 import { describe, expect, test } from "vitest";
 
 import { connectionAvailability } from "./availability";
+import { gestureOrientation, validateConnection } from "./edgeValidation";
 import type { LintScene } from "./lint";
 import { portKey } from "./scene";
 
@@ -89,7 +90,7 @@ describe("connectionAvailability — fromRole", () => {
       portsOf,
       validate: (_s, candidate) => {
         seen.push(candidate);
-        return { allowed: true };
+        return { allowed: true, oriented: gestureOrientation(candidate) };
       },
     });
     expect(seen.every((c) => c.source === "a" && c.sourceHandle === "out")).toBe(true);
@@ -102,7 +103,7 @@ describe("connectionAvailability — fromRole", () => {
       fromRole: "target",
       validate: (_s, candidate) => {
         seen.push(candidate);
-        return { allowed: true };
+        return { allowed: true, oriented: gestureOrientation(candidate) };
       },
     });
     expect(seen.every((c) => c.target === "b" && c.targetHandle === "in")).toBe(true);
@@ -120,5 +121,77 @@ describe("connectionAvailability — override", () => {
       expect(verdict.allowed).toBe(false);
       expect(verdict.allowed === false && verdict.refusal.code).toBe("custom");
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* directionOf — the output→output correctness bug, fixed              */
+/* ------------------------------------------------------------------ */
+
+// REGRESSION (docs/peps/0002-the-judge-owns-edge-orientation.md). Probed
+// against `ValidityPreview.stories.tsx`'s real fixture before `directionOf`
+// existed on `AvailabilityOptions`: dragging from `num1/out` painted
+// `num2/out` (another OUTPUT) "available", because nothing here ever told
+// `validateConnection` which end emits. `a`/`b` both speak `out` only,
+// mirroring that fixture's two same-polarity source nodes; `sink` speaks
+// `in` only, the one legitimate opposite-polarity target.
+describe("connectionAvailability — directionOf (output→output refused)", () => {
+  const polarityScene: LintScene = { nodes: [n("a"), n("b"), n("sink")], edges: [] };
+  const polarityPortsOf = (nodeId: string): readonly string[] | undefined => {
+    if (nodeId === "a" || nodeId === "b") return ["out"];
+    if (nodeId === "sink") return ["in"];
+    return undefined;
+  };
+  const directionOf = ({ nodeId }: { nodeId: string; portId: string }) => (nodeId === "sink" ? ("sink" as const) : ("source" as const));
+
+  test("two SOURCE ports are refused for polarity — both by validateConnection directly and by connectionAvailability's map, same code", () => {
+    const direct = validateConnection(polarityScene, { id: "cand", source: "a", sourceHandle: "out", target: "b", targetHandle: "out" }, { directionOf });
+    expect(direct.allowed).toBe(false);
+    expect(direct.allowed === false && direct.refusal.code).toBe("polarity");
+
+    const map = connectionAvailability(polarityScene, { nodeId: "a", portId: "out" }, { portsOf: polarityPortsOf, directionOf });
+    const viaAvailability = map.get(portKey("b", "out"))!.verdict;
+    expect(viaAvailability.allowed).toBe(false);
+    expect(viaAvailability.allowed === false && viaAvailability.refusal.code).toBe("polarity");
+  });
+
+  test("a SOURCE dragged to the one SINK stays available — the fix does not refuse everything", () => {
+    const map = connectionAvailability(polarityScene, { nodeId: "a", portId: "out" }, { portsOf: polarityPortsOf, directionOf });
+    expect(map.get(portKey("sink", "in"))!.verdict.allowed).toBe(true);
+  });
+
+  test("without directionOf (the prior behaviour), the same output→output pair reads available — proving the bug existed and `directionOf` is what fixes it", () => {
+    const map = connectionAvailability(polarityScene, { nodeId: "a", portId: "out" }, { portsOf: polarityPortsOf });
+    expect(map.get(portKey("b", "out"))!.verdict.allowed).toBe(true);
+  });
+
+  // The task's SECOND probe: "from the already-broken sink/in it painted
+  // BOTH num1/out and num2/out available" — dragging from an INPUT that is
+  // already at 2 producers must still refuse a THIRD, but only once the
+  // many-to-one gate reads the ORIENTED wire (source = the new producer,
+  // target = sink/in) rather than the gesture's own naive order (which
+  // would check num3/out's own producer count — always zero, so always
+  // "available", regardless of how oversubscribed sink/in already is).
+  test("dragging FROM an already-oversubscribed sink refuses a fresh source too — many-to-one reads the ORIENTED wire, not the gesture's order", () => {
+    const fanScene: LintScene = {
+      nodes: [n("num1"), n("num2"), n("num3"), n("sink")],
+      edges: [e("e1", "num1", "sink", "out", "in"), e("e2", "num2", "sink", "out", "in")],
+    };
+    const fanPortsOf = (nodeId: string): readonly string[] | undefined => {
+      if (nodeId === "sink") return ["in"];
+      if (nodeId === "num1" || nodeId === "num2" || nodeId === "num3") return ["out"];
+      return undefined;
+    };
+    const fanDirectionOf = ({ nodeId }: { nodeId: string; portId: string }) => (nodeId === "sink" ? ("sink" as const) : ("source" as const));
+
+    const map = connectionAvailability(fanScene, { nodeId: "sink", portId: "in" }, { portsOf: fanPortsOf, directionOf: fanDirectionOf });
+    const verdict = map.get(portKey("num3", "out"))!.verdict;
+    expect(verdict.allowed).toBe(false);
+    expect(verdict.allowed === false && verdict.refusal.code).toBe("many-to-one");
+
+    // And WITHOUT directionOf, the same drag reads available — the exact
+    // symptom the probe found, pinned so it cannot come back silently.
+    const naive = connectionAvailability(fanScene, { nodeId: "sink", portId: "in" }, { portsOf: fanPortsOf });
+    expect(naive.get(portKey("num3", "out"))!.verdict.allowed).toBe(true);
   });
 });
