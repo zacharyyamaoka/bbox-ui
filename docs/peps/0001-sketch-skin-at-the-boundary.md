@@ -184,7 +184,23 @@ discovered.
 Neither affects a static canvas, which is how these components are looked at
 essentially all of the time.
 
-A third, smaller cost: **semantic seeds need one attribute to travel.**
+A third cost, and the one that will bite an implementer rather than a user:
+**the edge writes into someone else's cascade.** A boundary-injected node is
+subject to whatever descendant CSS the host subtree already has, and an
+SVG's `width`/`height` *attributes* lose to any rule that sets the
+property. Measured: a `Badge` carries shadcn's `[&>svg]:size-3` — there so
+an icon inside a chip is 12px — and it silently collapsed an outline
+declared at 121.2×22 to 12×12, leaving one stray mark in the corner. The
+in-core `SketchOutline` escaped it only by accident, because its `stretch`
+mode happens to set those in `style`.
+
+So anything the pass needs must be set at a specificity the host cannot
+accidentally beat, and a DOM-presence assertion will not catch the failure —
+only measuring the injected node's own `getBoundingClientRect` will. This is
+inherent to drawing from outside; it is the fair price of not asking the
+core to know anything.
+
+A fourth, smaller cost: **semantic seeds need one attribute to travel.**
 `badge.tsx` seeds `badge:${size}:${shape}` and `port.tsx` seeds
 `port:${state}:${diameter}` — props the edge cannot see. The boundary
 derives a geometry seed instead, so the wobble *pattern* differs while its
@@ -192,6 +208,34 @@ character and amplitude do not. Closing it properly means each component
 emitting `data-bbox-seed` — one added attribute, no skin import, no skin
 knowledge. `block.tsx` already needs nothing: its default seed is already a
 geometry string.
+
+## One thing that looked like a limit and is not
+
+Geometry painted *outside* an element's own box — a `Port` dot's state
+rings are `box-shadow` layers, so `getBoundingClientRect` returns the 12px
+dot while the ring the eye reads is larger. Drawing on the element box put
+the hand-drawn ring inside the coloured one and read as a bullseye.
+
+This looked like a case the edge simply could not see, and it is not: the
+two numbers the core uses privately are already in the computed
+`box-shadow` as its spread radii, and the core's own expression reduces
+exactly. With spreads `s1 < s2`, `SURFACE == s1` and `STATE == s2 - s1`, so
+
+```
+SURFACE*2 + STATE*3  ==  3*s2 - s1
+```
+
+The edge now emits viewBox `0 0 25 25` and pen `3` for a 12px dot —
+identical to what the core's own `SketchOutline` emits for the same dot,
+asserted per state.
+
+The caveat is honest: parsing another component's `box-shadow` is DOM
+archaeology, and it lives in this PoC only because a concurrent lane owned
+the component files. At migration the component publishes those numbers the
+same way it publishes its colour, and the parser is deleted. The point the
+derivation makes is architectural, not tactical — **the information the edge
+needs is already in the DOM**, so "the core must compute this" was never
+forced.
 
 ## What would reopen it
 

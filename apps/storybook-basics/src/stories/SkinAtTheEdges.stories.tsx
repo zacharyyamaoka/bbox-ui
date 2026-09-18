@@ -258,13 +258,38 @@ export const SideBySide: Story = {
         </div>
       </Labelled>
 
+      {/*
+       * Column 3 is the REAL production configuration, and the distinction
+       * matters: the skin ATTRIBUTE is still stamped here, because the
+       * token half of a skin (no fill, the informal font, the radius, the
+       * 2px stroke width) is already edge-driven and correct — CSS
+       * resolving a value the edge supplied is how a skin is supposed to
+       * work, and docs/peps/0001 keeps it exactly as it is.
+       *
+       * What is gone is GEOMETRY. No component in this subtree computes a
+       * wobble; every drawn line comes from `<SketchAtEdge>`, and the
+       * core's own outline elements are suppressed by the pass's CSS. An
+       * earlier draft left the attribute off entirely, which made column 3
+       * render with the default card fill and sans font and so compared two
+       * different things — the capture caught it.
+       */}
       <Labelled title="3 · Boundary sketch (proposed)">
-        {/* Note what is NOT here: no `bboxSkinAttrs`. The subtree below is
-            the core in its default state. */}
         <SketchAtEdge>
-          <div data-testid="col-boundary">
+          <div data-testid="col-boundary" {...bboxSkinAttrs("sketch")}>
             <TraceStage testid="boundary-traces" />
             <BoxStage testid="boundary-boxes" />
+          </div>
+        </SketchAtEdge>
+      </Labelled>
+
+      {/* And the independence claim on its own: geometry from the edge with
+          NO skin attribute anywhere in the subtree. The core does not know a
+          skin exists; it is simply being drawn over. */}
+      <Labelled title="4 · Boundary geometry, core fully un-skinned">
+        <SketchAtEdge>
+          <div data-testid="col-naked">
+            <TraceStage testid="naked-traces" />
+            <BoxStage testid="naked-boxes" />
           </div>
         </SketchAtEdge>
       </Labelled>
@@ -297,6 +322,42 @@ export const SideBySide: Story = {
       const boxTwins = boundary.querySelectorAll(`svg[${SKETCH_TWIN_ATTR}="box"]`).length;
       expect(boxTwins).toBe(blocks + badges + dots);
     });
+
+    // Port rings: the boundary derives the ring's centre-line from the
+    // element's own box-shadow spreads and lands on exactly the geometry the
+    // core computes from its private constants. Asserted as equality of the
+    // emitted viewBox and pen width, per state — drawing on the element box
+    // instead put the drawn ring INSIDE the coloured one and read as a
+    // bullseye, which is what the first capture of this PoC showed.
+    const coreDotGeom = [...incore.querySelectorAll('[data-slot="port-dot"]')].map((el) => {
+      const svg = el.querySelector('[data-slot="sketch-outline"]');
+      return {
+        vb: svg?.getAttribute("viewBox"),
+        pen: svg?.querySelector("path")?.getAttribute("stroke-width"),
+      };
+    });
+    const edgeDotGeom = [...boundary.querySelectorAll('[data-slot="port-dot"]')].map((el) => {
+      const svg = el.querySelector<SVGSVGElement>(`svg[${SKETCH_TWIN_ATTR}="box"]`);
+      return {
+        vb: svg?.getAttribute("viewBox"),
+        pen: svg?.querySelector("path")?.getAttribute("stroke-width"),
+      };
+    });
+    expect(coreDotGeom.length).toBeGreaterThan(0);
+    expect(edgeDotGeom).toEqual(coreDotGeom);
+
+    // Column 4 is the independence claim, asserted: drawn geometry present,
+    // and no skin attribute anywhere above it in that subtree. This is the
+    // one that says the core does not need to know a skin exists.
+    const naked = canvasElement.querySelector<HTMLElement>('[data-testid="col-naked"]')!;
+    await waitFor(() => {
+      expect(boundaryTwins(naked).length).toBe(TRACE_CASES.length);
+    });
+    expect(naked.closest("[data-bbox-skin]")).toBeNull();
+    expect(naked.querySelector("[data-bbox-skin]")).toBeNull();
+    // Same geometry as the skinned column — the tokens change the paint,
+    // never the path.
+    expect(boundaryTwins(naked).map((p) => p.getAttribute("d"))).toEqual(b);
 
     // The crisp column is genuinely crisp: no drawn geometry at all.
     const crispCol = canvasElement.querySelector<HTMLElement>('[data-testid="col-crisp"]')!;
@@ -373,6 +434,24 @@ export const MeasuredNotNominal: Story = {
     const stretchA = badgeBoxes[0] / 40;
     const stretchB = badgeBoxes[1] / 40;
     expect(Math.abs(stretchB - stretchA)).toBeGreaterThan(0.4);
+
+    // --- REGRESSION GUARD: the twin's RENDERED box, not just its attrs ---
+    // A boundary-injected node lives in the host's cascade. A `Badge`
+    // carries shadcn's `[&>svg]:size-3` (for icons inside a chip), which
+    // beats an SVG's width/height ATTRIBUTES and silently collapsed this
+    // outline to 12x12 — declared 121.2x22, rendered 12x12, capsule gone.
+    // Attributes alone would have asserted green through that, so this
+    // measures `getBoundingClientRect` on the twin itself.
+    for (const el of measured.querySelectorAll('[data-slot="badge"]')) {
+      const twin = el.querySelector<SVGSVGElement>(`svg[${SKETCH_TWIN_ATTR}="box"]`)!;
+      const want = el.getBoundingClientRect();
+      const got = twin.getBoundingClientRect();
+      expect(got.width, "twin collapsed — host CSS beat the width attribute").toBeCloseTo(
+        want.width,
+        0,
+      );
+      expect(got.height).toBeCloseTo(want.height, 0);
+    }
 
     // --- The boundary side draws at true pixels -------------------------
     for (const el of measured.querySelectorAll('[data-slot="block"], [data-slot="badge"]')) {

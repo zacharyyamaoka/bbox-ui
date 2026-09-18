@@ -155,12 +155,18 @@ ellipse.
 
 Note the diameter arithmetic at `:249-251`
 (`diameterPx + SURFACE*2 + STATE*3`) exists to land the drawn ring on the
-same centre-line the box-shadow rings use. The boundary measures the dot's
-own box, so it needs the same outward offset — currently it draws on the
-element box, not the ring centre-line. **This is the one place the
-boundary's output is not yet equivalent** and it needs a
-`--bbox-ink-ring-offset` style channel or an agreed constant. Treat it as
-the migration's only open geometry question; everything else is settled.
+same centre-line the box-shadow rings use. **This is solved, not an open
+question** — `ringExpansion` in `skin/sketchAtEdge.ts` derives it from the
+element's own computed `box-shadow` spreads, and the algebra reduces exactly
+(`SURFACE*2 + STATE*3 == 3*s2 - s1`, `STATE == s2 - s1`). Verified: the edge
+emits viewBox `0 0 25 25` and pen `3` for a 12px dot, identical to the
+core's own output, asserted per state in `SideBySide`.
+
+**But replace the parser here.** Reading another component's `box-shadow` is
+DOM archaeology; it exists only because this lane could not edit `port.tsx`.
+When you are already in the file for M6, publish the two numbers alongside
+the colour and delete `ringExpansion`'s parsing branch. The function's own
+header says so.
 
 ---
 
@@ -265,6 +271,13 @@ Plus, specific to the migration:
 - `Styles/*` must still render all three skins, and the toolbar picker must
   still switch live. That is Zach's review surface; a correct architecture
   that loses it is a failed deliverable.
+- **Assert on the injected node's own rendered box, not its attributes.** A
+  boundary twin lives in the host's cascade: `Badge`'s
+  `[&>svg]:size-3` beat a `width="121.2"` attribute and collapsed an outline
+  to 12×12 while every presence-based check stayed green. The pass now sets
+  size as inline style and `MeasuredNotNominal` measures the twin's own
+  `getBoundingClientRect`. Any new slot added to `BOX_SELECTOR` needs the
+  same guard — check what descendant `svg` rules its component already has.
 - Measure, do not assert: every visual claim via `getBoundingClientRect`,
   `getComputedStyle`, or the real `d` string read out of the DOM.
   `storyRenders[0].reportedException` is not a real property.

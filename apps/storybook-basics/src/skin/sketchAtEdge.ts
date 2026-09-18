@@ -206,6 +206,61 @@ export function measureBox(el: Element): MeasuredBox {
   };
 }
 
+/**
+ * A ring that is painted OUTSIDE the element's own box, expanded to where
+ * the drawn line has to land.
+ *
+ * WHY this exists: a `Port` dot's state rings are `box-shadow` layers, not
+ * a border, so they sit entirely outside the element — `getBoundingClientRect`
+ * returns the 14px dot, while the ring the eye reads is several px larger.
+ * Drawing on the element box puts the hand-drawn ring INSIDE the coloured
+ * one and it reads as a bullseye rather than as one drawn ring. (Measured:
+ * that is exactly what the first capture of this PoC showed.)
+ *
+ * The core solves it by arithmetic on its own constants — `port.tsx:249-251`
+ * passes `diameterPx + SURFACE*2 + STATE*3` with `borderWidth: STATE`, and
+ * `SketchOutline` then insets by one border width per side, landing the path
+ * on the annulus centre-line. The edge cannot import those constants, but it
+ * does not need to: the same two numbers are in the computed `box-shadow` as
+ * its two spread radii, which is the DOM contract already carrying them.
+ * With spreads s1 < s2, SURFACE == s1 and STATE == s2 - s1, so the core's
+ * own expression reduces exactly — and `expand` is the OUTER box the twin is
+ * built at, because `upsertBoxTwin` then insets by one pen per side just as
+ * `SketchOutline` does:
+ *
+ *     SURFACE*2 + STATE*3  ==  2*s1 + 3*(s2 - s1)  ==  3*s2 - s1
+ *     STATE                ==  s2 - s1                  (the pen's width)
+ *
+ * Verified against the live DOM: a 12px dot with spreads 2px/5px gives
+ * expand = 3*5 - 2 = 13, so the twin is built at 25x25 and its drawn ellipse
+ * is 25 - 2*3 = 19 across — byte-identical to the viewBox and stroke-width
+ * the core's own `SketchOutline` emits for the same dot.
+ *
+ * WHY a fallback and not the real answer: parsing another component's
+ * `box-shadow` is DOM archaeology, and it is here only so this PoC can show
+ * the correct geometry WITHOUT editing a component (a concurrent lane owns
+ * those files). At migration, `port.tsx` publishes the two numbers the same
+ * way M6 publishes its colour — one custom property, no skin import — and
+ * this parser is DELETED. Do not carry it forward as the mechanism.
+ */
+export function ringExpansion(el: Element): { expand: number; pen: number } | null {
+  const shadow = getComputedStyle(el).boxShadow;
+  if (!shadow || shadow === "none") return null;
+  // Each layer's 4th length is its spread. Split on commas that separate
+  // layers, not the ones inside a colour function.
+  const layers = shadow.split(/,(?![^(]*\))/);
+  const spreads: number[] = [];
+  for (const layer of layers) {
+    const lengths = layer.match(/-?[\d.]+px/g);
+    if (lengths && lengths.length >= 4) spreads.push(parsePx(lengths[3]));
+  }
+  if (spreads.length < 2) return null;
+  const lo = Math.min(...spreads);
+  const hi = Math.max(...spreads);
+  if (hi <= lo) return null;
+  return { expand: 3 * hi - lo, pen: hi - lo };
+}
+
 function parsePx(v: string): number {
   const n = Number.parseFloat(v);
   return Number.isFinite(n) ? n : 0;
@@ -285,7 +340,18 @@ export function applySketchAtEdge(root: ParentNode): SketchPassStats {
   for (const el of root.querySelectorAll(DOT_SELECTOR)) {
     const box = measureBox(el);
     if (box.width <= 0 || box.height <= 0) continue;
-    upsertBoxTwin(el, box, "ellipse", stats);
+    // Expand to the ring's own centre-line when the ring is painted outside
+    // the element as box-shadow. See `ringExpansion`.
+    const ring = ringExpansion(el);
+    const expanded: MeasuredBox = ring
+      ? {
+          width: box.width + ring.expand,
+          height: box.height + ring.expand,
+          radius: box.radius,
+          borderWidth: ring.pen,
+        }
+      : box;
+    upsertBoxTwin(el, expanded, "ellipse", stats);
   }
 
   return stats;
@@ -394,6 +460,21 @@ function upsertBoxTwin(
   svg.setAttribute("viewBox", `0 0 ${round(box.width)} ${round(box.height)}`);
   svg.setAttribute("width", String(round(box.width)));
   svg.setAttribute("height", String(round(box.height)));
+  // WHY the size is ALSO written as inline style, not just as attributes:
+  // a boundary-injected node is subject to whatever descendant CSS the host
+  // subtree already has, and an SVG's width/height ATTRIBUTES lose to any
+  // rule that sets the property. Measured 2026-09-17: a `Badge` carries
+  // shadcn's `[&>svg]:size-3` (there so an icon inside a chip is 12px), and
+  // it collapsed this outline from its declared 121.2x22 to 12x12 — the
+  // drawn capsule vanished and left one stray mark in the corner.
+  //
+  // `SketchOutline` never hit this only because its `stretch` mode happens
+  // to set `width`/`height` in `style`. This is the genuine hazard class of
+  // the boundary approach and it is worth knowing: the edge writes into
+  // someone else's cascade, so anything it needs must be set at a
+  // specificity the host cannot accidentally beat.
+  svg.style.width = `${round(box.width)}px`;
+  svg.style.height = `${round(box.height)}px`;
   const path = svg.firstElementChild!;
   path.setAttribute("d", d);
   path.setAttribute("transform", `translate(${round(pad)} ${round(pad)})`);
@@ -478,5 +559,6 @@ export const SKETCH_AT_EDGE_CSS = `
    Block and Port already carry \`relative\` for the core's own outline, so
    this is a safety net for anything that does not. */
 [data-bbox-sketch-active] [data-slot="block"],
+[data-bbox-sketch-active] [data-slot="badge"],
 [data-bbox-sketch-active] [data-slot="port-dot"] { position: relative; }
 `;
