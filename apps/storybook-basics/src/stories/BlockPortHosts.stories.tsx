@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
 import { DomCanvas } from "../hosts/domCanvas";
-import { dragFrom } from "../hosts/hostGestures";
+import { dragFrom, dragSteps } from "../hosts/hostGestures";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
 
@@ -17,7 +17,7 @@ import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 const meta = {
   title: "Blocks/BlockPort/In A Host",
-  tags: ["area:blocks", "lane:baseline"],
+  tags: ["area:blocks", "lane:host-fixes"],
 } satisfies Meta;
 
 export default meta;
@@ -67,9 +67,9 @@ export const BlockDomCanvas: Story = {
   },
 };
 
-function StatefulReactFlow({ initial, resizable }: { initial: HostScene; resizable?: boolean }) {
+function StatefulReactFlow({ initial, resizable, height = 260 }: { initial: HostScene; resizable?: boolean; height?: number }) {
   const [scene, setScene] = useState(initial);
-  return <ReactFlowHost scene={scene} onSceneChange={setScene} width={420} height={260} defaultViewport={{ x: 0, y: 0, zoom: 1 }} resizable={resizable} />;
+  return <ReactFlowHost scene={scene} onSceneChange={setScene} width={420} height={height} defaultViewport={{ x: 0, y: 0, zoom: 1 }} resizable={resizable} />;
 }
 
 export const BlockReactFlow: Story = {
@@ -102,7 +102,14 @@ export const BlockReactFlow: Story = {
 
 export const BlockResizeReactFlow: Story = {
   name: "Resize (ReactFlow)",
-  render: () => <StatefulReactFlow initial={BLOCK_SCENE} resizable />,
+  // Taller than the other benches on purpose: `amp`'s bottom-left resize
+  // handle at (24, 186) sits inside the stock zoom `<Controls>` panel's own
+  // bottom-left footprint on the default 260px-tall canvas — a genuine
+  // collision between two DIFFERENT things (a per-node handle, a
+  // canvas-fixed overlay), unrelated to defect 4's occlusion-by-the-Block's
+  // -own-content bug this story exists to catch. More headroom keeps the
+  // two apart without touching either's z-index.
+  render: () => <StatefulReactFlow initial={BLOCK_SCENE} resizable height={360} />,
   play: async ({ canvasElement }) => {
     const host = required<HTMLElement>(canvasElement, '[data-host="react-flow"]', "the React Flow host");
     const node = required<HTMLElement>(host, '.react-flow__node[data-id="amp"]', "the block RF node");
@@ -119,12 +126,30 @@ export const BlockResizeReactFlow: Story = {
      * rAF, which a backgrounded tab throttles to seconds. */
     await waitFor(() => expect(node.style.visibility).toBe("visible"), { timeout: 10000 });
 
+    /* Host-fixes lane, defect 4: `dragFrom(grip, …)` dispatches ON the grip
+     * element directly, which is exactly how the story stayed green while
+     * a real pointer could not reach it — `document.elementsFromPoint`
+     * never returned the grip at any of its four corners, occluded by the
+     * Block's own port rail/card content (no explicit z-index on the
+     * resize controls, so a later-painted, z-indexed sibling won the
+     * stack). Before touching this element, prove with REAL hit-testing —
+     * not element-targeted synthesis — that a real pointer would land on
+     * the grip and nothing else, for every one of the eight controls. */
+    const allControls = Array.from(node.querySelectorAll<HTMLElement>(".react-flow__resize-control"));
+    expect(allControls.length).toBe(8);
+    for (const control of allControls) {
+      const r = control.getBoundingClientRect();
+      const topHit = document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2)[0];
+      expect(topHit, `real hit-test at ${control.className} resolved to ${topHit?.tagName}.${(topHit as HTMLElement)?.className}, not the control`).toBe(control);
+    }
+
     const boxBefore = block.getBoundingClientRect();
     const dotBefore = required<HTMLElement>(node, '[data-port-id="out"] [data-slot="port-dot"]', "the out dot").getBoundingClientRect();
 
     /* Drag the STOCK resize handle — the host's gesture, written back into
      * the scene as data (`w`/`h`), which is what makes the Block itself
-     * grow rather than a wrapper clipping it. */
+     * grow rather than a wrapper clipping it. Real-hit-tested above, so
+     * dispatching on `grip` now targets what a real pointer would too. */
     const gripRect = grip.getBoundingClientRect();
     await dragFrom(grip, { x: gripRect.left + gripRect.width / 2 + 60, y: gripRect.top + gripRect.height / 2 + 40 });
 
@@ -136,6 +161,55 @@ export const BlockResizeReactFlow: Story = {
        * rail re-attached to the new geometry. */
       const dotAfter = required<HTMLElement>(node, '[data-port-id="out"] [data-slot="port-dot"]', "the out dot").getBoundingClientRect();
       expect(dotAfter.left - dotBefore.left).toBeGreaterThan(40);
+    });
+  },
+};
+
+export const BlockResizeTopLeftReactFlow: Story = {
+  name: "Resize from top-left holds until release (ReactFlow)",
+  render: () => <StatefulReactFlow initial={BLOCK_SCENE} resizable height={360} />,
+  play: async ({ canvasElement }) => {
+    const host = required<HTMLElement>(canvasElement, '[data-host="react-flow"]', "the React Flow host");
+    const node = required<HTMLElement>(host, '.react-flow__node[data-id="amp"]', "the block RF node");
+    const block = required<HTMLElement>(node, '[data-block-id="amp"] > [data-slot="block"]', "the Block box");
+    const grip = await waitFor(() => required<HTMLElement>(node, ".react-flow__resize-control.handle.top.left", "the top-left corner handle"));
+    await waitFor(() => expect(node.style.visibility).toBe("visible"), { timeout: 10000 });
+
+    /* Real hit-test first, same reason as the sibling story above. */
+    const r0 = grip.getBoundingClientRect();
+    expect(document.elementsFromPoint(r0.left + r0.width / 2, r0.top + r0.height / 2)[0]).toBe(grip);
+
+    /* Host-fixes lane, defect 5: a TOP-LEFT drag moves the anchor (x, y)
+     * AND grows (w, h) in the SAME gesture — React Flow streams the
+     * position half on every pointermove (`applyPositionChanges`, before
+     * this fix) while this host only ever writes w/h back at
+     * `onResizeEnd`, so the two used to visibly separate: the Block SLID
+     * with the streamed position while staying its OLD size, then jumped
+     * to its new size only at release. The fix holds position back to
+     * match size — proven here by sampling the Block's real rect at
+     * several points DURING the drag and asserting NONE of them differ
+     * from the pre-drag box, only the post-release one does. */
+    const boxBefore = block.getBoundingClientRect();
+    const gripRect = grip.getBoundingClientRect();
+    const target = { x: gripRect.left + gripRect.width / 2 - 50, y: gripRect.top + gripRect.height / 2 - 30 };
+    let sawIntermediateChange = false;
+    await dragSteps(grip, target, {
+      steps: 5,
+      onStep: () => {
+        const mid = block.getBoundingClientRect();
+        if (mid.left !== boxBefore.left || mid.top !== boxBefore.top || mid.width !== boxBefore.width || mid.height !== boxBefore.height) {
+          sawIntermediateChange = true;
+        }
+      },
+    });
+    expect(sawIntermediateChange, "the Block's box changed mid-drag — position and size streamed out of step").toBe(false);
+
+    /* …and it DOES change, once, after release — this is not "resize
+     * stopped working", it is "resize now commits atomically". */
+    await waitFor(() => {
+      const boxAfter = block.getBoundingClientRect();
+      expect(boxAfter.width - boxBefore.width).toBeGreaterThan(30);
+      expect(boxAfter.height - boxBefore.height).toBeGreaterThan(15);
     });
   },
 };

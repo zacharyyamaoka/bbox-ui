@@ -191,14 +191,22 @@ export const ThreeHosts: Story = {
     for (const host of [dom, rf, tl]) {
       await expectSceneRendered(host);
     }
-    /* Edges resolve in the two hosts that paint the trunk's wires… */
+    /* Edges resolve in the two hosts that paint the trunk's wires directly… */
     await expectWiresResolved(dom);
     await expectWiresResolved(tl);
-    /* …and in React Flow's own idiom. */
+    /* …and in React Flow's own idiom: React Flow owns the endpoints and
+     * geometry (`getBezierPath`, via `TraceEdge` — host-fixes lane, defect
+     * 3), but the paint is the SAME `TraceBody` the other two hosts use, so
+     * the check here is the trunk's own `[data-slot="trace-line"]`, not the
+     * stock `react-flow__edge-path` class a plain `<BaseEdge>` would carry
+     * (`:not([data-sketch="true"])` excludes the sketch-skin overlay
+     * `TraceBody` paints alongside the crisp line). */
     await waitFor(
       () => {
         for (const edge of HOST_SCENE.edges) {
-          const path = rf.querySelector<SVGPathElement>(`.react-flow__edge[data-id="${edge.id}"] path.react-flow__edge-path`);
+          const path = rf.querySelector<SVGPathElement>(
+            `.react-flow__edge[data-id="${edge.id}"] [data-slot="trace-line"]:not([data-sketch="true"])`,
+          );
           if (!path) throw new Error(`RF edge ${edge.id} has no rendered path yet`);
           expect(path.getTotalLength()).toBeGreaterThan(0);
         }
