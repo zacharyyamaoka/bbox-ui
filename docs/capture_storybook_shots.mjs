@@ -95,7 +95,11 @@ for (const shot of shots) {
       () => (document.querySelector("#storybook-root")?.childElementCount ?? 0) > 0,
       { timeout: 20_000 },
     );
-    await page.waitForTimeout(450); // fonts + any layout effect settling
+    // Per-shot override for stories whose PLAY FUNCTION is the picture — a
+    // drag/zoom journey needs seconds to reach its end state, and a 450ms
+    // frame of it is a random mid-gesture blur. Additive: every existing
+    // caller omits `settle` and keeps the old 450ms.
+    await page.waitForTimeout(shot.settle ?? 450); // fonts + any layout effect settling
     const file = path.join(OUT, `${shot.name}.png`);
     await page.screenshot({ path: file });
     manifest.push({ ...shot, file, ok: true });

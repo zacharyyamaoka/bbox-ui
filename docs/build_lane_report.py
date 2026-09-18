@@ -196,6 +196,11 @@ def run_capture(lane_repo: pathlib.Path, media_dir: pathlib.Path, stories: list[
             "w": s.get("w", 1000),
             "h": s.get("h", 700),
             "name": s.get("name") or slugify(s["id"]),
+            # Optional per-story settle (ms) before the screenshot — for
+            # stories whose play function IS the picture (a drag/zoom
+            # journey's end state). Passed through to
+            # capture_storybook_shots.mjs, which defaults it to 450.
+            **({"settle": s["settle"]} if "settle" in s else {}),
         }
         for s in stories
     ]
@@ -261,6 +266,8 @@ table.look a:hover { color:var(--accent2) }
 
 ul.plain { margin:0; padding-left:20px } ul.plain li { margin:0 0 8px }
 ul.plain code { color:var(--accent2) }
+.intro { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:6px 20px }
+.intro p { margin:12px 0; color:var(--fg) } .intro b { color:var(--accent) }
 
 .gallery { display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:18px }
 figure { margin:0 }
@@ -344,6 +351,14 @@ def build_html(manifest: dict, facts: dict, captures: dict, capture_port: int | 
     changes_html = "".join(f"<li>{c}</li>" for c in manifest.get("changes", []))
     findings_html = "".join(f"<li>{f}</li>" for f in manifest.get("findings", []))
 
+    # Optional `intro`: a list of paragraphs (raw HTML allowed, like every
+    # other manifest string) rendered ABOVE the look-live table — for the
+    # lane whose report has to LEAD with a status answer ("what existed,
+    # what this adds, what is still missing") rather than jump straight to
+    # stories. Additive: absent in every existing manifest.
+    intro_html = "".join(f"<p>{p}</p>" for p in manifest.get("intro", []))
+    intro_block = f'<h2>Status</h2><div class="intro">{intro_html}</div>' if intro_html else ""
+
     gallery_cards = []
     failures = []
     for s in stories:
@@ -375,6 +390,8 @@ def build_html(manifest: dict, facts: dict, captures: dict, capture_port: int | 
 <p class="sub">{manifest["summary"]}</p>
 
 <div class="facts">{facts_html}</div>
+
+{intro_block}
 
 <h2>Where to look live</h2>
 {look_table}
