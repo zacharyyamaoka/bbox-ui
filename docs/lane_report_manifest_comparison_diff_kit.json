@@ -1,0 +1,56 @@
+{
+  "title": "Comparison-view diff kit — S1 + S2",
+  "summary": "Three pure diff modules ported verbatim from SystemSketch with donor test coverage, plus a new sceneDiff.ts three-state model over {nodes, edges} — pure math only, no component touched.",
+  "base_ref": "main",
+  "branch_label": "isolated lane worktree, cut from 859ae8d",
+  "storybook_port": 5472,
+  "changes": [
+    "apps/storybook-basics/src/scene/wordDiff.ts — new: verbatim port of SystemSketch src/diff/wordDiff.ts (197 lines), byte-identical body after the provenance banner",
+    "apps/storybook-basics/src/scene/fieldDiff.ts — new: verbatim port of SystemSketch src/diff/fieldDiff.ts (208 lines), byte-identical body after the provenance banner",
+    "apps/storybook-basics/src/scene/lineDiff.ts — new: verbatim port of SystemSketch src/compare/lineDiff.ts (163 lines), byte-identical body after the provenance banner",
+    "apps/storybook-basics/src/scene/wordDiff.test.ts — new: verbatim port of the donor's wordDiff.test.ts (covers both wordDiff.ts and fieldDiff.ts — the donor combines them in one file), 15/15 pass",
+    "apps/storybook-basics/src/scene/lineDiff.test.ts — new: NOT a donor port (none exists) — written fresh against the ported lineDiff.ts, 13/13 pass",
+    "apps/storybook-basics/src/scene/sceneDiff.ts — new: the three-state model over {nodes, edges}, re-expressed (not ported) from compareModel.ts's model + WHY reasoning, dropping its tldraw-record-reading half; portsOf takes two resolvers (one per side) matching findDanglingEdges's callback shape; withoutDiffState implements clearDiffStates.ts's whole-document rule",
+    "apps/storybook-basics/src/scene/sceneDiff.test.ts — new: 18/18 pass, including the 'a port that appeared is an insertion of the port, not a modification of the block' rule",
+    "apps/storybook-basics/src/stories/SceneDiff.stories.tsx — new: 4 story variants rendering the pure functions' OUTPUT with story-local markup only — imports no component",
+    "docs/ALGORITHM-PROVENANCE.md — appended a new src/scene section with the 4 files' classification and how each was verified"
+  ],
+  "findings": [
+    "Donor test coverage: only wordDiff.ts and fieldDiff.ts have a dedicated donor test file (wordDiff.test.ts, which the donor itself uses to cover BOTH modules) — verified via grep that lineDiff.ts has NO donor test file at all (only exercised indirectly through the tldraw-bound CodeView.tsx and compareModel.test.ts's fixtures). Ported wordDiff.test.ts verbatim (15/15 pass); wrote lineDiff.test.ts fresh (13/13 pass) to close the gap the plan's own 'What I could not verify' section named.",
+    "The story's own play functions caught two real bugs before handoff, not after: (1) a wrong test assertion for wordDiff's compactFormerValue interaction (fixed the assertion, not the ported algorithm, which is donor-tested), and (2) a genuine design trap — an early fixture stored port vocabulary INSIDE a node's data bag for the portsOf callback to read, which caused sceneDiff.ts's own generic data-field diff to ALSO report the port list as a changed field, double-reporting the exact fact sceneDiff.ts's 'a port that appeared is an insertion of the port, not a modification of the block' rule exists to keep separate. Fixed by moving the story's port vocabulary into a registry OUTSIDE data (the realistic shape: ports derived from node type, not carried per-instance) — a real finding about how sceneDiff.ts's API must be used, now written into the story's own comment.",
+    "Total test delta: unit project 347 -> 393 (+46: 15 wordDiff + 13 lineDiff + 18 sceneDiff); story project 188 -> 192 (+4, one per SceneDiff.stories.tsx export). typecheck (pnpm --filter bbox-storybook-basics run typecheck) stayed clean.",
+    "Write set held exactly: apps/storybook-basics/src/scene/** (adds only), one new stories file, and an append-only edit to docs/ALGORITHM-PROVENANCE.md. Nothing under src/components/**, src/presets/**, .storybook/**, package.json or pnpm-lock.yaml was touched — verified with git status --porcelain before commit."
+  ],
+  "stories": [
+    {
+      "id": "blocks-scene-diff--word-diff-ink",
+      "title": "Scene/Diff · Word Diff Ink",
+      "look_for": "wordDiff's tokenizer inking only the run that changed — run_inference/run_predict inks just 'inference'/'predict', and the camelCase pair only inks 'Inference'/'Predict', never the shared 'run'",
+      "w": 480,
+      "h": 260
+    },
+    {
+      "id": "blocks-scene-diff--pose-classification",
+      "title": "Scene/Diff · Pose Classification",
+      "look_for": "classifyPoseChange telling moved from resized by which corner stayed put — the left-edge-drag row reports 'resized' with only the left edge heavy, never 'moved'",
+      "w": 620,
+      "h": 220
+    },
+    {
+      "id": "blocks-scene-diff--line-diff-code",
+      "title": "Scene/Diff · Line Diff Code",
+      "look_for": "the git-style raw-evidence diff over two JSON records, sorted keys so write order can't fake a change — threshold 0.5 removed in red, 0.8 added in green",
+      "w": 480,
+      "h": 260
+    },
+    {
+      "id": "blocks-scene-diff--scene-diff-summary",
+      "title": "Scene/Diff · Scene Diff Summary",
+      "look_for": "a whole before/after scene run through diffScene — the renamed-and-gained-a-port node shows ONE modified row naming only 'name', while the gained port shows up separately in the ports panel, never doubled into the node's own fields",
+      "w": 760,
+      "h": 260
+    }
+  ],
+  "slug": "comparison-diff-kit-2026-09-17",
+  "date": "2026-09-17"
+}
