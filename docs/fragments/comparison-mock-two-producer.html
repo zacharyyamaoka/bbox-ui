@@ -1,12 +1,16 @@
 <!-- Mock: the two-producer ruling and its merge rule, drawn. Shares the
      <style> block from comparison-mock-diff-paint.html (listed first). -->
-<p class="sub" style="margin-top:4px">The ruling: <b>diff keeps its own prop; the diff
-producer never writes into <code>diagnostics</code></b>. The list-with-stable-ids is the
-mechanism for many producers <em>of judgements</em>; <code>added/removed/modified</code>
-is not a severity, so the one merge rule the diagnostics prop owns —
-<code>max(severity)</code> — cannot rank it. Full reasoning:
-<code>docs/COMPARISON-NEXT-STEPS.md</code> §2. Below, the case the whole design exists
-to handle: <b>changed AND broken</b>, both marks, disjoint channels, no precedence.</p>
+<p class="sub" style="margin-top:4px"><b>Q2, reconciled in Zach's favour: "one paint,
+two producers" is exactly what gets built — delivered through two props.</b> One visual
+language, one channel discipline, shared severity tokens; the linter and the differ both
+write marks onto the same element. The only unshared thing is the door the data arrives
+through — <code>diagnostics?: Diagnostic[]</code> for judgements, <code>diff?: DiffMark</code>
+for comparison facts — because his own aside names the reason: <em>"there is probably some
+specific diff paint we will need."</em> There is: token ink, pose ghosts, was-now chips —
+structured ink with no home in a <code>Diagnostic</code>, and <code>added/removed/modified</code>
+has no rank for <code>max(severity)</code> to take. Same paint, two doors. Full grounds:
+<code>docs/COMPARISON-NEXT-STEPS.md</code> §2. Below, the case the design exists to handle:
+<b>changed AND broken</b> — both marks, disjoint channels, no precedence.</p>
 
 <div class="mockrow">
   <div class="mockfig" style="max-width:380px">

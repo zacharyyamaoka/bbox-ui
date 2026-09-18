@@ -1,26 +1,27 @@
 {
   "title": "Comparison view — next steps",
-  "summary": "The plan from the shipped S1+S2 baseline: what the resolver seam already overtook, the two-producer ruling (diff keeps its own prop), and a sequenced list with named write sets — N1 dispatchable today, everything component- or host-facing sequenced behind its owning lane. Lane-readable spec: docs/COMPARISON-NEXT-STEPS.md.",
-  "base_ref": "064be4b",
-  "branch_label": "planning lane (docs only), cut from 064be4b",
+  "summary": "Revision 2, after Zach answered the open questions: visual/appearance diff is IN (driver: golden layouts) as a second profile of one engine; merge AND rebase return as N7; the chrome ports into the editor kit; ‘one paint, two producers’ honoured through two props; and the id-association research is digested with citations — the prior work already answered it. Three lanes (N1, N7, N8) are dispatchable today. Lane-readable spec: docs/COMPARISON-NEXT-STEPS.md.",
+  "base_ref": "claude/bar-block-storybook-e61a36",
+  "branch_label": "planning lane, revision 2 (docs only)",
   "storybook_port": 5495,
   "changes": [
-    "<b>N1 — propertyRows over SceneDiff</b> (S–M, <b>unblocked today</b>): donor <code>propertyRows.ts:216,243</code> (<code>elementSummaries</code>/<code>orderChanges</code>) re-expressed over our <code>SceneDiff</code> rows. Write set: <code>src/scene/propertyRows.ts</code> + test + new story file + provenance append.",
-    "<b>N2 — diff paint on the components</b> (M–L, <b>barrier: components + skin lanes</b>): per-component <code>diff?: DiffMark</code> prop, <code>DIFF_VARIANT_TRAITS</code> ported verbatim as data, channel discipline + the corner rule enforced, changed-AND-broken proven with measured geometry. The research's own call: if only one surface gets built, build this one.",
-    "<b>N3 — six-variant gallery</b> (S, after N2): the <code>DIFF_VARIANT_TRAITS</code> rows over one fixture scene, as stories.",
-    "<b>S5 — useLinkedCameras + blend</b> (S, barrier: hosts lane): 23 donor lines (<code>BoardRender.tsx:258-280</code>), leader/follower with the re-entrancy latch, host-parameterised. Independent of N2.",
-    "<b>S6 — PropertyTable</b> (M, needs N1 + components lane landed): the 583-line donor re-expressed as a shadcn-shaped component over N1's rows.",
-    "<b>N6 — CompareView composition story</b> (M, needs N2+S5+S6): the four CVP §5 behaviours proven live at story scale — NOT the 1,127-line dialog, which waits for a consuming app.",
-    "<b>S7 — ports as scene records: stays deferred.</b> The resolver seam removed the urgency; un-defer conditions are named (port rename detection, reconcileNodePorts absorption, a third per-port-fields consumer) so this is a decision with an expiry, not a habit.",
-    "<b>diff3Scene — not on the list.</b> Unblocked but valueless until a merge/conflict UI exists; building math with no consumer invites drift."
+    "<b>N1 — propertyRows over SceneDiff</b> (S–M, <b>unblocked</b>): donor <code>propertyRows.ts:216,243</code> re-expressed over our diff rows. Write set: <code>src/scene/propertyRows.ts</code> + test + story.",
+    "<b>N7 — merge + rebase math</b> (M, <b>unblocked</b>, Q3 “we want to support both”): <code>applySceneDiff</code> + <code>diff3Scene(base, a, b) → {merged, conflicts}</code>; rebase = replay onto b through the same apply. Conflicts reported, never auto-resolved. Write set: <code>src/scene/merge.ts</code> + test + story.",
+    "<b>N8 — appearance diff</b> (S–M, <b>unblocked</b> for revision pairs, Q1's golden-layouts driver): a second <em>profile</em> of diffScene — matched pairs compared on geometry (<code>classifyPoseChange</code>, shipped) + appearance props, per-element, threshold-free. Write set: <code>src/scene/appearanceDiff.ts</code> + test + story.",
+    "<b>N2 — diff paint on the components</b> (M–L, barrier: components + skin lanes): per-component <code>diff?: DiffMark</code>, <code>DIFF_VARIANT_TRAITS</code> verbatim as data, channel discipline + corner rule, changed-AND-broken proven with measured geometry. Still the one that matters.",
+    "<b>N3 — six-variant gallery</b> (S, after N2). <b>S5 — useLinkedCameras + blend</b> (S, barrier: hosts lane) — now the enabling mechanism behind Q4's chosen Figma overlay slider, not one option among views.",
+    "<b>S6 — PropertyTable</b> (M, needs N1 + components lane) and <b>N6 — CompareBar · DiffCodeView · CompareView story</b> (M, needs N2+S5+S6): <b>editor-kit components with their own stories</b> per Q3 — the dialog's modal shell stays app wiring.",
+    "<b>N9 — conformance identity ladder over BlockScene</b> (M, <b>triggered by golden testing</b>, not by a lane): the pyblocks ladder pre-scoped as a port map (name→definitionId, graph→producersOf/consumersOf, source→a portsOf-style resolver, unmatched first-class).",
+    "<b>S7 — still deferred</b>; un-defer conditions unchanged, port-rename detection now slightly likelier once golden testing surfaces renamed ports.",
+    "New stories carry the tags convention: <code>tags: [\"area:blocks\", \"lane:&lt;slug&gt;\"]</code>."
   ],
   "findings": [
-    "<b>Overtaken:</b> CVP §3's \"port-level diff is impossible\" is no longer true — <code>diffScene</code>'s paired <code>portsOf</code> resolvers (same callback shape as <code>findDanglingEdges</code>) give port add/remove diff today with zero scene-contract change. The honest remainder: port <em>rename</em> detection (ids alone cannot say \"renamed\") — that belongs to S7 or an {id,label} resolver widening, weighed then, not now.",
-    "<b>Overtaken:</b> CVP §6's S1+S2 rows are built, merged and green — verified in this tree today: unit 393/393, stories 47 files / 192 tests, tsc clean. The donor's own wordDiff suite now runs green here (15/15), closing CVP's first \"What I could not verify\" bullet.",
-    "<b>Partially overtaken:</b> S4 — a math-output gallery (4 stories) already exists from the S2 lane; what remains of S4 is the paint gallery, renamed N3, still blocked on N2.",
-    "<b>The ruling:</b> diff marks get their own prop; the diff producer never writes into <code>diagnostics</code>. Five grounds (no common order — max(severity) cannot rank added/removed; no common payload; the donor's forbidden dependency arrow; no common lifecycle — lens-scoped vs live-derived; stable ids protect many <em>judgement</em> producers, and diffScene isn't one). Merge rule when both mark one element: both render in full on disjoint channels, halo outside the diff outline, flag owns top-right, no cross-axis precedence. Full argument: COMPARISON-NEXT-STEPS.md §2.",
-    "<b>Every donor citation re-verified against the tree today</b>, not carried from memory: CompareDialog 1,127 lines · PropertyTable 583 · propertyRows 247 · useLinkedCameras at BoardRender.tsx:258 · the cableEnds WHY at compareModel.ts:184-187 · BLOCK_STATES at blockModel.ts:214 · DIFF_VARIANT_TRAITS at diffPresentation.ts:99-106 · the diff-must-not-depend-on-lint WHY at diagnosticsModel.ts:48-64.",
-    "<b>Builder change riding along:</b> docs/build_lane_report.py grew an optional, backward-compatible <code>sections</code> manifest key (heading + html/html_file + images) — a PLAN's report owes rendered mocks and the capture pipeline alone cannot carry them. Manifests without it are byte-for-byte unchanged."
+    "<b>Q2 reconciled in Zach's favour:</b> “one paint, two producers” is exactly what gets built — one visual language, one channel discipline, shared severity tokens, two producers marking the same element — delivered through two <em>props</em>, because his own aside (“some specific diff paint we will need”) names the reason: token ink, pose ghosts and chips have no home in a Diagnostic, and added/removed/modified has no rank for max(severity). Merge rule for changed-AND-broken unchanged.",
+    "<b>Q1 verdict:</b> both diffs ship as <b>two profiles of one engine</b>, not two engines — the shape pyblocks measured its way to. The raw file/token diff survives as the cheap boolean oracle (an id-free drawable-props fingerprint: 30 canonicalizations, 0 drift), not as the engine — a raw record diff on a <em>passing</em> case reported 40+ changes with zero meaning. Pixel render-compare stays deliberately outside the differ: detects but cannot explain, re-imports thresholds; returns only if rendering itself becomes the subject.",
+    "<b>Q3 confirms the CRDT tripwire rather than disturbing it:</b> diff3Scene takes the merge base as an ordinary scene argument — a pair of documents, never a field on one — so merge and rebase land with BlockScene still {nodes, edges}. CVP §4 predicted exactly this.",
+    "<b>The id-association research already answered Zach's question.</b> His two cases are the two shipped profiles of <code>pyblocks/board_diff.py:80-90</code>: mutated file = revision (id rung only, layout is signal), generated copy = conformance (id→name→graph→source→unmatched, layout ignored). The similarity rung was a <em>deliberate deletion</em> — the probe had a 0.45 floor, shipped identity.py removed it, a test asserts its absence against the parsed AST, and 450/450 blocks still resolve (355 name · 51 graph · 44 source · 0 unmatched). Open work recorded: the designed-but-unimplemented write-back migration. Map note: <code>zach_brain/Projects/bbox-ui/MOC - Visual Diff.md</code>.",
+    "<b>Read properly this time:</b> the pyblocks probes and work orders in full, the engine report and architecture report as stripped text, the shipped <code>identity.py</code>/<code>board_diff.py</code> headers — both prior lanes had only listed these. The multi-MB visual-vocabulary pages remain unopened; their conclusions enter through <code>DIFF_VARIANT_TRAITS</code> (code) and the MOC's digest of the round-2 correction.",
+    "<b>Baselines re-verified after the tags merge:</b> unit 24 files / 393, stories 46 files / 188 (the −4 is exactly the retired WhatsNew stories), tsc clean. Donor citations from revision 1 all still hold; §6's new pyblocks citations verified against the tree today."
   ],
   "sections": [
     {
@@ -28,15 +29,19 @@
       "html_file": "docs/fragments/comparison-mock-diff-paint.html"
     },
     {
-      "heading": "Mock · changed AND broken — the two-producer ruling, drawn",
+      "heading": "Q2 · changed AND broken — one paint, two producers, two props",
       "html_file": "docs/fragments/comparison-mock-two-producer.html"
     },
     {
-      "heading": "Mock · surface C's honest slice — the CompareView story (N6, unbuilt)",
+      "heading": "Q1 · the split verdict, and the id-association research within arm's reach",
+      "html_file": "docs/fragments/comparison-mock-split-and-identity.html"
+    },
+    {
+      "heading": "Q3 + Q4 · the chrome ports into the editor kit — the CompareView slice",
       "html_file": "docs/fragments/comparison-mock-chrome.html"
     },
     {
-      "heading": "The sequence, drawn — and the tripwire",
+      "heading": "The revised sequence — and the tripwire, confirmed",
       "html_file": "docs/fragments/comparison-mock-sequence.html"
     }
   ],
