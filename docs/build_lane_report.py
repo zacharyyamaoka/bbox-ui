@@ -61,8 +61,26 @@ MANIFEST SHAPE (see docs/lane_report_manifest.example.json for a real one):
       {"id": "blocks-block--default", "title": "Block · Default", "look_for": "…", "w": 900, "h": 600}
     ],
     "slug": "…",                       # optional; default: slugified title
-    "date": "2026-09-17"               # optional; default: today
+    "date": "2026-09-17",              # optional; default: today
+    "sections": [                      # optional; rendered between Findings
+      {                                # and Captures, in manifest order.
+        "heading": "…",                # required per section
+        "html": "<raw html>",          # optional inline body, OR:
+        "html_file": "docs/frag.html", # optional file (relative to the lane
+                                       # repo) whose text is inlined verbatim
+        "images": [                    # optional figures under the body
+          {"file": "path.png|.svg", "title": "…", "caption": "…"}
+        ]                              # .svg is inlined as text (crisp, small);
+      }                                # rasters go through the same
+    ]                                  # crop+WebP pipeline as captures
   }
+
+WHY `sections` exists (2026-09-17, comparison-next-steps lane): a PLAN's
+report owes rendered MOCKS of things that do not exist yet — there is no
+story to capture, so the capture pipeline alone cannot carry a plan's
+evidence. A generic ordered-sections key keeps this the shared builder
+(one report grammar, every lane) instead of forcing plan lanes back to
+one-off scripts. Manifests without `sections` are byte-for-byte unchanged.
 """
 from __future__ import annotations
 
@@ -258,7 +276,43 @@ footer { margin-top:72px; padding-top:20px; border-top:1px solid var(--line);
 """
 
 
-def build_html(manifest: dict, facts: dict, captures: dict, capture_port: int | None) -> str:
+def render_sections(manifest: dict, lane_repo: pathlib.Path) -> str:
+    """Optional `sections` — see the docstring. Each renders as its own
+    <h2> block between Findings and Captures. Bodies are trusted HTML
+    authored by the lane's own manifest (the same trust level as `changes`
+    and `findings`, which are already raw HTML list items)."""
+    rendered = []
+    for section in manifest.get("sections", []):
+        parts = [f"<h2>{section['heading']}</h2>"]
+        body = section.get("html", "")
+        if section.get("html_file"):
+            body_path = pathlib.Path(section["html_file"])
+            if not body_path.is_absolute():
+                body_path = lane_repo / body_path
+            body += body_path.read_text()
+        if body:
+            parts.append(body)
+        figures = []
+        for image in section.get("images", []):
+            image_path = pathlib.Path(image["file"])
+            if not image_path.is_absolute():
+                image_path = lane_repo / image_path
+            if image_path.suffix.lower() == ".svg":
+                media = image_path.read_text()
+            else:
+                media = f'<img src="{webp_data_uri(image_path)}" alt="{image.get("title", image_path.name)}">'
+            figures.append(
+                f"<figure>{media}<figcaption><b>{image.get('title', '')}</b>"
+                f"{image.get('caption', '')}</figcaption></figure>"
+            )
+        if figures:
+            parts.append(f'<div class="gallery">{"".join(figures)}</div>')
+        rendered.append("".join(parts))
+    return "".join(rendered)
+
+
+def build_html(manifest: dict, facts: dict, captures: dict, capture_port: int | None,
+               lane_repo: pathlib.Path = DEFAULT_LANE_REPO) -> str:
     title = manifest["title"]
     stories = manifest.get("stories", [])
 
@@ -331,6 +385,8 @@ def build_html(manifest: dict, facts: dict, captures: dict, capture_port: int | 
 <h2>Findings</h2>
 <ul class="plain">{findings_html}</ul>
 
+{render_sections(manifest, lane_repo)}
+
 <h2>Captures{port_note}</h2>
 {failures_html}
 <div class="gallery">{gallery_html}</div>
@@ -385,7 +441,7 @@ def main() -> None:
         if capture_manifest_path.exists():
             captures = {e["name"]: e for e in json.loads(capture_manifest_path.read_text())}
 
-    html = build_html(manifest, facts, captures, port if stories else None)
+    html = build_html(manifest, facts, captures, port if stories else None, lane_repo)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)

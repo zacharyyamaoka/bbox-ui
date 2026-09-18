@@ -1,0 +1,72 @@
+<!-- Mock: the sequence as a dependency picture, plus the CRDT tripwire.
+     Shares the diff-paint fragment's styles. -->
+<style>
+  .lanecols { display:flex; gap:14px; flex-wrap:wrap; margin:18px 0 6px }
+  .lanecol { flex:1 1 180px; background:var(--panel); border:1px solid var(--line);
+             border-radius:10px; padding:12px 14px; min-width:170px }
+  .lanecol h3 { margin:0 0 10px; font-size:11px; text-transform:uppercase;
+                letter-spacing:.09em; color:var(--dim2); font-weight:600 }
+  .task { border-radius:8px; padding:7px 10px; margin:0 0 8px; font-size:12.5px;
+          line-height:1.45; border:1px solid var(--line); background:var(--panel2) }
+  .task b { font-family:var(--mono); font-size:12px }
+  .task .ws { display:block; font-size:10.5px; color:var(--dim2); font-family:var(--mono); overflow-wrap:anywhere }
+  .task.go { border-color:color-mix(in srgb, var(--ok) 55%, var(--line)) }
+  .task.go b { color:var(--ok) }
+  .task.wait b { color:var(--warn) }
+  .task.dead { opacity:.6 } .task.dead b { color:var(--dim) }
+  .gatecap { font-size:10.5px; color:var(--warn); font-family:var(--mono); margin:0 0 8px }
+  .tripwire { border:1px solid color-mix(in srgb, var(--err) 55%, var(--line));
+              background:color-mix(in srgb, var(--err) 7%, var(--panel));
+              border-radius:10px; padding:14px 18px; margin:22px 0 0; font-size:13.5px }
+  .tripwire b { color:var(--err); font-family:var(--mono) }
+</style>
+
+<p class="sub" style="margin-top:4px">Blocked versus merely next, drawn. Green runs today;
+amber waits for the named lane to land — a fact about <em>today's live lanes</em>
+(components · skin · hosts · storybook-nav), not about the work's intrinsic order.
+Write sets are named because directory ownership is the contract.</p>
+
+<div class="lanecols">
+  <div class="lanecol">
+    <h3>Now — unblocked</h3>
+    <div class="task go"><b>N1</b> · propertyRows over SceneDiff <span style="color:var(--dim2)">(S–M)</span>
+      <span class="ws">src/scene/propertyRows.ts + test + new story file</span></div>
+    <div class="task go" style="opacity:.85"><b>this plan</b> · md + report
+      <span class="ws">docs/** only</span></div>
+  </div>
+  <div class="lanecol">
+    <h3>After components + skin land</h3>
+    <div class="gatecap">▮ barrier: src/components/** · src/skin/**</div>
+    <div class="task wait"><b>N2</b> · diff paint props — the one that matters <span style="color:var(--dim2)">(M–L)</span>
+      <span class="ws">src/components: block · port · labeledPort · trace · traceBadge · editableText + diffInk.ts</span></div>
+    <div class="task wait"><b>N3</b> · six-variant gallery <span style="color:var(--dim2)">(S, after N2)</span>
+      <span class="ws">new stories + fixture</span></div>
+    <div class="task wait"><b>S6</b> · PropertyTable component <span style="color:var(--dim2)">(M, needs N1)</span>
+      <span class="ws">new src/components/propertyTable.tsx</span></div>
+  </div>
+  <div class="lanecol">
+    <h3>After hosts lands</h3>
+    <div class="gatecap">▮ barrier: src/hosts/**</div>
+    <div class="task wait"><b>S5</b> · useLinkedCameras + blend <span style="color:var(--dim2)">(S — 23 donor lines)</span>
+      <span class="ws">src/hosts/useLinkedCameras.ts + story</span></div>
+  </div>
+  <div class="lanecol">
+    <h3>Then</h3>
+    <div class="task wait"><b>N6</b> · CompareView composition story <span style="color:var(--dim2)">(M — needs N2 + S5 + S6)</span>
+      <span class="ws">new story + src/hosts/compareView.tsx</span></div>
+  </div>
+  <div class="lanecol">
+    <h3>Deferred by decision</h3>
+    <div class="task dead"><b>S7</b> · ports as scene records — un-defer conditions named in the md plan §5</div>
+    <div class="task dead"><b>diff3Scene</b> · unblocked but valueless until a merge UI exists</div>
+    <div class="task dead"><b>CompareDialog</b> · app chrome; waits for a consuming app</div>
+  </div>
+</div>
+
+<div class="tripwire"><b>TRIPWIRE-CRDT-SCENE-VERSION</b> — CVP §4's "no version field on
+<code>BlockScene</code>; a merge base is a pair of documents" holds <em>conditionally</em>.
+If the scene ever becomes the unit of live sync (CRDT / multiplayer / Yjs / Automerge /
+Loro, or any <code>version</code>/<code>clock</code>/<code>parent</code> field), causality
+must move into the document and §4 is <em>reopened, not extended</em> — before the field
+ships, because once a host ships <code>version</code>, removing it breaks every consumer.
+Recorded in <code>docs/COMPARISON-NEXT-STEPS.md</code> §6 under this greppable name.</div>
