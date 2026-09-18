@@ -21,7 +21,6 @@ import {
   type BlockMember,
   type BlockMembersLayout,
 } from "./blockMembers";
-import { SketchOutline, SKETCH_OUTLINE_BLEED_PX } from "../skin/sketchOutline";
 
 /**
  * Block — header / body / footer, stacked. All three are plain slots: pass
@@ -160,16 +159,36 @@ export interface BlockProps {
 }
 
 /**
- * The root's own border width, px — what `SketchOutline` draws on top of
- * and insets its bleed margin by. A literal, not `--bbox-skin-stroke-width`
- * read back out of CSS: this app carries no wall-anchor geometry that
- * needs the two to be the SAME variable (donor's block.tsx / skin.css both
- * flag that trap — see skin.css's own port-of-omission note), so a plain
- * constant is honest here. It still has to match the token's stroke-width
- * fallback (2px) or the drawn line and the CSS border would part ways the
- * moment a skin activates.
+ * The root's own border width, px, used only to size `overflowClipMargin`
+ * below. A literal, not `--bbox-skin-stroke-width` read back out of CSS:
+ * this app carries no wall-anchor geometry that needs the two to be the
+ * SAME variable (donor's block.tsx / skin.css both flag that trap — see
+ * skin.css's own port-of-omission note), so a plain constant is honest
+ * here. It still has to match the token's stroke-width fallback (2px) or
+ * the clip margin would come up short the moment a skin activates.
+ *
+ * WHY this no longer feeds a drawn line: before
+ * docs/peps/0001-sketch-skin-at-the-boundary.md, this fed `SketchOutline`
+ * directly. The boundary pass now measures its own pen width off
+ * `getComputedStyle(el).borderTopWidth` (`sketchAtEdge.ts`'s `measureBox`),
+ * which is more honest than a duplicated literal — this constant only
+ * has to stay right for the clip allowance, not for two things at once.
  */
 const BLOCK_BORDER_PX = 2;
+
+/**
+ * WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M2. Slack for any
+ * decorative child that paints just outside the border box — NOT a skin
+ * import, and not a number the skin gets to set. Before this migration
+ * this was `SKETCH_OUTLINE_BLEED_PX`, imported from the skin because the
+ * in-core `SketchOutline` was that decorative child; the boundary's own
+ * twin is now appended as a child of THIS element (`sketchAtEdge.ts`'s
+ * `upsertBoxTwin`) after this component has already rendered, so the same
+ * clip allowance is still needed, just granted generically rather than
+ * borrowed from the thing that used to need it. Value unchanged: 5, the
+ * same `Math.ceil(SKETCH_WOBBLE_PX + 2)` the donor computed.
+ */
+const OUTLINE_BLEED_PX = 5;
 
 export function Block({
   header,
@@ -256,8 +275,9 @@ export function Block({
       )}
       // `overflow: clip` (not `hidden`) so the header/footer bars' corners
       // still cut cleanly without turning Block into a scroll container —
-      // and so the drawn sketch outline's bleed isn't clipped at the
-      // padding box; see `overflowClipMargin` below.
+      // and so a decorative child painting just outside the padding box
+      // (a boundary-drawn twin; see `OUTLINE_BLEED_PX`) isn't clipped;
+      // see `overflowClipMargin` below.
       style={{
         width,
         height,
@@ -266,11 +286,11 @@ export function Block({
         // Widened to let the corner flag straddle the border (see
         // `flagOverhangPx` above) and, with `highlighterKind="mask"`, the
         // sibling mask frame (below) poke out too — the same clip-margin
-        // mechanism this rule already uses for the sketch outline's own
+        // mechanism this rule already grants a decorative child's own
         // bleed; every reason to widen it is independent, so this takes
         // whichever is largest rather than stacking them. `"stroke"` needs
         // no widening — see this file's own WHY on `showStroke` above.
-        overflowClipMargin: `${BLOCK_BORDER_PX + Math.max(SKETCH_OUTLINE_BLEED_PX, showFlag ? flagOverhangPx : 0, maskOverhangPx)}px`,
+        overflowClipMargin: `${BLOCK_BORDER_PX + Math.max(OUTLINE_BLEED_PX, showFlag ? flagOverhangPx : 0, maskOverhangPx)}px`,
         // PREPENDED ahead of the resting `shadow-[…]` utility (§3: "outer
         // halo... prepended") — an inline `boxShadow` beats a class at
         // equal specificity by cascade ORDER regardless, so this only sets
@@ -291,23 +311,6 @@ export function Block({
         ...style,
       }}
     >
-      {/*
-       * `stretch` when `height` is omitted (Block hugs its content): the
-       * real pixel height isn't known until layout, and self-measurement
-       * (ResizeObserver/getBoundingClientRect) is exactly what the core
-       * does not do — sketchOutline.tsx's own `stretch` mode exists for
-       * this (a Pill/Badge/Bar are in the same boat). The nominal 200
-       * below only scales the wobble amplitude and is invisible once
-       * `preserveAspectRatio="none"` stretches the path to whatever Block
-       * actually renders at.
-       */}
-      <SketchOutline
-        width={width}
-        height={height ?? 200}
-        borderWidth={BLOCK_BORDER_PX}
-        stretch={height === undefined}
-        seed={sketchSeed ?? `${width}x${height ?? "auto"}`}
-      />
       {showMask && markedSeverity && (
         // `"mask"` (HighlighterKind's own doc): a sibling frame whose
         // `border-radius` grows by EXACTLY the offset — the Minkowski-sum
