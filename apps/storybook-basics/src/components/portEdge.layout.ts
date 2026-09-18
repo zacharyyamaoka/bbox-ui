@@ -107,6 +107,15 @@ export const DEFAULT_ALIGN_GAP = 18;
  * requires (see that function's own docblock) — verified, not
  * re-implemented, by `PortEdge.stories.tsx`'s `EdgeDistributionControls`.
  */
+// Overloads so a caller passing a literal gets the NARROW arm back. Without
+// them the return is the `Distribution` union, and `BlockPort` — which
+// layers its own `gap`/`edgePadding` onto the aligned arm — cannot spread the
+// result without TypeScript objecting that `gap` is absent from
+// `DistributeConfig`. Narrowing here keeps the one-rule seam usable instead
+// of pushing every caller back to a duplicated literal.
+export function defaultDistributionForEdges(hasRowEdgePopulated: true): DistributeConfig;
+export function defaultDistributionForEdges(hasRowEdgePopulated: false): AlignConfig;
+export function defaultDistributionForEdges(hasRowEdgePopulated: boolean): Distribution;
 export function defaultDistributionForEdges(hasRowEdgePopulated: boolean): Distribution {
   return hasRowEdgePopulated
     ? { mode: "distribute", scheme: "space-around" }

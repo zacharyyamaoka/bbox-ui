@@ -29,7 +29,13 @@
  * measured one: first dot centre at `bandTop + slotMainPx / 2`, exactly.
  */
 import { PORT_DIAMETERS, PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, type BlockSide, type PortSize } from "./port.layout";
-import { CONTAINER_BORDER, CONTAINER_PADDING, DEFAULT_ALIGN_GAP, type Distribution } from "./portEdge.layout";
+import {
+  CONTAINER_BORDER,
+  CONTAINER_PADDING,
+  DEFAULT_ALIGN_GAP,
+  defaultDistributionForEdges,
+  type Distribution,
+} from "./portEdge.layout";
 
 /* ------------------------------------------------------------------ */
 /* Vocabulary — the donor's own two enums, by value                    */
@@ -262,7 +268,13 @@ export function railPlanFor(input: RailPlanInput): RailPlan {
       return {
         groups: "",
         groupMode: "off",
-        distribution: { mode: "distribute", scheme: "space-around" },
+        // ONE rule, not a second copy: `defaultDistributionForEdges`
+        // (portEdge.layout.ts) is the single source of truth for WHICH
+        // distribution a population implies. Lanes E and D landed the same
+        // rule independently — E exported it, D inlined the literals — and
+        // two correct implementations of one rule is how they silently
+        // diverge later. Read it here instead.
+        distribution: defaultDistributionForEdges(true),
         // Row-axis rails keep spanning the whole block — the band a
         // horizontal wall has always used (see the WHY above); column-axis
         // rails stay in the body band exactly as the left/right-only case
@@ -278,9 +290,15 @@ export function railPlanFor(input: RailPlanInput): RailPlan {
     return {
       groups: "",
       groupMode: "off",
+      // Same source of truth for the MODE; the two block-specific numbers
+      // are layered on top, and they are the reason this is a spread rather
+      // than a bare call. `RAIL_GAP_PX` is the Block's own rail pitch (not
+      // PortEdge's standalone `DEFAULT_ALIGN_GAP`), and `edgePadding` is the
+      // offset-lane inset that only exists when a Block pushes its trailing
+      // edge clear of the wire. Neither belongs in a function that knows
+      // nothing about Blocks.
       distribution: {
-        mode: "aligned",
-        anchor: "start",
+        ...defaultDistributionForEdges(false),
         gap: RAIL_GAP_PX,
         edgePadding: offset ? offsetEdgePaddingPx(leadCount) : 0,
       },
