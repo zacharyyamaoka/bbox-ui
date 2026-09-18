@@ -9,7 +9,16 @@ import { BlockPort } from "../components/blockPort";
 import type { PortEdgeItem } from "../components/portEdge";
 import { TRACE_TERMINAL_GAP } from "../components/trace";
 import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "../components/trace.layout";
-import { wiredPortKeys, withWiredState, type Wire } from "../components/wiring";
+// WHY the wired set comes from the scene kit while `Wire` stays a paint
+// type: the scene lane absorbed `wiredPortKeys`/`withWiredState` out of
+// `wiring.ts` (docs/SCENE-KIT.md) so the derivation has ONE owner. `Wire`
+// survives there as `WireLayer`'s prop vocabulary — paint only — which is
+// why this file still imports it from a component and the derivation from
+// `scene/`. Caught by `tsc` after a CLEAN git merge: this file and the
+// scene kit never touched the same lines.
+import { type Wire } from "../components/wiring";
+import { wiredPorts, type SceneEdgeEnds } from "../scene/scene";
+import { withWiredState } from "../scene/sceneWires";
 import { WireLayer } from "../components/wireLayer";
 import { ValueCapsule, VALUE_PILL_RADIUS_CLAMP_PX } from "../presets/value/value";
 
@@ -239,6 +248,19 @@ function Labeled({ caption, children }: { caption: ReactNode; children: ReactNod
 
 function Positioned({ x, y, children }: { x: number; y: number; children: ReactNode }) {
   return <div style={{ position: "absolute", left: x, top: y }}>{children}</div>;
+}
+
+/** `Wire` (paint) → `SceneEdgeEnds` (derivation). The scene kit owns "which
+ *  port is wired"; `WireLayer` still owns how a wire is drawn. One line,
+ *  kept here rather than exported, because a story fixture is the only
+ *  place the two vocabularies legitimately meet. */
+function wireToSceneEdge(wire: Wire): SceneEdgeEnds {
+  return {
+    source: wire.from.blockId,
+    target: wire.to.blockId,
+    sourceHandle: wire.from.portId,
+    targetHandle: wire.to.portId,
+  };
 }
 
 function WireBench({ benchId, caption, wires, width, height, children }: { benchId: string; caption?: ReactNode; wires: Wire[]; width: number; height: number; children: ReactNode }) {
@@ -497,7 +519,7 @@ function ProducerBlock({ id, title }: { id: string; title: string }) {
 function ReadBench() {
   const readers = ["ui", "log", "ctrl"];
   const wires: Wire[] = readers.map((r) => ({ id: `rd-${r}`, from: { blockId: "rd-val", portId: r }, to: { blockId: `rd-${r}`, portId: "in" } }));
-  const wiredSet = wiredPortKeys(wires);
+  const wiredSet = wiredPorts({ edges: wires.map(wireToSceneEdge) });
   return (
     <WireBench benchId="read" caption="read · one value → three consumers" wires={wires} width={400} height={260}>
       <Positioned x={16} y={102}>
@@ -521,7 +543,7 @@ function ReadBench() {
 function WriteBench() {
   const writers = ["init", "tune", "cal"];
   const wires: Wire[] = writers.map((w) => ({ id: `wr-${w}`, from: { blockId: `wr-${w}`, portId: "out" }, to: { blockId: "wr-val", portId: w } }));
-  const wiredSet = wiredPortKeys(wires);
+  const wiredSet = wiredPorts({ edges: wires.map(wireToSceneEdge) });
   return (
     <WireBench benchId="write" caption="write · three producers → one value" wires={wires} width={400} height={260}>
       {writers.map((w, i) => (
@@ -544,7 +566,7 @@ function ThroughBench() {
     ...writers.map((w) => ({ id: `th-w-${w}`, from: { blockId: `th-${w}`, portId: "out" }, to: { blockId: "th-val", portId: w } })),
     ...readers.map((r) => ({ id: `th-r-${r}`, from: { blockId: "th-val", portId: r }, to: { blockId: `th-${r}`, portId: "in" } })),
   ];
-  const wiredSet = wiredPortKeys(wires);
+  const wiredSet = wiredPorts({ edges: wires.map(wireToSceneEdge) });
   return (
     <WireBench benchId="through" caption="both walls · two writers → the value → two readers" wires={wires} width={640} height={200}>
       {writers.map((w, i) => (
