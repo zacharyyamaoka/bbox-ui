@@ -109,6 +109,23 @@ interface TldrawHostContextValue {
 const TldrawHostContext = createContext<TldrawHostContextValue | null>(null);
 
 /**
+ * The scene half of this host's context, for a component mounted through
+ * the new `components` prop below (a custom `ContextMenu`, say) rather than
+ * as a direct child of `TldrawHost` in the app's own JSX — it still sees
+ * this context because `<Tldraw>` renders inside `TldrawHostContext.Provider`
+ * (see this file's own return statement), and React context flows through
+ * the RENDER tree, not the file that defines a component. Exposes only
+ * `scene`/`onSceneChange` (not the full internal `TldrawHostContextValue` —
+ * `anchors`/`reportAnchors`/`decorate` are this file's own plumbing, not a
+ * seam a caller should reach through). Additive: nothing else here changed
+ * for it, same posture as `onEditorReady`'s own addition.
+ */
+export function useTldrawHostScene(): { scene: HostScene; onSceneChange?(next: HostScene): void } | null {
+  const host = useContext(TldrawHostContext);
+  return host ? { scene: host.scene, onSceneChange: host.onSceneChange } : null;
+}
+
+/**
  * ShapeUtil METHODS (`onTranslateEnd`, `onResizeEnd`, `canResize`) are not
  * React components, so the context above cannot reach them — this WeakMap
  * is the bridge: the host registers a mutable ref per editor on mount, the
@@ -524,9 +541,19 @@ export interface TldrawHostProps {
    * nothing else in this file changed for it.
    */
   onEditorReady?(editor: Editor, container: HTMLElement): void;
+  /**
+   * Merged OVER this host's own `COMPONENTS` (`OnTheCanvas: WireOverlay`
+   * stays unless a caller explicitly overrides that key too) — the seam
+   * the detach-to-primitive lane's right-click "Rebuild" menu item needs
+   * (`../detach/rebuildContextMenu.tsx`'s `RebuildContextMenu`, passed as
+   * `components={{ ContextMenu: RebuildContextMenu }}`). Omit for
+   * byte-identical behaviour to before this prop existed — additive only,
+   * same posture as `onEditorReady` above.
+   */
+  components?: TLComponents;
 }
 
-export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, decorate, onEditorReady }: TldrawHostProps) {
+export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, decorate, onEditorReady, components }: TldrawHostProps) {
   const editorRef = useRef<Editor | null>(null);
   const hostRootRef = useRef<HTMLDivElement | null>(null);
   const onEditorReadyRef = useRef(onEditorReady);
@@ -542,6 +569,10 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, de
     () => ({ scene, wired, onSceneChange, anchors, reportAnchors, decorate }),
     [scene, wired, onSceneChange, anchors, reportAnchors, decorate],
   );
+  // Caller's `components` layer OVER this host's own (`OnTheCanvas` stays
+  // unless a caller explicitly overrides that key too) — see the prop's
+  // own doc above.
+  const mergedComponents = useMemo<TLComponents>(() => ({ ...COMPONENTS, ...components }), [components]);
 
   // The ShapeUtil-side bridge (see bridgeByEditor) — a ref updated per
   // render so util callbacks always read the CURRENT scene, registered the
@@ -619,7 +650,7 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, de
          * its LIGHT chrome inside this app's dark Storybook, and the trunk
          * faces' dim labels sit on a white canvas while the other two
          * benches render dark (seen in the 2026-09-17 three-host capture). */}
-        <Tldraw shapeUtils={SHAPE_UTILS} components={COMPONENTS} onMount={handleMount} colorScheme="system" />
+        <Tldraw shapeUtils={SHAPE_UTILS} components={mergedComponents} onMount={handleMount} colorScheme="system" />
       </TldrawHostContext.Provider>
     </div>
   );

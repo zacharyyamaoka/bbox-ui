@@ -81,20 +81,23 @@ export function emitPortPrimitives(
   const state = dotEl.getAttribute("data-state") ?? "empty";
   const paint = STATE_STOCK_RING[state] ?? STATE_STOCK_RING.empty;
 
-  const dotBox = boxRelativeTo(origin, dotEl);
+  const dotBox = boxRelativeTo(origin, dotEl, editor);
   const ringBox = inflateBox(dotBox, PORT_RING_OVERHANG_PX);
   const ring = geoAtBox(ringBox, { geo: "ellipse", ...paint });
   const shapes: TLShapePartial[] = [ring];
 
   if (labelEl && labelEl.textContent && labelEl.textContent.trim() !== "") {
     const measureRendered = renderedLineMeasureFor(editor);
-    const textBox = textBoxRelativeTo(origin, labelEl);
-    // Port labels render at PORT_TEXT_SIZES.md (24px) by default
-    // (`../../components/port.layout.ts:158`, `../../components/port.tsx`'s
-    // `LabeledPort` default) — read the live font-size instead of assuming
-    // it, so a caller that sizes a label differently still measures true.
+    const textBox = textBoxRelativeTo(origin, labelEl, editor);
+    // Port labels render at PORT_TEXT_SIZES.sm (18px) by default
+    // (`../../components/port.layout.ts:158`, `../../components/labeledPort.tsx`'s
+    // `textSize = "sm"` default) — read the live font-size instead of
+    // assuming it, so a caller that sizes a label differently still
+    // measures true. STALE COMMENT FIXED 2026-09-18: this previously said
+    // 24px (PORT_TEXT_SIZES.md) — the code already read the computed style
+    // so behaviour was unaffected, only the comment was wrong.
     const computed = window.getComputedStyle(labelEl);
-    const fontPx = Math.round(parseFloat(computed.fontSize) || 24);
+    const fontPx = Math.round(parseFloat(computed.fontSize) || 18);
     shapes.push(
       textAtDom({
         text: labelEl.textContent.trim(),

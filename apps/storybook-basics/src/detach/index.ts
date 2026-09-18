@@ -21,8 +21,11 @@
  * inside the shared component kit. This kit follows the same split.
  *
  * WHAT THIS KIT DOES NOT DO (see the lane report for the full "owed wiring"
- * list): wire a live tldraw context-menu item, or register `glyph`/`code`/
- * `value` kinds. Both are real, scoped-out follow-up, not silent gaps.
+ * list): register `glyph`/`code`/`value` kinds — real, scoped-out
+ * follow-up, not a silent gap. The right-click "Rebuild" menu item IS
+ * wired now (`./rebuildContextMenu.tsx`'s `RebuildContextMenu`, composed
+ * onto tldraw's own `DefaultContextMenu`/`DefaultContextMenuContent` via
+ * `TldrawHost`'s `components` prop) — this line used to say it was not.
  */
 export {
   BBOX_UI_META_KEY,
@@ -48,6 +51,7 @@ export { runDetachSweep, type DetachSweepOptions, type DetachSweepResult } from 
 export { rebuildDetachedShapes, selectedRebuildableIds, type RebuildResult } from "./rebuild";
 export { DETACHABLE_KINDS, blockDetachableKind, emitPortPrimitives } from "./definitions";
 export { registerEditorContainer, containerFor } from "./editorContainer";
+export { RebuildContextMenu } from "./rebuildContextMenu";
 
 import type { Editor, TLShapeId } from "tldraw";
 
