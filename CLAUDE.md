@@ -13,9 +13,41 @@ when you are **changing** the repo.
 
 **The core imports no canvas engine.** `packages/bbox-ui` is props in, DOM out —
 zero imports of tldraw, zero of React Flow, no pointer listeners, no
-self-measurement, no z-index. Layout geometry is portable and lives in the core;
-interaction geometry (hit-testing, snapping, drag, z-order) is host-owned and
-never travels.
+self-measurement. Layout geometry is portable and lives in the core;
+interaction geometry (hit-testing, snapping, drag) is host-owned and never
+travels.
+
+**Z-index is not one thing, and this line used to say it was never emitted
+here — that was already false the day it was written.** Amended 2026-09-18
+(Card 04, the z-order lane): the mechanical test is whether the answer can be
+computed from ONE component's own props, knowing nothing about what else is
+on the canvas and nothing about what the pointer is doing.
+- **Paint order WITHIN one component's own box** (which member paints above
+  which, a header above a member's overflow, a port dot above its own
+  Block) is deterministic from that component's own tree, identical on every
+  host, and required for the render to be correct at all — that is layout,
+  it is portable, and it is named in `apps/storybook-basics/src/components/
+  paintOrder.ts`. Retroactively honest, not new: `blockPort.tsx` and
+  `portEdge.tsx` were already emitting raw `zIndex` literals, coordinated
+  only by prose comments across three files, before this ladder existed —
+  see `docs/provenance/z-order.md`.
+- **Z-order BETWEEN nodes on a canvas** (which node is on top,
+  raise-on-select, drag-to-front) needs the selection, the pointer, or a
+  sibling node's identity — that stays interaction geometry, host-owned,
+  never travels.
+- **The structural wall between the two:** every component root that emits a
+  paint tier sets `isolation: isolate`, a hard CSS stacking-context boundary
+  — a descendant's z-index cannot outrank anything outside its isolated root
+  no matter what integer it carries. The kit still never emits a z-index on
+  a node ROOT (a Block's own outer box); only a host does that. Mutation-
+  tested proof that the wall is load-bearing (not just documented) is in
+  `docs/provenance/z-order.md`.
+
+(Zach, 2026-09-18: "Right now we're not doing any z-index. BUT I think that
+is changing... in DOM canvas examples with expanded nodes with children
+inside we definitely need this." That is what this section resolves —
+between-node z-order is still his to grant per host; within-box paint order
+is granted here, once, for every host.)
 
 An adapter may import the core and its own engine — never the other engine,
 never the other adapter. That rule is what keeps a third host a ~150-line

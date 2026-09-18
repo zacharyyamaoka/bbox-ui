@@ -42,3 +42,38 @@ control panels. A file here typically:
   does not define new ones from scratch unless the composition itself is
   the deliverable (e.g. `focusControls.tsx` IS the deliverable, but it
   imports `Button`/`Slider` rather than hand-rolling either).
+
+## `nodeCatalog.ts` + `edgeDropMenu.tsx` — the edge-drop menu (card 14)
+
+"A cable that landed on nothing is a question, not a mistake" — dropping a
+loose wire end on empty canvas opens a type-filtered node search anchored
+to the loose end. Zach, 2026-09-18: "agree this is nice. Let's please add
+this to editor-components. We already have the implementation in
+SystemSketch." Ported as BEHAVIOUR from SystemSketch's
+`src/blocks/ui/OnCanvasBlockPicker.tsx` and its caller
+`ConnectionShapeUtil.tsx`'s `offerBlockForLooseTerminal` — see
+`docs/provenance/edge-drop-menu.md` for the line-by-line citations.
+
+Split the same way this kit already splits pure-vs-chrome:
+
+- **`nodeCatalog.ts`** — the PURE half. `NodeCatalogEntry` (a thing a host
+  could insert) and `catalogFor(catalog, want)`, which answers "which
+  entries can supply the polarity/type a loose cable end needs." No React,
+  no DOM — same discipline `scene/lint.ts` follows, but it lives here
+  rather than in `src/scene/` because it filters a host-authored CATALOG,
+  not a `BlockScene`.
+- **`edgeDropMenu.tsx`** — the chrome. `EdgeDropMenu` takes `anchor`/
+  `viewport` (plain data, no editor handle), `entries`, and — the one
+  non-negotiable part, card 23's rule — a `judge: (entry) => boolean`
+  callback the host wires to `scene/edgeValidation.ts`'s
+  `validateConnection`. An entry the judge refuses is never rendered, not
+  merely disabled: "one gate, no second entry point," because JointJS's
+  own `Connect` tool skipping `validateMagnet` while the raw press gates
+  it is exactly the failure this rule exists to rule out (cited in full in
+  the provenance doc). `placeEdgeDropMenu` is the donor's flip-then-clamp
+  placement math, re-expressed as a pure function of an already-measured
+  size instead of a live tldraw reactor.
+
+See `src/stories/EdgeDropMenu.stories.tsx` for the host-adapter pattern
+this establishes: the story owns the pointer gesture and the demo catalog;
+the kit component owns none of either.
