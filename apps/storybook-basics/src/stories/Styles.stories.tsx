@@ -88,6 +88,39 @@ function straightPath(x1: number, y1: number, x2: number, y2: number): string {
   return `M ${x1} ${y1} L ${x2} ${y2}`;
 }
 
+/**
+ * Path commands in ONE PASS of a `d` string — `M`/`L`/`C`/`Q`/`Z`, case-
+ * insensitive, counted only up to the second `M` (the start of the next
+ * pass, if any).
+ *
+ * TWO pitfalls this specifically avoids, both measured live against this
+ * exact story, both false-negative-proof (a broken build reads as fixed)
+ * or false-positive-proof (a fixed build reads as broken) if skipped:
+ *
+ *  1. Counting only `L`: `sketchPath.ts`'s own `smoothThrough` ALWAYS
+ *     closes an open subpath (`close: false`, what `sketchPathData` always
+ *     passes) with exactly one trailing `L`, regardless of how many
+ *     interior `Q`s precede it — so a correctly jittered 18-point pass and
+ *     a broken 2-point one both have exactly ONE `L`. Counting `L` alone
+ *     is an invariant, not a signal; it is what produced a false
+ *     "still broken" reading against a build that was actually fixed
+ *     (measured live: a working sketch path read 2 `L`s across its two
+ *     passes and 18 `Q`s — the `Q`s are where the fix shows up).
+ *  2. Counting every command ACROSS BOTH PASSES: `sketchPathData` draws
+ *     `passes = 2` by default, so even a STILL-BROKEN two-point path
+ *     doubles to `M...L...M...L` — 4 commands — which is already MORE
+ *     than the crisp path's 2, passing a whole-string count vacuously
+ *     (the exact "extra element exists is not a difference" failure mode
+ *     `sketchPath.test.ts`'s own header warns about, caught there by
+ *     mutation testing and reproduced here on purpose before fixing it).
+ *     Only ONE pass, compared against the crisp path's own count, proves
+ *     a pass actually grew interior points it didn't have before.
+ */
+function firstPassSegmentCount(d: string): number {
+  const firstPass = d.match(/M[^M]*/)?.[0] ?? d;
+  return (firstPass.match(/[MLCQZ]/gi) ?? []).length;
+}
+
 /* ==================================================================== */
 /* AllComponents — the matrix: every painting component x the 3 skins.   */
 /* ==================================================================== */
@@ -365,6 +398,23 @@ export const Sketch: Story = {
     await expect(sketched.length).toBe(crisp.length);
     for (const el of crisp) await expect(getComputedStyle(el).display).toBe("none");
     for (const el of sketched) await expect(getComputedStyle(el).display).not.toBe("none");
+
+    // T1, checked where it actually matters — the RENDERED DOM, not just
+    // the function in isolation (sketchPath.test.ts proves the function;
+    // this proves the picture). Each sketch twin is paired with its crisp
+    // sibling by DOM order (asserted equal-length just above, same `<g
+    // data-slot="trace">` per pair) — its `d` must carry strictly more
+    // path commands in its first pass than the crisp path (see
+    // `firstPassSegmentCount`'s own note on why counting only `L`, or
+    // counting across both passes, are both unsafe).
+    for (let i = 0; i < crisp.length; i++) {
+      const crispD = crisp[i].getAttribute("d") ?? "";
+      const sketchD = sketched[i].getAttribute("d") ?? "";
+      await expect(
+        firstPassSegmentCount(sketchD),
+        `trace-line[${i}]: sketch d ("${sketchD.slice(0, 40)}...") must have strictly more path commands than crisp d ("${crispD}")`,
+      ).toBeGreaterThan(firstPassSegmentCount(crispD));
+    }
 
     // `WiredCompositeScene`'s own PortEdge group outline (a `SketchOutline`
     // rect) and TraceTerminal ring — the drawn twin must show, the crisp
