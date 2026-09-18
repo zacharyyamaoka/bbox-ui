@@ -1,7 +1,7 @@
 {
   "title": "Fit to content — status, the bug, and the math",
   "summary": "Zach's first question answered per view, the pitch-compression bug confirmed in the donor AND found (twice, in two different disguises) in this kit, and fit-to-content delivered as pure math plus six measured stories — with no component edited.",
-  "base_ref": "main",
+  "base_ref": "fe7386d",
   "branch_label": "fit-to-content (isolated lane worktree)",
   "storybook_port": 5505,
   "slug": "fit-to-content",
