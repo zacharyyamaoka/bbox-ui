@@ -48,14 +48,28 @@
 //     Reporting the edge directly needs no algorithm beyond `source ===
 //     target`, so it is implemented directly rather than post-processing
 //     `findCycles`' output.
-//   - type-mismatch: NOT IMPLEMENTED. `SceneNode.data` is `SceneData =
-//     Record<string, unknown>` (scene.ts:35) and nothing anywhere in
-//     scene.ts, sceneWires.ts or linking.ts attaches a port type/schema —
-//     grepped for `portType`/`dataType`/`valueType` across `src/scene/` and
-//     `src/components/port*.tsx`, zero hits. There is no type vocabulary to
-//     compare two ports against, so inventing one here would be exactly the
-//     "fabricate a rule the data cannot support" the brief warned against.
-//     Add this rule the day a port carries a declared type.
+//   - type-mismatch: THE SEAM EXISTS; THE VOCABULARY IS STILL DELIBERATELY
+//     UNMINTED. `SceneNode.data` is still `SceneData = Record<string,
+//     unknown>` (scene.ts:35) and nothing in scene.ts, sceneWires.ts or
+//     linking.ts attaches a port type/schema — that has not changed. What
+//     changed (2026-09-18, "final spec" lane, ruling 6) is the DONOR:
+//     maxGraph `Multiplicity.check` was the planned type-vocabulary donor
+//     and was REJECTED after running it — `checkTerminal(graph,
+//     source_or_target, edge)` receives the connecting EDGE in the
+//     parameter named `terminal` (`Multiplicity.ts:147-150` vs the call
+//     site at `:204-208`, v0.24.0), so the applicability gate reads the
+//     edge's own value and silently no-ops for every ordinary (value-less)
+//     edge — reproduced against maxGraph's own shipped Validation-story
+//     fixtures. The adopted shape instead is Blockly
+//     `ConnectionChecker.doTypeChecks` (Apache-2.0, fetched
+//     `github.com/google/blockly` main `core/connection_checker.ts:203-
+//     219`): each side carries an optional array of accepted tags,
+//     `undefined` = unconstrained, compatible iff the arrays intersect —
+//     see `PortTypeOf`/`TypeCompatible`/`typesIntersect` below. WHY defer
+//     the ontology anyway: what a type IS (equality? hierarchy? union?) is
+//     a product decision with zero data support in this repo; the caller-
+//     injected `typeOf` resolver is what lets `type-mismatch` demonstrate
+//     filtering without this file fabricating one.
 
 import type { Diagnostic, DiagnosticSeverity } from "../components/highlighter";
 import { duplicateEdges, findCycles, findDanglingEdges, portKey, producersOf, type ScenePortRef, type SceneEdgeEnds } from "./scene";
@@ -79,6 +93,46 @@ export interface LintScene {
  *  judgement for it." Reused verbatim rather than re-declared so the two
  *  call sites can never drift. */
 export type PortsOf = (nodeId: string) => readonly string[] | undefined;
+
+/**
+ * A port's declared type vocabulary, or `undefined` for "unconstrained" —
+ * same convention as `PortsOf` above. Shape adopted from Blockly
+ * `ConnectionChecker.doTypeChecks` (Apache-2.0, fetched
+ * `core/connection_checker.ts:203-219`): an optional ARRAY of accepted
+ * tags per side, not a single type string, so a port can legitimately
+ * accept more than one shape (a union-typed input). See this file's own
+ * header for why maxGraph's `Multiplicity` was rejected as the donor.
+ */
+export type PortTypeOf = (ref: ScenePortRef) => readonly string[] | undefined;
+
+/** Compatible iff... whatever this returns says so. Default is
+ *  `typesIntersect` below; a caller may substitute equality, a hierarchy
+ *  check, or anything else — this file mints no opinion beyond the list
+ *  shape. */
+export type TypeCompatible = (from: readonly string[], to: readonly string[]) => boolean;
+
+/**
+ * Default `TypeCompatible` — Blockly's own list-intersection (same fetched
+ * `core/connection_checker.ts:203-219`). `undefined` on either side never
+ * reaches this function: `type-mismatch`'s own gate (below) skips the edge
+ * before calling it, matching `PortsOf`'s "undefined = unknown, no
+ * judgement" convention. litegraph.js's comma-string type encoding
+ * (`LiteGraph.isValidConnection`, MIT, `build/litegraph.js:686-720`, run
+ * 6/6) was the alternative deliberately NOT chosen — one convention for
+ * "what a type looks like" in this kit, not two.
+ */
+export const typesIntersect: TypeCompatible = (from, to) => from.some((tag) => to.includes(tag));
+
+/** Everything a rule may need beyond the scene itself — `portsOf` is the
+ *  pre-existing per-node vocabulary (`findDanglingEdges`'s own contract);
+ *  `typeOf`/`compatible` are `type-mismatch`'s. A rule that doesn't use a
+ *  field simply never reads it — nothing here obliges every rule to care
+ *  about every field. */
+export interface LintRuleContext {
+  portsOf?: PortsOf;
+  typeOf?: PortTypeOf;
+  compatible?: TypeCompatible;
+}
 
 /** What render carrier a finding attaches to — the address, not the paint.
  *  A component picks its own presentation per §5 of
@@ -121,12 +175,19 @@ export interface LintFinding extends Diagnostic {
 /* The registry — closed, documented, individually toggleable           */
 /* ------------------------------------------------------------------ */
 
-export type LintRuleId = "dangling-edge" | "cycle" | "duplicate-edge" | "many-to-one" | "self-connection";
+export type LintRuleId = "dangling-edge" | "cycle" | "duplicate-edge" | "many-to-one" | "self-connection" | "type-mismatch";
 
 /** Scene order — also the registry's own iteration/display order, so a
  *  rule-picker UI (the story's Storybook controls) lists them the same way
  *  every time. */
-export const LINT_RULE_IDS: readonly LintRuleId[] = ["dangling-edge", "cycle", "duplicate-edge", "many-to-one", "self-connection"];
+export const LINT_RULE_IDS: readonly LintRuleId[] = [
+  "dangling-edge",
+  "cycle",
+  "duplicate-edge",
+  "many-to-one",
+  "self-connection",
+  "type-mismatch",
+];
 
 /** One raw hit, before the runner turns it into a full `LintFinding` — a
  *  rule states WHAT it found and ABOUT WHAT; the runner (`lintScene`) owns
@@ -149,7 +210,7 @@ export interface LintRule {
   /** Where the rule's math or its "outside prior art has no answer, this is
    *  ours" comes from — repo rule, `.claude/feedback.md`. */
   provenance: string;
-  run(scene: LintScene, portsOf?: PortsOf): LintRuleHit[];
+  run(scene: LintScene, context?: LintRuleContext): LintRuleHit[];
 }
 
 const danglingEdgeRule: LintRule = {
@@ -157,8 +218,8 @@ const danglingEdgeRule: LintRule = {
   severity: "error",
   title: "Dangling edge — an end names a node or port that isn't in the scene",
   provenance: "wraps findDanglingEdges (scene.ts:424)",
-  run(scene, portsOf) {
-    return findDanglingEdges(scene, portsOf).map((d) => ({
+  run(scene, context) {
+    return findDanglingEdges(scene, context?.portsOf).map((d) => ({
       subject: { kind: "edge", id: d.edgeId },
       detail: d.end,
       message:
@@ -254,6 +315,36 @@ const selfConnectionRule: LintRule = {
   },
 };
 
+const typeMismatchRule: LintRule = {
+  id: "type-mismatch",
+  severity: "error",
+  title: "Type mismatch — an edge connects two incompatible port types",
+  provenance:
+    "Blockly ConnectionChecker.doTypeChecks (Apache-2.0, fetched github.com/google/blockly main core/connection_checker.ts:203-219) — list-intersection compatibility. maxGraph Multiplicity.check was the planned donor and was REJECTED: checkTerminal(graph, source_or_target, edge) receives the connecting EDGE in the parameter named `terminal` (Multiplicity.ts:147-150 vs the call site at :204-208, v0.24.0), so it silently no-ops for every ordinary edge — reproduced against maxGraph's own Validation-story fixtures. Fires ONLY when the caller-supplied `typeOf` resolves a vocabulary for BOTH ends — see this file's header for why no vocabulary is minted here.",
+  run(scene, context) {
+    const typeOf = context?.typeOf;
+    if (!typeOf) return [];
+    const compatible = context?.compatible ?? typesIntersect;
+    const hits: LintRuleHit[] = [];
+    for (const edge of scene.edges) {
+      if (edge.sourceHandle == null || edge.targetHandle == null) continue;
+      const sourceTypes = typeOf({ nodeId: edge.source, portId: edge.sourceHandle });
+      const targetTypes = typeOf({ nodeId: edge.target, portId: edge.targetHandle });
+      // Either end unresolved -> no judgement, per PortsOf's own
+      // "undefined = unknown" convention. Fabricating a verdict from a
+      // half-known vocabulary is exactly the "invent a rule the data
+      // cannot support" trap this file's header already warns against.
+      if (!sourceTypes || !targetTypes) continue;
+      if (compatible(sourceTypes, targetTypes)) continue;
+      hits.push({
+        subject: { kind: "edge", id: edge.id },
+        message: `Edge "${edge.id}" carries "${sourceTypes.join(", ")}" into "${targetTypes.join(", ")}"`,
+      });
+    }
+    return hits;
+  },
+};
+
 /** The closed registry — a documented value per id, never an open string
  *  soup. `Readonly` so a consumer cannot quietly monkey-patch a rule. */
 export const LINT_RULES: Readonly<Record<LintRuleId, LintRule>> = {
@@ -262,6 +353,7 @@ export const LINT_RULES: Readonly<Record<LintRuleId, LintRule>> = {
   "duplicate-edge": duplicateEdgeRule,
   "many-to-one": manyToOneRule,
   "self-connection": selfConnectionRule,
+  "type-mismatch": typeMismatchRule,
 };
 
 /* ------------------------------------------------------------------ */
@@ -279,6 +371,11 @@ export interface LintOptions {
    */
   rules?: readonly LintRuleId[];
   portsOf?: PortsOf;
+  /** `type-mismatch`'s vocabulary — omitted, that rule contributes nothing
+   *  (see its own `run`). Every existing caller that never passes these
+   *  gets byte-identical findings to before this field existed. */
+  typeOf?: PortTypeOf;
+  compatible?: TypeCompatible;
 }
 
 /**
@@ -295,11 +392,12 @@ export interface LintOptions {
  */
 export function lintScene(scene: LintScene, options: LintOptions = {}): LintFinding[] {
   const ruleIds = options.rules ?? LINT_RULE_IDS;
+  const context: LintRuleContext = { portsOf: options.portsOf, typeOf: options.typeOf, compatible: options.compatible };
   const findings: LintFinding[] = [];
   for (const ruleId of ruleIds) {
     const rule = LINT_RULES[ruleId];
     if (!rule) continue;
-    for (const hit of rule.run(scene, options.portsOf)) {
+    for (const hit of rule.run(scene, context)) {
       const subjectKeyStr = `${hit.subject.kind}:${hit.subject.id}`;
       const id = hit.detail ? `lint:${rule.id}:${subjectKeyStr}:${hit.detail}` : `lint:${rule.id}:${subjectKeyStr}`;
       findings.push({ id, severity: rule.severity, message: hit.message, code: rule.id, ruleId: rule.id, subject: hit.subject });

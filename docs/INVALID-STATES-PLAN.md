@@ -244,6 +244,12 @@ mark one element, the diagnostic halo renders outside their outline.
   `received`/`dimmed`/`hinting`.
 - **Naming the diff states** — the comparison lane's call; §6 states only
   the composition contract.
+- **Owed to the editor-component kit** (2026-09-18, "final spec" lane,
+  ruling 9): an IDE-style issue navigator over `LintFinding[]`/
+  `SurfacedFinding[]` — gutter, overview ruler, click-to-next-issue — Zach:
+  "like the IDE, where you can quickly click to any of the issues."
+  `src/scene/bubble.ts`'s `surfaceFindings` is what such a navigator would
+  read; not built in this wave.
 
 ---
 
