@@ -1,9 +1,19 @@
-// src/skin/sketchPath.ts — ported VERBATIM (byte-identical body) from
-// packages/bbox-ui/src/sketchPath.ts (frozen v1, read-only donor),
-// revision `c83c8b2` in this repo. Pure math — tldraw's seeded xorshift128
-// rng and the rect/ellipse jitter derivation — with no CSS var or React
-// import, so nothing here needed to change to reach this app. Only this
-// header is new.
+// src/skin/sketchPath.ts — ported from packages/bbox-ui/src/sketchPath.ts
+// (frozen v1, read-only donor), revision `c83c8b2` in this repo. Pure
+// math — tldraw's seeded xorshift128 rng and the rect/ellipse jitter
+// derivation — with no CSS var or React import, so nothing here needed to
+// change to reach this app.
+//
+// NO LONGER byte-identical (2026-09-17): `flattenPathData`'s L/H/V cases
+// were pushing only the segment's END point, so a straight two-point run
+// (`routing: "straight"`/`"slanted"` with no bends, e.g. `M4 20L156 20`)
+// had NO interior points for `sketchPathData` to jitter — both its points
+// are the run's index-0 and index-(length-1) endpoints, which are
+// deliberately protected from jitter so a Trace stays attached to its
+// ports. Confirmed the donor has the identical gap (byte-diffed this
+// function against it before touching anything); it is frozen v1 and
+// cannot be fixed there, so the fix lives only in this copy. See the WHY
+// at each of the three cases below.
 
 /**
  * bbox-ui sketch geometry — the hand-drawn outline, as pure math.
@@ -275,6 +285,10 @@ function quadAt(p0: Pt, c: Pt, p1: Pt, t: number): Pt {
   };
 }
 
+function lerpAt(p0: Pt, p1: Pt, t: number): Pt {
+  return { x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t };
+}
+
 /** Flatten a `d` string into runs of points. `null` means "this path uses a
  * command we do not flatten" — the caller must then leave it alone. */
 function flattenPathData(d: string, spacing: number): Pt[][] | null {
@@ -312,19 +326,41 @@ function flattenPathData(d: string, spacing: number): Pt[][] | null {
         cmd = rel ? "l" : "L";
         break;
       }
+      // L/H/V: BUG FIX (2026-09-17, this app only — the donor at
+      // packages/bbox-ui/src/sketchPath.ts has the identical gap and is
+      // frozen v1, read-only, so it cannot be fixed there). These three
+      // used to push only the segment's END point, same as a naive line-to.
+      // `sketchPathData` protects index 0 and index (length-1) of a run
+      // from jitter so a Trace stays attached to its two ports — but for a
+      // straight two-point run (exactly `routing: "straight"`/`"slanted"`
+      // with no bends) that is ALSO 100% of the run, so nothing could ever
+      // move: `M4 20L156 20` sketched to itself, twice, which is why the
+      // sketch column looked identical to the crisp one. `C`/`Q` a few
+      // lines below never had this problem — they already sample `steps`
+      // interior points via `sampleCount`. The fix is the same move: give
+      // a straight run interior points to jitter, exactly like a curve's.
       case "L": {
-        cur = { x: num() + ox, y: num() + oy };
-        run.push(cur);
+        const from = cur;
+        const end = { x: num() + ox, y: num() + oy };
+        const steps = sampleCount(from, end);
+        for (let s = 1; s <= steps; s++) run.push(lerpAt(from, end, s / steps));
+        cur = end;
         break;
       }
       case "H": {
-        cur = { x: num() + ox, y: cur.y };
-        run.push(cur);
+        const from = cur;
+        const end = { x: num() + ox, y: cur.y };
+        const steps = sampleCount(from, end);
+        for (let s = 1; s <= steps; s++) run.push(lerpAt(from, end, s / steps));
+        cur = end;
         break;
       }
       case "V": {
-        cur = { x: cur.x, y: num() + oy };
-        run.push(cur);
+        const from = cur;
+        const end = { x: cur.x, y: num() + oy };
+        const steps = sampleCount(from, end);
+        for (let s = 1; s <= steps; s++) run.push(lerpAt(from, end, s / steps));
+        cur = end;
         break;
       }
       case "C": {

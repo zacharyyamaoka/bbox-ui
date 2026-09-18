@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
@@ -6,39 +7,69 @@ import { Badge } from "../components/badge";
 import { Port } from "../components/port";
 import { TraceBody } from "../components/trace";
 import { CodeEditor } from "../components/codeEditor";
+import { LabeledPort } from "../components/labeledPort";
+import { BlockPort } from "../components/blockPort";
+import { PortEdge, type PortEdgeItem } from "../components/portEdge";
+import { TraceTerminal } from "../components/traceTerminal";
+import { Button } from "../components/button";
+import { Toggle } from "../components/toggle";
+import { EditableText } from "../components/editableText";
+import { Text } from "../components/text";
+import { FoldingChevron } from "../components/foldingChevron";
+import { ValueCapsule } from "../presets/value/value";
 import { BBOX_SKINS, BBOX_SKIN_LABELS, bboxSkinAttrs, type BboxSkin } from "../skin/skin";
 
 /**
  * Styles/** — the skin system (src/skin/**, ported from packages/bbox-ui,
- * frozen v1) brought to this app's own components (Tranche 2 of the port:
- * `block.tsx`, `badge.tsx`, `port.tsx`, `trace.tsx`, `codeEditor.css`).
- * `.storybook/preview.tsx`'s toolbar "Skin" global switches every story in
- * this file (and every other story in the app) live — these three exist to
- * show the language at a glance, not to be the only place it is visible.
+ * frozen v1) brought to this app's own components, across all five
+ * tranches of the port (Tranche 2: block/badge/port/trace/codeEditor;
+ * Tranche 3: composites; Tranche 4: shadcn primitives; Tranche 5:
+ * presets/value). `.storybook/preview.tsx`'s toolbar "Skin" global
+ * switches every story in this file (and every other story in the app)
+ * live — these stories exist to show the language at a glance, not to be
+ * the only place it is visible.
  *
- * COVERAGE — "every painting component" made measurable, not a claim
- * (Tranche 2 only; Tranches 3-5 are not part of this pass — see the
- * handoff report for what's left):
+ * COVERAGE — "every painting component" made measurable, not a claim.
  *
- *   Component    | Paints                          | Reads
- *   ------------ | -------------------------------- | ------------------------------------------------
- *   Block        | border, radius, surface, shadow  | stroke(-width), radius, surface, shadow, fg, font
- *   Badge        | radius, (outline variant) border | radius(-pill), line-override, ink (via SketchOutline)
- *   Port         | box-shadow rings                 | dot-rings, ink (via SketchOutline's drawn ring)
- *   Trace        | SVG stroke                        | crisp, outline (the drawn/crisp path pair)
- *   CodeEditor   | border, radius, background, font  | stroke(-width), radius, surface, fg, font-mono
+ *   Component     | Paints                          | Reads
+ *   ------------- | -------------------------------- | ------------------------------------------------
+ *   Block         | border, radius, surface, shadow  | stroke(-width), radius, surface, shadow, fg, font
+ *   Badge         | radius, (outline variant) border | radius(-pill), line-override, ink (via SketchOutline)
+ *   Port          | box-shadow rings                 | dot-rings, ink (via SketchOutline's drawn ring)
+ *   Trace         | SVG stroke                        | crisp, outline (the drawn/crisp path pair)
+ *   CodeEditor    | border, radius, background, font  | stroke(-width), radius, surface, fg, font-mono
+ *   LabeledPort   | (label text) font-family          | font-sans
+ *   PortEdge      | edge line, card overlay, group    | stroke, stroke-width, radius, line-override, outline
+ *                 | outline border/radius             |
+ *   BlockMembers  | card overlay border/radius        | radius, stroke-width
+ *   TraceTerminal | SVG stroke (the ring)              | line-override, outline (the drawn/crisp ring pair)
+ *   Button        | radius, (outline variant) border  | radius, line-override
+ *   Toggle        | radius, (outline variant) border  | radius, line-override
+ *   Tooltip       | radius                            | radius (NOT DOM-verified — see below)
+ *   DropdownMenu  | radius, divider background        | radius, stroke (NOT DOM-verified — see below)
+ *   EditableText  | (text) font-family, `font:"sans"`  | font-sans
+ *   Text          | (text) font-family                | font-sans
+ *   FoldingChevron| radius                            | radius
  *
- *   Bar          | NOTHING of its own — a layout strip; the only lines are
- *                | Block's own header/footer dividers, already covered
- *                | above. See skin.test.ts's own "coverage (S4)" describe
- *                | block for the grepped proof.
+ *   Bar, Collapsible, BlockPort, TraceBadge, WireLayer, ValueCapsule
+ *                 | NOTHING of their own — layout/positioning wrappers
+ *                 | around already-wired children. See skin.test.ts's own
+ *                 | "coverage (S4)" describe block for the grepped proof
+ *                 | (and, for ValueCapsule specifically, why its
+ *                 | border/background literal is a permanent suppression,
+ *                 | not a paint a skin could ever drive).
  *
- * NOT YET PORTED (Tranches 3-5 — labeledPort, portEdge, blockPort,
- * blockMembers, traceBadge, traceTerminal, wireLayer, the shadcn
- * primitives, presets/value): these compose the components above, so they
- * already inherit `--bbox-skin-font`/`-fg` etc. through the Block/Badge/
- * Port/CodeEditor they wrap, but none of them has its OWN token call sites
- * yet (no drawn outline, no radius override). They are not claimed here.
+ * WHY Tooltip and DropdownMenu are NOT in `AllComponents`/`NoSkinRegression`
+ * below despite being wired: both render their real content through a Base
+ * UI `Portal` (`document.body` by default), which escapes the `data-bbox-
+ * skin` attribute this file stamps on each column's own DOM subtree — a
+ * live per-skin DOM comparison would need `tooltip.tsx`/`dropdown-menu.tsx`
+ * to accept a portal `container` override neither exposes today, which is
+ * new scope past "wire the token". Their radius/stroke wiring is instead
+ * checked at the SOURCE level (skin.test.ts: the exact byte-identical
+ * fallback literal is present, verbatim, in each file) rather than against
+ * live `getComputedStyle` output. Said plainly rather than silently
+ * skipped.
  */
 
 const meta = {
@@ -123,42 +154,112 @@ export const AllComponents: Story = {
           </div>
         )}
       </ComponentRow>
+
+      {/* Tranche 3 — composites */}
+      <ComponentRow name="LabeledPort">
+        {() => <LabeledPort edge="left" state="wired">value</LabeledPort>}
+      </ComponentRow>
+
+      <ComponentRow name="PortEdge">
+        {() => (
+          <PortEdge
+            edge="left"
+            items={[
+              { id: "a", label: "a", state: "empty" },
+              { id: "b", label: "b", state: "wired" },
+            ]}
+            showCard
+            size={{ width: 140, height: 100 }}
+          />
+        )}
+      </ComponentRow>
+
+      <ComponentRow name="BlockMembers">
+        {() => <Block width={200} height={140} members={[{ id: "m1", content: "Member" }]} showCards />}
+      </ComponentRow>
+
+      <ComponentRow name="TraceTerminal">
+        {() => (
+          <svg width={40} height={40} style={{ overflow: "visible" }}>
+            <TraceTerminal x={20} y={20} dir="right" />
+          </svg>
+        )}
+      </ComponentRow>
+
+      {/* Tranche 4 — shadcn primitives */}
+      <ComponentRow name="Button">
+        {() => <Button variant="outline">Outline</Button>}
+      </ComponentRow>
+
+      <ComponentRow name="Toggle">
+        {() => <Toggle variant="outline">On</Toggle>}
+      </ComponentRow>
+
+      <ComponentRow name="EditableText">
+        {() => <EditableText size="md">value</EditableText>}
+      </ComponentRow>
+
+      <ComponentRow name="Text">
+        {() => <Text>label</Text>}
+      </ComponentRow>
+
+      <ComponentRow name="FoldingChevron">
+        {() => <FoldingChevron open={false} onClick={() => {}} />}
+      </ComponentRow>
     </div>
   ),
   play: async ({ canvasElement }) => {
     // S2 — a measurable difference per component, not just on one. Compare
     // the "default"/"no-skin-equivalent" column against "sketch" for each
-    // row: at least one of {border-radius, background, box-shadow, the
-    // drawn outline's display} must change.
-    const rows = ["Block", "Badge", "Port", "Trace", "CodeEditor"];
-    for (const name of rows) {
+    // row: at least one of {border-radius, border-color, background,
+    // box-shadow, font-family, the drawn outline's display} must change.
+    // PER-ROW selector for the one element that carries this component's
+    // OWN paint (never a child's — Trace's marker, say, or a Block nested
+    // inside a composite row, would otherwise let an unrelated descendant's
+    // difference paper over this row's own read never firing).
+    const ROW_SELECTOR: Record<string, string> = {
+      Block: '[data-slot="block"]',
+      Badge: '[data-slot="badge"]',
+      Port: '[data-slot="port-dot"]',
+      Trace: '[data-slot="trace-line"]:not([data-sketch])',
+      CodeEditor: ".bbox-code-editor",
+      LabeledPort: '[data-slot="port-label-display"]',
+      PortEdge: '[data-slot="port-edge"]',
+      BlockMembers: '[data-slot="block-member-card"]',
+      TraceTerminal: '[data-slot="trace-terminal-ring"]',
+      Button: '[data-slot="button"]',
+      Toggle: '[data-slot="toggle"]',
+      EditableText: '[data-slot="editable-text"]',
+      Text: '[data-slot="text"]',
+      FoldingChevron: '[data-slot="folding-chevron"]',
+    };
+    for (const [name, selector] of Object.entries(ROW_SELECTOR)) {
       const defaultCell = canvasElement.querySelector(`[data-testid="cell-${name}-default"]`);
       const sketchCell = canvasElement.querySelector(`[data-testid="cell-${name}-sketch"]`);
       if (!(defaultCell instanceof HTMLElement) || !(sketchCell instanceof HTMLElement)) {
         throw new Error(`missing cell for ${name}`);
       }
-      const paintable = defaultCell.querySelector<HTMLElement | SVGElement>(
-        '[data-slot="block"], [data-slot="badge"], [data-slot="port-dot"], [data-slot="trace-line"]:not([data-sketch]), .bbox-code-editor',
-      );
-      const paintableSketch = sketchCell.querySelector<HTMLElement | SVGElement>(
-        '[data-slot="block"], [data-slot="badge"], [data-slot="port-dot"], [data-slot="trace-line"]:not([data-sketch]), .bbox-code-editor',
-      );
+      const paintable = defaultCell.querySelector<HTMLElement | SVGElement>(selector);
+      const paintableSketch = sketchCell.querySelector<HTMLElement | SVGElement>(selector);
       if (!paintable || !paintableSketch) throw new Error(`no paintable element found for ${name}`);
       const a = getComputedStyle(paintable);
       const b = getComputedStyle(paintableSketch);
-      const drawnA = defaultCell.querySelector('[data-slot="sketch-outline"]');
-      const drawnB = sketchCell.querySelector('[data-slot="sketch-outline"]');
+      const drawnA = defaultCell.querySelector('[data-slot="sketch-outline"], [data-slot="trace-terminal-ring-sketch"]');
+      const drawnB = sketchCell.querySelector('[data-slot="sketch-outline"], [data-slot="trace-terminal-ring-sketch"]');
       const outlineDiffers = drawnA && drawnB ? getComputedStyle(drawnA).display !== getComputedStyle(drawnB).display : false;
-      // Trace has none of border-radius/background/box-shadow (its
-      // "paintable" is an SVG `<path>`, where those properties are
-      // meaningless) — what changes for it is its own `display`, via
-      // `CRISP_STYLE`/`SKETCH_STYLE` (trace.tsx): the crisp path goes
-      // `inline` -> `none` the moment a skin's `--bbox-skin-crisp` flips.
+      // Trace/TraceTerminal have none of border-radius/background/box-shadow
+      // (their "paintable" is an SVG element, where those properties are
+      // meaningless) — what changes for them is `display` (the crisp/
+      // sketch pair) or `stroke` (TraceTerminal's line-override).
+      const strokeOf = (style: CSSStyleDeclaration) => (style as CSSStyleDeclaration & { stroke?: string }).stroke;
       const differs =
         a.borderRadius !== b.borderRadius ||
+        a.borderColor !== b.borderColor ||
         a.backgroundColor !== b.backgroundColor ||
         a.boxShadow !== b.boxShadow ||
         a.display !== b.display ||
+        a.fontFamily !== b.fontFamily ||
+        strokeOf(a) !== strokeOf(b) ||
         outlineDiffers;
       await expect(differs, `${name}: expected a measurable difference between default and sketch`).toBe(true);
     }
@@ -177,6 +278,48 @@ function WiredScene() {
         <TraceBody id="sketch-scene-trace" path={straightPath(0, 12, 100, 12)} length={100} variant="data" animated />
       </svg>
       <Block header={<Badge variant="secondary">Sink</Badge>} body={<Port state="received" />} width={140} height={100} />
+    </div>
+  );
+}
+
+/**
+ * WiredCompositeScene — Tranche 3-4's own visual-check surface (the task's
+ * "look at the sketch skin on a wired scene ... reads as one coherent
+ * hand-drawn language or as five components each sketched slightly
+ * differently"). Every component this pass wired, on one board: a real
+ * `PortEdge` rail (grouped, card overlay + group outline) via `BlockPort`,
+ * a `TraceTerminal` pair, and the shadcn primitives (`Button`/`Toggle`
+ * outline variants, `FoldingChevron`, `EditableText`, `Text`).
+ */
+function WiredCompositeScene() {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 40 }}>
+        <BlockPort
+          id="wired-scene-block"
+          view="port"
+          edges={{
+            left: {
+              items: [
+                { id: "p1", label: "p1", state: "wired" },
+                { id: "p2", label: "p2", state: "empty" },
+              ],
+            },
+          }}
+        >
+          <Block header={<Text>Panel</Text>} body={<EditableText size="sm">value</EditableText>} width={160} height={110} />
+        </BlockPort>
+        <svg width={60} height={40} style={{ overflow: "visible" }}>
+          <TraceTerminal x={12} y={20} dir="right" />
+          <TraceTerminal x={48} y={20} dir="left" showDirection={false} />
+        </svg>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <FoldingChevron open={open} onClick={() => setOpen((v) => !v)} />
+        <Button variant="outline">Run</Button>
+        <Toggle variant="outline">On</Toggle>
+      </div>
     </div>
   );
 }
@@ -203,12 +346,14 @@ export const Sketch: Story = {
       <WiredScene />
       <Block header={<Badge>Function</Badge>} body={<CodeEditor value="return value * 2" onWrite={() => {}} multiline={false} />} width={280} height={110} />
       <TraceGallery />
+      <WiredCompositeScene />
     </div>
   ),
   play: async ({ canvasElement }) => {
     // Every drawn outline in the scene is actually visible — not just
-    // present with `display: none`.
-    const outlines = canvasElement.querySelectorAll('[data-slot="sketch-outline"]');
+    // present with `display: none`. Includes `TraceTerminal`'s own drawn
+    // ring twin, which is a raw `<path>` rather than `SketchOutline`.
+    const outlines = canvasElement.querySelectorAll('[data-slot="sketch-outline"], [data-slot="trace-terminal-ring-sketch"]');
     await expect(outlines.length).toBeGreaterThan(0);
     for (const el of outlines) {
       await expect(getComputedStyle(el).display, "a sketch-skinned scene must show every drawn outline").not.toBe("none");
@@ -220,6 +365,17 @@ export const Sketch: Story = {
     await expect(sketched.length).toBe(crisp.length);
     for (const el of crisp) await expect(getComputedStyle(el).display).toBe("none");
     for (const el of sketched) await expect(getComputedStyle(el).display).not.toBe("none");
+
+    // `WiredCompositeScene`'s own PortEdge group outline (a `SketchOutline`
+    // rect) and TraceTerminal ring — the drawn twin must show, the crisp
+    // circle's stroke must be blanked.
+    const terminalRing = canvasElement.querySelector('[data-slot="trace-terminal-ring"]');
+    if (!terminalRing) throw new Error("missing trace-terminal-ring");
+    // Sketch's `--bbox-skin-line-override: transparent` (skin.css) — the
+    // browser reports a resolved transparent colour, not the keyword —
+    // which is exactly "blanked", the same contract Badge's `line-override`
+    // proves.
+    await expect(getComputedStyle(terminalRing).stroke, "TraceTerminal's crisp ring stroke must be blanked in sketch").toBe("rgba(0, 0, 0, 0)");
   },
 };
 
@@ -229,7 +385,30 @@ export const Sketch: Story = {
 
 function GeometryComposition() {
   return (
-    <Block header={<Badge variant="secondary">Panel</Badge>} body={<div style={{ display: "flex", gap: 12 }}><Port state="empty" /><Port state="wired" /><Port state="received" /></div>} width={220} height={120} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start" }}>
+      <Block header={<Badge variant="secondary">Panel</Badge>} body={<div style={{ display: "flex", gap: 12 }}><Port state="empty" /><Port state="wired" /><Port state="received" /></div>} width={220} height={120} />
+      {/* A composition using the Tranche 3-4 components this port wired:
+          BlockPort mounts a REAL PortEdge rail (LabeledPort dots, the
+          skin's stroke/radius on the rail itself) on a real Block; the
+          FoldingChevron and outline Button sit beside it. Excluded
+          components (BlockPort itself) are exercised here for free by
+          composing the wired ones underneath them. */}
+      <BlockPort id="sbs-blockport" view="port" edges={{ left: { items: [{ id: "x", label: "x", state: "wired" }] } }}>
+        <Block width={160} height={80} />
+      </BlockPort>
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <FoldingChevron open={false} onClick={() => {}} />
+        <Button variant="outline">Go</Button>
+      </div>
+      {/* Tranche 5 — presets/value. Not a NEW token read (see this file's
+          own coverage table and skin.test.ts's S4 note: its border/
+          background overrides are a permanent, skin-independent
+          suppression) — this proves T6 by composition instead: the pill
+          radius (`valueCapsuleRadiusPx`) must equal exactly half the
+          rendered height in EVERY skin, because it deliberately wins over
+          `Block`'s own `--bbox-skin-radius` every time. */}
+      <ValueCapsule id="sbs-value" value="tol" width={160} height={48} />
+    </div>
   );
 }
 
@@ -276,10 +455,11 @@ export const SideBySide: Story = {
       await expect(Math.abs(rect.height - refBlock.height)).toBeLessThanOrEqual(TOLERANCE_PX);
     }
 
-    // Every port dot's centre, relative to its own column.
+    // Every port dot's centre, relative to its own column — 3 bare `Port`s
+    // plus the one `BlockPort`/`PortEdge`/`LabeledPort` rail dot.
     const portCentresPerColumn = columns.map((col) => {
       const dots = [...col.querySelectorAll('[data-slot="port-dot"]')];
-      if (dots.length !== 3) throw new Error(`expected 3 port dots, found ${dots.length}`);
+      if (dots.length !== 4) throw new Error(`expected 4 port dots, found ${dots.length}`);
       return dots.map((dot) => {
         const c = col.getBoundingClientRect();
         const r = dot.getBoundingClientRect();
@@ -291,6 +471,47 @@ export const SideBySide: Story = {
       for (let i = 0; i < refPorts.length; i++) {
         await expect(Math.abs(ports[i].cx - refPorts[i].cx), `port ${i} cx`).toBeLessThanOrEqual(TOLERANCE_PX);
         await expect(Math.abs(ports[i].cy - refPorts[i].cy), `port ${i} cy`).toBeLessThanOrEqual(TOLERANCE_PX);
+      }
+    }
+
+    // The FoldingChevron and outline Button — Tranche 4 primitives — keep
+    // their own rect identical across skins too (radius/border-colour are
+    // paint, never geometry).
+    for (const selector of ['[data-slot="folding-chevron"]', '[data-slot="button"]']) {
+      const rects = columns.map((col) => {
+        const el = col.querySelector(selector);
+        if (!el) throw new Error(`missing ${selector}`);
+        return relRect(col, el);
+      });
+      const [ref, ...rest] = rects;
+      for (const rect of rest) {
+        await expect(Math.abs(rect.left - ref.left), `${selector} left`).toBeLessThanOrEqual(TOLERANCE_PX);
+        await expect(Math.abs(rect.top - ref.top), `${selector} top`).toBeLessThanOrEqual(TOLERANCE_PX);
+        await expect(Math.abs(rect.width - ref.width), `${selector} width`).toBeLessThanOrEqual(TOLERANCE_PX);
+        await expect(Math.abs(rect.height - ref.height), `${selector} height`).toBeLessThanOrEqual(TOLERANCE_PX);
+      }
+    }
+
+    // T6 — the Value capsule's own radius-equals-half-height contract,
+    // proved in EVERY skin, not just the default one ValuePreset.stories.
+    // tsx's own `PillGeometry` story checks (see this file's own header on
+    // why `ValueCapsule` itself reads no new token: its `borderRadius`
+    // literal is deliberately the thing that must keep winning).
+    for (const col of columns) {
+      // The ValueCapsule's own Block root — 3rd `[data-slot="block"]` in DOM
+      // order (the header/body Block, the plain BlockPort demo's Block,
+      // then ValueCapsule's own).
+      const block = col.querySelectorAll('[data-slot="block"]')[2];
+      if (!block) throw new Error("missing ValueCapsule block");
+      const rect = block.getBoundingClientRect();
+      const corners = [
+        getComputedStyle(block).borderTopLeftRadius,
+        getComputedStyle(block).borderTopRightRadius,
+        getComputedStyle(block).borderBottomLeftRadius,
+        getComputedStyle(block).borderBottomRightRadius,
+      ].map((v) => Number.parseFloat(v));
+      for (const radius of corners) {
+        await expect(Math.abs(radius - rect.height / 2), `ValueCapsule radius vs height/2 (${col.dataset.testid})`).toBeLessThanOrEqual(1);
       }
     }
   },
@@ -316,6 +537,43 @@ function BadgeReferenceBox() {
   return <span data-testid="badge-reference" className="rounded-md" style={{ width: 40, height: 20, display: "inline-block" }} />;
 }
 
+/**
+ * Tranche 3-4 reference elements — same recipe as Block/Badge's own above:
+ * a plain element wired to the EXACT pre-token CSS expression (a literal
+ * `var(--radius-lg)`/`var(--color-input)`/etc, never a copied pixel or
+ * colour value that could go stale under a different theme), so the
+ * comparison is live computed style vs. live computed style, not a
+ * hardcoded snapshot.
+ */
+function RadiusReferenceBox({ testId, radiusVar }: { testId: string; radiusVar: string }) {
+  return <span data-testid={testId} style={{ display: "inline-block", width: 24, height: 24, borderRadius: `var(${radiusVar})` }} />;
+}
+function OutlineBorderReferenceBox({ testId }: { testId: string }) {
+  return <span data-testid={testId} style={{ display: "inline-block", width: 24, height: 24, border: "1px solid var(--color-input)" }} />;
+}
+function StrokeLineReferenceBox({ testId }: { testId: string }) {
+  return <div data-testid={testId} style={{ width: 24, height: 1, background: "var(--border)" }} />;
+}
+/** PortEdge's own track radius was a plain literal `6` (`borderRadius: 6`,
+ * no Tailwind class, no CSS var) before this port — so ITS reference is
+ * the same bare literal, not a var alias to the thing under test. */
+function LiteralRadiusReferenceBox({ testId, px }: { testId: string; px: number }) {
+  return <span data-testid={testId} style={{ display: "inline-block", width: 24, height: 24, borderRadius: px }} />;
+}
+/** LabeledPort/Text's own font — `inherit` — is the ambient body font, so
+ * the reference is simply an unstyled sibling span. */
+function InheritFontReferenceBox({ testId }: { testId: string }) {
+  return <span data-testid={testId}>x</span>;
+}
+/** EditableText's own font choice, `font="sans"` — the exact literal
+ * `EDITABLE_TEXT_FONT_STACKS.sans` (editableText.layout.ts) fell back to
+ * before this port, reproduced here rather than imported so the test
+ * fails loudly if the two ever drift instead of silently importing the
+ * "same" constant on both sides of the comparison. */
+function SansFontReferenceBox({ testId }: { testId: string }) {
+  return <span data-testid={testId} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>x</span>;
+}
+
 export const NoSkinRegression: Story = {
   render: () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 32 }}>
@@ -327,12 +585,51 @@ export const NoSkinRegression: Story = {
         <Badge>Badge</Badge>
         <BadgeReferenceBox />
       </div>
+
+      {/* Tranche 3 */}
+      <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        <LabeledPort edge="left" state="wired">value</LabeledPort>
+        <InheritFontReferenceBox testId="labeled-port-reference" />
+      </div>
+      <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        <PortEdge edge="left" items={[{ id: "a", label: "a", state: "empty" }]} size={{ width: 100, height: 60 }} />
+        <LiteralRadiusReferenceBox testId="port-edge-reference" px={6} />
+        <StrokeLineReferenceBox testId="port-edge-line-reference" />
+      </div>
+      <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        <Block width={140} height={80} members={[{ id: "m1", content: "Member" }]} showCards />
+        <RadiusReferenceBox testId="block-members-reference" radiusVar="--radius-lg" />
+      </div>
+
+      {/* Tranche 4 */}
+      <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        <Button variant="outline">Outline</Button>
+        <RadiusReferenceBox testId="button-radius-reference" radiusVar="--radius-lg" />
+        <OutlineBorderReferenceBox testId="button-border-reference" />
+      </div>
+      <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        <Toggle variant="outline">On</Toggle>
+        <RadiusReferenceBox testId="toggle-radius-reference" radiusVar="--radius-lg" />
+        <OutlineBorderReferenceBox testId="toggle-border-reference" />
+      </div>
+      <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        <EditableText size="md">value</EditableText>
+        <SansFontReferenceBox testId="editable-text-reference" />
+      </div>
+      <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        <Text>label</Text>
+        <InheritFontReferenceBox testId="text-reference" />
+      </div>
+      <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+        <FoldingChevron open={false} onClick={() => {}} />
+        <RadiusReferenceBox testId="folding-chevron-reference" radiusVar="--radius-md" />
+      </div>
     </div>
   ),
   play: async ({ canvasElement }) => {
     // S1 — no skin set anywhere on the page -> every painting component's
-    // computed border/background/radius/shadow is byte-identical to a
-    // reference element built from the ORIGINAL (pre-port) classes.
+    // computed border/background/radius/shadow/font is byte-identical to a
+    // reference element built from the ORIGINAL (pre-port) expression.
     const block = canvasElement.querySelector('[data-slot="block"]');
     const blockRef = canvasElement.querySelector('[data-testid="block-reference"]');
     if (!block || !blockRef) throw new Error("missing block or its reference");
@@ -348,5 +645,49 @@ export const NoSkinRegression: Story = {
     const badgeRef = canvasElement.querySelector('[data-testid="badge-reference"]');
     if (!badge || !badgeRef) throw new Error("missing badge or its reference");
     await expect(getComputedStyle(badge).borderRadius, "Badge border-radius vs pre-port rounded-md").toBe(getComputedStyle(badgeRef).borderRadius);
+
+    const byTestId = (id: string) => {
+      const el = canvasElement.querySelector(`[data-testid="${id}"]`);
+      if (!el) throw new Error(`missing reference ${id}`);
+      return getComputedStyle(el);
+    };
+
+    const labeledPortText = canvasElement.querySelector('[data-slot="port-label-display"]');
+    if (!labeledPortText) throw new Error("missing port-label-display");
+    await expect(getComputedStyle(labeledPortText).fontFamily, "LabeledPort font-family vs pre-port inherit").toBe(byTestId("labeled-port-reference").fontFamily);
+
+    const portEdgeRoot = canvasElement.querySelector('[data-slot="port-edge"]');
+    if (!portEdgeRoot) throw new Error("missing port-edge");
+    await expect(getComputedStyle(portEdgeRoot).borderRadius, "PortEdge track border-radius vs pre-port literal 6px").toBe(byTestId("port-edge-reference").borderRadius);
+
+    const portEdgeLine = canvasElement.querySelector('[data-slot="port-edge-center-line"]');
+    if (!portEdgeLine) throw new Error("missing port-edge-center-line");
+    await expect(getComputedStyle(portEdgeLine).backgroundColor, "PortEdge centre-line background vs pre-port var(--border)").toBe(byTestId("port-edge-line-reference").backgroundColor);
+
+    const blockMemberCard = canvasElement.querySelector('[data-slot="block-member-card"]');
+    if (!blockMemberCard) throw new Error("missing block-member-card");
+    await expect(getComputedStyle(blockMemberCard).borderRadius, "BlockMembers card-overlay border-radius vs pre-port rounded-lg").toBe(byTestId("block-members-reference").borderRadius);
+
+    const buttonOutline = canvasElement.querySelector('[data-slot="button"]');
+    if (!buttonOutline) throw new Error("missing button");
+    await expect(getComputedStyle(buttonOutline).borderRadius, "Button border-radius vs pre-port rounded-lg").toBe(byTestId("button-radius-reference").borderRadius);
+    await expect(getComputedStyle(buttonOutline).borderColor, "Button outline border-color vs pre-port border-input").toBe(byTestId("button-border-reference").borderColor);
+
+    const toggleOutline = canvasElement.querySelector('[data-slot="toggle"]');
+    if (!toggleOutline) throw new Error("missing toggle");
+    await expect(getComputedStyle(toggleOutline).borderRadius, "Toggle border-radius vs pre-port rounded-lg").toBe(byTestId("toggle-radius-reference").borderRadius);
+    await expect(getComputedStyle(toggleOutline).borderColor, "Toggle outline border-color vs pre-port border-input").toBe(byTestId("toggle-border-reference").borderColor);
+
+    const editableTextRoot = canvasElement.querySelector('[data-slot="editable-text"]');
+    if (!editableTextRoot) throw new Error("missing editable-text");
+    await expect(getComputedStyle(editableTextRoot).fontFamily, "EditableText font-family vs pre-port sans stack").toBe(byTestId("editable-text-reference").fontFamily);
+
+    const textEl = canvasElement.querySelector('[data-slot="text"]');
+    if (!textEl) throw new Error("missing text");
+    await expect(getComputedStyle(textEl).fontFamily, "Text font-family vs pre-port inherit").toBe(byTestId("text-reference").fontFamily);
+
+    const chevron = canvasElement.querySelector('[data-slot="folding-chevron"]');
+    if (!chevron) throw new Error("missing folding-chevron");
+    await expect(getComputedStyle(chevron).borderRadius, "FoldingChevron border-radius vs pre-port rounded-md").toBe(byTestId("folding-chevron-reference").borderRadius);
   },
 };

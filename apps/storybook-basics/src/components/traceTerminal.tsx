@@ -19,9 +19,10 @@
 // `TraceDir` in `./trace.layout.ts`. The arrowhead that distinguishes the
 // ends is painted by the trace (`markerEnd` at the `to` end), never here.
 
-import type { ComponentProps } from "react";
+import { useMemo, type ComponentProps } from "react";
 
 import { cn } from "../lib/utils";
+import { sketchEllipsePath } from "../skin/sketchPath";
 import { DIR_ROTATION, type TraceDir } from "./trace.layout";
 
 /** The glyph's ring radius in user units. 9 keeps it a touch smaller than
@@ -111,6 +112,30 @@ export function TraceTerminal({
   className,
   ...props
 }: TraceTerminalProps) {
+  // The skin seam (src/skin/skin.ts + skin.css). The ring's colour is
+  // STATE-owned (`color`, from the caller — same split Port's own
+  // `portRingColor` makes: the skin only ever supplies the shape, never
+  // the hue), so it gets `--bbox-skin-line-override` rather than
+  // `--bbox-skin-stroke` — exactly Badge's `outline` variant's own
+  // reasoning. Undefined on every skin but sketch, so the fallback IS
+  // `color` and a consumer who never imports skin.css renders the exact
+  // circle this replaced.
+  //
+  // The drawn twin below (`sketchEllipsePath`, the same generator
+  // `SketchOutline` uses internally) can't just BE `SketchOutline` — that
+  // component assumes an HTML/CSS positioning context (`position:
+  // absolute` against a `position: relative` ancestor) and this glyph is
+  // pure SVG, positioned by its own `<g transform>`. So this hand-rolls
+  // the same crisp/sketch pair `trace.tsx`'s own `TraceBody` uses: the
+  // circle's FILL always paints (an opaque disc, never sketched — see
+  // this file's own `fill` doc), only its stroke is suppressed, and a
+  // `<path>` twin — toggled by the same `--bbox-skin-outline` display
+  // switch — draws the ring by hand. The inner arrow stays crisp always,
+  // same precedent as Port's lit core never getting a drawn twin either.
+  const ringD = useMemo(
+    () => sketchEllipsePath({ width: radius * 2, height: radius * 2, seed: `trace-terminal:${dir}:${radius}` }),
+    [radius, dir],
+  );
   return (
     <g
       data-slot="trace-terminal"
@@ -125,8 +150,19 @@ export function TraceTerminal({
         cy={0}
         r={radius}
         fill={fill}
+        style={{ stroke: `var(--bbox-skin-line-override, ${color})` }}
+        strokeWidth={TRACE_TERMINAL_RING_PX}
+      />
+      <path
+        data-slot="trace-terminal-ring-sketch"
+        d={ringD}
+        transform={`translate(${-radius} ${-radius})`}
+        fill="none"
         stroke={color}
         strokeWidth={TRACE_TERMINAL_RING_PX}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ display: "var(--bbox-skin-outline, none)" }}
       />
       {showDirection ? (
         <path

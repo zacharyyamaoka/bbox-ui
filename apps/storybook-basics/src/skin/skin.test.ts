@@ -97,42 +97,71 @@ describe("skin.css agrees with skin.ts", () => {
 });
 
 describe("components read the tokens skin.ts documents", () => {
-  // Tranche 2 of this port (see the Styles stories' own coverage table for
-  // the rest, and which components are deliberately excluded because they
-  // paint nothing).
+  // Every PAINTING component across all five tranches (see Styles.stories.
+  // tsx's own coverage table for the full per-component token list, and
+  // "coverage (S4)" below for the components deliberately EXCLUDED because
+  // they paint nothing of their own).
   const sources = [
+    // Tranche 2 (block, badge, port, trace, codeEditor)
     "block.tsx",
     "badge.tsx",
     "port.tsx",
     "trace.tsx",
     "codeEditor.css",
+    // Tranche 3 (composites)
+    "labeledPort.tsx",
+    "portEdge.tsx",
+    "blockMembers.tsx",
+    "traceTerminal.tsx",
+    // Tranche 4 (shadcn primitives)
+    "button.tsx",
+    "toggle.tsx",
+    "tooltip.tsx",
+    "dropdown-menu.tsx",
+    "editableText.tsx",
+    "text.tsx",
+    "foldingChevron.tsx",
   ]
     .map((f) => readFileSync(path.join(componentsDir, f), "utf8"))
     .join("\n");
   const sketchOutlineSource = readFileSync(path.join(skinDir, "sketchOutline.tsx"), "utf8");
   const allSources = `${sources}\n${sketchOutlineSource}`;
 
-  // The one token no Tranche 2 component needs: `--bbox-skin-font-sans` is
-  // for a text slot that writes `font-family` INLINE (a TextBox/EditableText
-  // rung), which beats plain inheritance the way `--bbox-skin-font` alone
-  // cannot — none of Block/Badge/Port/Trace/CodeEditor do that. It stays in
-  // the closed 15 (S5) because the token vocabulary is fixed regardless of
-  // which tranche is landed; this allowlist is what keeps "not read yet" a
-  // documented, asserted fact instead of a token quietly rotting unread
-  // forever. Re-check this list at the next tranche and shrink it.
-  const DEFERRED_TO_LATER_TRANCHES = new Set(["bbox-skin-font-sans"]);
+  // Tranche 5 (presets/value) reads NOTHING new here — see the coverage
+  // (S4) describe block below for why `ValueCapsule` is on the excluded
+  // list rather than a sixth source file.
 
-  it("every token is actually read by at least one component in this port, or is on the deferred list", () => {
+  it("every token in the closed 15 is actually read by at least one component in this port (S5 x coverage)", () => {
     for (const token of BBOX_SKIN_TOKENS) {
-      if (DEFERRED_TO_LATER_TRANCHES.has(token.name)) continue;
       expect(allSources.includes(`--${token.name}`), `${token.name} is read somewhere`).toBe(true);
     }
   });
+});
 
-  it("the deferred list is exactly the tokens genuinely unread by this tranche — no wider than it has to be", () => {
-    for (const name of DEFERRED_TO_LATER_TRANCHES) {
-      expect(allSources.includes(`--${name}`), `${name} should be UNREAD (deferred) — remove it from the list if a later edit added a reader`).toBe(false);
-    }
+describe("Tooltip / DropdownMenu — S1 checked at the source, not the DOM", () => {
+  // Styles.stories.tsx's own header explains why: both render their real
+  // content through a Base UI `Portal` (`document.body` by default), which
+  // ESCAPES the `data-bbox-skin` attribute a story stamps on its own DOM
+  // subtree, so a live per-skin `getComputedStyle` comparison (the recipe
+  // every other Tranche 3-4 component gets in `NoSkinRegression`) isn't
+  // reachable without teaching both files a portal `container` override —
+  // new scope past "wire the token". This is the substitute: the exact
+  // byte-identical fallback literal — what `rounded-md`/`rounded-lg`/
+  // `bg-border` resolved to BEFORE the token — is present verbatim, so a
+  // consumer with no skin imported gets the unchanged pixel.
+  it("tooltip.tsx's radius token falls back to the exact pre-port rounded-md literal", () => {
+    const src = readFileSync(path.join(componentsDir, "tooltip.tsx"), "utf8");
+    expect(src).toContain('borderRadius: "var(--bbox-skin-radius, var(--radius-md))"');
+  });
+
+  it("dropdown-menu.tsx's radius token falls back to the exact pre-port rounded-lg literal", () => {
+    const src = readFileSync(path.join(componentsDir, "dropdown-menu.tsx"), "utf8");
+    expect(src).toContain('borderRadius: "var(--bbox-skin-radius, var(--radius-lg))"');
+  });
+
+  it("dropdown-menu.tsx's separator stroke token falls back to the exact pre-port bg-border literal", () => {
+    const src = readFileSync(path.join(componentsDir, "dropdown-menu.tsx"), "utf8");
+    expect(src).toContain('background: "var(--bbox-skin-stroke, var(--color-border))"');
   });
 });
 
@@ -158,15 +187,47 @@ describe("coverage (S4) — the deliberately-excluded half of the claim", () => 
   // this test's sibling above checks. This half is "every EXCLUDED
   // component paints nothing", so a component can't quietly go
   // unskinned by omission from both lists.
-  it("bar.tsx paints nothing of its own — no border, background, box-shadow or stroke", () => {
-    const barSource = readFileSync(path.join(componentsDir, "bar.tsx"), "utf8")
+  //
+  // Tranches 3-5 add five more: `blockPort.tsx`, `traceBadge.tsx` and
+  // `wireLayer.tsx` (Tranche 3) are pure POSITIONING wrappers around
+  // already-wired children (BlockPort composes Block+PortEdge+Port,
+  // TraceBadge composes Badge+EditableText, WireLayer composes Trace) —
+  // none of them sets a border/background/box-shadow/stroke of its own.
+  // `collapsible.tsx` (Tranche 4) is a headless Base UI wrapper with no
+  // className or style anywhere. `presets/value/value.tsx` (Tranche 5) is
+  // checked separately below — it DOES contain the words "border" and
+  // "background", but only as a permanent, skin-independent SUPPRESSION.
+  const PAINTLESS_COMPONENTS = ["bar.tsx", "blockPort.tsx", "traceBadge.tsx", "wireLayer.tsx", "collapsible.tsx"];
+
+  it.each(PAINTLESS_COMPONENTS)("%s paints nothing of its own — no border, background, box-shadow or stroke", (file) => {
+    const source = readFileSync(path.join(componentsDir, file), "utf8")
       // Strip comments first — this file's own header explains why (a WHY
       // comment that quotes a class name is not the class being applied).
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/\/\/.*$/gm, "");
     for (const needle of ["border", "bg-", "background", "boxShadow", "box-shadow", "stroke"]) {
-      expect(barSource.includes(needle), `bar.tsx should not contain "${needle}" outside comments`).toBe(false);
+      expect(source.includes(needle), `${file} should not contain "${needle}" outside comments`).toBe(false);
     }
+  });
+
+  it("presets/value/value.tsx's border/background overrides are a permanent suppression, not a paint a skin could drive", () => {
+    // `ValueCapsule` composes `Block`+`BlockPort`+`CodeEditor` — all
+    // already wired — and deliberately OVERRIDES the CodeEditor's own
+    // skin-driven border/background to a hardcoded "transparent" ("the
+    // pill IS the box... the editor's own card chrome... goes", this
+    // file's own comment) so the capsule reads as one shape, not a field
+    // floating inside a pill. That override is unconditional in every
+    // skin — there is no colour here for a token to drive — which is
+    // different from "paints nothing" (bar.tsx) but the same conclusion:
+    // no NEW token read belongs in this file. Its own `borderRadius`
+    // (`valueCapsuleRadiusPx`) is geometry the preset owns outright (T6:
+    // "equal to half the height", Zach's own arithmetic) and MUST keep
+    // winning over Block's `--bbox-skin-radius` in every skin — reading a
+    // radius token here would be the regression, not the fix.
+    const presetsDir = path.resolve(skinDir, "..", "presets");
+    const valueSource = readFileSync(path.join(presetsDir, "value", "value.tsx"), "utf8");
+    expect(valueSource).toMatch(/background:\s*"transparent"/);
+    expect(valueSource).toMatch(/borderColor:\s*"transparent"/);
   });
 });
 
