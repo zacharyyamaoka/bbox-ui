@@ -131,13 +131,15 @@ describe("railPlanFor — port view", () => {
     expect(trailFirst - leadLast).toBe(railPitchPx());
   });
 
-  it("is exact where offsetPaddingFor is an approximation", () => {
-    // `offsetPaddingFor` is documented in portEdge.layout.ts as ignoring
-    // card size; it has zero call sites and stays untouched (D-A3). The
-    // shortfall is the whole reason a new helper exists.
+  it("agrees with offsetPaddingFor once given the same slot size (P9a, 2026-09-17)", () => {
+    // Was "is exact where offsetPaddingFor is an approximation" — that title
+    // pinned the bug (`count * gap`, under-shooting by `count * slotMainPx`)
+    // rather than testing anything. `offsetPaddingFor` is fixed now
+    // (portEdge.layout.ts's own docblock has the transcript); this pins the
+    // two formulas as the SAME closed form instead.
     expect(offsetEdgePaddingPx(3)).toBe(3 * (PORT_EDGE_SLOT_MIN_PX + RAIL_GAP_PX));
-    expect(offsetPaddingFor(3, RAIL_GAP_PX)).toBe(3 * RAIL_GAP_PX);
-    expect(offsetEdgePaddingPx(3) - offsetPaddingFor(3, RAIL_GAP_PX)).toBe(3 * PORT_EDGE_SLOT_MIN_PX);
+    expect(offsetPaddingFor(3, PORT_EDGE_SLOT_MIN_PX, RAIL_GAP_PX)).toBe(3 * (PORT_EDGE_SLOT_MIN_PX + RAIL_GAP_PX));
+    expect(offsetEdgePaddingPx(3)).toBe(offsetPaddingFor(3, PORT_EDGE_SLOT_MIN_PX, RAIL_GAP_PX));
   });
 });
 

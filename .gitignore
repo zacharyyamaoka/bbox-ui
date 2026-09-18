@@ -19,6 +19,16 @@ apps/docs/CLAUDE.md
 # "Leave the trace in the repo too").
 !.claude/
 !.claude/feedback.md
+# ...and settings.json's worktree.baseRef: CLAUDE.md's own "Isolated agent
+# lanes" section calls it load-bearing for every lane in THIS repo — without
+# it a fresh worktree branches from origin/main and can't see the branch it
+# was cut from (measured 2026-09-17, P9c). It's a repo invariant, not a
+# per-machine preference, so unlike most of .claude/ it travels with a
+# clone/worktree rather than needing every checkout to reinvent it. If this
+# file ever grows machine-local content (personal permission allowlists,
+# local model overrides), split those into a second, still-ignored file
+# rather than un-tracking this one.
+!.claude/settings.json
 # wrangler local state
 .wrangler/
 # Reports: the page is tracked, the captures it inlines are not (Zach, 2026-09-07).
