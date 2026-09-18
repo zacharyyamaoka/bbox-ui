@@ -57,6 +57,11 @@ const SHOTS = [
   { id: "blocks-blockport--function-port", w: 760, h: 440, name: "blockport-function" },
   { id: "basics-codeeditor--syntax-themes", w: 1000, h: 560, name: "code-themes" },
   { id: "basics-editabletext--placeholder", w: 760, h: 380, name: "editable-placeholder" },
+  { id: "presets-value--literals", w: 1000, h: 420, name: "value-literals" },
+  { id: "presets-value--pill-geometry", w: 1100, h: 380, name: "value-pill-geometry" },
+  { id: "presets-value--collapsed-vs-expanded", w: 1000, h: 480, name: "value-collapsed-expanded" },
+  { id: "presets-value--wired", w: 1250, h: 900, name: "value-wired" },
+  { id: "presets-value--editing", w: 760, h: 380, name: "value-editing" },
 ];
 
 const browser = await chromium.launch();
