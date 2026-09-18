@@ -193,39 +193,39 @@ export interface PortEdgeProps {
    * shape): ARMS click-to-edit on every port on this edge — it no longer
    * shows anything by itself. Zach: "I like the toggle but the actual ports
    * should basically look identical. The only difference is when you click
-   * the port to edit it." With `editing` true, every port's own built-in
-   * label (`labeledPort.tsx`'s `DefaultPortLabel`) becomes clickable; with
-   * it false (or unset), ports render exactly as they would with no
-   * `editing` prop at all — that identity is F1a's own acceptance test. A
-   * click opens ONE port's own single-line `CodeEditor`, in place, and never
-   * touches a neighbour (F1c).
-   *
-   * BLOCKER, not silently dropped: this used to also arm a SECOND, bigger
-   * capability — the rail-wide multi-line lane (`PortLaneOverlay` below),
-   * one `CodeEditor` document spanning every port, whose `onWrite` ran
-   * `reconcilePortLane` (`./portLane.ts`) to add/remove/reorder ports from a
-   * pasted block of text. That machinery (`PortLaneOverlay`,
-   * `useLaneGeometry`, `laneAvailability`, `formatPortLane`,
-   * `reconcilePortLane`) is UNTOUCHED and still fully correct — it is simply
-   * no longer reachable from this prop, because showing it automatically the
-   * instant `editing` turned true (the old wiring) is verbatim the bug being
-   * fixed here (152404.png: "an editor panel painted over the rail, every
-   * port's label gone"), and F1a/F1b's own acceptance tests (resting state
-   * byte-identical, no floating overlay while armed) leave no state for an
-   * auto-shown rail-wide editor to occupy. `BlockPortLane.stories.tsx`
-   * (not owned by this change) still drives the OLD contract — its
-   * `LaneToggle` flips this same `editing` prop and its play functions
-   * assert `.cm-line` elements appear immediately, with no port click at
-   * all — so that suite needs a coordinated update (either teaching its
-   * bench to click a port after arming, or a decision that bulk/lane editing
-   * gets its own explicit trigger) before both the new per-port contract and
-   * the old rail-wide one can be true at once. Left for Zach/the dispatcher
-   * to decide; re-wiring `PortLaneOverlay` behind a NEW trigger is a product
-   * call (what invokes it, where it lives) this change does not make
-   * unprompted.
+   * the port to edit it. either only a single line will appear, or the full
+   * multi line will appear." With `editing` true, every port's own label
+   * becomes clickable; with it false (or unset), ports render exactly as
+   * they would with no `editing` prop at all — that identity is F1a's own
+   * acceptance test, true regardless of `editMode` below (arming alone still
+   * paints nothing). A click opens ONE OF TWO editors, per `editMode`: this
+   * port's own single-line `CodeEditor` in place (`editMode: "single"`,
+   * F1h), or the rail-wide multi-line lane (`editMode: "multi"`, F1g) — the
+   * SAME `PortLaneOverlay` this prop used to open automatically, now opened
+   * BY a port click instead of by arming. Never both: single mode never
+   * mounts the lane, multi mode never opens a port's own inline editor.
    */
   editing?: boolean;
   onEditingChange?(next: boolean): void;
+  /**
+   * F-1's third state, from the same sentence: "either only a single line
+   * will appear, or the full multi line will appear." Per-edge (like
+   * `mode`/`groupMode` — `PortEdge` already takes per-edge config, so this
+   * follows the existing shape rather than inventing a global one).
+   * `"single"` is the default: a port click opens just that port's own
+   * label, which is the common case (rename one port) and what F1a/F1c/F1d
+   * already prove. `"multi"` opens the rail-wide lane instead — the same
+   * `PortLaneOverlay`/`reconcilePortLane` (`./portLane.ts`) machinery
+   * Phase 4 built, letting a pasted multi-line block add/remove/reorder
+   * ports in one edit; unchanged, just re-triggered. Falls back to `"single"`
+   * behaviour when the lane genuinely cannot open here (`laneAvailability`
+   * refuses — collapsed real family, row edge, custom mode) rather than
+   * leaving a click that does nothing: a control that silently no-ops on
+   * every click is worse than one that does the smaller of the two things it
+   * knows how to do (truthful rendering's spirit, PORT-EDGE-PLAN-PHASE4.md
+   * §5, applied to a click affordance rather than a disabled button).
+   */
+  editMode?: "single" | "multi";
   /**
    * Follow-up feedback item 3: the label's syntax parser, e.g. `python()`
    * from `@codemirror/lang-python` (already a dependency — `CodeEditor`
@@ -366,14 +366,24 @@ interface PortEdgeSlotBoxProps {
    */
   onLabelWrite?(id: string, value: string): void;
   /**
-   * F-1 continuity: `PortEdgeProps.laneLanguage` used to reach only the
-   * lane-wide `PortLaneOverlay`'s `CodeEditor`. Per-port editing is now the
-   * default path, so this is the same `LanguageSupport` forwarded to each
-   * port's own `labelLanguage` instead — the capability (syntax-aware label
-   * editing) survives the redesign, just retargeted at the editor that is
-   * actually reachable.
+   * F-1 continuity: `PortEdgeProps.laneLanguage` reaches whichever editor a
+   * click actually opens — this port's own `labelLanguage` in `"single"`
+   * mode, `PortLaneOverlay`'s `language` in `"multi"` mode (both wired from
+   * the same source prop, since only one of the two ever mounts at once).
    */
   labelLanguage?: LanguageSupport;
+  /** F-1: `PortEdgeProps.editMode`, threaded down the same way `hideLabel`
+   *  already was. */
+  editMode?: "single" | "multi";
+  /**
+   * F-1 `"multi"` mode's click target: fired instead of the port's own
+   * `onLabelWrite` path when a port is clicked with `editMode: "multi"` —
+   * opens the rail-wide lane (`PortEdgeBody`'s own `laneOpen` state) rather
+   * than this one port's inline editor. No id/value payload — unlike
+   * `onLabelWrite`, this isn't an edit, it's a request to open a DIFFERENT
+   * editor that then owns every port's text itself.
+   */
+  onRequestLaneOpen?(): void;
   /**
    * 2026-09-17 (Lane I, "what does dnd-kit actually use for a grouped
    * family" — see the report): a real (not collapsed) group's dnd-kit
@@ -409,13 +419,15 @@ const EMPTY_SLOT_MIN_PX = 24;
 const CARD_OVERLAY_FILL = "rgb(239 68 68 / 0.18)";
 const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
 
-function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage }: PortEdgeSlotBoxProps) {
+function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage, editMode = "single", onRequestLaneOpen }: PortEdgeSlotBoxProps) {
   const textLayout = textLayoutOverride ?? inwardTextLayout(edge);
-  // B3: `showPorts=false` hides the ENTIRE LabeledPort — dot, label,
-  // secondary slot — not just the dot. A host's own `renderItem` still wins
-  // outright (it doesn't have to BE a LabeledPort at all), matching the
-  // existing "the port edge doesn't actually care what goes inside its
-  // card" contract; `showPorts` only ever gates the DEFAULT fill.
+  // F-1: in `"multi"` mode, a click opens the RAIL's lane, not this port's
+  // own inline editor — so `LabeledPort` itself must stay `disabled` (its
+  // own click-to-edit never engages) and a capture-phase listener on the
+  // member box below does the opening instead, before the click can reach
+  // anything else. `"single"` mode (the default) is unchanged: `disabled`
+  // is simply the inverse of "armed".
+  const singleLineEditable = editingEnabled && editMode === "single";
   const port =
     item == null ? null : renderItem ? renderItem(item, { textLayout }) : showPorts ? (
       <LabeledPort
@@ -424,14 +436,16 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
         diameter="md"
         textLayout={textLayout}
         labelSlot={hideLabel ? null : undefined}
-        // F-1: `disabled` is the inverse of "armed" — with no `editing` prop
-        // at all (or `editing=false`) this is `disabled`, which is exactly
-        // the ordinary, unwired `LabeledPort` default every other story on
-        // this file already renders. Armed, a click opens THIS port's own
-        // single-line editor (`labeledPort.tsx`'s `DefaultPortLabel`, F-1's
-        // other half, already built) — never a second port's, never a
-        // rail-wide overlay.
-        disabled={!editingEnabled}
+        // F-1: `disabled` is the inverse of "armed for single-line editing"
+        // — with no `editing` prop at all (or `editing=false`) this is
+        // `disabled`, which is exactly the ordinary, unwired `LabeledPort`
+        // default every other story on this file already renders. Armed AND
+        // in `"single"` mode, a click opens THIS port's own single-line
+        // editor (`labeledPort.tsx`'s `DefaultPortLabel`, F-1's other half,
+        // already built) — never a second port's, never a rail-wide
+        // overlay. Armed AND in `"multi"` mode, this stays `disabled` too —
+        // the capture listener below owns the click instead.
+        disabled={!singleLineEditable}
         onLabelWrite={onLabelWrite ? (value) => onLabelWrite(item.id, value) : undefined}
         labelLanguage={labelLanguage}
       >
@@ -451,7 +465,26 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
   };
 
   return (
-    <span data-slot="port-edge-member" style={boxStyle}>
+    <span
+      data-slot="port-edge-member"
+      style={boxStyle}
+      // F-1 `"multi"` mode's click target — capture phase, so it runs
+      // BEFORE `LabeledPort`'s own bubble-phase click handler would (moot
+      // while `disabled`, but keeps this correct if a future `renderItem`
+      // override supplies its own clickable content) and `stopPropagation`
+      // keeps one click from also reaching an ancestor's own handlers (the
+      // sortable card's drag activation, in particular — a plain click
+      // never starts a drag on its own, but there is no reason to let this
+      // one bubble further than it needs to).
+      onClickCapture={
+        item != null && editingEnabled && editMode === "multi" && onRequestLaneOpen
+          ? (event) => {
+              event.stopPropagation();
+              onRequestLaneOpen();
+            }
+          : undefined
+      }
+    >
       {port}
       {showCard && !hideCardSurface && (
         // B3: "actually show a card, like a kanban card" — now an overlay,
@@ -501,6 +534,8 @@ interface SlotRenderProps {
   editingEnabled?: boolean;
   onLabelWrite?(id: string, value: string): void;
   labelLanguage?: LanguageSupport;
+  editMode?: "single" | "multi";
+  onRequestLaneOpen?(): void;
 }
 
 const GROUP_OUTLINE_PAD = 6;
@@ -539,7 +574,7 @@ function useEnclosingCircleBox(containerRef: RefObject<HTMLDivElement | null>, d
   return box;
 }
 
-function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotMainPx, gapPx, color, renderItem, textLayoutOverride, hideLabel, editingEnabled, onLabelWrite, labelLanguage }: SlotRenderProps) {
+function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotMainPx, gapPx, color, renderItem, textLayoutOverride, hideLabel, editingEnabled, onLabelWrite, labelLanguage, editMode, onRequestLaneOpen }: SlotRenderProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const memberIds = slot.members.map((m) => m.id).join(",");
   const box = useEnclosingCircleBox(containerRef, [memberIds, axis, showPorts, showCard, slotMainPx, gapPx]);
@@ -587,6 +622,8 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
           editingEnabled={editingEnabled}
           onLabelWrite={onLabelWrite}
           labelLanguage={labelLanguage}
+          editMode={editMode}
+          onRequestLaneOpen={onRequestLaneOpen}
           hideCardSurface
         />
       ))}
@@ -674,6 +711,8 @@ function SlotBody(props: SlotRenderProps) {
       editingEnabled={props.editingEnabled}
       onLabelWrite={props.onLabelWrite}
       labelLanguage={props.labelLanguage}
+      editMode={props.editMode}
+      onRequestLaneOpen={props.onRequestLaneOpen}
     />
   );
 }
@@ -1015,6 +1054,7 @@ function PortEdgeBody({
   textLayout,
   editing = false,
   onEditingChange,
+  editMode = "single",
   laneLanguage,
   maxVisible,
 }: PortEdgeProps) {
@@ -1038,22 +1078,39 @@ function PortEdgeBody({
   const hiddenSlots = maxVisible != null ? allSlots.slice(maxVisible) : [];
   const hiddenPortCount = hiddenSlots.reduce((n, s) => n + s.members.length, 0);
 
-  // Still exported and still what a HOST's own toggle button should read for
-  // its disabled/reason state (both `PortEdge.stories.tsx` and
+  // Still what a HOST's own toggle button should read for its
+  // disabled/reason state (both `PortEdge.stories.tsx` and
   // `BlockPortLane.stories.tsx` already do) — the multi-line lane's own
   // preconditions (column edge, auto mode, no collapsed real family) are
-  // real and unchanged. What no longer follows from it, per F-1: this
-  // component itself no longer uses `lane.available` to gate anything —
-  // per-port click-to-edit (`editingEnabled` below) has none of the lane's
-  // geometry requirements, so it stays armed on every axis/mode/groupMode.
+  // real and unchanged. Per-port SINGLE-line click-to-edit
+  // (`editingEnabled` below) has none of the lane's geometry requirements,
+  // so it stays armed on every axis/mode/groupMode regardless of `lane`.
   const lane = laneAvailability(axis, mode, groupMode, slots);
   // F-1: `editing` ARMS click-to-edit — see `PortEdgeProps.editing`'s own
-  // doc for the full redesign and the reported capability gap. It no longer
-  // gates a `useEffect`-driven auto-close the way the old lane-availability
-  // check did (D12/A12, removed with the overlay it protected): there is no
-  // longer a mid-edit document that could drift off unavailable geometry,
-  // so there is nothing left for that effect to protect against.
+  // doc. `editMode` picks WHICH editor a click opens; resolved here rather
+  // than at each leaf so every slot renderer downstream can stay ignorant
+  // of `laneAvailability` entirely. `"multi"` degrades to `"single"` when
+  // the lane genuinely cannot open (see `PortEdgeProps.editMode`'s own doc
+  // for why a graceful fallback beats a click that does nothing) — this is
+  // the ONE place that decision is made, so a caller who asks for `"multi"`
+  // on, say, a row edge gets ordinary single-port editing everywhere
+  // instead of each slot separately reinventing the same fallback.
   const editingEnabled = editing;
+  const resolvedEditMode: "single" | "multi" = editMode === "multi" && lane.available ? "multi" : "single";
+  // F-1: the rail-wide lane's own open/closed state — local, because
+  // opening it is now a CONSEQUENCE of a port click (`onRequestLaneOpen`
+  // below), not a direct reflection of `editing` the way it was before this
+  // redesign (that was the bug: arming and showing were the same bit).
+  const [laneOpen, setLaneOpen] = useState(false);
+  // Mirrors the old D12/A12 safety net, now scoped to `laneOpen` instead of
+  // `editing` itself: if the rail stops being armed, or the lane's own
+  // preconditions lapse mid-edit (a live groupMode/mode change), or the
+  // caller drops back to `"single"`, close the lane rather than leave it
+  // mounted and mismatched. Content-lossless for the same reason as before
+  // — every keystroke already wrote through `onItemsChange`.
+  useEffect(() => {
+    if (laneOpen && (!editingEnabled || resolvedEditMode !== "multi")) setLaneOpen(false);
+  }, [laneOpen, editingEnabled, resolvedEditMode]);
   const handlePortLabelWrite = (id: string, value: string) => {
     onItemsChange?.(items.map((it) => (it.id === id ? { ...it, label: value } : it)));
   };
@@ -1062,10 +1119,6 @@ function PortEdgeBody({
   // `items`' raw array order — a grouped family's members render
   // contiguously beside each other's dots (GroupSlotBody), and the lane
   // must match what's actually on screen, one line per dot top to bottom.
-  // F-1: computed but currently unused by this component's own render — kept
-  // for whatever re-wires `PortLaneOverlay` behind a new trigger (see
-  // `PortEdgeProps.editing`'s own doc), so that work starts from a correct
-  // line order rather than re-deriving it.
   const visualOrder = slots.flatMap((s) => s.members.map((m) => itemsById.get(m.id)).filter((it): it is PortEdgeItem => it != null));
 
   // B5/B7: every slot — single or grouped — shares this ONE fixed main-axis
@@ -1152,16 +1205,29 @@ function PortEdgeBody({
         data-edge={edge}
         data-unknown-groups={unknownIds.length > 0 ? unknownIds.join(",") : undefined}
         style={trackStyle}
+        // D13, restored: starting a drag CLOSES the lane rather than
+        // disabling the sortable — `useSortable({disabled:true})` still
+        // spreads `attributes` (role/tabIndex) and never reaches Custom
+        // mode's `useDraggable` at all, so it doesn't actually stop a drag;
+        // a capture-phase pointerdown on any card does, unconditionally,
+        // and makes the exclusivity legible instead of emergent (see the
+        // codeEditor's OWN capture listener, which this mirrors). Gated on
+        // `laneOpen` alone now, not `editing` — a per-port single-line edit
+        // has nothing shared to protect, only the rail-wide document does.
+        onPointerDownCapture={
+          laneOpen
+            ? (event) => {
+                if (event.target instanceof Element && event.target.closest('[data-slot="port-edge-card"]')) {
+                  setLaneOpen(false);
+                }
+              }
+            : undefined
+        }
       >
-        {/* F-1: D13's capture-phase pointerdown handler used to live here —
-         *  its whole job was closing the rail-wide `PortLaneOverlay` before a
-         *  drag could desync it from the dots it was pinned to. There is no
-         *  longer a shared document to protect: each port's own edit is
-         *  local to that one `DefaultPortLabel` instance (`labeledPort.tsx`),
-         *  so a drag starting elsewhere on the rail has nothing to corrupt.
-         *  If `PortLaneOverlay` gets a new trigger (see `editing`'s own doc),
-         *  this exclusivity needs to come back with it. */}
         {showCenterLine ? <EdgeLineMark axis={axis} /> : null}
+        {laneOpen && (
+          <PortLaneOverlay trackRef={trackRef} visualOrder={visualOrder} onItemsChange={onItemsChange} onClose={() => setLaneOpen(false)} language={laneLanguage} />
+        )}
         {hiddenPortCount > 0 && moreIndicatorPos && (
           <span
             data-slot="port-edge-more"
@@ -1201,6 +1267,8 @@ function PortEdgeBody({
                 editingEnabled={editingEnabled}
                 onLabelWrite={handlePortLabelWrite}
                 labelLanguage={laneLanguage}
+                editMode={resolvedEditMode}
+                onRequestLaneOpen={() => setLaneOpen(true)}
               />
             ))
           : slots.map((slot) => (
@@ -1222,6 +1290,8 @@ function PortEdgeBody({
                 editingEnabled={editingEnabled}
                 onLabelWrite={handlePortLabelWrite}
                 labelLanguage={laneLanguage}
+                editMode={resolvedEditMode}
+                onRequestLaneOpen={() => setLaneOpen(true)}
               />
             ))}
       </div>

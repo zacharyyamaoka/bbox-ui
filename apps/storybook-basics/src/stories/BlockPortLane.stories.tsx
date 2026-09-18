@@ -191,6 +191,32 @@ async function closeLane(bench: HTMLElement, rail: HTMLElement, edge: BlockSide)
 }
 
 /**
+ * F-1 (resumed, docs/FEEDBACK-2026-09-17c-PLAN.md): "the actual ports
+ * should basically look identical. The only difference is when you click
+ * the port to edit it... the full multi line will appear." The bench's own
+ * toggle now only ARMS the rail (`LaneToggle`'s `onClick`, `editing` on
+ * `PortEdge`) — it no longer opens the lane by itself. This is the second
+ * half every bench here needs: click any one port on the rail (each
+ * `LaneBench` edge is `portEdgeProps={{ editMode: "multi" }}`, so that click
+ * opens the lane rather than a single-line editor). `[data-slot="port-edge-
+ * member"]` is the wrapping box `PortEdgeSlotBox` puts around EVERY port
+ * regardless of `renderItem` — real here, since `BlockPort` always supplies
+ * its own — so this is a real click on a real rendered port, not a
+ * DOM-presence assumption.
+ */
+async function clickAnyPortToOpenLane(bench: HTMLElement, rail: HTMLElement, edge: BlockSide): Promise<void> {
+  // Wait for the bench's own arm to have actually landed first — most
+  // benches here arm via `openWhen: "afterPaint"`, a `requestAnimationFrame`
+  // AFTER first mount (F1's own workaround, see `LaneBench`'s doc). Clicking
+  // before that frame lands `editingEnabled` still false, so the click is a
+  // real no-op — caught as flakiness (this port would open the lane on some
+  // runs and not others) before this wait was added.
+  await waitFor(() => expect(toggleOf(bench, edge).getAttribute("data-open")).toBe("true"));
+  const member = required<HTMLElement>(rail, '[data-slot="port-edge-member"]', "a port to click to open the lane");
+  await userEvent.click(member);
+}
+
+/**
  * A measured assertion that says what it measured when it fails. A bare
  * `toBeCloseTo` on two viewport numbers reports "expected 331.5 to be close
  * to 329" with no way to tell which line, which rail, or which rule broke.
@@ -579,12 +605,20 @@ function LaneBench({ benchId, view, portLayout = "inline", openEdge = null, open
             onItemsChange: setInputs,
             editing: editing === "left",
             onEditingChange: (next) => setEditing(next ? "left" : null),
+            // F-1 (resumed): this whole file is a re-proof of the MULTI-LINE
+            // lane, so every bench asks for it explicitly — `editMode` is
+            // not one of `portEdgeProps`' overridden fields (`blockPort.tsx`
+            // only ever re-derives `edge`/`size`/`distribution`/`groups`/
+            // `groupMode`/`showContainer`/`showCenterLine`), so it reaches
+            // `PortEdge` unchanged.
+            portEdgeProps: { editMode: "multi" },
           },
           right: {
             items: outputs,
             onItemsChange: setOutputs,
             editing: editing === "right",
             onEditingChange: (next) => setEditing(next ? "right" : null),
+            portEdgeProps: { editMode: "multi" },
           },
         }}
       >
@@ -641,8 +675,10 @@ export const LaneOnPortView: Story = {
     await expect(block.height).toBe(260);
     await expect(block.width).toBe(220);
 
-    // The lane is open on first paint — wait for CodeMirror's own mount,
-    // then for `useLaneGeometry`'s post-measure repaint to settle.
+    // F-1 (resumed): armed at mount is no longer "open" — click a port to
+    // ask for the multi-line lane, THEN wait for CodeMirror's own mount and
+    // for `useLaneGeometry`'s post-measure repaint to settle.
+    await clickAnyPortToOpenLane(bench, rail, "left");
     await waitFor(() => expect(rail.querySelectorAll(".cm-line").length).toBe(INPUTS.length));
 
     // 1 · Every line on its own dot — all of them, 1px.
@@ -711,6 +747,7 @@ export const LaneOnExpandedView: Story = {
     const rail = railOf(bench, "left");
     const block = blockRectOf(bench);
 
+    await clickAnyPortToOpenLane(bench, rail, "left");
     await waitFor(() => expect(rail.querySelectorAll(".cm-line").length).toBe(INPUTS.length));
     await waitFor(() => expectEveryLineOnItsDot(rail, 1, "expanded view · left lane"));
     // z-order, not clipping — this is a left lane, same reasoning as
@@ -773,6 +810,7 @@ export const LaneOnRightWall: Story = {
     const rail = railOf(bench, "right");
     const block = blockRectOf(bench);
 
+    await clickAnyPortToOpenLane(bench, rail, "right");
     await waitFor(() => expect(rail.querySelectorAll(".cm-line").length).toBe(OUTPUTS.length));
     await waitFor(() => expectEveryLineOnItsDot(rail, 1, "right wall · lane"));
     // The genuine clipping claim — this lane opens OUTSIDE the card, so the
@@ -912,6 +950,7 @@ export const LaneVsMemberDrag: Story = {
     const bench = benchOf(canvasElement, "member-drag");
     const rail = railOf(bench, "right");
 
+    await clickAnyPortToOpenLane(bench, rail, "right");
     await waitFor(() => expect(rail.querySelectorAll(".cm-line").length).toBe(OUTPUTS.length));
     await waitFor(() => expectEveryLineOnItsDot(rail, 1, "member drag · lane before the drag"));
     const textBefore = lineTextsOf(rail);
@@ -933,20 +972,20 @@ export const LaneVsMemberDrag: Story = {
     // a port card, caught capture-phase on the track (D13).
     const card = required<HTMLElement>(rail, '[data-slot="port-edge-card"]', "a port card on the right rail");
     const cardRect = card.getBoundingClientRect();
-    card.dispatchEvent(
-      new PointerEvent("pointerdown", {
-        bubbles: true,
-        cancelable: true,
-        pointerId: 2,
-        isPrimary: true,
-        button: 0,
-        buttons: 1,
-        pointerType: "mouse",
-        clientX: cardRect.left + cardRect.width / 2,
-        clientY: cardRect.top + cardRect.height / 2,
-      }),
-    );
+    const pointerAt = { clientX: cardRect.left + cardRect.width / 2, clientY: cardRect.top + cardRect.height / 2 };
+    card.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 2, isPrimary: true, button: 0, buttons: 1, pointerType: "mouse", ...pointerAt }));
     await waitFor(() => expect(rail.querySelector('[data-slot="code-editor"]')).toBeNull());
+    // F-1 (resumed) — a real bug found here, not just a workaround: this
+    // pointerdown was never followed by a pointerup, which left `@dnd-kit`'s
+    // `PointerSensor` mid-gesture (`buttons: 1`, its own document-level
+    // listeners still armed waiting for the up/move that never came) for
+    // whatever mounts next. Measured: with only the pointerdown dispatched,
+    // `Lane Keeps Wired Identity` — the very next story in this file —
+    // failed ONLY when run after this one (`0` `.cm-line`s instead of `3`,
+    // isolated runs always green), and stopped failing the moment this
+    // `pointerup` was added. Completing the gesture, not working around its
+    // absence in the next story.
+    card.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true, pointerId: 2, isPrimary: true, button: 0, buttons: 0, pointerType: "mouse", ...pointerAt }));
   },
 };
 
@@ -974,6 +1013,7 @@ export const LaneKeepsWiredIdentity: Story = {
     const rail = railOf(bench, "left");
     const statesOf = () => Array.from(rail.querySelectorAll<HTMLElement>('[data-slot="port-dot"]')).map((d) => d.getAttribute("data-state"));
 
+    await clickAnyPortToOpenLane(bench, rail, "left");
     await waitFor(() => expect(rail.querySelectorAll(".cm-line").length).toBe(INPUTS.length));
     await waitFor(() => expectEveryLineOnItsDot(rail, 1, "identity · lane before the move"));
     await expect(statesOf()).toEqual(["wired", "valueSet", "empty"]);
@@ -1135,6 +1175,7 @@ export const LaneGallery: Story = {
       const benchEl = benchOf(canvasElement, bench);
       const rail = railOf(benchEl, edge);
       const block = blockRectOf(benchEl);
+      await clickAnyPortToOpenLane(benchEl, rail, edge);
       await waitFor(() => expect(rail.querySelectorAll(".cm-line").length).toBe(count));
       await waitFor(() => expectEveryLineOnItsDot(rail, 1, `gallery · ${bench} ${edge} lane`));
       if (kind === "escapes") {

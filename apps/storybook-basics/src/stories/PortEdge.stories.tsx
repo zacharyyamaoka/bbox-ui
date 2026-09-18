@@ -2049,3 +2049,118 @@ export const MaxVisible: Story = {
     });
   },
 };
+
+/* ------------------------------------------------------------------ */
+/* EditModeSingleVsMulti — F-1 resumed: the third state ("either only a  */
+/* single line will appear, or the full multi line will appear").       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * F-1's own sentence names three states, not two: resting (identical either
+ * way), armed + single-line (one port's own inline `CodeEditor`), armed +
+ * multi-line (the rail-wide lane, `PortLaneOverlay`). `editMode` is the
+ * seam that picks between the second and third — per-edge, matching how
+ * `mode`/`groupMode` already work on this component, and defaulting to
+ * `"single"` because renaming one port is the common case; a caller opts
+ * into the bigger, rarer capability (paste a block of text, add/remove/
+ * reorder ports in one edit) rather than the small one being the special
+ * case. See `PortEdgeProps.editMode`'s own doc in `portEdge.tsx` for the
+ * full reasoning, including the graceful fallback to `"single"` when the
+ * lane's own preconditions (column edge, auto mode, no collapsed group)
+ * are not met.
+ */
+function EditModeDemo() {
+  const [editMode, setEditMode] = useState<"single" | "multi">("single");
+  const [editing, setEditing] = useState(false);
+  const [items, setItems] = useState<PortEdgeItem[]>([
+    { id: "pose", label: "pose", state: "wired" },
+    { id: "gain", label: "gain", state: "empty" },
+    { id: "reset", label: "reset", state: "empty" },
+  ]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <Segmented options={[{ value: "single", label: "Single-line" }, { value: "multi", label: "Multi-line" }]} value={editMode} onChange={setEditMode} />
+        <button
+          type="button"
+          data-testid="edit-mode-toggle"
+          onClick={() => setEditing((v) => !v)}
+          style={{
+            padding: "4px 10px",
+            fontSize: 12,
+            borderRadius: 6,
+            border: "1px solid var(--border)",
+            background: editing ? "var(--accent)" : "transparent",
+            color: "var(--foreground)",
+            cursor: "pointer",
+          }}
+        >
+          {editing ? "Disable label editing" : "Enable label editing"}
+        </button>
+      </div>
+      <PortEdge edge="left" items={items} onItemsChange={setItems} editing={editing} onEditingChange={setEditing} editMode={editMode} size={{ width: 200, height: 220 }} />
+    </div>
+  );
+}
+
+export const EditModeSingleVsMulti: Story = {
+  render: () => <EditModeDemo />,
+  play: async ({ canvasElement }) => {
+    const modeToggle = (label: string) => {
+      const btn = Array.from(canvasElement.querySelectorAll("button")).find((b) => b.textContent?.trim() === label);
+      if (!btn) throw new Error(`expected a "${label}" button`);
+      return btn;
+    };
+    const editToggle = canvasElement.querySelector('[data-testid="edit-mode-toggle"]');
+    if (!(editToggle instanceof HTMLButtonElement)) throw new Error("expected the editing toggle button");
+
+    // --- F1h: armed + SINGLE-line mode + click a port -----------------
+    await userEvent.click(editToggle); // arm
+    await expect(canvasElement.querySelector('[data-slot="port-edge-lane"]')).toBeNull();
+
+    const firstLabelSingle = canvasElement.querySelector('[data-slot="port-label-display"]');
+    if (!(firstLabelSingle instanceof HTMLElement)) throw new Error("expected a port label to click");
+    await userEvent.click(firstLabelSingle);
+
+    // Exactly one CodeEditor — this port's own — and no lane element at all.
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(1);
+    });
+    await expect(canvasElement.querySelector('[data-slot="port-edge-lane"]')).toBeNull();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(0));
+
+    await userEvent.click(editToggle); // disarm, resets to resting
+
+    // --- F1g: armed + MULTI-line mode + click a port -------------------
+    await userEvent.click(modeToggle("Multi-line"));
+    await userEvent.click(editToggle); // arm
+
+    // No lane before the click — arming alone still paints nothing, mode
+    // notwithstanding (F1a's own guarantee holds for BOTH modes).
+    await expect(canvasElement.querySelector('[data-slot="port-edge-lane"]')).toBeNull();
+    await expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(0);
+
+    const firstMember = canvasElement.querySelector('[data-slot="port-edge-member"]');
+    if (!(firstMember instanceof HTMLElement)) throw new Error("expected a port to click");
+    await userEvent.click(firstMember);
+
+    // The lane element now exists — the rail-wide editor, not a per-port one.
+    await waitFor(() => {
+      const lane = canvasElement.querySelector('[data-slot="port-edge-lane"]');
+      expect(lane).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(1);
+    });
+    // And clicking a DIFFERENT port while the lane is open does not spawn a
+    // second editor — multi mode's click target is "open the shared lane",
+    // not "edit this port", so a second click is a no-op on an already-open
+    // lane, never a second mount.
+    const members = Array.from(canvasElement.querySelectorAll('[data-slot="port-edge-member"]'));
+    if (members[1]) await userEvent.click(members[1]);
+    await expect(canvasElement.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(1);
+  },
+};
+
