@@ -223,11 +223,37 @@ export function distributionStyle(axis: "row" | "column", distribution: Distribu
   return style;
 }
 
-/** Zach's rule for the "Offset" preset: the trailing edge's push-in is the
- * leading edge's port count times its gap — an approximation (ignores card
- * size, assumes both edges share one gap) meant as a starting point. */
-export function offsetPaddingFor(count: number, gap: number): number {
-  return count * gap;
+/**
+ * Zach's rule for the "Offset" preset: the trailing edge's push-in clears
+ * every leading slot AND the gap after it — `count * (slotMainPx + gap)`.
+ *
+ * FIXED 2026-09-17 (docs/PROPOSALS-2026-09-17.md P9a — the recorded IOU).
+ * The original shipped as `count * gap`, which ignored the slots
+ * themselves and under-shot by `count * slotMainPx` (72px for 3 empty
+ * 24px slots at the default gap) — enough that the trailing lane's first
+ * port lands INSIDE the leading lane's last slot instead of clear below
+ * it, i.e. the two lanes visually interleave. `slotMainPx` has no default
+ * here (unlike `blockPort.layout.ts`'s `offsetEdgePaddingPx`, which this
+ * now matches formula-for-formula): this module is PortEdge's own generic
+ * math and doesn't own a slot-size constant — `EMPTY_SLOT_MIN_PX` lives in
+ * `portEdge.tsx`, `PORT_EDGE_SLOT_MIN_PX` in `blockPort.layout.ts` — so a
+ * caller states its own slot size rather than this file guessing one.
+ * Still an approximation in the one way the original docblock named and
+ * this fix doesn't touch: a uniform `slotMainPx` assumes every leading
+ * slot is the same size, which is only true with `showCard` off (a
+ * variable-width card lane needs a caller-side sum over real slot rects,
+ * not a closed form).
+ *
+ * `apps/storybook-basics/src/stories/OffsetPaddingFor.stories.tsx`'s
+ * `OverlaidOffsetLanes` story is the regression: it renders two PortEdge
+ * tracks sharing one coordinate frame with this formula as the trailing
+ * track's `edgePadding`, and asserts — via real `getBoundingClientRect`
+ * boxes — that no trailing slot's main-axis span overlaps a leading one's.
+ * Restoring the old `count * gap` turns that story red (mutation-tested;
+ * see the story file's own header for the transcript).
+ */
+export function offsetPaddingFor(count: number, slotMainPx: number, gap: number): number {
+  return Math.max(0, count) * (slotMainPx + gap);
 }
 
 /* ------------------------------------------------------------------ */

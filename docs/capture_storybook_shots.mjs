@@ -40,6 +40,11 @@ const BASE = `http://localhost:${PORT}/iframe.html`;
 
 /** id → the story's Storybook id, plus the viewport it reads best at. */
 const SHOTS = [
+  { id: "blocks-blockwiring--wiring-scenarios", w: 1200, h: 900, name: "wiring" },
+  { id: "blocks-asyncregion--communication-patterns", w: 1250, h: 900, name: "async" },
+  { id: "blocks-blockport--four-edges", w: 760, h: 620, name: "fouredges" },
+  { id: "ports-portedge--edge-distribution-controls", w: 760, h: 900, name: "distribution" },
+  { id: "trace-tidy--tidy-direction-matrix", w: 1250, h: 900, name: "tidymatrix" },
   { id: "trace-interactive--straight-with-bends", w: 900, h: 420, name: "trace-interactive" },
   { id: "trace-interactive--many-bends", w: 900, h: 420, name: "trace-many-bends" },
   { id: "trace-polarity--routing-kinds", w: 1000, h: 700, name: "trace-routing-kinds" },

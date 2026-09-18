@@ -131,12 +131,14 @@ export function railPitchPx(slotMainPx: number = PORT_EDGE_SLOT_MIN_PX, gap: num
  * port one full pitch below the leading lane's last port, which is what the
  * donor's `outputStart = slot + inputs.length` means in pixels.
  *
- * `portEdge.layout.ts`'s `offsetPaddingFor` is a self-described
- * approximation (`count * gap`, "ignores card size") with zero call sites;
- * it is deliberately neither used nor deleted here. The difference is not
- * cosmetic: with today's numbers it under-shoots by `leadCount * slotMainPx`
- * — 72px on a three-port lane — so the two lanes would visibly interleave
- * instead of one starting below the other.
+ * `portEdge.layout.ts`'s `offsetPaddingFor` used to be a self-described
+ * approximation (`count * gap`, ignoring the slots themselves — 72px short
+ * on a three-port lane, enough that the two lanes visibly interleaved) with
+ * zero call sites. FIXED 2026-09-17 (docs/PROPOSALS-2026-09-17.md P9a): it
+ * now computes this exact same `count * (slotMainPx + gap)` formula, given
+ * the same `slotMainPx`. Still a separate function, not a re-export — this
+ * one defaults `slotMainPx`/`gap` to BlockPort's own constants, the other
+ * has no default (PortEdge's generic module owns no slot-size constant).
  */
 export function offsetEdgePaddingPx(
   leadCount: number,

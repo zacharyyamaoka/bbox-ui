@@ -1,0 +1,25 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "text",
+  "title": "Text",
+  "description": "Plain, non-editable text: a data-slot span plus a tone, for title/type labels and captions that aren't editable.",
+  "dependencies": [
+    "clsx",
+    "tailwind-merge"
+  ],
+  "files": [
+    {
+      "path": "apps/storybook-basics/src/components/text.tsx",
+      "content": "import type { ComponentProps } from \"react\";\n\nimport { cn } from \"../lib/utils\";\n\n/**\n * src/components/text.tsx — \"just normal text\", for displaying plain\n * information (title/type labels that aren't editable, a status line, a\n * caption). Deliberately tiny: a `data-slot` span plus a `tone` for the\n * default/muted distinction a header commonly needs — nothing else.\n */\nexport type TextTone = \"default\" | \"muted\";\n\nexport interface TextProps extends ComponentProps<\"span\"> {\n  tone?: TextTone;\n}\n\nconst TONE_CLASS: Record<TextTone, string> = {\n  default: \"text-foreground\",\n  muted: \"text-muted-foreground\",\n};\n\nexport function Text({ tone = \"default\", className, ...props }: TextProps) {\n  return (\n    <span data-slot=\"text\" data-tone={tone} className={cn(TONE_CLASS[tone], className)} {...props} />\n  );\n}\n",
+      "type": "registry:component",
+      "target": "components/bbox/text.tsx"
+    },
+    {
+      "path": "apps/storybook-basics/src/lib/utils.ts",
+      "content": "import { clsx, type ClassValue } from \"clsx\";\nimport { twMerge } from \"tailwind-merge\";\n\nexport function cn(...inputs: ClassValue[]) {\n  return twMerge(clsx(inputs));\n}\n",
+      "type": "registry:lib",
+      "target": "components/lib/utils.ts"
+    }
+  ],
+  "type": "registry:component"
+}
