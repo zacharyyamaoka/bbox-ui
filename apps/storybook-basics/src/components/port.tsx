@@ -19,6 +19,7 @@ import type { ComponentProps, CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
 import { PORT_DIAMETERS, PORT_HIT_PX, PORT_STATE_RING_PX, PORT_SURFACE_RING_PX, type PortSize } from "./port.layout";
+import { SketchOutline } from "../skin/sketchOutline";
 
 /* ------------------------------------------------------------------ */
 /* Colour — state -> token, inlined from packages/bbox-ui's appearance.ts */
@@ -89,6 +90,21 @@ export function portDotClass(): string {
 }
 
 /**
+ * The dot's ring colour, as one exported derivation.
+ *
+ * WHY extracted rather than left inline (ported from packages/bbox-ui/src/
+ * port.tsx's own `portRingColor`): the sketch skin draws the ring as a
+ * path instead of as box-shadow layers, and it has to be the SAME colour.
+ * A second copy of this precedence (hinting > dimmed > state) is exactly
+ * how a `hinting` port would end up orange in one skin and grey in
+ * another. `null` means "this state paints no ring at all".
+ */
+export function portRingColor({ state = "empty", dimmed = false, hinting = false }: PortDotPaintInput): string | null {
+  const { ring } = STATE_TOKENS[state];
+  return hinting ? paintVar("primary") : dimmed ? paintVar("muted-foreground") : ring ? paintVar(ring) : null;
+}
+
+/**
  * The dot's ring/fill. `dimmed` forces the ring to `muted-foreground` and
  * fades the whole dot to ~45% opacity, leaving the resting fill/core colour
  * underneath untouched (a dimmed `wired` port still reads "wired, just not
@@ -97,8 +113,8 @@ export function portDotClass(): string {
  * BECOMING wired, with a wide halo.
  */
 export function portDotStyle({ state = "empty", dimmed = false, hinting = false }: PortDotPaintInput): CSSProperties {
-  const { ring, fill } = STATE_TOKENS[state];
-  const ringColor = hinting ? paintVar("primary") : dimmed ? paintVar("muted-foreground") : ring ? paintVar(ring) : null;
+  const { fill } = STATE_TOKENS[state];
+  const ringColor = portRingColor({ state, dimmed, hinting });
   // `hinting` renders hollow (no fill), matching `wired`'s own shape.
   const fillColor = hinting ? null : fill ? paintVar(fill) : null;
 
@@ -113,7 +129,10 @@ export function portDotStyle({ state = "empty", dimmed = false, hinting = false 
   }
 
   const style: CSSProperties = {};
-  if (layers.length > 0) style.boxShadow = layers.join(", ");
+  // Behind a token so the sketch skin can blank the CSS rings and let the
+  // drawn one (below, in `Port`) take their place. Undefined on every other
+  // skin, so the `var()` fallback IS the layer list and nothing changes.
+  if (layers.length > 0) style.boxShadow = `var(--bbox-skin-dot-rings, ${layers.join(", ")})`;
   // Opaque resting paint, never transparent — a wall-mounted dot straddles a
   // block's border, and a transparent interior would let it show through a
   // hollow (`empty`/`wired`) dot. `var(--card)` is the same token the 2px
@@ -181,6 +200,7 @@ export function Port({
   // A fixed 40px hit target regardless of the painted diameter.
   const haloInset = (diameterPx - PORT_HIT_PX) / 2;
   const coreStyle = portCoreStyle({ state, hinting });
+  const ringColor = portRingColor({ state, dimmed, hinting });
   return (
     <span
       data-slot="port-dot"
@@ -197,6 +217,24 @@ export function Port({
       }}
       {...props}
     >
+      {/* The drawn ring (ported from packages/bbox-ui/src/port.tsx). Lands
+          on the SAME centre-line the box-shadow rings use: those paint an
+          annulus from `d/2 + SURFACE` out to `d/2 + SURFACE + STATE`, so
+          its centre-line diameter is `d + 2*SURFACE + STATE`; SketchOutline
+          insets the path by one border width per side, hence the extra
+          `2*STATE`. Colour comes from `portRingColor` — the same
+          derivation the box-shadow rings use — so `state` keeps sole
+          ownership of it; the skin only supplies the shape. */}
+      {ringColor != null && (
+        <SketchOutline
+          shape="ellipse"
+          width={diameterPx + PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
+          height={diameterPx + PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
+          borderWidth={PORT_STATE_RING_PX}
+          stroke={ringColor}
+          seed={`port:${state}:${diameter}`}
+        />
+      )}
       <span data-slot="port-dot-halo" aria-hidden className="absolute rounded-full" style={{ inset: haloInset }} />
       {coreStyle && (
         <span

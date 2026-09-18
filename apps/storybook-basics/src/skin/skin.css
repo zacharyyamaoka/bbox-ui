@@ -1,0 +1,149 @@
+/*
+ * src/skin/skin.css — ported by value from packages/bbox-ui/src/skin.css
+ * (frozen v1, read-only donor), revision `c83c8b2` in this repo. The three
+ * skin blocks and every WHY comment travel unchanged; this file's own
+ * imports/wiring at the bottom of globals.css is new (the donor is a
+ * standalone package export, this app inlines it as a sibling stylesheet).
+ *
+ * WHAT CHANGED in the port:
+ *   1. Variable names are UNCHANGED (`--foreground`, `--card`, etc.) — this
+ *      app's src/globals.css defines the same shadcn variable names the
+ *      donor's theme.css does, confirmed by grep before porting, so every
+ *      `var(--foreground)` etc. below resolves exactly as it did there.
+ *   2. The donor's "ONE TOKEN BELOW IS A TRAP" note (stroke-width vs.
+ *      `BLOCK_BORDER_PX`/`REGION_BORDER_PX`) is dropped — this app's
+ *      port.layout.ts explicitly does not carry wall-anchor geometry (its
+ *      own header: "this app has no `anchored` mode"), so there is no
+ *      inset math reading `--bbox-skin-stroke-width` as a length to warn
+ *      about here. If that geometry is ever added back, re-add the trap
+ *      note as-is — the invariant it protects is still true.
+ *
+ * Import AFTER src/globals.css's own `:root` block (globals.css does this
+ * with `@import "./skin/skin.css";` near the top, after the shadcn theme
+ * tokens are declared and before the trace-march keyframes). Then stamp
+ * one attribute on any ancestor:
+ *
+ *   <html data-bbox-skin="sketch">        a whole app
+ *   <div  data-bbox-skin="plain">…</div>  one board, one card, one story row
+ *
+ * WHY this file contains ONLY custom-property declarations, and not a
+ * single rule that reaches into a component's internals: the components
+ * already read these tokens at their own call sites with today's values
+ * hard-coded as the `var()` fallback. So this file is purely additive — a
+ * consumer who never imports it gets the pixels they have now, and one who
+ * does never has to win a specificity fight against a Tailwind utility or
+ * a caller's own `className`.
+ *
+ * Skin is ORTHOGONAL to theme. Nothing below names a colour literal —
+ * every one resolves through globals.css's own tokens, so all three skins
+ * follow light/dark, and `data-theme="dark" data-bbox-skin="sketch"` is an
+ * ordinary combination rather than a fourth thing to define.
+ */
+
+/*
+ * `default` is spelled out even though it is also every token's built-in
+ * fallback. WHY: without it there is no way to switch BACK. A host with a
+ * skin picker sets the attribute to one of three values; "unset the
+ * attribute" is a fourth, different operation that a <select> cannot
+ * express, and every host would hand-roll the same special case.
+ */
+[data-bbox-skin="default"] {
+  --bbox-skin-radius: var(--radius-lg);
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--border);
+  --bbox-skin-surface: var(--card);
+  --bbox-skin-shadow: var(--shadow-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+  --bbox-skin-font: inherit;
+  --bbox-skin-outline: none;
+  --bbox-skin-ink: var(--foreground);
+  --bbox-skin-fg: var(--card-foreground);
+  /* `initial` is the INERT value, and the only one that works. On a custom
+     property it is the guaranteed-invalid value, so `var(--x, <the real
+     paint>)` falls straight through to the component's own resolved
+     colour. Ported verbatim from skin.css's own WHY: a first pass used
+     `currentColor` here reasoning that it "names the real thing" — it
+     does not, it names the TEXT colour. */
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: initial;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-crisp: inline;
+  --bbox-skin-dot-rings: initial;
+}
+
+/*
+ * Plain — square corners, one weight of line, no shadow. The austere
+ * reading: a schematic.
+ */
+[data-bbox-skin="plain"] {
+  --bbox-skin-radius: 0px;
+  --bbox-skin-radius-pill: 0px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--foreground);
+  /* Ported verbatim (Zach, 2026-09-17, via the donor's own note): "For
+     default, you can actually have a background... Its only for plain and
+     sketch I don't want a background." `default` keeps its card; these two
+     are the line-only pair. */
+  --bbox-skin-surface: transparent;
+  --bbox-skin-shadow: none;
+  --bbox-skin-font: inherit;
+  --bbox-skin-outline: none;
+  --bbox-skin-ink: var(--foreground);
+  /* With no fill, text has to read against the canvas rather than a card. */
+  --bbox-skin-fg: var(--foreground);
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: initial;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-crisp: inline;
+  --bbox-skin-dot-rings: initial;
+}
+
+/*
+ * Sketch — hand-drawn. See sketchOutline.tsx for why a drawn SVG path and
+ * not an SVG filter, and why no `rotate` token exists (the geometry
+ * invariant every skin must hold — S3 in this app's Styles.stories.tsx).
+ *
+ * The font is a STACK, not a file — this package ships no webfont on
+ * purpose. Everything after the first name is a real platform fallback,
+ * `cursive` last so the skin degrades to *a* hand rather than to the body
+ * font.
+ */
+[data-bbox-skin="sketch"] {
+  --bbox-skin-radius: 12px;
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  /* Transparent, NOT absent — the border still occupies its 2px, it simply
+     paints nothing, and `SketchOutline` draws on exactly that line. That is
+     the whole trick: the sketch skin replaces the border's PAINT without
+     touching a pixel of its GEOMETRY. */
+  --bbox-skin-stroke: transparent;
+  /* Zach, 2026-09-17 (ported verbatim): "I don't want there to be any
+     background color... just the sketch line." */
+  --bbox-skin-surface: transparent;
+  --bbox-skin-shadow: none;
+  --bbox-skin-outline: block;
+  --bbox-skin-ink: var(--foreground);
+  /* With no fill, a sketch Block has to read against the CANVAS behind it. */
+  --bbox-skin-fg: var(--foreground);
+  /* Blank the CSS border on everything whose line colour belongs to a
+     state cascade (Port's rings, a semantic Badge variant) — the drawn
+     line replaces it and carries that same resolved colour down as a
+     prop, so state keeps sole ownership of the hue and the skin only
+     takes the shape. */
+  --bbox-skin-line-override: transparent;
+  --bbox-skin-font: "Shantell Sans", "Excalifont", "Virgil", "Segoe Print",
+    "Bradley Hand", "Comic Sans MS", cursive;
+  --bbox-skin-font-sans: "Shantell Sans", "Excalifont", "Virgil",
+    "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --bbox-skin-font-mono: "Shantell Sans", "Excalifont", "Virgil",
+    "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --bbox-skin-crisp: none;
+  /*
+   * INERT on purpose (ported verbatim from the donor's own hole in the
+   * story): turning it on is one line the day a real consumer needs Port's
+   * box-shadow rings suppressed too —
+   *
+   *   [data-bbox-skin="sketch"] { --bbox-skin-dot-rings: none; }
+   */
+  --bbox-skin-dot-rings: initial;
+}

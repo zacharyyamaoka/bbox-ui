@@ -74,6 +74,55 @@ import {
 } from "./elbow/index";
 import { elbowInputFromTerminals, routePoints } from "./elbow/traceContract";
 import { TraceTerminal } from "./traceTerminal";
+import { sketchPathData } from "../skin/sketchPath";
+
+/**
+ * `style` for the crisp path and for its hand-drawn twin (ported from
+ * packages/bbox-ui/src/trace.tsx).
+ *
+ * WHY both are rendered and CSS picks, rather than the component choosing:
+ * it cannot know the active skin. Everywhere else a skin blanks the crisp
+ * version by recolouring it (`--bbox-skin-stroke: transparent`), which
+ * works because a border can be transparent and still occupy its space. An
+ * SVG path has no equivalent — and a Trace's geometry belongs to the HOST
+ * (this app's `trace.routing.ts`/`elbow/`), so there is nothing here to
+ * re-derive. Paths do not affect layout, so the hidden twin costs only the
+ * memoised math.
+ *
+ * Zach, 2026-09-17 (ported verbatim): "it would be great of course if even
+ * the traces can support a more sketchy appearance... perhaps thats just
+ * like another styling thing for them. just like async, or animated" — so
+ * it is exactly that: orthogonal to `variant`, to `animated` and to the
+ * dash cadence.
+ */
+const CRISP_STYLE = { display: "var(--bbox-skin-crisp, inline)" } as const;
+const SKETCH_STYLE = { display: "var(--bbox-skin-outline, none)" } as const;
+
+/** Wobble for a cable. Lower than a Block's: the same absolute wander read
+ * across a long curve is a wave, not a drawn line. */
+const TRACE_WOBBLE_PX = 1.4;
+
+/**
+ * Sketched paths, cached by the geometry that produced them (ported
+ * verbatim from the donor — see its own WHY on the module-level `Map`
+ * versus `useMemo`: `TraceBody` here is likewise called as a plain
+ * function, no hook, so its wobble twin is memoised outside React instead).
+ * Bounded because a live drag produces a NEW `d` every frame.
+ */
+const SKETCH_CACHE = new Map<string, string>();
+const SKETCH_CACHE_MAX = 512;
+
+function sketchedTracePath(d: string): string {
+  const hit = SKETCH_CACHE.get(d);
+  if (hit !== undefined) return hit;
+  const out = sketchPathData(d, { seed: d, wobble: TRACE_WOBBLE_PX });
+  if (SKETCH_CACHE.size >= SKETCH_CACHE_MAX) {
+    const oldest = SKETCH_CACHE.keys().next().value;
+    if (oldest !== undefined) SKETCH_CACHE.delete(oldest);
+  }
+  SKETCH_CACHE.set(d, out);
+  return out;
+}
 
 /** The transparent hit path's stroke width. Wider than the 2px visible
  * line by design: the line is the thing you SEE, this is the thing you can
@@ -266,8 +315,21 @@ export function TraceBody({
     />
   ) : null;
 
+  // Seeded from the geometry itself, so a cable keeps its own wander while
+  // it sits still and re-draws honestly when it moves.
+  const sketched = sketchedTracePath(path);
+
   if (variant === "delayed" && splitAtLabel) {
     const dash = splitDashArrays(resolvedLength, clampLabelPosition(labelPosition));
+    const splitSegment = {
+      pathLength: PATH_LENGTH_UNITS,
+      fill: "none",
+      stroke: color,
+      strokeLinecap: "round" as const,
+      strokeLinejoin: "round" as const,
+      strokeWidth,
+      vectorEffect,
+    };
     return (
       <g
         data-slot="trace"
@@ -278,38 +340,27 @@ export function TraceBody({
       >
         {defs}
         {hit}
-        <path
-          data-slot="trace-line"
-          data-trace-segment="before"
-          d={path}
-          pathLength={PATH_LENGTH_UNITS}
-          fill="none"
-          stroke={color}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash.before}
-          vectorEffect={vectorEffect}
-        />
-        <path
-          data-slot="trace-line"
-          data-trace-segment="after"
-          d={path}
-          pathLength={PATH_LENGTH_UNITS}
-          fill="none"
-          stroke={color}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash.after}
-          vectorEffect={vectorEffect}
-          markerEnd={markerAttr}
-        />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="before" d={path} strokeDasharray={dash.before} style={CRISP_STYLE} />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="before" data-sketch="true" d={sketched} strokeDasharray={dash.before} style={SKETCH_STYLE} />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="after" d={path} strokeDasharray={dash.after} markerEnd={markerAttr} style={CRISP_STYLE} />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="after" data-sketch="true" d={sketched} strokeDasharray={dash.after} markerEnd={markerAttr} style={SKETCH_STYLE} />
       </g>
     );
   }
 
   const dashStyle = traceStrokeStyle(variant, resolvedLength, animated);
+  const segment = {
+    fill: "none",
+    stroke: color,
+    strokeWidth,
+    strokeLinecap: dashStyle.strokeLinecap,
+    strokeLinejoin: "round" as const,
+    strokeDasharray: dashStyle.strokeDasharray,
+    strokeDashoffset: dashStyle.strokeDashoffset,
+    vectorEffect,
+    className: dashStyle.className,
+    markerEnd: markerAttr,
+  };
   return (
     <g
       data-slot="trace"
@@ -320,21 +371,8 @@ export function TraceBody({
     >
       {defs}
       {hit}
-      <path
-        data-slot="trace-line"
-        data-trace-segment="whole"
-        d={path}
-        fill="none"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap={dashStyle.strokeLinecap}
-        strokeLinejoin="round"
-        strokeDasharray={dashStyle.strokeDasharray}
-        strokeDashoffset={dashStyle.strokeDashoffset}
-        vectorEffect={vectorEffect}
-        className={dashStyle.className}
-        markerEnd={markerAttr}
-      />
+      <path {...segment} data-slot="trace-line" data-trace-segment="whole" d={path} style={CRISP_STYLE} />
+      <path {...segment} data-slot="trace-line" data-trace-segment="whole" data-sketch="true" d={sketched} style={SKETCH_STYLE} />
     </g>
   );
 }
