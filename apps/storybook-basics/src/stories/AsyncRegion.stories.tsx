@@ -10,8 +10,9 @@ import type { BlockSide } from "../components/port.layout";
 import type { PortEdgeItem, PortEdgeProps } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import { ASYNC_PACKET_DASHARRAY, type TraceRouting } from "../components/trace.layout";
-import { wiredPortKeys, withWiredState, type Wire } from "../components/wiring";
 import { WireLayer } from "../components/wireLayer";
+import { type SceneEdge, wiredPorts } from "../scene/scene";
+import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
 
 /**
  * Basics/AsyncRegion — phase B2 of docs/BLOCK-PORT-EDGES-PLAN.md §7: the
@@ -341,20 +342,24 @@ function headerClearDistributionFor(edge: BlockSide): Distribution | undefined {
   return { mode: "aligned", anchor: "start", gap: RAIL_GAP_PX, edgePadding: HEADER_CLEAR_EDGE_PADDING_PX };
 }
 
-/** `from`/`to` per leg, honouring the donor's arrow rule (§7, finding 2):
- *  `forward` points initiator→responder; `back` always reverses that. */
-function wireForLeg(spec: Specimen, legIndex: number): Wire {
+/** `source`/`target` per leg, honouring the donor's arrow rule (§7,
+ *  finding 2): `forward` points initiator→responder; `back` always
+ *  reverses that. A scene edge now (docs/SCENE-KIT.md), with the view
+ *  styling riding in `data` for `sceneWires` to read — the record itself
+ *  is engine vocabulary, not paint. */
+function edgeForLeg(spec: Specimen, legIndex: number, routing: TraceRouting): SceneEdge<WireStyleData> {
   const leg = PROTOCOL_LEGS[spec.family][legIndex];
   const portId = legPortId(spec, legIndex);
-  const [from, to] = leg.direction === "forward" ? [spec.initiatorId, spec.responderId] : [spec.responderId, spec.initiatorId];
+  const [source, target] = leg.direction === "forward" ? [spec.initiatorId, spec.responderId] : [spec.responderId, spec.initiatorId];
   return {
     id: `${spec.key}-${leg.phase}`,
-    from: { blockId: from, portId },
-    to: { blockId: to, portId },
+    source,
+    sourceHandle: portId,
+    target,
+    targetHandle: portId,
     // D-B6: the async region's whole meaning is "new wires default to
     // async" (`asyncRegionModel.ts:96-123`).
-    variant: "async",
-    color: FAMILY_INK[spec.family],
+    data: { variant: "async", color: FAMILY_INK[spec.family], routing },
   };
 }
 
@@ -374,8 +379,9 @@ function Positioned({ x, y, children }: { x: number; y: number; children: ReactN
  */
 function RelationshipBench({ spec, routing }: { spec: Specimen; routing: TraceRouting }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const wires: Wire[] = useMemo(() => PROTOCOL_LEGS[spec.family].map((_, i) => ({ ...wireForLeg(spec, i), routing })), [spec, routing]);
-  const wiredSet = wiredPortKeys(wires);
+  const edges = useMemo(() => PROTOCOL_LEGS[spec.family].map((_, i) => edgeForLeg(spec, i, routing)), [spec, routing]);
+  const wires = useMemo(() => sceneWires({ edges }), [edges]);
+  const wiredSet = wiredPorts({ edges });
   const items = railItemsFor(spec);
   const groups = railGroupsFor(spec);
   const groupMode = groups ? "grouped" : "off";
@@ -561,14 +567,15 @@ function SummaryVsSplitBench({ style }: { style: "split" | "summary" }) {
     { id: "health.request", label: "health.request" },
     { id: "health.response", label: "health.response" },
   ];
-  const wires: Wire[] = useMemo(() => {
-    const all: Wire[] = [
-      { id: "sv-request", from: { blockId: "client", portId: "health.request" }, to: { blockId: "server", portId: "health.request" }, variant: "async", color: FAMILY_INK.service },
-      { id: "sv-response", from: { blockId: "server", portId: "health.response" }, to: { blockId: "client", portId: "health.response" }, variant: "async", color: FAMILY_INK.service },
+  const edges = useMemo(() => {
+    const all: SceneEdge<WireStyleData>[] = [
+      { id: "sv-request", source: "client", sourceHandle: "health.request", target: "server", targetHandle: "health.request", data: { variant: "async", color: FAMILY_INK.service } },
+      { id: "sv-response", source: "server", sourceHandle: "health.response", target: "client", targetHandle: "health.response", data: { variant: "async", color: FAMILY_INK.service } },
     ];
-    return style === "split" ? all : all.filter((w) => w.id === "sv-request"); // request = the service carrier
+    return style === "split" ? all : all.filter((e) => e.id === "sv-request"); // request = the service carrier
   }, [style]);
-  const wiredSet = wiredPortKeys(wires);
+  const wires = useMemo(() => sceneWires({ edges }), [edges]);
+  const wiredSet = wiredPorts({ edges });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
