@@ -18,7 +18,14 @@
 import type { ComponentProps, CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
-import { DiagnosticTooltip, diagnosticColorVar, maxDiagnosticSeverity, type Diagnostic } from "./diagnostic";
+import {
+  DEFAULT_HIGHLIGHTER_KIND,
+  DiagnosticTooltip,
+  diagnosticColorVar,
+  maxDiagnosticSeverity,
+  type Diagnostic,
+  type HighlighterKind,
+} from "./highlighter";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { PORT_DIAMETERS, PORT_HIT_PX, PORT_STATE_RING_PX, PORT_SURFACE_RING_PX, type PortSize } from "./port.layout";
 import { SketchOutline } from "../skin/sketchOutline";
@@ -81,8 +88,13 @@ export interface PortDotPaintInput {
   /** The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Port row) — a
    *  judgement ABOUT the port, made by an external producer, never a fifth
    *  `state`. Only the worst severity present paints (`maxDiagnosticSeverity`,
-   *  ./diagnostic.tsx); the rest ride the flag's popover, not this halo. */
+   *  ./highlighter.tsx); the rest ride the flag's popover, not this mark. */
   diagnostics?: Diagnostic[];
+  /** Which `HighlighterKind` draws the mark. Defaults to
+   *  `DEFAULT_HIGHLIGHTER_KIND` ("stroke") — Zach's own lean from the
+   *  report feedback; `"halo"` is the pre-existing treatment, kept as a
+   *  sibling, not deleted. */
+  highlighterKind?: HighlighterKind;
 }
 
 /**
@@ -119,15 +131,21 @@ export function portRingColor({ state = "empty", dimmed = false, hinting = false
  * core) in the accent colour regardless of `state` — previewing the port
  * BECOMING wired, with a wide halo.
  */
-export function portDotStyle({ state = "empty", dimmed = false, hinting = false, diagnostics }: PortDotPaintInput): CSSProperties {
+export function portDotStyle({
+  state = "empty",
+  dimmed = false,
+  hinting = false,
+  diagnostics,
+  highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
+}: PortDotPaintInput): CSSProperties {
   const { fill } = STATE_TOKENS[state];
   const ringColor = portRingColor({ state, dimmed, hinting });
   // `hinting` renders hollow (no fill), matching `wired`'s own shape.
   const fillColor = hinting ? null : fill ? paintVar(fill) : null;
+  const stateRingPx = hinting ? 4 : PORT_STATE_RING_PX;
 
   const layers: string[] = [];
   if (ringColor != null) {
-    const stateRingPx = hinting ? 4 : PORT_STATE_RING_PX;
     layers.push(`0 0 0 ${PORT_SURFACE_RING_PX}px var(--card)`);
     layers.push(`0 0 0 ${PORT_SURFACE_RING_PX + stateRingPx}px ${ringColor}`);
   }
@@ -144,10 +162,24 @@ export function portDotStyle({ state = "empty", dimmed = false, hinting = false,
   // Prepending would alpha-blend it OVER the opaque state ring instead,
   // recolouring the very fact this axis must not touch.
   // `info` paints NOTHING on a Port (§5's own table) — only error/warning
-  // earn the halo.
+  // earn a mark, in whichever `highlighterKind` the caller asked for.
   const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
   if (diagnosticSeverity && diagnosticSeverity !== "info") {
-    layers.push(`0 0 0 9px color-mix(in srgb, ${diagnosticColorVar(diagnosticSeverity)} 38%, transparent)`);
+    const color = diagnosticColorVar(diagnosticSeverity);
+    if (highlighterKind === "halo") {
+      layers.push(`0 0 0 9px color-mix(in srgb, ${color} 38%, transparent)`);
+    } else {
+      // `stroke` and `mask` are the IDENTICAL geometry on a circle
+      // (HighlighterKind's own doc: the equidistant offset of a circle is
+      // trivially a larger circle — there is no corner for `mask` to get
+      // more right than `stroke` does). A crisp two-layer ring — a card-
+      // coloured gap, then a solid line — one step further out than the
+      // state ring, the SAME two-layer recipe that ring itself already
+      // uses one step in.
+      const gap = PORT_SURFACE_RING_PX + stateRingPx + 2;
+      layers.push(`0 0 0 ${gap}px var(--card)`);
+      layers.push(`0 0 0 ${gap + 2}px ${color}`);
+    }
   }
 
   const style: CSSProperties = {};
@@ -201,11 +233,13 @@ export interface PortProps extends ComponentProps<"span"> {
    * previewing it becoming `wired`. */
   hinting?: boolean;
   /** The diagnostic axis — see `PortDotPaintInput.diagnostics`'s own doc.
-   *  Absent or `[]` paints no halo at all. Hovering the dot shows every
-   *  message (`DiagnosticTooltip`, ./diagnostic.tsx); there is no flag
+   *  Absent or `[]` paints no mark at all. Hovering the dot shows every
+   *  message (`DiagnosticTooltip`, ./highlighter.tsx); there is no flag
    *  here — Port is the dot alone, and §5 puts the flag on the composites
    *  that HAVE a corner or a slot to anchor it (`LabeledPort`, `Block`). */
   diagnostics?: Diagnostic[];
+  /** See `PortDotPaintInput.highlighterKind`'s own doc. */
+  highlighterKind?: HighlighterKind;
   /**
    * The hit halo's diameter in the component's OWN px. Defaults to
    * `PORT_HIT_PX` (40). The constant is scene-space: under a host's
@@ -236,6 +270,7 @@ export function Port({
   dimmed = false,
   hinting = false,
   diagnostics,
+  highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
   hitPx = PORT_HIT_PX,
   showHitRegion = false,
   className,
@@ -262,11 +297,12 @@ export function Port({
       data-dimmed={dimmed || undefined}
       data-hinting={hinting || undefined}
       data-diagnostic={diagnosticSeverity}
+      data-highlighter-kind={diagnosticSeverity ? highlighterKind : undefined}
       className={cn(portDotClass(), className)}
       style={{
         width: diameterPx,
         height: diameterPx,
-        ...portDotStyle({ state, dimmed, hinting, diagnostics }),
+        ...portDotStyle({ state, dimmed, hinting, diagnostics, highlighterKind }),
         ...style,
       }}
       {...props}

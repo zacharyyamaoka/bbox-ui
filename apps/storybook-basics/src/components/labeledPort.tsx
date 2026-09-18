@@ -45,7 +45,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { CodeEditor } from "./codeEditor";
-import { DiagnosticTooltip, diagnosticUnderlineStyle, maxDiagnosticSeverity, type Diagnostic } from "./diagnostic";
+import {
+  DiagnosticTooltip,
+  diagnosticUnderlineStyle,
+  maxDiagnosticSeverity,
+  type Diagnostic,
+  type HighlighterKind,
+} from "./highlighter";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { Port, type PortState } from "./port";
 import {
@@ -269,15 +275,20 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
   hinting?: boolean;
   /**
    * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's LabeledPort
-   * row) — forwarded to `Port` (the dot halo) and to the built-in label
-   * (the wavy/dotted underline). Ignored by the underline when `labelSlot`
-   * overrides the built-in field — a host-supplied slot owns its own
-   * typography. `DiagnosticFlag` (./diagnostic.tsx) is NOT wired here
-   * automatically; §5 says it "may ride the existing secondarySlot", so a
-   * host composes `secondarySlot={<DiagnosticFlag diagnostics={...} />}`
+   * row) — forwarded to `Port` (the dot mark) and to the built-in label
+   * (the wavy/dotted underline — a fixed treatment regardless of
+   * `highlighterKind`; Zach's own approval on text marks: "no need to
+   * reinvent the wheel there at all"). Ignored by the underline when
+   * `labelSlot` overrides the built-in field — a host-supplied slot owns
+   * its own typography. `DiagnosticFlag` (./highlighter.tsx) is NOT wired
+   * here automatically; §5 says it "may ride the existing secondarySlot",
+   * so a host composes `secondarySlot={<DiagnosticFlag diagnostics={...} />}`
    * itself rather than this component silently placing one.
    */
   diagnostics?: Diagnostic[];
+  /** Forwarded to `Port` — see `PortDotPaintInput.highlighterKind`'s own
+   *  doc. Has no effect on the label's own underline. */
+  highlighterKind?: HighlighterKind;
   /**
    * The label slot's placement, reaching PAST `textLayout` (the preset over
    * exactly these three). Omit any of them and the preset decides; set one
@@ -352,6 +363,7 @@ export function LabeledPort({
   dimmed = false,
   hinting = false,
   diagnostics,
+  highlighterKind,
   labelOrigin,
   labelAlign,
   labelOffsetX,
@@ -429,7 +441,16 @@ export function LabeledPort({
       style={{ width: diameterPx, height: diameterPx, ...style }}
       {...props}
     >
-      <Port state={state} diameter={diameter} dimmed={dimmed} hinting={hinting} diagnostics={diagnostics} hitPx={hitPx} showHitRegion={showHitRegion} />
+      <Port
+        state={state}
+        diameter={diameter}
+        dimmed={dimmed}
+        hinting={hinting}
+        diagnostics={diagnostics}
+        highlighterKind={highlighterKind}
+        hitPx={hitPx}
+        showHitRegion={showHitRegion}
+      />
       {labelSlot !== undefined ? (
         <span data-slot="port-label-slot" className="absolute" style={labelSlotStyle}>
           {labelSlot}

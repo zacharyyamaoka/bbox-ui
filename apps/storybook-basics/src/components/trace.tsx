@@ -39,7 +39,14 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 
 import { cn } from "../lib/utils";
-import { diagnosticColorVar, maxDiagnosticSeverity, type Diagnostic } from "./diagnostic";
+import {
+  DEFAULT_HIGHLIGHTER_KIND,
+  DiagnosticTooltip,
+  diagnosticColorVar,
+  maxDiagnosticSeverity,
+  type Diagnostic,
+  type HighlighterKind,
+} from "./highlighter";
 import { HIT_REGION_STROKE } from "./hitRegion";
 import {
   ASYNC_PACKET_DASHARRAY,
@@ -256,15 +263,33 @@ export interface TraceProps extends Omit<ComponentProps<"g">, "id" | "points"> {
   showHitRegion?: boolean;
   /**
    * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Trace row): a
-   * translucent backdrop path under the wire, same geometry as the hit
-   * path, painted at `max(severity)`. The stroke itself keeps its own
-   * variant colour/dash — `data`/`async`/`delayed` stay legible — so the
-   * backdrop is the ONLY thing this axis owns here. `info` paints nothing
-   * (§5's table). The message rides a hover `Tooltip` on the visible
-   * stroke, or a `TraceBadge` in severity dress at `labelPosition` — a
-   * host composition, not this file's job.
+   * mark under the wire, same geometry as the hit path, painted at
+   * `max(severity)`. The visible stroke itself keeps its own variant
+   * colour/dash — `data`/`async`/`delayed` stay legible — so the mark is
+   * the ONLY thing this axis owns here. `info` paints nothing (§5's
+   * table).
+   *
+   * WHY hover, not an inline badge (Zach's report feedback, reacting to
+   * the proposal's own "message rides `TraceBadge` in severity dress"
+   * mock): "I wonder if instead of display the error text directly on it,
+   * we instead follow the language of always showing the exact
+   * information in a pop out modal" — the wire is marked, exactly like
+   * every other element this axis touches, and the message lives in the
+   * hover `Tooltip` this file wraps its own marked output in
+   * (`DiagnosticTooltip`, ./highlighter.tsx), never baked onto the
+   * geometry. A host that still wants a `TraceBadge` on the line is free
+   * to add one for its OWN reasons — this axis no longer proposes it.
    */
   diagnostics?: Diagnostic[];
+  /** Which `HighlighterKind` draws the mark. Defaults to
+   *  `DEFAULT_HIGHLIGHTER_KIND` ("stroke") — Zach's own lean from the
+   *  report feedback; `"halo"` is the pre-existing translucent-backdrop
+   *  treatment, kept as a sibling, not deleted. `"mask"` aliases to
+   *  `"stroke"` here: JointJS's mask technique targets an enclosed
+   *  shape's interior, and an open path has none — a round-joined offset
+   *  line already gives a path the equidistant-at-bends property `mask`
+   *  is for, so there is no separate technique to build. */
+  highlighterKind?: HighlighterKind;
 }
 
 export interface TraceStrokeStyle {
@@ -367,6 +392,7 @@ export function TraceBody({
   hitStrokePx = TRACE_HIT_STROKE_PX,
   showHitRegion = false,
   diagnostics,
+  highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
   className,
   ...props
 }: TraceProps) {
@@ -486,15 +512,26 @@ export function TraceBody({
   // `max(severity)`. `info` paints nothing (§5's own table). The visible
   // stroke's `color`/dash stay whatever the variant already set — this is
   // the ONLY layer the diagnostic axis owns here, never a recoloured line.
+  // `"halo"` keeps the pre-existing wide, translucent wash; `"stroke"`
+  // (the new default) and `"mask"` (which aliases to it here — see this
+  // file's own `HighlighterKind` doc above) draw a crisp, OPAQUE, thinner
+  // parallel line instead — still painted behind the visible stroke
+  // (document order = paint order in SVG), just a different rendering of
+  // the same "one extra layer, geometry never recoloured" contract.
   const diagnosticBackdrop =
     diagnosticSeverity && diagnosticSeverity !== "info" ? (
       <path
         data-slot="trace-diagnostic-backdrop"
+        data-highlighter-kind={highlighterKind}
         aria-hidden
         d={drawnPath}
         fill="none"
-        stroke={`color-mix(in srgb, ${diagnosticColorVar(diagnosticSeverity)} 30%, transparent)`}
-        strokeWidth={10}
+        stroke={
+          highlighterKind === "halo"
+            ? `color-mix(in srgb, ${diagnosticColorVar(diagnosticSeverity)} 30%, transparent)`
+            : diagnosticColorVar(diagnosticSeverity)
+        }
+        strokeWidth={highlighterKind === "halo" ? 10 : 4}
         strokeLinecap="round"
         strokeLinejoin="round"
         style={{ pointerEvents: "none" }}
@@ -524,6 +561,11 @@ export function TraceBody({
       vectorEffect,
     };
     return (
+      // Hover -> Tooltip (message + code, no actions), the same §5
+      // contract every other marked element wraps its output in — and,
+      // per Zach's report feedback, the ONLY place the message rides on
+      // Trace now (no inline badge baked onto the wire).
+      <DiagnosticTooltip diagnostics={diagnostics}>
       <g
         data-slot="trace"
         data-variant={variant}
@@ -544,6 +586,7 @@ export function TraceBody({
         <path {...splitSegment} data-slot="trace-line" data-trace-segment="after" data-sketch="true" d={sketched} strokeDasharray={dash.after} markerEnd={markerAttr} style={SKETCH_STYLE} />
         {vias}
       </g>
+      </DiagnosticTooltip>
     );
   }
 
@@ -576,6 +619,9 @@ export function TraceBody({
     markerEnd: markerAttr,
   };
   return (
+    // Hover -> Tooltip (message + code, no actions) — see the split-label
+    // branch above for the full WHY; identical contract here.
+    <DiagnosticTooltip diagnostics={diagnostics}>
     <g
       data-slot="trace"
       data-variant={variant}
@@ -594,6 +640,7 @@ export function TraceBody({
       <path {...segment} data-slot="trace-line" data-trace-segment="whole" data-sketch="true" d={sketched} style={SKETCH_STYLE} />
       {vias}
     </g>
+    </DiagnosticTooltip>
   );
 }
 
@@ -888,6 +935,8 @@ export interface TraceRouteProps
   showHitRegion?: boolean;
   /** Forwarded to `TraceBody` — see its own doc. */
   diagnostics?: Diagnostic[];
+  /** Forwarded to `TraceBody` — see its own doc. */
+  highlighterKind?: HighlighterKind;
   /** Draw the two endpoint glyphs. On by default — `Trace` is "the whole
    * thing"; a host with real `Port`s passes `false`. */
   terminals?: boolean;
@@ -940,6 +989,7 @@ export function Trace({
   hitStrokePx,
   showHitRegion,
   diagnostics,
+  highlighterKind,
   terminals = true,
   terminalRadius,
   terminalColor,
@@ -1065,6 +1115,7 @@ export function Trace({
         hitStrokePx={hitStrokePx}
         showHitRegion={showHitRegion}
         diagnostics={diagnostics}
+        highlighterKind={highlighterKind}
       />
       {terminals ? (
         <>

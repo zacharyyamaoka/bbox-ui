@@ -4,7 +4,7 @@ import { expect, within } from "storybook/test";
 
 import { Badge } from "../components/badge";
 import { Block } from "../components/block";
-import type { Diagnostic } from "../components/diagnostic";
+import { HIGHLIGHTER_KINDS, type Diagnostic, type HighlighterKind } from "../components/highlighter";
 import { CodeEditor, type CodeEditorDiagnostic } from "../components/codeEditor";
 import { EditableText } from "../components/editableText";
 import { LabeledPort } from "../components/labeledPort";
@@ -21,9 +21,20 @@ import { ValueCapsule } from "../presets/value/value";
  * Zach actually reviews this kit.
  *
  * WHY `diagnostics` is a LIST with a stable `id`, not the scalar
- * docs/INVALID-STATES-PLAN.md §1 first drafted: see ./diagnostic.tsx's own
+ * docs/INVALID-STATES-PLAN.md §1 first drafted: see ./highlighter.tsx's own
  * header. Every specimen below builds its list with `mark(...)` so the
  * `id` never has to be typed twice.
+ *
+ * WHY most galleries below pin `highlighterKind="halo"` explicitly rather
+ * than taking the (new) component default: Zach's report feedback renamed
+ * the concept to "highlighter" and asked for `stroke`/`mask` as first-class
+ * kinds alongside the pre-existing halo/glow, with `stroke` now the
+ * DEFAULT — but these severity galleries predate that ask and exist to
+ * demonstrate SEVERITY behaviour, not kind, so they stay pinned to the
+ * exact treatment they were built and screenshotted against.
+ * `HighlighterKindsGallery` (bottom of this file) is the one story that
+ * answers the actual kind question: all three, on the same element, at
+ * the same severity, side by side.
  */
 
 let markSeq = 0;
@@ -50,7 +61,16 @@ function Gallery({ children }: { children: ReactNode }) {
 }
 
 const meta = {
-  title: "Diagnostics",
+  // Nested under "Styles" (area:styles) rather than a bare top-level
+  // "Diagnostics" group: CLAUDE.md's `area:` vocabulary is closed to the
+  // segments already listed there, and this file is the same shape of
+  // thing `Styles.stories.tsx` already is — a cross-cutting visual
+  // language demonstrated across every component it touches, not a
+  // single component's own story. Adding a new area name is out of this
+  // lane's write set (CLAUDE.md is not in it); this reuses an existing one
+  // honestly rather than inventing "diagnostics" unilaterally.
+  title: "Styles/Diagnostics",
+  tags: ["area:styles", "lane:invalid-states-impl"],
 } satisfies Meta;
 
 export default meta;
@@ -67,13 +87,13 @@ export const PortGallery: Story = {
         <Port state="empty" />
       </Specimen>
       <Specimen caption="error — danger halo">
-        <Port state="empty" diagnostics={mark("error", "Type mismatch: expected number, got string", "TS2322")} />
+        <Port state="empty" highlighterKind="halo" diagnostics={mark("error", "Type mismatch: expected number, got string", "TS2322")} />
       </Specimen>
       <Specimen caption="warning — amber halo">
-        <Port state="empty" diagnostics={mark("warning", "Unused port")} />
+        <Port state="empty" highlighterKind="halo" diagnostics={mark("warning", "Unused port")} />
       </Specimen>
       <Specimen caption="info — nothing (§5's board-scale calm rule)">
-        <Port state="empty" diagnostics={mark("info", "This port is a preview")} />
+        <Port state="empty" highlighterKind="halo" diagnostics={mark("info", "This port is a preview")} />
       </Specimen>
     </Gallery>
   ),
@@ -104,10 +124,10 @@ export const WiredAndError: Story = {
   render: () => (
     <Gallery>
       <Specimen caption="wired, no diagnostic">
-        <Port state="wired" />
+        <Port state="wired" highlighterKind="halo" />
       </Specimen>
       <Specimen caption="wired AND error — both marks at once">
-        <Port state="wired" diagnostics={mark("error", "Two producers wired into one port")} />
+        <Port state="wired" highlighterKind="halo" diagnostics={mark("error", "Two producers wired into one port")} />
       </Specimen>
     </Gallery>
   ),
@@ -151,21 +171,21 @@ export const LabeledPortGallery: Story = {
       </div>
       <div style={{ width: 130 }}>
         <Specimen caption="error — halo + wavy underline">
-          <LabeledPort edge="left" direction="input" state="wired" diagnostics={mark("error", "Undefined variable")}>
+          <LabeledPort edge="left" direction="input" state="wired" highlighterKind="halo" diagnostics={mark("error", "Undefined variable")}>
             amount
           </LabeledPort>
         </Specimen>
       </div>
       <div style={{ width: 130 }}>
         <Specimen caption="warning — amber halo + wavy underline">
-          <LabeledPort edge="left" direction="input" state="wired" diagnostics={mark("warning", "Shadows an outer name")}>
+          <LabeledPort edge="left" direction="input" state="wired" highlighterKind="halo" diagnostics={mark("warning", "Shadows an outer name")}>
             amount
           </LabeledPort>
         </Specimen>
       </div>
       <div style={{ width: 130 }}>
         <Specimen caption="info — dotted underline, no halo">
-          <LabeledPort edge="left" direction="input" state="wired" diagnostics={mark("info", "Inferred as number")}>
+          <LabeledPort edge="left" direction="input" state="wired" highlighterKind="halo" diagnostics={mark("info", "Inferred as number")}>
             amount
           </LabeledPort>
         </Specimen>
@@ -207,13 +227,13 @@ export const BlockGallery: Story = {
         <Block width={160} height={90} header="Resize" body="node" />
       </Specimen>
       <Specimen caption="error — glow + flag">
-        <Block width={160} height={90} header="Resize" body="node" diagnostics={mark("error", "Missing required input", "Ruff(F407)")} />
+        <Block width={160} height={90} header="Resize" body="node" highlighterKind="halo" diagnostics={mark("error", "Missing required input", "Ruff(F407)")} />
       </Specimen>
       <Specimen caption="warning — flag only, no glow ('must not shout')">
-        <Block width={160} height={90} header="Resize" body="node" diagnostics={mark("warning", "Deprecated block type")} />
+        <Block width={160} height={90} header="Resize" body="node" highlighterKind="halo" diagnostics={mark("warning", "Deprecated block type")} />
       </Specimen>
       <Specimen caption="info — nothing at all">
-        <Block width={160} height={90} header="Resize" body="node" diagnostics={mark("info", "Auto-generated block")} />
+        <Block width={160} height={90} header="Resize" body="node" highlighterKind="halo" diagnostics={mark("info", "Auto-generated block")} />
       </Specimen>
     </Gallery>
   ),
@@ -241,6 +261,84 @@ export const BlockGallery: Story = {
     // info: nothing — no glow, no flag.
     await expect(shadowOf(info)).toBe(shadowOf(none));
     await expect(flagOf(info)).toBeNull();
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* HighlighterKind comparison — the actual deliverable Zach's report    */
+/* feedback asked for, verbatim: "I do wonder if visual language wise   */
+/* if we should just borrow from jointjs and do the highlighting..     */
+/* perhaps that's clearer than the shadow drop..?" A QUESTION, not a    */
+/* ruling — so all three kinds, on the SAME element, at the SAME        */
+/* severity, side by side, rather than one replacing another.           */
+/* ------------------------------------------------------------------ */
+
+const KIND_CAPTION: Record<HighlighterKind, string> = {
+  stroke:
+    "stroke (DEFAULT) — a plain CSS outline. Cheap; same corner radius as the box, so not truly equidistant once the box has any radius (JointJS's own \"less precise\").",
+  mask: "mask — a sibling frame whose border-radius grows WITH the offset (the Minkowski-sum arithmetic — see highlighter.tsx's own HighlighterKind doc). Equidistant at the corners; stroke is not.",
+  halo: "halo — this kit's pre-existing soft glow, shown to Zach in the proposal report. Kept, not deleted — he questioned it, he did not reject it.",
+};
+
+export const HighlighterKindsGallery: Story = {
+  render: () => (
+    <Gallery>
+      <Specimen caption="none — the calm baseline every kind below is measured against">
+        <Block width={160} height={90} header="Resize" body="node" />
+      </Specimen>
+      {HIGHLIGHTER_KINDS.map((kind) => (
+        <Specimen key={kind} caption={KIND_CAPTION[kind]}>
+          <Block
+            width={160}
+            height={90}
+            header="Resize"
+            body="node"
+            highlighterKind={kind}
+            diagnostics={mark("error", "Missing required input", "Ruff(F407)")}
+          />
+        </Specimen>
+      ))}
+    </Gallery>
+  ),
+  play: async ({ canvasElement }) => {
+    const blocks = canvasElement.querySelectorAll('[data-slot="block"]');
+    const [none, stroke, mask, halo] = Array.from(blocks) as HTMLElement[];
+
+    // "stroke": a real CSS outline, offset OUTSIDE the border box, that
+    // does NOT touch box-shadow — the two kinds paint through genuinely
+    // different CSS properties, not just different values of one.
+    const strokeStyle = getComputedStyle(stroke);
+    await expect(strokeStyle.outlineStyle).toBe("solid");
+    await expect(parseFloat(strokeStyle.outlineWidth)).toBeGreaterThan(0);
+    await expect(parseFloat(strokeStyle.outlineOffset)).toBeGreaterThan(0);
+    await expect(strokeStyle.boxShadow).toBe(getComputedStyle(none).boxShadow);
+
+    // "mask": a SIBLING frame element (not the block's own outline/shadow),
+    // whose border-radius is measurably LARGER than the block's own — the
+    // equidistant-corner property "stroke" does not have. Both read the
+    // SAME `--bbox-skin-radius` chain, so this compares the two computed
+    // pixel values directly rather than trusting the source arithmetic.
+    const maskFrame = mask.querySelector('[data-slot="block-highlighter-mask"]');
+    if (!(maskFrame instanceof HTMLElement)) throw new Error('expected a [data-slot="block-highlighter-mask"]');
+    const maskFrameRadius = parseFloat(getComputedStyle(maskFrame).borderTopLeftRadius);
+    const maskBlockRadius = parseFloat(getComputedStyle(mask).borderTopLeftRadius);
+    await expect(maskFrameRadius).toBeGreaterThan(maskBlockRadius);
+    await expect(getComputedStyle(maskFrame).borderStyle).toBe("solid");
+    // "stroke"'s own outline never grows the radius the way "mask"'s frame
+    // does — the exact distinction the two kinds exist to demonstrate.
+    await expect(strokeStyle.borderTopLeftRadius).toBe(getComputedStyle(none).borderTopLeftRadius);
+
+    // "halo": the pre-existing treatment — box-shadow grows past the
+    // resting value, same proof `BlockGallery` above already runs.
+    await expect(getComputedStyle(halo).boxShadow).not.toBe(getComputedStyle(none).boxShadow);
+
+    // All three carry the SAME severity and the SAME corner flag — the
+    // comparison isolates the ONE variable (highlighterKind), nothing else
+    // is different between the four specimens.
+    for (const el of [stroke, mask, halo]) {
+      await expect(el.querySelector('[data-slot="diagnostic-flag"][data-severity="error"]')).not.toBeNull();
+      await expect(el.getAttribute("data-highlighter-kind")).not.toBeNull();
+    }
   },
 };
 
@@ -418,10 +516,10 @@ export const ValueCapsuleGallery: Story = {
         <ValueCapsule value="42" onWrite={() => {}} />
       </Specimen>
       <Specimen caption="error — pill glow + squiggle across the expression">
-        <ValueCapsule value="totl_price" onWrite={() => {}} diagnostics={mark("error", "Undefined name")} />
+        <ValueCapsule value="totl_price" onWrite={() => {}} highlighterKind="halo" diagnostics={mark("error", "Undefined name")} />
       </Specimen>
       <Specimen caption="warning — amber glow (no flag to carry it instead)">
-        <ValueCapsule value="0.999999" onWrite={() => {}} diagnostics={mark("warning", "Precision loss likely")} />
+        <ValueCapsule value="0.999999" onWrite={() => {}} highlighterKind="halo" diagnostics={mark("warning", "Precision loss likely")} />
       </Specimen>
     </Gallery>
   ),
