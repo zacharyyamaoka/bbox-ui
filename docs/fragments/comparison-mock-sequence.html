@@ -1,5 +1,5 @@
-<!-- Mock: the sequence as a dependency picture, plus the CRDT tripwire.
-     Shares the diff-paint fragment's styles. -->
+<!-- Mock: the revised sequence as a dependency picture, plus the CRDT
+     tripwire. Shares the diff-paint fragment's styles. -->
 <style>
   .lanecols { display:flex; gap:14px; flex-wrap:wrap; margin:18px 0 6px }
   .lanecol { flex:1 1 180px; background:var(--panel); border:1px solid var(--line);
@@ -13,6 +13,8 @@
   .task.go { border-color:color-mix(in srgb, var(--ok) 55%, var(--line)) }
   .task.go b { color:var(--ok) }
   .task.wait b { color:var(--warn) }
+  .task.trig { border-color:color-mix(in srgb, var(--accent2) 50%, var(--line)) }
+  .task.trig b { color:var(--accent2) }
   .task.dead { opacity:.6 } .task.dead b { color:var(--dim) }
   .gatecap { font-size:10.5px; color:var(--warn); font-family:var(--mono); margin:0 0 8px }
   .tripwire { border:1px solid color-mix(in srgb, var(--err) 55%, var(--line));
@@ -21,18 +23,21 @@
   .tripwire b { color:var(--err); font-family:var(--mono) }
 </style>
 
-<p class="sub" style="margin-top:4px">Blocked versus merely next, drawn. Green runs today;
-amber waits for the named lane to land — a fact about <em>today's live lanes</em>
-(components · skin · hosts · storybook-nav), not about the work's intrinsic order.
-Write sets are named because directory ownership is the contract.</p>
+<p class="sub" style="margin-top:4px">Revised for the expanded scope: merge/rebase math
+(N7) and the appearance profile (N8) join N1 in the unblocked lane — <b>three parallel-safe
+adds-only scene lanes, dispatchable today</b> (no live lane owns <code>src/scene/**</code>).
+Green runs today; amber waits for its owning lane; blue waits for a <em>trigger</em>, not
+a lane. Write sets named because directory ownership is the contract.</p>
 
 <div class="lanecols">
   <div class="lanecol">
-    <h3>Now — unblocked</h3>
+    <h3>Now — unblocked ×3</h3>
     <div class="task go"><b>N1</b> · propertyRows over SceneDiff <span style="color:var(--dim2)">(S–M)</span>
-      <span class="ws">src/scene/propertyRows.ts + test + new story file</span></div>
-    <div class="task go" style="opacity:.85"><b>this plan</b> · md + report
-      <span class="ws">docs/** only</span></div>
+      <span class="ws">src/scene/propertyRows.ts + test + story</span></div>
+    <div class="task go"><b>N7</b> · merge + rebase math — diff3Scene, applySceneDiff <span style="color:var(--dim2)">(M, Q3)</span>
+      <span class="ws">src/scene/merge.ts + test + story</span></div>
+    <div class="task go"><b>N8</b> · appearance profile <span style="color:var(--dim2)">(S–M, Q1)</span>
+      <span class="ws">src/scene/appearanceDiff.ts + test + story</span></div>
   </div>
   <div class="lanecol">
     <h3>After components + skin land</h3>
@@ -41,32 +46,35 @@ Write sets are named because directory ownership is the contract.</p>
       <span class="ws">src/components: block · port · labeledPort · trace · traceBadge · editableText + diffInk.ts</span></div>
     <div class="task wait"><b>N3</b> · six-variant gallery <span style="color:var(--dim2)">(S, after N2)</span>
       <span class="ws">new stories + fixture</span></div>
-    <div class="task wait"><b>S6</b> · PropertyTable component <span style="color:var(--dim2)">(M, needs N1)</span>
-      <span class="ws">new src/components/propertyTable.tsx</span></div>
+    <div class="task wait"><b>S6</b> · PropertyTable — editor kit <span style="color:var(--dim2)">(M, needs N1)</span>
+      <span class="ws">new editor-kit component + story</span></div>
   </div>
   <div class="lanecol">
     <h3>After hosts lands</h3>
     <div class="gatecap">▮ barrier: src/hosts/**</div>
-    <div class="task wait"><b>S5</b> · useLinkedCameras + blend <span style="color:var(--dim2)">(S — 23 donor lines)</span>
+    <div class="task wait"><b>S5</b> · useLinkedCameras + blend — the mechanism behind Q4's chosen overlay slider <span style="color:var(--dim2)">(S)</span>
       <span class="ws">src/hosts/useLinkedCameras.ts + story</span></div>
   </div>
   <div class="lanecol">
-    <h3>Then</h3>
-    <div class="task wait"><b>N6</b> · CompareView composition story <span style="color:var(--dim2)">(M — needs N2 + S5 + S6)</span>
-      <span class="ws">new story + src/hosts/compareView.tsx</span></div>
+    <h3>Then · editor kit</h3>
+    <div class="task wait"><b>N6</b> · CompareBar · DiffCodeView · CompareView story <span style="color:var(--dim2)">(M — needs N2 + S5 + S6)</span>
+      <span class="ws">editor-kit components + src/hosts/compareView.tsx</span></div>
   </div>
   <div class="lanecol">
-    <h3>Deferred by decision</h3>
-    <div class="task dead"><b>S7</b> · ports as scene records — un-defer conditions named in the md plan §5</div>
-    <div class="task dead"><b>diff3Scene</b> · unblocked but valueless until a merge UI exists</div>
-    <div class="task dead"><b>CompareDialog</b> · app chrome; waits for a consuming app</div>
+    <h3>Trigger · golden testing</h3>
+    <div class="task trig"><b>N9</b> · conformance ladder over BlockScene — the §6 port map, pre-scoped <span style="color:var(--dim2)">(M)</span>
+      <span class="ws">src/scene/identity.ts + test</span></div>
+    <h3 style="margin-top:14px">Deferred by decision</h3>
+    <div class="task dead"><b>S7</b> · ports as scene records — un-defer conditions in md §7</div>
+    <div class="task dead"><b>pixel compare</b> · outside the differ (§5 verdict)</div>
+    <div class="task dead"><b>dialog frame</b> · app shell; the pieces port, the modal does not</div>
   </div>
 </div>
 
-<div class="tripwire"><b>TRIPWIRE-CRDT-SCENE-VERSION</b> — CVP §4's "no version field on
-<code>BlockScene</code>; a merge base is a pair of documents" holds <em>conditionally</em>.
-If the scene ever becomes the unit of live sync (CRDT / multiplayer / Yjs / Automerge /
-Loro, or any <code>version</code>/<code>clock</code>/<code>parent</code> field), causality
-must move into the document and §4 is <em>reopened, not extended</em> — before the field
-ships, because once a host ships <code>version</code>, removing it breaks every consumer.
-Recorded in <code>docs/COMPARISON-NEXT-STEPS.md</code> §6 under this greppable name.</div>
+<div class="tripwire"><b>TRIPWIRE-CRDT-SCENE-VERSION</b> — unchanged, and now <em>confirmed</em>:
+Q3's merge/rebase ask is satisfied by <code>diff3Scene(base, a, b)</code> over three ordinary
+scenes — the merge base as an argument pair, exactly why no <code>version</code> field is
+needed on <code>BlockScene</code>. The wire stays armed: if the scene ever becomes the unit
+of live sync (CRDT / Yjs / Automerge / Loro, or any <code>version</code>/<code>clock</code>/<code>parent</code>
+field), causality must move into the document and CVP §4 is <em>reopened, not extended</em> —
+before the field ships. Recorded in <code>docs/COMPARISON-NEXT-STEPS.md</code> §8.</div>
