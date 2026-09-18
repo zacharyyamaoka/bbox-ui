@@ -1,0 +1,61 @@
+{
+  "title": "Port candidates \u2014 what else our own donors are holding",
+  "summary": "Zach asked, off the back of the focus slider: what else can we port from systemsketch / pyblocks that we haven't yet? Answer: 25 verified candidates ranked by the focus-slider test (mature, self-contained, already designed) \u2014 led by the mutation chain, ELK organize, the edge-drop quick menu, port affordances, and the at-risk System-boundary-ports feature, whose gestures exist only as untracked files.",
+  "slug": "port-candidates",
+  "date": "2026-09-18",
+  "base_ref": "main",
+  "branch_label": "agent worktree off claude/bar-block-storybook-e61a36 (survey lane \u2014 no component code touched)",
+  "changes": [
+    "docs/build_port_candidates_fragments.py \u2014 new: the fragment builder; every cited donor path is opened at build time and a missing one kills the build, so a citation cannot rot silently",
+    "docs/fragments/port-candidates-*.html \u2014 nine generated fragments (hero, landed ledger, at-risk inventory, top five, tier 2, tier 3, full table, ruled out, decision surface)",
+    "docs/lane_report_manifest.port-candidates.json \u2014 this manifest",
+    "reports/media/port-candidates-2026-09-18.html \u2014 the report (written to the MAIN checkout's reports/media/, the durable location)"
+  ],
+  "findings": [
+    "25 port candidates verified across 46 systemsketch top-level dirs, its lane worktrees, pyblocks, and the frozen packages/bbox-ui v1 \u2014 every donor path opened today, line counts measured at build time, never cited from memory",
+    "17 rows of docs/REMAINING-2026-09-17.md have LANDED since it was written (wire layer, scene record, lint+edge validation, availability preview, bubble, diagnostics paint, value preset, linking, sceneDiff+word/field/line diff, batchWire model, tunnels+layers, fitToContent, magnet, member dnd, drag policy, glyph-picker package, panel/inspector packages) \u2014 each with an evidence path checked to exist; that doc's axis was capability, this one's is donor code",
+    "AT RISK: ~2,600 lines of reviewed, screenshotted donor work exist in NO commit on any branch \u2014 vision-consolidated's four System gesture files (548 lines; its model is committed 13 unmerged commits deep on the lane branch) and the 1,261-line batch-wiring family + chrome, plus contextual-menu-next's menuComposition (710 lines incl. tests). One git stash -u from gone; measured live at build time",
+    "The single component gap gating four candidates (#1 effect ports, #5 boundary walls, #8 Loop/Branch bands, and REMAINING \u00a73.2) is unchanged today: rails attach only to a Block's four outer walls \u2014 one decision (edgeT-style inset placement) unblocks the family",
+    "Already landed but easy to miss: the icon picker is packages/glyph-picker (ported by value from SystemSketch), and the inspector ENGINE is packages/panel \u2014 so donor iconPicker/ and BlockInspector are content ports at most, not feature ports",
+    "14 of 25 candidate rows carry the donor's own review screenshot (17 captures total, cropped + re-encoded WebP); 2 mechanisms are drawn SVG in the approved visual kit (kit map, pyblocks identity ladder); the remaining rows are one-sentence mechanisms that need no figure"
+  ],
+  "stories": [],
+  "sections": [
+    {
+      "heading": "How to read this \u2014 25 candidates, four kits, one test",
+      "html_file": "docs/fragments/port-candidates-hero.html"
+    },
+    {
+      "heading": "Since the 09-17 map: already landed \u2014 do not re-propose",
+      "html_file": "docs/fragments/port-candidates-landed.html"
+    },
+    {
+      "heading": "At risk: reviewed donor work sitting in no commit",
+      "html_file": "docs/fragments/port-candidates-risk.html"
+    },
+    {
+      "heading": "Build next \u2014 the top five",
+      "html_file": "docs/fragments/port-candidates-top.html"
+    },
+    {
+      "heading": "Worth scheduling \u2014 tier 2",
+      "html_file": "docs/fragments/port-candidates-tier2.html"
+    },
+    {
+      "heading": "Small wins and honest defers \u2014 tier 3",
+      "html_file": "docs/fragments/port-candidates-tier3.html"
+    },
+    {
+      "heading": "The full ranked table",
+      "html_file": "docs/fragments/port-candidates-table.html"
+    },
+    {
+      "heading": "Ruled out, and why",
+      "html_file": "docs/fragments/port-candidates-ruledout.html"
+    },
+    {
+      "heading": "Decision surface",
+      "html_file": "docs/fragments/port-candidates-decision.html"
+    }
+  ]
+}
