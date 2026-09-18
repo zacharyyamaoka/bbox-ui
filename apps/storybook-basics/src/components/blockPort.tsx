@@ -63,7 +63,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { LabeledPort } from "./labeledPort";
 import { Port, type PortState } from "./port";
 import { BLOCK_SIDES, type BlockSide, type PortSize } from "./port.layout";
-import { PortEdge, type PortEdgeItem, type PortEdgeProps } from "./portEdge";
+import { PortEdge, type PortEdgeGroupMode, type PortEdgeItem, type PortEdgeProps } from "./portEdge";
 import type { Distribution } from "./portEdge.layout";
 import {
   PORT_EDGE_SLOT_MIN_PX,
@@ -104,6 +104,24 @@ export interface BlockEdgeSpec {
    * own, higher-precedence seam.
    */
   distribution?: Distribution;
+  /**
+   * The same higher-precedence seam as `distribution`, for the same reason
+   * and found the same way (2026-09-17): a lane building the async
+   * communication gallery passed `groups` through `portEdgeProps` and the
+   * grouped look never rendered, because the wrapper's own derivation
+   * overwrites that field — see `portEdgeProps`' doc below.
+   *
+   * WHY grouping needs to be reachable at all, when the view rule usually
+   * should win: a Service family whose `request` and `response` must sit
+   * ADJACENT on one wall is, by this repo's own refactor rule, "a `groups`
+   * entry plus a distribution setting" rather than a ported layout engine.
+   * That makes grouping a property of the DOMAIN the caller is drawing, not
+   * of the attachment geometry this component owns — so a caller has to be
+   * able to state it. Omit both and the derived plan is used unchanged,
+   * which is why no landed story moved.
+   */
+  groups?: string;
+  groupMode?: PortEdgeGroupMode;
   /**
    * Reach-past overrides forwarded to the underlying `PortEdge`
    * (`textLayout`, `showCard`, `renderItem`, `laneLanguage`…). The
@@ -323,7 +341,12 @@ export function BlockPort({
           // E-3: an explicit caller `distribution` always wins over the
           // population default above — the one field of the derived plan a
           // caller may reach past (`BlockEdgeSpec.distribution`'s own doc).
-          const finalPlan = spec.distribution ? { ...plan, distribution: spec.distribution } : plan;
+          const finalPlan = {
+            ...plan,
+            ...(spec.distribution ? { distribution: spec.distribution } : null),
+            ...(spec.groups !== undefined ? { groups: spec.groups } : null),
+            ...(spec.groupMode !== undefined ? { groupMode: spec.groupMode } : null),
+          };
           return <BlockPortRail key={side} edge={side} spec={spec} plan={finalPlan} bands={bands} diameter={diameter} />;
         })}
       {bands && functionPort && <BlockFunctionPort bands={bands} diameter={diameter} />}
