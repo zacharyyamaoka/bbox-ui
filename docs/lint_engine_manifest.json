@@ -1,0 +1,52 @@
+{
+  "title": "Lint + edge-validation engines (v1)",
+  "summary": "Two pure functions over the scene kit — lintScene (annotation: what's wrong with the scene as it stands, individually toggleable per rule) and validateConnection (prevention: may this candidate wire be committed) — plus a before/after/subset Storybook demo proving Zach's own click-through requirement mechanically.",
+  "base_ref": "main",
+  "branch_label": "lint-engine-2026-09-17 (isolated lane worktree, cut from 3656457)",
+  "storybook_port": 5497,
+  "changes": [
+    "apps/storybook-basics/src/scene/lint.ts — new: the closed 5-rule registry (dangling-edge, cycle, duplicate-edge, many-to-one, self-connection) and the lintScene runner; each rule cites its provenance (scene.ts wrap, the vault's PROJECT - pyblocks note, or 'ours, ad hoc')",
+    "apps/storybook-basics/src/scene/lint.test.ts — new: 33 tests, table-driven per rule plus the subset/id-stability/grouping properties the runner as a whole must hold",
+    "apps/storybook-basics/src/scene/edgeValidation.ts — new: validateConnection, the pre-commit twin — reuses lint.ts's OWN rules (dangling-edge silent, self-connection + many-to-one explained) rather than re-implementing them; duplicate-edge and cycle deliberately do NOT gate a connection",
+    "apps/storybook-basics/src/scene/edgeValidation.test.ts — new: 13 tests covering allowed / silently-refused / explained-refused, and that the refusal payload is Diagnostic-shaped",
+    "apps/storybook-basics/src/stories/Lint.stories.tsx — new: the before/after/subset demo (NoLinting, AllRulesEnabled, OnlyManyToOneEnabled, OnlyCycleAndSelfConnectionEnabled, Interactive) — a story-local host adapter over the LANDED diagnostics components (Block/Port/Trace), no component edited"
+  ],
+  "findings": [
+    "many-to-one counts DISTINCT PRODUCER SOURCES, not raw edge count — a test caught that an exact duplicate re-wire (same source, same target port) was tripping many-to-one as a side effect, which contradicted wiring.ts's own stated stance that duplicates are permitted; fixed by deduplicating producers by their source portKey before counting",
+    "type-mismatch (the 6th rule Zach named) is NOT implemented — grepped src/scene and src/components/port*.tsx for portType/dataType/valueType: zero hits. SceneNode.data is Record<string, unknown> with no port-type vocabulary anywhere, so there is nothing to compare two ports against; inventing one would be exactly the 'fabricate a rule the data cannot support' the brief warned against. Add the rule the day a port carries a declared type",
+    "the demo bypasses WireLayer/sceneWires — wiring.ts's Wire type carries no diagnostics field and WireLayer never forwards one to the Trace it renders, so there is no way to mark an individual wire through that path today. This is real, owed wiring for whoever next touches src/components/wiring.ts / wireLayer.tsx (out of this lane's write set). The story measures its own ports and draws its own Trace directly instead — the same DOM-measurement technique wireLayer.tsx's resolveDot/centreOf and BlockWiring.stories.tsx's dotOf/dotCentre already establish",
+    "edge-validation's rule selection is a real design call, stated and tested: dangling-edge/self-connection/many-to-one GATE a connection; duplicate-edge does not (wiring.ts's own permission-free stance: 'draw as many wires as you want... even multiple wires between the same two ports'); cycle does not (nothing in scene.ts states cycles are illegal — a feedback loop is a legitimate graph in plenty of dataflow domains, and blocking every cycle at connect time is a product call outside this lane's authority)",
+    "baseline measured before any edit: pnpm run typecheck clean, npx vitest --project=unit run 442/442 (26 files), pnpm test-stories 212/212 (49 files). After: typecheck clean, unit 488/488 (28 files, +46), test-stories 217/217 (50 files, +5) — zero regressions",
+    "id stability is pinned by a dedicated test group: the same scene linted twice is byte-identical; an unrelated node/edge added elsewhere leaves an existing finding's id untouched; reordering nodes/edges in the input changes nothing about WHICH ids come out; two scenes with the identical single violation at a different array index produce the SAME id — the property the whole multi-producer diagnostics design rests on"
+  ],
+  "stories": [
+    {
+      "id": "blocks-scene-lint--no-linting",
+      "title": "Lint · Before (linting off)",
+      "look_for": "a scene full of real violations (many-to-one, duplicate, cycle, self-connection, dangling) with NOTHING marked — this is Zach's own 'no linting you can show like a bunch of potentially illegal wires' half of the ask",
+      "w": 780,
+      "h": 480
+    },
+    {
+      "id": "blocks-scene-lint--all-rules-enabled",
+      "title": "Lint · After (every rule on)",
+      "look_for": "the same scene with every rule on: loop1/loop2/selfy carry a red glow + corner flag (cycle), sink's input port carries a red halo (many-to-one), the two a→dup wires carry an amber backdrop (duplicate-edge, warning), the self-loop wire and the wire trailing into the dashed 'ghost' dot both carry a red backdrop (self-connection, dangling-edge)",
+      "w": 780,
+      "h": 480
+    },
+    {
+      "id": "blocks-scene-lint--only-many-to-one-enabled",
+      "title": "Lint · Subset (only many-to-one on)",
+      "look_for": "Zach's own subset requirement made visible: ONLY sink's input port is marked — the cycle, duplicate and dangling violations are all still present in the scene but stay completely unmarked because their rules are off",
+      "w": 780,
+      "h": 480
+    },
+    {
+      "id": "blocks-scene-lint--only-cycle-and-self-connection-enabled",
+      "title": "Lint · Subset (cycle + self-connection on)",
+      "look_for": "a different 2-rule subset: loop1/loop2/selfy's cycle marks and the self-loop wire's backdrop are on, while many-to-one's port halo and the duplicate/dangling wire marks stay off",
+      "w": 780,
+      "h": 480
+    }
+  ]
+}
