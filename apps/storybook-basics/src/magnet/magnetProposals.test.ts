@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { effectiveHitValue, ZOOM_LEVELS } from "../hitRegions/hitPolicy";
 import { portKey, type ScenePortRef } from "../scene/scene";
-import type { ConnectionMessage, ConnectionVerdict } from "../scene/edgeValidation";
+import { gestureOrientation, type ConnectionMessage, type ConnectionVerdict } from "../scene/edgeValidation";
 import {
   composeJudges,
   effectiveMagnetRadius,
@@ -151,7 +151,7 @@ describe("A2 · proximity AND validation, in that order (R2)", () => {
   });
 
   it("an out-of-range candidate NEVER reaches validation (spy call count == in-range count)", () => {
-    const spy = vi.fn<ConnectionJudge>(() => ({ allowed: true }));
+    const spy = vi.fn<ConnectionJudge>((c) => ({ allowed: true, oriented: gestureOrientation(c) }));
     scanMagnets({ moving, resting, judge: spy });
     expect(spy).toHaveBeenCalledTimes(2);
     for (const call of spy.mock.calls) expect(call[0].target).not.toBe("far");
@@ -198,7 +198,7 @@ describe("A2 · proximity AND validation, in that order (R2)", () => {
   });
 
   it("a same-role pair is not a candidate at all (an out->out is not a refusal)", () => {
-    const spy = vi.fn<ConnectionJudge>(() => ({ allowed: true }));
+    const spy = vi.fn<ConnectionJudge>((c) => ({ allowed: true, oriented: gestureOrientation(c) }));
     const scan = scanMagnets({ moving, resting: [source("other", "out", 10, 0)], judge: spy });
     expect(scan.proposals).toEqual([]);
     expect(scan.refused).toEqual([]);
@@ -209,7 +209,7 @@ describe("A2 · proximity AND validation, in that order (R2)", () => {
     const seen: { source: string; target: string }[] = [];
     const spy: ConnectionJudge = (c) => {
       seen.push({ source: `${c.source}/${c.sourceHandle}`, target: `${c.target}/${c.targetHandle}` });
-      return { allowed: true };
+      return { allowed: true, oriented: gestureOrientation(c) };
     };
     // The MOVING port is the target end here, so the resting one must be the
     // edge's source.
@@ -372,7 +372,7 @@ describe("A5 · an illegal near candidate never shadows a legal far one (R2 + R4
   });
 
   it("composes the type gate with an arbitrary second judge, first refusal winning", () => {
-    const noPoseSink: ConnectionJudge = (c) => (c.target === "poseSink" ? { allowed: false, refusal: { severity: "error", code: "banned" } } : { allowed: true });
+    const noPoseSink: ConnectionJudge = (c) => (c.target === "poseSink" ? { allowed: false, refusal: { severity: "error", code: "banned" } } : { allowed: true, oriented: gestureOrientation(c) });
     const scan = scanMagnets({ moving, resting, judge: composeJudges(magnetTypeJudge({ typeOf, mode: "lenient" }), noPoseSink) });
     expect(scan.proposals).toEqual([]);
     expect(scan.refused.map((r) => r.refusal.code)).toEqual(["type-mismatch", "banned"]);

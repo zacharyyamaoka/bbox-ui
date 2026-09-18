@@ -100,12 +100,16 @@ export const AMBIGUOUS: WireRefusal = "ambiguous";
 /**
  * A judge's answer about one candidate cable.
  *
- * `silent` carries the sibling lane's three-valued refusal
- * (allowed / refused-silently / refused-with-message) through this module
- * without importing its types: a silent refusal still removes the dot from
- * the ring (availability is binary — a dot either produces cables or it
- * does not), but it is left OUT of the reported tally, so "refused
- * silently" stays silent in the sentence the gesture ends with.
+ * `silent` is BATCH-WIRING'S OWN device, not a mirror of a sibling
+ * contract: `ConnectionVerdict` (`edgeValidation.ts`) is two-outcome now —
+ * ruling 1 abolished its silent refusal case, so "allowed: false" always
+ * carries a `refusal` there. This module keeps its own `silent` regardless,
+ * because the reason to have one is local to a BATCH: a dot's ring is
+ * binary (a port either produces cables or it does not) but the SENTENCE a
+ * batch ends with is a summary a caller may reasonably want to keep quiet
+ * about some refusals without hiding the dot itself — `validateConnectionJudge`
+ * (`batchWireJudge.ts`) never sets it, so nothing produced by the real
+ * engine is silent today; a caller with its own judge is free to.
  */
 export type WireVerdict =
   | {
@@ -145,14 +149,14 @@ export type WireVerdict =
  * Deliberately `(candidate) => verdict` and NOT `(scene, candidate) =>
  * verdict`: the caller closes over its own scene, so this module never
  * learns a scene type it would then constrain. The sibling validation
- * lane's producer adapts in one line —
- *
- *     const judge: WireJudge = (c) => validateConnection(scene, c);
- *
- * — which is the same shape `findDanglingEdges`' `portsOf` uses
- * (`scene.ts:424`) and for the same reason: the scene does not own port
- * polarity, types, or cycle policy, so a function that asks it must be
- * handed the answer rather than guess one.
+ * lane's producer adapts through `validateConnectionJudge`
+ * (`batchWireJudge.ts`) — not literally the one-liner earlier drafts of
+ * this comment promised (`WireVerdict`/`ConnectionVerdict` disagree on
+ * shape), but the same idea: a closure over the scene, in the same
+ * position `findDanglingEdges`' `portsOf` occupies (`scene.ts:424`) and
+ * for the same reason — the scene does not own port polarity, types, or
+ * cycle policy, so a function that asks it must be handed the answer
+ * rather than guess one.
  */
 export type WireJudge = (candidate: BatchWirePair) => WireVerdict;
 
@@ -550,8 +554,11 @@ export function describeBatchWireOutcome(outcome: BatchWireOutcome): string {
  * you do NOT inspect the forty cables it made" (donor :138-140) — so the
  * asymmetry is load-bearing, not ceremony.
  *
- * The sibling validation lane adapts in one line, as before:
- *     const judgeFor: SceneJudge = (s) => (c) => validateConnection(s, c);
+ * The sibling validation lane adapts the same way, real now:
+ *     const sceneJudge: SceneJudge = (s) => validateConnectionJudge(s, options);
+ * (`batchWireJudge.ts`'s `validateConnectionJudge`, options carrying the
+ * host's `portsOf`/`directionOf` — see that file and `BatchWiring.stories.tsx`'s
+ * own `judgeWith` for the shape a caller actually uses.)
  */
 export type SceneJudge<N extends SceneData = SceneData, E extends SceneData = SceneData> = (
   scene: BlockScene<N, E>,

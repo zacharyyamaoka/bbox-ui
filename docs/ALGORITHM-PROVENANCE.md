@@ -299,6 +299,23 @@ this table indexes them, it does not restate them).
 
 ---
 
+## Polarity unification (2026-09-18) — `docs/peps/0002-the-judge-owns-edge-orientation.md`
+
+The lane that gave `ConnectionVerdict`'s allowed branch a required
+`oriented: ConnectionOrientation`, added the `polarity` gate/lint rule, real
+`validateConnectionJudge` behind batch wiring's `WireJudge` seam (deleting
+`batchWire.standIn.ts`), and wired `directionOf` into `connectionAvailability`.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `scene/edgeValidation.ts` — `ConnectionOrientation`/oriented `ConnectionVerdict` | (c) | Ours — no library studied returns orientation as verdict DATA rather than a gesture-time side effect. SystemSketch's own `ConnectionVerdict` ok-case carries explicit `source`/`sink` endpoints (`connectionRules.ts:53-63`, opened) — the SHAPE (verdict owns orientation) is behaviour-derived from that, the TYPE-LEVEL "no allowed verdict without one" discriminant is ours | `docs/peps/0002` records the two independent bug reports (batch wiring's backwards-edge regression, the validation-stack audit) that converged on this; `edgeValidation.test.ts`'s "allowed" describe block asserts every case |
+| `scene/edgeValidation.ts`/`scene/lint.ts` — `polarity` gate/rule (`same-polarity` refuse, `reversed` finding) | (c) rule, (a) precedent | SystemSketch `connectionRules.ts:186` (`same-polarity` refusal) and `:222-234` (`decideDirection`, which FLIPS a reversed-but-legal pair rather than refusing it) — both opened on disk. `PortDirection`/`PortDirectionOf` as a caller-SUPPLIED resolver (not a scene-model field) is ours: the donor DERIVES polarity from `portPolarity(port.side, face)` (`connectionModel.ts:99`), and this kit has neither lanes nor faces to derive it from | `lint.test.ts`'s `polarity` describe block; `availability.test.ts`'s `directionOf` describe block reproduces the exact output→output probe (`num1/out` painting `num2/out` "available") before and after the fix |
+| `scene/batchWireJudge.ts` — `validateConnectionJudge` | (c) | Ours — the translation `batchWire.ts`'s and `batchWire.standIn.ts`'s own comments promised ("the fix is one line") but did not build; no donor claimed, since the shape being bridged (`WireVerdict` vs `ConnectionVerdict`) is this repo's own | `batchWire.test.ts`'s `judgeWith` describe block (formerly `standInJudge`'s own suite) passes unchanged against the real engine; `BatchWiring.stories.tsx`'s 6 play-function stories pass unchanged |
+| `hosts/hostScene.ts` — `hostPortsOf`/`hostPolarityOf` (moved from deleted `batchWire.standIn.ts`) | (c) | Ours, relocated verbatim — host-geometry READERS (wall placement -> polarity), not a rule engine; no behaviour changed in the move | Same test suite as above, now importing from the new location |
+| `hosts/validationScene.ts` — `VALIDATION_SCENE` (the shared host-story fixture) | (c) | Ours — extracted from `ValidityPreview.stories.tsx`'s pre-existing `VP_SCENE` (kept, `ValidationHosts.stories.tsx`'s divergent `VH_SCENE` retired) so both host benches judge the identical record | `ValidityPreview.stories.tsx` and `ValidationHosts.stories.tsx`'s play functions both assert `sink/in`/`sink/in2` read the SAME value in both hosts |
+
+---
+
 ## `src/hosts/reactFlowHost.tsx` — `TraceEdge`
 
 Added 2026-09-18 by the host-fixes lane (defect 3: the host was drawing

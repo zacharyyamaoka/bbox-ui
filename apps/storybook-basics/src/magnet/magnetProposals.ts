@@ -161,7 +161,21 @@ export function pairMagnetRadius(a: MagnetPort, b: MagnetPort, zoom = 1): number
  */
 export type ConnectionJudge = (candidate: SceneEdgeEnds & { id: string }) => ConnectionVerdict;
 
-const ALLOWED: ConnectionVerdict = { allowed: true };
+/**
+ * The "nothing refused it" verdict — built PER CANDIDATE, not a shared
+ * constant: `edgeValidation.ts`'s own doc comment on `ConnectionVerdict`
+ * is explicit that "there is no shared ALLOWED singleton any more — an
+ * allowed verdict is per-candidate data now, not a constant", because an
+ * `allowed: true` verdict must always carry the oriented pair to commit.
+ * `endsOf` (below) has already resolved `candidate`'s `source`/`target`
+ * correctly by `role` before any judge sees it, so `gestureOrientation`'s
+ * "the candidate's own order stands" is simply the right answer here —
+ * this module orients by port role, not by port direction, so there is no
+ * polarity fact left for `by: "polarity"` to report.
+ */
+function allowedAsWritten(candidate: SceneEdgeEnds & { id: string }): ConnectionVerdict {
+  return { allowed: true, oriented: gestureOrientation(candidate) };
+}
 
 /**
  * Run judges in order; the FIRST refusal wins and short-circuits — which is
@@ -176,7 +190,7 @@ export function composeJudges(...judges: readonly ConnectionJudge[]): Connection
       const verdict = judge(candidate);
       if (!verdict.allowed) return verdict;
     }
-    return ALLOWED;
+    return allowedAsWritten(candidate);
   };
 }
 
@@ -198,11 +212,11 @@ export function composeJudges(...judges: readonly ConnectionJudge[]): Connection
 export function magnetTypeJudge(options: { typeOf(ref: ScenePortRef): string | undefined; mode?: PortTypeMatching }): ConnectionJudge {
   const { typeOf, mode = "lenient" } = options;
   return (candidate) => {
-    if (candidate.sourceHandle == null || candidate.targetHandle == null) return ALLOWED;
+    if (candidate.sourceHandle == null || candidate.targetHandle == null) return allowedAsWritten(candidate);
     const sourceType = typeOf({ nodeId: candidate.source, portId: candidate.sourceHandle }) ?? "";
     const sinkType = typeOf({ nodeId: candidate.target, portId: candidate.targetHandle }) ?? "";
     const verdict = arePortTypesCompatible(sourceType, sinkType, mode);
-    if (verdict === "ok") return ALLOWED;
+    if (verdict === "ok") return allowedAsWritten(candidate);
     if (verdict === "mismatch") {
       return { allowed: false, refusal: { severity: "error", code: "type-mismatch", message: `${sourceType || "(untyped)"} does not match ${sinkType || "(untyped)"}` } };
     }

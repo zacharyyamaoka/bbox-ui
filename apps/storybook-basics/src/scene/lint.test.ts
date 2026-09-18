@@ -64,8 +64,8 @@ describe("LINT_RULES / LINT_RULE_IDS", () => {
     }
   });
 
-  test("a closed set — six rules, no more, no fewer (D6 added type-mismatch)", () => {
-    expect(LINT_RULE_IDS).toEqual(["dangling-edge", "cycle", "duplicate-edge", "many-to-one", "self-connection", "type-mismatch"]);
+  test("a closed set — seven rules, no more, no fewer (D6 added type-mismatch, ruling 1 added polarity)", () => {
+    expect(LINT_RULE_IDS).toEqual(["dangling-edge", "cycle", "duplicate-edge", "many-to-one", "self-connection", "type-mismatch", "polarity"]);
   });
 
   test("every rule carries a non-empty provenance string", () => {
