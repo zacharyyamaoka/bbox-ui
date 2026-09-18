@@ -1,6 +1,6 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry-item.json",
-  "name": "block-v2",
+  "name": "block-card",
   "title": "Block (Simple View) — design trunk",
   "description": "The design-trunk Block (apps/storybook-basics): Container, Header band, BlockMembers, Glyph, Text slots, Chip. Supersedes the `block` item's packages/bbox-ui source as the current design — packages/bbox-ui stays published as-is until apps/docs migrates to this lineage (ARCHITECTURE.md, \"Name the trunk\").",
   "dependencies": [

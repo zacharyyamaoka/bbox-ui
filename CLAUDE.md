@@ -99,18 +99,36 @@ registry.json tweak. Until then they are reference implementations, and the docs
 say so. Do not paper over it.
 
 **Sixteen items now publish the trunk directly** (`badge`, `bar`, `text`,
-`editable-text`, `folding-chevron`, `block-v2`, `port-v2`, `code-editor`,
+`editable-text`, `folding-chevron`, `block-card`, `port-dot`, `code-editor`,
 `labeled-port`, `port-edge`, `block-port`, `trace`, `trace-badge`,
 `trace-editor`, `trace-tidy`, `wire-layer`) — sourced from
 `apps/storybook-basics/src/`, each self-contained the same way `port`/`block`
 are (no `registryDependencies` between bbox items; a shared file like
 `elbow/*` or `lib/utils.ts` is simply re-listed, with its own `target`, by
-every item that needs it). `port-v2`/`block-v2` exist because `port`/`block`
-already name the pre-reset `packages/bbox-ui` lineage and repointing those
-names would silently break `apps/docs`'s live preview (which still imports
-`@bbox-ui/core`) against its own install tab — that mismatch is real,
-unresolved follow-up work for whoever migrates `apps/docs`, not something to
-paper over with a rename here.
+every item that needs it).
+
+**Naming principle (Zach, 2026-09-17): bbox-ui's own names are descriptive
+and precise; shorthand belongs to the consumer.** SystemSketch calls its
+primitive a "port" and has no reason to know it's assembled from several
+bbox-ui components — that shorthand is SystemSketch's to use, not ours to
+bake into the registry. `block-card`/`port-dot` replace this pass's original
+`block-v2`/`port-v2` names, which encoded history (a naming collision with
+the v1 lineage below) instead of what the items are. `port.tsx` is the dot
+alone — geometry, no label, no slot — and the code already names it that way
+(`data-slot="port-dot"`, `portDotClass`); `labeled-port`/`port-edge` are what
+add the label and the rail around it. `block.tsx` is header/body/footer
+chrome painted with shadcn's own `bg-card`/`text-card-foreground` tokens and
+its own doc comment calls it "a card with a header, a body, a footer" —
+`block-card` names that directly, and `block-port` is the wrapper that mounts
+ports on its walls.
+
+`port`/`block` (no suffix) stay exactly as they are on purpose — still
+pointing at the frozen `packages/bbox-ui` lineage. Renaming them would
+silently break `apps/docs`'s live preview (which still imports
+`@bbox-ui/core`) against its own install tab. The short names sitting on the
+legacy lineage rather than the descriptive trunk items is deliberate and
+self-correcting — it resolves itself the day `apps/docs` migrates to the
+trunk, not something to "fix" by renaming `port`/`block` now.
 
 Two things the reset shipped are deliberately **not** registry items:
 - **`glyph.tsx`** — imports `@bbox-ui/glyph-content`, `private: true` and
