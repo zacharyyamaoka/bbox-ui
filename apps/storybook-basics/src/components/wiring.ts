@@ -1,22 +1,32 @@
-// src/components/wiring.ts — the connection record (docs/BLOCK-PORT-EDGES-PLAN.md
-// §5, phase B1).
+// src/components/wiring.ts — `WireLayer`'s paint vocabulary: what a wire
+// LOOKS like between two rendered dots, plus how N wires sharing one
+// endpoint pair fan apart so they are visibly N (`fanWires`, D-B3).
 //
-// Group B's actual ask: a wire between two ports on two Blocks, with NOTHING
-// validating it. "draw as many wires as you want... even multiple wires
-// between the same two ports" (Zach, 2026-09-17) — the donor's own refusal
-// machinery (`connectionRules.ts`'s `judgeConnection`) is deliberately not
-// ported; its own whiteboard preset already stands every rule down ("Every
-// rule stood down", `connectionRules.ts:31-32`), which is the precedent D-B2
-// cites. So `Wire` is a plain array element and everything below is
-// DERIVATION, never validation: which ports read as wired
-// (`wiredPortKeys`/`withWiredState`), and how N wires sharing one endpoint
-// pair fan apart so they are visibly N (`fanWires`, D-B3).
+// This file used to be a third thing as well: the connection RECORD, with
+// its own derivation (`wiredPortKeys`). That role is absorbed — the record
+// is `scene.ts`'s `SceneEdge` (source/target/sourceHandle/targetHandle,
+// React Flow's own vocabulary), the derivation is `scene.ts`'s
+// `wiredPorts`, and the item-state mapping moved to the adapter
+// (`sceneWires.ts`'s `withWiredState`). Deleted here, deliberately:
+// `wireEndKey`, `wiredPortKeys`, `withWiredState` — so there is exactly
+// ONE model and this module cannot quietly grow back into a second one.
+//
+// What remains is view-kit only, and this file still imports NOTHING from
+// `src/scene/` — `Wire` is a paint instruction a host DERIVES from a scene
+// (`sceneWires.ts`), never a record a host authors as its source of truth.
+// `WireLayer` (a component) imports this module, and the components-never-
+// import-the-scene wall holds precisely because the scene types stay out
+// of here, even transitively.
+//
+// The permission-free stance is unchanged (Zach, 2026-09-17: "draw as many
+// wires as you want... even multiple wires between the same two ports") —
+// nothing here validates; everything is derivation over whatever list it
+// is handed.
 
-import type { PortEdgeItem } from "./portEdge";
 import type { TraceMarkerEnd, TraceRouting, TraceVariant } from "./trace.layout";
 
 /* ------------------------------------------------------------------ */
-/* The record — minimal by decree (plan §5)                            */
+/* The paint instruction                                               */
 /* ------------------------------------------------------------------ */
 
 export interface WireEnd {
@@ -27,7 +37,8 @@ export interface WireEnd {
 export interface Wire {
   id: string;
   /** The initiating end — the arrowhead points AT `to` (`Trace`'s own
-   *  default `markerEnd: "arrow"`). */
+   *  default `markerEnd: "arrow"`). A scene edge's source/target map to
+   *  from/to with the arrow direction preserved (`sceneWires.ts`). */
   from: WireEnd;
   to: WireEnd;
   /** Default `"data"`; the async gallery passes `"async"` (D-B6's reading
@@ -41,43 +52,6 @@ export interface Wire {
 }
 
 /* ------------------------------------------------------------------ */
-/* Wired state — DERIVED, never stored (§5)                            */
-/* ------------------------------------------------------------------ */
-
-/** `${blockId}/${portId}` — one key shared by a wire's own identity and
- *  `WireLayer`'s DOM resolution, so there is exactly one notion of "which
- *  port" anywhere in Group B. */
-export function wireEndKey(end: WireEnd): string {
-  return `${end.blockId}/${end.portId}`;
-}
-
-/** Every port named by at least one wire, from either end. A duplicate wire
- *  between the same two ports adds nothing new to the set — idempotence,
- *  not a bug `fanWires` needs to fix. */
-export function wiredPortKeys(wires: readonly Wire[]): Set<string> {
-  const keys = new Set<string>();
-  for (const wire of wires) {
-    keys.add(wireEndKey(wire.from));
-    keys.add(wireEndKey(wire.to));
-  }
-  return keys;
-}
-
-/**
- * `items`, with `state: "wired"` forced onto every member the wire list
- * names, and left alone otherwise — a fixture-authored `valueSet` or
- * `received` survives on an unwired port, but wired always wins when wired
- * (§5: "the donor's own cables also override the row paint"). Feeding the
- * result through `BlockPort`'s `edges[side].items` is the whole mechanism:
- * a collapsed simple-view dot already reads "any member wired" off these
- * same per-item states (`blockPort.tsx`'s `collapsedState`), so nothing
- * downstream needs to know a wire exists at all.
- */
-export function withWiredState(items: readonly PortEdgeItem[], blockId: string, wired: ReadonlySet<string>): PortEdgeItem[] {
-  return items.map((item) => (wired.has(wireEndKey({ blockId, portId: item.id })) ? { ...item, state: "wired" } : item));
-}
-
-/* ------------------------------------------------------------------ */
 /* Duplicate fan (D-B3)                                                */
 /* ------------------------------------------------------------------ */
 
@@ -88,10 +62,13 @@ export const DUPLICATE_FAN_PX = 14;
 
 /** Unordered: a wire and a same-pair wire drawn the other way (`a→b` beside
  *  `b→a`) still fan against each other — the visible fact is "N wires
- *  between these two dots", not which end either one calls `from`. */
+ *  between these two dots", not which end either one calls `from`. The same
+ *  rule the scene kit's `duplicateEdges` lint applies, restated over the
+ *  paint vocabulary, so the lint and the drawing can never disagree about
+ *  what counts as a duplicate. */
 function unorderedPairKey(a: WireEnd, b: WireEnd): string {
-  const ka = wireEndKey(a);
-  const kb = wireEndKey(b);
+  const ka = `${a.blockId}/${a.portId}`;
+  const kb = `${b.blockId}/${b.portId}`;
   return ka <= kb ? `${ka}|${kb}` : `${kb}|${ka}`;
 }
 

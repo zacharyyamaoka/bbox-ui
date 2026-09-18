@@ -10,8 +10,10 @@ import type { BlockView } from "../components/blockPort.layout";
 import type { PortEdgeItem } from "../components/portEdge";
 import { TRACE_TERMINAL_GAP } from "../components/trace";
 import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "../components/trace.layout";
-import { DUPLICATE_FAN_PX, wiredPortKeys, withWiredState, type Wire } from "../components/wiring";
+import { DUPLICATE_FAN_PX, type Wire } from "../components/wiring";
 import { WireLayer } from "../components/wireLayer";
+import { type BlockScene, type SceneData, type ScenePosition, wiredPorts } from "../scene/scene";
+import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
 
 /**
  * Basics/BlockWiring — phase B1 of docs/BLOCK-PORT-EDGES-PLAN.md: wires
@@ -159,6 +161,20 @@ function Positioned({ x, y, children }: { x: number; y: number; children: ReactN
   return <div style={{ position: "absolute", left: x, top: y }}>{children}</div>;
 }
 
+/** Every bench's source of truth is now a `BlockScene` (the scene kit —
+ *  docs/SCENE-KIT.md): nodes carry placement, edges carry connectivity,
+ *  and the two view derivations (`sceneWires` → `WireLayer` props,
+ *  `wiredPorts` → per-item wired state) replace the `Wire[]`-as-model +
+ *  `wiredPortKeys` pair this story used to own ad hoc. */
+type WiringScene = BlockScene<SceneData, WireStyleData>;
+
+/** The node's authored position — so a bench places each block where the
+ *  SCENE says it sits, instead of repeating x/y beside it. A ghost id
+ *  lands at the origin (total, like the scene kit itself). */
+function at(scene: WiringScene, nodeId: string): ScenePosition {
+  return scene.nodes.find((node) => node.id === nodeId)?.position ?? { x: 0, y: 0 };
+}
+
 interface WireBenchProps {
   benchId: string;
   caption?: ReactNode;
@@ -214,20 +230,27 @@ function OutsideToOutsideBench() {
     }),
     [],
   );
-  const wires: Wire[] = wired ? [{ id: "oto-w1", from: { blockId: "oto-a", portId: "out" }, to: { blockId: "oto-b", portId: "in" } }] : [];
-  const wiredSet = wiredPortKeys(wires);
+  const scene: WiringScene = {
+    nodes: [
+      { id: "oto-a", position: { x: 16, y: 30 }, data: {} },
+      { id: "oto-b", position: { x: 216, y: 30 }, data: {} },
+    ],
+    edges: wired ? [{ id: "oto-w1", source: "oto-a", sourceHandle: "out", target: "oto-b", targetHandle: "in" }] : [],
+  };
+  const wires = sceneWires(scene);
+  const wiredSet = wiredPorts(scene);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <button type="button" data-testid="oto-toggle" onClick={() => setWired((w) => !w)} style={{ alignSelf: "flex-start", fontSize: 12, padding: "3px 8px" }}>
         {wired ? "remove wire" : "add wire"}
       </button>
       <WireBench benchId="outside-to-outside" caption="outside ↔ outside" wires={wires} width={360} height={140}>
-        <Positioned x={16} y={30}>
+        <Positioned {...at(scene, "oto-a")}>
           <BlockPort id="oto-a" view="port" edges={{ right: { items: withWiredState(items.out, "oto-a", wiredSet) } }}>
             <Block header="A" width={120} height={80} />
           </BlockPort>
         </Positioned>
-        <Positioned x={216} y={30}>
+        <Positioned {...at(scene, "oto-b")}>
           <BlockPort id="oto-b" view="port" edges={{ left: { items: withWiredState(items.in, "oto-b", wiredSet) } }}>
             <Block header="B" width={120} height={80} />
           </BlockPort>
@@ -241,17 +264,24 @@ function OutsideToOutsideBench() {
 function FanOutBench() {
   const src: PortEdgeItem[] = [{ id: "cmd", label: "cmd" }];
   const targets = ["p", "q", "r"];
-  const wires: Wire[] = targets.map((t) => ({ id: `fo-w-${t}`, from: { blockId: "fo-src", portId: "cmd" }, to: { blockId: `fo-${t}`, portId: "in" } }));
-  const wiredSet = wiredPortKeys(wires);
+  const scene: WiringScene = {
+    nodes: [
+      { id: "fo-src", position: { x: 16, y: 90 }, data: {} },
+      ...targets.map((t, i) => ({ id: `fo-${t}`, position: { x: 230, y: 10 + i * 90 }, data: {} })),
+    ],
+    edges: targets.map((t) => ({ id: `fo-w-${t}`, source: "fo-src", sourceHandle: "cmd", target: `fo-${t}`, targetHandle: "in" })),
+  };
+  const wires = sceneWires(scene);
+  const wiredSet = wiredPorts(scene);
   return (
     <WireBench benchId="fan-out" caption="fan-out · 1 → 3" wires={wires} width={360} height={260}>
-      <Positioned x={16} y={90}>
+      <Positioned {...at(scene, "fo-src")}>
         <BlockPort id="fo-src" view="port" edges={{ right: { items: withWiredState(src, "fo-src", wiredSet) } }}>
           <Block header="src" width={100} height={70} />
         </BlockPort>
       </Positioned>
-      {targets.map((t, i) => (
-        <Positioned key={t} x={230} y={10 + i * 90}>
+      {targets.map((t) => (
+        <Positioned key={t} {...at(scene, `fo-${t}`)}>
           <BlockPort id={`fo-${t}`} view="port" edges={{ left: { items: withWiredState([{ id: "in", label: "in" }], `fo-${t}`, wiredSet) } }}>
             <Block header={t} width={100} height={60} />
           </BlockPort>
@@ -264,18 +294,25 @@ function FanOutBench() {
 /** Fan-in: three sources, one shared target port. */
 function FanInBench() {
   const sources = ["p", "q", "r"];
-  const wires: Wire[] = sources.map((s) => ({ id: `fi-w-${s}`, from: { blockId: `fi-${s}`, portId: "out" }, to: { blockId: "fi-dst", portId: "sum" } }));
-  const wiredSet = wiredPortKeys(wires);
+  const scene: WiringScene = {
+    nodes: [
+      ...sources.map((s, i) => ({ id: `fi-${s}`, position: { x: 16, y: 10 + i * 90 }, data: {} })),
+      { id: "fi-dst", position: { x: 230, y: 90 }, data: {} },
+    ],
+    edges: sources.map((s) => ({ id: `fi-w-${s}`, source: `fi-${s}`, sourceHandle: "out", target: "fi-dst", targetHandle: "sum" })),
+  };
+  const wires = sceneWires(scene);
+  const wiredSet = wiredPorts(scene);
   return (
     <WireBench benchId="fan-in" caption="fan-in · 3 → 1" wires={wires} width={360} height={260}>
-      {sources.map((s, i) => (
-        <Positioned key={s} x={16} y={10 + i * 90}>
+      {sources.map((s) => (
+        <Positioned key={s} {...at(scene, `fi-${s}`)}>
           <BlockPort id={`fi-${s}`} view="port" edges={{ right: { items: withWiredState([{ id: "out", label: "out" }], `fi-${s}`, wiredSet) } }}>
             <Block header={s} width={100} height={60} />
           </BlockPort>
         </Positioned>
       ))}
-      <Positioned x={230} y={90}>
+      <Positioned {...at(scene, "fi-dst")}>
         <BlockPort id="fi-dst" view="port" edges={{ left: { items: withWiredState([{ id: "sum", label: "sum" }], "fi-dst", wiredSet) } }}>
           <Block header="dst" width={100} height={70} />
         </BlockPort>
@@ -288,19 +325,26 @@ function FanInBench() {
  *  explicitly. D-B3's fan must make them visibly two, not one line drawn
  *  twice. */
 function DuplicatesBench() {
-  const wires: Wire[] = [
-    { id: "dup-w1", from: { blockId: "dup-a", portId: "out" }, to: { blockId: "dup-b", portId: "in" } },
-    { id: "dup-w2", from: { blockId: "dup-a", portId: "out" }, to: { blockId: "dup-b", portId: "in" } },
-  ];
-  const wiredSet = wiredPortKeys(wires);
+  const scene: WiringScene = {
+    nodes: [
+      { id: "dup-a", position: { x: 16, y: 30 }, data: {} },
+      { id: "dup-b", position: { x: 216, y: 30 }, data: {} },
+    ],
+    edges: [
+      { id: "dup-w1", source: "dup-a", sourceHandle: "out", target: "dup-b", targetHandle: "in" },
+      { id: "dup-w2", source: "dup-a", sourceHandle: "out", target: "dup-b", targetHandle: "in" },
+    ],
+  };
+  const wires = sceneWires(scene);
+  const wiredSet = wiredPorts(scene);
   return (
     <WireBench benchId="duplicates" caption="duplicates · same two ports, twice" wires={wires} width={360} height={140}>
-      <Positioned x={16} y={30}>
+      <Positioned {...at(scene, "dup-a")}>
         <BlockPort id="dup-a" view="port" edges={{ right: { items: withWiredState([{ id: "out", label: "out" }], "dup-a", wiredSet) } }}>
           <Block header="A" width={120} height={80} />
         </BlockPort>
       </Positioned>
-      <Positioned x={216} y={30}>
+      <Positioned {...at(scene, "dup-b")}>
         <BlockPort id="dup-b" view="port" edges={{ left: { items: withWiredState([{ id: "in", label: "in" }], "dup-b", wiredSet) } }}>
           <Block header="B" width={120} height={80} />
         </BlockPort>
@@ -311,11 +355,15 @@ function DuplicatesBench() {
 
 /** A block's own left → its own right — no rule forbids it. */
 function SelfWireBench() {
-  const wires: Wire[] = [{ id: "self-w1", from: { blockId: "self-a", portId: "in" }, to: { blockId: "self-a", portId: "out" } }];
-  const wiredSet = wiredPortKeys(wires);
+  const scene: WiringScene = {
+    nodes: [{ id: "self-a", position: { x: 80, y: 30 }, data: {} }],
+    edges: [{ id: "self-w1", source: "self-a", sourceHandle: "in", target: "self-a", targetHandle: "out" }],
+  };
+  const wires = sceneWires(scene);
+  const wiredSet = wiredPorts(scene);
   return (
     <WireBench benchId="self-wire" caption="self-wire · a block's own left → right" wires={wires} width={280} height={140}>
-      <Positioned x={80} y={30}>
+      <Positioned {...at(scene, "self-a")}>
         <BlockPort
           id="self-a"
           view="port"
@@ -335,8 +383,18 @@ function SelfWireBench() {
  *  own (left) rail. The member is itself a `BlockPort`, nested exactly the
  *  way `blockMembers.tsx`'s `content: ReactNode` always allowed. */
 function IntoChildBench() {
-  const wires: Wire[] = [{ id: "child-w1", from: { blockId: "child-parent", portId: "out" }, to: { blockId: "child-kid", portId: "in" } }];
-  const wiredSet = wiredPortKeys(wires);
+  // `parentId` IS the nesting: the kid is a scene fact here, and the
+  // member below is the view kit RENDERING that fact — the same
+  // membership `blockMembers.tsx` used to be the only owner of.
+  const scene: WiringScene = {
+    nodes: [
+      { id: "child-parent", position: { x: 16, y: 20 }, data: {} },
+      { id: "child-kid", position: { x: 0, y: 0 }, data: {}, parentId: "child-parent" },
+    ],
+    edges: [{ id: "child-w1", source: "child-parent", sourceHandle: "out", target: "child-kid", targetHandle: "in" }],
+  };
+  const wires = sceneWires(scene);
+  const wiredSet = wiredPorts(scene);
   const member: BlockMember = {
     id: "kid",
     content: (
@@ -347,7 +405,7 @@ function IntoChildBench() {
   };
   return (
     <WireBench benchId="into-child" caption="into a child · parent's inner rail → a member's own port" wires={wires} width={360} height={220}>
-      <Positioned x={16} y={20}>
+      <Positioned {...at(scene, "child-parent")}>
         <BlockPort
           id="child-parent"
           view="expanded"
@@ -475,11 +533,24 @@ export const WiringScenarios: Story = {
  * reading honest rather than a story hiding the wire on purpose.
  */
 function ViewsWiredBench({ view }: { view: BlockView }) {
-  const wires: Wire[] = [
-    { id: "vw-outer", from: { blockId: "vw-parent", portId: "sig" }, to: { blockId: "vw-sibling", portId: "in" } },
-    { id: "vw-inner", from: { blockId: "vw-parent", portId: "aux" }, to: { blockId: "vw-kid", portId: "in" } },
-  ];
-  const wiredSet = wiredPortKeys(wires);
+  // The SAME scene across all three benches — the kid exists in every one
+  // of them (it is a scene fact, `parentId: "vw-parent"`); only the VIEW
+  // decides whether to render it, which is exactly what makes the
+  // `data-unresolved-wires` reading honest rather than a story hiding the
+  // wire on purpose.
+  const scene: WiringScene = {
+    nodes: [
+      { id: "vw-parent", position: { x: 16, y: 40 }, data: {} },
+      { id: "vw-sibling", position: { x: 300, y: 60 }, data: {} },
+      { id: "vw-kid", position: { x: 0, y: 0 }, data: {}, parentId: "vw-parent" },
+    ],
+    edges: [
+      { id: "vw-outer", source: "vw-parent", sourceHandle: "sig", target: "vw-sibling", targetHandle: "in" },
+      { id: "vw-inner", source: "vw-parent", sourceHandle: "aux", target: "vw-kid", targetHandle: "in" },
+    ],
+  };
+  const wires = sceneWires(scene);
+  const wiredSet = wiredPorts(scene);
   const parentItems: PortEdgeItem[] = [
     { id: "sig", label: "sig" },
     { id: "aux", label: "aux" },
@@ -498,7 +569,7 @@ function ViewsWiredBench({ view }: { view: BlockView }) {
 
   return (
     <WireBench benchId={`views-${view}`} caption={`${view} view`} wires={wires} width={420} height={260}>
-      <Positioned x={16} y={40}>
+      <Positioned {...at(scene, "vw-parent")}>
         <BlockPort
           id="vw-parent"
           view={view}
@@ -508,7 +579,7 @@ function ViewsWiredBench({ view }: { view: BlockView }) {
           <Block header="parent" width={220} height={180} members={member ? [member] : undefined} membersLayout="stack" memberGutter={20} />
         </BlockPort>
       </Positioned>
-      <Positioned x={300} y={60}>
+      <Positioned {...at(scene, "vw-sibling")}>
         <BlockPort id="vw-sibling" view="port" edges={{ left: { items: withWiredState([{ id: "in", label: "in" }], "vw-sibling", wiredSet) } }}>
           <Block header="sib" width={100} height={60} />
         </BlockPort>
@@ -582,19 +653,27 @@ export const ViewsWired: Story = {
 export const MixedViewsCanvas: Story = {
   render: () => {
     function MixedCanvas() {
-      const wires: Wire[] = [
-        { id: "mv-1", from: { blockId: "mv-simple", portId: "out" }, to: { blockId: "mv-port", portId: "in" } },
-        { id: "mv-2", from: { blockId: "mv-port", portId: "fwd" }, to: { blockId: "mv-expanded", portId: "in" } },
-      ];
-      const wiredSet = wiredPortKeys(wires);
+      const scene: WiringScene = {
+        nodes: [
+          { id: "mv-simple", position: { x: 16, y: 70 }, data: {} },
+          { id: "mv-port", position: { x: 260, y: 20 }, data: {} },
+          { id: "mv-expanded", position: { x: 490, y: 10 }, data: {} },
+        ],
+        edges: [
+          { id: "mv-1", source: "mv-simple", sourceHandle: "out", target: "mv-port", targetHandle: "in" },
+          { id: "mv-2", source: "mv-port", sourceHandle: "fwd", target: "mv-expanded", targetHandle: "in" },
+        ],
+      };
+      const wires = sceneWires(scene);
+      const wiredSet = wiredPorts(scene);
       return (
         <WireBench benchId="mixed-views" caption="one canvas · three blocks, three different views" wires={wires} width={640} height={240}>
-          <Positioned x={16} y={70}>
+          <Positioned {...at(scene, "mv-simple")}>
             <BlockPort id="mv-simple" view="simple" edges={{ right: { items: withWiredState([{ id: "out", label: "out" }], "mv-simple", wiredSet) } }}>
               <Block header="simple" width={120} height={90} showHeaderDivider={false} />
             </BlockPort>
           </Positioned>
-          <Positioned x={260} y={20}>
+          <Positioned {...at(scene, "mv-port")}>
             <BlockPort
               id="mv-port"
               view="port"
@@ -606,7 +685,7 @@ export const MixedViewsCanvas: Story = {
               <Block header="port" width={130} height={100} />
             </BlockPort>
           </Positioned>
-          <Positioned x={490} y={10}>
+          <Positioned {...at(scene, "mv-expanded")}>
             <BlockPort id="mv-expanded" view="expanded" edges={{ left: { items: withWiredState([{ id: "in", label: "in" }], "mv-expanded", wiredSet) } }}>
               <Block header="expanded" body={null} width={130} height={140} />
             </BlockPort>
