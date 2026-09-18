@@ -1,0 +1,122 @@
+{
+  "title": "Batch wiring \u2014 wiring N ports in one gesture",
+  "summary": "The feature Zach remembered as \"wire within / wire to\" is called \"Wire into\u2026\" and \"Wire together\" in the donor, it lives in an UNCOMMITTED SystemSketch worktree, and its \"smart detection\" is one function: the set of dots where a click would actually create cables. Ported as pure scene functions, demonstrated as a driveable DOM Canvas story, and two real bugs found on the way.",
+  "base_ref": "291b1e0",
+  "branch_label": "batch-wiring lane (isolated worktree, cut from the lane tip)",
+  "storybook_port": 5498,
+  "changes": [
+    "apps/storybook-basics/src/scene/batchWire.ts \u2014 new, 0 deps: resolveWirePair, planBatchWire, batchWireTargets (THE availability answer), batchWireSources, batchWireEdges, applyBatchWire, describeBatchWireOutcome. Pure, no React, no engine. Availability rules arrive as an INJECTED WireJudge so this lane and the validateConnection lane compose instead of colliding.",
+    "apps/storybook-basics/src/scene/batchWire.standIn.ts \u2014 new: a clearly-labelled STAND-IN availability predicate (6 of the donor's 8 refusal reasons over real host port data), to be DELETED when edgeValidation.ts lands. Its own header says so.",
+    "apps/storybook-basics/src/scene/batchWire.test.ts \u2014 new: 40 pure tests, structure ported from the donor's own 474-line suite.",
+    "apps/storybook-basics/src/stories/BatchWiring.stories.tsx \u2014 new: Blocks/Scene/Batch Wiring. One driveable Bench plus 5 play-function stories that assert the availability filtering by measured getComputedStyle.",
+    "docs/capture_batch_wiring_shots.mjs \u2014 new: drives the real bench on real Chromium and shoots BETWEEN the clicks, because an interaction's evidence is a sequence and the existing capture script screenshots a story as it loads.",
+    "docs/ALGORITHM-PROVENANCE.md \u2014 appended two rows (batchWire.ts, batchWire.standIn.ts), including the fact that the donor cannot be pinned to a rev.",
+    "docs/lane_report_manifest.batch-wiring.json \u2014 this file, the input to this report.",
+    "NOT touched: src/components/**, src/hosts/**, src/scene/scene.ts, package.json, pnpm-lock.yaml. The paint reaches real dots through the repo's own data-block-id/data-port-id DOM contract instead of a component or host edit."
+  ],
+  "findings": [
+    "WHAT THE FEATURE ACTUALLY WAS \u2014 two commands over ONE mechanism, differing in exactly where a landing click may land. \"Wire into\u2026\": select sources, invoke, click one dot ANYWHERE a source could legally reach, outside the selection included. \"Wire together\": select the group, invoke, click one of THEIR OWN ports to elect it the hub; the rest fan into it. Donor batchWiring.ts:1-30, its own header.",
+    "ZACH'S NAMES ARE CLOSE BUT NOT THE CODE'S. \"wire to\" \u2248 \"Wire into\u2026\"; \"wire within\" \u2248 \"Wire together\". His hedge (\"I think two things\") was right about the count. \"within\" also names a real SECOND axis he may have been half-remembering: selecting one CONTAINER is the deliberate shorthand for wiring its members (getWireIntoSources, donor :350-366). Both axes are implemented and switchable.",
+    "THE DONOR IS NOT COMMITTED ANYWHERE. batchWiring.ts, batchWiringCommands.ts, wireIntoState.ts, batchWiring.test.ts and SelectionWiringActions.tsx are all `??` untracked in ONE systemsketch worktree (.claude/worktrees/vision-consolidated, branch claude/vision-consolidated). `git log --all -- src/blocks/connections/batchWiring.ts` returns nothing, and the files are absent from src/blocks/connections/ at the donor root. 1,182 lines of working, reviewed feature that a `git stash -u` or `git clean -fd` in that worktree would destroy. Flagged as a preservation risk, not just a citation problem.",
+    "THE \"SMART DETECTION\" IS ONE FUNCTION, and its subtlety is the reason it works: a dot earns its ring only when at least one SOURCE \u2014 not merely one PORT \u2014 would get a cable. A landing every source resolves ambiguously against is perfectly legal and still wires nothing, so judging per port would make the ring promise landings that then did nothing. Donor's own words, portState.ts:40-56.",
+    "\"HIDE THE ONES THAT WEREN'T AVAILABLE\" IS A DIM, NOT A HIDE \u2014 opacity 0.18, and it is a settled value, not a default: Zach reviewed five live-CSS treatments against the running donor on 2026-09-06 and picked Dim (86/100) over Vanish at 0% (84/100) because it keeps the board recognisable while armed. The donor's CSS carries a do-not-retune comment (block-canvas.css:1029-1037). This app's own Port `dimmed` prop paints 0.45 instead (port.tsx:163) \u2014 a real, unresolved discrepancy, so the story makes all three switchable with the donor's value as default rather than silently picking one.",
+    "A BATCH MAY NOT GUESS. resolveWirePair: an exact port-NAME match wins; failing that, exactly one legal pairing wins; anything else is refused as `ambiguous`. \"First port that fits\" \u2014 fine for a single drag \u2014 would quietly wire `config` five times when the user meant `logs`, and a batch's whole value is that you do NOT inspect the forty cables it made (donor :127-147).",
+    "BUG FOUND AND FIXED #1 \u2014 incremental judging. My first commit re-judged every pair against the same frozen scene, so three sources wired into ONE single-feed input produced three cables and reported no refusals. The donor never had this because judgeConnection reads a live tldraw Editor that editor.run() is mutating as each shape is created; a pure function has to rebuild the scene between pairs. Fixed by making the commit-time judge a FACTORY (SceneJudge) and pinned by a regression test that asserts BOTH halves \u2014 the fix, and that a scene-pinned judge still wires all three.",
+    "BUG FOUND AND FIXED #2 \u2014 backwards edges. batchWireEdges wrote the edge in GESTURE order, not dataflow order. A name match between one block's `logs` INPUT and another's `logs` OUTPUT is a legal pair whose cable must run output \u2192 input; it came out reversed, which would have inverted its arrowhead and every producersOf/consumersOf/topologicalOrder read of it. The donor fixes this with normalizeConnectionDirection (donor :330) \u2014 a line that reads like tldraw binding plumbing and is in fact this rule. Fixed by having the verdict report the oriented pair, matching the donor's judge, whose ConnectionVerdict already carries explicit source/sink endpoints (connectionRules.ts:53-63).",
+    "BOTH BUGS WERE FOUND BY A STORY ASSERTION I HAD WRITTEN WRONG, not by reading the code. The second one surfaced because I asserted that probe/logs could not possibly be available and the suite disagreed; chasing the \"wrong\" ring found the reversed edge. Both wrong expectations are left recorded in the test/story comments rather than quietly corrected.",
+    "MY OWN BASELINE MEASUREMENT WAS CONTAMINATED, and it is worth knowing about. Running `pnpm test-stories` with no STORYBOOK_PORT set probes :5421 \u2014 Zach's live review server \u2014 so my first baseline reported `1 failed | 216 passed` for a DragPolicy story that has nothing to do with this lane. Re-run on my own port 5498 it passes 9/9 and imports nothing of mine. The true baseline is 50 files / 217 tests green; the single \"failure\" was this lane's harness testing a different worktree's source, exactly the hazard vitest.config.ts:9-21 already warns about in a comment.",
+    "SEAM I WANT FROM THE VALIDATION LANE: their ok-verdict should carry the ORIENTED pair, not just `ok` \u2014 otherwise every consumer has to re-derive polarity to avoid writing a backwards edge, and the donor's own judge already reports it. Adapter needed is one line either way: `const judgeFor: SceneJudge = (s) => (c) => validateConnection(s, c);`",
+    "COULD NOT VERIFY: the donor's THREE command surfaces (context menu BlockContextMenu.tsx:707, selection toolbar SelectionWiringActions.tsx, command palette) behind one getSelectionWiringAvailability read \u2014 I read the files but this app has none of those surfaces, so the \"cannot drift apart\" property is not reproduced, only recorded. Also not ported: the donor's toast host (the on-canvas read-out stands in for it) and the pending-state tool node (wireIntoState.ts's StateNode is a tldraw select-tool child; the story holds the armed flag in React state instead).",
+    "pyblocks checked as Zach suggested: /home/bam/pyblocks has NO batch-wiring vocabulary at all. SystemSketch is the only donor."
+  ],
+  "stories": [
+    {
+      "id": "blocks-scene-batch-wiring--bench",
+      "title": "Batch Wiring \u00b7 Bench (drive this one)",
+      "look_for": "Click two or more blocks, pick an intent, press Arm, then click a ringing dot. Switch the `ineligible` control between Dim 18% / Dim 45% / Vanish 0% while armed to compare the treatments on the same board. The `stand-in rules` checkboxes change which dots are available, live.",
+      "w": 900,
+      "h": 700
+    },
+    {
+      "id": "blocks-scene-batch-wiring--availability-is-filtered",
+      "title": "Batch Wiring \u00b7 Availability Is Filtered",
+      "look_for": "The mechanical proof. Asserts the exact 6-dot available set, that every ringing dot measures opacity 1, that a named list of unavailable dots measures < 1, and that one real dot measures 0.18 \u2014 the donor's frozen value. Ends committed, with the refusal sentence.",
+      "w": 900,
+      "h": 700
+    },
+    {
+      "id": "blocks-scene-batch-wiring--together-rings-only-its-own-group",
+      "title": "Batch Wiring \u00b7 Together Rings Only Its Own Group",
+      "look_for": "The one line separating the two commands, measured: same selection, same rules, same judge, and \"together\" drops every dot outside the selection from the ring.",
+      "w": 900,
+      "h": 700
+    },
+    {
+      "id": "blocks-scene-batch-wiring--ambiguity-is-refused-not-guessed",
+      "title": "Batch Wiring \u00b7 Ambiguity Is Refused Not Guessed",
+      "look_for": "A landing that resolves by NAME wires; the same shape with no name to match on refuses `ambiguous` rather than picking one of three legal ports.",
+      "w": 900,
+      "h": 700
+    },
+    {
+      "id": "blocks-scene-batch-wiring--empty-ring-refuses-to-arm",
+      "title": "Batch Wiring \u00b7 Empty Ring Refuses To Arm",
+      "look_for": "An armed mode with no affordance is a failure to report, not a mode to sit in. Also: a press away from every ringing dot is a decline, not an error.",
+      "w": 900,
+      "h": 700
+    },
+    {
+      "id": "blocks-scene-batch-wiring--rules-change-availability",
+      "title": "Batch Wiring \u00b7 Rules Change Availability",
+      "look_for": "Availability is a function of the RULES, not the board alone \u2014 turning single-feed off puts a dot back in the ring with no re-arm. This is the injected-judge seam made visible.",
+      "w": 900,
+      "h": 700
+    }
+  ],
+  "sections": [
+    {
+      "heading": "The gesture, mid-flight",
+      "html": "<p>Every still below is shot from the same <code>Bench</code> story a human drives, on real Chromium, <em>between</em> the clicks \u2014 <code>docs/capture_batch_wiring_shots.mjs</code>. None is a mock and none is a play function's end state. Read <strong>03</strong> against <strong>05</strong>: same board, same rules, one control changed, and the ring narrows from the whole board to the selection's own dots. That difference <em>is</em> the difference between the two commands.</p>",
+      "images": [
+        {
+          "file": "/tmp/claude-1000/-home-bam-bbox-ui--claude-worktrees-component-docs-reorganize-8ce972/9f4395e3-3df4-47ec-820a-d2eb947d0160/scratchpad/shots/02-selected.png",
+          "title": "02 \u2014 three sensors selected, nothing armed",
+          "caption": "Selection alone paints nothing off the table. Arming is a separate, explicit step \u2014 the donor refuses to enter it at all if the ring would be empty."
+        },
+        {
+          "file": "/tmp/claude-1000/-home-bam-bbox-ui--claude-worktrees-component-docs-reorganize-8ce972/9f4395e3-3df4-47ec-820a-d2eb947d0160/scratchpad/shots/03-armed-into.png",
+          "title": "03 \u2014 ARMED, \"Wire into\u2026\" \u00b7 available: 6",
+          "caption": "The answer to Zach's question. Six dots ring; every other dot AND its label sit at 18%. Note what is dimmed: the three selected sensors' own outputs, fuse/out, gain/val, and all of probe \u2014 all sources, none of which can take a cable. The dots are not gone, so the board stays readable."
+        },
+        {
+          "file": "/tmp/claude-1000/-home-bam-bbox-ui--claude-worktrees-component-docs-reorganize-8ce972/9f4395e3-3df4-47ec-820a-d2eb947d0160/scratchpad/shots/04-committed.png",
+          "title": "04 \u2014 committed \u00b7 \"Wired 1 cable \u00b7 skipped 2 input already fed\"",
+          "caption": "One real wire, arrowhead pointing AT the input, both endpoints flipped to the `wired` state by the kit's own withWiredState. The other two sources were refused because single-feed caps that input at one producer \u2014 and the sentence says so rather than going silent. This is the case that caught bug #1: before the fix it read \"Wired 3 cables\" with no refusals."
+        },
+        {
+          "file": "/tmp/claude-1000/-home-bam-bbox-ui--claude-worktrees-component-docs-reorganize-8ce972/9f4395e3-3df4-47ec-820a-d2eb947d0160/scratchpad/shots/05-armed-together.png",
+          "title": "05 \u2014 ARMED, \"Wire together\" \u00b7 available: 3",
+          "caption": "Same three-node selection (cam, lidar, fuse), one control changed. sink/in, sink/logs and gain/set were available a moment ago and are now off the table, because a landing must belong to the armed group. Whichever of fuse's dots is clicked becomes the hub \u2014 there is no separate hub concept in the code, here or in the donor."
+        },
+        {
+          "file": "/tmp/claude-1000/-home-bam-bbox-ui--claude-worktrees-component-docs-reorganize-8ce972/9f4395e3-3df4-47ec-820a-d2eb947d0160/scratchpad/shots/06-hub-committed.png",
+          "title": "06 \u2014 hub elected \u00b7 \"Wired 1 cable into fuse \u00b7 skipped 1 input already fed\"",
+          "caption": "Only \"Wire together\" names a hub in its sentence, because only it CHOSE that end \u2014 donor :456-462."
+        },
+        {
+          "file": "/tmp/claude-1000/-home-bam-bbox-ui--claude-worktrees-component-docs-reorganize-8ce972/9f4395e3-3df4-47ec-820a-d2eb947d0160/scratchpad/shots/07-armed-vanish.png",
+          "title": "07 \u2014 the same armed state at Vanish (0%), for comparison",
+          "caption": "Zach's second-placed treatment, 84/100 against Dim's 86. Worth seeing why it lost: the blocks lose their dots entirely, so cam, lidar, imu and probe stop being recognisable as port-bearing things at all. The story keeps this switchable rather than arguing about it."
+        }
+      ]
+    },
+    {
+      "heading": "The availability predicate I want at the seam",
+      "html": "<p>A sibling lane owns the real rules. This lane owns <em>the gesture</em>, and it asks exactly one question, injected \u2014 the same way <code>findDanglingEdges</code> takes <code>portsOf</code> (<code>scene.ts:424</code>):</p><pre><code>export type WireJudge = (candidate: { source: PortRef; target: PortRef }) =&gt; WireVerdict;\n\nexport type WireVerdict =\n  | { ok: true;  oriented?: { source: PortRef; target: PortRef } }\n  | { ok: false; reason: string; silent?: boolean };\n\n// Rebuilt per cable, so cable N is judged against cables 1..N-1:\nexport type SceneJudge = (scene: BlockScene) =&gt; WireJudge;</code></pre><p>Three deliberate choices, each one earned by something that went wrong:</p><ul><li><strong><code>reason</code> is an opaque <code>string</code>, not a closed union.</strong> The precedence order and the human words default to the donor's eight, but they are parameters. A union declared here would force the validation lane to either duplicate the taxonomy or adopt the donor's exact spelling.</li><li><strong><code>silent</code> carries your three-valued refusal through unchanged.</strong> A silent refusal still removes the dot from the ring \u2014 availability is binary \u2014 but is left out of the reported tally, so \"refused silently\" stays silent in the sentence.</li><li><strong><code>oriented</code> is the ask.</strong> Please have your ok-verdict report the pair ordered by dataflow. Without it every caller re-derives polarity to avoid writing a backwards edge, which is bug #2 above; and your judge already computes polarity, exactly as the donor's does (<code>ConnectionVerdict</code> carries explicit <code>source</code>/<code>sink</code>, <code>connectionRules.ts:53-63</code>).</li></ul><p>Adapting <code>validateConnection(scene, candidate)</code> is one line, and <code>batchWire.standIn.ts</code> is then deleted with nothing in <code>batchWire.ts</code> changing:</p><pre><code>const judgeFor: SceneJudge = (s) =&gt; (c) =&gt; validateConnection(s, c);</code></pre>"
+    },
+    {
+      "heading": "Where it lived, and the thing to do about it",
+      "html": "<p>The donor is five files totalling 1,182 lines, all of them <strong>untracked</strong> in a single systemsketch worktree:</p><pre><code>/home/bam/systemsketch/.claude/worktrees/vision-consolidated/\n  src/blocks/connections/batchWiring.ts          473 lines  ??\n  src/blocks/connections/batchWiring.test.ts     474 lines  ??\n  src/blocks/connections/wireIntoState.ts        164 lines  ??\n  src/blocks/connections/batchWiringCommands.ts   71 lines  ??\n  src/chrome/SelectionWiringActions.tsx           79 lines  ??</code></pre><p><code>git log --all</code> for those paths returns nothing, and they are absent from <code>src/blocks/connections/</code> at the donor root \u2014 so this feature has never been committed to systemsketch on any branch. Its supporting edits (the <code>opacity: 0.18</code> CSS, the <code>Port_eligible</code> paint, <code>installConnections.ts</code>' registration of the pending state) sit as <code>M</code> modifications in the same dirty tree.</p><p><strong>This is the risk worth naming:</strong> per this repo's own CLAUDE.md, a session switching branches in a shared checkout runs <code>git stash -u</code>, and that takes every untracked file with it \u2014 which is exactly how a report went missing on 2026-09-15. A <code>git clean -fd</code> in that worktree would be worse. Committing that lane, or listing those paths in its <code>.git/info/exclude</code>, is cheap insurance on a reviewed feature nobody can currently recover from git.</p><p>I did not touch it. It is read-only by instruction and I only opened files.</p>"
+    }
+  ]
+}
