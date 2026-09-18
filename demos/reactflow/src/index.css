@@ -3,6 +3,8 @@
    React Flow's own unlayered .react-flow__handle defaults. */
 @import "@xyflow/react/dist/style.css" layer(base);
 @import "@bbox-ui/core/theme.css";
+/* The optional shape language — see packages/bbox-ui/src/skin.css. */
+@import "@bbox-ui/core/skin.css";
 
 @source "../../../packages";
 
@@ -11,4 +13,23 @@ body,
 #root {
   height: 100%;
   margin: 0;
+}
+
+/*
+ * The sketch skin asks for a handwriting face by NAME; shipping the file is
+ * the host's job (@bbox-ui/core has no build step and no asset pipeline —
+ * see skin.css). This is that job, done: one OFL woff2, ~40 KB, declared
+ * under the first family in the skin's stack.
+ *
+ * It comes from @tldraw/assets because tldraw draws with Shantell Sans and
+ * the file is therefore already in this workspace. A host with no tldraw in
+ * it installs any hand font it likes and points this one rule at it; that is
+ * the whole integration.
+ */
+@font-face {
+  font-family: "Shantell Sans";
+  src: url("@tldraw/assets/fonts/Shantell_Sans-Informal_Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }

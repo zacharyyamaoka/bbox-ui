@@ -8,7 +8,9 @@
     ".": "./src/scene.ts",
     "./reactflow": "./src/reactflow.ts",
     "./tldraw": "./src/tldraw.ts",
-    "./fromEditor": "./src/fromEditor.ts"
+    "./fromEditor": "./src/fromEditor.ts",
+    "./SkinPicker": "./src/SkinPicker.tsx",
+    "./TraceEdge": "./src/TraceEdge.tsx"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -24,6 +26,11 @@
   },
   "devDependencies": {
     "typescript": "^5.6.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
   }
 }

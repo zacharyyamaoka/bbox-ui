@@ -4,6 +4,7 @@ import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { resolveField } from "@bbox-ui/schema";
 
 import { cn } from "./lib/utils";
+import { SketchOutline } from "./sketchOutline";
 import {
   STATE_TOKENS,
   TONE_TOKENS,
@@ -313,6 +314,30 @@ function toneColor(base: string | null, toneToken: string | null): string | null
  *   matching core paint. `hinting` wins over `dimmed` when both are set
  *   (the one port under the pointer is by definition the eligible one).
  */
+/**
+ * The dot's ring colour, as one exported derivation.
+ *
+ * WHY extracted rather than left inline: the sketch skin draws the ring as
+ * a path instead of as box-shadow layers, and it has to be the SAME colour.
+ * A second copy of this three-branch precedence (hinting > dimmed > tone >
+ * state) is exactly how a `hinting` port would end up orange in one skin
+ * and grey in another. `null` means "this state paints no ring at all".
+ */
+export function portRingColor({
+  state = "empty",
+  tone = "neutral",
+  dimmed = false,
+  hinting = false,
+}: PortDotPaintInput): string | null {
+  const toneToken = TONE_TOKENS[tone];
+  const { ring } = STATE_TOKENS[state];
+  return hinting
+    ? paintVar("primary")
+    : dimmed
+      ? paintVar("muted-foreground")
+      : toneColor(ring, toneToken);
+}
+
 export function portDotStyle({
   state = "empty",
   tone = "neutral",
@@ -320,12 +345,8 @@ export function portDotStyle({
   hinting = false,
 }: PortDotPaintInput): CSSProperties {
   const toneToken = TONE_TOKENS[tone];
-  const { ring, fill } = STATE_TOKENS[state];
-  const ringColor = hinting
-    ? paintVar("primary")
-    : dimmed
-      ? paintVar("muted-foreground")
-      : toneColor(ring, toneToken);
+  const { fill } = STATE_TOKENS[state];
+  const ringColor = portRingColor({ state, tone, dimmed, hinting });
   // `hinting` renders hollow (fill: null), matching `wired`'s own shape —
   // see the module doc above and `portCoreStyle`'s matching lit core.
   const fillColor = hinting ? null : toneColor(fill, toneToken);
@@ -349,7 +370,11 @@ export function portDotStyle({
   // then took over, measured live as +12px outward drift of every
   // right-wall handle at zoom 1. Only emit a key when it actually paints.
   const style: CSSProperties = {};
-  if (layers.length > 0) style.boxShadow = layers.join(", ");
+  // Behind a token so the sketch skin can blank the CSS rings and let the
+  // drawn one take their place. Undefined on every other skin, so the
+  // `var()` fallback IS the layer list and nothing changes. `initial`
+  // scoped to a subtree puts them back — see skin.css's exemption note.
+  if (layers.length > 0) style.boxShadow = `var(--bbox-skin-dot-rings, ${layers.join(", ")})`;
   // The disc's resting paint is OPAQUE, never "transparent": a wall-mounted
   // dot straddles the block's border, and a transparent interior let the
   // wall line show through the middle of a hollow (`empty`/`wired`) dot.
@@ -506,6 +531,7 @@ export function Port({
   // donor's own `inset: -14px` is this formula evaluated at diameter=12.
   const haloInset = (diameterPx - PORT_HIT_PX) / 2;
   const coreStyle = portCoreStyle({ state, tone, hinting });
+  const ringColor = portRingColor({ state, tone, dimmed, hinting });
   return (
     <span
       data-slot="port-dot"
@@ -523,6 +549,26 @@ export function Port({
       }}
       {...props}
     >
+      {/* The drawn ring. Zach asked for sketch to reach every component;
+          a Port is also the one he flagged as most likely to want back to
+          normal, which the exemption recipe in skin.css covers in two
+          lines. Colour comes from `portRingColor` — the same derivation
+          the box-shadow rings use — so `state` keeps sole ownership of it. */}
+      {ringColor != null && (
+        <SketchOutline
+          shape="ellipse"
+          // Lands the drawn ring on the SAME centre-line the box-shadow
+          // rings use. Those paint an annulus from `d/2 + SURFACE` out to
+          // `d/2 + SURFACE + STATE`, so its centre-line diameter is
+          // `d + 2*SURFACE + STATE`; SketchOutline insets the path by one
+          // border width per side, hence the extra 2*STATE.
+          width={diameterPx + PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
+          height={diameterPx + PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
+          borderWidth={PORT_STATE_RING_PX}
+          stroke={ringColor}
+          seed={`port:${state}:${diameter}`}
+        />
+      )}
       <span
         data-slot="port-dot-halo"
         aria-hidden
@@ -977,6 +1023,15 @@ export function LabeledPort({
       data-lens={lens !== "normal" ? lens : undefined}
       className={cn(
         "flex w-fit items-center",
+        // The skin's font, for the same reason `Block` carries it: a Port
+        // mounted on a Block wall inherits it from that Block, but a
+        // STANDALONE Port has no Block above it, so the sketch capture
+        // showed the board's "sensor bus" label still in the UI font while
+        // every wall-mounted label had gone hand-drawn. Nothing else about
+        // a Port is skinned — the dot stays `rounded-full` at
+        // `--bbox-skin-stroke-width`'s fixed 2px, because a circle at a
+        // measured anchor is what a Port IS.
+        "font-[family-name:var(--bbox-skin-font,inherit)]",
         // `reveal: "onHover"` composes opacity, not colour, over whichever
         // resting state is in force — a visibility policy triggered by the
         // CONTAINER's view, kept deliberately apart from `dimmed`

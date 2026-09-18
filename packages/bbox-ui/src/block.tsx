@@ -9,6 +9,7 @@ import {
 
 import { cn } from "./lib/utils";
 import {
+  BLOCK_BORDER_PX,
   CHIP,
   CHIP_RIGHT_IN_HEADER_PX,
   HEADER_CHIP_RESERVED_PX,
@@ -19,6 +20,7 @@ import {
   type TextSize,
 } from "./layout";
 import { Pill, type PillProps } from "./pill";
+import { SKETCH_OUTLINE_BLEED_PX, SketchOutline } from "./sketchOutline";
 import type { BlockOrientation } from "./block.fields";
 
 /**
@@ -27,7 +29,18 @@ import type { BlockOrientation } from "./block.fields";
  * Port and Region arrive with later views.)
  */
 
-/** Corner radius in px. 0 is edge-to-edge; the bars clip to it. */
+/**
+ * Corner radius in px. 0 is edge-to-edge; the bars clip to it.
+ *
+ * Still the DEFAULT, but no longer applied by `Block` itself: an unset
+ * `radius` resolves to `--bbox-skin-radius`, whose own fallback is this
+ * number (see `skin.css` and `skin.ts`'s `BBOX_SKIN_TOKENS`). Passing a
+ * number still wins outright — an explicit prop outranks a skin exactly
+ * as an override outranks a preset in the field cascade. `RADIUS_FIELD`
+ * (block.fields.ts) keeps this as its declared default, so a
+ * panel-driven Block stays pinned to 8 and ignores the skin until that
+ * field can say "auto" — the proposal's open decision D2.
+ */
 export const BLOCK_RADIUS_DEFAULT = 8;
 
 export interface BlockProps extends ComponentProps<"div"> {
@@ -38,8 +51,23 @@ export interface BlockProps extends ComponentProps<"div"> {
    * Corner radius, px. Zach, 2026-09-11: "sometimes we may want radius, but
    * sometimes in like edge to edge mode we may not want any radius" — a
    * number, not a rung (D3), so 0 means exactly square.
+   *
+   * Unset means "let the skin decide" — `var(--bbox-skin-radius, 8px)`.
    */
   radius?: number;
+  /**
+   * Stable string the sketch skin's hand-drawn outline is generated from.
+   * Same seed, same wobble, every render — see `sketchPath.ts` on why an
+   * unseeded random shimmers.
+   *
+   * Defaults to `id` when one is given, else the box's own size. WHY that
+   * fallback and not a counter: a counter is not stable across a server
+   * render and its hydration, and it would renumber when a list reorders.
+   * The cost is that two same-sized Blocks with no `id` wobble identically
+   * — visible as repetition in a grid, which is why a host that has real
+   * ids (both adapters do) should pass one.
+   */
+  sketchSeed?: string;
 }
 
 /**
@@ -50,24 +78,84 @@ export interface BlockProps extends ComponentProps<"div"> {
 export function Block({
   width = SIMPLE_BLOCK.width,
   height = SIMPLE_BLOCK.height,
-  radius = BLOCK_RADIUS_DEFAULT,
+  radius,
+  sketchSeed,
+  id,
   className,
   style,
+  children,
   ...props
 }: BlockProps) {
   return (
     <div
       data-slot="block"
+      id={id}
       data-radius={radius}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-1 border-2 border-foreground bg-card px-4 text-center text-card-foreground",
+        "relative flex flex-col items-center justify-center gap-1 px-4 text-center",
+        // Text colour is a skin token because a skin may remove the surface
+        // it was contrasting against: the sketch skin paints no fill, so
+        // `text-card-foreground` would be reading against a card that is not
+        // there. Fallback is the exact class this replaced.
+        "text-[color:var(--bbox-skin-fg,var(--color-card-foreground))]",
+        // The skin seam (skin.ts / skin.css). Each token carries today's
+        // value as its own `var()` fallback, which is what lets skin.css
+        // stay optional: a consumer who never imports it renders the exact
+        // pixels this line replaced (`border-2 border-foreground bg-card`).
+        //
+        // WHY these stay Tailwind utilities rather than moving into the
+        // `style` bag: `cn`'s tailwind-merge still dedupes them against a
+        // caller's own `className`, so `<Block className="bg-red-500">`
+        // keeps working. An inline style would silently outrank it.
+        // `border-solid` is explicit because a host without Tailwind's
+        // preflight defaults to `border-style: none`, where a width alone
+        // paints nothing at all.
+        "border-solid border-[length:var(--bbox-skin-stroke-width,2px)] border-[color:var(--bbox-skin-stroke,var(--color-foreground))]",
+        "bg-[var(--bbox-skin-surface,var(--color-card))] shadow-[var(--bbox-skin-shadow,none)]",
+        // Set once on the container; every text slot below inherits it, so
+        // the sketch skin needs no per-slot font prop.
+        //
+        // One text slot is NOT uniform, and the capture is what caught it:
+        // a CodeField (Port's label slot) inherits this like everything
+        // else UNLESS the host also imports `codeField.css`, whose
+        // `.cm-scroller` rule pins monospace and wins. Storybook imports
+        // it; the demos and apps/docs do not. So the same board renders
+        // sketch-font port labels in one host and monospace ones in
+        // another. Whether code text should resist a skin is a real taste
+        // call, not a bug to paper over — the proposal's open decision D3.
+        "font-[family-name:var(--bbox-skin-font,inherit)]",
         className,
       )}
       // `overflow: clip` (not hidden) so the corners cut the bars' lines
       // without turning the Block into a scroll container.
-      style={{ width, height, borderRadius: radius, overflow: "clip", ...style }}
+      style={{
+        width,
+        height,
+        borderRadius: radius ?? "var(--bbox-skin-radius, 8px)",
+        overflow: "clip",
+        // Lets the sketch outline paint over the border box it is drawn on,
+        // plus the slack its wobble needs. `overflow: clip` otherwise clips
+        // children at the PADDING box, which would shave the drawn line by
+        // the border width and flatten its outward bulges — a hand-drawn
+        // line with a perfectly straight segment where it was loosest. A
+        // length (measured from the padding box) rather than `border-box`,
+        // because `border-box` alone still trims the bulge. The bars keep
+        // clipping to the corners, which is what `clip` was here for; a
+        // browser without `overflow-clip-margin` trims the outline instead
+        // of breaking.
+        overflowClipMargin: `${BLOCK_BORDER_PX + SKETCH_OUTLINE_BLEED_PX}px`,
+        ...style,
+      }}
       {...props}
-    />
+    >
+      <SketchOutline
+        width={width}
+        height={height}
+        borderWidth={BLOCK_BORDER_PX}
+        seed={sketchSeed ?? id ?? `${width}x${height}`}
+      />
+      {children}
+    </div>
   );
 }
 

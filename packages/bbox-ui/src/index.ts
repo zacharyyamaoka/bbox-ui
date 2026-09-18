@@ -7,6 +7,17 @@ export * from "./blockLayout";
 export * from "./appearance";
 export * from "./appearance.fields";
 
+// The shape language (skin.css's companion) — orthogonal to both the
+// appearance ladder above and theme.css's colours. No React, no host
+// import, no DOM: a vocabulary plus one attribute name. See skin.ts.
+export * from "./skin";
+// The one part of a skin that cannot be CSS — a drawn line is geometry.
+// sketchPath.ts is pure math (no React, no DOM); sketchOutline.tsx is the
+// layer Block and Region both mount. See sketchPath.ts's header for what
+// tldraw actually does and why none of it is a stylesheet.
+export * from "./sketchPath";
+export * from "./sketchOutline";
+
 export * from "./badge.fields";
 export * from "./badge";
 

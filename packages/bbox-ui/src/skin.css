@@ -1,0 +1,225 @@
+/*
+ * bbox-ui skins — the shape language, one optional stylesheet.
+ *
+ * Import AFTER theme.css (or after whatever carries your copy of its
+ * tokens — apps/docs deliberately copies rather than imports it):
+ *
+ *   @import "@bbox-ui/core/skin.css";
+ *
+ * Then stamp one attribute on any ancestor:
+ *
+ *   <html data-bbox-skin="sketch">        a whole app
+ *   <div  data-bbox-skin="plain">…</div>  one board, one card, one story row
+ *
+ * WHY this file contains ONLY custom-property declarations, and not a
+ * single rule that reaches into a component's internals: the components
+ * already read these tokens at their own call sites with today's values
+ * hard-coded as the `var()` fallback. So this file is purely additive —
+ * a consumer who never imports it gets the pixels they have now, and one
+ * who does never has to win a specificity fight against a Tailwind
+ * utility or a caller's own `className`. The first draft of this file
+ * carried `@layer base { [data-slot="block"] { … } }` rules instead; they
+ * work, but they put the package in the business of restyling markup it
+ * also renders, and an unlayered rule there silently outranks the
+ * `className` prop every component documents as the escape hatch.
+ *
+ * ONE TOKEN BELOW IS A TRAP, AND ALL THREE SKINS THEREFORE AGREE ON IT:
+ * `--bbox-skin-stroke-width` paints a border, but border width is GEOMETRY
+ * in this codebase, not paint. `port.layout.ts`'s `BLOCK_BORDER_PX` (2)
+ * insets every wall-mounted port's anchor by it, and `region.tsx`'s
+ * `REGION_BORDER_PX` (2) positions the corner Block by it. A skin that
+ * stroked at 1px would slide every port half a pixel out from under the
+ * host's own edge endpoints, in both adapters, silently. Keep it at 2px
+ * until those two constants read the same token — that is layout work with
+ * adapter-visible consequences, not a line in this file.
+ *
+ * Skin is ORTHOGONAL to theme. Nothing below names a colour literal —
+ * every one resolves through theme.css's own tokens, so all three skins
+ * follow light/dark, and `data-theme="dark" data-bbox-skin="sketch"` is
+ * an ordinary combination rather than a fourth thing to define.
+ */
+
+/*
+ * `default` is spelled out even though it is also every token's built-in
+ * fallback. WHY: without it there is no way to switch BACK. A host with a
+ * skin picker sets the attribute to one of three values; "unset the
+ * attribute" is a fourth, different operation that a <select> cannot
+ * express, and every host would hand-roll the same special case.
+ */
+[data-bbox-skin="default"] {
+  --bbox-skin-radius: 8px;
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--foreground);
+  --bbox-skin-surface: var(--card);
+  --bbox-skin-shadow: none;
+  --bbox-skin-font: inherit;
+  --bbox-skin-outline: none;
+  --bbox-skin-ink: var(--foreground);
+  --bbox-skin-fg: var(--card-foreground);
+  /* `initial` is the INERT value, and the only one that works. On a custom
+     property it is the guaranteed-invalid value, so `var(--x, <the real
+     paint>)` falls straight through to the component's own resolved
+     colour. A first pass used `currentColor` here reasoning that it "names
+     the real thing" — it does not: it names the TEXT colour, so every
+     wired Pill in the default skin painted its ring in the label's ink
+     instead of the accent, and the capture is what showed it. `none` on
+     the box-shadow line below was worse: it blanked every Port's rings in
+     every skin. */
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: initial;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-crisp: inline;
+  --bbox-skin-dot-rings: initial;
+}
+
+/*
+ * Plain — square corners, one weight of line, no shadow. The austere
+ * reading: a schematic, or Base UI's own docs.
+ */
+[data-bbox-skin="plain"] {
+  --bbox-skin-radius: 0px;
+  --bbox-skin-radius-pill: 0px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--foreground);
+  /* Zach, 2026-09-17: "For default, you can actually have a background...
+     Its only for plain and sketch I don't want a background." So `default`
+     keeps the card and is free to get as styled as it likes; these two are
+     the line-only pair. */
+  --bbox-skin-surface: transparent;
+  --bbox-skin-shadow: none;
+  --bbox-skin-font: inherit;
+  --bbox-skin-outline: none;
+  --bbox-skin-ink: var(--foreground);
+  /* Same consequence as sketch's: with no card painted, text has to read
+     against the canvas. */
+  --bbox-skin-fg: var(--foreground);
+  /* Deliberately the SAME colour the component would have painted: these
+     two exist so the sketch skin can redirect them, and "unset" is not a
+     value a `var()` can carry. Naming the real thing keeps them inert. */
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: initial;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-crisp: inline;
+  --bbox-skin-dot-rings: initial;
+}
+
+/*
+ * Sketch — hand-drawn.
+ *
+ * WHY four different corner radii and not an SVG roughen filter: a
+ * `feTurbulence`/`feDisplacementMap` filter is the obvious way to wobble a
+ * stroke, and it does not work here. Block sets `overflow: clip` (so its
+ * corners cut the header/footer bars), which clips a filtered
+ * pseudo-element border to the padding box and eats the wobble; applying
+ * the filter to the element itself instead displaces its TEXT, which reads
+ * as blurry rather than hand-drawn. Asymmetric elliptical corners cost one
+ * token, survive `overflow: clip`, leave text crisp, and — unlike a filter
+ * — do not force a repaint layer onto every card on a canvas.
+ *
+ * WHY no `rotate`: a degree or two of tilt is the other obvious sketch
+ * move and it is the one thing a skin must never do. The DOM would stop
+ * agreeing with the host's own hit-test box and port anchors, which the
+ * core does not own. See skin.ts's INVARIANT.
+ *
+ * The font is a STACK, not a file. This package ships no webfont on
+ * purpose — it has no build step and no asset pipeline — so a host
+ * supplies one @font-face and every skinned component picks it up. A
+ * tldraw host already has Shantell Sans loaded (tldraw draws with it);
+ * anyone else self-hosts one ~40 KB woff2. Everything after it is a real
+ * platform fallback, and `cursive` last so the skin degrades to *a* hand
+ * rather than to the body font.
+ */
+[data-bbox-skin="sketch"] {
+  /* Only the bars still read this — the visible corner is drawn, not
+     CSS. Kept round so a header band clips to something sympathetic to
+     the drawn corner rather than to a square one. */
+  --bbox-skin-radius: 12px;
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  /* Transparent, NOT absent. The 2px border still occupies its 2px — it is
+     what every wall-mounted port anchor is measured against — it simply
+     paints nothing, and `SketchOutline` draws on exactly that line. That is
+     the whole trick: the sketch skin replaces the border's PAINT without
+     touching a pixel of its GEOMETRY. */
+  --bbox-skin-stroke: transparent;
+  /* Zach, 2026-09-17: "I don't want there to be any background color... just
+     the sketch line." A sketch block is a line on the canvas, so whatever is
+     behind it shows through — which also means the canvas, not the card, is
+     what the text has to contrast with; see --bbox-skin-ink below. */
+  --bbox-skin-surface: transparent;
+  --bbox-skin-shadow: none;
+  --bbox-skin-outline: block;
+  --bbox-skin-ink: var(--foreground);
+  /* With no fill, `--card-foreground` is contrasting against a card that is
+     not there. A sketch Block has to read against the CANVAS behind it, so
+     the text follows the page's own foreground. A consequence of
+     transparency, not a taste choice — but still a token, so this file
+     keeps its one real property: nothing in it selects markup, and so
+     nothing in it can out-specify a caller's own `className`. */
+  --bbox-skin-fg: var(--foreground);
+  /* Blank the CSS border on everything whose line colour belongs to the
+     `state` cascade (Pill, Bar, Port) — the drawn line replaces it and
+     carries that same resolved colour down as a prop, so `state` keeps
+     sole ownership of the hue and the skin only takes the shape. */
+  --bbox-skin-line-override: transparent;
+  --bbox-skin-font: "Shantell Sans", "Excalifont", "Virgil", "Segoe Print",
+    "Bradley Hand", "Comic Sans MS", cursive;
+  /* Zach, D3: a code field inherits the skin rather than pinning monospace.
+     Stated once here instead of depending on whether a host happened to
+     import codeField.css — which is what made the same board render
+     hand-drawn port labels in one host and monospace ones in another. */
+  /* A TextBox writes `font-family` inline, so inheritance alone never
+     reached a Port-view title. Both named rungs point at the hand. */
+  --bbox-skin-font-sans: "Shantell Sans", "Excalifont", "Virgil",
+    "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --bbox-skin-font-mono: "Shantell Sans", "Excalifont", "Virgil",
+    "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+  --bbox-skin-crisp: none;
+  /*
+   * INERT on purpose, and this is the one place the "sketch reaches every
+   * component" story has a real hole.
+   *
+   * `PortDot` does draw a hand-drawn ring (port.tsx), and in a host that
+   * renders the component — tldraw's adapter mounts a real <Port>, so does
+   * plain DOM — blanking the box-shadow here would hand the ring over to
+   * it cleanly. But `@bbox-ui/adapter-reactflow` never renders <PortDot>:
+   * it spreads `portDotStyle({state})` onto React Flow's own <Handle>
+   * (block-node.tsx), so it gets the box-shadow rings and nothing else.
+   * Blanking them there deletes the port's paint outright, and the capture
+   * is exactly how that was found — every React Flow port went invisible
+   * while tldraw's looked fine.
+   *
+   * So it ships off. Turning it on is one line, and correct the day the
+   * React Flow adapter renders the component (or grows its own outline):
+   *
+   *   [data-bbox-skin="sketch"] { --bbox-skin-dot-rings: none; }
+   *
+   * Zach, 2026-09-17, on the same seam from the other side: "I can always
+   * tune it later to prevent certain ones from being sketchy, say like if
+   * I want the ports to still be normal."
+   */
+  --bbox-skin-dot-rings: initial;
+}
+
+/*
+ * EXEMPTING ONE COMPONENT (Zach, 2026-09-17: "I can always tune it later
+ * to prevent certain ones from being sketchy, say like if I want the ports
+ * to still be normal").
+ *
+ * Every token above INHERITS, so an exemption is a scoped re-declaration —
+ * no new API, no prop, no component change. Ports back to normal:
+ *
+ *   [data-bbox-skin="sketch"] [data-slot="port"] {
+ *     --bbox-skin-outline: none;             (stop drawing the ring)
+ *     --bbox-skin-crisp: inline;             (put the crisp one back)
+ *     --bbox-skin-line-override: initial;    (let the CSS paint resolve)
+ *     --bbox-skin-dot-rings: initial;
+ *   }
+ *
+ * `initial` is what makes the last two work: on a custom property it is
+ * the guaranteed-invalid value, so `var(--x, <real paint>)` falls through
+ * to the real paint. That is the whole revert, and it is why none of these
+ * tokens is allowed to name a colour a component's own cascade owns.
+ */
+

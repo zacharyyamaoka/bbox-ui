@@ -41,6 +41,47 @@ function field(id: string) {
 
 const bare = pillElement();
 
+
+/**
+ * The label a Pill/Badge actually renders, with the decorative sketch layer
+ * stripped — and asserting that layer IS there, so this helper can never
+ * quietly hide its disappearance.
+ *
+ * WHY it exists: `Pill` and `Badge` now render `[<SketchOutline/>, children]`
+ * so the sketch skin can draw their outline (Zach's D4). The outline is
+ * chrome, never content, so a test about the LABEL must not see it — but
+ * `children === "Event"` is no longer literally true, and relaxing it to a
+ * "contains" check would stop catching a stray extra child.
+ */
+function labelOf(el: { props: Record<string, unknown> }): unknown {
+  const kids = el.props.children as unknown;
+  expect(Array.isArray(kids), `expected [outline, label], got ${String(kids)}`).toBe(true);
+  const arr = kids as unknown[];
+  expect(arr).toHaveLength(2);
+  const outline = arr[0] as { type?: unknown } | false | null;
+  const isOutline =
+    outline === false || outline === null || typeof (outline as { type?: unknown })?.type === "function";
+  expect(isOutline, "first child should be the sketch outline layer").toBe(true);
+  return arr[1];
+}
+
+/**
+ * The painted line colour, unwrapped from the skin's suppression variable,
+ * asserting the wrapper is present.
+ *
+ * WHY: the sketch skin blanks a state-painted border by defining
+ * `--bbox-skin-line-override`, so such a colour now ships as
+ * `var(--bbox-skin-line-override, <the resolved colour>)`. Every colour
+ * assertion below still pins the exact value the cascade resolved — this
+ * only peels the wrapper, and fails loudly if the wrapper goes missing.
+ */
+function lineColorOf(el: { props: { style?: Record<string, unknown> } }): string {
+  const raw = String(el.props.style?.borderColor ?? "");
+  const m = /^var\(--bbox-skin-line-override, (.*)\)$/.exec(raw);
+  expect(m, `borderColor should be wrapped by the skin override: ${raw}`).not.toBeNull();
+  return (m as RegExpExecArray)[1];
+}
+
 describe("PILL_FIELDS", () => {
   it("is the shared APPEARANCE_FIELDS bundle, then Pill's own paint fields, then children — in panel order", () => {
     expect(PILL_FIELDS.map((f) => f.id)).toEqual([
@@ -137,7 +178,7 @@ describe("PILL_FIELDS — Pill's own paint fields", () => {
 
   it("lineOpacity's declared default (1) equals Pill's own destructured default — proven by two renders agreeing", () => {
     const explicit = pillElement({ lineOpacity: field("lineOpacity").defaultValue as number });
-    expect(explicit.props.style.borderColor).toBe(bare.props.style.borderColor);
+    expect(lineColorOf(explicit)).toBe(lineColorOf(bare));
   });
 
   it("fillOpacity's declared default (1) equals Pill's own destructured default — proven by two renders agreeing", () => {
@@ -193,7 +234,7 @@ describe("PILL_FIELDS — size (a real, ungoverned, cascading prop)", () => {
 describe("PILL_FIELDS — children", () => {
   it("children's declared default is the demoable placeholder \"Pill\" (control-only — Pill's real prop has no destructured default; omitting it renders the bare shell)", () => {
     expect(field("children").defaultValue).toBe("Pill");
-    expect(bare.props.children).toBeUndefined();
+    expect(labelOf(bare)).toBeUndefined();
   });
 
   it("defaultArgs mirrors every field's own declared defaultValue, one entry per field", () => {
@@ -286,20 +327,20 @@ describe("The §1.4 worked example, executed against the real PILL_PRESETS (Defi
 
 describe("Pill — the real component reached through the same cascade the trace panel reads", () => {
   it("a bare Pill (state:'empty') paints the 'empty' preset's line, with no fill", () => {
-    expect(bare.props.style.borderColor).toBe("var(--foreground)");
+    expect(lineColorOf(bare)).toBe("var(--foreground)");
     expect(bare.props.style.background).toBe("transparent");
     expect(bare.props.style.borderStyle).toBe("solid");
   });
 
   it("state:'wired' paints the primary line and fill", () => {
     const wired = pillElement({ state: "wired" });
-    expect(wired.props.style.borderColor).toBe("var(--bbox-primary, var(--primary))");
+    expect(lineColorOf(wired)).toBe("var(--bbox-primary, var(--primary))");
     expect(wired.props.style.background).toBe("var(--bbox-primary, var(--primary))");
   });
 
   it("an explicit lineColor override reaches past the 'wired' preset on the real component, exactly the §1.4 worked example", () => {
     const overridden = pillElement({ state: "wired", lineColor: "bbox-danger" });
-    expect(overridden.props.style.borderColor).toBe("var(--bbox-danger)");
+    expect(lineColorOf(overridden)).toBe("var(--bbox-danger)");
     // The fill is untouched — only the one overridden field moved.
     expect(overridden.props.style.background).toBe("var(--bbox-primary, var(--primary))");
   });
@@ -308,14 +349,14 @@ describe("Pill — the real component reached through the same cascade the trace
     // state:"wired" already asks for an outline+fill shape (fillStyle
     // "solid"); tone:"danger" recolours both without changing that shape.
     const toned = pillElement({ state: "wired", tone: "danger" });
-    expect(toned.props.style.borderColor).toBe("var(--bbox-danger)");
+    expect(lineColorOf(toned)).toBe("var(--bbox-danger)");
     expect(toned.props.style.background).toBe("var(--bbox-danger)");
     expect(toned.props.style.borderStyle).toBe("solid");
   });
 
   it("tone recolours the outline even on a hollow state (fillStyle stays 'none' — a token is not a legal fillStyle)", () => {
     const toned = pillElement({ state: "empty", tone: "danger" });
-    expect(toned.props.style.borderColor).toBe("var(--bbox-danger)");
+    expect(lineColorOf(toned)).toBe("var(--bbox-danger)");
     expect(toned.props.style.background).toBe("transparent");
   });
 
@@ -335,7 +376,7 @@ describe("Pill — the real component reached through the same cascade the trace
   });
 
   it("children omitted renders the bare shell with no label — the real default, distinct from the demoable 'Pill' placeholder", () => {
-    expect(bare.props.children).toBeUndefined();
+    expect(labelOf(bare)).toBeUndefined();
   });
 
   it("lensBefore never leaks onto the rendered DOM span as an unrecognized attribute", () => {

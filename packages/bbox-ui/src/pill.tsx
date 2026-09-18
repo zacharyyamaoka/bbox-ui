@@ -2,6 +2,7 @@ import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { governedFieldIds, resolveField } from "@bbox-ui/schema";
 
 import { cn } from "./lib/utils";
+import { SketchOutline } from "./sketchOutline";
 import { toneOverride, type AppearanceState, type Lens, type Tone, paintVar } from "./appearance";
 import {
   PILL_PAINT_FIELDS,
@@ -233,13 +234,30 @@ export function Pill({
       data-line-style={lineStyleResolved}
       data-fill-style={fillStyleResolved}
       className={cn(
-        "box-border inline-flex w-fit items-center justify-center whitespace-nowrap rounded-full text-center leading-tight text-foreground",
+        // `rounded-[…]` rather than `rounded-full`: the capsule is the
+        // DEFAULT, not a law. A Pill is a text slot with a line around it,
+        // so its corner treatment is exactly what a skin is for — unlike a
+        // Port dot, which stays `rounded-full` unconditionally because a
+        // circle is what a Port IS (port.tsx's `portDotClassName`).
+        "relative box-border inline-flex w-fit items-center justify-center whitespace-nowrap rounded-[var(--bbox-skin-radius-pill,9999px)] text-center leading-tight text-foreground",
         className,
       )}
       style={{
         borderStyle: hollow ? "none" : BORDER_STYLE_CSS[lineStyleResolved],
         borderWidth: hollow ? 0 : LINE_THICKNESS_PX[lineThickness],
-        borderColor: paintColor(lineColorResolved, lineOpacity),
+        // D4 (Zach, 2026-09-17: "yes should go sketchy"). The CSS ring is
+        // blanked only by the sketch skin, which is the one that supplies
+        // `--bbox-skin-line-override`; every other skin leaves the token
+        // undefined so the `var()` fallback IS the resolved colour and
+        // nothing about this line changes.
+        //
+        // WHY the skin may not simply name a colour here: `lineColor` is
+        // governed by the `state` preset family. A second selector claiming
+        // it is precisely what `assertDisjointPresets` forbids. So the skin
+        // says only "do not paint the CSS one" and the drawn outline below
+        // is handed the SAME resolved colour — state keeps the hue, the
+        // skin takes the shape.
+        borderColor: `var(--bbox-skin-line-override, ${paintColor(lineColorResolved, lineOpacity)})`,
         background: paintColor(fillColorResolved, FILL_STYLE_ALPHA[fillStyleResolved] * fillOpacity),
         padding: PILL_SIZE_PADDING[size],
         fontSize: PILL_SIZES[size],
@@ -247,6 +265,21 @@ export function Pill({
       }}
       {...props}
     >
+      {!hollow && (
+        <SketchOutline
+          // Stretched, not measured: a Pill is sized by its own content and
+          // learning its real pixels would mean a ResizeObserver. The
+          // nominal box is a typical chip; see sketchOutline.tsx on the
+          // (sub-pixel, invisible) cost.
+          stretch
+          width={120}
+          height={26}
+          borderWidth={LINE_THICKNESS_PX[lineThickness]}
+          radius={13}
+          stroke={paintColor(lineColorResolved, lineOpacity)}
+          seed={`pill:${lineColorResolved}:${size}`}
+        />
+      )}
       {children}
     </span>
   );

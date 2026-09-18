@@ -17,6 +17,34 @@
       ]
     },
     {
+      "name": "bbox-skin",
+      "type": "registry:lib",
+      "title": "bbox skin",
+      "description": "Optional shape language for bbox-ui components: default / plain / sketch, selected with one inherited data-bbox-skin attribute. Ships the hand-drawn outline too — that part is real geometry, not CSS, so Block and Region import it.",
+      "files": [
+        {
+          "path": "packages/bbox-ui/src/skin.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/skin.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/skin.css",
+          "type": "registry:style",
+          "target": "components/bbox/skin.css"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/sketchPath.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchOutline.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/sketchOutline.tsx"
+        }
+      ]
+    },
+    {
       "name": "port",
       "type": "registry:component",
       "title": "Port",
@@ -71,6 +99,16 @@
           "path": "packages/bbox-ui/src/caretGeometry.ts",
           "type": "registry:lib",
           "target": "components/bbox/caretGeometry.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/sketchPath.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchOutline.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/sketchOutline.tsx"
         }
       ],
       "dependencies": [
@@ -104,6 +142,16 @@
           "path": "packages/bbox-ui/src/lib/utils.ts",
           "type": "registry:lib",
           "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/sketchPath.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchOutline.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/sketchOutline.tsx"
         }
       ],
       "dependencies": [

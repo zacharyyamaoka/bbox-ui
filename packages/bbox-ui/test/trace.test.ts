@@ -237,17 +237,50 @@ describe("traceStrokeStyle — dash mechanics only, never colour", () => {
   });
 });
 
+
+/**
+ * A trace's segments, split into the crisp paths and their hand-drawn
+ * twins — and asserting there is exactly one twin per crisp path.
+ *
+ * WHY: every segment is now rendered TWICE, the exact path the host
+ * computed plus a sketched copy, with CSS choosing between them
+ * (trace.tsx's CRISP_STYLE / SKETCH_STYLE). A Trace's geometry belongs to
+ * the host, so there is nothing for the component to re-derive and no way
+ * for it to know the active skin. Counting all paths would silently accept
+ * a segment that lost its twin, which is the failure this pairing check
+ * exists to catch.
+ */
+function segmentsOf(el: { props: { children: unknown } }) {
+  const children = el.props.children as unknown[];
+  const paths = children.filter(
+    (c): c is { type: string; props: Record<string, unknown> } =>
+      (c as { type?: string })?.type === "path",
+  );
+  const crisp = paths.filter((pth) => !pth.props["data-sketch"]);
+  const sketched = paths.filter((pth) => pth.props["data-sketch"]);
+  expect(sketched, "every crisp segment needs exactly one sketched twin").toHaveLength(crisp.length);
+  return { crisp, sketched };
+}
+
 describe("TraceBody — the real component, called plain-function style (no DOM/jsdom)", () => {
   const bare = traceBody();
 
   it("renders one <path> for data/async, none of the delayed-split machinery", () => {
     expect(bare.type).toBe("g");
     const children = bare.props.children as unknown[];
-    // [marker-defs-or-false, one <path>]
-    expect(children).toHaveLength(2);
-    const path = children[1] as { type: string; props: Record<string, unknown> };
-    expect(path.type).toBe("path");
-    expect(path.props.d).toBe("M0 0 L100 0");
+    // [marker-defs-or-false, the crisp <path>, its sketched twin]
+    expect(children).toHaveLength(3);
+    const { crisp, sketched } = segmentsOf(bare);
+    expect(crisp).toHaveLength(1);
+    // The crisp path is the host's own geometry, byte for byte — a Trace
+    // never re-derives what it was handed.
+    expect(crisp[0].props.d).toBe("M0 0 L100 0");
+    // The twin is a different path, and it is the one CSS shows under the
+    // sketch skin. Asserting it DIFFERS is what catches a roughener that
+    // silently no-ops.
+    expect(sketched[0].props.d).not.toBe("M0 0 L100 0");
+    expect((crisp[0].props.style as Record<string, string>).display).toBe("var(--bbox-skin-crisp, inline)");
+    expect((sketched[0].props.style as Record<string, string>).display).toBe("var(--bbox-skin-outline, none)");
   });
 
   it("data-variant reflects the resolved variant, defaulting 'data'", () => {
@@ -262,16 +295,12 @@ describe("TraceBody — the real component, called plain-function style (no DOM/
 
   it("delayed + splitAtLabel renders TWO <path> segments, not one", () => {
     const split = traceBody({ variant: "delayed", splitAtLabel: true });
-    const children = split.props.children as unknown[];
-    const paths = children.filter((c): c is { type: string } => (c as { type?: string })?.type === "path");
-    expect(paths).toHaveLength(2);
+    expect(segmentsOf(split).crisp).toHaveLength(2);
   });
 
   it("delayed WITHOUT splitAtLabel renders exactly one dotted <path>, the SystemSketch default", () => {
     const delayed = traceBody({ variant: "delayed" });
-    const children = delayed.props.children as unknown[];
-    const paths = children.filter((c): c is { type: string } => (c as { type?: string })?.type === "path");
-    expect(paths).toHaveLength(1);
+    expect(segmentsOf(delayed).crisp).toHaveLength(1);
   });
 
   it("markerEnd:'arrow' (the default) renders a <defs><marker> and wires marker-end onto the path", () => {
@@ -338,6 +367,16 @@ describe("TraceLabel — reuses Pill, no positioning logic", () => {
     // One more level of plain-function evaluation: `el` is `<Pill ...props>`,
     // unevaluated — call Pill itself (el.type) with el.props to get what it paints.
     const rendered = el.type(el.props);
-    expect(rendered.props.style.borderColor).toBe("var(--bbox-danger)");
+    // The sketch skin blanks a state-painted border by defining
+    // `--bbox-skin-line-override`, so a Pill's resolved colour now ships
+    // inside that var()'s fallback. Peel it and the assertion below still
+    // pins the exact colour the cascade produced.
+    const lineColorOf = (node: { props: { style?: Record<string, unknown> } }) => {
+      const raw = String(node.props.style?.borderColor ?? "");
+      const m = /^var\(--bbox-skin-line-override, (.*)\)$/.exec(raw);
+      expect(m, `borderColor should be wrapped by the skin override: ${raw}`).not.toBeNull();
+      return (m as RegExpExecArray)[1];
+    };
+    expect(lineColorOf(rendered)).toBe("var(--bbox-danger)");
   });
 });
