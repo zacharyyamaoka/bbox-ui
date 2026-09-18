@@ -410,3 +410,32 @@ because it is the single most instructive proof that DOM measurement does
 not exempt this kit from the donor's own coordinate-frame discipline — see
 the lane report's "adversarial loop" section for the full repro (24px error,
 one `sed`-sized fix, mutation-verified by reverting it).
+
+## `apps/storybook-basics/src/scene` — the grouping algebra (2026-09-18, lane:grouping)
+
+Five new files implementing collapse-to-region and its inverse. The headline
+provenance fact is a **negative** one and it is the most useful line here:
+the "line intersection logic with the port edge" Zach asked to be written as
+a pure function **already existed in this repo** and was not rewritten.
+`src/components/elbow/boundaryCrossing.ts` is a byte-for-byte SystemSketch
+copy whose own docstring already names the use case verbatim — *"a group or
+frame boundary port, for a cable that crosses in or out of a collapsed
+group"*. `scene/portEdgeCrossing.ts` is an adapter over it, not a second
+clipper.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `scene/portEdgeCrossing.ts` | (c) over (a) | The intersection itself is **not ours**: `components/elbow/boundaryCrossing.ts`'s `boundaryCrossings` (Liang–Barsky), class (a), Excalidraw→SystemSketch, already carrying its own "zero code edits" banner and its own donor suite. Ours and class (c): `alongSide` (a linear remap of a point on a known wall to 0..1 along that wall — the donor computes position along the *segment*, never along the *wall*), the route/chord `by` provenance, and the inset-consistent normalisation | Read `boundaryCrossing.ts` and `geometry.ts` in full on disk 2026-09-18 before writing a line. `portEdgeCrossing.test.ts` (18 tests) checks the crossing point against an **independent oracle** — similar triangles, `y = y0 + (X−x0)(y1−y0)/(x1−x0)` — not against the clipper's own parametric form. Mutation-tested: replacing the inset-aware bounds with the raw box turns the inset test red (`expected +0 to be close to 0.0417`), restored |
+| `scene/region.ts` | (c) | None claimed. `descendantsOf` is the same containment fixpoint `linking.ts`'s `deleteNode` already runs inline (made public and cycle-safe); `absolutePosition`/`ancestorsOf`/`selectionRoots` are new because nothing before this lane re-parented a node. `REGION_NODE_TYPE` rests on `SceneNode.type` already being React Flow's `nodeTypes` key — Zach's ruling, not a borrowed design | `region.test.ts` (18 tests), including a terminating-walk test per function against a malformed `parentId` cycle |
+| `scene/boundary.ts` | (c) | None claimed, and none exists to claim: the classification is Zach's own sentence partitioned one clause per member, and `dagPolarityPolicy` is his own stated v1 heuristic. Cited compositions rather than reimplementations: `lint.ts`'s `PortDirectionOf` `source`/`sink` vocabulary, `edgeValidation.ts`'s `ConnectionOrientation.by` words (`"polarity"`/`"gesture"`), `blockPort.layout.ts:155`'s `RailBand`, and `blockPort.layout.ts:456`'s `functionPortCenterPx` as the seat the promoted port names | `boundary.test.ts` (22 tests), written as his sentence read back — one `describe` per quoted clause. Mutation-tested: inverting `outerIsSink ? "right" : "left"` turns 5 tests red, restored |
+| `scene/collapse.ts` | (c) | The split-edge structure (one hierarchical pin, a net on each side) is the standard shape of a hierarchical netlist; **no specific source is claimed because none was read for this file** — it was derived from the requirement that dissolve be derivable rather than remembered. Cited compositions: `linking.ts`'s `DeletedNodeEdgePolicy` (`"drop"`/`"dangle"`/`"park"`) verbatim for the unbacked-port remainder, and `edgeValidation.ts`'s `CROSS_SCOPE` code for the refusal | `collapse.test.ts` (27 tests). The load-bearing one asserts `collapse → dissolve` returns a scene **deep-equal to the input**, array order included. Mutation-tested: dropping the position rebase turns 7 tests red, restored. The IEEE-754 position loss was found **by search** (3.3M pairs, 16% inexact, worst 5.8e-11 at magnitude 3.7e5), not assumed |
+| `scene/boundaryWiring.ts` | (c) | None claimed. The lowest-common-ancestor walk is textbook over two explicit parent chains. Cited compositions: `portEdgeCrossing.ts` for placement (Zach: "placed via the intersection function"), `edgeValidation.ts`'s `CROSS_SCOPE`, `lint.ts`'s `typesIntersect` shape | `boundaryWiring.test.ts` (15 tests), including that the refusal message **names every boundary** that needs a port |
+
+**What was deliberately NOT read, and why it is not cited.** maxGraph's
+`GraphView.ts:1656-1679` collapsed-terminal resolver was described to this
+lane by a parallel lane but was **not opened here**, so no behaviour in these
+files is attributed to it. Its reported *stance* (promotion as a render-time
+projection) was evaluated and **diverged from** — see
+`docs/GROUPING-ALGEBRA.md` for the reasoning and the three Zach rulings that
+force a document mutation instead. Citing it as a donor would be citing
+something this lane never read.
