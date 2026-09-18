@@ -1,0 +1,257 @@
+/*
+ * CodeEditor — reconciled from packages/bbox-ui/src/codeField.css (current
+ * on main: the box chrome, caret/selection/placeholder colours) and
+ * claude/code-block-primitive's codeBlock.css (recovered: the opaque
+ * gutter, the overflow/scroll variants, the tok-* syntax palette — all
+ * deleted from main's codeField.css by 368a524's trim). Colours are stock
+ * shadcn tokens (src/globals.css) — this app carries no bbox-* theme
+ * tokens, so the `var(--bbox-accent, #4f6ee5)` shape below always falls
+ * through to its literal, same pattern as editableText.tsx's
+ * `var(--bbox-ring, currentColor)`.
+ */
+
+.bbox-code-editor {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  /* `--bbox-tok-bg`/`--bbox-tok-fg` (codeEditorTheme.ts): a syntax theme is
+     a background + foreground pair, not just token colours — a Dark Modern
+     editor on the page's own light card is not Dark Modern. Unset, both
+     fall through to today's literals unchanged. */
+  background: var(--bbox-tok-bg, var(--color-card));
+  color: var(--bbox-tok-fg, var(--color-foreground));
+  cursor: text;
+  overflow: hidden;
+}
+
+.bbox-code-editor[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.bbox-code-editor:focus-within {
+  border-color: var(--color-primary);
+}
+
+.bbox-code-editor .cm-editor {
+  outline: none;
+  background: transparent;
+  height: auto;
+}
+
+.bbox-code-editor .cm-scroller {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Inherits the box's own inline `fontSize` (`fontSizePx`) rather than
+     hardcoding a copy — the only way a per-instance size reaches
+     CodeMirror's internal DOM. */
+  font-size: inherit;
+  line-height: 1.4;
+}
+
+/*
+ * `overflow` (codeEditor.tsx): what a line wider than the box does.
+ * `clip` — an <input>-like port label: cut at the edge, no bar. `scroll` —
+ * a real horizontal scrollbar once content is wider than the box (the IDE
+ * feel of Zach's screenshot). `wrap` — CodeMirror's own `lineWrapping`
+ * folds the line, so the scroller only ever needs to grow vertically.
+ */
+.bbox-code-editor[data-overflow="clip"] .cm-scroller {
+  overflow: hidden;
+}
+
+.bbox-code-editor[data-overflow="scroll"] .cm-scroller,
+.bbox-code-editor[data-overflow="wrap"] .cm-scroller {
+  overflow: auto;
+}
+
+.bbox-code-editor .cm-content {
+  padding: 0;
+  caret-color: var(--color-primary);
+}
+
+/*
+ * No `white-space` set on `.cm-content` above, on purpose — measured live (headless Chrome):
+ * CodeMirror's OWN base theme already puts `white-space: pre` on
+ * `.cm-content` at the SAME specificity as a plain `.bbox-code-editor
+ * .cm-content` rule would be (two classes each), and CodeMirror's
+ * stylesheet is injected at `EditorView` construction time, i.e. AFTER this
+ * file's import — so it wins the cascade tie regardless of what this rule
+ * declared. codeBlock.css's own `white-space: nowrap` here had the exact
+ * same dead-on-arrival shape (confirmed: the recovered branch never beat
+ * this tie either). It doesn't matter: `pre` already gives "no soft wrap"
+ * (CodeMirror still renders one `.cm-line` per line regardless of this
+ * property), and unlike `nowrap` it does NOT collapse a run of leading
+ * spaces — which Python's indentation needs. Fighting the cascade for
+ * `nowrap` here would have made indentation render wrong the moment it won.
+ */
+
+/* WHY this rule exists at all: CodeMirror's `lineWrapping` sets
+   `white-space: pre-wrap` through its own `.ͼ1 .cm-lineWrapping` rule —
+   specificity (0,2,0), the SAME as `.cm-content` alone, so which wins would
+   otherwise depend on stylesheet order. Three classes settles it. */
+.bbox-code-editor .cm-content.cm-lineWrapping {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bbox-code-editor .cm-line {
+  padding: 0;
+}
+
+/* The line-number gutter (`lineNumbers`): a hairline on its right, numbers
+   in the faint ink, room for a few digits before the content's own padding.
+   WHY it needs a REAL (opaque) background, not `transparent`: CodeMirror
+   pins the gutter with its own `position: sticky; left: 0` so it stays put
+   while `.cm-content`'s lines scroll underneath it horizontally
+   (`data-overflow="scroll"`/`"wrap"` above). A transparent gutter lets that
+   scrolled text show through behind the numbers as it passes — matching the
+   editor's own surface colour, not the page's, keeps it opaque without
+   drawing a visibly different panel. This is the fix codeBlock.css shipped
+   and main's codeField.css trim lost along with the gutter entirely. */
+.bbox-code-editor .cm-gutters {
+  background: var(--color-card);
+  color: var(--color-muted-foreground);
+  border-right: 1px solid var(--color-border);
+  min-width: 36px;
+  justify-content: flex-end;
+  margin-right: 12px;
+}
+
+.bbox-code-editor .cm-lineNumbers .cm-gutterElement {
+  padding: 0 8px 0 6px;
+}
+
+.bbox-code-editor .cm-focused .cm-activeLine,
+.bbox-code-editor .cm-focused .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+
+.bbox-code-editor .cm-placeholder {
+  color: var(--color-muted-foreground);
+  font-style: normal;
+}
+
+.bbox-code-editor .cm-selectionBackground,
+.bbox-code-editor .cm-focused .cm-selectionBackground,
+.bbox-code-editor ::selection {
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.bbox-code-editor .cm-cursor {
+  border-left-color: var(--color-primary);
+}
+
+/*
+ * The syntax palette. `classHighlighter` (@lezer/highlight) emits stable
+ * `tok-*` classes with no colour of its own; this is the one place they get
+ * one, ported from codeBlock.css's `bbox-code-tokens` block.
+ *
+ * WHY every selector carries BOTH root classes (0,3,0): CodeMirror's own
+ * fallback highlight style, when a host happens to mount it, paints tokens
+ * through generated `.ͼN .ͼM` rules at (0,2,0) — a bare
+ * `.bbox-code-tokens .tok-keyword` would tie on specificity and lose or win
+ * by stylesheet order. Three classes settles it in this sheet's favour.
+ *
+ * WHY each rule now reads `var(--bbox-tok-*, <today's literal>)`
+ * (docs/FEEDBACK-2026-09-17b-PLAN.md A-2, codeEditorTheme.ts): a VS Code
+ * syntax theme is a PALETTE SWAP over this exact selector set, not a
+ * second highlighter or a per-theme CodeMirror `EditorView.theme()` — see
+ * codeEditor.tsx:297's own WHY. `codeEditorThemeVars()` sets the
+ * `--bbox-tok-*` custom properties inline on the root; with none set (the
+ * default, and any unrecognised theme id) every rule falls straight
+ * through to the literal it had before this change, byte-identical.
+ */
+.bbox-code-editor.bbox-code-tokens .tok-keyword,
+.bbox-code-editor.bbox-code-tokens .tok-operatorKeyword,
+.bbox-code-editor.bbox-code-tokens .tok-definitionKeyword,
+.bbox-code-editor.bbox-code-tokens .tok-moduleKeyword {
+  color: var(--bbox-tok-keyword, color-mix(in srgb, var(--bbox-accent, #4f6ee5) 78%, var(--color-foreground)));
+  font-weight: 600;
+}
+
+/* Split from the group above so a theme's "control keyword" row
+   (if/for/return/…) has somewhere to land — see codeEditorTheme.ts's own
+   WHY on why `classHighlighter` never actually emits this class today. */
+.bbox-code-editor.bbox-code-tokens .tok-controlKeyword {
+  color: var(--bbox-tok-control-keyword, color-mix(in srgb, var(--bbox-accent, #4f6ee5) 78%, var(--color-foreground)));
+  font-weight: 600;
+}
+
+.bbox-code-editor.bbox-code-tokens .tok-string,
+.bbox-code-editor.bbox-code-tokens .tok-docString,
+.bbox-code-editor.bbox-code-tokens .tok-character,
+.bbox-code-editor.bbox-code-tokens .tok-attributeValue {
+  color: var(--bbox-tok-string, color-mix(in srgb, var(--bbox-success, #2f9e5a) 62%, var(--color-foreground)));
+}
+
+.bbox-code-editor.bbox-code-tokens .tok-number,
+.bbox-code-editor.bbox-code-tokens .tok-integer,
+.bbox-code-editor.bbox-code-tokens .tok-float,
+.bbox-code-editor.bbox-code-tokens .tok-bool,
+.bbox-code-editor.bbox-code-tokens .tok-atom,
+.bbox-code-editor.bbox-code-tokens .tok-null,
+.bbox-code-editor.bbox-code-tokens .tok-unit {
+  color: var(--bbox-tok-number, color-mix(in srgb, var(--bbox-warning, #c98a1b) 58%, var(--color-foreground)));
+}
+
+.bbox-code-editor.bbox-code-tokens .tok-comment,
+.bbox-code-editor.bbox-code-tokens .tok-lineComment,
+.bbox-code-editor.bbox-code-tokens .tok-blockComment,
+.bbox-code-editor.bbox-code-tokens .tok-meta {
+  color: var(--bbox-tok-comment, var(--color-muted-foreground));
+  font-style: italic;
+}
+
+.bbox-code-editor.bbox-code-tokens .tok-typeName,
+.bbox-code-editor.bbox-code-tokens .tok-className,
+.bbox-code-editor.bbox-code-tokens .tok-namespace {
+  color: var(--bbox-tok-type, color-mix(in srgb, var(--bbox-accent, #4f6ee5) 55%, var(--color-foreground)));
+}
+
+.bbox-code-editor.bbox-code-tokens .tok-variableName,
+.bbox-code-editor.bbox-code-tokens .tok-variableName2,
+.bbox-code-editor.bbox-code-tokens .tok-definition,
+.bbox-code-editor.bbox-code-tokens .tok-self {
+  color: var(--bbox-tok-variable, var(--bbox-accent, #4f6ee5));
+}
+
+.bbox-code-editor.bbox-code-tokens .tok-propertyName,
+.bbox-code-editor.bbox-code-tokens .tok-attributeName,
+.bbox-code-editor.bbox-code-tokens .tok-labelName {
+  color: color-mix(in srgb, var(--bbox-danger, #c94b3f) 42%, var(--color-foreground));
+}
+
+/* WHY the fallback reads `var(--bbox-accent, #4f6ee5))` (the tok-variableName
+   rule's own default above) and not `var(--color-foreground)`: this
+   selector was dead until codeEditorHighlight.ts (its own WHY) started
+   actually emitting `tok-function` — nothing ever exercised this rule's
+   own literal, so it was never noticed that it disagreed with what a
+   function name actually rendered as (`.tok-variableName`'s colour, since
+   `.tok-function`/`.tok-definition`/`.tok-variableName` are now emitted
+   together on the SAME element — see that file's own WHY on unioning
+   classes). Every theme sets `--bbox-tok-function` explicitly, so this
+   fallback only matters with no theme selected, and it has to match
+   tok-variableName's fallback exactly or turning the class "on" silently
+   recolours every function name (and call site) the moment no theme is
+   set — a real regression, not a fidelity gain. */
+.bbox-code-editor.bbox-code-tokens .tok-function,
+.bbox-code-editor.bbox-code-tokens .tok-macroName {
+  color: var(--bbox-tok-function, var(--bbox-accent, #4f6ee5));
+  font-weight: 600;
+}
+
+.bbox-code-editor.bbox-code-tokens .tok-operator,
+.bbox-code-editor.bbox-code-tokens .tok-punctuation,
+.bbox-code-editor.bbox-code-tokens .tok-separator,
+.bbox-code-editor.bbox-code-tokens .tok-bracket {
+  color: var(--bbox-tok-operator, var(--color-muted-foreground));
+}
+
+.bbox-code-editor.bbox-code-tokens .tok-invalid {
+  color: var(--bbox-danger, #c94b3f);
+}

@@ -1,0 +1,157 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Standard shadcn/ui default theme (new-york, neutral base color) —
+ * self-contained on purpose. This app does NOT import packages/bbox-ui's
+ * theme.css (bbox-specific accent + status tokens) or apps/docs' fumadocs
+ * shadcn.css (drags in a fumadocs dependency chain this Storybook app has
+ * no reason to take on). This is the "stable floor" alone: the same
+ * variable names shadcn/ui and any `shadcn add` component expect, nothing
+ * bbox-shaped layered on top.
+ *
+ * WHY `tw-animate-css` (same package + version as packages/inspector):
+ * `dropdown-menu.tsx`/`tooltip.tsx` reference `animate-in`/`animate-out`/
+ * `fade-out-0`/`zoom-out-95` etc. — not stock Tailwind utilities, they come
+ * from this plugin. Without it those classes are no-ops: measured live, a
+ * "closed" popup stayed mounted at `opacity: 1` indefinitely (only
+ * `pointer-events: none` changed) instead of actually fading/scaling out.
+ */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* System dark preference — no toggle in this app, so the media query is
+   the whole story (no `.dark` class needed until something drives one). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.145 0 0);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+  }
+}
+
+/*
+ * Box-sizing reset, folded in from the old preview.css — structural, not a
+ * design system. Without it a border+padding box overflows its own
+ * declared width.
+ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#storybook-root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/*
+ * Port's two state tokens (docs/PORT-EDGE-PLAN.md Phase 1) — appended here,
+ * not merged into an earlier block, so this stays a single surgical diff.
+ * Without them `wired` paints near-black (`--primary` on this app's neutral
+ * shadcn theme) and `received` paints nothing at all. Values copied from
+ * packages/bbox-ui/src/theme.css (`--bbox-primary`/`--bbox-received`).
+ */
+:root {
+  --bbox-primary: oklch(0.65 0.19 48);
+  --bbox-received: oklch(0.6 0.19 145);
+}
+
+/*
+ * Trace's marching-ants (`variant:"data"` + `animated`) — appended, not
+ * merged upward, so this stays a single surgical diff (docs/TRACE-PLAN.md
+ * P1's ONE globals.css edit). Copied unchanged from
+ * packages/bbox-ui/src/theme.css:115-133, which ports SystemSketch's own
+ * `systemsketch-data-cable-march`.
+ *
+ * WHY the keyframes live in CSS and not in `traceStrokeStyle`: that
+ * function returns only the class NAME, never the keyframes, so every
+ * Trace on a page marches off ONE definition at one speed. The literal
+ * `10` is `DATA_MARCH_DASHOFFSET_PX` (= 2 x the 5px dash) — CSS cannot
+ * reference the constant, so `trace.layout.ts` pins the value and
+ * `Trace.stories.tsx` asserts the two still agree.
+ *
+ * The reduced-motion guard is not decoration: a 0.5s infinite loop is
+ * exactly the kind of motion `prefers-reduced-motion` exists for, and
+ * `animation: none` leaves the dashes painted, just still.
+ */
+.bbox-trace-march {
+  animation: bbox-trace-march 0.5s linear infinite;
+}
+@keyframes bbox-trace-march {
+  from { stroke-dashoffset: 10; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bbox-trace-march { animation: none; }
+}

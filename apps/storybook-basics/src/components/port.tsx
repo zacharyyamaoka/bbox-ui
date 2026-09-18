@@ -1,0 +1,211 @@
+"use client";
+
+// src/components/port.tsx — ported by value from packages/bbox-ui/src/port.tsx
+// (docs/PORT-EDGE-PLAN.md Phase 1). `Port` is the geometry alone: the disc,
+// the 2px surface ring, the 3px state ring, the lit core, the 40px hit halo.
+// It knows nothing about labels or slots — `./labeledPort.tsx` is the
+// composite that adds those.
+//
+// What ported OVER verbatim (pure geometry/paint, no schema): `portDotClass`,
+// the ring/halo/core layering.
+//
+// What's LEFT BEHIND (docs/PORT-EDGE-PLAN.md's own list — none of it is
+// geometry): `resolveField`/`PORT_PRESETS`/the `size` cascade rung (D4 —
+// `diameter` is a direct prop here), `tone`/`lens`/`reveal`/`producers` (D3 —
+// the sketch's six states don't need them, each is re-addable later), and
+// `anchored` (wall geometry for a real Block).
+
+import type { ComponentProps, CSSProperties } from "react";
+
+import { cn } from "../lib/utils";
+import { PORT_DIAMETERS, PORT_HIT_PX, PORT_STATE_RING_PX, PORT_SURFACE_RING_PX, type PortSize } from "./port.layout";
+
+/* ------------------------------------------------------------------ */
+/* Colour — state -> token, inlined from packages/bbox-ui's appearance.ts */
+/* (STATE_TOKENS/paintVar), tone channel removed (D3) so there is no      */
+/* color-mix blend step: a token resolves straight to `var(--token)`.     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The board's four-value axis — "what is in the port": empty, a default
+ * value set, wired to something, or data has flowed through it just now.
+ * `dimmed`/`hidden` are NOT rungs of this union (see `PortProps`'s own
+ * docs) — neither is a fact about what the port IS.
+ */
+export type PortState = "empty" | "valueSet" | "wired" | "received";
+
+export const PORT_STATES: PortState[] = ["empty", "valueSet", "wired", "received"];
+
+export const PORT_STATE_LABELS: Record<PortState, string> = {
+  empty: "Empty",
+  valueSet: "Default Value",
+  wired: "Wired",
+  received: "Data Received",
+};
+
+interface StateTokenPair {
+  ring: string | null;
+  fill: string | null;
+  core: string | null;
+}
+
+const STATE_TOKENS: Record<PortState, StateTokenPair> = {
+  empty: { ring: "foreground", fill: null, core: null },
+  valueSet: { ring: "muted-foreground", fill: "muted", core: null },
+  wired: { ring: "primary", fill: null, core: "primary" },
+  received: { ring: "bbox-received", fill: "bbox-received", core: "bbox-received" },
+};
+
+/**
+ * `primary` resolves through the bbox accent (with a fallback to whatever
+ * host `--primary` already means) so "wired" reads as the design system's
+ * own orange rather than the host's button colour — same special case
+ * `paintVar` makes in the donor package. `--bbox-primary`/`--bbox-received`
+ * are the two tokens this phase appends to `src/globals.css`.
+ */
+export function paintVar(token: string): string {
+  return token === "primary" ? "var(--bbox-primary, var(--primary))" : `var(--${token})`;
+}
+
+/* ------------------------------------------------------------------ */
+/* The dot's paint                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface PortDotPaintInput {
+  state?: PortState;
+  dimmed?: boolean;
+  hinting?: boolean;
+}
+
+/**
+ * Static half of the dot's class — sizing/shape/transition only. Every
+ * colour fact is dynamic per state and lives in `portDotStyle` instead.
+ *
+ * `hover:scale-110` is a real CSS `:hover` pseudo-class, deliberately NOT a
+ * `hover` prop — nothing outside this component ever needs to SET hover.
+ */
+export function portDotClass(): string {
+  return "relative box-border inline-flex shrink-0 rounded-full transition-transform duration-[50ms] ease-in-out hover:scale-110 motion-reduce:transition-none motion-reduce:hover:scale-100";
+}
+
+/**
+ * The dot's ring/fill. `dimmed` forces the ring to `muted-foreground` and
+ * fades the whole dot to ~45% opacity, leaving the resting fill/core colour
+ * underneath untouched (a dimmed `wired` port still reads "wired, just not
+ * focused right now"). `hinting` wears `wired`'s own shape (hollow ring, lit
+ * core) in the accent colour regardless of `state` — previewing the port
+ * BECOMING wired, with a wide halo.
+ */
+export function portDotStyle({ state = "empty", dimmed = false, hinting = false }: PortDotPaintInput): CSSProperties {
+  const { ring, fill } = STATE_TOKENS[state];
+  const ringColor = hinting ? paintVar("primary") : dimmed ? paintVar("muted-foreground") : ring ? paintVar(ring) : null;
+  // `hinting` renders hollow (no fill), matching `wired`'s own shape.
+  const fillColor = hinting ? null : fill ? paintVar(fill) : null;
+
+  const layers: string[] = [];
+  if (ringColor != null) {
+    const stateRingPx = hinting ? 4 : PORT_STATE_RING_PX;
+    layers.push(`0 0 0 ${PORT_SURFACE_RING_PX}px var(--card)`);
+    layers.push(`0 0 0 ${PORT_SURFACE_RING_PX + stateRingPx}px ${ringColor}`);
+  }
+  if (hinting) {
+    layers.push("0 0 0 9px color-mix(in srgb, var(--bbox-primary, var(--primary)) 38%, transparent)");
+  }
+
+  const style: CSSProperties = {};
+  if (layers.length > 0) style.boxShadow = layers.join(", ");
+  // Opaque resting paint, never transparent — a wall-mounted dot straddles a
+  // block's border, and a transparent interior would let it show through a
+  // hollow (`empty`/`wired`) dot. `var(--card)` is the same token the 2px
+  // surface ring already uses, so ring and disc read as one punch-out.
+  style.background = fillColor ?? "var(--card)";
+  if (dimmed && !hinting) style.opacity = 0.45;
+  if (hinting) style.transform = "scale(1.18)";
+  return style;
+}
+
+/** The core's own diameter as a fraction of the dot's. */
+const PORT_CORE_RATIO = 0.42;
+
+/**
+ * The small inner "core" dot: lit for `wired` (disc stays hollow, core lit
+ * instead of a solid fill) and `received` (core matches the already-solid
+ * fill, reading as "fully lit"). `null` means no core layer at all, not a
+ * transparent one — `empty`/`valueSet` never mount the extra span.
+ */
+export function portCoreStyle({ state = "empty", hinting = false }: PortDotPaintInput): CSSProperties | null {
+  const core = hinting ? "primary" : STATE_TOKENS[state].core;
+  if (core == null) return null;
+  return { background: paintVar(core) };
+}
+
+/* ------------------------------------------------------------------ */
+/* Port — the dot alone: the disc + both rings + the lit core + the    */
+/* 40px hit halo. Knows nothing about labels or slots.                 */
+/* ------------------------------------------------------------------ */
+
+export interface PortProps extends ComponentProps<"span"> {
+  state?: PortState;
+  diameter?: PortSize;
+  /** Author-set, persisted. Genuinely absent when true — `if (hidden)
+   * return null`, no element, no 40px halo, no pointer events at all. Not
+   * "opacity 0, still clickable" — Zach's own annotation on the sketch:
+   * "Completely remove it, we don't want it to be selectable either." */
+  hidden?: boolean;
+  /** Host-set, never persisted — the port is out of focus, or mid-drag and
+   * not a legal target. Composes OVER the resting paint (a dimmed `wired`
+   * port stays legible as "wired, unfocused"), never a fifth `state`. */
+  dimmed?: boolean;
+  /** Host-set, never persisted — the pointer is over this port mid-drag,
+   * previewing it becoming `wired`. */
+  hinting?: boolean;
+}
+
+/**
+ * The dot alone. `hidden` renders NOTHING — not a fifth visual state, a
+ * visibility fact (see `PortProps.hidden`'s own doc, and Port.stories.tsx's
+ * `Hidden` story, which asserts the DOM node is actually gone).
+ */
+export function Port({
+  state = "empty",
+  diameter = "md",
+  hidden = false,
+  dimmed = false,
+  hinting = false,
+  className,
+  style,
+  ...props
+}: PortProps) {
+  if (hidden) return null;
+  const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
+  // A fixed 40px hit target regardless of the painted diameter.
+  const haloInset = (diameterPx - PORT_HIT_PX) / 2;
+  const coreStyle = portCoreStyle({ state, hinting });
+  return (
+    <span
+      data-slot="port-dot"
+      data-state={state}
+      data-diameter={diameter}
+      data-dimmed={dimmed || undefined}
+      data-hinting={hinting || undefined}
+      className={cn(portDotClass(), className)}
+      style={{
+        width: diameterPx,
+        height: diameterPx,
+        ...portDotStyle({ state, dimmed, hinting }),
+        ...style,
+      }}
+      {...props}
+    >
+      <span data-slot="port-dot-halo" aria-hidden className="absolute rounded-full" style={{ inset: haloInset }} />
+      {coreStyle && (
+        <span
+          data-slot="port-dot-core"
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ width: `${PORT_CORE_RATIO * 100}%`, height: `${PORT_CORE_RATIO * 100}%`, ...coreStyle }}
+        />
+      )}
+    </span>
+  );
+}

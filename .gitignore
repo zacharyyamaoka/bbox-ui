@@ -14,13 +14,22 @@ apps/docs/CLAUDE.md
 .scratch-host/
 # Agent scratch — machine-local. Repo guidance lives in CLAUDE.md, which is tracked.
 # `.claude/*` rather than `.claude/`: git cannot re-include a file whose PARENT
-# DIRECTORY is excluded, so the negation below is silently dead with a trailing
-# slash. The glob excludes the contents while leaving the directory itself
-# eligible, which is what makes the exception work.
+# DIRECTORY is excluded, so a negation under a trailing-slash rule is silently
+# dead. The glob excludes the contents while leaving the directory itself
+# eligible, which is what makes the two exceptions below work.
 .claude/*
-# ...except the feedback ledger: it is repo guidance, loaded by CLAUDE.md's @ line,
-# and must travel with a clone. Untracked would not survive a peer's `git stash -u`.
+# ...except the feedback ledger: it is repo guidance, loaded by CLAUDE.md's @
+# line, and must travel with a clone. Untracked would not survive a peer's
+# `git stash -u` — which is how a handed-over report vanished on 2026-09-15.
 !.claude/feedback.md
+# ...and settings.json's worktree.baseRef: CLAUDE.md's own "Isolated agent
+# lanes" section calls it load-bearing for every lane in THIS repo — without it
+# a fresh worktree branches from origin/main and cannot see the branch it was
+# cut from (measured 2026-09-17). A repo invariant, not a per-machine
+# preference. If this file ever grows machine-local content (permission
+# allowlists, model overrides), split those into a second, still-ignored file
+# rather than un-tracking this one.
+!.claude/settings.json
 # wrangler local state
 .wrangler/
 # Reports: the page is tracked, the captures it inlines are not (Zach, 2026-09-07).
