@@ -43,6 +43,12 @@ on the canvas and nothing about what the pointer is doing.
   tested proof that the wall is load-bearing (not just documented) is in
   `docs/provenance/z-order.md`.
 
+(Zach, 2026-09-18: "Right now we're not doing any z-index. BUT I think that
+is changing... in DOM canvas examples with expanded nodes with children
+inside we definitely need this." That is what this section resolves —
+between-node z-order is still his to grant per host; within-box paint order
+is granted here, once, for every host.)
+
 An adapter may import the core and its own engine — never the other engine,
 never the other adapter. That rule is what keeps a third host a ~150-line
 afternoon instead of a fork.
