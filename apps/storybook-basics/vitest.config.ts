@@ -60,8 +60,16 @@ export default defineConfig({
         // 'useMemo')", second run green on the warm cache. A fresh lane's
         // first `pnpm test-stories` must not depend on being the second
         // run.
+        // tldraw is pre-declared beside it, but as INSURANCE, not a
+        // measured necessity: a cold-cache run (node_modules/.vite
+        // removed) with the tldraw host stories present and NO entry here
+        // passed 196/197 with no mid-suite re-optimize (2026-09-17) —
+        // unlike @xyflow/react, whose absence was measured red. tldraw is
+        // a far bigger dependency, the failure mode is timing-dependent,
+        // and the entry costs one line; keep it unless the day comes to
+        // prove it matters.
         optimizeDeps: {
-          include: ["@xyflow/react"],
+          include: ["@xyflow/react", "tldraw"],
         },
         test: {
           name: "storybook",
