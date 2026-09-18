@@ -24,6 +24,7 @@ import {
   RAIL_GAP_PX,
   RAIL_MAIN_INSET_PX,
   alignedFirstCentrePx,
+  collapsedWallCenterPx,
   functionPortCenterPx,
   functionPortHeaderInsetPx,
   offsetEdgePaddingPx,
@@ -276,6 +277,54 @@ describe("functionPortCenterPx", () => {
   it("is null when the Block renders no header", () => {
     const { headerTop: _headerTop, ...noHeader } = BANDS;
     expect(functionPortCenterPx(noHeader)).toBeNull();
+  });
+});
+
+describe("collapsedWallCenterPx", () => {
+  it("lands on the wall's own border line, at the block's vertical midline (left/right)", () => {
+    expect(collapsedWallCenterPx(BANDS, "left")).toEqual({ x: BANDS.blockLeft, y: BANDS.blockTop + BANDS.blockHeight / 2 });
+    expect(collapsedWallCenterPx(BANDS, "right")).toEqual({
+      x: BANDS.blockLeft + BANDS.blockWidth,
+      y: BANDS.blockTop + BANDS.blockHeight / 2,
+    });
+    // Sanity against this fixture's concrete numbers (220×240 at the origin).
+    expect(collapsedWallCenterPx(BANDS, "left")).toEqual({ x: 0, y: 120 });
+    expect(collapsedWallCenterPx(BANDS, "right")).toEqual({ x: 220, y: 120 });
+  });
+
+  it("is the symmetric case for a horizontal wall (top/bottom)", () => {
+    expect(collapsedWallCenterPx(BANDS, "top")).toEqual({ x: BANDS.blockLeft + BANDS.blockWidth / 2, y: BANDS.blockTop });
+    expect(collapsedWallCenterPx(BANDS, "bottom")).toEqual({
+      x: BANDS.blockLeft + BANDS.blockWidth / 2,
+      y: BANDS.blockTop + BANDS.blockHeight,
+    });
+  });
+
+  it("moves with the block, not just its own formula's shape", () => {
+    const shifted: BlockBands = { ...BANDS, blockLeft: 40, blockTop: 12, blockWidth: 100, blockHeight: 60 };
+    expect(collapsedWallCenterPx(shifted, "left")).toEqual({ x: 40, y: 42 });
+    expect(collapsedWallCenterPx(shifted, "right")).toEqual({ x: 140, y: 42 });
+  });
+
+  it("agrees with railBoxFor's own arithmetic for the real 'simple' collapsed plan — not a second, drifting rule", () => {
+    // Re-derives the same point via the mechanism `collapsedWallCenterPx`
+    // claims to restate: a "simple"-collapsed rail's box, cross-centred on
+    // the wall and content-centred over the whole block band (band:"block",
+    // endMarginPx:0 — see railPlanFor's own WHY on space-evenly vs
+    // space-between for a lone box).
+    for (const edge of ["left", "right", "top", "bottom"] as const) {
+      const plan = railPlanFor(planInput({ edge, itemIds: ["only"], view: "simple", collapsePorts: true }));
+      expect(plan.collapsed).toBe(true);
+      const box = railBoxFor(edge, plan, BANDS);
+      const point = collapsedWallCenterPx(BANDS, edge);
+      if (railAxisFor(edge) === "column") {
+        expect(box.left + box.width / 2).toBe(point.x);
+        expect(box.top + RAIL_MAIN_INSET_PX + (box.height - 2 * RAIL_MAIN_INSET_PX) / 2).toBe(point.y);
+      } else {
+        expect(box.top + box.height / 2).toBe(point.y);
+        expect(box.left + RAIL_MAIN_INSET_PX + (box.width - 2 * RAIL_MAIN_INSET_PX) / 2).toBe(point.x);
+      }
+    }
   });
 });
 
