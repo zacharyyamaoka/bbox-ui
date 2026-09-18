@@ -284,3 +284,97 @@ domain's, not ours:
 **Not taken:** JointJS's imperative `add(cellView, selector, id, opts)` API.
 This kit is declarative — props in, DOM out — so the equivalent is a list
 prop whose entries carry the id, not a registry the caller mutates.
+
+---
+
+## Appendix B — three libraries read, and what they change
+
+Zach, 2026-09-17: *"I feel actually there are so many ideas out there
+potentially we could use for showing error states, linting. Can you scrape
+these to see if there are other ideas we can take?"* — maxGraph, JointJS
+(deeper than the highlighters page), and Vyuh Node Flow. Read, not recalled;
+every claim below carries the API name it came from.
+
+### The reframe, which matters more than any single feature
+
+**All three libraries spend their budget on PREVENTION; this plan spends its
+budget on ANNOTATION.** They validate at drag time and, having refused, show
+nothing at rest — JointJS core has no in-place error decoration at all, and
+Vyuh has no diagnostics model whatsoever. Neither stance is wrong: prevention
+suits an editor that owns every mutation, annotation suits a *linter*, which
+by definition reports on state that already exists and was not necessarily
+created by a gesture.
+
+But they are complements, not alternatives, and we currently have only one.
+**Adopting the prevention layer converts most would-be diagnostics into
+non-events**, which is strictly better than rendering them well.
+
+### What three independent designs agreed on — take these
+
+| Convergence | Where | Our position |
+|---|---|---|
+| A mark on an edge is addressed by a **1-D coordinate along the path** | maxGraph `x ∈ [-1..1]` + orthogonal offset; JointJS `distance` (px, `'50%'`, **negative counts from the END**) + `offset` + `rotate` | We have **no** along-path addressing. Adopt it — and the negative form pins a diagnostic at the *broken end* of a dangling edge, which is our hardest case. |
+| The badge sits at a **corner, half outside the box** | maxGraph `defaultOverlap: 0.5`; JointJS `Button` `x:'100%'` / `calc()`; Vyuh "top-right, -8px offset" | Confirms `DiagnosticFlag`'s placement. Three traditions converged; stop deliberating it. |
+| **N marks per element** | all three | Only ours has **stable ids**. maxGraph's `setCellWarning(cell, null)` deletes *every* overlay on the cell — the exact clobbering our ids prevent. |
+
+### Genuinely new — ranked by what they change
+
+1. **Three-valued refusal, carrying its own message.** maxGraph's
+   `getEdgeValidationError` returns `null` (valid) / `''` (**invalid but
+   silent**) / `"message"` (invalid and explained) — *"for empty error
+   messages, the event is silently dropped."* Vyuh independently shaped the
+   verdict as a value object, `deny(reason:, showMessage:)` — then never
+   consumed it (verified in their source: `reason` is dropped on the floor).
+   **Combine them:** a refusal severity axis *independent* of diagnostic
+   severity, where the explained case carries the same message vocabulary the
+   at-rest diagnostic uses. Vyuh declared this loop; nobody has closed it.
+2. **Show the legal move set during the gesture.** JointJS `markAvailable`
+   paints every valid target the instant a drag starts, and `snapLinks` pulls
+   only toward valid magnets — validity as *physics*, not colour. Rejection
+   then shows nothing because invalid targets were never attractive. This is
+   the prevention layer, and it is the single strongest thing we lack.
+3. **Errors bubble through folds.** maxGraph's `containsValidationErrors`:
+   a collapsed group whose hidden children failed wears its own badge. Blocks
+   collapse here and nothing in this plan covers error visibility across a
+   fold.
+4. **Motion as a severity channel.** Vyuh sets a per-edge runtime effect
+   (`PulseEffect`, `FlowingDashEffect`) — their own example variable is named
+   `criticalConnection`. Orthogonal to colour, so it survives colour-blindness
+   AND remains legible zoomed out, where a thin red stroke does not.
+5. **A zoom policy for marks.** Vyuh's LOD tiers hide labels and ports below
+   thresholds. A wavy underline and a corner flag are full-detail chrome that
+   vanish exactly when a zoomed-out overview most needs to show where the
+   problems are. **State which marks survive each tier — error indication
+   should be the last chrome to go.**
+6. **Dual-channel validity.** maxGraph's connect preview is green *and* 3px
+   for valid, red *and* 1px for invalid. Validity survives colour-blindness
+   with no extra thought.
+7. **`focusOpacity`** (JointJS `dia.ToolView`) — while one mark is engaged,
+   the siblings dim. Cheap, and it solves the crowded-element case.
+8. **Our own list design, finished.** JointJS's `list` highlighter **binds to
+   a model attribute** and diffs **per item** — `createListItem` is not called
+   for unchanged entries. That is this plan's diagnostics-array-with-ids as a
+   rendering contract, plus an optimisation we had not specified.
+9. **`mask` with `deep: true`** falls back to `getBoundingClientRect()` when
+   the target is HTML inside a `foreignObject` — they solved halo-ing
+   DOM-in-SVG, which is exactly this kit's rendering situation.
+
+### Confirmed gaps — nobody has these, so they are ours to invent
+
+- **No invalid-PORT rendering anywhere.** maxGraph's `ConstraintHandler`
+  highlights only *valid* points; Vyuh's port highlighting is positive-only
+  and its in-flight cable carries no validity state at all. Ports are where
+  Zach says the key interactions live, and there is no prior art.
+- **No gutter, minimap summary, or dim-the-valid focus mode** in any of the
+  three. "Where are my errors on a board I cannot see all of" is unanswered.
+- **At-rest invalid edges** are weakly served everywhere. JointJS's
+  `linkPinning` defaults to *true* — a dangling end is a legal state, which
+  supports the `drop | dangle | park` decision already taken here — but
+  nothing renders it as diagnosed.
+
+### Deliberately not taken
+
+maxGraph's `validationAlert` (a `window.alert` by default) and JointJS's
+prevent-by-revert `Validator` (paid, and its docs' own example logs to the
+console). Both replace in-place annotation with a modal or a revert, which is
+the stance this plan exists to reject.
