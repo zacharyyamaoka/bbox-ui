@@ -214,10 +214,12 @@ export const DelayedSplit: Story = {
   ),
   play: async ({ canvasElement }) => {
     const group = required<SVGGElement>(canvasElement, '[data-slot="trace"][data-split="true"]', "the split trace group");
-    // `:not([data-sketch])` — the skin port (src/skin/**) added a hidden
-    // hand-drawn twin beside every crisp trace-line path (trace.tsx's
-    // `CRISP_STYLE`/`SKETCH_STYLE`); this assertion is about the two real
-    // segments (before/after), not the twins riding along with them.
+    // `:not([data-sketch])` — belt-and-suspenders since
+    // docs/peps/0001-sketch-skin-at-the-boundary.md: `trace.tsx` no longer
+    // emits a hidden hand-drawn twin at all, but this story renders no
+    // `<SketchAtEdge>` either, so nothing here ever gets a `data-sketch`
+    // twin. The exclusion just keeps this assertion about the two real
+    // segments (before/after) even if a boundary pass is added later.
     const segments = group.querySelectorAll<SVGPathElement>('[data-slot="trace-line"]:not([data-sketch])');
     await expect(segments).toHaveLength(2);
 

@@ -54,7 +54,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tool
 /* The vocabulary — §1                                                 */
 /* ------------------------------------------------------------------ */
 
-/** The closed set. Three members, like the skin table's fixed 15 tokens
+/** The closed set. Three members, like the skin table's fixed 13 tokens
  *  (skin.ts:89) — an open-ended set of marks degenerates into a pile of
  *  per-callsite overrides. */
 export type DiagnosticSeverity = "error" | "warning" | "info";

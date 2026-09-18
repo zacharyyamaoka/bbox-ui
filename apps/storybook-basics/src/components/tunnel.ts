@@ -268,12 +268,15 @@ export interface TunnelMouths {
  *      `pinned` dash the moment a tunnel is active. That is not a bug in
  *      the donor — it is what the dash technique costs, paid somewhere
  *      else.
- *   2. **The sketch skin rewrites the path.** `sketchedTracePath` jitters
- *      interior points, which CHANGES the arc length; a dash pattern
- *      computed from the crisp length lands in the wrong place on the
- *      sketched twin. Slicing geometry first and sketching each mouth
- *      separately is correct by construction — `flattenPathData` already
- *      treats each `M` as a new run.
+ *   2. **The sketch skin rewrites the path.** The boundary pass's
+ *      `sketchTraceD` (`src/skin/sketchAtEdge.ts`, formerly this file's own
+ *      `sketchedTracePath` before docs/peps/0001-sketch-skin-at-the-
+ *      boundary.md moved it to the edge) jitters interior points, which
+ *      CHANGES the arc length; a dash pattern computed from the crisp
+ *      length lands in the wrong place on the drawn twin. Slicing geometry
+ *      first and sketching each mouth separately is correct by
+ *      construction — `flattenPathData` already treats each `M` as a new
+ *      run.
  *   3. **It makes the claim measurable.** A dashed tunnel's `d` is
  *      byte-identical to an untunnelled one, so "the long run is hidden"
  *      can only be asserted from a prop. A shortened `d` is measurable on

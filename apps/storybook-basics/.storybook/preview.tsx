@@ -4,6 +4,7 @@ import { Anchor, Circle, Play, Rocket } from "lucide-react";
 
 import { GlyphResolverProvider } from "../src/components/glyph";
 import { BBOX_SKINS, BBOX_SKIN_LABELS, bboxSkinAttrs, type BboxSkin } from "../src/skin/skin";
+import { SketchAtEdge } from "../src/skin/SketchAtEdge";
 import "../src/globals.css";
 
 /**
@@ -75,10 +76,22 @@ const preview: Preview = {
       // (no skin set -> byte-identical to today) has to hold with zero
       // DOM difference, not just zero paint difference.
       if (!skin) return <Story />;
+      // WHY <SketchAtEdge> wraps here (docs/peps/0001-sketch-skin-at-the-
+      // boundary.md M8): this decorator already knows the active skin from
+      // Storybook's own toolbar global — the proof the edge was always the
+      // right place to run the boundary pass. `active` is gated on
+      // `"sketch"` specifically: `default`/`plain` are pure CSS (a token
+      // layer with no drawn geometry at all), so running the pass for them
+      // would be work with nothing to draw. `SketchAtEdge`'s own wrapper is
+      // `display: contents`, so it adds no box for a descendant's own
+      // `getBoundingClientRect` to trip over — the S1 case (no skin at all)
+      // stays wrapper-free entirely via the early return just above.
       return (
-        <div {...bboxSkinAttrs(skin)} style={{ display: "contents" }}>
-          <Story />
-        </div>
+        <SketchAtEdge active={skin === "sketch"}>
+          <div {...bboxSkinAttrs(skin)} style={{ display: "contents" }}>
+            <Story />
+          </div>
+        </SketchAtEdge>
       );
     },
     (Story) => (

@@ -1,11 +1,10 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import type { ComponentProps, CSSProperties } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
 import { BAR_SIZE_TO_BADGE_SIZE, useBarSize } from "./barSize";
-import { SketchOutline } from "../skin/sketchOutline";
 
 /**
  * src/components/badge.tsx — a plain, stock shadcn Badge. Not vendored
@@ -88,31 +87,32 @@ export function Badge({ className, variant, size, shape, style, ...props }: Badg
       data-slot="badge"
       data-size={resolvedSize}
       data-shape={resolvedShape}
+      // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. The edge has
+      // no props, so its default seed is geometry-derived
+      // (`${width}x${height}`) — a different wobble PATTERN than this
+      // component's own semantic seed, `badge:${resolvedSize}:${resolvedShape}`
+      // (same character and amplitude either way, just a different jitter
+      // sequence). Publishing it closes that gap: `sketchAtEdge.ts`'s
+      // `seedForBox` reads this attribute first.
+      data-bbox-seed={`badge:${resolvedSize}:${resolvedShape}`}
       className={cn(badgeVariants({ variant, size: resolvedSize, shape: resolvedShape }), className)}
       style={{
         borderRadius:
           resolvedShape === "pill"
             ? "var(--bbox-skin-radius-pill, 9999px)"
             : "var(--bbox-skin-radius, var(--radius-md))",
+        // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6.
+        // `currentColor` IS this variant's resolved line colour — every
+        // variant above sets its own `text-*` class, and a real CSS border
+        // (the `outline` variant) is already drawn in `currentColor`. A
+        // boundary twin is appended as a CHILD of this span, so it inherits
+        // the same `color` and lands on the same value without this
+        // component importing the skin or hardcoding a token.
+        ...({ "--bbox-ink-state": "currentColor" } as CSSProperties),
         ...style,
       }}
       {...props}
     >
-      {/* A tinted chip has no border of its own to replace (default /
-          secondary / destructive are `border-transparent`) — the sketch
-          skin gives it one instead. `stretch` because a Badge is sized by
-          its own content, and self-measurement is what the core does not
-          do (sketchOutline.tsx's own WHY). Nominal 40x20 is a typical chip;
-          `preserveAspectRatio="none"` stretches it to whatever this one
-          actually renders at. */}
-      <SketchOutline
-        stretch
-        width={40}
-        height={20}
-        borderWidth={1}
-        radius={resolvedShape === "pill" ? 20 : 8}
-        seed={`badge:${resolvedSize}:${resolvedShape}`}
-      />
       {props.children}
     </span>
   );

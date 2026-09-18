@@ -28,7 +28,6 @@ import {
 } from "./highlighter";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { PORT_DIAMETERS, PORT_HIT_PX, PORT_STATE_RING_PX, PORT_SURFACE_RING_PX, type PortSize } from "./port.layout";
-import { SketchOutline } from "../skin/sketchOutline";
 
 /* ------------------------------------------------------------------ */
 /* Colour — state -> token, inlined from packages/bbox-ui's appearance.ts */
@@ -363,33 +362,44 @@ export function Port({
       data-availability={availability}
       data-diagnostic={diagnosticSeverity}
       data-highlighter-kind={diagnosticSeverity ? highlighterKind : undefined}
+      // WHY these two: docs/peps/0001-sketch-skin-at-the-boundary.md M4.
+      // The dot's state rings are `box-shadow` layers, entirely OUTSIDE
+      // this element's own box, so a boundary pass needs to know how far
+      // out its drawn ring has to land. Before this migration that lived
+      // only in `sketchAtEdge.ts`'s `ringExpansion`, which parsed this
+      // element's computed `box-shadow` spreads back out — "DOM
+      // archaeology" by its own header, kept only because that lane could
+      // not edit this file. Now that it can, these publish the SAME two
+      // numbers directly (unchanged arithmetic: the ring's own centre-line
+      // sits `SURFACE*2 + STATE*3` beyond the dot's diameter, drawn with a
+      // `STATE`-wide pen) and the parser is deleted.
+      data-bbox-ring-expand={PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
+      data-bbox-ring-pen={PORT_STATE_RING_PX}
+      // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. Same gap as
+      // Badge's — the edge's default seed is geometry (`${w}x${h}`), this
+      // component's own is semantic (`port:${state}:${diameter}`).
+      // Publishing it makes the wobble pattern match what the deleted
+      // in-core `SketchOutline` call used to draw, not just its amplitude.
+      data-bbox-seed={`port:${state}:${diameter}`}
       className={cn(portDotClass(), className)}
       style={{
         width: diameterPx,
         height: diameterPx,
         ...portDotStyle({ state, dimmed, hinting, availability, diagnostics, highlighterKind }),
+        // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6. The ring's
+        // colour is STATE-owned (computed above by `portRingColor`, not the
+        // skin), so it is published in a channel the skin never writes,
+        // rather than left for a boundary pass to read back off
+        // `getComputedStyle(el).borderColor` — the sketch skin blanks that
+        // to transparent on purpose (its mechanism for hiding a crisp line
+        // while keeping its width), which would draw an invisible ring.
+        // Naming a colour this component already computed is not a skin
+        // import.
+        ...({ "--bbox-ink-state": ringColor ?? undefined } as CSSProperties),
         ...style,
       }}
       {...props}
     >
-      {/* The drawn ring (ported from packages/bbox-ui/src/port.tsx). Lands
-          on the SAME centre-line the box-shadow rings use: those paint an
-          annulus from `d/2 + SURFACE` out to `d/2 + SURFACE + STATE`, so
-          its centre-line diameter is `d + 2*SURFACE + STATE`; SketchOutline
-          insets the path by one border width per side, hence the extra
-          `2*STATE`. Colour comes from `portRingColor` — the same
-          derivation the box-shadow rings use — so `state` keeps sole
-          ownership of it; the skin only supplies the shape. */}
-      {ringColor != null && (
-        <SketchOutline
-          shape="ellipse"
-          width={diameterPx + PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
-          height={diameterPx + PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
-          borderWidth={PORT_STATE_RING_PX}
-          stroke={ringColor}
-          seed={`port:${state}:${diameter}`}
-        />
-      )}
       <span
         data-slot="port-dot-halo"
         aria-hidden

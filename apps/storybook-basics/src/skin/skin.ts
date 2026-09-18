@@ -4,11 +4,11 @@
 //
 //   • The whole file — vocabulary (`BBOX_SKINS`/`BboxSkin`), labels,
 //     blurbs, the closed `BBOX_SKIN_TOKENS` table, `BBOX_SKIN_ATTR`, and
-//     `bboxSkinAttrs`. The three skins (`default`/`plain`/`sketch`), the
-//     15 token names, and every module-doc WHY (the third orthogonal
-//     axis, the inherited-attribute mechanism, the no-rotate/no-width
-//     invariant) travel unchanged — this app's job was never to redesign
-//     the language, only to bring it to components that never had it.
+//     `bboxSkinAttrs`. The three skins (`default`/`plain`/`sketch`) and
+//     every module-doc WHY (the third orthogonal axis, the
+//     inherited-attribute mechanism, the no-rotate/no-width invariant)
+//     travel unchanged — this app's job was never to redesign the
+//     language, only to bring it to components that never had it.
 //
 // WHAT CHANGED in the port, exhaustively:
 //
@@ -27,8 +27,19 @@
 //      what `skin.test.ts` and the Styles stories actually enforce, not a
 //      shared string. `fallback` below is therefore advisory/documentation
 //      only in this port; see skin.test.ts for what actually gets checked.
-//   2. Nothing else changed: same 15 names, same "paints" column, same
-//      `null`-means-computed convention for the two suppression tokens.
+//   2. Otherwise unchanged: same 13 remaining names, same "paints" column,
+//      same `null`-means-computed convention for the suppression token.
+//   3. TWO tokens the donor still carries, `bbox-skin-crisp` and
+//      `bbox-skin-outline`, are DELETED here — the one deliberate
+//      divergence from "travels unchanged" above, and it is deliberate:
+//      docs/peps/0001-sketch-skin-at-the-boundary.md (migration M8). Both
+//      existed only to switch between a core-rendered crisp element and a
+//      core-rendered hand-drawn twin; this app's core renders no twin at
+//      all any more (`src/skin/SketchAtEdge.tsx` draws from outside
+//      instead), so there is nothing left for either token to switch
+//      between. `packages/bbox-ui` is frozen v1 and still needs them —
+//      this is exactly the kind of divergence CLAUDE.md's "trunk" section
+//      anticipates: new design work happens here, not there.
 //
 // WHY this still lives in its own file rather than folding into
 // globals.css or a component: the vocabulary is the CONTRACT between this
@@ -94,12 +105,12 @@ export const BBOX_SKIN_TOKENS: readonly SkinToken[] = [
   { name: "bbox-skin-surface", fallback: null, paints: "background" },
   { name: "bbox-skin-shadow", fallback: null, paints: "box-shadow" },
   { name: "bbox-skin-font", fallback: "inherit", paints: "font-family (inherited by every text slot)" },
-  // The two that switch between a CSS border and a drawn one. `outline` is
-  // a `display` value, not a colour: only the sketch skin sets it to
-  // `block`, so every other skin renders `SketchOutline` and never paints
-  // it.
-  { name: "bbox-skin-outline", fallback: "none", paints: "display (SketchOutline's <svg>)" },
-  { name: "bbox-skin-ink", fallback: "var(--color-foreground)", paints: "stroke (the drawn line)" },
+  // WHY there is no `bbox-skin-outline` entry any more (migration M8):
+  // it used to be a `display` switch between a core-rendered crisp
+  // element and a core-rendered hand-drawn twin. The core renders no twin
+  // at all now — `SketchAtEdge.tsx` draws from outside instead — so there
+  // is nothing left for a display switch to pick between.
+  { name: "bbox-skin-ink", fallback: "var(--color-foreground)", paints: "stroke (the drawn line, painted at the boundary — see --bbox-ink-state)" },
   { name: "bbox-skin-fg", fallback: null, paints: "color (a component's own text, which a fill-less skin must re-point)" },
   // Lets a skin blank out a border whose COLOUR belongs to another axis
   // (Port's state rings, a semantic Badge variant). Undefined on every
@@ -107,10 +118,9 @@ export const BBOX_SKIN_TOKENS: readonly SkinToken[] = [
   { name: "bbox-skin-line-override", fallback: null, paints: "border-color on state-painted components" },
   { name: "bbox-skin-font-sans", fallback: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', paints: "font-family for a sans text slot, set inline and so beats inheritance" },
   { name: "bbox-skin-font-mono", fallback: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace', paints: "font-family inside CodeEditor" },
-  // The inverse of `--bbox-skin-outline`: an SVG path has no "transparent
-  // but still there" the way a border does, so a sketch-drawn component
-  // renders both the crisp path and the drawn one and CSS picks.
-  { name: "bbox-skin-crisp", fallback: "inline", paints: "display (the un-sketched twin of a drawn element)" },
+  // WHY there is no `bbox-skin-crisp` entry any more (migration M8): the
+  // inverse of `bbox-skin-outline` above, retired for the identical
+  // reason — the core emits no twin for it to switch away from.
   // A Port's rings are box-shadow layers, not a border, so `transparent`
   // is not a way to blank them. Same contract as line-override: the skin
   // names no colour, only "do not paint the CSS one".

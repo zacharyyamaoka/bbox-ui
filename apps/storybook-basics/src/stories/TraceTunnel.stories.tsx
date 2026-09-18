@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent } from "storybook/test";
+import { expect, userEvent, waitFor } from "storybook/test";
 
 import { Button } from "../components/button";
 import { Trace, TraceBody } from "../components/trace";
@@ -22,6 +22,8 @@ import {
   tunnelDisplayState,
   type TunnelDisplayState,
 } from "../components/tunnel";
+import { SketchAtEdge } from "../skin/SketchAtEdge";
+import { SKETCH_TWIN_ATTR } from "../skin/sketchAtEdge";
 import type { BlockScene } from "../scene/scene";
 import { canonicalSceneLayer, edgeLayer, edgeTunnels, sceneLayers, type SceneLayerData } from "../scene/layers";
 
@@ -483,22 +485,42 @@ export const SketchedTunnel: Story = {
       <Row label="default skin, tunnelled" testid="skin-default" >
         <StraightTunnel state="hidden" id="skin-default" />
       </Row>
-      <Row
-        label="sketch skin, tunnelled"
-        note="Both properties on one element: each mouth is its own hand-drawn run, and the long middle is still gone."
-        testid="skin-sketch"
-        skin="sketch"
-      >
-        <StraightTunnel state="hidden" id="skin-sketch" />
-      </Row>
+      {/* WHY wrapped in <SketchAtEdge>, not `skin="sketch"` alone
+          (docs/peps/0001-sketch-skin-at-the-boundary.md): the token half of
+          a skin (fill, radius, stroke width) is still CSS, resolved off the
+          `data-bbox-skin="sketch"` attribute `Row` sets below — but the
+          GEOMETRY (the hand-drawn twin this test reads) is no longer
+          computed inside `trace.tsx`. It comes from this boundary pass
+          reading the crisp DOM back after layout, which is exactly the
+          "U5: tunnel composes with the sketch skin" claim this story makes,
+          now proven the way the ruling requires. */}
+      <SketchAtEdge>
+        <Row
+          label="sketch skin, tunnelled"
+          note="Both properties on one element: each mouth is its own hand-drawn run, and the long middle is still gone."
+          testid="skin-sketch"
+          skin="sketch"
+        >
+          <StraightTunnel state="hidden" id="skin-sketch" />
+        </Row>
+      </SketchAtEdge>
     </div>
   ),
   play: async ({ canvasElement }) => {
     const cell = requireEl(canvasElement, '[data-testid="skin-sketch"]');
-    // The ONE element that carries both claims: the sketched twin, which is
+    // The pass runs in a layout effect; wait for its twin rather than
+    // assuming a frame has already elapsed. WHY the twin carries no
+    // `data-slot` (only `${SKETCH_TWIN_ATTR}`): `copyPresentation` in
+    // sketchAtEdge.ts copies PAINT attributes only, deliberately excluding
+    // `data-slot` — the twin is not a second `"trace-line"`, it is a drawn
+    // decoration adjacent to one.
+    await waitFor(() => {
+      expect(cell.querySelectorAll(`[${SKETCH_TWIN_ATTR}]`).length).toBeGreaterThan(0);
+    });
+    // The ONE element that carries both claims: the drawn twin, which is
     // the path the sketch skin actually shows.
-    const sketched = requireEl<SVGPathElement>(cell, '[data-slot="trace-line"][data-sketch="true"]');
-    const crisp = requireEl<SVGPathElement>(cell, '[data-slot="trace-line"]:not([data-sketch])');
+    const sketched = requireEl<SVGPathElement>(cell, `[${SKETCH_TWIN_ATTR}]`);
+    const crisp = requireEl<SVGPathElement>(cell, `[data-slot="trace-line"]:not([${SKETCH_TWIN_ATTR}])`);
 
     // It is the visible one under this skin — otherwise "it is sketched"
     // would be a claim about an invisible element.

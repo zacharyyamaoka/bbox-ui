@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 
 import { Block } from "../components/block";
 import { Badge } from "../components/badge";
@@ -18,6 +18,8 @@ import { Text } from "../components/text";
 import { FoldingChevron } from "../components/foldingChevron";
 import { ValueCapsule } from "../presets/value/value";
 import { BBOX_SKINS, BBOX_SKIN_LABELS, bboxSkinAttrs, type BboxSkin } from "../skin/skin";
+import { SketchAtEdge } from "../skin/SketchAtEdge";
+import { SKETCH_TWIN_ATTR } from "../skin/sketchAtEdge";
 
 /**
  * Styles/** — the skin system (src/skin/**, ported from packages/bbox-ui,
@@ -130,11 +132,26 @@ function ComponentRow({ name, children }: { name: string; children: (skin: BboxS
   return (
     <div data-testid={`row-${name}`} style={{ display: "grid", gridTemplateColumns: "120px repeat(3, 220px)", alignItems: "center", gap: 16 }}>
       <span style={{ fontSize: 12, color: "var(--muted-foreground)" }}>{name}</span>
-      {BBOX_SKINS.map((skin) => (
-        <div key={skin} {...bboxSkinAttrs(skin)} data-testid={`cell-${name}-${skin}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 72 }}>
-          {children(skin)}
-        </div>
-      ))}
+      {BBOX_SKINS.map((skin) => {
+        const cell = (
+          <div key={skin} {...bboxSkinAttrs(skin)} data-testid={`cell-${name}-${skin}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 72 }}>
+            {children(skin)}
+          </div>
+        );
+        // WHY only the "sketch" cell wraps in <SketchAtEdge>
+        // (docs/peps/0001-sketch-skin-at-the-boundary.md M8): "default" and
+        // "plain" are pure CSS — the token layer alone accounts for every
+        // difference between them and no-skin-set. "sketch" is the one
+        // skin with a GEOMETRY half, and the core no longer draws it —
+        // without this wrapper `data-bbox-skin="sketch"` alone produces
+        // zero measurable difference for a component like Port, whose
+        // entire crisp-visible sketch mark used to be its now-deleted
+        // in-core ring. `display: contents` (SketchAtEdge's own wrapper
+        // style) is a documented CSS Grid exception: an element with it
+        // is removed from the box tree and its children participate in
+        // the grid as if it were not there, so this adds no extra column.
+        return skin === "sketch" ? <SketchAtEdge key={skin}>{cell}</SketchAtEdge> : cell;
+      })}
     </div>
   );
 }
@@ -255,7 +272,7 @@ export const AllComponents: Story = {
       Block: '[data-slot="block"]',
       Badge: '[data-slot="badge"]',
       Port: '[data-slot="port-dot"]',
-      Trace: '[data-slot="trace-line"]:not([data-sketch])',
+      Trace: `[data-slot="trace-line"]:not([${SKETCH_TWIN_ATTR}])`,
       CodeEditor: ".bbox-code-editor",
       LabeledPort: '[data-slot="port-label-display"]',
       PortEdge: '[data-slot="port-edge"]',
@@ -267,6 +284,14 @@ export const AllComponents: Story = {
       Text: '[data-slot="text"]',
       FoldingChevron: '[data-slot="folding-chevron"]',
     };
+    // The sketch column's boundary pass runs in a layout effect; wait for
+    // ITS OWN twin (Port's) before measuring, since Port is the one row
+    // with no other skin-driven difference to fall back on if the pass
+    // hasn't drawn yet.
+    await waitFor(() => {
+      const cell = canvasElement.querySelector(`[data-testid="cell-Port-sketch"]`)!;
+      expect(cell.querySelectorAll(`[${SKETCH_TWIN_ATTR}]`).length).toBeGreaterThan(0);
+    });
     for (const [name, selector] of Object.entries(ROW_SELECTOR)) {
       const defaultCell = canvasElement.querySelector(`[data-testid="cell-${name}-default"]`);
       const sketchCell = canvasElement.querySelector(`[data-testid="cell-${name}-sketch"]`);
@@ -278,9 +303,14 @@ export const AllComponents: Story = {
       if (!paintable || !paintableSketch) throw new Error(`no paintable element found for ${name}`);
       const a = getComputedStyle(paintable);
       const b = getComputedStyle(paintableSketch);
-      const drawnA = defaultCell.querySelector('[data-slot="sketch-outline"], [data-slot="trace-terminal-ring-sketch"]');
-      const drawnB = sketchCell.querySelector('[data-slot="sketch-outline"], [data-slot="trace-terminal-ring-sketch"]');
-      const outlineDiffers = drawnA && drawnB ? getComputedStyle(drawnA).display !== getComputedStyle(drawnB).display : false;
+      // WHY this now checks for the BOUNDARY's twin, not
+      // `[data-slot="sketch-outline"]`/`[data-slot="trace-terminal-ring-
+      // sketch"]` (docs/peps/0001-sketch-skin-at-the-boundary.md M8): the
+      // core renders neither any more. `sketchCell` is wrapped in
+      // `<SketchAtEdge>` (see `ComponentRow`), so a twin sibling/child now
+      // exists wherever the core used to render its own drawn outline.
+      const drawnB = sketchCell.querySelector(`[${SKETCH_TWIN_ATTR}]`);
+      const outlineDiffers = drawnB != null;
       // Trace/TraceTerminal have none of border-radius/background/box-shadow
       // (their "paintable" is an SVG element, where those properties are
       // meaningless) — what changes for them is `display` (the crisp/
@@ -376,25 +406,47 @@ function TraceGallery() {
 
 export const Sketch: Story = {
   render: () => (
-    <div {...bboxSkinAttrs("sketch")} style={{ display: "flex", flexDirection: "column", gap: 32, padding: 32 }}>
-      <WiredScene />
-      <Block header={<Badge>Function</Badge>} body={<CodeEditor value="return value * 2" onWrite={() => {}} multiline={false} />} width={280} height={110} />
-      <TraceGallery />
-      <WiredCompositeScene />
-    </div>
+    // WHY <SketchAtEdge> wraps here too (docs/peps/0001-sketch-skin-at-the-
+    // boundary.md M8): `bboxSkinAttrs("sketch")` alone is now only the
+    // token half (fill, font, radius, stroke width). Every drawn outline
+    // this story asserts on comes from the boundary pass, not from the
+    // components underneath, which import no skin at all any more.
+    <SketchAtEdge>
+      <div {...bboxSkinAttrs("sketch")} style={{ display: "flex", flexDirection: "column", gap: 32, padding: 32 }}>
+        <WiredScene />
+        <Block header={<Badge>Function</Badge>} body={<CodeEditor value="return value * 2" onWrite={() => {}} multiline={false} />} width={280} height={110} />
+        <TraceGallery />
+        <WiredCompositeScene />
+      </div>
+    </SketchAtEdge>
   ),
   play: async ({ canvasElement }) => {
-    // Every drawn outline in the scene is actually visible — not just
-    // present with `display: none`. Includes `TraceTerminal`'s own drawn
-    // ring twin, which is a raw `<path>` rather than `SketchOutline`.
-    const outlines = canvasElement.querySelectorAll('[data-slot="sketch-outline"], [data-slot="trace-terminal-ring-sketch"]');
+    // The pass runs in a layout effect; wait for its output rather than
+    // assuming a frame has already elapsed.
+    await waitFor(() => {
+      expect(canvasElement.querySelectorAll(`[${SKETCH_TWIN_ATTR}]`).length).toBeGreaterThan(0);
+    });
+
+    // Every drawn twin in the scene is actually visible — not just present
+    // with `display: none`. `[${SKETCH_TWIN_ATTR}]` covers all three
+    // twin shapes at once (trace-line paths, TraceTerminal ring paths,
+    // Block/Badge/PortEdge-group/Port box-or-dot <svg>s).
+    const outlines = canvasElement.querySelectorAll(`[${SKETCH_TWIN_ATTR}]`);
     await expect(outlines.length).toBeGreaterThan(0);
     for (const el of outlines) {
       await expect(getComputedStyle(el).display, "a sketch-skinned scene must show every drawn outline").not.toBe("none");
     }
     // Every trace-line's crisp twin is hidden, its sketch twin shown.
-    const crisp = canvasElement.querySelectorAll('[data-slot="trace-line"]:not([data-sketch])');
-    const sketched = canvasElement.querySelectorAll('[data-slot="trace-line"][data-sketch]');
+    // Paired by DOM ADJACENCY (the mechanism's own identity, `findTwinFor`
+    // in sketchAtEdge.ts) rather than by a blanket `[${SKETCH_TWIN_ATTR}]`
+    // query: that query also matches TraceTerminal's ring twins, which
+    // live in an unrelated `<g>` and would silently misalign the pairing.
+    const crisp = [
+      ...canvasElement.querySelectorAll<SVGPathElement>('path[data-slot="trace-line"]'),
+    ].filter((p) => !p.hasAttribute(SKETCH_TWIN_ATTR));
+    const sketched = crisp
+      .map((p) => p.nextElementSibling)
+      .filter((el): el is Element => el !== null && el.hasAttribute(SKETCH_TWIN_ATTR));
     await expect(crisp.length).toBeGreaterThan(0);
     await expect(sketched.length).toBe(crisp.length);
     for (const el of crisp) await expect(getComputedStyle(el).display).toBe("none");

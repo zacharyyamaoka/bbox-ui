@@ -41,25 +41,27 @@ beforeEach(() => {
   __clearSketchCache();
 });
 
-describe("the constant cannot silently drift from the core's", () => {
+describe("the sketch geometry no longer lives in the core (migration M1)", () => {
   // WHY read the component off disk instead of importing it: importing
   // `trace.tsx` would make this test — and anything that bundles it — pull
   // React and the whole component graph into a node project. Reading the
-  // source as TEXT asserts the same invariant with no dependency at all,
-  // and it is the invariant that matters: the number written in the core
-  // today and the number written here must agree until migration deletes
-  // the core's copy.
-  it("TRACE_WOBBLE_PX matches the literal in trace.tsx", () => {
+  // source as TEXT asserts the same invariant with no dependency at all.
+  //
+  // This replaces the pre-migration "TRACE_WOBBLE_PX matches the literal in
+  // trace.tsx" drift guard: before docs/SKIN-AT-THE-EDGES-MIGRATION.md's M1,
+  // TWO copies of this constant existed (trace.tsx's own and this file's)
+  // and had to be asserted equal. M1 deleted trace.tsx's copy along with its
+  // twin-path rewriter, so this file is now the ONLY declaration — there is
+  // nothing left to drift against, only a regression to guard: trace.tsx
+  // growing a second copy back.
+  it("trace.tsx declares no wobble constant of its own", () => {
     const src = readFileSync(TRACE_TSX, "utf8");
-    const match = src.match(/const TRACE_WOBBLE_PX\s*=\s*([\d.]+)/);
-    expect(match, "trace.tsx no longer declares TRACE_WOBBLE_PX").not.toBeNull();
-    expect(Number(match![1])).toBe(TRACE_WOBBLE_PX);
+    expect(src).not.toMatch(/TRACE_WOBBLE_PX/);
   });
 
-  // The core's recipe, spelled out, so a change to either side fails here.
-  it("trace.tsx still seeds from the path string itself", () => {
+  it("trace.tsx no longer imports the sketch path generator", () => {
     const src = readFileSync(TRACE_TSX, "utf8");
-    expect(src).toContain("sketchPathData(d, { seed: d, wobble: TRACE_WOBBLE_PX })");
+    expect(src).not.toMatch(/from ["']\.\.\/skin/);
   });
 });
 
