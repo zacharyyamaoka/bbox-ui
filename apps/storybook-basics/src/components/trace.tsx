@@ -39,6 +39,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 
 import { cn } from "../lib/utils";
+import { HIT_REGION_STROKE } from "./hitRegion";
 import {
   ASYNC_PACKET_DASHARRAY,
   DATA_MARCH_CLASS,
@@ -235,6 +236,23 @@ export interface TraceProps extends Omit<ComponentProps<"g">, "id" | "points"> {
    * component can only guess through a CSS variable. Hosts opt in.
    */
   crossing?: CrossingMark;
+  /**
+   * The hit path's stroke width in the SVG's own units. Defaults to
+   * `TRACE_HIT_STROKE_PX` (12). Scene-space, like every geometry number
+   * here: under a host's viewport transform the band scales with zoom
+   * (note it does NOT get the `vectorEffect` prop — that keeps the INK
+   * screen-constant while the hit band still scales; see the hit-regions
+   * stories). A host wanting a screen-constant band divides by its zoom.
+   */
+  hitStrokePx?: number;
+  /**
+   * Paint the hit path (translucent stroke) instead of leaving it
+   * transparent. Pure paint on the EXISTING hit element — width, cap and
+   * hit-testing are identical with this on or off. Only meaningful with
+   * `interactive`; a non-interactive Trace HAS no hit band, and painting
+   * one would be the decoration this prop exists to avoid.
+   */
+  showHitRegion?: boolean;
 }
 
 export interface TraceStrokeStyle {
@@ -334,6 +352,8 @@ export function TraceBody({
   interactive = false,
   tunnel = "off",
   crossing = "none",
+  hitStrokePx = TRACE_HIT_STROKE_PX,
+  showHitRegion = false,
   className,
   ...props
 }: TraceProps) {
@@ -438,8 +458,8 @@ export function TraceBody({
       data-slot="trace-hit"
       d={drawnPath}
       fill="none"
-      stroke="transparent"
-      strokeWidth={TRACE_HIT_STROKE_PX}
+      stroke={showHitRegion ? HIT_REGION_STROKE : "transparent"}
+      strokeWidth={hitStrokePx}
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ pointerEvents: "stroke" }}
@@ -823,6 +843,10 @@ export interface TraceRouteProps
   tunnel?: TunnelDisplayState;
   /** See `TraceProps.crossing`. */
   crossing?: CrossingMark;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  hitStrokePx?: number;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  showHitRegion?: boolean;
   /** Draw the two endpoint glyphs. On by default — `Trace` is "the whole
    * thing"; a host with real `Port`s passes `false`. */
   terminals?: boolean;
@@ -872,6 +896,8 @@ export function Trace({
   interactive,
   tunnel = "off",
   crossing = "none",
+  hitStrokePx,
+  showHitRegion,
   terminals = true,
   terminalRadius,
   terminalColor,
@@ -994,6 +1020,8 @@ export function Trace({
         strokeWidth={strokeWidth}
         vectorEffect={vectorEffect}
         interactive={interactive}
+        hitStrokePx={hitStrokePx}
+        showHitRegion={showHitRegion}
       />
       {terminals ? (
         <>
