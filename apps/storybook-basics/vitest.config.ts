@@ -69,7 +69,21 @@ export default defineConfig({
         // and the entry costs one line; keep it unless the day comes to
         // prove it matters.
         optimizeDeps: {
-          include: ["@xyflow/react", "tldraw"],
+          // WHY each entry: Vite re-optimizes mid-suite when it first meets
+          // a dep, and the re-optimize restarts the module graph under a
+          // running test — measured as 10 files failing on a null hook
+          // dispatcher (4ada3f8). Declaring them up front is the fix.
+          // @codemirror/lint and @base-ui/react/popover joined the graph
+          // with the diagnostic axis and were measured red the same way: a
+          // "Re-optimizing dependencies because vite config has changed"
+          // run failed once, then passed twice warm. Anything a component
+          // imports lazily belongs in this list.
+          include: [
+            "@xyflow/react",
+            "tldraw",
+            "@codemirror/lint",
+            "@base-ui/react/popover",
+          ],
         },
         test: {
           name: "storybook",
