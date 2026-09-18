@@ -5,33 +5,38 @@ via the `@.claude/feedback.md` line in `CLAUDE.md`. Newest first. This is a live
 rule set, not an archive — prune superseded entries, consolidate past ~60 lines.
 The full replay record lives in the vault; these entries must stand alone.
 
-- **2026-09-17 · VERY BAD · reports (repeat, 1h later)** — Two mechanical gates,
-  because remembering the rule below was not enough: it was encoded and then
-  violated an hour later in the same session. **(1) A subagent brief that
-  produces a document for Zach names the HTML report as the deliverable, not the
-  `.md`** — state both; the `.md` is the lane-readable input (isolated worktrees
-  read plans from a commit), the report is what he reads. **(2) A `docs/*.md` is
-  NOT relayable to him until a report exists** — if you are about to type "here
-  is the plan, N lines, committed at `<sha>`" and no `file://` follows, stop and
-  build the report. The failure point is not the handoff, it is the brief: for
-  delegated work the output format is chosen long before the handoff rule fires.
-  <sub>rate note: `rate - Sep 17 2026, 6.11.40PM.md` · builders: `docs/build_remaining_report.py`, `docs/capture_storybook_shots.mjs`</sub>
-
-- **2026-09-17 · Bad · reports** — Any substantive review, proposal set, research
-  answer or implementation writeup ships as a **rich-media self-contained HTML
-  report**, not a markdown file and not a chat table — whatever verb the ask used.
-  The trigger is the artifact, not the phrasing: if Zach will review and decide
-  from it, it is a visual deliverable. **A proposal for something that does not
-  exist yet owes a rendered MOCK of the proposed UI**, precisely because there is
-  nothing to screenshot. A committed `.md` plan is a different artifact (input for
-  subagent lanes) and does not discharge this. In this repo: build it with a
-  script in `docs/`, capture stories with `docs/capture_storybook_shots.mjs`
-  (Playwright against each story's `iframe.html?id=…`, so no sidebar chrome lands
-  in frame), write to `/home/bam/bbox-ui/reports/` by absolute path, render it
-  headlessly and look at it, then verify the `file://` with `gio info` before
-  handing it over. Captures inline as base64, so such a page belongs in the
-  gitignored `reports/media/` half. Example: `docs/build_proposals_report.py`.
-  <sub>rate note: `rate - Sep 17 2026, 5.02.14PM.md` · full rule is GLOBAL, in the vault's `Settings/Memory/feedback_show_dont_tell.md` and its `MEMORY.md` hook</sub>
+- **2026-09-17 · Bad ×3 same day (consolidated) · reports** — Any substantive
+  review, proposal set, research answer, or implementation writeup ships as a
+  **rich-media self-contained HTML report** — never a markdown file, never a
+  chat table, and never an append into an existing note — whatever verb the
+  ask used and wherever the text physically lands. The trigger is the
+  artifact, not the phrasing or the write path: if Zach will review and
+  decide from it, it is a visual deliverable. **A proposal for something that
+  doesn't exist yet owes a rendered MOCK**, precisely because there's nothing
+  to screenshot yet. Three mechanical gates, because remembering the rule
+  alone failed three times in one day:
+  1. **A subagent brief that produces a document for Zach names the HTML
+     report as the deliverable, not the `.md`.** State both: the `.md` is
+     the lane-readable input (isolated worktrees read plans from a commit),
+     the report is what he reads.
+  2. **A `docs/*.md` is NOT relayable until a report exists.** If the
+     sentence being typed is "here is the plan, committed at `<sha>`" and no
+     `file://` follows, stop and build the report first.
+  3. **Appending an `[!ai]-` reply — or any content — into an EXISTING note
+     is not exempt either.** "I'm just replying inline" reads as low-stakes
+     and skips the trigger entirely, but a comparison table, a research
+     synthesis, or a proposal is the same deliverable whether it lands in a
+     new file, a subagent's return value, or an append to a thread that's
+     been running for months.
+  In this repo: build with a script in `docs/`, write to
+  `/home/bam/bbox-ui/reports/` (or `reports/media/` if it inlines captures),
+  render headlessly, `Read` the PNG, verify `file://` with `gio info` before
+  handoff. Examples: `docs/build_proposals_report.py`,
+  `docs/build_jointjs_comparison_report.py`.
+  <sub>rate notes: `rate - Sep 17 2026, 5.02.14PM.md`, `rate - Sep 17 2026,
+  6.11.40PM.md`, `rate - Sep 17 2026, 7.15.43PM.md` · full rule is GLOBAL, in
+  the vault's `Settings/Memory/feedback_show_dont_tell.md` and its
+  `MEMORY.md` hook</sub>
 
 - **2026-09-17 · Direction · algorithm provenance** — Every file implementing real
   math cites where it came from. Porting is fine, writing our own is fine;
