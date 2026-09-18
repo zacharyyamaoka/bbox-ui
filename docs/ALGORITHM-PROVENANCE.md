@@ -250,3 +250,25 @@ of the five requirements have none in the libraries actually read):
    node close enough"*: distance from the dragged node's OWN ports, which sit
    at an arbitrary offset from wherever the user grabbed. `MagnetPort.at` is
    the right primitive for that, and it is a different problem.
+||||||| fe7386d
+## `apps/storybook-basics/src/layout` — fit to content (2026-09-18, fit-to-content lane)
+
+New directory. `src/layout/` holds geometry that is about a Block's **box**
+rather than about one component's internals — see the report for why it was
+kept out of `src/components` (a concurrent lane owned that directory) and for
+the recommendation that it eventually move beside `blockPort.layout.ts`.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `layout/fitToContent.ts` | (c) + spec | **(c) every line of arithmetic is ours**, derived from this kit's own exported constants (`PORT_EDGE_SLOT_MIN_PX`, `RAIL_GAP_PX`, `RAIL_MAIN_INSET_PX`, `CONTAINER_BORDER`/`CONTAINER_PADDING`). The donor computes over tldraw shape props and its own `NODE_ROW_HEIGHT_PX = 44`, none of which exists here, so nothing could be copied even in principle. **Spec only**, from SystemSketch, all read read-only 2026-09-18: `blockPortViewHeightForSlots` → `layoutBlock.ts:495-517` (the "inverse of the clamp" idea and its own coupling warning, quoted verbatim in the code); `portViewSlotCount` → `layoutBlock.ts:461` (`planBodySlots`, `outputStart = slot + inputs.length`) via `blockPortSlotCount` (`:490`); `railPitchForBand` → `layoutBlock.ts:1434` (`pitch = Math.min(NODE_ROW_HEIGHT_PX, available / plan.slotCount)`), reproduced as a **detector**, not as a layout step; `fitBoxToMembers` → `blockAutoResize.ts:87-118` (`Box.FromPoints` + a uniform pad) and its empty-container rule at `:220-223`. `gapCountFor`'s four cases are read off CSS Box Alignment Level 3's normative definitions, already quoted in `portEdge.layout.ts`'s `mainAxisPositions` docblock (§1 of this file). `resolveBlockHeight` is **(c), ad hoc — no prior art claimed**; it is three `Math.max` expressing Zach's "floored, never overridden". | Every donor range opened with `sed -n` on `/home/bam/systemsketch/src/blocks/` (read-only; nothing written there). `layoutBlock.ts` is 1,674 lines and `:1434` really is the `Math.min` clamp; `blockAutoResize.ts` is 276 lines and `:27` really is `BLOCK_AUTO_RESIZE_PADDING_PX = 56`. **The 56 is deliberately NOT ported** — the donor's own `:21-27` says it is sized for tldraw's single-scalar `fitFrameToContent` and a 48px header, which is a stock-API workaround rather than a design value; see that function's WHY. |
+
+### The one number this lane could not take from anywhere
+
+`railBandHeightForSlots`'s `distribution` parameter has **no donor**. It exists
+because `fitToContent.test.ts`'s "holds the full pitch in EVERY distribution"
+failed on its first run — measured 33px where 42px was expected on
+`space-around` — which established that the space-* schemes spend gap on the
+container's **ends** and therefore need a taller band than `aligned` does for
+the same visual pitch. The donor has no equivalent because it has no
+distribution concept: it places rows arithmetically at a single computed
+`pitch`. Ours, ad hoc, found by testing rather than by reading.
