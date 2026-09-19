@@ -25,9 +25,12 @@ from __future__ import annotations
 
 import base64
 import html
+import io
 import json
 import pathlib
 import subprocess
+
+from PIL import Image
 
 HERE = pathlib.Path(__file__).resolve().parent
 WORKTREE = HERE.parent
@@ -43,6 +46,16 @@ BUILD_PATH = HERE / "menus/data/build.json"
 BUILD = json.loads(BUILD_PATH.read_text()) if BUILD_PATH.exists() else None
 
 SHOTS_DIR = HERE / "menus/screenshots"
+
+# Real captures of the rebuilt components, taken from a running Storybook by
+# docs/capture_menu_kit_shots.mjs. `surface` maps each back to the SystemSketch
+# screenshot it reproduces, so the page can put original and rebuild together.
+BUILT_DIR = REPO / "reports/media/menu-kit-shots"
+MANIFEST = BUILT_DIR / "manifest.json"
+BUILT = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else []
+BUILT_BY_SURFACE: dict[str, list[dict]] = {}
+for _b in BUILT:
+    BUILT_BY_SURFACE.setdefault(_b["surface"], []).append(_b)
 
 # ---------------------------------------------------------------------------
 # The nine surfaces, in the order Zach listed them. `shot` is the staged file;
@@ -96,6 +109,27 @@ SURFACES = [
          blurb="Exit · draft name · ⋯ on the left; “Compare 0 Changes” and a split “Merge ▾” on the right, "
                "disabled until there is something to merge."),
 ]
+
+
+# WHY the page embeds WebP and not the PNGs on disk: the desktop preview
+# builds a `data:text/html,<encoded>` URL and refuses past 2,097,024 bytes,
+# measured ENCODED — and base64 inflates a media-heavy page ~37%. Thirty-three
+# captures as PNG came to 2,898 KB, browser-only. The same images at WebP q92,
+# capped at 1200px (they are shot at deviceScaleFactor 2 and displayed around
+# 620px, so nothing visible is lost), come to roughly a third of that. The PNGs
+# stay on disk at full resolution; only the copies inside the page shrink.
+_WEBP_MAX_W = 1200
+_WEBP_QUALITY = 92
+
+
+def img(path: pathlib.Path) -> str:
+    """Inline an image as a WebP data URI, downscaled to the page's needs."""
+    im = Image.open(path).convert("RGB")
+    if im.width > _WEBP_MAX_W:
+        im = im.resize((_WEBP_MAX_W, round(im.height * _WEBP_MAX_W / im.width)), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "WEBP", quality=_WEBP_QUALITY, method=6)
+    return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 def b64(path: pathlib.Path) -> str:
@@ -171,6 +205,16 @@ h2{font-size:27px;font-weight:700;letter-spacing:-.015em;margin:0 0 8px}
 .shot .blurb{padding:0 22px 16px;color:var(--dim);font-size:14px;max-width:820px}
 .shot .zach{padding:0 22px 16px;color:var(--accent2);font-size:14px;font-style:italic}
 .shot .img{background:#07080a;border-top:1px solid var(--line);padding:20px;text-align:center}
+.rebuild{border-top:1px solid var(--line);background:#0e1512}
+.rebuild-head{padding:13px 22px 0;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--good);font-weight:700}
+.rebuild-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;
+  padding:14px 22px 22px}
+.rebuilt{margin:0;background:#07080a;border:1px solid var(--line);border-radius:8px;
+  overflow:hidden}
+.rebuilt img{width:100%;height:auto;display:block}
+.rebuilt figcaption{padding:7px 11px;font-family:var(--mono);font-size:10.5px;color:var(--faint);
+  border-top:1px solid var(--line)}
 .shot img{max-width:100%;height:auto;border-radius:6px;display:block;margin:0 auto}
 
 table{width:100%;border-collapse:collapse;font-size:13.5px;margin:0}
@@ -306,12 +350,26 @@ def surfaces_html() -> str:
         counts = (f"{len(sv['files'])} files · {len(sv['anatomy'])} parts · "
                   f"{len(sv['engineCoupling'])} couplings")
         zach = f"<div class='zach'>{e(s['zach'])}</div>" if s["zach"] else ""
+        key = s["shot"][:2]
+        rebuilds = "".join(
+            f"""<figure class='rebuilt'>
+  <img alt="{e(b['name'])}" src="{img(BUILT_DIR / (b['name'] + '.png'))}">
+  <figcaption>{e(b['name'])}</figcaption>
+</figure>"""
+            for b in BUILT_BY_SURFACE.get(key, []) if (BUILT_DIR / (b["name"] + ".png")).exists())
+        rebuilt_block = f"""
+  <div class='rebuild'>
+    <div class='rebuild-head'>Rebuilt in bbox-ui — captured from the running Storybook,
+      not mocked</div>
+    <div class='rebuild-grid'>{rebuilds}</div>
+  </div>""" if rebuilds else ""
         out.append(f"""
 <div class='shot'>
   <div class='cap'><h3>{e(s['title'])}</h3><div class='counts'>{counts}</div></div>
   <div class='blurb'>{s['blurb']}</div>
   {zach}
-  <div class='img'><img alt="{e(s['title'])}" src="data:image/png;base64,{b64(p)}"></div>
+  <div class='img'><img alt="{e(s['title'])}" src="{img(p)}"></div>
+  {rebuilt_block}
 </div>""")
     return "".join(out)
 

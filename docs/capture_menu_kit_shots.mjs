@@ -83,10 +83,37 @@ for (const shot of SHOTS) {
     // and the result is clamped back inside the viewport because a clip
     // rectangle that escapes it makes Playwright throw.
     const box = await page.evaluate(() => {
-      const nodes = [
-        ...document.querySelectorAll("#storybook-root > *"),
-        ...document.querySelectorAll("body > [role='presentation'], body > [data-base-ui-portal]"),
-      ];
+      // WHY every top-level body child and not a portal SELECTOR: an open
+      // popover is portaled out of #storybook-root, and guessing the portal's
+      // markup got it wrong — Base UI's wrapper matched neither
+      // [role=presentation] nor [data-base-ui-portal], so the fill-popover
+      // shot clipped to the bare strip and cut the popover off entirely.
+      // Measuring whatever is actually in <body> cannot be wrong about that.
+      // #storybook-root itself is skipped (it is always viewport-tall however
+      // little it holds, which is the reason this measuring exists at all) in
+      // favour of its children.
+      // Union over every element that actually paints, anywhere in <body>.
+      //
+      // WHY not just body's top-level children: a portaled popover hangs off a
+      // WRAPPER whose own box is 0x0, so a children-only pass skipped it and
+      // the fill-popover shot clipped to the bare strip with the popover
+      // sheared off. WHY not a portal selector either: guessing Base UI's
+      // markup was what produced that wrapper miss in the first place.
+      //
+      // Full-viewport elements are excluded because they are layout scaffold,
+      // not ink — #storybook-root is always viewport-tall however little it
+      // holds, which is the whole reason this measurement exists.
+      const nodes = [...document.body.querySelectorAll("*")].filter((n) => {
+        if (/^sb-/.test(n.className || "")) return false;
+        const q = n.getBoundingClientRect();
+        if (q.width === 0 || q.height === 0) return false;
+        // Viewport-TALL is the scaffold tell on its own: a story's ink is
+        // never exactly as tall as the window, but every layout wrapper is.
+        // Requiring full width too let a tall narrow wrapper through and
+        // padded shots with several hundred px of dead background.
+        if (q.height >= innerHeight * 0.98) return false;
+        return q.width < innerWidth * 0.98 || q.height < innerHeight * 0.5;
+      });
       if (!nodes.length) return null;
       let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
       for (const n of nodes) {
