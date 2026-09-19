@@ -73,6 +73,17 @@ export interface RegionLayoutInput {
   /** The corner block's measured (or declared) size. */
   corner: { w: number; h: number };
   arms?: readonly RegionArmInput[];
+  /**
+   * The arm header row's height. Default `REGION_ARM_HEADER_PX` (the
+   * donor's 32). A region VARIANT may draw a shorter or taller header
+   * (`skin/regionVariants.ts`, `arms.headerPx`) — and because this twin is
+   * read by hosts that never render (a tldraw shape's geometry), the number
+   * has to arrive as an input rather than be read off a computed style. A
+   * host that switches variants passes
+   * `REGION_VARIANTS[readRegionVariant()].arms.headerPx` here, or its rows
+   * and the component's rows disagree by the difference.
+   */
+  armHeaderPx?: number;
 }
 
 export interface RegionArmLayout {
@@ -108,10 +119,11 @@ export function regionLayout(input: RegionLayoutInput): RegionLayout {
   // row starts exactly where this one ended. The ONE change from the donor
   // is where the cursor starts — under the CORNER BLOCK, not under a
   // full-width band (Zach's 2026-09-18 "OLD: BAD / NEW: GOOD" ruling).
+  const headerPx = input.armHeaderPx ?? REGION_ARM_HEADER_PX;
   let cursor = corner.h;
   const arms: RegionArmLayout[] = (input.arms ?? []).map((arm, index) => {
     const rowTop = cursor;
-    const bodyTop = rowTop + REGION_ARM_HEADER_PX;
+    const bodyTop = rowTop + headerPx;
     // WHY the clamp only applies while OPEN: `bodyHeight` is the height an
     // arm remembers, and a folded arm must remember the number it will
     // re-open at — clamping a folded arm to the minimum would silently

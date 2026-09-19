@@ -107,10 +107,27 @@ const OPAQUE_NODE: HostScene["nodes"][number] = {
   data: { name: "Collapsed", region: { kind: "group", view: "opaque" }, w: 300, h: 120 },
 };
 
-/** cf-C's `Nested` (`BRANCH_NESTED`, imported — never retyped) beside
- *  cf-A's loop and one opaque card. */
+/**
+ * cf-C's `Nested` (`BRANCH_NESTED`, imported — never retyped) beside
+ * cf-A's loop and one opaque card.
+ *
+ * ONE patch, visible here rather than hidden in a copy: the outer `if`
+ * arm's body grows from 360 to 372. The inner branch it holds is 16 (its
+ * authored y) + 80 (corner) + 2 × (32 + 96) (two arms) + 12 (pad) = 364px
+ * tall, so at 360 it hangs 4px past its own arm's body — visible in cf-C's
+ * shipped `nested.png` too. A proposal capture must not carry a fixture's
+ * 4px overlap as if it were the drawing's, and every variant's header
+ * (26–32px) fits under 372 with slack.
+ */
+const OUTER_IF_ARM_BODY_PX = 372;
 const FIXTURE: HostScene = {
-  nodes: [...BRANCH_NESTED.nodes, ...LOOP_NODES, OPAQUE_NODE],
+  nodes: [
+    ...BRANCH_NESTED.nodes.map((node) =>
+      node.id === "if" ? { ...node, data: { ...node.data, arm: { ...node.data.arm, open: true, h: OUTER_IF_ARM_BODY_PX } } } : node,
+    ),
+    ...LOOP_NODES,
+    OPAQUE_NODE,
+  ],
   edges: [],
 };
 
@@ -155,12 +172,16 @@ function expectCornerFlush(region: HTMLElement, id: string): void {
 /** Item 2 — the left-wall port dot is ON the frame's left edge and not
  *  cut off by it. */
 function expectPortOnTheEdge(region: HTMLElement, id: string, portId: string): void {
-  const frame = frameOf(region).getBoundingClientRect();
   const dot = required<HTMLElement>(
     region,
     `[data-slot="region-corner"] [data-block-id="${id}"] [data-slot="block-port-rail"][data-edge="left"] [data-port-id="${portId}"] [data-slot="port-dot"]`,
     `${id}'s ${portId} dot`,
   );
+  // `elementFromPoint` answers only for points inside the VIEWPORT (it
+  // returns null off-screen — a tall gallery would read as "clipped"), so
+  // bring the dot on screen first and measure everything after the scroll.
+  dot.scrollIntoView({ block: "center", inline: "nearest" });
+  const frame = frameOf(region).getBoundingClientRect();
   const rect = dot.getBoundingClientRect();
   const c = centre(rect);
   expect(Math.abs(c.x - frame.left), `${id}/${portId}: dot centre x vs frame left x`).toBeLessThanOrEqual(1);
@@ -263,11 +284,44 @@ function expectVariantPaint(root: ParentNode, variant: RegionVariantId): void {
   }
 }
 
+/**
+ * Item 4 for the OUTER branch — `expectArmsStacked`'s measurements
+ * (same tolerances, same claims), scoped to a region's DIRECT arm rows.
+ * The lane-A helper counts every `[data-slot="region-arm"]` under the
+ * region, which on a nested fixture includes the inner branch's rows (the
+ * shipped `Nested` story only ever calls it on the inner region for that
+ * reason). The inner region is still measured through the helper itself.
+ */
+function expectOwnArmsStacked(region: HTMLElement, armIds: string[]): void {
+  const rows = Array.from(region.querySelectorAll<HTMLElement>(':scope > [data-slot="region-frame"] > [data-slot="region-arm"]'));
+  expect(rows.map((row) => row.getAttribute("data-arm-id"))).toEqual(armIds);
+  const frame = frameOf(region).getBoundingClientRect();
+  const corner = required<HTMLElement>(region, ':scope > [data-slot="region-frame"] > [data-slot="region-corner"]', "the corner").getBoundingClientRect();
+  let previousBottom = corner.bottom;
+  for (const row of rows) {
+    const armId = row.getAttribute("data-arm-id");
+    const rect = row.getBoundingClientRect();
+    expect(rect.top, `arm ${armId} starts where the previous row ended`).toBeGreaterThanOrEqual(previousBottom - 2);
+    expect(Math.abs(rect.left - frame.left), `arm ${armId} spans from the frame's left edge`).toBeLessThanOrEqual(4);
+    expect(Math.abs(rect.width - frame.width), `arm ${armId} spans the frame's width`).toBeLessThanOrEqual(4);
+    required(row, ':scope > [data-slot="region-arm-header"] [data-slot="folding-chevron"]', `arm ${armId}'s fold chevron`);
+    const body = row.querySelector<HTMLElement>(':scope > [data-slot="region-arm-body"]');
+    if (row.getAttribute("data-open") === "false") {
+      expect(body === null || body.getBoundingClientRect().height <= 1, `folded arm ${armId} shows no body`).toBe(true);
+    } else {
+      expect(body, `open arm ${armId} has a body`).not.toBeNull();
+      expect(body!.getBoundingClientRect().height).toBeGreaterThan(0);
+    }
+    previousBottom = rect.bottom;
+  }
+  expect(previousBottom).toBeLessThanOrEqual(frame.bottom + 2);
+}
+
 /** The whole per-variant contract, items 1–5. */
 async function expectRegionVariant(root: ParentNode, variant: RegionVariantId): Promise<void> {
   for (const id of REGIONS_ON_THE_BOARD) await expectRegionExpanded(root, id);
-  await expectArmsStacked(root, "br", ["if", "else"]);
   await expectArmsStacked(root, "inner", ["inner-if", "inner-else"]);
+  await waitFor(() => expectOwnArmsStacked(regionOf(root, "br"), ["if", "else"]));
   expectCornerPorts(root, "loop", { left: ["Iterable"], right: ["Iter"] });
 
   await waitFor(() => {
@@ -425,7 +479,7 @@ export const FoldInEveryVariant: Story = {
   play: async ({ canvasElement }) => {
     for (const variant of REGION_VARIANT_IDS) {
       const section = required<HTMLElement>(canvasElement, `[data-gallery-variant="${variant}"]`, `the ${variant} row`);
-      await expectArmsStacked(section, "br", ["if", "else"]);
+      await waitFor(() => expectOwnArmsStacked(regionOf(section, "br"), ["if", "else"]));
       const elseRowBefore = required<HTMLElement>(section, '[data-arm-id="else"]', "the else row").getBoundingClientRect().top;
       required<HTMLElement>(section, '[data-arm-id="if"] > [data-slot="region-arm-header"] [data-slot="folding-chevron"]', `${variant}: the if chevron`).click();
       await waitFor(() => {
