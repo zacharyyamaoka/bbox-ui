@@ -260,7 +260,7 @@ LANE_ROWS = [
      "PASS <code>d65e404</code>", "PASS (1 minor)", "0", "merged <code>02f45ce</code>",
      "<code>isCodeOrigin</code> uses <code>Object.keys</code>, so a non-enumerable or symbol extra key still validates."),
     ("scv:scv-origin-on-app-shape", "Origin on the NEW app's code shape, host resolution, the badge, the backend switch, the source context-menu group",
-     "in flight", "—", "—", "in flight at report time", "See the in-flight section above."),
+     "PASS <code>a64a271</code> (returned BLOCKED on a policy point, not a defect)", "PASS (no blockers; the two <code>App.tsx</code> lines were outside the write set until the dispatcher granted them)", "0", "merged <code>9dbe984</code>", "Needed <code>ContextMenu: SourceContextMenu</code> in <code>App.tsx</code>: tldraw 5.3.2 has no other seam to mount a menu after mount. The brief's second bottom-right backend switch was dropped in favour of the real setting stream 3 landed."),
 ]
 
 # Needs-Zach items: (num, title, recommendation, default, cites)
@@ -374,9 +374,7 @@ def build(inline_gif: bool) -> str:
     if INFLIGHT_DIR.exists() and list(INFLIGHT_DIR.glob("*.png")):
         pngs = sorted(INFLIGHT_DIR.glob("*.png"))[:4]
         inflight = (
-            "<p class='ok'>The lane's capture directory exists at build time — these are its captures, "
-            "named as the lane left them. The dispatcher re-ran this builder after it landed; "
-            "the lane-table row and the audit verdict for it are whatever the dispatcher's handoff says, not this snapshot.</p>"
+            "<p class='ok'>Landed at <code>9dbe984</code> after this page was first built. These are the lane's own captures: the origin badge reads <em>Pseudo</em> on an unbound cell and <em>Orphaned</em> on a bound cell while the backend is <code>none</code>; with the backend on, the stock right-click menu gains <em>Convert to code</em> as its last row.</p>"
             "<div class='grid2'>" + "".join(fig(img(p, 900), f"<code>{esc(p.name)}</code>") for p in pngs) + "</div>"
         )
     else:
@@ -455,7 +453,7 @@ def build(inline_gif: bool) -> str:
         (10, "scratchpad/build3-journal.json — wave 3: ss-L2 re-audit, ss-L3, ss-L4, ss-L5, pb-app-backend-wiring, cf-F audit"),
         (11, "scratchpad/plans.json — the four planners' structured output (needs_zach, not_verified, follow_ups)"),
         (12, "scratchpad/lanes.json — the 21 lanes: ids, deps, write sets, acceptance files"),
-        (13, "git log c166fc0..8317b59 on claude/control-flow-integration-2026-09-18 in /home/bam/bbox-ui/.claude/worktrees/cf-integration-2026-09-18 — 18 lane merges, 4 plan merges, 175 files, +33,600 / −131"),
+        (13, "git log c166fc0..9dbe984 on claude/control-flow-integration-2026-09-18 — 19 lane merges, 4 plan merges, 183 files, +35,852 / −131"),
         (14, "scratchpad/gate-final-trunk.log — apps/storybook-basics `pnpm test` on the merged tree, 2026-09-19 10:28: 178 files, 1693 tests, all passed, 17.7 s"),
         (15, "reports/media/lanes-2026-09-18/<lane>/*.png — the lanes' own captures (about 120 PNGs); the ones embedded here are listed by the builder at the end of its run"),
         (16, "/home/bam/zach_brain/Pasted image 20260918150916.png (OLD/BAD vs NEW/GOOD), 20260918192040.png (React Flow Labeled Group Node), 20260918145132.png (for loop), 20260918143241.png (branch, one input, in the old app)"),
@@ -560,7 +558,7 @@ pre.cmd {{ background:#08090b; border:1px solid var(--line); border-radius:8px; 
 <h1>Control flow, and SystemSketch rebuilt as bbox-ui + stock tldraw</h1>
 <p class="prov">Built by Claude Fable 5.1 (scribe) for the dispatcher session, 2026-09-19, from the sources in the index at the bottom. Every bare number after a claim is one of them. Captures are the lanes' own; the hero video is this report's own recording of the merged app. Nothing here is drawn from memory.</p>
 
-<p class="lead">Twenty-one lanes ran overnight against the ask you wrote on the 18th {cite(1)}. Eighteen are merged on <code>claude/control-flow-integration-2026-09-18</code> at <code>8317b59</code> with every gate green {cite(13, 14, 22)}; two stayed on pyblocks branches by rule {cite(20)}; one is still building. The old SystemSketch is archived at <code>517a4fb9</code> {cite(21)}. Nothing touched <code>main</code>.</p>
+<p class="lead">Twenty-one lanes ran overnight against the ask you wrote on the 18th {cite(1)}. Nineteen are merged on <code>claude/control-flow-integration-2026-09-18</code> at <code>9dbe984</code> with every gate green {cite(13, 14, 22)}; two stayed on pyblocks branches by rule {cite(20)}; the last one landed after this page was first built (its row and captures are below). The old SystemSketch is archived at <code>517a4fb9</code> {cite(21)}. Nothing touched <code>main</code>.</p>
 
 <div class="items">
   <div class="item"><span class="st done">DONE · IN THE TRUNK</span><h3>1 · For / while / branch presets and the Region</h3>
@@ -569,8 +567,8 @@ pre.cmd {{ background:#08090b; border:1px solid var(--line); border-radius:8px; 
     <p class="dim"><code>apps/systemsketch</code>: stock tldraw 5.3.2, the trunk through one <code>@trunk</code> alias, ONE system slot (Block · Code · Port · Loop · Branch), wires, editor menus, regions, <code>.tldr</code> persistence. The old app archived with a two-line banner {cite(3, 6, 13)}.</p></div>
   <div class="item"><span class="st done">DONE · OFF BY DEFAULT</span><h3>3 · The pyblocks backend</h3>
     <p class="dim"><code>Backend: none | pyblocks @ url</code> with health, Open Python file…, a board titled after the file, and an edit-event bridge that echoes semantic events to pyblocks. The pyblocks half (<code>block_view_to_scene</code>, routes) sits on a branch, unmerged by rule {cite(4, 10, 20)}.</p></div>
-  <div class="item"><span class="st part">PARTIAL · APP LANE IN FLIGHT</span><h3>4 · Source-code view</h3>
-    <p class="dim">Rung A in the trunk (collapse to a code cell, expand back, definitions → scene, the four-state origin badge, pyblocks-gated actions) is merged with PASS audits; the definitions partition is on a pyblocks branch; wiring the badge and menu into the new app's code shape is the one lane still running {cite(5, 8, 20)}.</p></div>
+  <div class="item"><span class="st ok">DONE · BADGE + MENU IN THE APP</span><h3>4 · Source-code view</h3>
+    <p class="dim">Rung A in the trunk (collapse to a code cell, expand back, definitions → scene, the four-state origin badge, pyblocks-gated actions) is merged with PASS audits; the definitions partition is on a pyblocks branch; the badge and the pyblocks-gated right-click group are wired into the new app's code shape (audit PASS; the two lines it needed in <code>App.tsx</code> — tldraw's stock <code>ContextMenu</code> slot — were ratified by the dispatcher) {cite(5, 8, 20)}.</p></div>
 </div>
 
 <h2><span class="k">01</span>The merged app, driven</h2>
@@ -654,7 +652,7 @@ pre.cmd {{ background:#08090b; border:1px solid var(--line); border-radius:8px; 
   <div class="gate"><div class="big">64</div><div class="lbl">app unit tests, 4 files {cite(22)}</div></div>
   <div class="gate"><div class="big">28</div><div class="lbl">app smoke tests, 6 files, real Chromium {cite(22)}</div></div>
 </div>
-<p class="dim">All measured on the merged tree at <code>8317b59</code>. The diff over <code>c166fc0</code> is 175 files, +33,600 / −131, in 18 lane merges and 4 plan merges {cite(13)}. The trunk's full gate log ends <code>Test Files 178 passed (178) · Tests 1693 passed (1693)</code> {cite(14)}.</p>
+<p class="dim">All measured on the merged tree at <code>8317b59</code>, then re-run by the dispatcher at <code>9dbe984</code> after the last lane landed: app typecheck 0 · unit 94 · smoke 33, trunk typecheck 0 · unit 1211. The diff over <code>c166fc0</code> is 183 files, +35,852 / −131, in 19 lane merges and 4 plan merges {cite(13)}. The trunk's full gate log ends <code>Test Files 178 passed (178) · Tests 1693 passed (1693)</code> {cite(14)}.</p>
 
 <h3>The 21 lanes</h3>
 <p class="dim">Every row has its own verdict buttons. “Fix rounds” counts builder rounds after an audit; the audit column is the verdict sequence. Commits are lane tips or merge commits on the integration branch {cite(8, 9, 10, 13)}.</p>
