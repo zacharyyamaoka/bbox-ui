@@ -29,19 +29,48 @@ function DropdownMenuContent({
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
+  anchor,
+  collisionPadding,
+  container,
   className,
   style,
   ...props
 }: MenuPrimitive.Popup.Props &
-  Pick<MenuPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
+  // WHY `anchor`/`collisionPadding` were added to this Pick (2026-09-18,
+  // menu kit build): a canvas-anchored menu (e.g. a right-click menu
+  // positioned at a pointer point, not a DOM trigger) has no element to
+  // open FROM — Positioner's own `anchor` prop already accepts a Floating
+  // UI VirtualElement for exactly this. `collisionPadding` is the matching
+  // gap for a menu whose trigger sits flush against the viewport/host edge
+  // (toolDock.tsx's bottom dock family menus): without it the popup can
+  // only avoid the *screen* edge, never a host-defined safe area. Both
+  // already exist on Positioner; this Pick just never surfaced them.
+  // Adds-only; every current consumer that omits them is unaffected.
+  Pick<
+    MenuPrimitive.Positioner.Props,
+    "align" | "alignOffset" | "side" | "sideOffset" | "anchor" | "collisionPadding"
+  > &
+  // WHY `container` comes from PORTAL, not Positioner, and why it took a
+  // second pass to land: the host contract promises a token-scoped portal
+  // container — without it every menu escapes to `<body>`, which is outside
+  // whatever element carries the host's CSS variables, so a popup rendered
+  // by a themed host paints with the *document's* tokens instead of its
+  // own. The first pass widened only the Positioner Pick and concluded
+  // `container` did not exist; it does, but Base UI puts it on
+  // `Menu.Portal` (menu/portal/MenuPortal.d.ts) because choosing the DOM
+  // parent is a portal decision, not a positioning one. Picking it off the
+  // wrong namespace is why it went missing rather than being refused.
+  Pick<MenuPrimitive.Portal.Props, "container">) {
   return (
-    <MenuPrimitive.Portal>
+    <MenuPrimitive.Portal container={container}>
       <MenuPrimitive.Positioner
         className="isolate z-50 outline-none"
         align={align}
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        anchor={anchor}
+        collisionPadding={collisionPadding}
       >
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"

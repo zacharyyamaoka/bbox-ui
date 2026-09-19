@@ -1,0 +1,630 @@
+{
+ "lanes": [
+  {
+   "lane": "A \u2014 contract primitives",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/toolbar.tsx",
+    "apps/storybook-basics/src/components/popover.tsx",
+    "apps/storybook-basics/src/components/separator.tsx",
+    "apps/storybook-basics/src/components/dropdown-menu.tsx",
+    "apps/storybook-basics/src/components/tooltip.tsx",
+    "apps/storybook-basics/src/stories/Toolbar.stories.tsx",
+    "apps/storybook-basics/src/stories/Popover.stories.tsx"
+   ],
+   "exports": [
+    "toolbar.tsx: Toolbar, ToolbarButton, ToolbarGroup, ToolbarLink, ToolbarSeparator",
+    "popover.tsx: Popover, PopoverContent, PopoverTrigger (+ PopoverContentProps type)",
+    "separator.tsx: Separator",
+    "dropdown-menu.tsx: unchanged export list, DropdownMenuContent's Pick widened with \"anchor\"",
+    "tooltip.tsx: unchanged export list, TooltipContent's Pick widened with \"anchor\""
+   ],
+   "decisions": [
+    "dropdown-menu.tsx/tooltip.tsx edits scoped to EXACTLY the task brief's instruction (add \"anchor\" only) rather than the design doc's broader \"anchor|container|collisionPadding\" (MENU-KIT-DESIGN.md line 149) \u2014 the task brief explicitly says 'that is the entire change, one word in a type and one prop passed through, twice', which is more specific/authoritative for this lane than the design doc summary.",
+    "popover.tsx's new PopoverContentProps DOES get the full interface from the design doc (align/alignOffset/side/sideOffset/anchor/collisionPadding + container + autoFocus) since this is a brand-new file, not a surgical edit \u2014 no reason to narrow it.",
+    "ToolbarButton composes with PopoverTrigger as `<ToolbarButton render={<PopoverTrigger/>}>` (toolbar item outer, trigger behavior merged in) rather than the reverse \u2014 verified this is the correct Base UI composition direction for a roving-focus item that also opens a popup (the toolbar's CompositeItem must own the DOM node Toolbar.Root manages).",
+    "ToolbarButton pressed state uses `aria-pressed:` Tailwind variant (matching toggle.tsx's existing `aria-pressed:bg-muted` convention) rather than a `data-pressed` attribute, since Base UI's Toolbar.Button has no built-in pressed state of its own.",
+    "Fixed a real, verified bug while writing the NEW separator.tsx: the stock apps/docs/src/registry/new-york-v4/ui/separator.tsx's `data-horizontal:`/`data-vertical:` Tailwind classes are dead code \u2014 compiled (via tailwindcss's own `compile()` API) to presence-only `[data-horizontal]`/`[data-vertical]` selectors, but Base UI's Separator actually emits a value-based `data-orientation=\"horizontal\"|\"vertical\"` attribute (verified by reading Separator.js + getStateAttributesProps.js). Used `data-[orientation=horizontal]:`/`data-[orientation=vertical]:` instead, matching what toolbar.tsx's ToolbarSeparator already correctly does. Did NOT touch apps/docs's own copy (out of write set) \u2014 flagging this as a separate finding below.",
+    "Toolbar's className auto-flips to `flex-col` on `data-[orientation=vertical]`, so callers never need to hand-pass a `style={{flexDirection}}` override for a vertical toolbar."
+   ],
+   "provenance": [
+    "toolbar.tsx: no direct SystemSketch donor (design doc: 'the one genuinely missing wrapper... verified 404 twice') \u2014 new wrapper over apps/storybook-basics/node_modules/@base-ui/react/toolbar/index.parts.d.ts (Root/Group/Button/Separator/Link), styled matching apps/storybook-basics/src/components/button.tsx:50-69's size-cascade pattern and bar.tsx's WHY-comment density",
+    "popover.tsx: based on apps/docs/src/registry/new-york-v4/ui/popover.tsx:1-91, extended per docs/menus/MENU-KIT-DESIGN.md:131-146 (PopoverContentProps interface) \u2014 anchor/collisionPadding verified against apps/storybook-basics/node_modules/@base-ui/react/internals/useAnchorPositioning.d.ts:70-80",
+    "separator.tsx: based on apps/docs/src/registry/new-york-v4/ui/separator.tsx:1-26, orientation-selector fix verified against apps/storybook-basics/node_modules/@base-ui/react/separator/Separator.js and .../internals/getStateAttributesProps.js",
+    "dropdown-menu.tsx:27-42 edit: Pick widened per task brief instruction, anchor verified present on MenuPrimitive.Positioner.Props via .../menu/positioner/MenuPositioner.d.ts extending UseAnchorPositioningSharedParameters",
+    "tooltip.tsx:27-43 edit: same pattern, verified via .../tooltip/positioner/TooltipPositioner.d.ts"
+   ],
+   "blockers": [
+    "NOT a blocker for this lane, but a finding for the orchestrator: apps/docs/src/registry/new-york-v4/ui/separator.tsx (the stock file every other L1 part's separator.tsx is supposed to copy) ships dead `data-horizontal:`/`data-vertical:` Tailwind classes \u2014 verified via compiling with tailwindcss@4.3.3's own compile() API, they never match Base UI's actual `data-orientation=\"...\"` attribute. Out of this lane's write set to fix (apps/docs/, not apps/storybook-basics/), so left untouched there; my own new separator.tsx uses the corrected `data-[orientation=...]:` selectors instead and documents why in its header comment.",
+    "Did not run pnpm typecheck/test-stories/tsc per the concurrency instructions (other lanes are mid-write in the same tree) \u2014 verified all Base UI API usage (Toolbar.Root/Group/Button/Separator/Link, Popover's anchor/collisionPadding/container, Menu/Tooltip Positioner's anchor) by reading the real installed .d.ts and .js files in apps/storybook-basics/node_modules/@base-ui/react/ rather than by compiling. The orchestrator's barrier typecheck is the first real compile of this lane's code."
+   ]
+  },
+  {
+   "lane": "Lane B \u2014 leaf primitives (menu kit)",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/context-menu.tsx",
+    "apps/storybook-basics/src/components/button-group.tsx",
+    "apps/storybook-basics/src/components/breadcrumb.tsx",
+    "apps/storybook-basics/src/components/toggle-group.tsx",
+    "apps/storybook-basics/src/components/tabs.tsx",
+    "apps/storybook-basics/src/components/splitButton.tsx",
+    "apps/storybook-basics/src/components/inlineRename.tsx",
+    "apps/storybook-basics/src/stories/ContextMenu.stories.tsx",
+    "apps/storybook-basics/src/stories/ButtonGroup.stories.tsx",
+    "apps/storybook-basics/src/stories/Breadcrumb.stories.tsx",
+    "apps/storybook-basics/src/stories/ToggleGroup.stories.tsx",
+    "apps/storybook-basics/src/stories/Tabs.stories.tsx",
+    "apps/storybook-basics/src/stories/SplitButton.stories.tsx",
+    "apps/storybook-basics/src/stories/InlineRename.stories.tsx"
+   ],
+   "exports": [
+    "context-menu.tsx: ContextMenu, ContextMenuCheckboxItem, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuPortal, ContextMenuRadioGroup, ContextMenuRadioItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger",
+    "button-group.tsx: ButtonGroup, ButtonGroupSeparator, ButtonGroupText, buttonGroupVariants",
+    "breadcrumb.tsx: Breadcrumb, BreadcrumbEllipsis, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator",
+    "toggle-group.tsx: ToggleGroup, ToggleGroupItem",
+    "tabs.tsx: Tabs, TabsContent, TabsList, TabsTrigger, tabsListVariants",
+    "splitButton.tsx: SplitButton, SplitButtonProps, SplitButtonItem",
+    "inlineRename.tsx: InlineRename, InlineRenameProps"
+   ],
+   "decisions": [
+    "Fixed the same 'bare data-attribute vs data-orientation' Tailwind selector bug (already documented/fixed once in this app's own separator.tsx) at two more sites I ported into: button-group.tsx's ButtonGroupSeparator and toggle-group.tsx's orientation selectors \u2014 both donors used e.g. `data-vertical:` which lowers to `[data-vertical]`, an attribute Base UI never sets (it sets `data-orientation=\"vertical\"`), so the donor's vertical-orientation styling was dead CSS. Left a WHY comment pointing back to separator.tsx at each site.",
+    "splitButton.tsx composes Button + DropdownMenu directly with a flex div (not the new ButtonGroup) for the rounded-corner-collapse \u2014 kept it simple/self-contained per the brief's literal instruction ('compose the EXISTING button.tsx and dropdown-menu.tsx') rather than adding an implicit third dependency on a sibling lane's ButtonGroup.",
+    "InlineRename mirrors DraftsControl.tsx's contract (calls onCancel when the committed value is unchanged) rather than DraftModeBar.tsx's slightly different inline version, since the props sketch in the design doc (onCommit + onCancel) matches DraftsControl's shape.",
+    "InlineRename's default validate message ('Give this draft a name.') is generic-but-donor-literal; per-call-site wording (frames row, file title) is expected to pass its own `validate`.",
+    "Used `fireEvent.contextMenu(...)` from storybook/test to open the ContextMenu in tests, and used direct `.focus()`/`.blur()` DOM calls in a couple of plain-mechanics assertions instead of `userEvent.tab()`, matching the existing Toolbar.stories.tsx pattern in this app.",
+    "Verified exact Base UI 1.8 data-attribute names on disk before asserting on them in tests (data-checked/data-unchecked for CheckboxItem, data-pressed for Toggle, data-active \u2014 not data-selected \u2014 for Tabs.Tab, aria-disabled for a disabled composite Tab) rather than guessing from the shadcn class names."
+   ],
+   "provenance": [
+    "context-menu.tsx: /home/bam/systemsketch/src/components/ui/context-menu.tsx:1-260 (full file)",
+    "button-group.tsx: apps/docs/src/registry/new-york-v4/ui/button-group.tsx:1-84 (full file)",
+    "breadcrumb.tsx: /home/bam/systemsketch/src/components/ui/breadcrumb.tsx:1-114 (full file)",
+    "toggle-group.tsx: packages/inspector/src/components/ui/toggle-group.tsx:1-90 (full file)",
+    "tabs.tsx: apps/docs/src/registry/new-york-v4/ui/tabs.tsx:1-73 (full file)",
+    "splitButton.tsx: /home/bam/systemsketch/src/drafts/DraftModeBar.tsx:95-180 (MergeSplitButton) + drafts.css:619-663 (state styling) \u2014 behavior/state-model ported, markup rewritten to compose Button+DropdownMenu",
+    "inlineRename.tsx: /home/bam/systemsketch/src/drafts/DraftsControl.tsx:36-116 (local InlineRename helper), cross-checked against /home/bam/systemsketch/src/drafts/DraftModeBar.tsx:190-243,394-423 (near-duplicate editor) \u2014 contract ported, validate() generalized from the donor's hardcoded check"
+   ],
+   "blockers": []
+  },
+  {
+   "lane": "C - control data (registry port)",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/controlValue.ts",
+    "apps/storybook-basics/src/components/controlRegistry.ts",
+    "apps/storybook-basics/src/components/controlGlyphs.tsx",
+    "apps/storybook-basics/src/components/controlValue.test.ts",
+    "apps/storybook-basics/src/components/controlRegistry.test.ts"
+   ],
+   "exports": [
+    "controlValue.ts: ControlValue<T>, sharedValueAcross, combineControlValues",
+    "controlRegistry.ts: ControlLayout, ControlTrigger, ControlOption, ControlDefinition<K>, CustomSizeBinding, ControlBinding, BoundControl<K>, ControlRecipe<K>, ControlComposition<K>, MIXED_LABEL, CUSTOM_LABEL, createControlRegistry<K>() -> {bindControl, composeControls, controlIds, danglingControls}, selectedControlOption, isAutomaticSelection, stackModes, controlTriggerLabel",
+    "controlGlyphs.tsx: GlyphRenderer, GlyphFamilies, DEFAULT_GLYPH_FAMILIES, swatchGlyph"
+   ],
+   "decisions": [
+    "danglingControls(recipe, candidates) returns the K[] of bound-control kinds that appear in NO recipe group at all (the reverse of the recipe's own optional-slot drop) - this is what composeControls's new onDangling callback is fed; recipe items with no matching candidate are NOT reported (that drop stays load-bearing for optional slots per design decision #7)",
+    "combineControlValues's element type is `(ControlValue<T> | undefined)[]` per the design's own type sketch (donor took `readonly SharedStyle<T>[]` with no undefined) - implemented by filtering undefined entries as abstentions before folding, consistent with sharedValueAcross's own abstention rule; added one new test for this widened contract since it's new behavior relative to the donor",
+    "DEFAULT_GLYPH_FAMILIES keys chosen as: fill, dash, size, strokeWidth, font, align, verticalAlign, routing, arrowheadStart, arrowheadEnd - 'routing' replaces the donor's 'lineShape' name per the design doc's own abbreviated list, and arrowheadStart/arrowheadEnd stay two separate keys (each closing over its own `atStart` boolean) rather than adding a second parameter to GlyphRenderer, since the design's GlyphRenderer type sketch takes only `(value)`",
+    "'geo' and 'swatch' families are deliberately NOT in DEFAULT_GLYPH_FAMILIES: geo dispatches on a tldraw-vendored icon set (canvas-engine data, out of scope for a kit that imports no canvas engine) and has no host-agnostic replacement to port; swatch is the one genuinely editor-coupled family and ships instead as the injectable swatchGlyph(hexFor) factory per the design's own sketch",
+    "STROKE_WIDTH_PX (thin:2, medium:3.5, thick:7) and strokeWidthPxForRung are inlined as local, unexported consts in controlGlyphs.tsx rather than porting strokeMeta.ts itself, since that donor file also carries live shape-metadata read/write with no equivalent in this kit and only the three numbers are load-bearing for the drawn glyph",
+    "controlRegistry.test.ts builds its own small fixture vocabulary (Kind union + DEFINITIONS + three recipes shaped like the donor's SHAPE/CONNECTOR/BLOCK_TITLE recipes) via createControlRegistry rather than importing a real app vocabulary, since the factory pattern means there is no module-level registry left to import directly - every donor assertion is preserved against this fixture, plus new cases for danglingControls/onDangling (design decision #7, absent from the donor) and for the widened isCustomValue/customValueLabel and null-returning selectedControlOption"
+   ],
+   "provenance": [
+    "controlValue.ts <- /home/bam/systemsketch/src/contextualMenus/sharedValues.ts:19-46 (rev 10748b8ccdb374e71714f3d351abc43947ecfb0e)",
+    "controlValue.test.ts <- /home/bam/systemsketch/src/contextualMenus/sharedValues.test.ts:1-53",
+    "controlRegistry.ts <- /home/bam/systemsketch/src/contextualMenus/contextualControlRegistry.ts:8-134,411-491 and /home/bam/systemsketch/src/contextualMenus/ContextualControls.tsx:236-248 (stackedModes -> stackModes)",
+    "controlRegistry.test.ts <- /home/bam/systemsketch/src/contextualMenus/contextualControlRegistry.test.ts:1-129",
+    "controlGlyphs.tsx <- /home/bam/systemsketch/src/appearance/AppearanceGlyph.tsx:54-81 (GLYPH_FAMILIES table + WHY), :196-230 (ColorSwatch shape), :330-506 (all drawn glyph functions verbatim) and /home/bam/systemsketch/src/appearance/strokeMeta.ts:87-91,195-199 (STROKE_WIDTH_PX, strokeWidthPxForRung, inlined)"
+   ],
+   "blockers": []
+  },
+  {
+   "lane": "D \u2014 floating placement",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/floatingToolbar.placement.ts",
+    "apps/storybook-basics/src/components/floatingToolbar.placement.test.ts"
+   ],
+   "exports": [
+    "SELECTION_MENU_GAP",
+    "SELECTION_MENU_MARGIN",
+    "SELECTION_OVERLAY_INSET",
+    "SELECTION_MENU_MIN_WIDTH",
+    "Rect",
+    "Size",
+    "SelectionMenuSide",
+    "SelectionMenuPlacementInput",
+    "SelectionMenuPlacement",
+    "isSelectionOnScreen",
+    "floatingToolbarMaxWidth",
+    "placeFloatingToolbar"
+   ],
+   "decisions": [
+    "Renamed only the two function names the design doc explicitly renamed (placeSelectionMenu -> placeFloatingToolbar, selectionMenuMaxWidth -> floatingToolbarMaxWidth); left SelectionMenuSide, the SelectionMenuPlacement*/Rect/Size type names, and all SELECTION_* constant names untouched, since the design doc lists SelectionMenuSide and 'the four constants' verbatim as the exports and only calls out the two function renames.",
+    "Made overlayInset a required field on SelectionMenuPlacementInput (dropped its `= SELECTION_OVERLAY_INSET` default) per MENU-KIT-DESIGN.md \u00a74: 'overlayInset now REQUIRED (its 5px default was measured against tldraw's handles)'. Kept SELECTION_OVERLAY_INSET exported as tldraw's own measured value for a host to pass explicitly.",
+    "Test file's local frozen-oracle helper (oraclePlaceSelectionMenu) keeps its own internal overlayInset default unchanged, since it's a test fixture reproducing the donor's original hand-rolled math bit-for-bit, not the shipped API; every call site that invokes the real placeFloatingToolbar now passes overlayInset: SELECTION_OVERLAY_INSET explicitly.",
+    "Kept every WHY comment from the donor verbatim (FigJam vertical-placement policy, viewport-margin/obstacle-floor clamp shapes, the Codex round 1/2/4 width-cap history, intersection-vs-midpoint rationale), only updating file/module references (e.g. donor CSS class names) to speak generically about the host's CSS rather than assume systemsketch-specific selectors.",
+    "Provenance headers on both files cite the exact donor paths and line ranges read in full (floatingToolbarPlacement.ts:1-343, floatingToolbarPlacement.test.ts:1-252) per the repo's algorithm-provenance rule, and explain both renames plus the overlayInset default removal inline so a future reader doesn't mistake them for a silent drift from the donor."
+   ],
+   "provenance": [
+    "apps/storybook-basics/src/components/floatingToolbar.placement.ts: ported from /home/bam/systemsketch/src/chrome/floatingToolbarPlacement.ts:1-343 (read in full)",
+    "apps/storybook-basics/src/components/floatingToolbar.placement.test.ts: ported from /home/bam/systemsketch/src/chrome/floatingToolbarPlacement.test.ts:1-252 (read in full)"
+   ],
+   "blockers": []
+  },
+  {
+   "lane": "E (pure models)",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/breadcrumbCompact.ts",
+    "apps/storybook-basics/src/components/breadcrumbCompact.test.ts",
+    "apps/storybook-basics/src/components/toolPreferences.ts",
+    "apps/storybook-basics/src/components/toolPreferences.test.ts",
+    "apps/storybook-basics/src/components/framesOrder.ts",
+    "apps/storybook-basics/src/components/framesOrder.test.ts",
+    "apps/storybook-basics/src/components/historyTime.ts",
+    "apps/storybook-basics/src/components/wordDiff.ts",
+    "apps/storybook-basics/src/components/wordDiff.test.ts",
+    "apps/storybook-basics/src/components/lineDiff.ts",
+    "apps/storybook-basics/src/components/propertyRows.ts",
+    "apps/storybook-basics/src/components/compareModel.ts",
+    "apps/storybook-basics/src/components/compareModel.test.ts"
+   ],
+   "exports": [
+    "breadcrumbCompact.ts: DepthBreadcrumbItem, CompactDepthBreadcrumbItem, compactDepthBreadcrumbs, CrumbSegment, segmentBreadcrumbs",
+    "toolPreferences.ts: PreferenceField, PreferenceRegistry, parsePreferences, mergePreferences, ArrowPreset, ToolbarPreferences, DEFAULT_TOOLBAR_PREFERENCES, TOOLBAR_PREFERENCES_REGISTRY, parseToolbarPreferences, nextArrowPreset, arrowPresetPressCount, arrowPresetsInPressOrder, arrowPresetForActivation",
+    "framesOrder.ts: Box, FramesOrderState, FramesOrderDropPosition, readOrder, ordered, intersects, clip, moveItemKey",
+    "historyTime.ts: relativeTime, absoluteTime",
+    "wordDiff.ts: DiffTokenKind, DiffToken, WordDiff, WORD_DIFF_TOKEN_LIMIT, tokenizeFieldValue, wordDiff, WORD_DIFF_ELISION, compactFormerValue",
+    "lineDiff.ts: LineKind, DiffLine, stableJson, lineDiff, CONTEXT_LINES, collapseContext, ELISION",
+    "propertyRows.ts: PropertyRow, rowPrevious, rowCurrent, rowSupportsWordDiff, STATE_LABEL, propertyRowsOf, ElementSummary, ELEMENT_STATUS_LABEL, elementSummaries, orderChanges",
+    "compareModel.ts: CHANGE_KINDS, ChangeKind, SUBJECT_KINDS, SubjectKind, FieldChange, CompareChange, SubjectTally, BoardCompare, canWordDiff, RecordLike, RecordMap, BLOCK_COMPARE_FIELDS, PORT_COMPARE_FIELDS, CABLE_COMPARE_FIELDS, compareBoards"
+   ],
+   "decisions": [
+    "toolPreferences.ts: 'generalized preference algebra' read as replacing the donor's field-specific SystemSketch tool vocabulary (ShapeFamilyTool/SystemFamilyTool/BboxFamilyTool, isBboxFamilyTool, ARROW_PRESET_ROUTING/connectionRoutingForArrowPreset) with a registry-driven PreferenceField/PreferenceRegistry/parsePreferences/mergePreferences mechanism, plus ArrowPreset as the one worked example the design doc names ('pressCount derived from the cycle'). Those SS-vocab items are host-adapter concerns, not kit exports -- documented in the file's provenance header rather than silently dropped.",
+    "toolPreferences.ts: PreferenceRegistry<P>/parsePreferences<P>/mergePreferences<P> are constrained to `P extends object` rather than `Record<string,string>`/`Record<string,unknown>` -- TS strict mode refuses to unify a plain interface (no explicit index signature) against a Record-constrained generic, which broke on ToolbarPreferences and the test fixture; `object` plus internal casts (matching the donor's own escape-hatch casts) preserves the same runtime behavior.",
+    "framesOrder.ts: readOrder(meta, key) takes the metadata bag and its key as two arguments instead of the donor's readOrder(page: TLPage) reading one hardcoded FRAMES_PANEL_ORDER_META_KEY off a tldraw TLPage -- required to remove the canvas-engine type, and lets a host pick its own storage key.",
+    "framesOrder.ts: clip(a, b) is new, not in the donor -- the design doc names it alongside intersects/ordered/readOrder/moveItemKey but no such function exists in framesPanelModel.ts. Implemented as the natural pure-geometry counterpart to intersects (returns the overlapping rect or null) and marked 'ours, ad hoc' in the provenance header per the algorithm-provenance rule.",
+    "compareModel.ts: BlockPort inlined as a 4-field structural PortLike {id, name, type, defaultValue?} per the design doc's explicit instruction -- confirmed by reading every BlockPort use site in the donor (portsOf, PORT_COMPARE_FIELDS access): only those four fields are ever read.",
+    "wordDiff.test.ts: ported only the 'tokenizing a field value' and 'the intra-value diff' describe blocks from the donor test file -- the remaining two blocks ('reading a field pair', 'a changed pose') exercise a different donor (./fieldDiff.ts) out of Lane E's write set and were not ported.",
+    "historyTime.ts: no .test.ts written -- absent from the explicit write set (unlike every other ported file with a donor test), even though historyModel.test.ts exists in the donor tree; treated the write-set omission as deliberate rather than an oversight to fix.",
+    "toolPreferences.test.ts / framesOrder.test.ts: added direct unit coverage beyond the donor's ported cases (a synthetic multi-field registry fixture; readOrder/ordered/intersects/clip exercised directly) since the generalized algebra and the new clip function are new surface area the donor tests never isolated on their own."
+   ],
+   "provenance": [
+    "breadcrumbCompact.ts <- /home/bam/systemsketch/src/depth/depthBreadcrumbs.ts:1-58 (compactDepthBreadcrumbs, verbatim) + /home/bam/systemsketch/src/chrome/TitleBar.tsx:130-160 (segmentBreadcrumbs, generalized)",
+    "breadcrumbCompact.test.ts <- /home/bam/systemsketch/src/depth/depthBreadcrumbs.test.ts:1-51 (verbatim) + new segmentBreadcrumbs coverage",
+    "toolPreferences.ts <- /home/bam/systemsketch/src/toolbar/toolbarModel.ts:85-105 (parsePreferences, generalized), :187-205 (mergePreferences, generalized), :45-52+107-151 (arrow-preset example, verbatim)",
+    "toolPreferences.test.ts <- /home/bam/systemsketch/src/toolbar/toolbarModel.test.ts:17-56 (verbatim arrow-preset cases) + new registry-algebra fixture",
+    "framesOrder.ts <- /home/bam/systemsketch/src/chrome/framesPanelModel.ts:86-102 (moveItemKey), :34-37 (ordered, verbatim), :23-32 (readOrder, generalized signature), :59-61 (intersects, verbatim); clip is ours, ad hoc",
+    "framesOrder.test.ts <- /home/bam/systemsketch/src/chrome/framesPanelModel.test.ts:47-51 (moveItemKey cases, verbatim) + new direct coverage for readOrder/ordered/intersects/clip",
+    "historyTime.ts <- /home/bam/systemsketch/src/history/historyModel.ts:75-103 (relativeTime, absoluteTime, verbatim)",
+    "wordDiff.ts <- /home/bam/systemsketch/src/diff/wordDiff.ts:1-197 (verbatim)",
+    "wordDiff.test.ts <- /home/bam/systemsketch/src/diff/wordDiff.test.ts:1-93 (verbatim, wordDiff-only describe blocks)",
+    "lineDiff.ts <- /home/bam/systemsketch/src/compare/lineDiff.ts:1-163 (verbatim)",
+    "propertyRows.ts <- /home/bam/systemsketch/src/compare/propertyRows.ts:1-247 (verbatim)",
+    "compareModel.ts <- /home/bam/systemsketch/src/compare/compareModel.ts:47-496 (verbatim except BlockPort inlined as PortLike; recordsOfSnapshot at :498-511 excluded)",
+    "compareModel.test.ts <- /home/bam/systemsketch/src/compare/compareModel.test.ts:1-247 (verbatim)"
+   ],
+   "blockers": []
+  },
+  {
+   "lane": "F (control renderer + menu lab)",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/controlStrip.tsx",
+    "apps/storybook-basics/src/components/controlPanel.tsx",
+    "apps/storybook-basics/src/stories/ControlStrip.stories.tsx",
+    "apps/storybook-basics/src/stories/ControlLab.stories.tsx"
+   ],
+   "exports": [
+    "controlStrip.tsx: ControlStrip, ControlStripProps",
+    "controlPanel.tsx: ControlPanel, ControlPanelProps",
+    "ControlStrip.stories.tsx: default (meta), DemoKind (type), DEMO_SWATCH_HEX, FONT_SIZE_PX, demoDefinitions, demoRegistry, demoGlyphs, FillPopover, FontSizeList, FontSizePresetsOnly, FontSizeWithCustomBinding, LayoutGallery, TriggerGallery, BesideMode, MixedAndAutomaticStates",
+    "ControlLab.stories.tsx: default (meta), Lab"
+   ],
+   "decisions": [
+    "Trigger dispatch implemented as a Record<ControlTrigger, Component> lookup (TRIGGER_SHAPES) rather than an if/else chain, satisfying 'lookup, never a per-kind conditional' \u2014 generic K is bridged with a documented `as unknown as` cast since a mapped Record type can't carry a distinct type parameter per key.",
+    "Toggle trigger's hardcoded donor 'B' glyph generalizes to: draw the control's own glyph family if declared, else fall back to the first letter of its label \u2014 reproduces the exact 'B' for kind=bold with zero hardcoding.",
+    "Action/icon/value trigger faces all read the SAME glyphs table via control.glyph (no separate icon-by-kind registry like the donor's FIGJAM_TRIGGER_ICON).",
+    "data-contextual-recipe vs design doc's suggested data-control-recipe rename: shipped BOTH attributes on ControlStrip's root, since the design doc (\u00a73.3) says rename it but the task brief text says the original name 'survives... tests assert on which recipe rendered' \u2014 conflicting instructions, resolved by not guessing which string a downstream test keys on.",
+    "customColorSlot (ControlPanel) renders a purely decorative rainbow-wheel placeholder (inline style, justified as non-theme content) when no slot is supplied, so the swatch grid's 22nd cell still reads correctly before a real picker exists.",
+    "Added `\"aria-label\"?: string` to ControlStripProps (not in the design doc's props sketch) since it wraps Toolbar, a Base UI roving-focus container that wants an accessible name \u2014 same shape other kit surfaces (ChromeBar, ToolDock) already carry.",
+    "Added `testIdPrefix?: string` to ControlPanelProps (not in the design doc's sketch) for symmetry with ControlStrip's own testIdPrefix.",
+    "formatPx (the one-decimal rounding rule of donor's formatFontPx) is duplicated as a small private helper in both controlStrip.tsx and controlPanel.tsx rather than introducing a shared module, since the write set is exactly 4 files and the two components must not import from each other.",
+    "ControlStrip.stories.tsx exports its demo vocabulary (demoRegistry/demoGlyphs/demoDefinitions/DEMO_SWATCH_HEX/FONT_SIZE_PX) so ControlLab.stories.tsx can build against the same registry (repo convention is normally a sibling *.fixture.tsx, unavailable given the fixed 4-file write set) \u2014 added `excludeStories` regex to that file's meta so Storybook's CSF indexer doesn't try to render the plain-object exports as stories.",
+    "ControlLab.stories.tsx does not port LAB_PRESETS/labPresetDrift (they check the donor's own shipped product recipes for drift, which a demo kit vocabulary has no equivalent of) \u2014 defaultLabState is an ordinary starting preset instead.",
+    "Swatch demo palette uses 21 colors across an 11-column, 2-row grid (columns: 11 on the `fill` definition) to match donor's own '22nd cell' comment and the visual density of screenshot 01, rather than trying to pixel-match the exact FigJam palette."
+   ],
+   "provenance": [
+    "controlStrip.tsx: /home/bam/systemsketch/src/contextualMenus/ContextualControls.tsx:54-249 (ContextualControls/ContextualControlItem/ControlTrigger/Chevron)",
+    "controlStrip.tsx custom-size formatting: /home/bam/systemsketch/src/appearance/customFontSize.ts:231-234 (formatFontPx rounding rule only, not the file)",
+    "controlPanel.tsx: /home/bam/systemsketch/src/contextualMenus/ContextualControls.tsx:251-401 (ControlPanel/OptionButton) and :455-500 (CustomFontSizeCell)",
+    "ControlLab.stories.tsx: /home/bam/systemsketch/src/prototypes/menuLab/menuLabModel.ts:1-388 (full file, ported near-verbatim minus LAB_PRESETS/labPresetDrift), header WHY quote carried verbatim from menuLabModel.ts:1-33",
+    "Read but not directly ported (context only): /home/bam/systemsketch/src/appearance/appearance.css (pill/panel visual spec), /home/bam/systemsketch/src/appearance/figjamTokens.ts (measured constants), docs/menus/screenshots/01-floating-toolbar-fill-popover.png, docs/menus/screenshots/03-font-size-popover.png",
+    "Consumed peer-lane outputs (read only, not modified): apps/storybook-basics/src/components/toolbar.tsx, popover.tsx, controlRegistry.ts, controlGlyphs.tsx, controlValue.ts, barSize.tsx, bar.tsx (house-style reference)"
+   ],
+   "blockers": [
+    "Could not run pnpm typecheck / tsc / test-stories per the lane's explicit instructions (orchestrator runs those at the barrier since other lanes' files are mid-write) \u2014 reviewed all four files manually for type-correctness (generic Record-of-components dispatch, ControlValue/BoundControl shapes, JSX prop wiring) but a full compile has not been verified.",
+    "The data-contextual-recipe vs data-control-recipe naming conflict between MENU-KIT-DESIGN.md \u00a73.3 and the task brief was not resolvable from context alone (no test file exists yet to check which name it expects) \u2014 shipped both attributes; whoever wires the first real host/test should drop the one that doesn't match and update this file's own WHY comment.",
+    "Did not verify visually in a running Storybook (no server was started, per 'verification does not need a server' / lane isolation rules) \u2014 story correctness was checked by manual trace of the ported model logic (especially the labDangling/labCandidates full-array-walk semantics, which had a bug in my first draft's play() assertions that I caught and fixed by hand-tracing the algorithm, not by running it)."
+   ]
+  },
+  {
+   "lane": "G \u2014 floating shell",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/floatingToolbar.tsx",
+    "apps/storybook-basics/src/stories/FloatingToolbar.stories.tsx"
+   ],
+   "exports": [
+    "floatingToolbar.tsx: export interface FloatingToolbarProps",
+    "floatingToolbar.tsx: export function FloatingToolbar(props: FloatingToolbarProps): ReactNode",
+    "FloatingToolbar.stories.tsx: export default meta (title \"Basics/FloatingToolbar\")",
+    "FloatingToolbar.stories.tsx: export const Gallery: Story",
+    "FloatingToolbar.stories.tsx: export const VisibilityToggle: Story"
+   ],
+   "decisions": [
+    "FloatingToolbar renders one Toolbar (toolbar.tsx, Base UI Toolbar.Root) wrapping ALL children in a single roving-focus root, mirroring the donor's single TldrawUiToolbar wrapping the whole pill \u2014 rather than each child (ControlStrip, an opacity slider, an arrange cluster) owning its own root.",
+    "Merged the donor's two nested elements (outer position/opacity wrapper + inner visual pill) into one element, since self-measurement is now host-owned so there's no conflict; the host's ref measures exactly the visible pill.",
+    "Reused SelectionMenuSide from floatingToolbar.placement.ts (L2) for the side prop instead of re-declaring the union, since L3-imports-L2 is explicitly legal per the layer diagram.",
+    "Added an optional className?: string prop beyond the design's literal sketch, as a host styling escape hatch \u2014 consistent with Bar/Toolbar's own additive style/className props.",
+    "Visual pill styling (bg-foreground/text-background inverse surface, rounded-xl, shadow-lg, min-h-10, px-1) is a Tailwind-token translation of the donor's CSS custom properties, not a pixel-for-pixel port, per house rule.",
+    "The story's fake host performs a real one-shot measure-then-place loop (getBoundingClientRect -> real placeFloatingToolbar -> render), not stubbed sizes, across all 6 required cases on one shared 560x360 stage (same-scale-per-cell convention).",
+    "play() asserts data-side plus exact-boundary numeric checks via getBoundingClientRect on the real rendered pill, per this repo's spatial-claims-are-measured rule."
+   ],
+   "provenance": [
+    "floatingToolbar.tsx ported from /home/bam/systemsketch/src/chrome/SelectionContextualMenu.tsx:107-224 (PositionedSelectionMenu) and /home/bam/systemsketch/src/chrome/systemsketch-chrome.css:825-926 (.systemsketch-selection-menu / .systemsketch-selection-menu__bar) \u2014 both read in full before writing",
+    "floatingToolbar.tsx consumes apps/storybook-basics/src/components/toolbar.tsx and apps/storybook-basics/src/components/floatingToolbar.placement.ts as-is (both already committed by other lanes), no edits to either",
+    "FloatingToolbar.stories.tsx consumes floatingToolbar.placement.ts's exports verbatim, matching the inline-type import style already used in floatingToolbar.placement.test.ts:19-33"
+   ],
+   "blockers": []
+  },
+  {
+   "lane": "H \u2014 tool dock",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/toolDock.tsx",
+    "apps/storybook-basics/src/stories/ToolDock.stories.tsx"
+   ],
+   "exports": [
+    "ToolItem",
+    "ToolSection",
+    "FamilyDeclaration",
+    "SimpleToolItem",
+    "LibrarySlotProps",
+    "ToolDockProps",
+    "resolveCurrentTool",
+    "isFamilyActive",
+    "ToolDock"
+   ],
+   "decisions": [
+    "resolveCurrentTool/isFamilyActive: checked family.isMember(activeToolId) first (direct member wins), then family.variantOf(activeToolId, activeVariant) (base id resolving through a live variant, e.g. tldraw's 'geo'), then falls back to the remembered preference, then to the family's own first declared item as a last-resort default \u2014 this fully generalizes all four of the donor's bespoke per-family ternary chains into one pure rule with no family-specific knowledge baked into the kit.",
+    "isFamilyActive is exported as a second pure function alongside the required resolveCurrentTool (design doc only mandated resolveCurrentTool) because the 'is this family's face pressed' question is genuinely separate from 'what should the face show', and ToolDock itself needs both \u2014 keeping it as a named, testable export rather than inlining the logic.",
+    "Composed each interactive cell as `<ToolbarButton render={<DropdownMenuTrigger/>}>`/`render={<PopoverTrigger/>}` (ToolbarButton OUTER, trigger merged via render) rather than the reverse nesting \u2014 matches the explicit WHY comment already established in this codebase (Popover.stories.tsx's FontSizePopoverDemo: 'the TOOLBAR ITEM has to be the outer element so Toolbar.Root can find and manage it'), which I discovered only after first writing it the other way around and had to restructure.",
+    "Split-press is literally ONE region with two simultaneous effects (pointerdown arms via onArm, the same press opens the popout via the merged DropdownMenuTrigger), not two separate hit-boxes \u2014 verified against the donor's own CSS (`.systemsketch-family-tool__chevron { pointer-events: none }`), so the chevron glyph is purely a visual affordance, never a second click target.",
+    "onArm fires only the resolved 'current' tool for that family; onSelectItem (row picks inside a popout) is where ToolDock itself computes and hands back the merged preferences object via onPreferencesChange, so the host never has to know which prefKey belongs to which family.",
+    "librarySlot uses Popover (not DropdownMenu), matching MENU-KIT-DESIGN.md's stock-part table placing 'the library panel' under Popover; omitting librarySlot drops the '+' cell entirely rather than rendering a disabled placeholder.",
+    "Overrode DropdownMenuContent's default `w-(--anchor-width)` with an explicit `w-56` on the family popout \u2014 the stock default ties popup width to the (tiny, icon-only) trigger's width, which would squeeze real label+shortcut+checkmark rows; chromeBar.tsx and branchChip.tsx already established this same override pattern for small triggers.",
+    "Native `title` attribute used for tooltip text on every cell (matching the donor's plain `title` prop) rather than pulling in the kit's Tooltip component, since the design doc doesn't mandate rich tooltips specifically for the dock and screenshot 04 shows none.",
+    "Characterized the split-press contract, the resolution rule, and every family's collapsed/expanded/active states entirely through Storybook play functions (per the brief: 'your story is what pins it') rather than a separate .test.ts file, since the write set explicitly excludes a test file."
+   ],
+   "provenance": [
+    "/home/bam/systemsketch/src/toolbar/SystemSketchToolbar.tsx:245-469 (FamilyToolSlot + ShapeFamilySlot/SystemFamilySlot/BboxFamilySlot/DrawFamilySlot) \u2014 read in full, generalized into FamilyDeclaration + resolveCurrentTool/isFamilyActive",
+    "/home/bam/systemsketch/src/toolbar/SystemSketchToolbar.tsx:273-280 \u2014 the onArm pointerdown/click(detail 0) WHY comment, ported verbatim",
+    "/home/bam/systemsketch/src/toolbar/toolbarModel.ts:1-215 \u2014 read in full for the preferences shape (confirmed compatible with, but not imported from, Lane E's landed apps/storybook-basics/src/components/toolPreferences.ts)",
+    "/home/bam/systemsketch/src/toolbar/systemsketch-toolbar.css:72-121 \u2014 the .systemsketch-family-tool/__chevron/.systemsketch-tool-menu rules, ported into the chevron span's absolute positioning, pointer-events:none, and the w-56 popout width",
+    "docs/menus/MENU-KIT-DESIGN.md:396-430 (toolDock.tsx spec), :656-772 (host contract + stock-part table), :809-810 (Lane H scope) \u2014 read and followed for the exact prop shape",
+    "docs/menus/screenshots/04-bottom-tool-toolbar.png \u2014 read/zoomed to confirm the chevron is beneath the icon within one cell, not a separate hit region",
+    "apps/storybook-basics/src/stories/Popover.stories.tsx:74-80 \u2014 read to discover and correct the required render-composition direction (ToolbarButton outer, trigger merged via render)"
+   ],
+   "blockers": []
+  },
+  {
+   "lane": "I \u2014 chrome bar + branch chip",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/chromeBar.tsx",
+    "apps/storybook-basics/src/components/branchChip.tsx",
+    "apps/storybook-basics/src/stories/ChromeBar.stories.tsx"
+   ],
+   "exports": [
+    "chromeBar.tsx: ChromeBar, ChromeBarProps, MenuAction, MenuGroupSpec, MenuSpec, StatusTone, Crumb, StatusDot, ChromeBarIcons",
+    "branchChip.tsx: BranchChip, BranchChipProps, DraftSummary"
+   ],
+   "decisions": [
+    "ChromeBarProps/BranchChipProps follow the design doc's TS sketch verbatim (menu/history/identity/rename/crumbs/depth/fileActions/draftChip/container/popupClassName/testIdPrefix; isDraftMode/draftCount/activeDraftName/drafts/activeDraftId/onSwitchTo/onCreate/onRename/onDiscard/renderTrigger/container).",
+    "container is forwarded to ContextMenuContent and BranchChip's PopoverContent (both accept it) but NOT to any DropdownMenuContent call \u2014 dropdown-menu.tsx (lane A, frozen, out of my write set) only widened `anchor`, never `container`; documented inline on ChromeBarProps.container and left as a known follow-up for whoever widens that file.",
+    "popupClassName is forwarded as `className` on every *Content component (Dropdown/Context/Popover), matching the host-contract's 'host CSS on the popup's own [data-slot=...]' wording, not as a positioner class.",
+    "Depth badge trigger composes `ToolbarButton` styled with `badgeVariants({variant:'secondary'})` instead of composing the real `Badge` component \u2014 badge.tsx explicitly ships no `render`/Slot support, so a trigger needing to BE a real focusable button borrows the badge's classes rather than reopening composition on a component that deliberately doesn't support it.",
+    "BranchChip's default (no renderTrigger) trigger renders `PopoverTrigger` directly styled with `buttonVariants`, with the icon/name/badge/chevron as its children \u2014 not a separate `<Button render=.../>` wrapper \u2014 because a bespoke non-forwarding function component sitting between PopoverTrigger and its real props (onClick, ref, aria-expanded) would silently drop them; only the HOST's renderTrigger (composing real forwarding components like Button/ToolbarButton) uses the `render` composition path.",
+    "ChromeBar self-wraps its internal `<TooltipProvider delay={350}>` (unlike Bar/Block's slot-content convention of leaving it to the host) because every tooltip inside it (Home/Back/Forward/burger) is fixed internal chrome with no external call site that could supply one; Base UI's Tooltip.Root reads the provider via plain useContext so nesting under a host's own provider is harmless.",
+    "rename.busy (declared per the design's props sketch) has no direct hook in InlineRename itself (that field ships no disabled/busy prop), so it's applied via a wrapping span with aria-busy + pointer-events-none/opacity-60 rather than forking or editing the shared InlineRename file.",
+    "atRoot is derived as `crumbs.length === 0` (not a separate prop) since the design's ChromeBarProps has no explicit atRoot field.",
+    "The avatar/copy/panel-toggle/Share cluster visible in screenshot 09 is deliberately NOT part of ChromeBarProps \u2014 Zach named exactly four parts (breadcrumb, draft selector, forward/backward, burger file settings); that cluster is demonstrated in the story as host-composed page chrome via `Bar`'s right slot, not baked into the component."
+   ],
+   "provenance": [
+    "chromeBar.tsx ported from /home/bam/systemsketch/src/chrome/TitleBar.tsx:1-630 (full file read) \u2014 FileCrumb double-click/menu-vs-rename logic (186-342), back/forward-left-of-path WHY (405-410), draft-chip-no-separator WHY (458-462), ellipsis-is-real-menu breadcrumb (500-570), depth-badge-as-structural-path-trigger (572-623)",
+    "branchChip.tsx ported from /home/bam/systemsketch/src/drafts/DraftsControl.tsx:1-307 (full file read) \u2014 InlineRename mousedown-guard WHY (22-116, superseded here by the already-ported apps/storybook-basics/src/components/inlineRename.tsx), DraftRow hover-reveal + two-step discard (117-211), renderTrigger seam (213-260), popover list + New draft (261-306)",
+    "breadcrumbCompact.ts (lane E, already committed) read in full for segmentBreadcrumbs/compactDepthBreadcrumbs/DepthBreadcrumbItem/CrumbSegment contracts",
+    "docs/menus/MENU-KIT-DESIGN.md lines 1-934 read in full for the ChromeBarProps/BranchChipProps TS sketches, host-contract \u00a74, stock-part table \u00a75, and Lane I's own write set at \u00a76",
+    "docs/menus/screenshots/05-chrome-bar.png and 09-draft-title-bar.png viewed directly",
+    "Sibling already-committed files read for house style/typing before use: bar.tsx, toolbar.tsx, button.tsx, badge.tsx, separator.tsx, button-group.tsx, breadcrumb.tsx, dropdown-menu.tsx, context-menu.tsx, tooltip.tsx, popover.tsx, inlineRename.tsx, plus Breadcrumb.stories.tsx, ButtonGroup.stories.tsx, DraftBar.stories.tsx, Block.stories.tsx, ContextMenu.stories.tsx and InlineRename.stories.tsx for story/test conventions"
+   ],
+   "blockers": [
+    "dropdown-menu.tsx (lane A, frozen/out of my write set) never widened its Positioner Pick with `container` (only `anchor`) \u2014 the burger, file-title dropdown, breadcrumb ellipsis, and depth-badge dropdowns in chromeBar.tsx all portal to document.body regardless of the `container` prop a host passes; only the file title's right-click ContextMenu and BranchChip's Popover honor `container` today. Flagged inline in ChromeBarProps' own doc comment; fixing it means editing dropdown-menu.tsx, which is not this lane's file.",
+    "Could not run pnpm typecheck/test-stories/tsc per the concurrency rules (other lanes' files are mid-write in the same tree) \u2014 verification here was a careful manual review (import-usage audit, Base UI render-composition/ref-forwarding correctness, and hand-traced pathLength arithmetic for the breadcrumb-compaction story fixture) rather than a real compiler/test run. The orchestrator's barrier typecheck/test-stories pass is the first real verification these files will see."
+   ]
+  },
+  {
+   "lane": "J \u2014 panels + status strip",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/panelShell.tsx",
+    "apps/storybook-basics/src/components/framesPanel.tsx",
+    "apps/storybook-basics/src/components/problemsPanel.tsx",
+    "apps/storybook-basics/src/components/statusStrip.tsx",
+    "apps/storybook-basics/src/stories/PanelShell.stories.tsx",
+    "apps/storybook-basics/src/stories/FramesPanel.stories.tsx",
+    "apps/storybook-basics/src/stories/ProblemsPanel.stories.tsx",
+    "apps/storybook-basics/src/stories/StatusStrip.stories.tsx"
+   ],
+   "exports": [
+    "panelShell.tsx: PanelShell, PanelShellProps",
+    "framesPanel.tsx: FramesPanel, FramesPanelProps, FramesItem, FramesKindMeta, FramesPanelMode, FramesPanelPreview, PanelPreviewBox, FramesPanelSaveView, FramesPanelReorder, PanelPreview, PanelPreviewProps",
+    "problemsPanel.tsx: ProblemsPanel, ProblemsPanelProps, ProblemsBadge, Severity, Diagnostic, DiagnosticGroup, ProblemsPanelEmptyCopy",
+    "statusStrip.tsx: StatusStrip, StatusStripProps, StatusStripItem"
+   ],
+   "decisions": [
+    "framesPanel's `reorder` prop diverges from the design doc's literal `{onMove,dragging,dropTarget,dragHandleProps}` sketch. Instead it owns dnd-kit internally (PointerSensor + closestCenter + useSortable) exactly like this trunk's own blockMembers.tsx/portEdge.tsx precedent, exposing one `onReorder(nextKeys)` callback. Chosen because the lane brief explicitly said '@dnd-kit/* is already a dependency and other trunk components use it \u2014 match how they do it', and dnd-kit is a plain DOM drag toolkit (not tldraw/@xyflow), so embedding it in the core doesn't violate 'the core imports no canvas engine'.",
+    "FramesItem.caption (a per-item fallback string) vs kinds[kind].caption (the host override table): resolveCaption() prefers the kinds-map caption and falls back to item.caption only when the kind is absent from the map \u2014 reconciling the design doc's two same-named 'caption' fields, which as written look redundant.",
+    "landmarksLocked (framesPanel) gates ONLY the Save-current-view form, not a per-item lock \u2014 the component has no per-item 'is this a landmark' signal (kind is host vocabulary), so protecting an existing item's rename/delete is left to onRename's/onDelete's own {ok,reason} contract instead.",
+    "statusStrip's `children` readout slot has no position field in the design doc's interface, so it splits `items` via Math.ceil(items.length/2) \u2014 leading half, then children, then trailing half \u2014 which reproduces the donor's frames\u00b7problems | zoom | dev\u00b7help (2-and-2) layout without hardcoding which items come first. Documented as 'ours, ad hoc' in the file.",
+    "problemsPanel's `filter` prop is a plain string (not a union) and severities is a config array; a severity id absent from that array (e.g. a hypothetical 'info') still counts toward the 'All' total via `counts` but gets no segmented chip and its rows fall back to a plain muted-dot icon, matching design decision #5's 'info counted only'.",
+    "aria-pressed on StatusStrip's ToolbarButton is emitted as literal 'true'/'false' when `active` is a defined boolean, and omitted only when `active` is entirely undefined (a non-toggling launcher) \u2014 chosen over the repo's `x || undefined` presence-only idiom (that one is correct for a styling data-attribute, not for the a11y state of an actual toggle button, which must announce its OFF state too).",
+    "Icons throughout are lucide-react named exports chosen for legibility (GitFork, Frame, Scan, Code2, HelpCircle, TriangleAlert, Crosshair, GripVertical, LayoutGrid, MoreHorizontal) rather than pixel-matching the donor's hand-drawn SVGs, per the stock-part rule that every icon is a host-suppliable ReactNode."
+   ],
+   "provenance": [
+    "framesPanel.tsx ported from /home/bam/systemsketch/src/chrome/BoardOverview.tsx:1-110 (header/save-form/row layout, PanelPreview geometry at :41-55) and /home/bam/systemsketch/src/chrome/framesPanelModel.ts:1-137 (semantics only \u2014 the actual moveItemKey/ordered/intersects/clip code was already ported into this app's own components/framesOrder.ts by lane E, reused here rather than re-ported)",
+    "problemsPanel.tsx ported from /home/bam/systemsketch/src/diagnostics/BoardDiagnosticsPanel.tsx:1-192 (BoardDiagnosticsView's header/counts/filters/row/group layout) and cross-referenced against /home/bam/systemsketch/src/diagnostics/diagnosticsModel.ts:1-611 for the Severity/Diagnostic/DiagnosticGroup/counts vocabulary (the analyzer logic itself at diagnosticsModel.ts:250-566 was NOT ported \u2014 host-adapter territory)",
+    "panelShell.tsx ported from /home/bam/systemsketch/src/chrome/SystemSketchChrome.tsx:1148-1178 (the systemsketch-right-popout aside + its header) and /home/bam/systemsketch/src/chrome/SystemSketchChrome.tsx:1156-1164 (the data-inspector-header WHY, carried into panelShell's hideHeader prop doc)",
+    "statusStrip.tsx ported from /home/bam/systemsketch/src/SystemSketchUtilities.tsx:655-731 (the systemsketch-utility-strip TldrawUiToolbar and its board-overview/diagnostics/zoom/dev/help buttons, including the problemCount > 99 ? '99+' clamp at :689)",
+    "House-style reference (not donor, style calibration only): apps/storybook-basics/src/components/bar.tsx, blockMembers.tsx, chromeBar.tsx, draftBar.tsx, foldingChevron.tsx, badge.tsx, toolbar.tsx, toggle-group.tsx, inlineRename.tsx \u2014 all read in full before writing"
+   ],
+   "blockers": [
+    "Not run: pnpm typecheck / tsc / test-stories, per the brief's explicit instruction not to compile the shared tree mid-wave (other lanes' files are half-written). All four components and four story files were reviewed manually against the real APIs of every trunk component they import (Button, DropdownMenu*, InlineRename, ToggleGroup*, Toolbar*, Badge, cn, framesOrder's moveItemKey) and against the installed @dnd-kit/@base-ui package internals (verified GripVertical/TriangleAlert/Crosshair/etc. exist in the installed lucide-react, verified dnd-kit's real aria-roledescription default and CSS.Translate export, verified Base UI Toggle's real data-pressed/aria-pressed attributes) but no compiler ran over them \u2014 the orchestrator's barrier typecheck is the first real proof.",
+    "Two design-doc prop shapes were deliberately NOT followed verbatim (framesPanel's `reorder` object, statusStrip's item/children split) \u2014 see decisions[] above for the reasoning; flagging in case the orchestrator wants the literal design-doc shapes instead for cross-lane consistency."
+   ]
+  },
+  {
+   "blockers": [],
+   "decisions": [
+    "Moved the word-diff checkbox and the By-element/Flat-table ToggleGroup INTO propertyTable.tsx (donor CompareDialog.tsx:848-869 kept them in the dialog shell) per the brief's framing of propertyTable.tsx as 'the right rail's Properties view' \u2014 PropertyTable now takes onGitHighlightChange/onLayoutChange callbacks so compareReview.tsx (Lane M) just mounts one self-contained component instead of hand-wiring a checkbox + segmented group per host.",
+    "historyList.tsx declares its own HistoryRecord/HistoryAuthor types and metaLine() locally (ported from historyModel.ts:35-59,105-115) rather than adding them to historyTime.ts, since historyTime.ts is Lane E's write set and only relativeTime/absoluteTime (historyModel.ts:75-103) were placed there.",
+    "No bespoke success/accent-third-state color tokens exist in this app's stock shadcn theme (only --destructive), so the three diff states (added/removed/modified) use plain Tailwind green-600/red-600/blue-600 (+ -400 dark) directly, following the same direct-palette convention packages/inspector/src/compat/StockCheckReport.tsx already uses for its own tri-state banners, rather than inventing new CSS variables.",
+    "Replaced Tailwind's theme(colors.*) arbitrary-value helper (used in an early draft) with var(--color-*) references, matching this app's CSS-variable-for-theming convention and Tailwind v4's native token exposure.",
+    "Reused the kit's own FoldingChevron (foldingChevron.tsx) for HistoryList's description-disclosure trigger instead of porting the donor's hand-rolled inline SVG chevron, since it is exactly that control (a rotating trigger over an open/closed boolean).",
+    "Simplified the donor's older display:block/display:table sticky-header hack in PropertyTable/CodeView tables to a plain sticky <thead> inside an overflow-auto wrapper, since the kit targets modern browsers only; box-shadow inset row rails became real border-l/shadow utilities via Tailwind arbitrary values.",
+    "Did not run pnpm test-stories, pnpm typecheck, or tsc over the whole project per the concurrency instructions; instead verified all six files with an isolated throwaway tsconfig (created and deleted, never committed) that only includes my files plus their already-existing Lane B/E dependencies (toggle-group.tsx, foldingChevron.tsx, historyTime.ts, compareModel.ts, propertyRows.ts, wordDiff.ts, lineDiff.ts) \u2014 it type-checked clean with zero errors."
+   ],
+   "exports": [
+    "historyList.tsx: HistoryList (component), HistoryListProps, HistoryDensity, HistoryAuthor, HistoryRecord, metaLine",
+    "propertyTable.tsx: PropertyTable (component), PropertyTableProps, TableLayout, ElementReview",
+    "codeView.tsx: CodeView (component), CodeViewProps"
+   ],
+   "filesWritten": [
+    "apps/storybook-basics/src/components/historyList.tsx",
+    "apps/storybook-basics/src/components/propertyTable.tsx",
+    "apps/storybook-basics/src/components/codeView.tsx",
+    "apps/storybook-basics/src/stories/HistoryList.stories.tsx",
+    "apps/storybook-basics/src/stories/PropertyTable.stories.tsx",
+    "apps/storybook-basics/src/stories/CodeView.stories.tsx"
+   ],
+   "lane": "K (compare bodies)",
+   "provenance": [
+    "historyList.tsx: /home/bam/systemsketch/src/history/HistoryList.tsx:1-212 (full file read); /home/bam/systemsketch/src/history/historyModel.ts:35-59,105-115 (HistoryRecord/HistoryAuthor/metaLine \u2014 full file read, :75-103 already ported into historyTime.ts by Lane E); /home/bam/systemsketch/src/history/history.css (full file read, translated to Tailwind)",
+    "propertyTable.tsx: /home/bam/systemsketch/src/compare/PropertyTable.tsx:1-583 (full file read); /home/bam/systemsketch/src/compare/review-table.css:1-512 (full file read, translated to Tailwind); word-diff toggle + segmented control markup from /home/bam/systemsketch/src/compare/CompareDialog.tsx:958-993 (moved into this component per brief)",
+    "codeView.tsx: /home/bam/systemsketch/src/compare/CodeView.tsx:1-69 (full file read); relevant compare.css rules at lines 343-624 (full section read, translated to Tailwind)",
+    "Consumed as-is (read, not modified) from Lane E's write set: apps/storybook-basics/src/components/historyTime.ts, compareModel.ts (+test), propertyRows.ts, wordDiff.ts (+test), lineDiff.ts",
+    "Consumed as-is (read, not modified) from Lane B's write set: apps/storybook-basics/src/components/toggle-group.tsx; and from the trunk baseline: foldingChevron.tsx, badge.tsx, bar.tsx (house-style calibration)"
+   ],
+   "status": "done"
+  },
+  {
+   "lane": "L (draft bar)",
+   "status": "done",
+   "filesWritten": [
+    "apps/storybook-basics/src/components/draftBar.tsx",
+    "apps/storybook-basics/src/stories/DraftBar.stories.tsx"
+   ],
+   "exports": [
+    "draftBar.tsx: MenuAction (interface)",
+    "draftBar.tsx: DraftBarProps (interface)",
+    "draftBar.tsx: DraftBar (function component)"
+   ],
+   "decisions": [
+    "rename open/closed state is local to DraftBar (matches the design doc's literal DraftBarProps.rename shape, which only carries onCommit/validate, no active/onBegin/onCancel) \u2014 InlineRename mounts on name-click, host only hears onCommit for a real new value; focus returns to the re-mounted name trigger via requestAnimationFrame, ported from DraftModeBar.tsx's commitRename/cancelRename.",
+    "mergeState defaults from canMerge when omitted: resolvedMergeState = mergeState ?? (canMerge ? 'normal' : 'disabled'). Keeps 'blocked' entirely host-decided (conflict detection is orchestration, out of scope per design \u00a74) while giving a sensible default so callers that only know canMerge don't have to compute mergeState themselves.",
+    "mergeMenuItems typed as the existing SplitButtonItem (from splitButton.tsx) rather than repeating an identical inline {id,label,onSelect()} shape under a new name \u2014 structurally identical to the design doc's literal type.",
+    "MenuAction defined locally in draftBar.tsx rather than imported: chromeBar.tsx (Lane I) did not exist in this write set at the time of writing (it landed concurrently during this lane's work, confirmed via git status afterward) and is out of my write set regardless. Left an explicit comment that a later pass should re-point to chromeBar.tsx's export (verified afterward: chromeBar.tsx's own MenuAction shape matches mine exactly).",
+    "Built on top of the existing Bar (bar.tsx) three-slot layout rather than a bespoke flex row \u2014 no center content, so Bar's own grid math collapses to the left-grows/right-hugs layout the screenshot shows; matches the design's 'unchanged (stock seam)' Bar mapping.",
+    "Bar has no className prop by design (bar.tsx is a deliberately bare stock seam), so DraftBarProps.className is applied via a plain wrapping <div>, matching Bar.stories.tsx's own documented pattern for width-constraining a Bar from outside.",
+    "Conflict banner uses literal amber-* Tailwind swatches (ink text on a tint + colored left border, ported from drafts.css:516-548's own WHY) since this trunk has no semantic 'warning' CSS token yet \u2014 same approach as portEdge.layout.ts's amber wire-status color.",
+    "Compare button uses variant='outline' (not filled) to preserve the donor's WHY: keeps Merge as the only filled/primary control in the row so hierarchy reads at a glance (ported, drafts.css:407-424's comment).",
+    "Story gallery includes a PureMoveStillMergeable variant beyond the brief's literal list, to prove changeCount and canMerge are genuinely decoupled per the design doc's explicit WHY ('changeCount \u2260 canMerge'), plus a Blocked/LongConflictText pair and an OverflowMenu interaction test for full contract coverage."
+   ],
+   "provenance": [
+    "/home/bam/systemsketch/src/drafts/DraftModeBar.tsx:1-465 (whole file read) \u2014 exit control, click-to-rename state machine (renaming/renameMountedAtRef/beginRename/cancelRename/commitRename), OverflowMenu (63-99), MergeSplitButton (108-180), the render tree (378-461)",
+    "/home/bam/systemsketch/src/drafts/drafts.css:370-560 (read) \u2014 divider/name/compare button styling WHYs, conflict banner's ink-on-tint + border-left + min-width:0 truncation WHY (516-548), status line styling (554-561)",
+    "apps/storybook-basics/src/components/splitButton.tsx (whole file read) \u2014 SplitButtonItem/SplitButtonProps shapes, state derivation pattern",
+    "apps/storybook-basics/src/components/inlineRename.tsx (whole file read) \u2014 InlineRenameProps shape, aria-label prop key, size='bar' rung",
+    "apps/storybook-basics/src/components/bar.tsx (whole file read) \u2014 Bar/BarProps, size cascade rationale, no-className-on-Bar convention",
+    "apps/storybook-basics/src/components/barSize.tsx (whole file read) \u2014 BAR_SIZE_TO_BUTTON_SIZE has no icon-size rung, informing the explicit size='sm' choices in draftBar.tsx",
+    "apps/storybook-basics/src/components/dropdown-menu.tsx:1-110 (read) \u2014 DropdownMenuItem variant/disabled props, DropdownMenuTrigger render-prop pattern",
+    "apps/storybook-basics/src/stories/SplitButton.stories.tsx (whole file read) \u2014 story shape/pattern copied for DraftBar.stories.tsx (meta.args, play functions, AllStates side-by-side gallery)",
+    "docs/menus/MENU-KIT-DESIGN.md:624-661 (DraftBarProps contract), \u00a74 'Draft bar' host-contract paragraph, \u00a75 SplitButton/InlineRename stock-part rows, \u00a77 draftModel.ts exclusion, \u00a79 WHY checklist (conflict banner truncation, changeCount\u2260canMerge)"
+   ],
+   "blockers": []
+  },
+  {
+   "blockers": [],
+   "decisions": [
+    "MENU-KIT-DESIGN.md's CompareReviewProps sketch lists `layout`/`gitHighlight` with no setters, but PropertyTable requires onLayoutChange/onGitHighlightChange. Per propertyTable.tsx's own header note ('the host \u2014 compareReview.tsx \u2014 still owns the state'), I treated the two props as SEED values for local useState inside CompareReview rather than adding new callback props the design doc doesn't ask for. Documented inline as a DECISION comment.",
+    "PropertyTable's `selectedElementId`/`onSelectElement` (needed for the figma-layout element list) has no corresponding field on CompareReviewProps at all \u2014 kept as fully internal useState, not exposed upward, since nothing outside this surface needs it.",
+    "The donor's FULLSCREEN bar swaps to an entirely different stepper/version-picker UI (CompareDialog.tsx:822-847) built on components (version stepper, blend-in-fullscreen layout) that are out of this lane's write set and not required by the brief. I kept the same Side-by-side/Overlay toggle + Fullscreen/'Exit fullscreen' button visible in both states, relying on `data-fullscreen` for host-side chrome promotion per the host contract ('kit emits data-fullscreen and onStageShapeChange; host restyles and re-frames').",
+    "The donor's hand-drawn inline DockIcon SVG is replaced with stock lucide-react PanelBottom/PanelRight exports (both already read as 'a frame with one edge filled', matching the donor's own description and this kit's icon stock-part rule), showing the DESTINATION dock per the donor's WHY.",
+    "The amber `problem` notice reuses draftBar.tsx's already-landed ConflictBanner pattern (ink text on an amber-tinted left bar) verbatim rather than inventing a second warning treatment, since no --warning token exists yet in this trunk.",
+    "CompareReviewSelection.onToggleReject is called unconditionally on checkbox toggle (ignoring the boolean 'accepted' PropertyTable's ElementReview.onToggle passes) since the prop is already named as a toggle over a rejected-id set \u2014 the adapter just forwards the id.",
+    "`container` prop is accepted on the type for host-contract completeness (\u00a74 'Universal') but not wired to anything, since this surface has no popover/portal-bearing child today \u2014 documented inline."
+   ],
+   "exports": [
+    "compareReview.tsx: CompareReview, CompareReviewProps, CompareMode, CompareTab, CompareDock, CompareActionOutcome, CompareReviewAction, CompareReviewSelection",
+    "CompareReview.stories.tsx: default meta (Basics/CompareReview), NoSnapshotLoaded, IdenticalVersions, ElementSelected, SideBySideVsOverlay, OverlayDisabledWithoutLinkedCameras, PropertiesVsCode, DockToggleFullscreenAndReviewFooter"
+   ],
+   "filesWritten": [
+    "apps/storybook-basics/src/components/compareReview.tsx",
+    "apps/storybook-basics/src/stories/CompareReview.stories.tsx"
+   ],
+   "lane": "M (compare assembly)",
+   "provenance": [
+    "compareReview.tsx JSX shape ported from /home/bam/systemsketch/src/compare/CompareDialog.tsx:721-773 (history rail), :776-890 (centre panes + bottom bar, fullscreen sub-widgets deliberately cut), :892-1030 (detail rail, tab strip + dock toggle :945-961, DockIcon :1095-1114 replaced by lucide), :1032-1085 (action/review footer), :386 (stageShape stamp)",
+    "Amber problem-notice styling ported from apps/storybook-basics/src/components/draftBar.tsx's ConflictBanner (already-landed sibling file in this same tree, not authored by this lane)",
+    "PropertyTable/CodeView/HistoryList/tabs.tsx/toggle-group.tsx/button.tsx/compareModel.ts/propertyRows.ts consumed as already-landed lane K / lane B outputs, read but not modified"
+   ],
+   "status": "done"
+  }
+ ],
+ "gates": {
+  "g0": {
+   "pass": true,
+   "typecheckExit": 0,
+   "testExit": 0,
+   "testFiles": "35 passed (35)",
+   "testCount": "164 passed (164)",
+   "failures": []
+  },
+  "g1": {
+   "pass": true,
+   "typecheckExit": 0,
+   "testExit": 0,
+   "testFiles": "42 passed (42)",
+   "testCount": "203 passed (203)",
+   "failures": []
+  },
+  "g2": {
+   "pass": true,
+   "typecheckExit": 0,
+   "testExit": 0,
+   "testFiles": "55 passed (55)",
+   "testCount": "287 passed (287)",
+   "failures": []
+  },
+  "g3": {
+   "pass": true,
+   "typecheckExit": 0,
+   "testExit": 0,
+   "testFiles": "56 passed (56)",
+   "testCount": "294 passed (294)",
+   "failures": []
+  }
+ },
+ "audit": {
+  "overallVerdict": "The menu kit is genuinely well built and, unusually, honestly reported \u2014 but the audit found one real contract breach, one real verification hole, and the product step still missing. (1) Wave 0 never delivered what the design contract ordered: MENU-KIT-DESIGN.md \u00a73.1/\u00a75 requires widening DropdownMenuContent/TooltipContent Picks with \"anchor\" | \"container\" | \"collisionPadding\"; the shipped diff gives dropdown-menu anchor+collisionPadding and tooltip anchor only \u2014 no `container` anywhere \u2014 so ChromeBar/ToolDock/SplitButton/DraftBar dropdowns always portal to document.body and a host's token-scoped `container` (host contract \u00a74, \"Universal\") is silently ignored for most popups. Lane I flagged it; nobody fixed it at any barrier even though the file was wave-0's own write set. (2) The GATE RESULTS verified only the storybook vitest project: their file/test counts match story files exactly, and vitest.config.ts's `test-stories` deliberately excludes the `unit` project \u2014 so the 22 ported acceptance suites (314 tests, including the design-mandated 4,608-case placement differential) were never executed by any gate, while every lane deferred to \"the orchestrator's barrier\" as its first real verification. I ran everything independently in /home/bam/bbox-ui/.claude/worktrees/component-docs-reorganize-bf287b/apps/storybook-basics: typecheck clean, 56/294 story tests pass, 22/314 unit tests pass \u2014 so no latent code failure, but the verification claim was hollow. (3) Lane N (registry.json items) never ran; per CLAUDE.md \"the registry is the product,\" none of the ~45 new files is consumable yet. Beyond that: the import law holds perfectly across all 47 files (zero engine imports, zero self-measurement/localStorage/position:fixed; the only z-index is framesPanel's dnd-kit drag row, matching trunk precedent portEdge.tsx:767 but contradicting the design's letter), provenance spot-checks hit cited donor lines 12-for-12 on substance (three stale line counts), all four named WHYs survived verbatim, and stories are real measured galleries. Recommended order: widen `container` (+ tooltip collisionPadding) in wave-0's two files, wire the unit project into the gate, then run Lane N.",
+  "lawViolations": [
+   "apps/storybook-basics/src/components/framesPanel.tsx:401 \u2014 `zIndex: isDragging ? 10 : undefined` on the sortable row, plus internal dnd-kit (PointerSensor attaches document-level listeners during an active drag). Violates the design's L3 ban on z-index/global listeners as written; matches existing trunk precedent (portEdge.tsx:767 `zIndex: isDragging ? 10 : 1`, blockMembers.tsx dnd-kit) and the lane brief's explicit instruction to match it. Panel-internal stacking context (position:relative while dragging), so it cannot fight host layering.",
+   "apps/storybook-basics/src/components/inlineRename.tsx:114 and draftBar.tsx:185 \u2014 `window.requestAnimationFrame` for focus-return-to-trigger. A literal `window.` hit; the behavior (focus returns to the trigger) is explicitly specified by the design (\u00a73.1 InlineRename, \u00a75 stock table), and rAF is neither a query, a measurement, nor a persistent listener. Benign.",
+   "No other hits in shipped component code: zero tldraw/@xyflow imports, zero getBoundingClientRect/ResizeObserver/localStorage/position:fixed/document.* calls (all remaining grep hits are doc comments quoting the host contract). Stories use getBoundingClientRect/document as the fake host \u2014 sanctioned by host-contract step 1 and the repo's spatial-claims-are-measured rule. tooltip.tsx's pre-existing `z-50` on the Positioner predates this build and was not touched."
+  ],
+  "falseClaims": [
+   "Lane A's decision \u2014 \"edits scoped to EXACTLY the task brief's instruction (add \\\"anchor\\\" only)\u2026 one word in a type and one prop passed through, twice\" \u2014 does not match its own diff: dropdown-menu.tsx was widened with anchor AND collisionPadding (two words, two props passed through), tooltip.tsx with anchor only. Asymmetric edits, misreported (in the safe direction, but the two shared-contract files now disagree with each other and both disagree with the design doc's three-name list).",
+   "GATE RESULTS present wave pass/fail as the verification of record, but every wave's testFiles/testCount matches the storybook project alone (56 files / 294 tests at wave3 = exactly the story files). The `unit` vitest project \u2014 22 files / 314 tests, including the 4,608-case differential suite the design names as Lane D's acceptance evidence \u2014 was never run by any gate. Multiple lanes explicitly deferred (\"the orchestrator's barrier typecheck/test-stories is the first real verification\"), so the gap was load-bearing. I ran `pnpm exec vitest --project=unit run`: all 314 pass, so no code defect \u2014 but the gates' implied coverage was false.",
+   "Lane B's provenance cites /home/bam/systemsketch/src/components/ui/context-menu.tsx:1-260 \"(full file)\" and breadcrumb.tsx:1-114 \"(full file)\" \u2014 the on-disk donors are 280 and 124 lines (clean working tree, last changed Sep 9, before the lanes ran). Content verified intact (the donor's tail is the export block; all 15 exports match the port), so the substance is honest but the cited ranges are wrong. Lane I's DraftsControl.tsx:1-307 vs an actual 306 lines is the same class, trivially."
+  ],
+  "provenanceProblems": [
+   "context-menu.tsx cited as donor \"1-260 (full file)\" \u2014 donor /home/bam/systemsketch/src/components/ui/context-menu.tsx is 280 lines; tail (export block) verified identical to the port, so content is intact, but the range is wrong and \"full file\" it is not.",
+   "breadcrumb.tsx cited as donor \"1-114 (full file)\" \u2014 donor is 124 lines. Same class.",
+   "DraftsControl.tsx cited \"1-307 (full file read)\" \u2014 donor is 306 lines (off by one, trivial).",
+   "Everything else spot-checked is exact: sharedValues.ts:19-46, strokeMeta.ts:87-91/195-199, historyModel.ts:75-103, SystemSketchToolbar.tsx:273-280 (onArm WHY verbatim), SystemSketchUtilities.tsx:689 (99+ clamp at the exact cited line), TitleBar.tsx:130-160 (segmentBreadcrumbs), ContextualControls.tsx:236-248 (stackedModes), DraftModeBar.tsx MergeSplitButton in 95-180, menuLabModel.ts:1-388, AppearanceGlyph.tsx:54-81/330-506, floatingToolbarPlacement.ts:1-343 (structural diff shows ONLY the two claimed renames plus overlayInset losing its default), and framesOrder's `clip` honestly marked \"ours, ad hoc\" \u2014 confirmed absent from the donor."
+  ],
+  "findings": [
+   {
+    "severity": "major",
+    "file": "apps/storybook-basics/src/components/dropdown-menu.tsx",
+    "summary": "Design contract \u00a73.1/\u00a75 orders the DropdownMenuContent and TooltipContent Picks widened with \"anchor\" | \"container\" | \"collisionPadding\"; shipped is anchor+collisionPadding on dropdown-menu (no container) and anchor only on tooltip (no container, no collisionPadding).",
+    "breaks": "ChromeBar's documented `container` prop (chromeBar.tsx:161-165) is silently ignored for the burger, file-title dropdown, breadcrumb-ellipsis menu, and depth-badge dropdown \u2014 they always portal to document.body, outside the host's token scope that host-contract \u00a74 says `container` exists to reach. Same for every DropdownMenu inside ToolDock, SplitButton, and DraftBar's overflow menu. A host with a scoped theme root gets mis-themed popups with no error. Self-flagged by lane I but never fixed at any barrier despite the file being wave-0's own write set.",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "major",
+    "file": "apps/storybook-basics/vitest.config.ts",
+    "summary": "The orchestrator's wave gates ran only the storybook vitest project; the unit project (22 test files / 314 tests, including the design-mandated 4,608-case placement differential and every ported donor acceptance suite) was never executed by any gate.",
+    "breaks": "The GATE RESULTS' pass:true covered barely half the tests the design mandates \u2014 gate counts match story files exactly (56/294 at wave3), and vitest.config.ts documents that test-stories deliberately runs only the storybook project. Every lane deferred verification to this barrier, so nothing had ever run controlValue/controlRegistry/floatingToolbar.placement/compareModel/wordDiff/toolPreferences/framesOrder/breadcrumbCompact tests before this audit. I ran `pnpm exec vitest --project=unit run`: 22 files, 314 tests, all pass \u2014 so no latent failure, but the verification claim was hollow and the gate must add `--project=unit` (or run both projects) going forward.",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "minor",
+    "file": "registry.json",
+    "summary": "Lane N (the design's wave-3 registry step: one registry item per new component, sibling-rule targets, shadcn build + throwaway install + tsc) was never executed; registry.json is untouched since commit a889df1.",
+    "breaks": "Per CLAUDE.md \"the registry is the product\": none of the ~45 new kit files is consumable by `npx shadcn add` yet. Not a false lane claim (no lane claimed it), but the design's own build order ends with it and it is the largest outstanding item. Note also two L2 type-only sibling imports (controlRegistry.ts\u2192./controlValue, propertyRows.ts\u2192./compareModel) that Lane N must re-list per the sibling rule \u2014 they flatten safely since all L2 files land in components/bbox/ together.",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "minor",
+    "file": "apps/storybook-basics/src/components/framesPanel.tsx",
+    "summary": "framesPanel owns dnd-kit internally (onReorder(nextKeys) API, zIndex:10 + document-level listeners during drag) instead of the design \u00a73.3's literal reorder prop shape ({onMove, dragging, dropTarget, dragHandleProps} with the host bolting on DnD per \u00a74).",
+    "breaks": "A host that wants HTML5 drag, its own DnD library, or none cannot use the design's promised seam; the kit's L3 z-index/global-listener ban is violated in the letter. Mitigated: matches trunk precedent (portEdge.tsx:767, blockMembers.tsx), was the lane brief's explicit instruction, is self-flagged in the lane report with the reasoning, and the drag listeners exist only during an active drag. Needs an explicit ruling from Zach: design-doc shape or trunk precedent.",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "minor",
+    "file": "apps/storybook-basics/src/components/compareReview.tsx",
+    "summary": "CompareReviewProps.layout and .gitHighlight are consumed as one-shot useState seeds (lines 210-211); prop changes after mount are silently ignored though the design sketch presents them as plain (controlled-looking) fields.",
+    "breaks": "A host that later flips `layout` or `gitHighlight` from outside sees no effect and gets no warning \u2014 a semi-controlled API wart. Documented inline as a DECISION (the design sketch is self-contradictory: it lists the fields with no setters while PropertyTable requires onLayoutChange/onGitHighlightChange), but the prop names still read as controlled.",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "minor",
+    "file": "apps/storybook-basics/src/components/draftBar.tsx",
+    "summary": "draftBar.tsx and chromeBar.tsx both export an identical `MenuAction` interface (lane L wrote it before lane I's landed, verified structurally equal, follow-up comment left at draftBar.tsx:42-45).",
+    "breaks": "Barrel re-exports or a registry item that includes both files collide on the name; two definitions can drift silently until someone does the promised re-point. One import swap fixes it.",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "minor",
+    "file": "apps/storybook-basics/src/components/controlStrip.tsx",
+    "summary": "ControlStrip's root ships BOTH data-contextual-recipe and data-control-recipe (lines 130-131) because the design (\u00a73.3: rename to data-control-recipe) and the lane's task brief (original name survives for tests) conflicted; the lane hedged rather than guessed.",
+    "breaks": "Nothing today (no test keys on either yet \u2014 verified), but the dual attribute is a wart that will fossilize; whoever wires the first real host/test should drop one and update the file's WHY comment, exactly as the lane's own blocker note requests.",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "minor",
+    "file": "docs/menus/screenshots/01-floating-toolbar-fill-popover.png",
+    "summary": "The staged screenshot's opacity slider (slider track + \"100%\" readout cell in the pill) has no corresponding code path anywhere in the kit \u2014 no slider component exists, and it is not named in \u00a77's deliberately-left-out list; floatingToolbar.tsx only mentions \"an opacity slider\" as hypothetical host-supplied children (lines 36, 86).",
+    "breaks": "One of the nine staged surfaces cannot be reproduced from kit parts alone; a host must hand-roll the slider cell with no kit primitive or documented recipe. (Screenshot 02's rich-text toolbar and 09's avatar/copy/Share cluster are, by contrast, explicitly sanctioned omissions \u2014 \u00a77 and lane I's recorded decision respectively, the latter demonstrated as host-composed content in ChromeBar.stories.tsx:194.)",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "minor",
+    "file": "apps/storybook-basics/src/components/tooltip.tsx",
+    "summary": "Lane A's report says both shared-contract edits added \"anchor\" only (\"one word in a type and one prop passed through, twice\"), but dropdown-menu.tsx actually also gained collisionPadding while tooltip.tsx did not \u2014 the two files' Picks now disagree with each other as well as with the design's three-name list.",
+    "breaks": "A canvas-anchored tooltip near a host edge cannot receive collisionPadding while the equivalent menu can; and the self-report cannot be trusted as a record of what shipped. Trivial to reconcile while fixing the container gap.",
+    "confidence": "CONFIRMED"
+   },
+   {
+    "severity": "minor",
+    "file": "apps/storybook-basics/src/components/statusStrip.tsx",
+    "summary": "StatusStrip splits `items` around the children readout slot via Math.ceil(items.length/2) \u2014 an invented positioning heuristic the design's interface (items + children, no position field) never specifies, marked \"ours, ad hoc\" in the file.",
+    "breaks": "A host wanting an asymmetric split (e.g. 3-left/1-right) cannot express it; reproduces the donor's 2-and-2 layout only for even-ish item counts. Self-flagged in the lane's blockers for exactly this cross-lane-consistency question.",
+    "confidence": "CONFIRMED"
+   }
+  ],
+  "whatIsGenuinelyGood": [
+   "The import law holds perfectly across all 47 new/edited files: zero tldraw/@xyflow imports, zero @bbox-ui/* or cross-package imports, zero getBoundingClientRect/ResizeObserver/localStorage/position:fixed/document.* in shipped component code (verified by grep over every file \u2014 remaining hits are doc comments), and the whole dependency graph is L0 stock + ../lib/utils + sibling files, exactly the layer diagram.",
+   "Provenance is real, not performative: 12 of 12 spot-checks against /home/bam/systemsketch/src found the cited content at (or within) the cited lines \u2014 including exact single-line hits like the 99+ clamp at SystemSketchUtilities.tsx:689 and the onArm WHY at SystemSketchToolbar.tsx:273-280 \u2014 and a structural diff of floatingToolbar.placement.ts against its donor shows ONLY the two claimed renames plus the claimed overlayInset default removal. framesOrder's new `clip` is honestly labeled \"ours, ad hoc\" and confirmed absent from the donor.",
+   "The 4,608-case differential suite is genuine: 2 viewports \u00d7 2 obstacles \u00d7 6\u00d76 positions \u00d7 4\u00d74 sizes \u00d7 2 menus with a frozen hand-rolled oracle and a self-check assertion on the sweep count \u2014 and it passes (I ran it).",
+   "All four named load-bearing WHYs survived verbatim with donor citations: elbow-is-the-datum (toolPreferences.ts:112-117, DEFAULT_TOOLBAR_PREFERENCES.lastArrowPreset=\"elbow\" with Zach's quote), glyph-table-never-an-if-chain (controlGlyphs.tsx:289), custom-size-cell-only-when-bound (controlPanel.tsx:146), empty-group drop + new onDangling (controlRegistry.ts:65-76, 218). Bonus verbatim survivals verified: the vocabulary law header, the undefined===undefined A-badge guard, splitButton's blocked-keeps-chevron-accent (splitButton.tsx:72-79 with drafts.css:645-655 cite), and the Base UI composition direction (ToolbarButton outer, trigger merged via render) applied consistently in toolDock.",
+   "Stories are true variant galleries with measured assertions: 23 new story files averaging ~6 story exports each, FloatingToolbar's Gallery runs a real measure-then-place loop over 6 cases using the actual placement function and asserts exact boundary coordinates via getBoundingClientRect; ControlLab ports the 388-line menuLab model with an exhaustive what-changed header.",
+   "Independent re-verification all green: `pnpm typecheck` clean, `pnpm test-stories` 56 files/294 tests pass, `pnpm exec vitest --project=unit run` 22 files/314 tests pass, and a forced --noUnusedLocals pass over the new files found zero dead imports; zero TODOs left anywhere.",
+   "Deviations are almost universally self-flagged with inline WHY comments and honest lane blockers (the container gap, the dual recipe attribute, the reorder-prop divergence, the design-sketch contradictions) \u2014 the reports understate rather than oversell, the opposite of the fabricated-claim failure mode this repo's rules exist to catch."
+  ]
+ }
+}

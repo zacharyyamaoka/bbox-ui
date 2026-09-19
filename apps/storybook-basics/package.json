@@ -9,6 +9,8 @@
     "storybook": "storybook dev -p ${STORYBOOK_PORT:-5421} --ci",
     "build-storybook": "storybook build -o storybook-static",
     "test-stories": "vitest --project=storybook run",
+    "test-unit": "vitest --project=unit run",
+    "test": "vitest run",
     "whats-new": "node ../../docs/build_whats_new.mjs"
   },
   "dependencies": {
@@ -26,6 +28,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@floating-ui/core": "^1.8.0",
     "@lezer/highlight": "^1.2.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

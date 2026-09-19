@@ -30,18 +30,39 @@ function TooltipContent({
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
+  anchor,
+  collisionPadding,
+  container,
   children,
   style,
   ...props
 }: TooltipPrimitive.Popup.Props &
-  Pick<TooltipPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
+  // WHY `anchor` was added to this Pick (2026-09-18, menu kit build): same
+  // reason as dropdown-menu.tsx's matching edit — a canvas-anchored hint (a
+  // pointer-position tooltip with no DOM trigger) needs Positioner's own
+  // `anchor` (a Floating UI VirtualElement), which this Pick never
+  // surfaced. Adds-only; every current consumer that omits `anchor` is
+  // unaffected.
+  //
+  // `collisionPadding` and `container` followed in the same pass that fixed
+  // dropdown-menu.tsx — see the longer note there. The pair has to stay in
+  // lockstep across these two files: a host that scopes its design tokens
+  // to a container element and gets themed MENUS but unthemed TOOLTIPS has
+  // a bug that is much harder to read than one where neither works.
+  Pick<
+    TooltipPrimitive.Positioner.Props,
+    "align" | "alignOffset" | "side" | "sideOffset" | "anchor" | "collisionPadding"
+  > &
+  Pick<TooltipPrimitive.Portal.Props, "container">) {
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal container={container}>
       <TooltipPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        anchor={anchor}
+        collisionPadding={collisionPadding}
         className="isolate z-50"
       >
         <TooltipPrimitive.Popup
