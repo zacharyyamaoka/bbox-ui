@@ -46,7 +46,7 @@ import {
 import { REGION_MIN_WIDTH_PX } from "@trunk/components/region.layout";
 
 import { REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "../types";
-import { isRegionPlaceholder, regionHugHeightOf, regionLayoutOf } from "./cornerBlock";
+import { armsAfterDelta, reconcileRegionProps, regionHugForArms, regionHugHeightOf, regionLayoutOf, regionMinHeightOf } from "./cornerBlock";
 import { RegionFace } from "./RegionFace";
 
 /** Which construct this frame IS. Closed, because a `kind` the renderer has
@@ -84,12 +84,6 @@ declare module "@tldraw/tlschema" {
 }
 
 export type RegionShape = TLBaseShape<"ss-region", RegionShapeProps>;
-
-/** The floor under an authored height. The width's floor is the trunk's own
- *  `REGION_MIN_WIDTH_PX` (240, the archive's `BRANCH_MIN_WIDTH`); 160 is this
- *  plan's matching floor for the height — below it a frame cannot hold a
- *  corner block and a body at once. */
-const REGION_MIN_HEIGHT_PX = 160;
 
 export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
   static override type = REGION_SHAPE_TYPE;
@@ -187,16 +181,43 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
    * answer: for a top or left handle `resizeBox` converts the shortfall into
    * an `x`/`y` offset, so the edge the author is not dragging stays where it
    * is. Clamping afterwards would instead slide the whole frame across the
-   * board the moment the drag hit the floor. The height floor is the region's
-   * own CONTENT (`regionHugHeightOf`: corner card + arm rows + pad), not a
-   * constant — a two-armed Branch simply cannot be 160px tall, and letting the
-   * handle pretend otherwise is what left a dead zone at the bottom edge.
+   * board the moment the drag hit the floor.
+   *
+   * WHY the height floor is `regionMinHeightOf` and NOT the current hug, which
+   * is what an earlier cut of this lane passed: an armed region's height IS
+   * its rows, so flooring at the rows-as-they-stand made the bottom handle
+   * one-way — you could stretch a Branch and never shrink it again. The floor
+   * is instead how far the arms themselves can give (every open arm at
+   * `REGION_ARM_MIN_BODY_PX`), which is exactly where `armsAfterDelta` stops,
+   * so the number `resizeBox` clamps at and the number the spread below can
+   * honour are the same function of the same arms — the condition a top-handle
+   * drag needs in order not to slide, since `resizeBox` turns a shortfall into
+   * a `y` offset (`resizeBox.ts:78-116`).
+   *
+   * WHY THE ARMS ARE SPREAD HERE and not left to `onBeforeUpdate`, which is
+   * where the archive put the whole rule and where this lane put it first:
+   * tldraw applies a resize as `applyPartialToRecordWithProps(initialShape,
+   * {…this answer})` (`Editor.getResizeShapePartial`), and `resizeBox` answers
+   * `props: { w, h }` alone — so every prop this method does NOT return is
+   * replayed from the gesture's opening snapshot on every frame. Arms written
+   * downstream were therefore reverted a frame later and the revert then read
+   * as "an arm changed", which hugged the frame straight back: measured as
+   * 336 → 343 → 336 → 357 → 336, a Branch whose bottom handle visibly did
+   * nothing. Returning the arms is what makes them survive that merge.
+   *
+   * The delta is taken against the SNAPSHOT's rows (`shape` here IS
+   * `{…initialShape, x, y}`, same source `resizeBox` scales), so it is
+   * absolute for the whole gesture and cannot accumulate rounding.
    */
   override onResize(shape: RegionShape, info: TLResizeInfo<RegionShape>) {
-    return resizeBox(shape, info, {
+    const box = resizeBox(shape, info, {
       minWidth: REGION_MIN_WIDTH_PX,
-      minHeight: Math.max(REGION_MIN_HEIGHT_PX, regionHugHeightOf(this.editor, shape)),
+      minHeight: regionMinHeightOf(this.editor, shape),
     });
+    // An armless Loop or plain scope has a free body: the height IS the answer.
+    if (shape.props.arms.length === 0) return box;
+    const arms = armsAfterDelta(shape.props.arms, box.props.h - regionHugHeightOf(this.editor, shape));
+    return { ...box, props: { ...box.props, h: regionHugForArms(this.editor, shape, arms), arms } };
   }
 
   /**
@@ -235,9 +256,12 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
   /**
    * THE ONE SEAM WHERE `props` BECOMES TRUE. Every create and every update
    * leaves this class with `props.w/h` equal to what `getGeometry` will draw:
-   * at least `REGION_MIN_WIDTH_PX` wide, and at least as tall as the corner
-   * card and the arm rows need (`regionLayoutOf`, which returns
-   * `max(authored, hugged)` — so an author's roomier frame survives).
+   * at least `REGION_MIN_WIDTH_PX` wide, and — for a region WITH ARMS —
+   * exactly as tall as the corner card and the arm rows add up to, the arms
+   * absorbing whatever a resize handle asked for. An armless Loop or plain
+   * scope keeps a free body, so there `h` is `max(authored, hugged)` and an
+   * author's roomier frame survives. The rule and the reason both live in
+   * `reconcileRegionProps` (`./cornerBlock`).
    *
    * WHY reconcile the record instead of letting the geometry hug on its own,
    * which reads like the tidier half (no write-back, one derived reading): the
@@ -263,11 +287,22 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
    * the guard has to cover the update path or it does not exist.
    */
   override onBeforeCreate(next: RegionShape): RegionShape | void {
-    return reconciled(this.editor, next);
+    return reconcileRegionProps(this.editor, undefined, next);
   }
 
-  override onBeforeUpdate(_previous: RegionShape, next: RegionShape): RegionShape | void {
-    return reconciled(this.editor, next);
+  /**
+   * WHY `previous` IS READ AND NOT IGNORED — the whole difference between a
+   * frame that hugs and one that only ever grows. `reconcileRegionProps` needs
+   * to know whether THIS write touched `h`: `resizeBox` writes it and means
+   * "give the arms this much more room", while a fold writes only `arms` and
+   * means "`h`, follow me down". An earlier cut of this lane took
+   * `max(props.h, hugged)` from the two records' `next` alone, which cannot
+   * tell those apart — so a folded arm left a 160px band inside a construct
+   * that has no free body, and a stretched frame left the extra under the last
+   * arm. `previous` is the only place that answer exists.
+   */
+  override onBeforeUpdate(previous: RegionShape, next: RegionShape): RegionShape | void {
+    return reconcileRegionProps(this.editor, previous, next);
   }
 
   /**
@@ -347,16 +382,4 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
   override component(shape: RegionShape) {
     return <RegionFace shape={shape} />;
   }
-}
-
-/** The reconcile, in one place so create and update cannot disagree. Returns
- *  nothing when the record is already true, so an update that changed only
- *  `name` does not churn a second record out of this hook. */
-function reconciled(editor: Editor, next: RegionShape): RegionShape | void {
-  if (isRegionPlaceholder(next)) return;
-  const layout = regionLayoutOf(editor, next);
-  const w = Math.max(layout.width, REGION_MIN_WIDTH_PX);
-  const h = Math.max(layout.height, REGION_MIN_HEIGHT_PX);
-  if (w === next.props.w && h === next.props.h) return;
-  return { ...next, props: { ...next.props, w, h } };
 }

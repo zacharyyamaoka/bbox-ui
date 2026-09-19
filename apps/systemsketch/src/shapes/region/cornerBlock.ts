@@ -25,7 +25,12 @@
 //      authored at once the card it hugs has measured itself.
 import { createShapeId, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
-import { regionLayout, type RegionLayout } from "@trunk/components/region.layout";
+import {
+  REGION_ARM_MIN_BODY_PX,
+  REGION_MIN_WIDTH_PX,
+  regionLayout,
+  type RegionLayout,
+} from "@trunk/components/region.layout";
 
 import type { BlockPortSpec, BlockShapeProps } from "../block/BlockShapeUtil";
 import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE, type PortSide } from "../types";
@@ -74,6 +79,25 @@ const CORNER_CLAIM_SLACK_PX = 24;
  *  truthfully" rule — and it is a constant rather than a measurement so the
  *  geometry and the paint cannot disagree about where the first arm starts. */
 export const REGION_NAME_TAB_PX = 28;
+
+/**
+ * The floor under an ARMLESS region's height. The width's floor is the trunk's
+ * own `REGION_MIN_WIDTH_PX` (240, the archive's `BRANCH_MIN_WIDTH`); 160 is
+ * this plan's matching floor for the height — below it a frame cannot hold a
+ * corner block and a body to drop into at once.
+ *
+ * WHY IT DOES NOT APPLY TO A REGION WITH ARMS, which the lane brief's flat
+ * "h >= 160" reads as covering: an armed region has NO free body — "a branch
+ * has no free body; its arms are its body" (`@trunk/components/region.layout`
+ * :96-97) — so its height is exactly its rows, and a floor above them would
+ * paint a band under the last arm that belongs to no arm. The archive agrees
+ * by omission: `reconcileBranchProps` floors the WIDTH
+ * (`/home/bam/systemsketch/src/branch/branchModel.ts:458-479`) and never the
+ * height, because `branchHeightForArms` IS the height. What protects an armed
+ * region from collapsing is `REGION_ARM_MIN_BODY_PX` on each open arm, which
+ * is a floor on the rows rather than on the frame.
+ */
+export const REGION_MIN_HEIGHT_PX = 160;
 
 /** An empty rail set, spelled once. */
 const NO_PORTS: Record<PortSide, BlockPortSpec[]> = { left: [], right: [], top: [], bottom: [] };
@@ -300,13 +324,25 @@ export function installRegionKit(editor: Editor): () => void {
     return parent && parent.type === REGION_SHAPE_TYPE ? (parent as RegionShape) : undefined;
   };
 
-  /** Only ever GROWS: `regionLayout` returns `max(authored, hugged)`, so an
-   *  author's deliberately roomy frame survives a card that shrank. */
+  /**
+   * The card moved the rows, so the frame follows them — DOWN as well as up.
+   *
+   * WHY it goes through `reconcileRegionProps` with `previous === next` rather
+   * than writing `regionLayoutOf`'s answer (which is what an earlier cut of
+   * this lane did, and what the auditor caught): `regionLayoutOf` returns
+   * `max(authored, hugged)` and therefore only ever GROWS, so a corner card
+   * that shrank left a dead band under the last arm that belongs to no arm.
+   * Passing the region as its own `previous` says exactly what happened — the
+   * rows moved, nobody dragged a handle — which is the one branch of the
+   * reconcile that re-derives `h` from the rows. Sharing the function is also
+   * what makes this write a FIXED POINT: `onBeforeUpdate` re-runs the same
+   * rule on the record written here and finds nothing left to change.
+   */
   const reconcileFrame = (region: RegionShape) => {
-    if (isRegionPlaceholder(region)) return;
-    const layout = regionLayoutOf(editor, region);
-    if (layout.width === region.props.w && layout.height === region.props.h) return;
-    editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { w: layout.width, h: layout.height } });
+    const reconciled = reconcileRegionProps(editor, region, region);
+    if (!reconciled) return;
+    const { w, h, arms } = reconciled.props;
+    editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { w, h, arms } });
   };
 
   const stops = [
@@ -376,29 +412,212 @@ export function cornerBoxOf(editor: Editor, shape: RegionShape): { w: number; h:
  * thing about the same engine: "The record, not the layout".
  */
 export function regionLayoutOf(editor: Editor, shape: RegionShape): RegionLayout {
-  return regionLayout(layoutInput(editor, shape, shape.props.h));
+  return regionLayout(layoutInput(editor, shape, shape.props.h, shape.props.arms));
 }
 
 /**
- * The smallest height this region's CONTENT allows — the corner card plus
- * every arm row plus the bottom pad, ignoring whatever height it was authored
- * at.
+ * The height this region's own ROWS add up to: the corner card, every arm row
+ * (a folded arm costs only its header) and the bottom pad — ignoring whatever
+ * height the frame was authored at.
  *
- * WHY it is separate from `regionLayoutOf`: it is the `minHeight` a live
- * resize needs (`RegionShapeUtil.onResize`). `resizeBox` does not merely clamp
- * a too-small number — for a top or left handle it also offsets `x`/`y` by the
- * shortfall, so the edge the author is NOT dragging stays put. Flooring the
- * result afterwards instead would slide the whole frame.
+ * This is the archive's `branchHeightForArms`
+ * (`/home/bam/systemsketch/src/branch/branchModel.ts:150-154`), generalised
+ * over a MEASURED corner block where the donor had a fixed 40px band.
  */
 export function regionHugHeightOf(editor: Editor, shape: RegionShape): number {
-  return regionLayout(layoutInput(editor, shape, 0)).height;
+  return hugHeightOf(editor, shape, shape.props.arms);
 }
 
-function layoutInput(editor: Editor, shape: RegionShape, height: number) {
+/**
+ * The smallest height a live resize may reach (`RegionShapeUtil.onResize`'s
+ * `minHeight`).
+ *
+ * WHY it is NOT the current hug, which is what an earlier cut of this lane
+ * passed: `resizeBox` clamps the drag at `minHeight`, so a floor equal to the
+ * rows as they stand means the bottom handle can never make an arm smaller —
+ * the frame would be resizable upward only. The real floor is the hug with
+ * every OPEN arm shrunk to `REGION_ARM_MIN_BODY_PX`, i.e. exactly as far down
+ * as `reconcileRegionProps` can spread a negative delta before its per-arm
+ * clamp bites. Keeping the two numbers the same function of the same arms is
+ * what stops a top-handle drag from sliding the frame: `resizeBox` turns a
+ * shortfall into a `y` offset, so if it floored at a height the reconcile then
+ * refused to honour, the edge the author is NOT dragging would move.
+ *
+ * WHY an armless region uses `REGION_MIN_HEIGHT_PX` instead: it has a FREE
+ * body rather than rows, so there is nothing to spread a delta into and the
+ * floor is a constant (see that constant's own note).
+ */
+export function regionMinHeightOf(editor: Editor, shape: RegionShape): number {
+  const arms = shape.props.arms;
+  if (arms.length === 0) return Math.max(REGION_MIN_HEIGHT_PX, hugHeightOf(editor, shape, arms));
+  return hugHeightOf(
+    editor,
+    shape,
+    arms.map((arm) => ({ ...arm, h: REGION_ARM_MIN_BODY_PX })),
+  );
+}
+
+/**
+ * KEEP `h` AND THE ARMS IN STEP, WHICHEVER SIDE WROTE — ported by value from
+ * the archive's `reconcileBranchProps`
+ * (`/home/bam/systemsketch/src/branch/branchModel.ts:458-479`), whose own
+ * doc comment states the contract this lane owes: "A command that folds, adds
+ * or resizes an arm writes the arms and expects `h` to follow. tldraw's resize
+ * writes `h` and expects the open arms to share the change. Both go through
+ * here, so a Branch can never carry a height its rows do not add up to."
+ *
+ * The invariant it buys, and the reason every caller funnels through it: for a
+ * region WITH ARMS, `props.h` is always exactly `regionHugHeightOf`. Never a
+ * pixel more — a taller frame would show a band under the last arm that
+ * belongs to no arm, inside a construct the trunk says has no free body
+ * (`@trunk/components/region.layout:96-97`) — and never a pixel less, which
+ * would paint arms outside the border they live in.
+ *
+ * WHY THE THREE BRANCHES, and why the donor's own discriminator could not be
+ * ported literally. The archive reads "did the arms change?" and otherwise
+ * assumes a resize, because its band was a CONSTANT 40px so the only thing
+ * that could move `expected` was an arm. Here the top row is a real measured
+ * `ss-block` child, so `expected` also moves when that card measures itself or
+ * is replaced — and reading that as a resize would spread the card's growth
+ * into the arms, squashing every one of them the moment the corner block
+ * settled (a click-placed Branch would come out with 72px arms instead of
+ * 160px). The honest discriminator is therefore "did THIS write touch `h`?",
+ * which `previous` answers exactly: `resizeBox` writes `h`, a fold writes only
+ * `arms`, and the corner-card repair writes the hug it was already at.
+ *
+ *   1. ARMLESS — a Loop or a plain scope. Its body is free space to drop into,
+ *      so an author's roomier frame survives and `h` only ever has floors
+ *      applied. This is the one case where `h > hug` is legitimate.
+ *   2. THE ROWS MOVED — a fold, an added or removed arm, or the corner card
+ *      re-measuring (`previous` and `next` carry the same `h`). `h` follows
+ *      the rows, DOWN as much as up. This is the branch the auditor's repro
+ *      exercises: folding `else` on a 480x496 Branch must hug back to 336, not
+ *      leave a 160px dead band.
+ *   3. A HEIGHT WAS WRITTEN and the arms were not. The delta over the rows is
+ *      spread across the OPEN arms (`armsAfterDelta`) and `h` is re-derived
+ *      from them, so the two can never disagree. A fully folded region has no
+ *      open arm to receive the space, so it simply snaps back to its rows (the
+ *      donor's `open.length === 0` case) — which is also why
+ *      `regionMinHeightOf` refuses to let a handle go below them. NOTE that a
+ *      resize GESTURE does not normally arrive here: `onResize` has already
+ *      spread it, for the engine reason written out on `armsAfterDelta`, and
+ *      this branch then finds a delta of zero. What is left for it is a
+ *      programmatic `props.h` — stream 3's `applyScene`, a paste with an
+ *      off-layout height — which no gesture seam ever sees.
+ *
+ * Returns nothing when the record is already true, so an update that changed
+ * only `name` does not churn a second record out of this hook.
+ */
+export function reconcileRegionProps(
+  editor: Editor,
+  previous: RegionShape | undefined,
+  next: RegionShape,
+): RegionShape | void {
+  // A `1x1` region is the box tool's placeholder, not a document — see
+  // `isRegionPlaceholder` and `RegionShapeUtil.onBeforeCreate`.
+  if (isRegionPlaceholder(next)) return;
+
+  const w = Math.max(next.props.w, REGION_MIN_WIDTH_PX);
+  const arms = next.props.arms;
+
+  // 1. No arms: a free body an author may size at will.
+  if (arms.length === 0) {
+    const h = Math.max(next.props.h, hugHeightOf(editor, next, arms), REGION_MIN_HEIGHT_PX);
+    return settled(next, w, h, arms);
+  }
+
+  const hugged = hugHeightOf(editor, next, arms);
+  // A CREATE counts as "the rows moved": the archive mints a branch at
+  // `h: branchHeightForArms(arms)` too (`branchModel.ts:282`), so a pasted,
+  // duplicated or programmatically written region lands on its own rows.
+  const rowsMoved = previous === undefined || !sameArms(previous.props.arms, arms) || previous.props.h === next.props.h;
+
+  // 2. The rows moved: `h` follows them.
+  if (rowsMoved) return settled(next, w, hugged, arms);
+
+  // 3. A height was written with no arm change — a programmatic `props.h`, or
+  //    a gesture whose spread `onResize` already applied and is re-stating.
+  //    Either way the open arms share it (donor lines 470-479).
+  const spread = armsAfterDelta(arms, next.props.h - hugged);
+  return settled(next, w, hugHeightOf(editor, next, spread), spread);
+}
+
+/**
+ * Share `delta` px across the OPEN arms, weighted by their current heights —
+ * the donor's spread (`reconcileBranchProps`, branchModel.ts:470-479), lifted
+ * into its own function so the two seams that need it cannot drift apart.
+ *
+ * WHY TWO SEAMS NEED IT, which is the thing that cost this lane a round.
+ * `RegionShapeUtil.onResize` is the one that runs during a drag, and it has to
+ * be, because of how tldraw applies a resize: `Editor.getResizeShapePartial`
+ * (@tldraw/editor `src/lib/editor/Editor.ts`, measured in 5.3.2) builds the
+ * update as `applyPartialToRecordWithProps(initialShape, {…onResize's answer})`
+ * — the SNAPSHOT taken when the gesture began, with only the props `onResize`
+ * returned laid over it. `resizeBox` returns `props: { w, h }` and nothing
+ * else, so `arms` is replayed from the snapshot on EVERY frame. A reconcile
+ * that spread the delta from `onBeforeUpdate` therefore wrote arms the next
+ * frame silently reverted, and `!sameArms(previous, next)` then read that
+ * revert as "the rows moved" and hugged back to the start — measured as a
+ * frame that visibly refused to resize at all: 336 → 343 → 336 → 357 → 336.
+ * The fix is that `onResize` returns the arms too, so they survive the merge.
+ * The reconcile keeps its own copy of the rule for the writes no gesture makes
+ * (a programmatic `props.h`), and both call THIS.
+ *
+ * A folded arm is skipped: it has no body on screen to give or take, and its
+ * `h` is a memory of what it will re-open at, which a resize must not rewrite.
+ */
+export function armsAfterDelta(arms: readonly RegionArm[], delta: number): RegionArm[] {
+  const open = arms.filter((arm) => arm.open);
+  if (delta === 0 || open.length === 0) return [...arms];
+  const total = open.reduce((sum, arm) => sum + arm.h, 0);
+  let remaining = delta;
+  return arms.map((arm) => {
+    if (!arm.open) return arm;
+    // The LAST open arm takes whatever the rounding left over, so the shares
+    // add up to the delta exactly and the frame lands where the handle was let
+    // go rather than a pixel or two off it.
+    const isLast = open[open.length - 1] === arm;
+    const share = isLast ? remaining : Math.round((delta * arm.h) / Math.max(1, total));
+    remaining -= share;
+    const h = Math.max(REGION_ARM_MIN_BODY_PX, arm.h + share);
+    return h === arm.h ? arm : { ...arm, h };
+  });
+}
+
+/** The height a region would hug if its arms were `arms` — what a resize needs
+ *  in order to answer with a frame its own rows add up to. */
+export function regionHugForArms(editor: Editor, shape: RegionShape, arms: readonly RegionArm[]): number {
+  return hugHeightOf(editor, shape, arms);
+}
+
+/** The reconcile's one exit: answer `undefined` when nothing actually moved,
+ *  so a no-op update does not mint a record. */
+function settled(next: RegionShape, w: number, h: number, arms: RegionArm[]): RegionShape | void {
+  if (w === next.props.w && h === next.props.h && sameArms(arms, next.props.arms)) return;
+  return { ...next, props: { ...next.props, w, h, arms } };
+}
+
+/** Same arms, field for field — the donor's `sameArms` (branchModel.ts:432-444)
+ *  minus `controlIcons`, which this document model does not have (a `break` is
+ *  a mark this lane does not build). Identity is not enough: `updateShape`
+ *  rebuilds the array on every write. */
+function sameArms(a: readonly RegionArm[], b: readonly RegionArm[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((arm, index) => {
+    const other = b[index];
+    return arm.id === other.id && arm.open === other.open && arm.h === other.h && arm.title === other.title;
+  });
+}
+
+function hugHeightOf(editor: Editor, shape: RegionShape, arms: readonly RegionArm[]): number {
+  return regionLayout(layoutInput(editor, shape, 0, arms)).height;
+}
+
+function layoutInput(editor: Editor, shape: RegionShape, height: number, arms: readonly RegionArm[]) {
   return {
     width: shape.props.w,
     height,
     corner: cornerBoxOf(editor, shape),
-    arms: shape.props.arms.map((arm) => ({ id: arm.id, open: arm.open, bodyHeight: arm.h })),
+    arms: arms.map((arm) => ({ id: arm.id, open: arm.open, bodyHeight: arm.h })),
   };
 }

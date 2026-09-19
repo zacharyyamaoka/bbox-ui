@@ -45,8 +45,11 @@ export {
   createCornerBlock,
   installRegionKit,
   isRegionPlaceholder,
+  reconcileRegionProps,
   regionHugHeightOf,
   regionLayoutOf,
+  regionMinHeightOf,
+  REGION_MIN_HEIGHT_PX,
   type RegionPreset,
 } from "./cornerBlock";
 
