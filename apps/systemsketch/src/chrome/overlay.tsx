@@ -349,7 +349,7 @@ function SystemSketchChrome() {
       */}
       <div
         ref={corner}
-        className="pointer-events-auto absolute flex items-center gap-2"
+        className="pointer-events-auto absolute flex items-end gap-2"
         style={{ right: placement.right, bottom: placement.bottom }}
         data-corner-placement={placement.placement}
       >
@@ -357,7 +357,10 @@ function SystemSketchChrome() {
             row: its own acceptance pins it to the status strip's row, and the
             row as a whole is what `placeCornerCluster` measures against the
             licence watermark and the dock. Kept first so the strip stays the
-            piece nearest the corner. */}
+            piece nearest the corner, and the row is `items-end` so the
+            strip's own bottom IS the row's bottom — centring it left a 12px
+            gap under the strip at narrow widths, which reads as "not in the
+            corner" exactly like the offset Zach objected to. */}
         <VariantSwitch />
         <SystemSketchStatusStrip
           open={open}

@@ -197,7 +197,7 @@ function VariantMenu<T extends string>({ which, label, heading, ids, titleOf, va
             watermark — which is where Zach asked for it, 2026-09-19 — while
             the whole row stays narrow. The full title is on the trigger's
             tooltip and in the open list. */}
-        <span className="max-w-16 truncate text-muted-foreground">{titleOf(value)}</span>
+        <span className="hidden max-w-24 truncate text-muted-foreground min-[1600px]:inline">{titleOf(value)}</span>
         <ChevronUp className="size-3 opacity-60" aria-hidden="true" />
       </DropdownMenuTrigger>
       {/* Opens UPWARD and right-aligned: the pill sits on the bottom edge,
@@ -266,7 +266,14 @@ export function VariantSwitch() {
       data-testid="ss-variant-switch"
       role="group"
       aria-label="Prototype variants"
-      className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 text-xs text-card-foreground shadow-sm"
+      // WHY it disappears under 900px: this temporary switch shares the
+      // bottom-right row with the zoom cluster, and on a narrow window that
+      // row grows wide enough to reach the dock — which forces the whole row
+      // to float above BOTH the dock and tldraw's licence watermark, the
+      // exact "not in the corner" Zach objected to (2026-09-19). A prototype
+      // control yields to the app's own chrome; `?` and the board are
+      // unchanged, and the variant still follows localStorage.
+      className="pointer-events-auto hidden items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 text-xs text-card-foreground shadow-sm min-[900px]:flex"
     >
       <VariantMenu
         which="port"
