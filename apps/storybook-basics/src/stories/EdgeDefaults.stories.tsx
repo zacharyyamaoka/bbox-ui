@@ -132,16 +132,20 @@ function perpendicularOffset(point: Pt, centre: Pt, wall: "horizontal" | "vertic
 
 const CARD = { view: "port", w: 150, h: 84 } as const;
 
-/** Source → three targets, all at DIFFERENT heights, so a cable that left
- *  the dot anywhere but its centre is visible as a y offset. The blocks are
- *  far enough apart in both axes that a chord would be steeply diagonal —
- *  which is what makes `axisAlignedFraction` discriminating. */
+/** Source → three targets, all at DIFFERENT heights — and none of them at
+ *  the SOURCE's height either, so every route genuinely has to turn a
+ *  corner. (An elbow between two dots that happen to be level is a single
+ *  straight run whose length IS its chord: correct, and indistinguishable
+ *  from a chord by measurement, so it proves nothing about the default and
+ *  is kept out of this fixture on purpose.) The blocks are far enough apart
+ *  in both axes that a chord would be steeply diagonal — which is what makes
+ *  `axisAlignedFraction` discriminating. */
 const FAN_OUT: HostScene = {
   nodes: [
     { id: "src", type: "block", position: { x: 20, y: 180 }, data: { ...CARD, name: "estimate()", ports: { right: ["pose"] } } },
     { id: "t1", type: "block", position: { x: 420, y: 20 }, data: { ...CARD, name: "a()", ports: { left: ["pose"] } } },
-    { id: "t2", type: "block", position: { x: 420, y: 180 }, data: { ...CARD, name: "b()", ports: { left: ["pose"] } } },
-    { id: "t3", type: "block", position: { x: 420, y: 340 }, data: { ...CARD, name: "c()", ports: { left: ["pose"] } } },
+    { id: "t2", type: "block", position: { x: 420, y: 260 }, data: { ...CARD, name: "b()", ports: { left: ["pose"] } } },
+    { id: "t3", type: "block", position: { x: 420, y: 400 }, data: { ...CARD, name: "c()", ports: { left: ["pose"] } } },
   ],
   // No `data` at all: these cables state NO routing, so what they draw as
   // IS the default under test.
@@ -206,7 +210,7 @@ const EXPLICIT_STRAIGHT: HostScene = {
  * rather than merely sampling flat.
  */
 export const ElbowIsTheDefault: Story = {
-  render: () => <DomCanvas scene={FAN_OUT} width={620} height={460} />,
+  render: () => <DomCanvas scene={FAN_OUT} width={620} height={520} />,
   play: async ({ canvasElement }) => {
     const root = hostOf(canvasElement);
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -245,7 +249,7 @@ export const ExplicitRoutingStillWins: Story = {
 
 /** Three cables OUT of one dot: all three leave on the dot's centre line. */
 export const FanOutLeavesOneCentre: Story = {
-  render: () => <DomCanvas scene={FAN_OUT} width={620} height={460} />,
+  render: () => <DomCanvas scene={FAN_OUT} width={620} height={520} />,
   play: async ({ canvasElement }) => {
     const root = hostOf(canvasElement);
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

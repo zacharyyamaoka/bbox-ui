@@ -29,7 +29,7 @@ import { HTMLContainer, useEditor, useValue } from "tldraw";
 
 import { Trace } from "@trunk/components/trace";
 
-import { WIRE_TERMINAL_GAP, directionTowards, fannedTerminal, wireFanOffset, wireTerminals } from "./wireGeometry";
+import { WIRE_TERMINAL_GAP, directionTowards, wireTerminals } from "./wireGeometry";
 import { wireDrag } from "./wireGesture";
 import type { WireShape } from "./WireShapeUtil";
 
@@ -49,16 +49,20 @@ export function WireFace({ shape }: { shape: WireShape }) {
       const live = editor.getShape<WireShape>(shape.id);
       if (!live) return null;
       const { from, to } = wireTerminals(editor, live);
-      const offset = wireFanOffset(editor, live.id);
       return {
-        // `curve` is what `Trace` honours for the DIRECT routings; the
-        // terminal nudge is what an `elbow` needs, because its router never
-        // looks at `curve`. Both are derived from the same `fanWires` offset,
-        // so a duplicate spreads by the same amount whichever routing it is
-        // wearing. Full reasoning: `fannedTerminal` in ./wireGeometry.
-        from: fannedTerminal(from, offset),
-        to: fannedTerminal(to, offset),
-        curve: offset,
+        // ONE ATTACH POINT PER PORT, and it is the dot's measured centre.
+        // Zach, 2026-09-19, on three cables leaving one `pose` dot at three
+        // stacked offsets: "very bad. edges should always leave from the
+        // center of the port… The port only should have 1 connection point
+        // in the center. Instead you should show the producer circle that
+        // has the number for the number of arrows intersecting at that
+        // port." So the duplicate FAN that used to move these two terminals
+        // ±7px perpendicular is gone, and so is the `curve` that spread the
+        // direct routings by the same amount. Two cables between the same
+        // two dots now draw on top of each other; that overlap is the rule
+        // working, not a defect, and the count is what a badge will say.
+        from,
+        to,
         variant: live.props.variant,
         routing: live.props.routing,
         // `color: ""` is the schema's "unset" (a `T.string` cannot be null
@@ -87,7 +91,6 @@ export function WireFace({ shape }: { shape: WireShape }) {
             routing={painted.routing}
             variant={painted.variant}
             color={painted.color}
-            curve={painted.curve}
             // The dots are REAL `Port`s rendered by the blocks at each end,
             // so `Trace` must not draw its own terminal glyphs on top of
             // them — the donor passes the same `false` for the same reason.
