@@ -218,7 +218,11 @@ function edgeSpecsOf(
           portIds.map(
             (id): PortEdgeItem => ({
               id,
-              label: id,
+              // WHY the id is still the fallback: a port with no authored
+              // name has nothing truer to show than what every edge and
+              // every edit event already calls it (hostScene.ts's
+              // `portLabels`).
+              label: node.data.portLabels?.[id] ?? id,
               availability: decoration?.availability?.[id],
               diagnostics: decoration?.portDiagnostics?.[id],
             }),

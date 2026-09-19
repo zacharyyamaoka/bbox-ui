@@ -36,8 +36,25 @@ export const NO_BACKEND: BackendSetting = Object.freeze({ kind: "none" });
  * trailing slash is dropped), or `null` when the text is not a URL the
  * client could call. Pure.
  */
-export function normalizePyblocksUrl(_text: string): string | null {
-  throw new Error("normalizePyblocksUrl: not implemented (lane trunk-loader-events)");
+export function normalizePyblocksUrl(text: string): string | null {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  // WHY the protocol is checked and not just the parse: `new URL` happily
+  // accepts `javascript:alert(1)` and `ftp://host` — only a scheme the
+  // client can actually `fetch` is a backend, and the check is here rather
+  // than at the fetch so a typed URL is refused while it is still a
+  // SETTING, with the field still in front of the person who typed it.
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  // Origin only: the client owns every path it calls (`/api/health`,
+  // `/api/systemsketch/*`), so keeping a pasted path would produce
+  // `…/api/health/api/health` the first time someone pastes the health URL.
+  return url.origin;
 }
 
 /**
@@ -45,12 +62,25 @@ export function normalizePyblocksUrl(_text: string): string | null {
  * `{kind:"pyblocks", url:<normalizable>}` parses to `NO_BACKEND`. A stored
  * value from a future version never turns the feature on by accident.
  */
-export function parseBackendSetting(_raw: unknown): BackendSetting {
-  throw new Error("parseBackendSetting: not implemented (lane trunk-loader-events)");
+export function parseBackendSetting(raw: unknown): BackendSetting {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return NO_BACKEND;
+  const value = raw as { kind?: unknown; url?: unknown };
+  if (value.kind === "none") return NO_BACKEND;
+  if (value.kind === "pyblocks" && typeof value.url === "string") {
+    const url = normalizePyblocksUrl(value.url);
+    if (url !== null) return { kind: "pyblocks", url };
+  }
+  // WHY every other shape lands on `none` instead of throwing: this parses
+  // a value a PREVIOUS version of the app wrote into the viewer's own
+  // browser storage, and the whole feature's promise is that `none` renders
+  // nothing pyblocks at all. A stored value nobody here understands must
+  // therefore fail CLOSED — an exception at startup, or a half-understood
+  // setting, would both be louder than the whiteboard Zach asked for.
+  return NO_BACKEND;
 }
 
 /** The inverse; `parseBackendSetting(JSON.parse(serializeBackendSetting(s)))`
  *  equals `s` for every valid setting. */
-export function serializeBackendSetting(_setting: BackendSetting): string {
-  throw new Error("serializeBackendSetting: not implemented (lane trunk-loader-events)");
+export function serializeBackendSetting(setting: BackendSetting): string {
+  return JSON.stringify(setting);
 }
