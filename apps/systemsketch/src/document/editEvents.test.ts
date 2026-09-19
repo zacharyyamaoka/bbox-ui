@@ -66,11 +66,11 @@ describe("subscribeEditEvents — one batch per store transaction", () => {
     t.store.update(id, (r) => ({ ...r, x: 40, y: 12 }));
     expect(t.last().events).toEqual([{ kind: "node.moved", nodeId: id, x: 40, y: 12, parentId: null }]);
 
-    t.store.update(id, (r) => ({ ...r, props: { ...(r as { props: object }).props, w: 300, h: 140 } }));
+    t.store.update(id, (r) => ({ ...r, props: { ...(r as { props: object }).props, w: 300, h: 140 } } as typeof r));
     expect(t.last().events).toEqual([{ kind: "node.resized", nodeId: id, w: 300, h: 140 }]);
 
     const batchesBeforeAnchors = t.batches.length;
-    t.store.update(id, (r) => ({ ...r, props: { ...(r as { props: object }).props, anchors: [{ portId: "in", x: 0, y: 20, side: "left" }] } }));
+    t.store.update(id, (r) => ({ ...r, props: { ...(r as { props: object }).props, anchors: [{ portId: "in", x: 0, y: 20, side: "left" }] } } as typeof r));
     // The store listener fires (a transaction happened), but it translates to no semantic event.
     expect(t.batches.length).toBeGreaterThanOrEqual(batchesBeforeAnchors);
     expect(t.events().filter((e) => e.kind !== "node.added" && e.kind !== "node.moved" && e.kind !== "node.resized")).toEqual([]);
@@ -81,7 +81,7 @@ describe("subscribeEditEvents — one batch per store transaction", () => {
     const t = makeStore();
     const id = createShapeId("c");
     t.store.put([t.shape(id, CODE_SHAPE_TYPE, { code: "x = 1" })]);
-    t.store.update(id, (r) => ({ ...r, props: { ...(r as { props: object }).props, code: "x = 2", w: 400 } }));
+    t.store.update(id, (r) => ({ ...r, props: { ...(r as { props: object }).props, code: "x = 2", w: 400 } } as typeof r));
     const ev = t.last().events.find((e) => e.kind === "node.changed");
     expect(ev).toBeDefined();
     if (!ev || ev.kind !== "node.changed") throw new Error("narrowing");
