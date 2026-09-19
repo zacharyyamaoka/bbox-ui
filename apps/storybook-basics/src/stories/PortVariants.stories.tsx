@@ -1,11 +1,15 @@
+import { useRef, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
 import { Block } from "../components/block";
 import { BlockPort } from "../components/blockPort";
 import { LabeledPort } from "../components/labeledPort";
-import { PORT_TEXT_SIZES } from "../components/port.layout";
+import { PORT_RING_OVERHANG_PX, PORT_TEXT_SIZES } from "../components/port.layout";
 import type { PortEdgeItem } from "../components/portEdge";
+import type { PortState } from "../components/port";
+import type { Wire } from "../components/wiring";
+import { WireLayer } from "../components/wireLayer";
 import {
   DEFAULT_PORT_VARIANT_ID,
   PORT_VARIANTS,
@@ -241,6 +245,11 @@ export const AllFive: Story = {
       const key = `${v.dot.diameter}/${v.dot.gap}/${v.dot.ring}/${v.dot.fill}/${v.text}`;
       await expect(seen.has(key)).toBe(false);
       seen.add(key);
+      // Added with the implementation (strengthening, never weakening): no
+      // variant's painted rings reach past the reserved allowance every
+      // label/lane/inset clears (port.layout.ts `PORT_RING_OVERHANG_PX`'s
+      // WHY) — otherwise a thick-ringed variant would paint under its text.
+      await expect(portVariantRingOverhangPx(v)).toBeLessThanOrEqual(PORT_RING_OVERHANG_PX);
     }
   },
 };
@@ -394,5 +403,169 @@ export const StatesV1: Story = {
     // producers: present here, absent on every other swatch.
     await expect(canvasElement.querySelectorAll('[data-slot="port-producers"]').length).toBe(1);
     await expect(fanned.parentElement?.querySelector('[data-slot="port-producers"]')?.textContent?.trim()).toBe("3");
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* ADDED with the implementation (never relaxing anything above):      */
+/* every variant's full state row, and the five in context with real   */
+/* cables — what a reviewer actually compares.                          */
+/* ------------------------------------------------------------------ */
+
+const STATE_ROW: { caption: string; state: PortState; selected?: boolean; producers?: number; label: string; type: string }[] = [
+  { caption: "empty", state: "empty", label: "reset", type: "bool" },
+  { caption: "default set", state: "valueSet", label: "gain", type: "float" },
+  { caption: "wired", state: "wired", label: "pose", type: "Pose" },
+  { caption: "data received", state: "received", label: "done", type: "bool" },
+  { caption: "selected", state: "wired", selected: true, label: "pose", type: "Pose" },
+  { caption: "producers = 3", state: "wired", producers: 3, label: "pose", type: "Pose" },
+];
+
+/**
+ * Every variant × every state it must define (the brief: "define hover /
+ * selected / wired states"), one row per variant on the same labels, so the
+ * grammars can be read against each other column by column. Hover is a
+ * real `:hover` and is captured with a real pointer (v1-hover.png).
+ */
+export const StatesAllVariants: Story = {
+  render: () => (
+    <div data-slot="states-matrix" style={{ display: "grid", gridTemplateColumns: `180px repeat(${STATE_ROW.length}, 132px)`, rowGap: 22, columnGap: 8, padding: "28px 40px", alignItems: "center" }}>
+      <span />
+      {STATE_ROW.map((cell) => (
+        <span key={cell.caption} style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{cell.caption}</span>
+      ))}
+      {PORT_VARIANT_IDS.map((id) => (
+        <StatesRow key={id} id={id} />
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    for (const id of PORT_VARIANT_IDS) {
+      const v = PORT_VARIANTS[id];
+      const dots = Array.from(canvasElement.querySelectorAll<HTMLElement>(`[data-slot="states-row"][data-variant="${id}"] [data-slot="port-dot"]`));
+      await expect(dots.length).toBe(STATE_ROW.length);
+      for (const dot of dots) {
+        const rect = dot.getBoundingClientRect();
+        await expect(rect.width).toBeCloseTo(v.dot.diameter, 0);
+        await expect(Math.abs(rect.width - rect.height)).toBeLessThanOrEqual(0.5);
+        await expect(dot.getAttribute(PORT_VARIANT_ATTR)).toBe(id);
+      }
+      // selected is a real outline on every variant; nothing else has one.
+      const selected = dots[STATE_ROW.findIndex((c) => c.selected)];
+      await expect(parseFloat(getComputedStyle(selected).outlineWidth)).toBeCloseTo(v.selected.ring, 0);
+      await expect(getComputedStyle(dots[0]).outlineStyle).toBe("none");
+      // one producers circle per row, on the fan-in swatch.
+      await expect(canvasElement.querySelectorAll(`[data-slot="states-row"][data-variant="${id}"] [data-slot="port-producers"]`).length).toBe(1);
+    }
+  },
+};
+
+function StatesRow({ id }: { id: PortVariantId }) {
+  return (
+    <div data-slot="states-row" data-variant={id} style={{ display: "contents" }}>
+      <span style={{ fontSize: 11, color: "var(--muted-foreground)", lineHeight: 1.35 }}>
+        <b style={{ color: "var(--foreground)", fontWeight: 600 }}>{id}</b> · {PORT_VARIANTS[id].title}
+      </span>
+      {STATE_ROW.map((cell) => (
+        <div key={cell.caption} style={{ display: "flex", alignItems: "center", height: 28, paddingLeft: 14 }}>
+          <LabeledPort variant={id} state={cell.state} selected={cell.selected} producers={cell.producers} type={cell.type}>
+            {cell.label}
+          </LabeledPort>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* In context: three producers fan into `estimate().pose`, one consumer
+ * reads `cmd` — real `WireLayer` cables, elbow-routed (Zach, 2026-09-19:
+ * "by default elbow arrows should always be used"). */
+
+const CONTEXT_W = 620;
+const CONTEXT_H = 300;
+
+interface ContextBlock {
+  id: string;
+  header: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  left?: PortEdgeItem[];
+  right?: PortEdgeItem[];
+}
+
+const CONTEXT_BLOCKS: ContextBlock[] = [
+  { id: "detect", header: "detect()", x: 0, y: 0, w: 150, h: 70, right: [{ id: "pose", label: "pose", type: "Pose", state: "wired" }] },
+  { id: "track", header: "track()", x: 0, y: 100, w: 150, h: 70, right: [{ id: "pose", label: "pose", type: "Pose", state: "wired" }] },
+  { id: "imu", header: "imu()", x: 0, y: 200, w: 150, h: 70, right: [{ id: "pose", label: "pose", type: "Pose", state: "wired" }] },
+  { id: "estimate", header: "estimate()", x: 230, y: 70, w: 200, h: 160, left: LEFT, right: RIGHT },
+  { id: "drive", header: "drive()", x: 500, y: 60, w: 120, h: 70, left: [{ id: "cmd", label: "cmd", type: "Twist", state: "wired" }] },
+];
+
+const CONTEXT_WIRES: Wire[] = [
+  { id: "w-detect", from: { blockId: "detect", portId: "pose" }, to: { blockId: "estimate", portId: "pose" }, routing: "elbow" },
+  { id: "w-track", from: { blockId: "track", portId: "pose" }, to: { blockId: "estimate", portId: "pose" }, routing: "elbow" },
+  { id: "w-imu", from: { blockId: "imu", portId: "pose" }, to: { blockId: "estimate", portId: "pose" }, routing: "elbow" },
+  { id: "w-cmd", from: { blockId: "estimate", portId: "cmd" }, to: { blockId: "drive", portId: "cmd" }, routing: "elbow" },
+];
+
+function ContextBoard({ variant, caption }: { variant: PortVariantId; caption: ReactNode }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  return (
+    <div data-slot="port-variant-context" data-variant={variant} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "20px 40px" }}>
+      <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{caption}</span>
+      <div ref={containerRef} data-slot="wire-bench" style={{ position: "relative", width: CONTEXT_W, height: CONTEXT_H }}>
+        {CONTEXT_BLOCKS.map((b) => (
+          <div key={b.id} style={{ position: "absolute", left: b.x, top: b.y }}>
+            <BlockPort
+              id={b.id}
+              view="port"
+              variant={variant}
+              edges={{
+                ...(b.left ? { left: { items: b.left } } : null),
+                ...(b.right ? { right: { items: b.right } } : null),
+              }}
+            >
+              <Block header={b.header} body={null} width={b.w} height={b.h} />
+            </BlockPort>
+          </div>
+        ))}
+        <WireLayer wires={CONTEXT_WIRES} containerRef={containerRef} layoutKey={variant} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The five on a small real board: the same fixture block, three cables
+ * fanning into `pose` (hence its producers circle), `cmd` feeding a
+ * consumer. Measured: every dot of every block still centred on its wall,
+ * and exactly one producers circle per board.
+ */
+export const InContext: Story = {
+  render: () => (
+    <div style={{ display: "flex", flexWrap: "wrap", maxWidth: 1420 }}>
+      {PORT_VARIANT_IDS.map((id) => (
+        <ContextBoard key={id} variant={id} caption={`${id} · ${PORT_VARIANTS[id].title}`} />
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    for (const id of PORT_VARIANT_IDS) {
+      const board = required<HTMLElement>(canvasElement, `[data-slot="port-variant-context"][data-variant="${id}"]`, `the ${id} board`);
+      await waitFor(() => expect(board.querySelectorAll("[data-wire-id]").length).toBe(CONTEXT_WIRES.length));
+      for (const b of CONTEXT_BLOCKS) {
+        const blockEl = required<HTMLElement>(board, `[data-block-id="${b.id}"] [data-slot="block"]`, `${id}/${b.id}'s Block`);
+        const r = blockEl.getBoundingClientRect();
+        for (const side of ["left", "right"] as const) {
+          const wall = side === "left" ? r.left : r.right;
+          for (const dot of Array.from(board.querySelectorAll<HTMLElement>(`[data-block-id="${b.id}"] [data-slot="block-port-rail"][data-edge="${side}"] [data-slot="port-dot"]`))) {
+            await expect(Math.abs(centre(dot).x - wall)).toBeLessThanOrEqual(1);
+          }
+        }
+      }
+      await expect(board.querySelectorAll('[data-slot="port-producers"]').length).toBe(1);
+    }
   },
 };
