@@ -1,0 +1,53 @@
+/*
+ * src/app.css — the app's stylesheet is the TRUNK's stylesheet.
+ *
+ * WHY an `@import` of a file in a sibling package rather than a copy: the same
+ * rule the `@trunk` alias exists for — one source of design, no vendored copy
+ * to drift (docs/SYSTEMSKETCH-REBUILD-PLAN.md §1). `globals.css` itself pulls
+ * in `tailwindcss`, `tw-animate-css` and the skin system.
+ */
+@import "../../storybook-basics/src/globals.css";
+
+/*
+ * WHY two `@source` lines: CLAUDE.md's own trap — "Tailwind v4 only scans the
+ * app's own sources", so a utility used ONLY by a trunk component is never
+ * generated and the class silently paints nothing (`border-foreground` on an
+ * empty Port rendered invisible). The trunk directory is where every component
+ * this app renders actually lives, so it has to be scanned from here.
+ */
+@source "../../storybook-basics/src";
+@source "./";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/*
+ * A tool popout must never eat the next canvas click.
+ *
+ * `@trunk/components/toolDock`'s family cell is a Base UI `Menu.Root`, whose
+ * `modal` prop defaults to TRUE, and a modal menu renders an
+ * `InternalBackdrop` — `position: fixed; inset: 0` (@base-ui/react
+ * utils/InternalBackdrop.js) — over everything. On a canvas app that is the
+ * wrong default: the dock's split press ARMS a tool and OPENS its popout off
+ * the same press (the donor's "press-arms-then-menu-keeps-focus"), so the very
+ * next thing the user does is click the canvas to place the shape — and the
+ * backdrop swallows it. Measured here as Playwright refusing the click:
+ * `<div role="presentation" data-base-ui-inert=""> … intercepts pointer events`.
+ *
+ * Scoped to MENUS (`[role="menu"]`) so a real modal dialog keeps its
+ * modality. Floating UI's outside-press detection is document-level, so the
+ * menu still closes on that same click — which is exactly the FigJam
+ * behaviour: one press arms, one click places, the popout gets out of the way.
+ *
+ * OWED UPSTREAM: the trunk should pass `modal={false}` on the family cell's
+ * `DropdownMenu` (or expose it on `ToolDockProps`), at which point this rule
+ * comes out. It is not patched from here — `apps/storybook-basics` is
+ * read-only for this lane.
+ */
+[data-base-ui-portal]:has([role="menu"]) > [data-base-ui-inert] {
+  pointer-events: none;
+}
