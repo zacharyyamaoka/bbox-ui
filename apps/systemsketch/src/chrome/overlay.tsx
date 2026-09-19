@@ -111,9 +111,26 @@ function SystemSketchChrome() {
         under it — but it is worth stating, because a FIXTURE placed at page
         (40, 40) with the camera at the origin lands underneath it.
         `src/region.smoke.test.tsx`'s re-parenting test is exactly such a
-        fixture; it is already red here (L5 has not landed) and its drag now
-        fails on interception instead of on the missing shape util. The fix
-        belongs to that test's fixture, not to this bar.
+        fixture, and the fix belongs to that fixture, not to this bar.
+
+        MEASURED both ways, 2026-09-19, so this is not an opinion: with the
+        bar mounted that test fails at its line 90 — `dragAndDrop` retries the
+        whole 30s timeout and gives up, `data-testid="ss-chrome" ...
+        intercepts pointer events`. With `<SystemSketchChrome/>` temporarily
+        unmounted and nothing else changed, the SAME test fails at its line
+        91 instead — `waitFor timed out ... re-parented into the region` — and
+        the file's result is identical either way, 4 failed | 1 passed,
+        because L5 has not landed. This bar changes that test's failure
+        MODE; it does not change its outcome, and it takes nothing green to
+        red.
+
+        The one-line fix is the fixture's own coordinates: `x: 40, y: 40` →
+        `x: 60, y: 160` at region.smoke.test.tsx:86 — the position the same
+        file's wire-target test already uses, clear of this bar (y 8-50), of
+        that test's region (x 300-720 / y 120-420) and of the bottom-centre
+        dock. It is also the only test in that file passing today, with this
+        bar mounted, which is what makes it a measured choice rather than a
+        guess.
       */}
       <div className="absolute top-2 left-2">
         <SystemSketchChromeBar />
