@@ -28,6 +28,7 @@ import { ChromeBar } from "@trunk/components/chromeBar";
 import { Toolbar, ToolbarButton } from "@trunk/components/toolbar";
 
 import { fileActionsFor, type FileActionHelpers } from "./fileActions";
+import { legacyAppActionsFor } from "./legacyApp";
 
 /**
  * What an unnamed board is called.
@@ -139,6 +140,12 @@ export function SystemSketchChromeBar() {
 
   const helpers = useMemo<FileActionHelpers>(() => ({ addToast, confirm, boardName: name }), [addToast, confirm, name]);
   const fileActions = useMemo(() => fileActionsFor(editor, helpers), [editor, helpers]);
+  // The door back to the archived app lives in the burger only, never in the
+  // file title's menu: it is not a file action. See ./legacyApp.ts.
+  const menuGroups = useMemo(() => {
+    const legacy = legacyAppActionsFor(window.location.hostname);
+    return legacy.length ? [{ id: "file", items: fileActions }, { id: "legacy", items: legacy }] : [{ id: "file", items: fileActions }];
+  }, [fileActions]);
 
   return (
     // `pointer-events: auto` because `.ss-chrome` is `none` — see the WHY on
@@ -146,7 +153,7 @@ export function SystemSketchChromeBar() {
     <div className="pointer-events-auto flex items-center gap-2">
       <ChromeBar
         testIdPrefix="ss-chrome"
-        menu={{ id: "main", label: "SystemSketch", groups: [{ id: "file", items: fileActions }] }}
+        menu={{ id: "main", label: "SystemSketch", groups: menuGroups }}
         // WHY both arrows are hard-`false` rather than wired to something:
         // this bar's `history` is DEPTH navigation — "back to the level you
         // came from" — and this app has no depth model yet (no focused
