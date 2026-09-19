@@ -30,9 +30,10 @@
 //
 // Pure: no React, no DOM, no canvas engine.
 
-import type { CollapseOptions, CollapseResult, DissolveOptions, DissolveResult } from "./collapse";
+import { collapseToRegion, dissolveRegion, type CollapseOptions, type CollapseResult, type DissolveOptions, type DissolveResult } from "./collapse";
 import type { CodeOrigin } from "./codeOrigin";
-import type { BlockScene, SceneData, SceneNode } from "./scene";
+import { descendantsOf, isRegion, selectionRoots } from "./region";
+import { childrenOf, type BlockScene, type SceneData, type SceneNode } from "./scene";
 
 /** The face. `origin` null = the board owns the bytes (a pseudo cell). */
 export interface CodeCellPayload {
@@ -53,8 +54,21 @@ export const CODE_CELL_LANGUAGE_PLAINTEXT = "plaintext";
 /** A region carrying a `codeCell` payload. Total: a non-region, or a region
  *  without the payload, is simply not a cell. */
 export function isCodeCell(node: SceneNode<SceneData>): node is SceneNode<CodeCellData> {
-  void node;
-  throw new Error("scv: not implemented — lane scv-rung-a-scene fills this body (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md)");
+  return isRegion(node) && typeof node.data.codeCell === "object" && node.data.codeCell !== null;
+}
+
+/** The second line of every header, verbatim in one place so the generated
+ *  text and the "was it edited?" comparison can never drift apart. */
+const CODE_CELL_HEADER_NOTE = "# annotation only until a backend is connected; expand restores the blocks\n";
+
+/** `data.name` when it is a string, else the id — the default `nameOf`,
+ *  shared by `collapseToCode` (which names the selection roots) and
+ *  `expandCode` (which re-derives the same names from the cell's own
+ *  children to decide whether the text was touched). ONE function, because
+ *  two spellings of "what is this block called" is exactly how
+ *  `textWasEdited` would start reporting an edit nobody made. */
+function defaultNameOf<N extends SceneData>(node: SceneNode<N>): string {
+  return typeof node.data.name === "string" ? node.data.name : node.id;
 }
 
 /**
@@ -67,8 +81,16 @@ export function isCodeCell(node: SceneNode<SceneData>): node is SceneNode<CodeCe
  * order given; zero names renders `# code cell — 0 blocks\n` + the second line.
  */
 export function codeCellHeader(memberNames: readonly string[]): string {
-  void memberNames;
-  throw new Error("scv: not implemented — lane scv-rung-a-scene fills this body (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md)");
+  // WHY the text is GENERATED and not derived code (plan §1, Q1 default):
+  // at Rung A there is no parser, so no honest lowering from blocks to
+  // source exists. The collapsed subgraph stays in the scene under the
+  // cell and IS the truth; this string is an annotation about it. Making
+  // it deterministic is what lets a test, a story and `expandCode` all
+  // compare against the same bytes and tell "generated" from "someone
+  // typed here" without storing a dirty flag nobody would maintain.
+  const counted = `${memberNames.length} ${memberNames.length === 1 ? "block" : "blocks"}`;
+  const named = memberNames.length === 0 ? counted : `${counted}: ${memberNames.join(", ")}`;
+  return `# code cell — ${named}\n${CODE_CELL_HEADER_NOTE}`;
 }
 
 export interface CollapseToCodeOptions<N extends SceneData = SceneData, E extends SceneData = SceneData>
@@ -95,10 +117,24 @@ export function collapseToCode<N extends SceneData, E extends SceneData>(
   nodeIds: readonly string[],
   options: CollapseToCodeOptions<N, E>,
 ): CollapseResult<N, E> {
-  void scene;
-  void nodeIds;
-  void options;
-  throw new Error("scv: not implemented — lane scv-rung-a-scene fills this body (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md)");
+  const nameOf = options.nameOf ?? defaultNameOf;
+  // Named BEFORE the wrapped call, off the ORIGINAL scene: `collapseToRegion`
+  // re-parents the roots under a node that does not exist yet, so the only
+  // moment the names are readable in their authored nesting is now. Nothing
+  // else is computed here — in particular no id is minted, so the region id,
+  // the stub ids and their order are `collapseToRegion`'s alone.
+  const names = selectionRoots(scene, descendantsOf(scene, nodeIds)).map(nameOf);
+  return collapseToRegion(scene, nodeIds, {
+    ...options,
+    regionData: {
+      ...(options.regionData ?? ({} as N)),
+      codeCell: {
+        language: options.language ?? CODE_CELL_LANGUAGE_PLAINTEXT,
+        source: codeCellHeader(names),
+        origin: null,
+      },
+    } as N,
+  });
 }
 
 export interface ExpandCodeResult<N extends SceneData, E extends SceneData> extends DissolveResult<N, E> {
@@ -123,8 +159,25 @@ export function expandCode<N extends SceneData, E extends SceneData>(
   cellId: string,
   options: DissolveOptions = {},
 ): ExpandCodeResult<N, E> {
-  void scene;
-  void cellId;
-  void options;
-  throw new Error("scv: not implemented — lane scv-rung-a-scene fills this body (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md)");
+  const cell = scene.nodes.find((node) => node.id === cellId);
+  if (!cell) return { scene, rewired: [], removedStubs: [], orphaned: [], released: [], discardedText: null, textWasEdited: false };
+
+  // WHY this RETURNS the text it throws away instead of refusing to expand
+  // while a cell holds writing: refusing would make the round trip
+  // conditional, and a gesture that sometimes works is worse than one that
+  // always works and tells you what it cost. The blocks are the truth here
+  // (see this file's header), so expand can always replay them; the only
+  // thing genuinely lost is the annotation, so expand hands it back with a
+  // flag saying whether it was ever more than the generated header. A host
+  // that wants a "you typed in this cell — discard it?" prompt has both
+  // facts, and one that does not care ignores two fields. Neither has to
+  // ask this module for permission.
+  const discardedText = isCodeCell(cell) ? cell.data.codeCell.source : null;
+  const memberNames = childrenOf(scene, cellId).map(defaultNameOf);
+  const dissolved = dissolveRegion(scene, cellId, options);
+  return {
+    ...dissolved,
+    discardedText,
+    textWasEdited: discardedText !== null && discardedText !== codeCellHeader(memberNames),
+  };
 }
