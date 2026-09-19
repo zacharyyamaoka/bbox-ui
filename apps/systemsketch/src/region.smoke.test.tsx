@@ -83,7 +83,7 @@ describe("L5 — regions: control flow is containment, the header is a real bloc
     const regionId = createShapeId();
     app.editor.createShape({ id: regionId, type: REGION_SHAPE_TYPE, x: 300, y: 120, props: { kind: "while", name: "While Loop", w: 420, h: 300 } } as never);
     const blockId = createShapeId();
-    app.editor.createShape({ id: blockId, type: BLOCK_SHAPE_TYPE, x: 40, y: 40, props: { name: "refine()", view: "port", ports: { left: [], right: [], top: [], bottom: [] } } } as never);
+    app.editor.createShape({ id: blockId, type: BLOCK_SHAPE_TYPE, x: 60, y: 160, props: { name: "refine()", view: "port", ports: { left: [], right: [], top: [], bottom: [] } } } as never);
     const header = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${blockId}"] [data-slot="block-header"]`), { what: "header" });
     const regionEl = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${regionId}"]`), { what: "region" });
     const target = centreOf(regionEl);
