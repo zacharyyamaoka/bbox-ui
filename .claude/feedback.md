@@ -5,6 +5,18 @@ via the `@.claude/feedback.md` line in `CLAUDE.md`. Newest first. This is a live
 rule set, not an archive — prune superseded entries, consolidate past ~60 lines.
 The full replay record lives in the vault; these entries must stand alone.
 
+- **2026-09-19 · Direction · chrome lives in the editor components** — Zach:
+  *"all of the feedback regarding the chrome should be made in bbox-ui
+  editor-components, not in system sketch, system sketch should just be kinda
+  like importing these stock menus and doing a light bit of configuration."*
+  So a change to how a menu, toolbar, dock, panel or status cluster LOOKS or
+  BEHAVES lands in the trunk (`apps/storybook-basics/src/components/*` for the
+  menu kit, `src/editor/*` for the editor kit) with a story, and
+  `apps/systemsketch` only mounts, positions and wires it (tldraw seams, the
+  licence, which part goes in which slot). A chrome fix made only inside the
+  app is a divergence the next host inherits nothing from.
+  <sub>source: `Projects/SystemSketch/PROJECT - System Sketch.md`, "More feedback", 2026-09-19</sub>
+
 - **2026-09-17 · Bad ×3 same day (consolidated) · reports** — Any substantive
   review, proposal set, research answer, or implementation writeup ships as a
   **rich-media self-contained HTML report** — never a markdown file, never a
