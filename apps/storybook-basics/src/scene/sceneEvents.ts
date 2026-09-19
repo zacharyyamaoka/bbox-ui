@@ -288,6 +288,26 @@ export function deriveSceneEvents(before: HostScene, after: HostScene): SceneEve
       // what `from?: unknown` means. Substituting `null` for "absent" would
       // be a silent normalization, and it would make a legitimate stored
       // `null` unreadable.
+      //
+      // WHY this line is NOT `wasData[key] ?? null`, even though the fixture
+      // currently asks for `null`: the two committed assertions disagree with
+      // each other, and this side is the one the contract supports. Both
+      // inputs are structurally identical — a key absent from the before node,
+      // present after — yet `events_edit_session.json`'s event[0] pins
+      // `"from": null` for `color` while `sceneEvents.test.ts:91` pins
+      // `from: undefined` for `mystery`. Under vitest's `toEqual` an
+      // `undefined` property is ignored and a `null` one is not, so the two
+      // cannot both hold: measured here, the raw value fails the fixture 39/40
+      // and `?? null` fails :91 10/11 — perfectly mirrored, one failure either
+      // way. The only "passing" implementation would branch on the node id or
+      // the key name, which is fixture-fitting, not a rule. So the raw value
+      // stays, because `from?: unknown` (this file's own union, above) and the
+      // brief's "absent means undefined" both say absence is `undefined`, and
+      // because reporting a stored value as something it is not is the exact
+      // normalization the port-label doc comment in `hostScene.ts` refuses.
+      // The one-token resolution belongs to the fixture's owner: drop the
+      // `"from": null,` line from event[0] — an absent key still pins `from`
+      // to undefined under `toEqual`, so nothing is weakened.
       events.push({ type: "data-changed", nodeId, key, from: wasData[key], to: nowData[key] });
     }
   }
