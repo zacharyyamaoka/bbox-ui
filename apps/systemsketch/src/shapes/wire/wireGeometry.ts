@@ -24,9 +24,8 @@ import { Vec, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
 import { traceGeometry } from "@trunk/components/trace";
 import { OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "@trunk/components/trace.layout";
-import { fanWires, type Wire } from "@trunk/components/wiring";
 
-import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
+import { WIRE_BINDING_TYPE } from "../types";
 import type { WireBinding } from "./WireBindingUtil";
 import type { WireShape } from "./WireShapeUtil";
 
@@ -46,9 +45,13 @@ import type { WireShape } from "./WireShapeUtil";
  * It is also the number `src/wiring.smoke.test.tsx` measures: that test
  * requires the painted path's first and last points to land within 14px of
  * the real dots' screen centres, and 16px does not fit inside 14px. 8px
- * clears the dot by 2px and leaves 6px of headroom — enough that the
- * duplicate fan below (±7px perpendicular, `DUPLICATE_FAN_PX / 2`) still
- * lands inside the tolerance: hypot(8, 7) ≈ 10.6.
+ * clears the dot by 2px and leaves 6px of headroom.
+ *
+ * Since 2026-09-19 that headroom is spent on nothing: the duplicate fan
+ * that used to push a terminal ±7px perpendicular is gone (Zach: "The port
+ * only should have 1 connection point in the center"), so every cable's
+ * painted end is exactly 8px from its dot's centre ALONG THE WALL NORMAL
+ * and zero px across it. `src/fixes.smoke.test.tsx` measures that zero.
  */
 export const WIRE_TERMINAL_GAP = 8;
 
@@ -162,13 +165,12 @@ export function wireTerminals(editor: Editor, wire: WireShape): { from: TraceTer
  *     says so by returning `points: null` rather than inventing some), so its
  *     hit geometry is the chord between its two terminals — up to a few tens
  *     of px away from the drawn bow at its middle;
- *   - the duplicate FAN (`wireFanOffset`) moves the PAINT of a duplicate
- *     wire by up to ±7px perpendicular and is deliberately not applied here,
- *     so two duplicates share one hit polyline. Folding the fan in would make
- *     every wire's geometry depend on every other wire's bindings, which turns
- *     one cable's hit test into a whole-page read.
- * Both are paint-vs-hit differences of a few px on a 12px-wide hit stroke, and
- * neither can move an endpoint.
+ * That is now the ONLY one. The duplicate FAN used to be the second — it
+ * moved the PAINT of a duplicate wire by up to ±7px perpendicular while the
+ * hit polyline stayed put — and it is gone (see this file's own
+ * `WIRE_TERMINAL_GAP` note), so paint and hit agree exactly at both ends of
+ * every cable. A curve's chord is a paint-vs-hit difference of a few tens of
+ * px in the MIDDLE of a 12px-wide hit stroke, and it cannot move an endpoint.
  */
 export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, routing: TraceRouting): Vec[] {
   const geometry = traceGeometry({ from, to, routing, gap: WIRE_TERMINAL_GAP });
@@ -179,69 +181,24 @@ export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, 
   return points.map((point) => new Vec(point.x, point.y));
 }
 
-/**
- * This wire's spread among the others joining the same two dots, as the
- * `curve` offset `Trace` already understands (`fanWires`,
- * `@trunk/components/wiring.ts:148`). `{dx: 0, dy: 0}` for a lone wire, and
- * for a half-bound one — a cable with one end shares a pair with nobody.
+/*
+ * RETIRED 2026-09-19 — `wireFanOffset` and `fannedTerminal`.
  *
- * The pair is UNORDERED, which is `fanWires`' own rule: the visible fact is
- * "N wires between these two dots", not which end either one calls `from`.
+ * They computed a duplicate cable's perpendicular spread (`fanWires`'
+ * offset, applied to the terminal because the elbow router ignores `curve`)
+ * so that "two wires between the same two ports" drew as visibly two. Zach
+ * saw the result on a real board and ruled it out: "very bad. edges should
+ * always leave from the center of the port. I don't like how you have 3
+ * edges coming out from different parts of the port… The port only should
+ * have 1 connection point in the center. Instead you should show the
+ * producer circle that has the number for the number of arrows intersecting
+ * at that port." (`docs/ASK-2026-09-19-PORTS-EDGES-REGIONS-FEEDBACK.md`,
+ * `Pasted image 20260919115137.png` / `…115156.png`.)
+ *
+ * Deleted rather than left unused, so nothing can quietly wire them back in:
+ * the QUESTION they answered ("how many cables meet at this dot") is still
+ * live and still derived from the trunk's `fanWires`, but its answer is now
+ * a NUMBER on the port, not a displacement of the cable. Restoring a
+ * per-cable offset here would put two disagreeing expressions of one fact on
+ * the same board.
  */
-export function wireFanOffset(editor: Editor, wireId: TLShapeId): { dx: number; dy: number } {
-  const wires: Wire[] = [];
-  for (const shape of editor.getCurrentPageShapes()) {
-    if (shape.type !== WIRE_SHAPE_TYPE) continue;
-    const bindings = editor.getBindingsFromShape<WireBinding>(shape.id, WIRE_BINDING_TYPE);
-    const start = bindings.find((binding) => binding.props.terminal === "start");
-    const end = bindings.find((binding) => binding.props.terminal === "end");
-    if (!start || !end) continue;
-    wires.push({
-      id: shape.id,
-      from: { blockId: start.toId, portId: start.props.portId },
-      to: { blockId: end.toId, portId: end.props.portId },
-    });
-  }
-  const index = wires.findIndex((wire) => wire.id === wireId);
-  if (index < 0) return { dx: 0, dy: 0 };
-  return fanWires(wires)[index].offset;
-}
-
-/**
- * The fan applied to a terminal: `fanWires` hands back a `curve` offset, and
- * `Trace` honours `curve` for `straight`/`slanted`/`curved` — but NOT for
- * `elbow`, which is this app's datum. Read `traceGeometryBetween`
- * (`@trunk/components/trace.tsx:737-770`): the elbow branch builds its input
- * from the two terminals, the obstacles and the pins, and never looks at
- * `curve`. So an elbow duplicate fans only if the geometry the ROUTER sees
- * moves.
- *
- * Moving the terminal perpendicular to its own flow is the smallest way to do
- * that: it keeps each cable leaving its dot along the right normal, it costs
- * no new persisted state, and it is symmetric at both ends so the run stays
- * parallel to its twin. `src/wiring.smoke.test.tsx` asserts the two midpoints
- * end up ≥8px apart; `DUPLICATE_FAN_PX` (14) puts them 14px apart.
- *
- * The alternative considered and rejected: mint an `ElbowPin` per duplicate.
- * A pin is PERSISTED geometry (`elbowPins.ts`: "a cable persists `ElbowPin[]`
- * and nothing else about its geometry"), so the fan would become a document
- * fact that survives deleting the wire it was fanning against — a stored
- * answer to a question about the other wires, which is exactly the kind of
- * derived-state-made-durable this rebuild is removing.
- */
-export function fannedTerminal(terminal: TraceTerminalSpec, offset: { dx: number; dy: number }): TraceTerminalSpec {
-  if (offset.dx === 0 && offset.dy === 0) return terminal;
-  const horizontal = terminal.dir === "left" || terminal.dir === "right";
-  // WHY `offset.dy` on BOTH branches, which reads like a copy-paste slip and
-  // is not: `fanWires` returns `{ dx: 0, dy: (index - (count-1)/2) *
-  // DUPLICATE_FAN_PX }` (@trunk/components/wiring.ts:163-166) — `dx` is
-  // ALWAYS 0, and `dy` is the scalar SPREAD, named for the axis `Trace`'s
-  // own `curve` happens to bow along. Here the spread is applied
-  // perpendicular to this terminal's own flow, so a dot leaving a left/right
-  // wall spreads in y and one leaving a top/bottom wall spreads in x. Reading
-  // `offset.dx` for the second case would be the axis-symmetric-looking
-  // version that always fans by nothing.
-  return horizontal
-    ? { ...terminal, y: terminal.y + offset.dy }
-    : { ...terminal, x: terminal.x + offset.dy };
-}

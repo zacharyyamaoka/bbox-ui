@@ -41,7 +41,6 @@ export {
   WIRE_TERMINAL_GAP,
   portTerminal,
   resolveWireEnds,
-  wireFanOffset,
   wireRoutePoints,
   wireTerminals,
   type WireEnds,

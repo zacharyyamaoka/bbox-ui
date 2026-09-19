@@ -14,6 +14,7 @@ import { FloatingSelectionToolbar } from "./floatingToolbar";
 import { SystemSketchPanel } from "./panels";
 import { useProblems } from "./problems";
 import { SystemSketchStatusStrip, type ChromePanel } from "./statusStrip";
+import { VariantSwitch } from "./variantSwitch";
 
 export function Overlay() {
   return (
@@ -348,10 +349,16 @@ function SystemSketchChrome() {
       */}
       <div
         ref={corner}
-        className="pointer-events-auto absolute"
+        className="pointer-events-auto absolute flex items-center gap-2"
         style={{ right: placement.right, bottom: placement.bottom }}
         data-corner-placement={placement.placement}
       >
+        {/* WHY the temporary variant switch rides INSIDE the measured corner
+            row: its own acceptance pins it to the status strip's row, and the
+            row as a whole is what `placeCornerCluster` measures against the
+            licence watermark and the dock. Kept first so the strip stays the
+            piece nearest the corner. */}
+        <VariantSwitch />
         <SystemSketchStatusStrip
           open={open}
           onToggle={toggle}

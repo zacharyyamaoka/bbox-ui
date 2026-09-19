@@ -27,6 +27,13 @@
 // own `interactive` hit path is exactly the opt-back-in a host that wants
 // one would reach for, left off here on purpose.
 //
+// ADDED (2026-09-19, lane `fix-edges`): the layer RESOLVES each wire's
+// routing against `DEFAULT_TRACE_ROUTING` (`elbow`) instead of forwarding
+// `undefined`, and it no longer applies `fanWires`' perpendicular spread to
+// anything. Both are Zach's 2026-09-19 ruling — "by default elbow arrows
+// should always be used" and "the port only should have 1 connection point
+// in the center" — and both are asserted in `EdgeDefaults.stories.tsx`.
+//
 // ADDED (docs/CONTROL-FLOW-PLAN.md lane D): keep-outs and badges. For a
 // wire whose `routing` is `"elbow"`, the layer measures every structural box
 // in the fixture once per pass — a region's frame, an arm's row, a block's
@@ -56,8 +63,8 @@ import type { ElbowRect } from "./elbow/index";
 import type { BlockSide } from "./port.layout";
 import { Trace } from "./trace";
 import { TraceBadge } from "./traceBadge";
-import { OPPOSITE_DIR, type Point, type TraceDir, type TraceTerminalSpec } from "./trace.layout";
-import { fanWires, keepOutsFor, type KeepOutRect, type Wire, type WireEnd } from "./wiring";
+import { DEFAULT_TRACE_ROUTING, OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "./trace.layout";
+import { keepOutsFor, type KeepOutRect, type Wire, type WireEnd } from "./wiring";
 
 /* ------------------------------------------------------------------ */
 /* The frozen surface (plan §5)                                        */
@@ -172,7 +179,14 @@ interface ResolvedWire {
   wire: Wire;
   from: TraceTerminalSpec;
   to: TraceTerminalSpec;
-  curve: { dx: number; dy: number };
+  /** The wire's own routing, or {@link DEFAULT_TRACE_ROUTING} — resolved
+   *  HERE and not left to `Trace`'s own default, because the layer has to
+   *  know the answer one step earlier than `Trace` does: it is what decides
+   *  whether this pass collects keep-outs at all. Leaving `undefined` to
+   *  fall through to `Trace` drew an elbow with an EMPTY obstacle list, so
+   *  a defaulted cable ignored every region frame on the board while an
+   *  explicitly-elbow one respected them — two behaviours for one picture. */
+  routing: TraceRouting;
   /** Elbow only, and `undefined` for every other routing so `Trace` is
    *  handed the identical prop set it was handed before lane D. */
   obstacles?: ElbowRect[];
@@ -189,14 +203,13 @@ const EMPTY_STATE: WireLayerState = { resolved: [], unresolvedIds: [] };
 
 function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayerState {
   const containerRect = container.getBoundingClientRect();
-  const fans = fanWires(wires);
   const resolved: ResolvedWire[] = [];
   const unresolvedIds: string[] = [];
   // Measured lazily: a fixture with no elbow wire at all pays nothing, and
   // a fixture with twenty pays once.
   let rects: KeepOutRect[] | null = null;
 
-  wires.forEach((wire, i) => {
+  wires.forEach((wire) => {
     const fromDot = resolveDot(container, wire.from);
     const toDot = resolveDot(container, wire.to);
     const fromEdge = fromDot ? railEdgeOf(fromDot) : null;
@@ -205,10 +218,22 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
       unresolvedIds.push(wire.id);
       return;
     }
+    // ONE ATTACH POINT, and it is the dot's measured centre — no per-cable
+    // offset, ever. Zach, 2026-09-19: "edges should always leave from the
+    // center of the port… The port only should have 1 connection point in
+    // the center. Instead you should show the producer circle that has the
+    // number for the number of arrows intersecting at that port."
+    // So `fanWires`' perpendicular spread is no longer applied to paint
+    // anywhere (it survives in `wiring.ts` as the GROUPING the producer
+    // count is derived from — the fact stays, only its expression moved
+    // from geometry to a badge). Two cables sharing a pair therefore draw
+    // on top of each other on the stub; that overlap is the accepted cost
+    // of the rule, not an oversight.
     const from: TraceTerminalSpec = { ...centreOf(fromDot, containerRect), dir: fromEdge as TraceDir };
     const to: TraceTerminalSpec = { ...centreOf(toDot, containerRect), dir: OPPOSITE_DIR[toEdge as TraceDir] };
-    if (wire.routing !== "elbow") {
-      resolved.push({ wire, from, to, curve: fans[i].offset });
+    const routing = wire.routing ?? DEFAULT_TRACE_ROUTING;
+    if (routing !== "elbow") {
+      resolved.push({ wire, from, to, routing });
       return;
     }
     rects ??= keepOutRectsOf(container, containerRect);
@@ -229,7 +254,7 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
       wire,
       from,
       to,
-      curve: fans[i].offset,
+      routing,
       obstacles: keepOutsFor(wire, rects),
       fromBox: fromBlock ? boxOf(fromBlock, containerRect) : null,
       toBox: toBlock ? boxOf(toBlock, containerRect) : null,
@@ -329,7 +354,7 @@ export function WireLayer({ wires, containerRef, layoutKey }: WireLayerProps) {
         height="100%"
         style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}
       >
-        {state.resolved.map(({ wire, from, to, curve, obstacles, fromBox, toBox }) => (
+        {state.resolved.map(({ wire, from, to, routing, obstacles, fromBox, toBox }) => (
           // `id` is destructured out of both `Trace` and `TraceBody` (it feeds
           // the MARKER's own id, `safeElementId("bbox-trace-head", id)`) and
           // never lands on either `<g>` as a DOM attribute — so a wrapping
@@ -347,11 +372,10 @@ export function WireLayer({ wires, containerRef, layoutKey }: WireLayerProps) {
               id={wire.id}
               from={from}
               to={to}
-              routing={wire.routing}
+              routing={routing}
               variant={wire.variant ?? "data"}
               color={wire.color}
               markerEnd={wire.markerEnd}
-              curve={curve}
               terminals={false}
               obstacles={obstacles}
               fromBox={fromBox}

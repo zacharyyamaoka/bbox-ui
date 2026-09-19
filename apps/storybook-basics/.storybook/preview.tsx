@@ -1,10 +1,12 @@
 import type { Preview } from "@storybook/react-vite";
-import type { ReactNode } from "react";
+import { useLayoutEffect, type ReactNode } from "react";
 import { Anchor, Circle, Play, Rocket } from "lucide-react";
 
 import { GlyphResolverProvider } from "../src/components/glyph";
 import { BBOX_SKINS, BBOX_SKIN_LABELS, bboxSkinAttrs, type BboxSkin } from "../src/skin/skin";
 import { SketchAtEdge } from "../src/skin/SketchAtEdge";
+import { PORT_VARIANT_IDS, PORT_VARIANTS } from "../src/skin/portVariants";
+import { REGION_VARIANT_IDS, REGION_VARIANTS } from "../src/skin/regionVariants";
 import "../src/globals.css";
 
 /**
@@ -48,6 +50,21 @@ function renderLucide(name: string): ReactNode {
   return LUCIDE_ICONS[name] ?? null;
 }
 
+/** The app's bottom-right variant pill (apps/systemsketch/src/chrome/variantSwitch.tsx) as two toolbar globals: the SAME
+ *  `<html>` attributes. WHY `v1` stamps nothing: it IS the absent attribute, so every story not switched is untouched. */
+function VariantAttrs({ port, region, children }: { port: string; region: string; children: ReactNode }) {
+  useLayoutEffect(() => {
+    const html = document.documentElement.dataset;
+    if (port !== "v1") html.bboxPortVariant = port;
+    if (region !== "v1") html.bboxRegionVariant = region;
+    return () => {
+      if (port !== "v1") delete html.bboxPortVariant;
+      if (region !== "v1") delete html.bboxRegionVariant;
+    };
+  }, [port, region]);
+  return children;
+}
+
 const preview: Preview = {
   globalTypes: {
     [SKIN_GLOBAL]: {
@@ -62,11 +79,16 @@ const preview: Preview = {
         dynamicTitle: true,
       },
     },
+    portVariant: { name: "Port style", toolbar: { icon: "circle", dynamicTitle: true, items: PORT_VARIANT_IDS.map((id) => ({ value: id, title: `Ports ${id} · ${PORT_VARIANTS[id].title}` })) } },
+    regionVariant: { name: "Region style", toolbar: { icon: "component", dynamicTitle: true, items: REGION_VARIANT_IDS.map((id) => ({ value: id, title: `Regions ${id} · ${REGION_VARIANTS[id].title}` })) } },
   },
   initialGlobals: {
     [SKIN_GLOBAL]: "" as SkinGlobal,
+    portVariant: "v1",
+    regionVariant: "v1",
   },
   decorators: [
+    (Story, { globals }) => <VariantAttrs port={String(globals.portVariant ?? "v1")} region={String(globals.regionVariant ?? "v1")}><Story /></VariantAttrs>,
     (Story, context) => {
       const skin = (context.globals[SKIN_GLOBAL] as SkinGlobal | undefined) || "";
       // WHY no wrapper at all when unset, rather than a div stamped
