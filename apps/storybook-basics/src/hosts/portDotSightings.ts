@@ -32,11 +32,33 @@
 // inside a labeled port, and the rail's own `data-edge` as the wall name
 // (wireLayer.tsx:80-84's "the rail's own `data-edge` attribute IS the face
 // normal").
+//
+// The one non-DOM import is `portKey` (`scene/scene.ts`) — pure string
+// joining, no engine, no React. A member's dot needs a name a host can hand
+// its edge renderer, and inventing a second spelling of "which port" beside
+// the one `wiredPorts` / `sceneWires` / `WireLayer` already share is how two
+// vocabularies for one fact start.
 
 import type { BlockSide } from "../components/port.layout";
+import { portKey } from "../scene/scene";
 
 export interface PortDotSighting {
   portId: string;
+  /**
+   * The block this dot belongs to — the nearest `[data-block-id]` ancestor.
+   * `nodeId` for the node's own dots; a MEMBER's id for a dot sighted under
+   * `{ members: true }` (a member is drawn inside its parent by the view
+   * kit, so its dots live in the same subtree).
+   */
+  ownerId: string;
+  /**
+   * What a host calls this anchor. `portId` when the dot is the node's own
+   * (so nothing a host already mounted moves), `portKey(ownerId, portId)`
+   * when it belongs to a member — the one shared spelling of "which port"
+   * (`scene.ts`'s `portKey`), reused so React Flow handle ids and tldraw
+   * anchor keys agree with the scene record without a second convention.
+   */
+  handleId: string;
   /** Centre of the rendered dot, viewport (client) px — raw, unprojected. */
   clientX: number;
   clientY: number;
@@ -48,11 +70,22 @@ export interface PortDotSighting {
   side: BlockSide | null;
 }
 
-/** A dot belongs to THIS node, not to a member rendered inside it — the
- *  nearest `data-block-id` ancestor decides. Same ownership reading as
- *  `WireLayer`'s resolution and reactFlowHost.tsx:87-89's `dotOwnedBy`. */
-function dotOwnedBy(el: Element, nodeId: string): boolean {
-  return el.closest("[data-block-id]")?.getAttribute("data-block-id") === nodeId;
+/**
+ * Which block owns this dot — the nearest `data-block-id` ancestor decides,
+ * the same ownership reading as `WireLayer`'s resolution
+ * (wireLayer.tsx:80-92) and reactFlowHost.tsx's `ownHeaderOf`.
+ *
+ * `null` means "not sightable from here": either no owning block at all, or
+ * a member's dot while `members` is off. The member branch is also fenced
+ * to `root` — `closest` walks past `root` into whatever the host mounted
+ * this subtree inside, and a block ABOVE the node is not a member of it.
+ */
+function dotOwnerId(el: Element, nodeId: string, root: HTMLElement, members: boolean): string | null {
+  const owner = el.closest("[data-block-id]");
+  const ownerId = owner?.getAttribute("data-block-id") ?? null;
+  if (owner === null || ownerId === null) return null;
+  if (ownerId === nodeId) return ownerId;
+  return members && root.contains(owner) ? ownerId : null;
 }
 
 function sideOf(el: Element): BlockSide | null {
@@ -60,37 +93,65 @@ function sideOf(el: Element): BlockSide | null {
   return edge === "top" || edge === "right" || edge === "bottom" || edge === "left" ? edge : null;
 }
 
+/** What `sightPortDots` may look at beyond the node's own dots. */
+export interface SightPortDotsOptions {
+  /**
+   * Also sight the dots of blocks NESTED inside `root` at any depth (a
+   * member drawn inside its parent by the view kit). Absent or `false`
+   * returns exactly the node's own dots, which is what every host mounted
+   * before this option existed.
+   */
+  members?: boolean;
+}
+
 /**
  * Every port dot the view kit rendered inside `root` that belongs to
  * `nodeId`, as viewport-space sightings. Collapsed stand-in dots resolve
  * every member id they name to the one dot (the same `data-collapsed-ports`
- * reading `WireLayer` uses). First sighting per port id wins: mid-gesture a
- * wall can transiently expose BOTH forms of one port (its direct dot and a
+ * reading `WireLayer` uses). First sighting per `handleId` wins: mid-gesture
+ * a wall can transiently expose BOTH forms of one port (its direct dot and a
  * collapsed stand-in naming it), and two sightings with one id is an
  * ambiguous anchor — the same dedupe reactFlowHost.tsx:96-101 documents.
+ * (With `members` off, `handleId === portId`, so this is the identical
+ * dedupe it always was.)
+ *
+ * WHY `{ members: true }` is an OPTION and not the new behaviour: a canvas
+ * host routes edges to ANCHORS, and a member's dot is an anchor of the
+ * top-level node it is drawn inside — `hostScene.ts:75-82` recorded exactly
+ * that gap as a finding ("an edge into a member … has no React Flow
+ * rendering"), and this closes it. But the DOM host resolves dots itself and
+ * every host story predating control flow was written against own-dots-only,
+ * so the default stays byte-identical and the two canvas hosts opt in. The
+ * ownership rule is unchanged either way; only the fence around it moves.
  */
-export function sightPortDots(root: HTMLElement, nodeId: string): PortDotSighting[] {
+export function sightPortDots(root: HTMLElement, nodeId: string, options?: SightPortDotsOptions): PortDotSighting[] {
+  const members = options?.members === true;
   const out: PortDotSighting[] = [];
   const seen = new Set<string>();
-  const push = (portId: string, el: Element) => {
-    if (seen.has(portId)) return;
-    seen.add(portId);
+  const push = (portId: string, el: Element, ownerId: string) => {
+    const handleId = ownerId === nodeId ? portId : portKey(ownerId, portId);
+    if (seen.has(handleId)) return;
+    seen.add(handleId);
     const dot = el.querySelector('[data-slot="port-dot"]') ?? el;
     const rect = dot.getBoundingClientRect();
     out.push({
       portId,
+      ownerId,
+      handleId,
       clientX: rect.left + rect.width / 2,
       clientY: rect.top + rect.height / 2,
       side: sideOf(el),
     });
   };
   for (const el of Array.from(root.querySelectorAll("[data-port-id]"))) {
-    if (dotOwnedBy(el, nodeId)) push(el.getAttribute("data-port-id")!, el);
+    const ownerId = dotOwnerId(el, nodeId, root, members);
+    if (ownerId !== null) push(el.getAttribute("data-port-id")!, el, ownerId);
   }
   for (const el of Array.from(root.querySelectorAll("[data-collapsed-ports]"))) {
-    if (!dotOwnedBy(el, nodeId)) continue;
+    const ownerId = dotOwnerId(el, nodeId, root, members);
+    if (ownerId === null) continue;
     for (const portId of (el.getAttribute("data-collapsed-ports") ?? "").split(",")) {
-      if (portId.trim()) push(portId.trim(), el);
+      if (portId.trim()) push(portId.trim(), el, ownerId);
     }
   }
   return out;

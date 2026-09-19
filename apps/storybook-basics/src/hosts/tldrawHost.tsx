@@ -79,6 +79,8 @@ import type { BlockSide } from "../components/port.layout";
 import { OPPOSITE_DIR, type TraceDir, type TraceTerminalSpec } from "../components/trace.layout";
 import { Trace } from "../components/trace";
 import { fanWires } from "../components/wiring";
+import { ancestorsOf } from "../scene/region";
+import { portKey } from "../scene/scene";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import { POINTER_OWNED_CLASS, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
@@ -92,6 +94,18 @@ import { sightPortDots } from "./portDotSightings";
  *  numbers precisely so the wire paint never has to find a DOM element. */
 export interface PortAnchor {
   portId: string;
+  /**
+   * The block that owns the dot — this shape's own node, or a MEMBER drawn
+   * inside it by the view kit (members are not shapes of their own).
+   */
+  ownerId: string;
+  /**
+   * The KEY this anchor is looked up by: `portId` for the shape's own dots,
+   * `portKey(ownerId, portId)` for a member's. Minted once, by
+   * `portDotSightings.ts`, so React Flow's handle ids and these anchor keys
+   * are the same spelling — see `endPoint` below for the lookup.
+   */
+  handleId: string;
   x: number;
   y: number;
   side: BlockSide | null;
@@ -228,7 +242,7 @@ function sameAnchors(a: readonly PortAnchor[] | undefined, b: readonly PortAncho
   if (!a) return b.length === 0;
   return (
     a.length === b.length &&
-    a.every((p, i) => p.portId === b[i].portId && Math.abs(p.x - b[i].x) < 0.5 && Math.abs(p.y - b[i].y) < 0.5 && p.side === b[i].side)
+    a.every((p, i) => p.handleId === b[i].handleId && Math.abs(p.x - b[i].x) < 0.5 && Math.abs(p.y - b[i].y) < 0.5 && p.side === b[i].side)
   );
 }
 
@@ -259,9 +273,14 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
 
     // Dots → anchors: sight in viewport space (engine-free seam), project
     // into shape space through the editor's own camera math (rule 2).
-    const anchors = sightPortDots(wrapper, nodeId).map((sighting): PortAnchor => {
+    // `{ members: true }`: a member is drawn inside this shape, so its dot
+    // is an anchor OF THIS SHAPE — the same projection, the same numbers,
+    // just keyed by `handleId` so `endPoint` can tell the two apart. Own
+    // dots keep `handleId === portId`, so every wire that resolved before
+    // resolves identically.
+    const anchors = sightPortDots(wrapper, nodeId, { members: true }).map((sighting): PortAnchor => {
       const local = editor.getPointInShapeSpace(shape.id, editor.screenToPage({ x: sighting.clientX, y: sighting.clientY }));
-      return { portId: sighting.portId, x: local.x, y: local.y, side: sighting.side };
+      return { portId: sighting.portId, ownerId: sighting.ownerId, handleId: sighting.handleId, x: local.x, y: local.y, side: sighting.side };
     });
     bridge.reportAnchors(nodeId, anchors);
   }, [editor, nodeId, shape.id]);
@@ -454,12 +473,21 @@ function WireOverlay() {
       const resolved: ResolvedWireRender[] = [];
       const unresolvedIds: string[] = [];
       const endPoint = (blockId: string, portId: string): { x: number; y: number; side: BlockSide } | null => {
-        const anchor = anchors[blockId]?.find((candidate) => candidate.portId === portId);
+        // WHY the ancestor walk: only TOP-LEVEL nodes get a shape
+        // (`handleMount`/`topLevelNodes`), so a member has no
+        // `shapeIdForNode` of its own and `anchors[memberId]` is never
+        // populated — the member's dot was measured as an anchor of the
+        // shape it is DRAWN inside, under `portKey(member, port)`. Walk out
+        // to that shape and ask for that key. Nearest-first, so `.at(-1)` is
+        // the outermost; a top-level end has no ancestors and is unchanged.
+        const shapeNodeId = ancestorsOf(scene, blockId).at(-1) ?? blockId;
+        const handleId = blockId === shapeNodeId ? portId : portKey(blockId, portId);
+        const anchor = anchors[shapeNodeId]?.find((candidate) => candidate.handleId === handleId);
         if (!anchor) return null;
-        const transform = editor.getShapePageTransform(shapeIdForNode(blockId));
+        const transform = editor.getShapePageTransform(shapeIdForNode(shapeNodeId));
         if (!transform) return null;
         const page = transform.applyToPoint({ x: anchor.x, y: anchor.y });
-        const shape = editor.getShape<BboxNodeShape>(shapeIdForNode(blockId));
+        const shape = editor.getShape<BboxNodeShape>(shapeIdForNode(shapeNodeId));
         const side = anchor.side ?? (shape && anchor.x < shape.props.w / 2 ? "left" : "right");
         return { x: page.x, y: page.y, side };
       };

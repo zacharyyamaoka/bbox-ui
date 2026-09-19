@@ -49,6 +49,8 @@ import {
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { TraceBody } from "../components/trace";
+import { ancestorsOf } from "../scene/region";
+import { portKey } from "../scene/scene";
 import type { WireStyleData } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import { SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
@@ -76,6 +78,13 @@ const HostSceneContext = createContext<{
 
 interface MeasuredHandle {
   portId: string;
+  /**
+   * The `<Handle id>` React Flow resolves an edge end against — the port id
+   * for this node's OWN dots (so every handle that existed before member
+   * sighting keeps its name), `portKey(memberId, portId)` for a member's.
+   * `portDotSightings.ts` mints it; this host only carries it through.
+   */
+  handleId: string;
   /** Node-local px (unscaled — divided back out of the viewport zoom). */
   x: number;
   y: number;
@@ -184,16 +193,27 @@ function measurePortDots(root: HTMLElement, nodeId: string): MeasuredHandle[] {
   const rootRect = root.getBoundingClientRect();
   if (rootRect.width === 0 || root.offsetWidth === 0) return [];
   const scale = rootRect.width / root.offsetWidth;
-  return sightPortDots(root, nodeId).map((sighting) => {
+  // `{ members: true }`: a member is drawn INSIDE this node by the view kit
+  // (rfNodes below never makes it a React Flow node of its own), so the only
+  // place its dot can be reached from is this node's subtree — and the only
+  // thing an edge into it can anchor to is a handle of THIS node. Own dots
+  // keep `handleId === portId`, so nothing that already resolved moves.
+  return sightPortDots(root, nodeId, { members: true }).map((sighting) => {
     const x = (sighting.clientX - rootRect.left) / scale;
     const y = (sighting.clientY - rootRect.top) / scale;
     const side = sighting.side ? POSITION_FOR_EDGE[sighting.side] : undefined;
-    return { portId: sighting.portId, x, y, side: side ?? (x < root.offsetWidth / 2 ? Position.Left : Position.Right) };
+    return {
+      portId: sighting.portId,
+      handleId: sighting.handleId,
+      x,
+      y,
+      side: side ?? (x < root.offsetWidth / 2 ? Position.Left : Position.Right),
+    };
   });
 }
 
 function sameHandles(a: MeasuredHandle[], b: MeasuredHandle[]): boolean {
-  return a.length === b.length && a.every((h, i) => h.portId === b[i].portId && Math.abs(h.x - b[i].x) < 0.5 && Math.abs(h.y - b[i].y) < 0.5 && h.side === b[i].side);
+  return a.length === b.length && a.every((h, i) => h.handleId === b[i].handleId && Math.abs(h.x - b[i].x) < 0.5 && Math.abs(h.y - b[i].y) < 0.5 && h.side === b[i].side);
 }
 
 /** Invisible and inert: the handle exists so React Flow can resolve and
@@ -261,9 +281,9 @@ function MeasuredPortHandles({ nodeId, rootRef }: { nodeId: string; rootRef: Rea
         // Both types per port: a scene port may be an edge's source in one
         // wire and a target in another; React Flow resolves each end
         // against its own type's handle list.
-        <Fragment key={h.portId}>
-          <Handle type="source" id={h.portId} position={h.side} isConnectable={false} style={handleStyle(h)} />
-          <Handle type="target" id={h.portId} position={h.side} isConnectable={false} style={handleStyle(h)} />
+        <Fragment key={h.handleId}>
+          <Handle type="source" id={h.handleId} position={h.side} isConnectable={false} style={handleStyle(h)} />
+          <Handle type="target" id={h.handleId} position={h.side} isConnectable={false} style={handleStyle(h)} />
         </Fragment>
       ))}
     </>
@@ -379,7 +399,7 @@ const RESIZE_CONTROL_Z_INDEX = 20;
 /** Every host-facing name renders through the one shared node component;
  *  `SceneNodeView` owns the type switch, so a fifth kind is one case
  *  there, zero here. */
-const NODE_TYPES = { block: BboxNode, glyph: BboxNode, code: BboxNode, value: BboxNode };
+const NODE_TYPES = { block: BboxNode, glyph: BboxNode, code: BboxNode, value: BboxNode, region: BboxNode };
 
 /** Where a node drag may START, per host-facing type. Interaction
  *  geometry — host-owned, never written into the scene record. */
@@ -388,6 +408,13 @@ const DRAG_HANDLE_FOR_TYPE: Record<string, string | undefined> = {
   // nested inside this node (host-fixes lane, defect 6) — the marker
   // `OwnDragHandleMarker` stamps is unique to this node's own header.
   block: `[${OWN_DRAG_HANDLE_ATTR}]`,
+  // A region drags by the same marker for the same reason, and that is not a
+  // second rule: a region's own header IS its corner block's header
+  // ("everything is a block" — the corner card carries
+  // `[data-block-id=<region id>]`), so `ownHeaderOf` already resolves it
+  // once lane A renders one. Harmless before then — no region node exists to
+  // match, and a frame is not a header.
+  region: `[${OWN_DRAG_HANDLE_ATTR}]`,
   // glyph: the whole face is inert — drag anywhere.
   // code: the wrapper's grab ring (the editor itself is `nodrag`).
   // value: the pill's non-editor face (the editor carries `nodrag`;
@@ -505,6 +532,34 @@ function applyPositionChanges(scene: HostScene, changes: NodeChange[]): HostScen
   return nodes === scene.nodes ? scene : { ...scene, nodes };
 }
 
+/**
+ * Which React Flow node + handle an edge end actually resolves against.
+ *
+ * A member is not a canvas node — the view kit draws it INSIDE its parent
+ * (`rfNodes` below only ever hands React Flow top-level nodes), so an edge
+ * into one used to resolve against nothing and React Flow dropped it
+ * (`hostScene.ts:75-82`'s recorded gap). The member's dot is still on
+ * screen, inside its outermost ancestor's box, and `MeasuredPortHandles`
+ * now mounts a handle there named `portKey(memberId, portId)` — so the end
+ * re-points to that ancestor and asks for that handle.
+ *
+ * WHY this is a rendering fact and not a scene rewrite: the scene record is
+ * untouched (`wiredPorts`, `sceneWires` and the DOM host all still read
+ * `kid/in` as an edge into `kid`), and the edge object keeps its own `id`
+ * and `data`. It changes where a wire ANCHORS, never what it means — the
+ * member is a block whose dots this host can now see.
+ */
+function anchorEnd(scene: HostScene, nodeId: string, handleId: string | undefined): { nodeId: string; handleId: string | undefined } {
+  // Outermost ancestor: `ancestorsOf` walks nearest-first, so the LAST entry
+  // is the top-level node — a member of a member still lands on the one
+  // shape that draws it. `undefined` = already top-level, nothing to do.
+  const topLevelId = ancestorsOf(scene, nodeId).at(-1);
+  if (topLevelId === undefined) return { nodeId, handleId };
+  // An end with no handle wires the NODE, not a port (`sceneWires`' own
+  // rule) — there is no dot to name, so it keeps that honest absence.
+  return { nodeId: topLevelId, handleId: handleId === undefined ? undefined : portKey(nodeId, handleId) };
+}
+
 export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children, decorate }: ReactFlowHostProps) {
   const wired = useMemo(() => wiredPortsOf(scene), [scene]);
   const context = useMemo(() => ({ scene, wired, onSceneChange, resizable, decorate }), [scene, wired, onSceneChange, resizable, decorate]);
@@ -555,8 +610,27 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
   // `bboxTrace` on every edge — the decoration, same licence as `rfNodes`
   // above: the scene edge object passes through untouched, this host only
   // adds the type that routes it through `TraceEdge` instead of React
-  // Flow's stock bezier.
-  const rfEdges: Edge[] = useMemo(() => scene.edges.map((edge) => ({ ...edge, type: "bboxTrace" })), [scene.edges]);
+  // Flow's stock bezier, and re-points each END at the canvas node that
+  // actually renders it (`anchorEnd`).
+  const rfEdges: Edge[] = useMemo(
+    () =>
+      scene.edges.map((edge) => {
+        const source = anchorEnd(scene, edge.source, edge.sourceHandle);
+        const target = anchorEnd(scene, edge.target, edge.targetHandle);
+        return {
+          ...edge,
+          source: source.nodeId,
+          sourceHandle: source.handleId,
+          target: target.nodeId,
+          targetHandle: target.handleId,
+          type: "bboxTrace",
+        };
+      }),
+    // The WHOLE scene, not just `scene.edges`: `anchorEnd` reads `parentId`
+    // off the NODES, so an edge list memoized on the edges alone would keep
+    // pointing a member's cable at a parent the member has since left.
+    [scene],
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
