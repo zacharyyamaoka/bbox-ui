@@ -53,7 +53,9 @@ import { ancestorsOf } from "../scene/region";
 import { portKey } from "../scene/scene";
 import type { WireStyleData } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
+import type { OpaqueRegionView } from "../scene/regionView";
 import { SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
 
 /* ------------------------------------------------------------------ */
@@ -70,6 +72,8 @@ const HostSceneContext = createContext<{
   onSceneChange?(next: HostScene): void;
   resizable?: boolean;
   decorate?: Decorate;
+  /** The opaque projection's cards — see `SceneNodeViewProps.regionViews`. */
+  regionViews?: ReadonlyMap<string, OpaqueRegionView>;
 } | null>(null);
 
 /* ------------------------------------------------------------------ */
@@ -309,7 +313,14 @@ function BboxNode({ id }: NodeProps) {
       // hosts with a drag gesture.
       style={{ position: "relative", padding: node.type === "code" ? 10 : 0 }}
     >
-      <SceneNodeView scene={host.scene} node={node} wired={host.wired} onSceneChange={host.onSceneChange} decorate={host.decorate} />
+      <SceneNodeView
+        scene={host.scene}
+        node={node}
+        wired={host.wired}
+        onSceneChange={host.onSceneChange}
+        decorate={host.decorate}
+        regionViews={host.regionViews}
+      />
       <MeasuredPortHandles nodeId={id} rootRef={rootRef} />
       <OwnDragHandleMarker nodeId={id} rootRef={rootRef} />
       {host.resizable && (node.type ?? "block") === "block" && (
@@ -561,8 +572,17 @@ function anchorEnd(scene: HostScene, nodeId: string, handleId: string | undefine
 }
 
 export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children, decorate }: ReactFlowHostProps) {
-  const wired = useMemo(() => wiredPortsOf(scene), [scene]);
-  const context = useMemo(() => ({ scene, wired, onSceneChange, resizable, decorate }), [scene, wired, onSceneChange, resizable, decorate]);
+  // Hosts paint the projection; the document keeps its direct P1 cables.
+  // Identity on an all-expanded scene (same arrays out), so `wired`, the
+  // edge list and every memo below are unchanged for every bench that has
+  // no opaque region.
+  const projected = useMemo(() => projectHostScene(scene), [scene]);
+  const wired = useMemo(() => wiredPortsOf(projected.scene), [projected]);
+  const regionViews = useMemo(() => regionViewMap(projected.regions), [projected]);
+  const context = useMemo(
+    () => ({ scene, wired, onSceneChange, resizable, decorate, regionViews }),
+    [scene, wired, onSceneChange, resizable, decorate, regionViews],
+  );
 
   // Host-owned measurement cache, by node id — NEVER part of the scene
   // record (the same "host owns interaction/measurement geometry" rule
@@ -614,7 +634,13 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
   // actually renders it (`anchorEnd`).
   const rfEdges: Edge[] = useMemo(
     () =>
-      scene.edges.map((edge) => {
+      // The PROJECTED edges: an opaque region's crossing cables already
+      // name its card's promoted ports, so `anchorEnd` below then runs on
+      // ends that are already top-level and leaves them alone, while a
+      // member's cable in an EXPANDED region still gets lane G's
+      // re-pointing. Two independent re-anchorings, composed in the order
+      // that makes each one's input true.
+      projected.scene.edges.map((edge) => {
         const source = anchorEnd(scene, edge.source, edge.sourceHandle);
         const target = anchorEnd(scene, edge.target, edge.targetHandle);
         return {
@@ -629,7 +655,7 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
     // The WHOLE scene, not just `scene.edges`: `anchorEnd` reads `parentId`
     // off the NODES, so an edge list memoized on the edges alone would keep
     // pointing a member's cable at a parent the member has since left.
-    [scene],
+    [scene, projected],
   );
 
   const handleNodesChange = useCallback(

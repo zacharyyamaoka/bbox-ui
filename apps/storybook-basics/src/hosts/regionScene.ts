@@ -1,6 +1,6 @@
 // src/hosts/regionScene.ts — this host family's region vocabulary
 // (`HostNodeData.region` / `.arm`) and the ONE write a view toggle makes.
-// CONTRACT STUB — docs/CONTROL-FLOW-PLAN.md, lane E. Signatures frozen by
+// docs/CONTROL-FLOW-PLAN.md §3.1/§3.4, lane E. Signatures frozen by
 // `regionScene.test.ts` (off-limits to builders). Pure: no React, no DOM —
 // it lives in `hosts/` only because it reads `HostNodeData`, which the scene
 // kit never learns about (the same licence `hostPortsOf` claims).
@@ -49,10 +49,6 @@ export function isOpaqueRegion(node: SceneNode<HostNodeData>): boolean {
   return isRegion(node) && regionViewOf(node) === "opaque";
 }
 
-function notImplemented(): never {
-  throw new Error("hosts/regionScene.ts: lane E of docs/CONTROL-FLOW-PLAN.md has not landed yet");
-}
-
 /**
  * The toggle, as a scene write: ONLY `data.region.view` on `regionId`
  * changes. Every other node is the SAME object, `scene.edges` is the SAME
@@ -61,19 +57,48 @@ function notImplemented(): never {
  * is what "positions preserved" means mechanically.
  */
 export function setRegionView(scene: HostScene, regionId: string, view: RegionView): HostScene {
-  void scene; void regionId; void view;
-  return notImplemented();
+  const index = scene.nodes.findIndex((node) => node.id === regionId);
+  // Unknown id, a node that is not a region, or a view that is already what
+  // it would be set to: the SAME scene object. WHY it matters beyond tidiness
+  // — every host memoizes off `scene` identity (`reactFlowHost.tsx`'s
+  // `rfNodes`/`rfEdges`, `DomCanvas`'s `layoutKey`), so returning a fresh
+  // object for a write that changed nothing would re-measure the whole board
+  // and, in React Flow, briefly unset `measured` on every node.
+  if (index === -1) return scene;
+  const node = scene.nodes[index];
+  if (!isRegion(node) || regionViewOf(node) === view) return scene;
+  // ONE new node object in a copy of the array. Every sibling passes through
+  // by reference and `scene.edges` is handed back untouched — which is what
+  // "positions preserved by construction" MEANS: there is no code path here
+  // that could move one, because nothing but `data.region.view` is written.
+  const nodes = scene.nodes.slice();
+  nodes[index] = { ...node, data: { ...node.data, region: { ...(node.data.region ?? { kind: "group" as const }), view } } };
+  return { ...scene, nodes };
 }
 
 export function toggleRegionView(scene: HostScene, regionId: string): HostScene {
-  void scene; void regionId;
-  return notImplemented();
+  const node = scene.nodes.find((candidate) => candidate.id === regionId);
+  if (!node || !isRegion(node)) return scene;
+  return setRegionView(scene, regionId, regionViewOf(node) === "opaque" ? "expanded" : "opaque");
 }
 
 export interface HostSceneProjection {
   /** Same nodes, projected edges — what every host hands its edge painter. */
   scene: HostScene;
   regions: OpaqueRegionView[];
+}
+
+/**
+ * `HostSceneProjection.regions` as a lookup — what `SceneNodeView` takes.
+ *
+ * WHY it lives here and not in a new module: this is the host family's
+ * region vocabulary file, the three hosts each need the same one line, and
+ * a fourth file whose whole content is `new Map(...)` is how one-line
+ * helpers start disagreeing. Empty map for an all-expanded scene, so a
+ * region reading it finds nothing and renders from the document alone.
+ */
+export function regionViewMap(regions: readonly OpaqueRegionView[]): ReadonlyMap<string, OpaqueRegionView> {
+  return new Map(regions.map((region) => [region.regionId, region]));
 }
 
 /** `projectOpaqueRegions` with this family's own predicates plugged in. */
