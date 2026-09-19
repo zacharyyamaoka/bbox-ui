@@ -17,12 +17,26 @@ import { createBindingId, createShapeId, type Editor, type TLShapeId } from "tld
 import type { WireEnd } from "../../document/editEvents";
 import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import type { WireBinding } from "./WireBindingUtil";
-import type { WireShape } from "./WireShapeUtil";
+import type { WireShape, WireShapeProps } from "./WireShapeUtil";
 
 export interface CreateWireOptions {
   from: WireEnd;
   to: WireEnd;
-  variant?: "data" | "async" | "delayed";
+  /** Every style field is OPTIONAL and omitted means "whatever
+   *  `WireShapeUtil.getDefaultProps` says" — a gesture that states none gets
+   *  Zach's datum (`variant: "data"`, `routing: "elbow"`, no colour).
+   *
+   *  WHY `routing` and `color` are here at all, when the press-drag gesture
+   *  never sets either: `applySceneDiff.ts` re-creates a cable whose ENDS
+   *  moved, and a constructor that could only carry `variant` silently
+   *  answered a caller's `routing: "straight"` with the default elbow and its
+   *  `color` with `""` (measured 2026-09-19). A constructor that cannot state
+   *  the whole shape is a constructor its callers have to patch up
+   *  afterwards, in a second transaction, which is exactly the undo story the
+   *  single `editor.run` below exists to prevent. */
+  variant?: WireShapeProps["variant"];
+  routing?: WireShapeProps["routing"];
+  color?: string;
 }
 
 /**
@@ -50,6 +64,14 @@ export function createWire(editor: Editor, options: CreateWireOptions): TLShapeI
     editor.canBindShapes({ fromShape: { type: WIRE_SHAPE_TYPE }, toShape: target, binding: WIRE_BINDING_TYPE });
   if (!bindable(fromShape) || !bindable(toShape)) return null;
 
+  // Only the fields the caller actually stated: naming a key with `undefined`
+  // would still land in the record and defeat `getDefaultProps`.
+  const props: Partial<WireShapeProps> = {
+    ...(options.variant ? { variant: options.variant } : {}),
+    ...(options.routing ? { routing: options.routing } : {}),
+    ...(options.color ? { color: options.color } : {}),
+  };
+
   const id = createShapeId();
   editor.run(() => {
     editor.createShape<WireShape>({
@@ -65,7 +87,7 @@ export function createWire(editor: Editor, options: CreateWireOptions): TLShapeI
       parentId: editor.getCurrentPageId(),
       x: 0,
       y: 0,
-      ...(options.variant ? { props: { variant: options.variant } } : {}),
+      ...(Object.keys(props).length > 0 ? { props } : {}),
     });
     editor.createBindings<WireBinding>([
       { id: createBindingId(), type: WIRE_BINDING_TYPE, fromId: id, toId: fromShape.id, props: { terminal: "start", portId: options.from.portId } },
