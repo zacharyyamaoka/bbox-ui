@@ -2300,6 +2300,67 @@
         "lucide-react",
         "tailwind-merge"
       ]
+    },
+    {
+      "name": "region",
+      "type": "registry:component",
+      "title": "Region",
+      "description": "A control-flow frame with a real Block integral to its top-left corner \u2014 the frame carries scope and no value ports; arms stack under the corner block with a fold chevron each. Loops and branches are data presets over it.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockMembers.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/foldingChevron.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/foldingChevron.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/region.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/region.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/region.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/region.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
     }
   ]
 }
