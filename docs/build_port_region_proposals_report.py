@@ -287,8 +287,8 @@ NEEDS = [
      "Fix at the measure seam (divide by zoom); it will bite any pyblocks board opened at 108%.", "next lane"),
     ("Q8", "Once picked: collapse to the chosen variant and remove the temporary pill, or keep the registry as a skin axis?",
      "Collapse to the pick and delete the pill (it is a temporary review device by your rule); keep the registry file only if you want to flip again.", "pill stays until you pick"),
-    ("Q9", "Integration: <code>claude/port-region-feedback-2026-09-19</code> at <code>21bd8ef</code> is not on <code>main</code> and not in the worktree behind your :5421.",
-     "Fast-forward the review worktree so :5421/:4340 show it; landing on main is your call, in those words.", "nothing lands"),
+    ("Q9", "Integration: done. <code>claude/port-region-feedback-2026-09-19</code> is merged into <code>main</code> at <code>1be88fb</code> (you asked for everything on main); :5421 is fast-forwarded and the dock build updated.",
+     "Nothing to decide; revert with <code>git revert -m 1 1be88fb</code> if a pick goes the other way.", "already landed"),
 ]
 
 ISSUES = [
@@ -499,8 +499,8 @@ def build(inline_gif: bool) -> str:
     review_cmd = f"pnpm --dir {REVIEW_WORKTREE} --filter systemsketch dev"
     integ_cmd = f"pnpm --dir {INTEGRATION_WORKTREE} --filter systemsketch exec vite --port 4470 --strictPort"
     if has_round:
-        fence_note = "Opens the app from the worktree behind your :5421 Storybook, which already contains this round."
-        fence_cmd, fence_url = review_cmd, "http://127.0.0.1:4340"
+        fence_note = "Opens the new SystemSketch exactly as your dock icon does — its build is main at 1be88fb, which contains this round."
+        fence_cmd, fence_url = "python3 /home/bam/bbox-ui/scripts/launch_systemsketch.py --open", "http://127.0.0.1:4341"
         other = (f"<p class='dim small'>The integration worktree runs the same tree on :4470: <code>{esc(integ_cmd)}</code>. "
                  f"Stories: <code>http://127.0.0.1:5421/?path=/story/&lt;id&gt;</code>.</p>")
     else:
@@ -618,7 +618,7 @@ ul.tight li {{ margin:4px 0 }}
 <body><main>
 <h1>Ports, edges and regions — your feedback on the overnight build, answered</h1>
 <p class="prov">Written by Claude Opus 5 (scribe), 2026-09-19. Lanes built by Opus 5, the regions lane by Fable 5.1; audits by Sonnet 5 and Opus 5 because Fable hit its usage limit (the lane records name Sonnet 5 as the auditor of record on all five) {cite(3)}. Every bare number after a claim is a source in the index at the bottom. The hero and the four measured issues marked <em>found by the scribe</em> are new captures made on the merged tree; every other capture is the lanes' own.</p>
-<p class="lead"><strong>{tally['fixed']} of your points are fixed, {tally['proposed']} are five-way proposals you can flip live in the app, {tally['kept']} is kept, {tally['not done']} is not done.</strong> Elbow is the default everywhere, every cable meets a port at its centre with a count badge, and the tldraw Branch now matches the DOM render. The five port styles and five region drawings sit behind a bottom-right switch, with <strong>v1 of each already applied</strong>, so if you pick nothing nothing changes. Five lanes, all audited PASS (one after a fix round), merged on <code>claude/port-region-feedback-2026-09-19</code> at <code>{INTEGRATION_HEAD}</code>; all six gates are green on the merged tree {cite(3, 10, 11)}. It is <strong>not</strong> on main and not yet in the worktree behind your :5421 (Q9) — <a href="#s9">open it ↓</a>.</p>
+<p class="lead"><strong>{tally['fixed']} of your points are fixed, {tally['proposed']} are five-way proposals you can flip live in the app, {tally['kept']} is kept, {tally['not done']} is not done.</strong> Elbow is the default everywhere, every cable meets a port at its centre with a count badge, and the tldraw Branch now matches the DOM render. The five port styles and five region drawings sit behind a bottom-right switch, with <strong>v1 of each already applied</strong>, so if you pick nothing nothing changes. Five lanes, all audited PASS (one after a fix round), merged on <code>claude/port-region-feedback-2026-09-19</code> at <code>{INTEGRATION_HEAD}</code>; all six gates are green on the merged tree {cite(3, 10, 11)}. It is <strong>on <code>main</code></strong> (<code>1be88fb</code>, merged at your word, every gate re-run green on main), your :5421 worktree is fast-forwarded to it, and your dock's SystemSketch build is updated to it — <a href="#s9">open it ↓</a>.</p>
 <table class="head"><thead><tr><th>Outcome</th><th>What you said {cite(1, 2)}</th><th>Your screenshot</th><th>What happened</th></tr></thead><tbody>{head_rows}</tbody></table>
 
 <h2 id="s1"><span class="k">01</span>The merged app, driven</h2>
@@ -710,7 +710,7 @@ ul.tight li {{ margin:4px 0 }}
 <ul class="tight">
   <li><strong>Next, not blocked:</strong> type colour into the app's ports (Q3); members follow their arm on a drawing switch (Q4); the Problems panel's arm blindness (Q6); the zoom-measure bug (Q7); keep-outs for the React Flow host's elbow.</li>
   <li><strong>Blocked on you:</strong> the two picks (Q1, Q2), then collapsing to them (Q8).</li>
-  <li><strong>Integration:</strong> your call (Q9).</li>
+  <li><strong>Integration:</strong> done — on <code>main</code> at <code>1be88fb</code> (Q9).</li>
 </ul>
 <h3>The five port styles</h3>
 <p class="dim small">Verdict buttons are on each card in section 03: {' · '.join(f'<a href="#port-{v}">P{i} {v} {esc(PORT_INFO[v][0])}</a>' for i, v in enumerate(PORT_INFO, 1))}.</p>
@@ -720,7 +720,7 @@ ul.tight li {{ margin:4px 0 }}
 {needs_html}
 <h3>Deliberately not done</h3>
 <ul class="tight">
-  <li>Nothing merged to <code>main</code>, nothing pushed, the worktree behind your :5421 untouched — implementing is not integrating.</li>
+  <li>Nothing pushed.</li>
   <li>No fix for the four measured issues — each is outside the five lanes' write sets and gets its own lane on your say-so.</li>
   <li>The regions lane's Storybook captures were not re-shot with the 12px ports; the app captures and the hero are the merged tree.</li>
   <li>Your 13:48 note about the right-corner menu sitting over “Get a license for production” is a separate ask (the dock lane's), not this round — the pill sits in that same row.</li>
