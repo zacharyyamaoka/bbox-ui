@@ -220,6 +220,20 @@ function describeEvent(event: SceneEvent): string {
   return "nodeId" in event ? `${event.type} · ${event.nodeId}` : `${event.type} · ${event.edgeId}`;
 }
 
+/** The same value with every `null`- and `undefined`-valued key dropped,
+ *  recursively — the one normalization under which a JSON fixture and a
+ *  derived JS object can be compared at all, since JSON has no `undefined`
+ *  and an absent key is how it spells one. */
+function withoutAbsentKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutAbsentKeys);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== null && entry !== undefined)
+      .map(([key, entry]) => [key, withoutAbsentKeys(entry)]),
+  );
+}
+
 function EditSessionPanel() {
   // A seam per panel, never a module-level bus — `history.ts`'s own rule,
   // restated here so the counter below is this panel's own truth.
@@ -273,5 +287,26 @@ export const EditSessionEvents: Story = {
     expect(types).toContain("node-added");
     expect(types).toContain("wire-rewired");
     expect(types.filter((type) => type === "node-moved")).toHaveLength(1);
+
+    // The frozen list, in the frozen order, is what the rows say — the
+    // contract checked against the artefact a reader is looking at, not
+    // just against a number of rows.
+    const frozen = editSessionFixture.events as unknown as SceneEvent[];
+    expect(types).toEqual(frozen.map((event) => event.type));
+
+    // WHY the deep comparison normalizes `null`/`undefined` away, and why
+    // this is NOT the acceptance assertion: `sceneEvents.test.ts:42` pins
+    // the frozen list with `toEqual` and stays RED on purpose. Its event[0]
+    // asks for `from: null` where the `color` key is simply absent from the
+    // before node, while `sceneEvents.test.ts:91` asks for `from: undefined`
+    // on structurally identical input — two committed assertions that no
+    // rule can satisfy at once, so this lane keeps the raw value
+    // (`sceneEvents.ts`, the WHY at the `data-changed` seam) and reports the
+    // red rather than branching on a node id. What this line proves is the
+    // part that IS settled: all 13 events, in the contract's order, with
+    // every field equal, differ from the frozen bytes in exactly one token.
+    // Delete `"from": null,` at `events_edit_session.json:512` and the
+    // acceptance file goes green with no implementation change.
+    expect(withoutAbsentKeys(deriveSceneEvents(EDIT_BEFORE, EDIT_AFTER))).toEqual(withoutAbsentKeys(frozen));
   },
 };
