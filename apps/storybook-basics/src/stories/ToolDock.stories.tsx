@@ -1,16 +1,19 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import {
   Box,
   Circle,
+  CornerDownRight,
   Diamond,
   Frame,
   GitBranch,
   Highlighter,
   MousePointer2,
+  MoveUpRight,
   PackagePlus,
   Pencil,
+  Redo,
   Square,
   Triangle,
   Type,
@@ -23,6 +26,15 @@ import {
   type FamilyDeclaration,
   type ToolDockProps,
 } from "../components/toolDock";
+import {
+  DEFAULT_TOOLBAR_PREFERENCES,
+  arrowPresetForActivation,
+  arrowPresetFromToolId,
+  arrowPresetSection,
+  arrowPresetToolId,
+  parseToolbarPreferences,
+  type ArrowPreset,
+} from "../components/toolPreferences";
 
 /**
  * Demo data below stands in for what a HOST would build once, close over
@@ -465,5 +477,146 @@ export const ResolveCurrentToolIsPure: Story = {
     // `DEFAULT_TOOLBAR_PREFERENCES` seed problem) falls back to the
     // family's own first declared item rather than throwing.
     await expect(resolveCurrentTool(shapeFamily, "text", undefined, undefined)).toBe("rectangle");
+  },
+};
+
+/**
+ * Excalidraw's "press A again for the next arrow", as the archive shipped it
+ * (Zach, 2026-09-19: "Please add the excalidraw interaction of multi pressing
+ * A to cycle through arrow types. Please refer to the old system sketch to
+ * see how this was implemented.").
+ *
+ * The kit does not bind keys (MENU-KIT-DESIGN.md §4 — the HOST owns the real
+ * keybinding), so this harness stands in for the host exactly the way
+ * SystemSketch's `chrome/dock.tsx` does: `A` runs `arrowPresetForActivation`
+ * (advance while the arrow tool is live, otherwise re-arm the last preset),
+ * the shape family's `variantOf` closes over the remembered preset so the
+ * face shows it, and the popout's arrow rows come from `arrowPresetSection`,
+ * in the order A reaches them with the press count beside each
+ * (donor: SystemSketchToolbar.tsx:72-93,307,330-338).
+ */
+const ARROW_ICONS: Record<ArrowPreset, ReactNode> = {
+  straight: <MoveUpRight />,
+  curve: <Redo />,
+  elbow: <CornerDownRight />,
+};
+
+function ArrowCycleHarness() {
+  const [activeToolId, setActiveToolId] = useState("select");
+  const [preferences, setPreferences] = useState<Record<string, string>>({
+    lastShapeTool: "rectangle",
+    lastArrowPreset: DEFAULT_TOOLBAR_PREFERENCES.lastArrowPreset,
+  });
+  const lastArrowPreset = parseToolbarPreferences(preferences).lastArrowPreset;
+
+  // Read inside the key listener without re-binding it every render.
+  const live = useRef({ activeToolId, lastArrowPreset });
+  live.current = { activeToolId, lastArrowPreset };
+
+  const arm = (preset: ArrowPreset) => {
+    setPreferences((current) => ({ ...current, lastArrowPreset: preset, lastShapeTool: arrowPresetToolId(preset) }));
+    setActiveToolId("arrow");
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "a" || event.metaKey || event.ctrlKey || event.altKey) return;
+      arm(arrowPresetForActivation(live.current.activeToolId, live.current.lastArrowPreset));
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const select = (toolId: string) => {
+    const preset = arrowPresetFromToolId(toolId);
+    if (preset) arm(preset);
+    else setActiveToolId(toolId);
+  };
+
+  const arrowShapeFamily: FamilyDeclaration = {
+    id: "shape",
+    label: "Shapes",
+    prefKey: "lastShapeTool",
+    sections: [
+      { heading: "Shapes", items: [{ id: "rectangle", label: "Rectangle", icon: <Square />, shortcutHint: "R" }] },
+      arrowPresetSection(ARROW_ICONS),
+    ],
+    isMember: (toolId) => toolId === "rectangle",
+    // 'arrow' names a FAMILY of shapes, like tldraw's 'geo': the member it is
+    // showing is the remembered preset (toolDock.tsx's own `variantOf` WHY).
+    variantOf: (toolId) => (toolId === "arrow" ? arrowPresetToolId(lastArrowPreset) : undefined),
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+      <p style={{ font: "12px monospace", opacity: 0.6 }}>Press A (repeatedly) — the Shapes face follows the cycle.</p>
+      <ToolDock
+        activeToolId={activeToolId}
+        families={[arrowShapeFamily]}
+        preferences={preferences}
+        onPreferencesChange={setPreferences}
+        testIdPrefix="arrow-cycle"
+        simpleTools={[
+          {
+            id: "select",
+            label: "Cursor",
+            icon: <MousePointer2 />,
+            active: activeToolId === "select",
+            onSelect: () => setActiveToolId("select"),
+          },
+        ]}
+        onArm={select}
+        onSelectItem={select}
+      />
+      <output data-testid="arrow-cycle-readout" style={{ font: "12px monospace" }}>
+        tool: {activeToolId} · last preset: {lastArrowPreset}
+      </output>
+    </div>
+  );
+}
+
+export const ArrowPresetCycle: Story = {
+  render: () => <ArrowCycleHarness />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    const face = () => canvas.getByTestId("arrow-cycle-family-shape");
+    const expectFace = async (label: string, pressed: boolean) => {
+      await waitFor(() => expect(face().getAttribute("aria-label")).toMatch(new RegExp(`^${label}`)));
+      await expect(face()).toHaveAttribute("aria-pressed", String(pressed));
+    };
+
+    // Fresh start: the first A lands on ELBOW ("by default elbow arrows
+    // should always be used"), then walks straight, curve, elbow.
+    for (const label of ["Elbow arrow", "Straight arrow", "Curved arrow", "Elbow arrow"]) {
+      await userEvent.keyboard("a");
+      await expectFace(label, true);
+    }
+
+    // Another tool: the face keeps showing the remembered arrow, un-pressed…
+    await userEvent.click(canvas.getByTestId("arrow-cycle-tool-select"));
+    await expectFace("Elbow arrow", false);
+    // …and the next A RE-ARMS it rather than advancing.
+    await userEvent.keyboard("a");
+    await expectFace("Elbow arrow", true);
+    await userEvent.keyboard("a");
+    await expectFace("Straight arrow", true);
+
+    // The popout: rows in the order A reaches them, each with its press count,
+    // the current one checked.
+    await userEvent.click(face());
+    await waitFor(() => expect(body.getByText("Arrows · repeat A to cycle")).toBeInTheDocument());
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]')).filter((row) =>
+      /arrow/i.test(row.textContent ?? ""),
+    );
+    await expect(rows.map((row) => row.textContent)).toEqual(["Elbow arrowA", "Straight arrowA × 2", "Curved arrowA × 3"]);
+    await expect(rows[1].querySelector("svg.lucide-check")).not.toBeNull();
+
+    // Picking a row arms that preset; the next A advances from it.
+    await userEvent.click(body.getByText("Curved arrow"));
+    await waitFor(() => expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')).toBeNull());
+    await expectFace("Curved arrow", true);
+    await userEvent.keyboard("a");
+    await expectFace("Elbow arrow", true);
   },
 };
