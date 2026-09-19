@@ -379,6 +379,64 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.5.1)(@vitest/browser-playwright@4.1.11)(jsdom@25.0.1)(msw@2.15.0(@types/node@26.5.1)(typescript@5.9.3))(vite@6.4.3(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
 
+  apps/systemsketch:
+    dependencies:
+      '@tldraw/assets':
+        specifier: 5.3.2
+        version: 5.3.2
+      bbox-storybook-basics:
+        specifier: workspace:*
+        version: link:../storybook-basics
+      lucide-react:
+        specifier: ^1.44.0
+        version: 1.44.0(react@19.3.0)
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.3.0(react@19.3.0)
+      tldraw:
+        specifier: 5.3.2
+        version: 5.3.2(@floating-ui/dom@1.8.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.0.0
+        version: 4.3.3(vite@6.4.3(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
+      '@tldraw/tlschema':
+        specifier: 5.3.2
+        version: 5.3.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^4.3.0
+        version: 4.7.0(vite@6.4.3(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
+      '@vitest/browser-playwright':
+        specifier: ^4.1.11
+        version: 4.1.11(msw@2.15.0(@types/node@26.5.1)(typescript@5.9.3))(playwright@1.63.0)(vite@6.4.3(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))(vitest@4.1.11)
+      playwright:
+        specifier: ^1.63.0
+        version: 1.63.0
+      tailwindcss:
+        specifier: ^4.0.0
+        version: 4.3.3
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.3(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0)
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.5.1)(@vitest/browser-playwright@4.1.11)(jsdom@25.0.1)(msw@2.15.0(@types/node@26.5.1)(typescript@5.9.3))(vite@6.4.3(@types/node@26.5.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
+
   demos/compare:
     dependencies:
       '@bbox-ui/compare-view':

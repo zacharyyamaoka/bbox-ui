@@ -3,6 +3,7 @@ packages:
   - apps/playground
   - apps/storybook
   - apps/storybook-basics
+  - apps/systemsketch
   - apps/docs
   - demos/reactflow
   - demos/tldraw

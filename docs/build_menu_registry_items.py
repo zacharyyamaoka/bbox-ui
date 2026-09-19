@@ -105,6 +105,29 @@ ITEMS = [
      "side-by-side or overlay. Headless: the host supplies the modal and both renderers."),
     ("draft-bar", "components/draftBar.tsx", "Draft Bar",
      "The draft-mode strip: exit, draft name, and a change-gated compare/merge pair."),
+    # ── The control-flow kit's ONE distributable surface ────────────────
+    # WHY `region` is an item and the `loop` / `branch` PRESETS are not,
+    # even though a consumer plainly wants a for-loop: an item is a file
+    # tree this script can target, and `target_for` above has exactly two
+    # rules — `src/components/X -> components/bbox/X` and
+    # `src/lib/X -> components/lib/X`. A preset lives at
+    # `src/presets/<kind>/<kind>.ts` and would raise "unexpected trunk
+    # location, no target rule" on the spot. That is the shallow reason.
+    # The deep one is that the presets are not components at all: they are
+    # pure scene-node factories over a HOST (`forLoopNode` returns a
+    # `SceneNode<HostNodeData>`, `branchNode` an array of them), so they
+    # import `hosts/hostScene` and `scene/region` — the scene kit, which a
+    # `components/bbox/` install has no counterpart for. Shipping them
+    # would mean shipping the whole scene+host lineage under a component
+    # target, which is a different distribution decision than this script
+    # makes. `docs/CONTROL-FLOW-PLAN.md` §11 item 6 owns that follow-up (a
+    # `presets/` target rule); until it lands, a consumer installs `region`
+    # and writes the three fields (`region.kind`, `ports`, arms) itself —
+    # which is all a preset ever was.
+    ("region", "components/region.tsx", "Region",
+     "A control-flow frame with a real Block integral to its top-left corner — the frame carries "
+     "scope and no value ports; arms stack under the corner block with a fold chevron each. Loops "
+     "and branches are data presets over it."),
 ]
 
 LEGACY_ITEMS = [

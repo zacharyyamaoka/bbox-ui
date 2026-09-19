@@ -150,6 +150,47 @@ return completionMenu({
 
 Try every option by hand in Storybook: **Components → AutocompleteMenu**.
 
+### Region
+
+A control-flow frame with a **real Block integral to its top-left corner**.
+The frame carries scope and owns no value ports of its own; the corner card
+carries the interface, so a loop's `Iterable`/`Iter` and a branch's
+conditions are ordinary ports on an ordinary block.
+
+- **View**: `expanded` (the frame, its free body and its arm rows) ·
+  `opaque` (the corner card alone, widened, with a footer stating what it
+  hides — "2 blocks · 2 arms hidden"). One field on one node.
+- **Arms**: full-width rows stacked under the corner block, each with its
+  own fold chevron. A folded arm keeps its header and drops its body; a
+  non-active arm fades to `REGION_ARM_FADE_OPACITY`.
+- **Geometry** is a pure twin — `regionLayout()` in `region.layout.ts`
+  returns the corner, the body and every arm row, so a host that needs arm
+  geometry without rendering (a drop target, an SVG export) reads the same
+  numbers the paint used.
+- **Control flow is never a cable**: containment, arm rows and
+  `break`/`continue`/`pass` marks carry it. Loops and branches are *data
+  presets* over this one component, not components of their own.
+
+```tsx
+<Region
+  id="loop"
+  kind="loop"
+  corner={<BlockPort id="loop" view="port" edges={walls}><Block header="For Loop" /></BlockPort>}
+  width={520}
+  members={bodyMembers}
+  arms={[{ id: "if", title: "if fast:", open: true, members: armMembers }]}
+/>
+```
+
+```bash
+npx shadcn@latest add zacharyyamaoka/bbox-ui/region
+```
+
+The loop and branch presets are deliberately **not** installable items —
+they are scene-node factories over a host, not components. See
+`docs/CONTROL-FLOW-PLAN.md` §11 item 6. See the whole language on one board
+in Storybook: **Control Flow → Gallery**.
+
 ## One core, two hosts — the adapter diff
 
 The presentational core never imports a canvas engine. Each host wraps the

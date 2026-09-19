@@ -8,7 +8,8 @@
 import type { PortEdgeItem } from "../components/portEdge";
 import type { TraceMarkerEnd, TraceRouting, TraceVariant } from "../components/trace.layout";
 import type { Wire } from "../components/wiring";
-import { portKey, type SceneEdge } from "./scene";
+import { ancestorsOf } from "./region";
+import { portKey, type SceneData, type SceneEdge, type SceneNode } from "./scene";
 
 /**
  * Per-edge view styling, riding in `SceneEdge.data` — a `type` alias so it
@@ -23,7 +24,20 @@ export type WireStyleData = {
   routing?: TraceRouting;
   markerEnd?: TraceMarkerEnd;
   color?: string;
+  /** Pill text riding the wire (`Wire.badge`). Authoring it is optional:
+   *  a `delayed` edge that names none still gets one — see `sceneWires`. */
+  badge?: string;
 };
+
+/** What `sceneWires` derives `through` from. `nodes` is OPTIONAL so every
+ *  caller that only ever had edges (`sceneWires({ edges })`, the async
+ *  gallery) keeps compiling and keeps getting `through: []` — a wire with
+ *  no declared containers is exactly a wire that may enter none of them,
+ *  which is the right answer for a flat bench. */
+export interface SceneWiresInput<N extends SceneData = SceneData> {
+  nodes?: readonly SceneNode<N>[];
+  edges: readonly SceneEdge<WireStyleData>[];
+}
 
 /**
  * `SceneEdge[]` → `Wire[]`, one to one, order preserved. `source` becomes
@@ -34,7 +48,8 @@ export type WireStyleData = {
  * `data-unresolved-wires`, its established "skipped, not guessed at"
  * channel, rather than this adapter inventing an anchor.
  */
-export function sceneWires(scene: { edges: readonly SceneEdge<WireStyleData>[] }): Wire[] {
+export function sceneWires<N extends SceneData>(scene: SceneWiresInput<N>): Wire[] {
+  const containment = { nodes: scene.nodes ?? [] };
   return scene.edges.map((edge) => ({
     id: edge.id,
     from: { blockId: edge.source, portId: edge.sourceHandle ?? "" },
@@ -43,7 +58,31 @@ export function sceneWires(scene: { edges: readonly SceneEdge<WireStyleData>[] }
     routing: edge.data?.routing,
     markerEnd: edge.data?.markerEnd,
     color: edge.data?.color,
+    // The containers this cable is genuinely INSIDE: the `parentId` chain
+    // of both ends, deduped, nothing else. `ancestorsOf` is the scene kit's
+    // one parent walk (cycle-safe, containment-only, never a definition
+    // group) — restating it here is how two readings of "which region am I
+    // in" start to disagree.
+    through: throughOf(containment, edge.source, edge.target),
+    // WHY a `delayed` cable gets "z⁻¹" without anyone authoring it (plan Q7,
+    // "always draw the pill"): the delay is the whole meaning of a carried
+    // value, and a dotted line alone does not say WHAT is delayed by how
+    // much. An authored `badge` always wins, so "z⁻¹ = estimate()" — the seed
+    // spelled out — is a plain data override, not a special case.
+    badge: edge.data?.badge ?? (edge.data?.variant === "delayed" ? "z⁻¹" : undefined),
   }));
+}
+
+/** Both ends' ancestor chains, deduped, source's first. A self-loop names
+ *  its one chain once — the same "excluded once" the keep-out set gives an
+ *  endpoint block. */
+function throughOf<N extends SceneData>(
+  scene: { nodes: readonly SceneNode<N>[] },
+  source: string,
+  target: string,
+): string[] {
+  if (scene.nodes.length === 0) return [];
+  return [...new Set([...ancestorsOf(scene, source), ...ancestorsOf(scene, target)])];
 }
 
 /**

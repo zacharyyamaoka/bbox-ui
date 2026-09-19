@@ -49,6 +49,66 @@ export interface Wire {
   /** Default is `Trace`'s own default (`"arrow"`). */
   markerEnd?: TraceMarkerEnd;
   color?: string;
+  /**
+   * Block/region/arm ids this wire is ALLOWED to pass through — the
+   * containers its two ends live inside (a host derives it from
+   * `ancestorsOf`; `sceneWires.ts`). `WireLayer` treats every other
+   * measured box as a keep-out when `routing === "elbow"`: that is the
+   * whole of "cables that do not flow through a region must route around
+   * it — bypass above or below" (docs/CONTROL-FLOW-PLAN.md, lane D).
+   */
+  through?: readonly string[];
+  /** Text of a pill riding the wire (`TraceBadge`): `z⁻¹` on a delayed
+   *  cable, `mut` on an effect cable. Absent = no pill. */
+  badge?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Keep-outs (lane D) — CONTRACT STUB, frozen by wiring.test.ts         */
+/* ------------------------------------------------------------------ */
+
+/** A measured box a wire may have to avoid, keyed by the id that stamped it
+ *  (`data-block-id`, `data-region-id` or `data-arm-id`). Container-local px. */
+export interface KeepOutRect {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The obstacles ONE wire routes around: every rect except its own two
+ * endpoint blocks and everything in `through`. Input order, always a new
+ * array, `{x, y, w, h}` only (an `ElbowRect`) — the endpoint boxes travel
+ * separately as the router's `fromBox`/`toBox`.
+ */
+export function keepOutsFor(
+  wire: Pick<Wire, "from" | "to" | "through">,
+  rects: readonly KeepOutRect[],
+): { x: number; y: number; w: number; h: number }[] {
+  // WHY the exclusion set is exactly "my two ends plus `through`", and
+  // nothing cleverer: bypass means AVOID EVERYTHING EXCEPT what I am part
+  // of. A cable into a block sitting in a branch's arm may enter that
+  // region's frame and that one arm — both are in `through`, because both
+  // are ancestors of an end — and it may not enter a SIBLING arm, which is
+  // not. That is DRAKON's "an arm is entered only from the shared area"
+  // made mechanical: the rule is a set membership over measured boxes, not
+  // a special case per container kind, so a region, an arm and a plain
+  // block are all treated identically here and nothing has to know which
+  // is which. The tempting alternative — "skip any rect that CONTAINS an
+  // endpoint" — reads equivalent and is not: a sibling arm that happens to
+  // overlap an endpoint's box geometrically would be silently entered,
+  // and a container the wire genuinely crosses but whose measured rect has
+  // not settled yet would be silently kept out.
+  const mine = new Set<string>([wire.from.blockId, wire.to.blockId, ...(wire.through ?? [])]);
+  // A NEW array of NEW `{x, y, w, h}` objects, in `rects`' own order: the
+  // id is the collector's bookkeeping, not the router's vocabulary
+  // (`ElbowRoutingObstacle` has no id), and a caller that got the input
+  // array back could mutate one layer's measurements from another's.
+  return rects
+    .filter((rect) => !mine.has(rect.id))
+    .map(({ x, y, w, h }) => ({ x, y, w, h }));
 }
 
 /* ------------------------------------------------------------------ */

@@ -1,0 +1,1601 @@
+{
+  "schemaVersion": 1,
+  "content": {
+    "blocks": [
+      {
+        "id": "function:sort_frame@4:0/boundary:selected-function",
+        "title": "sort_frame()",
+        "description": "Selected function body",
+        "ports": [
+          {
+            "id": "boundary-input-frame",
+            "direction": "output",
+            "name": "frame",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.port": {
+                "displayRole": "boundary-input",
+                "displayDirection": "input"
+              },
+              "pyblocks.analysis": {
+                "semanticKind": "data",
+                "role": "parameter",
+                "symbol": "frame",
+                "version": 1,
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 4,
+                    "startColumn": 15,
+                    "endLine": 4,
+                    "endColumn": 20,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "parameter-origin"
+                }
+              }
+            }
+          },
+          {
+            "id": "boundary-input-detector",
+            "direction": "output",
+            "name": "detector",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.port": {
+                "displayRole": "boundary-input",
+                "displayDirection": "input"
+              },
+              "pyblocks.analysis": {
+                "semanticKind": "data",
+                "role": "parameter",
+                "symbol": "detector",
+                "version": 1,
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 4,
+                    "startColumn": 22,
+                    "endLine": 4,
+                    "endColumn": 30,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "parameter-origin"
+                }
+              }
+            }
+          },
+          {
+            "id": "boundary-input-bins",
+            "direction": "output",
+            "name": "bins",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.port": {
+                "displayRole": "boundary-input",
+                "displayDirection": "input"
+              },
+              "pyblocks.analysis": {
+                "semanticKind": "data",
+                "role": "parameter",
+                "symbol": "bins",
+                "version": 1,
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 4,
+                    "startColumn": 32,
+                    "endLine": 4,
+                    "endColumn": 36,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "parameter-origin"
+                }
+              }
+            }
+          },
+          {
+            "id": "boundary-output-report",
+            "direction": "input",
+            "name": "report",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.port": {
+                "displayRole": "boundary-output",
+                "displayDirection": "output"
+              },
+              "pyblocks.analysis": {
+                "semanticKind": "sink",
+                "role": "return",
+                "certainty": "must",
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 16,
+                    "startColumn": 11,
+                    "endLine": 16,
+                    "endColumn": 17,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "returned-expression"
+                }
+              }
+            }
+          }
+        ],
+        "parentId": null,
+        "sourceRefs": [
+          {
+            "uri": "workspace:sort_frame.py",
+            "span": {
+              "startLine": 4,
+              "startColumn": 0,
+              "endLine": 16,
+              "endColumn": 17,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "selected-function"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "boundary",
+            "role": "selected-function",
+            "effect": "pure",
+            "certainty": "must",
+            "qualifiedSymbol": "sort_frame",
+            "signature": "sort_frame(frame, detector, bins)"
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/data:literal@5:4-5:64",
+        "title": "'Detect objects in one fr…",
+        "description": "str",
+        "ports": [],
+        "parentId": null,
+        "sourceRefs": [
+          {
+            "uri": "workspace:sort_frame.py",
+            "span": {
+              "startLine": 5,
+              "startColumn": 4,
+              "endLine": 5,
+              "endColumn": 64,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "block-origin"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "data",
+            "role": "literal",
+            "effect": "pure",
+            "certainty": "must",
+            "tags": [],
+            "detail": "str"
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@6:17-6:39",
+        "title": "detector.detect()",
+        "description": "callee body/effect is unresolved",
+        "ports": [
+          {
+            "id": "in-frame",
+            "direction": "input",
+            "name": "frame",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.analysis": {
+                "edgeKind": "data",
+                "flowRole": "consumed",
+                "semanticName": "frame"
+              },
+              "pyblocks.python": {
+                "parameterKind": "unknown",
+                "required": true,
+                "supplied": true,
+                "argumentOrder": 0
+              }
+            }
+          },
+          {
+            "id": "in-self",
+            "direction": "input",
+            "name": "self",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.analysis": {
+                "edgeKind": "data",
+                "flowRole": "consumed",
+                "semanticName": "self"
+              },
+              "pyblocks.port": {
+                "role": "receiver"
+              },
+              "pyblocks.python": {
+                "parameterKind": "dependency",
+                "required": true,
+                "supplied": true
+              }
+            }
+          },
+          {
+            "id": "out-detections",
+            "direction": "output",
+            "name": "detections",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.analysis": {
+                "edgeKind": "data",
+                "flowRole": "produced",
+                "semanticName": "detections"
+              }
+            }
+          }
+        ],
+        "parentId": null,
+        "sourceRefs": [
+          {
+            "uri": "workspace:sort_frame.py",
+            "span": {
+              "startLine": 6,
+              "startColumn": 17,
+              "endLine": 6,
+              "endColumn": 39,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "block-origin"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "unknown",
+            "certainty": "must",
+            "tags": [
+              "call"
+            ],
+            "reason": "callee body/effect is unresolved"
+          },
+          "pyblocks.symbols": {
+            "resolution": "unknown"
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:operator@7:13-7:15",
+        "title": "list",
+        "description": null,
+        "ports": [
+          {
+            "id": "out-routed",
+            "direction": "output",
+            "name": "routed",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.analysis": {
+                "edgeKind": "data",
+                "flowRole": "produced",
+                "semanticName": "routed"
+              }
+            }
+          }
+        ],
+        "parentId": null,
+        "sourceRefs": [
+          {
+            "uri": "workspace:sort_frame.py",
+            "span": {
+              "startLine": 7,
+              "startColumn": 13,
+              "endLine": 7,
+              "endColumn": 15,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "block-origin"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "transform",
+            "role": "operator",
+            "effect": "pure",
+            "certainty": "must",
+            "tags": [
+              "operator"
+            ]
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "title": "for detection in detections:",
+        "description": "Loop body, opened. Carried state leaves through out-routed.",
+        "ports": [
+          {
+            "id": "in-bins",
+            "direction": "input",
+            "name": "bins",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "in-detections",
+            "direction": "input",
+            "name": "detections",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "in-routed",
+            "direction": "input",
+            "name": "routed",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "out-routed",
+            "direction": "output",
+            "name": "routed",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "in-bins__inner",
+            "direction": "output",
+            "name": "bins",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {
+              "pyblocks.boundary": {
+                "face": "inner"
+              }
+            }
+          },
+          {
+            "id": "in-detections__inner",
+            "direction": "output",
+            "name": "detections",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {
+              "pyblocks.boundary": {
+                "face": "inner"
+              }
+            }
+          },
+          {
+            "id": "in-routed__inner",
+            "direction": "output",
+            "name": "routed",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {
+              "pyblocks.boundary": {
+                "face": "inner"
+              }
+            }
+          },
+          {
+            "id": "out-routed__inner",
+            "direction": "input",
+            "name": "routed",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {
+              "pyblocks.boundary": {
+                "face": "inner"
+              }
+            }
+          }
+        ],
+        "parentId": null,
+        "sourceRefs": [
+          {
+            "uri": "workspace:sort_frame.py",
+            "span": {
+              "startLine": 8,
+              "startColumn": 4,
+              "endLine": 14,
+              "endColumn": 44,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "block-origin"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "region",
+            "role": "for",
+            "effect": "unknown",
+            "certainty": "unknown",
+            "tags": [
+              "control",
+              "collapsed",
+              "opaque"
+            ],
+            "reason": "loop body is collapsed; carried state and iteration count are not expanded in v1"
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@15:13-15:30",
+        "title": "summarize()",
+        "description": "callee body/effect is unresolved",
+        "ports": [
+          {
+            "id": "in-routed",
+            "direction": "input",
+            "name": "routed",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.analysis": {
+                "edgeKind": "data",
+                "flowRole": "consumed",
+                "semanticName": "routed"
+              },
+              "pyblocks.python": {
+                "parameterKind": "unknown",
+                "required": true,
+                "supplied": true,
+                "argumentOrder": 0
+              }
+            }
+          },
+          {
+            "id": "out-report",
+            "direction": "output",
+            "name": "report",
+            "dataType": null,
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.analysis": {
+                "edgeKind": "data",
+                "flowRole": "produced",
+                "semanticName": "report"
+              }
+            }
+          }
+        ],
+        "parentId": null,
+        "sourceRefs": [
+          {
+            "uri": "workspace:sort_frame.py",
+            "span": {
+              "startLine": 15,
+              "startColumn": 13,
+              "endLine": 15,
+              "endColumn": 30,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "block-origin"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "unknown",
+            "certainty": "must",
+            "tags": [
+              "call"
+            ],
+            "reason": "callee body/effect is unresolved"
+          },
+          "pyblocks.symbols": {
+            "resolution": "unknown"
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@9:16-9:34",
+        "title": "classify()",
+        "description": null,
+        "ports": [
+          {
+            "id": "in-detection",
+            "direction": "input",
+            "name": "detection",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "out-label",
+            "direction": "output",
+            "name": "label",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          }
+        ],
+        "parentId": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "sourceRefs": [],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "transform",
+            "role": "call",
+            "certainty": "must",
+            "lines": [
+              9,
+              9
+            ]
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "title": "if label == \"unknown\":",
+        "description": null,
+        "ports": [
+          {
+            "id": "in-label",
+            "direction": "input",
+            "name": "label",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "in-bins",
+            "direction": "input",
+            "name": "bins",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "out-bin_name",
+            "direction": "output",
+            "name": "bin_name",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "in-label__inner",
+            "direction": "output",
+            "name": "label",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {
+              "pyblocks.boundary": {
+                "face": "inner"
+              }
+            }
+          },
+          {
+            "id": "in-bins__inner",
+            "direction": "output",
+            "name": "bins",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {
+              "pyblocks.boundary": {
+                "face": "inner"
+              }
+            }
+          },
+          {
+            "id": "out-bin_name__inner",
+            "direction": "input",
+            "name": "bin_name",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {
+              "pyblocks.boundary": {
+                "face": "inner"
+              }
+            }
+          }
+        ],
+        "parentId": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "sourceRefs": [],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "region",
+            "role": "if",
+            "certainty": "may",
+            "lines": [
+              10,
+              13
+            ]
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/data:attribute@11:23-11:36",
+        "title": "bins.fallback",
+        "description": null,
+        "ports": [
+          {
+            "id": "in-bins",
+            "direction": "input",
+            "name": "bins",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "out-bin_name",
+            "direction": "output",
+            "name": "bin_name",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          }
+        ],
+        "parentId": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "sourceRefs": [],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "data",
+            "role": "attribute",
+            "certainty": "must",
+            "lines": [
+              11,
+              11
+            ]
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@13:23-13:41",
+        "title": "bins.lookup()",
+        "description": null,
+        "ports": [
+          {
+            "id": "in-bins",
+            "direction": "input",
+            "name": "bins",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "in-label",
+            "direction": "input",
+            "name": "label",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "out-bin_name",
+            "direction": "output",
+            "name": "bin_name",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          }
+        ],
+        "parentId": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "sourceRefs": [],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "transform",
+            "role": "call",
+            "certainty": "must",
+            "lines": [
+              13,
+              13
+            ]
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@14:8-14:44",
+        "title": "routed.append()",
+        "description": null,
+        "ports": [
+          {
+            "id": "in-detection",
+            "direction": "input",
+            "name": "detection",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "in-bin_name",
+            "direction": "input",
+            "name": "bin_name",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "in-routed",
+            "direction": "input",
+            "name": "routed",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "out-routed",
+            "direction": "output",
+            "name": "routed",
+            "dataType": null,
+            "description": null,
+            "required": false,
+            "metadata": {}
+          }
+        ],
+        "parentId": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "sourceRefs": [],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "transform",
+            "role": "call",
+            "certainty": "must",
+            "lines": [
+              14,
+              14
+            ]
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "pe:c8dac1959461:1",
+        "source": {
+          "blockId": "function:sort_frame@4:0/boundary:selected-function",
+          "portId": "boundary-input-frame"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@6:17-6:39",
+          "portId": "in-frame"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "must",
+            "sourceLabel": "frame",
+            "targetLabel": "frame",
+            "sourceType": null,
+            "targetType": null,
+            "rawEdgeIds": [
+              "e:b00c2c93bb5d:1"
+            ],
+            "elided": [
+              {
+                "id": "function:sort_frame@4:0/data:parameter@4:15-4:20",
+                "semanticKind": "data",
+                "role": "parameter",
+                "title": "frame",
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 4,
+                    "startColumn": 15,
+                    "endLine": 4,
+                    "endColumn": 20,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "elided-origin"
+                },
+                "symbol": "frame",
+                "version": 1
+              }
+            ],
+            "elidedSemantics": [
+              {
+                "semanticKind": "data",
+                "role": "parameter",
+                "title": "frame",
+                "symbol": "frame",
+                "version": 1
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "pe:6b6e3686785d:1",
+        "source": {
+          "blockId": "function:sort_frame@4:0/boundary:selected-function",
+          "portId": "boundary-input-detector"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@6:17-6:39",
+          "portId": "in-self"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "unknown",
+            "sourceLabel": "detector",
+            "targetLabel": "self",
+            "sourceType": null,
+            "targetType": null,
+            "rawEdgeIds": [
+              "e:179a1f04aa50:1"
+            ],
+            "elided": [
+              {
+                "id": "function:sort_frame@4:0/data:parameter@4:22-4:30",
+                "semanticKind": "data",
+                "role": "parameter",
+                "title": "detector",
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 4,
+                    "startColumn": 22,
+                    "endLine": 4,
+                    "endColumn": 30,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "elided-origin"
+                },
+                "symbol": "detector",
+                "version": 1
+              }
+            ],
+            "elidedSemantics": [
+              {
+                "semanticKind": "data",
+                "role": "parameter",
+                "title": "detector",
+                "symbol": "detector",
+                "version": 1
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "pe:195c77604d24:1",
+        "source": {
+          "blockId": "function:sort_frame@4:0/boundary:selected-function",
+          "portId": "boundary-input-bins"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "in-bins"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "may",
+            "sourceLabel": "bins",
+            "targetLabel": "bins",
+            "sourceType": null,
+            "targetType": null,
+            "rawEdgeIds": [
+              "e:053e14b303a3:1"
+            ],
+            "elided": [
+              {
+                "id": "function:sort_frame@4:0/data:parameter@4:32-4:36",
+                "semanticKind": "data",
+                "role": "parameter",
+                "title": "bins",
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 4,
+                    "startColumn": 32,
+                    "endLine": 4,
+                    "endColumn": 36,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "elided-origin"
+                },
+                "symbol": "bins",
+                "version": 1
+              }
+            ],
+            "elidedSemantics": [
+              {
+                "semanticKind": "data",
+                "role": "parameter",
+                "title": "bins",
+                "symbol": "bins",
+                "version": 1
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "pe:45136d171173:1",
+        "source": {
+          "blockId": "function:sort_frame@4:0/transform:call@6:17-6:39",
+          "portId": "out-detections"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "in-detections"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "may",
+            "sourceLabel": "detections",
+            "targetLabel": "detections",
+            "sourceType": null,
+            "targetType": null,
+            "rawEdgeIds": [
+              "e:701fa7c68d3b:1",
+              "e:7a31cb6a4939:1"
+            ],
+            "elided": [
+              {
+                "id": "function:sort_frame@4:0/data:intermediate@6:17-6:39",
+                "semanticKind": "data",
+                "role": "binding",
+                "title": "detections",
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 6,
+                    "startColumn": 17,
+                    "endLine": 6,
+                    "endColumn": 39,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "elided-origin"
+                },
+                "symbol": "detections",
+                "version": 1,
+                "bindingSourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 6,
+                    "startColumn": 4,
+                    "endLine": 6,
+                    "endColumn": 14,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "binding-token"
+                }
+              }
+            ],
+            "elidedSemantics": [
+              {
+                "semanticKind": "data",
+                "role": "binding",
+                "title": "detections",
+                "symbol": "detections",
+                "version": 1
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "pe:ddc033b3c71d:1",
+        "source": {
+          "blockId": "function:sort_frame@4:0/transform:operator@7:13-7:15",
+          "portId": "out-routed"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "in-routed"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "may",
+            "sourceLabel": "routed",
+            "targetLabel": "routed",
+            "sourceType": null,
+            "targetType": null,
+            "rawEdgeIds": [
+              "e:c1ed38b0606a:1",
+              "e:42502351512d:1"
+            ],
+            "elided": [
+              {
+                "id": "function:sort_frame@4:0/data:intermediate@7:13-7:15",
+                "semanticKind": "data",
+                "role": "binding",
+                "title": "routed",
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 7,
+                    "startColumn": 13,
+                    "endLine": 7,
+                    "endColumn": 15,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "elided-origin"
+                },
+                "symbol": "routed",
+                "version": 1,
+                "bindingSourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 7,
+                    "startColumn": 4,
+                    "endLine": 7,
+                    "endColumn": 10,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "binding-token"
+                }
+              }
+            ],
+            "elidedSemantics": [
+              {
+                "semanticKind": "data",
+                "role": "binding",
+                "title": "routed",
+                "symbol": "routed",
+                "version": 1
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "pe:3bb750a67b3a:1",
+        "source": {
+          "blockId": "function:sort_frame@4:0/transform:call@15:13-15:30",
+          "portId": "out-report"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/boundary:selected-function",
+          "portId": "boundary-output-report"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "must",
+            "sourceLabel": "report",
+            "targetLabel": "report",
+            "sourceType": null,
+            "targetType": null,
+            "rawEdgeIds": [
+              "e:a7065bdbe370:1",
+              "e:20e0d3e9135f:1"
+            ],
+            "elided": [
+              {
+                "id": "function:sort_frame@4:0/data:intermediate@15:13-15:30",
+                "semanticKind": "data",
+                "role": "binding",
+                "title": "report",
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 15,
+                    "startColumn": 13,
+                    "endLine": 15,
+                    "endColumn": 30,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "elided-origin"
+                },
+                "symbol": "report",
+                "version": 1,
+                "bindingSourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 15,
+                    "startColumn": 4,
+                    "endLine": 15,
+                    "endColumn": 10,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "binding-token"
+                }
+              },
+              {
+                "id": "function:sort_frame@4:0/sink:return@16:4-16:17",
+                "semanticKind": "sink",
+                "role": "return",
+                "title": "return",
+                "sourceRef": {
+                  "uri": "workspace:sort_frame.py",
+                  "span": {
+                    "startLine": 16,
+                    "startColumn": 4,
+                    "endLine": 16,
+                    "endColumn": 17,
+                    "columnEncoding": "utf8-bytes"
+                  },
+                  "role": "elided-origin"
+                }
+              }
+            ],
+            "elidedSemantics": [
+              {
+                "semanticKind": "data",
+                "role": "binding",
+                "title": "report",
+                "symbol": "report",
+                "version": 1
+              },
+              {
+                "semanticKind": "sink",
+                "role": "return",
+                "title": "return"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "x-detections-classify",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "in-detections__inner"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@9:16-9:34",
+          "portId": "in-detection"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "x-bins-branch",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "in-bins__inner"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+          "portId": "in-bins"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "x-routed-append",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "in-routed__inner"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@14:8-14:44",
+          "portId": "in-routed"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "x-detection-append",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "in-detections__inner"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@14:8-14:44",
+          "portId": "in-detection"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "i-label",
+        "source": {
+          "blockId": "function:sort_frame@4:0/transform:call@9:16-9:34",
+          "portId": "out-label"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+          "portId": "in-label"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "i-binname",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+          "portId": "out-bin_name"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@14:8-14:44",
+          "portId": "in-bin_name"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "y-bins-fallback",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+          "portId": "in-bins__inner"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/data:attribute@11:23-11:36",
+          "portId": "in-bins"
+        },
+        "label": null,
+        "kind": "control",
+        "metadata": {}
+      },
+      {
+        "id": "y-bins-lookup",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+          "portId": "in-bins__inner"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@13:23-13:41",
+          "portId": "in-bins"
+        },
+        "label": null,
+        "kind": "control",
+        "metadata": {}
+      },
+      {
+        "id": "y-label-lookup",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+          "portId": "in-label__inner"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@13:23-13:41",
+          "portId": "in-label"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "y-fallback-out",
+        "source": {
+          "blockId": "function:sort_frame@4:0/data:attribute@11:23-11:36",
+          "portId": "out-bin_name"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+          "portId": "out-bin_name__inner"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "y-lookup-out",
+        "source": {
+          "blockId": "function:sort_frame@4:0/transform:call@13:23-13:41",
+          "portId": "out-bin_name"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+          "portId": "out-bin_name__inner"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "c-append-carry",
+        "source": {
+          "blockId": "function:sort_frame@4:0/transform:call@14:8-14:44",
+          "portId": "out-routed"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "out-routed__inner"
+        },
+        "label": "carried",
+        "kind": "state",
+        "metadata": {}
+      },
+      {
+        "id": "c-loop-summ",
+        "source": {
+          "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+          "portId": "out-routed"
+        },
+        "target": {
+          "blockId": "function:sort_frame@4:0/transform:call@15:13-15:30",
+          "portId": "in-routed"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      }
+    ],
+    "title": "sort_frame() — region expanded (target)",
+    "metadata": {
+      "pyblocks.analysis": {
+        "sourceSha256": "8d396f1e13d8f6a5c4ec1b4879ec99ed5b30b4a84af7d4ff84566d9d42dc06b1",
+        "selectedViewId": "function:sort_frame@4:0",
+        "projection": "direct-flow-v1",
+        "boundaryBlockId": "function:sort_frame@4:0/boundary:selected-function",
+        "elidedNodeCount": 11
+      },
+      "pyblocks.viewerSpike": {
+        "form": "expanded",
+        "authored": "by hand, as a golden target",
+        "why": "the analyzer collapses this region today; this is what it must grow into"
+      }
+    }
+  },
+  "style": {
+    "blocks": {
+      "function:sort_frame@4:0/boundary:selected-function": {
+        "position": null,
+        "size": null,
+        "detail": "expanded",
+        "shape": "rectangle",
+        "visible": true,
+        "color": null
+      },
+      "function:sort_frame@4:0/data:literal@5:4-5:64": {
+        "position": null,
+        "size": null,
+        "detail": "simple",
+        "shape": "pill",
+        "visible": true,
+        "color": null
+      },
+      "function:sort_frame@4:0/transform:call@6:17-6:39": {
+        "position": null,
+        "size": null,
+        "detail": "ports",
+        "shape": "rectangle",
+        "visible": true,
+        "color": null
+      },
+      "function:sort_frame@4:0/transform:operator@7:13-7:15": {
+        "position": null,
+        "size": null,
+        "detail": "ports",
+        "shape": "rectangle",
+        "visible": true,
+        "color": null
+      },
+      "function:sort_frame@4:0/region:for@8:4-14:44": {
+        "position": null,
+        "size": null,
+        "detail": "ports",
+        "shape": "rectangle",
+        "visible": true,
+        "color": null
+      },
+      "function:sort_frame@4:0/transform:call@15:13-15:30": {
+        "position": null,
+        "size": null,
+        "detail": "ports",
+        "shape": "rectangle",
+        "visible": true,
+        "color": null
+      }
+    },
+    "ports": {
+      "function:sort_frame@4:0/boundary:selected-function": {
+        "boundary-input-frame": {
+          "visible": true,
+          "side": "left",
+          "order": 0,
+          "color": null
+        },
+        "boundary-input-detector": {
+          "visible": true,
+          "side": "left",
+          "order": 1,
+          "color": null
+        },
+        "boundary-input-bins": {
+          "visible": true,
+          "side": "left",
+          "order": 2,
+          "color": null
+        },
+        "boundary-output-report": {
+          "visible": true,
+          "side": "right",
+          "order": 0,
+          "color": null
+        }
+      },
+      "function:sort_frame@4:0/transform:call@6:17-6:39": {
+        "in-frame": {
+          "visible": true,
+          "side": "left",
+          "order": 0,
+          "color": null
+        },
+        "in-self": {
+          "visible": true,
+          "side": "left",
+          "order": 1,
+          "color": null
+        },
+        "out-detections": {
+          "visible": true,
+          "side": "right",
+          "order": 2,
+          "color": null
+        }
+      },
+      "function:sort_frame@4:0/transform:operator@7:13-7:15": {
+        "out-routed": {
+          "visible": true,
+          "side": "right",
+          "order": 0,
+          "color": null
+        }
+      },
+      "function:sort_frame@4:0/region:for@8:4-14:44": {
+        "in-bins": {
+          "visible": true,
+          "side": "left",
+          "order": 0,
+          "color": null
+        },
+        "in-detections": {
+          "visible": true,
+          "side": "left",
+          "order": 1,
+          "color": null
+        },
+        "in-routed": {
+          "visible": true,
+          "side": "left",
+          "order": 2,
+          "color": null
+        }
+      },
+      "function:sort_frame@4:0/transform:call@15:13-15:30": {
+        "in-routed": {
+          "visible": true,
+          "side": "left",
+          "order": 0,
+          "color": null
+        },
+        "out-report": {
+          "visible": true,
+          "side": "right",
+          "order": 1,
+          "color": null
+        }
+      }
+    },
+    "edges": {
+      "pe:c8dac1959461:1": {
+        "route": "elbow"
+      },
+      "pe:6b6e3686785d:1": {
+        "route": "elbow"
+      },
+      "pe:195c77604d24:1": {
+        "route": "elbow"
+      },
+      "pe:45136d171173:1": {
+        "route": "elbow"
+      },
+      "pe:ddc033b3c71d:1": {
+        "route": "elbow"
+      },
+      "pe:3bb750a67b3a:1": {
+        "route": "elbow"
+      },
+      "x-detections-classify": {
+        "route": "elbow"
+      },
+      "x-bins-branch": {
+        "route": "elbow"
+      },
+      "x-routed-append": {
+        "route": "elbow"
+      },
+      "x-detection-append": {
+        "route": "elbow"
+      },
+      "i-label": {
+        "route": "elbow"
+      },
+      "i-binname": {
+        "route": "elbow"
+      },
+      "y-bins-fallback": {
+        "route": "elbow"
+      },
+      "y-bins-lookup": {
+        "route": "elbow"
+      },
+      "y-label-lookup": {
+        "route": "elbow"
+      },
+      "y-fallback-out": {
+        "route": "elbow"
+      },
+      "y-lookup-out": {
+        "route": "elbow"
+      },
+      "c-append-carry": {
+        "route": "elbow"
+      },
+      "c-loop-summ": {
+        "route": "elbow"
+      }
+    },
+    "canvas": {
+      "viewport": {
+        "x": 0,
+        "y": 0
+      },
+      "zoom": 1.0,
+      "theme": "system",
+      "background": "dots"
+    }
+  }
+}

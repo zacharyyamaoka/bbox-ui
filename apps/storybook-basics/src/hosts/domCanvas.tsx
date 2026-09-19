@@ -20,6 +20,7 @@ import { WireLayer } from "../components/wireLayer";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import { SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { projectHostScene, regionViewMap } from "./regionScene";
 
 export interface DomCanvasProps {
   scene: HostScene;
@@ -43,16 +44,27 @@ export interface DomCanvasProps {
  */
 export function DomCanvas({ scene, onSceneChange, width = 640, height = 300, children, decorate }: DomCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const wired = wiredPortsOf(scene);
+  // WHY the host paints the PROJECTION while the nodes still render from
+  // the document: an opaque region's crossing cables are re-pointed at its
+  // card's promoted ports for painting only — the scene keeps its direct P1
+  // cables (`regionView.ts`'s header, plan §2.B). `projectHostScene` is the
+  // identity on an all-expanded scene (same arrays), so every bench that
+  // has no opaque region renders byte-identically to before lane E.
+  // `scene` — not `projected.scene` — stays the record handed to
+  // `SceneNodeView` and to `onSceneChange`, because a write-back must edit
+  // the document, never the lens over it.
+  const projected = projectHostScene(scene);
+  const wired = wiredPortsOf(projected.scene);
+  const regionViews = regionViewMap(projected.regions);
   return (
     <div data-host="dom-canvas" ref={containerRef} style={{ position: "relative", width, height }}>
       {topLevelNodes(scene).map((node) => (
         <div key={node.id} data-scene-node={node.id} style={{ position: "absolute", left: node.position.x, top: node.position.y }}>
-          <SceneNodeView scene={scene} node={node} wired={wired} onSceneChange={onSceneChange} decorate={decorate} />
+          <SceneNodeView scene={scene} node={node} wired={wired} onSceneChange={onSceneChange} decorate={decorate} regionViews={regionViews} />
         </div>
       ))}
       <WireLayer
-        wires={sceneWires(scene)}
+        wires={sceneWires(projected.scene)}
         containerRef={containerRef}
         // Any scene change can move a dot (a reorder swaps rail slots
         // without resizing anything the container's ResizeObserver would

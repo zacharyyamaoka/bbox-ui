@@ -77,3 +77,45 @@ Split the same way this kit already splits pure-vs-chrome:
 See `src/stories/EdgeDropMenu.stories.tsx` for the host-adapter pattern
 this establishes: the story owns the pointer gesture and the demo catalog;
 the kit component owns none of either.
+
+## `sourceActions.ts` — the pyblocks-gated source actions
+
+"Convert to code" and "Expand to blocks" — the two gestures of the
+source-code view's Rung A (`docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md` §5.5).
+Zach, item 4 of the 2026-09-18 ask: "add the menu items… that could appear
+if pyblocks is enabled."
+
+Pure, like `nodeCatalog.ts` and for the same reason: `sourceActionsFor`
+takes a backend ref, a selection (`nodeIds` plus a pre-bound
+`scene/codeCell.ts` `isCodeCell`) and the host's two handlers, and returns
+`MenuAction`-shaped rows. No React, no DOM, no `BlockScene` — it filters a
+host-authored action set, not a scene, which is why it lives here rather
+than in `src/scene/`.
+
+**The gate is one string.** `backend.kind === "pyblocks"`
+(`PYBLOCKS_BACKEND_KIND`) is the entire contract with the pyblocks-backend
+stream, which owns the backend object; this file reads that one field and
+nothing else, so a richer backend — request functions, a version, a socket —
+satisfies it structurally with no adapter.
+
+**Absent, never disabled.** With no backend, or any other `kind`, the
+function returns `[]` and the host renders no group at all. That is
+`edgeDropMenu.tsx`'s judge rule applied to a menu instead of a picker ("an
+entry the judge refuses is never rendered, full stop, not merely disabled"),
+and the reason is sharper here: a greyed-out "Convert to code" teaches a
+reader that the gesture exists and then refuses to say why it will not run,
+because the reason lives in a backend that is not connected. There is no
+honest tooltip to write. The same rule decides the two rows against each
+other — `convert-to-code` needs at least one selected node that is not
+already a cell, `expand-to-blocks` needs exactly one that is, and a
+selection earning neither gets an empty list rather than two dead rows.
+
+**Where the chrome lives: not here.** One `MenuAction[]` feeds a
+`ContextMenuGroup` *and* a dropdown *and* a `FloatingToolbar` cluster, so
+they cannot drift apart (`docs/menus/MENU-KIT-DESIGN.md` §5). This file
+never names a component. `src/stories/SourceActions.stories.tsx` is the
+reference host: it owns the right-click gesture, the selection model, the
+story-local scene adapter, and a bottom-right backend switch so both sides
+of the gate are visible without a URL flag — and its three play functions
+assert the negative against a menu that is genuinely open, because a menu
+that never opened satisfies "the group is absent" vacuously.

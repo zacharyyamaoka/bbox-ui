@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 1,
+  "kind": "definitions",
+  "source": {
+    "name": "stereo.py",
+    "lineCount": 32,
+    "sha256": "0492198bb2aedef2b939d54fba455f62da62a4bfe65acf2710b630537e405a0f"
+  },
+  "definitions": [
+    {
+      "anchor": "<module>",
+      "name": "<module>",
+      "kind": "module",
+      "parent": null,
+      "ordinal": 0,
+      "span": {
+        "startLine": 1,
+        "startColumn": 0,
+        "endLine": 32,
+        "endColumn": 0,
+        "columnEncoding": "utf8-bytes"
+      },
+      "signature": "module",
+      "parameters": [],
+      "outputs": [],
+      "contentHash": "sha256:0492198bb2aedef2b939d54fba455f62da62a4bfe65acf2710b630537e405a0f",
+      "text": "\"\"\"Stereo front end.\"\"\"\nfrom __future__ import annotations\nfrom typing import NamedTuple\n\nCALIB = load_calibration(\"cam.yaml\")\n\n\nclass EstimatePairOut(NamedTuple):\n    depth: Depth\n    confidence: float\n\n\ndef rectify(left: Frame, right: Frame) -> Rectified:\n    # deliberately fiddly\n    for i in range(3):\n        left = warp(left, CALIB[i])\n    return Rectified(left, right)\n\n\ndef estimate_pair(left: Frame, right: Frame) -> EstimatePairOut:\n    rectified = rectify(left, right)\n    disparity = match(rectified)\n    return EstimatePairOut(depth=to_depth(disparity), confidence=score(disparity))\n\n\nclass Pipeline:\n    def __init__(self, k: int) -> None:\n        self.k = k\n\n    def run(self, left, right):\n        return estimate_pair(left, right)\n"
+    },
+    {
+      "anchor": "EstimatePairOut",
+      "name": "EstimatePairOut",
+      "kind": "class",
+      "parent": "<module>",
+      "ordinal": 0,
+      "span": {
+        "startLine": 8,
+        "startColumn": 0,
+        "endLine": 10,
+        "endColumn": 21,
+        "columnEncoding": "utf8-bytes"
+      },
+      "signature": "class EstimatePairOut",
+      "parameters": [],
+      "outputs": [],
+      "contentHash": "sha256:e5780771a506782698fdc7b93f09063053336de4cf5a1e5e3082af1e0d85f053",
+      "text": "class EstimatePairOut(NamedTuple):\n    depth: Depth\n    confidence: float"
+    },
+    {
+      "anchor": "rectify",
+      "name": "rectify",
+      "kind": "function",
+      "parent": "<module>",
+      "ordinal": 0,
+      "span": {
+        "startLine": 13,
+        "startColumn": 0,
+        "endLine": 17,
+        "endColumn": 33,
+        "columnEncoding": "utf8-bytes"
+      },
+      "signature": "def rectify(left, right)",
+      "parameters": [
+        {
+          "name": "left",
+          "annotation": "Frame"
+        },
+        {
+          "name": "right",
+          "annotation": "Frame"
+        }
+      ],
+      "outputs": [],
+      "contentHash": "sha256:2439ad0d4e5e4379f9c8a63ff1bad80072f322a39302cdd177b70fb970372cae",
+      "text": "def rectify(left: Frame, right: Frame) -> Rectified:\n    # deliberately fiddly\n    for i in range(3):\n        left = warp(left, CALIB[i])\n    return Rectified(left, right)"
+    },
+    {
+      "anchor": "estimate_pair",
+      "name": "estimate_pair",
+      "kind": "function",
+      "parent": "<module>",
+      "ordinal": 0,
+      "span": {
+        "startLine": 20,
+        "startColumn": 0,
+        "endLine": 23,
+        "endColumn": 82,
+        "columnEncoding": "utf8-bytes"
+      },
+      "signature": "def estimate_pair(left, right)",
+      "parameters": [
+        {
+          "name": "left",
+          "annotation": "Frame"
+        },
+        {
+          "name": "right",
+          "annotation": "Frame"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "depth",
+          "dataType": "Depth"
+        },
+        {
+          "name": "confidence",
+          "dataType": "float"
+        }
+      ],
+      "contentHash": "sha256:e05e3d956a772aa1743adb6f19e18d9edf1a805c5b224a2ae08f88015a329748",
+      "text": "def estimate_pair(left: Frame, right: Frame) -> EstimatePairOut:\n    rectified = rectify(left, right)\n    disparity = match(rectified)\n    return EstimatePairOut(depth=to_depth(disparity), confidence=score(disparity))"
+    },
+    {
+      "anchor": "Pipeline",
+      "name": "Pipeline",
+      "kind": "class",
+      "parent": "<module>",
+      "ordinal": 0,
+      "span": {
+        "startLine": 26,
+        "startColumn": 0,
+        "endLine": 31,
+        "endColumn": 41,
+        "columnEncoding": "utf8-bytes"
+      },
+      "signature": "class Pipeline",
+      "parameters": [],
+      "outputs": [],
+      "contentHash": "sha256:0a4d9f3b5a08a345585fef5e1ccbf60cefea36b7da95f8fdd275f3de888546b3",
+      "text": "class Pipeline:\n    def __init__(self, k: int) -> None:\n        self.k = k\n\n    def run(self, left, right):\n        return estimate_pair(left, right)"
+    },
+    {
+      "anchor": "Pipeline.__init__",
+      "name": "__init__",
+      "kind": "function",
+      "parent": "Pipeline",
+      "ordinal": 0,
+      "span": {
+        "startLine": 27,
+        "startColumn": 0,
+        "endLine": 28,
+        "endColumn": 18,
+        "columnEncoding": "utf8-bytes"
+      },
+      "signature": "def Pipeline.__init__(self, k)",
+      "parameters": [
+        {
+          "name": "self",
+          "annotation": null
+        },
+        {
+          "name": "k",
+          "annotation": "int"
+        }
+      ],
+      "outputs": [],
+      "contentHash": "sha256:e1eb66a9d289dd168cf23cb7d1697957729b96d410158683332f3c0d056ccff1",
+      "text": "    def __init__(self, k: int) -> None:\n        self.k = k"
+    },
+    {
+      "anchor": "Pipeline.run",
+      "name": "run",
+      "kind": "function",
+      "parent": "Pipeline",
+      "ordinal": 0,
+      "span": {
+        "startLine": 30,
+        "startColumn": 0,
+        "endLine": 31,
+        "endColumn": 41,
+        "columnEncoding": "utf8-bytes"
+      },
+      "signature": "def Pipeline.run(self, left, right)",
+      "parameters": [
+        {
+          "name": "self",
+          "annotation": null
+        },
+        {
+          "name": "left",
+          "annotation": null
+        },
+        {
+          "name": "right",
+          "annotation": null
+        }
+      ],
+      "outputs": [],
+      "contentHash": "sha256:e8b0d7f702012a86b88d5324214a5f569c36f9bcbd34136d4c9a172e778fbf48",
+      "text": "    def run(self, left, right):\n        return estimate_pair(left, right)"
+    }
+  ],
+  "references": [
+    {
+      "from": "estimate_pair",
+      "to": "EstimatePairOut",
+      "kind": "call",
+      "lines": [
+        23
+      ]
+    },
+    {
+      "from": "estimate_pair",
+      "to": "EstimatePairOut",
+      "kind": "name",
+      "lines": [
+        20
+      ]
+    },
+    {
+      "from": "estimate_pair",
+      "to": "rectify",
+      "kind": "call",
+      "lines": [
+        21
+      ]
+    },
+    {
+      "from": "Pipeline.run",
+      "to": "estimate_pair",
+      "kind": "call",
+      "lines": [
+        31
+      ]
+    }
+  ],
+  "diagnostics": []
+}

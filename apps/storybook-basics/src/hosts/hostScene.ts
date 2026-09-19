@@ -64,6 +64,38 @@ export type HostNodeData = {
   value?: string;
   writers?: string[];
   readers?: string[];
+  /* -- type: "region" (scene/region.ts's REGION_NODE_TYPE) ------------- */
+  /** The control-flow vocabulary — see `hosts/regionScene.ts`. A region's
+   *  CORNER BLOCK reads `name`, `ports`, `w`/`h` exactly as a `block` does:
+   *  the corner block IS this node's interface ("everything is a block"),
+   *  and the frame around it carries scope and no value ports
+   *  (docs/CONTROL-FLOW-PLAN.md). */
+  region?: import("./regionScene").RegionData;
+  /** A chip in the corner block's header — a loop's "iteration 3 of 7"
+   *  (donor loopModel.ts:77-78's `turn`, generalised to any region). */
+  badge?: string;
+  /* -- type: "arm" (scene/controlFlow.ts's ARM_NODE_TYPE) --------------- */
+  arm?: import("./regionScene").ArmData;
+  /* -- any block ------------------------------------------------------ */
+  /** Port id → the port's authored NAME. Only NAMED ports appear; an
+   *  absent entry means "no authored label" and the face falls back to the
+   *  port ID, which is this family's own default (`nodeViews.tsx`'s port
+   *  item builder).
+   *
+   *  WHY the id stays the id and a label is a separate bag, rather than
+   *  renaming the port: the id is what an edge's `sourceHandle` names and
+   *  what an edit event names the block's port with (a pyblocks document's
+   *  ids are semantic — `in-raw`, `boundary-output-scaled`), so renaming
+   *  it to the display name would break both. And the label is rendered
+   *  literally, never normalized or clipped (`feedback_truthful_property_
+   *  rendering`). */
+  portLabels?: Record<string, string>;
+  /** Port id → the declared type text, when the producer had one. Data
+   *  only — nothing in this family paints it yet. */
+  portTypes?: Record<string, string>;
+  /** Control-exit marks. DP - Break & Continue, B5: a mark beside the call,
+   *  never a cable — "break is not data flow". Drawn as badges, no wire. */
+  marks?: ("break" | "continue" | "pass")[];
 };
 
 export type HostScene = BlockScene<HostNodeData, WireStyleData>;

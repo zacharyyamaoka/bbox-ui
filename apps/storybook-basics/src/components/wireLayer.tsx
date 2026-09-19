@@ -27,18 +27,37 @@
 // own `interactive` hit path is exactly the opt-back-in a host that wants
 // one would reach for, left off here on purpose.
 //
+// ADDED (docs/CONTROL-FLOW-PLAN.md lane D): keep-outs and badges. For a
+// wire whose `routing` is `"elbow"`, the layer measures every structural box
+// in the fixture once per pass — a region's frame, an arm's row, a block's
+// card — and hands the router the ones this wire is NOT part of, which is
+// Zach's rule ("data cables that aren't flowing through the branch should
+// actively avoid the branch — bypass by going above or below it") turned
+// into two numbers per box. Nothing else changes: a wire with any other
+// routing is handed exactly the props it was handed before this landed, and
+// the badge sibling below is not rendered at all when no wire carries one.
+//
+// WHY the layer, and not the story, collects the obstacles: `elbow/` is a
+// verbatim port whose donor read live tldraw shapes and deliberately left
+// its collector behind (`elbow/traceContract.ts`: "there is no obstacle
+// COLLECTOR here, by design"). The collector belongs wherever the real
+// boxes are measured, and that is here — the one place that already reads
+// the rendered DOM and already owns the container's coordinate space.
+//
 // WHY there is no polarity prop anywhere here (the plan's "8-vs-4"
 // resolution): a rail's own `data-edge` attribute already says everything a
 // terminal spec needs, because `BlockSide` ("top"|"right"|"bottom"|"left")
 // is already the exact same union as `TraceDir` — `from` leaves along the
 // FROM port's own wall, `to` arrives travelling AGAINST the TO port's wall
 // (`OPPOSITE_DIR`).
-import { useLayoutEffect, useState, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useState, type RefObject } from "react";
 
+import type { ElbowRect } from "./elbow/index";
 import type { BlockSide } from "./port.layout";
 import { Trace } from "./trace";
-import { OPPOSITE_DIR, type TraceDir, type TraceTerminalSpec } from "./trace.layout";
-import { fanWires, type Wire, type WireEnd } from "./wiring";
+import { TraceBadge } from "./traceBadge";
+import { OPPOSITE_DIR, type Point, type TraceDir, type TraceTerminalSpec } from "./trace.layout";
+import { fanWires, keepOutsFor, type KeepOutRect, type Wire, type WireEnd } from "./wiring";
 
 /* ------------------------------------------------------------------ */
 /* The frozen surface (plan §5)                                        */
@@ -104,11 +123,61 @@ function centreOf(dot: HTMLElement, containerRect: DOMRect): { x: number; y: num
   return { x: rect.left + rect.width / 2 - containerRect.left, y: rect.top + rect.height / 2 - containerRect.top };
 }
 
+/** One measured box in the container's own coordinate space — the same
+ *  subtraction `centreOf` above does, over a whole rect instead of a dot. */
+function boxOf(element: HTMLElement, containerRect: DOMRect): ElbowRect {
+  const rect = element.getBoundingClientRect();
+  return { x: rect.left - containerRect.left, y: rect.top - containerRect.top, w: rect.width, h: rect.height };
+}
+
+/**
+ * Every structural box in the fixture, keyed by the id that stamped it.
+ * One pass, shared by every elbow wire — `keepOutsFor` then subtracts each
+ * wire's own ends and containers from this one list.
+ *
+ * WHY a REGION contributes its frame and never its corner card, although
+ * both carry the same id: the corner card is the region's INTERFACE
+ * ("everything is a block" — the card is a real Block, with the region's
+ * own `data-block-id`), while the frame is its SCOPE. A cable bypassing a
+ * loop has to clear the loop, not squeeze between the corner card and the
+ * body underneath it. Keyed by id with the frame written first, so the
+ * block pass below cannot overwrite it with the card's much smaller box.
+ */
+function keepOutRectsOf(container: HTMLElement, containerRect: DOMRect): KeepOutRect[] {
+  const rects: KeepOutRect[] = [];
+  const seen = new Set<string>();
+  const add = (id: string | null, element: HTMLElement) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    rects.push({ id, ...boxOf(element, containerRect) });
+  };
+  for (const frame of container.querySelectorAll<HTMLElement>('[data-slot="region-frame"][data-region-id]')) {
+    add(frame.getAttribute("data-region-id"), frame);
+  }
+  // An OPAQUE region has no frame — its root wraps only the card — so the
+  // root's own box is the honest keep-out for that id.
+  for (const region of container.querySelectorAll<HTMLElement>("[data-region-id]")) {
+    add(region.getAttribute("data-region-id"), region);
+  }
+  for (const arm of container.querySelectorAll<HTMLElement>('[data-slot="region-arm"][data-arm-id]')) {
+    add(arm.getAttribute("data-arm-id"), arm);
+  }
+  for (const block of container.querySelectorAll<HTMLElement>("[data-block-id]")) {
+    add(block.getAttribute("data-block-id"), block);
+  }
+  return rects;
+}
+
 interface ResolvedWire {
   wire: Wire;
   from: TraceTerminalSpec;
   to: TraceTerminalSpec;
   curve: { dx: number; dy: number };
+  /** Elbow only, and `undefined` for every other routing so `Trace` is
+   *  handed the identical prop set it was handed before lane D. */
+  obstacles?: ElbowRect[];
+  fromBox?: ElbowRect | null;
+  toBox?: ElbowRect | null;
 }
 
 interface WireLayerState {
@@ -123,6 +192,9 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
   const fans = fanWires(wires);
   const resolved: ResolvedWire[] = [];
   const unresolvedIds: string[] = [];
+  // Measured lazily: a fixture with no elbow wire at all pays nothing, and
+  // a fixture with twenty pays once.
+  let rects: KeepOutRect[] | null = null;
 
   wires.forEach((wire, i) => {
     const fromDot = resolveDot(container, wire.from);
@@ -135,10 +207,43 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
     }
     const from: TraceTerminalSpec = { ...centreOf(fromDot, containerRect), dir: fromEdge as TraceDir };
     const to: TraceTerminalSpec = { ...centreOf(toDot, containerRect), dir: OPPOSITE_DIR[toEdge as TraceDir] };
-    resolved.push({ wire, from, to, curve: fans[i].offset });
+    if (wire.routing !== "elbow") {
+      resolved.push({ wire, from, to, curve: fans[i].offset });
+      return;
+    }
+    rects ??= keepOutRectsOf(container, containerRect);
+    // WHY the endpoint boxes are the `[data-block-id]` roots and not the
+    // same rects the keep-out list carries: the router treats them
+    // differently on purpose (`elbow/collisionRouting.ts`'s
+    // `routeClearsInput` — the first and last leg may cross their OWN card
+    // while leaving through the bound port, no later segment may re-enter
+    // it), and that asymmetry is what makes a self-loop leave its block,
+    // travel around the outside and come back in on the far wall instead
+    // of cutting straight across the card it belongs to. A region end
+    // resolves to its corner card here, which is correct for the same
+    // reason: the dot is ON the card, so the card is the box the first leg
+    // has to escape — the frame is already in the keep-out list above.
+    const fromBlock = fromDot.closest<HTMLElement>("[data-block-id]");
+    const toBlock = toDot.closest<HTMLElement>("[data-block-id]");
+    resolved.push({
+      wire,
+      from,
+      to,
+      curve: fans[i].offset,
+      obstacles: keepOutsFor(wire, rects),
+      fromBox: fromBlock ? boxOf(fromBlock, containerRect) : null,
+      toBox: toBlock ? boxOf(toBlock, containerRect) : null,
+    });
   });
 
   return { resolved, unresolvedIds };
+}
+
+/** Same polyline? A badge only needs re-anchoring when the route actually
+ *  moved, and `Trace` reports its geometry on every re-route — including
+ *  the ones that land on identical numbers after a no-op re-measure. */
+function samePoints(a: readonly Point[] | undefined, b: readonly Point[]): boolean {
+  return a !== undefined && a.length === b.length && a.every((p, i) => p.x === b[i].x && p.y === b[i].y);
 }
 
 /* ------------------------------------------------------------------ */
@@ -147,6 +252,18 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
 
 export function WireLayer({ wires, containerRef, layoutKey }: WireLayerProps) {
   const [state, setState] = useState<WireLayerState>(EMPTY_STATE);
+  // The polyline each badged wire rides, reported by `Trace` itself rather
+  // than re-routed here — one derivation, read back (the same rule
+  // `trace.tsx` states for its own `sides`). Kept OUT of `state` on
+  // purpose: writing it there would give `state.resolved` a new identity on
+  // every geometry report, `Trace` would see fresh `obstacles`/`fromBox`
+  // objects, re-route, report again, and the layer would never settle.
+  const [badgePoints, setBadgePoints] = useState<Record<string, readonly Point[]>>({});
+
+  const reportGeometry = useCallback((wireId: string, points: readonly Point[] | null) => {
+    if (!points || points.length < 2) return;
+    setBadgePoints((previous) => (samePoints(previous[wireId], points) ? previous : { ...previous, [wireId]: points }));
+  }, []);
 
   useLayoutEffect(() => {
     let cancelled = false;
@@ -201,34 +318,82 @@ export function WireLayer({ wires, containerRef, layoutKey }: WireLayerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [containerRef, wires, layoutKey]);
 
+  const badged = state.resolved.filter(({ wire }) => wire.badge !== undefined && badgePoints[wire.id]);
+
   return (
-    <svg
-      data-slot="wire-layer"
-      data-unresolved-wires={state.unresolvedIds.join(",")}
-      width="100%"
-      height="100%"
-      style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}
-    >
-      {state.resolved.map(({ wire, from, to, curve }) => (
-        // `id` is destructured out of both `Trace` and `TraceBody` (it feeds
-        // the MARKER's own id, `safeElementId("bbox-trace-head", id)`) and
-        // never lands on either `<g>` as a DOM attribute — so a wrapping
-        // group is the only way a story can find ONE wire's rendered trace
-        // among its siblings. Purely additive: `Trace` itself is untouched.
-        <g key={wire.id} data-wire-id={wire.id}>
-          <Trace
-            id={wire.id}
-            from={from}
-            to={to}
-            routing={wire.routing}
-            variant={wire.variant ?? "data"}
-            color={wire.color}
-            markerEnd={wire.markerEnd}
-            curve={curve}
-            terminals={false}
-          />
-        </g>
-      ))}
-    </svg>
+    <>
+      <svg
+        data-slot="wire-layer"
+        data-unresolved-wires={state.unresolvedIds.join(",")}
+        width="100%"
+        height="100%"
+        style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}
+      >
+        {state.resolved.map(({ wire, from, to, curve, obstacles, fromBox, toBox }) => (
+          // `id` is destructured out of both `Trace` and `TraceBody` (it feeds
+          // the MARKER's own id, `safeElementId("bbox-trace-head", id)`) and
+          // never lands on either `<g>` as a DOM attribute — so a wrapping
+          // group is the only way a story can find ONE wire's rendered trace
+          // among its siblings. Purely additive: `Trace` itself is untouched.
+          //
+          // `data-wire-from` states, in the DOM, which port a wire LEFT.
+          // That is what lets an assertion about a control MARK be negative
+          // and still be checkable — "no wire originates at `<block>/break`"
+          // (`controlFlow.acceptance.ts`'s `expectControlMark`) — because a
+          // mark is a badge on the block and never an endpoint, and the only
+          // honest way to prove an absence is to enumerate what IS there.
+          <g key={wire.id} data-wire-id={wire.id} data-wire-from={`${wire.from.blockId}/${wire.from.portId}`}>
+            <Trace
+              id={wire.id}
+              from={from}
+              to={to}
+              routing={wire.routing}
+              variant={wire.variant ?? "data"}
+              color={wire.color}
+              markerEnd={wire.markerEnd}
+              curve={curve}
+              terminals={false}
+              obstacles={obstacles}
+              fromBox={fromBox}
+              toBox={toBox}
+              onGeometry={(geometry) => reportGeometry(wire.id, geometry.points)}
+            />
+          </g>
+        ))}
+      </svg>
+      {/* WHY the pills live in a DOM sibling of the svg rather than inside
+          it: `TraceBadge` renders the stock shadcn `Badge`, a Tailwind-styled
+          `<span>` (`traceBadge.tsx`'s own header — "WHY DOM and not SVG"), so
+          it has to be laid out by CSS, not by SVG user space. Its contract is
+          already "an absolutely-positioned sibling of the svg, whose `points`
+          are read in the offsetParent's padding box" — this element IS that
+          offsetParent, inset to the same box the svg fills, so the polyline
+          `Trace` reports needs no conversion at all.
+
+          Rendered only when something is actually badged: a fixture with no
+          pills keeps the DOM it had before lane D, down to the node count
+          every existing story's `getBoundingClientRect` reads. */}
+      {badged.length > 0 && (
+        <div data-slot="wire-badges" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          {badged.map(({ wire }) => (
+            // WHY the OPAQUE stock variant (`TraceBadge`'s own default)
+            // rather than the see-through `outline` the lane brief named:
+            // the pill sits ON the cable it describes, so a transparent one
+            // is read THROUGH by that cable — measured on `BadgeWithSeed`,
+            // where the delayed variant's dots ran between the characters
+            // of "z⁻¹ = estimate()". An opaque chip occludes the line the
+            // same way `trace.crossing.ts`'s casing occludes a crossing
+            // cable. It has to come from the stock Badge's own vocabulary
+            // and not from a backdrop written here: `skin.test.ts`'s S4
+            // coverage list holds this file to "paints nothing of its own —
+            // no border, background, box-shadow or stroke", and it is right
+            // to.
+            <div key={wire.id} data-wire-id={wire.id}>
+              <TraceBadge points={badgePoints[wire.id]} t={0.5} value={wire.badge!} size="sm" variant="secondary" />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

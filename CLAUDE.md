@@ -202,6 +202,28 @@ Two things the reset shipped are deliberately **not** registry items:
   wants them gets them from the stock shadcn registry
   (`npx shadcn add button`, etc.), not from bbox-ui.
 
+## Control flow — a region is ONE node, and the frame owns no id
+
+Loop, branch, arms and the opaque ⇄ expanded toggle are designed in
+`docs/CONTROL-FLOW-PLAN.md`; read it before touching `scene/controlFlow.ts`,
+`components/region*.{ts,tsx}`, `scene/regionView.ts` or `hosts/regionScene.ts`.
+
+**The one rule that is easy to break and silent when broken:** the region
+root and its frame carry `data-region-id`; the CORNER CARD alone carries
+`data-block-id`. `wireLayer.tsx`'s `resolveDot` takes the FIRST
+`[data-block-id="<id>"]` in document order (`wireLayer.tsx:81`), so stamping
+the region's id on the frame makes every wire into that region resolve
+against a box that owns no port dot — the frame would win the lookup and the
+cable would silently fail to land. The corner card IS the region's interface
+("everything is a block"): its ports are the region's ports, one id, one
+port vocabulary.
+
+The second rule, from the same plan: **control flow is never a cable.** Arms
+are `type: "arm"` NODES whose children's positions are arm-relative
+(`scene.ts:60-72`), so folding one arm never moves a sibling's blocks; and
+`break`/`continue`/`pass` are `Badge` marks (`[data-slot="control-mark"]`),
+never a wire with an endpoint.
+
 ## Storybook is opt-in, not default
 
 `apps/storybook` (`bbox-storybook`, a T0 spike: one story rendered across three
@@ -280,8 +302,8 @@ config that wires it up from this repo alone.
 **The vocabulary is closed — two prefixes, nothing else:**
 
 - **`area:<name>`** — one per file, matching the story's own top-level
-  `title` segment: `basics`, `blocks`, `hit-regions`, `ports`, `presets`,
-  `styles`, `trace`. Mechanical to derive (`title.split("/")[0]`,
+  `title` segment: `basics`, `blocks`, `control-flow`, `hit-regions`,
+  `ports`, `presets`, `styles`, `trace`. Mechanical to derive (`title.split("/")[0]`,
   lowercased) — don't invent a new area without adding it here first.
 - **`lane:<slug>`** — one per file, naming the delivery that produced or most
   recently substantively changed it. **When your lane creates a new story

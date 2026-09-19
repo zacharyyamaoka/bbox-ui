@@ -79,9 +79,13 @@ import type { BlockSide } from "../components/port.layout";
 import { OPPOSITE_DIR, type TraceDir, type TraceTerminalSpec } from "../components/trace.layout";
 import { Trace } from "../components/trace";
 import { fanWires } from "../components/wiring";
+import { ancestorsOf } from "../scene/region";
+import { portKey } from "../scene/scene";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
+import type { OpaqueRegionView } from "../scene/regionView";
 import { POINTER_OWNED_CLASS, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
 
 /* ------------------------------------------------------------------ */
@@ -92,6 +96,18 @@ import { sightPortDots } from "./portDotSightings";
  *  numbers precisely so the wire paint never has to find a DOM element. */
 export interface PortAnchor {
   portId: string;
+  /**
+   * The block that owns the dot — this shape's own node, or a MEMBER drawn
+   * inside it by the view kit (members are not shapes of their own).
+   */
+  ownerId: string;
+  /**
+   * The KEY this anchor is looked up by: `portId` for the shape's own dots,
+   * `portKey(ownerId, portId)` for a member's. Minted once, by
+   * `portDotSightings.ts`, so React Flow's handle ids and these anchor keys
+   * are the same spelling — see `endPoint` below for the lookup.
+   */
+  handleId: string;
   x: number;
   y: number;
   side: BlockSide | null;
@@ -99,11 +115,23 @@ export interface PortAnchor {
 
 interface TldrawHostContextValue {
   scene: HostScene;
+  /**
+   * The edges this host PAINTS — `projectHostScene(scene).scene`, which is
+   * `scene` itself (same arrays) unless a region is opaque. Kept beside
+   * `scene` rather than replacing it, because the two have different jobs:
+   * `SceneNodeView` and every write-back read the DOCUMENT, `WireOverlay`
+   * reads the LENS. Collapsing them would make an opaque region's members
+   * disappear from `childrenOf` — which is a document edit, and the whole
+   * point of §2.B is that a view flip is not one.
+   */
+  wireScene: HostScene;
   wired: ReadonlySet<string>;
   onSceneChange?(next: HostScene): void;
   anchors: Readonly<Record<string, readonly PortAnchor[]>>;
   reportAnchors(nodeId: string, anchors: PortAnchor[]): void;
   decorate?: Decorate;
+  /** The opaque projection's cards — see `SceneNodeViewProps.regionViews`. */
+  regionViews?: ReadonlyMap<string, OpaqueRegionView>;
 }
 
 const TldrawHostContext = createContext<TldrawHostContextValue | null>(null);
@@ -228,7 +256,7 @@ function sameAnchors(a: readonly PortAnchor[] | undefined, b: readonly PortAncho
   if (!a) return b.length === 0;
   return (
     a.length === b.length &&
-    a.every((p, i) => p.portId === b[i].portId && Math.abs(p.x - b[i].x) < 0.5 && Math.abs(p.y - b[i].y) < 0.5 && p.side === b[i].side)
+    a.every((p, i) => p.handleId === b[i].handleId && Math.abs(p.x - b[i].x) < 0.5 && Math.abs(p.y - b[i].y) < 0.5 && p.side === b[i].side)
   );
 }
 
@@ -259,9 +287,14 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
 
     // Dots → anchors: sight in viewport space (engine-free seam), project
     // into shape space through the editor's own camera math (rule 2).
-    const anchors = sightPortDots(wrapper, nodeId).map((sighting): PortAnchor => {
+    // `{ members: true }`: a member is drawn inside this shape, so its dot
+    // is an anchor OF THIS SHAPE — the same projection, the same numbers,
+    // just keyed by `handleId` so `endPoint` can tell the two apart. Own
+    // dots keep `handleId === portId`, so every wire that resolved before
+    // resolves identically.
+    const anchors = sightPortDots(wrapper, nodeId, { members: true }).map((sighting): PortAnchor => {
       const local = editor.getPointInShapeSpace(shape.id, editor.screenToPage({ x: sighting.clientX, y: sighting.clientY }));
-      return { portId: sighting.portId, x: local.x, y: local.y, side: sighting.side };
+      return { portId: sighting.portId, ownerId: sighting.ownerId, handleId: sighting.handleId, x: local.x, y: local.y, side: sighting.side };
     });
     bridge.reportAnchors(nodeId, anchors);
   }, [editor, nodeId, shape.id]);
@@ -319,7 +352,14 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
           }
         }}
       >
-        <SceneNodeView scene={host.scene} node={node} wired={host.wired} onSceneChange={host.onSceneChange} decorate={host.decorate} />
+        <SceneNodeView
+          scene={host.scene}
+          node={node}
+          wired={host.wired}
+          onSceneChange={host.onSceneChange}
+          decorate={host.decorate}
+          regionViews={host.regionViews}
+        />
       </div>
     </HTMLContainer>
   );
@@ -442,7 +482,9 @@ interface ResolvedWireRender {
 function WireOverlay() {
   const editor = useEditor();
   const host = useContext(TldrawHostContext);
-  const scene = host?.scene;
+  // Hosts paint the projection; the document keeps its direct P1 cables.
+  // `wireScene` is `scene` itself while everything is expanded.
+  const scene = host?.wireScene;
   const anchors = host?.anchors;
 
   const state = useValue(
@@ -454,12 +496,21 @@ function WireOverlay() {
       const resolved: ResolvedWireRender[] = [];
       const unresolvedIds: string[] = [];
       const endPoint = (blockId: string, portId: string): { x: number; y: number; side: BlockSide } | null => {
-        const anchor = anchors[blockId]?.find((candidate) => candidate.portId === portId);
+        // WHY the ancestor walk: only TOP-LEVEL nodes get a shape
+        // (`handleMount`/`topLevelNodes`), so a member has no
+        // `shapeIdForNode` of its own and `anchors[memberId]` is never
+        // populated — the member's dot was measured as an anchor of the
+        // shape it is DRAWN inside, under `portKey(member, port)`. Walk out
+        // to that shape and ask for that key. Nearest-first, so `.at(-1)` is
+        // the outermost; a top-level end has no ancestors and is unchanged.
+        const shapeNodeId = ancestorsOf(scene, blockId).at(-1) ?? blockId;
+        const handleId = blockId === shapeNodeId ? portId : portKey(blockId, portId);
+        const anchor = anchors[shapeNodeId]?.find((candidate) => candidate.handleId === handleId);
         if (!anchor) return null;
-        const transform = editor.getShapePageTransform(shapeIdForNode(blockId));
+        const transform = editor.getShapePageTransform(shapeIdForNode(shapeNodeId));
         if (!transform) return null;
         const page = transform.applyToPoint({ x: anchor.x, y: anchor.y });
-        const shape = editor.getShape<BboxNodeShape>(shapeIdForNode(blockId));
+        const shape = editor.getShape<BboxNodeShape>(shapeIdForNode(shapeNodeId));
         const side = anchor.side ?? (shape && anchor.x < shape.props.w / 2 ? "left" : "right");
         return { x: page.x, y: page.y, side };
       };
@@ -564,10 +615,13 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, de
     setAnchors((prev) => (sameAnchors(prev[nodeId], next) ? prev : { ...prev, [nodeId]: next }));
   }, []);
 
-  const wired = useMemo(() => wiredPortsOf(scene), [scene]);
+  // Hosts paint the projection; the document keeps its direct P1 cables.
+  const projected = useMemo(() => projectHostScene(scene), [scene]);
+  const wired = useMemo(() => wiredPortsOf(projected.scene), [projected]);
+  const regionViews = useMemo(() => regionViewMap(projected.regions), [projected]);
   const context = useMemo<TldrawHostContextValue>(
-    () => ({ scene, wired, onSceneChange, anchors, reportAnchors, decorate }),
-    [scene, wired, onSceneChange, anchors, reportAnchors, decorate],
+    () => ({ scene, wireScene: projected.scene, wired, onSceneChange, anchors, reportAnchors, decorate, regionViews }),
+    [scene, projected, wired, onSceneChange, anchors, reportAnchors, decorate, regionViews],
   );
   // Caller's `components` layer OVER this host's own (`OnTheCanvas` stays
   // unless a caller explicitly overrides that key too) — see the prop's
