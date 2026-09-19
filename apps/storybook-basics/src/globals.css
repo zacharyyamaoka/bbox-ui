@@ -1,5 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/*
+ * The skin system (src/skin/**, ported from packages/bbox-ui — frozen v1,
+ * read-only donor). Imported right after the framework so every component
+ * file's own `var(--bbox-skin-*, <today's literal>)` call sites (block.tsx,
+ * badge.tsx, port.tsx, trace.tsx, codeEditor.css) can be overridden by it —
+ * and BEFORE the `:root` block below, so `--border`/`--card`/etc. are
+ * declared first and this file's `[data-bbox-skin]` blocks can reference
+ * them. Purely additive: nothing here paints unless a `data-bbox-skin`
+ * attribute is present on an ancestor (see skin.css's own header).
+ */
+@import "./skin/skin.css";
 
 /*
  * Standard shadcn/ui default theme (new-york, neutral base color) —
@@ -125,6 +136,29 @@ body {
 :root {
   --bbox-primary: oklch(0.65 0.19 48);
   --bbox-received: oklch(0.6 0.19 145);
+}
+
+/*
+ * The diagnostic axis's three severity tokens
+ * (docs/INVALID-STATES-PLAN.md §2) — ported one by one, the same recipe as
+ * `--bbox-primary`/`--bbox-received` just above, from
+ * packages/bbox-ui/src/theme.css:28-31 (light) and :79-89 (dark). Unlike
+ * that pair, these three DO get an explicit dark value: the plan's own
+ * table calls for both, and error/warning/info are exactly the colours a
+ * dark canvas must not let wash out.
+ */
+:root {
+  --bbox-danger: oklch(0.55 0.19 25);
+  --bbox-warning: oklch(0.65 0.16 85);
+  --bbox-accent: oklch(0.6 0.19 264);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bbox-danger: oklch(0.72 0.17 25);
+    --bbox-warning: oklch(0.8 0.15 85);
+    --bbox-accent: oklch(0.7 0.17 264);
+  }
 }
 
 /*

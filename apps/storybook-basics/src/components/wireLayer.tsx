@@ -60,13 +60,31 @@ export interface WireLayerProps {
 /** `[data-port-id]` inside `[data-block-id]` first; a collapsed stand-in dot
  *  whose `data-collapsed-ports` list contains the id otherwise. Both
  *  attributes are stamped by `blockPort.tsx`'s rail fill, never by this
- *  file — `WireLayer` only reads DOM another component already wrote. */
+ *  file — `WireLayer` only reads DOM another component already wrote.
+ *
+ *  WHY every candidate is ownership-checked (`closest("[data-block-id]")
+ *  === block`) instead of taking `block.querySelector`'s first match: a
+ *  MEMBER rendered inside an expanded Block stamps its own nested
+ *  `[data-block-id]`, and a member can legally reuse a port id its parent
+ *  also has (`proc`'s own `in` and its member `kid`'s own `in`, both valid,
+ *  both distinct dots). A bare descendant query has no way to prefer the
+ *  block's OWN dot over a member's, and resolves to whichever is first in
+ *  document order — silently wrong, not unresolved, so nothing here ever
+ *  flagged it. `reactFlowHost.tsx`'s `dotOwnedBy` already reads this
+ *  correctly (nearest `data-block-id` ancestor decides); this is the same
+ *  rule, so the two hosts' resolution genuinely agrees, matching what that
+ *  file's own comment already claimed. Measured 2026-09-18: an edge into
+ *  `proc/in` painted onto `kid`'s dot instead, with
+ *  `data-unresolved-wires` still reading `""` — see
+ *  `WireLayerOwnership.stories.tsx`. */
 function resolveDot(container: HTMLElement, end: WireEnd): HTMLElement | null {
   const block = container.querySelector<HTMLElement>(`[data-block-id="${end.blockId}"]`);
   if (!block) return null;
-  const direct = block.querySelector<HTMLElement>(`[data-port-id="${end.portId}"]`);
-  if (direct) return direct;
+  for (const candidate of block.querySelectorAll<HTMLElement>(`[data-port-id="${end.portId}"]`)) {
+    if (candidate.closest("[data-block-id]") === block) return candidate;
+  }
   for (const collapsed of block.querySelectorAll<HTMLElement>("[data-collapsed-ports]")) {
+    if (collapsed.closest("[data-block-id]") !== block) continue;
     const members = (collapsed.getAttribute("data-collapsed-ports") ?? "").split(",").map((id) => id.trim());
     if (members.includes(end.portId)) return collapsed;
   }

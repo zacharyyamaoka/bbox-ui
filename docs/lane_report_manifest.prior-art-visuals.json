@@ -1,0 +1,44 @@
+{
+  "title": "Node-editor prior art — the other 26, drawn",
+  "summary": "The companion to node-editor-prior-art-2026-09-17.html: every idea that report listed as a one-line table row now gets the same visual treatment its 13 featured entries got — one mechanism diagram each, re-verified against real source before drawing.",
+  "slug": "node-editor-prior-art-visuals",
+  "date": "2026-09-18",
+  "base_ref": "fe7386d",
+  "branch_label": "prior-art-visuals lane",
+  "intro": [
+    "The first report (<code>file:///home/bam/bbox-ui/reports/media/node-editor-prior-art-2026-09-17.html</code>) drew its 13 featured entries and kept 26 more as dense table rows under “Also surfaced — real, cited, lower priority.” This page draws those 26 — same buckets, same order, same drawn language.",
+    "Every figure was re-checked against real source before drawing, in a scratch checkout outside the repo: <b>vyuh_node_flow</b> (MIT), <b>maxGraph</b> (Apache-2.0), <b>litegraph.js</b> (MIT) read and cited by file:line; <b>JointJS</b> (MPL-2.0) read and cited only — nothing copied, the same line held for LGPL libavoid. Each card carries two chips: how the claim was verified, and where this repo stands on it — including one idea a lane is implementing right now and several this tree already half-owns.",
+    "One upgrade over the original table: the JointJS <code>Connect</code>-skips-<code>validateMagnet</code> claim, flagged <i>unverified</i> there, is now read directly from both call sites (card 23)."
+  ],
+  "changes": [
+    "<code>docs/build_prior_art_visuals_fragments.py</code> — generates the 26 mechanism diagrams (inline SVG, the first report's drawn language) plus their verification/status chips and file:line citations.",
+    "<code>docs/fragments/prior-art-visuals-{container,layout,runtime,tools}.html</code> — the four bucket fragments this report inlines.",
+    "<code>docs/lane_report_manifest.prior-art-visuals.json</code> — this manifest.",
+    "No component, scene, or interaction source was touched — this lane writes docs and the report only."
+  ],
+  "findings": [
+    "<b>26 of 26 drawn; 24 core mechanisms verified in source with file:line</b>; 2 cards carry a sub-claim only documentation supports (card 16's promote-one-field practice, card 19's reverted-to-opt-in history) and say so on the card.",
+    "<b>Card 23 upgraded</b>: the original report's one flagged-unverified JointJS claim is now confirmed by reading both call paths — the ordinary press gates on <code>validateMagnet</code> (ElementView.mjs:785) before <code>dragLinkStart</code>; <code>Connect.dragstart</code> calls <code>dragLinkStart</code> directly with no gate.",
+    "<b>Already moving here</b>: card 06 (auto-fit reentrancy latch) is the fit-to-content lane's problem right now; cards 03, 09, 12, 13, 14, 16, 20, 24 are half-landed — <code>findCycles</code>, <code>validateConnection</code>, the skin cascade, <code>definitionId</code>, <code>completionMenu</code> (branch), <code>packages/inspector</code>, stock React Flow MiniMap, and <code>port.layout.ts</code>'s placement presets respectively.",
+    "<b>Card 04's answer is architectural</b>: bbox-ui's core owns no z-index by design, so Vyuh's three-moment invariant lands as a per-host checklist (reparent, drag-start, load), not a core feature.",
+    "None of the 26 was judged too thin to draw — the honest count stayed 26."
+  ],
+  "sections": [
+    {
+      "heading": "Container behavior — 10 ideas",
+      "html_file": "docs/fragments/prior-art-visuals-container.html"
+    },
+    {
+      "heading": "Layout & serialization — 3 ideas",
+      "html_file": "docs/fragments/prior-art-visuals-layout.html"
+    },
+    {
+      "heading": "Runtime & interaction polish — 7 ideas",
+      "html_file": "docs/fragments/prior-art-visuals-runtime.html"
+    },
+    {
+      "heading": "Element-tool mechanics (JointJS) — 6 ideas",
+      "html_file": "docs/fragments/prior-art-visuals-tools.html"
+    }
+  ]
+}

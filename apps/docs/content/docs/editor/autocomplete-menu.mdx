@@ -1,0 +1,34 @@
+---
+title: Autocomplete menu
+description: The completion popup for code-shaped fields — built once in the v1 lineage, deliberately not yet in the trunk.
+---
+
+<Callout title="Status — partial: v1 has it, the trunk dropped it">
+  A working completion menu exists in the **frozen v1 lineage**
+  (`completionMenu` + `codeGrammar` in `packages/bbox-ui`, exercised by a
+  story in the repo's older Storybook). The **trunk's** Code Editor
+  deliberately dropped the whole grammar/completion layer when it was ported
+  — the trunk has no completion popup today, and no registry item ships one.
+  Treat this page as a record of what exists where, not as documentation of a
+  finished component.
+</Callout>
+
+## What the v1 version does
+
+The v1 `CodeField` pairs a CodeMirror editor with a grammar: slot decorations
+plus a completion source. Typing in a slot opens the completion menu —
+styled by `completionMenu.css` — offering the grammar's candidates for that
+slot.
+
+## Why the trunk does not have it
+
+The trunk's Code Editor was rebuilt lean: the `grammar` machinery (slot
+decorations + completion), the rendered/source mode toggle, and the preset
+ladder were all dropped in the port, because the trunk had no field-spec
+machinery to hang them on. Syntax highlighting survived as a plain `language`
+prop. The completion popup's tooltip plumbing went with the grammar — nothing
+in the trunk opens a completion tooltip today.
+
+Re-growing completion on the trunk's Code Editor — with the grammar owned by
+the [editor kit](/docs/editor) rather than baked into the component — is the
+open design question this page will track.

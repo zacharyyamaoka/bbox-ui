@@ -340,6 +340,7 @@ function distinctPathsByDir(
 
 const meta: Meta = {
   title: "Trace/Routing",
+  tags: ["area:trace", "lane:baseline"],
   parameters: { layout: "fullscreen" },
 };
 
@@ -397,7 +398,7 @@ export const Routings: Story = {
     const keys = ["straight", "slanted", "curved", "degenerate"];
     for (const key of keys) {
       const cell = cellOf(canvasElement, key);
-      await expect(cell.querySelectorAll('[data-slot="trace-line"]')).toHaveLength(1);
+      await expect(cell.querySelectorAll('[data-slot="trace-line"]:not([data-sketch])')).toHaveLength(1);
       await expect(cell.querySelectorAll('[data-slot="trace-terminal"]')).toHaveLength(2);
     }
 
@@ -742,7 +743,7 @@ export const TargetTangents: Story = {
   ),
   play: async ({ canvasElement }) => {
     // Nothing is omitted: 3 routings x 4 tangents, all present and drawn.
-    await expect(canvasElement.querySelectorAll('[data-slot="trace-line"]')).toHaveLength(12);
+    await expect(canvasElement.querySelectorAll('[data-slot="trace-line"]:not([data-sketch])')).toHaveLength(12);
 
     for (const routing of DIRECT_ROUTINGS) {
       const honored = honorsTangent(routing, "to");
@@ -754,7 +755,7 @@ export const TargetTangents: Story = {
         const key = `to-${routing}-${dir}`;
         const cell = cellOf(canvasElement, key);
         await expect(cell.getAttribute("data-supported")).toBe(String(honored));
-        await expect(cell.querySelectorAll('[data-slot="trace-line"]')).toHaveLength(1);
+        await expect(cell.querySelectorAll('[data-slot="trace-line"]:not([data-sketch])')).toHaveLength(1);
 
         const measured = angleBetweenDeg(arrivalDirection(lineOf(canvasElement, key)), DIR_VECTOR[dir]);
         if (honored) {
@@ -809,7 +810,7 @@ export const SourceTangents: Story = {
     </div>
   ),
   play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelectorAll('[data-slot="trace-line"]')).toHaveLength(12);
+    await expect(canvasElement.querySelectorAll('[data-slot="trace-line"]:not([data-sketch])')).toHaveLength(12);
 
     for (const routing of DIRECT_ROUTINGS) {
       const honored = honorsTangent(routing, "from");

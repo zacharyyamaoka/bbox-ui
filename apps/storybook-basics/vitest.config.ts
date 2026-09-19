@@ -49,6 +49,43 @@ export default defineConfig({
             storybookScript: "pnpm storybook -- --ci",
           }),
         ],
+        // WHY @xyflow/react is pre-declared: the host stories
+        // (src/hosts/reactFlowHost.tsx) are the first runtime import of
+        // React Flow in this app (scene.reactflow.test.ts imports types
+        // only, which erase). Without the entry, a COLD first run
+        // discovers the dep mid-suite, Vite re-optimizes and invalidates
+        // the module graph, and React's hook dispatcher goes null inside
+        // whatever story was mid-render — measured 2026-09-17: first run
+        // 10 files failed with "Cannot read properties of null (reading
+        // 'useMemo')", second run green on the warm cache. A fresh lane's
+        // first `pnpm test-stories` must not depend on being the second
+        // run.
+        // tldraw is pre-declared beside it, but as INSURANCE, not a
+        // measured necessity: a cold-cache run (node_modules/.vite
+        // removed) with the tldraw host stories present and NO entry here
+        // passed 196/197 with no mid-suite re-optimize (2026-09-17) —
+        // unlike @xyflow/react, whose absence was measured red. tldraw is
+        // a far bigger dependency, the failure mode is timing-dependent,
+        // and the entry costs one line; keep it unless the day comes to
+        // prove it matters.
+        optimizeDeps: {
+          // WHY each entry: Vite re-optimizes mid-suite when it first meets
+          // a dep, and the re-optimize restarts the module graph under a
+          // running test — measured as 10 files failing on a null hook
+          // dispatcher (4ada3f8). Declaring them up front is the fix.
+          // @codemirror/lint and @base-ui/react/popover joined the graph
+          // with the diagnostic axis and were measured red the same way: a
+          // "Re-optimizing dependencies because vite config has changed"
+          // run failed once, then passed twice warm. Anything a component
+          // imports lazily belongs in this list.
+          include: [
+            "@xyflow/react",
+            "tldraw",
+            "@codemirror/lint",
+            "@base-ui/react/popover",
+            "@base-ui/react/slider",
+          ],
+        },
         test: {
           name: "storybook",
           browser: {

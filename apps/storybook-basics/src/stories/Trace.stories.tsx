@@ -109,6 +109,7 @@ function StyleRow({ style }: { style: TraceStyle }) {
 
 const meta = {
   title: "Trace",
+  tags: ["area:trace", "lane:baseline"],
   component: TraceBody,
   // `id` and `path` are required props, so every story below would
   // otherwise have to restate them just to satisfy the type — these are
@@ -271,10 +272,12 @@ export const Styles: Story = {
     // count below pins the ambiguity down rather than hiding it.
     for (const style of TRACE_STYLES) {
       const row = requireEl(canvasElement, `[data-testid="trace-row-${style.key}"]`);
-      await expect(row.querySelectorAll('[data-slot="trace-line"]')).toHaveLength(1);
-      // one line + one marker chevron, no stray paths (no hit path here:
-      // `interactive` is off by default)
-      await expect(row.querySelectorAll('[data-slot="trace"] path')).toHaveLength(2);
+      await expect(row.querySelectorAll('[data-slot="trace-line"]:not([data-sketch])')).toHaveLength(1);
+      // one crisp line + one marker chevron, no stray paths (no hit path
+      // here: `interactive` is off by default). `:not([data-sketch])`
+      // for the same reason as above — the skin port (src/skin/**) added
+      // a hidden hand-drawn twin beside every crisp trace-line path.
+      await expect(row.querySelectorAll('[data-slot="trace"] path:not([data-sketch])')).toHaveLength(2);
     }
 
     /* --- 2. Dash mechanics, per style -------------------------------- */
@@ -733,7 +736,7 @@ export const DelayedSplit: Story = {
 
     for (const specimen of DELAYED_SPLIT_SPECIMENS) {
       const row = requireEl(canvasElement, `[data-testid="split-row-${specimen.key}"]`);
-      const segments = row.querySelectorAll('[data-slot="trace-line"]');
+      const segments = row.querySelectorAll('[data-slot="trace-line"]:not([data-sketch])');
       // Two real paths, not one path with a clever dash — that is what lets
       // the before/after runs carry different caps and markers.
       await expect(segments, `${specimen.key}: expected 2 trace-line paths`).toHaveLength(2);

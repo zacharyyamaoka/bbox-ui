@@ -1,0 +1,80 @@
+{
+  "title": "Comparison view — next steps",
+  "summary": "Revision 2, after Zach answered the open questions: visual/appearance diff is IN (driver: golden layouts) as a second profile of one engine; merge AND rebase return as N7; the chrome ports into the editor kit; ‘one paint, two producers’ honoured through two props; and the id-association research is digested with citations — the prior work already answered it. Three lanes (N1, N7, N8) are dispatchable today. Lane-readable spec: docs/COMPARISON-NEXT-STEPS.md.",
+  "base_ref": "claude/bar-block-storybook-e61a36",
+  "branch_label": "planning lane, revision 2 (docs only)",
+  "storybook_port": 5495,
+  "changes": [
+    "<b>N1 — propertyRows over SceneDiff</b> (S–M, <b>unblocked</b>): donor <code>propertyRows.ts:216,243</code> re-expressed over our diff rows. Write set: <code>src/scene/propertyRows.ts</code> + test + story.",
+    "<b>N7 — merge + rebase math</b> (M, <b>unblocked</b>, Q3 “we want to support both”): <code>applySceneDiff</code> + <code>diff3Scene(base, a, b) → {merged, conflicts}</code>; rebase = replay onto b through the same apply. Conflicts reported, never auto-resolved. Write set: <code>src/scene/merge.ts</code> + test + story.",
+    "<b>N8 — appearance diff</b> (S–M, <b>unblocked</b> for revision pairs, Q1's golden-layouts driver): a second <em>profile</em> of diffScene — matched pairs compared on geometry (<code>classifyPoseChange</code>, shipped) + appearance props, per-element, threshold-free. Write set: <code>src/scene/appearanceDiff.ts</code> + test + story.",
+    "<b>N2 — diff paint on the components</b> (M–L, barrier: components + skin lanes): per-component <code>diff?: DiffMark</code>, <code>DIFF_VARIANT_TRAITS</code> verbatim as data, channel discipline + corner rule, changed-AND-broken proven with measured geometry. Still the one that matters.",
+    "<b>N3 — six-variant gallery</b> (S, after N2). <b>S5 — useLinkedCameras + blend</b> (S, barrier: hosts lane) — now the enabling mechanism behind Q4's chosen Figma overlay slider, not one option among views.",
+    "<b>S6 — PropertyTable</b> (M, needs N1 + components lane) and <b>N6 — CompareBar · DiffCodeView · CompareView story</b> (M, needs N2+S5+S6): <b>editor-kit components with their own stories</b> per Q3 — the dialog's modal shell stays app wiring.",
+    "<b>N9 — conformance identity ladder over BlockScene</b> (M, <b>triggered by golden testing</b>, not by a lane): the pyblocks ladder pre-scoped as a port map (name→definitionId, graph→producersOf/consumersOf, source→a portsOf-style resolver, unmatched first-class).",
+    "<b>S7 — still deferred</b>; un-defer conditions unchanged, port-rename detection now slightly likelier once golden testing surfaces renamed ports.",
+    "New stories carry the tags convention: <code>tags: [\"area:blocks\", \"lane:&lt;slug&gt;\"]</code>."
+  ],
+  "findings": [
+    "<b>Q2 reconciled in Zach's favour:</b> “one paint, two producers” is exactly what gets built — one visual language, one channel discipline, shared severity tokens, two producers marking the same element — delivered through two <em>props</em>, because his own aside (“some specific diff paint we will need”) names the reason: token ink, pose ghosts and chips have no home in a Diagnostic, and added/removed/modified has no rank for max(severity). Merge rule for changed-AND-broken unchanged.",
+    "<b>Q1 verdict:</b> both diffs ship as <b>two profiles of one engine</b>, not two engines — the shape pyblocks measured its way to. The raw file/token diff survives as the cheap boolean oracle (an id-free drawable-props fingerprint: 30 canonicalizations, 0 drift), not as the engine — a raw record diff on a <em>passing</em> case reported 40+ changes with zero meaning. Pixel render-compare stays deliberately outside the differ: detects but cannot explain, re-imports thresholds; returns only if rendering itself becomes the subject.",
+    "<b>Q3 confirms the CRDT tripwire rather than disturbing it:</b> diff3Scene takes the merge base as an ordinary scene argument — a pair of documents, never a field on one — so merge and rebase land with BlockScene still {nodes, edges}. CVP §4 predicted exactly this.",
+    "<b>The id-association research already answered Zach's question.</b> His two cases are the two shipped profiles of <code>pyblocks/board_diff.py:80-90</code>: mutated file = revision (id rung only, layout is signal), generated copy = conformance (id→name→graph→source→unmatched, layout ignored). The similarity rung was a <em>deliberate deletion</em> — the probe had a 0.45 floor, shipped identity.py removed it, a test asserts its absence against the parsed AST, and 450/450 blocks still resolve (355 name · 51 graph · 44 source · 0 unmatched). Open work recorded: the designed-but-unimplemented write-back migration. Map note: <code>zach_brain/Projects/bbox-ui/MOC - Visual Diff.md</code>.",
+    "<b>Read properly this time:</b> the pyblocks probes and work orders in full, the engine report and architecture report as stripped text, the shipped <code>identity.py</code>/<code>board_diff.py</code> headers — both prior lanes had only listed these. The multi-MB visual-vocabulary pages remain unopened; their conclusions enter through <code>DIFF_VARIANT_TRAITS</code> (code) and the MOC's digest of the round-2 correction.",
+    "<b>Baselines re-verified after the tags merge:</b> unit 24 files / 393, stories 46 files / 188 (the −4 is exactly the retired WhatsNew stories), tsc clean. Donor citations from revision 1 all still hold; §6's new pyblocks citations verified against the tree today."
+  ],
+  "sections": [
+    {
+      "heading": "Mock · surface B — diff paint drawn on the components (N2, unbuilt)",
+      "html_file": "docs/fragments/comparison-mock-diff-paint.html"
+    },
+    {
+      "heading": "Q2 · changed AND broken — one paint, two producers, two props",
+      "html_file": "docs/fragments/comparison-mock-two-producer.html"
+    },
+    {
+      "heading": "Q1 · the split verdict, and the id-association research within arm's reach",
+      "html_file": "docs/fragments/comparison-mock-split-and-identity.html"
+    },
+    {
+      "heading": "Q3 + Q4 · the chrome ports into the editor kit — the CompareView slice",
+      "html_file": "docs/fragments/comparison-mock-chrome.html"
+    },
+    {
+      "heading": "The revised sequence — and the tripwire, confirmed",
+      "html_file": "docs/fragments/comparison-mock-sequence.html"
+    }
+  ],
+  "stories": [
+    {
+      "id": "blocks-scene-diff--word-diff-ink",
+      "title": "Already shipped · Word Diff Ink",
+      "look_for": "surface A is real: the donor's tokenizer inking only the run that changed — these captures are what N2's paint layer will consume",
+      "w": 480,
+      "h": 260
+    },
+    {
+      "id": "blocks-scene-diff--pose-classification",
+      "title": "Already shipped · Pose Classification",
+      "look_for": "moved vs resized read off the drawing — the input to N2's ghost-vs-heavy-edge treatments",
+      "w": 620,
+      "h": 220
+    },
+    {
+      "id": "blocks-scene-diff--line-diff-code",
+      "title": "Already shipped · Line Diff Code",
+      "look_for": "the raw-evidence tab's math, sorted keys so write order can't fake a change",
+      "w": 480,
+      "h": 260
+    },
+    {
+      "id": "blocks-scene-diff--scene-diff-summary",
+      "title": "Already shipped · Scene Diff Summary",
+      "look_for": "diffScene's three lists — note the ports panel: the resolver seam is why CVP §3's 'impossible' is overtaken",
+      "w": 760,
+      "h": 260
+    }
+  ],
+  "slug": "comparison-next-steps",
+  "date": "2026-09-17"
+}

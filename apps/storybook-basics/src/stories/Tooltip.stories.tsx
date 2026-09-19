@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../com
  */
 const meta = {
   title: "Basics/Tooltip",
+  tags: ["area:basics", "lane:baseline"],
   component: Tooltip,
 } satisfies Meta<typeof Tooltip>;
 

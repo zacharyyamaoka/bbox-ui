@@ -103,6 +103,7 @@ function measureControlInkBounds(control: HTMLInputElement | HTMLTextAreaElement
 
 const meta = {
   title: "Basics/EditableText",
+  tags: ["area:basics", "lane:baseline"],
   component: EditableText,
   args: { children: "Title" },
 } satisfies Meta<typeof EditableText>;

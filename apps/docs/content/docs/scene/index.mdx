@@ -1,0 +1,56 @@
+---
+title: Scene
+description: The ensemble — what exists, what connects, what nests, what identity is — plus every pure function over it.
+---
+
+The scene kit is the ensemble: one record for how the components relate and
+talk to each other — `SceneNode` / `SceneEdge` / `BlockScene` — plus pure
+functions over it: topological order, cycle detection, wired-port derivation,
+rank, duplicate and linked-copy semantics.
+
+**The rule:** `f(scene) → data`. **No React, no DOM, no canvas engine — not
+even their types.** Everything here runs in a plain Node script, which is why
+its tests are milliseconds.
+
+The dependency constraint runs one way: [components](/docs/components) never
+import the scene, not even transitively. A host reads a scene and passes
+props; a pure function reads a scene and returns data. Where the two
+vocabularies must meet, an explicitly named adapter (`sceneWires.ts`) is
+allowed to know both — the same licence a canvas-engine adapter has.
+
+The vocabulary is React Flow's on purpose — `source`/`target`,
+`sourceHandle`/`targetHandle`, `position`, `data`, `parentId` — because the
+names carry the domain. "Borrowed exactly" is not a vibe: a type-level test
+proves `SceneNode → Node` and `SceneEdge → Edge` against `@xyflow/react`'s
+published types with no cast, while the scene source itself imports nothing.
+
+One more rule worth stating up front: a layout function needs sizes, and size
+is a view fact. So **the scene may contain measurements — it never takes
+them.** The host measures and writes the result back into the scene as data;
+the algorithms read numbers and never touch a DOM node.
+
+## Status map
+
+Verified against the source tree. Scene-kit members are pure functions — they
+document as prose and real source, not as live canvases, so nothing on these
+pages pretends to be a demo.
+
+| Member | What it is | Status | Docs |
+|---|---|---|---|
+| BlockScene | The record: `SceneNode` / `SceneEdge` / `BlockScene`. | Built — trunk | [BlockScene](/docs/scene/block-scene) |
+| Pure functions | `wiredPorts`, `producersOf` / `consumersOf`, `topologicalOrder`, `rank`, `findCycles`, `duplicateEdges`, `duplicateNode`, `linkedCopy`, `childrenOf`. | Built — trunk | [BlockScene](/docs/scene/block-scene) |
+| `sceneWires` bridge | The one adapter allowed to know both the scene and the wire-paint vocabulary. | Built — trunk | [BlockScene](/docs/scene/block-scene) |
+| Trace math | Elbow routing, pins, collision avoidance, nudging — the pure router family. | Built — trunk | [Trace math](/docs/scene/trace-math) |
+| Tidy (traces) | The Tidy pass over edge routes, restated as a pure function. | Built — trunk | [Tidy](/docs/scene/tidy) |
+| Tidy (scene layout) | Auto-placing the blocks themselves. | **Planned — does not exist** | [Tidy](/docs/scene/tidy) |
+| Registry publication | A `scene` registry item you can `shadcn add`. | **Planned — not published yet** | — |
+
+Two placement notes, so the map matches the tree rather than the idea:
+
+- **Trace math lives beside the components today** — in
+  `src/components/elbow/` and `trace.*.ts`, not in `src/scene/`. It obeys the
+  scene-kit law (zero React, zero DOM, zero engine imports; provable in Node)
+  and is documented here, where it conceptually belongs.
+- **The scene record is trunk-only.** It is not part of the frozen v1 lineage
+  and has no registry item yet — to use it today you copy
+  `apps/storybook-basics/src/scene/` from the repo.

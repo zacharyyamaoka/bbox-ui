@@ -2,6 +2,18 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "../lib/utils";
 import {
+  DEFAULT_HIGHLIGHTER_KIND,
+  DiagnosticFlag,
+  DIAGNOSTIC_FLAG_SIZE_PX,
+  diagnosticColorVar,
+  highlighterMaskFrameStyle,
+  highlighterStrokeOutlineStyle,
+  maxDiagnosticSeverity,
+  type Diagnostic,
+  type HighlighterKind,
+} from "./highlighter";
+import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
+import {
   BLOCK_MEMBER_GAP_PX,
   BLOCK_MEMBER_INSET_PX,
   BlockMembers,
@@ -9,6 +21,7 @@ import {
   type BlockMember,
   type BlockMembersLayout,
 } from "./blockMembers";
+import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 
 /**
  * Block — header / body / footer, stacked. All three are plain slots: pass
@@ -87,7 +100,96 @@ export interface BlockProps {
   insetBackground?: BlockInsetBackground;
   showMembers?: boolean;
   showCards?: boolean;
+  /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Block row,
+   * amended by Zach's report feedback — see `HighlighterKind`'s own doc
+   * in ./highlighter.tsx). `error`/`warning` get a mark in whichever
+   * `highlighterKind` the caller asked for, plus the corner
+   * `DiagnosticFlag`; `info` paints nothing at all, matching §5's
+   * board-scale calm rule. The flag carries a COUNT once the list is
+   * longer than one (`DiagnosticFlag`'s own doc).
+   *
+   * The `"halo"` kind keeps its ORIGINAL, narrower rule — `error` alone,
+   * "warning must not shout" — because a soft ambient glow is genuinely
+   * loud; `"stroke"`/`"mask"` mark both severities uniformly (a crisp
+   * outline does not have the same shouting problem), matching how
+   * JointJS's own highlighters behave.
+   */
+  diagnostics?: Diagnostic[];
+  /** Which `HighlighterKind` draws the mark. Defaults to
+   *  `DEFAULT_HIGHLIGHTER_KIND` ("stroke") — Zach's own lean from the
+   *  report feedback; `"halo"` is the pre-existing treatment, kept as a
+   *  sibling, not deleted. */
+  highlighterKind?: HighlighterKind;
+  /**
+   * Suppress the corner `DiagnosticFlag` while keeping the mark (default
+   * `true` — every existing caller unchanged). `ValueCapsule`
+   * (presets/value/value.tsx) is the one caller that sets this `false`:
+   * §5's own words are "no flag — a capsule is too small, the glow is the
+   * beacon and the message rides a hover Tooltip" — the mark is still
+   * this component's, the flag specifically is not.
+   */
+  showDiagnosticFlag?: boolean;
+  /**
+   * Let `warning` earn the `"halo"` kind's mark too (default `false` —
+   * Block's own row: "warning must not shout"). Only meaningful with
+   * `highlighterKind="halo"` — `"stroke"`/`"mask"` already mark both
+   * severities regardless. `ValueCapsule` sets this `true` for its OWN
+   * row ("warning: amber glow"), because a capsule has no flag at all to
+   * carry warning instead. Block itself never sets this.
+   */
+  diagnosticWarningGlow?: boolean;
+  /**
+   * Stable string the sketch skin's hand-drawn outline is generated from —
+   * same seed, same wobble, every render (see sketchPath.ts). Defaults to
+   * a size-derived string so two same-sized Blocks don't draw identical
+   * wobble by coincidence of both falling back the same way; pass an id
+   * when two same-sized Blocks need visibly different hand-drawn lines.
+   */
+  sketchSeed?: string;
+  /**
+   * Paint Block's hit region. Block has NO hit constant — deliberately: as
+   * a DOM element its pointer target is the browser's own hit test, which
+   * stops at the border box exactly (the same "there was no number to
+   * choose" React Flow's DOM nodes have; contrast tldraw's ±3 screen px
+   * `hitTestMargin`). So what this paints IS that fact: a wash over the
+   * border box, nothing outside it. Pure paint — absolutely positioned,
+   * `pointer-events: none`, moves no layout and eats no clicks.
+   */
+  showHitRegion?: boolean;
 }
+
+/**
+ * The root's own border width, px, used only to size `overflowClipMargin`
+ * below. A literal, not `--bbox-skin-stroke-width` read back out of CSS:
+ * this app carries no wall-anchor geometry that needs the two to be the
+ * SAME variable (donor's block.tsx / skin.css both flag that trap — see
+ * skin.css's own port-of-omission note), so a plain constant is honest
+ * here. It still has to match the token's stroke-width fallback (2px) or
+ * the clip margin would come up short the moment a skin activates.
+ *
+ * WHY this no longer feeds a drawn line: before
+ * docs/peps/0001-sketch-skin-at-the-boundary.md, this fed `SketchOutline`
+ * directly. The boundary pass now measures its own pen width off
+ * `getComputedStyle(el).borderTopWidth` (`sketchAtEdge.ts`'s `measureBox`),
+ * which is more honest than a duplicated literal — this constant only
+ * has to stay right for the clip allowance, not for two things at once.
+ */
+const BLOCK_BORDER_PX = 2;
+
+/**
+ * WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M2. Slack for any
+ * decorative child that paints just outside the border box — NOT a skin
+ * import, and not a number the skin gets to set. Before this migration
+ * this was `SKETCH_OUTLINE_BLEED_PX`, imported from the skin because the
+ * in-core `SketchOutline` was that decorative child; the boundary's own
+ * twin is now appended as a child of THIS element (`sketchAtEdge.ts`'s
+ * `upsertBoxTwin`) after this component has already rendered, so the same
+ * clip allowance is still needed, just granted generically rather than
+ * borrowed from the thing that used to need it. Value unchanged: 5, the
+ * same `Math.ceil(SKETCH_WOBBLE_PX + 2)` the donor computed.
+ */
+const OUTLINE_BLEED_PX = 5;
 
 export function Block({
   header,
@@ -105,20 +207,191 @@ export function Block({
   insetBackground = "none",
   showMembers = true,
   showCards = false,
+  diagnostics,
+  highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
+  showDiagnosticFlag = true,
+  diagnosticWarningGlow = false,
+  sketchSeed,
+  showHitRegion = false,
 }: BlockProps) {
+  const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
+  const markedSeverity = diagnosticSeverity !== "info" ? diagnosticSeverity : undefined;
+  // "Warning must not shout" (§5's own words for this row) is the
+  // "halo" kind's OWN, narrower rule — an error-only escalation by
+  // default, never amber, unless the caller (ValueCapsule) has no other
+  // channel and opts warning in. `stroke`/`mask` mark both severities
+  // uniformly — a crisp outline is not the loud thing "must not shout"
+  // was written about.
+  const showGlow =
+    highlighterKind === "halo" &&
+    (markedSeverity === "error" || (markedSeverity === "warning" && diagnosticWarningGlow));
+  const showStroke = highlighterKind === "stroke" && markedSeverity != null;
+  const showMask = highlighterKind === "mask" && markedSeverity != null;
+  const showFlag = showDiagnosticFlag && markedSeverity != null;
+  // Half the flag's own diameter pokes outside the border — "straddling
+  // the corner the way wall ports straddle walls" (§5). `overflowClipMargin`
+  // below has to widen to let it, exactly the mechanism already in place
+  // for the sketch outline's own bleed (this file's existing WHY on
+  // `overflow: clip`). The "mask" kind renders a SIBLING frame (below) that
+  // pokes out by the same amount for the same reason; "stroke" needs no
+  // widening at all — a CSS `outline` paints outside the border box but is
+  // NOT part of what the element's own `overflow` clips (same rule that
+  // already let the pre-existing glow's box-shadow skip this entirely).
+  const flagOverhangPx = DIAGNOSTIC_FLAG_SIZE_PX / 2;
+  const MASK_OFFSET_PX = 4;
+  const maskOverhangPx = showMask ? MASK_OFFSET_PX : 0;
   return (
     <div
       data-slot="block"
-      className="flex flex-col overflow-hidden rounded-lg border border-border bg-card text-sm text-card-foreground shadow-sm"
-      style={{ width, height, ...style }}
+      data-diagnostic={diagnosticSeverity}
+      data-highlighter-kind={markedSeverity ? highlighterKind : undefined}
+      className={cn(
+        "relative flex flex-col text-sm",
+        // Text colour is a skin token because a skin may remove the
+        // surface it was contrasting against: the sketch skin paints no
+        // fill, so `text-card-foreground` would be reading against a card
+        // that is not there. Fallback is the exact class this replaced.
+        "text-[color:var(--bbox-skin-fg,var(--color-card-foreground))]",
+        // The skin seam (src/skin/skin.ts + skin.css). Each token carries
+        // TODAY'S value as its own `var()` fallback — captured live off
+        // this story before this port (`blocks-block--default`,
+        // getComputedStyle) — so a consumer who never imports skin.css
+        // renders the exact pixels this replaced: `rounded-lg border
+        // border-border bg-card shadow-sm`. `border-solid` is explicit
+        // because a host without Tailwind's preflight defaults to
+        // `border-style: none`, where a width alone paints nothing.
+        // WHY the fallback is 1px, not the token table's 2px: Block's own
+        // border-width TODAY is Tailwind's plain `border` utility (1px) —
+        // captured live (`blocks-block--default`, getComputedStyle) before
+        // this port. skin.css's three blocks still all agree on 2px once
+        // ANY skin is active (including the explicit "default" one) — see
+        // skin.css's own header on why stroke-width has to be uniform
+        // across every skinned component the moment a skin is switched
+        // on. Only the UNSET case (no attribute at all) has to stay 1px.
+        "border-solid border-[length:var(--bbox-skin-stroke-width,1px)] border-[color:var(--bbox-skin-stroke,var(--color-border))]",
+        "bg-[var(--bbox-skin-surface,var(--color-card))] shadow-[var(--bbox-skin-shadow,0_1px_3px_0_rgb(0_0_0_/_0.1),0_1px_2px_-1px_rgb(0_0_0_/_0.1))]",
+        // Set once on the container; every text slot inherits it, so the
+        // sketch skin needs no per-slot font prop.
+        "font-[family-name:var(--bbox-skin-font,inherit)]",
+      )}
+      // `overflow: clip` (not `hidden`) so the header/footer bars' corners
+      // still cut cleanly without turning Block into a scroll container —
+      // and so a decorative child painting just outside the padding box
+      // (a boundary-drawn twin; see `OUTLINE_BLEED_PX`) isn't clipped;
+      // see `overflowClipMargin` below.
+      style={{
+        // The isolation invariant (paintOrder.ts's own header comment):
+        // this root emits paint tiers (the diagnostic flag below, and
+        // headerChrome on the header/footer slots), so it MUST wall them
+        // off in their own stacking context — otherwise a deeply nested
+        // Block (via `BlockMembers`, "boxes all the way down") could leak
+        // an interior z-index past this box and outrank an ANCESTOR's
+        // own header. See PaintOrder.stories.tsx's
+        // `NestedChildStaysBehindHeader`.
+        ...ISOLATED_ROOT_STYLE,
+        width,
+        height,
+        borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
+        overflow: "clip",
+        // Widened to let the corner flag straddle the border (see
+        // `flagOverhangPx` above) and, with `highlighterKind="mask"`, the
+        // sibling mask frame (below) poke out too — the same clip-margin
+        // mechanism this rule already grants a decorative child's own
+        // bleed; every reason to widen it is independent, so this takes
+        // whichever is largest rather than stacking them. `"stroke"` needs
+        // no widening — see this file's own WHY on `showStroke` above.
+        overflowClipMargin: `${BLOCK_BORDER_PX + Math.max(OUTLINE_BLEED_PX, showFlag ? flagOverhangPx : 0, maskOverhangPx)}px`,
+        // PREPENDED ahead of the resting `shadow-[…]` utility (§3: "outer
+        // halo... prepended") — an inline `boxShadow` beats a class at
+        // equal specificity by cascade ORDER regardless, so this only sets
+        // one when there is something to prepend; `undefined` otherwise
+        // leaves the Tailwind utility above untouched, byte-identical to
+        // before this axis existed. The wash is a soft, blurred colour-mix
+        // of the SAME token as the ring, never a hardcoded red/amber — dark
+        // mode gets the dark token variant for free.
+        ...(showGlow && markedSeverity
+          ? {
+              boxShadow: `0 0 0 1.5px ${diagnosticColorVar(markedSeverity)}, 0 0 18px color-mix(in srgb, ${diagnosticColorVar(markedSeverity)} 45%, transparent), var(--bbox-skin-shadow, 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1))`,
+            }
+          : null),
+        // `"stroke"` (HighlighterKind's own doc): a plain CSS outline, the
+        // cheap JointJS-style approximation — same corner radius as the
+        // box itself, not truly equidistant on a rounded rect.
+        ...(showStroke && markedSeverity ? highlighterStrokeOutlineStyle(diagnosticColorVar(markedSeverity), 4) : null),
+        ...style,
+      }}
     >
+      {showMask && markedSeverity && (
+        // `"mask"` (HighlighterKind's own doc): a sibling frame whose
+        // `border-radius` grows by EXACTLY the offset — the Minkowski-sum
+        // arithmetic that makes this genuinely equidistant at the corners,
+        // unlike `"stroke"`'s plain `outline-offset` above.
+        <div
+          data-slot="block-highlighter-mask"
+          aria-hidden
+          style={highlighterMaskFrameStyle(diagnosticColorVar(markedSeverity), MASK_OFFSET_PX, "var(--bbox-skin-radius, var(--radius-lg))")}
+        />
+      )}
+      {showFlag && diagnostics && (
+        // Straddles the top-right corner — half in, half out — the same
+        // convergence Appendix B's own table names (maxGraph's
+        // `defaultOverlap: 0.5`, JointJS's `Button` at `x:'100%'`, Vyuh's
+        // "-8px offset"). `zIndex` clears the sketch outline's own drawn
+        // stroke, which otherwise paints OVER a flag sitting this close to
+        // the corner.
+        <div
+          data-slot="block-diagnostic-flag"
+          style={{ position: "absolute", top: -flagOverhangPx, right: -flagOverhangPx, zIndex: paintTier("flagBadge") }}
+        >
+          <DiagnosticFlag diagnostics={diagnostics} />
+        </div>
+      )}
+      {showHitRegion && (
+        <div
+          data-slot="block-hit-region"
+          aria-hidden
+          style={{
+            position: "absolute",
+            // `inset: 0` covers the PADDING box; the hit region is the
+            // BORDER box, so reach back out by the live border width —
+            // the same token the root's own border reads.
+            inset: "calc(-1 * var(--bbox-skin-stroke-width, 1px))",
+            pointerEvents: "none",
+            background: HIT_REGION_FILL,
+            outline: HIT_REGION_OUTLINE,
+            outlineOffset: -1,
+            borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
+          }}
+        />
+      )}
       {header !== undefined && (
         <div
           data-slot="block-header"
           className={cn(
             "px-3 py-2 has-[>[data-slot=bar]]:p-0",
-            showHeaderDivider && "border-b border-border",
+            // `border-b-[color:…]`, NOT the bare `border-[color:…]` this
+            // was first written as: a bracketed arbitrary value with no
+            // side prefix sets the property on all FOUR sides, which
+            // silently added a 1px left/right/top border the div never
+            // had — measured live (BlockPort.stories.tsx's
+            // `FunctionPortHeaderInset`, off by 2px) before this fix.
+            // `border-b` alone still supplies the bottom width + solid
+            // style; this only overrides ITS colour.
+            showHeaderDivider && "border-b border-b-[color:var(--bbox-skin-stroke,var(--color-border))]",
           )}
+          // `headerChrome` (paintOrder.ts) — the nesting tier: a Block's
+          // own header must paint ABOVE its own `BlockMembers` region no
+          // matter how deeply that region nests other Blocks inside it
+          // (Card 04). Needs BOTH `position` (z-index is a no-op on a
+          // static element) and the explicit tier (a `BlockMembers`
+          // region in `free` mode is itself `position: relative` with
+          // z-index:auto, i.e. stack level 0 — a merely-positioned
+          // header with no z-index would still lose the DOM-order
+          // tie-break, since members renders AFTER header). This was
+          // NOT one of the five pre-existing literals; it is the one
+          // new capability this lane adds. See
+          // `PaintOrder.stories.tsx`'s `NestedChildStaysBehindHeader`.
+          style={{ position: "relative", zIndex: paintTier("headerChrome") }}
         >
           {header}
         </div>
@@ -146,7 +419,13 @@ export function Block({
       {footer !== undefined && (
         <div
           data-slot="block-footer"
-          className="border-t border-border px-3 py-2 has-[>[data-slot=bar]]:p-0"
+          className="border-t border-t-[color:var(--bbox-skin-stroke,var(--color-border))] px-3 py-2 has-[>[data-slot=bar]]:p-0"
+          // Same tier as the header — see the header's own comment above.
+          // Not covered by the nesting acceptance test (only the header
+          // relationship is), but a footer is the same "chrome" role and
+          // leaving it non-positioned would make it lose to members the
+          // header no longer does.
+          style={{ position: "relative", zIndex: paintTier("headerChrome") }}
         >
           {footer}
         </div>

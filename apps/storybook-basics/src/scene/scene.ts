@@ -67,8 +67,9 @@ export interface ScenePosition {
  * convention), free to collide and free to change without any edge
  * noticing. This is the rule `portLane.ts` had to reconstruct with an LCS
  * diff because port lines carried no id; scene nodes never have that
- * problem because the id travels with the record. `definitionId` marks a
- * LINKED copy — see `linkedCopy` below.
+ * problem because the id travels with the record. `definitionId` marks
+ * membership in a definition GROUP — see `linkedCopy` below and
+ * `src/scene/linking.ts` for the rules that maintain it.
  */
 export interface SceneNode<Data extends SceneData = SceneData> {
   id: string;
@@ -81,10 +82,13 @@ export interface SceneNode<Data extends SceneData = SceneData> {
   data: Data;
   /** The nesting. Absent = top-level. */
   parentId?: string;
-  /** Present on a linked copy: the id of the DEFINITION node this one is a
-   *  living view of. Always points at the root definition, never at
-   *  another copy (`linkedCopy` flattens chains). Extra field over React
-   *  Flow's `Node` — structurally invisible to it, deliberately. */
+  /** The definition GROUP this node is an occurrence of: an opaque id
+   *  shared by every occurrence, minted by the host like a node id and
+   *  never equal to one — there is no privileged "definition node", the
+   *  definition IS the shared data (the function-definition model:
+   *  `src/scene/linking.ts` owns the rules). Absent = a group of one.
+   *  Extra field over React Flow's `Node` — structurally invisible to
+   *  it, deliberately. */
   definitionId?: string;
 }
 
@@ -378,6 +382,70 @@ export function duplicateEdges<E extends SceneEdgeEnds>(scene: { edges: readonly
 }
 
 /* ------------------------------------------------------------------ */
+/* Dangling edges — "an edge end that points at nothing" lint           */
+/* ------------------------------------------------------------------ */
+
+/** One unresolvable edge end. `reason` separates the two failures a
+ *  linter reports differently: the whole node is gone, or the node is
+ *  alive but no longer speaks that port. */
+export interface DanglingEdgeEnd {
+  edgeId: string;
+  end: "source" | "target";
+  /** The node id this end names — dead or alive. */
+  nodeId: string;
+  /** The handle this end names, when it names one. */
+  portId?: string;
+  reason: "missing-node" | "missing-port";
+}
+
+/**
+ * Every edge end that does not resolve to a live node — and, when the
+ * caller can state a node's port vocabulary, to a live PORT on it. One
+ * function serves both of Zach's cases (2026-09-17): during interaction
+ * a host may permit dangling deliberately (`deleteNode`'s `"dangle"` /
+ * `"park"` policies in linking.ts) and this is what keeps that safe
+ * rather than silently corrupting; at load time nobody chose anything,
+ * so a dangling un-parked end means the document is wrong. Same
+ * question either way — only the response differs, and the response is
+ * the host's.
+ *
+ * `portsOf` is optional and per-node total: omitted, only node
+ * existence is checked; returning `undefined` for a node means "this
+ * node's vocabulary is unknown", so no port judgement is made for it.
+ * The port check exists because port identity is namespaced to the node
+ * (`portKey`): a node can survive while one of its ports dies, and a
+ * node-only check never sees that. An end with no handle wires the
+ * NODE, so it can only dangle by `missing-node`.
+ *
+ * Total: a healthy scene yields `[]`, malformed input yields the honest
+ * report, never a throw. Scene order, source end before target —
+ * deterministic for a linter.
+ */
+export function findDanglingEdges<E extends SceneEdgeEnds & { id: string }>(
+  scene: { nodes: readonly { id: string }[]; edges: readonly E[] },
+  portsOf?: (nodeId: string) => readonly string[] | undefined,
+): DanglingEdgeEnd[] {
+  const known = new Set(scene.nodes.map((node) => node.id));
+  const report: DanglingEdgeEnd[] = [];
+  for (const edge of scene.edges) {
+    for (const end of ["source", "target"] as const) {
+      const nodeId = edge[end];
+      const handle = end === "source" ? edge.sourceHandle : edge.targetHandle;
+      if (!known.has(nodeId)) {
+        report.push({ edgeId: edge.id, end, nodeId, ...(handle != null ? { portId: handle } : {}), reason: "missing-node" });
+        continue;
+      }
+      if (handle == null || !portsOf) continue;
+      const vocabulary = portsOf(nodeId);
+      if (vocabulary !== undefined && !vocabulary.includes(handle)) {
+        report.push({ edgeId: edge.id, end, nodeId, portId: handle, reason: "missing-port" });
+      }
+    }
+  }
+  return report;
+}
+
+/* ------------------------------------------------------------------ */
 /* Identity under duplication                                          */
 /* ------------------------------------------------------------------ */
 
@@ -412,11 +480,14 @@ export function duplicateNode<NodeData extends SceneData, EdgeData extends Scene
 }
 
 /**
- * A LINKED copy: same as `duplicateNode`, except the copy's
- * `definitionId` points at the definition — the source's own
- * `definitionId` if the source is already a copy, else the source's `id`.
- * The chain always flattens to the root definition, so "every copy of
- * this definition" is one equality test (`linkedCopies`), never a walk.
+ * A LINKED copy: same as `duplicateNode`, except the copy is another
+ * OCCURRENCE of the source's definition. If the source already belongs
+ * to a group, the copy shares its `definitionId`; if not, a group id is
+ * minted (the second `mintId` call) and stamped on BOTH — the source
+ * becomes the group's first occurrence, not its root: a definition has
+ * no root node, only members, so deleting any one occurrence (the
+ * original included) never orphans the rest. "Every occurrence of this
+ * definition" stays one equality test (`linkedCopies`), never a walk.
  */
 export function linkedCopy<NodeData extends SceneData, EdgeData extends SceneData>(
   scene: BlockScene<NodeData, EdgeData>,
@@ -425,11 +496,17 @@ export function linkedCopy<NodeData extends SceneData, EdgeData extends SceneDat
 ): BlockScene<NodeData, EdgeData> {
   const source = scene.nodes.find((node) => node.id === nodeId);
   if (!source) return scene;
-  return { ...scene, nodes: [...scene.nodes, { ...source, id: mintId(), definitionId: source.definitionId ?? source.id }] };
+  const copyId = mintId();
+  const definitionId = source.definitionId ?? mintId();
+  const copy = { ...source, id: copyId, definitionId };
+  const nodes = source.definitionId
+    ? [...scene.nodes, copy]
+    : [...scene.nodes.map((node) => (node === source ? { ...node, definitionId } : node)), copy];
+  return { ...scene, nodes };
 }
 
-/** Every linked copy of one definition, in scene order. The definition
- *  node itself is not among them — it is the thing being copied. */
+/** Every occurrence of one definition group, in scene order — the
+ *  original among them: occurrences are peers, none is privileged. */
 export function linkedCopies<NodeData extends SceneData>(
   scene: { nodes: readonly SceneNode<NodeData>[] },
   definitionId: string,

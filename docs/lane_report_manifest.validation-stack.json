@@ -1,0 +1,98 @@
+{
+  "title": "Validation Stack — rulings 1-9",
+  "summary": "No silent refusal, severity/text held low and display-blind, fold bubbling as an IDE red-folder, one 1-D address unifying marks and the pill, and drag-time validity preview on by default — the same fixtures driven through DOM Canvas, React Flow and tldraw.",
+  "repo_path": "/home/bam/bbox-ui/.claude/worktrees/wf_166de375-080-8",
+  "base_ref": "main",
+  "branch_label": "worktree-wf_166de375-080-8 (isolated lane worktree)",
+  "storybook_port": 5503,
+  "intro": [
+    "<b>What the oracles observed by actually running maxGraph and JointJS</b> is the strongest evidence this spec rests on, and it changed real decisions: maxGraph's <code>Multiplicity.check</code> was the planned type-vocabulary donor and was REJECTED after running it — <code>checkTerminal(graph, source_or_target, edge)</code> receives the connecting EDGE in the parameter named <code>terminal</code> (Multiplicity.ts:147-150 vs the call site at :204-208, v0.24.0), so it silently no-ops for every ordinary edge, reproduced against maxGraph's own shipped Validation-story fixtures. Blockly's list-intersection shape (<code>ConnectionChecker.doTypeChecks</code>, fetched from GitHub) replaced it. JointJS's own dangling-edge demo and its <code>markAvailable</code> lifecycle (RAN live) are the behaviour-derived donors for the 1-D address and the once-per-gesture availability contract; JointJS's <code>ToolsView</code> has ZERO collision handling (two tools landed on the identical pixel, RAN) — the citation for why <code>separateAlongPath</code> is ours, ad hoc.",
+    "<b>This lane merged two already-landed lanes</b> (scene: edgeValidation/lint/availability/bubble; component: trace path-addressing, TraceMark, Port availability) into one worktree, ran <code>pnpm typecheck</code> immediately per the dispatch's own warning, and it was clean both times — no import edge the two write sets missed.",
+    "<b>One real integration gap DID surface</b>, and it wasn't in either lane's diff: <code>blockPort.tsx</code>'s default port renderer never forwarded <code>PortEdgeItem.diagnostics</code>/<code>.availability</code> to the <code>Port</code>/<code>LabeledPort</code> it renders — a file neither lane's write set touched. <code>ValidityPreview.stories.tsx</code>'s own failing assertion caught it, not a code review; the fix and its provenance are in <code>docs/ALGORITHM-PROVENANCE.md</code>'s new section."
+  ],
+  "changes": [
+    "src/hosts/nodeViews.tsx — new <code>Decorate</code>/<code>SceneNodeDecoration</code> seam: one node in, optional {diagnostics, availability, portDiagnostics} out. <code>undefined</code> decorate = byte-identical to every pre-existing story.",
+    "src/hosts/domCanvas.tsx, reactFlowHost.tsx, tldrawHost.tsx — each threads the new <code>decorate</code> prop straight to <code>SceneNodeView</code>, adds-only.",
+    "src/components/blockPort.tsx — <code>renderItem</code> and <code>renderCollapsed</code> now forward <code>item.diagnostics</code>/<code>item.availability</code> (new <code>collapsedDiagnostics</code>/<code>collapsedAvailability</code> helpers, modelled on the file's own pre-existing <code>collapsedState</code> \"any wired wins\" shape) — the integration fix above.",
+    "src/stories/ValidityPreview.stories.tsx — new: ruling 5, a real pointer gesture through DomCanvas. Legal targets marked at drag-start (once, never per-pointermove), a preview <code>Trace</code> coloured by a LOOKUP against the held map, invalid release commits nothing, and a pre-existing many-to-one mark on <code>sink/in</code> survives every gesture untouched (prevention is additive, never a replacement).",
+    "src/stories/FoldBubbling.stories.tsx — new: ruling 3, the IDE red-folder case. Two independent cycle findings on two hidden members bubble together onto the one ancestor that hides them; a hypothetical fifth view (\"peek\", not even in the app's own BlockView union) bubbles correctly as one local table row, with zero import from or string added to bubble.ts.",
+    "src/stories/TraceMark.stories.tsx — new: ruling 4, the unified 1-D address. Fractions (including the OURS negative-fraction form, <code>t = 1 + f</code>), a mark pinned <code>{px: -24}</code> from a dangling edge's broken end, and a real pill-collision yield measured on-screen.",
+    "src/stories/ValidationHosts.stories.tsx — new: ruling 8/gesture transfer. The SAME connectionAvailability map, painted through the SAME decorate seam, via a real drag on React Flow and a Storybook-control (honestly labelled NOT a gesture) on tldraw.",
+    "docs/ALGORITHM-PROVENANCE.md — appended this lane's own provenance table, including the blockPort.tsx integration-gap row.",
+    "docs/REFERENCE-IMPLEMENTATIONS.md — new: the spec's own embedded reference doc, split out to its own file (the task's <code>${args.refsDoc}</code> placeholder arrived unsubstituted)."
+  ],
+  "findings": [
+    "Both merges (scene lane 9e3db3a, component lane c3fbc35) were clean — no conflicts, and <code>pnpm typecheck</code> was green IMMEDIATELY after, before a single story was written, per the dispatch's own warning about lanes passing separately and failing together.",
+    "The blockPort.tsx gap is real and load-bearing, not a story-only fixture issue: <code>PortEdgeItem</code> has carried <code>diagnostics</code>/<code>availability</code> since the component lane's port.tsx/portEdge.tsx/labeledPort.tsx work landed, but the file that actually RENDERS a rail's items (untouched by either lane, not in either lane's declared write set) dropped both fields on the floor. Caught by a real, failing browser test (<code>pnpm test-stories</code>), not inferred from reading the diff.",
+    "A drag target that is ALREADY many-to-one at rest correctly reads <code>unavailable</code> for every future candidate too (lint.ts's own many-to-one rule counts distinct sources on the hypothetical scene) — the first ValidityPreview fixture accidentally targeted such a port and the story had to add a second, clean port (<code>sink/in2</code>) to demonstrate the legal-target path; the already-broken port (<code>sink/in</code>) stays the at-rest-grammar demo instead. This is correct behaviour, not a bug — inviting a THIRD wire into an already-illegal port is not \"legal\" either.",
+    "Gesture transfer, measured: the identical <code>connectionAvailability</code> map, painted through the identical <code>decorate</code> seam, produces the identical <code>data-availability</code> attributes on <code>sink/in2</code> (available) and <code>str/out</code> (unavailable) whether the host is DomCanvas or React Flow — same selectors, same assertions, same result.",
+    "tldraw's host (tldrawHost.tsx) has no cable-drawing gesture at all — grepped, no pointerdown-driven edge creation exists anywhere in that file — so simulating one would have fabricated behaviour the host doesn't have. The control-driven story says so on-screen, verbatim, per the dispatch's own required label.",
+    "Gate run twice to rule out flake: pnpm exec vitest --project=unit run — 623/623 both times. pnpm test-stories — 243/243 across all 56 story files, both times (one earlier run also showed an unrelated, pre-existing DragPolicy.stories.tsx flake that passed clean on rerun — not touched by this lane).",
+    "Per-lane write-set check: git diff --name-only for this commit touches only src/hosts/**, src/stories/** (4 new files), src/components/blockPort.tsx (the one declared deviation, justified above and in ALGORITHM-PROVENANCE.md), and the two docs files — no magnet*, no batchWire*, no package.json, no pnpm-lock.yaml."
+  ],
+  "stories": [
+    {
+      "id": "blocks-scene-validity-preview--interactive",
+      "title": "Validity Preview · Drag-Time (interactive)",
+      "look_for": "sink/in already carries a many-to-one mark at rest (the red halo, left wall) — that's the at-rest grammar. The play function drags a real gesture; this static shot is the resting frame before any gesture starts.",
+      "w": 620,
+      "h": 380
+    },
+    {
+      "id": "blocks-scene-validity-preview--preview-off",
+      "title": "Validity Preview · Toggled off",
+      "look_for": "validityPreview: false — a full press-move-release changes nothing about availability paint, the toggle's own mechanical proof.",
+      "w": 620,
+      "h": 380
+    },
+    {
+      "id": "blocks-scene-fold-bubbling--expanded-marks-in-place",
+      "title": "Fold Bubbling · Expanded (in place)",
+      "look_for": "kid1 and kid2 each show their OWN error flag — nothing has bubbled because nothing is hidden.",
+      "w": 380,
+      "h": 320
+    },
+    {
+      "id": "blocks-scene-fold-bubbling--port-view-bubbles-to-parent",
+      "title": "Fold Bubbling · Port view (bubbled)",
+      "look_for": "the IDE red-folder case: proc's OWN flag now reads \"2 error diagnostics\" — both hidden members' findings climbed to the ancestor that hides them.",
+      "w": 380,
+      "h": 320
+    },
+    {
+      "id": "trace-mark--marks-at-fractions",
+      "title": "Trace/Mark · Marks at fractions",
+      "look_for": "three severities at three fractions, alternating above/below the line via offsetPx's sign — including the negative-fraction (OURS, t = 1 + f) mark.",
+      "w": 460,
+      "h": 120
+    },
+    {
+      "id": "trace-mark--pinned-at-dangling-edge-end",
+      "title": "Trace/Mark · Pinned at a dangling edge",
+      "look_for": "the error flag sits 24px back from the dashed \"ghost\" stand-in — {px: -24}, JointJS's own dangling-edge demo shape, behaviour-derived.",
+      "w": 460,
+      "h": 120
+    },
+    {
+      "id": "trace-mark--pill-collision-yield",
+      "title": "Trace/Mark · Pill collision",
+      "look_for": "the pill (TraceBadge) sits exactly at its own requested t=0.5; the mark (yellow warning flag) visibly steps aside rather than landing on top of it.",
+      "w": 460,
+      "h": 120
+    },
+    {
+      "id": "blocks-scene-validation-in-a-host--react-flow-drag-time-preview",
+      "title": "Validation In A Host · React Flow (gesture)",
+      "look_for": "same three-node fixture, same decorate seam, now inside a real React Flow canvas — a static rest frame; the play function drives the actual drag.",
+      "w": 620,
+      "h": 220
+    },
+    {
+      "id": "blocks-scene-validation-in-a-host--tldraw-control-driven-availability",
+      "title": "Validation In A Host · tldraw (control-driven)",
+      "look_for": "the on-screen label reads \"NOT a gesture\" verbatim — sink/in reads available, str/out reads unavailable, painted through a Storybook control, not a drag tldraw's own host has no mechanism for.",
+      "w": 620,
+      "h": 300
+    }
+  ]
+}

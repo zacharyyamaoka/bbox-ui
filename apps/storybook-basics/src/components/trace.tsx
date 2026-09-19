@@ -40,6 +40,15 @@ import { useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 
 
 import { cn } from "../lib/utils";
 import {
+  DEFAULT_HIGHLIGHTER_KIND,
+  DiagnosticTooltip,
+  diagnosticColorVar,
+  maxDiagnosticSeverity,
+  type Diagnostic,
+  type HighlighterKind,
+} from "./highlighter";
+import { HIT_REGION_STROKE } from "./hitRegion";
+import {
   ASYNC_PACKET_DASHARRAY,
   DATA_MARCH_CLASS,
   DATA_MARCH_DASHARRAY,
@@ -53,6 +62,7 @@ import {
   clampLabelPosition,
   pointAtFraction,
   polylineLength,
+  polylinePath,
   safeElementId,
   splitDashArrays,
   type Point,
@@ -64,6 +74,21 @@ import {
 } from "./trace.layout";
 import { routeTrace, type DirectRouting, type TraceCurve } from "./trace.routing";
 import type { TraceBend } from "./trace.bends";
+import {
+  CROSSING_CASING_COLOR,
+  CROSSING_CASING_WIDTH,
+  casingDashArray,
+  type CrossingMark,
+} from "./trace.crossing";
+import {
+  TUNNEL_STUB_LENGTH,
+  TUNNEL_VIA_RADIUS,
+  tunnelHidesRun,
+  tunnelMouths,
+  tunnelShowsVias,
+  tunnelVisualForPoints,
+  type TunnelDisplayState,
+} from "./tunnel";
 import {
   elbowPath,
   routeElbow,
@@ -139,6 +164,83 @@ export interface TraceProps extends Omit<ComponentProps<"g">, "id" | "points"> {
    * nothing listens to should not be silently eating pointer events from
    * whatever sits under it. */
   interactive?: boolean;
+  /**
+   * Tunnel display state — `off` (an ordinary cable), `hidden` (the long
+   * run leaves the surface, two stubs and two vias remain), `preview` (the
+   * whole route, mouths still marked) or `revealed` (the whole route, no
+   * mouths). Resolve it with `tunnelDisplayState` in `./tunnel`, which is
+   * where the four-state rule and its provenance live.
+   *
+   * WHY this arrives RESOLVED rather than as `{selected, hovered, layer}`:
+   * three of those four inputs are interaction state, which
+   * `ARCHITECTURE.md` makes host-owned. `TraceBody` stays props-in/DOM-out
+   * and never learns what "focused" meant here.
+   *
+   * `hidden` needs `points` — shortening the drawn `d` requires the route's
+   * vertices, not just its serialization. Without them the cable paints in
+   * full, which is the honest failure (`Trace` supplies them for every
+   * routing, sampling a curve's after layout).
+   */
+  tunnel?: TunnelDisplayState;
+  /**
+   * How this cable shows it passes OVER another where they cross. `none`
+   * (default) or `halo` — a background-coloured casing under this cable's
+   * own stroke and over every cable painted before it. See
+   * `./trace.crossing` for the research, the 11px calibration, and why the
+   * seam is a style name rather than a boolean (so `hop`/`gap` can land
+   * later without a rewrite).
+   *
+   * Defaults to `none` even though the donor's `DEFAULT_CROSSING_MARK` is
+   * `halo`: a casing asserts knowledge of the canvas colour, which this
+   * component can only guess through a CSS variable. Hosts opt in.
+   */
+  crossing?: CrossingMark;
+  /**
+   * The hit path's stroke width in the SVG's own units. Defaults to
+   * `TRACE_HIT_STROKE_PX` (12). Scene-space, like every geometry number
+   * here: under a host's viewport transform the band scales with zoom
+   * (note it does NOT get the `vectorEffect` prop — that keeps the INK
+   * screen-constant while the hit band still scales; see the hit-regions
+   * stories). A host wanting a screen-constant band divides by its zoom.
+   */
+  hitStrokePx?: number;
+  /**
+   * Paint the hit path (translucent stroke) instead of leaving it
+   * transparent. Pure paint on the EXISTING hit element — width, cap and
+   * hit-testing are identical with this on or off. Only meaningful with
+   * `interactive`; a non-interactive Trace HAS no hit band, and painting
+   * one would be the decoration this prop exists to avoid.
+   */
+  showHitRegion?: boolean;
+  /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's Trace row): a
+   * mark under the wire, same geometry as the hit path, painted at
+   * `max(severity)`. The visible stroke itself keeps its own variant
+   * colour/dash — `data`/`async`/`delayed` stay legible — so the mark is
+   * the ONLY thing this axis owns here. `info` paints nothing (§5's
+   * table).
+   *
+   * WHY hover, not an inline badge (Zach's report feedback, reacting to
+   * the proposal's own "message rides `TraceBadge` in severity dress"
+   * mock): "I wonder if instead of display the error text directly on it,
+   * we instead follow the language of always showing the exact
+   * information in a pop out modal" — the wire is marked, exactly like
+   * every other element this axis touches, and the message lives in the
+   * hover `Tooltip` this file wraps its own marked output in
+   * (`DiagnosticTooltip`, ./highlighter.tsx), never baked onto the
+   * geometry. A host that still wants a `TraceBadge` on the line is free
+   * to add one for its OWN reasons — this axis no longer proposes it.
+   */
+  diagnostics?: Diagnostic[];
+  /** Which `HighlighterKind` draws the mark. Defaults to
+   *  `DEFAULT_HIGHLIGHTER_KIND` ("stroke") — Zach's own lean from the
+   *  report feedback; `"halo"` is the pre-existing translucent-backdrop
+   *  treatment, kept as a sibling, not deleted. `"mask"` aliases to
+   *  `"stroke"` here: JointJS's mask technique targets an enclosed
+   *  shape's interior, and an open path has none — a round-joined offset
+   *  line already gives a path the equidistant-at-bends property `mask`
+   *  is for, so there is no separate technique to build. */
+  highlighterKind?: HighlighterKind;
 }
 
 export interface TraceStrokeStyle {
@@ -236,13 +338,47 @@ export function TraceBody({
   strokeWidth = 2,
   vectorEffect,
   interactive = false,
+  tunnel = "off",
+  crossing = "none",
+  hitStrokePx = TRACE_HIT_STROKE_PX,
+  showHitRegion = false,
+  diagnostics,
+  highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
   className,
   ...props
 }: TraceProps) {
   const markerId = safeElementId("bbox-trace-head", id);
+  const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
   const hasMarker = markerEnd !== "none";
   const markerAttr = hasMarker ? `url(#${markerId})` : undefined;
   const resolvedLength = length ?? (points ? polylineLength(points) : 0);
+
+  // ---- Tunnel -----------------------------------------------------------
+  // `revealed` passes `true` and gets null back — that IS the donor's
+  // contract ("`null` means the route should remain fully visible"), so
+  // revealed needs no branch of its own here.
+  const tunnelVisual =
+    tunnel !== "off" && points ? tunnelVisualForPoints(points, tunnel === "revealed") : null;
+  // Only `hidden` shortens the path. `preview` keeps the whole route AND
+  // the mouths — the single most confusable thing about this feature, which
+  // is why it reads as a named predicate rather than a string compare.
+  const mouths =
+    tunnelVisual && tunnelHidesRun(tunnel) && points ? tunnelMouths(points, false) : null;
+  // Two subpaths in ONE `d`, not two elements: the marker then still lands
+  // on the target end (a marker-end attaches to the final vertex of the last
+  // subpath), the dash channel stays free for the variant, and
+  // `flattenPathData` already treats each `M` as a separate sketch run.
+  const drawnPath = mouths
+    ? `${polylinePath(mouths.start)} ${polylinePath(mouths.end)}`
+    : path;
+  const drawnLength = mouths ? TUNNEL_STUB_LENGTH * 2 : resolvedLength;
+  const showVias = tunnelVisual !== null && tunnelShowsVias(tunnel);
+
+  // ---- Crossing mark ----------------------------------------------------
+  // Measured on the DRAWN length, which makes the tunnel case correct for
+  // free: two 34px stubs fall under `CROSSING_CASING_MIN_LENGTH`, so a
+  // tunnelled cable gets no casing — there is no middle left to protect.
+  const casingDash = crossing === "halo" ? casingDashArray(drawnLength) : null;
 
   const defs = hasMarker ? (
     <defs data-slot="trace-defs">
@@ -250,92 +386,207 @@ export function TraceBody({
     </defs>
   ) : null;
 
+  // Painted FIRST — before the hit path, before this cable's own stroke —
+  // because paint order IS the algorithm: the cable drawn later lays its
+  // background casing across the one drawn earlier, so the upper line reads
+  // as passing over the lower one with no intersection computed anywhere.
+  //
+  // WHY this never gets a drawn twin: it is `data-slot="trace-casing"`, not
+  // `"trace-line"`, so `sketchAtEdge.ts`'s boundary pass does not select it
+  // at all (docs/peps/0001-sketch-skin-at-the-boundary.md). That is also
+  // the right call on the merits — the casing is the canvas colour, so it
+  // is invisible on its own and exists only to occlude. An 11px stroke
+  // swallows the sketch skin's ~1.4px wobble whole, so a drawn copy would
+  // cost a path and change nothing. `pointerEvents: none` because a wide
+  // invisible stroke that ate clicks would be a hit target nobody asked
+  // for.
+  const casing = casingDash ? (
+    <path
+      data-slot="trace-casing"
+      d={drawnPath}
+      fill="none"
+      stroke={CROSSING_CASING_COLOR}
+      strokeWidth={CROSSING_CASING_WIDTH}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeDasharray={casingDash}
+      style={{ pointerEvents: "none" }}
+    />
+  ) : null;
+
+  // The honest remainder of a hidden long run: two outlined landing points
+  // make "continues elsewhere" distinct from "disconnected".
+  const vias = showVias ? (
+    <g data-slot="trace-vias" style={{ color: color, pointerEvents: "none" }}>
+      <circle
+        data-via="start"
+        cx={tunnelVisual.startVia.x}
+        cy={tunnelVisual.startVia.y}
+        r={TUNNEL_VIA_RADIUS}
+        fill={CROSSING_CASING_COLOR}
+        stroke="currentColor"
+        strokeWidth={2}
+      />
+      <circle
+        data-via="end"
+        cx={tunnelVisual.endVia.x}
+        cy={tunnelVisual.endVia.y}
+        r={TUNNEL_VIA_RADIUS}
+        fill={CROSSING_CASING_COLOR}
+        stroke="currentColor"
+        strokeWidth={2}
+      />
+    </g>
+  ) : null;
+
   // Painted FIRST so the visible line always sits on top of it. It is
   // transparent, not `opacity:0` — a transparent stroke still hit-tests
   // with `pointer-events: stroke`, which is the entire point.
+  // WHY `drawnPath` and not `path`: a tunnelled cable's hidden middle is not
+  // there, so it must not be hoverable either. Zach's own note on the
+  // feature is "hover previews the route with its tunnel mouths" — the mouth
+  // is the affordance; a hit target tracing the invisible run would make
+  // empty canvas react and would make the preview impossible to escape.
   const hit = interactive ? (
     <path
       data-slot="trace-hit"
-      d={path}
+      d={drawnPath}
       fill="none"
-      stroke="transparent"
-      strokeWidth={TRACE_HIT_STROKE_PX}
+      stroke={showHitRegion ? HIT_REGION_STROKE : "transparent"}
+      strokeWidth={hitStrokePx}
       strokeLinecap="round"
       strokeLinejoin="round"
       style={{ pointerEvents: "stroke" }}
     />
   ) : null;
 
-  if (variant === "delayed" && splitAtLabel) {
+  // §5's Trace row: a translucent backdrop under the wire, same geometry
+  // as the hit path above (`drawnPath`, so a tunnelled cable's backdrop
+  // stops at the same mouths the wire itself does), painted at
+  // `max(severity)`. `info` paints nothing (§5's own table). The visible
+  // stroke's `color`/dash stay whatever the variant already set — this is
+  // the ONLY layer the diagnostic axis owns here, never a recoloured line.
+  // `"halo"` keeps the pre-existing wide, translucent wash; `"stroke"`
+  // (the new default) and `"mask"` (which aliases to it here — see this
+  // file's own `HighlighterKind` doc above) draw a crisp, OPAQUE, thinner
+  // parallel line instead — still painted behind the visible stroke
+  // (document order = paint order in SVG), just a different rendering of
+  // the same "one extra layer, geometry never recoloured" contract.
+  const diagnosticBackdrop =
+    diagnosticSeverity && diagnosticSeverity !== "info" ? (
+      <path
+        data-slot="trace-diagnostic-backdrop"
+        data-highlighter-kind={highlighterKind}
+        aria-hidden
+        d={drawnPath}
+        fill="none"
+        stroke={
+          highlighterKind === "halo"
+            ? `color-mix(in srgb, ${diagnosticColorVar(diagnosticSeverity)} 30%, transparent)`
+            : diagnosticColorVar(diagnosticSeverity)
+        }
+        strokeWidth={highlighterKind === "halo" ? 10 : 4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ pointerEvents: "none" }}
+      />
+    ) : null;
+
+
+  // A hidden middle has no label seam to split at — `splitAtLabel` puts the
+  // solid/dotted boundary at `labelPosition` along the FULL route, which is
+  // exactly the stretch that has left the surface. So a tunnelled `delayed`
+  // trace falls through to the single-path branch and keeps its dots; it
+  // does not silently draw a split across two 34px stubs.
+  if (variant === "delayed" && splitAtLabel && !mouths) {
     const dash = splitDashArrays(resolvedLength, clampLabelPosition(labelPosition));
+    const splitSegment = {
+      pathLength: PATH_LENGTH_UNITS,
+      fill: "none",
+      stroke: color,
+      strokeLinecap: "round" as const,
+      strokeLinejoin: "round" as const,
+      strokeWidth,
+      vectorEffect,
+    };
     return (
+      // Hover -> Tooltip (message + code, no actions), the same §5
+      // contract every other marked element wraps its output in — and,
+      // per Zach's report feedback, the ONLY place the message rides on
+      // Trace now (no inline badge baked onto the wire).
+      <DiagnosticTooltip diagnostics={diagnostics}>
       <g
         data-slot="trace"
         data-variant={variant}
         data-split="true"
+        data-tunnel={tunnel}
+        data-crossing={crossing}
+        data-diagnostic={diagnosticSeverity}
         className={cn(className)}
         {...props}
       >
         {defs}
+        {diagnosticBackdrop}
+        {casing}
         {hit}
-        <path
-          data-slot="trace-line"
-          data-trace-segment="before"
-          d={path}
-          pathLength={PATH_LENGTH_UNITS}
-          fill="none"
-          stroke={color}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash.before}
-          vectorEffect={vectorEffect}
-        />
-        <path
-          data-slot="trace-line"
-          data-trace-segment="after"
-          d={path}
-          pathLength={PATH_LENGTH_UNITS}
-          fill="none"
-          stroke={color}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={strokeWidth}
-          strokeDasharray={dash.after}
-          vectorEffect={vectorEffect}
-          markerEnd={markerAttr}
-        />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="before" d={path} strokeDasharray={dash.before} />
+        <path {...splitSegment} data-slot="trace-line" data-trace-segment="after" d={path} strokeDasharray={dash.after} markerEnd={markerAttr} />
+        {vias}
       </g>
+      </DiagnosticTooltip>
     );
   }
 
-  const dashStyle = traceStrokeStyle(variant, resolvedLength, animated);
+  // WHY `drawnLength` and not `resolvedLength`: the dash phase has to
+  // describe the path that is actually painted. A tunnelled cable draws two
+  // 34px stubs, and 34 is well under one async cadence (74px) — fed the
+  // full route length, `asyncDashOffsetForLength` returns 0, both stubs
+  // land inside the 56px carrier, and an async cable silently renders
+  // solid. Caught by LOOKING at the capture, not by a test: every
+  // attribute-level assertion passed. Fed the drawn length instead, the
+  // short-run branch that already exists for exactly this case centres one
+  // gap-packet-gap mark in each mouth. Identical to `resolvedLength`
+  // whenever nothing is tunnelled.
+  //
+  // It is ONE MOUTH's length, not both: `asyncDashOffsetForLength`'s
+  // contract is "centre a mark in a run of this length", and SVG restarts
+  // the dash pattern at each subpath — so the run it phases is a single
+  // stub, twice, not their sum.
+  const dashStyle = traceStrokeStyle(variant, mouths ? TUNNEL_STUB_LENGTH : drawnLength, animated);
+  const segment = {
+    fill: "none",
+    stroke: color,
+    strokeWidth,
+    strokeLinecap: dashStyle.strokeLinecap,
+    strokeLinejoin: "round" as const,
+    strokeDasharray: dashStyle.strokeDasharray,
+    strokeDashoffset: dashStyle.strokeDashoffset,
+    vectorEffect,
+    className: dashStyle.className,
+    markerEnd: markerAttr,
+  };
   return (
+    // Hover -> Tooltip (message + code, no actions) — see the split-label
+    // branch above for the full WHY; identical contract here.
+    <DiagnosticTooltip diagnostics={diagnostics}>
     <g
       data-slot="trace"
       data-variant={variant}
       data-animated={animated || undefined}
+      data-tunnel={tunnel}
+      data-crossing={crossing}
+      data-diagnostic={diagnosticSeverity}
       className={cn(className)}
       {...props}
     >
       {defs}
+      {diagnosticBackdrop}
+      {casing}
       {hit}
-      <path
-        data-slot="trace-line"
-        data-trace-segment="whole"
-        d={path}
-        fill="none"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap={dashStyle.strokeLinecap}
-        strokeLinejoin="round"
-        strokeDasharray={dashStyle.strokeDasharray}
-        strokeDashoffset={dashStyle.strokeDashoffset}
-        vectorEffect={vectorEffect}
-        className={dashStyle.className}
-        markerEnd={markerAttr}
-      />
+      <path {...segment} data-slot="trace-line" data-trace-segment="whole" d={drawnPath} />
+      {vias}
     </g>
+    </DiagnosticTooltip>
   );
 }
 
@@ -618,6 +869,20 @@ export interface TraceRouteProps
   strokeWidth?: number;
   vectorEffect?: "non-scaling-stroke";
   interactive?: boolean;
+  /** See `TraceProps.tunnel`. `Trace` additionally SUPPLIES the points a
+   * `hidden` tunnel needs — including a curve's, sampled off the mounted
+   * path — so tunnelling works on every routing kind here. */
+  tunnel?: TunnelDisplayState;
+  /** See `TraceProps.crossing`. */
+  crossing?: CrossingMark;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  hitStrokePx?: number;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  showHitRegion?: boolean;
+  /** Forwarded to `TraceBody` — see its own doc. */
+  diagnostics?: Diagnostic[];
+  /** Forwarded to `TraceBody` — see its own doc. */
+  highlighterKind?: HighlighterKind;
   /** Draw the two endpoint glyphs. On by default — `Trace` is "the whole
    * thing"; a host with real `Port`s passes `false`. */
   terminals?: boolean;
@@ -665,6 +930,12 @@ export function Trace({
   strokeWidth,
   vectorEffect,
   interactive,
+  tunnel = "off",
+  crossing = "none",
+  hitStrokePx,
+  showHitRegion,
+  diagnostics,
+  highlighterKind,
   terminals = true,
   terminalRadius,
   terminalColor,
@@ -728,6 +999,13 @@ export function Trace({
 
   const hostRef = useRef<SVGGElement | null>(null);
   const [measuredLength, setMeasuredLength] = useState<number | null>(null);
+  // A curve has no vertices until the browser has one — and `tunnel:
+  // "hidden"` needs vertices to slice its two mouths out of. The effect
+  // below already samples them for `onGeometry`; keeping them lets a curved
+  // cable tunnel exactly like a straight one. Cost, stated: a curved tunnel
+  // paints its full route for one frame, the same extra pass `Trace`
+  // already documents for curve length.
+  const [measuredPoints, setMeasuredPoints] = useState<readonly Point[] | null>(null);
   // The callback in a ref so a caller passing an inline arrow does not make
   // the effect below re-fire on every render.
   const onGeometryRef = useRef(onGeometry);
@@ -746,8 +1024,10 @@ export function Trace({
       }
       resolved = { ...geometry, length: total, points: sampled };
       setMeasuredLength(total);
+      setMeasuredPoints(sampled);
     } else {
       setMeasuredLength(null);
+      setMeasuredPoints(null);
     }
     onGeometryRef.current?.(resolved);
   }, [geometry, curveSamples]);
@@ -766,7 +1046,9 @@ export function Trace({
         id={id}
         path={geometry.path}
         length={measuredLength ?? geometry.length}
-        points={geometry.points ?? undefined}
+        points={geometry.points ?? measuredPoints ?? undefined}
+        tunnel={tunnel}
+        crossing={crossing}
         variant={variant}
         color={color}
         animated={animated}
@@ -776,6 +1058,10 @@ export function Trace({
         strokeWidth={strokeWidth}
         vectorEffect={vectorEffect}
         interactive={interactive}
+        hitStrokePx={hitStrokePx}
+        showHitRegion={showHitRegion}
+        diagnostics={diagnostics}
+        highlighterKind={highlighterKind}
       />
       {terminals ? (
         <>

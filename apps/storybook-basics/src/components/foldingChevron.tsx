@@ -39,6 +39,7 @@ export function FoldingChevron({
   onClick,
   reveal = "always",
   className,
+  style,
   ...props
 }: FoldingChevronProps) {
   // WHY collapsed always wins regardless of `reveal` (Zach's explicit
@@ -54,7 +55,7 @@ export function FoldingChevron({
       aria-expanded={open}
       onClick={onClick}
       className={cn(
-        "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground",
+        "inline-flex size-6 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground",
         // `reveal="always"` keeps the original hover chip; `"hover"` is
         // borderless in every state (open-collapsed-forced-visible
         // included) — the background pill is what "always" and "hover"
@@ -65,6 +66,13 @@ export function FoldingChevron({
         alwaysForced && "opacity-100",
         className,
       )}
+      // The skin seam (src/skin/skin.ts + skin.css) — `rounded-md` moved
+      // off the class list and onto here; `var(--radius-md)` is exactly
+      // what it resolved to, so a consumer who never imports skin.css is
+      // byte-identical. It paints only once the hover pill does, but the
+      // property is set unconditionally, same as every other radius call
+      // site in this port.
+      style={{ borderRadius: "var(--bbox-skin-radius, var(--radius-md))", ...style }}
       {...props}
     >
       <ChevronRight

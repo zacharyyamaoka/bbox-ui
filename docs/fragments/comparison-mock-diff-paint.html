@@ -1,0 +1,106 @@
+<!-- Mock: surface B, diff paint drawn ON the components. Nothing here is a
+     screenshot — N2 is unbuilt, so this is the rendered mock a plan owes.
+     The <style> block below is shared by ALL comparison-mock-*.html
+     fragments; this fragment is listed first in the manifest on purpose. -->
+<style>
+  .mockrow { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; margin:18px 0 6px }
+  .mockfig { flex:1 1 240px; max-width:340px }
+  .mockcap { font-size:12.5px; color:var(--dim2); margin-top:8px; line-height:1.5 }
+  .mockcap b { display:block; color:var(--fg); font-size:13px; margin-bottom:2px }
+  .mockstage { position:relative; background:#0a0b0e; border:1px solid var(--line);
+               border-radius:8px; padding:26px 22px; min-height:150px }
+  .bblock { position:relative; background:var(--panel2); border:1.5px solid #3a4150;
+            border-radius:8px; width:190px; font:12px/1.4 var(--mono); color:var(--fg) }
+  .bblock .btitle { padding:7px 10px 5px; font-weight:600; font-size:12.5px;
+                    border-bottom:1px solid var(--line) }
+  .bport { display:flex; align-items:center; gap:7px; padding:4px 10px }
+  .bdot { width:9px; height:9px; border-radius:50%; background:#0a0b0e;
+          border:2px solid #8b93a5; flex:none }
+  .bport.added { color:var(--ok) } .bport.added .bdot { border-color:var(--ok) }
+  .bport.removed { color:var(--err); background:color-mix(in srgb, var(--err) 9%, transparent) }
+  .bport.removed .bdot { border-color:var(--err); border-style:dashed }
+  .bport.removed .plabel { text-decoration:line-through }
+  .chip { display:inline-block; font-size:10.5px; padding:1px 6px; border-radius:9px;
+          border:1px solid var(--line); background:var(--panel); color:var(--dim);
+          font-family:var(--mono) }
+  .chip .strike { text-decoration:line-through; color:var(--err) }
+  .inkdel { color:var(--err); text-decoration:line-through }
+  .inkadd { color:var(--ok); font-weight:700 }
+  .ghost { position:absolute; border:1.5px dashed #4a5264; border-radius:8px;
+           width:190px; height:86px; opacity:.75 }
+  .posebadge { position:absolute; font:10.5px var(--mono); color:var(--dim);
+               background:var(--panel); border:1px solid var(--line);
+               border-radius:9px; padding:1px 7px }
+  .gone { opacity:.55; border-style:dashed; border-color:var(--err) }
+  .gone .btitle { text-decoration:line-through; color:var(--err) }
+  .cable { stroke-width:2.25; fill:none }
+  .note { font-size:11px; color:var(--dim2); font-style:italic }
+</style>
+
+<p class="sub" style="margin-top:4px">CVP §2's rule, drawn: a diff is <em>ink on the
+components themselves</em>, not a table beside a canvas. Every mark below is a
+component prop (<code>diff?: DiffMark</code>), painted on the diff lane's own
+channels — fills, washes, chips, ghosts, token ink. Mock palette is this
+report's; the implementation uses the kit's tokens.</p>
+
+<div class="mockrow">
+  <div class="mockfig">
+    <div class="mockstage">
+      <div class="bblock">
+        <div class="btitle">run<span class="inkadd">Predict</span>
+          <span class="chip" style="margin-left:6px">was …<span class="strike">Inference</span></span>
+        </div>
+        <div class="bport"><span class="bdot"></span><span class="plabel">in</span></div>
+        <div class="bport"><span class="bdot"></span><span class="plabel">out</span></div>
+        <div class="bport added"><span class="bdot"></span><span class="plabel">confidence</span><span style="margin-left:auto;font-weight:700">+</span></div>
+        <div class="bport removed"><span class="bdot"></span><span class="plabel">debug</span><span style="margin-left:auto;font-weight:700">−</span></div>
+      </div>
+    </div>
+    <div class="mockcap"><b>Renamed, gained a port, lost a port — one block, three facts</b>
+      Word ink strikes only the token that changed (<code>wordDiff</code>'s camelCase split —
+      shipped, tested). The removed <code>debug</code> port is drawn <em>in the row it is
+      missing from</em> — the requirement that makes diff paint a component prop, not a
+      dialog row. Three facts stay three marks: <code>sceneDiff</code> already keeps them
+      separate rows.</div>
+  </div>
+
+  <div class="mockfig">
+    <div class="mockstage" style="min-height:170px">
+      <div class="ghost" style="left:22px; top:26px"></div>
+      <svg width="70" height="40" style="position:absolute; left:100px; top:52px" viewBox="0 0 70 40">
+        <defs><marker id="mockarrow" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+          <path d="M0,0 L7,3.5 L0,7 z" fill="#8b93a5"/></marker></defs>
+        <path d="M4,4 C30,4 40,30 62,34" stroke="#8b93a5" stroke-width="1.5" fill="none"
+              stroke-dasharray="4 3" marker-end="url(#mockarrow)"/>
+      </svg>
+      <div class="bblock" style="position:absolute; left:120px; top:66px">
+        <div class="btitle">Logger</div>
+        <div class="bport"><span class="bdot"></span><span class="plabel">in</span></div>
+      </div>
+      <span class="posebadge" style="left:26px; top:6px">moved +260, +40</span>
+    </div>
+    <div class="mockcap"><b>Moved — the ghost at its former pose</b>
+      <code>classifyPoseChange</code> (shipped) tells moved from resized by which corner
+      survived; the paint layer only draws what it is told. A resize instead inks the
+      dragged edges heavier, no ghost arrow.</div>
+  </div>
+
+  <div class="mockfig">
+    <div class="mockstage" style="min-height:170px">
+      <div class="bblock gone" style="margin-bottom:14px">
+        <div class="btitle">LegacyParser</div>
+        <div class="bport"><span class="bdot"></span><span class="plabel">in</span></div>
+      </div>
+      <svg width="260" height="46" viewBox="0 0 260 46">
+        <path class="cable" d="M8,12 C70,12 120,34 200,34" stroke="var(--ok)"/>
+        <circle cx="8" cy="12" r="4" fill="var(--ok)"/><circle cx="200" cy="34" r="4" fill="var(--ok)"/>
+        <path class="cable" d="M8,40 C90,40 140,8 236,8" stroke="var(--err)" stroke-dasharray="6 4" opacity=".8"/>
+      </svg>
+    </div>
+    <div class="mockcap"><b>Removed block · added and removed cables</b>
+      A removed element stays visible — struck, dashed, dimmed — because a diff view's
+      whole point is showing what is no longer there. Cable endpoints are ids in our
+      <code>SceneEdge</code>, so a dragged board is never called a rewiring
+      (the donor's <code>cableEnds</code> machinery evaporated — CVP §1).</div>
+  </div>
+</div>

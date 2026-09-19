@@ -151,11 +151,24 @@ function required<T extends Element>(root: ParentNode, selector: string, what: s
   return found;
 }
 
+// WHY every candidate is ownership-checked instead of taking the first
+// `[data-port-id]` match: `proc` and its member `kid` both declare a port
+// named `in` (line 60/64 above — the exact case that "stays visually clear"
+// comment exists for), and a bare descendant query resolves to whichever
+// dot is first in document order, not necessarily proc's own. This test's
+// own `dotOf` carried the identical bug `WireLayer.resolveDot` did
+// (host-fixes lane, defect 2, `wireLayer.tsx`) — the two independently
+// implemented queries agreeing with each other, both wrong, is exactly why
+// nothing caught it: `e-cmd · to terminal on proc/in` compared the rendered
+// wire (post-fix: correctly on proc's own dot) against THIS helper's
+// resolution (still kid's), and only diverged once one side was fixed.
 function dotOf(bench: HTMLElement, blockId: string, portId: string): HTMLElement {
   const block = required<HTMLElement>(bench, `[data-block-id="${blockId}"]`, `block \`${blockId}\``);
-  const direct = block.querySelector<HTMLElement>(`[data-port-id="${portId}"]`);
-  if (direct) return direct;
+  for (const candidate of Array.from(block.querySelectorAll<HTMLElement>(`[data-port-id="${portId}"]`))) {
+    if (candidate.closest("[data-block-id]") === block) return candidate;
+  }
   for (const collapsed of Array.from(block.querySelectorAll<HTMLElement>("[data-collapsed-ports]"))) {
+    if (collapsed.closest("[data-block-id]") !== block) continue;
     if ((collapsed.getAttribute("data-collapsed-ports") ?? "").split(",").includes(portId)) return collapsed;
   }
   throw new Error(`expected a dot for ${blockId}/${portId}`);
@@ -228,6 +241,7 @@ function expectTerminalOnDot(svg: SVGSVGElement, line: SVGPathElement, end: "fro
 
 const meta = {
   title: "Blocks/Scene",
+  tags: ["area:blocks", "lane:host-fixes"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },
 } satisfies Meta<typeof WireLayer>;

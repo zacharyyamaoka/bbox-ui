@@ -1,0 +1,126 @@
+{
+  "title": "Invalid states: the diagnostic axis, implemented (+ highlighter kinds)",
+  "summary": "docs/INVALID-STATES-PLAN.md made true in code, then revised mid-run on Zach's report feedback: the concept is renamed 'highlighter' (JointJS terminology), stroke/mask join the pre-existing halo as first-class HighlighterKinds (stroke now the default), and the wire's message moved off an inline badge into the same hover Tooltip every other mark uses.",
+  "slug": "invalid-states-impl",
+  "base_ref": "main",
+  "branch_label": "worktree-agent-a1cb7d320e534605e (isolated lane worktree, cut from 859ae8d)",
+  "storybook_port": 5498,
+  "changes": [
+    "apps/storybook-basics/src/components/diagnostic.tsx — new: the closed DiagnosticSeverity type, the Diagnostic interface (list, stable id — Zach's mid-run amendment over §1's original scalar), maxDiagnosticSeverity, diagnosticColorVar, diagnosticUnderlineStyle, DiagnosticTooltip (hover half), DiagnosticFlag (click half, Popover-based, carries a count)",
+    "apps/storybook-basics/src/components/popover.tsx — new: stock shadcn Popover over @base-ui/react/popover, copied verbatim the way tooltip.tsx/dropdown-menu.tsx already were",
+    "apps/storybook-basics/src/globals.css — ported --bbox-danger/--bbox-warning/--bbox-accent (light + dark) from packages/bbox-ui/src/theme.css, one by one beside --bbox-primary/--bbox-received",
+    "apps/storybook-basics/src/components/port.tsx — diagnostics prop; box-shadow halo APPENDED (not prepended) so the state ring/fill stay untouched; info paints nothing; hover wrapped in DiagnosticTooltip",
+    "apps/storybook-basics/src/components/labeledPort.tsx — forwards diagnostics to Port; wavy/dotted underline on the rest span (DefaultPortLabel), editing branch (CodeEditor) explicitly out of scope per the plan",
+    "apps/storybook-basics/src/components/block.tsx — diagnostics prop; error-only glow by default (prepended box-shadow) + corner DiagnosticFlag straddling the border (overflowClipMargin widened to let it); warning gets the flag alone; info nothing; new showDiagnosticFlag/diagnosticWarningGlow escape hatches for ValueCapsule",
+    "apps/storybook-basics/src/components/portEdge.tsx — PortEdgeItem grows diagnostics?, forwarded to the LabeledPort the default render draws",
+    "apps/storybook-basics/src/components/trace.tsx — diagnostics prop; one translucent backdrop <path> under the wire at max(severity), painted BEHIND the casing/hit/line (no sketched twin); info nothing",
+    "apps/storybook-basics/src/components/codeEditor.tsx + codeEditor.css — diagnostics?: CodeEditorDiagnostic[] (positional ranges, the one component that stays a list of ranges rather than max-severity); @codemirror/lint's setDiagnostics/linter; whole-field error also sets ariaInvalid; squiggle retinted from CM's hardcoded colours to this kit's three tokens via text-decoration",
+    "apps/storybook-basics/src/components/editableText.tsx — diagnostics prop; wavy/dotted underline on the rest span AND the editing control (EditableTextControl)",
+    "apps/storybook-basics/src/components/badge.tsx — new variant=\"warning\" cva row (amber bg, dark text)",
+    "apps/storybook-basics/src/presets/value/value.tsx — diagnostics + diagnosticRange props, forwarded to Block (showDiagnosticFlag=false, diagnosticWarningGlow=true — the ONE caller that wants warning to earn the glow, since a capsule has no flag) and to the underlying CodeEditor as one squiggle range",
+    "apps/storybook-basics/src/stories/Diagnostics.stories.tsx — new: 10 stories — one gallery per marked component, a wired+error channel-discipline proof, and a 'board with problems' composition",
+    "apps/storybook-basics/src/stories/CodeEditor.stories.tsx — Syntax Themes story's hardcoded #4f6ee5 fallback literals updated to var(--bbox-accent): porting that token in globals.css made the fallback chain resolve through the real token instead of past it, which is the intended effect of §2, not a regression",
+    "apps/storybook-basics/src/components/diagnostic.tsx -> highlighter.tsx (git mv) — Zach's report feedback: \"Perhaps we can just borrow their terminology. Highlighters I think is right.\" Data stays `Diagnostic`; the drawing concept is now `HighlighterKind`.",
+    "highlighter.tsx — new HighlighterKind = \"stroke\" | \"mask\" | \"halo\" (Appendix A's JointJS table), DEFAULT_HIGHLIGHTER_KIND = \"stroke\", highlighterStrokeOutlineStyle (CSS outline) and highlighterMaskFrameStyle (the Minkowski-sum border-radius arithmetic — Appendix B's own \"mask falls back to getBoundingClientRect() for HTML in a foreignObject\" finding is why this is a bounding-rect technique, never a literal SVG <mask>)",
+    "port.tsx — highlighterKind prop; \"stroke\"/\"mask\" render the IDENTICAL crisp two-layer ring for a circle (documented why: no corners for mask to get more right than stroke), \"halo\" keeps the original translucent wash",
+    "block.tsx — highlighterKind prop; \"stroke\" = CSS outline (cheap, same radius as the box), \"mask\" = a sibling frame whose border-radius grows by the offset (genuinely equidistant), \"halo\" = the original glow, still error-only by default (\"warning must not shout\" stays specific to halo — stroke/mask mark both severities, since a crisp outline does not shout)",
+    "trace.tsx — highlighterKind prop (\"mask\" aliases to \"stroke\" for an open path — documented why); TraceBody's own output is now wrapped in DiagnosticTooltip so hovering a marked wire shows its message — replacing the plan's original \"message rides TraceBadge\" mock per Zach's own words: \"I wonder if instead of display the error text directly on it, we instead follow the language of always showing the exact information in a pop out modal\"",
+    "labeledPort.tsx, presets/value/value.tsx — highlighterKind forwarded through to Port/Block",
+    "stories/Diagnostics.stories.tsx — retitled \"Diagnostics\" -> \"Styles/Diagnostics\" (area:styles; CLAUDE.md's area vocabulary is closed and does not list \"diagnostics\", and CLAUDE.md is outside this lane's write set) with tags [\"area:styles\", \"lane:invalid-states-impl\"]; existing severity galleries pinned to highlighterKind=\"halo\" where their captions/assertions specifically depended on the old default; new HighlighterKindsGallery story — the actual deliverable, all three kinds on one Block at one severity, side by side, with measured (not asserted) geometry proof"
+  ],
+  "findings": [
+    "Mid-run correction from the dispatcher: §1's ORIGINAL plan text specified a scalar `diagnostic?: Diagnostic`; the dispatcher overrode this to `diagnostics?: Diagnostic[]` with a stable `id` (Appendix B's convergence argument — a popover with 'the full anatomy' cannot show more than one finding from an already-merged scalar, and the flag's own COUNT cannot render from one). Verified against the actual plan doc on a peer worktree branch (component-docs-reorganize-8ce972 @ 0e47d91, 'Section 1 takes the list') — the override matches the settled, committed spec. Implemented as instructed: diagnostics is a list everywhere except CodeEditor, which was already positional-list-shaped in §5 and needed no change.",
+    "Mid-run constraint from the dispatcher: no src/skin/ imports and no sketched twins in the diagnostic chrome. Verified clean by grep across every touched file — every SketchOutline/sketchPathData/data-sketch reference in port.tsx/block.tsx/trace.tsx/badge.tsx/portEdge.tsx predates this work and belongs to those components' own base geometry; nothing I wrote calls into src/skin/ or emits a data-sketch twin. The Trace backdrop is one crisp <path>, not a crisp/sketch pair.",
+    "Real bug caught by the story play functions, not eyeballing: Port's halo initially painted for `info` too (any truthy severity, including \"info\", passed the old `if (diagnosticSeverity)` gate) — §5 says info paints NOTHING on a Port. Fixed with an explicit `!== \"info\"` guard; PortGallery's play function now asserts the info dot's box-shadow is byte-identical to the unmarked dot's.",
+    "Second bug caught the same way: my own BoardWithProblems/BlockGallery play functions queried `el.parentElement?.querySelector(flag-selector)` — since the flag is a CHILD of Block's own root (not a sibling), this cross-matched a DIFFERENT block's flag whenever two blocks shared an ancestor row. Fixed to query the block element's own subtree.",
+    "Channel discipline is measured, not asserted: PortGallery/WiredAndError compare the resolved `getComputedStyle().boxShadow` STRING before/after a diagnostic — the marked dot's box-shadow is asserted to be a strict superset (startsWith the unmarked one, longer, and the wired core's own background colour unchanged) rather than merely checking a class/attribute exists.",
+    "Discrepancy resolved between Block's row ('warning must not shout' — no glow) and ValueCapsule's row ('warning: amber glow'): added `diagnosticWarningGlow` (default false) to Block; ValueCapsule is the one caller that sets it, because a capsule has no flag to carry warning instead.",
+    "THE BIG ONE — a real, load-bearing bug the play-function gate could NOT catch, only a live capture did: the CodeEditor squiggle rendered at t=0 and then silently VANISHED by t=750ms, in every run. Root-caused with a live browser session (Claude_Browser tools), not guessed: @codemirror/lint's linter() mounts a ViewPlugin that unconditionally schedules `source(view)` to run ONCE, `delay`ms (default 750) after mount/any relevant update — not 'only on a real edit', which is what the original `cmLinter(() => [])` no-op-source comment assumed. At the 750ms mark it dispatched `setDiagnostics(state, [])`, erasing whatever the sync effect had written, because an empty-array-returning source is still an ACTIVE source. Fixed to `cmLinter(null)`: `lintConfig`'s own `combine` filters a `null` source out of `sources` entirely, so the scheduled `run()` finds `sources.length === 0` and dispatches nothing — the state field and its decorations still mount unconditionally either way. Verified with an in-page interval sampling the live DOM every 20ms for 3s post-fix: the marks now persist. `pnpm test-stories` passed BOTH before and after this fix — its play function asserts within ~50-100ms of mount, well inside the 750ms window, so it is not a sufficient acceptance gate for anything CodeMirror lints on a timer. This is exactly why the report mandate's 'open the rendered PNG and look at it' step exists.",
+    "Acceptance measured on this worktree (859ae8d baseline, NOT the 561b062/0e47d91 peer branch): pnpm --filter bbox-storybook-basics run typecheck clean; pnpm test-stories 46->47 files, 188->198 tests (both strictly above baseline); npx vitest --project=unit run 21 files/347 tests unchanged. All three re-verified AFTER the linter(null) fix, not just before.",
+    "Not done: a live Tooltip hover was not captured in this report (Base UI portals tooltip content to document.body on hover, which a static screenshot at page-load does not show) — the story play functions instead assert the DOM/CSS facts (box-shadow layers, text-decoration, aria-invalid, cm-lintRange classes) that the visual state is built from.",
+    "Zach's report feedback (vault PROJECT - Black Box UI.md:2589), relayed mid-run: the orthogonal axis, the diagnostics list with stable ids, and the text-mark treatment (@codemirror/lint + wavy underlines) are all CONFIRMED as-is — no changes made to any of that. Three changes requested: (1) rename to \"highlighter\" terminology, (2) add stroke/mask as first-class kinds alongside halo with stroke as the new default and a side-by-side comparison story, (3) move the wire's message off an inline badge into the pop-out Tooltip.",
+    "The stroke/mask distinction is only real where the shape has corners: verified live (getComputedStyle) that Block's mask frame measures border-radius 14px against the block's own 10px — exactly radius+offset(4), the Minkowski-sum arithmetic the code claims, not just asserted in a comment. For Port's circle, stroke and mask are documented as the IDENTICAL geometry (a circle has no corners to get more or less right) rather than building two indistinguishable rings.",
+    "The linter/edge-validation engine Zach also asked for is explicitly NOT this lane's work (the dispatcher is running it separately as pure functions over the scene) — nothing in this round imports or builds anything rule- or lint-shaped; `diagnostics` stays host-supplied data with no assumption about its producer.",
+    "Existing severity galleries (Port/LabeledPort/Block/ValueCapsule) were pinned to highlighterKind=\"halo\" explicitly rather than left on the new default — their captions and play-function assertions were written against the old (now non-default) box-shadow-based treatment, and changing the default out from under them would have silently invalidated what they demonstrate. TraceGallery and BoardWithProblems needed no pinning: their assertions check element PRESENCE (the backdrop/flag exist), which holds under either kind, so they now exercise the new default live.",
+    "Acceptance on this worktree (859ae8d baseline): typecheck clean; pnpm test-stories 47 files / 199 tests (up from this lane's own prior commit at 47/198, and from the 859ae8d baseline's 46/188); vitest --project=unit 21 files / 347 tests unchanged. The coordinator separately reported the shared branch tip (a DIFFERENT, peer worktree) at 48 files/202 stories/442 unit tests — this worktree was not rebased onto it; these numbers are this lane's own delta against its own base commit."
+  ],
+  "stories": [
+    {
+      "id": "styles-diagnostics--port-gallery",
+      "title": "Styles/Diagnostics · Port Gallery",
+      "look_for": "none/error/warning/info side by side — info paints nothing on the dot itself",
+      "w": 640,
+      "h": 200
+    },
+    {
+      "id": "styles-diagnostics--wired-and-error",
+      "title": "Styles/Diagnostics · Wired AND Error",
+      "look_for": "the channel-discipline proof — the wired ring/core stay exactly themselves while the error halo rides outside them",
+      "w": 420,
+      "h": 200
+    },
+    {
+      "id": "styles-diagnostics--labeled-port-gallery",
+      "title": "Styles/Diagnostics · LabeledPort Gallery",
+      "look_for": "the wavy (error/warning) vs dotted (info) underline under the label text, plus the dot halo",
+      "w": 720,
+      "h": 200
+    },
+    {
+      "id": "styles-diagnostics--block-gallery",
+      "title": "Styles/Diagnostics · Block Gallery",
+      "look_for": "error gets glow+flag, warning gets the flag ALONE (no glow — 'must not shout'), info gets nothing",
+      "w": 800,
+      "h": 200
+    },
+    {
+      "id": "styles-diagnostics--highlighter-kinds-gallery",
+      "title": "Styles/Diagnostics · Highlighter Kinds Gallery",
+      "look_for": "the actual deliverable Zach's report feedback asked for: stroke (default), mask, and halo on the SAME Block at the SAME severity, side by side — mask's corner visibly rounder than stroke's (measured: 14px vs 10px, exactly radius+offset)",
+      "w": 1300,
+      "h": 420
+    },
+    {
+      "id": "styles-diagnostics--trace-gallery",
+      "title": "Styles/Diagnostics · Trace Gallery",
+      "look_for": "the translucent backdrop under the wire for error/warning; the stroke itself never recolours; info is bare",
+      "w": 1000,
+      "h": 160
+    },
+    {
+      "id": "styles-diagnostics--code-editor-gallery",
+      "title": "Styles/Diagnostics · CodeEditor Gallery",
+      "look_for": "one field with an error squiggle AND a warning squiggle at independent character ranges, beside a plain field",
+      "w": 700,
+      "h": 200
+    },
+    {
+      "id": "styles-diagnostics--editable-text-gallery",
+      "title": "Styles/Diagnostics · EditableText Gallery",
+      "look_for": "the same wavy/dotted underline split on a plain text label",
+      "w": 700,
+      "h": 140
+    },
+    {
+      "id": "styles-diagnostics--badge-gallery",
+      "title": "Styles/Diagnostics · Badge Gallery",
+      "look_for": "the new amber variant=\"warning\" beside the existing destructive/secondary chips",
+      "w": 900,
+      "h": 130
+    },
+    {
+      "id": "styles-diagnostics--value-capsule-gallery",
+      "title": "Styles/Diagnostics · ValueCapsule Gallery",
+      "look_for": "the pill glow for BOTH error and warning (no flag anywhere — a capsule is too small)",
+      "w": 700,
+      "h": 200
+    },
+    {
+      "id": "styles-diagnostics--board-with-problems",
+      "title": "Styles/Diagnostics · Board With Problems",
+      "look_for": "three independent producers marking a wired port, a block and a cable at once, with the unmarked Accumulator block staying completely calm beside them",
+      "w": 900,
+      "h": 320
+    }
+  ]
+}

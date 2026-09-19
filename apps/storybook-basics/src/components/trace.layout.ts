@@ -238,6 +238,179 @@ export function fractionNearest(points: readonly Point[], p: Point): number {
   return best.length / total;
 }
 
+/* --------------------------- path addressing (D4) -------------------------- */
+/*
+ * One 1-D coordinate scheme for anything that rides a trace's polyline —
+ * `TraceBadge`'s pill (widened, not replaced) and the new `TraceMark`
+ * (./traceMark.tsx). Ruling 4, verbatim: "Interesting idea for marks on
+ * cable getting 1d coordinate... we already support this for the
+ * placement of the pill... if there is a pill already we don't likely
+ * want to render it directly on the pill." Two mature libraries converged
+ * on the same shape independently — maxGraph's label geometry
+ * (`x ∈ [-1..1]` + orthogonal offset) and JointJS's `distance` (px,
+ * percent, or negative-from-the-end) + perpendicular `offset` — which is
+ * the argument FOR unifying rather than inventing a third vocabulary.
+ *
+ * `PathAddress` is deliberately two cases, not three: a plain fraction
+ * (the currency `TraceBadge` already speaks) and `{px}` (JointJS's own
+ * arc-length-pixels case). There is no percent-string case — a fraction
+ * already IS a percent (`0.2` === `20%`), so adding `"20%"` would just be
+ * a second spelling of the same number.
+ */
+export type PathAddress = number | { px: number };
+
+/**
+ * `PathAddress` -> a resolved arc-length fraction, clamped to `[0, 1]` —
+ * NOT `clampLabelPosition`'s 0.05..0.95 band. That band exists so a
+ * *label* never sits ON a terminal and reads as part of it
+ * (`LABEL_POSITION_MIN`/`MAX`'s own doc, above); a `TraceMark` pinned to
+ * the BROKEN end of a dangling edge (`{px: -24}`) needs exactly the
+ * opposite — the whole `[0, 1]` range, end included. Callers that DO want
+ * the label band (`TraceBadge`) apply `clampLabelPosition` themselves,
+ * after this function, the same order `TraceBadge` already resolved `t`
+ * before clamping it.
+ *
+ * Two provenances, and they are NOT the same claim:
+ *
+ * - `{px: n}` with `n < 0` measuring from the path's END is
+ *   BEHAVIOUR-DERIVED from JointJS's own `Path.pointAtLength` negative
+ *   branch (dist `joint.js:7802-7808` — the validation-stack oracle
+ *   session ran it live: `distance:-20` landed ~28px from the target end).
+ *   MPL-2.0; reimplemented from the observed behaviour, no JointJS source
+ *   copied.
+ * - Negative FRACTIONS resolving the same way (`f < 0` -> `t = 1 + f`) are
+ *   OURS, built deliberately for symmetry — NOT a port. The same oracle
+ *   session ran JointJS's own PERCENT form (`distance: '-20%'`) and found
+ *   it does the opposite: it clamps negative percentages to the SOURCE
+ *   end instead of counting from the target end (`joint.js:8047-8068`).
+ *   So "negative counts from the end" is true for JointJS's px case and
+ *   false for its own percent case — we chose the symmetric interpretation
+ *   deliberately rather than inheriting either one by "analogy". `-0`
+ *   behaves as `0` (`-0 < 0` is `false` in JS) — pass the literal `1` for
+ *   the exact end.
+ */
+export function resolvePathAddress(points: readonly Point[], address: PathAddress): number {
+  if (typeof address === "number") {
+    const t = address < 0 ? 1 + address : address;
+    return Math.min(1, Math.max(0, t));
+  }
+  const total = polylineLength(points);
+  if (!(total > 0) || !Number.isFinite(address.px)) return 0;
+  const t = address.px < 0 ? 1 + address.px / total : address.px / total;
+  return Math.min(1, Math.max(0, t));
+}
+
+/**
+ * The unit tangent (flow direction) of the polyline at arc-length fraction
+ * `t` — what `TraceMark` rotates its perpendicular `offsetPx` against so a
+ * mark rides beside the line rather than floating at a fixed screen angle.
+ * Falls back to the first non-degenerate segment (then to a bare
+ * rightward unit vector) when the chosen segment has zero length — a
+ * repeated point in `points` must never divide by zero.
+ */
+export function tangentAtFraction(points: readonly Point[], t: number): Point {
+  if (points.length < 2) return { x: 1, y: 0 };
+  const total = polylineLength(points);
+  let target = Math.min(1, Math.max(0, t)) * total;
+  for (let index = 1; index < points.length; index += 1) {
+    const a = points[index - 1];
+    const b = points[index];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const segment = Math.hypot(dx, dy);
+    if (target <= segment || index === points.length - 1) {
+      if (segment > 0) return { x: dx / segment, y: dy / segment };
+      break;
+    }
+    target -= segment;
+  }
+  for (let index = 1; index < points.length; index += 1) {
+    const a = points[index - 1];
+    const b = points[index];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const segment = Math.hypot(dx, dy);
+    if (segment > 0) return { x: dx / segment, y: dy / segment };
+  }
+  return { x: 1, y: 0 };
+}
+
+export interface PathPlacement {
+  t: number;
+  widthPx: number;
+  /** Never moved — the pill's own slot, when one is already parked here. */
+  pinned?: boolean;
+}
+
+/**
+ * OURS, AD HOC — not a port. The justification is the gap itself: the
+ * validation-stack oracle session ran JointJS's own `ToolsView`
+ * positioning live and found ZERO collision avoidance — two
+ * `distance:'50%'` tools landed at the IDENTICAL pixel
+ * (`getBoundingClientRect` equal to the last digit; z-order was DOM
+ * append order, `joint.js:37752-37820`). Nothing to port; this is
+ * written fresh.
+ *
+ * Pinned placements never move. Every unpinned placement is nudged, in
+ * the order given, to the nearest arc-length position that clears every
+ * placement resolved so far (pinned ones plus earlier unpinned ones) by
+ * at least `gapPx` of clear path, measured edge-to-edge in pixels along
+ * `lengthPx`. Ties between "push right" and "push left" favour whichever
+ * is closer to the placement's own requested `t`; a genuine tie favours
+ * the right (higher-`t`) side, arbitrarily but deterministically.
+ *
+ * Returns one resolved fraction per input placement, in input order,
+ * each clamped to `[0, 1]`.
+ */
+export function separateAlongPath(lengthPx: number, placements: readonly PathPlacement[], gapPx = 8): number[] {
+  const length = Number.isFinite(lengthPx) && lengthPx > 0 ? lengthPx : 0;
+  const half = (p: PathPlacement) => Math.max(0, p.widthPx) / 2;
+  const toPx = (p: PathPlacement) => Math.min(1, Math.max(0, p.t)) * length;
+
+  interface Interval {
+    lo: number;
+    hi: number;
+  }
+  const settled: Interval[] = [];
+  const resultPx: number[] = new Array(placements.length).fill(0);
+
+  // Pinned placements are fixed obstacles, resolved first regardless of
+  // their position in the input array — an unpinned placement earlier in
+  // the array must still yield to a pinned one that appears later.
+  placements.forEach((p, index) => {
+    if (!p.pinned) return;
+    const pos = toPx(p);
+    resultPx[index] = pos;
+    settled.push({ lo: pos - half(p), hi: pos + half(p) });
+  });
+
+  placements.forEach((p, index) => {
+    if (p.pinned) return;
+    let pos = toPx(p);
+    const h = half(p);
+    // Bounded re-check: moving to clear one interval can land inside
+    // another. `settled.length + 1` passes is always enough to walk clear
+    // of every existing interval once, because each pass resolves at
+    // least the interval(s) it was pushed to avoid.
+    for (let pass = 0; pass <= settled.length; pass += 1) {
+      const overlapping = settled.filter((iv) => pos - h - gapPx < iv.hi && pos + h + gapPx > iv.lo);
+      if (overlapping.length === 0) break;
+      const rightEdge = Math.max(...overlapping.map((iv) => iv.hi)) + gapPx + h;
+      const leftEdge = Math.min(...overlapping.map((iv) => iv.lo)) - gapPx - h;
+      const right = Math.min(length, rightEdge);
+      const left = Math.max(0, leftEdge);
+      const distRight = Math.abs(right - pos);
+      const distLeft = Math.abs(left - pos);
+      pos = distLeft < distRight ? left : right;
+    }
+    pos = Math.min(length, Math.max(0, pos));
+    resultPx[index] = pos;
+    settled.push({ lo: pos - h, hi: pos + h });
+  });
+
+  return resultPx.map((pos) => (length > 0 ? Math.min(1, Math.max(0, pos / length)) : 0));
+}
+
 /* ------------------------------ label position ---------------------------- */
 
 /** Kept off the terminals — a label sitting exactly on a port reads as

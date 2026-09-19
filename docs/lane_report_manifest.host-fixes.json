@@ -1,0 +1,99 @@
+{
+  "title": "React Flow host — 7 measured defects fixed",
+  "summary": "Seven independently-audited defects in reactFlowHost.tsx (drag flake, wire-ownership, stock edges, resize hit-testing/write-back, member-header drag leak, engine-coupled sighting), each fixed and proven with a real-pointer regression test.",
+  "base_ref": "main",
+  "branch_label": "worktree-agent-addcd549491f042ae (isolated lane worktree)",
+  "storybook_port": 5511,
+  "changes": [
+    "apps/storybook-basics/src/hosts/reactFlowHost.tsx — carries React Flow's own `measured` cache forward across scene updates (defect 1); adds `TraceEdge` (getBezierPath + trunk `TraceBody`) and wires `edgeTypes` (defect 3); renders `NodeResizer` after the Block's own content and gives its 8 controls `zIndex: 20` (defect 4); holds position back during an active resize so it commits atomically with size (defect 5); adds `OwnDragHandleMarker`/`ownHeaderOf` so `dragHandle` only matches a node's OWN header, never a member's (defect 6); repoints `measurePortDots` at `portDotSightings.ts`'s `sightPortDots`, keeping only the rect-ratio projection and `Position` mapping host-side (defect 7); adds `nodeDragThreshold={4}` (drag-policy lane's owed wiring)",
+    "apps/storybook-basics/src/components/wireLayer.tsx — `resolveDot` now checks `closest(\"[data-block-id]\") === block` before accepting a `[data-port-id]` match, so a member reusing its parent's port name (defect 2) resolves to the parent's own dot",
+    "apps/storybook-basics/src/hosts/hostGestures.ts — adds `dragSteps`, a `dragFrom` variant with an `onStep` callback for defect 5's mid-drag sampling",
+    "apps/storybook-basics/src/stories/WireLayerOwnership.stories.tsx — new: defect 2's regression test",
+    "apps/storybook-basics/src/stories/Scene.stories.tsx — its own `dotOf` test helper carried the identical bug wireLayer.tsx had (defect 2); fixed the same way, plus a `lane:host-fixes` retag",
+    "apps/storybook-basics/src/stories/SceneHosts.stories.tsx — edge-path selectors updated from the stock `react-flow__edge-path` class to the trunk's own `[data-slot=\"trace-line\"]` (defect 3); adds an async-dash assertion; adds `MemberHeaderDoesNotDragParent` (defect 6's regression test)",
+    "apps/storybook-basics/src/stories/SceneHostsTldraw.stories.tsx — same edge-path selector fix as SceneHosts.stories.tsx",
+    "apps/storybook-basics/src/stories/BlockPortHosts.stories.tsx — `BlockResizeReactFlow` now proves real hit-testing (`elementsFromPoint`) at all 8 resize controls before pressing (defect 4); adds `BlockResizeTopLeftReactFlow`, defect 5's regression test; taller canvas to clear the stock zoom-controls panel",
+    "docs/ALGORITHM-PROVENANCE.md — new `src/hosts/reactFlowHost.tsx` section citing `demos/scene/src/TraceEdge.tsx` as `TraceEdge`'s donor"
+  ],
+  "findings": [
+    "Defect 1 root cause, confirmed by instrumentation (not guessed): React Flow's `adoptUserNodes` (`checkEquality: true` by default) keeps its cached internal node — and its `measured` size — only when the incoming node object is the SAME reference as last render. `rfNodes` decorates every node fresh on every scene update, so `measured` reset to `{width: undefined, height: undefined}` on every drag, and `NodeWrapper` sets `visibility: hidden` until the next ResizeObserver tick. A press landing in that window hit `.react-flow__pane` (proven via `document.elementsFromPoint`, not inferred) and panned the canvas — indistinguishable from a real drag by `getBoundingClientRect` alone, which is exactly what `DragPolicy.stories.tsx`'s assertion measures.",
+    "Defect 1 fix, measured: 25/25 consecutive green runs of `DragPolicy.stories.tsx` after the fix (was failing ~1 run in 8-15 before — reproduced 3 times independently during root-causing). Full 54-file / 238-test story suite green throughout.",
+    "Defect 2: `resolveDot`'s bug and the fix's regression test were BOTH pressure-tested against the running code — the new story fails on the pre-fix `resolveDot` (`toProc < toKid` assertion fails) and passes after. `Scene.stories.tsx` had an INDEPENDENT copy of the identical bug in its own `dotOf` test helper, which is why `SceneReactFlow`'s `e-cmd` assertion started failing the moment `wireLayer.tsx` alone was fixed — both were wrong the same way, so neither test had ever caught it.",
+    "Defect 3: measured before the fix — `wireLayerCount: 0`, `trunkTraceCount: 0`, 3 stock `.react-flow__edge` bezier paths, and the async `e-cfg` edge rendered solid (no `stroke-dasharray`) despite `data: { variant: \"async\" }`. After: `[data-slot=\"trace\"][data-variant=\"async\"]` and a real `stroke-dasharray` on the line, asserted in `SceneReactFlow` directly (not just \"a path exists\", which passed both before and after).",
+    "Defect 4 root cause, refuting the 'port-rail occlusion' theory as too narrow: `document.elementsFromPoint` at each of the 8 resize controls' own centres, pre-fix, resolved to `[data-slot=\"block-port\"]` (top-left) or `[data-slot=\"port-edge\"]` (bottom-left, bottom-right) — only top-right (no port nearby) was reachable. The real cause is DOM order (`NodeResizer` rendered BEFORE the Block's own content) compounded by z-index (`portEdge.tsx` sets `zIndex: 1`/`5`/`10` on its own elements, `NodeResizer`'s controls set none) — moving the resizer later in DOM order alone fixed 2 of 4 corners; only adding `zIndex: 20` fixed all 8.",
+    "Defect 4 fix, measured: after the fix, `document.elementsFromPoint` at all 8 controls' centres resolves each one to itself, not to any port/rail element — asserted as a hard gate in `BlockResizeReactFlow` before any gesture is dispatched.",
+    "Defect 5, measured: sampling the Block's own `getBoundingClientRect()` at 5 evenly-spaced points during a top-left resize drag — pre-fix, at least one intermediate sample differed from the pre-drag box (the slide); post-fix, none do, and the box changes exactly once, after release.",
+    "Defect 6, measured: pressing kid's own header (a member nested inside proc, which ALSO declares `ports:{left:[\"in\"]}` reusing the parent's own port name) moved proc by 58px pre-fix — reproduced live in this lane, matching the two independent measurements (57,24 and 40.8px) the brief cited. Post-fix, proc moves ≤1px from the same gesture, and its own header still drags it normally (≥40px, asserted as the control).",
+    "Defect 7: `measurePortDots` now delegates its sighting half to `portDotSightings.ts`'s `sightPortDots` (built by the tldraw lane for exactly this repointing) and keeps only the rect-ratio-to-node-local-px projection and `Position` mapping, which `sightPortDots` deliberately does not do. Full suite unchanged (54/238) — behavior-preserving.",
+    "Two items from the drag-policy lane's owed-wiring list were evaluated and NOT attempted, each reported rather than papered over: replacing `DRAG_HANDLE_FOR_TYPE` with `dragPolicy.ts`'s resolver would require bypassing React Flow's CSS-selector-based `dragHandle` filter entirely (it exposes no arbitrary-predicate hook), which conflicts with defect 6's already-proven fix; carrying `select` NodeChanges through `applyPositionChanges` would need a new field on `SceneNode`, which lives in `src/scene/scene.ts` — outside this lane's write set (`src/scene/**` is owned by the validation-stack workflow).",
+    "Not a pinned pre-work baseline (this lane went straight to reproducing defect 1 instead of measuring first, as the brief asked) — but `pnpm test-stories` and `pnpm exec tsc --noEmit -p .` were re-run after EVERY fix, never just once at the end, and both stayed green throughout with the count only ever going UP (2 new regression story files) or staying flat. Final: 54 files / 238 tests (storybook project), 33 files / 611 tests (unit project), `tsc --noEmit` clean."
+  ],
+  "sections": [
+    {
+      "heading": "Defect 1 — the flake that started this lane, before and after",
+      "html": "<table><thead><tr><th></th><th>before the fix</th><th>after the fix</th></tr></thead><tbody><tr><td><b>DragPolicy.stories.tsx</b> (BlockSolid, <code>viaBody</code>)</td><td>failed on run 8, then run 4, then run 15 of independent loops (~1 in 8-15)</td><td><b>25 / 25</b> consecutive green runs</td></tr><tr><td>Failure signature</td><td>binary: exactly <code>0</code> or exactly <code>56.60388679233962</code> (the full drag delta) — never partial</td><td>n/a</td></tr><tr><td>Root cause</td><td colspan=\"2\">React Flow's own <code>measured</code> node-size cache reset to unmeasured on every scene update (object-identity churn in <code>rfNodes</code>), flipping the node to <code>visibility:hidden</code> for one ResizeObserver tick; a press landing there fell through to the pane and panned the canvas instead of touching the node — confirmed by instrumenting <code>document.elementsFromPoint</code> at the exact press coordinate, not inferred from behaviour.</td></tr></tbody></table>"
+    },
+    {
+      "heading": "Defect 3 — stock bezier vs the trunk's own Trace",
+      "html": "<p>Same scene (<code>HOST_SCENE</code>), same React Flow host, same viewport — only <code>rfEdges</code>' <code>type</code> differs. The async <code>aux → cfg</code> wire (bottom pair) is the tell: <code>data: { variant: \"async\" }</code> was always there, but the stock bezier never reads <code>Edge.data</code>.</p>",
+      "images": [
+        {
+          "file": "/home/bam/bbox-ui/reports/media/host-fixes-2026-09-18-before/defect3-before-stock-bezier.png",
+          "title": "Before — React Flow's stock bezier",
+          "caption": "No edgeTypes entry; every wire (including the async one) renders identically, solid."
+        },
+        {
+          "file": "/home/bam/bbox-ui/reports/media/host-fixes-2026-09-18/defect3-after-trunk-trace.png",
+          "title": "After — TraceEdge (getBezierPath + trunk TraceBody)",
+          "caption": "Same geometry source (React Flow's own getBezierPath), but painted by the trunk's TraceBody — the async wire now dashes."
+        }
+      ]
+    },
+    {
+      "heading": "Defect 4 — real hit-testing at all 8 resize controls, before and after",
+      "html": "<p>Not a visual difference (the controls are the same size and position either way) — the bug is which element a REAL pointer would actually hit. <code>document.elementsFromPoint</code> at each control's own centre, read directly off the running DOM:</p><table><thead><tr><th>control</th><th>before the fix</th><th>after the fix</th></tr></thead><tbody><tr><td>top-left</td><td>occluded by <code>[data-slot=\"block-port\"]</code></td><td>the grip itself</td></tr><tr><td>top-right</td><td>the grip itself (no port nearby)</td><td>the grip itself</td></tr><tr><td>bottom-left</td><td>occluded by <code>[data-slot=\"port-edge\"]</code></td><td>the grip itself</td></tr><tr><td>bottom-right</td><td>occluded by <code>[data-slot=\"port-edge\"]</code></td><td>the grip itself</td></tr><tr><td>+ 4 edge (line) controls</td><td>not individually re-measured before the fix</td><td>all 4: the control itself</td></tr></tbody></table><p>Every existing resize story stayed green throughout because its gesture helper dispatches events directly on the element reference, bypassing browser hit-testing — this is the measurement that would have caught it.</p>"
+    }
+  ],
+  "stories": [
+    {
+      "id": "interaction-drag-policy--block-solid",
+      "title": "Interaction · Drag Policy · Block (solid)",
+      "look_for": "defect 1's story — the run-statistics table above is the real evidence; this is the canvas the flake happened on",
+      "w": 1000,
+      "h": 500,
+      "settle": 700
+    },
+    {
+      "id": "blocks-host-fixes-wire-layer-ownership--own-dot-over-member-dot",
+      "title": "Blocks · Host Fixes · Wire Layer Ownership",
+      "look_for": "the wire lands squarely on proc's OWN dot (with the arrowhead), not kid's outlined one below it — defect 2",
+      "w": 480,
+      "h": 260,
+      "settle": 900
+    },
+    {
+      "id": "blocks-blockport-in-a-host--block-resize-react-flow",
+      "title": "Blocks · BlockPort · In A Host · Resize (ReactFlow)",
+      "look_for": "the resized Block, post-drag — all 8 controls are now real-hit-tested before this gesture runs (defect 4)",
+      "w": 500,
+      "h": 440,
+      "settle": 1500
+    },
+    {
+      "id": "blocks-blockport-in-a-host--block-resize-top-left-react-flow",
+      "title": "Blocks · BlockPort · In A Host · Resize from top-left (defect 5)",
+      "look_for": "a top-left resize that no longer slides before snapping — position and size now commit together",
+      "w": 500,
+      "h": 440,
+      "settle": 1500
+    },
+    {
+      "id": "blocks-scene-in-a-host--member-header-does-not-drag-parent",
+      "title": "Blocks · Scene · In A Host · Member Header Does Not Drag Parent",
+      "look_for": "proc, after its own header (not kid's) dragged it — kid's header press earlier in this same test moved proc ≤1px",
+      "w": 800,
+      "h": 460,
+      "settle": 900
+    }
+  ]
+}

@@ -33,6 +33,7 @@ function DropdownMenuContent({
   collisionPadding,
   container,
   className,
+  style,
   ...props
 }: MenuPrimitive.Popup.Props &
   // WHY `anchor`/`collisionPadding` were added to this Pick (2026-09-18,
@@ -74,9 +75,15 @@ function DropdownMenuContent({
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
-            "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground min-w-32 rounded-lg p-1 shadow-md ring-1 duration-100 data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 z-50 max-h-(--available-height) w-(--anchor-width) origin-(--transform-origin) overflow-x-hidden overflow-y-auto outline-none data-closed:overflow-hidden",
+            "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground min-w-32 p-1 shadow-md ring-1 duration-100 data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 z-50 max-h-(--available-height) w-(--anchor-width) origin-(--transform-origin) overflow-x-hidden overflow-y-auto outline-none data-closed:overflow-hidden",
             className,
           )}
+          // The skin seam (src/skin/skin.ts + skin.css) — `rounded-lg`
+          // moved off the class list (also covers `DropdownMenuSubContent`
+          // below, which renders THIS component) and onto here so a skin
+          // can reach it. `var(--radius-lg)` is exactly what it resolved
+          // to, so a consumer who never imports skin.css is byte-identical.
+          style={{ borderRadius: "var(--bbox-skin-radius, var(--radius-lg))", ...style }}
           {...props}
         />
       </MenuPrimitive.Positioner>
@@ -248,11 +255,16 @@ function DropdownMenuRadioItem({
   );
 }
 
-function DropdownMenuSeparator({ className, ...props }: MenuPrimitive.Separator.Props) {
+function DropdownMenuSeparator({ className, style, ...props }: MenuPrimitive.Separator.Props) {
   return (
     <MenuPrimitive.Separator
       data-slot="dropdown-menu-separator"
-      className={cn("bg-border -mx-1 my-1 h-px", className)}
+      className={cn("-mx-1 my-1 h-px", className)}
+      // The skin seam — `bg-border` moved off the class list and onto here
+      // (`var(--color-border)` is exactly what it resolves to, so a
+      // consumer who never imports skin.css is byte-identical): the same
+      // token Block's own header/footer dividers read.
+      style={{ background: "var(--bbox-skin-stroke, var(--color-border))", ...style }}
       {...props}
     />
   );

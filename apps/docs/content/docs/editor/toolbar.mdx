@@ -1,0 +1,32 @@
+---
+title: Toolbar
+description: The tool rail that places blocks and ports — exists today as host app code, not as a kit component.
+---
+
+<Callout title="Status — partial: host chrome exists, no kit component">
+  The repo's playground app has a working toolbar — tldraw's toolbar extended
+  with bbox tool families (a Block tool, a Port tool, grouped family
+  drop-downs with remembered preferences). But it is **app code inside one
+  tldraw host**, built from tldraw's own UI primitives. No host-neutral
+  toolbar component exists in any kit, and nothing installs from the
+  registry. This page records that honestly.
+</Callout>
+
+## What exists
+
+`apps/playground` in the repo wires `BBOX_BLOCK_TOOL_ID` and
+`BBOX_PORT_TOOL_ID` (from the tldraw adapter) into tldraw's `DefaultToolbar`,
+with family drop-downs (draw tools, shape tools, black-box tools) and a small
+preferences model remembering each family's last-used tool.
+
+That is the right place for most of it to live: *which tool is active* is
+host-owned interaction state, exactly like hit-testing and drag. What could
+become a kit component is the part that is not tldraw-specific — the family
+grouping model and the block/port tool vocabulary.
+
+## What "toolbar" would mean as an editor-kit member
+
+A host-neutral tool rail that reads the available block/port vocabulary,
+renders with the [components kit](/docs/components), and emits one mutation
+class — "create this element here". It does not exist yet. When it does, the
+playground's toolbar becomes one host's rendering of it.

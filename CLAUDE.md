@@ -13,9 +13,41 @@ when you are **changing** the repo.
 
 **The core imports no canvas engine.** `packages/bbox-ui` is props in, DOM out —
 zero imports of tldraw, zero of React Flow, no pointer listeners, no
-self-measurement, no z-index. Layout geometry is portable and lives in the core;
-interaction geometry (hit-testing, snapping, drag, z-order) is host-owned and
-never travels.
+self-measurement. Layout geometry is portable and lives in the core;
+interaction geometry (hit-testing, snapping, drag) is host-owned and never
+travels.
+
+**Z-index is not one thing, and this line used to say it was never emitted
+here — that was already false the day it was written.** Amended 2026-09-18
+(Card 04, the z-order lane): the mechanical test is whether the answer can be
+computed from ONE component's own props, knowing nothing about what else is
+on the canvas and nothing about what the pointer is doing.
+- **Paint order WITHIN one component's own box** (which member paints above
+  which, a header above a member's overflow, a port dot above its own
+  Block) is deterministic from that component's own tree, identical on every
+  host, and required for the render to be correct at all — that is layout,
+  it is portable, and it is named in `apps/storybook-basics/src/components/
+  paintOrder.ts`. Retroactively honest, not new: `blockPort.tsx` and
+  `portEdge.tsx` were already emitting raw `zIndex` literals, coordinated
+  only by prose comments across three files, before this ladder existed —
+  see `docs/provenance/z-order.md`.
+- **Z-order BETWEEN nodes on a canvas** (which node is on top,
+  raise-on-select, drag-to-front) needs the selection, the pointer, or a
+  sibling node's identity — that stays interaction geometry, host-owned,
+  never travels.
+- **The structural wall between the two:** every component root that emits a
+  paint tier sets `isolation: isolate`, a hard CSS stacking-context boundary
+  — a descendant's z-index cannot outrank anything outside its isolated root
+  no matter what integer it carries. The kit still never emits a z-index on
+  a node ROOT (a Block's own outer box); only a host does that. Mutation-
+  tested proof that the wall is load-bearing (not just documented) is in
+  `docs/provenance/z-order.md`.
+
+(Zach, 2026-09-18: "Right now we're not doing any z-index. BUT I think that
+is changing... in DOM canvas examples with expanded nodes with children
+inside we definitely need this." That is what this section resolves —
+between-node z-order is still his to grant per host; within-box paint order
+is granted here, once, for every host.)
 
 An adapter may import the core and its own engine — never the other engine,
 never the other adapter. That rule is what keeps a third host a ~150-line
@@ -125,18 +157,36 @@ registry.json tweak. Until then they are reference implementations, and the docs
 say so. Do not paper over it.
 
 **Sixteen items now publish the trunk directly** (`badge`, `bar`, `text`,
-`editable-text`, `folding-chevron`, `block-v2`, `port-v2`, `code-editor`,
+`editable-text`, `folding-chevron`, `block-card`, `port-dot`, `code-editor`,
 `labeled-port`, `port-edge`, `block-port`, `trace`, `trace-badge`,
 `trace-editor`, `trace-tidy`, `wire-layer`) — sourced from
 `apps/storybook-basics/src/`, each self-contained the same way `port`/`block`
 are (no `registryDependencies` between bbox items; a shared file like
 `elbow/*` or `lib/utils.ts` is simply re-listed, with its own `target`, by
-every item that needs it). `port-v2`/`block-v2` exist because `port`/`block`
-already name the pre-reset `packages/bbox-ui` lineage and repointing those
-names would silently break `apps/docs`'s live preview (which still imports
-`@bbox-ui/core`) against its own install tab — that mismatch is real,
-unresolved follow-up work for whoever migrates `apps/docs`, not something to
-paper over with a rename here.
+every item that needs it).
+
+**Naming principle (Zach, 2026-09-17): bbox-ui's own names are descriptive
+and precise; shorthand belongs to the consumer.** SystemSketch calls its
+primitive a "port" and has no reason to know it's assembled from several
+bbox-ui components — that shorthand is SystemSketch's to use, not ours to
+bake into the registry. `block-card`/`port-dot` replace this pass's original
+`block-v2`/`port-v2` names, which encoded history (a naming collision with
+the v1 lineage below) instead of what the items are. `port.tsx` is the dot
+alone — geometry, no label, no slot — and the code already names it that way
+(`data-slot="port-dot"`, `portDotClass`); `labeled-port`/`port-edge` are what
+add the label and the rail around it. `block.tsx` is header/body/footer
+chrome painted with shadcn's own `bg-card`/`text-card-foreground` tokens and
+its own doc comment calls it "a card with a header, a body, a footer" —
+`block-card` names that directly, and `block-port` is the wrapper that mounts
+ports on its walls.
+
+`port`/`block` (no suffix) stay exactly as they are on purpose — still
+pointing at the frozen `packages/bbox-ui` lineage. Renaming them would
+silently break `apps/docs`'s live preview (which still imports
+`@bbox-ui/core`) against its own install tab. The short names sitting on the
+legacy lineage rather than the descriptive trunk items is deliberate and
+self-correcting — it resolves itself the day `apps/docs` migrates to the
+trunk, not something to "fix" by renaming `port`/`block` now.
 
 Two things the reset shipped are deliberately **not** registry items:
 - **`glyph.tsx`** — imports `@bbox-ui/glyph-content`, `private: true` and
@@ -201,6 +251,77 @@ nothing at all. Awaiting one real element first is what gives every later
 assertion in that play function something to be false about. 115 play
 functions here still open synchronously (most predate the menu kit); fix
 them as you touch them rather than in one sweep.
+
+## Story tags — every lane's work is findable by its tag
+
+Zach, 2026-09-17, looking at 47 story files with no way to filter them: *"I
+still need better help navigating the storybook... each agent I think that
+delivers work should like group it under a tag."* Storybook's sidebar filter
+menu builds a checkbox per tag **automatically** — any tag on a story's
+`meta.tags` that isn't one of Storybook's own reserved tags (`dev`, `test`,
+`autodocs`, `attached-mdx`, `unattached-mdx`, `play-fn`, `test-fn`,
+`manifest`) becomes a filterable entry with a live count, no registration
+step required. Verified by reading the built sidebar bundle itself
+(`storybook/dist/manager/runtime.js`, `src/manager/components/sidebar/
+FilterPanel.utils.ts` and `useFilterData.tsx`): `useTagFilterEntries` walks
+every indexed story, buckets any non-`BUILT_IN_TAGS` tag into
+`userTagsCounts`, and turns each into a checkbox — that is the whole
+mechanism, and it is exactly what this section uses.
+
+**The "New / Modified / Related" row in that same filter menu is a
+different, unrelated feature — do not try to populate it with tags.** It is
+Storybook's git-based Change Detection status (`STATUS_DISPLAY_ORDER`:
+`status-value:new` / `modified` / `affected` — "Related" is `affected`'s
+display name), gated behind `globalThis.FEATURES.changeDetection` and fed by
+a status provider (Chromatic-class integration), not by `tags` at all. It
+reads 0/0/0 regardless of what any story is tagged, and there is no local
+config that wires it up from this repo alone.
+
+**The vocabulary is closed — two prefixes, nothing else:**
+
+- **`area:<name>`** — one per file, matching the story's own top-level
+  `title` segment: `basics`, `blocks`, `hit-regions`, `ports`, `presets`,
+  `styles`, `trace`. Mechanical to derive (`title.split("/")[0]`,
+  lowercased) — don't invent a new area without adding it here first.
+- **`lane:<slug>`** — one per file, naming the delivery that produced or most
+  recently substantively changed it. **When your lane creates a new story
+  file or materially reworks an existing one, set its `lane:` tag to your
+  own branch/task slug** (e.g. `lane:component-docs-reorganize`) — this is
+  the literal mechanism Zach asked for: `git grep -l 'lane:<slug>'` finds
+  everything one delivery touched, and he can say "that tag is obsolete" and
+  it's a mechanical `sed`/grep-and-delete across those files, not an
+  archaeology project.
+  - Every file that predates this convention (2026-09-17) carries
+    `lane:baseline` instead of a fabricated historical lane name — the repo's
+    real history here is prose commit messages and squashed/rebased
+    branches, and guessing a precise per-file lane from those would be
+    fabricated precision, not provenance. `lane:baseline` is honest about
+    what it is: "existed before lane tags did." Retag a file to its real
+    lane only when you actually touch it for a reason.
+
+Add both tags as the second line of `meta`, right after `title:` — every
+existing file follows this order, so a new one should too:
+
+```ts
+const meta = {
+  title: "Blocks/Block",
+  tags: ["area:blocks", "lane:baseline"],
+  component: Block,
+  ...
+} satisfies Meta<typeof Block>;
+```
+
+**`WhatsNew.stories.tsx` is retired** (was: a git-derived changelog view,
+`docs/build_whats_new.mjs` → `pnpm whats-new` → a gitignored JSON the story
+read). It answered "what changed recently," a real but different question
+from "what did lane X deliver" — but it shipped generating nothing for a
+fresh clone (nobody runs `pnpm whats-new` automatically), so every session
+including Zach's own saw a permanently-empty group costing sidebar space for
+zero information. Faced with that, Zach's own next words were to ask for
+tags instead. `docs/build_whats_new.mjs` is left in place (its git-derived
+answer is still correct, just not rendered anywhere right now) in case a
+future surface wants a "recently changed" view; the story consuming it is
+gone.
 
 ## Isolated agent lanes — the two lines every one of them needs
 

@@ -1,0 +1,75 @@
+{
+  "title": "Host phase 2 — the tldraw host",
+  "summary": "The status answer first: phase 2 (tldraw) had never been started — but tldraw already worked twice in this repo's pre-reset lineage, and this lane ports the PATTERN to the trunk. The three-host proof is now genuine: one HOST_SCENE literal through DOM, React Flow, and tldraw.",
+  "base_ref": "064be4b",
+  "branch_label": "worktree-agent-ae915e861cde18bd8 (isolated lane)",
+  "storybook_port": 5492,
+  "slug": "host-phase2-tldraw",
+  "intro": [
+    "<b>What existed before this lane.</b> Two working pre-reset tldraw implementations, both hanging off the frozen <code>@bbox-ui/core</code>: the T0 spike's story host (<code>demos/story-hosts/src/TldrawHost.tsx</code>, 205 lines + 38 of CSS) — source of the load-bearing finding that tldraw shape props are persisted document state and cannot hold a ReactNode — and the full adapter (<code>packages/adapter-tldraw/src/</code>, 1,457 lines: block/glyph/port ShapeUtils plus a detach subsystem), whose package description states the second rule this lane preserves: <i>\"port anchors are geometry points, not DOM elements.\"</i> Neither could be reused directly (frozen-v1 imports); both were read as donors and are cited at every seam.",
+    "<b>What phase 1 shipped</b> (<code>4ada3f8</code>): <code>src/hosts/</code> with the DOM control host and a real React Flow host, one shared <code>HOST_SCENE</code> fixture, four faces (block/glyph/code/value), and the gesture-boundary stories. tldraw was deliberately cut with \"half of that landing is worse than none.\"",
+    "<b>What this lane adds</b> (2 commits, <code>5eb7809</code> + <code>2395845</code>): a real tldraw 5.3.2 host (<code>src/hosts/tldrawHost.tsx</code>, ~490 lines) — one ShapeUtil, shape props limited to <code>{w, h, nodeId}</code>, content via React Context, port anchors measured once through a new engine-free sighting seam (<code>src/hosts/portDotSightings.ts</code>) and projected to shape-local geometry via <code>screenToPage</code> + <code>getPointInShapeSpace</code>, and a page-space wire overlay painting the trunk's own <code>Trace</code> from anchors × live shape transforms (no DOM read at paint time). Plus five stories mirroring the SceneHosts idiom, including the three-column story below. Measured: typecheck clean, <code>pnpm test-stories</code> 48 files / 197 tests (baseline 47/192), unit 24 files / 393.",
+    "<b>What is still missing.</b> Interactive edge <i>creation</i> (drawing a wire from a port) in every host — phase 1 called it out and it stays out here. Body-click selection on tldraw block faces (see the gesture trade-off in Findings). The React Flow host still paints stock beziers, so the async edge's dashing shows only in the DOM and tldraw benches. And the sighting seam's React Flow half is owed: <code>reactFlowHost.tsx</code> keeps its private copy until the planned extraction lane repoints it."
+  ],
+  "changes": [
+    "<code>apps/storybook-basics/src/hosts/tldrawHost.tsx</code> — new: the host. ShapeUtil (<code>bbox-node</code>) + gesture boundary (<code>markEventAsHandled</code>, SystemSketch's device, keyed off the shared <code>POINTER_OWNED_CLASS</code> plus an own-header drag surface resolved through <code>data-block-id</code>) + wire overlay (tldraw's <code>OnTheCanvas</code> slot, trunk <code>Trace</code> paint) + scene write-back at rest (<code>onTranslateEnd</code>/<code>onResizeEnd</code>)",
+    "<code>apps/storybook-basics/src/hosts/portDotSightings.ts</code> — new: the engine-free dot-sighting module, written as the extraction request the React Flow audits asked for — viewport-space sightings, projection host-owned; its header names the exact factoring and the copy it should replace",
+    "<code>apps/storybook-basics/src/stories/SceneHostsTldraw.stories.tsx</code> — new: 5 stories, all with measured play functions (path endpoints vs rendered dots, elementFromPoint hit-target checks, wheel pan + ctrl-wheel zoom, dnd-kit reorder with wires re-anchoring, a pinned-exact CSS leak tripwire)",
+    "<code>apps/storybook-basics/vitest.config.ts</code> — <code>tldraw</code> added to <code>optimizeDeps.include</code> as insurance; the comment records the honest measurement (see Findings)",
+    "<code>docs/capture_storybook_shots.mjs</code> + <code>docs/build_lane_report.py</code> — additive: optional per-shot <code>settle</code> (a drag-journey story's capture must be its END state, not a mid-gesture blur) and optional manifest <code>intro</code> (this Status section); every existing caller unchanged"
+  ],
+  "findings": [
+    "<b>The anchor pipeline is the real difference between the hosts, measured:</b> React Flow measures dots and mounts invisible <code>&lt;Handle&gt;</code>s the engine resolves from the DOM; tldraw's paint happens in page space where no node DOM exists, so anchors must BE geometry — measured once per layout change, stored as shape-local numbers, projected through live transforms. The oracle: play functions assert each wire's drawn endpoint lands at dot-centre + the 16px terminal gap, against <code>getBoundingClientRect</code> of the real dot — and the rail-reorder story proves the anchors move when dnd-kit swaps the dots.",
+    "<b>Fully pure anchors are impossible against the trunk today</b> — deliberately. The pre-reset adapter computed anchors in closed form from props; the trunk's rails are positioned against MEASURED block bands (<code>useBlockBands</code>, <code>railBoxFor(bands)</code>) because a Block's regions hug rendered content (blockPort.tsx's D-A5). So \"anchors are geometry points\" here means measured-once-then-geometry, not never-measured. That is a fixture-portability fact worth knowing, not a bug.",
+    "<b>The sighting seam signature this lane requests</b> (and implemented, so the extraction lane has a landing zone): <code>sightPortDots(root: HTMLElement, nodeId: string): {portId, clientX, clientY, side: BlockSide | null}[]</code> — raw viewport coordinates, no scale math, no engine enum; each host projects at its own boundary. <code>reactFlowHost.tsx:87-134</code>'s private copy becomes deletable the day that host imports this module and maps <code>side</code> → <code>Position</code> itself.",
+    "<b>Gesture boundary trade-off, stated:</b> tldraw's select tool makes select-and-drag ONE gesture, so hiding a block-body press (to mirror React Flow's header-only drag policy) also costs body-click selection — a block is selected by header or marquee. Splitting the two needs SystemSketch's preempt/interlock lane (memberStackDnd.tsx's four steps), deliberately not built for a bench. The predicate is one exported function (<code>contentOwnsPress</code>) so the planned <code>dragPolicy</code> module replaces it as one import swap. The member-header ambiguity the audit measured in React Flow does NOT exist here: header ownership resolves through the nearest <code>data-block-id</code>.",
+    "<b>hostGestures' mouse-event family: unnecessary for tldraw, harmless, kept.</b> tldraw's input stack (<code>useCanvasEvents</code>) listens for PointerEvents only — no d3, no mouse listeners — so unlike React Flow, the pointer half alone would reach it. One shared helper across all three hosts beats a second recipe.",
+    "<b>tldraw has exactly one real global CSS leak, now a pinned tripwire:</b> <code>tldraw.css:308-312</code> sets <code>user-select: text</code> on every <code>input</code>/<code>[contenteditable]</code> ON THE PAGE. It cannot change layout, colour or stacking; it can override a page's own <code>user-select: none</code>. The containment story asserts the offender list EXACTLY equals that one selector, so any new leak fails the suite. (First run also taught the sweep itself a lesson: a naive comma-split flags ten fully-namespaced <code>:is()/:not()</code> selectors; the story splits at paren depth 0.)",
+    "<b>The vitest pre-declare was NOT necessary, measured:</b> a cold-cache run (<code>node_modules/.vite</code> removed) with the tldraw stories present and no <code>optimizeDeps</code> entry passed 196/197 with no mid-suite re-optimize — unlike <code>@xyflow/react</code>, whose absence was measured red in 4ada3f8. The entry ships anyway as one-line insurance against a timing-dependent failure; the config comment says exactly this.",
+    "<b>hostScene.ts needed nothing added</b> — but tldraw is the first host that needs a BOX per node (its geometry cannot hug content), and the fixture authors <code>w/h</code> only for block/value nodes. The host measures the rendered face and writes the box into its own shape props (host state, never the scene record), which is the honest reading of \"the host measures; the scene contains.\"",
+    "<b>Owed wiring in fenced files</b> (reported, not made): <code>reactFlowHost.tsx:87-134</code> → import the sighting seam, delete the private copy; <code>reactFlowHost.tsx</code>'s <code>RESIZE_MIN_WIDTH/HEIGHT</code> + <code>DRAG_HANDLE_FOR_TYPE</code> and tldrawHost's mirrored constants + <code>contentOwnsPress</code> → one shared <code>dragPolicy</code> module (tldraw host cannot import them today: that module's first line loads React Flow's global stylesheet).",
+    "<b>Licence:</b> the dev watermark (\"Get a license for production\") renders as expected; localhost is carved out permanently, which is exactly where Storybook and the vitest browser live. Never mount this host in <code>apps/docs</code>."
+  ],
+  "stories": [
+    {
+      "id": "blocks-scene-in-a-host-tldraw--three-hosts",
+      "title": "Same Scene, Three Hosts",
+      "look_for": "THE review story: one HOST_SCENE literal through DOM Canvas (control), React Flow, and tldraw — same faces, same nesting (kid inside proc), same wires; the async e-cfg edge renders dashed in DOM and tldraw (React Flow's stock bezier drops it)",
+      "w": 1500,
+      "h": 980,
+      "settle": 6000
+    },
+    {
+      "id": "blocks-scene-in-a-host-tldraw--scene-tldraw",
+      "title": "Scene (tldraw)",
+      "look_for": "the tldraw bench alone: all four faces inside real shapes, wires anchored on the dots, tldraw's stock UI (toolbar, style panel, zoom) alive around them",
+      "w": 900,
+      "h": 560,
+      "settle": 4000
+    },
+    {
+      "id": "blocks-scene-in-a-host-tldraw--viewport-and-shape-drag",
+      "title": "Viewport And Shape Drag (tldraw) — END state",
+      "look_for": "captured AFTER the play journey: proc translated by its own header and still selected (tldraw's blue indicator + resize handles), camera wheel-panned and ctrl-wheel-zoomed to 110%, wires re-anchored to the moved shape",
+      "w": 900,
+      "h": 560,
+      "settle": 12000
+    },
+    {
+      "id": "blocks-scene-in-a-host-tldraw--rail-reorder-and-caret-inside-a-shape",
+      "title": "Rail Reorder And Caret (tldraw) — END state",
+      "look_for": "the boundary fight's aftermath: proc's right rail reads aux/out (dnd-kit reordered it, the shape never moved, the camera never panned), e-set re-anchored to out's NEW slot, and the code face shows the text selection the caret drag made instead of a shape drag",
+      "w": 900,
+      "h": 560,
+      "settle": 12000
+    },
+    {
+      "id": "blocks-scene-in-a-host-tldraw--css-containment-tldraw",
+      "title": "CSS Containment (tldraw)",
+      "look_for": "the probe elements beside the host keeping their computed values; the play pins tldraw's one real global leak exactly",
+      "w": 760,
+      "h": 420,
+      "settle": 3000
+    }
+  ]
+}

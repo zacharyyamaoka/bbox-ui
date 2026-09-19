@@ -212,6 +212,7 @@ function Segmented<T extends string>({ options, value, onChange, slot }: { optio
 
 const meta = {
   title: "Blocks/BlockPort",
+  tags: ["area:blocks", "lane:baseline"],
   component: BlockPort,
   // Never read — every story supplies its own `render` with story-local
   // state, because `BlockPort`'s edges are controlled.

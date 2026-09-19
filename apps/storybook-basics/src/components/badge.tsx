@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import type { ComponentProps, CSSProperties } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
@@ -26,14 +26,26 @@ import { BAR_SIZE_TO_BADGE_SIZE, useBarSize } from "./barSize";
  * is opt-in via `shape="pill"`, not the new floor.
  */
 const badgeVariants = cva(
-  "inline-flex w-fit shrink-0 items-center justify-center overflow-hidden border font-medium whitespace-nowrap transition-[color,box-shadow] [&>svg]:pointer-events-none",
+  "relative inline-flex w-fit shrink-0 items-center justify-center overflow-hidden border font-medium whitespace-nowrap transition-[color,box-shadow] [&>svg]:pointer-events-none",
   {
     variants: {
       variant: {
         default: "border-transparent bg-primary text-primary-foreground",
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         destructive: "border-transparent bg-destructive text-white dark:bg-destructive/60",
-        outline: "text-foreground",
+        // docs/INVALID-STATES-PLAN.md §5's Badge row: "amber bg, dark
+        // text" — one cva row, no new component. `--bbox-warning` (ported
+        // in src/globals.css) stays light enough in BOTH themes that black
+        // text keeps its contrast; `destructive` above needs the opposite
+        // (white-on-dark-red) for the same reason.
+        warning: "border-transparent bg-[var(--bbox-warning)] text-black",
+        // The one variant with a REAL (non-transparent) border, so it's
+        // the one that gets `--bbox-skin-line-override`: default/secondary/
+        // destructive are already `border-transparent` and need nothing —
+        // suppressing an already-invisible border would be a no-op. See
+        // block.tsx's own line-override note on why the colour a skin
+        // suppresses has to be the one the STATE cascade already owns.
+        outline: "border-[color:var(--bbox-skin-line-override,currentColor)] text-foreground",
       },
       size: {
         sm: "gap-0.5 px-1.5 py-0 text-[0.65rem] [&>svg]:size-2.5",
@@ -41,9 +53,16 @@ const badgeVariants = cva(
         lg: "gap-1 px-2.5 py-1 text-sm [&>svg]:size-3.5",
         xl: "gap-1.5 px-3 py-1 text-base [&>svg]:size-4",
       },
+      // WHY radius moved OFF these two classes and onto inline style
+      // (see the component body): `rounded-md`/`rounded-full` bake a
+      // fixed radius no skin token can reach. The literal each falls back
+      // to below is unchanged from before this port — `rounded-md` here
+      // resolves to `var(--radius-md)` = 8px on this app's `--radius:
+      // 0.625rem` base, captured live off `basics-badge--variants` before
+      // the edit.
       shape: {
-        rounded: "rounded-md",
-        pill: "rounded-full",
+        rounded: "",
+        pill: "",
       },
     },
     defaultVariants: {
@@ -56,20 +75,46 @@ const badgeVariants = cva(
 
 export interface BadgeProps extends ComponentProps<"span">, VariantProps<typeof badgeVariants> {}
 
-export function Badge({ className, variant, size, shape, ...props }: BadgeProps) {
+export function Badge({ className, variant, size, shape, style, ...props }: BadgeProps) {
   // Explicit `size` wins; the ambient Bar cascade is only the fallback when
   // `size` itself is omitted, `"md"` (cva's own default) is the floor when
   // there is no Bar ancestor either.
   const barSize = useBarSize();
   const resolvedSize = size ?? (barSize && BAR_SIZE_TO_BADGE_SIZE[barSize]) ?? "md";
+  const resolvedShape = shape ?? "rounded";
   return (
     <span
       data-slot="badge"
       data-size={resolvedSize}
-      data-shape={shape ?? "rounded"}
-      className={cn(badgeVariants({ variant, size: resolvedSize, shape }), className)}
+      data-shape={resolvedShape}
+      // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. The edge has
+      // no props, so its default seed is geometry-derived
+      // (`${width}x${height}`) — a different wobble PATTERN than this
+      // component's own semantic seed, `badge:${resolvedSize}:${resolvedShape}`
+      // (same character and amplitude either way, just a different jitter
+      // sequence). Publishing it closes that gap: `sketchAtEdge.ts`'s
+      // `seedForBox` reads this attribute first.
+      data-bbox-seed={`badge:${resolvedSize}:${resolvedShape}`}
+      className={cn(badgeVariants({ variant, size: resolvedSize, shape: resolvedShape }), className)}
+      style={{
+        borderRadius:
+          resolvedShape === "pill"
+            ? "var(--bbox-skin-radius-pill, 9999px)"
+            : "var(--bbox-skin-radius, var(--radius-md))",
+        // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6.
+        // `currentColor` IS this variant's resolved line colour — every
+        // variant above sets its own `text-*` class, and a real CSS border
+        // (the `outline` variant) is already drawn in `currentColor`. A
+        // boundary twin is appended as a CHILD of this span, so it inherits
+        // the same `color` and lands on the same value without this
+        // component importing the skin or hardcoding a token.
+        ...({ "--bbox-ink-state": "currentColor" } as CSSProperties),
+        ...style,
+      }}
       {...props}
-    />
+    >
+      {props.children}
+    </span>
   );
 }
 

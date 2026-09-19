@@ -17,17 +17,44 @@
   min-width: 0;
   box-sizing: border-box;
   padding: 4px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  /* `--bbox-tok-bg`/`--bbox-tok-fg` (codeEditorTheme.ts): a syntax theme is
-     a background + foreground pair, not just token colours — a Dark Modern
-     editor on the page's own light card is not Dark Modern. Unset, both
-     fall through to today's literals unchanged. */
-  background: var(--bbox-tok-bg, var(--color-card));
-  color: var(--bbox-tok-fg, var(--color-foreground));
+  /*
+   * The skin seam (src/skin/skin.ts + skin.css), same pattern this file's
+   * own `--bbox-tok-*` lines already use one level down: a token read at
+   * the call site with TODAY'S value (1px solid var(--color-border), 6px)
+   * as its own `var()` fallback, so a consumer who never imports skin.css
+   * renders exactly the pixels this replaced.
+   */
+  border: var(--bbox-skin-stroke-width, 1px) solid var(--bbox-skin-stroke, var(--color-border));
+  border-radius: var(--bbox-skin-radius, 6px);
+  /* `--bbox-tok-bg`/`--bbox-tok-fg` (codeEditorTheme.ts) still take
+     precedence — a syntax theme is a background + foreground pair, not
+     just token colours, and a Dark Modern editor on a sketch-skinned
+     page is still Dark Modern. Only once NEITHER a theme nor a skin sets
+     one does it fall through to today's literal, unchanged. */
+  background: var(--bbox-tok-bg, var(--bbox-skin-surface, var(--color-card)));
+  color: var(--bbox-tok-fg, var(--bbox-skin-fg, var(--color-foreground)));
   cursor: text;
   overflow: hidden;
 }
+
+/*
+ * NO `SketchOutline` here, unlike Block/Badge/Port — a deliberate scope
+ * boundary, not an oversight: CodeMirror's `EditorView` mounts itself
+ * imperatively into `.bbox-code-editor` via `hostRef` (codeEditor.tsx),
+ * which is the sole child React ever manages on that node. A drawn
+ * outline needs to be a SIBLING (so React and CodeMirror never fight over
+ * the same parent's children), which means wrapping the whole component in
+ * a new root div — real surgery on a component nothing else in this port
+ * touches, for a cosmetic layer, not a token-correctness one. So in the
+ * sketch skin CodeEditor's border/background genuinely vanish (same
+ * `--bbox-skin-stroke: transparent` / `-surface: transparent` every other
+ * skinned component obeys) with no hand-drawn replacement — the field
+ * reads as bare text on the canvas, which is honest for "no box", just
+ * not as demonstrative as Block/Badge/Port's drawn ring. Matches
+ * packages/bbox-ui/src/codeField.css's own scope exactly (it wires only
+ * `--bbox-skin-font-mono`, nothing else) — this port already goes further
+ * by wiring border/radius/surface/fg too.
+ */
 
 .bbox-code-editor[aria-disabled="true"] {
   opacity: 0.6;
@@ -45,7 +72,11 @@
 }
 
 .bbox-code-editor .cm-scroller {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Ported from packages/bbox-ui/src/codeField.css:90 (its ONLY skin-token
+     line) — a code editor stays monospace by default and the sketch skin
+     is the one place that's a real taste call, not a bug: Zach, D3,
+     "a code field inherits the skin rather than pinning monospace." */
+  font-family: var(--bbox-skin-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
   /* Inherits the box's own inline `fontSize` (`fontSizePx`) rather than
      hardcoding a copy — the only way a per-instance size reaches
      CodeMirror's internal DOM. */
@@ -254,4 +285,50 @@
 
 .bbox-code-editor.bbox-code-tokens .tok-invalid {
   color: var(--bbox-danger, #c94b3f);
+}
+
+/*
+ * The diagnostic axis's squiggle (docs/INVALID-STATES-PLAN.md §5's
+ * CodeEditor row, §7's stock-parts table). `@codemirror/lint`'s OWN
+ * baseTheme already paints `.cm-lintRange-*` with a `background-image`
+ * data-URI squiggle baked from a LITERAL hex at import time (`#f11`,
+ * `orange`, `#999`) — no CSS variable can reach inside an already-encoded
+ * SVG string, so retinting means replacing the whole declaration, not
+ * overriding one property. This kit already draws its OTHER resting-text
+ * marks (EditableText, LabeledPort) as a plain `text-decoration: underline
+ * wavy/dotted` — reusing that recipe here, instead of hand-building a
+ * second SVG squiggle, is one fewer visual language for the same mark.
+ *
+ * WHY three classes (0,3,0): identical tie-break to `.cm-content.
+ * cm-lineWrapping` a few rules up in this file — CodeMirror injects its
+ * own `.ͼN.cm-lintRange-error` rule at (0,2,0) when the `EditorView`
+ * mounts, AFTER this stylesheet loads, so stylesheet order alone would
+ * let it win a same-specificity tie. `info` reuses the wavy/dotted split
+ * `diagnosticUnderlineStyle` already draws elsewhere in this kit — dotted,
+ * not wavy, so a merely-informational range never LOOKS as urgent as an
+ * error or warning range beside it.
+ */
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-error,
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-warning,
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-info {
+  background-image: none;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-error,
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-warning {
+  text-decoration-style: wavy;
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-info {
+  text-decoration-style: dotted;
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-error {
+  text-decoration-color: var(--bbox-danger, #c94b3f);
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-warning {
+  text-decoration-color: var(--bbox-warning, #c98a1b);
+}
+.bbox-code-editor.bbox-code-tokens .cm-lintRange-info {
+  text-decoration-color: var(--bbox-accent, #4f6ee5);
 }

@@ -1,0 +1,31 @@
+
+<div class="pc-note pc-risk"><b>Reviewed work that exists in no commit on any branch,
+anywhere.</b> A previous lane flagged the 1,182-line batch-wiring donor sitting untracked
+in systemsketch's <code>vision-consolidated</code> worktree. Re-measured today
+(<code>git status --porcelain</code>, live at build time): the situation is bigger than
+the flag. One <code>git stash&nbsp;-u</code> or <code>git clean&nbsp;-fd</code> in either
+worktree deletes all of it — source, reports, and the review screenshots this very page
+uses as figures.</div>
+<div class="pc-scroll"><table class="pc-tbl">
+<tr><th>Worktree (branch)</th><th>Untracked source, measured now</th><th>State</th></tr>
+<tr><td><b>vision-consolidated</b><br><code>claude/vision-consolidated</code></td>
+<td><code>src/system/</code> — the whole System-boundary-ports feature, <b>548 lines</b>
+across 4 files (model, commands, drag,
+drop, selection, migrations, tool, tests) · batch-wiring donor <b>1261 lines</b>
+(<code>batchWiring.ts</code>, <code>wireIntoState.ts</code>, commands, chrome) · plus its two
+review reports and ~30 review PNGs under <code>docs/</code> and <code>sketches/review/</code>,
+all untracked (63 untracked paths total)</td>
+<td>batch-wiring model already rescued into this repo as <code>scene/batchWire.ts</code>;
+the System MODEL is committed on the lane branch (13 commits, unmerged) but its gestures are
+not — <b>the System half is rescued nowhere</b>; it is candidate #5 below</td></tr>
+<tr><td><b>contextual-menu-next</b><br><code>claude/contextual-menu-next</code></td>
+<td><code>menuComposition.ts</code> + <code>menuCompositionStore.ts</code> + tests —
+<b>710 lines</b>: saved contextual-menu compositions as data (the lab writes,
+the product reads back)</td>
+<td>feeds candidate #9; unrescued</td></tr>
+</table></div>
+<p class="pc-body" style="margin-top:10px"><b>Recommendation</b> (needs a systemsketch
+session, not this repo): commit both worktrees' untracked files to their own lane branches
+— even a WIP commit ends the stash-risk. This lane did not touch them
+(systemsketch is read-only by rule); porting from them into bbox-ui, as
+<code>scene/batchWire.ts</code> already did, is the other durable rescue.</p>

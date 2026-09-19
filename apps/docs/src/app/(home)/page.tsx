@@ -47,28 +47,38 @@ export default function HomePage() {
         </a>
       </div>
 
+      {/* WHY three kits and not three components: the kit split
+          (components / scene / editor) is the project's vocabulary — the
+          landing page teaches it first, per ARCHITECTURE.md "Kits and
+          consumers". Each card states the kit's one rule. */}
       <div className="text-muted-foreground mt-16 grid max-w-3xl gap-8 text-left sm:grid-cols-3">
-        <div>
-          <p className="text-foreground font-medium">Port</p>
-          <p className="mt-1 text-sm">
-            A circle with a text slot. Four states, six text layouts, three
-            diameters.
+        <Link href="/docs/components" className="group">
+          <p className="text-foreground font-medium group-hover:underline">
+            Components
           </p>
-        </div>
-        <div>
-          <p className="text-foreground font-medium">Block</p>
           <p className="mt-1 text-sm">
-            Container, header band, glyph, text slots, chip. The icon rides the
-            title rung at 0.9&times;.
+            The atoms that draw a scene element — Block, Port, Trace. Props
+            in, DOM out. Imports no canvas engine, no scene.
           </p>
-        </div>
-        <div>
-          <p className="text-foreground font-medium">Two hosts</p>
+        </Link>
+        <Link href="/docs/scene" className="group">
+          <p className="text-foreground font-medium group-hover:underline">
+            Scene
+          </p>
           <p className="mt-1 text-sm">
-            The same core wrapped for React&nbsp;Flow and tldraw. The core
-            imports neither.
+            What exists, connects and nests, plus pure functions over it.
+            f(scene) &rarr; data. No React, no DOM, no engine.
           </p>
-        </div>
+        </Link>
+        <Link href="/docs/editor" className="group">
+          <p className="text-foreground font-medium group-hover:underline">
+            Editor Components
+          </p>
+          <p className="mt-1 text-sm">
+            The authoring surfaces — inspector, glyph picker, menus. They
+            produce scene mutations. Nothing imports them.
+          </p>
+        </Link>
       </div>
     </div>
   );

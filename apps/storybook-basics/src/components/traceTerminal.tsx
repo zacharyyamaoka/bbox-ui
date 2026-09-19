@@ -19,7 +19,7 @@
 // `TraceDir` in `./trace.layout.ts`. The arrowhead that distinguishes the
 // ends is painted by the trace (`markerEnd` at the `to` end), never here.
 
-import type { ComponentProps } from "react";
+import { type ComponentProps, type CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
 import { DIR_ROTATION, type TraceDir } from "./trace.layout";
@@ -111,12 +111,33 @@ export function TraceTerminal({
   className,
   ...props
 }: TraceTerminalProps) {
+  // WHY this glyph's drawn twin now lives at the boundary, not here
+  // (docs/peps/0001-sketch-skin-at-the-boundary.md M5b): before this
+  // migration, `SketchOutline` couldn't be used — it assumes HTML/CSS
+  // positioning (`position: absolute` against a `position: relative`
+  // ancestor) and this glyph is pure SVG, positioned by its own `<g
+  // transform>` — so this hand-rolled the same crisp/sketch pair
+  // `trace.tsx`'s own `TraceBody` used to. The boundary has no such
+  // problem: `sketchAtEdge.ts` appends a twin `<svg>` into THIS `<g>`
+  // (added to `DOT_SELECTOR`), which already inherits the `translate`/
+  // `rotate` transform above — the hand-rolled duplicate existed only
+  // because the core's own abstraction could not reach this case. The
+  // circle's fill still always paints (an opaque disc, never sketched —
+  // see this file's own `fill` doc); only its stroke is suppressed, now
+  // by the boundary's own crisp-suppression CSS rather than a per-skin
+  // `display` switch on a twin this file drew itself.
   return (
     <g
       data-slot="trace-terminal"
       data-dir={dir}
       transform={`translate(${x} ${y}) rotate(${DIR_ROTATION[dir]})`}
       className={cn(className)}
+      // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6. `color` is
+      // this glyph's own STATE-owned colour (the caller's prop, same split
+      // `portRingColor` makes), published here so a boundary sketch pass
+      // can draw the ring in the right colour without reading a
+      // `stroke`/`border-color` the skin has already blanked.
+      style={{ "--bbox-ink-state": color } as CSSProperties}
       {...props}
     >
       <circle
@@ -125,7 +146,26 @@ export function TraceTerminal({
         cy={0}
         r={radius}
         fill={fill}
-        stroke={color}
+        // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. This
+        // component's own seed (`trace-terminal:${dir}:${radius}`),
+        // published on the RING ITSELF rather than the parent `<g>` the
+        // plan's table names — `sketchAtEdge.ts`'s RING_SELECTOR loop
+        // reads `data-bbox-seed` off the circle it measures, matching
+        // where the M5b build deviation (see the build report) actually
+        // reads geometry from.
+        data-bbox-seed={`trace-terminal:${dir}:${radius}`}
+        // WHY `--bbox-skin-line-override` stays (deviation from the
+        // migration plan's literal table, which said to drop it — see the
+        // build report): dropping it would leave the crisp ring visible
+        // forever, even under the sketch skin. Block/Badge/PortEdge all
+        // keep the identical read for the identical reason — this token is
+        // the UNCHANGED, token-layer mechanism (docs/peps/0001's own "token
+        // styling stays exactly as it is") that blanks a state-owned line
+        // to transparent under sketch, and it is the only way to hide just
+        // the STROKE while the circle's opaque `fill` keeps painting; a
+        // `display:none` on the whole element (the mechanism `trace-line`
+        // uses) would hide the fill too.
+        style={{ stroke: `var(--bbox-skin-line-override, ${color})` }}
         strokeWidth={TRACE_TERMINAL_RING_PX}
       />
       {showDirection ? (

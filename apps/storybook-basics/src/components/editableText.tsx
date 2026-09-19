@@ -22,6 +22,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { BAR_SIZE_TO_EDITABLE_TEXT_SIZE, useBarSize } from "./barSize";
+import { diagnosticUnderlineStyle, maxDiagnosticSeverity, type Diagnostic } from "./highlighter";
 import {
   EDITABLE_TEXT_FONT_STACKS,
   editableTextAlignItems,
@@ -72,6 +73,14 @@ export interface EditableTextProps extends Omit<ComponentProps<"div">, "onChange
   /** The host may still pass `editing` while `readOnly` — the control just refuses input. */
   readOnly?: boolean;
   maxLength?: number;
+  /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's EditableText
+   * row): a wavy (`error`/`warning`) or dotted (`info`) underline on the
+   * rest span, painted at `max(severity)`; the editing control inherits
+   * the SAME `text-decoration` so the mark survives across the rest/edit
+   * swap rather than vanishing the instant a host clicks in to fix it.
+   */
+  diagnostics?: Diagnostic[];
 }
 
 type ControlElement = HTMLInputElement | HTMLTextAreaElement;
@@ -162,6 +171,7 @@ function EditableTextControl({
   placeholder,
   readOnly,
   maxLength,
+  diagnostics,
   onChange,
   onCommit,
   onCancel,
@@ -171,6 +181,7 @@ function EditableTextControl({
   placeholder?: string;
   readOnly: boolean;
   maxLength?: number;
+  diagnostics?: Diagnostic[];
   onChange?: (value: string) => void;
   onCommit?: (value: string) => void;
   onCancel?: () => void;
@@ -261,6 +272,7 @@ function EditableTextControl({
   // wiring one layer up (docs/TEXTBOX-EDITING-SPEC.md §3), not this file's job.
   const stopPropagation = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
+  const controlSeverity = maxDiagnosticSeverity(diagnostics);
   const style: CSSProperties = {
     ...CONTROL_TYPOGRAPHY_STYLE,
     // The shadcn focus-ring idiom: no chrome at all until focused, then a
@@ -270,6 +282,9 @@ function EditableTextControl({
     outline: focused ? "2px solid var(--bbox-ring, currentColor)" : "none",
     outlineOffset: focused ? 2 : undefined,
     ...(focused ? { borderRadius: 4 } : {}),
+    // §5: "the editing control inherits it" — the SAME underline the rest
+    // span wears, so the mark survives the rest/edit swap.
+    ...(controlSeverity ? diagnosticUnderlineStyle(controlSeverity) : null),
   };
 
   // WHY the marker is BOTH a class and a data-attribute, and the core emits
@@ -349,6 +364,7 @@ export function EditableText({
   placeholder = "",
   readOnly = false,
   maxLength,
+  diagnostics,
   className,
   style,
   children,
@@ -360,6 +376,7 @@ export function EditableText({
   // control to type into a ReactNode, so the box just renders rest.
   const isEditingNow = editing && typeof children === "string";
   const isEmptyText = children === undefined || children === "";
+  const textSeverity = maxDiagnosticSeverity(diagnostics);
 
   // Explicit `size` wins; the ambient Bar cascade (barSize.tsx) is only the
   // fallback when `size` itself is omitted, and `"md"` (this component's
@@ -369,7 +386,17 @@ export function EditableText({
 
   const boxStyle: CSSProperties = {
     fontSize: editableTextFontPx(resolvedSize, sizePx),
-    fontFamily: EDITABLE_TEXT_FONT_STACKS[font],
+    // The skin seam (src/skin/skin.ts + skin.css). `--bbox-skin-font-sans`
+    // is the token deferred here from Tranche 2 — this is the "TextBox/
+    // EditableText rung" its own deferred-list comment named. Reached ONLY
+    // when `font === "sans"` (the default): `font` is this component's own
+    // explicit per-instance choice — a caller who deliberately picked
+    // `"sketch"` or `"mono"` made a decision the ambient skin does not own,
+    // same as Badge's non-outline variants keeping their own
+    // `border-transparent` regardless of skin. `EDITABLE_TEXT_FONT_STACKS.
+    // sans` is the exact literal this replaces, so a consumer who never
+    // imports skin.css is byte-identical.
+    fontFamily: font === "sans" ? `var(--bbox-skin-font-sans, ${EDITABLE_TEXT_FONT_STACKS.sans})` : EDITABLE_TEXT_FONT_STACKS[font],
     alignItems: editableTextAlignItems(align),
     justifyContent: editableTextJustifyContent(justify),
     paddingTop,
@@ -437,6 +464,7 @@ export function EditableText({
         placeholder={placeholder}
         readOnly={readOnly}
         maxLength={maxLength}
+        diagnostics={diagnostics}
         onChange={onChange}
         onCommit={onCommit}
         onCancel={onCancel}
@@ -480,11 +508,15 @@ export function EditableText({
     content = (
       <span
         data-slot="editable-text-content"
-        style={
-          lines === "single"
+        data-diagnostic={textSeverity}
+        style={{
+          ...(lines === "single"
             ? { display: "block", minWidth: 0, maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
-            : { display: "block", minWidth: 0, maxWidth: "100%", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }
-        }
+            : { display: "block", minWidth: 0, maxWidth: "100%", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }),
+          // §5's EditableText row: wavy (error/warning) or dotted (info)
+          // underline on the rest span, painted at `max(severity)`.
+          ...(textSeverity ? diagnosticUnderlineStyle(textSeverity) : null),
+        }}
       >
         {rest}
       </span>

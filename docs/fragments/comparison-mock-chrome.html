@@ -1,0 +1,63 @@
+<!-- Mock: surface C's honest slice — the CompareView composition story (N6),
+     not the 1,127-line donor dialog. Shares the diff-paint fragment's styles. -->
+<p class="sub" style="margin-top:4px">Reframed per Q3: <b>the chrome pieces are
+editor-kit components with their own stories</b> — the editor kit's rule fits exactly
+("it imports both other kits; nothing imports it"). What ports: <code>CompareBar</code>
+(mode toggle · blend slider · fullscreen — Q4 chose this Figma overlay-slider design, and
+S5's linked cameras is its enabling mechanism), <code>PropertyTable</code> (S6),
+<code>DiffCodeView</code> (thin over the shipped <code>lineDiff</code>). What does not:
+the donor dialog's modal shell, tab persistence and launcher — app wiring. The eleven
+<code>systemsketch-track-diff-ui-*</code> worktrees are design material; the converged
+lineage already landed as <code>src/compare/</code>, the port source of record.</p>
+
+<div class="mockrow">
+  <div class="mockfig" style="max-width:640px; flex:1 1 420px">
+    <div class="mockstage" style="padding:0; overflow:hidden">
+      <div style="display:flex; align-items:center; gap:14px; padding:9px 14px;
+           border-bottom:1px solid var(--line); background:var(--panel); font:12px var(--mono)">
+        <span style="border:1px solid var(--line); border-radius:7px; overflow:hidden; display:inline-flex">
+          <span style="padding:3px 10px; background:var(--panel2); color:var(--fg)">Side-by-side</span><span style="padding:3px 10px; color:var(--dim2)">Overlay</span>
+        </span>
+        <span style="color:var(--dim2)">blend</span>
+        <span style="flex:1; max-width:120px; height:3px; background:var(--line); border-radius:2px; position:relative">
+          <span style="position:absolute; right:0; top:-4px; width:11px; height:11px; border-radius:50%; background:var(--accent2)"></span>
+        </span>
+        <span style="margin-left:auto; color:var(--dim2)">⛶ fullscreen</span>
+      </div>
+      <div style="display:flex; position:relative">
+        <div style="flex:1; padding:18px; border-right:1px solid var(--line)">
+          <div class="note" style="margin-bottom:10px">before</div>
+          <div class="bblock" style="width:130px; font-size:11px">
+            <div class="btitle" style="font-size:11.5px">runInference</div>
+            <div class="bport"><span class="bdot"></span>out</div>
+          </div>
+        </div>
+        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+             background:var(--panel); border:1px solid var(--line); border-radius:50%;
+             width:26px; height:26px; text-align:center; font:13px/26px var(--mono);
+             color:var(--accent2); z-index:2" title="linked cameras">⧉</div>
+        <div style="flex:1; padding:18px">
+          <div class="note" style="margin-bottom:10px">after</div>
+          <div class="bblock" style="width:130px; font-size:11px">
+            <div class="btitle" style="font-size:11.5px">run<span class="inkadd">Predict</span></div>
+            <div class="bport"><span class="bdot"></span>out</div>
+            <div class="bport added"><span class="bdot"></span>confidence</div>
+          </div>
+        </div>
+      </div>
+      <table class="look" style="border-radius:0; border-left:none; border-right:none; border-bottom:none">
+        <tr><th>element</th><th>changes</th></tr>
+        <tr><td style="font-family:var(--mono)">runInference → run<span style="color:var(--ok)">Predict</span></td>
+            <td>name <span class="chip">was …<span class="strike">Inference</span></span> &nbsp;·&nbsp; port <code>confidence</code> <span style="color:var(--ok)">added</span></td></tr>
+      </table>
+    </div>
+    <div class="mockcap"><b>The CompareView story (N6) — editor-kit pieces, every part sourced</b>
+      One camera, two boards: <code>useLinkedCameras</code>, 23 donor lines
+      (<code>BoardRender.tsx:258-280</code>, S5). The mode toggle and blend are one
+      surface (<code>CompareDialog.tsx:46,133</code>); fullscreen is a CSS stamp that
+      forces overlay (<code>:501-507</code> — one viewport, two boards). The table row
+      is element-first grouping: a renamed block whose port also changed is ONE row with
+      two changes (<code>propertyRows.ts:216</code>, N1 + S6) — never two rows the
+      reviewer must connect.</div>
+  </div>
+</div>

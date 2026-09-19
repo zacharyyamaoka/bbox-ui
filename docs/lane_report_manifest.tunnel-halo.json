@@ -1,0 +1,69 @@
+{
+  "title": "Tunnel edges, layers and the background halo",
+  "summary": "The two overlap treatments Zach's own research settled on, ported with provenance: tunnel edges (four display states + layer focus, from SystemSketch) and the casing halo (11px, measured, from pyblocks \u2014 not SystemSketch, which has no connection halo at all). Edge hops deliberately not built; the seam that admits them later is preserved.",
+  "base_ref": "main",
+  "branch_label": "claude/bar-block-storybook-17d0ae (isolated lane worktree)",
+  "storybook_port": 5467,
+  "slug": "tunnel-halo-layers",
+  "changes": [
+    "apps/storybook-basics/src/components/tunnel.ts \u2014 new: SystemSketch tunnelEdge.ts ported whole (4 display states, stub/via geometry) plus tunnelMouths, the one deliberate deviation",
+    "apps/storybook-basics/src/components/tunnel.test.ts \u2014 new: the donor's own 5 tests ported UNMODIFIED as an independent oracle, plus 19 added",
+    "apps/storybook-basics/src/components/trace.crossing.ts \u2014 new: pyblocks crossingMark.ts ported (CrossingMark seam, 11px casing, 34px bare lead, casingDashArray)",
+    "apps/storybook-basics/src/components/trace.crossing.test.ts \u2014 new: 7 tests against the donor's stated contract (it shipped none of its own)",
+    "apps/storybook-basics/src/scene/layers.ts \u2014 new: the Editor-bound half of the donor re-expressed against a scene. A layer is a field on the edge; the SET is derived",
+    "apps/storybook-basics/src/scene/layers.test.ts \u2014 new: 13 tests, three of which pin a deliberate deviation from the donor",
+    "apps/storybook-basics/src/components/trace.tsx \u2014 tunnel + crossing props, casing path, via dots, mouth-shortened d; Trace now keeps a curve's sampled points so curved routes tunnel too",
+    "apps/storybook-basics/src/stories/TraceTunnel.stories.tsx \u2014 new: 5 stories, every acceptance claim measured on the mounted element",
+    "zach_brain/Projects/bbox-ui/Components/DP - Trace Overlap.md \u2014 new vault note: the dedicated area for this topic, with all 5 verified HTML report links",
+    "zach_brain/Projects/bbox-ui/Components/DP - Trace.md \u2014 linked to it (via obsidian-edit.py, never a direct write)"
+  ],
+  "findings": [
+    "THE BRIEF'S PREMISE WAS WRONG ABOUT THE HALO. It said to copy it from SystemSketch. It is not there \u2014 every 'halo' in systemsketch/src/blocks/ is a port hit-target (portAffordances.ts:39) or a label routing obstacle (routingObstacles.ts:50); its DataCablePath emits ONE stroked path with nothing under it, and cable overlap is resolved by tldraw z-order (keepConnectionsAtBottom.ts). The real donor is pyblocks src/pipeline/connection/crossingMark.ts, which carries Zach's own measured 11px calibration. Confirmed twice, independently.",
+    "THE DONORS' DASH TECHNIQUE DOES NOT COMPOSE HERE, and the donor's own code proves it. Both paint the tunnel by putting 'stub hidden stub 0' into stroke-dasharray; in this repo traceStrokeStyle already owns that channel for async/delayed/marching-ants. pyblocks ConnectionShapeUtil.tsx:958-963 hit the identical collision and resolved it with a ternary that DROPS the variant dash whenever a tunnel is on. So this port shortens the drawn `d` instead \u2014 two sub-polylines in one path \u2014 which keeps the variant, fixes the sketch skin's arc-length mismatch, and turns 'the long run is hidden' into something measurable rather than a prop read back.",
+    "LAYER DECISION: a layer is data.layer on the edge and the SET is DERIVED (sceneLayers), never a registry on BlockScene. A registry would let two structures own one fact \u2014 the exact thing SCENE-KIT.md rejected a placements table for \u2014 and would admit orphan states needing a reconcile and a lint, bought for no capability. It is also what the kit already believes: linking.ts's rule 1 is 'same name = same thing'. Cost, stated: an empty '+ New layer' does not survive reload; canonicalSceneLayer's fallback-to-trimmed-input is what makes the button work until the first edge joins.",
+    "tunnelDisplayState landed in components/, NOT scene/. It is pure, but it is not f(scene) \u2014 two of its four inputs are interaction state. More decisively: components never imports scene (ARCHITECTURE.md's load-bearing rule), and trace.tsx has to be able to reach it. Purity is preserved by taking the host's state as ARGUMENTS, which mirrors the donor's own split: membership on the document, focus in a view-local atom that 'never mutates or dirties the board'.",
+    "TUNNEL AND HALO ARE EXACT COMPLEMENTS over one arc-length decomposition \u2014 the casing paints ONLY the middle ('0 lead middle lead'), the tunnel paints ONLY the ends ('stub hidden stub 0'), and both use 34 and 34*2+16. The constants were kept separate anyway: they answer different questions and a future recalibration of one must not silently move the other. It also makes the composition free \u2014 a tunnelled cable's two 34px stubs fall under the casing minimum, so it correctly gets no casing.",
+    "NON-VACUITY, mutation-tested with real failures. U2: forcing drawnPath = path failed 4 story tests with 'expected 376 to be greater than 376'. U4a: painting the casing AFTER the line failed with 'expected +0 to be truthy' on compareDocumentPosition. U4b: nudging the cable 2px when a casing is present failed with \"expected 'M 30 30 L 432 150' to be 'M 30 30 L 430 150'\". All three reverted; full green re-run after.",
+    "LOOKING AT THE CAPTURE FOUND A BUG NO ASSERTION DID. The first render of `async + tunnelled` was visibly SOLID: traceStrokeStyle was being fed the full route length, an async cadence is 74px, a mouth is 34px, so asyncDashOffsetForLength returned 0 and both stubs landed inside the 56px carrier. Every attribute-level assertion passed \u2014 the dasharray was present and was the variant's. Fixed by phasing off ONE MOUTH's length (the same short-run centring the variant already had), and a new assertion now pins it; mutating it back fails with 'expected +0 to be 48'. This is the case for captures being evidence rather than decoration.",
+    "BASELINE PRESERVED AND EXPLICITLY COUNTED: pnpm test-stories 161 -> 166 (+5, and the new file was confirmed to actually RUN, not silently absent \u2014 a story file that fails to compile is skipped, not failed). Unit 299 -> 341 (+42). pnpm exec tsc --noEmit -p . clean, run explicitly \u2014 it caught two excess-property errors in layers.test.ts that vitest had happily passed, which is exactly why it is run separately.",
+    "EDGE HOPS OUT OF SCOPE, and the seam is already Zach's own design: CrossingMark is a string union, not a boolean, so adding 'hop' or 'gap' is a literal plus a renderer branch gated on routing !== 'curved'. His research is why they are not built \u2014 a 26-tool CAD survey found ZERO schematics that draw them, choosing which line hops is NP-hard, and no study has ever measured hop vs no-hop.",
+    "COULD NOT DO / did not touch: src/skin/**, src/presets/**, src/hosts/**, apps/docs/**, packages/**, registry.json, ARCHITECTURE.md \u2014 concurrent lanes hold them. No inspector UI was built (Zach's screenshots show a Tunnel toggle and Layer dropdown in the inspector); the LayerFocus story carries the equivalent controls so the behaviour is reviewable, but wiring the real inspector panel belongs to whoever owns packages/inspector."
+  ],
+  "stories": [
+    {
+      "id": "trace-tunnel-halo--display-states",
+      "title": "Trace \u00b7 Tunnel \u2014 four display states",
+      "look_for": "off / hidden / preview / revealed stacked. `hidden` is the one to check: two short stubs at the ports, two outlined vias, and nothing in between. `preview` puts the whole route back WITHOUT losing the mouths \u2014 that is the distinction the feature turns on.",
+      "w": 560,
+      "h": 620
+    },
+    {
+      "id": "trace-tunnel-halo--layer-focus",
+      "title": "Trace \u00b7 Tunnel \u2014 layer focus",
+      "look_for": "click Control, then Diagnostics. The focused layer's cable comes back in full; every other cable goes underground \u2014 INCLUDING the third one, which was never configured as a tunnel at all. Click the active layer again to clear focus (the donor's toggle).",
+      "w": 600,
+      "h": 560
+    },
+    {
+      "id": "trace-tunnel-halo--crossing-halo",
+      "title": "Trace \u00b7 Halo \u2014 before / after",
+      "look_for": "two cables that genuinely cross. Top panel: no mark, and nothing says which is in front. Bottom: the second cable's 11px canvas-coloured casing breaks the first. Note both cables stay bare for 34px at each port \u2014 the casing only covers the middle.",
+      "w": 560,
+      "h": 560
+    },
+    {
+      "id": "trace-tunnel-halo--sketched-tunnel",
+      "title": "Trace \u00b7 Tunnel under the sketch skin",
+      "look_for": "the same tunnel, hand-drawn. Each mouth wobbles as its own run \u2014 which only works because the port slices real geometry before the skin sees it, instead of dashing a path the skin then re-lengthens.",
+      "w": 560,
+      "h": 400
+    },
+    {
+      "id": "trace-tunnel-halo--composes-with-variants",
+      "title": "Trace \u00b7 Tunnel composes with variants",
+      "look_for": "three rows. An async cable, then the SAME cable tunnelled \u2014 each 34px mouth still carries its packet mark (this is what both donors lose, and what looking at the capture caught that no attribute assertion did). Then a curved tunnel whose mouths follow the real sampled arc.",
+      "w": 560,
+      "h": 560
+    }
+  ]
+}
