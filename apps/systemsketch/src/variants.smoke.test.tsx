@@ -106,7 +106,9 @@ function trigger(which: "port" | "region"): HTMLElement | null {
   return app!.root.querySelector<HTMLElement>(`[data-testid="ss-variant-${which}"]`);
 }
 
-/** Pick a variant the way Zach does: open the menu, click the row. */
+/** Pick a variant the way Zach does: open the menu, click the row — then
+ *  put the menu away, whether or not the pick already closed it, so the next
+ *  pick starts from a closed menu rather than toggling a half-closed one. */
 async function pick(which: "port" | "region", id: string) {
   const button = await waitFor(() => trigger(which), { what: `the ${which} trigger` });
   await userEvent.click(button);
@@ -115,6 +117,8 @@ async function pick(which: "port" | "region", id: string) {
   });
   await userEvent.click(row);
   await waitFor(() => (trigger(which)?.getAttribute("data-value") === id ? true : null), { what: `${which} trigger to read ${id}` });
+  if (document.querySelector(`[data-testid^="ss-variant-${which}-v"]`)) await userEvent.keyboard("{Escape}");
+  await waitFor(() => (document.querySelector(`[data-testid^="ss-variant-${which}-v"]`) ? null : true), { what: `the ${which} menu to close` });
 }
 
 function regionOf(id: TLShapeId): RegionShape {

@@ -1,5 +1,5 @@
 /**
- * Variants/Gallery — the cf-F gallery board (a branch inside a loop, a
+ * Control Flow/Variant Gallery — the cf-F gallery board (a branch inside a loop, a
  * bypass around both, a `mut` cable) under whichever PORT style and REGION
  * drawing the Storybook toolbar has picked.
  *
@@ -33,8 +33,8 @@ import { REGION_VARIANTS, type RegionVariantId } from "../skin/regionVariants";
 import { BranchInLoop } from "./ControlFlowGallery.stories";
 
 const meta = {
-  title: "Variants/Gallery",
-  tags: ["area:control-flow", "area:ports", "lane:prf-app-variant-switch-2026-09-19"],
+  title: "Control Flow/Variant Gallery",
+  tags: ["area:control-flow", "lane:prf-app-variant-switch-2026-09-19"],
   parameters: { layout: "fullscreen" },
 } satisfies Meta;
 
