@@ -12,9 +12,16 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  ARROW_CYCLE_HEADING,
+  ARROW_PRESETS,
+  ARROW_PRESET_LABELS,
   DEFAULT_TOOLBAR_PREFERENCES,
   arrowPresetForActivation,
+  arrowPresetFromToolId,
   arrowPresetPressCount,
+  arrowPresetSection,
+  arrowPresetShortcutHint,
+  arrowPresetToolId,
   arrowPresetsInPressOrder,
   mergePreferences,
   nextArrowPreset,
@@ -108,5 +115,49 @@ describe("parseToolbarPreferences", () => {
     expect(parseToolbarPreferences({ lastArrowPreset: "curve" })).toEqual({ lastArrowPreset: "curve" })
     expect(parseToolbarPreferences({ lastArrowPreset: "sideways" })).toEqual(DEFAULT_TOOLBAR_PREFERENCES)
     expect(parseToolbarPreferences(null)).toEqual(DEFAULT_TOOLBAR_PREFERENCES)
+  })
+})
+
+/**
+ * The dock rows for the A cycle — the donor's `ARROW_LABELS` +
+ * `ARROW_MENU_ITEMS` + heading (SystemSketchToolbar.tsx:72-93,330) and its
+ * `shapeToolForArrowPreset` / `arrowPresetFromShapeTool` id pair
+ * (toolbarModel.ts:153-155, toolbarIntegration.ts:66-72). Expected values are
+ * spelled from the donor, not derived from the code under test.
+ */
+describe("arrow preset dock rows (the donor's popout, ported)", () => {
+  it("labels each preset the way the donor's popout did", () => {
+    expect(ARROW_PRESET_LABELS).toEqual({
+      straight: "Straight arrow",
+      curve: "Curved arrow",
+      elbow: "Elbow arrow",
+    })
+    expect(ARROW_CYCLE_HEADING).toBe("Arrows · repeat A to cycle")
+  })
+
+  it("prints the press count beside each preset: A, then A × n", () => {
+    expect(arrowPresetShortcutHint("elbow")).toBe("A")
+    expect(arrowPresetShortcutHint("straight")).toBe("A × 2")
+    expect(arrowPresetShortcutHint("curve")).toBe("A × 3")
+  })
+
+  it("round-trips a preset through its dock row id and rejects anything else", () => {
+    for (const preset of ARROW_PRESETS) {
+      expect(arrowPresetFromToolId(arrowPresetToolId(preset))).toBe(preset)
+    }
+    expect(arrowPresetToolId("curve")).toBe("arrow-curve")
+    expect(arrowPresetFromToolId("arrow")).toBeUndefined()
+    expect(arrowPresetFromToolId("arrow-sideways")).toBeUndefined()
+    expect(arrowPresetFromToolId("rectangle")).toBeUndefined()
+  })
+
+  it("builds one headed section, rows in the order A reaches them, icons supplied by the host", () => {
+    const section = arrowPresetSection({ straight: "s-icon", curve: "c-icon", elbow: "e-icon" })
+    expect(section.heading).toBe("Arrows · repeat A to cycle")
+    expect(section.items).toEqual([
+      { id: "arrow-elbow", label: "Elbow arrow", icon: "e-icon", shortcutHint: "A" },
+      { id: "arrow-straight", label: "Straight arrow", icon: "s-icon", shortcutHint: "A × 2" },
+      { id: "arrow-curve", label: "Curved arrow", icon: "c-icon", shortcutHint: "A × 3" },
+    ])
   })
 })

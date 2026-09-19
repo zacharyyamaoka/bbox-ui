@@ -128,6 +128,15 @@ export default defineConfig({
     // straight to `<Tldraw assetUrls={…}>`. See the WHY above for why the
     // value arrives this way instead of as an import.
     __TLDRAW_ASSET_URLS__: JSON.stringify(getAssetUrls({ baseUrl: TLDRAW_ASSET_BASE })),
+    // Consumed by src/App.tsx as `<Tldraw licenseKey>` — the same env names
+    // the archive read (archive vite.config.ts:31-37) and tldraw's own
+    // LicenseProvider looks for. A licence key is the ONLY sanctioned way to
+    // take tldraw's watermark off the board (see the WHY beside
+    // `__TLDRAW_LICENSE_KEY__` in src/App.tsx); unset, this is `""` and the
+    // watermark stays, with the corner cluster stepping beside it. Keys are
+    // public by design — tldraw validates them against the page's host in
+    // the browser — so baking one into the bundle leaks nothing.
+    __TLDRAW_LICENSE_KEY__: JSON.stringify(process.env.TLDRAW_LICENSE_KEY ?? process.env.VITE_TLDRAW_LICENSE_KEY ?? ""),
   },
   resolve: {
     // WHY ONE alias instead of a vendored copy: this app's only source of
