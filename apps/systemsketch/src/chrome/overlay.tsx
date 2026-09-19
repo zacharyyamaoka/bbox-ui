@@ -40,7 +40,7 @@ export interface CornerRect {
   bottom: number;
 }
 
-export type CornerPlacementKind = "corner" | "beside-licence" | "above-licence";
+export type CornerPlacementKind = "corner" | "beside-licence" | "above-licence" | "above-dock";
 
 /** Offsets from the container's right and bottom edges, and which rule won. */
 export interface CornerPlacement {
@@ -59,8 +59,11 @@ function overlaps(a: CornerRect, b: CornerRect): boolean {
  *
  *   1. `corner`         — flush, `CORNER_INSET` from both edges;
  *   2. `beside-licence` — the bottom edge, immediately LEFT of the watermark;
- *   3. `above-licence`  — flush right, immediately ABOVE the watermark (a
- *                         window too narrow for 2 to clear the dock).
+ *   3. `above-licence`  — flush right, immediately ABOVE the watermark — and
+ *                         above the dock too, if the row is wide enough to
+ *                         reach it (`above-dock` when no watermark exists
+ *                         and only the dock is in the way). The last resort,
+ *                         so it is built to clear everything beneath it.
  *
  * WHY this order, Zach 2026-09-19 (Pasted image 20260919134814.png): "please
  * move the right corner menu to be truly in the right corner right now its
@@ -77,7 +80,13 @@ function overlaps(a: CornerRect, b: CornerRect): boolean {
  * slot's 250 (editor.css:45-46), so nothing in tldraw stops chrome here from
  * covering it — the archive's bottom-right strip did exactly that, sitting on
  * the watermark's own 4px anchor one layer above it. Covering is removing.
- * If nothing fits at all, the licence still wins over the dock.
+ *
+ * WHY 3 lifts over the dock rather than falling back to 2: a trial merge with
+ * main at 52506fa, whose temporary variant pill rides in this same row
+ * (482px wide), measured the first version of this rule at 1024px: nothing
+ * fitted, so it fell back to "beside" and laid the row straight across the
+ * dock. A cluster in the air is a cosmetic cost; one on top of the tools is
+ * a broken toolbar.
  */
 export function placeCornerCluster({
   container,
@@ -93,18 +102,29 @@ export function placeCornerCluster({
   const candidates: CornerPlacement[] = [{ right: CORNER_INSET, bottom: CORNER_INSET, placement: "corner" }];
   if (watermark) {
     candidates.push({ right: container.right - watermark.left + CORNER_INSET, bottom: CORNER_INSET, placement: "beside-licence" });
-    candidates.push({ right: CORNER_INSET, bottom: container.bottom - watermark.top + CORNER_INSET, placement: "above-licence" });
+  }
+  // 3: flush right, lifted clear of whatever sits under that flush-right span.
+  const spanLeft = container.right - CORNER_INSET - cluster.width;
+  const spanRight = container.right - CORNER_INSET;
+  const beneath = [...(watermark ? [watermark] : []), ...obstacles].filter((rect) => rect.left < spanRight && spanLeft < rect.right);
+  if (beneath.length > 0) {
+    candidates.push({
+      right: CORNER_INSET,
+      bottom: container.bottom - Math.min(...beneath.map((rect) => rect.top)) + CORNER_INSET,
+      placement: watermark && beneath.includes(watermark) ? "above-licence" : "above-dock",
+    });
   }
   const candidateRect = (candidate: CornerPlacement): CornerRect => {
     const right = container.right - candidate.right;
     const bottom = container.bottom - candidate.bottom;
     return { left: right - cluster.width, top: bottom - cluster.height, right, bottom };
   };
-  const clearOfLicence = (candidate: CornerPlacement) => !watermark || !overlaps(candidateRect(candidate), watermark);
-  const fits = candidates.find(
-    (candidate) => clearOfLicence(candidate) && !obstacles.some((obstacle) => overlaps(candidateRect(candidate), obstacle)),
-  );
-  return fits ?? candidates.find(clearOfLicence) ?? candidates[candidates.length - 1];
+  const blockers = watermark ? [watermark, ...obstacles] : obstacles;
+  const fits = candidates.find((candidate) => !blockers.some((rect) => overlaps(candidateRect(candidate), rect)));
+  // Always found: if nothing lies beneath the flush-right span the corner
+  // itself is clear, and if something does, 3 is lifted above all of it. The
+  // fallback only satisfies the type checker.
+  return fits ?? candidates[candidates.length - 1];
 }
 
 /** tldraw's own class for it (LicenseManager.mjs:351) — read, never styled. */
