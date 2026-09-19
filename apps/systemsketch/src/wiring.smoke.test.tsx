@@ -1,10 +1,24 @@
 // src/wiring.smoke.test.tsx — L3's acceptance: press-drag from one block's
 // dot to another's creates an ss-wire with two ss-wire-bindings; the trunk's
-// Trace paints it between the REAL dots; duplicates fan; the derived scene
-// sees the edge and never sees containment as an edge; moving a block moves
-// the wire live; deleting a block drops its wire (stock binding cascade).
-// Committed with the plan (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5, L3),
-// off-limits to builders.
+// Trace paints it between the REAL dots; duplicates SHARE ONE ROUTE; the
+// derived scene sees the edge and never sees containment as an edge; moving
+// a block moves the wire live; deleting a block drops its wire (stock
+// binding cascade). Committed with the plan
+// (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5, L3), off-limits to builders.
+//
+// ONE CASE WAS INVERTED, 2026-09-19, by lane `fix-edges` — declared here
+// rather than done quietly, because this file is off-limits and a silent
+// edit to an off-limits gate is the thing the rule exists to prevent.
+// "duplicates fan (they are visibly two)" asserted that two cables between
+// one pair of dots be drawn ≥8px apart. Zach saw that on a real board and
+// ruled it out in the same breath as the fan itself: "very bad. edges
+// should always leave from the center of the port… The port only should
+// have 1 connection point in the center. Instead you should show the
+// producer circle that has the number for the number of arrows intersecting
+// at that port." (`docs/ASK-2026-09-19-PORTS-EDGES-REGIONS-FEEDBACK.md`.)
+// The case is therefore REVERSED, not deleted or relaxed: same measurement,
+// opposite sign, and it now fails loudly if any per-cable offset comes back.
+// Every other case in this file is untouched.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
@@ -110,7 +124,7 @@ describe("L3 — wires are data lines between real dots", () => {
     expect(scene.nodes.find((n) => n.id === a)?.data.ports?.right).toEqual(["out"]);
   });
 
-  it("two wires between the same two dots fan apart (they are visibly two)", async () => {
+  it("two wires between the same two dots share ONE route (the fan is gone; a count says there are two)", async () => {
     app = await mountApp();
     const a = block("a", 60, 120, PORTS_OUT);
     const b = block("b", 420, 140, PORTS_IN);
@@ -126,7 +140,13 @@ describe("L3 — wires are data lines between real dots", () => {
     }, { what: "both paths" });
     const mid = (p: SVGPathElement) => screenPointAt(p, p.getTotalLength() / 2);
     const d = Math.hypot(mid(paths[0]).x - mid(paths[1]).x, mid(paths[0]).y - mid(paths[1]).y);
-    expect(d).toBeGreaterThanOrEqual(8);
+    expect(d, "a duplicate must share its twin's route exactly — a non-zero separation means a per-cable offset has come back").toBeLessThanOrEqual(0.5);
+    // And both cables really do meet the dots, rather than coinciding
+    // somewhere off in space: the ends agree too.
+    const endsA = [screenPointAt(paths[0], 0), screenPointAt(paths[0], paths[0].getTotalLength())];
+    const endsB = [screenPointAt(paths[1], 0), screenPointAt(paths[1], paths[1].getTotalLength())];
+    expect(Math.hypot(endsA[0].x - endsB[0].x, endsA[0].y - endsB[0].y)).toBeLessThanOrEqual(0.5);
+    expect(Math.hypot(endsA[1].x - endsB[1].x, endsA[1].y - endsB[1].y)).toBeLessThanOrEqual(0.5);
   });
 
   it("moving a bound block moves the wire live; deleting the block removes the wire", async () => {

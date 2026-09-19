@@ -481,8 +481,19 @@ export const WiringScenarios: Story = {
       }
     }
 
-    /* ---- duplicates : two wires, same pair, visibly fanned apart ---- */
+    /* ---- duplicates : two wires, same pair, ONE shared route ---- */
     {
+      // INVERTED 2026-09-19 (lane `fix-edges`). This block used to demand
+      // the two midpoints be at least `DUPLICATE_FAN_PX / 2` APART — the
+      // fan that made "two wires between the same two ports" read as two.
+      // Zach ruled that out on the real board: "edges should always leave
+      // from the center of the port… The port only should have 1 connection
+      // point in the center. Instead you should show the producer circle
+      // that has the number for the number of arrows intersecting at that
+      // port." So the expectation is not dropped, it is REVERSED: the two
+      // cables must now coincide, and the count is what a badge will say.
+      // Same measurement, opposite sign — see `EdgeDefaults.stories.tsx`
+      // for the endpoint half of the same rule.
       const bench = benchOf(canvasElement, "duplicates");
       const g1 = await waitForWireGroup(bench, "dup-w1");
       const g2 = await waitForWireGroup(bench, "dup-w2");
@@ -491,8 +502,8 @@ export const WiringScenarios: Story = {
       const mid1 = l1.getPointAtLength(l1.getTotalLength() / 2);
       const mid2 = l2.getPointAtLength(l2.getTotalLength() / 2);
       const separation = Math.hypot(mid2.x - mid1.x, mid2.y - mid1.y);
-      if (!(separation >= DUPLICATE_FAN_PX / 2)) {
-        throw new Error(`duplicates · the two wires' rendered midpoints are only ${separation.toFixed(2)}px apart (want ≥ ${DUPLICATE_FAN_PX / 2}px) — they read as one line drawn twice`);
+      if (separation > 0.5) {
+        throw new Error(`duplicates · the two wires' rendered midpoints are ${separation.toFixed(2)}px apart — a per-cable offset has come back; a duplicate must share its twin's route exactly (DUPLICATE_FAN_PX is ${DUPLICATE_FAN_PX} and is no longer applied to paint)`);
       }
     }
 

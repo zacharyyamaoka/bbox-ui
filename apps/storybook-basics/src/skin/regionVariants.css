@@ -1,0 +1,213 @@
+/*
+ * src/skin/regionVariants.css — the PAINT of the five region variants
+ * (`regionVariants.ts` is the spec and the numbers; this file is what the
+ * browser reads). Same mechanism as `skin.css`, same rules:
+ *
+ *   • ONLY custom-property declarations, keyed on `[data-bbox-region-variant]`
+ *     on any ancestor. Not one rule reaches into a component: `region.tsx`
+ *     reads every token at its own call site with `v1`'s value as the
+ *     `var()` fallback, so a consumer who never imports this file gets the
+ *     pixels they have today, and one who does never fights a specificity
+ *     battle.
+ *   • No colour literal. Every value resolves through globals.css's own
+ *     tokens (`--border`, `--muted`, `--foreground`, `--radius-*`), so all
+ *     five follow light/dark and compose with any skin.
+ *   • `v1` is spelled out even though it is every token's built-in
+ *     fallback — WHY: without it there is no way to switch BACK. A picker
+ *     sets the attribute to one of five values; "remove the attribute" is a
+ *     sixth, different operation a <select> cannot express.
+ *   • `initial` is the INERT value for the inherited-text tokens
+ *     (`*-title-*`): it makes the token guaranteed-invalid, so the
+ *     component's `font-family: var(--bbox-region-arm-title-font)` is
+ *     invalid at computed-value time and — for an inherited property — that
+ *     means `inherit`, i.e. the Bar's own text. Ported from skin.css's own
+ *     note; `currentColor` would NOT do here (it names the text colour).
+ *
+ * Imported by globals.css right after skin.css, before the `:root` theme
+ * block is consumed by anything — order matters only in that `--muted`
+ * etc. must exist by the time a frame paints, which they do.
+ *
+ * Nesting: a frame declares `--bbox-region-frame-fill` for ITS DESCENDANTS as
+ * `var(--bbox-region-nested-fill, <its own fill>)` (region.tsx), so a region
+ * inside a region reads the nested token, and a third level reads the same
+ * nested token again (one tone deeper, once — not a gradient per level).
+ */
+
+/* v1 — Labeled group. Today's look; every value equals the component's own
+   fallback. */
+[data-bbox-region-variant="v1"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v2 — Ruled. The corner card's bottom edge continues as a full-width rule
+   (the line Zach pointed at in `Pasted image 20260919115353.png`), and every
+   arm header sits between two rules: the divider above, its own rule below.
+   The card's free corner goes square so the rule leaves it cleanly; the
+   frame's radius comes down a step to match the harder reading. */
+[data-bbox-region-variant="v2"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--radius-md);
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: 0px;
+  --bbox-region-header-rule-display: block;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 1px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: 13px;
+  --bbox-region-arm-title-weight: 500;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v3 — Zone. No frame line at all: a faint foreground tint marks the scope
+   (the border keeps its 1px of GEOMETRY and paints nothing, skin.css's own
+   trick), each arm header is a slightly stronger band with the condition
+   in it, and there are no rules anywhere. A nested zone is one tone deeper.
+   Tints are `color-mix` over `--foreground` so they read on any canvas,
+   light or dark, rather than a fixed grey. */
+[data-bbox-region-variant="v3"] {
+  --bbox-region-frame-stroke: transparent;
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: color-mix(in oklch, var(--foreground) 3%, transparent);
+  --bbox-region-nested-fill: color-mix(in oklch, var(--foreground) 6%, transparent);
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: color-mix(in oklch, var(--foreground) 6%, transparent);
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: 13px;
+  --bbox-region-arm-title-weight: 500;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v4 — Bracket. The frame is a left bracket plus a top rule, open on the
+   right and the bottom (`1px 0 0 1px`), in a darker grey so a single L reads
+   as a deliberate margin rather than a frame that lost two sides. Arms read
+   like code: no dividers, a hairline indent guide hanging under the fold
+   chevron for the length of the arm's body, monospace headers in the muted
+   text colour, and the chevron only on hover while open (folded arms keep
+   theirs — `FoldingChevron`'s own rule).
+   The guide's `inset` top is the header height (26px, `regionVariants.ts`
+   v4 `arms.headerPx`) plus 2px; its left is the chevron's centre line: the
+   Bar's 12px padding plus half the 24px button, less the guide's own 1px. */
+[data-bbox-region-variant="v4"] {
+  --bbox-region-frame-stroke: var(--muted-foreground);
+  --bbox-region-frame-stroke-widths: 1px 0 0 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--radius-md);
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius) 0 0 0;
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: 12.5px;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: var(--bbox-skin-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  --bbox-region-arm-title-color: var(--muted-foreground);
+  --bbox-region-arm-decor-display: block;
+  --bbox-region-arm-decor-inset: 28px auto 6px 23px;
+  --bbox-region-arm-decor-width: 0px;
+  --bbox-region-arm-decor-stroke-widths: 0 0 0 1px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v5 — Card. The frame is filled one tone off the canvas (`--muted`), each
+   arm is an inset card on that fill (the row's own box is untouched — the
+   card is a decor box inset 3px/8px inside it, so `expectArmsStacked` and
+   every member position hold), the header text moves 8px in to sit inside
+   the card, and a nested region fills one tone deeper still. No dividers:
+   the cards separate the rows. */
+[data-bbox-region-variant="v5"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: var(--muted);
+  --bbox-region-nested-fill: color-mix(in oklch, var(--muted), var(--foreground) 5%);
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 8px;
+  --bbox-region-arm-title-size: 13px;
+  --bbox-region-arm-title-weight: 500;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: block;
+  --bbox-region-arm-decor-inset: 3px 8px 3px 8px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 1px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: var(--radius-md);
+  --bbox-region-arm-decor-fill: var(--card);
+}

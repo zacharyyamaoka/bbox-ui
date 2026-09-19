@@ -12,6 +12,15 @@
  */
 @import "./skin/skin.css";
 /*
+ * The five region drawings (src/skin/regionVariants.{ts,css}) — the same
+ * mechanism as skin.css, one attribute lower: `data-bbox-region-variant`
+ * on any ancestor selects a block of custom properties that region.tsx
+ * reads with `v1`'s value as each fallback. Purely additive for the same
+ * reason skin.css is: nothing paints differently until the attribute is
+ * stamped.
+ */
+@import "./skin/regionVariants.css";
+/*
  * The port variant registry's CSS half (src/skin/portVariants.ts +
  * portVariants.css, lane `ports` 2026-09-19): the five `--bbox-port-*`
  * property sets keyed on `[data-bbox-port-variant]`, `:root` carrying v1,

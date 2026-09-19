@@ -41,6 +41,7 @@ import {
   type TLDragShapesInInfo,
   type TLResizeInfo,
   type TLShape,
+  type TLShapeId,
 } from "tldraw";
 
 import { REGION_MIN_WIDTH_PX } from "@trunk/components/region.layout";
@@ -240,17 +241,57 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
   }
 
   /**
-   * Cables cross a region freely — verbatim from the archive's
+   * TWO children escape the frame's clip: a cable, and the region's own
+   * corner card. Every other member still stops at the wall.
+   *
+   * CABLES, verbatim from the archive's
    * `/home/bam/systemsketch/src/loop/LoopShapeUtil.tsx:135-138` ("Cables cross
    * the region freely; they live in the scope outside it"), which is itself
    * tldraw's own carve-out for arrows in `BaseFrameLikeShapeUtil
    * .shouldClipChild`. A wire from a block inside a loop to a block outside it
    * is ordinary dataflow — "scopes see in" — and clipping it at the border
    * would draw a cable that stops in mid-air.
+   *
+   * THE CORNER CARD (added 2026-09-19). Zach, comparing the app (`Pasted image
+   * 20260919115050.png`, the `input 1` dot sliced off by the frame's wall)
+   * with the DOM canvas (`…115249.png`, the `mode` dot sitting cleanly ON it):
+   * "Generally I want the port to be right on the edge. and it shouldn't be
+   * cut off by the frame."
+   *
+   * WHY those two sentences need a clip carve-out and not just a smaller
+   * inset: a left rail centres its dots on the card's own wall, so half of
+   * every dot is painted OUTSIDE the card (`@trunk/components/port.layout`).
+   * "On the edge" therefore means the card is flush at x = 0 AND the dot's
+   * outer half is outside the frame — which is exactly what `getClipPath`
+   * removes. The previous answer bought the dot back by pushing the card 8px
+   * inside (`cornerBlock.ts`'s `CORNER_INSET_X_PX`), and paid for it with the
+   * two things he objected to: a card visibly inset from its own frame, and a
+   * dot sitting in the scope rather than on its wall. Lifting the clip for
+   * this one child costs neither.
+   *
+   * WHY IT IS SAFE TO SCOPE IT THIS TIGHTLY: the clip is what makes a region a
+   * SCOPE — a member dragged past the wall must visibly stop at it, or
+   * containment stops reading as containment. The corner card is not a member.
+   * It is the region's own header contract (`cornerBlock.ts`: "everything is
+   * really a block"), it is pinned to the frame's top-left, and it is the one
+   * child whose id the region itself names — so "the shape my parent calls its
+   * corner" is a total, checkable test rather than a heuristic about which
+   * children look important.
+   *
+   * `shouldClipChild` is handed the DESCENDANT and is asked of EVERY clipping
+   * ancestor (`Editor._getShapeMaskCache` walks `getShapeAncestors`), so the
+   * test reads the child's OWN parent rather than assuming it is this shape: a
+   * region nested against another region's wall must not have its corner card
+   * sliced by the outer frame either, and reading `child.parentId` gets that
+   * right for free.
    */
   override shouldClipChild(child: TLShape): boolean {
     const childType: string = child.type;
-    return childType !== WIRE_SHAPE_TYPE && super.shouldClipChild(child);
+    if (childType === WIRE_SHAPE_TYPE) return false;
+    if (!super.shouldClipChild(child)) return false;
+    const parent = this.editor?.getShape(child.parentId as TLShapeId);
+    if (!parent || parent.type !== REGION_SHAPE_TYPE) return true;
+    return (parent as RegionShape).props.cornerBlockId !== child.id;
   }
 
   /**
