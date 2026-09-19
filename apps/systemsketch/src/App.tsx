@@ -18,6 +18,7 @@ import { PyblocksBackendPanel } from "./backend/BackendSettings";
 import { SystemSketchDock } from "./chrome/dock";
 import { Overlay } from "./chrome/overlay";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
+import { SourceContextMenu } from "./source/sourceContextMenu";
 
 export interface AppProps {
   /** `undefined` → the app's own board. `null` → no persistence at all, which
@@ -49,6 +50,22 @@ const COMPONENTS: TLComponents = {
   // `.tlui-layout__top__right`). At `Backend: none` it renders one control
   // reading `none` and nothing else.
   SharePanel: PyblocksBackendPanel,
+  // Stream 4's one piece of chrome: tldraw's OWN context menu, COMPOSED with
+  // a `bbox-source` group that exists only while a pyblocks backend is
+  // connected (src/source/sourceContextMenu.tsx). Every stock row stays —
+  // this is `DefaultContextMenu` + `DefaultContextMenuContent` + one extra
+  // group, not a replacement.
+  //
+  // WHY this line is in App.tsx when the note above says "the context menu
+  // stay stock": it still IS stock. `TLUiComponents.ContextMenu` is a
+  // documented component slot and `TLUiOverrides` has no context-menu hook
+  // in this pinned version, so the slot is the only seam there is — the same
+  // one the trunk's `detach/rebuildContextMenu.tsx` uses. There is no kit
+  // seam for a `components` entry (`shapes/registry.ts`'s `ShapeKit` carries
+  // shapeUtils/bindingUtils/tools/familyItems/toolUi/install/Overlay and no
+  // `components`), and inventing one would be a bigger change to a file
+  // another lane owns than this one line.
+  ContextMenu: SourceContextMenu,
   MainMenu: null,
   MenuPanel: null,
   StylePanel: null,
