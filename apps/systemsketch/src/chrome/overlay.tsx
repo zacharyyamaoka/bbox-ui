@@ -5,8 +5,8 @@
 // WHY a fan-out rather than a list in App.tsx: L3 paints a wire's in-flight
 // terminal and L4 mounts the chrome bar and the floating toolbar. Both arrive
 // through their own directory; neither should have to edit App.tsx to be seen.
-import { useCallback, useId, useState } from "react";
-import { useEditor } from "tldraw";
+import { useCallback, useId, useRef, useState } from "react";
+import { useEditor, usePassThroughWheelEvents } from "tldraw";
 
 import { KITS } from "../shapes/registry";
 import { SystemSketchChromeBar } from "./chromeBar";
@@ -59,6 +59,38 @@ function SystemSketchChrome() {
   const panelId = useId();
   const problems = useProblems(editor);
 
+  /**
+   * STEP 7 of docs/menus/MENU-KIT-DESIGN.md §4 — "the host attaches wheel
+   * pass-through to the ref if its engine needs it". This engine needs it.
+   *
+   * WHY it is not free: tldraw's wheel listener is attached to `.tl-canvas`
+   * itself (@tldraw/editor useGestureEvents.mjs:231, and its own handler is
+   * guarded by `elm.contains(event.target)`), while this whole overlay lives
+   * in `.tl-canvas__in-front`, a SIBLING of `.tl-canvas` (DefaultCanvas.mjs
+   * renders them side by side). A wheel event whose target is any chrome
+   * surface therefore bubbles up a branch the camera is not listening on and
+   * the board simply stops panning under the cursor — measured before this
+   * line existed: wheel over the pill, the chrome bar or the status strip
+   * left the camera at {0,0,1} while wheel over bare canvas moved it to
+   * {0,-240,1}.
+   *
+   * WHY the stock hook and not our own re-dispatch: `usePassThroughWheelEvents`
+   * is what tldraw's OWN chrome uses for exactly this (DefaultMenuPanel,
+   * DefaultStylePanel, TldrawUiContextualToolbar), and it reaches this app
+   * through the public `tldraw` entry (`tldraw`'s d.ts ends in `export * from
+   * "@tldraw/editor"`), so `src/document/stockBoundary.test.ts` stays happy.
+   * It also carries the two behaviours a hand-rolled version would drop: it
+   * leaves a genuinely scrollable surface — the frames/problems list — to
+   * scroll itself, and it marks its re-dispatched event so it cannot loop.
+   *
+   * WHY once, here, rather than per surface as tldraw does: every chrome
+   * surface this app owns is a descendant of this element, and the canvas is
+   * not — bare-canvas wheels bubble up the sibling branch and never reach
+   * this listener. One attachment is the whole set.
+   */
+  const chrome = useRef<HTMLDivElement>(null);
+  usePassThroughWheelEvents(chrome);
+
   const toggle = useCallback((panel: ChromePanel) => {
     // One at a time: pressing the open one closes it, pressing the other
     // swaps. The kit's `StatusStripItem.active` is already the toggle's
@@ -69,7 +101,7 @@ function SystemSketchChrome() {
   const close = useCallback(() => setOpen(null), []);
 
   return (
-    <div className="ss-chrome pointer-events-none absolute inset-0 z-[1]">
+    <div ref={chrome} className="ss-chrome pointer-events-none absolute inset-0 z-[1]">
       {/*
         Top-LEFT, and it genuinely covers the canvas underneath: measured in
         the running app at 1400x900 the cluster occupies x 8-416, y 8-50, and

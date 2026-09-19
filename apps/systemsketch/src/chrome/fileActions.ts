@@ -126,16 +126,40 @@ function pickTldrawFile(): Promise<string | null> {
 /**
  * Load a `.tldr` over the current board.
  *
- * WHY `parseTldrawJsonFile` + `editor.loadSnapshot` rather than tldraw's own
- * `parseAndLoadDocument`, which is what the lane brief named: that helper is
- * marked "Excluded from this release type" in tldraw 5.3.2's public entry
+ * WHY this is hand-assembled rather than tldraw's own `parseAndLoadDocument`,
+ * which is what the lane brief named: that helper is marked "Excluded from
+ * this release type" in tldraw 5.3.2's public entry
  * (`tldraw/dist-cjs/index.d.ts:3164`), so importing it fails `tsc` — and
  * reaching past the public entry is exactly what
- * `src/document/stockBoundary.test.ts` forbids. These two ARE public, and
- * together they are what `parseAndLoadDocument` does internally: parse into a
- * detached store, then swap that store's snapshot in. The one thing lost is
- * its built-in toast copy, which is why the failure branch below writes its
- * own.
+ * `src/document/stockBoundary.test.ts` forbids.
+ *
+ * So the body below is a deliberate re-implementation of
+ * `tldraw/dist-esm/lib/utils/tldr/file.mjs:201-209`, and it is NOT enough to
+ * parse and `loadSnapshot` — the three lines around that swap are the ones a
+ * person notices:
+ *
+ *   - `editor.clearHistory()`, because `Store.loadStoreSnapshot` runs its
+ *     `clear()` + `put()` through `atomic(fn, false)` with
+ *     `isMergingRemoteChanges` false (Store.mjs:476-480, :265), so the whole
+ *     document swap is recorded as a **user** history entry. Without this,
+ *     Ctrl+Z immediately after opening a file silently brings the PREVIOUS
+ *     board back — measured through this very function before the line
+ *     existed: `getCanUndo()` true, `undo()` restored the old shapes.
+ *   - `editor.zoomToBounds(...)`, because a saved board's content can sit
+ *     anywhere in page space while the camera is wherever the last board left
+ *     it. Measured the same way: opening a board whose only block sits at page
+ *     (5000, 5000) left the camera at {0,0,1} and the viewport nowhere near
+ *     the shape — "Open .tldr…" looked like it did nothing. With
+ *     `NavigationPanel` switched off (App.tsx) there is no stock zoom menu
+ *     left to recover with, only the chrome bar's home button.
+ *   - one `editor.run`, so the swap, the history reset and the camera move
+ *     land in a single transaction the way tldraw's own `transact` does.
+ *
+ * Two things from that helper are deliberately NOT ported: its localized toast
+ * copy (`msg(...)`, which needs the UI translation context — the failure
+ * branch below writes its own instead) and `extractAssets`, which rehydrates
+ * `data:` image/video assets. This app's vocabulary is the five `ss-*` shapes
+ * and none of them carries an asset, so there is nothing for it to extract.
  */
 export async function openBoard(editor: Editor, helpers: FileActionHelpers): Promise<void> {
   const text = await pickTldrawFile();
@@ -152,7 +176,19 @@ export async function openBoard(editor: Editor, helpers: FileActionHelpers): Pro
     });
     return;
   }
-  editor.loadSnapshot(parsed.value.getStoreSnapshot());
+  editor.run(() => {
+    editor.loadSnapshot(parsed.value.getStoreSnapshot());
+    // Ordered exactly as file.mjs orders it: the snapshot's own diff has
+    // already reached the history recorder synchronously by now
+    // (HistoryAccumulator.add calls its interceptors inline, Store.mjs:860),
+    // so clearing here really does discard it.
+    editor.clearHistory();
+    const bounds = editor.getCurrentPageBounds();
+    // `immediate` because this is a document swap, not a navigation — an
+    // animated fly-in from the previous board's camera is motion that means
+    // nothing. Stock passes the same two options.
+    if (bounds) editor.zoomToBounds(bounds, { targetZoom: 1, immediate: true });
+  });
 }
 
 /**
