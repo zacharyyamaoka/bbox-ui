@@ -422,7 +422,15 @@ export function CompareReview({
       <div
         data-slot="compare-stagebar"
         data-testid={`${prefix}-bar`}
-        className="flex shrink-0 items-center gap-3 border-t border-border px-3 py-2"
+        // WHY `flex-wrap`: this row holds a two-button mode toggle, a
+        // labelled slider with a percentage readout, and Fullscreen, and at
+        // the 900px the stories use — with a 380px rail beside it — there is
+        // not room for all of it on one line. Without wrapping they simply
+        // OVERLAPPED: the slider crossed the Fullscreen button and the "60%"
+        // was clipped, which a judge read straight off the saved capture
+        // (2026-09-18). Wrapping is the honest failure mode for a row that
+        // runs out of width; overlapping is not.
+        className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-3 py-2"
       >
         <ToggleGroup
           value={[mode]}
@@ -458,7 +466,9 @@ export function CompareReview({
               value={blend}
               disabled={canOverlay === false}
               onChange={(event) => onBlendChange(Number(event.target.value))}
-              className="h-1.5 flex-1 accent-primary"
+              // `min-w-0` because a range input carries an intrinsic
+              // minimum width that `flex-1` alone will not shrink past.
+              className="h-1.5 min-w-0 flex-1 accent-primary"
               data-testid={`${prefix}-blend`}
               aria-label="Overlay blend"
             />

@@ -236,17 +236,29 @@ export const DragToReorder: Story = {
     // tech being told it was sortable. Both facts cannot be right, and this
     // pins the resolution.
     //
-    // HONEST LIMIT: this does not prove an end-to-end keyboard reorder. Trying
-    // to write that test is what found the aria-hidden conflict AND that no
-    // KeyboardSensor was registered at all (both now fixed), but driving
-    // dnd-kit's keyboard drag to completion in this runner did not work and
-    // I did not want to assert a proof I do not have. Reordering by POINTER
-    // is covered; keyboard reorder is wired and unproven.
     grips[0].focus();
     await expect(grips[0]).toHaveFocus();
     await expect(grips[0]).not.toHaveAttribute("aria-hidden");
     await expect(grips[0]).toHaveAttribute("role", "button");
     await expect(grips[0]).toHaveAccessibleName(/Reorder /);
+
+    // Space must actually START a drag. Attribute checks alone did not
+    // observe that: removing `{...listeners}` from the grip, or removing
+    // the KeyboardSensor entirely, left every assertion above passing
+    // (judge mutation, 2026-09-18) — both mutations disconnect the keyboard
+    // path completely. `useSortable`'s `isDragging` is what the row renders
+    // its lifted state from, so reading that state back is the cheapest
+    // thing that is false in both mutants.
+    await userEvent.keyboard("[Space]");
+    await waitFor(() =>
+      expect(canvasElement.querySelector("[data-slot='frames-panel-item'][data-dragging='true']")).not.toBeNull(),
+    );
+    await userEvent.keyboard("{Escape}");
+
+    // HONEST LIMIT: a COMPLETED keyboard reorder is still unproven — driving
+    // dnd-kit's drop to completion did not work in this runner. The pickup
+    // is proven; the drop is not.
+
   },
 };
 

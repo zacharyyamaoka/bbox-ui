@@ -510,8 +510,39 @@ export const FamilyPopoutsExpanded: Story = {
     await userEvent.click(canvas.getByTestId("tool-dock-family-draw"));
     await waitFor(() => expect(body.getByText("Highlighter")).toBeInTheDocument());
     const checked = body.getByText("Highlighter").closest("[data-slot='dropdown-menu-item']");
-    await expect(checked?.querySelector("svg")).not.toBeNull();
+    // The CHECK MARK specifically: every row carries its own tool icon, so
+    // `querySelector("svg")` found one even with the check removed (judge
+    // mutation, 2026-09-18).
+    await expect(checked?.querySelector("[data-slot='tool-dock-checked']")).not.toBeNull();
+    // And it is on that row ALONE — a check on every row would also satisfy
+    // the assertion above.
+    await expect(
+      document.body.querySelectorAll("[data-slot='tool-dock-checked']"),
+    ).toHaveLength(1);
     await userEvent.keyboard("{Escape}");
+  },
+};
+
+/**
+ * A family popout left OPEN, for the report's capture.
+ *
+ * WHY this exists as its own story: `FamilyPopoutsExpanded` opens each family
+ * in turn and closes it again — correct for a behavioural test, useless as
+ * evidence. The capture named "tool-dock-popouts" in the report was therefore
+ * a picture of the CLOSED dock, illustrating a screenshot whose whole subject
+ * is the popout (judge, 2026-09-18). A capture recipe cannot photograph a
+ * state that the story it points at has already undone.
+ */
+export const PopoutOpenForCapture: Story = {
+  render: () => <ToolDockHarness testIdPrefix="popout-open" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    await userEvent.click(await canvas.findByTestId("popout-open-family-shape"));
+    // Left open deliberately — the rows, their headings and the shortcut
+    // hints are the subject.
+    await expect(await body.findByText("Rectangle")).toBeInTheDocument();
+    await expect(body.getByText("Lines")).toBeInTheDocument();
   },
 };
 

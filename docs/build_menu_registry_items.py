@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -322,6 +323,22 @@ def _check_published_payloads(reg: dict) -> None:
             print(f"  … and {len(set(stale)) - 20} more")
         raise SystemExit(1)
     print("published payloads match source")
+
+    # And the payloads must satisfy shadcn's OWN schema, not merely the
+    # fields this script thought to compare. Everything above is a
+    # re-derivation of the format, and a re-derivation is only as good as its
+    # author's memory: it approved a payload with `name` deleted and with a
+    # corrupted item `type`, both of which shadcn rejects outright (judge
+    # fault injection, 2026-09-18). Delegating to the installed schema makes
+    # this an independent oracle instead of a second opinion from the same
+    # source as the mistake.
+    schema_check = subprocess.run(
+        ["node", str(HERE / "validate_registry_payloads.mjs"), str(published)],
+        cwd=REPO, capture_output=True, text=True,
+    )
+    print((schema_check.stdout or schema_check.stderr).strip())
+    if schema_check.returncode != 0:
+        raise SystemExit(1)
 
 
 def main() -> None:

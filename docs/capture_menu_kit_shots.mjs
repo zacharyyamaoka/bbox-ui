@@ -45,7 +45,9 @@ const SHOTS = [
   // before every family, which is NOT the order screenshot 04 draws. The
   // report was illustrating surface 04 with a picture that contradicted it.
   { name: "tool-dock", id: "basics-tooldock--screenshot-order", w: 900, h: 340, surface: "04" },
-  { name: "tool-dock-popouts", id: "basics-tooldock--family-popouts-expanded", w: 1100, h: 700, surface: "04" },
+  // The popout LEFT OPEN — `family-popouts-expanded` closes each menu after
+  // checking it, so pointing the camera there photographed a closed dock.
+  { name: "tool-dock-popouts", id: "basics-tooldock--popout-open-for-capture", w: 1100, h: 700, surface: "04" },
   { name: "chrome-bar", id: "basics-chromebar--main-branch-at-root", w: 1100, h: 340, surface: "05" },
   { name: "chrome-bar-tones", id: "basics-chromebar--status-tones", w: 1100, h: 560, surface: "05" },
   { name: "chrome-bar-drafts", id: "basics-chromebar--branch-chip-main-vs-draft-mode", w: 1100, h: 500, surface: "05" },

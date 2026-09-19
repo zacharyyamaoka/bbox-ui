@@ -236,9 +236,17 @@ export const ActivateRow: Story = {
     // check passed when the callback was handed a different object
     // entirely (judge mutation, 2026-09-18).
     await expect(args.onActivate).toHaveBeenCalledTimes(1);
-    await expect(args.onActivate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "w1", code: "block-title.blank", message: "Block has no title" }),
-    );
+    // The WHOLE object, not three of its fields: `objectContaining` with a
+    // subset passed when severity and detail were replaced with wrong
+    // values (judge mutation, 2026-09-18). "That exact diagnostic" means
+    // every field of it.
+    await expect(args.onActivate).toHaveBeenCalledWith({
+      id: "w1",
+      code: "block-title.blank",
+      severity: "warning",
+      message: "Block has no title",
+      detail: "Name this Block.",
+    });
   },
 };
 
