@@ -127,6 +127,7 @@ CSS = """
 
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px }
   .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px }
+  .grid2 > *, .grid3 > * { min-width:0 }
   @media (max-width:760px){ .grid2,.grid3 { grid-template-columns:1fr } }
   .card { background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:13px 15px }
   .card > b { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.08em;
