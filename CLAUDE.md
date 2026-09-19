@@ -146,6 +146,36 @@ Two stories silently failed for hours behind that check (2026-09-17). In
 story as a real Vitest/Playwright test via `@storybook/addon-vitest`, with a
 real process exit code. See `apps/storybook-basics/vitest.config.ts`.
 
+**But `pnpm test-stories` is not the whole suite — use `pnpm test` as the
+gate.** `vitest.config.ts` defines *two* projects, and `test-stories` runs
+only `storybook` by deliberate design (its name says stories, and silently
+widening what it covers would make the name lie). The second project,
+`unit`, is where the pure node tests live — no DOM, no browser — and it is
+the larger half by test count: measured 2026-09-18, `storybook` was 56 files
+/ 294 tests while `unit` was 22 files / **314 tests**, including a
+4,608-case differential sweep. A green `test-stories` therefore proves
+nothing about more than half the assertions in the package.
+
+This is not hypothetical. The menu-kit build (2026-09-18) gated four
+barriers on `test-stories` alone and reported every wave green; an
+independent audit found the 22 ported acceptance suites had never been
+executed by any gate. They passed when finally run — but the verification
+claim was hollow, and a claim that happens to be true is not a check. Run
+`pnpm test` (all projects) for any gate or hand-off; `test-stories` /
+`test-unit` are for narrowing while you iterate.
+
+**A play function's first testing-library call should be `findBy*`.**
+`getBy*` demands its element on the first tick, so a story that has not
+finished mounting fails instantly under load — that is how the combined run
+above surfaced its one failure. The sharper reason is the assertion that
+comes *after*: `queryBy*(...).not.toBeInTheDocument()` passes trivially
+against an empty DOM, so on an unmounted story a negative assertion is not
+fragile, it is **vacuously true** — it would pass a component that rendered
+nothing at all. Awaiting one real element first is what gives every later
+assertion in that play function something to be false about. 115 play
+functions here still open synchronously (most predate the menu kit); fix
+them as you touch them rather than in one sweep.
+
 ## Isolated agent lanes — the two lines every one of them needs
 
 Zach reviews a long-running Storybook on **:5421**. A work-in-progress edit

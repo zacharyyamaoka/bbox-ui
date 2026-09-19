@@ -8,7 +8,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "storybook": "storybook dev -p ${STORYBOOK_PORT:-5421} --ci",
     "build-storybook": "storybook build -o storybook-static",
-    "test-stories": "vitest --project=storybook run"
+    "test-stories": "vitest --project=storybook run",
+    "test-unit": "vitest --project=unit run",
+    "test": "vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
