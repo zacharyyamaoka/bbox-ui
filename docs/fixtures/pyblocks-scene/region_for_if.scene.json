@@ -1,0 +1,746 @@
+{
+  "schemaVersion": 1,
+  "kind": "pyblocks-scene",
+  "source": {
+    "uri": "workspace:sort_frame.py",
+    "sha256": "8d396f1e13d8f6a5c4ec1b4879ec99ed5b30b4a84af7d4ff84566d9d42dc06b1",
+    "selectedViewId": "function:sort_frame@4:0",
+    "title": "sort_frame() — region expanded (target)"
+  },
+  "scene": {
+    "nodes": [
+      {
+        "id": "function:sort_frame@4:0/boundary:selected-function",
+        "type": "region",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "sort_frame()",
+          "view": "expanded",
+          "w": 520,
+          "h": 340,
+          "ports": {
+            "left": [
+              "boundary-input-frame",
+              "boundary-input-detector",
+              "boundary-input-bins"
+            ],
+            "right": [
+              "boundary-output-report"
+            ]
+          },
+          "membersLayout": "free",
+          "autoFit": true,
+          "control": {
+            "kind": "function",
+            "head": "sort_frame(frame, detector, bins)"
+          },
+          "portLabels": {
+            "boundary-input-frame": "frame",
+            "boundary-input-detector": "detector",
+            "boundary-input-bins": "bins",
+            "boundary-output-report": "report"
+          },
+          "description": "Selected function body",
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/boundary:selected-function",
+            "semanticKind": "boundary",
+            "role": "selected-function",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 4,
+              "startColumn": 0,
+              "endLine": 16,
+              "endColumn": 17,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        }
+      },
+      {
+        "id": "function:sort_frame@4:0/data:literal@5:4-5:64",
+        "type": "value",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "'Detect objects in one fr…",
+          "value": "'Detect objects in one fr…",
+          "writers": [],
+          "readers": [],
+          "description": "str",
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/data:literal@5:4-5:64",
+            "semanticKind": "data",
+            "role": "literal",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 5,
+              "startColumn": 4,
+              "endLine": 5,
+              "endColumn": 64,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/boundary:selected-function"
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@6:17-6:39",
+        "type": "block",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "detector.detect()",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "left": [
+              "in-frame",
+              "in-self"
+            ],
+            "right": [
+              "out-detections"
+            ]
+          },
+          "portLabels": {
+            "in-frame": "frame",
+            "in-self": "self",
+            "out-detections": "detections"
+          },
+          "description": "callee body/effect is unresolved",
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/transform:call@6:17-6:39",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "unknown",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 6,
+              "startColumn": 17,
+              "endLine": 6,
+              "endColumn": 39,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/boundary:selected-function"
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:operator@7:13-7:15",
+        "type": "block",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "list",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "right": [
+              "out-routed"
+            ]
+          },
+          "portLabels": {
+            "out-routed": "routed"
+          },
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/transform:operator@7:13-7:15",
+            "semanticKind": "transform",
+            "role": "operator",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 7,
+              "startColumn": 13,
+              "endLine": 7,
+              "endColumn": 15,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/boundary:selected-function"
+      },
+      {
+        "id": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "type": "region",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "for detection in detections:",
+          "view": "expanded",
+          "w": 520,
+          "h": 340,
+          "ports": {
+            "left": [
+              "in-bins",
+              "in-detections",
+              "in-routed"
+            ],
+            "right": [
+              "out-routed"
+            ]
+          },
+          "membersLayout": "free",
+          "autoFit": true,
+          "control": {
+            "kind": "for",
+            "head": "for detection in detections:"
+          },
+          "portLabels": {
+            "in-bins": "bins",
+            "in-detections": "detections",
+            "in-routed": "routed",
+            "out-routed": "routed"
+          },
+          "description": "Loop body, opened. Carried state leaves through out-routed.",
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/region:for@8:4-14:44",
+            "semanticKind": "region",
+            "role": "for",
+            "effect": "unknown",
+            "certainty": "unknown",
+            "sourceSpan": {
+              "startLine": 8,
+              "startColumn": 4,
+              "endLine": 14,
+              "endColumn": 44,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/boundary:selected-function"
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@15:13-15:30",
+        "type": "block",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "summarize()",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "left": [
+              "in-routed"
+            ],
+            "right": [
+              "out-report"
+            ]
+          },
+          "portLabels": {
+            "in-routed": "routed",
+            "out-report": "report"
+          },
+          "description": "callee body/effect is unresolved",
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/transform:call@15:13-15:30",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "unknown",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 15,
+              "startColumn": 13,
+              "endLine": 15,
+              "endColumn": 30,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/boundary:selected-function"
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@9:16-9:34",
+        "type": "block",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "classify()",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "left": [
+              "in-detection"
+            ],
+            "right": [
+              "out-label"
+            ]
+          },
+          "portLabels": {
+            "in-detection": "detection",
+            "out-label": "label"
+          },
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/transform:call@9:16-9:34",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": null,
+            "certainty": "must",
+            "sourceSpan": null,
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/region:for@8:4-14:44"
+      },
+      {
+        "id": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "type": "region",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "if label == \"unknown\":",
+          "view": "expanded",
+          "w": 520,
+          "h": 340,
+          "ports": {
+            "left": [
+              "in-label",
+              "in-bins"
+            ],
+            "right": [
+              "out-bin_name"
+            ]
+          },
+          "membersLayout": "free",
+          "autoFit": true,
+          "control": {
+            "kind": "if",
+            "head": "if label == \"unknown\":"
+          },
+          "portLabels": {
+            "in-label": "label",
+            "in-bins": "bins",
+            "out-bin_name": "bin_name"
+          },
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/region:if@10:8-13:41",
+            "semanticKind": "region",
+            "role": "if",
+            "effect": null,
+            "certainty": "may",
+            "sourceSpan": null,
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/region:for@8:4-14:44"
+      },
+      {
+        "id": "function:sort_frame@4:0/data:attribute@11:23-11:36",
+        "type": "block",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "bins.fallback",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "left": [
+              "in-bins"
+            ],
+            "right": [
+              "out-bin_name"
+            ]
+          },
+          "portLabels": {
+            "in-bins": "bins",
+            "out-bin_name": "bin_name"
+          },
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/data:attribute@11:23-11:36",
+            "semanticKind": "data",
+            "role": "attribute",
+            "effect": null,
+            "certainty": "must",
+            "sourceSpan": null,
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/region:if@10:8-13:41"
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@13:23-13:41",
+        "type": "block",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "bins.lookup()",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "left": [
+              "in-bins",
+              "in-label"
+            ],
+            "right": [
+              "out-bin_name"
+            ]
+          },
+          "portLabels": {
+            "in-bins": "bins",
+            "in-label": "label",
+            "out-bin_name": "bin_name"
+          },
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/transform:call@13:23-13:41",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": null,
+            "certainty": "must",
+            "sourceSpan": null,
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/region:if@10:8-13:41"
+      },
+      {
+        "id": "function:sort_frame@4:0/transform:call@14:8-14:44",
+        "type": "block",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "routed.append()",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "left": [
+              "in-detection",
+              "in-bin_name",
+              "in-routed"
+            ],
+            "right": [
+              "out-routed"
+            ]
+          },
+          "portLabels": {
+            "in-detection": "detection",
+            "in-bin_name": "bin_name",
+            "in-routed": "routed",
+            "out-routed": "routed"
+          },
+          "pyblocks": {
+            "blockId": "function:sort_frame@4:0/transform:call@14:8-14:44",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": null,
+            "certainty": "must",
+            "sourceSpan": null,
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:sort_frame@4:0/region:for@8:4-14:44"
+      }
+    ],
+    "edges": [
+      {
+        "id": "pe:c8dac1959461:1",
+        "source": "function:sort_frame@4:0/boundary:selected-function",
+        "sourceHandle": "boundary-input-frame",
+        "target": "function:sort_frame@4:0/transform:call@6:17-6:39",
+        "targetHandle": "in-frame",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "pe:c8dac1959461:1",
+            "kind": "data",
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "pe:6b6e3686785d:1",
+        "source": "function:sort_frame@4:0/boundary:selected-function",
+        "sourceHandle": "boundary-input-detector",
+        "target": "function:sort_frame@4:0/transform:call@6:17-6:39",
+        "targetHandle": "in-self",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "pe:6b6e3686785d:1",
+            "kind": "data",
+            "certainty": "unknown"
+          }
+        }
+      },
+      {
+        "id": "pe:195c77604d24:1",
+        "source": "function:sort_frame@4:0/boundary:selected-function",
+        "sourceHandle": "boundary-input-bins",
+        "target": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "targetHandle": "in-bins",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "pe:195c77604d24:1",
+            "kind": "data",
+            "certainty": "may"
+          }
+        }
+      },
+      {
+        "id": "pe:45136d171173:1",
+        "source": "function:sort_frame@4:0/transform:call@6:17-6:39",
+        "sourceHandle": "out-detections",
+        "target": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "targetHandle": "in-detections",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "pe:45136d171173:1",
+            "kind": "data",
+            "certainty": "may"
+          }
+        }
+      },
+      {
+        "id": "pe:ddc033b3c71d:1",
+        "source": "function:sort_frame@4:0/transform:operator@7:13-7:15",
+        "sourceHandle": "out-routed",
+        "target": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "targetHandle": "in-routed",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "pe:ddc033b3c71d:1",
+            "kind": "data",
+            "certainty": "may"
+          }
+        }
+      },
+      {
+        "id": "pe:3bb750a67b3a:1",
+        "source": "function:sort_frame@4:0/transform:call@15:13-15:30",
+        "sourceHandle": "out-report",
+        "target": "function:sort_frame@4:0/boundary:selected-function",
+        "targetHandle": "boundary-output-report",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "pe:3bb750a67b3a:1",
+            "kind": "data",
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "x-detections-classify",
+        "source": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "sourceHandle": "in-detections",
+        "target": "function:sort_frame@4:0/transform:call@9:16-9:34",
+        "targetHandle": "in-detection",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "x-detections-classify",
+            "kind": "data",
+            "innerSource": true
+          }
+        }
+      },
+      {
+        "id": "x-bins-branch",
+        "source": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "sourceHandle": "in-bins",
+        "target": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "targetHandle": "in-bins",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "x-bins-branch",
+            "kind": "data",
+            "innerSource": true
+          }
+        }
+      },
+      {
+        "id": "x-routed-append",
+        "source": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "sourceHandle": "in-routed",
+        "target": "function:sort_frame@4:0/transform:call@14:8-14:44",
+        "targetHandle": "in-routed",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "x-routed-append",
+            "kind": "data",
+            "innerSource": true
+          }
+        }
+      },
+      {
+        "id": "x-detection-append",
+        "source": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "sourceHandle": "in-detections",
+        "target": "function:sort_frame@4:0/transform:call@14:8-14:44",
+        "targetHandle": "in-detection",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "x-detection-append",
+            "kind": "data",
+            "innerSource": true
+          }
+        }
+      },
+      {
+        "id": "i-label",
+        "source": "function:sort_frame@4:0/transform:call@9:16-9:34",
+        "sourceHandle": "out-label",
+        "target": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "targetHandle": "in-label",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "i-label",
+            "kind": "data"
+          }
+        }
+      },
+      {
+        "id": "i-binname",
+        "source": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "sourceHandle": "out-bin_name",
+        "target": "function:sort_frame@4:0/transform:call@14:8-14:44",
+        "targetHandle": "in-bin_name",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "i-binname",
+            "kind": "data"
+          }
+        }
+      },
+      {
+        "id": "y-label-lookup",
+        "source": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "sourceHandle": "in-label",
+        "target": "function:sort_frame@4:0/transform:call@13:23-13:41",
+        "targetHandle": "in-label",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "y-label-lookup",
+            "kind": "data",
+            "innerSource": true
+          }
+        }
+      },
+      {
+        "id": "y-fallback-out",
+        "source": "function:sort_frame@4:0/data:attribute@11:23-11:36",
+        "sourceHandle": "out-bin_name",
+        "target": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "targetHandle": "out-bin_name",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "y-fallback-out",
+            "kind": "data",
+            "innerTarget": true
+          }
+        }
+      },
+      {
+        "id": "y-lookup-out",
+        "source": "function:sort_frame@4:0/transform:call@13:23-13:41",
+        "sourceHandle": "out-bin_name",
+        "target": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "targetHandle": "out-bin_name",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "y-lookup-out",
+            "kind": "data",
+            "innerTarget": true
+          }
+        }
+      },
+      {
+        "id": "c-append-carry",
+        "source": "function:sort_frame@4:0/transform:call@14:8-14:44",
+        "sourceHandle": "out-routed",
+        "target": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "targetHandle": "out-routed",
+        "data": {
+          "variant": "delayed",
+          "pyblocks": {
+            "edgeId": "c-append-carry",
+            "kind": "state",
+            "label": "carried",
+            "innerTarget": true
+          }
+        }
+      },
+      {
+        "id": "c-loop-summ",
+        "source": "function:sort_frame@4:0/region:for@8:4-14:44",
+        "sourceHandle": "out-routed",
+        "target": "function:sort_frame@4:0/transform:call@15:13-15:30",
+        "targetHandle": "in-routed",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "c-loop-summ",
+            "kind": "data"
+          }
+        }
+      }
+    ]
+  },
+  "controlEdges": [
+    {
+      "id": "y-bins-fallback",
+      "kind": "control",
+      "source": {
+        "nodeId": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "portId": "in-bins__inner"
+      },
+      "target": {
+        "nodeId": "function:sort_frame@4:0/data:attribute@11:23-11:36",
+        "portId": "in-bins"
+      }
+    },
+    {
+      "id": "y-bins-lookup",
+      "kind": "control",
+      "source": {
+        "nodeId": "function:sort_frame@4:0/region:if@10:8-13:41",
+        "portId": "in-bins__inner"
+      },
+      "target": {
+        "nodeId": "function:sort_frame@4:0/transform:call@13:23-13:41",
+        "portId": "in-bins"
+      }
+    }
+  ],
+  "views": [],
+  "diagnostics": []
+}
