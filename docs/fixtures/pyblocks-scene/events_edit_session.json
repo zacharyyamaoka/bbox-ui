@@ -1,0 +1,668 @@
+{
+  "schemaVersion": 1,
+  "kind": "pyblocks-scene-events-fixture",
+  "before": {
+    "nodes": [
+      {
+        "id": "function:run@3:0/boundary:selected-function",
+        "type": "region",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "run()",
+          "view": "expanded",
+          "w": 520,
+          "h": 340,
+          "ports": {
+            "left": [
+              "boundary-input-raw"
+            ],
+            "right": [
+              "boundary-output-scaled"
+            ]
+          },
+          "membersLayout": "free",
+          "autoFit": true,
+          "control": {
+            "kind": "function",
+            "head": "run(raw: bytes) -> Frame"
+          },
+          "portLabels": {
+            "boundary-input-raw": "raw",
+            "boundary-output-scaled": "scaled"
+          },
+          "portTypes": {
+            "boundary-input-raw": "bytes",
+            "boundary-output-scaled": "Frame"
+          },
+          "pyblocks": {
+            "blockId": "function:run@3:0/boundary:selected-function",
+            "semanticKind": "boundary",
+            "role": "selected-function",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 3,
+              "startColumn": 0,
+              "endLine": 6,
+              "endColumn": 17,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        }
+      },
+      {
+        "id": "function:run@3:0/transform:call@4:12-4:23",
+        "type": "block",
+        "position": {
+          "x": 40,
+          "y": 80
+        },
+        "data": {
+          "name": "decode()",
+          "view": "port",
+          "w": 240,
+          "h": 90,
+          "ports": {
+            "left": [
+              "in-raw"
+            ],
+            "right": [
+              "out-frame"
+            ]
+          },
+          "portLabels": {
+            "in-raw": "raw",
+            "out-frame": "frame"
+          },
+          "portTypes": {
+            "in-raw": "bytes",
+            "out-frame": "Frame"
+          },
+          "description": "Decode raw bytes into a frame.",
+          "pyblocks": {
+            "blockId": "function:run@3:0/transform:call@4:12-4:23",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 4,
+              "startColumn": 12,
+              "endLine": 4,
+              "endColumn": 23,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": true
+          }
+        },
+        "parentId": "function:run@3:0/boundary:selected-function"
+      },
+      {
+        "id": "function:run@3:0/transform:call@5:13-5:35",
+        "type": "block",
+        "position": {
+          "x": 360,
+          "y": 80
+        },
+        "data": {
+          "name": "scale()",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "left": [
+              "in-frame",
+              "in-gain"
+            ],
+            "right": [
+              "out-scaled"
+            ]
+          },
+          "portLabels": {
+            "in-frame": "frame",
+            "in-gain": "gain",
+            "out-scaled": "scaled"
+          },
+          "portTypes": {
+            "in-frame": "Frame",
+            "in-gain": "float",
+            "out-scaled": "Frame"
+          },
+          "pyblocks": {
+            "blockId": "function:run@3:0/transform:call@5:13-5:35",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 5,
+              "startColumn": 13,
+              "endLine": 5,
+              "endColumn": 35,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": true
+          }
+        },
+        "parentId": "function:run@3:0/boundary:selected-function"
+      },
+      {
+        "id": "function:run@3:0/data:literal@5:29-5:32",
+        "type": "value",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "2.0",
+          "value": "2.0",
+          "writers": [],
+          "readers": [
+            "out-value"
+          ],
+          "portTypes": {
+            "out-value": "float"
+          },
+          "pyblocks": {
+            "blockId": "function:run@3:0/data:literal@5:29-5:32",
+            "semanticKind": "data",
+            "role": "literal",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 5,
+              "startColumn": 29,
+              "endLine": 5,
+              "endColumn": 32,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:run@3:0/boundary:selected-function"
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-raw",
+        "source": "function:run@3:0/boundary:selected-function",
+        "sourceHandle": "boundary-input-raw",
+        "target": "function:run@3:0/transform:call@4:12-4:23",
+        "targetHandle": "in-raw",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "e-raw",
+            "kind": "data",
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "e-frame",
+        "source": "function:run@3:0/transform:call@4:12-4:23",
+        "sourceHandle": "out-frame",
+        "target": "function:run@3:0/transform:call@5:13-5:35",
+        "targetHandle": "in-frame",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "e-frame",
+            "kind": "data",
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "e-gain",
+        "source": "function:run@3:0/data:literal@5:29-5:32",
+        "sourceHandle": "out-value",
+        "target": "function:run@3:0/transform:call@5:13-5:35",
+        "targetHandle": "in-gain",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "e-gain",
+            "kind": "data"
+          }
+        }
+      },
+      {
+        "id": "e-out",
+        "source": "function:run@3:0/transform:call@5:13-5:35",
+        "sourceHandle": "out-scaled",
+        "target": "function:run@3:0/boundary:selected-function",
+        "targetHandle": "boundary-output-scaled",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "e-out",
+            "kind": "data",
+            "certainty": "must"
+          }
+        }
+      }
+    ]
+  },
+  "after": {
+    "nodes": [
+      {
+        "id": "function:run@3:0/boundary:selected-function",
+        "type": "region",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "run()",
+          "view": "expanded",
+          "w": 520,
+          "h": 340,
+          "ports": {
+            "left": [
+              "boundary-input-raw"
+            ],
+            "right": [
+              "boundary-output-scaled"
+            ]
+          },
+          "membersLayout": "free",
+          "autoFit": true,
+          "control": {
+            "kind": "function",
+            "head": "run(raw: bytes) -> Frame"
+          },
+          "portLabels": {
+            "boundary-input-raw": "raw",
+            "boundary-output-scaled": "scaled"
+          },
+          "portTypes": {
+            "boundary-input-raw": "bytes",
+            "boundary-output-scaled": "Frame"
+          },
+          "pyblocks": {
+            "blockId": "function:run@3:0/boundary:selected-function",
+            "semanticKind": "boundary",
+            "role": "selected-function",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 3,
+              "startColumn": 0,
+              "endLine": 6,
+              "endColumn": 17,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          },
+          "color": "teal"
+        }
+      },
+      {
+        "id": "function:run@3:0/transform:call@4:12-4:23",
+        "type": "block",
+        "position": {
+          "x": 60,
+          "y": 120
+        },
+        "data": {
+          "name": "decode()",
+          "view": "simple",
+          "w": 260,
+          "h": 90,
+          "ports": {
+            "left": [
+              "in-raw"
+            ],
+            "right": [
+              "out-frame"
+            ]
+          },
+          "portLabels": {
+            "in-raw": "raw",
+            "out-frame": "frame"
+          },
+          "portTypes": {
+            "in-raw": "bytes",
+            "out-frame": "Frame"
+          },
+          "description": "Decode raw bytes into a frame.",
+          "pyblocks": {
+            "blockId": "function:run@3:0/transform:call@4:12-4:23",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 4,
+              "startColumn": 12,
+              "endLine": 4,
+              "endColumn": 23,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": true
+          }
+        },
+        "parentId": "function:run@3:0/boundary:selected-function"
+      },
+      {
+        "id": "function:run@3:0/transform:call@5:13-5:35",
+        "type": "block",
+        "position": {
+          "x": 360,
+          "y": 80
+        },
+        "data": {
+          "name": "rescale()",
+          "view": "port",
+          "w": 240,
+          "ports": {
+            "left": [
+              "in-gain",
+              "in-frame"
+            ],
+            "right": [
+              "out-scaled",
+              "out-debug"
+            ]
+          },
+          "portLabels": {
+            "in-frame": "frame",
+            "in-gain": "k",
+            "out-scaled": "scaled"
+          },
+          "portTypes": {
+            "in-frame": "Frame",
+            "in-gain": "float",
+            "out-scaled": "Frame"
+          },
+          "pyblocks": {
+            "blockId": "function:run@3:0/transform:call@5:13-5:35",
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 5,
+              "startColumn": 13,
+              "endLine": 5,
+              "endColumn": 35,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": true
+          }
+        },
+        "parentId": "function:run@3:0/boundary:selected-function"
+      },
+      {
+        "id": "function:run@3:0/data:literal@5:29-5:32",
+        "type": "value",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "2.0",
+          "value": "3.0",
+          "writers": [],
+          "readers": [
+            "out-value"
+          ],
+          "portTypes": {
+            "out-value": "float"
+          },
+          "pyblocks": {
+            "blockId": "function:run@3:0/data:literal@5:29-5:32",
+            "semanticKind": "data",
+            "role": "literal",
+            "effect": "pure",
+            "certainty": "must",
+            "sourceSpan": {
+              "startLine": 5,
+              "startColumn": 29,
+              "endLine": 5,
+              "endColumn": 32,
+              "columnEncoding": "utf8-bytes"
+            },
+            "authoredPosition": false
+          }
+        },
+        "parentId": "function:run@3:0/boundary:selected-function"
+      },
+      {
+        "id": "note-1",
+        "type": "code",
+        "parentId": "function:run@3:0/boundary:selected-function",
+        "position": {
+          "x": 40,
+          "y": 240
+        },
+        "data": {
+          "name": "note-1",
+          "code": "# scratch"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-raw",
+        "source": "function:run@3:0/boundary:selected-function",
+        "sourceHandle": "boundary-input-raw",
+        "target": "function:run@3:0/transform:call@4:12-4:23",
+        "targetHandle": "in-raw",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "e-raw",
+            "kind": "data",
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "e-frame",
+        "source": "function:run@3:0/transform:call@4:12-4:23",
+        "sourceHandle": "out-frame",
+        "target": "function:run@3:0/transform:call@5:13-5:35",
+        "targetHandle": "in-gain",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "e-frame",
+            "kind": "data",
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "e-out",
+        "source": "function:run@3:0/transform:call@5:13-5:35",
+        "sourceHandle": "out-scaled",
+        "target": "function:run@3:0/boundary:selected-function",
+        "targetHandle": "boundary-output-scaled",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "e-out",
+            "kind": "data",
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "e-gain2",
+        "source": "function:run@3:0/boundary:selected-function",
+        "sourceHandle": "boundary-input-raw",
+        "target": "function:run@3:0/transform:call@5:13-5:35",
+        "targetHandle": "in-gain",
+        "data": {
+          "variant": "data"
+        }
+      }
+    ]
+  },
+  "events": [
+    {
+      "type": "data-changed",
+      "nodeId": "function:run@3:0/boundary:selected-function",
+      "key": "color",
+      "from": null,
+      "to": "teal"
+    },
+    {
+      "type": "node-moved",
+      "nodeId": "function:run@3:0/transform:call@4:12-4:23",
+      "from": {
+        "x": 40,
+        "y": 80
+      },
+      "to": {
+        "x": 60,
+        "y": 120
+      }
+    },
+    {
+      "type": "node-resized",
+      "nodeId": "function:run@3:0/transform:call@4:12-4:23",
+      "from": {
+        "w": 240,
+        "h": 90
+      },
+      "to": {
+        "w": 260,
+        "h": 90
+      }
+    },
+    {
+      "type": "node-view-changed",
+      "nodeId": "function:run@3:0/transform:call@4:12-4:23",
+      "from": "port",
+      "to": "simple"
+    },
+    {
+      "type": "node-renamed",
+      "nodeId": "function:run@3:0/transform:call@5:13-5:35",
+      "from": "scale()",
+      "to": "rescale()"
+    },
+    {
+      "type": "ports-reordered",
+      "nodeId": "function:run@3:0/transform:call@5:13-5:35",
+      "side": "left",
+      "from": [
+        "in-frame",
+        "in-gain"
+      ],
+      "to": [
+        "in-gain",
+        "in-frame"
+      ]
+    },
+    {
+      "type": "port-added",
+      "nodeId": "function:run@3:0/transform:call@5:13-5:35",
+      "portId": "out-debug",
+      "side": "right"
+    },
+    {
+      "type": "port-renamed",
+      "nodeId": "function:run@3:0/transform:call@5:13-5:35",
+      "portId": "in-gain",
+      "from": "gain",
+      "to": "k"
+    },
+    {
+      "type": "value-changed",
+      "nodeId": "function:run@3:0/data:literal@5:29-5:32",
+      "from": "2.0",
+      "to": "3.0"
+    },
+    {
+      "type": "node-added",
+      "nodeId": "note-1",
+      "node": {
+        "id": "note-1",
+        "type": "code",
+        "parentId": "function:run@3:0/boundary:selected-function",
+        "position": {
+          "x": 40,
+          "y": 240
+        },
+        "data": {
+          "name": "note-1",
+          "code": "# scratch"
+        }
+      }
+    },
+    {
+      "type": "wire-rewired",
+      "edgeId": "e-frame",
+      "from": {
+        "source": "function:run@3:0/transform:call@4:12-4:23",
+        "sourceHandle": "out-frame",
+        "target": "function:run@3:0/transform:call@5:13-5:35",
+        "targetHandle": "in-frame"
+      },
+      "to": {
+        "source": "function:run@3:0/transform:call@4:12-4:23",
+        "sourceHandle": "out-frame",
+        "target": "function:run@3:0/transform:call@5:13-5:35",
+        "targetHandle": "in-gain"
+      }
+    },
+    {
+      "type": "wire-disconnected",
+      "edgeId": "e-gain",
+      "edge": {
+        "id": "e-gain",
+        "source": "function:run@3:0/data:literal@5:29-5:32",
+        "sourceHandle": "out-value",
+        "target": "function:run@3:0/transform:call@5:13-5:35",
+        "targetHandle": "in-gain",
+        "data": {
+          "variant": "data",
+          "pyblocks": {
+            "edgeId": "e-gain",
+            "kind": "data"
+          }
+        }
+      }
+    },
+    {
+      "type": "wire-connected",
+      "edgeId": "e-gain2",
+      "edge": {
+        "id": "e-gain2",
+        "source": "function:run@3:0/boundary:selected-function",
+        "sourceHandle": "boundary-input-raw",
+        "target": "function:run@3:0/transform:call@5:13-5:35",
+        "targetHandle": "in-gain",
+        "data": {
+          "variant": "data"
+        }
+      }
+    }
+  ],
+  "expectedClasses": {
+    "node-moved": "presentation",
+    "node-resized": "presentation",
+    "node-view-changed": "presentation",
+    "ports-reordered": "presentation",
+    "node-renamed": "semantic",
+    "port-added": "semantic",
+    "port-removed": "semantic",
+    "port-renamed": "semantic",
+    "value-changed": "semantic",
+    "code-changed": "semantic",
+    "wire-connected": "semantic",
+    "wire-disconnected": "semantic",
+    "wire-rewired": "semantic",
+    "node-added": "semantic",
+    "node-removed": "semantic",
+    "node-reparented": "semantic",
+    "data-changed": "unknown"
+  }
+}

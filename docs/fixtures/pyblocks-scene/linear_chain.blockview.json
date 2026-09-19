@@ -1,0 +1,374 @@
+{
+  "schemaVersion": 1,
+  "content": {
+    "title": "run() — linear chain",
+    "metadata": {
+      "pyblocks.analysis": {
+        "sourceSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "selectedViewId": "function:run@3:0",
+        "projection": "direct-flow-v1"
+      }
+    },
+    "blocks": [
+      {
+        "id": "function:run@3:0/boundary:selected-function",
+        "title": "run()",
+        "description": null,
+        "parentId": null,
+        "ports": [
+          {
+            "id": "boundary-input-raw",
+            "direction": "output",
+            "name": "raw",
+            "dataType": "bytes",
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.port": {
+                "displayRole": "boundary-input",
+                "displayDirection": "input"
+              },
+              "pyblocks.analysis": {
+                "semanticKind": "data",
+                "role": "parameter",
+                "symbol": "raw"
+              }
+            }
+          },
+          {
+            "id": "boundary-output-scaled",
+            "direction": "input",
+            "name": "scaled",
+            "dataType": "Frame",
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.port": {
+                "displayRole": "boundary-output",
+                "displayDirection": "output"
+              },
+              "pyblocks.analysis": {
+                "semanticKind": "sink",
+                "role": "return"
+              }
+            }
+          }
+        ],
+        "sourceRefs": [
+          {
+            "uri": "workspace:linear_chain.py",
+            "span": {
+              "startLine": 3,
+              "startColumn": 0,
+              "endLine": 6,
+              "endColumn": 17,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "selected-function"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "boundary",
+            "role": "selected-function",
+            "effect": "pure",
+            "certainty": "must",
+            "qualifiedSymbol": "run",
+            "signature": "run(raw: bytes) -> Frame"
+          }
+        }
+      },
+      {
+        "id": "function:run@3:0/transform:call@4:12-4:23",
+        "title": "decode()",
+        "description": "Decode raw bytes into a frame.",
+        "parentId": null,
+        "ports": [
+          {
+            "id": "in-raw",
+            "direction": "input",
+            "name": "raw",
+            "dataType": "bytes",
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.analysis": {
+                "edgeKind": "data",
+                "flowRole": "consumed",
+                "semanticName": "raw"
+              }
+            }
+          },
+          {
+            "id": "out-frame",
+            "direction": "output",
+            "name": "frame",
+            "dataType": "Frame",
+            "description": null,
+            "required": true,
+            "metadata": {
+              "pyblocks.analysis": {
+                "edgeKind": "data",
+                "flowRole": "produced",
+                "semanticName": "frame"
+              }
+            }
+          }
+        ],
+        "sourceRefs": [
+          {
+            "uri": "workspace:linear_chain.py",
+            "span": {
+              "startLine": 4,
+              "startColumn": 12,
+              "endLine": 4,
+              "endColumn": 23,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "block-origin"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "pure",
+            "certainty": "must",
+            "tags": [
+              "call"
+            ]
+          }
+        }
+      },
+      {
+        "id": "function:run@3:0/transform:call@5:13-5:35",
+        "title": "scale()",
+        "description": null,
+        "parentId": null,
+        "ports": [
+          {
+            "id": "in-frame",
+            "direction": "input",
+            "name": "frame",
+            "dataType": "Frame",
+            "description": null,
+            "required": true,
+            "metadata": {}
+          },
+          {
+            "id": "in-gain",
+            "direction": "input",
+            "name": "gain",
+            "dataType": "float",
+            "description": null,
+            "required": false,
+            "metadata": {}
+          },
+          {
+            "id": "out-scaled",
+            "direction": "output",
+            "name": "scaled",
+            "dataType": "Frame",
+            "description": null,
+            "required": true,
+            "metadata": {}
+          }
+        ],
+        "sourceRefs": [
+          {
+            "uri": "workspace:linear_chain.py",
+            "span": {
+              "startLine": 5,
+              "startColumn": 13,
+              "endLine": 5,
+              "endColumn": 35,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "block-origin"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "transform",
+            "role": "call",
+            "effect": "pure",
+            "certainty": "must",
+            "tags": [
+              "call"
+            ]
+          }
+        }
+      },
+      {
+        "id": "function:run@3:0/data:literal@5:29-5:32",
+        "title": "2.0",
+        "description": null,
+        "parentId": null,
+        "ports": [
+          {
+            "id": "out-value",
+            "direction": "output",
+            "name": null,
+            "dataType": "float",
+            "description": null,
+            "required": true,
+            "metadata": {}
+          }
+        ],
+        "sourceRefs": [
+          {
+            "uri": "workspace:linear_chain.py",
+            "span": {
+              "startLine": 5,
+              "startColumn": 29,
+              "endLine": 5,
+              "endColumn": 32,
+              "columnEncoding": "utf8-bytes"
+            },
+            "role": "block-origin"
+          }
+        ],
+        "resources": [],
+        "metadata": {
+          "pyblocks.analysis": {
+            "semanticKind": "data",
+            "role": "literal",
+            "effect": "pure",
+            "certainty": "must",
+            "tags": [],
+            "detail": "float"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-raw",
+        "source": {
+          "blockId": "function:run@3:0/boundary:selected-function",
+          "portId": "boundary-input-raw"
+        },
+        "target": {
+          "blockId": "function:run@3:0/transform:call@4:12-4:23",
+          "portId": "in-raw"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "e-frame",
+        "source": {
+          "blockId": "function:run@3:0/transform:call@4:12-4:23",
+          "portId": "out-frame"
+        },
+        "target": {
+          "blockId": "function:run@3:0/transform:call@5:13-5:35",
+          "portId": "in-frame"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "must"
+          }
+        }
+      },
+      {
+        "id": "e-gain",
+        "source": {
+          "blockId": "function:run@3:0/data:literal@5:29-5:32",
+          "portId": "out-value"
+        },
+        "target": {
+          "blockId": "function:run@3:0/transform:call@5:13-5:35",
+          "portId": "in-gain"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {}
+      },
+      {
+        "id": "e-out",
+        "source": {
+          "blockId": "function:run@3:0/transform:call@5:13-5:35",
+          "portId": "out-scaled"
+        },
+        "target": {
+          "blockId": "function:run@3:0/boundary:selected-function",
+          "portId": "boundary-output-scaled"
+        },
+        "label": null,
+        "kind": "data",
+        "metadata": {
+          "pyblocks.analysis": {
+            "certainty": "must"
+          }
+        }
+      }
+    ]
+  },
+  "style": {
+    "blocks": {
+      "function:run@3:0/boundary:selected-function": {
+        "position": null,
+        "size": null,
+        "detail": "expanded",
+        "shape": "rectangle",
+        "visible": true,
+        "color": null
+      },
+      "function:run@3:0/transform:call@4:12-4:23": {
+        "position": {
+          "x": 40,
+          "y": 80
+        },
+        "size": {
+          "width": 240,
+          "height": 90
+        },
+        "detail": "ports",
+        "shape": "rectangle",
+        "visible": true,
+        "color": null
+      },
+      "function:run@3:0/transform:call@5:13-5:35": {
+        "position": {
+          "x": 360,
+          "y": 80
+        },
+        "size": null,
+        "detail": "ports",
+        "shape": "rectangle",
+        "visible": true,
+        "color": null
+      },
+      "function:run@3:0/data:literal@5:29-5:32": {
+        "position": null,
+        "size": null,
+        "detail": "simple",
+        "shape": "pill",
+        "visible": true,
+        "color": null
+      }
+    },
+    "ports": {},
+    "edges": {},
+    "canvas": {
+      "viewport": {
+        "x": 0,
+        "y": 0
+      },
+      "zoom": 1.0,
+      "theme": "system",
+      "background": "dots"
+    }
+  }
+}
