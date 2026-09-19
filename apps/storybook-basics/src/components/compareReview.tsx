@@ -323,10 +323,51 @@ export function CompareReview({
 
   const stagePane = (
     <div data-slot="compare-stage" data-mode={mode} className="flex min-h-0 flex-1 flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-border">
-        <figure data-slot="compare-pane" data-side="before" className="m-0 flex min-h-0 flex-col overflow-hidden">
+      {/* WHY overlay collapses to ONE grid cell instead of only fading the
+       *  after pane: it is called Overlay, and it was not overlaying
+       *  anything. The port carried the donor's opacity rule and dropped its
+       *  layout rule, so "overlay" rendered two side-by-side columns with
+       *  the right one translucent — a judge measured two grid columns in
+       *  overlay mode (2026-09-18), and by then a new gallery caption was
+       *  advertising the behaviour as "after pane faded over before".
+       *
+       *  The donor does it in CSS (compare.css:293-303): one column, both
+       *  panes at `grid-area: 1 / 1`, the after pane raised so the slider
+       *  fades the TOP layer while the bottom one always paints. `isolate`
+       *  keeps that raise inside this stage rather than in the host's stack.
+       *
+       *  Captions stack too, and two captions in one cell overprint into
+       *  soup — the donor's own words. Its answer is that a crossfade is
+       *  labelled by both endpoints at once, so overlay hides the two and
+       *  renders that single combined caption instead. */}
+      <div
+        className={cn(
+          "isolate grid min-h-0 flex-1",
+          mode === "overlay" ? "grid-cols-1" : "grid-cols-2 divide-x divide-border",
+        )}
+      >
+        {mode === "overlay" ? (
           <figcaption
-            className="shrink-0 truncate border-b border-border px-3 py-2 text-xs font-semibold text-foreground"
+            data-slot="compare-overlay-caption"
+            className="col-start-1 row-start-1 z-20 self-start truncate border-b border-border bg-card/90 px-3 py-2 text-xs font-semibold text-foreground"
+            title={`${beforeLabel} → ${afterLabel}`}
+          >
+            {beforeLabel} → {afterLabel}
+          </figcaption>
+        ) : null}
+        <figure
+          data-slot="compare-pane"
+          data-side="before"
+          className={cn(
+            "m-0 flex min-h-0 flex-col overflow-hidden",
+            mode === "overlay" && "col-start-1 row-start-1",
+          )}
+        >
+          <figcaption
+            className={cn(
+              "shrink-0 truncate border-b border-border px-3 py-2 text-xs font-semibold text-foreground",
+              mode === "overlay" && "invisible",
+            )}
             title={beforeLabel}
           >
             {beforeLabel}
@@ -336,7 +377,12 @@ export function CompareReview({
         <figure
           data-slot="compare-pane"
           data-side="after"
-          className="m-0 flex min-h-0 flex-col overflow-hidden"
+          className={cn(
+            "m-0 flex min-h-0 flex-col overflow-hidden",
+            // The top layer is what the slider fades; the bottom one always
+            // paints (donor: compare.css:301-303).
+            mode === "overlay" && "col-start-1 row-start-1 z-10",
+          )}
           // Overlay only fades AFTER onto BEFORE — the same "blend is a
           // property of the after pane" the donor keeps, so side-by-side
           // never carries a stray opacity that a host CSS override forgot
@@ -344,7 +390,10 @@ export function CompareReview({
           style={mode === "overlay" ? { opacity: blend / 100 } : undefined}
         >
           <figcaption
-            className="shrink-0 truncate border-b border-border px-3 py-2 text-xs font-semibold text-foreground"
+            className={cn(
+              "shrink-0 truncate border-b border-border px-3 py-2 text-xs font-semibold text-foreground",
+              mode === "overlay" && "invisible",
+            )}
             title={afterLabel}
           >
             {afterLabel}

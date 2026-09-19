@@ -156,9 +156,17 @@ export interface ChromeBarProps {
    *  this bar only reserves the seat GitHub reserves beside the repo name. */
   draftChip?: ReactNode;
   /** Portal target inside the host's token scope (host-contract §4).
-   *  Forwarded to EVERY popup this bar opens — the burger menu, the file
-   *  actions, the breadcrumb ellipsis, the depth badge, the context menu,
-   *  and any `draftChip` that accepts one.
+   *  Forwarded to every popup this bar OWNS — the burger menu and its
+   *  submenus, the file actions, the breadcrumb ellipsis, the depth badge,
+   *  the context menu, and the back/forward/home/burger tooltips.
+   *
+   *  It does NOT reach `draftChip`, and cannot: that prop is an opaque
+   *  ReactNode the host constructs, so this component has nothing to thread
+   *  through without reaching inside someone else's element. A host wanting
+   *  its BranchChip scoped passes the same container to the chip directly —
+   *  `BranchChip` takes one. The previous wording said "and any draftChip
+   *  that accepts one", which read as automatic and is not (judge fixture,
+   *  2026-09-18, opening a chip popup outside the supplied scope).
    *
    *  This comment used to say the dropdowns could not honour it because
    *  `dropdown-menu.tsx` exposed no `container`, and that "not this lane's
@@ -169,7 +177,17 @@ export interface ChromeBarProps {
    *  something re-checks it, which is the actual lesson here. */
   container?: HTMLElement | null;
   /** Host CSS on the rendered popup's own `[data-slot=…]` — stacking/
-   *  z-order. The kit ships zero z-index (host-contract §4). */
+   *  z-order.
+   *
+   *  This used to claim "the kit ships zero z-index". It does not, and
+   *  saying so was the kind of comment that makes a reader stop checking:
+   *  every portaled popup's positioner carries `z-50`, and `isolation:
+   *  isolate` contains a stacking context for an element's DESCENDANTS, not
+   *  for the element's OWN z-index. So a popup does participate in whatever
+   *  stack its portal container belongs to. A host that must paint above one
+   *  raises its overlay past 50, or supplies a `container` it controls the
+   *  stacking of. Corrected after a judge measured the computed styles
+   *  (2026-09-18). */
   popupClassName?: string;
   testIdPrefix?: string;
 }

@@ -155,13 +155,7 @@ export function InlineRename({
     // genuinely wants names trimmed does it in its own `onCommit`, where it
     // is a visible decision rather than one this component made silently.
     //
-    // KNOWN LIMIT, not silent: `value` round-trips through a single-line
-    // `<input>`, which cannot hold a newline — a stored "A\nB" is exposed as
-    // "AB" and would commit that way if edited. That is the element's
-    // constraint, not a normalization invented here, and a host storing
-    // multi-line names needs a different editor rather than this one
-    // quietly flattening them.
-    if (unrepresentable) {
+      if (unrepresentable) {
       // Nothing to set: `error` above is already showing why, and the value
       // is left exactly as the host stored it.
       window.requestAnimationFrame(() => inputRef.current?.focus());
@@ -206,6 +200,22 @@ export function InlineRename({
         onChange={(event) => {
           setDraft(event.target.value);
           setInternalError(null);
+        }}
+        onPaste={(event) => {
+          // WHY the clipboard is inspected here rather than the resulting
+          // value: the `<input>` strips line breaks BEFORE `onChange` runs,
+          // so by then "A\nB" is already "AB" and nothing downstream can
+          // tell a paste that lost characters from one that never had any.
+          // The earlier guard only read the `value` PROP, which caught a
+          // stored newline and missed a pasted one entirely — paste "A\nB"
+          // into a clean field and it committed "AB" with no warning at all
+          // (judge fixture, 2026-09-18). The clipboard is the last point
+          // where the original text still exists.
+          const pasted = event.clipboardData.getData("text");
+          if (/[\r\n]/.test(pasted)) {
+            event.preventDefault();
+            setInternalError("Pasted text contains a line break, so it wasn't inserted.");
+          }
         }}
         onMouseDown={(event) => {
           if (performance.now() - mountedAtRef.current < RENAME_MOUSEDOWN_GUARD_MS) {

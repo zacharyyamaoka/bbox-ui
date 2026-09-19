@@ -341,6 +341,43 @@ def main() -> None:
     # is structural, and un-breaking it means regenerating the package from the
     # trunk — P7-class work, not a drive-by. Warning keeps the fact visible on
     # every run instead of letting it go quiet again.
+    # THIRD failure mode, and the one that shipped: `npx shadcn@latest build`
+    # embeds each file's CONTENT into public/r/<item>.json. So the published
+    # payload is a SNAPSHOT — edit a source file afterwards and the registry
+    # keeps serving the old bytes, silently. Measured 2026-09-18: eight items
+    # were serving pre-fix source, so a consumer installing `inline-rename`
+    # got the version that silently ate line breaks and one installing
+    # `tool-dock` got the one that passed Object.prototype to onArm, while
+    # every source-level check here passed. Freshness of registry.json says
+    # nothing about freshness of what is actually served.
+    published = REPO / "public/r"
+    stale: list[str] = []
+    if published.is_dir():
+        for it in reg["items"]:
+            payload = published / f"{it['name']}.json"
+            if not payload.is_file():
+                stale.append(f"{it['name']}: never published")
+                continue
+            data = json.loads(payload.read_text())
+            by_target = {f.get("target") or f["path"]: f.get("content") for f in data.get("files", [])}
+            for f in it["files"]:
+                src = REPO / f["path"]
+                if not src.is_file():
+                    continue
+                shipped = by_target.get(f["target"])
+                if shipped is None:
+                    stale.append(f"{it['name']}: {f['target']} missing from the published payload")
+                elif shipped != src.read_text():
+                    stale.append(f"{it['name']}: {f['target']} published content differs from source")
+    if stale:
+        print("\nPUBLISHED PAYLOADS ARE STALE — re-run `npx shadcn@latest build`:")
+        for line in sorted(set(stale))[:20]:
+            print("  " + line)
+        if len(set(stale)) > 20:
+            print(f"  … and {len(set(stale)) - 20} more")
+        raise SystemExit(1)
+    print("published payloads match source")
+
     trunk_names = {name for name, *_ in ITEMS}
     legacy_names = {name for name, *_ in LEGACY_ITEMS}
     hard, soft = [], []

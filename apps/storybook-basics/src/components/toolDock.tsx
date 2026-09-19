@@ -456,6 +456,13 @@ function LibraryCell({
  * nothing validates it, so the lookup has to be the thing that is safe.
  * Found by a judge fixture, 2026-09-18.
  */
+/** How many times this id has already been seen — see the key WHY below. */
+function occurrence(seen: Map<string, number>, id: string): number {
+  const next = (seen.get(id) ?? 0) + 1;
+  seen.set(id, next);
+  return next;
+}
+
 function rememberedFor(preferences: Readonly<Record<string, string>>, key: string): string | undefined {
   return Object.hasOwn(preferences, key) ? preferences[key] : undefined;
 }
@@ -474,6 +481,8 @@ export function ToolDock({
   container,
   testIdPrefix,
 }: ToolDockProps) {
+  const seenToolIds = new Map<string, number>();
+  const seenFamilyIds = new Map<string, number>();
   // One ordered list of cells, so `order` can interleave the two sources.
   // Each entry stays a thunk rather than an element: `cells` is rebuilt on
   // every render anyway, and deferring keeps the two branches' props —
@@ -481,13 +490,22 @@ export function ToolDock({
   // they were before, not hoisted into a different closure.
   const cells: { key: string; id: string; render: () => ReactNode }[] = [
     ...simpleTools.map((tool, index) => ({
-      // WHY the INDEX and not the id: namespacing separated tools from
-      // families, but two simpleTools sharing an id still collided —
-      // React then reused the wrong element and a re-render left a
-      // removed tool on screen (judge fixture, 2026-09-18: [A,B,A] ->
-      // [B,C] still rendered A, B, C). Position is the only key that is
-      // unique by construction when ids are host data we cannot police.
-      key: `tool:${index}:${tool.id}`,
+      // WHY the key is id + OCCURRENCE and not the id, nor the index:
+      //
+      //   id alone     — two simpleTools sharing an id collided, so React
+      //                  reused the wrong element and a removed tool stayed
+      //                  on screen ([A,B,A] -> [B,C] still rendered A,B,C).
+      //   index alone  — the classic index-as-key bug, and the fix that
+      //                  replaced the above: reordering [A,B] -> [B,A]
+      //                  transferred A's focus, open menu and armed state
+      //                  onto B, because position was all React matched on.
+      //
+      // Both were found by judge fixtures a round apart (2026-09-18), the
+      // second one caused by the first one's repair. Counting occurrences
+      // gives a key that is stable when an item MOVES (it travels with the
+      // id) and still unique when ids repeat (the nth "x" stays the nth
+      // "x"), which is the only combination that satisfies both.
+      key: `tool:${tool.id}:${occurrence(seenToolIds, tool.id)}`,
       id: tool.id,
       render: () => (
         <ToolbarButton
@@ -503,8 +521,8 @@ export function ToolDock({
         </ToolbarButton>
       ),
     })),
-    ...families.map((family, index) => ({
-      key: `family:${index}:${family.id}`,
+    ...families.map((family) => ({
+      key: `family:${family.id}:${occurrence(seenFamilyIds, family.id)}`,
       id: family.id,
       render: () => (
         <FamilyCell

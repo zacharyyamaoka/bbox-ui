@@ -40,8 +40,12 @@ function useInsideToolbar(): boolean {
 }
 
 /**
- * Resets `useInsideToolbar` to false for a subtree. Every portal wrapper in
- * the kit renders its content inside one.
+ * Resets `useInsideToolbar` to false for a subtree. Every portal wrapper in the kit —
+ * popover, dropdown-menu, context-menu and tooltip, in both their Content
+ * and raw Portal forms — renders its content inside one. That list is
+ * exhaustive on purpose: it was written as "every portal wrapper" while
+ * tooltip was still missing, and a comment asserting completeness is worth
+ * nothing unless it names what it is complete over.
  *
  * WHY this is required and not belt-and-braces: React context crosses PORTAL
  * boundaries, but the DOM does not. A `ControlStrip` rendered inside a

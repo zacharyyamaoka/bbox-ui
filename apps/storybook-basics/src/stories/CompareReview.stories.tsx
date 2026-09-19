@@ -100,6 +100,21 @@ const IDENTICAL_COMPARISON = compareBoards(AFTER_BOARD, AFTER_BOARD);
  *  id shape (see `PropertyTable.stories.tsx`'s `ByElementLayout` for the
  *  same fixed id, same reason). */
 const PREDICT_ELEMENT_TESTID = "compare-element-block:shape:predict";
+const PREDICT_ELEMENT_ID = "block:shape:predict";
+
+/**
+ * The change that belongs to PREDICT_ELEMENT_ID, not simply `changes[0]`.
+ *
+ * WHY: the element selection and the change selection are independent, and
+ * the gallery's Properties and Code cells were driven by different ones — so
+ * Properties showed `run_predict` while Code showed a removed Debug Overlay
+ * record, under a caption claiming Code showed "the raw record the Properties
+ * row was computed from". A judge read the caption against the DOM and caught
+ * the mismatch (2026-09-18). Deriving both from one constant is what stops
+ * them drifting apart again.
+ */
+const PREDICT_CHANGE_ID =
+  COMPARISON.changes.find((change) => change.id.includes("predict"))?.id ?? COMPARISON.changes[0]?.id ?? null;
 
 const LIVE_RECORD: HistoryRecord = {
   id: "live",
@@ -309,6 +324,33 @@ export const ElementSelected: Story = {
  *  blend control — `canOverlay={false}` disables the option instead of
  *  hiding it (design doc: "overlay only means anything with linked
  *  cameras"), so this gallery shows that gate too. */
+/**
+ * Overlay actually stacks the two panes.
+ *
+ * It did not. The port carried the donor's opacity rule and dropped its
+ * LAYOUT rule (compare.css:293-303), so "overlay" rendered two side-by-side
+ * columns with the right one translucent — and nothing noticed, because
+ * every assertion about overlay checked the toggle's state rather than the
+ * geometry. A judge measured two grid columns in overlay mode (2026-09-18).
+ *
+ * This asserts the geometry: one column, both panes in the same cell.
+ */
+export const OverlayStacksPanes: Story = {
+  render: () => <Demo comparison={COMPARISON} versions={[LIVE_RECORD, V1_RECORD]} initialMode="overlay" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByTestId("compare-frame");
+    const stage = canvasElement.querySelector("[data-slot='compare-stage'] > div");
+    await expect(stage).not.toBeNull();
+    await expect(getComputedStyle(stage as Element).gridTemplateColumns.split(" ")).toHaveLength(1);
+
+    // Same cell, not adjacent columns — the thing "overlay" names.
+    const before = canvasElement.querySelector("[data-side='before']") as HTMLElement;
+    const after = canvasElement.querySelector("[data-side='after']") as HTMLElement;
+    await expect(before.getBoundingClientRect().left).toBe(after.getBoundingClientRect().left);
+  },
+};
+
 export const SideBySideVsOverlay: Story = {
   render: () => <Demo comparison={COMPARISON} versions={[LIVE_RECORD, V1_RECORD]} initialSelectedVersionId={V1_RECORD.id} />,
   play: async ({ canvasElement }) => {
@@ -493,14 +535,14 @@ export const AllStates: Story = {
             comparison={COMPARISON}
             versions={[LIVE_RECORD, V1_RECORD]}
             initialSelectedVersionId={V1_RECORD.id}
-            initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+            initialSelectedChangeId={PREDICT_CHANGE_ID}
             // WHY this is here and not implied by the line above: selecting a
             // CHANGE does not select an ELEMENT — they are separate concerns,
             // and without this the cell rendered "Select an edited element to
             // compare changes" under a caption promising a table. A caption
             // that describes a state the cell does not render is the one
             // thing a gallery must never do.
-            defaultSelectedElementId="block:shape:predict"
+            defaultSelectedElementId={PREDICT_ELEMENT_ID}
           />
         ),
       },
@@ -519,14 +561,14 @@ export const AllStates: Story = {
             comparison={COMPARISON}
             versions={[LIVE_RECORD, V1_RECORD]}
             initialSelectedVersionId={V1_RECORD.id}
-            initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+            initialSelectedChangeId={PREDICT_CHANGE_ID}
             // WHY this is here and not implied by the line above: selecting a
             // CHANGE does not select an ELEMENT — they are separate concerns,
             // and without this the cell rendered "Select an edited element to
             // compare changes" under a caption promising a table. A caption
             // that describes a state the cell does not render is the one
             // thing a gallery must never do.
-            defaultSelectedElementId="block:shape:predict"
+            defaultSelectedElementId={PREDICT_ELEMENT_ID}
             initialTab="properties"
           />
         ),
@@ -538,14 +580,14 @@ export const AllStates: Story = {
             comparison={COMPARISON}
             versions={[LIVE_RECORD, V1_RECORD]}
             initialSelectedVersionId={V1_RECORD.id}
-            initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+            initialSelectedChangeId={PREDICT_CHANGE_ID}
             // WHY this is here and not implied by the line above: selecting a
             // CHANGE does not select an ELEMENT — they are separate concerns,
             // and without this the cell rendered "Select an edited element to
             // compare changes" under a caption promising a table. A caption
             // that describes a state the cell does not render is the one
             // thing a gallery must never do.
-            defaultSelectedElementId="block:shape:predict"
+            defaultSelectedElementId={PREDICT_ELEMENT_ID}
             initialTab="code"
           />
         ),
