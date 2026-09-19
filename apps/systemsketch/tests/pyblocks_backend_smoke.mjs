@@ -274,6 +274,10 @@ async function main() {
     const okText = ((await page.textContent('[data-testid="ss-backend-health"]')) ?? "").trim();
     check("(3) the health pill reads ok · scene · events", okText === "ok · scene · events", okText);
     await page.keyboard.press("Escape");
+    // The settings popup has a dismiss layer; clicking the menu while it is
+    // still closing lands on that layer, not on the trigger. Wait for it to
+    // be GONE rather than for a duration.
+    await waitFor(async () => (await page.locator('[data-testid="ss-backend-popover"]').count()) === 0, { what: "the settings popup closing" });
     await waitFor(async () => (await page.locator('[data-testid="ss-backend-menu"]').count()) === 1, { what: "the Python menu appearing" });
     await page.click('[data-testid="ss-backend-menu"]');
     await waitFor(async () => (await page.locator('[data-testid="ss-backend-open-python"]').count()) === 1, {
@@ -327,7 +331,11 @@ async function main() {
     check("(3) all four data wires were built", wires.length === 4, `${wires.length} wires`);
     const labelled = nodes.flatMap((shape) => Object.values(shape.ports ?? {}).flat());
     check("(3) a named port keeps its authored label, not its id", labelled.includes("in-raw:raw"), labelled.join(" "));
-    await page.evaluate(() => window.editor.zoomToFit());
+    // A block body, because `zoomToFit()` returns the Editor and Playwright
+    // cannot serialize it back.
+    await page.evaluate(() => {
+      window.editor.zoomToFit();
+    });
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(MEDIA_DIR, "05-board.png") });
 
@@ -339,10 +347,16 @@ async function main() {
     const grab = await page.evaluate(() => {
       const editor = window.editor;
       const shape = editor.getCurrentPageShapes().find((one) => one.props?.name === "decode()");
-      const bounds = editor.getShapePageBounds(shape.id);
-      const centre = editor.pageToScreen({ x: bounds.x + bounds.w / 2, y: bounds.y + 12 });
-      return { id: shape.id, x: centre.x, y: centre.y };
+      // A block translates ONLY from its header — a body press is content-owned
+      // and deliberately hidden from tldraw (src/shapes/shared/pointerOwnership.ts).
+      // So the grab point is MEASURED off the real header element rather than
+      // guessed from the shape's bounds.
+      const header = document.querySelector(`[data-block-id="${shape.id}"] [data-slot="block-header"]`);
+      if (!header) return { id: shape.id, missing: true };
+      const rect = header.getBoundingClientRect();
+      return { id: shape.id, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     });
+    check("(4) the dragged block's header is on screen to grab", grab.missing !== true && grab.x > 0 && grab.y > 0, JSON.stringify(grab));
     await page.mouse.move(grab.x, grab.y);
     await page.mouse.down();
     await page.mouse.move(grab.x + 40, grab.y + 60, { steps: 12 });

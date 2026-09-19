@@ -14,6 +14,7 @@ import { Tldraw, type Editor, type TLComponents, type TLUiAssetUrlOverrides, typ
 import "tldraw/tldraw.css";
 import "./app.css";
 
+import { PyblocksBackendPanel } from "./backend/BackendSettings";
 import { SystemSketchDock } from "./chrome/dock";
 import { Overlay } from "./chrome/overlay";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
@@ -39,6 +40,15 @@ const COMPONENTS: TLComponents = {
   // rather than hidden with CSS. `null` is tldraw's documented "no component
   // here" (TLUiComponents). Dialogs, Toasts and the context menu stay stock:
   // they carry file-open errors and confirmations this app raises itself.
+  // Stream 3's whole surface — the `Backend: none | pyblocks` setting, the
+  // health pill, `Open Python file…` and the echo line — in the stock
+  // top-right seat `StylePanel: null` just vacated. WHY a slot and not a
+  // line in `./chrome/overlay.tsx`: this is not L4's editor chrome, it is an
+  // optional backend, and `components.SharePanel` is tldraw's own documented
+  // place for a host's top-right panel (TldrawUi.mjs renders it into
+  // `.tlui-layout__top__right`). At `Backend: none` it renders one control
+  // reading `none` and nothing else.
+  SharePanel: PyblocksBackendPanel,
   MainMenu: null,
   MenuPanel: null,
   StylePanel: null,
