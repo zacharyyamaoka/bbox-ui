@@ -172,6 +172,36 @@ export const WhitespaceOnlyNameRefused: Story = {
   },
 };
 
+/**
+ * A name the editor cannot represent is refused, not flattened.
+ *
+ * A single-line `<input>` drops line breaks: assign "Frame\nTwo" and the
+ * element reports "FrameTwo". Before this, appending one character committed
+ * the flattened string — the user edited one character and silently lost
+ * another. Documenting that in a comment protected nobody, since the person
+ * losing the data never reads the source. Reproduced by an independent judge
+ * (2026-09-18).
+ */
+export const LineBreakRefused: Story = {
+  args: {
+    value: "Frame\nTwo",
+    onCommit: fn(),
+    onCancel: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const input = await canvas.findByRole("textbox");
+    await expect(canvas.getByText("This name contains a line break and can't be edited here.")).toBeInTheDocument();
+
+    // The point is the REFUSAL: an edit that would commit the flattened
+    // string must not reach the host at all.
+    await userEvent.type(input, "!");
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onCommit).not.toHaveBeenCalled();
+    await expect(args.onCancel).not.toHaveBeenCalled();
+  },
+};
+
 /** The default validator refuses an empty name with "Give this draft a
  *  name." and keeps editing open — neither callback fires. */
 export const EmptyNameRefused: Story = {

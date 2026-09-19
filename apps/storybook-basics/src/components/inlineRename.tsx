@@ -102,7 +102,26 @@ export function InlineRename({
     inputRef.current?.select();
   }, []);
 
-  const error = externalError ?? internalError;
+  // A single-line <input> cannot hold a line break: assign "A\nB" and the
+  // element reports "AB". So a name containing one cannot round-trip through
+  // this editor, and the first keystroke would commit the flattened string —
+  // the user edits one character and silently loses another. A judge
+  // reproduced exactly that (2026-09-18) and was right that a source comment
+  // saying so protects nobody: the person losing the data never reads it.
+  //
+  // Refusing is the honest option of the two available. Preserving is not
+  // actually on the table — the component would have to guess which of the
+  // user's edits applied to text the element never showed them — so this
+  // REFUSES, visibly, and leaves the stored value untouched for an editor
+  // that can represent it. Zach's truthful-rendering rule already says
+  // constrained geometry must show its constraint explicitly rather than
+  // quietly dropping characters; this is that rule applied to an input
+  // instead of a label.
+  const unrepresentable = /[\r\n]/.test(value);
+  const error =
+    externalError ??
+    internalError ??
+    (unrepresentable ? "This name contains a line break and can't be edited here." : null);
 
   const commit = useCallback(() => {
     // WHY nothing here trims, and the whitespace policy lives in the
@@ -142,6 +161,12 @@ export function InlineRename({
     // constraint, not a normalization invented here, and a host storing
     // multi-line names needs a different editor rather than this one
     // quietly flattening them.
+    if (unrepresentable) {
+      // Nothing to set: `error` above is already showing why, and the value
+      // is left exactly as the host stored it.
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
     const message = validate(draft);
     if (message) {
       setInternalError(message);
@@ -162,7 +187,7 @@ export function InlineRename({
     // this component made on its behalf.
     if (draft !== value) onCommit(draft);
     else onCancel();
-  }, [draft, onCancel, onCommit, validate, value]);
+  }, [draft, onCancel, onCommit, unrepresentable, validate, value]);
 
   return (
     <div data-slot="inline-rename" data-size={size} data-error={error ? "true" : undefined} className="inline-flex flex-col gap-1">

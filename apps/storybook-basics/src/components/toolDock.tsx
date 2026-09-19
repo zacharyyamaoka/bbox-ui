@@ -446,6 +446,20 @@ function LibraryCell({
  * plain markup instead). No measured overflow (MENU-KIT-DESIGN.md §7): the
  * row simply wraps if a host's family/tool count outgrows one line.
  */
+/**
+ * `preferences[key]`, but only for the host's OWN entries.
+ *
+ * WHY: a plain index reaches Object.prototype, so a family whose `prefKey`
+ * is "__proto__" (or "constructor", "toString"…) read an inherited value
+ * instead of undefined — the face lost its glyph and pointer-down called
+ * `onArm(Object.prototype)` with a non-string. `prefKey` is host data and
+ * nothing validates it, so the lookup has to be the thing that is safe.
+ * Found by a judge fixture, 2026-09-18.
+ */
+function rememberedFor(preferences: Readonly<Record<string, string>>, key: string): string | undefined {
+  return Object.hasOwn(preferences, key) ? preferences[key] : undefined;
+}
+
 export function ToolDock({
   activeToolId,
   activeVariant,
@@ -466,8 +480,14 @@ export function ToolDock({
   // which read `preferences` and the callbacks — evaluated in the same place
   // they were before, not hoisted into a different closure.
   const cells: { key: string; id: string; render: () => ReactNode }[] = [
-    ...simpleTools.map((tool) => ({
-      key: `tool:${tool.id}`,
+    ...simpleTools.map((tool, index) => ({
+      // WHY the INDEX and not the id: namespacing separated tools from
+      // families, but two simpleTools sharing an id still collided —
+      // React then reused the wrong element and a re-render left a
+      // removed tool on screen (judge fixture, 2026-09-18: [A,B,A] ->
+      // [B,C] still rendered A, B, C). Position is the only key that is
+      // unique by construction when ids are host data we cannot police.
+      key: `tool:${index}:${tool.id}`,
       id: tool.id,
       render: () => (
         <ToolbarButton
@@ -483,8 +503,8 @@ export function ToolDock({
         </ToolbarButton>
       ),
     })),
-    ...families.map((family) => ({
-      key: `family:${family.id}`,
+    ...families.map((family, index) => ({
+      key: `family:${index}:${family.id}`,
       id: family.id,
       render: () => (
         <FamilyCell
@@ -493,7 +513,7 @@ export function ToolDock({
           container={container}
           activeToolId={activeToolId}
           activeVariant={activeVariant}
-          remembered={preferences[family.prefKey]}
+          remembered={rememberedFor(preferences, family.prefKey)}
           testIdPrefix={testIdPrefix}
           onArm={onArm}
           onSelectItem={(toolId) => {

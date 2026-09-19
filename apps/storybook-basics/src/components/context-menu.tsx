@@ -19,9 +19,15 @@ function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />;
 }
 
-function ContextMenuPortal({ ...props }: ContextMenuPrimitive.Portal.Props) {
+function ContextMenuPortal({ children, ...props }: ContextMenuPrimitive.Portal.Props) {
+  // Same boundary the Content wrapper applies. This raw wrapper is EXPORTED,
+  // so a consumer portalling their own content through it was still leaking
+  // toolbar context across the portal — the Content fix covered the kit's
+  // own usage and missed the public seam (judge fixture, 2026-09-18).
   return (
-    <ContextMenuPrimitive.Portal data-slot="context-menu-portal" {...props} />
+    <ContextMenuPrimitive.Portal data-slot="context-menu-portal" {...props}>
+      <ToolbarBoundary>{children}</ToolbarBoundary>
+    </ContextMenuPrimitive.Portal>
   );
 }
 

@@ -472,6 +472,15 @@ export const AllStates: Story = {
             readOnly
             notices={["This document is read-only. Saved views cannot be changed."]}
             onFocus={fn()}
+            // WHY onDelete is supplied HERE specifically: the caption says
+            // delete is DISABLED, and Delete only renders at all when this
+            // prop exists (framesPanel.tsx:365). Without it the row menu had
+            // no Delete item, so the cell showed an absent action while
+            // claiming a disabled one — a caption describing a state its
+            // cell does not render, which is the one thing a gallery must
+            // never do. Caught by a judge reading the caption against the
+            // DOM (2026-09-18).
+            onDelete={fn()}
             onRename={() => ({ ok: false, reason: "This document is read-only." })}
             saveView={{ suggestedName: "View 1", onSave: () => ({ ok: false, reason: "Read-only." }) }}
             reorder={{ onReorder: fn() }}

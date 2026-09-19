@@ -1370,6 +1370,11 @@
           "target": "components/bbox/splitButton.tsx"
         },
         {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
+        },
+        {
           "path": "apps/storybook-basics/src/lib/utils.ts",
           "type": "registry:lib",
           "target": "components/lib/utils.ts"
@@ -1774,6 +1779,11 @@
           "target": "components/bbox/popover.tsx"
         },
         {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
+        },
+        {
           "path": "apps/storybook-basics/src/lib/utils.ts",
           "type": "registry:lib",
           "target": "components/lib/utils.ts"
@@ -1860,6 +1870,11 @@
           "path": "apps/storybook-basics/src/components/inlineRename.tsx",
           "type": "registry:component",
           "target": "components/bbox/inlineRename.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
         },
         {
           "path": "apps/storybook-basics/src/lib/utils.ts",
@@ -2286,6 +2301,11 @@
           "path": "apps/storybook-basics/src/components/splitButton.tsx",
           "type": "registry:component",
           "target": "components/bbox/splitButton.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
         },
         {
           "path": "apps/storybook-basics/src/lib/utils.ts",

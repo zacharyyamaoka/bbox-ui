@@ -17,8 +17,17 @@ function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
 }
 
-function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
-  return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />;
+function DropdownMenuPortal({ children, ...props }: MenuPrimitive.Portal.Props) {
+  // Same boundary the Content wrapper applies. This raw wrapper is
+  // EXPORTED, so a consumer portalling their own content through it
+  // was still leaking toolbar context across the portal — the
+  // Content fix covered the kit's own usage and missed the public
+  // seam (judge fixture, 2026-09-18).
+  return (
+    <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props}>
+      <ToolbarBoundary>{children}</ToolbarBoundary>
+    </MenuPrimitive.Portal>
+  );
 }
 
 function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {

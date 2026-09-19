@@ -272,7 +272,7 @@ function BurgerMenu({
         >
           <MenuIcon aria-hidden="true" />
         </TooltipTrigger>
-        <TooltipContent>{menu.label}</TooltipContent>
+        <TooltipContent container={container}>{menu.label}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent className={cn("w-64", popupClassName)} align="start" container={container}>
         <BurgerMenuGroups groups={menu.groups} />
@@ -372,7 +372,7 @@ function FileCrumb({
           >
             <Home aria-hidden="true" />
           </TooltipTrigger>
-          <TooltipContent>Board root</TooltipContent>
+          <TooltipContent container={container}>Board root</TooltipContent>
         </Tooltip>
       )}
       {rename.active ? (
@@ -543,7 +543,7 @@ export function ChromeBar({
           >
             <ArrowLeft aria-hidden="true" />
           </TooltipTrigger>
-          <TooltipContent>Back to previous view</TooltipContent>
+          <TooltipContent container={container}>Back to previous view</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -560,7 +560,7 @@ export function ChromeBar({
           >
             <ArrowRight aria-hidden="true" />
           </TooltipTrigger>
-          <TooltipContent>Forward to next view</TooltipContent>
+          <TooltipContent container={container}>Forward to next view</TooltipContent>
         </Tooltip>
       </ButtonGroup>
       <ToolbarSeparator orientation="vertical" />

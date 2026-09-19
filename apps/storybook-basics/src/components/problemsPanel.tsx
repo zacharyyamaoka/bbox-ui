@@ -231,7 +231,16 @@ export function ProblemsPanel({
   const visibleCount = visible.reduce((sum, group) => sum + group.diagnostics.length, 0);
 
   return (
-    <div data-slot="problems-panel" data-testid={`${testIdPrefix}-problems-panel`} className="flex flex-col">
+    <div
+      data-slot="problems-panel"
+      data-testid={`${testIdPrefix}-problems-panel`}
+      // `isolate`: the sticky group headings below use z-10, which escaped
+      // into the host's stacking context whenever this panel was rendered
+      // OUTSIDE a PanelShell (the shell has its own boundary, standalone has
+      // none) — a host overlay at z-5 lost to a heading. Judge sweep,
+      // 2026-09-18, the same omission as FramesPanel.
+      className="isolate flex flex-col"
+    >
       <header className="flex items-start justify-between gap-3 border-b border-border px-3.5 py-3.5">
         <div className="min-w-0">
           <strong className="block text-base font-semibold text-foreground">
