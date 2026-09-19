@@ -83,7 +83,7 @@ import { portKey } from "../scene/scene";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import type { OpaqueRegionView } from "../scene/regionView";
-import { POINTER_OWNED_CLASS, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { POINTER_OWNED_CLASS, producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
 
@@ -125,6 +125,8 @@ interface TldrawHostContextValue {
    */
   wireScene: HostScene;
   wired: ReadonlySet<string>;
+  /** `producerCountsOf(wireScene)` — see `SceneNodeViewProps.producers`. */
+  producers: ReadonlyMap<string, number>;
   onSceneChange?(next: HostScene): void;
   anchors: Readonly<Record<string, readonly PortAnchor[]>>;
   reportAnchors(nodeId: string, anchors: PortAnchor[]): void;
@@ -355,6 +357,7 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
           scene={host.scene}
           node={node}
           wired={host.wired}
+          producers={host.producers}
           onSceneChange={host.onSceneChange}
           decorate={host.decorate}
           regionViews={host.regionViews}
@@ -620,10 +623,13 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, de
   // Hosts paint the projection; the document keeps its direct P1 cables.
   const projected = useMemo(() => projectHostScene(scene), [scene]);
   const wired = useMemo(() => wiredPortsOf(projected.scene), [projected]);
+  // Off the projection, like `wired`: the count is of the cables PAINTED
+  // at each dot (domCanvas.tsx says why at length).
+  const producers = useMemo(() => producerCountsOf(projected.scene), [projected]);
   const regionViews = useMemo(() => regionViewMap(projected.regions), [projected]);
   const context = useMemo<TldrawHostContextValue>(
-    () => ({ scene, wireScene: projected.scene, wired, onSceneChange, anchors, reportAnchors, decorate, regionViews }),
-    [scene, projected, wired, onSceneChange, anchors, reportAnchors, decorate, regionViews],
+    () => ({ scene, wireScene: projected.scene, wired, producers, onSceneChange, anchors, reportAnchors, decorate, regionViews }),
+    [scene, projected, wired, producers, onSceneChange, anchors, reportAnchors, decorate, regionViews],
   );
   // Caller's `components` layer OVER this host's own (`OnTheCanvas` stays
   // unless a caller explicitly overrides that key too) — see the prop's

@@ -57,7 +57,7 @@ import { portKey } from "../scene/scene";
 import type { WireStyleData } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import type { OpaqueRegionView } from "../scene/regionView";
-import { SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
 
@@ -72,6 +72,8 @@ import { sightPortDots } from "./portDotSightings";
 const HostSceneContext = createContext<{
   scene: HostScene;
   wired: ReadonlySet<string>;
+  /** `producerCountsOf(projected.scene)` — see `SceneNodeViewProps.producers`. */
+  producers: ReadonlyMap<string, number>;
   onSceneChange?(next: HostScene): void;
   resizable?: boolean;
   decorate?: Decorate;
@@ -320,6 +322,7 @@ function BboxNode({ id }: NodeProps) {
         scene={host.scene}
         node={node}
         wired={host.wired}
+        producers={host.producers}
         onSceneChange={host.onSceneChange}
         decorate={host.decorate}
         regionViews={host.regionViews}
@@ -608,10 +611,13 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
   // no opaque region.
   const projected = useMemo(() => projectHostScene(scene), [scene]);
   const wired = useMemo(() => wiredPortsOf(projected.scene), [projected]);
+  // Off the projection, like `wired`: the count is of the cables PAINTED
+  // at each dot (domCanvas.tsx says why at length).
+  const producers = useMemo(() => producerCountsOf(projected.scene), [projected]);
   const regionViews = useMemo(() => regionViewMap(projected.regions), [projected]);
   const context = useMemo(
-    () => ({ scene, wired, onSceneChange, resizable, decorate, regionViews }),
-    [scene, wired, onSceneChange, resizable, decorate, regionViews],
+    () => ({ scene, wired, producers, onSceneChange, resizable, decorate, regionViews }),
+    [scene, wired, producers, onSceneChange, resizable, decorate, regionViews],
   );
 
   // Host-owned measurement cache, by node id — NEVER part of the scene

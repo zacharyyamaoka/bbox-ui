@@ -19,7 +19,7 @@ import { useRef, type ReactNode } from "react";
 import { WireLayer } from "../components/wireLayer";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
-import { SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { projectHostScene, regionViewMap } from "./regionScene";
 
 export interface DomCanvasProps {
@@ -55,12 +55,25 @@ export function DomCanvas({ scene, onSceneChange, width = 640, height = 300, chi
   // the document, never the lens over it.
   const projected = projectHostScene(scene);
   const wired = wiredPortsOf(projected.scene);
+  // WHY the count comes off the PROJECTION too, like `wired`: the badge is
+  // "how many arrows meet this dot", and the arrows on screen are the
+  // projection's — an opaque card's promoted port counts the cables
+  // re-pointed at it, a hidden interior cable counts nowhere.
+  const producers = producerCountsOf(projected.scene);
   const regionViews = regionViewMap(projected.regions);
   return (
     <div data-host="dom-canvas" ref={containerRef} style={{ position: "relative", width, height }}>
       {topLevelNodes(scene).map((node) => (
         <div key={node.id} data-scene-node={node.id} style={{ position: "absolute", left: node.position.x, top: node.position.y }}>
-          <SceneNodeView scene={scene} node={node} wired={wired} onSceneChange={onSceneChange} decorate={decorate} regionViews={regionViews} />
+          <SceneNodeView
+            scene={scene}
+            node={node}
+            wired={wired}
+            producers={producers}
+            onSceneChange={onSceneChange}
+            decorate={decorate}
+            regionViews={regionViews}
+          />
         </div>
       ))}
       <WireLayer

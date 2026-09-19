@@ -33,7 +33,8 @@ import { ValueCapsule } from "../presets/value/value";
 import { armsOf, bodyChildrenOf, describeHidden, hiddenSummary } from "../scene/controlFlow";
 import type { PromotedPort } from "../scene/boundary";
 import type { OpaqueRegionView } from "../scene/regionView";
-import { childrenOf, type SceneNode, wiredPorts } from "../scene/scene";
+import { producerCounts } from "../scene/producers";
+import { childrenOf, portKey, type SceneNode, wiredPorts } from "../scene/scene";
 import { withWiredState } from "../scene/sceneWires";
 import { useAutoFitHeight } from "./blockAutoFit";
 import { type HostNodeData, type HostScene } from "./hostScene";
@@ -153,6 +154,14 @@ export interface SceneNodeViewProps {
   /** `wiredPorts(scene)` — computed once by the host per render, not per
    *  node. Optional so a single-component bench can omit it. */
   wired?: ReadonlySet<string>;
+  /**
+   * `producerCounts(scene)` — how many cable ends meet each port, keyed by
+   * `portKey`. Computed once per render by the host, from the SAME scene
+   * `wired` came from (the painted projection), and handed to every port
+   * item as `producers`. Omitted = no counts, byte-identical to before this
+   * prop existed.
+   */
+  producers?: ReadonlyMap<string, number>;
   /** The write-back seam. Omitted = a read-only specimen (reorders and
    *  keystrokes no-op, exactly like an uncontrolled gallery card). */
   onSceneChange?(next: HostScene): void;
@@ -215,6 +224,28 @@ function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResul
   };
 }
 
+/**
+ * `items`, each carrying `producers` — the number of cable ends meeting that
+ * port (`producerCounts`, lane `producers-count`). Unwired ports are left
+ * untouched (the item object is the same one that came in), so a scene with
+ * no edges renders byte-identically to before counts existed.
+ *
+ * WHY the RAW count goes onto the item, 1 included, and the "only 2 or more
+ * shows a number" rule is not applied here: a single cable needs no number —
+ * the dot's wired look already says "one", and a "1" on every wired port
+ * would be noise — but that is a PAINT decision, and it has one owner,
+ * `Port`'s own `producers >= 2` (components/port.tsx). A second threshold
+ * here would be a second place for the rule to drift; the host's job is to
+ * say what the scene says.
+ */
+function withProducers(items: PortEdgeItem[], nodeId: string, producers: ReadonlyMap<string, number> | undefined): PortEdgeItem[] {
+  if (!producers || producers.size === 0) return items;
+  return items.map((item) => {
+    const count = producers.get(portKey(nodeId, item.id));
+    return count === undefined ? item : { ...item, producers: count };
+  });
+}
+
 /** One node's walls as `BlockPort` edge specs — the port items, their wired
  *  state, any decoration, and the reorder write-back. Shared verbatim by a
  *  block's own card and a region's CORNER card, because a region's ports
@@ -224,6 +255,7 @@ function edgeSpecsOf(
   scene: HostScene,
   node: SceneNode<HostNodeData>,
   wired: ReadonlySet<string> | undefined,
+  producers: ReadonlyMap<string, number> | undefined,
   onSceneChange: ((next: HostScene) => void) | undefined,
   decoration: SceneNodeDecoration | undefined,
 ): Partial<Record<BlockSide, BlockEdgeSpec>> {
@@ -231,21 +263,25 @@ function edgeSpecsOf(
     Object.entries(node.data.ports ?? {}).map(([side, portIds]) => [
       side,
       {
-        items: withWiredState(
-          portIds.map(
-            (id): PortEdgeItem => ({
-              id,
-              // WHY the id is still the fallback: a port with no authored
-              // name has nothing truer to show than what every edge and
-              // every edit event already calls it (hostScene.ts's
-              // `portLabels`).
-              label: node.data.portLabels?.[id] ?? id,
-              availability: decoration?.availability?.[id],
-              diagnostics: decoration?.portDiagnostics?.[id],
-            }),
+        items: withProducers(
+          withWiredState(
+            portIds.map(
+              (id): PortEdgeItem => ({
+                id,
+                // WHY the id is still the fallback: a port with no authored
+                // name has nothing truer to show than what every edge and
+                // every edit event already calls it (hostScene.ts's
+                // `portLabels`).
+                label: node.data.portLabels?.[id] ?? id,
+                availability: decoration?.availability?.[id],
+                diagnostics: decoration?.portDiagnostics?.[id],
+              }),
+            ),
+            node.id,
+            wired ?? new Set(),
           ),
           node.id,
-          wired ?? new Set(),
+          producers,
         ),
         distribution: node.data.anchorStart?.includes(side as BlockSide) ? ANCHOR_START : undefined,
         onItemsChange: onSceneChange
@@ -282,12 +318,17 @@ function withPromotedPorts(
   nodeId: string,
   ports: readonly PromotedPort[] | undefined,
   wired: ReadonlySet<string> | undefined,
+  producers: ReadonlyMap<string, number> | undefined,
 ): Partial<Record<BlockSide, BlockEdgeSpec>> {
   if (!ports || ports.length === 0) return base;
   const merged: Partial<Record<BlockSide, BlockEdgeSpec>> = { ...base };
   for (const port of ports) {
     const spec = merged[port.side];
-    const item = withWiredState([{ id: port.id, label: port.inner.portId }], nodeId, wired ?? new Set());
+    // A promoted seat counts the cables the PROJECTION re-pointed at it —
+    // the host computed `producers` from the painted scene, so three
+    // crossing cables into one hidden port read "3" on the card, exactly
+    // what is drawn landing there.
+    const item = withProducers(withWiredState([{ id: port.id, label: port.inner.portId }], nodeId, wired ?? new Set()), nodeId, producers);
     merged[port.side] = { ...spec, items: [...(spec?.items ?? []), ...item], onItemsChange: undefined };
   }
   return merged;
@@ -353,7 +394,7 @@ function headerOf(node: SceneNode<HostNodeData>): ReactNode {
  * `height={node.data.h}` path as before — verified by the full story
  * suite staying green with none of those stories' own code touched.
  */
-function BlockNodeView({ scene, node, wired, onSceneChange, decorate, regionViews }: SceneNodeViewProps) {
+function BlockNodeView({ scene, node, wired, producers, onSceneChange, decorate, regionViews }: SceneNodeViewProps) {
   const decoration = decorate?.(node);
   const isFree = node.data.membersLayout === "free";
   const autoFit = isFree && node.data.autoFit === true;
@@ -374,12 +415,20 @@ function BlockNodeView({ scene, node, wired, onSceneChange, decorate, regionView
 
   const members: BlockMember[] = kids.map((kid) => {
     const content = (
-      <SceneNodeView scene={scene} node={kid} wired={wired} onSceneChange={onSceneChange} decorate={decorate} regionViews={regionViews} />
+      <SceneNodeView
+        scene={scene}
+        node={kid}
+        wired={wired}
+        producers={producers}
+        onSceneChange={onSceneChange}
+        decorate={decorate}
+        regionViews={regionViews}
+      />
     );
     if (!isFree) return { id: kid.id, content };
     return freeMemberOf(kid, drag, content);
   });
-  const edges = edgeSpecsOf(scene, node, wired, onSceneChange, decoration);
+  const edges = edgeSpecsOf(scene, node, wired, producers, onSceneChange, decoration);
   const height = autoFit ? resolveBlockHeight({ autoFit: true, fitHeightPx, manualHeightPx: node.data.h }) : node.data.h;
 
   const block = (
@@ -425,7 +474,7 @@ function BlockNodeView({ scene, node, wired, onSceneChange, decorate, regionView
  * (`ControlMark`, B5), and the only wires are ordinary data edges into the
  * corner's ports or straight into a member.
  */
-function RegionNodeView({ scene, node, wired, onSceneChange, decorate, regionViews }: SceneNodeViewProps) {
+function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate, regionViews }: SceneNodeViewProps) {
   const decoration = decorate?.(node);
   const region = node.data.region ?? { kind: "group" as const };
   const view = regionViewOf(node);
@@ -444,7 +493,15 @@ function RegionNodeView({ scene, node, wired, onSceneChange, decorate, regionVie
     freeMemberOf(
       kid,
       drag,
-      <SceneNodeView scene={scene} node={kid} wired={wired} onSceneChange={onSceneChange} decorate={decorate} regionViews={regionViews} />,
+      <SceneNodeView
+        scene={scene}
+        node={kid}
+        wired={wired}
+        producers={producers}
+        onSceneChange={onSceneChange}
+        decorate={decorate}
+        regionViews={regionViews}
+      />,
     );
 
   const opaque = view === "opaque";
@@ -466,10 +523,11 @@ function RegionNodeView({ scene, node, wired, onSceneChange, decorate, regionVie
   // the same `edgeSpecsOf` builder, the same rails, the same dot DOM, one
   // extra item per hidden endpoint.
   const cardEdges = withPromotedPorts(
-    edgeSpecsOf(scene, node, wired, onSceneChange, decoration),
+    edgeSpecsOf(scene, node, wired, producers, onSceneChange, decoration),
     node.id,
     opaque ? projected?.ports : undefined,
     wired,
+    producers,
   );
   const cornerSlots = portViewSlotCount({
     leftCount: cardEdges.left?.items.length ?? 0,
@@ -564,7 +622,7 @@ function RegionNodeView({ scene, node, wired, onSceneChange, decorate, regionVie
  * Flow's own `nodeTypes` lookup applies.
  */
 export function SceneNodeView(props: SceneNodeViewProps): ReactNode {
-  const { scene, node, wired, onSceneChange } = props;
+  const { scene, node, wired, producers, onSceneChange } = props;
   switch (node.type) {
     case "glyph":
       return <Glyph content={node.data.content ?? ""} sizePreset="lg" />;
@@ -589,8 +647,16 @@ export function SceneNodeView(props: SceneNodeViewProps): ReactNode {
           width={node.data.w}
           height={node.data.h}
           onWrite={(next) => onSceneChange?.(writeNodeData(scene, node.id, { value: next }))}
-          writers={withWiredState((node.data.writers ?? []).map((id): PortEdgeItem => ({ id, label: id })), node.id, wired ?? new Set())}
-          readers={withWiredState((node.data.readers ?? []).map((id): PortEdgeItem => ({ id, label: id })), node.id, wired ?? new Set())}
+          writers={withProducers(
+            withWiredState((node.data.writers ?? []).map((id): PortEdgeItem => ({ id, label: id })), node.id, wired ?? new Set()),
+            node.id,
+            producers,
+          )}
+          readers={withProducers(
+            withWiredState((node.data.readers ?? []).map((id): PortEdgeItem => ({ id, label: id })), node.id, wired ?? new Set()),
+            node.id,
+            producers,
+          )}
           codeEditorProps={{ className: POINTER_OWNED_CLASS }}
         />
       );
@@ -606,4 +672,11 @@ export function SceneNodeView(props: SceneNodeViewProps): ReactNode {
  *  reaches into the scene kit for the common read. */
 export function wiredPortsOf(scene: HostScene): Set<string> {
   return wiredPorts(scene);
+}
+
+/** The producer-count read, same recompute-once shape as `wiredPortsOf`:
+ *  a host calls it on the scene it PAINTS and hands the map to
+ *  `SceneNodeView` as `producers`. */
+export function producerCountsOf(scene: HostScene): Map<string, number> {
+  return producerCounts(scene);
 }
