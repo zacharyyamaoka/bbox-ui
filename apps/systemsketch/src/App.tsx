@@ -9,7 +9,7 @@
 // (/home/bam/systemsketch/tests/test_stock_boundary.py) is what kept the
 // original honest for a year.
 import { useCallback } from "react";
-import { Tldraw, type Editor, type TLComponents, type TLUiOverrides } from "tldraw";
+import { Tldraw, type Editor, type TLComponents, type TLUiAssetUrlOverrides, type TLUiOverrides } from "tldraw";
 
 import "tldraw/tldraw.css";
 import "./app.css";
@@ -42,6 +42,23 @@ const OVERRIDES: TLUiOverrides = {
   tools: withToolUi,
 };
 
+/** Injected by vite.config.ts's `define` — the URL map `@tldraw/assets`'
+ *  own `getAssetUrls({ baseUrl })` produces, pointing at this app's own
+ *  origin. Ambient rather than imported ON PURPOSE, and the purpose is not
+ *  a style preference: see the long WHY beside `selfHostedTldrawAssets` in
+ *  vite.config.ts. The one-line version: the plan wants tldraw's icons and
+ *  fonts served offline, src/document/stockBoundary.test.ts forbids every
+ *  `@tldraw/*` import but `tlschema` from this directory tree, and moving
+ *  the resolution into build config is what satisfies both without
+ *  weakening the gate or hiding the specifier behind an alias. What crosses
+ *  into the bundle here is ~15 KB of plain strings, no engine module.
+ *
+ *  Measured after the change: 0 requests to cdn.tldraw.com on first paint,
+ *  down from 36. The app now paints with the network off. */
+declare const __TLDRAW_ASSET_URLS__: TLUiAssetUrlOverrides;
+
+const ASSET_URLS: TLUiAssetUrlOverrides = __TLDRAW_ASSET_URLS__;
+
 export function App({ persistenceKey, onEditorReady }: AppProps) {
   const handleMount = useCallback(
     (editor: Editor) => {
@@ -56,29 +73,6 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
 
   const key = persistenceKey === undefined ? DEFAULT_PERSISTENCE_KEY : persistenceKey;
 
-  // UNRESOLVED, and deliberately visible: there is NO `assetUrls` prop below,
-  // so tldraw serves its icons, fonts, translations and embed icons from
-  // https://cdn.tldraw.com/5.3.2/ — 78 requests, measured with a Playwright
-  // request listener against this app on :4340. The app needs the network on
-  // first paint; the canvas, the dock and every bbox component do not.
-  //
-  // WHY it is not the self-hosted `getAssetUrlsByImport()` the plan asks for
-  // (docs/SYSTEMSKETCH-REBUILD-PLAN.md §4 / the lane brief's STEP 4): that
-  // helper only exists in `@tldraw/assets/imports.vite`, and
-  // src/document/stockBoundary.test.ts:105 refuses ANY `@tldraw/*` import
-  // except `@tldraw/tlschema` from every file under `src`. `tldraw` itself
-  // re-exports no asset helper (checked: its package exports are `.` and
-  // `./tldraw.css`), and moving the import outside `src` is outside this
-  // lane's write set. The two rules as written cannot both hold.
-  //
-  // This lane took the reversible half: stock CDN assets, which cost only
-  // offline use, rather than a source change that turns an acceptance gate
-  // red. `@tldraw/assets` stays declared in package.json and excluded from
-  // vite's prebundle so the fix is two lines once the dispatcher rules —
-  // either whitelist `@tldraw/assets` in that regex beside `tlschema`, or
-  // keep the CDN and delete the dependency. Recorded in README.md under
-  // "Problems this lane cannot fix" so the decision is not silent.
-
   return (
     <main data-testid="systemsketch-app" style={{ position: "fixed", inset: 0 }}>
       <Tldraw
@@ -90,6 +84,7 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
         onMount={handleMount}
         persistenceKey={key ?? undefined}
         colorScheme="system"
+        assetUrls={ASSET_URLS}
       />
     </main>
   );
