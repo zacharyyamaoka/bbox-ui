@@ -20,6 +20,14 @@
  * stamped.
  */
 @import "./skin/regionVariants.css";
+/*
+ * The port variant registry's CSS half (src/skin/portVariants.ts +
+ * portVariants.css, lane `ports` 2026-09-19): the five `--bbox-port-*`
+ * property sets keyed on `[data-bbox-port-variant]`, `:root` carrying v1,
+ * and the hover/selected/producers rules that read them. Same placement
+ * rule as skin.css above — after the framework, before `:root`.
+ */
+@import "./skin/portVariants.css";
 
 /*
  * Standard shadcn/ui default theme (new-york, neutral base color) —
