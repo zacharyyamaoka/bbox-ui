@@ -12,6 +12,7 @@ import { BlockPort, type BlockEdgeSpec } from "@trunk/components/blockPort";
 import type { BlockSide } from "@trunk/components/port.layout";
 import type { PortEdgeItem } from "@trunk/components/portEdge";
 
+import { usePortProducers } from "../../document/sceneFromStore";
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
 import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
@@ -73,6 +74,9 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
       ),
     [editor, shape.id],
   );
+  // How many cables meet each of this block's ports — off the derived scene,
+  // the same `producerCounts` the trunk hosts call (see `usePortProducers`).
+  const producers = usePortProducers(editor, shape.id);
 
   const edges: Partial<Record<BlockSide, BlockEdgeSpec>> = Object.fromEntries(
     PORT_SIDES.map((side) => [
@@ -83,6 +87,11 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
             id: port.id,
             label: labelOf(port),
             state: wired.has(port.id) ? "wired" : undefined,
+            // The RAW count, 1 included. One cable needs no number — the
+            // wired dot already says "one" — but that threshold is a paint
+            // rule with one owner, `Port`'s own `producers >= 2`; repeating
+            // it here would be a second copy of the rule to drift.
+            ...(producers.has(port.id) ? { producers: producers.get(port.id) } : null),
           }),
         ),
         // A rail reorder is a real edit — one undo step, unlike the measured
