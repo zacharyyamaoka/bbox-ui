@@ -37,13 +37,19 @@
 // persist it (a page's `meta`, `localStorage`, nothing).
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, LayoutGrid, MoreHorizontal, Rows3 } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode, type RefObject } from "react";
@@ -421,14 +427,27 @@ function SortableFrameRow(props: FrameRowProps) {
       }}
       className="flex items-center gap-2.5 border-b border-border bg-popover px-3 py-2.5 last:border-b-0"
     >
+      {/* WHY this is NOT `aria-hidden`, which it used to be: `attributes`
+          from `useSortable` puts `tabIndex={0}`, `role="button"` and
+          `aria-roledescription="sortable"` on this element — so it was a
+          focusable, operable control that announced itself as sortable while
+          simultaneously telling assistive tech to ignore it. A keyboard user
+          could land on it; a screen-reader user was told nothing was there.
+          The two cannot both be right, and `aria-hidden` is the one that has
+          to go, because the element genuinely IS the drag handle.
+
+          Found while writing a test that drives the reorder from the
+          keyboard — the same test that surfaced there being no KeyboardSensor
+          registered at all (see `sensors` below). The label moves from a
+          `title` tooltip to a real accessible name for the same reason. */}
       <span
-        aria-hidden="true"
+        aria-label={`Reorder ${props.item.label}`}
         title="Drag to reorder"
         className="grid size-4 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="size-3.5" />
+        <GripVertical aria-hidden="true" className="size-3.5" />
       </span>
       <RowContent {...props} />
     </li>
@@ -567,7 +586,20 @@ export function FramesPanel({
   container,
 }: FramesPanelProps) {
   const sortable = Boolean(reorder) && !readOnly && !reorderLocked && items.length > 1;
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // WHY a KeyboardSensor beside the pointer one: these rows already tell
+  // assistive tech they are sortable — dnd-kit's `useSortable` sets
+  // `aria-roledescription="sortable"` and ships drag instructions — while
+  // registering only a PointerSensor, so a keyboard user was told the rows
+  // could be reordered and given no way to do it. The gap surfaced while
+  // writing a test that drives the reorder from the keyboard: it could not
+  // be written, which is the clearest evidence the feature was not there.
+  // `sortableKeyboardCoordinates` is the sortable preset's own translator
+  // from arrow keys to positions, so this is the stock pairing rather than
+  // a hand-rolled one.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!reorder || !over || over.id === active.id) return;

@@ -465,7 +465,19 @@ function LibraryCell({
  * instead of pretending the next key scheme will be the one that holds.
  */
 function warnOnDuplicateIds(kind: string, ids: readonly string[]): void {
-  if (process.env.NODE_ENV === "production") return;
+  // WHY there is no `process.env.NODE_ENV` guard: this file is COPIED into a
+  // consumer's app by `shadcn add`, and `process` is a Node global that a
+  // plain DOM+TypeScript host has neither the types for (TS2591) nor the
+  // value of at runtime (ReferenceError). Base compiled and rendered in such
+  // a host; adding the guard broke both, which a judge reproduced by
+  // building the same fixture at each revision (2026-09-18). A kit whose
+  // distribution channel is "we hand you the source" cannot reach for its
+  // own build environment's globals.
+  //
+  // So it warns unconditionally. A duplicate id is a defect in the caller's
+  // data either way, and a console line in production is a far smaller cost
+  // than an unusable component — or than the silent misbehaviour this
+  // replaced.
   const seen = new Set<string>();
   for (const id of ids) {
     if (seen.has(id)) {

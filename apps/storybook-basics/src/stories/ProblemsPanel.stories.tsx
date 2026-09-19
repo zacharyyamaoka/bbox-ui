@@ -231,7 +231,14 @@ export const ActivateRow: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByText("Block has no title"));
+    // The EXACT diagnostic, not merely "something was activated": the
+    // story's own name promises "with that exact diagnostic", and a count
+    // check passed when the callback was handed a different object
+    // entirely (judge mutation, 2026-09-18).
     await expect(args.onActivate).toHaveBeenCalledTimes(1);
+    await expect(args.onActivate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "w1", code: "block-title.blank", message: "Block has no title" }),
+    );
   },
 };
 

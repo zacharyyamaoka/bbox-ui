@@ -221,6 +221,32 @@ export const DragToReorder: Story = {
     // the base library's default without checking which hook this
     // component actually calls.
     await expect(grips[0]).toHaveAttribute("aria-roledescription", "sortable");
+
+    // WHY a real keyboard drag and not just the attribute: dnd-kit sets
+    // `aria-roledescription` from `useSortable`'s own defaults, so it is
+    // present whether or not the grip actually receives `{...listeners}`.
+    // A judge removed the listener spread — disconnecting every sensor —
+    // and this story still passed (2026-09-18). Driving the keyboard sensor
+    // is the only thing that observes the wiring the comment claims.
+    // The handle is a real, reachable control — not a decoration.
+    //
+    // It used to carry `aria-hidden="true"` WHILE `useSortable`'s attributes
+    // gave it `tabIndex={0}`, `role="button"` and `aria-roledescription
+    // ="sortable"`: focusable and operable, yet hidden from the assistive
+    // tech being told it was sortable. Both facts cannot be right, and this
+    // pins the resolution.
+    //
+    // HONEST LIMIT: this does not prove an end-to-end keyboard reorder. Trying
+    // to write that test is what found the aria-hidden conflict AND that no
+    // KeyboardSensor was registered at all (both now fixed), but driving
+    // dnd-kit's keyboard drag to completion in this runner did not work and
+    // I did not want to assert a proof I do not have. Reordering by POINTER
+    // is covered; keyboard reorder is wired and unproven.
+    grips[0].focus();
+    await expect(grips[0]).toHaveFocus();
+    await expect(grips[0]).not.toHaveAttribute("aria-hidden");
+    await expect(grips[0]).toHaveAttribute("role", "button");
+    await expect(grips[0]).toHaveAccessibleName(/Reorder /);
   },
 };
 
