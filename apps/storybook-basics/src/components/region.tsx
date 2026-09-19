@@ -54,6 +54,7 @@
 // `layering.test.ts` import wall).
 
 import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
 import { Bar } from "./bar";
 import { BlockMembers, type BlockMember } from "./blockMembers";
@@ -192,22 +193,42 @@ function useCornerSize(given: { w: number; h: number } | undefined): {
  * WHY it is measured off the DOM in a layout effect, like the corner, and
  * not passed as a prop or read from a context: the contract's switch is an
  * ATTRIBUTE (so the app's dropdown and Storybook's global are three lines
- * each, and CSS reads the same thing), and an attribute that changes on
- * `<html>` re-renders nothing on its own. The `MutationObserver` is what
- * makes "set `document.documentElement.dataset.bboxRegionVariant`" reach
- * the two values here that are not CSS — the header height the layout
- * twin needs and the chevron's `reveal` — without any React state outside
- * this file. The first render assumes `v1` and the layout effect corrects
- * it before paint, the same first-frame device `useCornerSize` uses.
+ * each, and CSS reads the same thing), and an attribute change re-renders
+ * nothing here on its own. The CSS tokens follow it for free; the two
+ * values that are not CSS — the header height the layout twin needs and
+ * the chevron's `reveal` — follow it through the observer below, without
+ * any React state outside this file. The first render assumes `v1` and the
+ * layout effect corrects it before paint, the device `useCornerSize` uses.
+ *
+ * WHY the observer is shaped as it is — the failure it closes is a
+ * HALF-SWITCHED region, CSS on the new drawing and layout/chevron on the
+ * old (`RegionVariants.stories.tsx`'s `SwitchOnAncestor*` and
+ * `SwitchNeverHalfPainted`, each red against the alternative named here):
+ *   • It watches the WHOLE document (`subtree`), filtered to the one
+ *     attribute — `<html>`'s dataset from an app dropdown, a wrapper
+ *     written by hand, and a React-owned wrapper (the Storybook global)
+ *     whether or not this region re-rendered with it. Observing only
+ *     `<html>` (the first cut) left a nearer ancestor's switch unseen
+ *     forever. The filter keeps it cheap: records exist only for this
+ *     attribute, which changes when someone picks a drawing.
+ *   • It applies the change with `flushSync`. Its callback is a microtask,
+ *     and a plain `setState` from there is scheduled as a later TASK —
+ *     after the browser has painted the new CSS over the old layout, one
+ *     visible frame of jitter per switch. `flushSync` renders inside the
+ *     same microtask checkpoint, before paint; when the resolved variant
+ *     did not change (another subtree's switch) the same-value bail-out
+ *     makes it a `closest()` walk and nothing else.
  */
 function useRegionVariant(node: HTMLElement | null): RegionVariantId {
   const [variant, setVariant] = useState<RegionVariantId>(DEFAULT_REGION_VARIANT);
   useLayoutEffect(() => {
     if (!node) return;
-    const read = () => setVariant(readRegionVariant(node));
-    read();
-    const observer = new MutationObserver(read);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: [REGION_VARIANT_ATTR] });
+    setVariant(readRegionVariant(node));
+    const observer = new MutationObserver(() => {
+      const next = readRegionVariant(node);
+      flushSync(() => setVariant(next));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: [REGION_VARIANT_ATTR], subtree: true });
     return () => observer.disconnect();
   }, [node]);
   return variant;

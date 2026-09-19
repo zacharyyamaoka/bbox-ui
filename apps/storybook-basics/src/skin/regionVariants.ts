@@ -183,8 +183,9 @@ export function readRegionVariant(from?: Element | null): RegionVariantId {
 
 /**
  * The app's switch: write (or clear) the attribute on `<html>`. Every
- * mounted Region observes exactly this attribute and re-paints without a
- * React re-render (`region.tsx`'s `useRegionVariant`).
+ * mounted Region observes this attribute on `<html>` AND on every nearer
+ * ancestor, and re-resolves before the next paint without the caller
+ * re-rendering anything (`region.tsx`'s `useRegionVariant`).
  */
 export function setRegionVariant(id: RegionVariantId | null): void {
   if (typeof document === "undefined") return;
