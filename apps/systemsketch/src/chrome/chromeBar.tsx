@@ -1,15 +1,22 @@
 // src/chrome/chromeBar.tsx — the top-left cluster: the trunk's `ChromeBar`
-// (burger · history arrows · board name · depth badge) and, beside it, this
-// app's OWN undo/redo pair.
+// (burger · depth arrows · board name · depth badge), the Settings surface and
+// the file navigator it raises.
 //
 // This file is the "Chrome bar" row of docs/menus/MENU-KIT-DESIGN.md §4's
 // host contract: crumbs/depth/canGoBack/canGoForward as plain data, the
 // callbacks, the identity, and — the line the contract is most explicit
 // about — "confirm dialogs and toasts are host's". Those two come from
-// tldraw's own `useDialogs`/`useToasts`, which is why `./fileActions.ts` takes
-// them as callbacks instead of reaching for the hooks itself.
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Redo2, Undo2 } from "lucide-react";
+// tldraw's own `useDialogs`/`useToasts`, which is why `src/files/session.tsx`
+// takes them as callbacks instead of reaching for the hooks itself.
+//
+// WHY there is no undo/redo pill here any more: Zach, 2026-09-19 — "Undo redo
+// should be hidden … We don't need to show that". Undo and Redo are Edit ▸
+// rows running tldraw's own actions (`./stockMenus.ts`), and Ctrl+Z /
+// Ctrl+⇧+Z are untouched — the engine still owns them. The pill's old
+// justification (depth arrows must not be re-labelled as document history)
+// still holds, and is why the arrows below remain honestly disabled rather
+// than quietly becoming undo/redo now that the pill is gone.
+import { useCallback, useMemo, useState } from "react";
 import {
   TldrawUiButton,
   TldrawUiButtonLabel,
@@ -24,84 +31,47 @@ import {
   useValue,
 } from "tldraw";
 
+import { buildAppMenu, type MenuGroupSpec } from "@trunk/components/appMenu";
 import { ChromeBar } from "@trunk/components/chromeBar";
-import { Toolbar, ToolbarButton } from "@trunk/components/toolbar";
+import { FileNavigator } from "@trunk/components/fileNavigator";
 
-import { fileActionsFor, type FileActionHelpers } from "./fileActions";
+import { documentLocation } from "../files/launchConfig";
+import { useDocumentSession, type DocumentSessionHelpers } from "../files/session";
+import { SystemSketchSettings, useAppSettings } from "./appSettings";
 import { legacyAppActionsFor } from "./legacyApp";
+import { shortcutPlatform, useStockMenus } from "./stockMenus";
 
 /**
- * What an unnamed board is called.
+ * What an unnamed, file-less board is called.
  *
- * WHY the name itself is NOT state in this component: the plan's document
- * model mints no board-level field, but tldraw already ships one —
- * `TLDocument.name`, a plain `T.string` on the singleton `document:document`
- * record (@tldraw/tlschema `records/TLDocument.js`, added by the `AddName`
- * migration), read with `editor.getDocumentSettings()` and written with
- * `editor.updateDocumentSettings()`. Using the engine's own record mints
- * nothing, rides along inside a saved `.tldr`, and — the reason it changed —
- * is the ONE place two writers can agree on. `src/backend/OpenPython.tsx`
- * names the board after the Python file it just opened; while this component
- * kept a private `useState`, the bar still read "Untitled board" next to a
- * board that was plainly `linear_chain.py`, and `File ▸ Save .tldr…` (which
- * takes its filename from `helpers.boardName` below) downloaded
- * `Untitled board.tldr`. A fresh document's `name` is `""`, so the fallback
- * below keeps the previous default exactly.
+ * WHY the name is NOT state in this component: the plan's document model mints
+ * no board-level field, but tldraw already ships one — `TLDocument.name`, a
+ * plain `T.string` on the singleton `document:document` record (@tldraw/tlschema
+ * `records/TLDocument.js`), read with `editor.getDocumentSettings()` and
+ * written with `editor.updateDocumentSettings()`. Using the engine's own record
+ * mints nothing, rides along inside a saved `.tldr`, and is the ONE place two
+ * writers can agree on: `src/backend/OpenPython.tsx` names the board after the
+ * Python file it just opened, and this bar reads that name immediately.
+ *
+ * WHY a FILE-BACKED board ignores it and shows the file's name instead
+ * (`session.title`): once a board is a file, its name is the file's name —
+ * renaming the title renames the file on disk, and a title that disagreed
+ * with the path would make Copy Absolute Path read as a different document.
  */
 const DEFAULT_BOARD_NAME = "Untitled board";
-
-/**
- * Where tldraw's own local store registers every IndexedDB document it has
- * created, and the prefix those documents' names carry
- * (@tldraw/editor `utils/sync/LocalIndexedDb.mjs:3-5`, written by
- * `addDbName` at :246-248, read by `getAllIndexDbNames` at :238).
- *
- * WHY this is how "is this board persisted?" gets answered: `persistenceKey`
- * is a prop of `<Tldraw>` and reaches nothing the editor exposes — there is
- * no `editor.persistenceKey`, no field on `editor.store`, and `src/App.tsx`
- * is off-limits to this lane beyond its `COMPONENTS` object, so it cannot
- * thread the answer down either. This index is a real, documented artefact of
- * the engine's own persistence, readable synchronously, and it says exactly
- * what the status dot claims: a tldraw document has been written to this
- * browser. A test mounts with `persistenceKey={null}`, never opens a
- * document db, and therefore correctly reads "Not persisted".
- */
-const TLDRAW_DB_NAME_INDEX_KEY = "TLDRAW_DB_NAME_INDEX_v2";
-const TLDRAW_DOCUMENT_DB_PREFIX = "TLDRAW_DOCUMENT_v2";
-
-function readsAsPersisted(): boolean {
-  try {
-    const raw = window.localStorage.getItem(TLDRAW_DB_NAME_INDEX_KEY);
-    if (!raw) return false;
-    const names: unknown = JSON.parse(raw);
-    return Array.isArray(names) && names.some((name) => typeof name === "string" && name.startsWith(TLDRAW_DOCUMENT_DB_PREFIX));
-  } catch {
-    // Same posture as `./preferences.ts`: a private window or blocked storage
-    // costs the person a status dot, never the chrome.
-    return false;
-  }
-}
 
 export function SystemSketchChromeBar() {
   const editor = useEditor();
   const { addToast } = useToasts();
   const { addDialog } = useDialogs();
+  const { settings, update } = useAppSettings();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const name = useValue("ss board name", () => editor.getDocumentSettings().name || DEFAULT_BOARD_NAME, [editor]);
-  const setName = useCallback((next: string) => editor.updateDocumentSettings({ name: next }), [editor]);
-  const [renaming, setRenaming] = useState(false);
-  const [persisted, setPersisted] = useState(false);
-
-  // Read AFTER mount: tldraw registers the db name while the store is being
-  // opened, which is the same commit this component first renders in.
-  useEffect(() => setPersisted(readsAsPersisted()), []);
-
-  const canUndo = useValue("ss can undo", () => editor.getCanUndo(), [editor]);
-  const canRedo = useValue("ss can redo", () => editor.getCanRedo(), [editor]);
+  const boardName = useValue("ss board name", () => editor.getDocumentSettings().name || DEFAULT_BOARD_NAME, [editor]);
 
   /** tldraw's own dialog, promised. The `answered` latch is what keeps a
    *  dismissal (backdrop, Escape, the × ) from resolving twice. */
-  const confirm = useCallback<FileActionHelpers["confirm"]>(
+  const confirm = useCallback<DocumentSessionHelpers["confirm"]>(
     (prompt) =>
       new Promise<boolean>((resolve) => {
         let answered = false;
@@ -138,14 +108,36 @@ export function SystemSketchChromeBar() {
     [addDialog],
   );
 
-  const helpers = useMemo<FileActionHelpers>(() => ({ addToast, confirm, boardName: name }), [addToast, confirm, name]);
-  const fileActions = useMemo(() => fileActionsFor(editor, helpers), [editor, helpers]);
-  // The door back to the archived app lives in the burger only, never in the
-  // file title's menu: it is not a file action. See ./legacyApp.ts.
-  const menuGroups = useMemo(() => {
-    const legacy = legacyAppActionsFor(window.location.hostname);
-    return legacy.length ? [{ id: "file", items: fileActions }, { id: "legacy", items: legacy }] : [{ id: "file", items: fileActions }];
-  }, [fileActions]);
+  const helpers = useMemo<DocumentSessionHelpers>(() => ({ addToast, confirm }), [addToast, confirm]);
+  const session = useDocumentSession({ editor, mode: settings.fileNavigation, helpers, boardName });
+  const stock = useStockMenus();
+
+  // The door back to the archived app: its own group, last, so it reads as a
+  // way OUT rather than as another file command. It navigates through the
+  // same `DocumentLocation` seam every other navigation uses — a smoke test
+  // must never be able to load :4321, which rewrites Zach's real boards on
+  // open.
+  const legacyGroups = useMemo<MenuGroupSpec[]>(() => {
+    const rows = legacyAppActionsFor(window.location.hostname, (url) => documentLocation().assign(url));
+    return rows.length > 0 ? [{ id: "legacy", items: rows }] : [];
+  }, []);
+
+  const menu = useMemo(
+    () =>
+      buildAppMenu({
+        label: "SystemSketch",
+        platform: shortcutPlatform(),
+        file: session.file,
+        onSettings: () => setSettingsOpen(true),
+        edit: stock.edit,
+        view: stock.view,
+        export: stock.export,
+        preferences: stock.preferences,
+        onKeyboardShortcuts: stock.openKeyboardShortcuts,
+        extra: legacyGroups,
+      }),
+    [legacyGroups, session.file, stock],
+  );
 
   return (
     // `pointer-events: auto` because `.ss-chrome` is `none` — see the WHY on
@@ -153,7 +145,7 @@ export function SystemSketchChromeBar() {
     <div className="pointer-events-auto flex items-center gap-2">
       <ChromeBar
         testIdPrefix="ss-chrome"
-        menu={{ id: "main", label: "SystemSketch", groups: menuGroups }}
+        menu={menu}
         // WHY both arrows are hard-`false` rather than wired to something:
         // this bar's `history` is DEPTH navigation — "back to the level you
         // came from" — and this app has no depth model yet (no focused
@@ -165,72 +157,20 @@ export function SystemSketchChromeBar() {
         // there is a level to go back to.
         history={{ canGoBack: false, canGoForward: false, onBack: () => {}, onForward: () => {} }}
         identity={{
-          title: name,
-          statusTone: persisted ? "ok" : "pending",
-          statusLabel: persisted ? "Saved locally" : "Not persisted",
+          title: session.title ?? boardName,
+          statusTone: session.statusTone,
+          statusLabel: session.statusLabel,
+          path: session.path ?? undefined,
         }}
-        rename={{
-          active: renaming,
-          onBegin: () => setRenaming(true),
-          onCommit: (next) => {
-            const trimmed = next.trim();
-            // Truthful rendering: whatever was typed, verbatim. An empty
-            // commit is the one thing refused, and it is refused by keeping
-            // the old name rather than by writing "".
-            if (trimmed.length > 0) setName(trimmed);
-            setRenaming(false);
-          },
-          onCancel: () => setRenaming(false),
-        }}
+        rename={session.rename}
         crumbs={[]}
         depth={0}
         onReturnToRoot={() => editor.zoomToFit()}
         onJumpToLevel={() => {}}
-        fileActions={fileActions}
+        fileActions={session.titleActions}
       />
-      {/*
-        WHY undo/redo are the APP's own buttons rather than the bar's history
-        arrows: the kit's `history` is depth navigation (see its WHY above),
-        and re-labelling Back/Forward as Undo/Redo would be two lies at once
-        — the arrows would stop meaning what they mean everywhere else, and
-        document history would be hiding behind a navigation affordance.
-        Chrome's own arrows do not undo your typing either.
-
-        WHY `focusableWhenDisabled={false}`: Base UI's `Toolbar.Button`
-        defaults it to TRUE (toolbar/button/ToolbarButton.js:27), and
-        `useFocusableWhenDisabled` then sets `aria-disabled` and deliberately
-        NOT the native `disabled` attribute (utils/useFocusableWhenDisabled.js
-        — `isNativeButton && (!focusableWhenDisabled || isNonFocusableComposite)`
-        is the only branch that writes it). A disabled-looking button that is
-        still natively enabled would still fire `editor.undo()` on click.
-        Passing `false` takes the non-focusable-composite branch, which is
-        the one that writes the real attribute.
-      */}
-      <Toolbar
-        aria-label="Document history"
-        className="w-fit rounded-full border border-border bg-card px-1.5 py-1 text-card-foreground"
-      >
-        <ToolbarButton
-          data-testid="ss-chrome-undo"
-          aria-label="Undo"
-          title="Undo"
-          focusableWhenDisabled={false}
-          disabled={!canUndo}
-          onClick={() => editor.undo()}
-        >
-          <Undo2 />
-        </ToolbarButton>
-        <ToolbarButton
-          data-testid="ss-chrome-redo"
-          aria-label="Redo"
-          title="Redo"
-          focusableWhenDisabled={false}
-          disabled={!canRedo}
-          onClick={() => editor.redo()}
-        >
-          <Redo2 />
-        </ToolbarButton>
-      </Toolbar>
+      {session.navigatorProps ? <FileNavigator {...session.navigatorProps} /> : null}
+      <SystemSketchSettings open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} update={update} />
     </div>
   );
 }
