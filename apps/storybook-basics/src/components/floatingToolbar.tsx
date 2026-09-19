@@ -2,8 +2,8 @@ import type * as React from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "../lib/utils";
-import type { SelectionMenuSide } from "./floatingToolbar.placement";
 import { Toolbar } from "./toolbar";
+import type { SelectionMenuSide } from "./floatingToolbar.placement";
 
 /**
  * floatingToolbar.tsx — the positioned shell for the FigJam-style pill

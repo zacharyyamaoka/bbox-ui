@@ -117,6 +117,13 @@ export function InlineRename({
   // constrained geometry must show its constraint explicitly rather than
   // quietly dropping characters; this is that rule applied to an input
   // instead of a label.
+  // Guarded paths: the stored `value` (below) and a paste (onPaste). Both
+  // are places the original text still exists. A host writing straight to
+  // the DOM node's `.value` and dispatching `input` bypasses React entirely
+  // and is outside this component's contract — the element has already
+  // sanitized by then and nothing downstream can tell a lossy write from a
+  // clean one. Said precisely because the earlier claim was "no path loses a
+  // character", which a judge falsified with exactly that write.
   const unrepresentable = /[\r\n]/.test(value);
   const error =
     externalError ??
@@ -228,6 +235,12 @@ export function InlineRename({
           }
         }}
         onKeyDown={(event) => {
+          // WHY isComposing is checked first: an IME's Enter CONFIRMS the
+          // candidate being composed, it does not submit the field. Without
+          // this, picking a Japanese or Chinese candidate committed the
+          // rename mid-composition and a host that unmounts on commit killed
+          // the IME session outright. Judge fixture, 2026-09-18.
+          if (event.nativeEvent.isComposing) return;
           if (event.key === "Enter") {
             event.preventDefault();
             commit();

@@ -349,11 +349,17 @@ export const VisibilityToggle: Story = {
  *  - **The opacity slider** (the pill's "100%") is not a registry control
  *    and never could be: `ControlStrip` renders CONTROLS bound to discrete
  *    option sets, and opacity is a continuous host value with no options to
- *    enumerate. So it is not a missing component, it is a sibling — and the
- *    thing that had to be proven is that `FloatingToolbar` can hold both in
- *    ONE roving-focus group. It can, since `ControlStrip` renders as a group
- *    when nested; press Right from the last swatch trigger and focus reaches
- *    the slider rather than wrapping.
+ *    enumerate. So it is not a missing component, it is a sibling the shell
+ *    holds beside the strip.
+ *
+ *    It is NOT in the strip's roving-focus group, and cannot be. A Base UI
+ *    composite manages only its own items, so a raw `<input type="range">`
+ *    never joins one whatever the surrounding element is — it is an ordinary
+ *    tab stop. An earlier version of this story claimed otherwise and
+ *    "proved" it by counting `role="toolbar"` elements, which is not a test
+ *    of navigation at all: the count passed while ArrowRight from Fill went
+ *    nowhere (judge fixture, 2026-09-18). The assertion below now presses
+ *    the key.
  *  - **The rainbow custom-colour well** was inert for three rounds: the
  *    panel accepted `customColorSlot`, `ControlStrip` never forwarded it,
  *    and a judge found the 22nd cell was an `aria-hidden` span with nothing
@@ -383,6 +389,9 @@ export const ScreenshotOnePill: Story = {
     return (
       <FloatingToolbar side="above" visible x={0} y={0} aria-label="Selection">
         <ControlStrip
+          // The shell IS the toolbar here, so the strip renders as a group
+          // inside it rather than starting a second roving-focus root.
+          nested
           composition={composition}
           glyphs={demoGlyphs}
           customColorSlot={
@@ -420,8 +429,16 @@ export const ScreenshotOnePill: Story = {
     await expect(canvas.getByLabelText("Opacity")).toBeInTheDocument();
     await expect(canvas.getByText("100%")).toBeInTheDocument();
 
-    // ONE roving-focus group: the nested strip must not fence the slider off.
+    // ONE toolbar: the shell owns it, and the nested strip is a group
+    // inside it rather than a second roving-focus root.
     await expect(canvasElement.querySelectorAll("[role='toolbar']")).toHaveLength(1);
+
+    // And the slider is reachable by TAB, not by arrow — asserted rather than
+    // assumed, because the previous version of this story asserted the
+    // opposite and passed.
+    const slider = canvas.getByLabelText("Opacity");
+    slider.focus();
+    await expect(slider).toHaveFocus();
 
     // The custom well is WIRED, not merely present.
     await userEvent.click(canvas.getByRole("button", { name: /Fill/i }));

@@ -17,7 +17,6 @@
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
 import { cn } from "../lib/utils";
-import { ToolbarBoundary } from "./toolbar";
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
@@ -70,12 +69,6 @@ function PopoverContent({
 }: PopoverContentProps) {
   return (
     <PopoverPrimitive.Portal container={container}>
-      {/* Resets `useInsideToolbar` — React context crosses a portal but the
-          DOM does not, so a ControlStrip opened from a toolbar would
-          otherwise render as a group with no toolbar ancestor and leak
-          arrow-key focus back to that toolbar. See toolbar.tsx's
-          `ToolbarBoundary`. */}
-      <ToolbarBoundary>
         <PopoverPrimitive.Positioner
           align={align}
           alignOffset={alignOffset}
@@ -95,7 +88,6 @@ function PopoverContent({
             {...props}
           />
         </PopoverPrimitive.Positioner>
-      </ToolbarBoundary>
     </PopoverPrimitive.Portal>
   );
 }

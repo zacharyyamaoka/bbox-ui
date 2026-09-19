@@ -456,6 +456,29 @@ function LibraryCell({
  * nothing validates it, so the lookup has to be the thing that is safe.
  * Found by a judge fixture, 2026-09-18.
  */
+/**
+ * Dev-only: a duplicate id is a host bug this component cannot paper over.
+ *
+ * Silence was the wrong answer twice — first ids collided and React reused
+ * the wrong element, then index keys transferred state on reorder. Both are
+ * symptoms of the same missing precondition, so this reports the precondition
+ * instead of pretending the next key scheme will be the one that holds.
+ */
+function warnOnDuplicateIds(kind: string, ids: readonly string[]): void {
+  if (process.env.NODE_ENV === "production") return;
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) {
+      console.warn(
+        `[bbox-ui] ToolDock: duplicate ${kind} id ${JSON.stringify(id)}. ` +
+          "Ids must be unique — focus and open-menu state cannot be tracked reliably across re-renders otherwise.",
+      );
+      return;
+    }
+    seen.add(id);
+  }
+}
+
 /** How many times this id has already been seen — see the key WHY below. */
 function occurrence(seen: Map<string, number>, id: string): number {
   const next = (seen.get(id) ?? 0) + 1;
@@ -481,6 +504,8 @@ export function ToolDock({
   container,
   testIdPrefix,
 }: ToolDockProps) {
+  warnOnDuplicateIds("simpleTools", simpleTools.map((tool) => tool.id));
+  warnOnDuplicateIds("families", families.map((family) => family.id));
   const seenToolIds = new Map<string, number>();
   const seenFamilyIds = new Map<string, number>();
   // One ordered list of cells, so `order` can interleave the two sources.
@@ -490,21 +515,19 @@ export function ToolDock({
   // they were before, not hoisted into a different closure.
   const cells: { key: string; id: string; render: () => ReactNode }[] = [
     ...simpleTools.map((tool, index) => ({
-      // WHY the key is id + OCCURRENCE and not the id, nor the index:
+      // Keys are id + occurrence. That is enough for React to not reuse
+      // the WRONG element when ids repeat, and it is NOT enough to give a
+      // duplicate a stable identity: an occurrence number names a position
+      // among duplicates, so removing the first "x" makes the second one
+      // become occurrence 1 and inherit its focus and open menu. A judge
+      // demonstrated exactly that (2026-09-18), and an earlier version of
+      // this comment claimed stability it does not have.
       //
-      //   id alone     — two simpleTools sharing an id collided, so React
-      //                  reused the wrong element and a removed tool stayed
-      //                  on screen ([A,B,A] -> [B,C] still rendered A,B,C).
-      //   index alone  — the classic index-as-key bug, and the fix that
-      //                  replaced the above: reordering [A,B] -> [B,A]
-      //                  transferred A's focus, open menu and armed state
-      //                  onto B, because position was all React matched on.
-      //
-      // Both were found by judge fixtures a round apart (2026-09-18), the
-      // second one caused by the first one's repair. Counting occurrences
-      // gives a key that is stable when an item MOVES (it travels with the
-      // id) and still unique when ids repeat (the nth "x" stays the nth
-      // "x"), which is the only combination that satisfies both.
+      // No key scheme can fix it, because with duplicate ids there IS no
+      // stable identity to key on — the host has not given one. So the
+      // contract is that ids are unique, and `warnOnDuplicateIds` below says
+      // so out loud in development rather than letting the dock quietly
+      // misbehave.
       key: `tool:${tool.id}:${occurrence(seenToolIds, tool.id)}`,
       id: tool.id,
       render: () => (

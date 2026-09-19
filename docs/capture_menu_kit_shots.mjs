@@ -34,10 +34,17 @@ const SHOTS = [
   { name: "control-strip-fill", id: "basics-controlstrip--fill-popover", w: 900, h: 640, surface: "01" },
   { name: "control-strip-triggers", id: "basics-controlstrip--trigger-gallery", w: 1100, h: 560, surface: "01" },
   { name: "control-strip-fontsize", id: "basics-controlstrip--font-size-list", w: 820, h: 620, surface: "03" },
+  // Surface 02 had no capture at all until now — the story existed and the
+  // report still illustrated that screenshot with nothing.
+  { name: "block-title-bar", id: "basics-controlstrip--block-title-bar", w: 900, h: 260, surface: "02" },
+  { name: "screenshot-one-pill", id: "basics-floatingtoolbar--screenshot-one-pill", w: 900, h: 300, surface: "01" },
   { name: "control-strip-mixed", id: "basics-controlstrip--mixed-and-automatic-states", w: 1000, h: 480, surface: "01" },
   { name: "control-lab", id: "basics-controllab--lab", w: 1320, h: 1000, surface: "01" },
   { name: "floating-toolbar", id: "basics-floatingtoolbar--gallery", w: 1240, h: 900, surface: "01" },
-  { name: "tool-dock", id: "basics-tooldock--default", w: 900, h: 340, surface: "04" },
+  // WHY ScreenshotOrder and not Default: `Default` renders every simple tool
+  // before every family, which is NOT the order screenshot 04 draws. The
+  // report was illustrating surface 04 with a picture that contradicted it.
+  { name: "tool-dock", id: "basics-tooldock--screenshot-order", w: 900, h: 340, surface: "04" },
   { name: "tool-dock-popouts", id: "basics-tooldock--family-popouts-expanded", w: 1100, h: 700, surface: "04" },
   { name: "chrome-bar", id: "basics-chromebar--main-branch-at-root", w: 1100, h: 340, surface: "05" },
   { name: "chrome-bar-tones", id: "basics-chromebar--status-tones", w: 1100, h: 560, surface: "05" },

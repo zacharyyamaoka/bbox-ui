@@ -11,21 +11,15 @@ import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
 
 import { cn } from "../lib/utils";
-import { ToolbarBoundary } from "./toolbar";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
 }
 
 function DropdownMenuPortal({ children, ...props }: MenuPrimitive.Portal.Props) {
-  // Same boundary the Content wrapper applies. This raw wrapper is
-  // EXPORTED, so a consumer portalling their own content through it
-  // was still leaking toolbar context across the portal — the
-  // Content fix covered the kit's own usage and missed the public
-  // seam (judge fixture, 2026-09-18).
   return (
     <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props}>
-      <ToolbarBoundary>{children}</ToolbarBoundary>
+      {children}
     </MenuPrimitive.Portal>
   );
 }
@@ -77,12 +71,6 @@ function DropdownMenuContent({
   Pick<MenuPrimitive.Portal.Props, "container">) {
   return (
     <MenuPrimitive.Portal container={container}>
-      {/* Resets `useInsideToolbar` — React context crosses a portal but the
-          DOM does not, so a ControlStrip opened from a toolbar would
-          otherwise render as a group with no toolbar ancestor and leak
-          arrow-key focus back to that toolbar. See toolbar.tsx's
-          `ToolbarBoundary`. */}
-      <ToolbarBoundary>
         <MenuPrimitive.Positioner
           className="isolate z-50 outline-none"
           align={align}
@@ -101,7 +89,6 @@ function DropdownMenuContent({
             {...props}
           />
         </MenuPrimitive.Positioner>
-      </ToolbarBoundary>
     </MenuPrimitive.Portal>
   );
 }

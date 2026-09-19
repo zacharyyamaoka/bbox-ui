@@ -18,7 +18,10 @@ import { ToggleGroup, ToggleGroupItem } from "./toggle-group"
  * two centre panes, the right/bottom detail rail (Properties|Code over
  * lane K's `PropertyTable`/`CodeView`), and the bottom
  * Side-by-side|Overlay + Fullscreen bar. No `Dialog`, no fixed
- * positioning, no z-index — MENU-KIT-DESIGN.md §3.3 is explicit that "a
+ * positioning, no z-index EXCEPT overlay's own stacking (the two panes share one
+ * grid cell, so the after pane is raised above the before pane and the
+ * combined caption above both — all contained by `isolate` on the stage, so
+ * none of it reaches the host's stack) — MENU-KIT-DESIGN.md §3.3 is explicit that "a
  * thin host modal wraps it."
  *
  * Ported structurally (JSX shape, not the math — there is none here) from

@@ -350,9 +350,28 @@ def main() -> None:
     # `tool-dock` got the one that passed Object.prototype to onArm, while
     # every source-level check here passed. Freshness of registry.json says
     # nothing about freshness of what is actually served.
+    # WHY only in --check: regenerating registry.json necessarily leaves the
+    # published payloads stale until `npx shadcn@latest build` re-embeds
+    # them, so running this on the WRITE path made the documented sequence
+    # (`generate && build`) impossible — the generator exited 1 for a
+    # condition its own next step fixes. --check is where "is what we serve
+    # current?" is the question being asked.
+    if not check:
+        print("\n(payload freshness is checked by --check; run `npx shadcn@latest build` next)")
+        return
+
     published = REPO / "public/r"
     stale: list[str] = []
-    if published.is_dir():
+    if not published.is_dir():
+        # WHY this is an error and not a skip: the guard used to be
+        # `if published.is_dir():`, so deleting or never building public/r
+        # made --check print "published payloads match source" and exit 0 —
+        # a checker that passes hardest when there is nothing to check.
+        # Fault-injected by a judge, 2026-09-18. Unpublished is a state to
+        # report, never one to pass.
+        print(f"\nNOT PUBLISHED: {published} does not exist — run `npx shadcn@latest build`")
+        raise SystemExit(1)
+    if True:
         for it in reg["items"]:
             payload = published / f"{it['name']}.json"
             if not payload.is_file():
