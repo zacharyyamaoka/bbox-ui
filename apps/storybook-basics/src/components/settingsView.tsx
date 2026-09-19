@@ -23,7 +23,19 @@
 // where the description sits and how the nav highlights are this file's, so
 // the next host inherits them. `kind: "custom"` is the escape hatch for a
 // section no stock control fits (an About block), not the default.
-import type { ReactElement, ReactNode } from "react";
+"use client";
+
+import { useState, type ReactElement, type ReactNode } from "react";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { XIcon } from "lucide-react";
+
+import { cn } from "../lib/utils";
+import { Button } from "./button";
+import { DialogClose, DialogOverlay, DialogPortal } from "./dialog";
+import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "./field";
+import { RadioGroup, RadioGroupItem } from "./radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
+import { Switch } from "./switch";
 
 /** Zach: "We want the option wether we see settings as a [dialog or a page]". */
 export type SettingsPresentation = "dialog" | "page";
@@ -75,6 +87,95 @@ export interface SettingsViewProps {
   testIdPrefix?: string;
 }
 
+// The dialog's own base-nova styling (components/dialog.tsx) is a fixed,
+// non-conditional class string, so `presentation` is switched here at the
+// className level rather than by fighting it with `data-[presentation=…]:`
+// overrides of every dialog-mode utility. Both branches are stock Tailwind
+// utilities only — no bespoke positioning math.
+//
+// WHY fade only, no `zoom-in-95` (unlike dialog.tsx's DialogContent): the
+// scale keyframe lives on whichever position/size classes are ALSO the ones
+// that change between presentations, so switching dialog<->page removes and
+// re-adds the animation utility on an already-open popup — the browser
+// restarts the transform mid-flight and `getBoundingClientRect` can catch it
+// still scaled down (measured: a stray ~15px on a ~380px box, the tempting
+// zoom kept from dialog.tsx). Keeping the animation entirely in `POPUP_BASE`
+// (present at every presentation, never toggled) means a presentation swap
+// can never retrigger it.
+const POPUP_BASE =
+  "fixed z-50 flex flex-col gap-4 bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0";
+
+const POPUP_DIALOG =
+  "top-1/2 left-1/2 w-full max-w-[calc(100%-2rem)] max-h-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl sm:max-w-lg";
+
+const POPUP_PAGE = "inset-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 overflow-hidden rounded-none";
+
+function renderControl(section: SettingsSection, controlId: string): ReactNode {
+  const control = section.control;
+  switch (control.kind) {
+    case "radio":
+      return (
+        <RadioGroup value={control.value} onValueChange={(value) => control.onValueChange(value as string)}>
+          {control.options.map((option) => {
+            const optionId = `${controlId}-${option.value}`;
+            return (
+              <FieldLabel key={option.value} htmlFor={optionId}>
+                <Field orientation="horizontal">
+                  <FieldContent>
+                    <FieldTitle>{option.label}</FieldTitle>
+                    {option.description ? <FieldDescription>{option.description}</FieldDescription> : null}
+                    {option.disabled && option.disabledReason ? (
+                      <FieldDescription>{option.disabledReason}</FieldDescription>
+                    ) : null}
+                  </FieldContent>
+                  <RadioGroupItem
+                    id={optionId}
+                    value={option.value}
+                    disabled={option.disabled}
+                    data-option-value={option.value}
+                  />
+                </Field>
+              </FieldLabel>
+            );
+          })}
+        </RadioGroup>
+      );
+    case "switch":
+      return (
+        <Switch
+          id={controlId}
+          checked={control.checked}
+          onCheckedChange={control.onCheckedChange}
+          disabled={control.disabled}
+          aria-label={section.title}
+        />
+      );
+    case "select": {
+      // Base UI's Select resolves the trigger's initial label from `items`
+      // (its own documented API) — the popup's items are not in the DOM
+      // until first opened, so without this map the trigger shows nothing
+      // until a selection is made (see Select.stories.tsx).
+      const items = Object.fromEntries(control.options.map((option) => [option.value, option.label]));
+      return (
+        <Select value={control.value} onValueChange={(value) => control.onValueChange(value as string)} items={items}>
+          <SelectTrigger id={controlId} aria-label={section.title}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {control.options.map((option) => (
+              <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+    case "custom":
+      return control.render;
+  }
+}
+
 /**
  * DOM contract (what the acceptance story measures; the builder keeps it):
  *   - one element `[data-slot="settings-view"]` — the stock Dialog POPUP
@@ -98,6 +199,84 @@ export interface SettingsViewProps {
  *     (same category) in the other container — no close/reopen needed.
  */
 export function SettingsView(props: SettingsViewProps): ReactElement | null {
-  void props;
-  throw new Error("SettingsView: not implemented (lane settings-kit)");
+  const {
+    open,
+    onOpenChange,
+    presentation,
+    categories,
+    category,
+    onCategoryChange,
+    title = "Settings",
+    container,
+    popupClassName,
+    testIdPrefix,
+  } = props;
+
+  // Uncontrolled fallback per the DOM contract's "omitted → uncontrolled,
+  // starting on the first" — this state lives on SettingsView itself, not
+  // the Dialog, so switching `presentation` re-renders the SAME element in
+  // place and the open category survives it for free.
+  const [uncontrolledCategoryId, setUncontrolledCategoryId] = useState<string | undefined>(undefined);
+  const activeCategoryId = category ?? uncontrolledCategoryId ?? categories[0]?.id;
+  const activeCategory = categories.find((candidate) => candidate.id === activeCategoryId) ?? categories[0];
+
+  function selectCategory(id: string) {
+    onCategoryChange?.(id);
+    if (category === undefined) setUncontrolledCategoryId(id);
+  }
+
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPortal container={container}>
+        <DialogOverlay />
+        <DialogPrimitive.Popup
+          data-slot="settings-view"
+          data-presentation={presentation}
+          data-testid={testIdPrefix}
+          className={cn(POPUP_BASE, presentation === "page" ? POPUP_PAGE : POPUP_DIALOG, popupClassName)}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border pb-3">
+            <DialogPrimitive.Title className="cn-font-heading text-base leading-none font-medium">
+              {title}
+            </DialogPrimitive.Title>
+            <DialogClose render={<Button variant="ghost" size="icon-sm" />}>
+              <XIcon />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </div>
+          <div className="flex min-h-0 flex-1 gap-4">
+            <nav data-slot="settings-nav" aria-label="Settings categories" className="flex w-36 shrink-0 flex-col gap-0.5">
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  aria-current={cat.id === activeCategory?.id ? "page" : undefined}
+                  onClick={() => selectCategory(cat.id)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-muted hover:text-foreground",
+                    cat.id === activeCategory?.id && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
+                >
+                  {cat.icon}
+                  {cat.label}
+                </button>
+              ))}
+            </nav>
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
+              {activeCategory?.sections.map((section) => {
+                const controlId = `${testIdPrefix ?? "settings"}-${activeCategory.id}-${section.id}`;
+                return (
+                  <div key={section.id} data-slot="settings-section" data-section-id={section.id} className="flex flex-col gap-2">
+                    <FieldTitle>{section.title}</FieldTitle>
+                    {section.description ? <FieldDescription>{section.description}</FieldDescription> : null}
+                    {renderControl(section, controlId)}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </DialogPrimitive.Popup>
+      </DialogPortal>
+    </DialogPrimitive.Root>
+  );
 }

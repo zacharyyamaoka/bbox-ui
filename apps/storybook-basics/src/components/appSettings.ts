@@ -18,6 +18,7 @@
 //
 // Storage is a per-viewer convenience (`localStorage`), never shared state:
 // which dialog a person prefers is a fact about that person's browser.
+import { parsePreferences, type PreferenceRegistry } from "./toolPreferences";
 import type { SettingsPresentation } from "./settingsView";
 
 /** `app` = SystemSketch's own navigator over the local file host (the old
@@ -45,6 +46,15 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   settingsPresentation: "dialog",
 });
 
+// WHY the registry, not a hand-written ladder: `parsePreferences` already
+// generalizes exactly this shape (field-independent fallback, never throws,
+// never hands back the frozen default for a caller to mutate) — writing a
+// second ladder here would just be `toolPreferences.ts`'s bug surface twice.
+const APP_SETTINGS_REGISTRY: PreferenceRegistry<AppSettings> = {
+  fileNavigation: { values: ["app", "native"], default: DEFAULT_APP_SETTINGS.fileNavigation },
+  settingsPresentation: { values: ["dialog", "page"], default: DEFAULT_APP_SETTINGS.settingsPresentation },
+};
+
 /**
  * Total and field-independent: each field that is not one of its own legal
  * values falls back to ITS default without invalidating its sibling (the rule
@@ -53,23 +63,26 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
  * Never throws.
  */
 export function parseAppSettings(raw: unknown): AppSettings {
-  void raw;
-  throw new Error("parseAppSettings: not implemented (lane settings-kit)");
+  return parsePreferences(APP_SETTINGS_REGISTRY, raw);
 }
 
 /** The inverse: `parseAppSettings(JSON.parse(serializeAppSettings(s)))`
  *  deep-equals `s` for every valid `s`. */
 export function serializeAppSettings(settings: AppSettings): string {
-  void settings;
-  throw new Error("serializeAppSettings: not implemented (lane settings-kit)");
+  return JSON.stringify(settings);
 }
 
 /** Reads `APP_SETTINGS_STORAGE_KEY` through `parseAppSettings`. A null
  *  storage, a throwing `getItem` (private window, blocked site data) or
  *  corrupt JSON → the defaults. Never throws. */
 export function readAppSettings(storage: Pick<Storage, "getItem"> | null): AppSettings {
-  void storage;
-  throw new Error("readAppSettings: not implemented (lane settings-kit)");
+  if (!storage) return DEFAULT_APP_SETTINGS;
+  try {
+    const raw = storage.getItem(APP_SETTINGS_STORAGE_KEY);
+    return raw === null ? DEFAULT_APP_SETTINGS : parseAppSettings(JSON.parse(raw));
+  } catch {
+    return DEFAULT_APP_SETTINGS;
+  }
 }
 
 /** Writes `serializeAppSettings(settings)` under the key. A null storage or a
@@ -77,7 +90,10 @@ export function readAppSettings(storage: Pick<Storage, "getItem"> | null): AppSe
  *  a reason to block drawing" (the archive's rule, `src/chrome/preferences.ts`).
  *  Never throws. */
 export function writeAppSettings(storage: Pick<Storage, "setItem"> | null, settings: AppSettings): void {
-  void storage;
-  void settings;
-  throw new Error("writeAppSettings: not implemented (lane settings-kit)");
+  if (!storage) return;
+  try {
+    storage.setItem(APP_SETTINGS_STORAGE_KEY, serializeAppSettings(settings));
+  } catch {
+    // Swallowed on purpose — see the doc comment above.
+  }
 }
