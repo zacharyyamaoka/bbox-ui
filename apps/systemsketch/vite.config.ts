@@ -7,6 +7,8 @@ import react from "@vitejs/plugin-react";
 import { getAssetUrls } from "@tldraw/assets/selfHosted";
 import { defineConfig, type Plugin } from "vite";
 
+import { devFileHostPlugin } from "./devFileHost";
+
 const TRUNK = path.resolve(__dirname, "../storybook-basics/src");
 
 /* ------------------------------------------------------------------ */
@@ -122,7 +124,13 @@ function selfHostedTldrawAssets(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), selfHostedTldrawAssets()],
+  // WHY devFileHostPlugin() takes no argument here: it resolves its own
+  // roots from `process.env` (real HOME outside a test runner, `null` —
+  // meaning it does nothing — under Vitest). See devFileHost.ts's WHY for
+  // why `vite dev` needs this at all: without it, Open/Save works from the
+  // dock's Stable server but 404s from `pnpm --filter systemsketch dev`,
+  // the two surfaces Zach actually uses.
+  plugins: [react(), tailwindcss(), selfHostedTldrawAssets(), devFileHostPlugin()],
   define: {
     // Consumed by src/App.tsx, which declares it ambient and passes it
     // straight to `<Tldraw assetUrls={…}>`. See the WHY above for why the
