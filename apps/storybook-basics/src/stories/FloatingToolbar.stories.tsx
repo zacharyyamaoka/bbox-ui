@@ -433,12 +433,18 @@ export const ScreenshotOnePill: Story = {
     // inside it rather than a second roving-focus root.
     await expect(canvasElement.querySelectorAll("[role='toolbar']")).toHaveLength(1);
 
-    // And the slider is reachable by TAB, not by arrow — asserted rather than
-    // assumed, because the previous version of this story asserted the
-    // opposite and passed.
-    const slider = canvas.getByLabelText("Opacity");
-    slider.focus();
-    await expect(slider).toHaveFocus();
+    // And the slider is reachable by TAB, not by arrow. This PRESSES Tab
+    // rather than calling .focus(): a judge set the slider's tabIndex to -1,
+    // which makes it genuinely unreachable by Tab, and the .focus() version
+    // of this assertion still passed (2026-09-18). Programmatic focus proves
+    // nothing about tab order, which is the thing the sentence above claims.
+    // Start from a real composite ITEM: focusing the toolbar root does not
+    // enter the roving group, so Tab from there never leaves it either.
+    const fillTrigger = canvas.getByRole("button", { name: /Fill/i });
+    fillTrigger.focus();
+    await expect(fillTrigger).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByLabelText("Opacity")).toHaveFocus();
 
     // The custom well is WIRED, not merely present.
     await userEvent.click(canvas.getByRole("button", { name: /Fill/i }));

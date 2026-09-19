@@ -266,6 +266,16 @@ export const Default: Story = {
   render: () => <ToolDockHarness />,
 };
 
+/**
+ * A family face is labelled "<member> — open <family> tools" (toolDock.tsx),
+ * a simple tool with its own label. This reduces both to the FAMILY or TOOL
+ * name so a whole-sequence assertion reads as the screenshot does.
+ */
+function nameOf(label: string): string {
+  const open = label.match(/open (.+) tools$/);
+  return open ? open[1] : label;
+}
+
 /** Every dock cell's accessible name, in rendered order. */
 function positions(root: HTMLElement): string[] {
   return [...root.querySelectorAll<HTMLElement>("[data-slot='tool-dock'] button")]
@@ -309,12 +319,21 @@ export const ScreenshotOrder: Story = {
     // containment reads both without the test having to know which is which.
     const at = (needle: string) => positions(canvasElement).findIndex((l) => l.includes(needle));
 
-    // Text after every family is the whole point of `order`; without it the
-    // dock could only ever render Text third.
-    await expect(at("Text")).toBeGreaterThan(at("Drawing"));
-    await expect(at("Text")).toBeGreaterThan(at("Shapes"));
-    await expect(at("Cursor")).toBeLessThan(at("Frame"));
-    await expect(at("Frame")).toBeLessThan(at("Insert"));
+    // WHY the WHOLE sequence and not a few pairwise relations: the first
+    // version asserted four `<`/`>` pairs, and a judge moved the bbox family
+    // after Text and after the library without failing any of them
+    // (2026-09-18). Pairwise checks describe a partial order; the screenshot
+    // shows a total one, so that is what gets asserted.
+    await expect(positions(canvasElement).map(nameOf)).toEqual([
+      "Cursor",
+      "Frame",
+      "Insert",
+      "bbox-ui",
+      "Shapes",
+      "Drawing",
+      "Text",
+      "Library",
+    ]);
   },
 };
 
@@ -329,8 +348,18 @@ export const DefaultOrderUnchanged: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByRole("toolbar", { name: "Tools" });
-    const at = (needle: string) => positions(canvasElement).findIndex((l) => l.includes(needle));
-    await expect(at("Text")).toBeLessThan(at("Shapes"));
+    // Same reasoning as ScreenshotOrder: the previous single `<` passed with
+    // Insert moved before Cursor, which contradicts this story's own promise
+    // of "every simple tool, then every family".
+    await expect(positions(canvasElement).map(nameOf)).toEqual([
+      "Cursor",
+      "Frame",
+      "Text",
+      "Insert",
+      "bbox-ui",
+      "Shapes",
+      "Drawing",
+    ]);
   },
 };
 

@@ -237,6 +237,67 @@ def build_item(name: str, entry_rel: str, title: str, desc: str,
     }
 
 
+
+def _check_published_payloads(reg: dict) -> None:
+    """Is what we SERVE current, complete, and nothing more?"""
+    published = REPO / "public/r"
+    stale: list[str] = []
+    if not published.is_dir():
+        # WHY this is an error and not a skip: the guard used to be
+        # `if published.is_dir():`, so deleting or never building public/r
+        # made --check print "published payloads match source" and exit 0 —
+        # a checker that passes hardest when there is nothing to check.
+        # Fault-injected by a judge, 2026-09-18. Unpublished is a state to
+        # report, never one to pass.
+        print(f"\nNOT PUBLISHED: {published} does not exist — run `npx shadcn@latest build`")
+        raise SystemExit(1)
+    if True:
+        for it in reg["items"]:
+            payload = published / f"{it['name']}.json"
+            if not payload.is_file():
+                stale.append(f"{it['name']}: never published")
+                continue
+            data = json.loads(payload.read_text())
+            by_target = {f.get("target") or f["path"]: f.get("content") for f in data.get("files", [])}
+
+            # WHY the file SET and the dependencies are compared, not just the
+            # bytes of files we expect: checking only "every file I expect is
+            # present and matches" passes a payload that ALSO ships files
+            # nobody declared, and passes one whose `dependencies` have been
+            # emptied — so `shadcn add` would copy source needing packages it
+            # never installs. Both were fault-injected into
+            # public/r/control-strip.json and both exited 0 (judge, 2026-09-18).
+            # A payload is a contract in three parts: which files, their
+            # contents, and what they need installed.
+            expected_targets = {f["target"] for f in it["files"]}
+            for extra in sorted(set(by_target) - expected_targets):
+                stale.append(f"{it['name']}: published payload ships an undeclared file {extra}")
+            declared_deps = sorted(it.get("dependencies", []))
+            if sorted(data.get("dependencies", [])) != declared_deps:
+                stale.append(
+                    f"{it['name']}: published dependencies {data.get('dependencies', [])} "
+                    f"!= declared {declared_deps}"
+                )
+
+            for f in it["files"]:
+                src = REPO / f["path"]
+                if not src.is_file():
+                    continue
+                shipped = by_target.get(f["target"])
+                if shipped is None:
+                    stale.append(f"{it['name']}: {f['target']} missing from the published payload")
+                elif shipped != src.read_text():
+                    stale.append(f"{it['name']}: {f['target']} published content differs from source")
+    if stale:
+        print("\nPUBLISHED PAYLOADS ARE STALE — re-run `npx shadcn@latest build`:")
+        for line in sorted(set(stale))[:20]:
+            print("  " + line)
+        if len(set(stale)) > 20:
+            print(f"  … and {len(set(stale)) - 20} more")
+        raise SystemExit(1)
+    print("published payloads match source")
+
+
 def main() -> None:
     check = "--check" in sys.argv
     reg = json.loads(REGISTRY.read_text())
@@ -356,46 +417,17 @@ def main() -> None:
     # (`generate && build`) impossible — the generator exited 1 for a
     # condition its own next step fixes. --check is where "is what we serve
     # current?" is the question being asked.
-    if not check:
+    # WHY the payload block is guarded rather than the function returning
+    # here: the early `return` that used to sit at this line skipped
+    # EVERYTHING below it, including the unpublished-dependency guard — so
+    # generation silently accepted an item depending on a private package,
+    # which the same script refuses at 565fb78. A judge injected an
+    # `@bbox-ui/schema` import and watched exit 0 (2026-09-18). Skipping one
+    # check must never mean skipping the rest.
+    if check:
+        _check_published_payloads(reg)
+    else:
         print("\n(payload freshness is checked by --check; run `npx shadcn@latest build` next)")
-        return
-
-    published = REPO / "public/r"
-    stale: list[str] = []
-    if not published.is_dir():
-        # WHY this is an error and not a skip: the guard used to be
-        # `if published.is_dir():`, so deleting or never building public/r
-        # made --check print "published payloads match source" and exit 0 —
-        # a checker that passes hardest when there is nothing to check.
-        # Fault-injected by a judge, 2026-09-18. Unpublished is a state to
-        # report, never one to pass.
-        print(f"\nNOT PUBLISHED: {published} does not exist — run `npx shadcn@latest build`")
-        raise SystemExit(1)
-    if True:
-        for it in reg["items"]:
-            payload = published / f"{it['name']}.json"
-            if not payload.is_file():
-                stale.append(f"{it['name']}: never published")
-                continue
-            data = json.loads(payload.read_text())
-            by_target = {f.get("target") or f["path"]: f.get("content") for f in data.get("files", [])}
-            for f in it["files"]:
-                src = REPO / f["path"]
-                if not src.is_file():
-                    continue
-                shipped = by_target.get(f["target"])
-                if shipped is None:
-                    stale.append(f"{it['name']}: {f['target']} missing from the published payload")
-                elif shipped != src.read_text():
-                    stale.append(f"{it['name']}: {f['target']} published content differs from source")
-    if stale:
-        print("\nPUBLISHED PAYLOADS ARE STALE — re-run `npx shadcn@latest build`:")
-        for line in sorted(set(stale))[:20]:
-            print("  " + line)
-        if len(set(stale)) > 20:
-            print(f"  … and {len(set(stale)) - 20} more")
-        raise SystemExit(1)
-    print("published payloads match source")
 
     trunk_names = {name for name, *_ in ITEMS}
     legacy_names = {name for name, *_ in LEGACY_ITEMS}
