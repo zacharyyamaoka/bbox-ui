@@ -6,12 +6,12 @@
 // tldraw, so this file's entire job is to turn `shape.props` into the
 // component's props, to stamp the two DOM attributes the dot sighting reads,
 // and to route the label's keystrokes back into the store.
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useEditor, useValue, type Editor, type TLBinding } from "tldraw";
 
 import { CodeEditor } from "@trunk/components/codeEditor";
 import { LabeledPort } from "@trunk/components/labeledPort";
-import { PORT_TEXT_SIZES, type PortTextLayout } from "@trunk/components/port.layout";
+import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, PORT_TEXT_SIZES, type PortTextLayout } from "@trunk/components/port.layout";
 import { POINTER_OWNED_CLASS } from "@trunk/hosts/nodeViews";
 
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
@@ -21,6 +21,26 @@ import type { PortDirection, PortShape } from "./PortShapeUtil";
 /** Room between the dot and the shape's own edge, so the selection outline
  *  never sits on the painted ring (`PORT_RING_OVERHANG_PX` is 5). */
 const FACE_INSET_PX = 8;
+
+/**
+ * The clear space the trunk's own placement math leaves between the dot's box
+ * and the label's near edge. `slotPlacementStyle` offsets the label slot by
+ * `dot.w + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP` from the dot root's
+ * opposite edge (port.layout.ts:285-291) and that root IS the dot's box, so
+ * the clear space beside it is exactly these two constants. Derived from them
+ * rather than written as `13`, so a change to either travels here instead of
+ * silently sliding the spacer below out from under the real label.
+ */
+const LABEL_CLEARANCE_PX = PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
+
+/**
+ * The face never measures shorter than this: the shape's own default `h`, and
+ * also the smallest box that still covers the dot's PAINTED extent — a 12px
+ * dot plus `PORT_RING_OVERHANG_PX` of box-shadow ring on each side is 22px —
+ * with room left over to grab. A floor rather than a pin, for the same reason
+ * the width is one; see the spacer's WHY in `PortFace`.
+ */
+const FACE_MIN_HEIGHT_PX = 32;
 
 /** The trunk's own default port type size (`PortTextSize` "sm"). Read from the
  *  same constant the editing branch reads, so the resting label and the
@@ -217,6 +237,99 @@ export function PortFace({ shape }: { shape: PortShape }) {
 
   const align = direction === "out" ? "right" : "left";
 
+  const faceRef = useRef<HTMLDivElement | null>(null);
+  const [labelWidth, setLabelWidth] = useState(0);
+
+  /**
+   * How wide is the label that is actually on screen right now?
+   *
+   * WHY the rendered element rather than a hidden twin of the same two runs:
+   * the slot holds a `CodeEditor` while renaming, and a twin of THAT would be
+   * a second CodeMirror instance fighting the first for focus — while a twin
+   * of only the resting runs would size the box wrong for the whole rename.
+   * One reading of whatever is really there covers both, and cannot drift
+   * from the markup the way a copy of it would.
+   *
+   * WHY `offsetWidth` and not `getBoundingClientRect()`: unscaled layout px
+   * IS shape-local px (`shared/measure.ts`'s rule 1), so this number is right
+   * at any camera zoom, where the client rect would be multiplied by it.
+   */
+  const readLabelWidth = useCallback(() => {
+    const label = faceRef.current?.querySelector<HTMLElement>('[data-slot="port-label"]');
+    if (label) setLabelWidth(label.offsetWidth);
+  }, []);
+
+  // Every render, the pass `shared/measure.ts` runs for the shape's own box:
+  // a keystroke into the name re-renders this face in the same commit that
+  // relaid the label out, so the spacer below is never a character behind.
+  useLayoutEffect(readLabelWidth);
+
+  // ...and again once the font settles and (on the first render of a rename)
+  // CodeMirror has laid out its first line, both of which land a frame later.
+  // Re-attached when `editing` swaps one slot component for the other, since
+  // the observed element is swapped with it.
+  useEffect(() => {
+    const label = faceRef.current?.querySelector<HTMLElement>('[data-slot="port-label"]');
+    if (!label) return;
+    const frame = requestAnimationFrame(readLabelWidth);
+    const observer = new ResizeObserver(readLabelWidth);
+    observer.observe(label);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [editing, readLabelWidth]);
+
+  /**
+   * The label's width, in flow, on the label's side — an empty box that
+   * reserves exactly the room the real (absolutely positioned) label occupies.
+   *
+   * WHY it has to exist at all: `LabeledPort`'s root box is the DOT and
+   * nothing else, with both slots positioned as absolute overlays off it
+   * (its own B4 note, labeledPort.tsx:420-436) — that is what keeps a dot
+   * centred on a rail whatever height its label has, and it is also why a
+   * label costs its parent zero width.
+   *
+   * WHY the face is no longer pinned to `props.w` (what this file did first):
+   * that made the measurement circular in exactly the way
+   * `nodeShapeComponent.tsx:28-34` warns about — `w` could only ever confirm
+   * the 120 it was born with, so every label wider than the leftover ~100px
+   * hung OUTSIDE the `Rectangle2d` `getGeometry` returns. Measured, not
+   * feared: of five real names on the capture board four overflowed, one of
+   * them (`image_tensor Tensor`) by 91px; a press on the overflowing part
+   * fell through to the canvas and moved nothing, and a double-click there
+   * made tldraw draw a stray stock `text` shape and type the new name into
+   * THAT instead of into `props.name`. With the spacer in flow the hug
+   * `NodeShapeFrame` measures is the box the user can see, so the donor's
+   * rule quoted in `PortShapeUtil.getGeometry` — one grab anywhere on the
+   * face starts translating — is true of the whole face again: re-measured
+   * on the same six ports, every one now reports 0px outside its box, and
+   * `throttle_setpoint_value float` measures 279 wide instead of 120.
+   *
+   * WHY the spacer is the MEASURED label rather than a `visibility: hidden`
+   * twin of the two resting runs (the cheaper fix, and the obvious one):
+   * a twin is only right while the slot holds those runs. Measured here the
+   * moment a rename opens, the CodeEditor that replaces them is WIDER than
+   * the text it replaced — 306 against 279 for the same name, because it is
+   * monospace — and it then grows per keystroke, reaching 525. A twin would
+   * have handed the rename session back the very bug this fixes. A twin
+   * would also have put a second `[data-slot="port-label"]` in the DOM, and
+   * `src/port.smoke.test.tsx` (committed, off-limits) reaches for that
+   * selector with `querySelector` and double-clicks whatever comes first.
+   */
+  const labelSpacer = (
+    <span
+      aria-hidden="true"
+      data-slot="ss-port-label-space"
+      style={{
+        flex: "none",
+        width: labelWidth,
+        marginLeft: direction === "in" ? LABEL_CLEARANCE_PX : 0,
+        marginRight: direction === "in" ? 0 : LABEL_CLEARANCE_PX,
+      }}
+    />
+  );
+
   return (
     <NodeShapeFrame<PortShape> shapeId={shape.id} shapeType={PORT_SHAPE_TYPE} w={w} h={h}>
       {/* WHY this exact nesting — `data-block-id` OUTSIDE `data-port-id`, with
@@ -231,22 +344,26 @@ export function PortFace({ shape }: { shape: PortShape }) {
           honest rather than guessed). Break the nesting and the port still
           paints, measures nothing, and can never be wired. */}
       <div
+        ref={faceRef}
         data-block-id={shape.id}
         data-slot="ss-port-face"
         style={{
-          width: w,
-          height: h,
+          // No width and no height: the row IS dot + clearance + label, laid
+          // out in the order the direction asks for, and `NodeShapeFrame`'s
+          // `max-content` wrapper reads that hug back into `props.w`/`h`.
+          // `minHeight` alone is a floor, never a pin — see its constant.
+          minHeight: FACE_MIN_HEIGHT_PX,
           boxSizing: "border-box",
           display: "flex",
           alignItems: "center",
-          // The dot sits on the side its direction faces; the label is
-          // absolutely positioned off the dot by LabeledPort itself, so it
-          // costs the box no width and the measurement stays the authored one.
-          justifyContent: direction === "in" ? "flex-start" : "flex-end",
           padding: `0 ${FACE_INSET_PX}px`,
         }}
       >
-        <span data-port-id={FLOATING_PORT_ID} style={{ display: "inline-flex" }}>
+        {/* The dot sits on the side its direction faces, so the spacer that
+            stands in for the label goes on the other one: before the dot for
+            an `out` port (label to its left), after it for an `in` port. */}
+        {direction === "in" ? null : labelSpacer}
+        <span data-port-id={FLOATING_PORT_ID} style={{ display: "inline-flex", flex: "none" }}>
           <LabeledPort
             direction={TRUNK_DIRECTION[direction]}
             edge={direction === "in" ? "left" : "right"}
@@ -263,6 +380,7 @@ export function PortFace({ shape }: { shape: PortShape }) {
             labelSlot={editing ? <LabelEditor shape={shape} align={align} /> : <RestingLabel name={name} type={type} />}
           />
         </span>
+        {direction === "in" ? labelSpacer : null}
       </div>
     </NodeShapeFrame>
   );

@@ -68,6 +68,15 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
   // be retrofitted once boards exist in the wild.
   static override migrations = createShapePropsMigrationSequence({ sequence: [] });
 
+  // `w`/`h` here are the SEED the shape is born with, not a size it keeps:
+  // `useMeasuredShape` overwrites both from the rendered face on the first
+  // layout pass, the same way it does for `ss-block`. 120x32 is the
+  // document-model contract (documentModel.test.ts:157 asserts exactly this
+  // record), and it is also a sane box for the one frame before the face has
+  // been laid out. A default-named port then SETTLES at 77x32, not 120x32,
+  // because the face hugs "port" rather than padding out to it — measured in
+  // the real app, not assumed. Nothing reads a port's `w` but the engine's
+  // own geometry, so the hug is the whole story: `getGeometry` below.
   override getDefaultProps(): PortShapeProps {
     return { w: 120, h: 32, name: "port", type: "", direction: "out", anchors: [] };
   }
@@ -76,10 +85,18 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
   // a separate label rect: the archive's own rule, recorded at
   // FloatingPortShapeUtil.tsx:47-52 — "A free Port's text is its movable face,
   // not an editor label … Keep the real label bounds hit-testable so one grab
-  // starts the stock translating interaction immediately." One rectangle is
-  // that rule with nothing left to drift, because the face rendered by
-  // PortFace is exactly this box (it is laid out at `props.w × props.h`, so
-  // the measurement pass confirms the box rather than shrinking it to the dot).
+  // starts the stock translating interaction immediately."
+  //
+  // One rectangle only keeps that promise while `w`/`h` really are the painted
+  // face, LABEL INCLUDED — which is a fact about PortFace, not about this
+  // method. It is load-bearing there and stated here because this is where it
+  // gets broken: PortFace lays the face out as dot + clearance + a spacer the
+  // width of the real label, so `NodeShapeFrame`'s `max-content` hug is the
+  // whole token and the measurement pass writes it back. Pin that face to
+  // `props.w` again (it was, once) and the measurement can only confirm the
+  // number the shape was born with: the label then hangs outside this
+  // rectangle, a press on it falls through to the canvas, and a double-click
+  // on it makes tldraw draw a stray `text` shape instead of renaming the port.
   override getGeometry(shape: PortShape) {
     return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true });
   }
