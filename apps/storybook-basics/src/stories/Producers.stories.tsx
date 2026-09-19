@@ -258,3 +258,86 @@ export const Tldraw: Story = {
   render: () => <Bench host="tldraw" />,
   play: async ({ canvasElement }) => playFanIn(canvasElement),
 };
+
+/* ------------------------------------------------------------------ */
+/* The opaque card — a promoted seat counts what the projection lands   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Two cables from outside into `merge/pose`, a member of a loop that starts
+ * OPAQUE. The card's promoted seat `merge/pose` is where the projection
+ * re-points both of them, so it reads "2"; expanding the loop moves both
+ * cables back onto the real `merge/pose` dot, and the "2" moves with them.
+ * The count is of the cables PAINTED at a dot — the host computes it off the
+ * same projection it paints.
+ */
+const OPAQUE_SCENE: HostScene = {
+  nodes: [
+    // 120 tall, not the 84 `ControlFlowToggle`'s `src` uses: at 84 its second
+    // dot (`others`) hangs below the card in a capture — two port-view slots
+    // need the taller body.
+    { id: "src", type: "block", position: { x: 16, y: 40 }, data: { name: "src", view: "port", w: 108, h: 120, ports: { right: ["pose", "others"] } } },
+    { id: "prior", type: "block", position: { x: 16, y: 210 }, data: { name: "prior", view: "port", w: 108, h: 60, ports: { right: ["out"] } } },
+    {
+      id: "loop",
+      type: "region",
+      position: { x: 200, y: 24 },
+      // 330 tall so the expanded frame holds `merge` whole (at 268 it hangs
+      // out of the frame's bottom edge once the loop is opened).
+      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 400, h: 330 },
+    },
+    { id: "merge", type: "block", parentId: "loop", position: { x: 36, y: 86 }, data: { name: "merge", view: "port", w: 156, h: 106, ports: { left: ["pose", "other"], right: ["Pose"] } } },
+  ],
+  edges: [
+    { id: "e-iterable", source: "src", sourceHandle: "others", target: "loop", targetHandle: "Iterable" },
+    { id: "e-seed", source: "src", sourceHandle: "pose", target: "merge", targetHandle: "pose" },
+    { id: "e-prior", source: "prior", sourceHandle: "out", target: "merge", targetHandle: "pose", data: { variant: "delayed" } },
+  ],
+};
+
+function StatefulOpaque() {
+  const [scene, setScene] = useState(OPAQUE_SCENE);
+  return <DomCanvasHost scene={scene} onSceneChange={setScene} width={680} height={380} />;
+}
+
+/** Every badge as `blockId/portId → text`, split at the FIRST `/` so a
+ *  promoted id (`merge/pose`) stays whole. */
+function badgeTexts(root: ParentNode): Record<string, string | undefined> {
+  return Object.fromEntries(Array.from(root.querySelectorAll('[data-slot="port-producers"]')).map((badge) => [keyOfBadge(badge), badge.textContent?.trim()]));
+}
+
+export const OpaqueCard: Story = {
+  name: "Opaque card — a promoted seat counts its re-pointed cables",
+  render: () => <StatefulOpaque />,
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(badgeTexts(canvasElement)).toEqual({ "loop/merge/pose": "2" }));
+    const seat = required<HTMLElement>(canvasElement, '[data-block-id="loop"] [data-port-id="merge/pose"] [data-slot="port-dot"]', "the card's merge/pose seat");
+    const badge = required<HTMLElement>(seat, '[data-slot="port-producers"]', "the seat's badge");
+    const d = Math.hypot(centre(badge).x - centre(seat).x, centre(badge).y - centre(seat).y);
+    const reach = seat.offsetWidth / 2 + portVariantRingOverhangPx(PORT_VARIANTS.v1) + badge.getBoundingClientRect().width / 2;
+    expect(d, "the badge rides the promoted seat").toBeLessThanOrEqual(reach + 0.5);
+
+    // Expand: the same two cables land on the real dot, and the count follows.
+    await userEvent.click(required<HTMLElement>(canvasElement, '[data-region-id="loop"] [data-block-id="loop"] [data-slot="folding-chevron"]', "the loop's chevron"));
+    await waitFor(() => expect(badgeTexts(canvasElement)).toEqual({ "merge/pose": "2" }));
+    expect(canvasElement.querySelector('[data-port-id="merge/pose"]'), "the promoted seat is gone with the card").toBeNull();
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* At rest — the three hosts side by side, for review (no play)         */
+/* ------------------------------------------------------------------ */
+
+export const AtRest: Story = {
+  name: "At rest — all three hosts",
+  render: () => (
+    <div style={{ display: "grid", gap: 16 }}>
+      {(["dom", "reactflow", "tldraw"] as const).map((host) => (
+        <section key={host} data-slot="bench" data-host-kind={host}>
+          <h3 style={{ fontSize: 12, fontWeight: 600, margin: "0 0 4px" }}>{host === "dom" ? "DOM Canvas" : host === "reactflow" ? "React Flow" : "tldraw"}</h3>
+          <Bench host={host} />
+        </section>
+      ))}
+    </div>
+  ),
+};
