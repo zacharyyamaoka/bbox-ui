@@ -543,6 +543,12 @@ export const FontSizePresetsOnly: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // Anchor on a preset row that MUST exist before asserting the Custom row
+    // does not. Without it this check passed against a completely empty DOM
+    // (an independent judge ran it that way, 2026-09-18): "no custom input
+    // here" is trivially true of a panel that rendered nothing at all, so
+    // the story could not distinguish presets-only from broken.
+    await canvas.findByText("Large");
     await expect(canvas.queryByTestId("control-custom-size-input")).toBeNull();
   },
 };

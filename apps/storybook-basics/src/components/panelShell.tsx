@@ -119,7 +119,23 @@ export function PanelShell({
        * "interaction geometry stays host-side" line CLAUDE.md draws
        * everywhere else in this kit.
        */}
-      <div data-slot="panel-shell-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {/* WHY `isolate` on the scroll body: every panel that lives in this shell
+          has something sticky inside it — Problems' group headers, a table's
+          `<thead>` — and sticky needs a z-index to stack above the rows
+          scrolling under it. Without a local stacking context those z values
+          compete in whatever context the HOST put the panel in, so a host
+          overlay at z-index 5 could be pierced by a group header at 10. An
+          independent judge raised exactly that (2026-09-18).
+
+          `isolate` (`isolation: isolate`) makes this element a stacking
+          context, so every z-index inside the panel is resolved against the
+          panel and is invisible outside it. That is what lets the kit keep
+          the internal stacking a sticky header genuinely needs while still
+          honouring the trunk's rule that the core does not claim z-order
+          from its host: the values stay, their REACH does not. Placed on the
+          shell rather than in each panel so a panel added later inherits it
+          without anyone remembering. */}
+      <div data-slot="panel-shell-body" className="isolate min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {children}
       </div>
     </div>

@@ -7,10 +7,37 @@
 // L1 part here (`cn` + shadcn CSS variables, no raw `style={{color}}`).
 "use client";
 
+import { createContext, useContext } from "react";
+
 import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 
 import { cn } from "../lib/utils";
 import { BAR_SIZE_TO_BUTTON_SIZE, useBarSize, type ButtonToggleSize } from "./barSize";
+
+/**
+ * True while rendering inside a `Toolbar`.
+ *
+ * WHY a context rather than a prop each caller passes: a Base UI
+ * `Toolbar.Root` owns ONE roving-focus group, so nesting a second Root
+ * inside the first silently splits keyboard traversal in two — arrow keys
+ * stop at the inner group's edge and wrap, instead of continuing to the
+ * outer toolbar's remaining items. Nothing throws and nothing looks wrong;
+ * it is only reachable by pressing an arrow key, which is why it survived
+ * every visual check and every DOM-presence test and had to be found with a
+ * keyboard fixture (independent judge, 2026-09-18).
+ *
+ * A composite component like `ControlStrip` cannot know whether its caller
+ * put it inside a toolbar, and requiring the caller to say so is a rule that
+ * will be forgotten exactly once. Reading it from context makes "am I the
+ * root?" a question the tree answers rather than the author.
+ */
+const InsideToolbarContext = createContext(false);
+
+/** Whether the calling component is already inside a `Toolbar` root, and so
+ *  must render a group rather than a second root. */
+function useInsideToolbar(): boolean {
+  return useContext(InsideToolbarContext);
+}
 
 /**
  * `Toolbar` is the roving-focus container underneath the floating pill
@@ -32,14 +59,16 @@ import { BAR_SIZE_TO_BUTTON_SIZE, useBarSize, type ButtonToggleSize } from "./ba
  */
 function Toolbar({ className, ...props }: ToolbarPrimitive.Root.Props) {
   return (
-    <ToolbarPrimitive.Root
-      data-slot="toolbar"
-      className={cn(
-        "flex items-center gap-1 outline-none data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch",
-        className,
-      )}
-      {...props}
-    />
+    <InsideToolbarContext.Provider value={true}>
+      <ToolbarPrimitive.Root
+        data-slot="toolbar"
+        className={cn(
+          "flex items-center gap-1 outline-none data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch",
+          className,
+        )}
+        {...props}
+      />
+    </InsideToolbarContext.Provider>
   );
 }
 
@@ -132,4 +161,4 @@ function ToolbarSeparator({ className, ...props }: ToolbarPrimitive.Separator.Pr
   );
 }
 
-export { Toolbar, ToolbarButton, ToolbarGroup, ToolbarLink, ToolbarSeparator };
+export { Toolbar, ToolbarButton, ToolbarGroup, ToolbarLink, ToolbarSeparator, useInsideToolbar };

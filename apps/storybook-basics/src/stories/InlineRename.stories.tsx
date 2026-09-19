@@ -92,6 +92,86 @@ export const UnchangedValueCancels: Story = {
   },
 };
 
+/**
+ * Authored whitespace survives, and an untouched field with whitespace in it
+ * still counts as untouched.
+ *
+ * This is the regression test the suite did not have. Every other story here
+ * uses a value with no leading or trailing space, so none of them could see
+ * that `commit()` validated and committed the same `.trim()`ed string: open a
+ * rename on `"  Draft 1  "`, press Enter having typed nothing, and it fired
+ * `onCommit("Draft 1")` — destroying characters the user authored, on a field
+ * they never edited, because the trimmed draft compared unequal to the
+ * untrimmed value and defeated the unchanged-cancels guard.
+ *
+ * Found by an independent Codex judge (2026-09-18) building its own fixture,
+ * not by this suite. The two assertions below are deliberately BOTH here:
+ * one pins the truthful-rendering rule (nothing silently edits what you
+ * typed), the other pins the guard that the same bug broke.
+ */
+export const WhitespaceIsAuthoredText: Story = {
+  args: {
+    value: "  Draft 1  ",
+    onCommit: fn(),
+    onCancel: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const input = await canvas.findByRole("textbox");
+    // The field shows exactly what is stored — no normalization on the way in.
+    await expect(input).toHaveValue("  Draft 1  ");
+
+    // Untouched Enter is a dismiss, not a rename.
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onCancel).toHaveBeenCalledTimes(1);
+    await expect(args.onCommit).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * A real edit keeps every character the user typed, trailing space included.
+ * A host that wants names trimmed does it in its own `onCommit`, where it is
+ * a visible decision rather than one this component made silently.
+ */
+export const EditedTextCommitsVerbatim: Story = {
+  args: {
+    value: "Draft 1",
+    onCommit: fn(),
+    onCancel: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const input = await canvas.findByRole("textbox");
+    await userEvent.clear(input);
+    await userEvent.type(input, "  Renamed  ");
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onCommit).toHaveBeenCalledWith("  Renamed  ");
+  },
+};
+
+/**
+ * Validation still reads the trimmed draft, so a name of pure whitespace is
+ * refused exactly like an empty one — the half of the old `.trim()` that was
+ * doing real work, kept.
+ */
+export const WhitespaceOnlyNameRefused: Story = {
+  args: {
+    value: "Draft 1",
+    onCommit: fn(),
+    onCancel: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const input = await canvas.findByRole("textbox");
+    await userEvent.clear(input);
+    await userEvent.type(input, "   ");
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByText("Give this draft a name.")).toBeInTheDocument();
+    await expect(args.onCommit).not.toHaveBeenCalled();
+    await expect(args.onCancel).not.toHaveBeenCalled();
+  },
+};
+
 /** The default validator refuses an empty name with "Give this draft a
  *  name." and keeps editing open — neither callback fires. */
 export const EmptyNameRefused: Story = {

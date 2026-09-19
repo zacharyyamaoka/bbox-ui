@@ -279,8 +279,14 @@ export const DeepPathCompacted: Story = {
     await userEvent.click(ellipsis);
 
     // Truthful-rendering guarantee: nothing the `…` hides is unreachable.
+    //
+    // `findByText`, not `getByText`: the menu portals into <body> and mounts
+    // a tick after the click, so a synchronous read races it — the same
+    // class of failure as the opening assertion above, one step later, and
+    // it only surfaced under the load of running both vitest projects
+    // together (2026-09-18).
     for (const name of HIDDEN_BY_COMPACTION) {
-      await expect(body.getByText(name)).toBeInTheDocument();
+      await expect(await body.findByText(name)).toBeInTheDocument();
     }
 
     await userEvent.keyboard("{Escape}");

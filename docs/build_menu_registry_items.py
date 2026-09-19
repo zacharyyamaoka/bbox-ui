@@ -274,19 +274,24 @@ def main() -> None:
     reg["items"] = [existing[n] for n in order]
     out = json.dumps(reg, indent=2) + "\n"
 
+    # WHY --check no longer returns here: it used to, which meant the freshness
+    # test PASSED and the two safety assertions below — the sibling rule and
+    # the unpublished-dependency check, the whole reason this generator exists
+    # — never ran at all. A stale-but-broken registry and a fresh-but-broken
+    # one both reported "up to date". Caught by an independent judge, 2026-09-18.
+    # Freshness is the cheapest of the three checks, not a substitute for them.
     if check:
         if out != REGISTRY.read_text():
             print("registry.json is STALE — re-run without --check")
             raise SystemExit(1)
-        print("registry.json is up to date")
-        return
-
-    REGISTRY.write_text(out)
-    print(f"registry.json: {len(reg['items'])} items ({len(built)} from the menu kit)")
-    for it in built:
-        n_comp = sum(1 for f in it["files"] if f["type"] == "registry:component")
-        print(f"  {it['name']:<18} {len(it['files']):>2} files ({n_comp} components)  "
-              f"deps: {', '.join(it['dependencies']) or '—'}")
+        print("registry.json is up to date; verifying its contents too")
+    else:
+        REGISTRY.write_text(out)
+        print(f"registry.json: {len(reg['items'])} items ({len(built)} from the menu kit)")
+        for it in built:
+            n_comp = sum(1 for f in it["files"] if f["type"] == "registry:component")
+            print(f"  {it['name']:<18} {len(it['files']):>2} files ({n_comp} components)  "
+                  f"deps: {', '.join(it['dependencies']) or '—'}")
 
     # The sibling rule, asserted rather than trusted: every relative import in
     # every shipped file must resolve against its own TARGET layout, not its

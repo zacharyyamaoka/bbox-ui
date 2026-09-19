@@ -11,6 +11,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import type { RefObject } from "react";
 
 import { cn } from "../lib/utils";
 import { Button } from "./button";
@@ -49,6 +50,12 @@ export interface SplitButtonProps {
   size?: ButtonToggleSize;
   /** aria-label for the chevron segment; defaults to "`{label}` options". */
   menuLabel?: string;
+  /** Portal target inside the host's token scope (host-contract §4,
+   *  docs/menus/MENU-KIT-DESIGN.md:661). Forwarded straight to the chevron's
+   *  `DropdownMenuContent` — without it the menu portals to `document.body`,
+   *  outside a themed host's own scope, and paints with the document's CSS
+   *  variables instead of the host's. */
+  container?: HTMLElement | ShadowRoot | RefObject<HTMLElement | ShadowRoot | null> | null;
   className?: string;
 }
 
@@ -66,6 +73,7 @@ export function SplitButton({
   state = "normal",
   size,
   menuLabel,
+  container,
   className,
 }: SplitButtonProps) {
   const disabled = state === "disabled";
@@ -110,7 +118,7 @@ export function SplitButton({
             </Button>
           }
         />
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" container={container}>
           {items.map((item) => (
             <DropdownMenuItem key={item.id} onClick={item.onSelect}>
               {item.label}

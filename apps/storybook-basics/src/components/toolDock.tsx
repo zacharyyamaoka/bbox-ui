@@ -162,6 +162,28 @@ export interface ToolDockProps {
   /** The trailing "+" (screenshot 04's library trigger). Omitted entirely
       when the host has no library surface to show. */
   librarySlot?: LibrarySlotProps;
+  /**
+   * Render order across BOTH lists, by id. Omit it and the dock renders
+   * every `simpleTools` cell and then every `families` cell — the original
+   * behaviour, unchanged for every existing caller.
+   *
+   * WHY this exists: without it the dock cannot draw the screenshot it was
+   * ported from. `simpleTools`' own doc comment above names "Cursor, Frame,
+   * Text in screenshot 04", but that screenshot puts Text AFTER all four
+   * families (cursor · frame · block▾ · block▾ · shape▾ · draw▾ · T · +) —
+   * and rendering one whole list before the other can only ever produce
+   * Text third. The comment described the screenshot while the code
+   * contradicted it; an independent judge reproduced the mismatch by
+   * building the dock from screenshot 04's own tools and reading back
+   * "Select, Frame, Text, Blocks, Shapes, Draw". Two flat lists cannot
+   * express an interleaving, so the order has to become data.
+   *
+   * Ids not named here are appended in their original order rather than
+   * dropped: a host that lists three of its eight tools gets those three
+   * first and still sees the other five, instead of silently losing them.
+   * An id naming nothing is ignored.
+   */
+  order?: readonly string[];
   testIdPrefix?: string;
 }
 
@@ -404,8 +426,63 @@ export function ToolDock({
   onArm,
   onSelectItem,
   librarySlot,
+  order,
   testIdPrefix,
 }: ToolDockProps) {
+  // One ordered list of cells, so `order` can interleave the two sources.
+  // Each entry stays a thunk rather than an element: `cells` is rebuilt on
+  // every render anyway, and deferring keeps the two branches' props —
+  // which read `preferences` and the callbacks — evaluated in the same place
+  // they were before, not hoisted into a different closure.
+  const cells: { id: string; render: () => ReactNode }[] = [
+    ...simpleTools.map((tool) => ({
+      id: tool.id,
+      render: () => (
+        <ToolbarButton
+          key={tool.id}
+          aria-label={tool.label}
+          aria-pressed={tool.active}
+          disabled={tool.disabled}
+          title={tool.disabled ? (tool.disabledTitle ?? `${tool.label} is unavailable`) : tool.label}
+          data-testid={testIdPrefix ? `${testIdPrefix}-tool-${tool.id}` : undefined}
+          onClick={tool.onSelect}
+        >
+          {tool.icon}
+        </ToolbarButton>
+      ),
+    })),
+    ...families.map((family) => ({
+      id: family.id,
+      render: () => (
+        <FamilyCell
+          key={family.id}
+          family={family}
+          activeToolId={activeToolId}
+          activeVariant={activeVariant}
+          remembered={preferences[family.prefKey]}
+          testIdPrefix={testIdPrefix}
+          onArm={onArm}
+          onSelectItem={(toolId) => {
+            // The kit owns "which prefKey this family remembers"; the
+            // host only ever gets told the tool to switch to.
+            onPreferencesChange({ ...preferences, [family.prefKey]: toolId });
+            onSelectItem(toolId);
+          }}
+        />
+      ),
+    })),
+  ];
+
+  // Named ids first, in the order given; everything else keeps its original
+  // relative position behind them. Appending rather than dropping is what
+  // stops a partial `order` from silently losing a tool the host declared.
+  const ordered = order
+    ? [
+        ...order.map((id) => cells.find((cell) => cell.id === id)).filter((cell) => cell !== undefined),
+        ...cells.filter((cell) => !order.includes(cell.id)),
+      ]
+    : cells;
+
   return (
     <div
       data-slot="tool-dock"
@@ -415,36 +492,7 @@ export function ToolDock({
       )}
     >
       <Toolbar aria-label="Tools">
-        {simpleTools.map((tool) => (
-          <ToolbarButton
-            key={tool.id}
-            aria-label={tool.label}
-            aria-pressed={tool.active}
-            disabled={tool.disabled}
-            title={tool.disabled ? (tool.disabledTitle ?? `${tool.label} is unavailable`) : tool.label}
-            data-testid={testIdPrefix ? `${testIdPrefix}-tool-${tool.id}` : undefined}
-            onClick={tool.onSelect}
-          >
-            {tool.icon}
-          </ToolbarButton>
-        ))}
-        {families.map((family) => (
-          <FamilyCell
-            key={family.id}
-            family={family}
-            activeToolId={activeToolId}
-            activeVariant={activeVariant}
-            remembered={preferences[family.prefKey]}
-            testIdPrefix={testIdPrefix}
-            onArm={onArm}
-            onSelectItem={(toolId) => {
-              // The kit owns "which prefKey this family remembers"; the
-              // host only ever gets told the tool to switch to.
-              onPreferencesChange({ ...preferences, [family.prefKey]: toolId });
-              onSelectItem(toolId);
-            }}
-          />
-        ))}
+        {ordered.map((cell) => cell.render())}
         {librarySlot ? (
           <>
             <ToolbarSeparator />

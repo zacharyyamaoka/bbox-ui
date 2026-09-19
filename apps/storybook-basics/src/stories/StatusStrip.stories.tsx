@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 import { Code2, HelpCircle, Scan, ZoomIn, ZoomOut } from "lucide-react";
@@ -52,7 +52,9 @@ export const ActiveToggle: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const button = canvas.getByRole("button", { name: /board overview/i });
+    // `findByRole`, not `getByRole`, as the first call — see CLAUDE.md,
+    // "Verifying story play functions".
+    const button = await canvas.findByRole("button", { name: /board overview/i });
     await expect(button).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(button);
     await expect(button).toHaveAttribute("aria-pressed", "true");
@@ -83,7 +85,9 @@ export const WithZoomControls: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText("100%")).toBeInTheDocument();
+    // `findByText`, not `getByText`, as the first call — see CLAUDE.md,
+    // "Verifying story play functions".
+    await expect(await canvas.findByText("100%")).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "Zoom in" }));
     await expect(canvas.getByText("110%")).toBeInTheDocument();
   },
@@ -126,6 +130,83 @@ export const OddItemCount: Story = {
       <StatusStrip items={items}>
         <span>readout</span>
       </StatusStrip>
+    );
+  },
+};
+
+/**
+ * Every state above, side by side (docs/menus/MENU-KIT-DESIGN.md:646) — the
+ * comparison a review actually needs, not six separate story entries
+ * clicked through one at a time. A strip is a single row, so unlike
+ * `CompareReview`'s gallery there is nothing here worth scaling down —
+ * these are the exact same non-interactive renders their single-purpose
+ * stories above use.
+ */
+export const AllStates: Story = {
+  render: () => {
+    const cells: { label: string; content: ReactNode }[] = [
+      {
+        label: "Default — screenshot 06/07 cluster: frames · problems(99+) · 45% · dev(●) · help",
+        content: (
+          <StatusStrip
+            items={[
+              { id: "frames", icon: <Scan className="size-4" />, label: "Board overview and saved views", active: true, onSelect: fn() },
+              { id: "problems", icon: <ProblemsBadge count={175} />, label: "Problems — 175 issues", onSelect: fn() },
+              { id: "dev", icon: <Code2 className="size-4" />, label: "Development views — new Preview available", indicator: "success", onSelect: fn() },
+              { id: "help", icon: <HelpCircle className="size-4" />, label: "Help", onSelect: fn() },
+            ]}
+          >
+            <span>45%</span>
+          </StatusStrip>
+        ),
+      },
+      {
+        label: "Active toggle — pressed state (aria-pressed=true)",
+        content: (
+          <StatusStrip
+            items={[
+              { id: "frames", icon: <Scan className="size-4" />, label: "Board overview and saved views", active: true, onSelect: fn() },
+              { id: "help", icon: <HelpCircle className="size-4" />, label: "Help", onSelect: fn() },
+            ]}
+          />
+        ),
+      },
+      {
+        label: "Indicators and badges — every indicator tone plus a plain numeric/text badge",
+        content: (
+          <StatusStrip
+            items={[
+              { id: "success", icon: <Code2 className="size-4" />, label: "Success indicator", indicator: "success", onSelect: fn() },
+              { id: "warning", icon: <Code2 className="size-4" />, label: "Warning indicator", indicator: "warning", onSelect: fn() },
+              { id: "danger", icon: <Code2 className="size-4" />, label: "Danger indicator", indicator: "danger", onSelect: fn() },
+              { id: "badge", icon: <Scan className="size-4" />, label: "Plain numeric badge", badge: 3, onSelect: fn() },
+              { id: "badge-text", icon: <Scan className="size-4" />, label: "Plain text badge", badge: "new", onSelect: fn() },
+            ]}
+          />
+        ),
+      },
+      {
+        label: "No readout — items only, no children segment or its flanking separators",
+        content: (
+          <StatusStrip
+            items={[
+              { id: "frames", icon: <Scan className="size-4" />, label: "Board overview", onSelect: fn() },
+              { id: "help", icon: <HelpCircle className="size-4" />, label: "Help", onSelect: fn() },
+            ]}
+          />
+        ),
+      },
+    ];
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {cells.map(({ label, content }) => (
+          <div key={label} className="flex flex-col gap-1.5">
+            <span className="text-muted-foreground text-xs">{label}</span>
+            {content}
+          </div>
+        ))}
+      </div>
     );
   },
 };

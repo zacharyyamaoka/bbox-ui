@@ -20,7 +20,7 @@
 "use client";
 
 import { AlertTriangle, ArrowLeft, MoreHorizontal } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { useCallback, useRef, useState } from "react";
 
 import { Bar } from "./bar";
@@ -111,6 +111,14 @@ export interface DraftBarProps {
    *  DraftModeBar.tsx:172-179) — typed as `SplitButtonItem` directly rather
    *  than repeating its `{id, label, onSelect()}` shape under a new name. */
   mergeMenuItems: readonly SplitButtonItem[];
+  /** Portal target inside the host's token scope (host-contract §4,
+   *  docs/menus/MENU-KIT-DESIGN.md:661). Forwarded to the "···" overflow
+   *  menu and passed straight through to `SplitButton` for its own Merge
+   *  chevron menu — one prop set once on `DraftBar` covers both popups.
+   *  Without it either menu portals to `document.body`, outside a themed
+   *  host's scope, and paints with the document's CSS variables instead of
+   *  the host's. */
+  container?: HTMLElement | ShadowRoot | RefObject<HTMLElement | ShadowRoot | null> | null;
   className?: string;
 }
 
@@ -171,6 +179,7 @@ export function DraftBar({
   onMerge,
   mergeState,
   mergeMenuItems,
+  container,
   className,
 }: DraftBarProps) {
   const [renaming, setRenaming] = useState(false);
@@ -255,7 +264,7 @@ export function DraftBar({
                     </Button>
                   }
                 />
-                <DropdownMenuContent align="start">
+                <DropdownMenuContent align="start" container={container}>
                   {overflowItems.map((item) => (
                     <DropdownMenuItem
                       key={item.id}
@@ -315,6 +324,7 @@ export function DraftBar({
               items={mergeMenuItems}
               state={resolvedMergeState}
               menuLabel="Merge options"
+              container={container}
             />
           </div>
         }

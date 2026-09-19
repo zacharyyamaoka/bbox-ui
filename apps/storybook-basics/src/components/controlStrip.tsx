@@ -77,7 +77,7 @@ import {
   type ControlTrigger,
 } from "./controlRegistry";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
-import { Toolbar, ToolbarButton, ToolbarGroup, ToolbarSeparator } from "./toolbar";
+import { Toolbar, ToolbarButton, ToolbarGroup, ToolbarSeparator, useInsideToolbar } from "./toolbar";
 
 export interface ControlStripProps<K extends string = string> {
   composition: ControlComposition<K>;
@@ -95,6 +95,26 @@ export interface ControlStripProps<K extends string = string> {
       `editor.markEventAsHandled`, or nothing for a host with no such
       concept) — wired onto every panel's own pointer-down-capture. */
   onPanelPointerDownCapture?: PointerEventHandler;
+  /**
+   * The host's colour picker, rendered into the 22nd cell of any `swatches`
+   * control that declares `custom` — screenshot 01's rainbow well.
+   *
+   * WHY this had to exist here and not only on `ControlPanel`: the panel
+   * already accepted `customColorSlot`, but `ControlStrip` — the component
+   * every host actually renders, and the only thing that constructs the
+   * panels — never exposed or forwarded it. So the well was unreachable in
+   * practice: an independent judge opened the fill popover and found the
+   * rainbow cell was an `aria-hidden` span with no interaction behind it,
+   * with the only real buttons being preset swatches. A slot nothing can
+   * fill is indistinguishable from a decoration, which is exactly what it
+   * had become.
+   *
+   * Still omittable: with no slot the cell stays the placeholder it is
+   * today, because the picker itself is deliberately a separate port (kit
+   * omission list) and shipping a half-picker would be worse than shipping
+   * the seam for one.
+   */
+  customColorSlot?: ReactNode;
   testIdPrefix?: string;
   /** Not in the design doc's props sketch, added here because this
       component wraps `Toolbar` (`toolbar.tsx`), which — like every Base UI
@@ -112,11 +132,29 @@ export function ControlStrip<K extends string>({
   container,
   autoFocus,
   onPanelPointerDownCapture,
+  customColorSlot,
   testIdPrefix = "bbox",
   "aria-label": ariaLabel,
 }: ControlStripProps<K>) {
+  // WHY the root element is conditional: a Base UI `Toolbar.Root` owns ONE
+  // roving-focus group, so rendering a second one inside the first splits
+  // arrow-key traversal in two. The design's own composition puts this strip
+  // INSIDE `FloatingToolbar` (which is itself a `Toolbar`) alongside sibling
+  // controls like Arrange — and in that arrangement, pressing Right from the
+  // strip's last control wrapped back to its own first control instead of
+  // continuing to Arrange. Reproduced with a keyboard fixture by an
+  // independent judge (2026-09-18); invisible to every DOM-presence test and
+  // every screenshot, because nothing renders wrongly — only focus moves
+  // wrongly.
+  //
+  // Rendering a `ToolbarGroup` when nested keeps the semantics right in both
+  // shapes: standalone, this IS the toolbar; nested, it is one group of items
+  // belonging to the toolbar that already exists. `useInsideToolbar` reads
+  // that from context, so no caller has to remember which case it is in.
+  const nested = useInsideToolbar();
+  const Root = nested ? ToolbarGroup : Toolbar;
   return (
-    <Toolbar
+    <Root
       aria-label={ariaLabel}
       data-slot="control-strip"
       // WHY two names on the same value: MENU-KIT-DESIGN.md §3.3 names the
@@ -147,13 +185,14 @@ export function ControlStrip<K extends string>({
                 container={container}
                 autoFocus={autoFocus}
                 onPanelPointerDownCapture={onPanelPointerDownCapture}
+                customColorSlot={customColorSlot}
                 testIdPrefix={testIdPrefix}
               />
             ))}
           </ToolbarGroup>
         </Fragment>
       ))}
-    </Toolbar>
+    </Root>
   );
 }
 
@@ -163,6 +202,9 @@ interface TriggerShapeProps<K extends string> {
   container?: HTMLElement | null;
   autoFocus?: boolean;
   onPanelPointerDownCapture?: PointerEventHandler;
+  /** Forwarded unchanged from `ControlStripProps.customColorSlot` — only the
+      panel of a `custom` swatches control ever renders it. */
+  customColorSlot?: ReactNode;
   testIdPrefix: string;
 }
 
@@ -231,6 +273,7 @@ function PopoverTriggerShape<K extends string>({
   container,
   autoFocus,
   onPanelPointerDownCapture,
+  customColorSlot,
   testIdPrefix,
 }: TriggerShapeProps<K>) {
   const current = selectedControlOption(control);
@@ -274,7 +317,12 @@ function PopoverTriggerShape<K extends string>({
         // WHY warns against.
         onPointerDownCapture={onPanelPointerDownCapture}
       >
-        <ControlPanel control={control} glyphs={glyphs} testIdPrefix={testIdPrefix} />
+        <ControlPanel
+          control={control}
+          glyphs={glyphs}
+          customColorSlot={customColorSlot}
+          testIdPrefix={testIdPrefix}
+        />
       </PopoverContent>
     </Popover>
   );

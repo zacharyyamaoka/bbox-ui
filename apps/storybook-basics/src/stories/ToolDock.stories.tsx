@@ -147,6 +147,7 @@ function ToolDockHarness(props: {
   onArm?: ToolDockProps["onArm"];
   onSelectItem?: ToolDockProps["onSelectItem"];
   withLibrary?: boolean;
+  order?: readonly string[];
   testIdPrefix?: string;
 }) {
   const [activeToolId, setActiveToolId] = useState(props.initialActiveToolId ?? "select");
@@ -159,6 +160,7 @@ function ToolDockHarness(props: {
       activeToolId={activeToolId}
       activeVariant={activeVariant}
       families={DEMO_FAMILIES}
+      order={props.order}
       preferences={preferences}
       onPreferencesChange={setPreferences}
       testIdPrefix={props.testIdPrefix ?? "tool-dock"}
@@ -262,6 +264,74 @@ type Story = StoryObj<typeof meta>;
  */
 export const Default: Story = {
   render: () => <ToolDockHarness />,
+};
+
+/** Every dock cell's accessible name, in rendered order. */
+function positions(root: HTMLElement): string[] {
+  return [...root.querySelectorAll<HTMLElement>("[data-slot='tool-dock'] button")]
+    .map((button) => button.getAttribute("aria-label"))
+    .filter((label): label is string => Boolean(label));
+}
+
+/**
+ * docs/menus/screenshots/04-bottom-tool-toolbar.png, in its ACTUAL order —
+ * which, until `order` existed, this component could not draw.
+ *
+ * The screenshot runs cursor · frame · insert▾ · bbox▾ · shape▾ · draw▾ · T · +,
+ * so the Text cell sits AFTER all four families. `simpleTools`' own doc
+ * comment named "Cursor, Frame, Text in screenshot 04" while the render
+ * emitted every simple tool before every family, which can only ever put
+ * Text third. An independent judge (2026-09-18) built the dock from this
+ * screenshot's own tools and read back "Select, Frame, Text, Blocks, Shapes,
+ * Draw" — the comment described the picture, the code contradicted it, and
+ * no story had ever asserted the sequence, so nothing caught it.
+ *
+ * The assertion below is on the rendered ORDER, not on presence: every one
+ * of these cells was already present before the fix. Presence was never the
+ * thing in doubt.
+ */
+export const ScreenshotOrder: Story = {
+  render: () => (
+    <ToolDockHarness
+      order={["select", "frame", "insert", "bbox", "shape", "draw", "text"]}
+      withLibrary
+      testIdPrefix="screenshot-order"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole("toolbar", { name: "Tools" });
+
+    // WHY a substring predicate and not `indexOf(label)`: a FAMILY face is
+    // labelled with its resolved member AND its family — "Block — open
+    // Insert tools" (toolDock.tsx:286) — so the family's own name never
+    // appears as a whole label. A simple tool's label IS exact. Matching on
+    // containment reads both without the test having to know which is which.
+    const at = (needle: string) => positions(canvasElement).findIndex((l) => l.includes(needle));
+
+    // Text after every family is the whole point of `order`; without it the
+    // dock could only ever render Text third.
+    await expect(at("Text")).toBeGreaterThan(at("Drawing"));
+    await expect(at("Text")).toBeGreaterThan(at("Shapes"));
+    await expect(at("Cursor")).toBeLessThan(at("Frame"));
+    await expect(at("Frame")).toBeLessThan(at("Insert"));
+  },
+};
+
+/**
+ * Omitting `order` keeps the original behaviour exactly — every simple tool,
+ * then every family. Pinned because the fix above had to be adds-only: this
+ * is the story that fails if `order`'s default ever stops being "what it did
+ * before".
+ */
+export const DefaultOrderUnchanged: Story = {
+  render: () => <ToolDockHarness testIdPrefix="default-order" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole("toolbar", { name: "Tools" });
+    const at = (needle: string) => positions(canvasElement).findIndex((l) => l.includes(needle));
+    await expect(at("Text")).toBeLessThan(at("Shapes"));
+  },
 };
 
 /**
@@ -425,6 +495,10 @@ export const NoLibrary: Story = {
   render: () => <ToolDockHarness />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // Same reasoning as FontSizePresetsOnly: a dock that rendered nothing
+    // also has no library trigger, so the negative assertion alone proved
+    // nothing. Anchor on the toolbar itself first.
+    await canvas.findByRole("toolbar", { name: "Tools" });
     await expect(canvas.queryByTestId("tool-dock-library")).toBeNull();
   },
 };

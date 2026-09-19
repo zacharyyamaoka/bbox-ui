@@ -159,7 +159,11 @@ export const DragToReorder: Story = {
     // this just pins the grip's presence and its keyboard affordance so a
     // regression that removes `useSortable`'s wiring fails loudly here.
     const canvas = within(canvasElement);
-    const grips = canvas.getAllByTitle("Drag to reorder");
+    // `findAllBy*`, not `getAllBy*`, as the first call: see CLAUDE.md,
+    // "Verifying story play functions" — a `getBy*` demands its element on
+    // the first tick and flakes under load before this story finishes
+    // mounting.
+    const grips = await canvas.findAllByTitle("Drag to reorder");
     await expect(grips.length).toBe(4);
     // WHY "sortable", not "draggable" (fixed 2026-09-18): this pins
     // `useSortable`'s (`@dnd-kit/sortable`) own wiring, and that hook's
@@ -193,7 +197,7 @@ export const ReadOnly: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled();
+    await expect(await canvas.findByRole("button", { name: "Save" })).toBeDisabled();
   },
 };
 
@@ -216,6 +220,16 @@ export const ReorderLocked: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // WHY `findAllByLabelText` first, not the `queryByTitle(...)
+    // .not.toBeInTheDocument()` below on its own (fixed 2026-09-18, see
+    // CLAUDE.md "Verifying story play functions"): a row's "Actions for
+    // <label>" menu button renders whether or not dragging is locked, so
+    // awaiting it first proves the panel actually mounted its five rows
+    // before trusting the grip-absence check below. Without it, a
+    // regression that rendered nothing at all — an empty DOM — would have
+    // satisfied `.not.toBeInTheDocument()` just as well, and this exact
+    // story shipped that way and passed against a blank render.
+    await canvas.findAllByLabelText(/^Actions for/);
     // Grips still render (inert) but no sortable wiring is mounted.
     await expect(canvas.queryByTitle("Drag to reorder")).not.toBeInTheDocument();
   },
@@ -240,7 +254,7 @@ export const LandmarksLocked: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("button", { name: "Save" })).toBeDisabled();
+    await expect(await canvas.findByRole("button", { name: "Save" })).toBeDisabled();
   },
 };
 
@@ -261,7 +275,7 @@ export const Empty: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByTestId("frames-panel-empty")).toBeInTheDocument();
+    await expect(await canvas.findByTestId("frames-panel-empty")).toBeInTheDocument();
   },
 };
 
@@ -311,8 +325,9 @@ export const InlineRenameFailure: Story = {
     // rename field it opens is NOT portaled, so everything after the click
     // stays on `canvas`.
     const body = within(document.body);
-    // Empty name: InlineRename's own default validation, onRename never called.
-    await userEvent.click(canvas.getAllByLabelText(/^Actions for/)[0]);
+    // `findAllBy*`, not `getAllBy*`, as the first call — see CLAUDE.md,
+    // "Verifying story play functions".
+    await userEvent.click((await canvas.findAllByLabelText(/^Actions for/))[0]);
     await userEvent.click(await body.findByText("Rename"));
     await userEvent.clear(canvas.getByRole("textbox"));
     await userEvent.keyboard("{Enter}");
@@ -344,4 +359,122 @@ export const UnknownKind: Story = {
       />
     </Shell>
   ),
+};
+
+/**
+ * Every state above, side by side — the comparison this review actually
+ * needs (docs/menus/MENU-KIT-DESIGN.md:646), not one story per state read
+ * in isolation one at a time. Each cell is the same non-interactive render
+ * its single-purpose story above uses; nothing here is faked or resized —
+ * a `Shell` is already only 320×560, small enough to lay several out in a
+ * wrapping grid without scaling.
+ */
+export const AllStates: Story = {
+  render: () => {
+    const cells: { label: string; content: ReactNode }[] = [
+      {
+        label: "Default — cards mode, save-view form, reorderable rows",
+        content: (
+          <FramesPanel
+            items={SCREENSHOT_ITEMS}
+            kinds={KINDS}
+            mode="cards"
+            onModeChange={fn()}
+            onFocus={fn()}
+            onRename={() => ({ ok: true })}
+            saveView={{ suggestedName: "View 1", onSave: () => ({ ok: true }) }}
+            reorder={{ onReorder: fn() }}
+          />
+        ),
+      },
+      {
+        label: "Empty — no items yet",
+        content: (
+          <FramesPanel
+            items={[]}
+            kinds={KINDS}
+            mode="cards"
+            onModeChange={fn()}
+            onFocus={fn()}
+            onRename={() => ({ ok: true })}
+            saveView={{ suggestedName: "View 1", onSave: () => ({ ok: true }) }}
+          />
+        ),
+      },
+      {
+        label: "List mode — no thumbnails, just grip · icon · name · menu",
+        content: (
+          <FramesPanel
+            items={SCREENSHOT_ITEMS}
+            kinds={KINDS}
+            mode="list"
+            onModeChange={fn()}
+            onFocus={fn()}
+            onRename={() => ({ ok: true })}
+          />
+        ),
+      },
+      {
+        label: "Read-only — save-view/rename/delete disabled, no drag grips wired",
+        content: (
+          <FramesPanel
+            items={SCREENSHOT_ITEMS.slice(0, 5)}
+            kinds={KINDS}
+            mode="cards"
+            onModeChange={fn()}
+            readOnly
+            notices={["This document is read-only. Saved views cannot be changed."]}
+            onFocus={fn()}
+            onRename={() => ({ ok: false, reason: "This document is read-only." })}
+            saveView={{ suggestedName: "View 1", onSave: () => ({ ok: false, reason: "Read-only." }) }}
+            reorder={{ onReorder: fn() }}
+          />
+        ),
+      },
+      {
+        label: "Reorder-locked — everything else stays live, only dragging is off",
+        content: (
+          <FramesPanel
+            items={SCREENSHOT_ITEMS.slice(0, 5)}
+            kinds={KINDS}
+            mode="list"
+            onModeChange={fn()}
+            reorderLocked
+            notices={["Frame ordering uses an unknown format and will not be changed."]}
+            onFocus={fn()}
+            onRename={() => ({ ok: true })}
+            reorder={{ onReorder: fn() }}
+          />
+        ),
+      },
+      {
+        label: "Unknown kind — fallback caption, no icon",
+        content: (
+          <FramesPanel
+            items={[{ key: "shape:x", kind: "mystery-shape", label: "region_7", caption: "REGION" }]}
+            kinds={KINDS}
+            mode="cards"
+            onModeChange={fn()}
+            onFocus={fn()}
+            onRename={() => ({ ok: true })}
+          />
+        ),
+      },
+    ];
+
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 24 }}>
+        {cells.map(({ label, content }) => (
+          <div key={label} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ font: "12px monospace", opacity: 0.6 }}>{label}</span>
+            <div style={{ height: 560, width: 320 }}>
+              <PanelShell eyebrow="RIGHT PANEL" title="Frames" onClose={fn()}>
+                {content}
+              </PanelShell>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  },
 };

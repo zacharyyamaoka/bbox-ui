@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
@@ -252,7 +252,9 @@ export const NoSnapshotLoaded: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByTestId("compare-history-row-live")).toHaveAttribute("data-current", "true");
+    // `findBy*`, not `getBy*`, as the first call — see CLAUDE.md,
+    // "Verifying story play functions".
+    await expect(await canvas.findByTestId("compare-history-row-live")).toHaveAttribute("data-current", "true");
     await expect(canvas.getByTestId("compare-history-pick-live")).toBeDisabled();
     await expect(canvas.getByTestId("compare-no-snapshot")).toHaveTextContent("No snapshot loaded.");
     await expect(canvas.getByTestId("compare-problem")).toHaveTextContent(/No prior versions found/);
@@ -273,7 +275,11 @@ export const IdenticalVersions: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByTestId("compare-history-pick-v1")).toHaveAttribute("aria-current", "true");
+    // `findBy*` first — see CLAUDE.md, "Verifying story play functions" —
+    // so the `queryByTestId(...).not.toBeInTheDocument()` below has
+    // something real to be false about rather than passing against a
+    // story that never finished mounting.
+    await expect(await canvas.findByTestId("compare-history-pick-v1")).toHaveAttribute("aria-current", "true");
     await expect(canvas.queryByTestId("compare-problem")).not.toBeInTheDocument();
     await expect(canvas.getByTestId("compare-no-changes")).toHaveTextContent("These two versions are identical.");
   },
@@ -287,7 +293,8 @@ export const ElementSelected: Story = {
   render: () => <Demo comparison={COMPARISON} versions={[LIVE_RECORD, V1_RECORD]} initialSelectedVersionId={V1_RECORD.id} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByTestId("compare-figma-empty")).toBeInTheDocument();
+    // `findBy*` first — see CLAUDE.md, "Verifying story play functions".
+    await expect(await canvas.findByTestId("compare-figma-empty")).toBeInTheDocument();
     await userEvent.click(canvas.getByTestId(PREDICT_ELEMENT_TESTID));
     await expect(canvas.getByTestId(PREDICT_ELEMENT_TESTID)).toHaveAttribute("data-selected", "true");
     await expect(canvas.queryByTestId("compare-figma-empty")).not.toBeInTheDocument();
@@ -303,7 +310,10 @@ export const SideBySideVsOverlay: Story = {
   render: () => <Demo comparison={COMPARISON} versions={[LIVE_RECORD, V1_RECORD]} initialSelectedVersionId={V1_RECORD.id} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByTestId("compare-mode-side-by-side")).toHaveAttribute("data-pressed");
+    // `findBy*` first — see CLAUDE.md, "Verifying story play functions" —
+    // so the negative assertion right after it has something real to be
+    // false about.
+    await expect(await canvas.findByTestId("compare-mode-side-by-side")).toHaveAttribute("data-pressed");
     await expect(canvas.queryByTestId("compare-blend")).not.toBeInTheDocument();
 
     await userEvent.click(canvas.getByTestId("compare-mode-overlay"));
@@ -324,7 +334,7 @@ export const OverlayDisabledWithoutLinkedCameras: Story = {
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByTestId("compare-mode-overlay")).toBeDisabled();
+    await expect(await canvas.findByTestId("compare-mode-overlay")).toBeDisabled();
   },
 };
 
@@ -347,8 +357,9 @@ export const PropertiesVsCode: Story = {
     // element is selected in the list beside it (otherwise it's the
     // "Select an edited element" empty state — see `ElementSelected`
     // above); select one here purely to get a properties table on screen
-    // for the tab-switch this story actually exercises.
-    await userEvent.click(canvas.getByTestId(PREDICT_ELEMENT_TESTID));
+    // for the tab-switch this story actually exercises. `findBy*` first —
+    // see CLAUDE.md, "Verifying story play functions".
+    await userEvent.click(await canvas.findByTestId(PREDICT_ELEMENT_TESTID));
     await expect(canvas.getByTestId("compare-property-table")).toBeInTheDocument();
     await userEvent.click(canvas.getByTestId("compare-tab-code"));
     await expect(canvas.getByTestId("compare-code-view")).toBeInTheDocument();
@@ -426,7 +437,8 @@ export const DockToggleFullscreenAndReviewFooter: Story = {
   render: () => <DockAndReviewDemo />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByTestId("compare")).toHaveAttribute("data-dock", "right");
+    // `findBy*` first — see CLAUDE.md, "Verifying story play functions".
+    await expect(await canvas.findByTestId("compare")).toHaveAttribute("data-dock", "right");
     await userEvent.click(canvas.getByTestId("compare-dock-toggle"));
     await expect(canvas.getByTestId("compare")).toHaveAttribute("data-dock", "bottom");
 
@@ -438,5 +450,95 @@ export const DockToggleFullscreenAndReviewFooter: Story = {
     await userEvent.click(canvas.getByTestId("compare-collapse"));
     await expect(canvas.getByTestId("compare")).not.toHaveAttribute("data-fullscreen");
     await expect(canvas.getByTestId("compare-action-bar")).toBeInTheDocument();
+  },
+};
+
+/**
+ * Every state above, side by side (docs/menus/MENU-KIT-DESIGN.md:646) — the
+ * comparison a review actually needs, not seven separate story entries
+ * clicked through one at a time. Each cell is a REAL `Demo` instance, the
+ * same host every single-purpose story above uses — nothing here is a
+ * screenshot or a faked snapshot. `Demo`'s own frame is 900×540, so seven
+ * of them side by side would need ~6300px of width; each cell is scaled
+ * down with CSS `zoom` (a Chromium feature, which is what Storybook's own
+ * Playwright runner uses) rather than actually shrinking the component, and
+ * the caption says so — the content behind the shrink is identical to its
+ * full-size single-purpose story.
+ */
+export const AllStates: Story = {
+  render: () => {
+    const cells: { label: string; content: ReactNode }[] = [
+      {
+        label: "No snapshot loaded",
+        content: (
+          <Demo
+            comparison={null}
+            versions={[LIVE_RECORD]}
+            problem="No prior versions found beside this board. Save a `<name>.v1.systemsketch` next to it to compare against."
+            noSnapshot
+          />
+        ),
+      },
+      {
+        label: "Identical versions — a real total: 0 diff, not a stub",
+        content: <Demo comparison={IDENTICAL_COMPARISON} versions={[LIVE_RECORD, V1_RECORD]} initialSelectedVersionId={V1_RECORD.id} />,
+      },
+      {
+        label: "Element selected — Properties rows for the picked block",
+        content: (
+          <Demo
+            comparison={COMPARISON}
+            versions={[LIVE_RECORD, V1_RECORD]}
+            initialSelectedVersionId={V1_RECORD.id}
+            initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+          />
+        ),
+      },
+      {
+        label: "Side by side — two boards, no blend slider",
+        content: <Demo comparison={COMPARISON} versions={[LIVE_RECORD, V1_RECORD]} initialSelectedVersionId={V1_RECORD.id} initialMode="side-by-side" />,
+      },
+      {
+        label: "Overlay — after pane faded over before, blend slider revealed",
+        content: <Demo comparison={COMPARISON} versions={[LIVE_RECORD, V1_RECORD]} initialSelectedVersionId={V1_RECORD.id} initialMode="overlay" />,
+      },
+      {
+        label: "Properties tab — the table computed from the selected change",
+        content: (
+          <Demo
+            comparison={COMPARISON}
+            versions={[LIVE_RECORD, V1_RECORD]}
+            initialSelectedVersionId={V1_RECORD.id}
+            initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+            initialTab="properties"
+          />
+        ),
+      },
+      {
+        label: "Code tab — the raw record the Properties row was computed from",
+        content: (
+          <Demo
+            comparison={COMPARISON}
+            versions={[LIVE_RECORD, V1_RECORD]}
+            initialSelectedVersionId={V1_RECORD.id}
+            initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+            initialTab="code"
+          />
+        ),
+      },
+    ];
+
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 24 }}>
+        {cells.map(({ label, content }) => (
+          <div key={label} className="flex flex-col gap-1.5">
+            <span className="text-muted-foreground text-xs">{label} — scaled to 33% (CSS zoom)</span>
+            <div style={{ width: 300, height: 180, overflow: "hidden" }}>
+              <div style={{ zoom: 0.3333 }}>{content}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   },
 };

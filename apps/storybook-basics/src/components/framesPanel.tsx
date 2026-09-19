@@ -46,7 +46,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, LayoutGrid, MoreHorizontal, Rows3 } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode, type RefObject } from "react";
 
 import { moveItemKey } from "./framesOrder";
 import { Button } from "./button";
@@ -151,6 +151,12 @@ export interface FramesPanelProps {
   onDelete?(key: string): void;
   saveView?: FramesPanelSaveView;
   reorder?: FramesPanelReorder;
+  /** Portal target inside the host's token scope (host-contract §4,
+   *  docs/menus/MENU-KIT-DESIGN.md:661). Forwarded to the view-options menu
+   *  in the header and to every row's own "Actions for …" menu — without it
+   *  either one portals to `document.body`, outside a themed host's scope,
+   *  and paints with the document's CSS variables instead of the host's. */
+  container?: HTMLElement | ShadowRoot | RefObject<HTMLElement | ShadowRoot | null> | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -263,9 +269,21 @@ interface RowContentProps {
   onFocus(key: string): void;
   onRename: FramesPanelProps["onRename"];
   onDelete?(key: string): void;
+  /** Threaded straight from `FramesPanelProps.container` down to this row's
+   *  own "Actions for …" menu — see that prop's WHY. */
+  container: FramesPanelProps["container"];
 }
 
-function RowContent({ item, mode, kinds, mutationLocked, onFocus, onRename, onDelete }: RowContentProps) {
+function RowContent({
+  item,
+  mode,
+  kinds,
+  mutationLocked,
+  onFocus,
+  onRename,
+  onDelete,
+  container,
+}: RowContentProps) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const kindMeta = kinds[item.kind];
@@ -338,7 +356,7 @@ function RowContent({ item, mode, kinds, mutationLocked, onFocus, onRename, onDe
         >
           <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" container={container}>
           <DropdownMenuItem onClick={() => onFocus(item.key)}>Focus</DropdownMenuItem>
           <DropdownMenuItem disabled={mutationLocked} onClick={() => setEditing(true)}>
             Rename
@@ -480,7 +498,16 @@ function SaveViewForm({ saveView, disabled }: { saveView: FramesPanelSaveView; d
 /* Header                                                               */
 /* ------------------------------------------------------------------ */
 
-function ModeToggle({ mode, onModeChange }: { mode: FramesPanelMode; onModeChange(mode: FramesPanelMode): void }) {
+function ModeToggle({
+  mode,
+  onModeChange,
+  container,
+}: {
+  mode: FramesPanelMode;
+  onModeChange(mode: FramesPanelMode): void;
+  /** Threaded straight from `FramesPanelProps.container` — see that prop's WHY. */
+  container: FramesPanelProps["container"];
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -495,7 +522,7 @@ function ModeToggle({ mode, onModeChange }: { mode: FramesPanelMode; onModeChang
       >
         <LayoutGrid className="size-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" container={container}>
         <DropdownMenuLabel>View</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onModeChange(value as FramesPanelMode)}>
           <DropdownMenuRadioItem value="cards">Thumbnail cards</DropdownMenuRadioItem>
@@ -524,6 +551,7 @@ export function FramesPanel({
   onDelete,
   saveView,
   reorder,
+  container,
 }: FramesPanelProps) {
   const sortable = Boolean(reorder) && !readOnly && !reorderLocked && items.length > 1;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -554,6 +582,7 @@ export function FramesPanel({
     onRename,
     onDelete,
     sortable,
+    container,
   });
 
   const list =
@@ -587,7 +616,7 @@ export function FramesPanel({
             <span className="text-xs text-muted-foreground">{items.length} items</span>
           </div>
         </div>
-        <ModeToggle mode={mode} onModeChange={onModeChange} />
+        <ModeToggle mode={mode} onModeChange={onModeChange} container={container} />
       </div>
       <p className="px-3.5 pt-1.5 pb-3 text-sm text-muted-foreground">
         Frames, regions, and saved camera views in one navigable order.
