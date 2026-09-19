@@ -166,4 +166,26 @@ describe("the bottom-right cluster — truly in the corner, never over the licen
     const leftWatermark: CornerRect = { left: 4, top: 860, right: 104, bottom: 896 };
     expect(placeCornerCluster({ container, cluster, watermark: leftWatermark, obstacles: [dock] }).placement).toBe("corner");
   });
+
+  it("the placement rule never lands on the dock: a cluster too wide for the bottom row lifts above the dock row as well as the watermark", () => {
+    // Measured 2026-09-19 in a trial merge with main at 52506fa, whose
+    // temporary variant pill rides in the same row as the strip: the row is
+    // 482px wide, so at 1024px neither the corner, nor beside the watermark,
+    // nor 8px above it clears the dock (x 368-656, top 848) — and the first
+    // version of this rule then fell back to "beside", straight across it.
+    const container: CornerRect = { left: 0, top: 0, right: 1024, bottom: 900 };
+    const cluster = { width: 482, height: 42 };
+    const watermark: CornerRect = { left: 920, top: 860, right: 1020, bottom: 896 };
+    const dock: CornerRect = { left: 368, top: 848, right: 656, bottom: 892 };
+    const placed = placeCornerCluster({ container, cluster, watermark, obstacles: [dock] });
+    expect(placed).toEqual({ right: CORNER_INSET, bottom: 900 - 848 + CORNER_INSET, placement: "above-licence" });
+    const rect = {
+      left: container.right - placed.right - cluster.width,
+      top: container.bottom - placed.bottom - cluster.height,
+      right: container.right - placed.right,
+      bottom: container.bottom - placed.bottom,
+    };
+    expect(intersects(rect, watermark)).toBe(false);
+    expect(intersects(rect, dock)).toBe(false);
+  });
 });
