@@ -371,6 +371,164 @@ Hero video candidate: `control-flow-toggle--dom-canvas` (expand ⇄ collapse, 8 
 
 *(Lane F appends here what landed, with the gate output.)*
 
+### Lane F · 2026-09-18 — registry item, gallery, full gate
+
+**Lanes landed on `claude/control-flow-integration-2026-09-18`** (this lane's
+base is `837c1d1`, the cf:E merge):
+
+| Lane | Tip | Merge |
+|---|---|---|
+| cf:A region kit | `c616d71` | `d09fbe2` |
+| cf:B loop preset | `edf60d4` | `002cd58` |
+| cf:C branch preset | `b1ec6c6` | `5edb8f7` |
+| cf:D wires | `3b91b0a` | `88fbc0d` |
+| cf:E opaque projection | `c52c96f` | `837c1d1` |
+| cf:G member edges | `cf6fc98` | `07f86ec` |
+
+**Gate — `apps/storybook-basics`, all green.**
+
+```
+pnpm typecheck        → exit 0
+pnpm test             → 178 files / 1693 tests passed, exit 0
+  project `unit`      →  76 files / 1211 tests
+  project `storybook` → 102 files /  482 tests   (178−76, 1693−1211)
+```
+
+Run with `STORYBOOK_PORT=5620` so the suite compiled THIS worktree's source
+rather than reusing Zach's `:5421` (the false-pass `vitest.config.ts`'s own
+header warns about). No file red anywhere in either project.
+
+**`apps/systemsketch` was not run and did not need to be:** this lane's diff
+(`git diff --name-only`) contains zero files under `apps/`, other than the one
+new story file in `apps/storybook-basics/src/stories/`. Nothing it consumes
+changed.
+
+**Registry.**
+
+```
+$ python3 docs/build_menu_registry_items.py
+  region              9 files (5 components)  deps: @dnd-kit/core, @dnd-kit/sortable,
+                                                    @dnd-kit/utilities, clsx, lucide-react,
+                                                    tailwind-merge
+$ python3 docs/build_menu_registry_items.py --check
+registry.json is up to date                                                  → exit 0
+$ npx shadcn@latest build
+✔ Building registry.  (… "Building region…")                                 → exit 0
+```
+
+The nine files, and the sibling rule they satisfy — `components/` flattens
+into `components/bbox/`, `lib/` lands BESIDE it at `components/lib/` so
+`../lib/utils` still resolves after the move:
+
+| Source | Target |
+|---|---|
+| `src/components/region.tsx` | `components/bbox/region.tsx` |
+| `src/components/region.layout.ts` | `components/bbox/region.layout.ts` |
+| `src/components/blockMembers.tsx` | `components/bbox/blockMembers.tsx` |
+| `src/components/bar.tsx` | `components/bbox/bar.tsx` |
+| `src/components/barSize.tsx` | `components/bbox/barSize.tsx` |
+| `src/components/foldingChevron.tsx` | `components/bbox/foldingChevron.tsx` |
+| `src/components/editableText.layout.ts` | `components/bbox/editableText.layout.ts` |
+| `src/components/glyph.layout.ts` | `components/bbox/glyph.layout.ts` |
+| `src/lib/utils.ts` | **`components/lib/utils.ts`** |
+
+**Install proof** — `npx shadcn add` exiting 0 proves nothing (CLAUDE.md),
+so the item was installed into a throwaway project and type-checked.
+Verbatim, in `…/scratchpad/throwaway`:
+
+```
+$ npm install react@^19 react-dom@^19 @types/react@^19 @types/react-dom@^19 typescript@^5.6
+                                                                             → exit 0
+$ npx --yes shadcn@latest add /…/scratchpad/region.json
+✔ Created 9 files:
+  src/components/bbox/{bar,barSize,blockMembers,editableText.layout,foldingChevron,
+                       glyph.layout,region.layout,region}.tsx|ts
+  src/components/lib/utils.ts                                                → exit 0
+$ npx tsc --noEmit                                                           → exit 0
+```
+
+The project carried `components.json` copied in shape from
+`apps/storybook-basics/components.json` (same `@/` aliases), and a `tsconfig`
+with `paths: {"@/*": ["./src/*"]}`. Nothing else — no Vite config was needed,
+because the failure this gate exists to catch is a module-resolution one.
+
+**The loop and branch presets are deliberately NOT registry items**, and this
+is the plan's own §11 item 6 rather than an omission. Two reasons, the second
+the real one:
+
+1. `target_for` has rules only for `src/components/` and `src/lib/`; a preset
+   at `src/presets/loop/loop.ts` raises `unexpected trunk location, no target
+   rule` on the spot.
+2. A preset is not a component. `forLoopNode` returns a
+   `SceneNode<HostNodeData>` and `branchNode` an array of them — pure factories
+   that import `hosts/hostScene` and `scene/region`, i.e. the scene+host
+   lineage, which a `components/bbox/` install has no counterpart for.
+   Shipping them under a component target would be a different distribution
+   decision than this script makes. Until §11 item 6 lands, a consumer
+   installs `region` and writes the three fields (`region.kind`, `ports`,
+   arms) itself — which is all a preset ever was.
+
+**Stories — every id §8 names exists.** 37 `control-flow-*` ids are indexed
+(read off the running Storybook's own `index.json`, not derived from titles);
+§8 names 33 of them and all 33 resolve. The four beyond the plan are
+`control-flow-region--header-chip-and-marks`,
+`control-flow-wires--badge-with-seed`,
+`control-flow-host-edges--member-edge-survives-drag` (lanes A/D/G shipping
+more than they promised) and this lane's own
+`control-flow-gallery--collapsed-branch-in-loop`.
+
+This lane's four:
+
+| Story id | Host | Asserts |
+|---|---|---|
+| `control-flow-gallery--branch-in-loop` | DOM canvas | both frames expanded; arms `if`/`else` stacked; `merge`/`estimate`/`fallback` inside their containers; `e-bypass` clears BOTH frames (acceptance helper + the painted-line check); `mut` and `z⁻¹ = prior()` pills; no cable crosses arms |
+| `…--branch-in-loop-react-flow` | React Flow | both frames expanded + two members inside, neither a host node |
+| `…--branch-in-loop-tldraw` | tldraw | the same |
+| `…--collapsed-branch-in-loop` | DOM canvas | the branch opaque INSIDE the open loop's body; no arm row, no member reaches the DOM |
+
+Measured on the DOM board (`getBoundingClientRect`, headless Chromium,
+1520×840): loop frame `216,126 → 1216,666`; branch frame `787,216 →
+1187,631`, fully inside it; `e-bypass` samples every 4px along the real
+`path[data-slot="trace-line"]` — **0 points inside either frame**, max y 690,
+24px below the loop's bottom border; 13 wires painted,
+`data-unresolved-wires` empty.
+
+**Nothing is red, but two findings are worth the dispatcher's time.**
+
+1. **`docs/build_menu_registry_items.py` (no `--check`) exits 1 on this base,
+   and did so BEFORE this lane** — 50 sibling-rule violations across 11
+   PRE-EXISTING items (`block-card`, `block-port`, `code-editor`,
+   `editable-text`, `labeled-port`, `port-dot`, `port-edge`, `trace`,
+   `trace-badge`, `trace-editor`, `wire-layer`), e.g. `wire-layer:
+   components/bbox/wireLayer.tsx imports './traceBadge' -> no file lands at
+   'components/bbox/traceBadge'`. Measured both ways on 2026-09-18: the base
+   script against the base `registry.json` reports the same 50 across the same
+   11 items, so this lane added zero. `region` is not among them. These are
+   the sixteen hand-written trunk items CLAUDE.md calls "self-contained"; they
+   are the exact "installs clean, then fails to compile" class the script was
+   written to catch, and the fix is to generate them (add them to `ITEMS`)
+   rather than to hand-patch `registry.json`. Out of this lane's brief, so
+   reported rather than done. `--check` exits 0 because it returns before the
+   assertion — that asymmetry is itself worth closing.
+2. **`public/r/*.json` is tracked and stale.** `npx shadcn@latest build`
+   rewrote 18 of them with current source content (they had drifted since the
+   last build) and created `public/r/region.json`. `public/r/` is not in this
+   lane's write set, so all 19 were reverted and the built `region.json` was
+   used only for the install proof. Whoever owns the website surface should
+   rebuild and commit it, or the served registry keeps shipping pre-reset
+   component source.
+
+**One cosmetic observation, not fixed** (`src/components/` is off-limits to
+this lane): a `Block` with both a header and a TOP-wall port paints the port's
+label over the header text — visible on `merge()` as `effect:pose` sitting on
+`merge()`. Pre-existing and already shipped that way in lane D's
+`control-flow-wires--mut-effect-cable`; it is a `Block`/rail band question,
+not a fixture one.
+
+**Captures:** `/home/bam/bbox-ui/reports/media/lanes-2026-09-18/cf-F/` —
+`gallery-branch-in-loop-dom.png`, `…-reactflow.png`, `…-tldraw.png`,
+`gallery-collapsed-branch-in-loop.png` (headless Chromium, DSR 2, looked at).
+
 ---
 
 ## Appendix — the builder briefs, verbatim (what each Opus builder receives)
