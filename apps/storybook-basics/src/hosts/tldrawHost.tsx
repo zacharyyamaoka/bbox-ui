@@ -83,7 +83,9 @@ import { ancestorsOf } from "../scene/region";
 import { portKey } from "../scene/scene";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
+import type { OpaqueRegionView } from "../scene/regionView";
 import { POINTER_OWNED_CLASS, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
 
 /* ------------------------------------------------------------------ */
@@ -113,11 +115,23 @@ export interface PortAnchor {
 
 interface TldrawHostContextValue {
   scene: HostScene;
+  /**
+   * The edges this host PAINTS — `projectHostScene(scene).scene`, which is
+   * `scene` itself (same arrays) unless a region is opaque. Kept beside
+   * `scene` rather than replacing it, because the two have different jobs:
+   * `SceneNodeView` and every write-back read the DOCUMENT, `WireOverlay`
+   * reads the LENS. Collapsing them would make an opaque region's members
+   * disappear from `childrenOf` — which is a document edit, and the whole
+   * point of §2.B is that a view flip is not one.
+   */
+  wireScene: HostScene;
   wired: ReadonlySet<string>;
   onSceneChange?(next: HostScene): void;
   anchors: Readonly<Record<string, readonly PortAnchor[]>>;
   reportAnchors(nodeId: string, anchors: PortAnchor[]): void;
   decorate?: Decorate;
+  /** The opaque projection's cards — see `SceneNodeViewProps.regionViews`. */
+  regionViews?: ReadonlyMap<string, OpaqueRegionView>;
 }
 
 const TldrawHostContext = createContext<TldrawHostContextValue | null>(null);
@@ -338,7 +352,14 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
           }
         }}
       >
-        <SceneNodeView scene={host.scene} node={node} wired={host.wired} onSceneChange={host.onSceneChange} decorate={host.decorate} />
+        <SceneNodeView
+          scene={host.scene}
+          node={node}
+          wired={host.wired}
+          onSceneChange={host.onSceneChange}
+          decorate={host.decorate}
+          regionViews={host.regionViews}
+        />
       </div>
     </HTMLContainer>
   );
@@ -461,7 +482,9 @@ interface ResolvedWireRender {
 function WireOverlay() {
   const editor = useEditor();
   const host = useContext(TldrawHostContext);
-  const scene = host?.scene;
+  // Hosts paint the projection; the document keeps its direct P1 cables.
+  // `wireScene` is `scene` itself while everything is expanded.
+  const scene = host?.wireScene;
   const anchors = host?.anchors;
 
   const state = useValue(
@@ -592,10 +615,13 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, de
     setAnchors((prev) => (sameAnchors(prev[nodeId], next) ? prev : { ...prev, [nodeId]: next }));
   }, []);
 
-  const wired = useMemo(() => wiredPortsOf(scene), [scene]);
+  // Hosts paint the projection; the document keeps its direct P1 cables.
+  const projected = useMemo(() => projectHostScene(scene), [scene]);
+  const wired = useMemo(() => wiredPortsOf(projected.scene), [projected]);
+  const regionViews = useMemo(() => regionViewMap(projected.regions), [projected]);
   const context = useMemo<TldrawHostContextValue>(
-    () => ({ scene, wired, onSceneChange, anchors, reportAnchors, decorate }),
-    [scene, wired, onSceneChange, anchors, reportAnchors, decorate],
+    () => ({ scene, wireScene: projected.scene, wired, onSceneChange, anchors, reportAnchors, decorate, regionViews }),
+    [scene, projected, wired, onSceneChange, anchors, reportAnchors, decorate, regionViews],
   );
   // Caller's `components` layer OVER this host's own (`OnTheCanvas` stays
   // unless a caller explicitly overrides that key too) — see the prop's
