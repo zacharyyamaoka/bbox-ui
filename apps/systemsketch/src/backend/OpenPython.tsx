@@ -40,9 +40,10 @@ import {
 } from "@trunk/scene/pyblocksScene";
 
 import type { BlockShape } from "../shapes/block";
+import type { RegionShape } from "../shapes/region";
 import { applyScene } from "../document/applySceneDiff";
 import type { DocNodeData, DocumentScene } from "../document/sceneFromStore";
-import { BLOCK_SHAPE_TYPE, PORT_SIDES } from "../shapes/types";
+import { BLOCK_SHAPE_TYPE, PORT_SIDES, REGION_SHAPE_TYPE } from "../shapes/types";
 
 /* ------------------------------------------------------------------ */
 /* Ids                                                                 */
@@ -86,6 +87,35 @@ const REGION_KIND_OF: Record<string, NonNullable<DocNodeData["regionKind"]>> = {
   if: "branch",
 };
 
+/**
+ * How far the first row of a region's members drops to clear the corner block.
+ *
+ * WHY the projection has to add this at all: the trunk's layout is older than
+ * this file's corner block and knows nothing about it. `layoutUnplaced` places
+ * every node pyblocks did not position at `x = 40 + 320·rank, y = 40 + 160·i`
+ * IN THE PARENT'S SPACE (`@trunk/scene/pyblocksScene.ts` — `LAYOUT_ORIGIN_PX`,
+ * `LAYOUT_COLUMN_PX`, `LAYOUT_ROW_PX`), while the corner block this file mints
+ * sits at the frame's own top-left, `{0,0}`, 160×100 (`BlockShapeUtil`'s
+ * `getDefaultProps`). Those two rectangles overlap by 120×60, and the loser is
+ * the corner block: it is created first, so the first member draws ON TOP of
+ * the region's own interface — measured 2026-09-19, `run()`'s `raw` label
+ * clipped to `ra` and its `scaled` port and wire hidden under `decode()`.
+ *
+ * Fixing it HERE rather than in the trunk is deliberate: the corner block is
+ * this app's ruling ("a region's interface IS a real block"), no other host
+ * mints one, and a trunk layout that reserved room for a shape only this app
+ * creates would be geometry paid for by every consumer. Authored positions are
+ * never touched — only what the trunk itself placed.
+ *
+ * 120 = the corner block's own height (100) plus a 20 gutter, which keeps the
+ * first row clear of it and every later row on the trunk's own 160 pitch.
+ */
+const REGION_MEMBER_CLEARANCE_PX = 120;
+
+/** The room a region keeps around its outermost member when this file grows it
+ *  to fit — see `fitRegionsToMembers`. */
+const REGION_FIT_PADDING_PX = 40;
+
 export interface PyblocksBoard {
   scene: DocumentScene;
   /** Shape id → port id → the port's AUTHORED name.
@@ -127,6 +157,21 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
     bottom: data.ports?.bottom ?? [],
   });
 
+  /** Which ids are regions, so a member can be recognised by its PARENT. Read
+   *  before the loop because a document may list a member ahead of its frame. */
+  const regionIds = new Set(loaded.scene.nodes.filter((node) => node.type === "region").map((node) => node.id));
+
+  /** A node's position, dropped clear of the corner block when — and only
+   *  when — the trunk placed it inside a region. `authoredPosition === false`
+   *  is pyblocks' own word for "I placed nothing here"
+   *  (`unplacedByPyblocks`); anything the file itself authored is left exactly
+   *  where it was authored. */
+  const placedPosition = (node: SceneNode<HostNodeData>) => {
+    if (extras.get(node.id)?.pyblocks?.authoredPosition !== false) return node.position;
+    if (!node.parentId || !regionIds.has(node.parentId)) return node.position;
+    return { x: node.position.x, y: node.position.y + REGION_MEMBER_CLEARANCE_PX };
+  };
+
   for (const node of loaded.scene.nodes) {
     const shapeId = toShapeId(node.id);
     const extra = extras.get(node.id);
@@ -139,7 +184,7 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
       nodes.push({
         id: shapeId,
         type: "region",
-        position: node.position,
+        position: placedPosition(node),
         ...(parentId ? { parentId } : {}),
         data: {
           kind: "region",
@@ -177,7 +222,7 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
       nodes.push({
         id: shapeId,
         type: "block",
-        position: node.position,
+        position: placedPosition(node),
         ...(parentId ? { parentId } : {}),
         data: {
           kind: "block",
@@ -196,7 +241,7 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
       nodes.push({
         id: shapeId,
         type: "block",
-        position: node.position,
+        position: placedPosition(node),
         ...(parentId ? { parentId } : {}),
         data: {
           kind: "block",
@@ -215,7 +260,7 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
       nodes.push({
         id: shapeId,
         type: "code",
-        position: node.position,
+        position: placedPosition(node),
         ...(parentId ? { parentId } : {}),
         data: { kind: "code", name: node.data.name ?? "", code: node.data.code ?? "", language: "python" },
       });
@@ -263,6 +308,7 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
 export function applyPyblocksBoard(editor: Editor, board: PyblocksBoard): void {
   editor.run(() => {
     applyScene(editor, board.scene);
+    fitRegionsToMembers(editor, board);
     for (const [shapeId, labels] of board.portLabels) {
       const shape = editor.getShape(shapeId as TLShapeId);
       if (!shape || shape.type !== BLOCK_SHAPE_TYPE) continue;
@@ -284,6 +330,53 @@ export function applyPyblocksBoard(editor: Editor, board: PyblocksBoard): void {
     // a navigation, and an animated fly-in from the old board means nothing.
     if (bounds) editor.zoomToBounds(bounds, { targetZoom: 1, immediate: true });
   });
+}
+
+/**
+ * Grow each region until its own members are inside it.
+ *
+ * WHY this cannot go through the scene: `applySceneDiff.ts`'s `propsFromData`
+ * deliberately never names `w`/`h` ("a field the scene has no opinion about —
+ * a measured `anchors`, a `w` nobody authored — must keep whatever the
+ * document already has"), so a region lands at `RegionShapeUtil`'s default
+ * 480×320 whatever it contains. With three members on the trunk's 320×160
+ * pitch that is already too small: `scale()` at x=360 is 40 units wider than
+ * the frame, and it drew OUTSIDE its own dashed boundary before this ran.
+ * Dropping the first row clear of the corner block above makes the same thing
+ * true downward, so the two fixes ship together or the second one trades a
+ * collision for an overflow.
+ *
+ * WHY measured and not computed: the sizes are the shapes' OWN geometry, read
+ * back after `applyScene` created them, so a block that sizes itself to its
+ * ports is counted as it really is rather than as a default this file assumed.
+ *
+ * Owed upstream to L5: `autoFit` is a REGION behaviour (plan §5, and the
+ * pyblocks contract carries `membersLayout: "free"` / `autoFit: true` per
+ * region). This is a one-shot fit at open — it does not follow a member that
+ * is later dragged out. When L5 lands the real thing, delete this.
+ */
+function fitRegionsToMembers(editor: Editor, board: PyblocksBoard): void {
+  for (const node of board.scene.nodes) {
+    if (node.data.kind !== "region") continue;
+    const region = editor.getShape(node.id as TLShapeId);
+    if (!region || region.type !== REGION_SHAPE_TYPE) continue;
+    let right = 0;
+    let bottom = 0;
+    for (const childId of editor.getSortedChildIdsForParent(region.id)) {
+      const child = editor.getShape(childId);
+      if (!child) continue;
+      // Child x/y are PARENT-relative (tldraw's own rule), and the geometry's
+      // bounds are the child's own box — so the two add up in region space.
+      const bounds = editor.getShapeGeometry(child).bounds;
+      right = Math.max(right, child.x + bounds.maxX);
+      bottom = Math.max(bottom, child.y + bounds.maxY);
+    }
+    const props = (region as RegionShape).props;
+    const w = Math.max(props.w, Math.round(right + REGION_FIT_PADDING_PX));
+    const h = Math.max(props.h, Math.round(bottom + REGION_FIT_PADDING_PX));
+    if (w === props.w && h === props.h) continue;
+    editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { w, h } } as never);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -334,6 +427,24 @@ export function OpenPythonMenu({ client, onOpened, onError, onBoardApplied }: Op
       }
       const board = pyblocksBoardFrom(loaded);
       applyPyblocksBoard(editor, board);
+      // The board IS this file now, and tldraw's own singleton document record
+      // is where a board's name belongs (`TLDocument.name`, written through the
+      // stock `editor.updateDocumentSettings` — no minted field, no new
+      // contract, and it rides along in a saved `.tldr`).
+      //
+      // WHY the name is written even though nothing reads it yet: the chrome
+      // bar's title is `useState(DEFAULT_BOARD_NAME)`, local to
+      // `src/chrome/chromeBar.tsx` (L4's file, outside this lane's write set),
+      // so the bar still reads "Untitled board" after a file opens and
+      // `File ▸ Save` derives its filename from that. Writing the truth where
+      // the engine already keeps it turns that into a ONE-LINE fix in L4's
+      // file — `const name = useValue("ss board name", () =>
+      // editor.getDocumentSettings().name || DEFAULT_BOARD_NAME, [editor])`,
+      // with `setName` becoming `editor.updateDocumentSettings({ name })` —
+      // instead of a new context threaded through the app shell. Until that
+      // lands, `ss-backend-title` beside the Backend control is the honest
+      // title surface, and the smoke measures both.
+      editor.updateDocumentSettings({ name: filename });
       onBoardApplied();
       onOpened({ title: filename, documentUri: doc.source.uri, problems: board.problems, diagnostics: doc.diagnostics });
     },

@@ -331,6 +331,50 @@ async function main() {
     check("(3) all four data wires were built", wires.length === 4, `${wires.length} wires`);
     const labelled = nodes.flatMap((shape) => Object.values(shape.ports ?? {}).flat());
     check("(3) a named port keeps its authored label, not its id", labelled.includes("in-raw:raw"), labelled.join(" "));
+
+    // MEASURED, never DOM-presence-asserted: the region's interface is a real
+    // corner block at the frame's top-left and the trunk lays members out from
+    // (40,40), so the two boxes overlapped by 120x60 until the projection
+    // dropped the first row clear (OpenPython.tsx's REGION_MEMBER_CLEARANCE_PX).
+    // `run()`'s `raw` label came out clipped to `ra` and its `scaled` port and
+    // wire were hidden UNDER `decode()` — a board that looked fine in a shape
+    // dump and wrong on screen. Page bounds, so the camera cannot flatter it.
+    const geometry = await page.evaluate(() => {
+      const editor = window.editor;
+      const region = editor.getCurrentPageShapes().find((shape) => shape.type === "ss-region");
+      if (!region) return { missing: true };
+      const corner = editor.getShape(region.props.cornerBlockId);
+      if (!corner) return { missing: "corner" };
+      const box = (id) => {
+        const bounds = editor.getShapePageBounds(id);
+        return bounds ? { minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY } : null;
+      };
+      const cornerBox = box(corner.id);
+      const regionBox = box(region.id);
+      const covering = [];
+      const outside = [];
+      for (const id of editor.getSortedChildIdsForParent(region.id)) {
+        if (id === corner.id) continue;
+        const shape = editor.getShape(id);
+        if (!shape || shape.type === "ss-wire") continue;
+        const member = box(id);
+        if (!member) continue;
+        const overlapW = Math.min(cornerBox.maxX, member.maxX) - Math.max(cornerBox.minX, member.minX);
+        const overlapH = Math.min(cornerBox.maxY, member.maxY) - Math.max(cornerBox.minY, member.minY);
+        const name = String(shape.props?.name ?? id);
+        if (overlapW > 0 && overlapH > 0) covering.push(`${name} ${Math.round(overlapW)}x${Math.round(overlapH)}`);
+        if (member.minX < regionBox.minX || member.minY < regionBox.minY || member.maxX > regionBox.maxX || member.maxY > regionBox.maxY) {
+          outside.push(name);
+        }
+      }
+      return { covering, outside, documentName: editor.getDocumentSettings().name };
+    });
+    check("(3) no member covers the region's corner block — its interface stays readable", Array.isArray(geometry.covering) && geometry.covering.length === 0, (geometry.covering ?? []).join(", ") || JSON.stringify(geometry));
+    check("(3) every member is inside its own region's frame", Array.isArray(geometry.outside) && geometry.outside.length === 0, (geometry.outside ?? []).join(", "));
+    // The board's name, where tldraw itself keeps it. The chrome bar's own
+    // title is still L4's `useState` and outside this lane's write set — this
+    // is the value the one-line fix there reads (see OpenPython.tsx's WHY).
+    check("(3) tldraw's document record carries the file name", geometry.documentName === "linear_chain.py", String(geometry.documentName));
     // A block body, because `zoomToFit()` returns the Editor and Playwright
     // cannot serialize it back.
     await page.evaluate(() => {
