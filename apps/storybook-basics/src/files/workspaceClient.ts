@@ -174,7 +174,159 @@ export const WORKSPACE_METADATA_TIMEOUT_MS = 10_000;
 export const WORKSPACE_READ_TIMEOUT_MS = 30_000;
 export const WORKSPACE_WRITE_TIMEOUT_MS = 45_000;
 
+async function responsePayload(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new WorkspaceRequestError(
+      `the local SystemSketch controller returned non-JSON (${response.status})`,
+      response.status,
+    );
+  }
+}
+
+async function expectOk(response: Response): Promise<Record<string, unknown>> {
+  const payload = await responsePayload(response);
+  if (response.status === 409 && payload.conflict === true) {
+    throw new WorkspaceConflict(
+      typeof payload.error === "string" ? payload.error : "the document changed on disk",
+      typeof payload.mtime === "number" ? payload.mtime : null,
+      typeof payload.digest === "string" ? payload.digest : null,
+    );
+  }
+  if (!response.ok || typeof payload.error === "string") {
+    throw new WorkspaceRequestError(
+      typeof payload.error === "string" ? payload.error : `request failed (${response.status})`,
+      response.status,
+    );
+  }
+  return payload;
+}
+
+function workspaceWritePayload(input: WorkspaceWriteInput): Record<string, unknown> {
+  return {
+    path: input.path,
+    source: input.source,
+    baseDigest: input.baseDigest,
+    force: input.force === true,
+  };
+}
+
+/**
+ * The HTTP `WorkspaceClient`, over an injectable `fetch` and `baseUrl` (see
+ * the header WHY). `fetch` is looked up at CALL time when not injected, so a
+ * test that stubs the global after construction is still honoured (donor
+ * behavior implicitly relies on the same global lookup).
+ */
 export function createHttpWorkspaceClient(options: HttpWorkspaceClientOptions = {}): WorkspaceClient {
-  void options;
-  throw new Error("createHttpWorkspaceClient: not implemented (lane files-kit)");
+  const baseUrl = options.baseUrl ?? "";
+
+  const resolvedFetch = (): typeof fetch => options.fetch ?? globalThis.fetch;
+
+  /**
+   * WHY: a loopback controller can stall or restart just like a remote
+   * service; without a deadline, Loading or Saving can remain unresolved
+   * forever. This combines caller cancellation with per-operation budgets
+   * while preserving the distinction between an intentional abort and a
+   * retryable timeout. Donor: workspaceClient.ts:151-187.
+   */
+  async function requestPayload(
+    path: string,
+    init: RequestInit,
+    requestOptions: WorkspaceRequestOptions,
+    defaultTimeoutMs: number,
+  ): Promise<Record<string, unknown>> {
+    const timeoutMs = Math.max(1, requestOptions.timeoutMs ?? defaultTimeoutMs);
+    const controller = new AbortController();
+    let timedOut = false;
+    const abortFromCaller = () => controller.abort(requestOptions.signal?.reason);
+    if (requestOptions.signal?.aborted) abortFromCaller();
+    else requestOptions.signal?.addEventListener("abort", abortFromCaller, { once: true });
+    const timeout = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      return await expectOk(await resolvedFetch()(`${baseUrl}${path}`, { ...init, signal: controller.signal }));
+    } catch (cause) {
+      if (timedOut) throw new WorkspaceRequestTimeout(timeoutMs);
+      // `fetch` uses TypeError for network failures. Wrap it here so a
+      // TypeError from document serialization elsewhere in the save
+      // pipeline is never mistaken for a retryable transport problem.
+      if (cause instanceof TypeError) throw new WorkspaceTransportError(cause.message);
+      throw cause;
+    } finally {
+      globalThis.clearTimeout(timeout);
+      requestOptions.signal?.removeEventListener("abort", abortFromCaller);
+    }
+  }
+
+  async function post(
+    path: string,
+    payload: Record<string, unknown>,
+    requestOptions: WorkspaceRequestOptions = {},
+  ): Promise<Record<string, unknown>> {
+    return requestPayload(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      requestOptions,
+      WORKSPACE_WRITE_TIMEOUT_MS,
+    );
+  }
+
+  return {
+    async list(dir, requestOptions = {}) {
+      const query = dir ? `?dir=${encodeURIComponent(dir)}` : "";
+      return (await requestPayload(
+        `/api/workspace/list${query}`,
+        {},
+        requestOptions,
+        WORKSPACE_METADATA_TIMEOUT_MS,
+      )) as unknown as WorkspaceListing;
+    },
+
+    async load(path, requestOptions = {}) {
+      return (await requestPayload(
+        `/api/workspace/file?path=${encodeURIComponent(path)}`,
+        {},
+        requestOptions,
+        WORKSPACE_READ_TIMEOUT_MS,
+      )) as unknown as WorkspaceDocument;
+    },
+
+    async stat(path, requestOptions = {}) {
+      return (await requestPayload(
+        `/api/workspace/stat?path=${encodeURIComponent(path)}`,
+        {},
+        requestOptions,
+        WORKSPACE_METADATA_TIMEOUT_MS,
+      )) as unknown as WorkspaceDocumentStat;
+    },
+
+    async save(input, requestOptions = {}) {
+      return (await post("/api/workspace/file", workspaceWritePayload(input), requestOptions)) as unknown as WorkspaceDocumentSaved;
+    },
+
+    async rename(input, requestOptions = {}) {
+      return (await post("/api/workspace/rename", input, requestOptions)) as unknown as WorkspaceDocumentSaved;
+    },
+
+    async trash(input, requestOptions = {}) {
+      await post("/api/workspace/trash", input, requestOptions);
+    },
+
+    async reveal(path, requestOptions = {}) {
+      await post("/api/workspace/reveal", { path }, requestOptions);
+    },
+
+    async createDirectory(parent, name, requestOptions = {}) {
+      return (await post("/api/workspace/directory", { parent, name }, requestOptions)) as unknown as WorkspaceDirectoryCreated;
+    },
+  };
 }

@@ -132,20 +132,125 @@ export interface NativeFileAccess {
 }
 
 export function isNativeFileAccessSupported(host: Partial<NativePickerHost> | null | undefined): boolean {
-  void host;
-  throw new Error("isNativeFileAccessSupported: not implemented (lane files-kit)");
+  return typeof host?.showOpenFilePicker === "function" && typeof host?.showSaveFilePicker === "function";
 }
 
 /** Lower-case hex SHA-256 of `text`'s UTF-8 bytes — byte-identical to the
  *  Python host's `document_digest` (`hashlib.sha256(text.encode()).hexdigest()`). */
 export async function sha256Hex(text: string, subtle: Pick<SubtleCrypto, "digest">): Promise<string> {
-  void text;
-  void subtle;
-  throw new Error("sha256Hex: not implemented (lane files-kit)");
+  const bytes = new TextEncoder().encode(text);
+  const digest = await subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+const NATIVE_SUFFIX = ".tldr";
+
+/** `.tldr` stripped case-insensitively, mirroring `workspaceModel.documentTitle`
+ *  for the one suffix native mode ever sees. */
+function nativeDocumentTitle(name: string): string {
+  return name.toLowerCase().endsWith(NATIVE_SUFFIX) ? name.slice(0, -NATIVE_SUFFIX.length) : name;
+}
+
+/** A picker's own `AbortError` — cancel — vs. every other failure, which is
+ *  a real error the caller must see. */
+function isPickerCancellation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { name?: unknown }).name === "AbortError";
+}
+
+async function requestWritePermission(handle: NativeFileHandleLike): Promise<void> {
+  if (!handle.queryPermission) return;
+  const current = await handle.queryPermission({ mode: "readwrite" });
+  if (current === "granted") return;
+  const requested = handle.requestPermission
+    ? await handle.requestPermission({ mode: "readwrite" })
+    : current;
+  if (requested !== "granted") {
+    throw new Error(`permission to write "${handle.name}" was not granted`);
+  }
 }
 
 export function createNativeFileAccess(host: NativePickerHost): NativeFileAccess {
-  void host;
-  void WorkspaceConflict;
-  throw new Error("createNativeFileAccess: not implemented (lane files-kit)");
+  const supported = isNativeFileAccessSupported(host);
+
+  async function readDocument(handle: NativeFileHandleLike): Promise<NativeDocument> {
+    const file = await handle.getFile();
+    const source = await file.text();
+    return {
+      handle,
+      name: file.name,
+      title: nativeDocumentTitle(file.name),
+      source,
+      digest: await sha256Hex(source, host.crypto.subtle),
+    };
+  }
+
+  return {
+    supported,
+
+    async open() {
+      if (!host.showOpenFilePicker) throw new Error("showOpenFilePicker is not available");
+      let handles: NativeFileHandleLike[];
+      try {
+        handles = await host.showOpenFilePicker({
+          id: NATIVE_PICKER_ID,
+          types: TLDR_PICKER_TYPES,
+          excludeAcceptAllOption: false,
+          multiple: false,
+        });
+      } catch (cause) {
+        if (isPickerCancellation(cause)) return null;
+        throw cause;
+      }
+      const [handle] = handles;
+      if (!handle) return null;
+      return readDocument(handle);
+    },
+
+    async save(doc, source, options = {}) {
+      await requestWritePermission(doc.handle);
+      if (!options.force) {
+        const file = await doc.handle.getFile();
+        const onDiskSource = await file.text();
+        const onDiskDigest = await sha256Hex(onDiskSource, host.crypto.subtle);
+        if (onDiskDigest !== doc.digest) {
+          throw new WorkspaceConflict(`"${doc.name}" changed on disk`, file.lastModified / 1000, onDiskDigest);
+        }
+      }
+      const writable = await doc.handle.createWritable();
+      await writable.write(source);
+      await writable.close();
+      return {
+        handle: doc.handle,
+        name: doc.name,
+        title: doc.title,
+        source,
+        digest: await sha256Hex(source, host.crypto.subtle),
+      };
+    },
+
+    async saveAs(suggestedTitle, source) {
+      if (!host.showSaveFilePicker) throw new Error("showSaveFilePicker is not available");
+      let handle: NativeFileHandleLike;
+      try {
+        handle = await host.showSaveFilePicker({
+          id: NATIVE_PICKER_ID,
+          suggestedName: `${suggestedTitle}${NATIVE_SUFFIX}`,
+          types: TLDR_PICKER_TYPES,
+        });
+      } catch (cause) {
+        if (isPickerCancellation(cause)) return null;
+        throw cause;
+      }
+      const writable = await handle.createWritable();
+      await writable.write(source);
+      await writable.close();
+      return {
+        handle,
+        name: handle.name,
+        title: nativeDocumentTitle(handle.name),
+        source,
+        digest: await sha256Hex(source, host.crypto.subtle),
+      };
+    },
+  };
 }
