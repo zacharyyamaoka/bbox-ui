@@ -18,8 +18,12 @@
 //   1. `cornerBlockPropsFor` — the typed header per region kind;
 //   2. `createCornerBlock` / `armRegionPreset` — who mints it, and when;
 //   3. `regionLayoutOf` — the frame's geometry, which starts BELOW the corner
-//      block's measured box (`@trunk/components/region.layout`'s own rule).
-import { createShapeId, type Editor, type TLShapeId } from "tldraw";
+//      block's measured box (`@trunk/components/region.layout`'s own rule);
+//   4. `installRegionKit` — the two repairs that keep 1 and 3 TRUE over a
+//      document's whole life: a duplicated region must not keep naming the
+//      ORIGINAL's corner block, and a frame must not stay the size it was
+//      authored at once the card it hugs has measured itself.
+import { createShapeId, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
 import { regionLayout, type RegionLayout } from "@trunk/components/region.layout";
 
@@ -46,6 +50,23 @@ const CORNER_INSET_X_PX = 8;
  *  20260918192040.png`), which `@trunk/components/region.tsx` draws by pulling
  *  its `region-corner` slot back by the frame's 1px border. */
 const CORNER_INSET_Y_PX = 0;
+
+/**
+ * How far from the corner slot a freshly created child block may sit and still
+ * be recognised as a COPY of the region's header contract.
+ *
+ * WHY a position test at all, when the region already names its corner by id:
+ * `cornerBlockId` is a plain `T.string` (the planner's schema, §3), and tldraw
+ * remaps ids inside `duplicateShapes` / `putContent` only for the fields it
+ * knows about — `parentId`, bindings, `props.*` of its OWN shapes. A copied
+ * region therefore arrives naming the ORIGINAL's card. The copy's real card is
+ * created in the same batch, at exactly the local position the original's card
+ * has, so "a new block landed in this region's corner slot while the region is
+ * pointing at something that is not its child" identifies it without guessing.
+ * 24px is the acceptance test's own tolerance for "the corner block is at the
+ * region's top-left" (`src/region.smoke.test.tsx`).
+ */
+const CORNER_CLAIM_SLACK_PX = 24;
 
 /** The height of the plain text tab a region wears INSTEAD of a corner block
  *  (`kind: "plain"`, or a region a writer created without one). It exists so
@@ -148,6 +169,9 @@ export interface RegionPreset {
   kind: RegionKind;
   name: string;
   arms: RegionArm[];
+  /** The tool whose OWN pointing state authorises this preset. See
+   *  `armRegionPreset` — without it the arming is authorship-blind. */
+  toolId: string;
 }
 
 /**
@@ -177,11 +201,29 @@ export interface RegionPreset {
  *
  * Both handlers are guarded against acting twice: an undo that re-creates a
  * region already carrying a kind and a corner id must not mint a second block.
+ *
+ * WHY THE GATE IS THE TOOL'S OWN `pointing` STATE, and not the shape type plus
+ * `kind === "plain"`: a store side effect sees EVERY create, from every source.
+ * A shape-type filter says "an ss-region was born", never "THIS user drew one
+ * with THIS tool". While a Loop row was armed, a paste, a programmatic
+ * `createShape`, a collaborator's record and stream 3's `applyScene` all came
+ * out rewritten as a For Loop with a corner block minted into them — the
+ * `kind !== "plain"` guard distinguishes RESTORES, not AUTHORSHIP, so anything
+ * that legitimately wanted a bare scope was hijacked. `BaseBoxShapeTool`
+ * creates its shape inside `root.<toolId>.pointing` on BOTH paths it has
+ * (`children/Pointing.ts`: `onPointerMove` for the drag, `complete()` for the
+ * click, both before the state leaves `pointing`), while a paste or a
+ * programmatic write while the row is merely armed happens in `<toolId>.idle`.
+ * So `editor.isIn(\`${toolId}.pointing\`)` is exactly "this create is the
+ * gesture this tool is running", and it is the narrowest true statement
+ * available from inside a store handler.
  */
 export function armRegionPreset(editor: Editor, preset: RegionPreset): () => void {
+  const isThisToolPlacing = () => editor.isIn(`${preset.toolId}.pointing`);
   const stops = [
     editor.sideEffects.registerBeforeCreateHandler("shape", (shape) => {
       if (shape.type !== REGION_SHAPE_TYPE) return shape;
+      if (!isThisToolPlacing()) return shape;
       const region = shape as RegionShape;
       // Only a FRESH default region takes the preset (see the guard note
       // above): anything already typed is a restore, not a placement.
@@ -190,9 +232,106 @@ export function armRegionPreset(editor: Editor, preset: RegionPreset): () => voi
     }),
     editor.sideEffects.registerAfterCreateHandler("shape", (shape) => {
       if (shape.type !== REGION_SHAPE_TYPE) return;
+      if (!isThisToolPlacing()) return;
       const region = shape as RegionShape;
       if (region.props.cornerBlockId) return;
       createCornerBlock(editor, region.id, region.props.kind);
+    }),
+  ];
+  return () => {
+    for (const stop of stops) stop();
+  };
+}
+
+/**
+ * The region's OWN corner block, or `undefined`.
+ *
+ * WHY the parent check and not a bare `getShape(cornerBlockId)`: the id is a
+ * plain string that survives a copy verbatim, so a duplicated region names the
+ * ORIGINAL's card until `installRegionKit` repairs it — and a lookup that
+ * happily returned another region's block would silently lay THIS frame out
+ * around a card that is on the other side of the page. "Is it my child?" is
+ * the same question `parentId` already answers for containment everywhere else
+ * in this document model, so the header contract answers it the same way.
+ */
+export function cornerBlockOf(editor: Editor, shape: RegionShape): TLShape | undefined {
+  const cornerId = shape.props.cornerBlockId;
+  if (!cornerId) return undefined;
+  const corner = editor.getShape(cornerId as TLShapeId);
+  if (!corner || corner.parentId !== shape.id) return undefined;
+  return corner;
+}
+
+/** A `1x1` `ss-region` is the stock box tool's PLACEHOLDER, not a document: it
+ *  exists for the handful of milliseconds between `createShapes` and the
+ *  `select.resizing` snapshot that sizes it. Nothing may reconcile it — see
+ *  `RegionShapeUtil.onBeforeCreate`. */
+export function isRegionPlaceholder(shape: RegionShape): boolean {
+  return shape.props.w <= 1 && shape.props.h <= 1;
+}
+
+/**
+ * The two permanent repairs the region kit installs on the editor
+ * (`regionKit.install`, run once from `App.tsx`'s `onMount`).
+ *
+ *   1. A DUPLICATED region's header contract. `props.cornerBlockId` is a
+ *      `T.string`; tldraw remaps `parentId` and bindings when it copies
+ *      shapes, and has no way to know this string is a shape id, so the copy
+ *      points at the original's card (measured: `duplicateShapes([region])`
+ *      leaves `copy.props.cornerBlockId === original.props.cornerBlockId`
+ *      while the copy's real child card is a different, unnamed shape). Left
+ *      alone that is a card that names the wrong contract, a frame laid out
+ *      around a foreign block, a `cornerBlockId` the derived scene reports
+ *      pointing into a different region, and a dangling id the moment the
+ *      original is deleted.
+ *   2. The frame's hug. The corner card is a real `ss-block`, so its height is
+ *      MEASURED from its own face (`shared/measure.ts`) and lands after the
+ *      region already exists. `props.w/h` are the geometry now
+ *      (`RegionShapeUtil.getGeometry`), so a card that grew has to push its
+ *      frame rather than overflow it.
+ *
+ * Both are store side effects rather than anything in the tools, because the
+ * events that need them (duplicate, paste, a measurement settling) are not
+ * gestures any tool owns.
+ */
+export function installRegionKit(editor: Editor): () => void {
+  const parentRegionOf = (shape: TLShape): RegionShape | undefined => {
+    const parent = editor.getShape(shape.parentId as TLShapeId);
+    return parent && parent.type === REGION_SHAPE_TYPE ? (parent as RegionShape) : undefined;
+  };
+
+  /** Only ever GROWS: `regionLayout` returns `max(authored, hugged)`, so an
+   *  author's deliberately roomy frame survives a card that shrank. */
+  const reconcileFrame = (region: RegionShape) => {
+    if (isRegionPlaceholder(region)) return;
+    const layout = regionLayoutOf(editor, region);
+    if (layout.width === region.props.w && layout.height === region.props.h) return;
+    editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { w: layout.width, h: layout.height } });
+  };
+
+  const stops = [
+    editor.sideEffects.registerAfterCreateHandler("shape", (shape) => {
+      if (shape.type !== BLOCK_SHAPE_TYPE) return;
+      const region = parentRegionOf(shape);
+      if (!region) return;
+      // A region that claims NO contract never adopts one behind the author's
+      // back — dragging a block into a plain scope must stay a drop, not a
+      // promotion. Only a region already naming a card it does not own is
+      // broken, and only the card in its corner slot is that card's copy.
+      if (!region.props.cornerBlockId) return;
+      if (cornerBlockOf(editor, region)) return;
+      if (Math.abs(shape.x - CORNER_INSET_X_PX) > CORNER_CLAIM_SLACK_PX) return;
+      if (Math.abs(shape.y - CORNER_INSET_Y_PX) > CORNER_CLAIM_SLACK_PX) return;
+      editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { cornerBlockId: shape.id } });
+    }),
+    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next) => {
+      if (next.type !== BLOCK_SHAPE_TYPE) return;
+      const before = previous.props as { w: number; h: number };
+      const after = next.props as { w: number; h: number };
+      if (before.w === after.w && before.h === after.h) return;
+      const region = parentRegionOf(next);
+      if (!region || region.props.cornerBlockId !== next.id) return;
+      reconcileFrame(region);
     }),
   ];
   return () => {
@@ -204,8 +343,7 @@ export function armRegionPreset(editor: Editor, preset: RegionPreset): () => voi
  *  corner block. `{w: 0, h: 0}` for an unnamed plain region: nothing sits above
  *  the body, so the body starts at the top. */
 export function cornerBoxOf(editor: Editor, shape: RegionShape): { w: number; h: number } {
-  const cornerId = shape.props.cornerBlockId;
-  const corner = cornerId ? editor.getShape(cornerId as TLShapeId) : undefined;
+  const corner = cornerBlockOf(editor, shape);
   if (corner) {
     const props = corner.props as { w?: number; h?: number };
     return { w: props.w ?? 0, h: props.h ?? 0 };
@@ -219,20 +357,48 @@ export function cornerBoxOf(editor: Editor, shape: RegionShape): { w: number; h:
  * WHY the shape util and the face both call THIS rather than each doing its
  * own arithmetic (the trunk's own reason, `region.layout.ts:17-23`, inherited
  * from the archive's `branchModel.ts:14-16`): "a fold, an added arm and a
- * tldraw resize all agree about where every row is". Here it buys one more
- * thing — `props.h` is the AUTHORED height and `layout.height` is the height
- * the arms actually need, and the trunk's rule is that an explicit height may
- * only ever make a region TALLER. Because the geometry is derived from the
- * same call as the paint, a region whose arms outgrow its authored box has a
- * selection outline, a clip path and a drop target that still match what is
- * on screen — without writing a single reconciled number back into the
- * document.
+ * tldraw resize all agree about where every row is".
+ *
+ * WHY THE ANSWER IS WRITTEN BACK INTO `props.w/h` instead of being left as a
+ * derived reading the geometry quietly uses — the archive's
+ * `reconcileBranchProps` rule, and the thing an earlier cut of this lane got
+ * wrong. tldraw sizes an interactive drag against the SELECTION BOUNDS
+ * (`Resizing._createSnapshot` → `getSelectionRotatedPageBounds`, i.e. the
+ * geometry) while `resizeBox` multiplies `initialShape.props.w/h`. The moment
+ * those two disagree every gesture is scaled by their ratio: a drag-create
+ * whose frame lands 239px right of the release point, and a bottom handle
+ * drawn at the hugged edge that moves a height 176px shorter, so the first
+ * 176px of the drag do nothing at all. There is no way to tune them apart —
+ * the ONE fix is that geometry and props are the same numbers, which means
+ * the hug has to become an authored number (`RegionShapeUtil.onBeforeCreate` /
+ * `onBeforeUpdate`) rather than a correction applied downstream of one.
+ * `/home/bam/systemsketch/src/loop/LoopShapeUtil.tsx:101-104` says the same
+ * thing about the same engine: "The record, not the layout".
  */
 export function regionLayoutOf(editor: Editor, shape: RegionShape): RegionLayout {
-  return regionLayout({
+  return regionLayout(layoutInput(editor, shape, shape.props.h));
+}
+
+/**
+ * The smallest height this region's CONTENT allows — the corner card plus
+ * every arm row plus the bottom pad, ignoring whatever height it was authored
+ * at.
+ *
+ * WHY it is separate from `regionLayoutOf`: it is the `minHeight` a live
+ * resize needs (`RegionShapeUtil.onResize`). `resizeBox` does not merely clamp
+ * a too-small number — for a top or left handle it also offsets `x`/`y` by the
+ * shortfall, so the edge the author is NOT dragging stays put. Flooring the
+ * result afterwards instead would slide the whole frame.
+ */
+export function regionHugHeightOf(editor: Editor, shape: RegionShape): number {
+  return regionLayout(layoutInput(editor, shape, 0)).height;
+}
+
+function layoutInput(editor: Editor, shape: RegionShape, height: number) {
+  return {
     width: shape.props.w,
-    height: shape.props.h,
+    height,
     corner: cornerBoxOf(editor, shape),
     arms: shape.props.arms.map((arm) => ({ id: arm.id, open: arm.open, bodyHeight: arm.h })),
-  });
+  };
 }

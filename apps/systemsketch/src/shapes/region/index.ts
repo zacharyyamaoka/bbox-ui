@@ -31,6 +31,7 @@ import { GitBranch, Repeat } from "lucide-react";
 import type { ShapeKit } from "../registry";
 import { BRANCH_TOOL_ID, LOOP_TOOL_ID } from "../types";
 import { BranchTool } from "./BranchTool";
+import { installRegionKit } from "./cornerBlock";
 import { LoopTool } from "./LoopTool";
 import { RegionShapeUtil } from "./RegionShapeUtil";
 
@@ -38,12 +39,26 @@ export { RegionShapeUtil, type RegionArm, type RegionKind, type RegionShape, typ
 export { RegionFace } from "./RegionFace";
 export { BranchTool, BRANCH_PRESET } from "./BranchTool";
 export { LoopTool, FOR_LOOP_PRESET } from "./LoopTool";
-export { cornerBlockPropsFor, createCornerBlock, regionLayoutOf, type RegionPreset } from "./cornerBlock";
+export {
+  cornerBlockPropsFor,
+  cornerBlockOf,
+  createCornerBlock,
+  installRegionKit,
+  isRegionPlaceholder,
+  regionHugHeightOf,
+  regionLayoutOf,
+  type RegionPreset,
+} from "./cornerBlock";
 
 export const regionKit: ShapeKit = {
   shapeUtils: [RegionShapeUtil],
   bindingUtils: [],
   tools: [LoopTool, BranchTool],
+  // Two permanent repairs, neither of which any TOOL can own because neither
+  // is a gesture: a duplicated region must stop naming the original's corner
+  // block, and a frame must follow the card it hugs once that card has
+  // measured itself. Full reasoning in `./cornerBlock`'s `installRegionKit`.
+  install: installRegionKit,
   // Two more rows of the ONE system family, after Block, Code and Port. No
   // `shortcutHint` on either: the dock renders the hint as TEXT inside the row
   // (toolDock.tsx's `DropdownMenuShortcut`), and neither construct has a

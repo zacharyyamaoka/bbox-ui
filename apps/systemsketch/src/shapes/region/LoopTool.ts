@@ -26,7 +26,7 @@ import { armRegionPreset, type RegionPreset } from "./cornerBlock";
 /** `for item in iterable` — the default a Loop row places. Typed header,
  *  unnamed (DP - Loop), no arms: a loop's body is the frame itself, so it
  *  needs no titled rows the way a branch does. */
-export const FOR_LOOP_PRESET: RegionPreset = { kind: "for", name: "For Loop", arms: [] };
+export const FOR_LOOP_PRESET: RegionPreset = { kind: "for", name: "For Loop", arms: [], toolId: LOOP_TOOL_ID };
 
 export class LoopTool extends BaseBoxShapeTool {
   static override id = LOOP_TOOL_ID;

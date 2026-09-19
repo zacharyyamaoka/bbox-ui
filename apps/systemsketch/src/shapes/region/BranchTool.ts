@@ -27,6 +27,7 @@ import { armRegionPreset, type RegionPreset } from "./cornerBlock";
 export const BRANCH_PRESET: RegionPreset = {
   kind: "branch",
   name: "Branch",
+  toolId: BRANCH_TOOL_ID,
   arms: [
     { id: "if", title: "if", open: true, h: 160 },
     { id: "else", title: "else", open: true, h: 160 },

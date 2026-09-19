@@ -36,6 +36,7 @@ import {
   T,
   createShapePropsMigrationSequence,
   resizeBox,
+  type Editor,
   type TLBaseShape,
   type TLDragShapesInInfo,
   type TLResizeInfo,
@@ -45,7 +46,7 @@ import {
 import { REGION_MIN_WIDTH_PX } from "@trunk/components/region.layout";
 
 import { REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "../types";
-import { regionLayoutOf } from "./cornerBlock";
+import { isRegionPlaceholder, regionHugHeightOf, regionLayoutOf } from "./cornerBlock";
 import { RegionFace } from "./RegionFace";
 
 /** Which construct this frame IS. Closed, because a `kind` the renderer has
@@ -179,8 +180,23 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
     return true;
   }
 
+  /**
+   * Stock `resizeBox`, told the real floors.
+   *
+   * WHY the floors go THROUGH `resizeBox` rather than being applied to its
+   * answer: for a top or left handle `resizeBox` converts the shortfall into
+   * an `x`/`y` offset, so the edge the author is not dragging stays where it
+   * is. Clamping afterwards would instead slide the whole frame across the
+   * board the moment the drag hit the floor. The height floor is the region's
+   * own CONTENT (`regionHugHeightOf`: corner card + arm rows + pad), not a
+   * constant — a two-armed Branch simply cannot be 160px tall, and letting the
+   * handle pretend otherwise is what left a dead zone at the bottom edge.
+   */
   override onResize(shape: RegionShape, info: TLResizeInfo<RegionShape>) {
-    return resizeBox(shape, info);
+    return resizeBox(shape, info, {
+      minWidth: REGION_MIN_WIDTH_PX,
+      minHeight: Math.max(REGION_MIN_HEIGHT_PX, regionHugHeightOf(this.editor, shape)),
+    });
   }
 
   /**
@@ -216,17 +232,42 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
     return childType !== WIRE_SHAPE_TYPE && super.shouldClipChild(child);
   }
 
-  /** A programmatic create with an off-layout size lands on the floor.
-   *  The `1×1` guard is the archive's (`LoopShapeUtil.tsx:74-79`): the stock
-   *  box tool creates a 1×1 placeholder and resizes it inside the SAME
-   *  gesture, so flooring it here would fight the drag that is sizing it. */
+  /**
+   * THE ONE SEAM WHERE `props` BECOMES TRUE. Every create and every update
+   * leaves this class with `props.w/h` equal to what `getGeometry` will draw:
+   * at least `REGION_MIN_WIDTH_PX` wide, and at least as tall as the corner
+   * card and the arm rows need (`regionLayoutOf`, which returns
+   * `max(authored, hugged)` — so an author's roomier frame survives).
+   *
+   * WHY reconcile the record instead of letting the geometry hug on its own,
+   * which reads like the tidier half (no write-back, one derived reading): the
+   * engine measures an interactive drag against the SELECTION BOUNDS — the
+   * geometry — and then scales `initialShape.props` by that ratio
+   * (`Resizing._createSnapshot` → `getSelectionRotatedPageBounds`;
+   * `resizeBox`: `w = shape.props.w * scaleX`). A geometry that is 240x496
+   * over props of 240x320 therefore does not merely look different; it makes
+   * every gesture wrong by 496/320, which showed up as a drag-create landing
+   * 239px past the release point and a bottom handle with a 176px dead zone.
+   * The archive warns about exactly this at
+   * `/home/bam/systemsketch/src/loop/LoopShapeUtil.tsx:101-104`: "The record,
+   * not the layout".
+   *
+   * WHY the `1x1` guard, on BOTH hooks (the archive's, `LoopShapeUtil.tsx:74-79`,
+   * extended to `onBeforeUpdate` because this lane needs it and the archive did
+   * not): `BaseBoxShapeTool` creates a 1x1 PLACEHOLDER and hands it to
+   * `select.resizing`, which snapshots it and scales that snapshot for the rest
+   * of the gesture. Reconciling the placeholder — including through the
+   * `cornerBlockId` write-back the corner block's creation performs, which is
+   * an ordinary update and lands BEFORE the snapshot — replaces the 1x1 the
+   * whole drag is measured from. That single write is what produced the +239px:
+   * the guard has to cover the update path or it does not exist.
+   */
   override onBeforeCreate(next: RegionShape): RegionShape | void {
-    if (next.props.w <= 1 && next.props.h <= 1) return;
-    return floored(next);
+    return reconciled(this.editor, next);
   }
 
   override onBeforeUpdate(_previous: RegionShape, next: RegionShape): RegionShape | void {
-    return floored(next);
+    return reconciled(this.editor, next);
   }
 
   /**
@@ -248,13 +289,16 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
    *   3. chrome is `excludeFromShapeBounds`, so a laid-out band cannot widen
    *      the bounds and snap a region to its own layout mid-create.
    *
-   * And the box is `regionLayoutOf`'s, not `props.w/h`: the geometry, the
-   * clip path, the container tldraw sizes and the paint all come out of one
-   * call, so a region whose arms outgrow its authored height still has a
-   * selection outline that matches what is on screen (see `regionLayoutOf`).
+   * And the box is `props.w/h` — NOT the layout's, which is the same number by
+   * the time anything hit-tests this shape (`onBeforeCreate`/`onBeforeUpdate`
+   * reconcile it) and is deliberately NOT the same number during the box
+   * tool's 1x1 placeholder. Reading the layout here instead is what made the
+   * geometry disagree with the record the engine scales, and every drag wrong
+   * by their ratio; the reconcile above is where the hug belongs.
    */
   override getGeometry(shape: RegionShape) {
     const layout = regionLayoutOf(this.editor, shape);
+    const width = shape.props.w;
     const chrome = [
       // The title strip: the corner block's own row, full width. The corner
       // block is a CHILD and therefore sits ABOVE this in tldraw's z-order,
@@ -270,13 +314,13 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
 
     return new Group2d({
       children: [
-        new Rectangle2d({ width: layout.width, height: layout.height, isFilled: false }),
+        new Rectangle2d({ width, height: shape.props.h, isFilled: false }),
         ...chrome.map(
           (band) =>
             new Rectangle2d({
               x: 0,
               y: band.y,
-              width: layout.width,
+              width,
               height: band.h,
               isFilled: true,
               isLabel: true,
@@ -288,9 +332,8 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
   }
 
   override getIndicatorPath(shape: RegionShape) {
-    const layout = regionLayoutOf(this.editor, shape);
     const path = new Path2D();
-    path.rect(0, 0, layout.width, layout.height);
+    path.rect(0, 0, shape.props.w, shape.props.h);
     return path;
   }
 
@@ -306,10 +349,14 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
   }
 }
 
-/** The floors, in one place so create and update cannot disagree. */
-function floored(next: RegionShape): RegionShape | void {
-  const w = Math.max(next.props.w, REGION_MIN_WIDTH_PX);
-  const h = Math.max(next.props.h, REGION_MIN_HEIGHT_PX);
+/** The reconcile, in one place so create and update cannot disagree. Returns
+ *  nothing when the record is already true, so an update that changed only
+ *  `name` does not churn a second record out of this hook. */
+function reconciled(editor: Editor, next: RegionShape): RegionShape | void {
+  if (isRegionPlaceholder(next)) return;
+  const layout = regionLayoutOf(editor, next);
+  const w = Math.max(layout.width, REGION_MIN_WIDTH_PX);
+  const h = Math.max(layout.height, REGION_MIN_HEIGHT_PX);
   if (w === next.props.w && h === next.props.h) return;
   return { ...next, props: { ...next.props, w, h } };
 }
