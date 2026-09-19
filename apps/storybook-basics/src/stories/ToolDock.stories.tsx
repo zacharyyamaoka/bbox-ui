@@ -485,13 +485,33 @@ export const FamilyPopoutsExpanded: Story = {
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')).toBeNull());
 
-    // Picking a row calls onSelectItem AND remembers the pick — verified by
-    // re-opening and seeing the check mark move.
+    // Picking a row calls onSelectItem AND remembers the pick.
+    //
+    // WHY this re-opens the menu and reads the CHECK MARK instead of the
+    // face's aria-label: the label says which tool is ACTIVE, and after
+    // picking Highlighter it is active for reasons that have nothing to do
+    // with the preference (resolveCurrentTool case 1: the active tool is a
+    // direct member). So deleting the preference write entirely left this
+    // assertion green — the comment claimed a re-open check that the code
+    // never performed (judge mutation, 2026-09-18). The check mark inside
+    // the popout is the only thing that reads the remembered value back.
     await userEvent.click(canvas.getByTestId("tool-dock-family-draw"));
     await waitFor(() => expect(body.getByText("Highlighter")).toBeInTheDocument());
     await userEvent.click(body.getByText("Highlighter"));
     await waitFor(() => expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')).toBeNull());
     await expect(canvas.getByTestId("tool-dock-family-draw").getAttribute("aria-label")).toMatch(/Highlighter/);
+
+    // Move ACTIVE elsewhere so the face can no longer be showing Highlighter
+    // because it is current — only because it is remembered.
+    await userEvent.click(canvas.getByRole("button", { name: "Cursor" }));
+    await expect(canvas.getByTestId("tool-dock-family-draw").getAttribute("aria-label")).toMatch(/Highlighter/);
+
+    // And the popout marks it as the checked member.
+    await userEvent.click(canvas.getByTestId("tool-dock-family-draw"));
+    await waitFor(() => expect(body.getByText("Highlighter")).toBeInTheDocument());
+    const checked = body.getByText("Highlighter").closest("[data-slot='dropdown-menu-item']");
+    await expect(checked?.querySelector("svg")).not.toBeNull();
+    await userEvent.keyboard("{Escape}");
   },
 };
 

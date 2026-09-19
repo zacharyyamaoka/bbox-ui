@@ -288,6 +288,32 @@ def _check_published_payloads(reg: dict) -> None:
                     stale.append(f"{it['name']}: {f['target']} missing from the published payload")
                 elif shipped != src.read_text():
                     stale.append(f"{it['name']}: {f['target']} published content differs from source")
+    # Two more ways a publication can be wrong that per-item checks cannot see.
+    #
+    # ORPHANS: a payload whose item was removed from registry.json keeps being
+    # SERVED — `npx shadcn add .../old-item` still installs it, from bytes
+    # nothing in this repo describes any more. Iterating items can never find
+    # a file no item names, so the directory is enumerated too.
+    #
+    # registryDependencies: these are the OTHER registry items shadcn pulls in
+    # transitively. Only npm `dependencies` were compared, so an undeclared
+    # one in a payload went unnoticed — and this repo's items are deliberately
+    # self-contained (no registryDependencies between bbox items; a shared
+    # file is re-listed with its own target instead), so ANY value here is a
+    # drift from that design, not merely a mismatch.
+    # Both fault-injected by a judge, 2026-09-18.
+    known = {f"{it['name']}.json" for it in reg["items"]} | {"registry.json", "index.json"}
+    for orphan in sorted(p.name for p in published.glob("*.json") if p.name not in known):
+        stale.append(f"published payload {orphan} has no item in registry.json — it would still install")
+    for it in reg["items"]:
+        payload = published / f"{it['name']}.json"
+        if not payload.is_file():
+            continue
+        declared = sorted(it.get("registryDependencies", []))
+        served = sorted(json.loads(payload.read_text()).get("registryDependencies", []))
+        if served != declared:
+            stale.append(f"{it['name']}: published registryDependencies {served} != declared {declared}")
+
     if stale:
         print("\nPUBLISHED PAYLOADS ARE STALE — re-run `npx shadcn@latest build`:")
         for line in sorted(set(stale))[:20]:

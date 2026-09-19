@@ -214,20 +214,24 @@ export const MultipleGroups: Story = {
 
 /** Clicking a row calls `onActivate` with that exact diagnostic — "select and fit the affected board objects". */
 export const ActivateRow: Story = {
-  render: function Render() {
-    const onActivate = fn();
+  args: { onActivate: fn() },
+  render: function Render(args) {
+    // See PanelShell.CloseFires: a spy created in the render closure is
+    // unreachable from `play`, so this story clicked a diagnostic and
+    // asserted nothing. `args` is what makes the assertion possible.
     const groups: DiagnosticGroup[] = [
       { id: "board", label: "Board", diagnostics: [{ id: "w1", code: "block-title.blank", severity: "warning", message: "Block has no title", detail: "Name this Block." }] },
     ];
     return (
       <Shell>
-        <ProblemsPanel groups={groups} counts={{ all: 1, error: 0, warning: 1 }} severities={SEVERITIES} filter="all" onFilterChange={fn()} onActivate={onActivate} />
+        <ProblemsPanel groups={groups} counts={{ all: 1, error: 0, warning: 1 }} severities={SEVERITIES} filter="all" onFilterChange={fn()} onActivate={args.onActivate} />
       </Shell>
     );
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByText("Block has no title"));
+    await expect(args.onActivate).toHaveBeenCalledTimes(1);
   },
 };
 

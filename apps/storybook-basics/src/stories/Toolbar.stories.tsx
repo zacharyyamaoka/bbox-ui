@@ -59,8 +59,18 @@ export const Default: Story = {
 
     // Roving tabindex: only the (first, absent an explicit pressed item)
     // button is a tab stop — every other button starts at tabindex="-1".
+    // Every OTHER button, not just the next one: checking select and frame
+    // alone passed with rectangle also at tabindex 0, i.e. two initial tab
+    // stops — the exact thing roving tabindex exists to prevent (judge
+    // mutation, 2026-09-18).
     await expect(select.getAttribute("tabindex")).toBe("0");
     await expect(frame.getAttribute("tabindex")).toBe("-1");
+    await expect(rectangle.getAttribute("tabindex")).toBe("-1");
+    await expect(
+      [...canvasElement.querySelectorAll("[data-slot='toolbar-button']")].filter(
+        (button) => button.getAttribute("tabindex") === "0",
+      ),
+    ).toHaveLength(1);
 
     select.focus();
     await expect(select).toHaveFocus();

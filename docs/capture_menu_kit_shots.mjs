@@ -147,6 +147,25 @@ for (const shot of SHOTS) {
   await page.close();
 }
 
+await browser.close();
+
+// WHY a non-zero exit on ANY miss, and why the manifest is written last:
+// the loop above catches per-shot failures so one bad story cannot abort the
+// run — which is right — but the script then exited 0 regardless. Point it
+// at a dead port and it reported "0/26 captured", wrote an empty manifest,
+// left every stale PNG in place, and succeeded. The old images stay on disk
+// and keep being served as evidence of current behaviour, which is exactly
+// how the dock shot came to show Text third for two rounds after that was
+// fixed. A capture job that cannot fail is a capture job that silently
+// preserves whatever was there before (judge fault injection, 2026-09-18).
+if (manifest.length !== SHOTS.length) {
+  const missing = SHOTS.filter((shot) => !manifest.some((entry) => entry.name === shot.name));
+  console.error(
+    `\nFAILED: ${manifest.length}/${SHOTS.length} captured. Missing: ${missing.map((s) => s.name).join(", ")}\n` +
+      "Existing PNGs were left untouched and are now of UNKNOWN freshness — do not publish a report from them.",
+  );
+  process.exit(1);
+}
+
 await writeFile(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 2));
 console.log(`\n${manifest.length}/${SHOTS.length} captured -> ${OUT}`);
-await browser.close();

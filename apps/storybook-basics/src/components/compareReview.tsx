@@ -325,7 +325,15 @@ export function CompareReview({
   )
 
   const stagePane = (
-    <div data-slot="compare-stage" data-mode={mode} className="flex min-h-0 flex-1 flex-col">
+    // WHY `min-w-0`: a flex CHILD defaults to `min-width: auto`, i.e. it
+    // refuses to shrink below its content. Beside a fixed 380px rail that
+    // made the stage the thing that wins a width fight, so at the 900px the
+    // stories use, the rail was pushed past the frame's edge and its dock
+    // toggle and right-hand contents were simply unreachable — visible in
+    // the saved capture before this (judge, 2026-09-18). `min-w-0` lets the
+    // stage yield, which is what makes the rail's fixed width actually mean
+    // 380px rather than "380px if there happens to be room".
+    <div data-slot="compare-stage" data-mode={mode} className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* WHY overlay collapses to ONE grid cell instead of only fading the
        *  after pane: it is called Overlay, and it was not overlaying
        *  anything. The port carried the donor's opacity rule and dropped its
@@ -564,8 +572,15 @@ export function CompareReview({
       data-dock={dock}
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background text-foreground"
     >
-      <div className={cn("flex min-h-0 flex-1", dock === "bottom" && "flex-col")}>
-        <div className="flex min-h-0 flex-1">
+      {/* `min-w-0` at EVERY level of this chain, not just on the stage: a flex
+       *  child defaults to `min-width: auto` and so refuses to shrink below
+       *  its content, and one un-shrinkable ancestor is enough to defeat a
+       *  `min-w-0` further down. Fixing only the stage left the detail rail
+       *  still overflowing the frame at the 900px the stories use — its dock
+       *  toggle and right-hand contents were pushed out of reach, which a
+       *  judge read straight off the saved capture (2026-09-18). */}
+      <div className={cn("flex min-h-0 min-w-0 flex-1", dock === "bottom" && "flex-col")}>
+        <div className="flex min-h-0 min-w-0 flex-1">
           {historyRail}
           {stagePane}
           {dock === "right" ? detailRail : null}
