@@ -49,6 +49,46 @@ export interface Wire {
   /** Default is `Trace`'s own default (`"arrow"`). */
   markerEnd?: TraceMarkerEnd;
   color?: string;
+  /**
+   * Block/region/arm ids this wire is ALLOWED to pass through — the
+   * containers its two ends live inside (a host derives it from
+   * `ancestorsOf`; `sceneWires.ts`). `WireLayer` treats every other
+   * measured box as a keep-out when `routing === "elbow"`: that is the
+   * whole of "cables that do not flow through a region must route around
+   * it — bypass above or below" (docs/CONTROL-FLOW-PLAN.md, lane D).
+   */
+  through?: readonly string[];
+  /** Text of a pill riding the wire (`TraceBadge`): `z⁻¹` on a delayed
+   *  cable, `mut` on an effect cable. Absent = no pill. */
+  badge?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Keep-outs (lane D) — CONTRACT STUB, frozen by wiring.test.ts         */
+/* ------------------------------------------------------------------ */
+
+/** A measured box a wire may have to avoid, keyed by the id that stamped it
+ *  (`data-block-id`, `data-region-id` or `data-arm-id`). Container-local px. */
+export interface KeepOutRect {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The obstacles ONE wire routes around: every rect except its own two
+ * endpoint blocks and everything in `through`. Input order, always a new
+ * array, `{x, y, w, h}` only (an `ElbowRect`) — the endpoint boxes travel
+ * separately as the router's `fromBox`/`toBox`.
+ */
+export function keepOutsFor(
+  wire: Pick<Wire, "from" | "to" | "through">,
+  rects: readonly KeepOutRect[],
+): { x: number; y: number; w: number; h: number }[] {
+  void wire; void rects;
+  throw new Error("components/wiring.ts: lane D of docs/CONTROL-FLOW-PLAN.md has not landed yet");
 }
 
 /* ------------------------------------------------------------------ */

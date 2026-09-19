@@ -64,6 +64,22 @@ export type HostNodeData = {
   value?: string;
   writers?: string[];
   readers?: string[];
+  /* -- type: "region" (scene/region.ts's REGION_NODE_TYPE) ------------- */
+  /** The control-flow vocabulary — see `hosts/regionScene.ts`. A region's
+   *  CORNER BLOCK reads `name`, `ports`, `w`/`h` exactly as a `block` does:
+   *  the corner block IS this node's interface ("everything is a block"),
+   *  and the frame around it carries scope and no value ports
+   *  (docs/CONTROL-FLOW-PLAN.md). */
+  region?: import("./regionScene").RegionData;
+  /** A chip in the corner block's header — a loop's "iteration 3 of 7"
+   *  (donor loopModel.ts:77-78's `turn`, generalised to any region). */
+  badge?: string;
+  /* -- type: "arm" (scene/controlFlow.ts's ARM_NODE_TYPE) --------------- */
+  arm?: import("./regionScene").ArmData;
+  /* -- any block ------------------------------------------------------ */
+  /** Control-exit marks. DP - Break & Continue, B5: a mark beside the call,
+   *  never a cable — "break is not data flow". Drawn as badges, no wire. */
+  marks?: ("break" | "continue" | "pass")[];
 };
 
 export type HostScene = BlockScene<HostNodeData, WireStyleData>;
