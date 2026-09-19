@@ -79,6 +79,15 @@ export interface MenuAction {
   shortcut?: string;
   disabled?: boolean;
   destructive?: boolean;
+  /** A toggle row (Preferences ▸ Snap mode). Present → the burger renders a
+   *  `DropdownMenuCheckboxItem` with `aria-checked`; absent → a plain item.
+   *  CONTRACT (docs/CHROME-FILES-SETTINGS-PLAN.md, lane chrome-rename-burger):
+   *  adds-only, every current consumer omits it. */
+  checked?: boolean;
+  /** The row's full text on hover, e.g. an Open recent row's absolute path —
+   *  truthful rendering: a truncated label keeps its whole value one hover
+   *  away. Adds-only, same plan. */
+  title?: string;
   run(): void;
 }
 
