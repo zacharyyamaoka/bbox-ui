@@ -6,7 +6,7 @@
 // Plain node: `createTLStore` is the same store the editor mounts, and
 // `store.listen` fires the same `HistoryEntry` the app's subscription reads
 // — so what this proves in node is what the app emits in the browser.
-import { createBindingId, createShapeId, createTLStore, type TLShapeId } from "tldraw";
+import { createBindingId, createShapeId, createTLStore, type TLShape, type TLShapeId } from "tldraw";
 import { describe, expect, it } from "vitest";
 
 import { editEventsFromDiff, subscribeEditEvents, type EditBatch, type EditEvent } from "./editEvents";
@@ -15,7 +15,7 @@ import { BLOCK_SHAPE_TYPE, CODE_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE }
 
 function makeStore() {
   const store = createTLStore({ shapeUtils: SHAPE_UTILS, bindingUtils: BINDING_UTILS });
-  store.ensureStoreIsUsable();
+  (store as unknown as { ensureStoreIsUsable(): void }).ensureStoreIsUsable(); // @internal in the public types, present at runtime
   const pageId = store.allRecords().find((r) => r.typeName === "page")!.id;
   const batches: EditBatch[] = [];
   const stop = subscribeEditEvents(store, (batch) => batches.push(batch));
@@ -35,7 +35,7 @@ function makeStore() {
     meta: {},
     props: { ...defaults(type), ...props },
     ...extra,
-  });
+  }) as unknown as TLShape;
   const events = () => batches.flatMap((b) => b.events);
   const last = () => batches[batches.length - 1];
   return { store, pageId, batches, stop, shape, events, last };

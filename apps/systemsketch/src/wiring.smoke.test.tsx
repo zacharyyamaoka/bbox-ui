@@ -7,7 +7,7 @@
 // off-limits to builders.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
-import type { TLShapeId } from "tldraw";
+import { createShapeId, type TLShapeId } from "tldraw";
 
 import { sceneFromRecords } from "./document/sceneFromStore";
 import { BLOCK_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "./shapes/types";
@@ -23,7 +23,7 @@ const PORTS_OUT = { left: [], right: [{ id: "out", name: "out", type: "Pose" }],
 const PORTS_IN = { left: [{ id: "in", name: "in", type: "Pose" }, { id: "cfg", name: "cfg", type: "" }], right: [], top: [], bottom: [] };
 
 function block(name: string, x: number, y: number, ports: unknown): TLShapeId {
-  const id = app!.editor.createShapeId();
+  const id = createShapeId();
   app!.editor.createShape({ id, type: BLOCK_SHAPE_TYPE, x, y, props: { name, view: "port", ports } } as never);
   return id;
 }

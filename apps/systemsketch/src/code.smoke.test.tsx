@@ -5,7 +5,7 @@
 // the plan (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5, L1), off-limits to builders.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
-import type { TLShapeId } from "tldraw";
+import { createShapeId, type TLShapeId } from "tldraw";
 
 import { CODE_SHAPE_TYPE, CODE_TOOL_ID } from "./shapes/types";
 import { canvasOf, centreOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
@@ -24,7 +24,7 @@ interface CodeShapeLike {
 }
 
 function place(code: string): TLShapeId {
-  const id = app!.editor.createShapeId();
+  const id = createShapeId();
   app!.editor.createShape({ id, type: CODE_SHAPE_TYPE, x: 140, y: 120, props: { code, language: "python" } } as never);
   return id;
 }
@@ -85,7 +85,7 @@ describe("L1 — code shape", () => {
     app = await mountApp();
     const plain = place("pass");
     expect((app.editor.getShape(plain) as CodeShapeLike).props.origin).toBeNull();
-    const id = app.editor.createShapeId();
+    const id = createShapeId();
     app.editor.createShape({ id, type: CODE_SHAPE_TYPE, x: 0, y: 0, props: { code: "def run(): ...", origin: { uri: "stereo.py", anchor: "run", contentHash: "sha256:" + "a".repeat(64) } } } as never);
     expect((app.editor.getShape(id) as CodeShapeLike).props.origin?.uri).toBe("stereo.py");
   });

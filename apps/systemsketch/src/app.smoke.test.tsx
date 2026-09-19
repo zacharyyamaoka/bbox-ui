@@ -10,7 +10,7 @@
 // synthetic events are a vacuous gesture against a canvas engine).
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
-import type { TLShapeId } from "tldraw";
+import { createShapeId, type TLShapeId } from "tldraw";
 
 import { BLOCK_SHAPE_TYPE, BLOCK_TOOL_ID } from "./shapes/types";
 import { canvasOf, centreOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
@@ -72,7 +72,7 @@ describe("L0 — the app is stock tldraw with one system slot", () => {
 
   it("ports given as props render as dots and their measured anchors land on the dots (shape-local, survives zoom)", async () => {
     app = await mountApp();
-    const id = app.editor.createShapeId();
+    const id = createShapeId();
     app.editor.createShape({
       id,
       type: BLOCK_SHAPE_TYPE,
@@ -121,7 +121,7 @@ describe("L0 — the app is stock tldraw with one system slot", () => {
 
   it("dragging a block by its header moves it (drag from cold, no prior selection); pressing its port rail does not", async () => {
     app = await mountApp();
-    const id = app.editor.createShapeId();
+    const id = createShapeId();
     app.editor.createShape({
       id,
       type: BLOCK_SHAPE_TYPE,

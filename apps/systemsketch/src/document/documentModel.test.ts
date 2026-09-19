@@ -10,7 +10,7 @@
 // Each `describe` names the lane that turns it green (L0 block, L1 code,
 // L2 port, L3 wire, L5 region). A lane may not edit this file; if a contract
 // line here is wrong the lane reports it and the dispatcher decides.
-import { createShapeId, createTLStore, getSnapshot, loadSnapshot, createBindingId, type TLShapeId } from "tldraw";
+import { createShapeId, createTLStore, getSnapshot, loadSnapshot, createBindingId, type TLShape, type TLShapeId } from "tldraw";
 import { describe, expect, it } from "vitest";
 
 import { BINDING_UTILS, SHAPE_UTILS } from "../shapes/registry";
@@ -22,7 +22,9 @@ function store() {
 
 /** The records a store needs before a shape can live on a page. */
 function seedPage(s: ReturnType<typeof store>): { pageId: string } {
-  s.ensureStoreIsUsable();
+  // `ensureStoreIsUsable` exists at runtime but is `@internal` in tldraw's public
+  // types; the cast keeps this harness on the same seed path the Editor uses.
+  (s as unknown as { ensureStoreIsUsable(): void }).ensureStoreIsUsable();
   const pageId = s.allRecords().find((r) => r.typeName === "page")!.id;
   return { pageId };
 }
@@ -45,7 +47,7 @@ function shapeRecord(s: ReturnType<typeof store>, id: TLShapeId, type: string, p
     meta: {},
     props,
     ...extra,
-  };
+  } as unknown as TLShape;
 }
 
 function defaultsOf(type: string): Record<string, unknown> {

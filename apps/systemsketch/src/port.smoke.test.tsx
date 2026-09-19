@@ -5,7 +5,7 @@
 // builders.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
-import type { TLShapeId } from "tldraw";
+import { createShapeId, type TLShapeId } from "tldraw";
 
 import { FLOATING_PORT_ID, PORT_SHAPE_TYPE, PORT_TOOL_ID } from "./shapes/types";
 import { centreOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
@@ -34,7 +34,7 @@ describe("L2 — floating port shape", () => {
 
   it("renders the trunk LabeledPort, measures its single anchor onto the dot, and carries its name and type literally", async () => {
     app = await mountApp();
-    const id = app.editor.createShapeId();
+    const id = createShapeId();
     app.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 200, y: 160, props: { name: "gain_x  ", type: "float", direction: "in" } } as never);
 
     const dot = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-slot="port"] [data-slot="port-dot"]`), { what: "the LabeledPort's dot" });
@@ -57,7 +57,7 @@ describe("L2 — floating port shape", () => {
   it("direction decides which side the dot sits on (in → dot left of label; out → dot right of label)", async () => {
     app = await mountApp();
     const mk = (direction: "in" | "out", y: number) => {
-      const id = app!.editor.createShapeId();
+      const id = createShapeId();
       app!.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 100, y, props: { name: "p", type: "", direction } } as never);
       return id;
     };
@@ -76,7 +76,7 @@ describe("L2 — floating port shape", () => {
 
   it("double-click edits the name inline and writes it back", async () => {
     app = await mountApp();
-    const id = app.editor.createShapeId();
+    const id = createShapeId();
     app.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 200, y: 160, props: { name: "old", type: "", direction: "out" } } as never);
     const label = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-slot="port-label"]`), { what: "label" });
     await userEvent.dblClick(label);

@@ -8,7 +8,7 @@
 // (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5, L5), off-limits to builders.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
-import type { TLShapeId } from "tldraw";
+import { createShapeId, type TLShapeId } from "tldraw";
 
 import { sceneFromRecords } from "./document/sceneFromStore";
 import { BLOCK_SHAPE_TYPE, BRANCH_TOOL_ID, LOOP_TOOL_ID, REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "./shapes/types";
@@ -80,9 +80,9 @@ describe("L5 — regions: control flow is containment, the header is a real bloc
 
   it("dragging a block into a region re-parents it (stock frame containment); the derived scene shows nesting, never an edge", async () => {
     app = await mountApp();
-    const regionId = app.editor.createShapeId();
+    const regionId = createShapeId();
     app.editor.createShape({ id: regionId, type: REGION_SHAPE_TYPE, x: 300, y: 120, props: { kind: "while", name: "While Loop", w: 420, h: 300 } } as never);
-    const blockId = app.editor.createShapeId();
+    const blockId = createShapeId();
     app.editor.createShape({ id: blockId, type: BLOCK_SHAPE_TYPE, x: 40, y: 40, props: { name: "refine()", view: "port", ports: { left: [], right: [], top: [], bottom: [] } } } as never);
     const header = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${blockId}"] [data-slot="block-header"]`), { what: "header" });
     const regionEl = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${regionId}"]`), { what: "region" });
@@ -100,9 +100,9 @@ describe("L5 — regions: control flow is containment, the header is a real bloc
 
   it("a region is never a wire target — a drag from a dot onto the region creates no wire", async () => {
     app = await mountApp();
-    const regionId = app.editor.createShapeId();
+    const regionId = createShapeId();
     app.editor.createShape({ id: regionId, type: REGION_SHAPE_TYPE, x: 400, y: 100, props: { kind: "plain", name: "", w: 300, h: 240 } } as never);
-    const a = app.editor.createShapeId();
+    const a = createShapeId();
     app.editor.createShape({ id: a, type: BLOCK_SHAPE_TYPE, x: 60, y: 160, props: { name: "a", view: "port", ports: { left: [], right: [{ id: "out", name: "out", type: "" }], top: [], bottom: [] } } } as never);
     const dot = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${a}"] [data-port-id="out"] [data-slot="port-dot"]`), { what: "dot" });
     const regionEl = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${regionId}"]`), { what: "region" });
@@ -114,7 +114,7 @@ describe("L5 — regions: control flow is containment, the header is a real bloc
 
   it("a branch region renders its arms as titled rows inside the frame, in order", async () => {
     app = await mountApp();
-    const id = app.editor.createShapeId();
+    const id = createShapeId();
     app.editor.createShape({
       id,
       type: REGION_SHAPE_TYPE,

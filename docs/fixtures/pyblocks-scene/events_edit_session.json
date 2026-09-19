@@ -509,7 +509,6 @@
       "type": "data-changed",
       "nodeId": "function:run@3:0/boundary:selected-function",
       "key": "color",
-      "from": null,
       "to": "teal"
     },
     {

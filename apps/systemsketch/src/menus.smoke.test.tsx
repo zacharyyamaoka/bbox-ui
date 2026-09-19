@@ -3,6 +3,7 @@
 // problems panels, and status strip are mounted through tldraw's component
 // seams and wired to the live editor. Committed with the plan
 // (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5, L4), off-limits to builders.
+import { createShapeId } from "tldraw";
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -16,7 +17,7 @@ afterEach(() => {
 });
 
 function placeBlock(name: string, x = 200, y = 200) {
-  const id = app!.editor.createShapeId();
+  const id = createShapeId();
   app!.editor.createShape({ id, type: BLOCK_SHAPE_TYPE, x, y, props: { name, view: "port", ports: { left: [{ id: "in", name: "in", type: "" }], right: [], top: [], bottom: [] } } } as never);
   return id;
 }
