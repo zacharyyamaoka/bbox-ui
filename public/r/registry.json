@@ -1441,6 +1441,11 @@
           "target": "components/bbox/barSize.tsx"
         },
         {
+          "path": "apps/storybook-basics/src/components/controlGlyphs.css",
+          "type": "registry:style",
+          "target": "components/bbox/controlGlyphs.css"
+        },
+        {
           "path": "apps/storybook-basics/src/components/controlGlyphs.tsx",
           "type": "registry:component",
           "target": "components/bbox/controlGlyphs.tsx"

@@ -59,6 +59,13 @@
 //      literal `0.35` travels as a comment-cited number, not a live import.
 import type { ReactElement, ReactNode } from "react";
 
+// The glyphs are written AGAINST this stylesheet's contract (outlined by
+// default, `[data-role="solid"]` to mean painted), so importing it here rather
+// than leaving it to the host is what makes the component self-contained —
+// same call codeEditor.tsx:62 makes for codeEditor.css, and what lets the
+// registry generator ship it without anyone declaring it by hand.
+import "./controlGlyphs.css";
+
 /** One family's preview renderer: a control's raw value in, a drawn (or
     absent) preview out. No editor, no DOM measurement, no engine types. */
 export type GlyphRenderer = (value: string | undefined) => ReactNode;
