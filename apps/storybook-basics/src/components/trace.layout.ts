@@ -137,6 +137,25 @@ export interface TraceTerminalSpec {
 export type TraceRouting = "straight" | "slanted" | "curved" | "elbow";
 
 /**
+ * What a cable draws as when nobody says.
+ *
+ * WHY: "by default elbow arrows should always be used. never straight
+ * arrows" — Zach, 2026-09-19, looking at `Pasted image 20260919114952.png`
+ * (Source → A → B → Sink drawn as diagonal chords). The other three
+ * routings remain SELECTABLE — `straight` is still what a caller gets by
+ * asking for it, and `TraceRouting.stories.tsx` still draws all four side
+ * by side — but none of them is ever what a caller gets by saying nothing.
+ *
+ * It lives HERE, beside the union it names, and not in `trace.tsx`, because
+ * three unrelated seams have to agree on it: the `Trace` component's own
+ * prop default, `WireLayer`'s resolution (which must know the answer BEFORE
+ * it decides whether to collect keep-outs), and the tldraw host's overlay.
+ * A default spelled three times is how "never straight" becomes true in two
+ * hosts and false in the third.
+ */
+export const DEFAULT_TRACE_ROUTING: TraceRouting = "elbow";
+
+/**
  * The router's side for each end, from the frozen contract:
  *
  *   side(from) = from.dir                 // the wire LEAVES along the flow

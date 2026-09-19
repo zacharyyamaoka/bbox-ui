@@ -61,6 +61,9 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import type { Diagnostic } from "./highlighter";
+// The visual-variant registry (lane `ports`, 2026-09-19): pinned per
+// BlockPort for a gallery; omitted, every port reads the document.
+import type { PortVariantId } from "../skin/portVariants";
 import { LabeledPort } from "./labeledPort";
 import { Port, type PortState } from "./port";
 import { BLOCK_SIDES, type BlockSide, type PortSize } from "./port.layout";
@@ -158,7 +161,9 @@ export interface BlockPortProps {
    * `FourEdges` shows today.
    */
   collapsePorts?: boolean;
-  /** Painted diameter for rail dots and for collapsed stand-in dots. */
+  /** Painted diameter for rail dots and for collapsed stand-in dots.
+   *  Omit (since 2026-09-19; was `"md"`) and the VARIANT decides — that
+   *  is how the default small dot reaches every block nobody sized. */
   diameter?: PortSize;
   /**
    * Stamped as `data-block-id`. Group B's wire layer resolves a `WireEnd`
@@ -179,6 +184,13 @@ export interface BlockPortProps {
    * render for why it bypasses `PortEdge`/the rail machinery entirely.
    */
   functionPort?: boolean;
+  /**
+   * The visual variant for every port on every wall (src/skin/
+   * portVariants.ts). Omit — the normal case — and each port reads the
+   * document-wide `<html data-bbox-port-variant>` (default `v1`, the
+   * small pair); set it to pin this block, as the variant gallery does.
+   */
+  variant?: PortVariantId;
 }
 
 /* ------------------------------------------------------------------ */
@@ -331,9 +343,10 @@ export function BlockPort({
   portLayout = "inline",
   edges,
   collapsePorts,
-  diameter = "md",
+  diameter,
   id,
   functionPort = false,
+  variant,
 }: BlockPortProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const collapse = collapsePorts ?? view === "simple";
@@ -388,9 +401,9 @@ export function BlockPort({
             ...(spec.groups !== undefined ? { groups: spec.groups } : null),
             ...(spec.groupMode !== undefined ? { groupMode: spec.groupMode } : null),
           };
-          return <BlockPortRail key={side} edge={side} spec={spec} plan={finalPlan} bands={bands} diameter={diameter} />;
+          return <BlockPortRail key={side} edge={side} spec={spec} plan={finalPlan} bands={bands} diameter={diameter} variant={variant} />;
         })}
-      {bands && functionPort && <BlockFunctionPort bands={bands} diameter={diameter} />}
+      {bands && functionPort && <BlockFunctionPort bands={bands} diameter={diameter} variant={variant} />}
     </div>
   );
 }
@@ -408,15 +421,22 @@ export function BlockPort({
  * from day one, present-but-empty, so a real label is later one prop
  * change here, not a second component.
  */
-function BlockFunctionPort({ bands, diameter }: { bands: BlockBands; diameter: PortSize }) {
+function BlockFunctionPort({ bands, diameter, variant }: { bands: BlockBands; diameter?: PortSize; variant?: PortVariantId }) {
   const center = functionPortCenterPx(bands);
   if (center == null) return null;
   return (
     <div
       data-slot="block-port-function"
-      style={{ position: "absolute", left: center.x, top: center.y, transform: "translate(-50%, -50%)", zIndex: paintTier("portDot") }}
+      // WHY `display: flex` (lane `ports`, 2026-09-19): as a plain block this
+      // holder was a LINE BOX — 24px tall from the inherited strut, with the
+      // port sitting on its baseline — so `translate(-50%, -50%)` centred
+      // the line, not the dot. The 12px `md` dot happened to land at the
+      // line's middle; the 6px default landed 3px low (measured). A flex
+      // holder is exactly the port's own box, so the translate centres the
+      // dot at any diameter.
+      style={{ position: "absolute", display: "flex", left: center.x, top: center.y, transform: "translate(-50%, -50%)", zIndex: paintTier("portDot") }}
     >
-      <LabeledPort edge="left" diameter={diameter} labelSlot={null} />
+      <LabeledPort edge="left" diameter={diameter} variant={variant} labelSlot={null} />
     </div>
   );
 }
@@ -431,12 +451,14 @@ function BlockPortRail({
   plan,
   bands,
   diameter,
+  variant,
 }: {
   edge: BlockSide;
   spec: BlockEdgeSpec;
   plan: RailPlan;
   bands: BlockBands;
-  diameter: PortSize;
+  diameter?: PortSize;
+  variant?: PortVariantId;
 }) {
   const box = railBoxFor(edge, plan, bands);
   const axis = railAxisFor(edge);
@@ -466,7 +488,7 @@ function BlockPortRail({
   const renderItem: PortEdgeProps["renderItem"] = (item, ctx) =>
     plan.collapsed ? (
       <span data-slot="block-port-item" data-port-id={item.id} data-collapsed-ports={item.id} style={{ display: "inline-flex" }}>
-        <Port state={item.state ?? "empty"} diameter={diameter} diagnostics={item.diagnostics} availability={item.availability} />
+        <Port state={item.state ?? "empty"} diameter={diameter} variant={variant} diagnostics={item.diagnostics} availability={item.availability} producers={item.producers} selected={item.selected} />
       </span>
     ) : (
       <span data-slot="block-port-item" data-port-id={item.id} style={{ display: "inline-flex" }}>
@@ -474,9 +496,17 @@ function BlockPortRail({
           edge={edge}
           state={item.state ?? "empty"}
           diameter={diameter}
+          variant={variant}
           textLayout={ctx.textLayout}
           diagnostics={item.diagnostics}
           availability={item.availability}
+          // Lane `ports` (2026-09-19): the type run, the fan-in count and
+          // selection travel from the item exactly as `diagnostics` does —
+          // the PORT is the subject, the rail is furniture.
+          type={item.type}
+          typeColor={item.typeColor}
+          producers={item.producers}
+          selected={item.selected}
         >
           {item.label}
         </LabeledPort>
@@ -510,6 +540,7 @@ function BlockPortRail({
       <Port
         state={collapsedState(members)}
         diameter={diameter}
+        variant={variant}
         diagnostics={collapsedDiagnostics(members)}
         availability={collapsedAvailability(members)}
       />

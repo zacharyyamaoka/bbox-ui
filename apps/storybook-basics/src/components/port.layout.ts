@@ -41,15 +41,39 @@ import type { CSSProperties } from "react";
 /* (see the donor file's own header for provenance).                   */
 /* ------------------------------------------------------------------ */
 
-export const PORT_DIAMETERS = { sm: 8, md: 12, lg: 18 } as const;
+/**
+ * `xs` (6px) added 2026-09-19 (lane `ports`): the stock React Flow handle's
+ * own box (`@xyflow/react/dist/style.css:250-251`, `width: 6px; height:
+ * 6px`) and the box every default-variant dot renders at — Zach: "the
+ * ports look way too big right now". `sm`/`md`/`lg` are unchanged and
+ * still reachable by an explicit `diameter` prop.
+ */
+export const PORT_DIAMETERS = { xs: 6, sm: 8, md: 12, lg: 18 } as const;
 export type PortSize = keyof typeof PORT_DIAMETERS | number; // number = "Exact"
 
 export const PORT_DIAMETER_LABELS: Record<keyof typeof PORT_DIAMETERS, string> = {
+  xs: "Extra Small",
   sm: "Small",
   md: "Medium",
   lg: "Large",
 };
 
+/**
+ * Since 2026-09-19 (lane `ports`) these two are the RESERVED ring allowance,
+ * not the painted rings. What actually paints is the variant's own
+ * `dot.gap`/`dot.ring` (`src/skin/portVariants.ts` — v1 paints 1 + 1.5), and
+ * every variant's overhang is ≤ this allowance (`PortVariants.stories.tsx`
+ * asserts it). WHY the allowance stays at the old 2 + 3 rather than
+ * following v1: every label, lane and header inset clears the dot by
+ * `PORT_RING_OVERHANG_PX + PORT_LABEL_GAP`, and a dozen consumers read that
+ * sum as a closed form (`blockPort.layout.ts`, `portEdge.tsx`'s lane,
+ * `detach/definitions/port.ts`, the app's `PortFace` spacer). Keeping the
+ * allowance fixed means a variant's RING never re-flows a label — text
+ * moves only by half the change in the dot's box (≤ 3px across the five) —
+ * and every consumer keeps agreeing by construction, with no variant
+ * plumbing in pure layout code. The cost is that a thin-ringed variant's
+ * label sits a couple of px further from its ring than a thick-ringed one's.
+ */
 export const PORT_SURFACE_RING_PX = 2;
 export const PORT_STATE_RING_PX = 3;
 // WHY: the rings are box-shadow, painted OUTSIDE the dot's layout box — any
@@ -151,13 +175,21 @@ export function inwardTextLayout(side: BlockSide): PortTextLayout {
   }
 }
 
-/** Port's own text-size rung — same four px values as EditableText's
- * ladder (`editableText.layout.ts`'s `EDITABLE_TEXT_SIZES`), so a
- * `PortTextSize` passes straight through as an `EditableTextSize` with no
- * translation table. */
-export const PORT_TEXT_SIZES = { sm: 18, md: 24, lg: 36, xl: 44 } as const;
+/**
+ * Port's own text-size rung. `sm`..`xl` are the same four px values as
+ * EditableText's ladder (`editableText.layout.ts`'s `EDITABLE_TEXT_SIZES`).
+ * `xs` (12px) was added 2026-09-19 (lane `ports`) as the DEFAULT rung —
+ * Zach: "I want the port text to be 'small' by default" — and is Port's
+ * own: it has no EditableText twin, because a port label at rest is a
+ * plain span and while editing a `CodeEditor` fed `fontSizePx` directly
+ * (`labeledPort.tsx`'s `DefaultPortLabel`), neither of which goes through
+ * `EDITABLE_TEXT_SIZES`. 12 rather than 13: the Tailwind `text-xs` rung
+ * every other 11–12px caption in this app already sits at.
+ */
+export const PORT_TEXT_SIZES = { xs: 12, sm: 18, md: 24, lg: 36, xl: 44 } as const;
 export type PortTextSize = keyof typeof PORT_TEXT_SIZES;
 export const PORT_TEXT_SIZE_LABELS: Record<PortTextSize, string> = {
+  xs: "Extra Small",
   sm: "Small",
   md: "Medium",
   lg: "Large",

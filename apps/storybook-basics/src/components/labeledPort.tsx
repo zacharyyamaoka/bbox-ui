@@ -54,6 +54,10 @@ import {
 } from "./highlighter";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
 import { Port, type PortState } from "./port";
+// The visual-variant registry (lane `ports`, 2026-09-19): the default dot
+// diameter and text rung when a caller sets neither, the ring overhang the
+// label clears, and the type→colour palette for the by-type variants.
+import { PORT_VARIANT_ATTR, portVariantLabelFont, portVariantVars, usePortVariant, type PortVariantId } from "../skin/portVariants";
 import {
   PORT_DIAMETERS,
   PORT_LABEL_GAP,
@@ -101,7 +105,9 @@ const MIN_LABEL_COLUMNS = 3;
 function DefaultPortLabel({
   children = "",
   direction = "input",
-  textSize = "sm",
+  textSize = "xs",
+  type,
+  fontFamily = "var(--bbox-skin-font-sans, inherit)",
   disabled = false,
   onLabelWrite,
   placeholder,
@@ -114,6 +120,13 @@ function DefaultPortLabel({
   children?: string;
   direction?: PortDirection;
   textSize?: PortTextSize;
+  /** The secondary run — the port's type — drawn after the name at the
+   *  variant's `type.size`/`opacity` (portVariants.css). Rest only: the
+   *  editor edits the NAME, and a type beside a caret reads as editable. */
+  type?: string;
+  /** The label face — the variant's (`portVariantLabelFont`); defaults to
+   *  the skin's sans token, this label's behaviour before variants. */
+  fontFamily?: string;
   disabled?: boolean;
   onLabelWrite?(value: string): void;
   placeholder?: string;
@@ -221,6 +234,10 @@ function DefaultPortLabel({
         data-placeholder={isEmpty && placeholder ? "" : undefined}
         style={{
           fontSize: fontSizePx,
+          // The variant's weight (v2 SystemSketch-original is 500, the
+          // rest 400) — read from the property the port root publishes,
+          // falling back to the plain weight for a bare label.
+          fontWeight: "var(--bbox-port-label-weight, 400)",
           // §5's wavy/dotted underline mark (./diagnostic.tsx's own
           // `diagnosticUnderlineStyle`) — `undefined` when there is
           // nothing to mark, so a plain label's `text-decoration` is
@@ -237,7 +254,10 @@ function DefaultPortLabel({
           // this label's exact behaviour today (no font-family of its own
           // at all), so a consumer who never imports skin.css is
           // byte-identical.
-          fontFamily: "var(--bbox-skin-font-sans, inherit)",
+          // The variant's face (v2 SystemSketch-original is the mono
+          // signature row) — still through the skin's font tokens, so the
+          // sketch skin re-fonts every variant; see `portVariantLabelFont`.
+          fontFamily,
           display: "block",
           minWidth: 0,
           maxWidth: "100%",
@@ -251,6 +271,17 @@ function DefaultPortLabel({
         {isEmpty ? (placeholder ?? "") : value}
       </span>
       </DiagnosticTooltip>
+      {type ? (
+        // Reading order name → type on BOTH directions, never mirrored —
+        // the app's own floating port made the same call and recorded why
+        // (apps/systemsketch/src/shapes/port/PortFace.tsx `RestingLabel`:
+        // mirroring rendered an output as "Image mask", a type-first
+        // annotation language). `white-space: pre` keeps every authored
+        // character (truthful rendering). Paint: portVariants.css.
+        <span data-slot="port-label-type" style={{ marginLeft: 6, fontFamily }}>
+          {type}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -328,6 +359,31 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
   /** Forwarded to `Port` — the halo's diameter in px (default 40). */
   hitPx?: number;
   /**
+   * The visual variant (src/skin/portVariants.ts). Omit and the
+   * document-wide `<html data-bbox-port-variant>` decides (default `v1`);
+   * set it to pin this port. Decides the default `diameter` and `textSize`
+   * when those are omitted too. Its RING never moves the label: the label
+   * clears the fixed `PORT_RING_OVERHANG_PX` allowance past the dot's box
+   * on every variant, so only the box size itself shifts the text.
+   */
+  variant?: PortVariantId;
+  /**
+   * The port's TYPE, drawn as a muted secondary run after the name
+   * (`[data-slot="port-label-type"]`) — "label small inside the row, type
+   * secondary". Also handed to `Port` as `dataType`, where the two by-type
+   * variants (v2, v3) colour the dot from it through their own source's
+   * palette (`portTypePaint`); every other variant colours by state.
+   * Ignored by a host-supplied `labelSlot`, which owns its own runs.
+   */
+  type?: string;
+  /** An explicit CSS colour for the type — wins over either palette. */
+  typeColor?: string;
+  /** Forwarded to `Port` — the fan-in count circle riding the dot, on the
+   *  side away from the label. See `PortProps.producers`. */
+  producers?: number;
+  /** Forwarded to `Port` — see `PortProps.selected`. */
+  selected?: boolean;
+  /**
    * Paint every pointer target this composite owns: the dot's halo (via
    * `Port`) and — when the built-in label is editable — the label's own
    * click-to-edit box. Pure paint; geometry is identical on or off. A
@@ -358,9 +414,9 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
 export function LabeledPort({
   direction = "input",
   edge = "left",
-  diameter = "md",
+  diameter,
   textLayout,
-  textSize = "sm",
+  textSize,
   state = "empty",
   hidden = false,
   dimmed = false,
@@ -385,14 +441,27 @@ export function LabeledPort({
   onLabelWrite,
   placeholder,
   labelLanguage,
+  variant: variantId,
+  type,
+  typeColor,
+  producers,
+  selected = false,
   className,
   style,
   children = "",
   ...props
 }: LabeledPortProps) {
+  // Hooks before the early return — `hidden` is a prop, not a hook order.
+  const variant = usePortVariant(variantId);
   if (hidden) return null;
   const resolvedTextLayout = textLayout ?? inwardTextLayout(edge);
-  const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
+  // Omitted `diameter`/`textSize` fall to the VARIANT, not to a constant —
+  // that is the whole mechanism by which "the small pair is the default"
+  // (Zach's ruling) reaches every port nobody sized explicitly, and by
+  // which the `<html>` switch re-sizes them all.
+  const diameterPx = diameter === undefined ? variant.dot.diameter : typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
+  const resolvedTextSize: PortTextSize = textSize ?? variant.text;
+  const labelFont = portVariantLabelFont(variant);
   const resolvedSecondaryLayout = secondarySlotLayout ?? defaultSecondarySlotLayout(resolvedTextLayout);
 
   // The named layout is the PRESET; an explicit origin/offset reaches past
@@ -432,7 +501,17 @@ export function LabeledPort({
   // makes that impossible by construction: whatever centres THIS component
   // centres the dot, and the label — now an overlay, not a flow sibling —
   // extends outward from wherever it actually sits, at any height.
+  // The label clears the RESERVED ring allowance (`PORT_RING_OVERHANG_PX`),
+  // not this variant's painted ring — see port.layout.ts's WHY: a variant
+  // switch moves text only by the box's own size change, and every layout
+  // consumer that reads the same closed form keeps agreeing.
   const labelSlotStyle = slotPlacementStyle(labelPlacement, { w: diameterPx, h: diameterPx }, PORT_LABEL_GAP);
+
+  // The producers circle rides the side AWAY from the label, so it never
+  // sits on the text: a left-wall port (label flowing right, into the
+  // block) wears it on the left, outside the block, where the cables it
+  // counts actually arrive.
+  const producersAt: "left" | "right" = labelPlacement.origin === "right" ? "left" : "right";
 
   return (
     <div
@@ -441,13 +520,19 @@ export function LabeledPort({
       data-direction={direction}
       data-edge={edge}
       data-text-layout={resolvedTextLayout}
+      {...{ [PORT_VARIANT_ATTR]: variant.id }}
       className={cn("relative inline-flex shrink-0", className)}
-      style={{ width: diameterPx, height: diameterPx, ...style }}
+      // The variant's custom properties, published on THIS root so the label
+      // and type runs (siblings of the dot, not its descendants) read the
+      // same numbers the dot painted with — and so a consumer with only the
+      // component source, no portVariants.css, still renders right.
+      style={{ width: diameterPx, height: diameterPx, ...portVariantVars(variant), ...style }}
       {...props}
     >
       <Port
         state={state}
         diameter={diameter}
+        variant={variant.id}
         dimmed={dimmed}
         hinting={hinting}
         availability={availability}
@@ -455,6 +540,11 @@ export function LabeledPort({
         highlighterKind={highlighterKind}
         hitPx={hitPx}
         showHitRegion={showHitRegion}
+        selected={selected}
+        producers={producers}
+        producersAt={producersAt}
+        dataType={type}
+        typeColor={typeColor}
       />
       {labelSlot !== undefined ? (
         <span data-slot="port-label-slot" className="absolute" style={labelSlotStyle}>
@@ -463,7 +553,9 @@ export function LabeledPort({
       ) : (
         <DefaultPortLabel
           direction={direction}
-          textSize={textSize}
+          textSize={resolvedTextSize}
+          type={type}
+          fontFamily={labelFont}
           disabled={disabled}
           onLabelWrite={onLabelWrite}
           placeholder={placeholder}

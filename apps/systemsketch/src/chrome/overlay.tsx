@@ -14,6 +14,7 @@ import { FloatingSelectionToolbar } from "./floatingToolbar";
 import { SystemSketchPanel } from "./panels";
 import { useProblems } from "./problems";
 import { SystemSketchStatusStrip, type ChromePanel } from "./statusStrip";
+import { VariantSwitch } from "./variantSwitch";
 
 export function Overlay() {
   return (
@@ -150,7 +151,8 @@ function SystemSketchChrome() {
         accident, so the strip is parked above it. At `bottom-3` it measured
         y 846-888 and covered the watermark outright.
       */}
-      <div className="pointer-events-auto absolute right-2 bottom-12">
+      <div className="pointer-events-auto absolute right-2 bottom-12 flex items-center gap-2">
+        <VariantSwitch />
         <SystemSketchStatusStrip
           open={open}
           onToggle={toggle}

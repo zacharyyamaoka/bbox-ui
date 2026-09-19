@@ -61,6 +61,10 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CodeEditor } from "./codeEditor";
+// The visual-variant registry (lane `ports`, 2026-09-19) — threaded down
+// to every default `LabeledPort` this edge draws, the same way
+// `laneLanguage` is; omitted, each port reads the document attribute.
+import type { PortVariantId } from "../skin/portVariants";
 import type { Diagnostic } from "./highlighter";
 import { LabeledPort } from "./labeledPort";
 import type { PortState } from "./port";
@@ -105,6 +109,26 @@ export interface PortEdgeItem {
    *  `PortDotPaintInput.availability`'s own doc
    *  (docs/INVALID-STATES-PLAN.md D5, ruling 5). */
   availability?: "available" | "unavailable";
+  /**
+   * The port's TYPE — drawn by the default `LabeledPort` as the muted
+   * secondary run after the name (lane `ports`, 2026-09-19: "label small
+   * inside the row, type secondary"), and the source of the by-type
+   * variants' colour. Optional: a port with no type renders the name alone.
+   */
+  type?: string;
+  /** An explicit CSS colour for the type, winning over the palette. */
+  typeColor?: string;
+  /**
+   * How many cables meet this port — the fan-in/fan-out count the
+   * `producers-count` lane computes from the scene and the port renders
+   * as a count circle riding the dot (Zach, 2026-09-19: one attach point
+   * in the centre, plus "the producer circle that has the number").
+   * Forwarded to the default `LabeledPort`; a host `renderItem` forwards
+   * it itself, same rule as `diagnostics`.
+   */
+  producers?: number;
+  /** Host-set selection, forwarded to the default `LabeledPort`. */
+  selected?: boolean;
 }
 
 export type PortEdgeArrangeMode = "auto" | "custom";
@@ -271,6 +295,13 @@ export interface PortEdgeProps {
    * does not fit the shape of this problem.
    */
   maxVisible?: number;
+  /**
+   * The visual variant for every default port on this edge (src/skin/
+   * portVariants.ts). Omit — the normal case — and each port reads the
+   * document-wide `<html data-bbox-port-variant>`; set it to pin one edge
+   * (a gallery of all five). Ignored by a host `renderItem`.
+   */
+  variant?: PortVariantId;
 }
 
 /* ------------------------------------------------------------------ */
@@ -394,6 +425,8 @@ interface PortEdgeSlotBoxProps {
    * the same source prop, since only one of the two ever mounts at once).
    */
   labelLanguage?: LanguageSupport;
+  /** `PortEdgeProps.variant`, threaded down the same way `labelLanguage` is. */
+  variant?: PortVariantId;
   /** F-1: `PortEdgeProps.editMode`, threaded down the same way `hideLabel`
    *  already was. */
   editMode?: "single" | "multi";
@@ -450,7 +483,7 @@ const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
 const CARD_OVERLAY_RADIUS = "var(--bbox-skin-radius, var(--radius-lg))";
 const CARD_OVERLAY_STROKE_WIDTH = "var(--bbox-skin-stroke-width, 1px)";
 
-function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage, editMode = "single", onRequestLaneOpen }: PortEdgeSlotBoxProps) {
+function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage, editMode = "single", onRequestLaneOpen, variant }: PortEdgeSlotBoxProps) {
   const textLayout = textLayoutOverride ?? inwardTextLayout(edge);
   // F-1: in `"multi"` mode, a click opens the RAIL's lane, not this port's
   // own inline editor — so `LabeledPort` itself must stay `disabled` (its
@@ -466,7 +499,14 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
         state={item.state ?? "empty"}
         diagnostics={item.diagnostics}
         availability={item.availability}
-        diameter="md"
+        // No `diameter` here since 2026-09-19 (was a hard `"md"`): the
+        // variant decides the default dot, so the small pair Zach asked
+        // for reaches every rail without each edge naming a size.
+        variant={variant}
+        type={item.type}
+        typeColor={item.typeColor}
+        producers={item.producers}
+        selected={item.selected}
         textLayout={textLayout}
         labelSlot={hideLabel ? null : undefined}
         // F-1: `disabled` is the inverse of "armed for single-line editing"
@@ -495,6 +535,18 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
     height: slotMainPx,
     boxSizing: "border-box",
     flexShrink: 0,
+    // WHY `top` (lane `ports`, 2026-09-19): this box is INLINE-level inside
+    // the sortable card (`display: block`), so by default it sits on the
+    // card's text baseline — and an inline-flex box's baseline is its first
+    // item's, i.e. the bottom edge of whatever dot is inside. That made the
+    // slot's position a function of the DOT'S SIZE: the 12px `md` dot
+    // happened to put the box exactly at the card's top, the 6px default dot
+    // shifted every slot 3px down and grew the card to 27px (measured:
+    // member top 153.5 vs card top 150.5 — every rail pitch 45 instead of
+    // 42). Pinning the box to the line's top makes the slot geometry
+    // independent of what is drawn inside it, which is the promise
+    // `PORT_EDGE_SLOT_MIN_PX` already makes to every layout consumer.
+    verticalAlign: "top",
   };
 
   return (
@@ -572,6 +624,7 @@ interface SlotRenderProps {
   editingEnabled?: boolean;
   onLabelWrite?(id: string, value: string): void;
   labelLanguage?: LanguageSupport;
+  variant?: PortVariantId;
   editMode?: "single" | "multi";
   onRequestLaneOpen?(): void;
 }
@@ -612,7 +665,7 @@ function useEnclosingCircleBox(containerRef: RefObject<HTMLDivElement | null>, d
   return box;
 }
 
-function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotMainPx, gapPx, color, renderItem, textLayoutOverride, hideLabel, editingEnabled, onLabelWrite, labelLanguage, editMode, onRequestLaneOpen }: SlotRenderProps) {
+function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotMainPx, gapPx, color, renderItem, textLayoutOverride, hideLabel, editingEnabled, onLabelWrite, labelLanguage, editMode, onRequestLaneOpen, variant }: SlotRenderProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const memberIds = slot.members.map((m) => m.id).join(",");
   const box = useEnclosingCircleBox(containerRef, [memberIds, axis, showPorts, showCard, slotMainPx, gapPx]);
@@ -702,6 +755,7 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
           editingEnabled={editingEnabled}
           onLabelWrite={onLabelWrite}
           labelLanguage={labelLanguage}
+          variant={variant}
           editMode={editMode}
           onRequestLaneOpen={onRequestLaneOpen}
           hideCardSurface
@@ -761,6 +815,7 @@ function SlotBody(props: SlotRenderProps) {
         renderItem={props.renderCollapsed ? (_item, ctx) => props.renderCollapsed?.(members, ctx) : undefined}
         textLayoutOverride={props.textLayoutOverride}
         hideLabel={props.hideLabel}
+        variant={props.variant}
         // F-1: deliberately NOT forwarding `editingEnabled`/`onLabelWrite`
         // here — `collapsedItem` is a synthesized "+N more" pseudo-port with
         // no real label of its own; wiring a write handler to it would let a
@@ -791,6 +846,7 @@ function SlotBody(props: SlotRenderProps) {
       editingEnabled={props.editingEnabled}
       onLabelWrite={props.onLabelWrite}
       labelLanguage={props.labelLanguage}
+      variant={props.variant}
       editMode={props.editMode}
       onRequestLaneOpen={props.onRequestLaneOpen}
     />
@@ -1140,6 +1196,7 @@ function PortEdgeBody({
   editMode = "single",
   laneLanguage,
   maxVisible,
+  variant,
 }: PortEdgeProps) {
   const containerId = id ?? edge;
   const axis = AXIS_FOR_EDGE[edge];
@@ -1361,6 +1418,7 @@ function PortEdgeBody({
                 editingEnabled={editingEnabled}
                 onLabelWrite={handlePortLabelWrite}
                 labelLanguage={laneLanguage}
+                variant={variant}
                 editMode={resolvedEditMode}
                 onRequestLaneOpen={() => setLaneOpen(true)}
               />
@@ -1384,6 +1442,7 @@ function PortEdgeBody({
                 editingEnabled={editingEnabled}
                 onLabelWrite={handlePortLabelWrite}
                 labelLanguage={laneLanguage}
+                variant={variant}
                 editMode={resolvedEditMode}
                 onRequestLaneOpen={() => setLaneOpen(true)}
               />
