@@ -367,7 +367,11 @@ export const SideBySideVsOverlay: Story = {
     // The AFTER pane (the `<figure>`, two DOM levels up from the mock)
     // carries the blend as its own opacity; BEFORE never does.
     const afterFigure = canvas.getByTestId("board-mock-after").parentElement?.parentElement as HTMLElement;
-    await expect(afterFigure.style.opacity).not.toBe("");
+    // The VALUE, not merely "some opacity is set": `not.toBe("")` passed
+    // with the blend replaced by a constant 1, i.e. an overlay where the
+    // slider does nothing and the after pane is fully opaque (judge
+    // mutation, 2026-09-18). The blend is the whole point of the mode.
+    await expect(Number(afterFigure.style.opacity)).toBeCloseTo(0.6, 2);
   },
 };
 

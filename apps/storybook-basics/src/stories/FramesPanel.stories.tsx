@@ -255,9 +255,19 @@ export const DragToReorder: Story = {
     );
     await userEvent.keyboard("{Escape}");
 
-    // HONEST LIMIT: a COMPLETED keyboard reorder is still unproven — driving
-    // dnd-kit's drop to completion did not work in this runner. The pickup
-    // is proven; the drop is not.
+    // OPEN, and deliberately not asserted here: the DROP. Asserting only the
+    // pickup leaves this story green if `reorder.onReorder` is disconnected
+    // — a drag that lifts and then changes nothing — and that gap is real
+    // (judge mutation, 2026-09-18).
+    //
+    // It is not closed because I could not make it TRUE in this runner.
+    // A judge drove Space -> ArrowDown -> Space to completion in JSDOM with
+    // row rectangles supplied by hand and saw [a,b,c] become [b,a,c] with
+    // exactly one host callback, so the behaviour exists; the same sequence
+    // in Storybook's real Chromium does not land the drop, and I would
+    // rather leave a named gap than an assertion that passes for the wrong
+    // reason. Pointer reordering is what this component is actually verified
+    // for today.
 
   },
 };

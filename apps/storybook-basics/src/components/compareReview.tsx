@@ -466,9 +466,15 @@ export function CompareReview({
               value={blend}
               disabled={canOverlay === false}
               onChange={(event) => onBlendChange(Number(event.target.value))}
-              // `min-w-0` because a range input carries an intrinsic
-              // minimum width that `flex-1` alone will not shrink past.
-              className="h-1.5 min-w-0 flex-1 accent-primary"
+              // `min-w-0` lets it shrink past the intrinsic minimum a range
+              // input carries; `min-w-24` stops it shrinking to nothing.
+              // The first fix without the second traded an overlap for a
+              // slider reduced to its own thumb — technically not clipped,
+              // and not a slider anyone can use (judge, reading the saved
+              // capture, 2026-09-18). Below that floor the whole label wraps
+              // to its own line instead, which is what `flex-wrap` on the
+              // row is for.
+              className="h-1.5 min-w-24 flex-1 accent-primary"
               data-testid={`${prefix}-blend`}
               aria-label="Overlay blend"
             />

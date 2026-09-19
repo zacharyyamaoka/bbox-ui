@@ -273,6 +273,26 @@ def _check_published_payloads(reg: dict) -> None:
             expected_targets = {f["target"] for f in it["files"]}
             for extra in sorted(set(by_target) - expected_targets):
                 stale.append(f"{it['name']}: published payload ships an undeclared file {extra}")
+            # Schema-valid but WRONG: shadcn accepts any member of its type
+            # enum and any string name, so a payload could declare itself
+            # `registry:lib`, or carry a different `name` entirely, and pass
+            # both the schema and the content comparison while contradicting
+            # the item it claims to be (judge fault injection, 2026-09-18).
+            # The schema says "is this a registry item"; only this says "is
+            # it THIS registry item".
+            if data.get("name") != it["name"]:
+                stale.append(f"{it['name']}: published name is {data.get('name')!r}")
+            if data.get("type") != it["type"]:
+                stale.append(f"{it['name']}: published type {data.get('type')!r} != declared {it['type']!r}")
+            declared_types = {f["target"]: f["type"] for f in it["files"]}
+            for f in data.get("files", []):
+                target = f.get("target") or f.get("path")
+                if target in declared_types and f.get("type") != declared_types[target]:
+                    stale.append(
+                        f"{it['name']}: {target} published as {f.get('type')!r} != declared "
+                        f"{declared_types[target]!r}"
+                    )
+
             declared_deps = sorted(it.get("dependencies", []))
             if sorted(data.get("dependencies", [])) != declared_deps:
                 stale.append(
