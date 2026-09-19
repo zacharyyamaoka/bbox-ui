@@ -50,6 +50,12 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# WHY same module, not a package import: systemsketch_files.py lives beside
+# this file in scripts/, and both the CLI (script-dir on sys.path[0]) and the
+# test suite (which inserts scripts/ itself) resolve it as a plain top-level
+# module — see scripts/tests/test_systemsketch_files_http.py's DockMountTests.
+from systemsketch_files import GioDesktop, WorkspaceApi, default_lock_root
+
 PRODUCT = "systemsketch-next"
 REPO = Path(__file__).resolve().parents[1]
 APP_DIR = REPO / "apps" / "systemsketch"
@@ -129,10 +135,26 @@ def build_stable() -> dict:
     return record
 
 
+def files_root_from(environment: dict[str, str]) -> Path:
+    """The folder the file host reads and writes real ``.tldr``/``.systemsketch``
+    documents under. ``SYSTEMSKETCH_FILES_ROOT`` overrides it (matching the
+    dev-file-host lane and the smoke tests); by default it's the real home
+    folder, same as the archived app."""
+    override = environment.get("SYSTEMSKETCH_FILES_ROOT")
+    return Path(override) if override else HOME
+
+
 # -------------------------------------------------------------- the server
 
 class StableHandler(http.server.SimpleHTTPRequestHandler):
     build = ""
+    # WHY mounted here rather than a second server/port: Zach, 2026-09-19,
+    # "we need to be able to save real files to the system" — the dock's one
+    # Stable server on :4341 now answers both the built app and
+    # /api/workspace/*, same origin, so the browser needs no second host to
+    # trust. None until `serve()` (or a test) sets it; with no workspace
+    # mounted this handler behaves exactly as it did before this changed.
+    workspace: "WorkspaceApi | None" = None
 
     def do_GET(self) -> None:  # noqa: N802 — the stdlib's spelling
         if self.path.split("?")[0] == "/api/health":
@@ -143,7 +165,14 @@ class StableHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if self.workspace is not None and self.workspace.handle_get(self):
+            return
         super().do_GET()
+
+    def do_POST(self) -> None:  # noqa: N802 — the stdlib's spelling
+        if self.workspace is not None and self.workspace.handle_post(self):
+            return
+        self.send_error(501, f"Unsupported method ({self.command!r})")
 
     def end_headers(self) -> None:
         # The build is immutable per commit, but index.html names the build;
@@ -158,6 +187,13 @@ class StableHandler(http.server.SimpleHTTPRequestHandler):
 
 def serve(port: int, root: Path, build: str) -> None:
     StableHandler.build = build
+    # Mount the file host on this same handler/origin — see the WHY on
+    # StableHandler.workspace above. Real desktop Trash/reveal (GioDesktop);
+    # the archived app's own lock folder when it exists, so a save from
+    # either app excludes the other on the same file (default_lock_root).
+    StableHandler.workspace = WorkspaceApi(
+        files_root_from(os.environ), default_lock_root(HOME), GioDesktop()
+    )
     handler = functools.partial(StableHandler, directory=str(root))
     with http.server.ThreadingHTTPServer(("127.0.0.1", port), handler) as server:
         server.serve_forever()
