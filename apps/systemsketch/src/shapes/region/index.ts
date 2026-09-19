@@ -1,126 +1,102 @@
-// PLACEHOLDER — lane L5 replaces this file whole — Region shapes (Loop, Branch)
-// (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5). What is here is SCHEMA ONLY: the
-// persisted props of `ss-region` exactly as plan §3 spells them, and nothing
-// else. No frame-like containment, no arm rows, no corner-block wiring, no
-// tools — those are L5's, and L5 overwrites this file.
+// src/shapes/region/index.ts — the Region kit (lane L5): Loop and Branch.
 //
-// The two load-bearing ideas meet in this record's shape. `cornerBlockId`
-// names a CHILD `ss-block`: a region grows no ports of its own, because a
-// region's interface IS a real block ("everything is really a block"). And
-// `arms` are rows inside the frame, not terminals — control flow is
-// containment and arms, never a cable, so there is no edge field here at all.
+// A region is a NODE KIND, isolated — never an occurrence of a shared
+// definition, so `ss-region` carries no `definitionId` and `sceneFromRecords`
+// never mints one (`@trunk/scene/region.ts:4-26`; Zach, 2026-09-18: "100% its
+// a node ... 100% region is isolated").
 //
-// WHY the schema lands in L0 and not with its own lane (the one place this
-// file departs from the lane brief's `regionKit = EMPTY_KIT`): the document
-// model is ONE contract, not five. A record only enters a tldraw store if a
-// registered util validates it, so with an empty kit a board written after L5
-// lands cannot be OPENED by an app where it has not — the `.tldr` is refused,
-// not degraded. `src/document/documentModel.test.ts`'s `registry` describe is
-// that rule made executable, and it is an L0 acceptance line: SHAPE_UTILS
-// publishes all five types and BINDING_UTILS the one binding type from day 0.
-// Vocabulary is shared and frozen early; BEHAVIOUR is what a lane owns.
+// The two load-bearing ideas, as this directory spends them:
+//   • EVERYTHING IS A BLOCK — a region's header contract is a real `ss-block`
+//     CHILD in its top-left corner (`./cornerBlock.ts`), so a loop's
+//     `Iterable` is wired by the same gesture as any other port. The region
+//     itself has no ports and no port schema.
+//   • NEVER MIX DATA AND CONTROL LINES — control flow is CONTAINMENT (tldraw
+//     frame parenting) plus arm rows; the region refuses every wire binding
+//     (`RegionShapeUtil.canBind` → false), and a `break` will be a mark, never
+//     a cable.
 //
-// WHY this spells the empty kit's other fields out instead of spreading
-// registry.ts's `EMPTY_KIT`: registry.ts imports THIS file, so a value import
-// back would close a module cycle and the const would be read while still in
-// its temporal dead zone — measured here as "Cannot read properties of
-// undefined (reading 'shapeUtils')" the first time the registry was loaded. An
-// `import type` is erased, so the cycle never exists at runtime.
+// TWO ROWS, ONE SHAPE TYPE. Loop and Branch are dock rows over the same
+// `ss-region`, which is why each tool arms a preset rather than naming its own
+// shape (see `./LoopTool.ts`'s header). `while` is the Loop's other header
+// contract, reached from a view control on a placed region — L4's floating
+// toolbar owns that file, so it is OWED wiring, not a third row.
+//
+// WHY `createElement` instead of JSX (kept verbatim from block/index.ts):
+// src/document/stockBoundary.test.ts requires every kind to publish its kit
+// from `index.ts` exactly ("a missing directory is a broken registry"), and a
+// `.ts` file cannot carry JSX.
 import { createElement } from "react";
-import { HTMLContainer, Rectangle2d, ShapeUtil, T, createShapePropsMigrationSequence, type TLBaseShape } from "tldraw";
+import { GitBranch, Repeat } from "lucide-react";
 
 import type { ShapeKit } from "../registry";
-import { REGION_SHAPE_TYPE } from "../types";
+import { BRANCH_TOOL_ID, LOOP_TOOL_ID } from "../types";
+import { BranchTool } from "./BranchTool";
+import { installRegionKit } from "./cornerBlock";
+import { LoopTool } from "./LoopTool";
+import { RegionShapeUtil } from "./RegionShapeUtil";
 
-// The face every un-landed kind wears. Duplicated per placeholder rather than
-// hoisted into `shared/`: `shared/` is L0's permanent write set and a lane
-// deletes its placeholder whole, so a shared constant would outlive every one
-// of its callers.
-const UNBUILT_FACE_STYLE = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  border: "1px dashed currentColor",
-  borderRadius: 4,
-  opacity: 0.55,
-  font: "12px ui-monospace, monospace",
-  pointerEvents: "all",
-} as const;
-
-export interface RegionArm {
-  id: string;
-  title: string;
-  open: boolean;
-  h: number;
-}
-
-export interface RegionShapeProps {
-  w: number;
-  h: number;
-  kind: "for" | "while" | "branch" | "plain";
-  name: string;
-  /** The CHILD `ss-block` that IS this region's header contract. Empty until
-   *  L5 creates one; never a port list of the region's own. */
-  cornerBlockId: string;
-  arms: RegionArm[];
-}
-
-declare module "@tldraw/tlschema" {
-  interface TLGlobalShapePropsMap {
-    "ss-region": RegionShapeProps;
-  }
-}
-
-export type RegionShape = TLBaseShape<"ss-region", RegionShapeProps>;
-
-/** Schema only. L5 replaces this class with the real one. */
-export class RegionShapeUtil extends ShapeUtil<RegionShape> {
-  static override type = REGION_SHAPE_TYPE;
-
-  static override props = {
-    w: T.number,
-    h: T.number,
-    kind: T.literalEnum("for", "while", "branch", "plain"),
-    name: T.string,
-    cornerBlockId: T.string,
-    arms: T.arrayOf(T.object({ id: T.string, title: T.string, open: T.boolean, h: T.number })),
-  };
-
-  // Version 0, declared now for the reason BlockShapeUtil records: the sequence
-  // is what gives these props a version number in a saved file, and it cannot
-  // be retrofitted once boards exist.
-  static override migrations = createShapePropsMigrationSequence({ sequence: [] });
-
-  override getDefaultProps(): RegionShapeProps {
-    return { w: 480, h: 320, kind: "plain", name: "", cornerBlockId: "", arms: [] };
-  }
-
-  override getGeometry(shape: RegionShape) {
-    return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true });
-  }
-
-  override getIndicatorPath(shape: RegionShape) {
-    const path = new Path2D();
-    path.rect(0, 0, shape.props.w, shape.props.h);
-    return path;
-  }
-
-  // WHY a visible "not built" face rather than `null`: a shape that validates,
-  // occupies geometry and paints nothing is selectable emptiness — the worst
-  // way to meet an un-landed lane. This says which lane owes it.
-  override component(shape: RegionShape) {
-    return createElement(
-      HTMLContainer,
-      { style: { ...UNBUILT_FACE_STYLE, width: shape.props.w, height: shape.props.h } },
-      `${REGION_SHAPE_TYPE} — lane L5`,
-    );
-  }
-}
+export { RegionShapeUtil, type RegionArm, type RegionKind, type RegionShape, type RegionShapeProps } from "./RegionShapeUtil";
+export { RegionFace } from "./RegionFace";
+export { BranchTool, BRANCH_PRESET } from "./BranchTool";
+export { LoopTool, FOR_LOOP_PRESET } from "./LoopTool";
+export {
+  cornerBlockPropsFor,
+  cornerBlockOf,
+  createCornerBlock,
+  installRegionKit,
+  isRegionPlaceholder,
+  reconcileRegionProps,
+  regionHugHeightOf,
+  regionLayoutOf,
+  regionMinHeightOf,
+  REGION_MIN_HEIGHT_PX,
+  type RegionPreset,
+} from "./cornerBlock";
 
 export const regionKit: ShapeKit = {
   shapeUtils: [RegionShapeUtil],
   bindingUtils: [],
-  tools: [],
-  familyItems: [],
-  toolUi: (_editor, tools) => tools,
+  tools: [LoopTool, BranchTool],
+  // Two permanent repairs, neither of which any TOOL can own because neither
+  // is a gesture: a duplicated region must stop naming the original's corner
+  // block, and a frame must follow the card it hugs once that card has
+  // measured itself. Full reasoning in `./cornerBlock`'s `installRegionKit`.
+  install: installRegionKit,
+  // Two more rows of the ONE system family, after Block, Code and Port. No
+  // `shortcutHint` on either: the dock renders the hint as TEXT inside the row
+  // (toolDock.tsx's `DropdownMenuShortcut`), and neither construct has a
+  // letter Zach has picked — a hint for a keybinding that does not exist would
+  // be a row that lies. Adding one is a `kbd` in the `toolUi` entry below plus
+  // the hint here, two lines, once he does.
+  familyItems: [
+    { id: LOOP_TOOL_ID, label: "Loop", icon: createElement(Repeat) },
+    { id: BRANCH_TOOL_ID, label: "Branch", icon: createElement(GitBranch) },
+  ],
+  toolUi: (editor, tools) => ({
+    ...tools,
+    // Without these entries both dock rows are SILENT NO-OPS: tldraw's
+    // `useTools()` only builds entries for its own stock list, so a tool
+    // passed through `<Tldraw tools={…}>` has a state machine and no UI entry
+    // (the `toolUi` contract in ../registry, and archive
+    // src/bboxUi/adapter/bboxToolUi.tsx:15-25).
+    [LOOP_TOOL_ID]: {
+      id: LOOP_TOOL_ID,
+      label: "Loop",
+      // Stock tldraw icon names, resolved from the app's self-hosted asset
+      // map: a cycle for the loop, the flowchart decision diamond for the
+      // branch.
+      icon: "arrow-cycle",
+      onSelect: () => {
+        editor.setCurrentTool(LOOP_TOOL_ID);
+      },
+    },
+    [BRANCH_TOOL_ID]: {
+      id: BRANCH_TOOL_ID,
+      label: "Branch",
+      icon: "geo-rhombus",
+      onSelect: () => {
+        editor.setCurrentTool(BRANCH_TOOL_ID);
+      },
+    },
+  }),
 };
