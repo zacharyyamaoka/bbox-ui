@@ -44,6 +44,14 @@ export default mergeConfig(
           test: {
             name: "smoke",
             include: ["src/**/*.smoke.test.tsx"],
+            // WHY (planning lane, docs/CHROME-FILES-SETTINGS-PLAN.md — the
+            // second change ever made to this file, by the author of the
+            // acceptance it serves): the files/settings acceptance round-trips
+            // real `.tldr` bytes through the real Python file host. This
+            // starts ONE host per run over a mkdtemp root, refuses the real
+            // ~/SystemSketch outright, and kills it by PID at teardown. A
+            // host that fails to start does not fail the other suites.
+            globalSetup: ["./src/testing/fileHost.globalSetup.ts"],
             // A whole tldraw editor per test: give it room.
             testTimeout: 30_000,
             browser: {

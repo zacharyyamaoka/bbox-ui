@@ -1,14 +1,24 @@
 // src/menus.smoke.test.tsx — L4's acceptance: the trunk's chrome bar (file
-// burger, undo/redo, title), floating toolbar over a selection, frames and
+// burger, title), floating toolbar over a selection, frames and
 // problems panels, and status strip are mounted through tldraw's component
 // seams and wired to the live editor. Committed with the plan
 // (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5, L4), off-limits to builders.
+//
+// AMENDED 2026-09-19 by the planning lane of docs/CHROME-FILES-SETTINGS-PLAN.md
+// (the acceptance's author, before any builder). Zach: "Undo redo should be
+// hidden … We don't need to show that" and "Please further build out our
+// burger menu. right now its looking too thin!". Two L4 cases asserted the
+// opposite — an undo/redo pill, and a three-row New/Open .tldr/Save .tldr
+// burger — and are REPLACED below, not deleted: undo/redo now live in Edit ▸
+// (and Ctrl+Z), and the burger is the old app's File-first structure. Every
+// other case here is L4's, unchanged.
 import { createShapeId } from "tldraw";
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { BLOCK_SHAPE_TYPE } from "./shapes/types";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";
+import { clickRow, closeMenus, openBurger, openSubmenu, rowsOf, separatorsOf } from "./testing/menus";
 
 let app: MountedApp | null = null;
 afterEach(() => {
@@ -34,39 +44,108 @@ describe("L4 — editor menus through tldraw's component seams", () => {
     expect(app.root.querySelector(".tl-canvas")).not.toBeNull();
   });
 
-  it("undo/redo in the chrome bar mirror the editor's history", async () => {
+  it("the undo/redo pill is gone; Edit ▸ Undo and Redo drive the editor's history, and Ctrl+Z still undoes", async () => {
     app = await mountApp();
-    const undo = await waitFor(() => app!.root.querySelector<HTMLButtonElement>('[data-testid="ss-chrome-undo"]'), { what: "undo" });
-    const redo = app.root.querySelector<HTMLButtonElement>('[data-testid="ss-chrome-redo"]')!;
-    expect(undo.disabled).toBe(true);
+    await waitFor(() => app!.root.querySelector('[data-testid="ss-chrome"]'), { what: "the ChromeBar" });
+    expect(app.root.querySelector('[data-testid="ss-chrome-undo"]')).toBeNull();
+    expect(app.root.querySelector('[data-testid="ss-chrome-redo"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Document history"]')).toBeNull();
+
     const id = placeBlock("u");
     await app.editor.markHistoryStoppingPoint("test");
-    await waitFor(() => !undo.disabled, { what: "undo enabled after an edit" });
-    await userEvent.click(undo);
-    await waitFor(() => app!.editor.getShape(id) === undefined, { what: "undone" });
-    await waitFor(() => !redo.disabled, { what: "redo enabled" });
-    await userEvent.click(redo);
-    await waitFor(() => app!.editor.getShape(id) !== undefined, { what: "redone" });
+    let edit = await openSubmenu(await openBurger(app), "Edit");
+    const [undo, redo] = rowsOf(edit);
+    expect([undo.label, undo.shortcut]).toEqual(["Undo", "Ctrl + Z"]);
+    expect([redo.label, redo.shortcut]).toEqual(["Redo", "Ctrl + ⇧ + Z"]);
+    const labels = rowsOf(edit).map((row) => row.label);
+    // The stock Edit rows tldraw's own main menu carried, in tldraw's order.
+    const expected = ["Cut", "Copy", "Paste", "Duplicate", "Delete", "Select all"];
+    const positions = expected.map((label) => labels.indexOf(label));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    await clickRow(edit, "Undo");
+    await waitFor(() => app!.editor.getShape(id) === undefined, { what: "Edit ▸ Undo undid the block" });
+
+    edit = await openSubmenu(await openBurger(app), "Edit");
+    await clickRow(edit, "Redo");
+    await waitFor(() => app!.editor.getShape(id) !== undefined, { what: "Edit ▸ Redo redid it" });
+    await closeMenus();
+
+    // tldraw's own keybinding is untouched by the pill's removal.
+    app.editor.focus();
+    await userEvent.keyboard("{Control>}z{/Control}");
+    await waitFor(() => app!.editor.getShape(id) === undefined, { what: "Ctrl+Z undid it" });
   });
 
-  it("the file burger lists New, Open .tldr, Save .tldr; Save downloads a document whose records include our shape", async () => {
+  it("the burger is File first, then Settings, Edit, View, Export, Preferences, Keyboard shortcuts, and the old-app switch — grouped like the old app", async () => {
     app = await mountApp();
+    const root = await openBurger(app);
+    expect(rowsOf(root).map((row) => row.label)).toEqual([
+      "File",
+      "Settings",
+      "Edit",
+      "View",
+      "Export",
+      "Preferences",
+      "Keyboard shortcuts",
+      "Switch to old SystemSketch",
+    ]);
+    // File | Settings | Edit View Export | Preferences Keyboard shortcuts | old app.
+    expect(separatorsOf(root)).toBe(4);
+
+    const file = await openSubmenu(root, "File");
+    expect(rowsOf(file).map((row) => [row.label, row.shortcut])).toEqual([
+      ["New", "Ctrl + N"],
+      ["New window", "Ctrl + ⇧ + N"],
+      ["Open…", "Ctrl + O"],
+      ["Open recent", ""],
+      ["Save", "Ctrl + S"],
+      ["Save As…", "Ctrl + ⇧ + S"],
+      ["Rename", "F2"],
+      ["Copy Absolute Path", ""],
+      ["Show in Files", ""],
+      ["Move to Trash…", ""],
+    ]);
+    // New … Open recent | Save … Rename | Copy Absolute Path … Move to Trash…
+    expect(separatorsOf(file)).toBe(2);
+    await closeMenus();
+
+    // The serializer the file commands use is still exposed as a pure function of the editor.
     placeBlock("saved");
-    const burger = await waitFor(() => app!.root.querySelector<HTMLElement>('[data-testid="ss-chrome-burger"]'), { what: "burger" });
-    await userEvent.click(burger);
-    const labels = await waitFor(() => {
-      const items = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((el) => el.textContent?.trim() ?? "");
-      return items.length ? items : null;
-    }, { what: "menu rows" });
-    expect(labels.some((l) => /^new/i.test(l))).toBe(true);
-    expect(labels.some((l) => /open/i.test(l) && /tldr/i.test(l))).toBe(true);
-    expect(labels.some((l) => /save/i.test(l) && /tldr/i.test(l))).toBe(true);
-    await userEvent.keyboard("{Escape}");
-    // The serializer the burger uses is exposed for tests as a pure function of the editor.
     const { serializeBoard } = await import("./chrome/fileActions");
     const text = await serializeBoard(app.editor);
     const parsed = JSON.parse(text) as { records: { typeName: string; type?: string }[] };
     expect(parsed.records.some((r) => r.typeName === "shape" && r.type === BLOCK_SHAPE_TYPE)).toBe(true);
+  });
+
+  it("View ▸ Zoom to 100% resets the camera; Preferences ▸ always-snap is a checkbox row that toggles the editor's own preference; Export and Keyboard shortcuts are tldraw's", async () => {
+    app = await mountApp();
+    app.editor.setCamera({ x: 0, y: 0, z: 0.5 });
+    const view = await openSubmenu(await openBurger(app), "View");
+    const viewRows = rowsOf(view).map((row) => [row.label, row.shortcut]);
+    expect(viewRows).toContainEqual(["Zoom in", "Ctrl + ="]);
+    expect(viewRows).toContainEqual(["Zoom to 100%", "⇧ + 0"]);
+    await clickRow(view, "Zoom to 100%");
+    await waitFor(() => Math.abs(app!.editor.getZoomLevel() - 1) < 1e-6, { what: "zoom back to 1" });
+
+    const before = app.editor.user.getIsSnapMode();
+    const preferences = await openSubmenu(await openBurger(app), "Preferences");
+    const snap = rowsOf(preferences).find((row) => /snap/i.test(row.label));
+    expect(snap).toBeDefined();
+    expect(snap!.element.getAttribute("role")).toBe("menuitemcheckbox");
+    expect(snap!.element.getAttribute("aria-checked")).toBe(String(before));
+    await userEvent.click(snap!.element);
+    await waitFor(() => app!.editor.user.getIsSnapMode() === !before, { what: "snap mode toggled" });
+    await closeMenus();
+
+    const exportMenu = await openSubmenu(await openBurger(app), "Export");
+    const exportLabels = rowsOf(exportMenu).map((row) => row.label);
+    expect(exportLabels.some((label) => /svg/i.test(label))).toBe(true);
+    expect(exportLabels.some((label) => /png/i.test(label))).toBe(true);
+    await closeMenus();
+
+    await clickRow(await openBurger(app), "Keyboard shortcuts");
+    await waitFor(() => document.querySelector(".tlui-shortcuts-dialog__body"), { what: "tldraw's keyboard shortcuts dialog" });
   });
 
   it("selecting a block shows the floating toolbar above it with view + delete actions; delete removes the block", async () => {
