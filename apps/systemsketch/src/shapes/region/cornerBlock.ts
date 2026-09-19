@@ -39,16 +39,28 @@ import type { RegionArm, RegionKind, RegionShape } from "./RegionShapeUtil";
 /**
  * How far in from the frame's left wall the corner block sits, px.
  *
- * WHY 8 and not 0, which is what the "NEW GOOD" sketch draws: a block's LEFT
+ * ZERO — flush, which is what the "NEW GOOD" sketch draws and what Zach
+ * asked for again on 2026-09-19, comparing the tldraw app (`Pasted image
+ * 20260919115050.png`) against the DOM canvas (`…115249.png`): "Generally I
+ * want the port to be right on the edge. and it shouldn't be cut off by the
+ * frame. This is desired: [the DOM render]". The trunk's own `Region` puts
+ * its corner slot at `left: -FRAME_BORDER_PX` (`@trunk/components/region.tsx`),
+ * so flush here IS parity with the drawing he approved.
+ *
+ * WHY IT WAS 8 UNTIL NOW, and what had to change with it: a block's LEFT
  * rail puts its dots ON the card's wall, straddling it by the dot's radius
  * (`@trunk/hosts/portDotSightings` measures the centre, the paint hangs half
- * the dot outside). A frame-like shape CLIPS its children to its own geometry
- * (`BaseFrameLikeShapeUtil.getClipPath`), so a corner block flush at x = 0
- * loses the outer half of every `Iterable` dot to that clip. Eight px is the
- * dot's radius plus slack, and it is inside the 24px the acceptance test
- * allows between the two top-left corners.
+ * the dot outside), and a frame-like shape CLIPS its children to its own
+ * geometry (`BaseFrameLikeShapeUtil.getClipPath`) — so a flush corner block
+ * lost the outer half of every `Iterable` dot to that clip. Eight px bought
+ * the dot's radius plus slack, at the cost of a card visibly inset from the
+ * frame and a dot sitting INSIDE the scope instead of on its wall.
+ *
+ * The clip is the thing that was actually wrong, and it is now lifted for
+ * this one child (`RegionShapeUtil.shouldClipChild`). Every OTHER member
+ * still clips, which is what a scope is for.
  */
-const CORNER_INSET_X_PX = 8;
+const CORNER_INSET_X_PX = 0;
 
 /** The corner block's own top edge sits ON the frame's top edge — the label
  *  tab of the React Flow Labeled Group Node look (`Pasted image
@@ -344,6 +356,33 @@ export function installRegionKit(editor: Editor): () => void {
     const { w, h, arms } = reconciled.props;
     editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { w, h, arms } });
   };
+
+  /**
+   * A corner block saved at the LEGACY inset snaps flush.
+   *
+   * WHY a sweep and not just the new constant: `CORNER_INSET_X_PX` decides
+   * where a card is CREATED, and every board already in IndexedDB has its
+   * cards at the old 8px. Zach's rule is "generalize every bug fix" — the
+   * boundary that made the bug possible is the stored position, so the
+   * stored position is what gets swept, once, at mount. Bounded by the same
+   * `CORNER_CLAIM_SLACK_PX` the claim test uses, so a card an author has
+   * deliberately dragged somewhere else is left exactly where they put it.
+   *
+   * `history: "ignore"` for the same reason `shared/measure.ts` uses it:
+   * this is a repair, not an edit, and it must not make the first Ctrl-Z of
+   * a session undo the frame's own geometry.
+   */
+  const snapCornersFlush = () => {
+    const regions = editor.getCurrentPageShapes().filter((shape) => shape.type === REGION_SHAPE_TYPE) as RegionShape[];
+    const moves = regions
+      .map((region) => cornerBlockOf(editor, region))
+      .filter((corner): corner is TLShape => !!corner)
+      .filter((corner) => corner.x !== CORNER_INSET_X_PX || corner.y !== CORNER_INSET_Y_PX)
+      .filter((corner) => Math.abs(corner.x - CORNER_INSET_X_PX) <= CORNER_CLAIM_SLACK_PX && Math.abs(corner.y - CORNER_INSET_Y_PX) <= CORNER_CLAIM_SLACK_PX)
+      .map((corner) => ({ id: corner.id, type: corner.type, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX }));
+    if (moves.length > 0) editor.run(() => editor.updateShapes(moves), { history: "ignore" });
+  };
+  snapCornersFlush();
 
   const stops = [
     editor.sideEffects.registerAfterCreateHandler("shape", (shape) => {

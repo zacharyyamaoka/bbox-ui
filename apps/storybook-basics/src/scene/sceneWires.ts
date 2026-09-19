@@ -55,6 +55,14 @@ export function sceneWires<N extends SceneData>(scene: SceneWiresInput<N>): Wire
     from: { blockId: edge.source, portId: edge.sourceHandle ?? "" },
     to: { blockId: edge.target, portId: edge.targetHandle ?? "" },
     variant: edge.data?.variant,
+    // WHY this stays `undefined` when nobody authored one, instead of
+    // filling in `DEFAULT_TRACE_ROUTING` here: the adapter's job is to say
+    // what the SCENE says, and the scene says nothing. Defaulting here would
+    // make every derived `Wire` look explicitly routed, so a host could no
+    // longer tell "the author chose elbow" from "the author chose nothing" —
+    // and the day the default changes again, boards would silently keep
+    // whatever this function baked in. The default is applied once, at
+    // paint, by `WireLayer` / `Trace` / the tldraw overlay.
     routing: edge.data?.routing,
     markerEnd: edge.data?.markerEnd,
     color: edge.data?.color,

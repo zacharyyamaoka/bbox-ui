@@ -52,6 +52,7 @@ import {
   ASYNC_PACKET_DASHARRAY,
   DATA_MARCH_CLASS,
   DATA_MARCH_DASHARRAY,
+  DEFAULT_TRACE_ROUTING,
   DELAY_DOT_GAP_PX,
   DELAY_DOT_PX,
   DIR_VECTOR,
@@ -857,8 +858,12 @@ export interface TraceRouteProps
     Omit<TraceRouteRequest, "routing"> {
   /** Host id — hex-encoded into the marker id, exactly as `TraceBody` says. */
   id: string;
-  /** Defaults to `curved` — the kit's own default, and the only one of the
-   * four that honours both flow tangents with no control point touched. */
+  /** Defaults to {@link DEFAULT_TRACE_ROUTING} (`elbow`). `curved` held
+   * this slot until 2026-09-19 — it is the only one of the four that
+   * honours both flow tangents with no control point touched, which is why
+   * it was the kit's own default — but Zach's ruling is flat: "by default
+   * elbow arrows should always be used. never straight arrows". All four
+   * stay selectable BY NAME; only the unstated case moved. */
   routing?: TraceRouting;
   variant?: TraceVariant;
   color?: string;
@@ -910,7 +915,7 @@ export interface TraceRouteProps
 export function Trace({
   from,
   to,
-  routing = "curved",
+  routing = DEFAULT_TRACE_ROUTING,
   gap,
   curve,
   slantT,

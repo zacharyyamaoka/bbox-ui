@@ -32,6 +32,8 @@ import {
   Background,
   Controls,
   getBezierPath,
+  getSmoothStepPath,
+  getStraightPath,
   Handle,
   NodeResizer,
   Position,
@@ -49,6 +51,7 @@ import {
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { TraceBody } from "../components/trace";
+import { DEFAULT_TRACE_ROUTING, type TraceRouting } from "../components/trace.layout";
 import { ancestorsOf } from "../scene/region";
 import { portKey } from "../scene/scene";
 import type { WireStyleData } from "../scene/sceneWires";
@@ -448,7 +451,9 @@ const DRAG_HANDLE_FOR_TYPE: Record<string, string | undefined> = {
  *
  * Ported from `demos/scene/src/TraceEdge.tsx:1-46` (the repo already
  * solved this once, for the demo scene against `@bbox-ui/core`'s
- * `TraceBody`) — same split, same call to `getBezierPath`, repointed at
+ * `TraceBody`) — same split, originally the same single call to
+ * `getBezierPath` (now one of four, dispatched by routing — see
+ * `edgePathFor`), repointed at
  * this trunk's own `TraceBody` (`../components/trace.tsx:376`) and
  * threading the scene's `WireStyleData` through instead of hardcoding
  * `variant="data"` (the donor had no per-edge style data to read). The
@@ -470,8 +475,33 @@ const DRAG_HANDLE_FOR_TYPE: Record<string, string | undefined> = {
  * to call `getTotalLength()` on, which is more machinery than a phase
  * offset warrants here.
  */
+function edgePathFor(routing: TraceRouting, geometry: Parameters<typeof getBezierPath>[0]): string {
+  // WHY the STOCK React Flow path builders and not the trunk's own elbow
+  // router: this host's own rule, three paragraphs up — "the HOST owns the
+  // geometry and the core owns the paint". React Flow already ships the
+  // four shapes, and `getSmoothStepPath` is its orthogonal one (the same
+  // function its own `smoothstep` edge type uses), so an elbow here costs
+  // one import rather than a second obstacle collector. It routes without
+  // keep-outs, which the DOM canvas's `WireLayer` does have — stated, not
+  // hidden: this bench proves the DEFAULT is orthogonal in every host, and
+  // the bypass rule is still only claimed where it is measured.
+  switch (routing) {
+    case "elbow":
+      return getSmoothStepPath(geometry)[0];
+    case "straight":
+    case "slanted":
+      return getStraightPath({ sourceX: geometry.sourceX, sourceY: geometry.sourceY, targetX: geometry.targetX, targetY: geometry.targetY })[0];
+    case "curved":
+      return getBezierPath(geometry)[0];
+  }
+}
+
 function TraceEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }: EdgeProps<Edge<WireStyleData>>) {
-  const [path] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  // `?? DEFAULT_TRACE_ROUTING` — Zach, 2026-09-19: "by default elbow arrows
+  // should always be used. never straight arrows." Before this the host
+  // drew a bezier for EVERY edge, so an explicitly-elbow cable and a
+  // defaulted one looked identical here and neither was orthogonal.
+  const path = edgePathFor(data?.routing ?? DEFAULT_TRACE_ROUTING, { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   return (
     <TraceBody
       id={id}
