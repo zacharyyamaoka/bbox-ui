@@ -1,18 +1,115 @@
-// PLACEHOLDER — replaced whole by lane L2 — Floating port shape
-// (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5). L0 creates it so
-// src/shapes/registry.ts can import every kind from day 0 and no later lane
-// has to edit the registry or App.tsx to be seen.
+// PLACEHOLDER — lane L2 replaces this file whole — Floating port shape
+// (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5). What is here is SCHEMA ONLY: the
+// persisted props of `ss-port` exactly as plan §3 spells them, and nothing
+// else. No tool, no dock row, no LabeledPort face, no measurement, no inline
+// label edit — those are L2's, and L2 overwrites this file.
 //
-// WHY this spells the empty kit out instead of importing registry.ts's own
-// `EMPTY_KIT`: registry.ts imports THIS file, so a value import back would
-// close a module cycle and the const would be read while still in its temporal
-// dead zone — measured here as "Cannot read properties of undefined (reading
-// 'shapeUtils')" the first time the registry was loaded. A `import type` is
-// erased, so the cycle never exists at runtime.
+// A floating port is the smallest block: a one-port node. That is why its
+// single anchor always carries `FLOATING_PORT_ID` and why it binds a wire at
+// all — "everything is really a block" applies to the one-port case too.
+//
+// WHY the schema lands in L0 and not with its own lane (the one place this
+// file departs from the lane brief's `portKit = EMPTY_KIT`): the document
+// model is ONE contract, not five. A record only enters a tldraw store if a
+// registered util validates it, so with an empty kit a board written after L2
+// lands cannot be OPENED by an app where it has not — the `.tldr` is refused,
+// not degraded. `src/document/documentModel.test.ts`'s `registry` describe is
+// that rule made executable, and it is an L0 acceptance line: SHAPE_UTILS
+// publishes all five types and BINDING_UTILS the one binding type from day 0.
+// Vocabulary is shared and frozen early; BEHAVIOUR is what a lane owns.
+//
+// WHY this spells the empty kit's other fields out instead of spreading
+// registry.ts's `EMPTY_KIT`: registry.ts imports THIS file, so a value import
+// back would close a module cycle and the const would be read while still in
+// its temporal dead zone — measured here as "Cannot read properties of
+// undefined (reading 'shapeUtils')" the first time the registry was loaded. An
+// `import type` is erased, so the cycle never exists at runtime.
+import { createElement } from "react";
+import { HTMLContainer, Rectangle2d, ShapeUtil, T, createShapePropsMigrationSequence, type TLBaseShape } from "tldraw";
+
 import type { ShapeKit } from "../registry";
+import { PortAnchorV } from "../shared/props";
+import { PORT_SHAPE_TYPE, type PortSide } from "../types";
+
+// The face every un-landed kind wears. Duplicated per placeholder rather than
+// hoisted into `shared/`: `shared/` is L0's permanent write set and a lane
+// deletes its placeholder whole, so a shared constant would outlive every one
+// of its callers.
+const UNBUILT_FACE_STYLE = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px dashed currentColor",
+  borderRadius: 4,
+  opacity: 0.55,
+  font: "12px ui-monospace, monospace",
+  pointerEvents: "all",
+} as const;
+
+export interface PortShapeProps {
+  w: number;
+  h: number;
+  name: string;
+  type: string;
+  direction: "in" | "out";
+  /** Exactly one MEASURED anchor, whose `portId` is `FLOATING_PORT_ID`. */
+  anchors: { portId: string; x: number; y: number; side: PortSide | null }[];
+}
+
+declare module "@tldraw/tlschema" {
+  interface TLGlobalShapePropsMap {
+    "ss-port": PortShapeProps;
+  }
+}
+
+export type PortShape = TLBaseShape<"ss-port", PortShapeProps>;
+
+/** Schema only. L2 replaces this class with the real one. */
+export class PortShapeUtil extends ShapeUtil<PortShape> {
+  static override type = PORT_SHAPE_TYPE;
+
+  static override props = {
+    w: T.number,
+    h: T.number,
+    name: T.string,
+    type: T.string,
+    direction: T.literalEnum("in", "out"),
+    anchors: T.arrayOf(PortAnchorV),
+  };
+
+  // Version 0, declared now for the reason BlockShapeUtil records: the sequence
+  // is what gives these props a version number in a saved file, and it cannot
+  // be retrofitted once boards exist.
+  static override migrations = createShapePropsMigrationSequence({ sequence: [] });
+
+  override getDefaultProps(): PortShapeProps {
+    return { w: 120, h: 32, name: "port", type: "", direction: "out", anchors: [] };
+  }
+
+  override getGeometry(shape: PortShape) {
+    return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true });
+  }
+
+  override getIndicatorPath(shape: PortShape) {
+    const path = new Path2D();
+    path.rect(0, 0, shape.props.w, shape.props.h);
+    return path;
+  }
+
+  // WHY a visible "not built" face rather than `null`: a shape that validates,
+  // occupies geometry and paints nothing is selectable emptiness — the worst
+  // way to meet an un-landed lane. This says which lane owes it.
+  override component(shape: PortShape) {
+    return createElement(
+      HTMLContainer,
+      { style: { ...UNBUILT_FACE_STYLE, width: shape.props.w, height: shape.props.h } },
+      `${PORT_SHAPE_TYPE} — lane L2`,
+    );
+  }
+}
 
 export const portKit: ShapeKit = {
-  shapeUtils: [],
+  shapeUtils: [PortShapeUtil],
   bindingUtils: [],
   tools: [],
   familyItems: [],

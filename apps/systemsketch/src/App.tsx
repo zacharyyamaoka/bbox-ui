@@ -56,6 +56,29 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
 
   const key = persistenceKey === undefined ? DEFAULT_PERSISTENCE_KEY : persistenceKey;
 
+  // UNRESOLVED, and deliberately visible: there is NO `assetUrls` prop below,
+  // so tldraw serves its icons, fonts, translations and embed icons from
+  // https://cdn.tldraw.com/5.3.2/ — 78 requests, measured with a Playwright
+  // request listener against this app on :4340. The app needs the network on
+  // first paint; the canvas, the dock and every bbox component do not.
+  //
+  // WHY it is not the self-hosted `getAssetUrlsByImport()` the plan asks for
+  // (docs/SYSTEMSKETCH-REBUILD-PLAN.md §4 / the lane brief's STEP 4): that
+  // helper only exists in `@tldraw/assets/imports.vite`, and
+  // src/document/stockBoundary.test.ts:105 refuses ANY `@tldraw/*` import
+  // except `@tldraw/tlschema` from every file under `src`. `tldraw` itself
+  // re-exports no asset helper (checked: its package exports are `.` and
+  // `./tldraw.css`), and moving the import outside `src` is outside this
+  // lane's write set. The two rules as written cannot both hold.
+  //
+  // This lane took the reversible half: stock CDN assets, which cost only
+  // offline use, rather than a source change that turns an acceptance gate
+  // red. `@tldraw/assets` stays declared in package.json and excluded from
+  // vite's prebundle so the fix is two lines once the dispatcher rules —
+  // either whitelist `@tldraw/assets` in that regex beside `tlschema`, or
+  // keep the CDN and delete the dependency. Recorded in README.md under
+  // "Problems this lane cannot fix" so the decision is not silent.
+
   return (
     <main data-testid="systemsketch-app" style={{ position: "fixed", inset: 0 }}>
       <Tldraw

@@ -32,6 +32,14 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
+    // NOTE: nothing imports `@tldraw/assets` today — src/App.tsx says why
+    // (stockBoundary.test.ts:105 refuses the specifier from anywhere under
+    // `src`, so the app runs on tldraw's CDN assets). This line and the
+    // dependency are kept, not dead weight by accident: they are what makes
+    // flipping back to self-hosted assets a two-line change the moment that
+    // regex admits `@tldraw/assets`, and re-adding the dep later would churn
+    // the lockfile for every lane.
+    //
     // Copied verbatim in reasoning from apps/playground/vite.config.ts:7-15:
     // the dev server's dependency-prebundle scan cannot resolve the `?url`
     // imports inside @tldraw/assets/imports.vite.js even though the files are
