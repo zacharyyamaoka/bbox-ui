@@ -14,6 +14,8 @@
 // in the settings row, the board that `linear_chain.py` opens as — are the
 // job of `tests/pyblocks_backend_smoke.mjs`, which drives the real app in a
 // real Chromium against a real `python3 -m pyblocks serve`.
+import { readFileSync } from "node:fs";
+
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_PYBLOCKS_URL, NO_BACKEND, type BackendSetting } from "@trunk/backend/backendSetting";
@@ -21,6 +23,10 @@ import type { PyblocksEventsEcho, PyblocksHealthResult } from "@trunk/backend/py
 import type { HostScene } from "@trunk/hosts/hostScene";
 import { authorId } from "@trunk/scene/history";
 import { createSceneEventSeam, type SceneEventBatch } from "@trunk/scene/sceneEvents";
+import { loadPyblocksScene, type PyblocksSceneDocument } from "@trunk/scene/pyblocksScene";
+
+import { boardLintFindings, shapeIdOfSubject } from "../chrome/problems";
+import { pyblocksBoardFrom } from "./OpenPython";
 
 import {
   BRIDGE_AUTHOR,
@@ -452,5 +458,91 @@ describe("the status line", () => {
 
   it("reports `applied` from the server, which is 0 by tonight's contract", () => {
     expect(echoSummary({ accepted: 2, applied: 0, classified: [] })).toBe("2 batch · 0 semantic · 0 applied");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* §6 L3 (3) — the board the projection hands the linter               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * ADDED 2026-09-19, after an independent audit opened `linear_chain.py` and
+ * got a red "3 problems" badge on a program with no cycle in it: three
+ * ERROR rows reading `Nodes form a cycle: run#corner → scale() → decode() →
+ * run#corner`. Nothing here weakens an earlier assertion — these are new
+ * ones, and they are the regression guard for the seam that produced it.
+ *
+ * The projection is graded against the REAL linter over the REAL committed
+ * fixtures, with no React tree and no browser: `pyblocksBoardFrom` is pure,
+ * `boardLintFindings` is the pure half of the Problems panel, and the
+ * fixtures are the frozen bytes the whole stream shares.
+ */
+describe("the board the projection hands the linter", () => {
+  const fixture = (name: string): PyblocksSceneDocument =>
+    JSON.parse(readFileSync(new URL(`../../../../docs/fixtures/pyblocks-scene/${name}.scene.json`, import.meta.url), "utf8")) as PyblocksSceneDocument;
+
+  const boardFor = (name: string) => pyblocksBoardFrom(loadPyblocksScene(fixture(name)));
+
+  it("reports NO cycle on linear_chain — a straight line is not a loop", () => {
+    const findings = boardLintFindings(boardFor("linear_chain").scene);
+    expect(findings.filter((finding) => finding.ruleId === "cycle")).toEqual([]);
+  });
+
+  it("opens linear_chain with a clean Problems panel — no error of any rule", () => {
+    const findings = boardLintFindings(boardFor("linear_chain").scene);
+    expect(findings.filter((finding) => finding.severity === "error").map((finding) => finding.message)).toEqual([]);
+  });
+
+  it("reports NO cycle on region_for_if either", () => {
+    const findings = boardLintFindings(boardFor("region_for_if").scene);
+    expect(findings.filter((finding) => finding.ruleId === "cycle")).toEqual([]);
+  });
+
+  it("STILL reports a real loop that closes outside the region's boundary", () => {
+    // The region's own output wired back into its own input, through a block
+    // outside it — the case the two-faced split must not swallow.
+    const board = boardFor("linear_chain");
+    const corner = board.scene.nodes.find((node) => node.id.endsWith("#corner"))!;
+    const feedback = "shape:feedback";
+    const scene = {
+      nodes: [
+        ...board.scene.nodes,
+        { id: feedback, type: "block" as const, position: { x: 900, y: 0 }, data: { kind: "block" as const, name: "feedback()", view: "port" as const, ports: { left: ["in"], right: ["out"], top: [], bottom: [] } } },
+      ],
+      edges: [
+        ...board.scene.edges,
+        { id: "shape:fb-out", source: corner.id, sourceHandle: "boundary-output-scaled", target: feedback, targetHandle: "in", data: { variant: "data" as const, routing: "elbow" as const } },
+        { id: "shape:fb-in", source: feedback, sourceHandle: "out", target: corner.id, targetHandle: "boundary-input-raw", data: { variant: "data" as const, routing: "elbow" as const } },
+      ],
+    };
+    const cycles = boardLintFindings(scene).filter((finding) => finding.ruleId === "cycle");
+    expect(cycles.length).toBeGreaterThan(0);
+    expect(cycles.map((finding) => finding.subject.id)).toContain(feedback);
+  });
+
+  it("STILL reports a loop that never touches a region at all", () => {
+    const scene = {
+      nodes: [
+        { id: "a", type: "block" as const, position: { x: 0, y: 0 }, data: { kind: "block" as const, name: "a", ports: { left: ["in"], right: ["out"] } } },
+        { id: "b", type: "block" as const, position: { x: 200, y: 0 }, data: { kind: "block" as const, name: "b", ports: { left: ["in"], right: ["out"] } } },
+      ],
+      edges: [
+        { id: "e1", source: "a", sourceHandle: "out", target: "b", targetHandle: "in", data: { variant: "data" as const, routing: "elbow" as const } },
+        { id: "e2", source: "b", sourceHandle: "out", target: "a", targetHandle: "in", data: { variant: "data" as const, routing: "elbow" as const } },
+      ],
+    };
+    expect(boardLintFindings(scene).filter((finding) => finding.ruleId === "cycle").map((finding) => finding.subject.id).sort()).toEqual(["a", "b"]);
+  });
+
+  it("points a Problems row at the SHAPE, even when the node id carries slashes", () => {
+    // A pyblocks id rides through verbatim behind the `shape:` prefix, so a
+    // real node id on this board is
+    // `shape:function:run@3:0/transform:call@4:12-4:23`. Splitting it at the
+    // FIRST slash — what the panel did before — named a shape that does not
+    // exist, and every row revealed nothing when clicked.
+    const node = "shape:function:run@3:0/transform:call@4:12-4:23";
+    expect(shapeIdOfSubject({ kind: "node", id: node })).toBe(node);
+    expect(shapeIdOfSubject({ kind: "port", id: `${node}/in-raw` })).toBe(node);
+    expect(shapeIdOfSubject({ kind: "edge", id: "shape:edge@1" })).toBe("shape:edge@1");
   });
 });

@@ -300,6 +300,14 @@ async function main() {
     await waitFor(async () => (await page.locator('[data-testid="ss-backend-title"]').count()) === 1, { what: "the board title" });
     const title = ((await page.textContent('[data-testid="ss-backend-title"]')) ?? "").trim();
     check("(3) the board is titled after the file", title === "linear_chain.py", title);
+    // ADDED 2026-09-19 after an audit measured `ss-chrome-title` still
+    // reading "Untitled board" beside this pill: the app's OWN title surface
+    // is the one that has to say it, and the two must never disagree on one
+    // screen. `src/chrome/chromeBar.tsx` now reads tldraw's own
+    // `TLDocument.name`, which is what `land()` writes.
+    const chromeTitle = ((await page.textContent('[data-testid="ss-chrome-title"]')) ?? "").trim();
+    check("(3) the app's own board title reads the file name", chromeTitle === "linear_chain.py", chromeTitle);
+    check("(3) the two title surfaces agree", chromeTitle === title, `${chromeTitle} vs ${title}`);
 
     const board = await waitFor(
       async () => {
@@ -382,6 +390,34 @@ async function main() {
     });
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(MEDIA_DIR, "05-board.png") });
+
+    // ADDED 2026-09-19. `linear_chain.py` is a straight line, so the
+    // Problems badge must be quiet. It was not: the projection re-points
+    // BOTH of the boundary's wires at the one corner block, and a graph rule
+    // that sees one node read `run#corner → decode → scale → run#corner` as
+    // a dependency loop — three red ERROR rows on the feature's headline
+    // flow. `src/chrome/problems.ts` now splits a region's interface into
+    // its two rails before the SCC runs.
+    const problemsLabel = ((await page.textContent('[data-testid="ss-status-problems"]')) ?? "").trim();
+    check("(3) the Problems badge counts nothing on a straight-line program", !/[1-9]/.test(problemsLabel), problemsLabel || "(empty)");
+    await page.click('[data-testid="ss-status-problems"]');
+    const panelText = await waitFor(async () => (await page.textContent('[data-testid="ss-problems-panel"]')) || null, { what: "the problems panel" });
+    check("(3) no false `cycle` error on a program with no cycle", !/cycle/i.test(panelText), panelText.replace(/\s+/g, " ").slice(0, 200));
+    await page.screenshot({ path: path.join(MEDIA_DIR, "05b-problems.png") });
+    await page.click('[data-testid="ss-status-problems"]');
+    await waitFor(async () => (await page.locator('[data-testid="ss-problems-panel"]').count()) === 0, { what: "the problems panel closing" });
+
+    // ADDED 2026-09-19. The board's name is not decoration: `File ▸ Save
+    // .tldr…` derives the downloaded filename from it
+    // (`fileNameFor(helpers.boardName)`), and it downloaded
+    // `Untitled board.tldr` after opening a Python file.
+    await page.click('[data-testid="ss-chrome-burger"]');
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("menuitem", { name: /Save \.tldr/ }).click(),
+    ]);
+    check("(3) File ▸ Save .tldr… downloads the file's own name", download.suggestedFilename() === "linear_chain.py.tldr", download.suggestedFilename());
+    await page.keyboard.press("Escape");
 
     /* ================================================================
        (4) a drag → ONE batch, ONE node-moved, echoed `presentation`

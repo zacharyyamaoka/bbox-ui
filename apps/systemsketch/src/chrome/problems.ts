@@ -22,6 +22,7 @@ import type { Editor, TLShapeId } from "tldraw";
 
 import type { Diagnostic, DiagnosticGroup, Severity } from "@trunk/components/problemsPanel";
 import { lintScene, type LintFinding, type PortsOf } from "@trunk/scene/lint";
+import { findCycles, type SceneEdgeEnds } from "@trunk/scene/scene";
 
 import { useDocumentScene, type DocNodeData, type DocumentScene } from "../document/sceneFromStore";
 import { FLOATING_PORT_ID, PORT_SIDES } from "../shapes/types";
@@ -70,11 +71,25 @@ export function portsOfScene(scene: DocumentScene): PortsOf {
 }
 
 /** `${nodeId}/${portId}` — `@trunk/scene/scene`'s `portKey`, read backwards.
- *  A shape id is `shape:<id>` and carries no slash, so the FIRST slash is
- *  always the separator. */
-function nodeIdOfSubject(subjectId: string): string {
-  const slash = subjectId.indexOf("/");
+ *
+ *  WHY the LAST slash and not the first: this app's own shape ids carry no
+ *  slash, but `src/backend/OpenPython.tsx` keeps a pyblocks block's semantic
+ *  id verbatim behind the `shape:` prefix, so a real id on a Python board is
+ *  `shape:function:run@9:0/transform:call@11:13-11:30`. Splitting at the
+ *  FIRST slash answered `shape:function:run@9:0` — a shape that does not
+ *  exist — and every Problems row about such a board silently revealed
+ *  nothing (`reveal` bails on an unknown id). A port id carries no slash, so
+ *  the last one is always the separator. */
+function nodeIdOfPortSubject(subjectId: string): string {
+  const slash = subjectId.lastIndexOf("/");
   return slash === -1 ? subjectId : subjectId.slice(0, slash);
+}
+
+/** The shape a finding is about. Only a PORT subject carries a port suffix
+ *  to strip — a node subject IS a shape id (and may contain slashes of its
+ *  own), an edge subject is the `ss-wire`'s id. */
+export function shapeIdOfSubject(subject: LintFinding["subject"]): string {
+  return subject.kind === "port" ? nodeIdOfPortSubject(subject.id) : subject.id;
 }
 
 /** A human name for a node, for the row's second line. */
@@ -97,12 +112,129 @@ function detailOf(scene: DocumentScene, finding: LintFinding): string {
   const { kind, id } = finding.subject;
   if (kind === "node") return `On ${nameOf(scene, id)}.`;
   if (kind === "port") {
-    const nodeId = nodeIdOfSubject(id);
+    const nodeId = nodeIdOfPortSubject(id);
     return `On port "${id.slice(nodeId.length + 1)}" of ${nameOf(scene, nodeId)}.`;
   }
   const edge = scene.edges.find((candidate) => candidate.id === id);
   if (!edge) return "On a wire.";
   return `On the wire from ${nameOf(scene, edge.source)} to ${nameOf(scene, edge.target)}.`;
+}
+
+/* ------------------------------------------------------------------ */
+/* A region's interface block has TWO faces                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The two faces of a region's interface block, while the cycle rule is
+ * looking. `\u0000` cannot occur in a tldraw shape id, so neither half can
+ * ever collide with a real node.
+ */
+const REGION_FACE_IN = "\u0000in";
+const REGION_FACE_OUT = "\u0000out";
+
+/**
+ * Which rail a port sits on.
+ *
+ * left/top = the block's inputs, right/bottom = its outputs — the convention
+ * `sceneFromStore.ts`'s `blockData` projects and `Block` draws. `undefined`
+ * is the kit-wide "unknown vocabulary, no judgement" (see `portsOfScene`);
+ * an endpoint whose rail cannot be read is left on the whole block, which is
+ * the conservative answer — it can only keep a finding, never invent one.
+ */
+function railOf(data: DocNodeData | undefined, portId: string | null | undefined): "in" | "out" | undefined {
+  if (!data || data.kind !== "block" || portId == null) return undefined;
+  if ((data.ports?.left ?? []).includes(portId) || (data.ports?.top ?? []).includes(portId)) return "in";
+  if ((data.ports?.right ?? []).includes(portId) || (data.ports?.bottom ?? []).includes(portId)) return "out";
+  return undefined;
+}
+
+/**
+ * Every node that sits on a REAL dependency loop — a region's own boundary
+ * excluded.
+ *
+ * WHY this exists, and why it is a correction rather than a suppression:
+ * "a region's interface IS a real block", so `src/backend/OpenPython.tsx`
+ * mints one corner block per region and re-points BOTH of the boundary's
+ * wires at it — the parameter leaving the interface into the body, and the
+ * return coming back. `@trunk/scene/lint.ts`'s `cycleRule` wraps
+ * `findCycles` (Tarjan SCC) over a graph of NODES, and one node cannot have
+ * two faces, so `run#corner → decode() → scale() → run#corner` read as a
+ * dependency loop: `linear_chain.py`, a straight line with no cycle
+ * anywhere, opened with three ERROR rows saying its own functions fed
+ * themselves (measured 2026-09-19, and the fixture reproduces it in
+ * `src/backend/backend.test.ts`).
+ *
+ * The fix is the standard hierarchical-dataflow one — split the boundary
+ * node into its two faces before running the SCC — and the split is by RAIL,
+ * not by direction. A region's left rail is one endpoint of the whole
+ * program's flow (the outside writes it, the inside reads it) and its right
+ * rail is the other. So:
+ *
+ *     outside ─▶ run#in ─▶ decode ─▶ scale ─▶ run#out ─▶ outside
+ *
+ * is a chain, exactly as the source is. Splitting by DIRECTION instead —
+ * "everything leaving the corner is one half" — was tried first and does not
+ * work: both boundary wires face the inside, so they land on the same half
+ * and the loop survives.
+ *
+ * A REAL loop still reports. Wire the region's output back into its own
+ * input and the graph reads `run#out → … → run#in → decode → scale →
+ * run#out`, which is an SCC and is caught; so is any loop that never touches
+ * a region at all.
+ *
+ * Owed upstream: the trunk's `cycleRule` states in its own provenance that
+ * this scene kit "has no region/branch/arm concept", which is why the split
+ * lives here, in the app that does have one, rather than in a shared rule
+ * that would have to invent the vocabulary first.
+ */
+function nodesOnRealCycles(scene: DocumentScene): Set<string> {
+  const dataById = new Map<string, DocNodeData>();
+  for (const node of scene.nodes) dataById.set(node.id, node.data);
+
+  const corners = new Set<string>();
+  for (const node of scene.nodes) {
+    if (node.data.kind === "region" && node.data.cornerBlockId) corners.add(node.data.cornerBlockId);
+  }
+
+  const faceOf = (corner: string, portId: string | null | undefined): string => {
+    const rail = railOf(dataById.get(corner), portId);
+    if (rail === undefined) return corner;
+    return `${corner}${rail === "in" ? REGION_FACE_IN : REGION_FACE_OUT}`;
+  };
+
+  const nodes: { id: string }[] = scene.nodes.map((node) => ({ id: node.id }));
+  for (const corner of corners) {
+    nodes.push({ id: `${corner}${REGION_FACE_IN}` }, { id: `${corner}${REGION_FACE_OUT}` });
+  }
+
+  const edges: SceneEdgeEnds[] = scene.edges.map((edge) => ({
+    source: corners.has(edge.source) ? faceOf(edge.source, edge.sourceHandle) : edge.source,
+    target: corners.has(edge.target) ? faceOf(edge.target, edge.targetHandle) : edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
+  }));
+
+  const members = new Set<string>();
+  for (const component of findCycles({ nodes, edges })) {
+    for (const id of component) {
+      const face = id.endsWith(REGION_FACE_IN) ? REGION_FACE_IN : id.endsWith(REGION_FACE_OUT) ? REGION_FACE_OUT : "";
+      members.add(face ? id.slice(0, -face.length) : id);
+    }
+  }
+  return members;
+}
+
+/**
+ * Every rule, over this board — the pure half of `useProblems`, exported so a
+ * projection can be graded against the linter with no React tree at all
+ * (`src/backend/backend.test.ts` runs it over the committed pyblocks
+ * fixtures).
+ */
+export function boardLintFindings(scene: DocumentScene): LintFinding[] {
+  const findings = lintScene(scene, { portsOf: portsOfScene(scene) });
+  if (!findings.some((finding) => finding.ruleId === "cycle")) return findings;
+  const real = nodesOnRealCycles(scene);
+  return findings.filter((finding) => finding.ruleId !== "cycle" || real.has(finding.subject.id));
 }
 
 export interface BoardProblems {
@@ -135,7 +267,7 @@ export function useProblems(editor: Editor): BoardProblems {
   const scene = useDocumentScene(editor);
 
   const { groups, counts, total, shapeIdByRow } = useMemo(() => {
-    const findings = lintScene(scene, { portsOf: portsOfScene(scene) });
+    const findings = boardLintFindings(scene);
     const diagnostics: Diagnostic[] = [];
     // WHY a side table keyed by row id, rather than re-parsing the id string
     // in `reveal`: `LintFinding.id` is
@@ -153,7 +285,7 @@ export function useProblems(editor: Editor): BoardProblems {
         message: finding.message ?? finding.ruleId,
         detail: detailOf(scene, finding),
       });
-      rows.set(finding.id, nodeIdOfSubject(finding.subject.id) as TLShapeId);
+      rows.set(finding.id, shapeIdOfSubject(finding.subject) as TLShapeId);
     }
     const tally: Record<string, number> = { all: diagnostics.length };
     for (const diagnostic of diagnostics) {

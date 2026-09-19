@@ -30,15 +30,22 @@ import { Toolbar, ToolbarButton } from "@trunk/components/toolbar";
 import { fileActionsFor, type FileActionHelpers } from "./fileActions";
 
 /**
- * The board's name, until the document model has a field for it.
+ * What an unnamed board is called.
  *
- * WHY session-local state and not a persisted prop: the plan's document-model
- * contract (§3) is frozen and has no board-level record at all — the `.tldr`
- * carries shapes, bindings and pages, nothing that names the board. Minting a
- * persisted field from a menu lane is precisely what the contract exists to
- * prevent. So the name is real (it renames, it is what a `.tldr` downloads
- * as) and it is honestly temporary, which is also what the status dot below
- * says out loud.
+ * WHY the name itself is NOT state in this component: the plan's document
+ * model mints no board-level field, but tldraw already ships one —
+ * `TLDocument.name`, a plain `T.string` on the singleton `document:document`
+ * record (@tldraw/tlschema `records/TLDocument.js`, added by the `AddName`
+ * migration), read with `editor.getDocumentSettings()` and written with
+ * `editor.updateDocumentSettings()`. Using the engine's own record mints
+ * nothing, rides along inside a saved `.tldr`, and — the reason it changed —
+ * is the ONE place two writers can agree on. `src/backend/OpenPython.tsx`
+ * names the board after the Python file it just opened; while this component
+ * kept a private `useState`, the bar still read "Untitled board" next to a
+ * board that was plainly `linear_chain.py`, and `File ▸ Save .tldr…` (which
+ * takes its filename from `helpers.boardName` below) downloaded
+ * `Untitled board.tldr`. A fresh document's `name` is `""`, so the fallback
+ * below keeps the previous default exactly.
  */
 const DEFAULT_BOARD_NAME = "Untitled board";
 
@@ -79,7 +86,8 @@ export function SystemSketchChromeBar() {
   const { addToast } = useToasts();
   const { addDialog } = useDialogs();
 
-  const [name, setName] = useState(DEFAULT_BOARD_NAME);
+  const name = useValue("ss board name", () => editor.getDocumentSettings().name || DEFAULT_BOARD_NAME, [editor]);
+  const setName = useCallback((next: string) => editor.updateDocumentSettings({ name: next }), [editor]);
   const [renaming, setRenaming] = useState(false);
   const [persisted, setPersisted] = useState(false);
 
