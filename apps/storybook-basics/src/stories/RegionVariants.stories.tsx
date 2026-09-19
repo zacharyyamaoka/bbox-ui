@@ -37,8 +37,21 @@
  * names `document.documentElement.dataset.bboxRegionVariant` for an app
  * (`SwitchLive` proves that path re-paints with no re-render), and a
  * wrapper element for a gallery (`AllFive`).
+ *
+ * Added in the fix round (the auditor's reproduced major): a switch on a
+ * NEARER ancestor than `<html>` must re-resolve too, or the CSS tokens
+ * (keyed on the attribute) repaint while the two TS-driven values — the
+ * arm header height and the chevron's reveal — keep the old drawing.
+ * `SwitchOnAncestor` flips a wrapper through React state while the region
+ * bails out of the re-render (the Storybook-global shape), and
+ * `SwitchOnAncestorDom` writes the wrapper's attribute directly.
+ * `SwitchNeverHalfPainted` is the strict form: for all three switch paths,
+ * the frame the switch lands in is measured in a ResizeObserver callback —
+ * after style and layout, before paint — so a region that catches up one
+ * task later (a half-switched frame on screen) is red, not "eventually
+ * green".
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
@@ -459,6 +472,193 @@ export const SwitchLive: Story = {
       else html.setAttribute(REGION_VARIANT_ATTR, before);
     }
   },
+};
+
+/* ------------------------------------------------------------------ */
+/* A nearer ancestor's switch — the Storybook global, a board, a row    */
+/* ------------------------------------------------------------------ */
+
+/** Every region on the board resolved to `variant` (the TS side), read off
+ *  its informational `data-region-variant` stamp. */
+function expectResolvedVariant(root: ParentNode, variant: RegionVariantId): void {
+  for (const id of [...REGIONS_ON_THE_BOARD, "op"]) {
+    expect(regionOf(root, id).getAttribute("data-region-variant"), `${id} resolved variant`).toBe(variant);
+  }
+}
+
+/** The whole contract AND the TS side agreeing with it. */
+async function expectSwitchedTo(root: ParentNode, variant: RegionVariantId): Promise<void> {
+  await expectRegionVariant(root, variant);
+  await waitFor(() => expectResolvedVariant(root, variant));
+}
+
+/**
+ * A wrapper whose attribute is React state, with the board handed in as
+ * `children` — so a switch re-renders the wrapper and React BAILS OUT of
+ * the board (same element, same props). That is the case the <html>-only
+ * observer missed: nothing re-renders the region, and nothing on `<html>`
+ * changes.
+ */
+function AncestorSwitch({ children }: { children: ReactNode }) {
+  const [variant, setVariant] = useState<RegionVariantId>(DEFAULT_REGION_VARIANT);
+  return (
+    <div>
+      <div role="group" aria-label="region variant" style={{ display: "flex", gap: 4, padding: 4 }}>
+        {REGION_VARIANT_IDS.map((id) => (
+          <button key={id} type="button" data-set-variant={id} aria-pressed={id === variant} onClick={() => setVariant(id)}>
+            {id}
+          </button>
+        ))}
+      </div>
+      <div data-switch-wrapper="" {...regionVariantAttrs(variant)}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function withHtmlCleared<T>(run: () => Promise<T>): Promise<T> {
+  const html = document.documentElement;
+  const before = html.getAttribute(REGION_VARIANT_ATTR);
+  html.removeAttribute(REGION_VARIANT_ATTR);
+  return run().finally(() => {
+    if (before === null) html.removeAttribute(REGION_VARIANT_ATTR);
+    else html.setAttribute(REGION_VARIANT_ATTR, before);
+  });
+}
+
+export const SwitchOnAncestor: Story = {
+  name: "switching a nearer ancestor re-paints live (the region bails out of the re-render)",
+  render: () => (
+    <AncestorSwitch>
+      <Bench />
+    </AncestorSwitch>
+  ),
+  play: async ({ canvasElement }) =>
+    withHtmlCleared(async () => {
+      const wrapper = required<HTMLElement>(canvasElement, "[data-switch-wrapper]", "the switch wrapper");
+      await expectSwitchedTo(wrapper, "v1");
+      for (const variant of ["v4", "v2", "v5", "v3", "v1"] as const) {
+        required<HTMLButtonElement>(canvasElement, `[data-set-variant="${variant}"]`, `the ${variant} button`).click();
+        await waitFor(() => expect(wrapper.getAttribute(REGION_VARIANT_ATTR)).toBe(variant));
+        await expectSwitchedTo(wrapper, variant);
+      }
+    }),
+};
+
+export const SwitchOnAncestorDom: Story = {
+  name: "writing a nearer ancestor's attribute directly re-paints live",
+  render: () => (
+    <div data-switch-wrapper="" {...regionVariantAttrs("v1")}>
+      <Bench />
+    </div>
+  ),
+  play: async ({ canvasElement }) =>
+    withHtmlCleared(async () => {
+      const wrapper = required<HTMLElement>(canvasElement, "[data-switch-wrapper]", "the switch wrapper");
+      await expectSwitchedTo(wrapper, "v1");
+      for (const variant of ["v3", "v5", "v4"] as const) {
+        wrapper.setAttribute(REGION_VARIANT_ATTR, variant);
+        await expectSwitchedTo(wrapper, variant);
+      }
+      // Removing the nearer choice falls back to <html>'s (cleared) → v1.
+      wrapper.removeAttribute(REGION_VARIANT_ATTR);
+      await expectSwitchedTo(wrapper, DEFAULT_REGION_VARIANT);
+    }),
+};
+
+/**
+ * Runs `switchIt` at the start of a frame, then measures THAT frame in a
+ * ResizeObserver callback — the browser runs those after style and layout
+ * and before paint, so whatever `measure` sees is what this frame puts on
+ * screen. Microtasks queued by the switch (React's sync work, the
+ * MutationObserver) have all run by then; a render deferred to a later
+ * TASK has not — which is exactly the one-frame half-switch this catches.
+ */
+function measureTheFrameOf(host: Element, switchIt: () => void, measure: () => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    requestAnimationFrame(() => {
+      try {
+        switchIt();
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      const probe = document.createElement("div");
+      host.appendChild(probe);
+      const observer = new ResizeObserver(() => {
+        observer.disconnect();
+        try {
+          measure();
+          resolve();
+        } catch (error) {
+          reject(error);
+        } finally {
+          probe.remove();
+        }
+      });
+      observer.observe(probe);
+    });
+  });
+}
+
+/** The same-frame claim: the TS side (resolved stamp, header height) and
+ *  the CSS side (the variant's paint) agree in the frame the switch lands. */
+function expectConsistentNow(root: ParentNode, variant: RegionVariantId): void {
+  expectResolvedVariant(root, variant);
+  expectArmHeaderHeights(regionOf(root, "br"), variant);
+  expectArmHeaderHeights(regionOf(root, "inner"), variant);
+  expectVariantPaint(root, variant);
+}
+
+export const SwitchNeverHalfPainted: Story = {
+  name: "no switch path ever paints a half-switched frame",
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <section data-path="html">
+        <Bench />
+      </section>
+      <section data-path="react">
+        <AncestorSwitch>
+          <Bench />
+        </AncestorSwitch>
+      </section>
+      <section data-path="dom">
+        <div data-switch-wrapper="" {...regionVariantAttrs("v1")}>
+          <Bench />
+        </div>
+      </section>
+    </div>
+  ),
+  play: async ({ canvasElement }) =>
+    withHtmlCleared(async () => {
+      const html = document.documentElement;
+      const htmlPath = required<HTMLElement>(canvasElement, '[data-path="html"]', "the html path");
+      const reactPath = required<HTMLElement>(canvasElement, '[data-path="react"] [data-switch-wrapper]', "the react path");
+      const domPath = required<HTMLElement>(canvasElement, '[data-path="dom"] [data-switch-wrapper]', "the dom path");
+      for (const root of [htmlPath, reactPath, domPath]) await expectSwitchedTo(root, "v1");
+
+      for (const variant of ["v4", "v2", "v1"] as const) {
+        await measureTheFrameOf(
+          canvasElement,
+          () => {
+            if (variant === DEFAULT_REGION_VARIANT) html.removeAttribute(REGION_VARIANT_ATTR);
+            else html.setAttribute(REGION_VARIANT_ATTR, variant);
+          },
+          () => expectConsistentNow(htmlPath, variant),
+        );
+        await measureTheFrameOf(
+          canvasElement,
+          () => required<HTMLButtonElement>(canvasElement, `[data-path="react"] [data-set-variant="${variant}"]`, `the ${variant} button`).click(),
+          () => expectConsistentNow(reactPath, variant),
+        );
+        await measureTheFrameOf(
+          canvasElement,
+          () => domPath.setAttribute(REGION_VARIANT_ATTR, variant),
+          () => expectConsistentNow(domPath, variant),
+        );
+      }
+    }),
 };
 
 /* ------------------------------------------------------------------ */
