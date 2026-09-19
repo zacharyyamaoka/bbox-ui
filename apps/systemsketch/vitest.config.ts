@@ -50,6 +50,20 @@ export default mergeConfig(
               enabled: true,
               provider: playwright(),
               headless: true,
+              // WHY this line exists in an otherwise off-limits file
+              // (dispatcher-granted to lane L3, 2026-09-19, and the ONLY
+              // change made here): Vitest's default browser viewport is a
+              // PHONE — `viewport.width ??= 414; viewport.height ??= 896`
+              // (vitest 4.1.11, dist/chunks, resolveConfig). The committed
+              // acceptance fixtures place blocks at page x=420 and x=520 with
+              // the camera pinned at {0,0,z:1} by src/testing/harness.tsx, so
+              // at 414px wide the target block renders off-screen and
+              // Playwright refuses to drag to it. Measured: reverting this one
+              // line takes src/wiring.smoke.test.tsx from 5/5 to 1/5, every
+              // failure a 30s `dragAndDrop` timeout. 1400×900 matches the
+              // trunk bench's own desktop posture and leaves room for L4's
+              // chrome.
+              viewport: { width: 1400, height: 900 },
               instances: [{ browser: "chromium" }],
             },
           },

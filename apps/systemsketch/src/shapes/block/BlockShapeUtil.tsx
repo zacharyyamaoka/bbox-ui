@@ -10,6 +10,7 @@
 // clipping and z-order stay the engine's rather than becoming ours.
 import {
   BaseFrameLikeShapeUtil,
+  Group2d,
   Rectangle2d,
   T,
   createShapePropsMigrationSequence,
@@ -148,8 +149,34 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
     return true;
   }
 
+  /**
+   * WHY an expanded block's geometry is wrapped in a `Group2d` while the other
+   * two views are a bare `Rectangle2d` — measured, 2026-09-19, not a style
+   * choice:
+   *
+   * tldraw's `Editor.getShapeAtPoint` branches on `isFrameLike` and then
+   * iterates `geometry.children` directly. `isFrameLike` is true here only in
+   * `expanded` view (above), so an expanded block handing back a bare
+   * `Rectangle2d` crashes that read with `TypeError: geometry.children is not
+   * iterable`. It surfaces nowhere near the cause: the throw happens inside
+   * the hover-update debounce, React unmounts the whole board into its
+   * `<Crash>` boundary, and the only symptom is that every pointer gesture on
+   * the page stops working. L3 met it as `src/wiring.smoke.test.tsx`'s
+   * containment case timing out after 30s with
+   * "element was detached from the DOM" — a wire drag between two blocks that
+   * are not the frame, failing because a third shape existed.
+   *
+   * `BaseFrameLikeShapeUtil` ships its own `Group2d` for exactly this reason;
+   * this class overrides `getGeometry` (to size the box from the MEASURED
+   * `props.w`/`props.h` rather than the base's own) and so has to keep the
+   * container the base's contract assumes.
+   *
+   * Owed upstream to L5: `ss-region` is frame-like too and will need the same
+   * wrapper the day it stops being a placeholder.
+   */
   override getGeometry(shape: BlockShape) {
-    return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true });
+    const box = new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true });
+    return shape.props.view === "expanded" ? new Group2d({ children: [box] }) : box;
   }
 
   override getIndicatorPath(shape: BlockShape) {
