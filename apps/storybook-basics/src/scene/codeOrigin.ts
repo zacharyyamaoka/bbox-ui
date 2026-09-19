@@ -88,9 +88,27 @@ export function codeOriginState(
   origin: CodeOrigin | null | undefined,
   resolution: CodeOriginResolution | undefined,
 ): CodeOriginState {
-  void origin;
-  void resolution;
-  throw new Error("scv: not implemented — lane scv-origin-and-actions fills this body (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md)");
+  // WHY the null check comes FIRST and ignores `resolution` outright — the
+  // ruling this seam carries, recorded in
+  // docs/peps/0004-code-cell-origin-binding.md: the first semantic field on
+  // a code node is a BINDING, and a null binding has nothing to resolve. A
+  // host that resolved something anyway answered a question nobody asked;
+  // letting its answer through would let a stray resolution promote an
+  // unbound cell to "synced" and claim a file owns bytes the board owns.
+  if (origin == null) return "pseudo";
+
+  // A missing fact is a missing fact. `anchorFound` with no `spanHash` is
+  // orphaned rather than optimistically synced — the alternative reports a
+  // verified cache on evidence nobody produced.
+  if (!resolution || !resolution.fileFound || !resolution.anchorFound || typeof resolution.spanHash !== "string") return "orphaned";
+
+  // WHY an exact string compare and not a normalised one (no case fold, no
+  // prefix strip, no trim): both sides are `sha256:<hex64>` emitted by ONE
+  // slicer over the same bytes (this file's header). Accepting a hash some
+  // other tool spelled differently is precisely the silent agreement
+  // "drifted" exists to refuse — a differently-spelled hash is a different
+  // producer, which is news, not a formatting detail.
+  return resolution.spanHash === origin.contentHash ? "synced" : "drifted";
 }
 
 /**
@@ -99,8 +117,25 @@ export function codeOriginState(
  * `contentHash` matching /^sha256:[0-9a-f]{64}$/. Extra keys → false. Total.
  */
 export function isCodeOrigin(value: unknown): value is CodeOrigin {
-  void value;
-  throw new Error("scv: not implemented — lane scv-origin-and-actions fills this body (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md)");
+  // WHY EXACT keys rather than "has at least these three": this record
+  // round-trips through pyblocks' mirror, whose own `_is_exact_v1`
+  // (`systemsketch.py:415`) applies the same discipline in the other
+  // direction. A permissive validator lets a fourth key ride along that one
+  // side writes and the other silently drops — the two ends then disagree
+  // about what the binding says while both believe they validated it.
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const expected = ["uri", "anchor", "contentHash"];
+  const keys = Object.keys(value);
+  if (keys.length !== expected.length) return false;
+  if (!expected.every((key) => keys.includes(key))) return false;
+
+  const { uri, anchor, contentHash } = value as Record<string, unknown>;
+  if (typeof uri !== "string" || uri.length === 0) return false;
+  if (typeof anchor !== "string" || anchor.length === 0) return false;
+  // Lower-case hex only: `codeOriginState` compares these strings exactly,
+  // so admitting two spellings of one hash here would manufacture the very
+  // "drifted" the comparison is supposed to detect.
+  return typeof contentHash === "string" && /^sha256:[0-9a-f]{64}$/.test(contentHash);
 }
 
 /** What the four-state badge paints per state (presentational data; the
