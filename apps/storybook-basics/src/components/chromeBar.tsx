@@ -156,12 +156,17 @@ export interface ChromeBarProps {
    *  this bar only reserves the seat GitHub reserves beside the repo name. */
   draftChip?: ReactNode;
   /** Portal target inside the host's token scope (host-contract §4).
-   *  Forwarded to the context menu and to nested `draftChip` popovers that
-   *  accept it; `dropdown-menu.tsx`'s own `Positioner` does not yet expose a
-   *  `container` Pick (only `anchor` was widened for this build — see its
-   *  header) so the burger/file/ellipsis/depth dropdowns still portal to
-   *  `document.body` until that file grows the same Pick context-menu.tsx
-   *  already has. Not this lane's file to edit. */
+   *  Forwarded to EVERY popup this bar opens — the burger menu, the file
+   *  actions, the breadcrumb ellipsis, the depth badge, the context menu,
+   *  and any `draftChip` that accepts one.
+   *
+   *  This comment used to say the dropdowns could not honour it because
+   *  `dropdown-menu.tsx` exposed no `container`, and that "not this lane's
+   *  file to edit" — true when written, stale the moment that Pick was
+   *  widened. An independent judge caught the gap by giving ChromeBar a
+   *  scoped container and watching the burger menu land outside it anyway
+   *  (2026-09-18). A documented limitation outlives its cause unless
+   *  something re-checks it, which is the actual lesson here. */
   container?: HTMLElement | null;
   /** Host CSS on the rendered popup's own `[data-slot=…]` — stacking/
    *  z-order. The kit ships zero z-index (host-contract §4). */
@@ -269,7 +274,7 @@ function BurgerMenu({
         </TooltipTrigger>
         <TooltipContent>{menu.label}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent className={cn("w-64", popupClassName)} align="start">
+      <DropdownMenuContent className={cn("w-64", popupClassName)} align="start" container={container}>
         <BurgerMenuGroups groups={menu.groups} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -416,6 +421,7 @@ function FileCrumb({
                 <StatusDot tone={identity.statusTone} label={identity.statusLabel} />
               </DropdownMenuTrigger>
               <DropdownMenuContent
+              container={container}
                 className={cn("w-64", popupClassName)}
                 data-testid={testIdPrefix ? `${testIdPrefix}-file-menu` : undefined}
               >
@@ -593,6 +599,7 @@ export function ChromeBar({
                       <BreadcrumbEllipsis className="size-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
+              container={container}
                       className={cn("w-64", popupClassName)}
                       data-testid={testIdPrefix ? `${testIdPrefix}-hidden-levels` : undefined}
                     >
@@ -673,6 +680,7 @@ export function ChromeBar({
           {depth}
         </DropdownMenuTrigger>
         <DropdownMenuContent
+              container={container}
           className={cn("w-72", popupClassName)}
           align="end"
           data-testid={testIdPrefix ? `${testIdPrefix}-path` : undefined}

@@ -29,7 +29,7 @@
  * family, testable with no rendering at all.
  */
 
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode, type RefObject } from "react";
 import { Check, ChevronDown, Plus, X } from "lucide-react";
 
 import { cn } from "../lib/utils";
@@ -162,6 +162,12 @@ export interface ToolDockProps {
   /** The trailing "+" (screenshot 04's library trigger). Omitted entirely
       when the host has no library surface to show. */
   librarySlot?: LibrarySlotProps;
+  /** Portal target inside the host's token scope (host-contract §4) —
+      forwarded to every family popout and to the library popover. Without
+      it a themed host gets a themed dock and document-coloured popups,
+      which an independent judge reproduced by scoping colours to a subtree
+      and opening a family (2026-09-18). */
+  container?: HTMLElement | ShadowRoot | RefObject<HTMLElement | ShadowRoot | null> | null;
   /**
    * Render order across BOTH lists, by id. Omit it and the dock renders
    * every `simpleTools` cell and then every `families` cell — the original
@@ -248,6 +254,7 @@ function itemById(family: FamilyDeclaration, id: string): ToolItem | undefined {
 
 function FamilyCell({
   family,
+  container,
   activeToolId,
   activeVariant,
   remembered,
@@ -256,6 +263,7 @@ function FamilyCell({
   testIdPrefix,
 }: {
   family: FamilyDeclaration;
+  container: ToolDockProps["container"];
   activeToolId: string;
   activeVariant: string | undefined;
   remembered: string | undefined;
@@ -336,7 +344,14 @@ function FamilyCell({
           the same way) — tied to the TRIGGER's own width, which for a
           ~32px icon-only family cell would squeeze a real label + shortcut
           + check-mark row down to nothing. */}
-      <DropdownMenuContent side="top" align="center" sideOffset={11} collisionPadding={12} className="w-56">
+      <DropdownMenuContent
+        side="top"
+        align="center"
+        sideOffset={11}
+        collisionPadding={12}
+        container={container}
+        className="w-56"
+      >
         {family.sections.map((section, index) => (
           <DropdownMenuGroup key={section.heading ?? index}>
             {section.heading ? <DropdownMenuLabel>{section.heading}</DropdownMenuLabel> : null}
@@ -368,7 +383,15 @@ function FamilyCell({
   );
 }
 
-function LibraryCell({ slot, testIdPrefix }: { slot: LibrarySlotProps; testIdPrefix?: string }) {
+function LibraryCell({
+  slot,
+  container,
+  testIdPrefix,
+}: {
+  slot: LibrarySlotProps;
+  container: ToolDockProps["container"];
+  testIdPrefix?: string;
+}) {
   return (
     <Popover open={slot.open} onOpenChange={slot.onOpenChange}>
       {/* Same outer-toolbar-item direction as the family cells above. */}
@@ -382,7 +405,14 @@ function LibraryCell({ slot, testIdPrefix }: { slot: LibrarySlotProps; testIdPre
       >
         <Plus />
       </ToolbarButton>
-      <PopoverContent side="top" align="end" sideOffset={12} collisionPadding={12} className="w-80">
+      <PopoverContent
+        side="top"
+        align="end"
+        sideOffset={12}
+        collisionPadding={12}
+        container={container}
+        className="w-80"
+      >
         <header className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             {slot.eyebrow ? (
@@ -427,6 +457,7 @@ export function ToolDock({
   onSelectItem,
   librarySlot,
   order,
+  container,
   testIdPrefix,
 }: ToolDockProps) {
   // One ordered list of cells, so `order` can interleave the two sources.
@@ -434,8 +465,9 @@ export function ToolDock({
   // every render anyway, and deferring keeps the two branches' props —
   // which read `preferences` and the callbacks — evaluated in the same place
   // they were before, not hoisted into a different closure.
-  const cells: { id: string; render: () => ReactNode }[] = [
+  const cells: { key: string; id: string; render: () => ReactNode }[] = [
     ...simpleTools.map((tool) => ({
+      key: `tool:${tool.id}`,
       id: tool.id,
       render: () => (
         <ToolbarButton
@@ -452,11 +484,13 @@ export function ToolDock({
       ),
     })),
     ...families.map((family) => ({
+      key: `family:${family.id}`,
       id: family.id,
       render: () => (
         <FamilyCell
           key={family.id}
           family={family}
+          container={container}
           activeToolId={activeToolId}
           activeVariant={activeVariant}
           remembered={preferences[family.prefKey]}
@@ -476,11 +510,32 @@ export function ToolDock({
   // Named ids first, in the order given; everything else keeps its original
   // relative position behind them. Appending rather than dropping is what
   // stops a partial `order` from silently losing a tool the host declared.
+  //
+  // WHY this consumes cells rather than looking them up: the first version
+  // used `cells.find(...)` per id plus an `order.includes(...)` filter, and
+  // an independent judge broke it twice (2026-09-18). `order:
+  // ["cursor","cursor"]` rendered the cursor TWICE with duplicate React
+  // keys; and when a simple tool and a family shared an id, `find` returned
+  // only the first while the filter excluded BOTH — so one of the host's
+  // declared tools vanished from the dock entirely. Ids are two independent
+  // namespaces (`simpleTools` and `families` are separate lists, and nothing
+  // stops a host from reusing a string across them), so neither a keyed
+  // lookup nor a set-membership test can be correct on its own.
+  //
+  // Taking each matched cell OUT of a working list makes both cases fall
+  // out: a repeated id finds nothing the second time, and a shared id
+  // matches the two cells in turn. Nothing is ever rendered twice, and
+  // nothing is ever silently dropped.
+  const remaining = [...cells];
   const ordered = order
-    ? [
-        ...order.map((id) => cells.find((cell) => cell.id === id)).filter((cell) => cell !== undefined),
-        ...cells.filter((cell) => !order.includes(cell.id)),
-      ]
+    ? (() => {
+        const picked: typeof cells = [];
+        for (const id of order) {
+          const index = remaining.findIndex((cell) => cell.id === id);
+          if (index !== -1) picked.push(...remaining.splice(index, 1));
+        }
+        return [...picked, ...remaining];
+      })()
     : cells;
 
   return (
@@ -492,11 +547,11 @@ export function ToolDock({
       )}
     >
       <Toolbar aria-label="Tools">
-        {ordered.map((cell) => cell.render())}
+        {ordered.map((cell) => <Fragment key={cell.key}>{cell.render()}</Fragment>)}
         {librarySlot ? (
           <>
             <ToolbarSeparator />
-            <LibraryCell slot={librarySlot} testIdPrefix={testIdPrefix} />
+            <LibraryCell slot={librarySlot} container={container} testIdPrefix={testIdPrefix} />
           </>
         ) : null}
       </Toolbar>

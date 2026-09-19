@@ -53,6 +53,7 @@ import { Button } from "./button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -523,11 +524,23 @@ function ModeToggle({
         <LayoutGrid className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" container={container}>
-        <DropdownMenuLabel>View</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onModeChange(value as FramesPanelMode)}>
-          <DropdownMenuRadioItem value="cards">Thumbnail cards</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="list">Compact list</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
+        {/* WHY the Group wrapper: `DropdownMenuLabel` renders Base UI's
+            `Menu.GroupLabel`, which READS `MenuGroupContext` and throws
+            "MenuGroupContext is missing" if no `Menu.Group` is above it —
+            it is a group's label, not a free-standing heading. Without this
+            wrapper, clicking "Frames panel view options" threw and unmounted
+            the whole React root. It shipped that way because no play
+            function ever opened this menu; an independent judge found it by
+            clicking every trigger (2026-09-18). `ViewMenuOpens` in
+            FramesPanel.stories.tsx now opens it, so a regression here fails
+            the suite instead of waiting for a user. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>View</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onModeChange(value as FramesPanelMode)}>
+            <DropdownMenuRadioItem value="cards">Thumbnail cards</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="list">Compact list</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -605,7 +618,16 @@ export function FramesPanel({
     );
 
   return (
-    <div data-slot="frames-panel" className="flex flex-col">
+    // WHY `isolate` here as well as on PanelShell's scroll body: a dragged
+    // row sets `zIndex: 10` (below), and PanelShell only supplies a stacking
+    // context when the panel is actually INSIDE one. Rendered standalone —
+    // which the stories do, and which nothing forbids a host from doing —
+    // that 10 resolved in the host's own context, where an overlay at
+    // z-index 5 could be painted under a row being dragged. An independent
+    // judge measured exactly that (2026-09-18) after the first fix assumed
+    // the shell was always there. A component that needs internal stacking
+    // owns its own boundary rather than borrowing a parent's.
+    <div data-slot="frames-panel" className="isolate flex flex-col">
       <div className="flex items-start justify-between gap-2 px-3.5 pt-3.5">
         <div className="min-w-0">
           <span className="block text-[10px] font-bold tracking-[0.08em] text-muted-foreground uppercase">

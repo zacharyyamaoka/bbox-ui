@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { Frame as FrameIcon, GitFork } from "lucide-react";
 
 import {
@@ -114,6 +114,53 @@ export const Default: Story = {
 };
 
 /** `mode="list"` — no thumbnails, just grip · icon · name · menu. */
+/**
+ * Opens the view-options menu and switches mode through it.
+ *
+ * WHY this story exists at all: that menu CRASHED. `DropdownMenuLabel`
+ * renders Base UI's `Menu.GroupLabel`, which throws "MenuGroupContext is
+ * missing" without a `Menu.Group` above it, and the label sat outside one —
+ * so clicking the trigger threw and unmounted the React root. It shipped and
+ * survived a merge because every FramesPanel story rendered the panel and
+ * none of them ever opened this menu; an independent judge found it by
+ * clicking every trigger on every surface (2026-09-18).
+ *
+ * The lesson is the test, not the fix: a trigger no story presses is a
+ * trigger nobody has run. This one is now pressed on every suite run.
+ */
+export const ViewMenuOpens: Story = {
+  render: function Render() {
+    const [mode, setMode] = useState<FramesPanelMode>("cards");
+    return (
+      <Shell>
+        <FramesPanel
+          items={SCREENSHOT_ITEMS}
+          kinds={KINDS}
+          mode={mode}
+          onModeChange={setMode}
+          onFocus={fn()}
+          onRename={() => ({ ok: true })}
+        />
+      </Shell>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    await userEvent.click(await canvas.findByRole("button", { name: "Frames panel view options" }));
+
+    // Both radio rows present means the menu actually MOUNTED — the crash
+    // left an empty root, so any assertion about panel content would still
+    // have passed while this one cannot.
+    await expect(await body.findByRole("menuitemradio", { name: "Thumbnail cards" })).toBeInTheDocument();
+    const list = await body.findByRole("menuitemradio", { name: "Compact list" });
+
+    // And it works, not merely renders.
+    await userEvent.click(list);
+    await waitFor(() => expect(canvasElement.querySelector("[data-mode='list']")).not.toBeNull());
+  },
+};
+
 export const ListMode: Story = {
   render: function Render() {
     const [mode, setMode] = useState<FramesPanelMode>("list");

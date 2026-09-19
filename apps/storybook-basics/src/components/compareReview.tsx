@@ -134,6 +134,27 @@ export interface CompareReviewProps {
   renderAfter(slot: { highlight: CompareChange | null; label: string }): ReactNode
   selectedChangeId: string | null
   onSelectChange(id: string | null): void
+  /**
+   * Which element the Figma-layout property table opens expanded.
+   *
+   * WHY this became a prop: the comment below still holds for a LIVE review
+   * — nothing outside the table cares which element is expanded mid-session
+   * — but "nothing cares" and "nobody can set it" are different claims, and
+   * only the first was true. Setting `selectedChangeId` does not select an
+   * element (they are separate concerns), so there was no way to open this
+   * surface with a row already showing: a host restoring a review session
+   * could not, and the stories' own `AllStates` gallery captioned two cells
+   * "Element selected" and "Properties tab — the table…" while both rendered
+   * "Select an edited element to compare changes" with no table at all. An
+   * independent judge opened the gallery and read the empty state back
+   * (2026-09-18).
+   *
+   * Uncontrolled-with-a-default rather than fully controlled, deliberately:
+   * the expanded row genuinely is view-local once the surface is open, so a
+   * host should not have to own it turn by turn — it only needs to be able
+   * to say where to start.
+   */
+  defaultSelectedElementId?: string | null
   /** Host cameras. Fired whenever the selected change (and therefore what should be framed) changes. */
   onFrameChange?(change: CompareChange | null): void
   mode: CompareMode
@@ -170,6 +191,7 @@ export function CompareReview({
   renderBefore,
   renderAfter,
   selectedChangeId,
+  defaultSelectedElementId = null,
   onSelectChange,
   onFrameChange,
   mode,
@@ -209,9 +231,10 @@ export function CompareReview({
    */
   const [layoutState, setLayoutState] = useState<TableLayout>(layout)
   const [gitHighlightState, setGitHighlightState] = useState(gitHighlight)
-  // Figma-layout's own element selection is the same kind of view-local
-  // state — nothing outside this table cares which element is expanded.
-  const [selectedElementId, setSelectedElementId] = useState<string | null>(null)
+  // Figma-layout's own element selection is view-local once the surface is
+  // open; `defaultSelectedElementId` only decides where it STARTS. See that
+  // prop's own WHY for why the distinction mattered.
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(defaultSelectedElementId ?? null)
 
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)

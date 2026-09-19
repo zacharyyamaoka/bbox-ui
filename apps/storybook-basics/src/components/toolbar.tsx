@@ -7,7 +7,7 @@
 // L1 part here (`cn` + shadcn CSS variables, no raw `style={{color}}`).
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
 import { Toolbar as ToolbarPrimitive } from "@base-ui/react/toolbar";
 
@@ -37,6 +37,29 @@ const InsideToolbarContext = createContext(false);
  *  must render a group rather than a second root. */
 function useInsideToolbar(): boolean {
   return useContext(InsideToolbarContext);
+}
+
+/**
+ * Resets `useInsideToolbar` to false for a subtree. Every portal wrapper in
+ * the kit renders its content inside one.
+ *
+ * WHY this is required and not belt-and-braces: React context crosses PORTAL
+ * boundaries, but the DOM does not. A `ControlStrip` rendered inside a
+ * popover that was opened from within a toolbar therefore saw
+ * `InsideToolbarContext === true` while having no toolbar ancestor in the
+ * DOM at all — so it rendered `role="group"` with nothing to be a group OF,
+ * and arrow-key focus escaped the popup into the toolbar behind it.
+ * Measured by an independent judge (2026-09-18): ArrowRight on the popup's
+ * last control moved focus to the outer toolbar instead of wrapping inside
+ * the popup. That regression was introduced by the context fix itself — the
+ * previous round's repair being the next round's defect, exactly as
+ * expected.
+ *
+ * The portal is the boundary where React's tree and the DOM tree diverge, so
+ * it is the one place this has to be corrected.
+ */
+function ToolbarBoundary({ children }: { children: ReactNode }) {
+  return <InsideToolbarContext.Provider value={false}>{children}</InsideToolbarContext.Provider>;
 }
 
 /**
@@ -161,4 +184,4 @@ function ToolbarSeparator({ className, ...props }: ToolbarPrimitive.Separator.Pr
   );
 }
 
-export { Toolbar, ToolbarButton, ToolbarGroup, ToolbarLink, ToolbarSeparator, useInsideToolbar };
+export { Toolbar, ToolbarButton, ToolbarGroup, ToolbarLink, ToolbarSeparator, ToolbarBoundary, useInsideToolbar };

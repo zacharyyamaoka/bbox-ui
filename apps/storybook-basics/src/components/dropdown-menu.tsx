@@ -11,6 +11,7 @@ import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
 
 import { cn } from "../lib/utils";
+import { ToolbarBoundary } from "./toolbar";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
@@ -47,7 +48,12 @@ function DropdownMenuContent({
   // Adds-only; every current consumer that omits them is unaffected.
   Pick<
     MenuPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset" | "anchor" | "collisionPadding"
+    | "align"
+    | "alignOffset"
+    | "side"
+    | "sideOffset"
+    | "anchor"
+    | "collisionPadding"
   > &
   // WHY `container` comes from PORTAL, not Positioner, and why it took a
   // second pass to land: the host contract promises a token-scoped portal
@@ -62,24 +68,31 @@ function DropdownMenuContent({
   Pick<MenuPrimitive.Portal.Props, "container">) {
   return (
     <MenuPrimitive.Portal container={container}>
-      <MenuPrimitive.Positioner
-        className="isolate z-50 outline-none"
-        align={align}
-        alignOffset={alignOffset}
-        side={side}
-        sideOffset={sideOffset}
-        anchor={anchor}
-        collisionPadding={collisionPadding}
-      >
-        <MenuPrimitive.Popup
-          data-slot="dropdown-menu-content"
-          className={cn(
-            "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground min-w-32 rounded-lg p-1 shadow-md ring-1 duration-100 data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 z-50 max-h-(--available-height) w-(--anchor-width) origin-(--transform-origin) overflow-x-hidden overflow-y-auto outline-none data-closed:overflow-hidden",
-            className,
-          )}
-          {...props}
-        />
-      </MenuPrimitive.Positioner>
+      {/* Resets `useInsideToolbar` — React context crosses a portal but the
+          DOM does not, so a ControlStrip opened from a toolbar would
+          otherwise render as a group with no toolbar ancestor and leak
+          arrow-key focus back to that toolbar. See toolbar.tsx's
+          `ToolbarBoundary`. */}
+      <ToolbarBoundary>
+        <MenuPrimitive.Positioner
+          className="isolate z-50 outline-none"
+          align={align}
+          alignOffset={alignOffset}
+          side={side}
+          sideOffset={sideOffset}
+          anchor={anchor}
+          collisionPadding={collisionPadding}
+        >
+          <MenuPrimitive.Popup
+            data-slot="dropdown-menu-content"
+            className={cn(
+              "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-popover text-popover-foreground min-w-32 rounded-lg p-1 shadow-md ring-1 duration-100 data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 z-50 max-h-(--available-height) w-(--anchor-width) origin-(--transform-origin) overflow-x-hidden overflow-y-auto outline-none data-closed:overflow-hidden",
+              className,
+            )}
+            {...props}
+          />
+        </MenuPrimitive.Positioner>
+      </ToolbarBoundary>
     </MenuPrimitive.Portal>
   );
 }
@@ -99,7 +112,10 @@ function DropdownMenuLabel({
     <MenuPrimitive.GroupLabel
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn("text-muted-foreground px-1.5 py-1 text-xs font-medium data-inset:pl-7", className)}
+      className={cn(
+        "text-muted-foreground px-1.5 py-1 text-xs font-medium data-inset:pl-7",
+        className,
+      )}
       {...props}
     />
   );
@@ -214,7 +230,12 @@ function DropdownMenuCheckboxItem({
 }
 
 function DropdownMenuRadioGroup({ ...props }: MenuPrimitive.RadioGroup.Props) {
-  return <MenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />;
+  return (
+    <MenuPrimitive.RadioGroup
+      data-slot="dropdown-menu-radio-group"
+      {...props}
+    />
+  );
 }
 
 function DropdownMenuRadioItem({
@@ -248,7 +269,10 @@ function DropdownMenuRadioItem({
   );
 }
 
-function DropdownMenuSeparator({ className, ...props }: MenuPrimitive.Separator.Props) {
+function DropdownMenuSeparator({
+  className,
+  ...props
+}: MenuPrimitive.Separator.Props) {
   return (
     <MenuPrimitive.Separator
       data-slot="dropdown-menu-separator"
@@ -258,7 +282,10 @@ function DropdownMenuSeparator({ className, ...props }: MenuPrimitive.Separator.
   );
 }
 
-function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"span">) {
+function DropdownMenuShortcut({
+  className,
+  ...props
+}: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="dropdown-menu-shortcut"

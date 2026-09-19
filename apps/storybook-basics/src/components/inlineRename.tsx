@@ -105,28 +105,44 @@ export function InlineRename({
   const error = externalError ?? internalError;
 
   const commit = useCallback(() => {
-    // WHY validation reads the TRIMMED draft but the commit carries the
-    // AUTHORED one — two different questions that one `.trim()` used to
-    // answer with the same value, wrongly:
+    // WHY nothing here trims, and the whitespace policy lives in the
+    // validator instead.
     //
-    //   "is this name acceptable?"  -> trimmed. A name of three spaces is
-    //                                  empty in every sense a host cares
-    //                                  about, and must be refused like "".
-    //   "what did the user write?"  -> verbatim. Zach's truthful-rendering
-    //                                  rule is explicit that stored text
-    //                                  keeps every authored character: no
-    //                                  silent normalization, trimming or
-    //                                  substitution. A field that quietly
-    //                                  edits what you typed is the exact
-    //                                  failure that rule names.
+    // This started as one `const next = draft.trim()` feeding BOTH the
+    // validator and the commit, which answered two different questions with
+    // one wrong value, and broke in two ways at once:
     //
-    // Collapsing the two also broke the unchanged-cancels guard below, by
-    // comparing a trimmed draft against an untrimmed `value`. Open a rename
-    // on "  Draft 1  ", press Enter having typed nothing, and the old code
-    // computed next="Draft 1", found it !== value, and fired onCommit with
-    // the whitespace destroyed — a write the user never asked for, on a
-    // field they never edited. Reproduced by an independent judge, 2026-09-18.
-    const message = validate(draft.trim());
+    //   1. It destroyed authored text. Zach's truthful-rendering rule is
+    //      explicit that stored text keeps every authored character — no
+    //      silent normalization, trimming or substitution. Open a rename on
+    //      "  Draft 1  ", press Enter having typed nothing, and it fired
+    //      onCommit("Draft 1"): a write the user never asked for, on a field
+    //      they never edited.
+    //   2. It defeated the unchanged-cancels guard below, by comparing a
+    //      trimmed draft against an untrimmed `value` — which is why (1)
+    //      could fire at all on an untouched field.
+    //
+    // The first repair validated `draft.trim()` and committed `draft`, which
+    // fixed the data loss and introduced a subtler bug: a HOST validator now
+    // judged a different string from the one about to be committed, so
+    // `validate: (n) => n.length > 5 ? "Too long" : null` approved
+    // "  Alpha  " on five characters and committed nine. A validator that
+    // cannot see what it is approving is worse than no validator.
+    //
+    // So: the validator receives exactly what would be committed, and
+    // "reject a name that is only whitespace" is expressed where it belongs
+    // — inside `defaultValidate`, which trims for its own test
+    // (`next.trim() ? ...`) without rewriting the caller's value. A host that
+    // genuinely wants names trimmed does it in its own `onCommit`, where it
+    // is a visible decision rather than one this component made silently.
+    //
+    // KNOWN LIMIT, not silent: `value` round-trips through a single-line
+    // `<input>`, which cannot hold a newline — a stored "A\nB" is exposed as
+    // "AB" and would commit that way if edited. That is the element's
+    // constraint, not a normalization invented here, and a host storing
+    // multi-line names needs a different editor rather than this one
+    // quietly flattening them.
+    const message = validate(draft);
     if (message) {
       setInternalError(message);
       // A frame late, same as the donor: `requestAnimationFrame` because a

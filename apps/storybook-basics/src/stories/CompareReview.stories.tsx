@@ -179,6 +179,7 @@ interface DemoProps {
   initialTab?: CompareTab;
   initialDock?: CompareDock;
   initialSelectedChangeId?: string | null;
+  defaultSelectedElementId?: string | null;
   canOverlay?: boolean;
 }
 
@@ -192,6 +193,7 @@ function Demo({
   initialTab = "properties",
   initialDock = "right",
   initialSelectedChangeId = null,
+  defaultSelectedElementId = null,
   canOverlay,
 }: DemoProps) {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(initialSelectedVersionId);
@@ -205,6 +207,7 @@ function Demo({
   return (
     <div className="h-[540px] w-[900px] overflow-hidden rounded-lg border border-border bg-background shadow-sm" data-testid="compare-frame">
       <CompareReview
+        defaultSelectedElementId={defaultSelectedElementId}
         comparison={comparison}
         versions={versions}
         selectedVersionId={selectedVersionId}
@@ -491,6 +494,13 @@ export const AllStates: Story = {
             versions={[LIVE_RECORD, V1_RECORD]}
             initialSelectedVersionId={V1_RECORD.id}
             initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+            // WHY this is here and not implied by the line above: selecting a
+            // CHANGE does not select an ELEMENT — they are separate concerns,
+            // and without this the cell rendered "Select an edited element to
+            // compare changes" under a caption promising a table. A caption
+            // that describes a state the cell does not render is the one
+            // thing a gallery must never do.
+            defaultSelectedElementId="block:shape:predict"
           />
         ),
       },
@@ -510,6 +520,13 @@ export const AllStates: Story = {
             versions={[LIVE_RECORD, V1_RECORD]}
             initialSelectedVersionId={V1_RECORD.id}
             initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+            // WHY this is here and not implied by the line above: selecting a
+            // CHANGE does not select an ELEMENT — they are separate concerns,
+            // and without this the cell rendered "Select an edited element to
+            // compare changes" under a caption promising a table. A caption
+            // that describes a state the cell does not render is the one
+            // thing a gallery must never do.
+            defaultSelectedElementId="block:shape:predict"
             initialTab="properties"
           />
         ),
@@ -522,6 +539,13 @@ export const AllStates: Story = {
             versions={[LIVE_RECORD, V1_RECORD]}
             initialSelectedVersionId={V1_RECORD.id}
             initialSelectedChangeId={COMPARISON.changes[0]?.id ?? null}
+            // WHY this is here and not implied by the line above: selecting a
+            // CHANGE does not select an ELEMENT — they are separate concerns,
+            // and without this the cell rendered "Select an edited element to
+            // compare changes" under a caption promising a table. A caption
+            // that describes a state the cell does not render is the one
+            // thing a gallery must never do.
+            defaultSelectedElementId="block:shape:predict"
             initialTab="code"
           />
         ),
