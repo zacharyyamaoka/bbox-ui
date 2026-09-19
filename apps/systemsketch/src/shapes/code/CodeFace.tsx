@@ -9,8 +9,11 @@ import { useRef } from "react";
 import { useEditor } from "tldraw";
 
 import { CodeEditor } from "@trunk/components/codeEditor";
+import { OriginBadge } from "@trunk/components/originBadge";
 import { POINTER_OWNED_CLASS } from "@trunk/hosts/nodeViews";
+import { ORIGIN_BADGE, codeOriginState } from "@trunk/scene/codeOrigin";
 
+import { useCodeOriginResolution } from "../../source/originResolution";
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { CODE_SHAPE_TYPE } from "../types";
 import type { CodeShape } from "./CodeShapeUtil";
@@ -35,9 +38,78 @@ const GRAB_RING_PX = 10;
  *  own floor at its code mount (hosts/nodeViews.tsx:473). */
 const MIN_COLUMNS = 8;
 
+/**
+ * The origin-badge strip's height, in px — FIXED, and that is the whole
+ * point.
+ *
+ * WHY a constant instead of letting the strip hug its badge: this face and
+ * `shared/measure.ts` are a feedback loop. The measurement writes the
+ * wrapper's `offsetHeight` into `props.h`, and the wrapper's height is
+ * `h - 2 * GRAB_RING_PX` (the editor) plus whatever else is in flow. Add a
+ * hugging strip and the fixed point breaks: each pass measures
+ * `strip + (h - 20) + 20` and writes it back as the new `h`, so the shape
+ * grows by the strip's height every frame — measured here the moment the
+ * badge first rendered, as React's own "Maximum update depth exceeded"
+ * thrown from `NodeShapeFrame`, which took every `ss-code` shape on the
+ * board down behind tldraw's error boundary (src/code.smoke.test.tsx went
+ * 4/4 → 1/4). Subtracting a KNOWN height below restores the fixed point:
+ * `HEADER + (h - 20 - HEADER) + 20 === h`, for every h, whether or not a
+ * badge is in the strip that frame.
+ *
+ * 20px comfortably clears a `size="sm"` Badge (`text-[0.65rem]`, `py-0`,
+ * 1px border ≈ 14px). The strip does NOT clip — `overflow` stays visible —
+ * so a badge that ever grew past this would hang over the editor rather
+ * than lose characters, which is the direction Zach's truthful-rendering
+ * rule demands.
+ */
+const ORIGIN_HEADER_PX = 20;
+
+/**
+ * The header strip: WHO OWNS THIS CELL'S BYTES, as one badge.
+ *
+ * WHY it lives in the shape's header and not in the trunk's `CodeEditor`
+ * (plan rule 12, restated because it is the tempting shortcut): the editor
+ * is a value-semantics component — text in, text out — and an ownership
+ * badge is a fact about the cell's BINDING, not about its text. Putting it
+ * inside `CodeEditor` would make every consumer of that component inherit a
+ * concept it has no way to populate.
+ *
+ * The three cases, and why the middle one renders nothing:
+ *   origin === null                → "Pseudo". An unbound cell is visibly
+ *                                    unbound; the board owns the bytes.
+ *   origin set, resolution pending → NOTHING. A bound cell whose lookup is
+ *                                    in flight has no honest state to show,
+ *                                    and flashing red for one frame and then
+ *                                    correcting itself teaches the reader to
+ *                                    distrust the badge.
+ *   origin set, resolution settled → whatever `codeOriginState` judges,
+ *                                    including `orphaned` for a settled
+ *                                    `undefined` (no backend — see
+ *                                    ../../source/originResolution.ts).
+ *
+ * The badge is deliberately OUTSIDE `POINTER_OWNED_CLASS`, so pressing it
+ * drags the shape like the rest of the grab ring rather than doing nothing.
+ */
+function OriginHeader({ origin }: { origin: CodeShape["props"]["origin"] }) {
+  const status = useCodeOriginResolution(origin);
+  // The strip stays even with no badge in it — see ORIGIN_HEADER_PX: a
+  // strip that came and went would move the editor under the caret, and
+  // would put the measurement loop back.
+  const pending = origin !== null && status.status === "pending";
+  const state = codeOriginState(origin, status.status === "settled" ? status.resolution : undefined);
+  return (
+    <div
+      data-slot="code-header"
+      style={{ height: ORIGIN_HEADER_PX, display: "flex", alignItems: "center", justifyContent: "flex-end" }}
+    >
+      {pending ? null : <OriginBadge state={state} spec={ORIGIN_BADGE[state]} size="sm" />}
+    </div>
+  );
+}
+
 export function CodeFace({ shape }: { shape: CodeShape }) {
   const editor = useEditor();
-  const { code, language, w, h } = shape.props;
+  const { code, language, origin, w, h } = shape.props;
 
   // `view.contentDOM`, captured once. Deliberately typed structurally rather
   // than as CodeMirror's `EditorView`: naming that type would need
@@ -67,6 +139,7 @@ export function CodeFace({ shape }: { shape: CodeShape }) {
         data-slot="code-grab-ring"
         style={{ padding: GRAB_RING_PX, boxSizing: "border-box", minWidth: w, minHeight: h }}
       >
+        <OriginHeader origin={origin} />
         <CodeEditor
           value={code}
           // Per keystroke — the trunk's one write policy
@@ -103,7 +176,10 @@ export function CodeFace({ shape }: { shape: CodeShape }) {
           // focused CodeMirror and put the caret at the end of the document.
           style={{
             minWidth: Math.max(0, w - 2 * GRAB_RING_PX),
-            minHeight: Math.max(0, h - 2 * GRAB_RING_PX),
+            // Minus the origin strip as well — see ORIGIN_HEADER_PX for why
+            // this subtraction is what keeps the measurement pass at a fixed
+            // point rather than growing the shape one strip per frame.
+            minHeight: Math.max(0, h - 2 * GRAB_RING_PX - ORIGIN_HEADER_PX),
             display: "grid",
           }}
           // Leaves editing; the value is never discarded — Ctrl+Z is the
