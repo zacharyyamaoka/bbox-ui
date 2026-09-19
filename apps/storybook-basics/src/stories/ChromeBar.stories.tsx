@@ -279,8 +279,12 @@ export const DeepPathCompacted: Story = {
     await userEvent.click(ellipsis);
 
     // Truthful-rendering guarantee: nothing the `…` hides is unreachable.
+    // `findByText`, for the same reason as the first assertion above: the
+    // dropdown's content mounts on a later tick than the click, and under
+    // the combined-project load (2026-09-18, 1 failure in 1453) `getByText`
+    // asked for it before it existed.
     for (const name of HIDDEN_BY_COMPACTION) {
-      await expect(body.getByText(name)).toBeInTheDocument();
+      await expect(await body.findByText(name)).toBeInTheDocument();
     }
 
     await userEvent.keyboard("{Escape}");
