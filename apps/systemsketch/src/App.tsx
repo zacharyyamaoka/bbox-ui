@@ -34,6 +34,16 @@ const COMPONENTS: TLComponents = {
   // for it — the same seam the archive used. One system-family icon, not two.
   Toolbar: SystemSketchDock,
   InFrontOfTheCanvas: Overlay,
+  // Every menu this app has is the trunk's, mounted through src/chrome — so
+  // tldraw's own equivalents are switched OFF at the seam that exists for it,
+  // rather than hidden with CSS. `null` is tldraw's documented "no component
+  // here" (TLUiComponents). Dialogs, Toasts and the context menu stay stock:
+  // they carry file-open errors and confirmations this app raises itself.
+  MainMenu: null,
+  MenuPanel: null,
+  StylePanel: null,
+  NavigationPanel: null,
+  HelpMenu: null,
 };
 
 // Keyboard shortcuts for our tools. A dock row whose id has no `tools[id]`
