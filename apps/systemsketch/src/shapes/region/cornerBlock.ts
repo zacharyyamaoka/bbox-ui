@@ -31,6 +31,7 @@ import {
   regionLayout,
   type RegionLayout,
 } from "@trunk/components/region.layout";
+import { REGION_VARIANTS, readRegionVariant } from "@trunk/skin/regionVariants";
 
 import type { BlockPortSpec, BlockShapeProps } from "../block/BlockShapeUtil";
 import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE, type PortSide } from "../types";
@@ -657,6 +658,14 @@ function layoutInput(editor: Editor, shape: RegionShape, height: number, arms: r
     width: shape.props.w,
     height,
     corner: cornerBoxOf(editor, shape),
+    // WHY the drawing in force and not the twin's default 32: the face paints
+    // the trunk's `Region`, which lays its arm rows out with the ACTIVE
+    // region variant's header (26-32px, `@trunk/skin/regionVariants`). Every
+    // number this file hands tldraw — the header bands it hit-tests, the hug
+    // written into `props.h` — has to be the same rows, or a drawing switch
+    // leaves the paint and the geometry a few px apart per arm.
+    // `chrome/variantSwitch.tsx` re-settles `props.h` when the drawing changes.
+    armHeaderPx: REGION_VARIANTS[readRegionVariant()].arms.headerPx,
     arms: arms.map((arm) => ({ id: arm.id, open: arm.open, bodyHeight: arm.h })),
   };
 }
