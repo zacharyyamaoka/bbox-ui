@@ -60,6 +60,11 @@ export interface InlineRenameProps {
    *  applied elsewhere in this kit. */
   size?: "bar" | "row";
   className?: string;
+  /** Exact pixel box the field must fill (chrome bar's rename-in-place: the
+   *  field takes the box its title had — see chromeBar.tsx's `FileCrumb`
+   *  WHY). Overrides `size`'s own width/height; every other caller omits
+   *  it and keeps `size`'s rungs. */
+  style?: { width: number; height: number };
   "aria-label"?: string;
 }
 
@@ -88,13 +93,14 @@ export function InlineRename({
   error: externalError,
   size = "row",
   className,
+  style,
   "aria-label": ariaLabel,
 }: InlineRenameProps) {
   const [draft, setDraft] = useState(value);
   const [internalError, setInternalError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const mountedAtRef = useRef(0);
-  const helpId = useId();
+  const errorId = useId();
 
   useEffect(() => {
     mountedAtRef.current = performance.now();
@@ -123,14 +129,30 @@ export function InlineRename({
   }, [draft, onCancel, onCommit, validate, value]);
 
   return (
-    <div data-slot="inline-rename" data-size={size} data-error={error ? "true" : undefined} className="inline-flex flex-col gap-1">
+    // WHY `relative inline-flex` and no `flex-col`/`gap` (behaviour change,
+    // Zach 2026-09-19 on `Pasted image 20260919135024.png`: "I don't like
+    // how this textbox moves up when I click it and the hint displays
+    // beneath it. please don't show the control hints"): this root's own
+    // box must be nothing more than the input's box — no persistent hint
+    // node ever contributes height, and entering edit mode must not move
+    // or resize whatever the field replaced (chromeBar.tsx's `FileCrumb`
+    // measures that replaced box and passes it back as `style`). `relative`
+    // exists ONLY to anchor the error message below OUT of flow, so a
+    // refused rename still says why without growing this box by a pixel.
+    <div
+      data-slot="inline-rename"
+      data-size={size}
+      data-error={error ? "true" : undefined}
+      className="relative inline-flex"
+    >
       <input
         ref={inputRef}
         data-slot="inline-rename-input"
         aria-label={ariaLabel ?? "Rename"}
-        aria-describedby={helpId}
+        aria-describedby={error ? errorId : undefined}
         aria-invalid={error ? true : undefined}
         value={draft}
+        style={style}
         className={cn(
           "border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 w-full min-w-0 rounded-lg border outline-none focus-visible:ring-3 aria-invalid:ring-3",
           SIZE_CLASS[size],
@@ -166,9 +188,22 @@ export function InlineRename({
         }}
         onBlur={commit}
       />
-      <span id={helpId} className="text-muted-foreground data-[error=true]:text-destructive text-xs" data-error={error ? "true" : undefined}>
-        {error ?? "Press Enter to rename, Escape to cancel"}
-      </span>
+      {error ? (
+        // WHY `role="alert"` + `absolute` rather than the removed static
+        // hint span: a live region is how a screen reader still learns why
+        // the commit was refused, and `absolute` (out of the normal flow
+        // this `relative` root establishes) is what keeps it from ever
+        // being measured as part of the field's own box — the ask was "no
+        // control hints", not "no way to see an error".
+        <span
+          role="alert"
+          id={errorId}
+          data-slot="inline-rename-error"
+          className="text-destructive absolute top-full left-0 z-10 mt-1 text-xs whitespace-nowrap"
+        >
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }

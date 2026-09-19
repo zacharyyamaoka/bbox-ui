@@ -17,7 +17,15 @@
 // TitleBar.tsx:130-160 — not reimplemented here.
 "use client";
 
-import { Fragment, useCallback, useState, type ReactElement, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -55,10 +63,12 @@ import {
 } from "./context-menu";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -223,10 +233,32 @@ function BurgerMenuEntry({ item }: { item: MenuAction | { submenu: MenuSpec } })
     );
   }
   const action = item;
+  // WHY `checked !== undefined` (not `action.checked`) picks the checkbox
+  // renderer: `MenuAction.checked`'s own CONTRACT (this file's header) is
+  // adds-only and "every current consumer omits it" — a row that never sets
+  // it must render exactly as before. `checked: false` (Preferences ▸ Show
+  // grid, unset) still has to render as a REAL unchecked checkbox row, not
+  // fall through to a plain item, so testing truthiness would silently
+  // un-render half of `AppMenu.stories.tsx`'s own toggle pair.
+  if (action.checked !== undefined) {
+    return (
+      <DropdownMenuCheckboxItem
+        checked={action.checked}
+        disabled={action.disabled}
+        title={action.title}
+        onCheckedChange={action.run}
+      >
+        {action.icon}
+        <span className="truncate">{action.label}</span>
+        {action.shortcut ? <DropdownMenuShortcut>{action.shortcut}</DropdownMenuShortcut> : null}
+      </DropdownMenuCheckboxItem>
+    );
+  }
   return (
     <DropdownMenuItem
       disabled={action.disabled}
       variant={action.destructive ? "destructive" : "default"}
+      title={action.title}
       onClick={action.run}
     >
       {action.icon}
@@ -236,16 +268,24 @@ function BurgerMenuEntry({ item }: { item: MenuAction | { submenu: MenuSpec } })
   );
 }
 
+// WHY a separator sits BETWEEN groups only (never leading/trailing): the
+// plan's "no stray separator ever renders" rule for the groups themselves
+// (`appMenu.ts`'s header) extends to the dividers between them — a host
+// that ends up with one group (e.g. `bare` in `appMenu.test.ts`) gets zero
+// separators, not a dangling one before or after it.
 function BurgerMenuGroups({ groups }: { groups: readonly MenuGroupSpec[] }) {
   return (
     <>
-      {groups.map((group) => (
-        <DropdownMenuGroup key={group.id}>
-          {group.label ? <DropdownMenuLabel>{group.label}</DropdownMenuLabel> : null}
-          {group.items.map((item) => (
-            <BurgerMenuEntry key={isSubmenuEntry(item) ? item.submenu.id : item.id} item={item} />
-          ))}
-        </DropdownMenuGroup>
+      {groups.map((group, index) => (
+        <Fragment key={group.id}>
+          {index > 0 ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuGroup>
+            {group.label ? <DropdownMenuLabel>{group.label}</DropdownMenuLabel> : null}
+            {group.items.map((item) => (
+              <BurgerMenuEntry key={isSubmenuEntry(item) ? item.submenu.id : item.id} item={item} />
+            ))}
+          </DropdownMenuGroup>
+        </Fragment>
       ))}
     </>
   );
@@ -324,6 +364,26 @@ function FileCrumb({
   const [menuOpen, setMenuOpen] = useState(false);
   const homeLabel = `Board root · ${identity.title}`;
 
+  // WHY the field's exact box is MEASURED, not styled to match (Zach,
+  // 2026-09-19, screenshot `Pasted image 20260919135024.png`: "I don't like
+  // how this textbox moves up when I click it… please don't show the
+  // control hints"): the title button's width comes from its truncated
+  // text content plus the status dot, a size no fixed CSS rule reproduces
+  // for an arbitrary title. A `useLayoutEffect` that runs on every
+  // non-active render keeps the LAST real box in a ref (not state — this
+  // must never itself cause a render), so the swap to `InlineRename` reads
+  // the exact rect the button just had, however it got there (double
+  // click, the context menu's Rename, or a future F2 handler the host
+  // wires onto `rename.onBegin`).
+  const titleRef = useRef<HTMLButtonElement | null>(null);
+  const titleBoxRef = useRef<{ width: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!rename.active && titleRef.current) {
+      const rect = titleRef.current.getBoundingClientRect();
+      titleBoxRef.current = { width: rect.width, height: rect.height };
+    }
+  });
+
   // WHY the double click is handled here rather than left to the menu
   // (ported, TitleBar.tsx:218-225): the first click of a double click has
   // already opened the dropdown by the time the second lands, so the rename
@@ -397,6 +457,7 @@ function FileCrumb({
             onCancel={rename.onCancel}
             error={rename.error}
             size="bar"
+            style={titleBoxRef.current ?? undefined}
             aria-label={`Rename ${identity.title}`}
           />
         </span>
@@ -414,6 +475,7 @@ function FileCrumb({
           <ContextMenuTrigger render={<span className="contents" />}>
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger
+                ref={titleRef}
                 render={<ToolbarButton render={<button type="button" className="text-inherit" />} />}
                 className="inline-flex min-w-0 items-center gap-1.5 rounded-md px-1 text-sm hover:bg-muted"
                 data-testid={testIdPrefix ? `${testIdPrefix}-title` : undefined}

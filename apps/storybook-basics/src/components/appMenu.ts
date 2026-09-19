@@ -21,6 +21,9 @@
 // returning JSX: chromeBar.tsx already renders a `MenuSpec` recursively, and
 // that data shape is the one place the menu kit allows menu-as-data (its
 // `ChromeBarProps.menu` WHY). This file only decides WHAT the spec says.
+import { createElement } from "react";
+import { Settings as SettingsIcon } from "lucide-react";
+
 import type { MenuAction, MenuGroupSpec, MenuSpec } from "./chromeBar";
 
 /** Which modifier spelling a shortcut renders in. `"other"` = Linux/Windows. */
@@ -47,10 +50,72 @@ export type KeyChord = string;
  * `"mac"` uses Apple's glyph order ⌃⌥⇧⌘ then the key, no separator:
  *   `"mod+shift+n"` → "⇧⌘N", `"f2"` → "F2", `"alt+mod+g"` → "⌥⌘G".
  */
+// WHY one token table feeds both platforms rather than two independent
+// switch statements: "other" prints every token (modifier or key) through
+// this same map/verbatim rule, in chord order — the mac branch reuses it
+// ONLY for the trailing key, because mac's modifiers get reordered into
+// Apple's fixed ⌃⌥⇧⌘ glyph sequence regardless of how the chord spelled
+// them (`formatShortcut`'s own doc comment). One table keeps "f2 → F2, not
+// the old app's F + 2" true in both places instead of drifting.
+const MODIFIER_LABELS: Record<string, string> = {
+  mod: "Ctrl",
+  ctrl: "Ctrl",
+  cmd: "Ctrl",
+  shift: "⇧",
+  alt: "Alt",
+  option: "Alt",
+};
+
+const DELETE_KEYS = new Set(["del", "delete", "backspace", "⌫"]);
+
+function formatToken(token: string): string {
+  const lower = token.toLowerCase();
+  if (lower in MODIFIER_LABELS) return MODIFIER_LABELS[lower];
+  if (DELETE_KEYS.has(lower)) return "Del";
+  if (/^f\d{1,2}$/.test(lower)) return lower.toUpperCase();
+  if (/^[a-z]$/.test(lower)) return lower.toUpperCase();
+  return token;
+}
+
+type MacModifier = "ctrl" | "alt" | "shift" | "mod";
+
+const MAC_MODIFIER_SYMBOLS: Record<MacModifier, string> = {
+  ctrl: "⌃",
+  alt: "⌥",
+  shift: "⇧",
+  mod: "⌘",
+};
+
+// Apple's own fixed order, independent of how the chord spelled its
+// modifiers ("alt+mod+g" and "mod+alt+g" print identically on mac).
+const MAC_ORDER: readonly MacModifier[] = ["ctrl", "alt", "shift", "mod"];
+
+function macModifier(token: string): MacModifier | null {
+  switch (token.toLowerCase()) {
+    case "ctrl":
+      return "ctrl";
+    case "alt":
+    case "option":
+      return "alt";
+    case "shift":
+      return "shift";
+    case "mod":
+    case "cmd":
+      return "mod";
+    default:
+      return null;
+  }
+}
+
 export function formatShortcut(chord: KeyChord, platform: ShortcutPlatform): string {
-  void chord;
-  void platform;
-  throw new Error("formatShortcut: not implemented (lane chrome-rename-burger)");
+  const tokens = chord.split("+");
+  if (platform === "other") {
+    return tokens.map(formatToken).join(" + ");
+  }
+  const present = new Set(tokens.map(macModifier).filter((m): m is MacModifier => m !== null));
+  const key = tokens.find((token) => macModifier(token) === null) ?? "";
+  const symbols = MAC_ORDER.filter((modifier) => present.has(modifier)).map((modifier) => MAC_MODIFIER_SYMBOLS[modifier]);
+  return [...symbols, formatToken(key)].join("");
 }
 
 /** The File submenu's row ids, in the order the old app showed them. */
@@ -206,9 +271,162 @@ export interface AppMenuInput {
  *       5. …`extra`      — verbatim, in order.
  *   - Pure: no DOM, no storage, and the same input builds a deep-equal spec.
  */
+const FILE_CALLBACK_KEYS: Record<Exclude<FileCommandId, "open-recent">, keyof FileMenuCallbacks> = {
+  new: "newDocument",
+  "new-window": "newWindow",
+  open: "open",
+  save: "save",
+  "save-as": "saveAs",
+  "export-copy": "exportCopy",
+  rename: "rename",
+  "copy-path": "copyPath",
+  reveal: "reveal",
+  trash: "trash",
+};
+
+// WHY a cache instead of a plain `() => onOpen(entry.path)` closure below:
+// `buildAppMenu` is documented pure — "the same input builds a deep-equal
+// spec" (`appMenu.test.ts`'s own purity case) — and a freshly allocated
+// closure is a fresh object identity every call, so two builds of the same
+// input would otherwise disagree on nothing a human can see (`toEqual`'s
+// "no visual difference" verdict on two structurally-identical functions).
+// Keying on the entry AND its host callback (both stable across builds of
+// the same input) returns the SAME row-runner every time either is unchanged.
+const openRecentRunCache = new WeakMap<RecentEntry, WeakMap<(path: string) => void, () => void>>();
+
+function runForRecentEntry(entry: RecentEntry, onOpen: (path: string) => void): () => void {
+  let byCallback = openRecentRunCache.get(entry);
+  if (!byCallback) {
+    byCallback = new WeakMap();
+    openRecentRunCache.set(entry, byCallback);
+  }
+  let run = byCallback.get(onOpen);
+  if (!run) {
+    run = () => onOpen(entry.path);
+    byCallback.set(onOpen, run);
+  }
+  return run;
+}
+
+const NO_RECENT_FILES_ROW: MenuAction = Object.freeze({
+  id: "no-recent-files",
+  label: NO_RECENT_FILES_LABEL,
+  disabled: true,
+  run: () => {},
+});
+
+function buildOpenRecentSubmenu(openRecent: NonNullable<FileMenuCallbacks["openRecent"]>): MenuSpec {
+  const items: MenuAction[] =
+    openRecent.entries.length > 0
+      ? openRecent.entries.map((entry) => ({
+          id: `recent:${entry.path}`,
+          label: entry.title,
+          title: entry.path,
+          run: runForRecentEntry(entry, openRecent.onOpen),
+        }))
+      : [NO_RECENT_FILES_ROW];
+  return { id: "open-recent", label: "Open recent", groups: [{ id: "open-recent-items", items }] };
+}
+
+/** Builds the top-level `file` group — one item, the File submenu — or
+ *  `null` when the host honours none of `FILE_MENU_ROWS` (no stray
+ *  submenu-with-nothing-in-it, same "omitted when empty" rule as every
+ *  other top group). */
+function buildFileGroup(file: FileMenuCallbacks, platform: ShortcutPlatform): MenuGroupSpec | null {
+  const byGroup = new Map<FileRowSpec["group"], (MenuAction | { submenu: MenuSpec })[]>();
+  for (const row of FILE_MENU_ROWS) {
+    let entry: MenuAction | { submenu: MenuSpec } | null = null;
+    if (row.id === "open-recent") {
+      if (file.openRecent) entry = { submenu: buildOpenRecentSubmenu(file.openRecent) };
+    } else {
+      const callback = file[FILE_CALLBACK_KEYS[row.id]] as (() => void) | undefined;
+      if (callback) {
+        entry = {
+          id: row.id,
+          label: row.label,
+          shortcut: row.chord ? formatShortcut(row.chord, platform) : undefined,
+          disabled: file.disabled?.[row.id],
+          destructive: row.destructive,
+          run: callback,
+        };
+      }
+    }
+    if (!entry) continue;
+    const list = byGroup.get(row.group) ?? [];
+    list.push(entry);
+    byGroup.set(row.group, list);
+  }
+  const groups: MenuGroupSpec[] = ([0, 1, 2] as const)
+    .filter((group) => (byGroup.get(group)?.length ?? 0) > 0)
+    .map((group) => ({ id: `file-group-${group}`, items: byGroup.get(group)! }));
+  if (groups.length === 0) return null;
+  return {
+    id: APP_MENU_GROUP_IDS.file,
+    items: [{ submenu: { id: APP_MENU_ITEM_IDS.file, label: "File", groups } }],
+  };
+}
+
+function hasRows(groups: readonly MenuGroupSpec[] | undefined): groups is readonly MenuGroupSpec[] {
+  return !!groups && groups.some((group) => group.items.length > 0);
+}
+
+/** A stock submenu (Edit/View/Export/Preferences) — the host's own groups
+ *  passed through verbatim (`docs/CHROME-FILES-SETTINGS-PLAN.md` §3: this
+ *  builder decides the SHAPE, never the host's content) — or omitted when
+ *  the host gave it nothing to show. */
+function buildStockSubmenu(id: string, label: string, groups: readonly MenuGroupSpec[] | undefined): { submenu: MenuSpec } | null {
+  if (!hasRows(groups)) return null;
+  return { submenu: { id, label, groups } };
+}
+
+function buildSettingsGroup(onSettings: (() => void) | undefined): MenuGroupSpec | null {
+  if (!onSettings) return null;
+  return {
+    id: APP_MENU_GROUP_IDS.settings,
+    items: [
+      {
+        id: APP_MENU_ITEM_IDS.settings,
+        label: "Settings",
+        icon: createElement(SettingsIcon, { "aria-hidden": true }),
+        run: onSettings,
+      },
+    ],
+  };
+}
+
+function buildStockGroup(input: AppMenuInput): MenuGroupSpec | null {
+  const items = [
+    buildStockSubmenu(APP_MENU_ITEM_IDS.edit, "Edit", input.edit),
+    buildStockSubmenu(APP_MENU_ITEM_IDS.view, "View", input.view),
+    buildStockSubmenu(APP_MENU_ITEM_IDS.export, "Export", input.export),
+  ].filter((item): item is { submenu: MenuSpec } => item !== null);
+  if (items.length === 0) return null;
+  return { id: APP_MENU_GROUP_IDS.stock, items };
+}
+
+function buildPreferencesGroup(input: AppMenuInput): MenuGroupSpec | null {
+  const items: (MenuAction | { submenu: MenuSpec })[] = [];
+  const preferences = buildStockSubmenu(APP_MENU_ITEM_IDS.preferences, "Preferences", input.preferences);
+  if (preferences) items.push(preferences);
+  if (input.onKeyboardShortcuts) {
+    items.push({ id: APP_MENU_ITEM_IDS.keyboardShortcuts, label: "Keyboard shortcuts", run: input.onKeyboardShortcuts });
+  }
+  if (items.length === 0) return null;
+  return { id: APP_MENU_GROUP_IDS.preferences, items };
+}
+
 export function buildAppMenu(input: AppMenuInput): MenuSpec {
-  void input;
-  throw new Error("buildAppMenu: not implemented (lane chrome-rename-burger)");
+  const groups: MenuGroupSpec[] = [];
+  const fileGroup = buildFileGroup(input.file, input.platform);
+  if (fileGroup) groups.push(fileGroup);
+  const settingsGroup = buildSettingsGroup(input.onSettings);
+  if (settingsGroup) groups.push(settingsGroup);
+  const stockGroup = buildStockGroup(input);
+  if (stockGroup) groups.push(stockGroup);
+  const preferencesGroup = buildPreferencesGroup(input);
+  if (preferencesGroup) groups.push(preferencesGroup);
+  if (input.extra) groups.push(...input.extra);
+  return { id: "app", label: input.label, groups };
 }
 
 /** Re-exported so a host building rows for `edit`/`view`/… needs one import. */
