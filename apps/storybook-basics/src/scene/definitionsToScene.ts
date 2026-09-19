@@ -29,7 +29,8 @@
 
 import type { CodeCellData } from "./codeCell";
 import type { ConnectionMessage } from "./edgeValidation";
-import type { BlockScene, ScenePosition } from "./scene";
+import { REGION_NODE_TYPE } from "./region";
+import type { BlockScene, SceneEdge, SceneNode, ScenePosition } from "./scene";
 
 /* ------------------------------------------------------------------ */
 /* The definitions view — FROZEN cross-repo JSON contract               */
@@ -192,7 +193,116 @@ export const UNKNOWN_ROOT_ANCHOR = "unknown-root-anchor";
  * edges (view order).
  */
 export function definitionsToScene(view: DefinitionsView, options: DefinitionsToSceneOptions): DefinitionsToSceneResult {
-  void view;
-  void options;
-  throw new Error("scv: not implemented — lane scv-rung-a-scene fills this body (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md)");
+  const byAnchor = new Map(view.definitions.map((definition) => [definition.anchor, definition]));
+  if (!byAnchor.has(options.rootAnchor)) {
+    return {
+      ok: false,
+      refusal: {
+        severity: "error",
+        code: UNKNOWN_ROOT_ANCHOR,
+        message: `Nothing to expand: \`${options.rootAnchor}\` names no definition in the definitions view of ${view.source.name}`,
+      },
+    };
+  }
+
+  /**
+   * How far under `rootAnchor` this definition sits — 0 for a direct child
+   * — or `undefined` when the `parent` chain never reaches the root (the
+   * root itself, an ancestor of it, or a sibling branch). Walking the chain
+   * rather than trusting `parent` to be one hop is what makes "strict
+   * descendant" mean the same thing at every nesting level; the visited set
+   * makes a malformed cyclic chain terminate, matching `region.ts`'s own
+   * "unknown means stop, not throw" policy.
+   */
+  const depthUnderRoot = (definition: SourceDefinition): number | undefined => {
+    const seen = new Set<string>([definition.anchor]);
+    let current = definition.parent;
+    let depth = 0;
+    while (current !== null && !seen.has(current)) {
+      if (current === options.rootAnchor) return depth;
+      seen.add(current);
+      depth += 1;
+      current = byAnchor.get(current)?.parent ?? null;
+    }
+    return undefined;
+  };
+
+  const place = options.place ?? ((_definition, index) => ({ x: 24, y: 24 + index * 160 }));
+  const nodeIdByAnchor: Record<string, string> = {};
+  const nodes: SceneNode<DefinitionNodeData>[] = [];
+  /** How many kept siblings each parent anchor has already placed. */
+  const placedUnder = new Map<string, number>();
+
+  for (const definition of view.definitions) {
+    const depth = depthUnderRoot(definition);
+    if (depth === undefined) continue;
+    // Non-null by construction: a strict descendant reached the root through
+    // its own `parent`, so it has one.
+    const parentAnchor = definition.parent as string;
+    const index = placedUnder.get(parentAnchor) ?? 0;
+    placedUnder.set(parentAnchor, index + 1);
+
+    const id = options.mintId();
+    nodeIdByAnchor[definition.anchor] = id;
+    // The parent's node when the parent was kept too; otherwise the cell
+    // being expanded, if the caller named one; otherwise top level — and
+    // then the key is OMITTED, never written as `undefined`, because a
+    // present-but-undefined key is a different record to `toEqual` and to
+    // anything that spreads this node.
+    const parentId = nodeIdByAnchor[parentAnchor] ?? options.parentId;
+
+    nodes.push({
+      id,
+      type: REGION_NODE_TYPE,
+      position: place(definition, index, depth),
+      data: {
+        name: definition.name,
+        codeCell: {
+          language: "python",
+          source: definition.text,
+          origin: { uri: options.uri, anchor: definition.anchor, contentHash: definition.contentHash },
+        },
+        definition: {
+          kind: definition.kind,
+          signature: definition.signature,
+          parameters: definition.parameters,
+          outputs: definition.outputs,
+        },
+      },
+      ...(parentId !== undefined ? { parentId } : {}),
+    });
+  }
+
+  // WHY a reference becomes a node-level edge of its OWN type and never a
+  // port cable (plan §6, the second load-bearing idea): "run calls
+  // estimate_pair" is a DEPENDENCY, not data flowing through a port and not
+  // containment. Giving it `REFERENCE_EDGE_TYPE` and no handles is what lets
+  // a host paint it as a third lane it can style, hide or ignore wholesale,
+  // and makes it structurally impossible to mistake for the data cables
+  // `collapse.ts` promotes or for a region arm. Whether references should
+  // ALSO become port-level cables is Zach's question (plan §9), and the
+  // shape chosen here is the one that leaves it open.
+  const edges: SceneEdge<ReferenceEdgeData>[] = [];
+  const external: SourceReference[] = [];
+  for (const reference of view.references) {
+    const source = nodeIdByAnchor[reference.from];
+    const target = nodeIdByAnchor[reference.to];
+    if (source !== undefined && target !== undefined) {
+      edges.push({
+        id: options.mintId(),
+        type: REFERENCE_EDGE_TYPE,
+        source,
+        target,
+        data: { kind: reference.kind, lines: [...reference.lines] },
+      });
+      continue;
+    }
+    // Exactly one end produced: reported so a host can say "this cell also
+    // talks to something outside what you expanded" rather than drawing a
+    // wire into nothing. Neither end produced is not news — it is a fact
+    // about a part of the file nobody asked about — so it is dropped.
+    if (source !== undefined || target !== undefined) external.push({ ...reference });
+  }
+
+  return { ok: true, scene: { nodes, edges }, nodeIdByAnchor, external };
 }
