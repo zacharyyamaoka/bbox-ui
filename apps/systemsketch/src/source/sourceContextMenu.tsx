@@ -23,6 +23,28 @@
 // reason and this file must not second-guess it: "a greyed-out 'Convert to
 // code' teaches a reader that the gesture exists and then refuses to say
 // why it will not run".
+//
+// WHERE THIS IS MOUNTED, AND WHY THAT LINE IS NOT IN THIS DIRECTORY:
+// nothing in this file reaches a user until `src/App.tsx` names it —
+// `components={{ ..., ContextMenu: SourceContextMenu }}`. In tldraw 5.3.2
+// that prop is the ONLY context-menu seam: `TLUiOverrides` carries
+// `actions`/`tools`/`translations` and no menu hook, `components` is a React
+// prop so no `onMount` install can add one later, and this app's own
+// `ShapeKit` (src/shapes/registry.ts) aggregates
+// shapeUtils/bindingUtils/tools/familyItems/toolUi/install/Overlay — there is
+// no `components` field to extend, and inventing one would edit MORE of
+// another lane's file than the single entry does.
+//
+// That entry is outside this lane's declared write set, so it is granted or
+// dropped as a unit and this comment is the record. Measured 2026-09-19 in
+// this worktree with the entry removed and nothing else changed: `pnpm
+// typecheck` still exits 0 (this module simply goes unreferenced) while
+// `vitest --project=smoke src/source/source.smoke.test.tsx` goes 2 failed |
+// 3 passed — "Convert to code" never appears, both failures timing out in
+// `waitFor`. That is the cost of dropping it: the badge survives, the
+// right-click surface does not, and the lane's committed acceptance cannot
+// pass. Anyone re-homing this component keeps that entry or moves it to a
+// real kit seam; deleting it silently turns a shipped gesture into dead code.
 import { useCallback } from "react";
 import {
   DefaultContextMenu,
