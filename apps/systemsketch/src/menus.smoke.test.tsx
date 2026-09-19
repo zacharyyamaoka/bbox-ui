@@ -105,7 +105,8 @@ describe("L4 — editor menus through tldraw's component seams", () => {
     app.editor.updateShape({ id, type: BLOCK_SHAPE_TYPE, props: { view: "expanded", w: 300, h: 200 } } as never);
     const frames = await waitFor(() => app!.root.querySelector<HTMLElement>('[data-testid="ss-status-frames"]'), { what: "frames item" });
     await userEvent.click(frames);
-    const row = await waitFor(() => Array.from(app!.root.querySelectorAll<HTMLElement>('[data-slot="frames-panel"] [data-testid="frames-row"]')).find((el) => /proc/.test(el.textContent ?? "")), { what: "the proc row" });
+    // Rows are the kit's own `data-slot="frames-panel-item"` (framesPanel.tsx:369,393) — never a test id derived from display text.
+    const row = await waitFor(() => Array.from(app!.root.querySelectorAll<HTMLElement>('[data-slot="frames-panel"] [data-slot="frames-panel-item"]')).find((el) => /proc/.test(el.textContent ?? "")), { what: "the proc row" });
     const before = app.editor.getCamera();
     await userEvent.click(row);
     await waitFor(() => {
