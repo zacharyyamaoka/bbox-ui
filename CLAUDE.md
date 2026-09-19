@@ -46,9 +46,35 @@ bbox-ui to docs, llms.txt, or a component page — it would be a lie. If
 publishing ever becomes the right call it is Zach's decision, not a convenience
 fix for the adapters.
 
-`registry.json` at the root is how people consume this. `npx shadcn@latest add
-zacharyyamaoka/bbox-ui/port` works today with no website at all — shadcn takes a
-GitHub repo as a registry directly.
+`registry.json` at the root is how people consume this — shadcn takes a GitHub
+repo as a registry directly, with no website at all.
+
+**But `port` and `block` do NOT install, and that sentence used to say they
+did.** Measured 2026-09-18 against a real throwaway project: `npx shadcn@latest
+add .../port.json` fails with `npm error 404 … @bbox-ui/schema@*`, before it
+writes a single file. `packages/schema` is `private: true` like every other
+`packages/*`, and `appearance.fields.ts`, `port.fields.ts`, `port.presets.ts`,
+`block.fields.ts` and `pill.tsx` all import it — so this is the same
+uninstallable-by-construction class as the two adapters and `glyph.tsx`, and
+the fix is the same source change, not a registry tweak.
+
+Worse, the breakage was hidden behind a *second* one. Both items shipped
+file lists that omitted what their entry points import — `port.tsx` needs
+`./appearance`, `./port.fields`, `./port.presets` and `./port.layout` and the
+item carried none of the four. So `npm install` never got far enough to 404;
+the install "succeeded" and left four unresolvable imports. Completing the
+file lists is what surfaced the real blocker underneath. The trunk-sourced
+items (`port-v2`, `block-v2`, the menu kit, …) have no such dependency and do
+install — verified the same day, `tsc --noEmit` exit 0 on a throwaway project
+with `compare-review`, `chrome-bar`, `control-strip`, `frames-panel` and
+`tool-dock` installed into it.
+
+**`registry.json`'s items are generated, not hand-edited** —
+`docs/build_menu_registry_items.py` walks each entry point's real transitive
+relative imports, applies the per-lineage target rule below, and then asserts
+both failure modes: that every relative import resolves against its *target*
+layout, and that no item depends on an unpublished `@bbox-ui/*` package. Add a
+component there, not by hand. Run `--check` to see whether the file is stale.
 
 **`shadcn add` copies source verbatim.** It rewrites only the `@/` alias prefix
 against the consumer's `components.json`. It never rewrites relative specifiers,
@@ -145,6 +171,36 @@ Two stories silently failed for hours behind that check (2026-09-17). In
 `apps/storybook-basics`, run `pnpm test-stories` instead — it runs every
 story as a real Vitest/Playwright test via `@storybook/addon-vitest`, with a
 real process exit code. See `apps/storybook-basics/vitest.config.ts`.
+
+**But `pnpm test-stories` is not the whole suite — use `pnpm test` as the
+gate.** `vitest.config.ts` defines *two* projects, and `test-stories` runs
+only `storybook` by deliberate design (its name says stories, and silently
+widening what it covers would make the name lie). The second project,
+`unit`, is where the pure node tests live — no DOM, no browser — and it is
+the larger half by test count: measured 2026-09-18, `storybook` was 56 files
+/ 294 tests while `unit` was 22 files / **314 tests**, including a
+4,608-case differential sweep. A green `test-stories` therefore proves
+nothing about more than half the assertions in the package.
+
+This is not hypothetical. The menu-kit build (2026-09-18) gated four
+barriers on `test-stories` alone and reported every wave green; an
+independent audit found the 22 ported acceptance suites had never been
+executed by any gate. They passed when finally run — but the verification
+claim was hollow, and a claim that happens to be true is not a check. Run
+`pnpm test` (all projects) for any gate or hand-off; `test-stories` /
+`test-unit` are for narrowing while you iterate.
+
+**A play function's first testing-library call should be `findBy*`.**
+`getBy*` demands its element on the first tick, so a story that has not
+finished mounting fails instantly under load — that is how the combined run
+above surfaced its one failure. The sharper reason is the assertion that
+comes *after*: `queryBy*(...).not.toBeInTheDocument()` passes trivially
+against an empty DOM, so on an unmounted story a negative assertion is not
+fragile, it is **vacuously true** — it would pass a component that rendered
+nothing at all. Awaiting one real element first is what gives every later
+assertion in that play function something to be false about. 115 play
+functions here still open synchronously (most predate the menu kit); fix
+them as you touch them rather than in one sweep.
 
 ## Isolated agent lanes — the two lines every one of them needs
 

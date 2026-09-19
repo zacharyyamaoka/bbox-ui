@@ -20,7 +20,7 @@
       "name": "bbox-skin",
       "type": "registry:lib",
       "title": "bbox skin",
-      "description": "Optional shape language for bbox-ui components: default / plain / sketch, selected with one inherited data-bbox-skin attribute. Ships the hand-drawn outline too — that part is real geometry, not CSS, so Block and Region import it.",
+      "description": "Optional shape language for bbox-ui components: default / plain / sketch, selected with one inherited data-bbox-skin attribute. Ships the hand-drawn outline too \u2014 that part is real geometry, not CSS, so Block and Region import it.",
       "files": [
         {
           "path": "packages/bbox-ui/src/skin.ts",
@@ -48,32 +48,32 @@
       "name": "port",
       "type": "registry:component",
       "title": "Port",
-      "description": "A circle with a text slot. Four states (Empty / Default Value / Wired / Data Recived), six text layouts, three diameters, three text rungs.",
+      "description": "A port dot with its optional label and code field, over the frozen v1 lineage.",
       "files": [
         {
-          "path": "packages/bbox-ui/src/port.tsx",
-          "type": "registry:component",
-          "target": "components/bbox/port.tsx"
-        },
-        {
-          "path": "packages/bbox-ui/src/layout.ts",
+          "path": "packages/bbox-ui/src/appearance.fields.ts",
           "type": "registry:lib",
-          "target": "components/bbox/layout.ts"
+          "target": "components/bbox/appearance.fields.ts"
         },
         {
-          "path": "packages/bbox-ui/src/lib/utils.ts",
+          "path": "packages/bbox-ui/src/appearance.ts",
           "type": "registry:lib",
-          "target": "components/bbox/lib/utils.ts"
+          "target": "components/bbox/appearance.ts"
         },
         {
-          "path": "packages/bbox-ui/src/codeField.tsx",
-          "type": "registry:component",
-          "target": "components/bbox/codeField.tsx"
+          "path": "packages/bbox-ui/src/caretGeometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/caretGeometry.ts"
         },
         {
           "path": "packages/bbox-ui/src/codeField.css",
           "type": "registry:style",
           "target": "components/bbox/codeField.css"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeField.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeField.tsx"
         },
         {
           "path": "packages/bbox-ui/src/codeFieldGuards.ts",
@@ -96,42 +96,88 @@
           "target": "components/bbox/fieldGesture.ts"
         },
         {
-          "path": "packages/bbox-ui/src/caretGeometry.ts",
+          "path": "packages/bbox-ui/src/layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/caretGeometry.ts"
+          "target": "components/bbox/layout.ts"
         },
         {
-          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "path": "packages/bbox-ui/src/lib/utils.ts",
           "type": "registry:lib",
-          "target": "components/bbox/sketchPath.ts"
+          "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/port.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/port.layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/port.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/port.tsx"
         },
         {
           "path": "packages/bbox-ui/src/sketchOutline.tsx",
           "type": "registry:component",
           "target": "components/bbox/sketchOutline.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/sketchPath.ts"
         }
       ],
       "dependencies": [
-        "clsx",
-        "tailwind-merge",
+        "@bbox-ui/schema",
         "@codemirror/autocomplete",
         "@codemirror/commands",
         "@codemirror/language",
         "@codemirror/state",
         "@codemirror/view",
-        "@lezer/highlight"
+        "@lezer/highlight",
+        "clsx",
+        "tailwind-merge"
       ]
     },
     {
       "name": "block",
       "type": "registry:component",
-      "title": "Block (Simple View)",
-      "description": "The black-box Block in Simple View: Container, Header band, Glyph, Text slots, Chip. Icon rides the title rung at 0.9\u00d7.",
+      "title": "Block",
+      "description": "A block body with its header, footer and sketch outline, over the frozen v1 lineage.",
       "files": [
+        {
+          "path": "packages/bbox-ui/src/appearance.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/appearance.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/appearance.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/appearance.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/block.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/block.fields.ts"
+        },
         {
           "path": "packages/bbox-ui/src/block.tsx",
           "type": "registry:component",
           "target": "components/bbox/block.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/block.view.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/block.view.ts"
         },
         {
           "path": "packages/bbox-ui/src/layout.ts",
@@ -144,17 +190,33 @@
           "target": "components/bbox/lib/utils.ts"
         },
         {
-          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "path": "packages/bbox-ui/src/pill.fields.ts",
           "type": "registry:lib",
-          "target": "components/bbox/sketchPath.ts"
+          "target": "components/bbox/pill.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/pill.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/pill.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/pill.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/pill.tsx"
         },
         {
           "path": "packages/bbox-ui/src/sketchOutline.tsx",
           "type": "registry:component",
           "target": "components/bbox/sketchOutline.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/sketchPath.ts"
         }
       ],
       "dependencies": [
+        "@bbox-ui/schema",
         "clsx",
         "tailwind-merge"
       ]
@@ -1221,6 +1283,1022 @@
         "@dnd-kit/core",
         "@dnd-kit/sortable",
         "@dnd-kit/utilities"
+      ]
+    },
+    {
+      "name": "menu-toolbar",
+      "type": "registry:component",
+      "title": "Menu Toolbar",
+      "description": "Roving-focus bar container over Base UI's Toolbar \u2014 the strip the floating pill, the tool dock, the chrome bar and the status strip all sit in. Consumes the trunk's ambient size cascade.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "split-button",
+      "type": "registry:component",
+      "title": "Split Button",
+      "description": "One primary action plus a chevron opening its alternates. Backs the tool dock's family cells and the draft bar's Merge control.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/dropdown-menu.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/dropdown-menu.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/splitButton.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/splitButton.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "inline-rename",
+      "type": "registry:component",
+      "title": "Inline Rename",
+      "description": "A text field that commits on Enter or blur and reverts on Escape. Controlled only \u2014 the host owns the keybinding that starts a rename.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/inlineRename.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/inlineRename.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "control-registry",
+      "type": "registry:component",
+      "title": "Control Registry",
+      "description": "Declare a value-bound control once, then compose it into many surfaces by recipe. A factory, so palettes and vocabularies are injected rather than imported.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/controlRegistry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/controlRegistry.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlValue.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/controlValue.ts"
+        }
+      ],
+      "dependencies": []
+    },
+    {
+      "name": "control-strip",
+      "type": "registry:component",
+      "title": "Control Strip",
+      "description": "The one renderer for every registered control: trigger shape chosen by `trigger`, panel shape by `layout`, value preview by `glyph` family \u2014 all lookups, never per-kind conditionals.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlGlyphs.css",
+          "type": "registry:style",
+          "target": "components/bbox/controlGlyphs.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlGlyphs.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/controlGlyphs.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlPanel.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/controlPanel.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlRegistry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/controlRegistry.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlStrip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/controlStrip.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlValue.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/controlValue.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/popover.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "floating-toolbar",
+      "type": "registry:component",
+      "title": "Floating Toolbar",
+      "description": "The positioned shell a control strip sits in, over FigJam's above/pinned/below placement policy. The host measures; the component never does.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/floatingToolbar.placement.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/floatingToolbar.placement.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/floatingToolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/floatingToolbar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "@floating-ui/core",
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "tool-dock",
+      "type": "registry:component",
+      "title": "Tool Dock",
+      "description": "A bottom tool bar whose families are declared as data, each remembering its last-used member.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/dropdown-menu.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/dropdown-menu.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/popover.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolDock.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolDock.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "chrome-bar",
+      "type": "registry:component",
+      "title": "Chrome Bar",
+      "description": "Burger menu, back/forward, home and an eliding breadcrumb with a status dot \u2014 the editor's top-left identity strip.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/breadcrumb.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/breadcrumb.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/breadcrumbCompact.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/breadcrumbCompact.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button-group.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/button-group.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/chromeBar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/chromeBar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/context-menu.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/context-menu.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/dropdown-menu.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/dropdown-menu.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/inlineRename.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/inlineRename.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/separator.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/separator.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/tooltip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/tooltip.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "branch-chip",
+      "type": "registry:component",
+      "title": "Branch Chip",
+      "description": "The branch or draft selector: current name, a count badge, and a popover of alternates with inline rename.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/branchChip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/branchChip.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/inlineRename.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/inlineRename.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/popover.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "panel-shell",
+      "type": "registry:component",
+      "title": "Panel Shell",
+      "description": "The side-panel frame \u2014 eyebrow, title, close, scrollable body. The shell is the component; each panel is one instance of it.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/panelShell.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/panelShell.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "frames-panel",
+      "type": "registry:component",
+      "title": "Frames Panel",
+      "description": "Reorderable board-navigation rows with host-rendered previews, plus a save-this-view row.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/dropdown-menu.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/dropdown-menu.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/framesOrder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/framesOrder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/framesPanel.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/framesPanel.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/inlineRename.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/inlineRename.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "problems-panel",
+      "type": "registry:component",
+      "title": "Problems Panel",
+      "description": "A diagnostics list in VS Code's shape: severity counts, a severity filter, grouped rows carrying a rule code. Severities are config, not a hardcoded three.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/problemsPanel.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/problemsPanel.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toggle-group.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toggle-group.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toggle.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toggle.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "status-strip",
+      "type": "registry:component",
+      "title": "Status Strip",
+      "description": "The corner cluster of panel launchers with badges and a zoom readout.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/statusStrip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/statusStrip.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toolbar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toolbar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "history-list",
+      "type": "registry:component",
+      "title": "History List",
+      "description": "A version rail where selecting an entry sets it as the BEFORE side of a comparison.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/foldingChevron.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/foldingChevron.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/historyList.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/historyList.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/historyTime.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/historyTime.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "property-table",
+      "type": "registry:component",
+      "title": "Property Table",
+      "description": "Per-element and flat-table views of a property diff, with optional Figma-style word-level highlighting.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/compareModel.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/compareModel.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/propertyRows.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/propertyRows.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/propertyTable.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/propertyTable.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toggle-group.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toggle-group.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toggle.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toggle.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/wordDiff.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/wordDiff.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "code-view",
+      "type": "registry:component",
+      "title": "Code View",
+      "description": "A line-diff view of two text versions.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/codeView.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeView.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/compareModel.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/compareModel.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/lineDiff.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/lineDiff.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "compare-review",
+      "type": "registry:component",
+      "title": "Compare Review",
+      "description": "The whole diff-review surface \u2014 history rail, two version panes, a properties/code rail, and side-by-side or overlay. Headless: the host supplies the modal and both renderers.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeView.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/codeView.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/compareModel.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/compareModel.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/compareReview.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/compareReview.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/foldingChevron.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/foldingChevron.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/historyList.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/historyList.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/historyTime.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/historyTime.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/lineDiff.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/lineDiff.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/propertyRows.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/propertyRows.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/propertyTable.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/propertyTable.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/tabs.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/tabs.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toggle-group.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toggle-group.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/toggle.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/toggle.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/wordDiff.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/wordDiff.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "draft-bar",
+      "type": "registry:component",
+      "title": "Draft Bar",
+      "description": "The draft-mode strip: exit, draft name, and a change-gated compare/merge pair.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/draftBar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/draftBar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/dropdown-menu.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/dropdown-menu.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/inlineRename.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/inlineRename.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/separator.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/separator.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/splitButton.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/splitButton.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
       ]
     }
   ]
