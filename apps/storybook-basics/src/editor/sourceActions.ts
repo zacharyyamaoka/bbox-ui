@@ -76,8 +76,41 @@ export function sourceActionsFor(
   selection: SourceActionSelection,
   handlers: SourceActionHandlers,
 ): SourceAction[] {
-  void backend;
-  void selection;
-  void handlers;
-  throw new Error("scv: not implemented — lane scv-origin-and-actions fills this body (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md)");
+  // WHY an empty list and not a list of `disabled: true` rows — the ONE
+  // gate, the same shape `edgeDropMenu.tsx` states for its judge ("an entry
+  // the judge refuses is never rendered, full stop, not merely disabled"):
+  // a greyed-out "Convert to code" teaches a reader that the gesture exists
+  // and then refuses to say why it will not run, and the host has no honest
+  // sentence to put in a tooltip because the reason lives in a backend that
+  // is not connected. Absent is the truthful rendering of "this board has
+  // no source backend". `?.` covers null AND undefined in one read.
+  if (backend?.kind !== PYBLOCKS_BACKEND_KIND) return [];
+
+  const ids = selection.nodeIds;
+  const actions: SourceAction[] = [];
+
+  // Convert before expand — a fixed order, not selection-dependent, so the
+  // same gesture is always in the same place under the pointer.
+  if (ids.length >= 1 && ids.some((id) => !selection.isCodeCell(id))) {
+    actions.push({
+      id: SOURCE_ACTION_IDS.convertToCode,
+      label: SOURCE_ACTION_LABELS[SOURCE_ACTION_IDS.convertToCode],
+      // WHY the ids are COPIED into the closure: `nodeIds` is the host's
+      // live selection array, and a `run` fired after the selection moved
+      // would collapse whatever is selected then rather than what the menu
+      // was opened over. The copy freezes the promise the row made when it
+      // was rendered, and leaves the caller's array untouched.
+      run: () => handlers.convertToCode([...ids]),
+    });
+  }
+
+  if (ids.length === 1 && selection.isCodeCell(ids[0])) {
+    actions.push({
+      id: SOURCE_ACTION_IDS.expandToBlocks,
+      label: SOURCE_ACTION_LABELS[SOURCE_ACTION_IDS.expandToBlocks],
+      run: () => handlers.expandToBlocks(ids[0]),
+    });
+  }
+
+  return actions;
 }
