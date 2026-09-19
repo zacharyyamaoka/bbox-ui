@@ -12,7 +12,10 @@
 // viewport.
 
 import { useRef, type ReactNode } from "react";
+import { CircleStop, RotateCw } from "lucide-react";
 
+import { Badge } from "../components/badge";
+import { Bar } from "../components/bar";
 import { Block } from "../components/block";
 import { BlockPort, type BlockEdgeSpec } from "../components/blockPort";
 import type { BlockMember } from "../components/blockMembers";
@@ -22,13 +25,17 @@ import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
-import { resolveBlockHeight } from "../layout/fitToContent";
+import { Region, REGION_CORNER_BLOCK_STYLE, type RegionArm } from "../components/region";
+import { REGION_CARD_WIDTH_PX, REGION_CORNER_WIDTH_PX } from "../components/region.layout";
+import { portViewSlotCount, railBandHeightForSlots, resolveBlockHeight } from "../layout/fitToContent";
 import { ValueCapsule } from "../presets/value/value";
+import { armsOf, bodyChildrenOf, describeHidden, hiddenSummary } from "../scene/controlFlow";
 import { childrenOf, type SceneNode, wiredPorts } from "../scene/scene";
 import { withWiredState } from "../scene/sceneWires";
 import { useAutoFitHeight } from "./blockAutoFit";
 import { type HostNodeData, type HostScene } from "./hostScene";
-import { useFreeMemberDrag } from "./memberDrag";
+import { useFreeMemberDrag, type UseFreeMemberDragResult } from "./memberDrag";
+import { regionViewOf } from "./regionScene";
 
 /**
  * The story-lane decoration seam (2026-09-18, "final spec" lane, D7's
@@ -151,6 +158,130 @@ export interface SceneNodeViewProps {
   decorate?: Decorate;
 }
 
+/* ------------------------------------------------------------------ */
+/* Shared between `BlockNodeView` and `RegionNodeView`                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One free-layout member: its live (dragging) position plus the bounded
+ * drag surface `POINTER_OWNED_CLASS` keeps the canvas out of. Extracted
+ * when the region renderer landed rather than copied — a second copy of
+ * this wrapper is how the two would drift into dragging differently, and
+ * the marker/stopPropagation pair is exactly the part that must not.
+ */
+function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResult, content: ReactNode): BlockMember {
+  const live = drag.liveFor(kid.id, kid.position);
+  return {
+    id: kid.id,
+    x: live.x,
+    y: live.y,
+    content: (
+      <div
+        data-slot="block-member-drag-handle"
+        data-dragging={drag.draggingId === kid.id || undefined}
+        // POINTER_OWNED_CLASS: this drag is bounded to the member's own
+        // box (ARCHITECTURE.md's "component-owned" gesture class), never
+        // the canvas underneath — see memberDrag.ts's own header. The
+        // SAME marker React Flow's `nodrag` filter and tldraw's
+        // `contentOwnsPress` (this file, `POINTER_OWNED_CLASS`'s own doc)
+        // already both honor, with zero per-host code added for it.
+        className={POINTER_OWNED_CLASS}
+        style={{ width: "max-content", cursor: drag.draggingId === kid.id ? "grabbing" : "grab", touchAction: "none" }}
+        onPointerDown={drag.beginDrag(kid.id, kid.position)}
+        onPointerMove={drag.onPointerMove}
+        onPointerUp={drag.onPointerUp}
+        onPointerCancel={drag.onPointerCancel}
+      >
+        {content}
+      </div>
+    ),
+  };
+}
+
+/** One node's walls as `BlockPort` edge specs — the port items, their wired
+ *  state, any decoration, and the reorder write-back. Shared verbatim by a
+ *  block's own card and a region's CORNER card, because a region's ports
+ *  ARE a block's ports (plan §2.A) and a second builder here would be the
+ *  first place that stopped being true. */
+function edgeSpecsOf(
+  scene: HostScene,
+  node: SceneNode<HostNodeData>,
+  wired: ReadonlySet<string> | undefined,
+  onSceneChange: ((next: HostScene) => void) | undefined,
+  decoration: SceneNodeDecoration | undefined,
+): Partial<Record<BlockSide, BlockEdgeSpec>> {
+  return Object.fromEntries(
+    Object.entries(node.data.ports ?? {}).map(([side, portIds]) => [
+      side,
+      {
+        items: withWiredState(
+          portIds.map(
+            (id): PortEdgeItem => ({
+              id,
+              label: id,
+              availability: decoration?.availability?.[id],
+              diagnostics: decoration?.portDiagnostics?.[id],
+            }),
+          ),
+          node.id,
+          wired ?? new Set(),
+        ),
+        distribution: node.data.anchorStart?.includes(side as BlockSide) ? ANCHOR_START : undefined,
+        onItemsChange: onSceneChange
+          ? (items: PortEdgeItem[]) => onSceneChange(reorderNodePorts(scene, node.id, side as BlockSide, items.map((item) => item.id)))
+          : undefined,
+      } satisfies BlockEdgeSpec,
+    ]),
+  );
+}
+
+/** A control-exit mark: DP - Break & Continue, B5 — "a mark beside the
+ *  call, never a cable". Drawn as a `Badge`, and deliberately given NO port
+ *  and NO edge: `expectControlMark` asserts no wire may originate at one,
+ *  which only stays true because nothing here ever mints a handle for it. */
+function ControlMark({ mark }: { mark: NonNullable<HostNodeData["marks"]>[number] }) {
+  return (
+    <Badge data-slot="control-mark" data-mark={mark} size="sm" variant="outline">
+      {mark === "break" && <CircleStop aria-hidden />}
+      {mark === "continue" && <RotateCw aria-hidden />}
+      {mark}
+    </Badge>
+  );
+}
+
+/**
+ * A node's header.
+ *
+ * WHY the plain string stays a plain string: every story that predates the
+ * control-flow lane passes `header={node.data.name}` straight into `Block`,
+ * and wrapping it in a `Bar` would change that markup for all of them. The
+ * `Bar` form is reached ONLY when there is a chip to put on the right — a
+ * `data.badge` ("iteration 3 of 7", the donor's `turn`) or a control mark —
+ * so the DOM change is scoped to exactly the nodes that asked for one.
+ */
+function headerOf(node: SceneNode<HostNodeData>): ReactNode {
+  const marks = node.data.marks ?? [];
+  if (node.data.badge === undefined && marks.length === 0) return node.data.name;
+  return (
+    <Bar
+      size="md"
+      left={node.data.name}
+      right={
+        <>
+          {node.data.badge !== undefined && (
+            <Badge size="sm" variant="secondary">
+              {node.data.badge}
+            </Badge>
+          )}
+          {marks.map((mark) => (
+            <ControlMark key={mark} mark={mark} />
+          ))}
+        </>
+      }
+    />
+  );
+}
+
 /**
  * `fit-to-content-hosts` lane, 2026-09-18: `membersLayout: "free"` opts a
  * node into member-dragging + auto-fit height — see `HostNodeData`'s own
@@ -186,62 +317,15 @@ function BlockNodeView({ scene, node, wired, onSceneChange, decorate }: SceneNod
   const members: BlockMember[] = kids.map((kid) => {
     const content = <SceneNodeView scene={scene} node={kid} wired={wired} onSceneChange={onSceneChange} decorate={decorate} />;
     if (!isFree) return { id: kid.id, content };
-    const live = drag.liveFor(kid.id, kid.position);
-    return {
-      id: kid.id,
-      x: live.x,
-      y: live.y,
-      content: (
-        <div
-          data-slot="block-member-drag-handle"
-          data-dragging={drag.draggingId === kid.id || undefined}
-          // POINTER_OWNED_CLASS: this drag is bounded to the member's own
-          // box (ARCHITECTURE.md's "component-owned" gesture class), never
-          // the canvas underneath — see memberDrag.ts's own header. The
-          // SAME marker React Flow's `nodrag` filter and tldraw's
-          // `contentOwnsPress` (this file, `POINTER_OWNED_CLASS`'s own doc)
-          // already both honor, with zero per-host code added for it.
-          className={POINTER_OWNED_CLASS}
-          style={{ width: "max-content", cursor: drag.draggingId === kid.id ? "grabbing" : "grab", touchAction: "none" }}
-          onPointerDown={drag.beginDrag(kid.id, kid.position)}
-          onPointerMove={drag.onPointerMove}
-          onPointerUp={drag.onPointerUp}
-          onPointerCancel={drag.onPointerCancel}
-        >
-          {content}
-        </div>
-      ),
-    };
+    return freeMemberOf(kid, drag, content);
   });
-  const edges = Object.fromEntries(
-    Object.entries(node.data.ports ?? {}).map(([side, portIds]) => [
-      side,
-      {
-        items: withWiredState(
-          portIds.map(
-            (id): PortEdgeItem => ({
-              id,
-              label: id,
-              availability: decoration?.availability?.[id],
-              diagnostics: decoration?.portDiagnostics?.[id],
-            }),
-          ),
-          node.id,
-          wired ?? new Set(),
-        ),
-        distribution: node.data.anchorStart?.includes(side as BlockSide) ? ANCHOR_START : undefined,
-        onItemsChange: onSceneChange
-          ? (items: PortEdgeItem[]) => onSceneChange(reorderNodePorts(scene, node.id, side as BlockSide, items.map((item) => item.id)))
-          : undefined,
-      } satisfies BlockEdgeSpec,
-    ]),
-  );
+  const edges = edgeSpecsOf(scene, node, wired, onSceneChange, decoration);
   const height = autoFit ? resolveBlockHeight({ autoFit: true, fitHeightPx, manualHeightPx: node.data.h }) : node.data.h;
 
   const block = (
     <BlockPort id={node.id} view={node.data.view ?? "simple"} edges={edges}>
       <Block
-        header={node.data.name}
+        header={headerOf(node)}
         width={node.data.w}
         height={height}
         members={members.length > 0 ? members : undefined}
@@ -258,6 +342,112 @@ function BlockNodeView({ scene, node, wired, onSceneChange, decorate }: SceneNod
   // unstyled wrapper div. Every other node (unset, or `"stack"`) returns
   // `block` directly: zero DOM change from before this lane.
   return isFree ? <div ref={rootRef}>{block}</div> : block;
+}
+
+/* ------------------------------------------------------------------ */
+/* The region                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One `type: "region"` scene node → the `Region` component.
+ *
+ * WHY there is no second node and no `data-block-id` on the frame (plan
+ * §2.A): a region IS one node whose ports are its CORNER BLOCK's ports.
+ * This function builds exactly one `BlockPort id={node.id}` — the same
+ * builder a plain block gets (`edgeSpecsOf`) — and hands it to `Region` as
+ * its `corner`. "Everything is a block" is therefore not a slogan here: a
+ * loop's `Iterable` resolves through the identical `[data-block-id]` ->
+ * `[data-port-id]` walk as any other port, so `WireLayer`, React Flow's
+ * handles and tldraw's anchors all needed zero region-specific code.
+ *
+ * And no control cable exists anywhere in it: the arm STRUCTURE carries
+ * the control flow (containment + rows), `break`/`continue` are marks
+ * (`ControlMark`, B5), and the only wires are ordinary data edges into the
+ * corner's ports or straight into a member.
+ */
+function RegionNodeView({ scene, node, wired, onSceneChange, decorate }: SceneNodeViewProps) {
+  const decoration = decorate?.(node);
+  const region = node.data.region ?? { kind: "group" as const };
+  const view = regionViewOf(node);
+
+  // ONE drag instance for the whole region — the body's members and every
+  // arm's. `useFreeMemberDrag` is keyed by member id (`liveFor(id, atRest)`
+  // is a no-op for every id but the one in flight), and a hook per arm
+  // would break the rules of hooks the moment an arm is added or removed.
+  const drag = useFreeMemberDrag({ onDragEnd: (id, next) => onSceneChange?.(moveMember(scene, id, next)) });
+
+  const memberViewOf = (kid: SceneNode<HostNodeData>) =>
+    freeMemberOf(kid, drag, <SceneNodeView scene={scene} node={kid} wired={wired} onSceneChange={onSceneChange} decorate={decorate} />);
+
+  const opaque = view === "opaque";
+  // WHY the corner card is given a BODY sized by the rail band, instead of
+  // being left to hug its header: `BlockPort` places a port-view rail
+  // against the Block's BODY band, and that band is measured as
+  // "header bottom → block bottom" (blockPort.tsx's `useBlockBands`). A
+  // header-only Block therefore has a zero-height band and its dots hang
+  // BELOW the card, into the frame — which is the corner's own promise
+  // ("height hugs the ports", REGION_CORNER_WIDTH_PX's doc) broken.
+  // `railBandHeightForSlots` is the exact inverse of the rail's own pitch
+  // clamp (fitToContent.ts's own derivation, round-trip-tested against the
+  // REAL `railBoxFor`), so this is the stock number rather than a guess —
+  // and an empty `slots` leaves `body` undefined, keeping a portless
+  // region's card byte-identical to a plain hugging Block.
+  const cornerSlots = portViewSlotCount({
+    leftCount: node.data.ports?.left?.length ?? 0,
+    rightCount: node.data.ports?.right?.length ?? 0,
+    portLayout: "inline",
+  });
+  const corner = (
+    <BlockPort id={node.id} view="port" edges={edgeSpecsOf(scene, node, wired, onSceneChange, decoration)}>
+      <Block
+        header={headerOf(node)}
+        width={opaque ? REGION_CARD_WIDTH_PX : REGION_CORNER_WIDTH_PX}
+        body={cornerSlots > 0 ? <div data-slot="region-corner-band" style={{ height: railBandHeightForSlots(cornerSlots) }} /> : undefined}
+        // P5's "a card whose footer states what it hides", measured off the
+        // scene by `hiddenSummary` — never a narrated sentence.
+        footer={opaque ? <span data-slot="region-hidden">{describeHidden(hiddenSummary(scene, node.id))}</span> : undefined}
+        // Expanded only: the corner's non-shared corners go square so the
+        // card reads as PART of the frame (see REGION_CORNER_BLOCK_STYLE's
+        // own WHY on the mechanism). An opaque card is a free-standing
+        // card again and keeps its own radius.
+        style={opaque ? undefined : REGION_CORNER_BLOCK_STYLE}
+        diagnostics={decoration?.diagnostics}
+      />
+    </BlockPort>
+  );
+  // lane E: promoted ports + toggle land here — the card's `edges` gain
+  // `projectHostScene`'s `PromotedPort[]` beside the region's own, and the
+  // header gains a `FoldingChevron` wired to `toggleRegionView`.
+
+  const arms: RegionArm[] = armsOf(scene, node.id).map((arm) => ({
+    id: arm.id,
+    title: arm.data.name ?? arm.id,
+    open: arm.data.arm?.open ?? true,
+    onOpenChange: onSceneChange
+      ? (open: boolean) => onSceneChange(writeNodeData(scene, arm.id, { arm: { ...arm.data.arm, open } }))
+      : undefined,
+    // No `activeArm` means every arm is active (donor branchModel.ts:11-12).
+    active: region.activeArm === undefined || region.activeArm === arm.id,
+    ...(arm.data.arm?.h === undefined ? null : { bodyHeight: arm.data.arm.h }),
+    // A child of an ARM, not of the region: its `position` is in the ARM's
+    // space (scene.ts:60-72), which is the whole reason arms are nodes —
+    // folding a sibling arm moves rows, and an arm-relative child does not
+    // have to be rewritten when it does (plan §2.C).
+    members: childrenOf(scene, arm.id).map(memberViewOf),
+  }));
+
+  return (
+    <Region
+      id={node.id}
+      kind={region.kind}
+      view={view}
+      corner={corner}
+      {...(node.data.w === undefined ? null : { width: node.data.w })}
+      {...(node.data.h === undefined ? null : { height: node.data.h })}
+      members={bodyChildrenOf(scene, node.id).map(memberViewOf)}
+      arms={arms}
+    />
+  );
 }
 
 /**
@@ -296,6 +486,8 @@ export function SceneNodeView(props: SceneNodeViewProps): ReactNode {
           codeEditorProps={{ className: POINTER_OWNED_CLASS }}
         />
       );
+    case "region":
+      return <RegionNodeView {...props} />;
     case "block":
     default:
       return <BlockNodeView {...props} />;

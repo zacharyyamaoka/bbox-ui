@@ -100,6 +100,45 @@ export interface RegionLayout {
 }
 
 export function regionLayout(input: RegionLayoutInput): RegionLayout {
-  void input;
-  throw new Error("components/region.layout.ts: lane A of docs/CONTROL-FLOW-PLAN.md has not landed yet");
+  const width = Math.max(input.width, REGION_MIN_WIDTH_PX);
+  const corner = { x: 0, y: 0, w: input.corner.w, h: input.corner.h };
+
+  // The donor's running cursor (branchModel.ts:161-230), restated: one row
+  // is header + body, the body costs nothing while folded, and the next
+  // row starts exactly where this one ended. The ONE change from the donor
+  // is where the cursor starts — under the CORNER BLOCK, not under a
+  // full-width band (Zach's 2026-09-18 "OLD: BAD / NEW: GOOD" ruling).
+  let cursor = corner.h;
+  const arms: RegionArmLayout[] = (input.arms ?? []).map((arm, index) => {
+    const rowTop = cursor;
+    const bodyTop = rowTop + REGION_ARM_HEADER_PX;
+    // WHY the clamp only applies while OPEN: `bodyHeight` is the height an
+    // arm remembers, and a folded arm must remember the number it will
+    // re-open at — clamping a folded arm to the minimum would silently
+    // rewrite an authored 10 into 48 the moment someone folded it.
+    const bodyHeight = arm.open ? Math.max(arm.bodyHeight ?? REGION_ARM_DEFAULT_BODY_PX, REGION_ARM_MIN_BODY_PX) : 0;
+    const bottom = bodyTop + bodyHeight;
+    cursor = bottom;
+    return { id: arm.id, index, open: arm.open, rowTop, headerTop: rowTop, bodyTop, bodyHeight, bottom };
+  });
+
+  // Hug: the last row's bottom plus the pad, or — with no arms — enough
+  // room for the free body a loop/group drops into. An explicit `height`
+  // may only ever make the region TALLER; the donor's own
+  // `reconcileBranchProps` keeps `h` in step with the arms for the same
+  // reason, and a frame shorter than its own rows would paint arms outside
+  // the border they are supposed to live in.
+  const hugged = arms.length > 0 ? cursor + REGION_PAD_BOTTOM_PX : corner.h + REGION_BODY_MIN_PX;
+  const height = Math.max(input.height ?? 0, hugged);
+
+  return {
+    width,
+    height,
+    corner,
+    // A branch has no free body: its arms ARE its body (plan §3.2). Kept as
+    // a zero-height rect at the same origin rather than omitted, so a
+    // caller reads one shape either way.
+    body: { x: 0, y: corner.h, w: width, h: arms.length > 0 ? 0 : height - corner.h },
+    arms,
+  };
 }
