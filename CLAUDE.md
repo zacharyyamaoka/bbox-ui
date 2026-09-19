@@ -46,9 +46,35 @@ bbox-ui to docs, llms.txt, or a component page — it would be a lie. If
 publishing ever becomes the right call it is Zach's decision, not a convenience
 fix for the adapters.
 
-`registry.json` at the root is how people consume this. `npx shadcn@latest add
-zacharyyamaoka/bbox-ui/port` works today with no website at all — shadcn takes a
-GitHub repo as a registry directly.
+`registry.json` at the root is how people consume this — shadcn takes a GitHub
+repo as a registry directly, with no website at all.
+
+**But `port` and `block` do NOT install, and that sentence used to say they
+did.** Measured 2026-09-18 against a real throwaway project: `npx shadcn@latest
+add .../port.json` fails with `npm error 404 … @bbox-ui/schema@*`, before it
+writes a single file. `packages/schema` is `private: true` like every other
+`packages/*`, and `appearance.fields.ts`, `port.fields.ts`, `port.presets.ts`,
+`block.fields.ts` and `pill.tsx` all import it — so this is the same
+uninstallable-by-construction class as the two adapters and `glyph.tsx`, and
+the fix is the same source change, not a registry tweak.
+
+Worse, the breakage was hidden behind a *second* one. Both items shipped
+file lists that omitted what their entry points import — `port.tsx` needs
+`./appearance`, `./port.fields`, `./port.presets` and `./port.layout` and the
+item carried none of the four. So `npm install` never got far enough to 404;
+the install "succeeded" and left four unresolvable imports. Completing the
+file lists is what surfaced the real blocker underneath. The trunk-sourced
+items (`port-v2`, `block-v2`, the menu kit, …) have no such dependency and do
+install — verified the same day, `tsc --noEmit` exit 0 on a throwaway project
+with `compare-review`, `chrome-bar`, `control-strip`, `frames-panel` and
+`tool-dock` installed into it.
+
+**`registry.json`'s items are generated, not hand-edited** —
+`docs/build_menu_registry_items.py` walks each entry point's real transitive
+relative imports, applies the per-lineage target rule below, and then asserts
+both failure modes: that every relative import resolves against its *target*
+layout, and that no item depends on an unpublished `@bbox-ui/*` package. Add a
+component there, not by hand. Run `--check` to see whether the file is stale.
 
 **`shadcn add` copies source verbatim.** It rewrites only the `@/` alias prefix
 against the consumer's `components.json`. It never rewrites relative specifiers,
