@@ -5,7 +5,7 @@
 // WHY a fan-out rather than a list in App.tsx: L3 paints a wire's in-flight
 // terminal and L4 mounts the chrome bar and the floating toolbar. Both arrive
 // through their own directory; neither should have to edit App.tsx to be seen.
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useEditor, usePassThroughWheelEvents } from "tldraw";
 
 import { KITS } from "../shapes/registry";
@@ -22,6 +22,176 @@ export function Overlay() {
       <SystemSketchChrome />
     </>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* The bottom-right corner                                             */
+/* ------------------------------------------------------------------ */
+
+/** Both edges, and the same 8px the chrome bar keeps from the opposite
+ *  (top-left) corner, so the two clusters frame the board symmetrically. */
+export const CORNER_INSET = 8;
+
+/** Viewport px, `getBoundingClientRect` shape. */
+export interface CornerRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+export type CornerPlacementKind = "corner" | "beside-licence" | "above-licence";
+
+/** Offsets from the container's right and bottom edges, and which rule won. */
+export interface CornerPlacement {
+  right: number;
+  bottom: number;
+  placement: CornerPlacementKind;
+}
+
+function overlaps(a: CornerRect, b: CornerRect): boolean {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+/**
+ * Where the bottom-right cluster goes: the first of these that covers
+ * neither tldraw's licence watermark nor any obstacle (the dock) —
+ *
+ *   1. `corner`         — flush, `CORNER_INSET` from both edges;
+ *   2. `beside-licence` — the bottom edge, immediately LEFT of the watermark;
+ *   3. `above-licence`  — flush right, immediately ABOVE the watermark (a
+ *                         window too narrow for 2 to clear the dock).
+ *
+ * WHY this order, Zach 2026-09-19 (Pasted image 20260919134814.png): "please
+ * move the right corner menu to be truly in the right corner right now its
+ * above this text 'get a license for production'". 1 is what he asked for
+ * and what a licensed build gets. When the watermark owns the corner, 2 keeps
+ * the cluster on the corner's own bottom edge instead of parked above the
+ * text — the placement he rejected — and 3 is only the narrow-window
+ * fallback.
+ *
+ * WHY the watermark is a hard wall and never something to paint over: it is
+ * tldraw's licence notice, and tldraw's own stylesheet binds users to keep it
+ * "visible, unobscured, and available to user-interaction" (@tldraw/editor
+ * Watermark.mjs:123-129). It sits at `--tl-layer-watermark: 248`, BELOW this
+ * slot's 250 (editor.css:45-46), so nothing in tldraw stops chrome here from
+ * covering it — the archive's bottom-right strip did exactly that, sitting on
+ * the watermark's own 4px anchor one layer above it. Covering is removing.
+ * If nothing fits at all, the licence still wins over the dock.
+ */
+export function placeCornerCluster({
+  container,
+  cluster,
+  watermark,
+  obstacles,
+}: {
+  container: CornerRect;
+  cluster: { width: number; height: number };
+  watermark: CornerRect | null;
+  obstacles: readonly CornerRect[];
+}): CornerPlacement {
+  const candidates: CornerPlacement[] = [{ right: CORNER_INSET, bottom: CORNER_INSET, placement: "corner" }];
+  if (watermark) {
+    candidates.push({ right: container.right - watermark.left + CORNER_INSET, bottom: CORNER_INSET, placement: "beside-licence" });
+    candidates.push({ right: CORNER_INSET, bottom: container.bottom - watermark.top + CORNER_INSET, placement: "above-licence" });
+  }
+  const candidateRect = (candidate: CornerPlacement): CornerRect => {
+    const right = container.right - candidate.right;
+    const bottom = container.bottom - candidate.bottom;
+    return { left: right - cluster.width, top: bottom - cluster.height, right, bottom };
+  };
+  const clearOfLicence = (candidate: CornerPlacement) => !watermark || !overlaps(candidateRect(candidate), watermark);
+  const fits = candidates.find(
+    (candidate) => clearOfLicence(candidate) && !obstacles.some((obstacle) => overlaps(candidateRect(candidate), obstacle)),
+  );
+  return fits ?? candidates.find(clearOfLicence) ?? candidates[candidates.length - 1];
+}
+
+/** tldraw's own class for it (LicenseManager.mjs:351) — read, never styled. */
+const LICENCE_WATERMARK = ".tl-watermark_SEE-LICENSE";
+const DOCK = '[data-slot="tool-dock"]';
+
+function rectOf(el: Element): CornerRect {
+  const r = el.getBoundingClientRect();
+  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+}
+
+/**
+ * `placeCornerCluster`, kept live. Measures, never assumes: whether a
+ * watermark exists at all (no key → yes; a valid key → no; a
+ * "with watermark" key → yes again), where tldraw put it (desktop, the 8px
+ * mobile tab under 700px, debug mode's lifted spot) and where the dock is.
+ *
+ * WHY observers rather than a one-off measure: the watermark mounts AFTER
+ * first paint — licence validation is async (LicenseManager.mjs:64) — and
+ * swaps shape at the 700px breakpoint. A subtree `childList` observer notices
+ * the watermark and the dock arriving or leaving (cheap: two querySelectors,
+ * and it re-measures only when either element's identity changes);
+ * ResizeObservers and one attribute observer cover every later move.
+ */
+function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPlacement {
+  const editor = useEditor();
+  const [placement, setPlacement] = useState<CornerPlacement>({ right: CORNER_INSET, bottom: CORNER_INSET, placement: "corner" });
+
+  useLayoutEffect(() => {
+    const container = editor.getContainer();
+    let watermark: Element | null = null;
+    let dock: Element | null = null;
+
+    const measure = () => {
+      const el = cluster.current;
+      if (!el) return;
+      const next = placeCornerCluster({
+        container: rectOf(container),
+        cluster: { width: el.offsetWidth, height: el.offsetHeight },
+        watermark: watermark ? rectOf(watermark) : null,
+        obstacles: dock ? [rectOf(dock)] : [],
+      });
+      setPlacement((current) =>
+        current.right === next.right && current.bottom === next.bottom && current.placement === next.placement ? current : next,
+      );
+    };
+
+    const sizes = new ResizeObserver(measure);
+    const watermarkAttributes = new MutationObserver(measure);
+
+    const track = () => {
+      const nextWatermark = container.querySelector(LICENCE_WATERMARK);
+      const nextDock = container.querySelector(DOCK);
+      if (nextWatermark === watermark && nextDock === dock) return false;
+      sizes.disconnect();
+      watermarkAttributes.disconnect();
+      watermark = nextWatermark;
+      dock = nextDock;
+      sizes.observe(container);
+      if (cluster.current) sizes.observe(cluster.current);
+      if (watermark) {
+        sizes.observe(watermark);
+        // `data-debug` / `data-mobile` move or reshape it without a resize.
+        watermarkAttributes.observe(watermark, { attributes: true });
+      }
+      if (dock) sizes.observe(dock);
+      return true;
+    };
+
+    const arrivals = new MutationObserver(() => {
+      if (track()) measure();
+    });
+    arrivals.observe(container, { childList: true, subtree: true });
+
+    track();
+    sizes.observe(container);
+    if (cluster.current) sizes.observe(cluster.current);
+    measure();
+
+    return () => {
+      arrivals.disconnect();
+      sizes.disconnect();
+      watermarkAttributes.disconnect();
+    };
+  }, [editor, cluster]);
+
+  return placement;
 }
 
 /**
@@ -91,6 +261,9 @@ function SystemSketchChrome() {
   const chrome = useRef<HTMLDivElement>(null);
   usePassThroughWheelEvents(chrome);
 
+  const corner = useRef<HTMLDivElement>(null);
+  const placement = useCornerPlacement(corner);
+
   const toggle = useCallback((panel: ChromePanel) => {
     // One at a time: pressing the open one closes it, pressing the other
     // swaps. The kit's `StatusStripItem.active` is already the toggle's
@@ -138,19 +311,27 @@ function SystemSketchChrome() {
       <FloatingSelectionToolbar />
       <SystemSketchPanel open={open} onClose={close} problems={problems} id={panelId} />
       {/*
-        Bottom-RIGHT, clear of the dock's bottom-centre column — and lifted
-        48px so it clears tldraw's LICENCE WATERMARK.
-        Measured in the running app at 1400x900: the watermark
-        (`.tl-watermark_SEE-LICENSE`) occupies x 1296-1396, y 860-896, and it
-        sits at `--tl-layer-watermark: 248` — BELOW `.tl-canvas__in-front`'s
-        250, so this chrome paints over it. tldraw's own CSS says the
-        watermark "sits above that content so it can't be occluded"; the
-        content it means is canvas content, and a host's own chrome can still
-        cover it. Covering a licensing element is not something to do by
-        accident, so the strip is parked above it. At `bottom-3` it measured
-        y 846-888 and covered the watermark outright.
+        Bottom-RIGHT: truly in the corner whenever tldraw's licence watermark
+        lets it be, and immediately beside it when it does not — never over
+        it. Zach, 2026-09-19: "please move the right corner menu to be truly
+        in the right corner right now its above this text 'get a license for
+        production'". The rule, and why the watermark is a wall, is
+        `placeCornerCluster` above.
+
+        Measured in the running app at 1400x900 with no licence key (every
+        keyless `http:` page, dev and production build alike): the watermark
+        occupies x 1296-1396, y 860-896, so the strip lands at x 1136-1288,
+        y 850-892 — the corner's own bottom row, 8px left of the licence.
+        With a key it drops to x 1240-1392, y 850-892 by itself.
+        Replaces a fixed `right-2 bottom-12`, which cleared the watermark by
+        floating 48px above it.
       */}
-      <div className="pointer-events-auto absolute right-2 bottom-12">
+      <div
+        ref={corner}
+        className="pointer-events-auto absolute"
+        style={{ right: placement.right, bottom: placement.bottom }}
+        data-corner-placement={placement.placement}
+      >
         <SystemSketchStatusStrip
           open={open}
           onToggle={toggle}

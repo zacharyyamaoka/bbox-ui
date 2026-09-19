@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 import {
   Circle,
+  CornerDownRight,
   Diamond,
   Frame,
   Hand,
@@ -16,13 +17,15 @@ import {
   MousePointer2,
   MoveUpRight,
   Pencil,
+  Redo,
   Slash,
   Square,
   Triangle,
   Type,
 } from "lucide-react";
 
-import type { ToolItem } from "@trunk/components/toolDock";
+import type { ToolItem, ToolSection } from "@trunk/components/toolDock";
+import { arrowPresetSection, type ArrowPreset } from "@trunk/components/toolPreferences";
 
 /**
  * tldraw's `geo` tool NAMES a family of shapes; WHICH one it draws lives in a
@@ -30,7 +33,8 @@ import type { ToolItem } from "@trunk/components/toolDock";
  * doubling as dock row ids, and picking one sets the style before arming
  * `geo` — `resolveCurrentTool`'s case 2, and the reason `GEO_VARIANT_IDS`
  * below is exported rather than inferred from "everything in this family"
- * (line and arrow are in the same family and are real tool ids).
+ * (line is in the same family and is a real tool id; the arrow rows are
+ * presets of the one `arrow` tool).
  */
 export const GEO_VARIANTS: readonly ToolItem[] = [
   { id: "rectangle", label: "Rectangle", icon: <Square />, shortcutHint: "R" },
@@ -41,10 +45,25 @@ export const GEO_VARIANTS: readonly ToolItem[] = [
 
 export const GEO_VARIANT_IDS: ReadonlySet<string> = new Set(GEO_VARIANTS.map((variant) => variant.id));
 
-export const LINE_TOOLS: readonly ToolItem[] = [
-  { id: "line", label: "Line", icon: <Slash />, shortcutHint: "L" },
-  { id: "arrow", label: "Arrow", icon: <MoveUpRight />, shortcutHint: "A" },
-];
+export const LINE_TOOLS: readonly ToolItem[] = [{ id: "line", label: "Line", icon: <Slash />, shortcutHint: "L" }];
+
+/**
+ * The arrows, one row per preset — the trunk builds the rows (order, labels,
+ * "A / A × 2 / A × 3" hints, the "Arrows · repeat A to cycle" heading) from
+ * the same cycle the `A` key walks, so the menu cannot drift from the key;
+ * this app only chooses the glyphs. Row ids are `arrow-<preset>`, which
+ * ./dock.tsx turns back into "arm the ONE arrow tool with this preset".
+ *
+ * Glyphs mirror the archive's tldraw icons (`tool-arrow`, `arrow-arc`,
+ * `arrow-elbow`, toolbarIntegration.ts:60-64) in this dock's lucide set.
+ */
+const ARROW_PRESET_ICONS: Readonly<Record<ArrowPreset, ReactNode>> = {
+  straight: <MoveUpRight />,
+  curve: <Redo />,
+  elbow: <CornerDownRight />,
+};
+
+export const ARROW_PRESET_SECTION: ToolSection = arrowPresetSection(ARROW_PRESET_ICONS);
 
 export const DRAW_TOOLS: readonly ToolItem[] = [
   { id: "draw", label: "Draw", icon: <Pencil />, shortcutHint: "D" },

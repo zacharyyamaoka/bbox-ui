@@ -548,7 +548,9 @@ function ArrowCycleHarness() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+    // Dock at the BOTTOM of a tall frame, as in the app, so the popout opens
+    // upward (side="top") instead of collision-flipping below the dock.
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start", justifyContent: "flex-end", minHeight: 360 }}>
       <p style={{ font: "12px monospace", opacity: 0.6 }}>Press A (repeatedly) — the Shapes face follows the cycle.</p>
       <ToolDock
         activeToolId={activeToolId}
