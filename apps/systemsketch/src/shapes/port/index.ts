@@ -1,117 +1,56 @@
-// PLACEHOLDER — lane L2 replaces this file whole — Floating port shape
-// (docs/SYSTEMSKETCH-REBUILD-PLAN.md §5). What is here is SCHEMA ONLY: the
-// persisted props of `ss-port` exactly as plan §3 spells them, and nothing
-// else. No tool, no dock row, no LabeledPort face, no measurement, no inline
-// label edit — those are L2's, and L2 overwrites this file.
+// src/shapes/port/index.ts — the floating-Port kit (lane L2).
 //
-// A floating port is the smallest block: a one-port node. That is why its
-// single anchor always carries `FLOATING_PORT_ID` and why it binds a wire at
-// all — "everything is really a block" applies to the one-port case too.
+// A floating port is the smallest block: a one-port node. That is why it binds
+// a wire at all, and why its single measured anchor always carries
+// `FLOATING_PORT_ID` — "everything is really a block" applies to the one-port
+// case too (plan §2, §6's L2 row). Its anchor is a DATA endpoint and nothing
+// in this kit draws a line; control flow is containment and marks.
 //
-// WHY the schema lands in L0 and not with its own lane (the one place this
-// file departs from the lane brief's `portKit = EMPTY_KIT`): the document
-// model is ONE contract, not five. A record only enters a tldraw store if a
-// registered util validates it, so with an empty kit a board written after L2
-// lands cannot be OPENED by an app where it has not — the `.tldr` is refused,
-// not degraded. `src/document/documentModel.test.ts`'s `registry` describe is
-// that rule made executable, and it is an L0 acceptance line: SHAPE_UTILS
-// publishes all five types and BINDING_UTILS the one binding type from day 0.
-// Vocabulary is shared and frozen early; BEHAVIOUR is what a lane owns.
-//
-// WHY this spells the empty kit's other fields out instead of spreading
-// registry.ts's `EMPTY_KIT`: registry.ts imports THIS file, so a value import
-// back would close a module cycle and the const would be read while still in
-// its temporal dead zone — measured here as "Cannot read properties of
-// undefined (reading 'shapeUtils')" the first time the registry was loaded. An
-// `import type` is erased, so the cycle never exists at runtime.
+// WHY `createElement` instead of JSX (kept verbatim from block/index.ts):
+// src/document/stockBoundary.test.ts requires every kind to publish its kit
+// from `index.ts` exactly ("a missing directory is a broken registry"), and a
+// `.ts` file cannot carry JSX. One icon element is not worth a second file.
 import { createElement } from "react";
-import { HTMLContainer, Rectangle2d, ShapeUtil, T, createShapePropsMigrationSequence, type TLBaseShape } from "tldraw";
+import { CircleDot } from "lucide-react";
 
 import type { ShapeKit } from "../registry";
-import { PortAnchorV } from "../shared/props";
-import { PORT_SHAPE_TYPE, type PortSide } from "../types";
+import { PORT_TOOL_ID } from "../types";
+import { PortShapeUtil } from "./PortShapeUtil";
+import { PortTool } from "./PortTool";
 
-// The face every un-landed kind wears. Duplicated per placeholder rather than
-// hoisted into `shared/`: `shared/` is L0's permanent write set and a lane
-// deletes its placeholder whole, so a shared constant would outlive every one
-// of its callers.
-const UNBUILT_FACE_STYLE = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  border: "1px dashed currentColor",
-  borderRadius: 4,
-  opacity: 0.55,
-  font: "12px ui-monospace, monospace",
-  pointerEvents: "all",
-} as const;
-
-export interface PortShapeProps {
-  w: number;
-  h: number;
-  name: string;
-  type: string;
-  direction: "in" | "out";
-  /** Exactly one MEASURED anchor, whose `portId` is `FLOATING_PORT_ID`. */
-  anchors: { portId: string; x: number; y: number; side: PortSide | null }[];
-}
-
-declare module "@tldraw/tlschema" {
-  interface TLGlobalShapePropsMap {
-    "ss-port": PortShapeProps;
-  }
-}
-
-export type PortShape = TLBaseShape<"ss-port", PortShapeProps>;
-
-/** Schema only. L2 replaces this class with the real one. */
-export class PortShapeUtil extends ShapeUtil<PortShape> {
-  static override type = PORT_SHAPE_TYPE;
-
-  static override props = {
-    w: T.number,
-    h: T.number,
-    name: T.string,
-    type: T.string,
-    direction: T.literalEnum("in", "out"),
-    anchors: T.arrayOf(PortAnchorV),
-  };
-
-  // Version 0, declared now for the reason BlockShapeUtil records: the sequence
-  // is what gives these props a version number in a saved file, and it cannot
-  // be retrofitted once boards exist.
-  static override migrations = createShapePropsMigrationSequence({ sequence: [] });
-
-  override getDefaultProps(): PortShapeProps {
-    return { w: 120, h: 32, name: "port", type: "", direction: "out", anchors: [] };
-  }
-
-  override getGeometry(shape: PortShape) {
-    return new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true });
-  }
-
-  override getIndicatorPath(shape: PortShape) {
-    const path = new Path2D();
-    path.rect(0, 0, shape.props.w, shape.props.h);
-    return path;
-  }
-
-  // WHY a visible "not built" face rather than `null`: a shape that validates,
-  // occupies geometry and paints nothing is selectable emptiness — the worst
-  // way to meet an un-landed lane. This says which lane owes it.
-  override component(shape: PortShape) {
-    return createElement(
-      HTMLContainer,
-      { style: { ...UNBUILT_FACE_STYLE, width: shape.props.w, height: shape.props.h } },
-      `${PORT_SHAPE_TYPE} — lane L2`,
-    );
-  }
-}
+export { PortShapeUtil, type PortDirection, type PortShape, type PortShapeProps } from "./PortShapeUtil";
+export { PortTool } from "./PortTool";
+export { PortFace } from "./PortFace";
 
 export const portKit: ShapeKit = {
   shapeUtils: [PortShapeUtil],
   bindingUtils: [],
-  tools: [],
-  familyItems: [],
-  toolUi: (_editor, tools) => tools,
+  tools: [PortTool],
+  // A row of the ONE system family. WHY no `shortcutHint` beside it, where
+  // Block carries "B": the dock renders the hint as TEXT inside the row
+  // (toolDock.tsx:331 `DropdownMenuShortcut`), so the row would read "PortP"
+  // — and `src/port.smoke.test.tsx` finds this row by `/^\s*port\s*$/i` on its
+  // textContent, which is the acceptance writing that rule down. A hint is
+  // display only anyway (`ToolItem.shortcutHint`'s own doc); the real
+  // keybinding would be a `kbd` in the `toolUi` entry below, and adding one is
+  // a two-line change once Zach picks the letter.
+  familyItems: [{ id: PORT_TOOL_ID, label: "Port", icon: createElement(CircleDot) }],
+  toolUi: (editor, tools) => ({
+    ...tools,
+    // Without this entry the dock row is a SILENT NO-OP: tldraw's `useTools()`
+    // only builds entries for its own stock list, so a tool passed through
+    // `<Tldraw tools={…}>` has a state machine and no UI entry (the `toolUi`
+    // contract in ../registry, and archive
+    // src/bboxUi/adapter/bboxToolUi.tsx:15-25).
+    [PORT_TOOL_ID]: {
+      id: PORT_TOOL_ID,
+      label: "Port",
+      // A stock tldraw icon name, resolved from the app's self-hosted asset
+      // map: a dot is what a port is.
+      icon: "geo-ellipse",
+      onSelect: () => {
+        editor.setCurrentTool(PORT_TOOL_ID);
+      },
+    },
+  }),
 };
