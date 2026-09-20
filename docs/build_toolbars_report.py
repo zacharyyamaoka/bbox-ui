@@ -83,6 +83,7 @@ DECISIONS = [
 
 KNOWN = [
     ("draft.smoke × 7", "The drafts chip never appears — <code>draftSession.tsx</code> is absent and <code>chromeBar.tsx</code> has no <code>draftChip</code>. <strong>The draft-compare chrome half was never committed.</strong> A real missing feature, not a flake. It was earlier believed to be deliberately-red acceptance; that turned out to be wrong."),
+    ("corner.smoke × 1 — MINE", "The only red this round caused, and it is reported rather than silenced. Adding grid and help took the strip to 295px and the measured corner row to 486px, so <code>placeCornerCluster</code> had only 417px between the dock and the licence watermark and fell through to <em>above-licence</em> — reproducing the exact complaint that placement exists to fix. Fixed for desktop by dropping the temporary variant pill’s words below 1600px (it keeps them in its aria-label, title and menu heading). <strong>Narrow 720×900 is still red</strong>: there the strip alone now overlaps the dock’s flush-right span, so it lifts above the DOCK rather than the watermark, leaving 20px where the test wants ≤8. The behaviour is correct — clear of both, flush right. The assertion encodes an assumption that only held while the strip was under ~181px. <code>corner.smoke.test.tsx</code> is off-limits acceptance and “cannot pass → report FAIL” is this repo’s own stated deliverable, so I did not edit it green. It should assert “immediately above whatever is beneath it”."),
     ("menus.smoke × 1", "The burger’s Export submenu: <em>“element is not stable … detached from the DOM”</em>. Reproduces in isolation, so not a cross-test flake, and it predates this round. <strong>Diagnosed, not just observed:</strong> I watched the Export trigger in the running app for 2s with no interaction — <em>zero</em> node swaps, still connected. The menu does not flicker on its own. The helper captures the trigger, the sibling File submenu’s close re-renders the row list, and the click lands on a detached node. Harness fragility in <code>openSubmenu</code>, not a product defect — which is why I did not “fix” it by editing acceptance."),
     ("A bug in the vendored Slider, found by measuring", "The pill’s opacity track was 96px wide and <strong>0px tall</strong>. The stock copy sizes every part with <code>data-horizontal:h-1</code>, which in Tailwind v4 means an attribute literally named <code>data-horizontal</code> — and that string appears <strong>nowhere in @base-ui/react 1.8.0</strong> (whole package grepped). Base UI emits <code>data-orientation</code>. Those classes are dead for every consumer, light or dark. Pinned locally; correcting the vendored file means re-snapping its provenance, which is a trunk lane."),
     ("Not built, not faked", "<strong>Wrap</strong> and <strong>Tidy</strong> are in the donor’s pill and not in this one. Wrap needs <code>wrapSelectionInto</code> ported; Tidy needs the trunk’s already-built <code>tidyTraces</code> bound to the app’s wire layer. Both are real lanes, not a row to add."),
@@ -198,12 +199,13 @@ HTML = f"""<!doctype html>
 <h2>Gates</h2>
 <table><tbody>
 <tr><td>app unit</td><td>137 / 137</td></tr>
-<tr><td>selection pill</td><td>10 / 10 · mutation-tested red both ways</td></tr>
+<tr><td>selection pill</td><td>10 / 10 · mutation-tested red two ways</td></tr>
 <tr><td>arrangeActions</td><td>14 / 14</td></tr>
+<tr><td>zoom menu</td><td>9 / 9 · mutation-tested red three ways</td></tr>
 <tr><td>region variants</td><td>11 / 11 · mutation-tested red on v2, v9, v10</td></tr>
 <tr><td>trunk region</td><td>47 / 47 unit · 20 / 20 variant stories</td></tr>
 <tr><td>tsc</td><td>exit 0</td></tr>
-<tr><td>app smoke</td><td>107 / 115 — the 8 reds are the 8 that were already red before this round</td></tr>
+<tr><td>app smoke</td><td><strong>114 / 124.</strong> Of the 10 reds, <strong>one</strong> is attributable to this round — the narrow corner case below. 7 are a feature that was never committed, 1 predates the round, 1 is a load-flake that passes 4/4 three runs in isolation.</td></tr>
 </tbody></table>
 </div>
 
