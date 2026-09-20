@@ -263,7 +263,14 @@ export function CompareReview({
     <aside
       data-slot="compare-history"
       data-testid={`${prefix}-history-panel`}
-      className="flex w-[230px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-border p-3"
+      // WHY 250px and not 230px: at 230 the live board's own row renders
+      // as "Current ver…" once the `AFTER` pin and the disclosure chevron
+      // have taken their share — an ellipsis on the one row that is always
+      // present, which is the row a reviewer reads first. Zach's screenshot
+      // gives this rail ~250px and shows "Current version" whole; truthful
+      // rendering (`feedback_truthful_property_rendering`) says geometry may
+      // abbreviate, but not where 20px of rail buys the complete value.
+      className="flex w-[250px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-border p-3"
     >
       {sourceNote ? (
         <div data-testid={`${prefix}-history-source-panel`} className="flex flex-col gap-1.5">
@@ -410,7 +417,20 @@ export function CompareReview({
       data-testid={`${prefix}-detail`}
       className={cn(
         "flex min-h-0 flex-col overflow-hidden bg-card",
-        dock === "right" ? "w-[380px] shrink-0 border-l border-border" : "h-[280px] shrink-0 border-t border-border",
+        // WHY 600px and not the 380px this shipped with: the `figma`
+        // layout — the DEFAULT — splits this rail into an element list AND
+        // a three-column property table, and at 380px the table gets under
+        // 200px, which wraps every cell character by character
+        // ("thres/hold/./float/./=/0.5" — measured headlessly 2026-09-19 at
+        // a 1600px viewport, before this line changed). Zach's own
+        // screenshot of this surface gives the panel ~600 of ~1830px, which
+        // is where the number comes from. `max-w-[45%]` is what keeps it
+        // honest on a narrow host: a fixed 600px rail on a 900px modal
+        // would leave the two boards unreadable, which is the mirror of the
+        // bug it fixes.
+        dock === "right"
+          ? "w-[600px] max-w-[45%] shrink-0 border-l border-border"
+          : "h-[280px] shrink-0 border-t border-border",
       )}
     >
       <div className="flex shrink-0 items-center gap-1 border-b border-border py-1 pr-1.5 pl-1">
