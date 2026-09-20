@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import type { Editor } from "tldraw";
 
 import { App } from "./App";
+import { bootOptionsFor, openBoardFromBoot } from "./review/boardParam";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("no #root in index.html");
@@ -19,8 +20,17 @@ function rememberForConsole(editor: Editor) {
   if (import.meta.env.DEV) (window as unknown as { editor: Editor }).editor = editor;
 }
 
+// WHY: `?board=` opens a disposable review board (persistenceKey null) — see review/boardParam.ts.
+const boot = bootOptionsFor(location.search, location.origin);
+
 createRoot(root).render(
   <StrictMode>
-    <App onEditorReady={rememberForConsole} />
+    <App
+      persistenceKey={boot.persistenceKey}
+      onEditorReady={(editor) => {
+        rememberForConsole(editor);
+        void openBoardFromBoot(editor, boot.board);
+      }}
+    />
   </StrictMode>,
 );
