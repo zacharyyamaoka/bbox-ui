@@ -5,6 +5,23 @@ via the `@.claude/feedback.md` line in `CLAUDE.md`. Newest first. This is a live
 rule set, not an archive — prune superseded entries, consolidate past ~60 lines.
 The full replay record lives in the vault; these entries must stand alone.
 
+- **2026-09-20 · Bad · hand over the board as a LINK, not a file chooser** — A
+  generated review board is handed over as a URL that opens it, never as "start
+  the server, then ☰ › File › Open and pick this path". Zach: *"you should make
+  it so I can open this file directly. I was able to do this is system sketch. I
+  think perhaps it had like a URI or something?"* The app takes
+  `?board=<absolute path>` — a literal `=` and `/`, **never** percent-encoded,
+  and **never** wrapped in a markdown `[text](url)` link, because a chat client
+  rewrites `?board=` to `?board%3D…` and the app then rejects it. Hand over the
+  bare URL or a code span. The Open-it board row is therefore: one fence with the
+  server command, and the `?board=` URL in a code span beneath it. The archived
+  app is the reference — `/home/bam/systemsketch/src/workspace/workspaceModel.ts:157`
+  builds the link, `LocalWorkspace.tsx:367` reads it. Before building any of
+  this, `git grep` the branches: `?board=` already had three implementations.
+  Generating the board and then making him navigate to it gives back the exact
+  saving the board existed to create.
+  <sub>rate note: `rate - Sep 20 2026, 12.34.03AM.md` · [open](obsidian://advanced-uri?vault=zach_brain&filepath=Settings%2FFeedback%2Frate%2Frate%20-%20Sep%2020%202026%2C%2012.34.03AM.md&openmode=true)</sub>
+
 - **2026-09-19 · Direction · chrome lives in the editor components** — Zach:
   *"all of the feedback regarding the chrome should be made in bbox-ui
   editor-components, not in system sketch, system sketch should just be kinda
