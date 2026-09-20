@@ -7,6 +7,13 @@ stock shadcn registry's Base UI style — the same flavour the trunk's
 trunk lacked: `dialog`, `switch`, `radio-group`, `select`, `label`, `input`,
 `table`, `field`.
 
+Lane `devtools-2026-09-19` added three more the same way, for the quick
+switcher: `command` (cmdk inside the Dialog above — the stock answer to "press
+S and it should open the quick switcher"), `input-group` (its search field),
+and `textarea`. The last one is nobody's design: `input-group.tsx` ships an
+`InputGroupTextarea` member, so the file has to exist for the copy above it to
+stay verbatim and to resolve.
+
 These JSON files are the ORACLE for lane `stock-primitives`:
 `apps/storybook-basics/src/components/stockPrimitives.test.ts` checks every
 copied `src/components/<name>.tsx` against the `files[0].content` here — the
@@ -23,3 +30,8 @@ monorepo, and the lane rewrites exactly those (the "copy-trap fixes"
 | `import { cn } from "cn"` | `import { cn } from "../lib/utils"` |
 | `@/registry/base-nova/ui/<x>` | `./<x>` (the trunk's own sibling) |
 | `<IconPlaceholder lucide="XIcon" … />` + its import | `<XIcon … />` imported from `lucide-react` (the icon the placeholder names) |
+
+One caution the oracle itself creates: its three "no registry-only specifier"
+regexes scan the WHOLE file, comments included. A header that quotes the banned
+strings to explain what it rewrote fails its own test — describe them instead,
+the way every copy in `src/components/` already does.
