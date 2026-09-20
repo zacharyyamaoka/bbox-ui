@@ -76,9 +76,12 @@ class Http:
             raw = error.read()
             return error.code, dict(error.headers), (json.loads(raw) if raw else None)
 
-    def get(self, path: str, **query: str):
+    def get(self, route: str, **query: str):
+        # The first parameter is `route`, NOT `path`: these routes take a query
+        # parameter literally called `path`, and `get("/api/workspace/file",
+        # path=p)` would otherwise raise TypeError before any request is made.
         suffix = ("?" + urllib.parse.urlencode(query)) if query else ""
-        return self.request("GET", path + suffix)
+        return self.request("GET", route + suffix)
 
     def post(self, path: str, body: object):
         return self.request("POST", path, body)
