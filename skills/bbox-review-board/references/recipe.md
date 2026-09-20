@@ -56,7 +56,53 @@ The document's vocabulary is closed: `apps/systemsketch/src/shapes/types.ts` (`s
 
 ### Other shapes
 
-`ss-port` (a floating one-port node; its single port id is `"port"`), `ss-code`, `ss-region` and the stock shapes are accepted, but this reference carries **no verified example** for them yet. The first time a review needs one: read its `getDefaultProps()` and props validators under `apps/systemsketch/src/shapes/<kind>/`, seed the smallest instance, add the worked example here, and only then rely on it. Facts already established: `ss-code` and `ss-region` are **not** cable ends (`canBind` is false for both); a region is never a wire target, because control flow is never a cable.
+`ss-port` (a floating one-port node; its single port id is `"port"`) and `ss-code` are accepted, but this reference carries **no verified example** for them yet. The first time a review needs one: read its `getDefaultProps()` and props validators under `apps/systemsketch/src/shapes/<kind>/`, seed the smallest instance, add the worked example here, and only then rely on it. Facts already established: `ss-code` and `ss-region` are **not** cable ends (`canBind` is false for both); a region is never a wire target, because control flow is never a cable.
+
+### Region — `ss-region` (verified 2026-09-19)
+
+A region is a **scope**, not a card. It is always frame-like, so anything you
+place inside it is a child, `parentId` and all.
+
+```json
+{ "id": "branch", "type": "ss-region", "x": 0, "y": 0,
+  "props": { "w": 420, "h": 416, "kind": "branch", "name": "Branch",
+    "cornerBlockId": "shape:branch-corner",
+    "arms": [ { "id": "if", "title": "if mode == \"fast\":", "open": true, "h": 120 },
+              { "id": "else", "title": "else:", "open": true, "h": 120 } ] } },
+{ "id": "branch-corner", "type": "ss-block", "parentId": "branch", "x": 0, "y": 0,
+  "props": { "name": "Branch", "view": "port", "w": 160, "h": 100,
+    "ports": { "left": [{ "id": "input_1", "name": "input 1", "type": "" }], "right": [], "top": [], "bottom": [] } } }
+```
+
+Five things the recipe has to get right, because the app will not fix any of
+them for a programmatically created region (`createCornerBlock` is what the
+dock's tools run, and a recipe does not run a tool):
+
+- **The corner block is a separate shape, and the region has to name it.**
+  It is an `ss-block` child at parent-local `0, 0`
+  (`CORNER_INSET_X_PX`/`_Y_PX`), and the region's `cornerBlockId` is its
+  **expanded** id — `"shape:branch-corner"`, written out, because props are
+  passed through untouched while `id`/`parentId` are the only fields the
+  generator expands. Without it the frame paints with no interface.
+- **`kind` decides the corner's ports**, and the recipe must spell them,
+  copied from `cornerBlockPropsFor` (`shapes/region/cornerBlock.ts`):
+  `branch` → one left port `input_1` "input 1"; `for` → left `iterable`
+  "Iterable" + right `iter` "Iter"; `while` → left `condition` "Bool";
+  `plain` → **no corner block at all** (and then no `cornerBlockId`).
+- **`h` is not free.** The app hugs: `h = corner.h + Σ(headerPx + arm.h) +
+  REGION_PAD_BOTTOM_PX`, with `corner.h` 104 for a one-port card, `headerPx`
+  30 for the region drawing in force (26–32 across the table), and the pad 12.
+  With **no** arms (a For Loop) it is `corner.h + REGION_BODY_MIN_PX` = 224.
+  Author the hug, or the first variant switch re-settles the frame and every
+  card you aligned to it moves.
+- **A nested region is an ordinary child**: `parentId` the outer region, `x`/`y`
+  parent-local. An arm's body starts at `corner.h + headerPx` in the frame, so
+  `y = 134 + <margin>` puts a child inside the FIRST arm. Coordinates alone are
+  not membership — the generator fails the build if it finds one inside without
+  belonging.
+- **`arms: []` is the For Loop**, and that is the whole of Zach's scoping rule:
+  a loop has no arm rows, so no arm treatment can reach it. Seed one beside a
+  Branch whenever a review is about how arms are drawn.
 
 ## Cables
 

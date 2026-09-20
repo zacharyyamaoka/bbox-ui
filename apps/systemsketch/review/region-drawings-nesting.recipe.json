@@ -1,0 +1,91 @@
+{
+  "feature": "Region arm drawings v6/v7/v8 — and what they do when Branches nest",
+  "viewport": { "width": 1700, "height": 1150 },
+  "shapes": [
+    {
+      "id": "flat", "type": "ss-region", "x": 0, "y": 0,
+      "props": { "w": 420, "h": 416, "kind": "branch", "name": "Branch", "cornerBlockId": "shape:flat-corner",
+        "arms": [
+          { "id": "if", "title": "if mode == \"fast\":", "open": true, "h": 120 },
+          { "id": "else", "title": "else:", "open": true, "h": 120 }
+        ] }
+    },
+    { "id": "flat-corner", "type": "ss-block", "parentId": "flat", "x": 0, "y": 0,
+      "props": { "name": "Branch", "view": "port", "w": 160, "h": 100,
+        "ports": { "left": [{ "id": "input_1", "name": "input 1", "type": "" }], "right": [], "top": [], "bottom": [] } } },
+
+    {
+      "id": "nest1", "type": "ss-region", "x": 620, "y": 0,
+      "props": { "w": 436, "h": 864, "kind": "branch", "name": "Branch", "cornerBlockId": "shape:nest1-corner",
+        "arms": [
+          { "id": "if", "title": "if depth == 1:", "open": true, "h": 628 },
+          { "id": "else", "title": "else:", "open": true, "h": 60 }
+        ] }
+    },
+    { "id": "nest1-corner", "type": "ss-block", "parentId": "nest1", "x": 0, "y": 0,
+      "props": { "name": "Branch", "view": "port", "w": 160, "h": 100,
+        "ports": { "left": [{ "id": "input_1", "name": "input 1", "type": "" }], "right": [], "top": [], "bottom": [] } } },
+
+    {
+      "id": "nest2", "type": "ss-region", "parentId": "nest1", "x": 24, "y": 158,
+      "props": { "w": 388, "h": 580, "kind": "branch", "name": "Branch", "cornerBlockId": "shape:nest2-corner",
+        "arms": [
+          { "id": "if", "title": "if depth == 2:", "open": true, "h": 344 },
+          { "id": "else", "title": "else:", "open": true, "h": 60 }
+        ] }
+    },
+    { "id": "nest2-corner", "type": "ss-block", "parentId": "nest2", "x": 0, "y": 0,
+      "props": { "name": "Branch", "view": "port", "w": 160, "h": 100,
+        "ports": { "left": [{ "id": "input_1", "name": "input 1", "type": "" }], "right": [], "top": [], "bottom": [] } } },
+
+    {
+      "id": "nest3", "type": "ss-region", "parentId": "nest2", "x": 24, "y": 158,
+      "props": { "w": 340, "h": 296, "kind": "branch", "name": "Branch", "cornerBlockId": "shape:nest3-corner",
+        "arms": [
+          { "id": "if", "title": "if depth == 3:", "open": true, "h": 60 },
+          { "id": "else", "title": "else:", "open": true, "h": 60 }
+        ] }
+    },
+    { "id": "nest3-corner", "type": "ss-block", "parentId": "nest3", "x": 0, "y": 0,
+      "props": { "name": "Branch", "view": "port", "w": 160, "h": 100,
+        "ports": { "left": [{ "id": "input_1", "name": "input 1", "type": "" }], "right": [], "top": [], "bottom": [] } } },
+
+    {
+      "id": "loop", "type": "ss-region", "x": 1200, "y": 0,
+      "props": { "w": 340, "h": 224, "kind": "for", "name": "For Loop", "cornerBlockId": "shape:loop-corner", "arms": [] }
+    },
+    { "id": "loop-corner", "type": "ss-block", "parentId": "loop", "x": 0, "y": 0,
+      "props": { "name": "For Loop", "view": "port", "w": 160, "h": 100,
+        "ports": { "left": [{ "id": "iterable", "name": "Iterable", "type": "Iterable" }], "right": [{ "id": "iter", "name": "Iter", "type": "" }], "top": [], "bottom": [] } } }
+  ],
+  "callouts": [
+    {
+      "id": "step-1", "kind": "step",
+      "text": "1 · Bottom-right pill > Regions. Pick v6, then v7, then v8. Every Branch on this board redraws. This one is the baseline: two arms, one level.",
+      "x": 0, "y": 980, "w": 460, "h": 170,
+      "target": { "shapeId": "flat", "anchor": "bottom", "dx": 20 }
+    },
+    {
+      "id": "step-2", "kind": "step",
+      "text": "2 · Same three picks on this stack — a Branch in a Branch in a Branch. Watch the LEFT GUTTER: v6 adds a 5 px line pair at every level, v7 and v8 add none.",
+      "x": 520, "y": 980, "w": 460, "h": 170,
+      "target": { "shapeId": "nest1", "anchor": "bottom", "dx": -88 }
+    },
+    {
+      "id": "step-3", "kind": "step",
+      "text": "3 · Now the For Loop. It has no arms, so no arm drawing can reach it. Its one rule under the corner card must read the same in v6, v7 and v8.",
+      "x": 1040, "y": 980, "w": 460, "h": 170,
+      "target": { "shapeId": "loop", "anchor": "bottom", "dx": -100 }
+    },
+    {
+      "id": "pass", "kind": "pass",
+      "text": "PASS WHEN v6, v7 and v8 each redraw every Branch arm while the For Loop never changes, and you can see the board through every arm in all three.",
+      "x": 1560, "y": 980, "w": 460, "h": 170
+    },
+    {
+      "id": "legend", "kind": "note",
+      "text": "Which pill value is which drawing from tonight's gallery:\n\nv6 = Transparent Card   (gallery V1)\nv7 = Edge Card   (gallery V2)\nv8 = Top Rule   (gallery V3)\n\nv1-v5 are the earlier five, untouched. v8's arm tokens are identical to v1's — picking it means shipping nothing.",
+      "x": 1700, "y": 0, "w": 460, "h": 300
+    }
+  ]
+}
