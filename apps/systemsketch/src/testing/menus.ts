@@ -8,7 +8,8 @@
 // `dropdown-menu-shortcut`. A row is anything with a menu-item role —
 // `menuitem` (plain rows AND submenu triggers) or `menuitemcheckbox`.
 // No test id is derived from display text; labels are READ, never used to
-// build a selector.
+// build a selector — and a label is read from the row's own nodes, never by
+// subtracting the shortcut's text from the row's (see `labelOf`).
 import { userEvent } from "vitest/browser";
 
 import { waitFor, type MountedApp } from "./harness";
@@ -23,6 +24,38 @@ export interface MenuRow {
   shortcut: string;
 }
 
+/**
+ * The row's label: every text node in the row EXCEPT the ones inside its
+ * shortcut column. The tick of a `menuitemcheckbox` and a leading icon are
+ * `<svg>`, which carries no text, so they cost nothing here.
+ *
+ * WHY the shortcut is removed as a NODE and not as a substring of the row's
+ * `textContent`: a row is allowed to be labelled with its own shortcut. Edit ▸
+ * Delete renders the text "Delete" immediately followed by the text "Del"
+ * (tldraw spells the chord `'⌫,del'`, and the trunk's `formatShortcut` prints
+ * every delete-ish token as "Del"), so `"DeleteDel".replace("Del", "")` — the
+ * reading this helper used to do — returned **"eteDel"**. That is not a
+ * cosmetic wrinkle in a test: it cost the shipped product a feature. A lane
+ * took the red as a product defect and suppressed the Delete row's whole
+ * shortcut column in `src/chrome/stockMenus.ts` so this reader would go green,
+ * which is the acceptance harness dictating the UI. Reading what is
+ * structurally left cannot express that pressure — the label and the shortcut
+ * are separate elements in `chromeBar.tsx`'s `BurgerMenuEntry`, and they are
+ * read separately here. Acceptance: `src/menuRows.smoke.test.tsx`.
+ *
+ * (Full-string equality was silently wrong the same way and looked right:
+ * `"DeleteDelete".replace("Delete", "")` is `"Delete"` — a pass by accident.)
+ */
+function labelOf(row: HTMLElement, shortcutElement: Element | null): string {
+  const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  let text = "";
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (shortcutElement?.contains(node)) continue;
+    text += node.nodeValue ?? "";
+  }
+  return text.trim();
+}
+
 /** The label and shortcut of every row directly in `popup` (not in nested popups). */
 export function rowsOf(popup: Element): MenuRow[] {
   return Array.from(popup.querySelectorAll<HTMLElement>(ROW_SELECTOR))
@@ -30,9 +63,7 @@ export function rowsOf(popup: Element): MenuRow[] {
     .map((element) => {
       const shortcutElement = element.querySelector('[data-slot="dropdown-menu-shortcut"]');
       const shortcut = shortcutElement?.textContent?.trim() ?? "";
-      const full = element.textContent ?? "";
-      const label = (shortcut ? full.replace(shortcutElement!.textContent ?? "", "") : full).trim();
-      return { element, label, shortcut };
+      return { element, label: labelOf(element, shortcutElement), shortcut };
     });
 }
 

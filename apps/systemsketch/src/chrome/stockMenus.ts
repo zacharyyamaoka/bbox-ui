@@ -57,31 +57,22 @@ export function chordForPlatform(kbd: string | undefined, platform: ShortcutPlat
   return match ?? chords[0];
 }
 
-/**
- * Action ids whose row carries NO shortcut column.
- *
- * WHY `delete` is here, measured 2026-09-19 in a real Chromium against this
- * very menu: tldraw binds Delete to `"⌫,del"`, and the trunk's `formatShortcut`
- * maps every delete-ish token to the word **"Del"** (`appMenu.ts`'s
- * `DELETE_KEYS`). A row then renders the text "Delete" immediately followed by
- * the text "Del", and "Del" is a PREFIX of its own label — so any reader that
- * recovers the label by removing the shortcut substring gets `"eteDel"`. That
- * is not a hypothetical: `src/testing/menus.ts`'s `rowsOf` does exactly that,
- * and the row measured as `["eteDel", "Del"]`.
- *
- * Suppressing the column here is a CONFIGURATION choice the host is allowed to
- * make (`AppMenuInput.edit` is host-built rows), and it costs a hint everybody
- * already knows. The tempting alternative — spelling the chord differently —
- * does not work: `⌫`, `del`, `delete` and `backspace` all print "Del".
- * The real fix is in the trunk (print the ⌫ glyph tldraw's own menus print,
- * or have the reader strip the shortcut NODE instead of the substring); it is
- * not this app's file to make.
- */
-const NO_SHORTCUT_COLUMN = new Set(["delete"]);
-
 /** One tldraw action as a burger row, or `null` when this build of tldraw
  *  does not ship it — a row for an action that does not exist is a row that
- *  does nothing. */
+ *  does nothing.
+ *
+ * WHY every action that HAS a chord gets its column, with no id-keyed
+ * exception list: until 2026-09-19 this function suppressed the column for
+ * `delete`, because `src/testing/menus.ts`'s `rowsOf` recovered a row's label
+ * by subtracting the shortcut's text from the row's, so "Delete" + "Del" read
+ * back as "eteDel" and the acceptance went red. Deleting a shortcut Zach uses
+ * — from the one row in Edit ▸ whose keystroke is the least guessable of the
+ * six — to make a broken reader happy is the product serving the test. The
+ * reader now reads the shortcut NODE (`labelOf`), and this file is back to
+ * configuration: WHICH tldraw actions appear and in which group, never how
+ * much of one is allowed to show. If a future row's shortcut looks wrong in
+ * the menu, the fix is in the trunk's `formatShortcut` or in the reader —
+ * never a row quietly losing part of itself here. */
 function actionRow(
   action: TLUiActionItem | undefined,
   msg: (id?: string) => string,
@@ -89,7 +80,7 @@ function actionRow(
   options: { checked?: boolean } = {},
 ): MenuAction | null {
   if (!action) return null;
-  const chord = NO_SHORTCUT_COLUMN.has(action.id) ? undefined : chordForPlatform(action.kbd, platform);
+  const chord = chordForPlatform(action.kbd, platform);
   // `"menu"` is the variant tldraw's own menus ask for: `toggle-snap-mode`
   // reads "Always snap" there rather than "Toggle always snap", and
   // `export-as-svg` reads "SVG" rather than "Export as SVG" — the wording
