@@ -345,6 +345,21 @@ answer is still correct, just not rendered anywhere right now) in case a
 future surface wants a "recently changed" view; the story consuming it is
 gone.
 
+## Seed the review board before handoff
+
+Zach, 2026-09-19: a board that opens blank makes him *"build the changes myself to
+see them"*. After a change to a host app's canvas behaviour — or to a trunk
+component that renders on one — the handoff carries a **seeded board**, not "open
+the app". Use the `bbox-review-board` skill (`skills/bbox-review-board/`, reached
+at `.claude/skills/`). It builds `<tldraw app>/review/<feature>.tldr`: the real
+objects at the interaction, numbered orange cue cards in tldraw's stock shapes and
+a green PASS WHEN card, made through the real app and then cold-reopened through
+the app's own Open, failing the build on a broken board.
+
+tldraw only today. **React Flow is still to be decided** — say "no seeded board for
+React Flow yet" and flag it; do not improvise a second annotation vocabulary.
+A board supplements the real-browser proof of the change and never replaces it.
+
 ## Isolated agent lanes — the two lines every one of them needs
 
 Zach reviews a long-running Storybook on **:5421**. A work-in-progress edit
