@@ -7,7 +7,7 @@
 // archive mounted its own toolbar in the same slot
 // (tests/test_stock_boundary.py:38, `Toolbar: SystemSketchFigmaToolbar`), so
 // replacing the Toolbar is a seam tldraw documents, not a fork of its chrome.
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ArrowShapeKindStyle,
   GeoShapeGeoStyle,
@@ -18,7 +18,7 @@ import {
   type TLUiToolsContextType,
 } from "tldraw";
 
-import { ToolDock, type FamilyDeclaration, type SimpleToolItem } from "@trunk/components/toolDock";
+import { ToolDock, type FamilyDeclaration, type LibrarySlotProps, type SimpleToolItem } from "@trunk/components/toolDock";
 import {
   arrowPresetForActivation,
   arrowPresetFromToolId,
@@ -232,6 +232,32 @@ export function SystemSketchDock() {
     onSelect: () => editor.setCurrentTool(tool.id),
   }));
 
+  /**
+   * The dock's trailing "+" (Zach's reference screenshot). `ToolDock` omits
+   * the cell entirely when `librarySlot` is `undefined` — "never a disabled
+   * row for a feature that does not exist" — so mounting it here is itself
+   * the honest claim that pressing it opens SOMETHING, even though this app
+   * has no shape/component library surface to open yet. WHY a placeholder
+   * popover rather than inventing one: a library (saved shapes, a symbol
+   * palette, importable blocks) is real, unbuilt product work with its own
+   * design questions, not a one-line stub this lane should improvise. The
+   * placeholder says exactly that instead of faking a feature — a future
+   * lane replaces `children` here with the real surface and this comment
+   * comes out.
+   */
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const librarySlot: LibrarySlotProps = {
+    title: "Library",
+    eyebrow: "Coming soon",
+    open: libraryOpen,
+    onOpenChange: setLibraryOpen,
+    children: (
+      <p className="text-muted-foreground text-sm">
+        Nothing here yet — SystemSketch has no saved-shape or component library surface to open.
+      </p>
+    ),
+  };
+
   return (
     // WHY the wrapper: tldraw's UI layer is `.tlui-layout { pointer-events:
     // none }` and every stock panel opts back IN through its own class
@@ -262,6 +288,7 @@ export function SystemSketchDock() {
         // it is currently SHOWING, off the same press that opens its popout.
         onArm={selectTool}
         onSelectItem={selectTool}
+        librarySlot={librarySlot}
         testIdPrefix="ss-dock"
       />
     </div>

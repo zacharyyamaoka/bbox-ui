@@ -1,16 +1,35 @@
-// src/chrome/statusStrip.tsx — the bottom-right cluster: the two panel
-// launchers and the zoom readout.
+// src/chrome/statusStrip.tsx — the bottom-right cluster: grid · frames ·
+// problems · zoom (a menu, flanked by optional zoom± buttons) · dev · help.
 //
 // `@trunk/components/statusStrip` takes a flat `StatusStripItem[]` plus one
 // `children` readout and stamps `data-slot="status-strip"`; the host decides
 // what the launchers ARE and what "active" means. This file is that decision
-// for SystemSketch: exactly two surfaces, because exactly two panels exist.
-import type { ReactNode } from "react";
-import { Code2, Frame } from "lucide-react";
+// for SystemSketch.
+//
+// WHY grid/help joined frames/problems/dev here (Zach, 2026-09-20, against
+// old SystemSketch's bottom-right strip screenshot: grid toggle · warning
+// triangle · zoom % · `</>` dev toggle · `?` help): this app already had
+// frames and problems, which the donor's strip did not — dropping either
+// would lose a surface this rebuild added on purpose. `items` is
+// `[grid, frames, problems, dev, help]`, and `StatusStrip` splits it around
+// the zoom readout at `Math.ceil(items.length / 2)` = 3, giving
+// `grid · frames · problems | zoom | dev · help` — 3 and 2. That keeps the
+// two PANEL launchers (frames, problems) adjacent to each other rather than
+// split across the zoom readout, and keeps grid (a canvas toggle, like the
+// donor's leading item) on the same side as them; dev and help stay
+// trailing, exactly the donor's own order for that pair.
+import { useMemo, useState, type ReactNode } from "react";
+import { CircleHelp, Code2, Frame, Grid3x3, Minus, Plus } from "lucide-react";
 import { useEditor, useValue } from "tldraw";
 
+import type { MenuAction, MenuGroupSpec } from "@trunk/components/appMenu";
+import { readAppearancePreferences } from "@trunk/components/appearancePreferences";
+import { Button } from "@trunk/components/button";
 import { ProblemsBadge } from "@trunk/components/problemsPanel";
 import { StatusStrip, type StatusStripItem } from "@trunk/components/statusStrip";
+
+import { useStockMenus } from "./stockMenus";
+import { ZoomMenu } from "./zoomMenu";
 
 /** Which right-hand panel is open. One at a time, or none. */
 export type ChromePanel = "frames" | "problems";
@@ -60,6 +79,64 @@ function idTag(testId: string, icon: ReactNode) {
   );
 }
 
+/** True for a plain row inside a `MenuGroupSpec`, false for a submenu entry
+ *  — `useStockMenus()`'s groups never nest a submenu under View ▸ or
+ *  Preferences ▸, but the type allows it, so this narrows honestly instead
+ *  of casting. */
+function isMenuAction(item: MenuGroupSpec["items"][number]): item is MenuAction {
+  return !("submenu" in item);
+}
+
+/** The `MenuAction` named `id`, wherever it lives inside `groups` — read by
+ *  id rather than by array position so a reordering inside `stockMenus.ts`
+ *  (which groups sit where) cannot silently break this file. `undefined`
+ *  when this build of tldraw does not ship the action, the same "a row for
+ *  an action that does not exist is a row that does nothing" rule
+ *  `stockMenus.ts`'s own `actionRow` documents. */
+function actionById(groups: readonly MenuGroupSpec[], id: string): MenuAction | undefined {
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (isMenuAction(item) && item.id === id) return item;
+    }
+  }
+  return undefined;
+}
+
+const ZOOM_ROW_IDS = ["zoom-in", "zoom-out", "zoom-to-100", "zoom-to-fit", "zoom-to-selection"] as const;
+
+/** The browser's own storage, or `null` when even touching it throws — the
+ *  same guard `appSettings.tsx`'s `viewerStorage` uses, for the same
+ *  reason (a blocked third-party context can throw on the PROPERTY access
+ *  itself, before any method is called). */
+function viewerStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Wires the ALREADY-EXISTING `showZoomButtons` appearance preference
+ * (`@trunk/components/appearancePreferences`, storage key
+ * `systemsketch.appearance.v1`) — shipped with a control in Settings ▸
+ * Appearance that, until now, nothing read. Read once at mount, exactly the
+ * shape `appSettings.tsx`'s `useAppSettings` already uses for this app's
+ * other settings: its own doc comment states the reasoning this hook
+ * inherits — a second window flipping a preference mid-session and silently
+ * changing this window's chrome under it is a worse failure than the reload
+ * it costs to pick the change up, and `settings.smoke.test.tsx` already
+ * proves every OTHER preference in this dialog that way ("survives a
+ * remount", never "propagates live"). This file does not import
+ * `appSettings.tsx` (outside this lane's write set) — `usePersistedRecord`'s
+ * read-once-at-mount shape is simply repeated here, one field, no write
+ * path needed on this side.
+ */
+function useShowZoomButtons(): boolean {
+  const [value] = useState(() => readAppearancePreferences(viewerStorage()).showZoomButtons);
+  return value;
+}
+
 export function SystemSketchStatusStrip({
   open,
   onToggle,
@@ -70,48 +147,119 @@ export function SystemSketchStatusStrip({
 }: SystemSketchStatusStripProps) {
   const editor = useEditor();
   const zoom = useValue("ss zoom", () => Math.round(editor.getZoomLevel() * 100), [editor]);
+  const showZoomButtons = useShowZoomButtons();
 
-  const items: StatusStripItem[] = [
-    {
-      id: "frames",
-      label: "Frames",
-      icon: idTag("ss-status-frames", <Frame className="size-4" aria-hidden="true" />),
-      active: open === "frames",
-      onSelect: () => onToggle("frames"),
-      controlsId: panelId,
-    },
-    {
-      id: "problems",
-      // The count belongs to the compound icon, not to `badge` — the kit
-      // splits those two on purpose (`StatusStripItem.badge`'s own doc).
-      label: problemCount === 1 ? "1 problem" : `${problemCount} problems`,
-      icon: idTag("ss-status-problems", <ProblemsBadge count={problemCount} />),
-      active: open === "problems",
-      onSelect: () => onToggle("problems"),
-      controlsId: panelId,
-    },
-    {
-      id: "dev",
-      label: "Dev",
-      icon: idTag("ss-status-dev", <Code2 className="size-4" aria-hidden="true" />),
-      active: devPanelOpen,
-      onSelect: onToggleDevPanel,
-      // No `controlsId`: the dev panel is a modal dialog, not an inline
-      // disclosure this button expands in place, so `aria-controls` /
-      // `aria-expanded` (which only fire when `controlsId` is set — this
-      // kit's own `StripButton`) would claim a relationship that is not
-      // there.
-    },
-  ];
+  // Reuses `useStockMenus()` — the same builder the burger's View ▸ and
+  // Preferences ▸ submenus render from — rather than a second `useActions()`
+  // subscription: one live read of tldraw's grid/zoom state, shared by every
+  // surface that shows it.
+  const stock = useStockMenus();
+  const gridAction = actionById(stock.preferences, "toggle-grid");
+  const zoomInAction = actionById(stock.view, "zoom-in");
+  const zoomOutAction = actionById(stock.view, "zoom-out");
+  const zoomRows = useMemo(
+    () => ZOOM_ROW_IDS.map((id) => actionById(stock.view, id)).filter((action): action is MenuAction => action !== undefined),
+    [stock.view],
+  );
+
+  // WHY named, individually-typed consts rather than one array literal with
+  // inline ternaries: TypeScript infers a chained `.filter`'s callback
+  // parameter from the LITERAL's own element type, not from a `const items:
+  // (StatusStripItem | null)[]` annotation on the final assignment — so an
+  // inline `cond ? {…} : null` array widens `icon` to the narrowest object
+  // shape it saw instead of `StatusStripItem`'s own `ReactNode`. Typing each
+  // row on its own `const` first is what makes every row genuinely a
+  // `StatusStripItem | null` before the array (and the filter) ever forms.
+  const gridItem: StatusStripItem | null = gridAction
+    ? {
+        id: "grid",
+        label: "Grid",
+        icon: idTag("ss-status-grid", <Grid3x3 className="size-4" aria-hidden="true" />),
+        active: gridAction.checked === true,
+        onSelect: gridAction.run,
+      }
+    : null;
+  const framesItem: StatusStripItem = {
+    id: "frames",
+    label: "Frames",
+    icon: idTag("ss-status-frames", <Frame className="size-4" aria-hidden="true" />),
+    active: open === "frames",
+    onSelect: () => onToggle("frames"),
+    controlsId: panelId,
+  };
+  const problemsItem: StatusStripItem = {
+    id: "problems",
+    // The count belongs to the compound icon, not to `badge` — the kit
+    // splits those two on purpose (`StatusStripItem.badge`'s own doc).
+    label: problemCount === 1 ? "1 problem" : `${problemCount} problems`,
+    icon: idTag("ss-status-problems", <ProblemsBadge count={problemCount} />),
+    active: open === "problems",
+    onSelect: () => onToggle("problems"),
+    controlsId: panelId,
+  };
+  const devItem: StatusStripItem = {
+    id: "dev",
+    label: "Dev",
+    icon: idTag("ss-status-dev", <Code2 className="size-4" aria-hidden="true" />),
+    active: devPanelOpen,
+    onSelect: onToggleDevPanel,
+    // No `controlsId`: the dev panel is a modal dialog, not an inline
+    // disclosure this button expands in place, so `aria-controls` /
+    // `aria-expanded` (which only fire when `controlsId` is set — this
+    // kit's own `StripButton`) would claim a relationship that is not
+    // there.
+  };
+  const helpItem: StatusStripItem | null = stock.openKeyboardShortcuts
+    ? {
+        id: "help",
+        label: "Keyboard shortcuts",
+        icon: idTag("ss-status-help", <CircleHelp className="size-4" aria-hidden="true" />),
+        onSelect: stock.openKeyboardShortcuts,
+        // No `active`/`controlsId` either: same reasoning as `dev` above,
+        // one step further — this one doesn't even toggle a panel this
+        // component owns, it opens tldraw's own dialog.
+      }
+    : null;
+  const items: StatusStripItem[] = [gridItem, framesItem, problemsItem, devItem, helpItem].filter(
+    (item): item is StatusStripItem => item !== null,
+  );
 
   return (
     <StatusStrip items={items}>
-      {/* The readout slot. A zoom MENU is stock tldraw's `ZoomMenu`, which
-          this app leaves mounted nowhere — the dock owns tools, the pill owns
-          the selection, and the camera is driven by the frames panel and the
-          usual gestures. So this is a readout, honestly labelled, and not a
-          trigger dressed up as one. */}
-      <span aria-label={`Zoom ${zoom} percent`}>{zoom}%</span>
+      {/* The readout slot. Zach, 2026-09-20, reversing the prior "no zoom
+          menu" decision recorded here (see the file header): the % is now a
+          menu trigger (`ZoomMenu`, built from `stockMenus.ts`'s own
+          `view-zoom` rows), optionally flanked by zoom−/zoom+ buttons when
+          `showZoomButtons` is on — the appearance preference Settings ▸
+          Appearance already exposed a control for, that nothing read until
+          this file. */}
+      <span className="flex items-center gap-0.5">
+        {showZoomButtons && zoomOutAction ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Zoom out"
+            title="Zoom out"
+            data-testid="ss-status-zoom-out"
+            onClick={() => zoomOutAction.run()}
+          >
+            <Minus aria-hidden="true" />
+          </Button>
+        ) : null}
+        <ZoomMenu rows={zoomRows} zoom={zoom} />
+        {showZoomButtons && zoomInAction ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Zoom in"
+            title="Zoom in"
+            data-testid="ss-status-zoom-in"
+            onClick={() => zoomInAction.run()}
+          >
+            <Plus aria-hidden="true" />
+          </Button>
+        ) : null}
+      </span>
     </StatusStrip>
   );
 }
