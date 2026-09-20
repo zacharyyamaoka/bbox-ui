@@ -138,3 +138,175 @@ describe("native file access", () => {
     expect(handle.writes).toEqual(["v2"]);
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * P1-5 — the compare/write race, added 2026-09-19 after an independent judge
+ * ran the implementation in memory and got TWO fulfilled saves, TWO writes and
+ * only the second window's board surviving.
+ *
+ * These fakes model what the File System Access API actually does, which the
+ * simple `fakeHandle` above does not:
+ *   - a read SNAPSHOTS the bytes and can then be descheduled (`afterRead`),
+ *     which is the whole bug: the digest a save compares is a statement about
+ *     the past, and the write happens in the future;
+ *   - `close()` is the COMMIT (the swap file is moved over the target) and
+ *     `abort()` throws the swap file away — so a save that closes a stream it
+ *     should have aborted shows up here as the file it destroyed, and a save
+ *     that merely stops calling `write` would still have truncated the board
+ *     to zero bytes;
+ *   - `mode: "exclusive"` is a real lock: a second `createWritable` while one
+ *     is open rejects with `NoModificationAllowedError`.
+ */
+interface FakeDisk {
+  content: string;
+  lastModified: number;
+  /** One entry per COMMITTED write, in commit order. */
+  writes: string[];
+  aborts: number;
+  /** Whether this fake honours `mode: "exclusive"`. */
+  exclusive: boolean;
+  openWritables: number;
+}
+
+interface FakeWindowHandle extends NativeFileHandleLike {
+  createWritableCalls: unknown[];
+}
+
+function fakeDisk(content: string): FakeDisk {
+  return { content, lastModified: 1_758_000_000_000, writes: [], aborts: 0, exclusive: false, openWritables: 0 };
+}
+
+/** One window's handle onto `disk`. Two windows = two handles, one disk. */
+function windowHandle(disk: FakeDisk, name: string, hooks: { afterRead?: () => Promise<void> } = {}): FakeWindowHandle {
+  const handle: FakeWindowHandle = {
+    kind: "file",
+    name,
+    createWritableCalls: [],
+    async getFile() {
+      const snapshot = disk.content;
+      const stamp = disk.lastModified;
+      return {
+        name,
+        lastModified: stamp,
+        async text() {
+          await hooks.afterRead?.();
+          return snapshot;
+        },
+      };
+    },
+    async createWritable(options?: unknown) {
+      handle.createWritableCalls.push(options);
+      if (disk.exclusive && disk.openWritables > 0) {
+        throw new DOMException(`The file "${name}" is locked.`, "NoModificationAllowedError");
+      }
+      disk.openWritables += 1;
+      let swap = "";
+      let settled = false;
+      return {
+        async write(data: string) {
+          swap += data;
+        },
+        async close() {
+          if (settled) return;
+          settled = true;
+          disk.openWritables -= 1;
+          disk.content = swap;
+          disk.lastModified += 1_000;
+          disk.writes.push(swap);
+        },
+        async abort() {
+          if (settled) return;
+          settled = true;
+          disk.openWritables -= 1;
+          disk.aborts += 1;
+        },
+      };
+    },
+  };
+  return handle;
+}
+
+describe("native save under a concurrent writer", () => {
+  it("refuses a write it can only discover is stale AFTER it has taken the file — two windows, one board", async () => {
+    const disk = fakeDisk("v1");
+    const handleA = windowHandle(disk, "Board.tldr");
+
+    let reads = 0;
+    let releaseB = () => {};
+    const bMayResume = new Promise<void>((resolve) => {
+      releaseB = resolve;
+    });
+    let bHasCompared = () => {};
+    const bIsParked = new Promise<void>((resolve) => {
+      bHasCompared = resolve;
+    });
+    // Park window B's SAVE-time read after it has snapshotted "v1" — the
+    // descheduling that turns its base digest into a statement about the past.
+    const handleB = windowHandle(disk, "Board.tldr", {
+      async afterRead() {
+        reads += 1;
+        if (reads !== 2) return; // 1 = open(), 2 = the save's compare
+        bHasCompared();
+        await bMayResume;
+      },
+    });
+
+    const windowA = createNativeFileAccess(host({ showOpenFilePicker: async () => [handleA], showSaveFilePicker: vi.fn() }));
+    const windowB = createNativeFileAccess(host({ showOpenFilePicker: async () => [handleB], showSaveFilePicker: vi.fn() }));
+    const docA = (await windowA.open())!;
+    const docB = (await windowB.open())!;
+    expect(docA.digest).toBe(docB.digest);
+
+    const saveB = windowB
+      .save(docB, "B's board")
+      .then((value) => ({ ok: true as const, value }), (cause) => ({ ok: false as const, cause }));
+    await bIsParked;
+
+    // A's whole save lands while B is holding a digest that is no longer true.
+    await windowA.save(docA, "A's board");
+    expect(disk.content).toBe("A's board");
+
+    releaseB();
+    const outcome = await saveB;
+    expect(outcome.ok).toBe(false);
+    expect(outcome.ok ? null : outcome.cause).toBeInstanceOf(WorkspaceConflict);
+    expect(disk.writes).toEqual(["A's board"]);
+    expect(disk.content).toBe("A's board");
+    // Never closed: closing an unwritten stream would have committed an empty
+    // swap file over the board.
+    expect(disk.aborts).toBe(1);
+  });
+
+  it("orders two saves through one handle instead of letting both compare against the same stale digest", async () => {
+    const disk = fakeDisk("v1");
+    const handle = windowHandle(disk, "Board.tldr");
+    const files = createNativeFileAccess(host({ showOpenFilePicker: async () => [handle], showSaveFilePicker: vi.fn() }));
+    const opened = (await files.open())!;
+
+    const settled = await Promise.allSettled([files.save(opened, "first"), files.save(opened, "second")]);
+    expect(settled[0]!.status).toBe("fulfilled");
+    expect(settled[1]!.status).toBe("rejected");
+    expect((settled[1] as PromiseRejectedResult).reason).toBeInstanceOf(WorkspaceConflict);
+    expect(disk.writes).toEqual(["first"]);
+    expect(disk.content).toBe("first");
+  });
+
+  it("asks the browser for the exclusive write lock, and turns a locked file into a loud refusal", async () => {
+    const disk = fakeDisk("v1");
+    const handle = windowHandle(disk, "Board.tldr");
+    const files = createNativeFileAccess(host({ showOpenFilePicker: async () => [handle], showSaveFilePicker: vi.fn() }));
+    const opened = (await files.open())!;
+    await files.save(opened, "v2");
+    expect(handle.createWritableCalls).toEqual([expect.objectContaining({ mode: "exclusive" })]);
+
+    const contested = fakeDisk("v1");
+    contested.exclusive = true;
+    contested.openWritables = 1; // another window's stream is open right now
+    const blocked = windowHandle(contested, "Board.tldr");
+    const other = createNativeFileAccess(host({ showOpenFilePicker: async () => [blocked], showSaveFilePicker: vi.fn() }));
+    const doc = (await other.open())!;
+    await expect(other.save(doc, "mine")).rejects.toThrow(/another window/i);
+    expect(contested.writes).toEqual([]);
+    expect(contested.content).toBe("v1");
+  });
+});

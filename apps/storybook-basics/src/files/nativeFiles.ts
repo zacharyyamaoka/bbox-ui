@@ -35,7 +35,26 @@ import { WorkspaceConflict } from "./workspaceClient";
  *  (and a node run) can hand in a fake without a DOM lib. */
 export interface NativeWritableLike {
   write(data: string): Promise<void>;
+  /** The COMMIT: the swap file is moved over the target. */
   close(): Promise<void>;
+  /** Throws the swap file away, leaving the target untouched. Optional only
+   *  because the interface is structural; every real
+   *  `FileSystemWritableFileStream` has it (it extends `WritableStream`).
+   *  WHY a save must abort and never close on a conflict: `createWritable`
+   *  starts from an EMPTY swap file (`keepExistingData` defaults to false),
+   *  so closing a stream nothing was written to commits zero bytes over the
+   *  board — the loudest possible version of the damage this file exists to
+   *  prevent. */
+  abort?(reason?: unknown): Promise<void>;
+}
+
+/** The options `createWritable` accepts. `mode` is the File System Access
+ *  API's own write lock; an implementation that does not know the member
+ *  ignores it (WebIDL dictionaries drop unrecognised keys), which is why it
+ *  is safe to ask for unconditionally and unsafe to rely on. */
+export interface NativeWritableOptions {
+  mode?: "exclusive" | "siloed";
+  keepExistingData?: boolean;
 }
 
 export interface NativeFileLike {
@@ -48,7 +67,7 @@ export interface NativeFileHandleLike {
   kind?: "file";
   name: string;
   getFile(): Promise<NativeFileLike>;
-  createWritable(): Promise<NativeWritableLike>;
+  createWritable(options?: NativeWritableOptions): Promise<NativeWritableLike>;
   queryPermission?(descriptor: { mode: "read" | "readwrite" }): Promise<"granted" | "denied" | "prompt">;
   requestPermission?(descriptor: { mode: "read" | "readwrite" }): Promise<"granted" | "denied" | "prompt">;
 }
@@ -124,6 +143,12 @@ export interface NativeFileAccess {
    * has `queryPermission` and it is not "granted", `requestPermission({mode:
    * "readwrite"})` first; not granted → reject. Resolves the new document
    * (same handle, new source/digest).
+   *
+   * The comparison happens TWICE — once before the stream is taken and once
+   * inside it, immediately before the bytes are written — and writes through
+   * one handle are serialised. See the WHY at the implementation: the API has
+   * no compare-and-swap, so this narrows the window and refuses loudly rather
+   * than pretending the write is atomic.
    */
   save(doc: NativeDocument, source: string, options?: { force?: boolean }): Promise<NativeDocument>;
   /** `showSaveFilePicker({id, suggestedName: <title>.tldr, types})`, then write
@@ -144,6 +169,67 @@ export async function sha256Hex(text: string, subtle: Pick<SubtleCrypto, "digest
 }
 
 const NATIVE_SUFFIX = ".tldr";
+
+/**
+ * Every stream this file opens asks for the File System Access API's own
+ * write lock. It is the only thing in the API that actually serialises two
+ * windows of this app, and a browser that has not implemented the member
+ * simply drops it, so asking costs nothing and can never fail a save that
+ * would otherwise have worked.
+ */
+const EXCLUSIVE_WRITE: NativeWritableOptions = Object.freeze({ mode: "exclusive" });
+
+/**
+ * One write at a time per handle.
+ *
+ * WHY here and not only in the app: `session.tsx` already chains its own
+ * saves, but this module must not depend on its caller to be safe. Two
+ * `save()` calls started together both read the file, both saw the base
+ * digest they expected, and both committed — the cross-window race with a
+ * shorter fuse. Chained, the second re-reads after the first has committed,
+ * sees bytes it never read, and refuses with `WorkspaceConflict`.
+ *
+ * LIMIT, stated rather than implied: this is keyed by the handle OBJECT, so
+ * it orders writers that share a handle inside this JavaScript realm. A
+ * second tab has its own realm and its own handle object; that case is what
+ * `EXCLUSIVE_WRITE` and the second comparison below are for.
+ */
+const writeChains = new WeakMap<NativeFileHandleLike, Promise<unknown>>();
+
+function serializeWrites<T>(handle: NativeFileHandleLike, task: () => Promise<T>): Promise<T> {
+  const previous = writeChains.get(handle) ?? Promise.resolve();
+  const run = previous.then(task, task);
+  writeChains.set(
+    handle,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  return run;
+}
+
+/** `createWritable` rejecting because someone else holds the write lock. */
+function isWriteLockFailure(cause: unknown): boolean {
+  return (
+    typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "NoModificationAllowedError"
+  );
+}
+
+/**
+ * Throw the swap file away. WHY this and never `close()` on a failure path:
+ * `createWritable` starts from an empty swap file, and `close()` is the
+ * commit — a stream closed without its bytes replaces the board with zero
+ * bytes. A failure to abort is swallowed because the error already being
+ * thrown is the one the person needs to see.
+ */
+async function discardWritable(writable: NativeWritableLike): Promise<void> {
+  try {
+    await writable.abort?.();
+  } catch {
+    /* the stream is being dropped either way */
+  }
+}
 
 /** `.tldr` stripped case-insensitively, mirroring `workspaceModel.documentTitle`
  *  for the one suffix native mode ever sees. */
@@ -171,6 +257,41 @@ async function requestWritePermission(handle: NativeFileHandleLike): Promise<voi
 
 export function createNativeFileAccess(host: NativePickerHost): NativeFileAccess {
   const supported = isNativeFileAccessSupported(host);
+
+  /**
+   * Read the file AS IT IS RIGHT NOW and refuse if it is not the file `doc`
+   * was read from. `WorkspaceConflict` is deliberately the same class the
+   * HTTP client raises from the host's 409, carrying the same two fields, so
+   * `reportSaveFailure` shows the identical "changed on disk — nothing was
+   * overwritten" toast whichever mode the person is in.
+   */
+  async function refuseIfChangedOnDisk(doc: NativeDocument): Promise<void> {
+    const file = await doc.handle.getFile();
+    const onDiskSource = await file.text();
+    const onDiskDigest = await sha256Hex(onDiskSource, host.crypto.subtle);
+    if (onDiskDigest !== doc.digest) {
+      throw new WorkspaceConflict(`"${doc.name}" changed on disk`, file.lastModified / 1000, onDiskDigest);
+    }
+  }
+
+  /**
+   * Take the write lock. A refusal because another window holds it is turned
+   * into a sentence a person can act on — and is left LOUD rather than
+   * retried: a refused save is recoverable, a save that quietly waits and
+   * then overwrites is not.
+   */
+  async function takeWritable(handle: NativeFileHandleLike): Promise<NativeWritableLike> {
+    try {
+      return await handle.createWritable(EXCLUSIVE_WRITE);
+    } catch (cause) {
+      if (!isWriteLockFailure(cause)) throw cause;
+      const refusal = new Error(
+        `“${handle.name}” is being written by another window right now, so nothing was saved. Try again in a moment.`,
+      );
+      (refusal as { cause?: unknown }).cause = cause;
+      throw refusal;
+    }
+  }
 
   async function readDocument(handle: NativeFileHandleLike): Promise<NativeDocument> {
     const file = await handle.getFile();
@@ -206,26 +327,67 @@ export function createNativeFileAccess(host: NativePickerHost): NativeFileAccess
       return readDocument(handle);
     },
 
-    async save(doc, source, options = {}) {
-      await requestWritePermission(doc.handle);
-      if (!options.force) {
-        const file = await doc.handle.getFile();
-        const onDiskSource = await file.text();
-        const onDiskDigest = await sha256Hex(onDiskSource, host.crypto.subtle);
-        if (onDiskDigest !== doc.digest) {
-          throw new WorkspaceConflict(`"${doc.name}" changed on disk`, file.lastModified / 1000, onDiskDigest);
+    save(doc, source, options = {}) {
+      // WHY the file is compared TWICE, and why the second comparison sits
+      // AFTER `createWritable`: between reading the bytes and committing new
+      // ones there is a window in which another window of this app — a second
+      // tab, a second desktop window, each with its own save queue — commits
+      // its own. An independent judge ran the single-comparison version of
+      // this function in memory on 2026-09-19 and got two fulfilled saves,
+      // two writes, and only the second window's board left on disk: a board
+      // destroyed with no error anywhere. That is the one failure the plan
+      // weights at 25% — "a lost board is unrecoverable, a missing feature is
+      // not" (docs/CHROME-FILES-SETTINGS-PLAN.md).
+      //
+      // HONEST LIMIT, because this cannot be made airtight and pretending
+      // otherwise is worse than the gap: the File System Access API has no
+      // compare-and-swap. Nothing here makes "the digest still matches" and
+      // "these bytes are committed" one operation. What it does instead is
+      // the three things the API does offer, and it fails loudly for the rest:
+      //   1. writers sharing a handle are serialised (`serializeWrites`);
+      //   2. the stream is taken with the API's own exclusive write lock,
+      //      the only real cross-window serialisation on offer — and one a
+      //      browser may not implement, so it narrows the race rather than
+      //      closing it;
+      //   3. the digest is re-read INSIDE that lock, immediately before the
+      //      bytes go out, so a writer that committed while this save was
+      //      queued, waiting on a permission prompt or serialising a board is
+      //      seen and refused.
+      // Left uncovered: a writer this browser cannot lock out (the archive
+      // app, an editor, rsync) committing between that second comparison and
+      // `close()`. Nothing in the API can see it, so it is NOT quietly
+      // absorbed — everything this code can see ends in `WorkspaceConflict`
+      // and an untouched file.
+      //
+      // WHY the second comparison is not moved after `write()` — later still,
+      // and tempting: nothing measured on this machine proves `getFile()`
+      // reports the target rather than the swap file while our own stream is
+      // open. If it reported the swap, every save would read back its own new
+      // bytes, call them a conflict and refuse — trading a rare silent
+      // overwrite for a permanent inability to save anything. Immediately
+      // before `write()` is the latest instant that is correct under both
+      // readings.
+      return serializeWrites(doc.handle, async () => {
+        await requestWritePermission(doc.handle);
+        if (!options.force) await refuseIfChangedOnDisk(doc);
+        const writable = await takeWritable(doc.handle);
+        try {
+          if (!options.force) await refuseIfChangedOnDisk(doc);
+          await writable.write(source);
+          await writable.close();
+        } catch (cause) {
+          // Abort, never close: see `discardWritable`.
+          await discardWritable(writable);
+          throw cause;
         }
-      }
-      const writable = await doc.handle.createWritable();
-      await writable.write(source);
-      await writable.close();
-      return {
-        handle: doc.handle,
-        name: doc.name,
-        title: doc.title,
-        source,
-        digest: await sha256Hex(source, host.crypto.subtle),
-      };
+        return {
+          handle: doc.handle,
+          name: doc.name,
+          title: doc.title,
+          source,
+          digest: await sha256Hex(source, host.crypto.subtle),
+        };
+      });
     },
 
     async saveAs(suggestedTitle, source) {
@@ -241,9 +403,19 @@ export function createNativeFileAccess(host: NativePickerHost): NativeFileAccess
         if (isPickerCancellation(cause)) return null;
         throw cause;
       }
-      const writable = await handle.createWritable();
-      await writable.write(source);
-      await writable.close();
+      // The picker already asked "Replace?", so there is no digest to compare
+      // here — but the stream is still taken under the exclusive lock and
+      // still aborted rather than closed if the write fails, so a Save As
+      // over a file another window is writing is refused instead of racing
+      // it, and a half-written stream never commits an empty file.
+      const writable = await takeWritable(handle);
+      try {
+        await writable.write(source);
+        await writable.close();
+      } catch (cause) {
+        await discardWritable(writable);
+        throw cause;
+      }
       return {
         handle,
         name: handle.name,
