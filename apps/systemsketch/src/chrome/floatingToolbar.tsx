@@ -34,6 +34,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@trunk/components/toggle-group";
 import { ToolbarButton, ToolbarSeparator } from "@trunk/components/toolbar";
 
+import { ArrangeCluster, FocusButton, OpacityCluster, StyleCluster } from "./selectionClusters";
 import type { CodeLanguage } from "../shapes/code";
 import {
   BLOCK_VIEWS,
@@ -284,7 +285,25 @@ export function FloatingSelectionToolbar() {
         </DropdownMenu>
       ) : null}
 
+      {/* The tldraw style bar. It renders ONLY for a selection made entirely
+          of tldraw's own shapes, so it can never appear beside the block-view
+          toggle above — a selection is one or the other, never both. The two
+          rows above and this one are therefore mutually exclusive by
+          construction rather than by an `else`. */}
+      <StyleCluster />
+
       {subject.blockView !== null || subject.codeLanguage !== null ? <ToolbarSeparator /> : null}
+
+      {/* Arrange, opacity and Focus are TRUE OF EVERY SHAPE — a Block, a Code
+          cell, a geo box, a mixed bag of all three — so unlike the rows above
+          they carry no `subject` condition at all. Each one hides itself when
+          the selection cannot use it (`arrangeGroupsFor(0)` is empty; opacity
+          and Focus need something selected). */}
+      <ArrangeCluster />
+      <OpacityCluster />
+      <FocusButton />
+
+      <ToolbarSeparator />
 
       <ToolbarButton
         data-testid="ss-selection-duplicate"
