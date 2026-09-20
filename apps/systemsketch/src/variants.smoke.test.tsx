@@ -7,7 +7,8 @@
 // is never gated behind a URL flag — a temporary drop-down in the app's
 // bottom-right corner switches variants live and REMEMBERS the choice. The
 // variants are the `ports` lane's five port styles and the `regions` lane's
-// five region drawings; the switch writes the two contract attributes on
+// region drawings (five, plus the three Zach picked out of the babble
+// gallery on 2026-09-19); the switch writes the two contract attributes on
 // `<html>` (`data-bbox-port-variant` / `data-bbox-region-variant`) and the two
 // storage keys `bbox.portVariant` / `bbox.regionVariant`.
 //
@@ -15,7 +16,7 @@
 // style, the editor's own geometry) — never DOM presence alone:
 //   (a) where the switch sits: bottom-right, beside the zoom cluster, clear of
 //       the canvas centre and of the dock, hit-testable; v1/v1 by default;
-//       every option is one of the five, titled from the variant tables.
+//       every option is one of the table's ids, titled from the variant tables.
 //   (b) port v3 is applied LIVE (attribute, storage, the dot's measured box)
 //       and survives a reload.
 //   (c) region v2's header rule appears under the corner card, measured.
@@ -223,20 +224,26 @@ describe("app-variant-switch (a) — a bottom-right pill beside the zoom cluster
     expect(document.documentElement.dataset.bboxPortVariant ?? "v1").toBe("v1");
     expect(document.documentElement.dataset.bboxRegionVariant ?? "v1").toBe("v1");
 
-    // Each menu offers exactly the five, titled from the variant tables.
+    // Each menu offers exactly the table's ids, titled from the variant
+    // tables. COUNT DERIVED, NOT SPELLED (2026-09-19): the two tables no
+    // longer have the same length — regions gained v6/v7/v8 — and a literal
+    // 5 here would have failed for the right reason but told the wrong
+    // story. Reading the length off the table the menu is built from makes
+    // this strictly stronger: it can never pass while the menu is short.
     for (const which of ["port", "region"] as const) {
+      const ids = which === "port" ? PORT_VARIANT_IDS : REGION_VARIANT_IDS;
       await userEvent.click(trigger(which)!);
       const rows = await waitFor(() => {
         const found = Array.from(document.querySelectorAll<HTMLElement>(`[data-testid^="ss-variant-${which}-v"]`));
-        return found.length === 5 ? found : null;
-      }, { what: `five ${which} rows` });
-      expect(rows.map((row) => row.getAttribute("data-testid"))).toEqual(
-        (which === "port" ? PORT_VARIANT_IDS : REGION_VARIANT_IDS).map((id) => `ss-variant-${which}-${id}`),
-      );
+        return found.length === ids.length ? found : null;
+      }, { what: `${ids.length} ${which} rows` });
+      expect(rows.map((row) => row.getAttribute("data-testid"))).toEqual(ids.map((id) => `ss-variant-${which}-${id}`));
       rows.forEach((row, index) => {
-        const id = (which === "port" ? PORT_VARIANT_IDS : REGION_VARIANT_IDS)[index];
-        const title = which === "port" ? PORT_VARIANTS[id].title : REGION_VARIANTS[id].title;
-        expect(row.textContent ?? "", `${which} ${id} row names its title`).toContain(title);
+        // The two tables are indexed separately so each keeps its own id
+        // union — `ids[index]` is the widened union of both and can no
+        // longer index either table now that they differ in length.
+        const title = which === "port" ? PORT_VARIANTS[PORT_VARIANT_IDS[index]].title : REGION_VARIANTS[REGION_VARIANT_IDS[index]].title;
+        expect(row.textContent ?? "", `${which} ${ids[index]} row names its title`).toContain(title);
       });
       await userEvent.keyboard("{Escape}");
       await waitFor(() => (document.querySelector(`[data-testid^="ss-variant-${which}-v"]`) ? null : true), { what: `${which} menu closed` });
@@ -336,7 +343,10 @@ describe("app-variant-switch (d) — the app's region geometry follows the drawi
       const armBands = bands.slice(1);
       expect(armBands, `${variant}: tldraw's arm header bands`).toEqual([REGION_VARIANTS[variant].arms.headerPx, REGION_VARIANTS[variant].arms.headerPx]);
     }
-    expect(window.localStorage.getItem(REGION_STORAGE_KEY)).toBe("v5");
+    // The loop above ends on the table's LAST id — derived for the same
+    // reason as the row count just above, not because the assertion got
+    // softer: it still pins the exact remembered value.
+    expect(window.localStorage.getItem(REGION_STORAGE_KEY)).toBe(REGION_VARIANT_IDS[REGION_VARIANT_IDS.length - 1]);
   });
 });
 

@@ -1,10 +1,13 @@
-// src/skin/regionVariants.ts — five DRAWINGS of the one Region component,
+// src/skin/regionVariants.ts — EIGHT DRAWINGS of the one Region component,
 // as a typed spec and one attribute. The contract the dispatcher spelled
 // out in docs/ASK-2026-09-19-PORTS-EDGES-REGIONS-FEEDBACK.md ("Contracts"),
 // owned by lane `regions`:
 //
 //   • `REGION_VARIANTS: Record<RegionVariantId, RegionVariant>`, ids
-//     `v1`..`v5`, `v1` the default so ignoring is free.
+//     `v1`..`v8`, `v1` the default so ignoring is free. `v1`-`v5` are the
+//     original five; `v6`-`v8` are the three Zach picked out of the
+//     2026-09-19 babble gallery, added rather than substituted because he
+//     is still comparing them against the first five (see their block).
 //   • The variant in force is read from `data-bbox-region-variant` — on
 //     `document.documentElement` for an app (`dataset.bboxRegionVariant`),
 //     or on ANY nearer ancestor for a gallery that shows several at once.
@@ -39,11 +42,11 @@
 // drifting.
 //
 // NO DASHED FRAME: `frame.dash` exists in the contract's shape and is left
-// undefined on all five on purpose — the dashed `ss-region` placeholder in
+// undefined on all eight on purpose — the dashed `ss-region` placeholder in
 // `Pasted image 20260919114919.png` is part of what Zach called "very
 // unprofessional", so a dashed proposal would be proposing the complaint.
 
-export const REGION_VARIANT_IDS = ["v1", "v2", "v3", "v4", "v5"] as const;
+export const REGION_VARIANT_IDS = ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"] as const;
 export type RegionVariantId = (typeof REGION_VARIANT_IDS)[number];
 
 export const DEFAULT_REGION_VARIANT: RegionVariantId = "v1";
@@ -80,8 +83,13 @@ export interface RegionVariant {
   arms: {
     /** How an arm's header row is marked. The contract named
      *  `rule | band | none`; `indent` (a code-style guide) and `card` (an
-     *  inset card) are this lane's two additions, each a whole drawing. */
-    header: "none" | "rule" | "band" | "indent" | "card";
+     *  inset card) are this lane's two additions, each a whole drawing.
+     *  `outline` and `edge` came out of the 2026-09-19 babble gallery
+     *  (`reports/media/branch-arm-drawings-2026-09-19.html`), where Zach
+     *  picked three of five: `outline` is `card` with the fill taken out,
+     *  `edge` is that outline run to the frame's own side lines, and his
+     *  third pick needs no new kind at all — it is `none` (see `v8`). */
+    header: "none" | "rule" | "band" | "indent" | "card" | "outline" | "edge";
     /** A hairline between consecutive rows (never above the first). */
     divider: boolean;
     /** The header row's height, px — fed to `regionLayout`. */
@@ -149,6 +157,62 @@ export const REGION_VARIANTS: Record<RegionVariantId, RegionVariant> = {
     corner: { integration: "flush" },
     arms: { header: "card", divider: false, headerPx: 30, chevron: "always" },
     nested: { contrast: "deepen" },
+    opaque: { card: "stock" },
+  },
+
+  // ── THE THREE DRAWINGS ZACH PICKED, 2026-09-19 ────────────────────────
+  // He named them "v1 v2 v3", meaning the BABBLE GALLERY's numbering
+  // (`reports/media/branch-arm-drawings-2026-09-19.html`), not this table's.
+  // They land here as v6/v7/v8 so v1-v5 stay exactly as he has been
+  // comparing them, and each carries the gallery's own NAME as its title so
+  // the two numberings can never be confused again:
+  //
+  //     gallery V1 "Transparent Card" → v6      gallery V3 "Top Rule" → v8
+  //     gallery V2 "Edge Card"        → v7
+  //
+  // THE PRINCIPLE ALL THREE SERVE (Zach, 2026-09-19): "control flow is not
+  // a card!" Every value below is subtractive — each drawing spends LESS
+  // ink on the arm than v5 does, and none of them gives an arm a background.
+  //
+  // WHY all three share v5's 30px header, its frame and its type rather
+  // than each carrying the gallery mock's own 26px: the point of shipping
+  // three at once is that he can flip the pill and see ONLY the arm
+  // drawing change. A different header height per drawing moves every row
+  // and every frame's hug on each flip, which reads as three different
+  // layouts rather than three different drawings of one layout.
+  //
+  // WHY the title tokens stay `initial` on all three: none of the three
+  // theses is about type, and an unset inherited token means "the Bar's own
+  // text" (this file's note on `initial`). A drawing changes what it claims
+  // to change.
+  v6: {
+    id: "v6",
+    title: "Transparent card",
+    blurb: "Gallery V1. v5's inset card with the fill taken out — a Block-shaped outline you can see the board straight through.",
+    frame: { stroke: "var(--border)", fill: "transparent", radius: "var(--radius-lg)" },
+    corner: { integration: "flush" },
+    arms: { header: "outline", divider: false, headerPx: 30, chevron: "always" },
+    nested: { contrast: "none" },
+    opaque: { card: "stock" },
+  },
+  v7: {
+    id: "v7",
+    title: "Edge card",
+    blurb: "Gallery V2. The same outline run edge to edge: top and bottom strokes only, so no side line ever doubles against the frame's.",
+    frame: { stroke: "var(--border)", fill: "transparent", radius: "var(--radius-lg)" },
+    corner: { integration: "flush" },
+    arms: { header: "edge", divider: false, headerPx: 30, chevron: "always" },
+    nested: { contrast: "none" },
+    opaque: { card: "stock" },
+  },
+  v8: {
+    id: "v8",
+    title: "Top rule",
+    blurb: "Gallery V3. One line above each arm after the first and nothing else — no body outline, no header rule. The least ink that still says \u201ctwo arms\u201d.",
+    frame: { stroke: "var(--border)", fill: "transparent", radius: "var(--radius-lg)" },
+    corner: { integration: "flush" },
+    arms: { header: "none", divider: true, headerPx: 30, chevron: "always" },
+    nested: { contrast: "none" },
     opaque: { card: "stock" },
   },
 };

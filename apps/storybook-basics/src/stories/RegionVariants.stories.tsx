@@ -1,5 +1,5 @@
 /**
- * Control Flow/Region Variants — five region DRAWINGS over one region
+ * Control Flow/Region Variants — the region DRAWINGS over one region
  * component, switched by an attribute, measured per variant
  * (docs/ASK-2026-09-19-PORTS-EDGES-REGIONS-FEEDBACK.md, lane `regions`).
  *
@@ -27,11 +27,12 @@
  *      the lane-A helper, unchanged) and fold with the chevron;
  *   5. the variant's own paint claim reached the browser (v2's full-width
  *      header RULE, v3's tinted band, v4's open right/bottom, v5's arm cards
- *      and nested contrast) — each read back off computed style;
- *   6. across the gallery, the five drawings are pairwise DISTINCT on a
- *      measured signature, and the opaque card is byte-identical in all
- *      five (its paint is the host's `Block`, deliberately not a variant
- *      axis).
+ *      and nested contrast, v6's UNFILLED inset outline, v7's side-stroke-free
+ *      edge card) — each read back off computed style;
+ *   6. across the gallery, the drawings are pairwise DISTINCT on a
+ *      measured signature, and the opaque card is byte-identical in every
+ *      one of them (its paint is the host's `Block`, deliberately not a
+ *      variant axis).
  *
  * The switch is `data-bbox-region-variant` on ANY ancestor — the contract
  * names `document.documentElement.dataset.bboxRegionVariant` for an app
@@ -45,6 +46,14 @@
  * `SwitchOnAncestor` flips a wrapper through React state while the region
  * bails out of the re-render (the Storybook-global shape), and
  * `SwitchOnAncestorDom` writes the wrapper's attribute directly.
+ * 2026-09-19, second round: Zach picked three of the five drawings in the
+ * babble gallery (`reports/media/branch-arm-drawings-2026-09-19.html`) and
+ * asked for them for real. They join the table as `v6`/`v7`/`v8` — the
+ * gallery numbered them V1/V2/V3, so each keeps the gallery's NAME as its
+ * title and `skin/regionVariants.ts` carries the mapping. Two new arm
+ * `header` kinds came with them (`outline`, `edge`); the third pick needed
+ * none, and why is worth reading in that file's `v8` note.
+ *
  * `SwitchNeverHalfPainted` is the strict form: for all three switch paths,
  * the frame the switch lands in is measured in a ResizeObserver callback —
  * after style and layout, before paint — so a region that catches up one
@@ -262,12 +271,45 @@ function expectVariantPaint(root: ParentNode, variant: RegionVariantId): void {
   }
 
   const decor = outer.querySelector<HTMLElement>(':scope > [data-slot="region-frame"] > [data-slot="region-arm"] > [data-slot="region-arm-decor"]');
-  if (spec.arms.header === "card" || spec.arms.header === "indent") {
+  if (spec.arms.header === "card" || spec.arms.header === "indent" || spec.arms.header === "outline" || spec.arms.header === "edge") {
     expect(decor, `${variant}: arm decor exists`).not.toBeNull();
     expect(getComputedStyle(decor!).display, `${variant}: arm decor is drawn`).not.toBe("none");
     const decorRect = decor!.getBoundingClientRect();
     const armRect = decor!.parentElement!.getBoundingClientRect();
-    if (spec.arms.header === "card") {
+    if (spec.arms.header === "outline") {
+      // v6, Transparent card — the gallery's V1. An inset card with the
+      // FILL TAKEN OUT: strictly inside its row on every side, rounded, a
+      // stroke on all four sides, and you can see the board through it.
+      // The last clause is the whole drawing, so it is asserted, not
+      // implied: "control flow is not a card!" (Zach, 2026-09-19).
+      const decorStyle = getComputedStyle(decor!);
+      expect(decorRect.left, `${variant}: outline inset left`).toBeGreaterThan(armRect.left);
+      expect(decorRect.right, `${variant}: outline inset right`).toBeLessThan(armRect.right);
+      expect(decorRect.top, `${variant}: outline inset top`).toBeGreaterThan(armRect.top);
+      expect(decorRect.bottom, `${variant}: outline inset bottom`).toBeLessThan(armRect.bottom);
+      expect(decorRect.width, `${variant}: outline spans the row`).toBeGreaterThan(armRect.width * 0.8);
+      expect(transparent(decorStyle.backgroundColor), `${variant}: the outline is UNFILLED`).toBe(true);
+      expect(parseFloat(decorStyle.borderTopWidth), `${variant}: outline top stroke`).toBeGreaterThan(0);
+      expect(parseFloat(decorStyle.borderLeftWidth), `${variant}: outline side stroke`).toBeGreaterThan(0);
+      expect(parseFloat(decorStyle.borderTopLeftRadius), `${variant}: the outline is rounded`).toBeGreaterThan(0);
+      // The title moves in with the outline, so it sits INSIDE it rather
+      // than straddling the stroke.
+      expect(parseFloat(getComputedStyle(firstHeader).paddingLeft), `${variant}: the header follows the outline in`).toBeGreaterThan(0);
+    } else if (spec.arms.header === "edge") {
+      // v7, Edge card — the gallery's V2. Edge to edge: the decor reaches
+      // both side walls of its row (so nothing is "parked in a box"), and
+      // it draws its TOP and BOTTOM only, so no side stroke can double
+      // against the frame's own left/right border.
+      const decorStyle = getComputedStyle(decor!);
+      expect(Math.abs(decorRect.left - armRect.left), `${variant}: decor reaches the left wall`).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(decorRect.right - armRect.right), `${variant}: decor reaches the right wall`).toBeLessThanOrEqual(0.5);
+      expect(transparent(decorStyle.backgroundColor), `${variant}: the edge card is UNFILLED`).toBe(true);
+      expect(parseFloat(decorStyle.borderTopWidth), `${variant}: edge top stroke`).toBeGreaterThan(0);
+      expect(parseFloat(decorStyle.borderBottomWidth), `${variant}: edge bottom stroke`).toBeGreaterThan(0);
+      expect(decorStyle.borderLeftWidth, `${variant}: no left stroke to double against the frame`).toBe("0px");
+      expect(decorStyle.borderRightWidth, `${variant}: no right stroke to double against the frame`).toBe("0px");
+      expect(parseFloat(decorStyle.borderTopLeftRadius), `${variant}: square, so the strokes meet the frame flat`).toBe(0);
+    } else if (spec.arms.header === "card") {
       // An inset card: strictly inside its row on every side, wide, filled.
       expect(decorRect.left, `${variant}: card inset left`).toBeGreaterThan(armRect.left);
       expect(decorRect.right, `${variant}: card inset right`).toBeLessThan(armRect.right);
@@ -369,6 +411,16 @@ function signatureOf(root: ParentNode): string {
     getComputedStyle(title).fontSize,
     rule ? getComputedStyle(rule).display : "no-rule",
     decor ? getComputedStyle(decor).display : "no-decor",
+    // ADDED with v6/v7 (2026-09-19): the decor box's own GEOMETRY. Without
+    // it the Transparent card and the Edge card sign identically — same
+    // frame, same header, both `decor: block` — while being two visibly
+    // different drawings. The ruler has to be able to see what the drawing
+    // changed, or "pairwise distinct" stops meaning anything. Strictly
+    // additive: more fields can only split pairs apart, never merge them.
+    decor ? getComputedStyle(decor).borderWidth : "no-decor",
+    decor ? getComputedStyle(decor).borderRadius : "no-decor",
+    decor ? String(Math.round(decor.getBoundingClientRect().left - decor.parentElement!.getBoundingClientRect().left)) : "no-decor",
+    getComputedStyle(header).paddingLeft,
   ].join("|");
 }
 
@@ -401,13 +453,18 @@ export const V2: Story = variantStory("v2");
 export const V3: Story = variantStory("v3");
 export const V4: Story = variantStory("v4");
 export const V5: Story = variantStory("v5");
+// The three Zach picked out of the 2026-09-19 babble gallery, where he
+// called them V1/V2/V3 — see `skin/regionVariants.ts` for the mapping.
+export const V6: Story = variantStory("v6");
+export const V7: Story = variantStory("v7");
+export const V8: Story = variantStory("v8");
 
 /* ------------------------------------------------------------------ */
-/* The gallery — all five, one fixture, side by side for the report     */
+/* The gallery — every drawing, one fixture, side by side for the report */
 /* ------------------------------------------------------------------ */
 
 export const AllFive: Story = {
-  name: "all five on the same fixture",
+  name: "every drawing on the same fixture",
   render: () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 8 }}>
       {REGION_VARIANT_IDS.map((variant) => (
@@ -432,14 +489,14 @@ export const AllFive: Story = {
       signatures.set(variant, signatureOf(section));
       cards.add(opaqueCardPaintOf(section));
     }
-    // Five genuinely different drawings: pairwise distinct signatures.
+    // Genuinely different drawings: pairwise distinct signatures.
     for (const a of REGION_VARIANT_IDS) {
       for (const b of REGION_VARIANT_IDS) {
         if (a < b) expect(signatures.get(a), `${a} and ${b} are the same drawing`).not.toBe(signatures.get(b));
       }
     }
     // And ONE opaque card: the P5 card is the host's Block, not a variant axis.
-    expect(Array.from(cards), "the opaque card reads the same in all five").toHaveLength(1);
+    expect(Array.from(cards), "the opaque card reads the same in every drawing").toHaveLength(1);
   },
 };
 

@@ -1,5 +1,5 @@
 /*
- * src/skin/regionVariants.css — the PAINT of the five region variants
+ * src/skin/regionVariants.css — the PAINT of the eight region variants
  * (`regionVariants.ts` is the spec and the numbers; this file is what the
  * browser reads). Same mechanism as `skin.css`, same rules:
  *
@@ -210,4 +210,147 @@
   --bbox-region-arm-decor-stroke: var(--border);
   --bbox-region-arm-decor-radius: var(--radius-md);
   --bbox-region-arm-decor-fill: var(--card);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   v6 / v7 / v8 — the THREE DRAWINGS Zach picked on 2026-09-19 out of the
+   babble gallery (`reports/media/branch-arm-drawings-2026-09-19.html`),
+   where he called them V1 / V2 / V3. His numbering is the GALLERY's, not
+   this table's, so each one keeps the gallery's NAME as its title:
+
+       gallery V1 "Transparent Card" -> v6
+       gallery V2 "Edge Card"        -> v7
+       gallery V3 "Top Rule"         -> v8
+
+   WHY all three take v1's frame — a plain 1px border, TRANSPARENT fill,
+   `--radius-lg`, closed on all four sides — and vary the ARM alone: the
+   governing quote is "control flow is not a card!", and the two hard
+   constraints beside it are that the arm background stays transparent and
+   that this treatment is the BRANCH's, not the For Loop's. A drawing that
+   also moved the frame would be answering a question he did not ask, and
+   the gallery held the frame constant across all three previews.
+
+   WHY none of them sets `--bbox-region-nested-fill` (all three stay at
+   `initial`, i.e. a nested frame reads the parent's own transparent fill):
+   deepening the nested frame is the only nesting contrast this mechanism
+   has, and it paints BEHIND the arms — which is exactly the arm background
+   he ruled out. So nesting here is answered with geometry, not tone, and
+   what that costs is measured per drawing in
+   `reports/media/region-drawings-2026-09-19.html`.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* v6 — Transparent card. `v5` with the fill taken out: the arm is an inset
+   rounded outline you see the board straight through. The three numbers are
+   the gallery's own, read off the rendered page: inset 5px, 1px on all four
+   sides, radius 6px, fill fully transparent — and the header text moves in
+   by the SAME 5px so the title sits inside the outline rather than
+   straddling it. No divider: the outline already says where the arm ends,
+   and a hairline between two outlines is a third line in the same 5px. */
+[data-bbox-region-variant="v6"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 5px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: block;
+  --bbox-region-arm-decor-inset: 5px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 1px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 6px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v7 — Edge card. The same outline, run edge to edge: inset 0, radius 0,
+   and `1px 0 1px 0` so the arm draws its TOP and BOTTOM only. WHY the side
+   strokes are dropped rather than kept at 1px: at inset 0 an arm's left and
+   right lines land on the frame's own left and right borders, one pixel
+   apart, and a doubled line there reads as a seam rather than a subdivision
+   — the gallery's own wording, "one column subdivided, not cards parked in
+   a box". Header inset stays 0: with no side stroke there is nothing for
+   the title to sit inside of. */
+[data-bbox-region-variant="v7"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: block;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 1px 0px 1px 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v8 — Top rule. Nothing but the hairline BETWEEN rows: no decor box, no
+   header rule under the corner card, no band. The drawing Zach said
+   "really just looks like control flow".
+
+   SAY IT PLAINLY: these arm tokens are identical to `v1`'s, value for
+   value. `v8` is not v1 dressed up — the gallery's third pick simply IS the
+   arm treatment already shipped, and the only difference in the whole set
+   is the 30px header the three share (v1 is 32px) so that flipping between
+   v6/v7/v8 moves no row. Kept as its own id anyway for one reason: he
+   picked three drawings by name and the pill has to offer three, not two
+   plus "go back to v1 and remember why". */
+[data-bbox-region-variant="v8"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
 }
