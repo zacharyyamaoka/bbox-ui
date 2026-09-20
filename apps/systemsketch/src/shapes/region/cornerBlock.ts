@@ -299,6 +299,28 @@ export function cornerBlockOf(editor: Editor, shape: RegionShape): TLShape | und
   return corner;
 }
 
+/**
+ * The inverse of `cornerBlockOf`, asked from the BLOCK's side: is this
+ * `ss-block` the corner card of the region it is parented to?
+ *
+ * WHY this predicate exists at all: a corner card is not painted differently
+ * because of anything in its own props — it is an ordinary `ss-block`, which
+ * is the whole "everything is really a block" ruling — so the only thing that
+ * makes it a corner is the RELATIONSHIP, and `BlockFace` has to be able to
+ * read it. Same double check `cornerBlockOf` makes, for the same reason: the
+ * id is a plain string that survives a copy, so `props.cornerBlockId === id`
+ * alone would also be true of a duplicated region's ORIGINAL card until
+ * `installRegionKit` repairs the copy, and that card would then be painted
+ * with a corner's square junctions while sitting loose on the page.
+ */
+export function isRegionCornerBlock(editor: Editor, blockId: TLShapeId): boolean {
+  const block = editor.getShape(blockId);
+  if (!block) return false;
+  const parent = editor.getShape(block.parentId as TLShapeId);
+  if (!parent || parent.type !== REGION_SHAPE_TYPE) return false;
+  return (parent as unknown as RegionShape).props.cornerBlockId === blockId;
+}
+
 /** A `1x1` `ss-region` is the stock box tool's PLACEHOLDER, not a document: it
  *  exists for the handful of milliseconds between `createShapes` and the
  *  `select.resizing` snapshot that sizes it. Nothing may reconcile it — see

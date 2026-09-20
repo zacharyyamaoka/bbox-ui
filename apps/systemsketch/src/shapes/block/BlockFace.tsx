@@ -11,8 +11,10 @@ import { Block } from "@trunk/components/block";
 import { BlockPort, type BlockEdgeSpec } from "@trunk/components/blockPort";
 import type { BlockSide } from "@trunk/components/port.layout";
 import type { PortEdgeItem } from "@trunk/components/portEdge";
+import { REGION_CORNER_BLOCK_STYLE } from "@trunk/components/region";
 
 import { usePortProducers } from "../../document/sceneFromStore";
+import { isRegionCornerBlock } from "../region/cornerBlock";
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
 import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
@@ -78,6 +80,26 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
   // the same `producerCounts` the trunk hosts call (see `usePortProducers`).
   const producers = usePortProducers(editor, shape.id);
 
+  // WHY: a region's corner card wears the trunk's own per-corner radii — the
+  // two corners where its edges CONTINUE the frame's border go square, so the
+  // border leaves the card straight instead of kinking twice on its way round
+  // (Zach, 2026-09-19: "I don't like how the edges where it meets the region
+  // are still curve. they shuld be straight!", annotating THIS app against the
+  // DOM render he had approved). What it rejects is the stock all-round Block
+  // this very component otherwise paints, which is what was shipping and what
+  // a future refactor will reach for again, because every OTHER block on the
+  // board wants exactly that.
+  //
+  // WHY it has to be said here and cannot live in `Region`: in this app the
+  // corner card is a real `ss-block` CHILD SHAPE, which tldraw renders in its
+  // own subtree — it is not a React descendant of the `Region` element in
+  // `RegionFace`, so no rule the component could write would reach it. The
+  // radii themselves stay the trunk's (`REGION_CORNER_BLOCK_STYLE`, measured
+  // by `RegionVariants.stories.tsx`'s `CornerMeetsFrameSquare` across all five
+  // drawings); this file only says WHICH card is a corner. Restating a radius
+  // here would be the divergence Zach's 2026-09-19 trunk rule forbids.
+  const isRegionCorner = useValue("ss-block is its region's corner card", () => isRegionCornerBlock(editor, shape.id), [editor, shape.id]);
+
   const edges: Partial<Record<BlockSide, BlockEdgeSpec>> = Object.fromEntries(
     PORT_SIDES.map((side) => [
       side,
@@ -139,6 +161,11 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           // IS the authored box in port and expanded views, and the
           // measurement simply confirms it.
           height={view === "simple" ? undefined : h}
+          // The trunk's radii, spread the way `hosts/nodeViews.tsx` spreads
+          // them — `Block` applies its caller's `style` AFTER its own
+          // `borderRadius` (block.tsx), which is the seam it publishes as
+          // overridable. See the WHY above.
+          style={isRegionCorner ? REGION_CORNER_BLOCK_STYLE : undefined}
         />
       </BlockPort>
     </NodeShapeFrame>

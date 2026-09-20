@@ -312,3 +312,73 @@ describe("app-variant-switch (d) — the app's region geometry follows the drawi
     expect(window.localStorage.getItem(REGION_STORAGE_KEY)).toBe("v5");
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* The junctions the corner card makes with the frame are straight      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Zach, 2026-09-19, annotating THIS app (`Pasted image 20260919180659.png`):
+ * "I don't like how the edges where it meets the region are still curve. they
+ * shuld be straight!" — against the DOM render he had already approved
+ * (`…115424.png`), where the corner card's top-RIGHT and bottom-LEFT are
+ * square because those are the two junctions: the card's top edge continues
+ * as the frame's top rule, its left edge as the frame's left rule.
+ *
+ * WHY this case has to live in the APP and cannot be left to the trunk's own
+ * `RegionVariants.stories.tsx`: here the corner card is a real `ss-block`
+ * CHILD SHAPE, rendered by tldraw in its own subtree rather than inside the
+ * `Region` element. The trunk publishes the radii
+ * (`REGION_CORNER_BLOCK_STYLE`) but cannot reach across that boundary to
+ * apply them — so "the trunk is green" proved nothing about what was on
+ * screen, and for one release the card shipped rounded on all four corners
+ * with every trunk test passing. This is the only place that failure is
+ * visible.
+ *
+ * Measured off computed style, per drawing, because the shared corner and the
+ * free corner both follow the variant's tokens (v2 and v4 are 8px, not 10;
+ * v2 squares the free corner for its header rule) — a hardcoded 10px would
+ * pass v1 and lie about the rest.
+ */
+describe("app-variant-switch (e) — the corner card's junctions with the frame are square", () => {
+  it("in every region drawing the card's top-right and bottom-left are 0px, while the shared and free corners follow the frame", async () => {
+    app = await mountApp();
+    const { id, cornerId } = branch(160, 140);
+    await waitFor(() => frameOf(id), { what: "the branch frame" });
+
+    const cardOf = () => app!.root.querySelector<HTMLElement>(`[data-shape-id="${cornerId}"] [data-slot="block"]`);
+    await waitFor(cardOf, { what: "the corner card" });
+
+    for (const variant of REGION_VARIANT_IDS) {
+      await pick("region", variant);
+      await waitFor(() => {
+        const card = getComputedStyle(cardOf()!);
+        const shared = getComputedStyle(frameOf(id)!).borderTopLeftRadius;
+        if (shared === "0px") return null;
+        return card.borderTopRightRadius === "0px" &&
+          card.borderBottomLeftRadius === "0px" &&
+          card.borderTopLeftRadius === shared
+          ? true
+          : null;
+      }, { what: `${variant}: the card to wear the region corner radii` });
+
+      const card = getComputedStyle(cardOf()!);
+      const shared = getComputedStyle(frameOf(id)!).borderTopLeftRadius;
+      expect(card.borderTopRightRadius, `${variant}: the card's top edge leaves the frame's top rule straight`).toBe("0px");
+      expect(card.borderBottomLeftRadius, `${variant}: the card's left edge leaves the frame's left rule straight`).toBe("0px");
+      expect(card.borderTopLeftRadius, `${variant}: the shared top-left curves with the frame`).toBe(shared);
+      expect(shared, `${variant}: the frame's own top-left is still round`).not.toBe("0px");
+      expect(card.borderBottomRightRadius, `${variant}: the free bottom-right corner`).toBe(variant === "v2" ? "0px" : shared);
+    }
+
+    // Scoped to the CORNER: an ordinary block on the same board keeps all
+    // four of its own corners, so this can never be read as "blocks are
+    // square now".
+    const loose = block("loose", 700, 140, PORTS_OUT);
+    const looseCard = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${loose}"] [data-slot="block"]`), { what: "a free-standing card" });
+    const style = getComputedStyle(looseCard);
+    for (const corner of ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"] as const) {
+      expect(style[corner], `a free-standing card keeps its ${corner}`).not.toBe("0px");
+    }
+  });
+});

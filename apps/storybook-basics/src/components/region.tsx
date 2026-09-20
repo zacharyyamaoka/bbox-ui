@@ -130,6 +130,37 @@ const FRAME_RADIUS = "var(--bbox-region-frame-radius, var(--bbox-skin-radius, va
  * the free corner square so its full-width header rule leaves the card
  * cleanly instead of departing from a curve.
  *
+ * WHY top-right and bottom-left are SQUARE, and the other two are not:
+ * those two are the JUNCTIONS — the card's own top edge continues as the
+ * frame's top rule, and its own left edge continues as the frame's left
+ * rule. A radius there retracts the card's edge from the frame's line, so
+ * the border visibly kinks twice on its way around the corner. Zach,
+ * 2026-09-19, annotating the tldraw app (`Pasted image 20260919180659.png`
+ * — a square-cornered rectangle drawn over a card rounded at all four):
+ * "I don't like how the edges where it meets the region are still curve.
+ * they shuld be straight!", against the For Loop in `…115424.png` he had
+ * already called done properly. WHAT THIS REJECTS: the stock all-round
+ * `Block` (`--bbox-skin-radius` on four corners), which is the tempting
+ * default because it is what every other Block on the board wears — and
+ * which makes the corner read as a card PARKED in the frame rather than
+ * part of it. Squaring all four was considered and rejected too: the
+ * top-left is the frame's OWN corner (card and frame curve together, so
+ * there is no junction to break) and the bottom-right touches no frame
+ * edge at all — and the drawing he approved rounds both.
+ *
+ * WHY this object is the contract for EVERY host, not only one that
+ * renders the card inside `Region`'s own subtree: a canvas host may mount
+ * the corner card as an INDEPENDENT element. `apps/systemsketch` paints it
+ * as a real `ss-block` child shape (its "everything is really a block"
+ * ruling), so the card is not a React descendant of this component and no
+ * CSS rule written here — not a wrapper class, not a
+ * `[data-slot="region-corner"] >` descendant selector — can ever reach it.
+ * Such a host has to spread THIS object onto its own card, exactly the way
+ * `hosts/nodeViews.tsx` does. A host that skips it silently gets the stock
+ * all-round card and the double kink above; that is the bug this paragraph
+ * exists to stop coming back, and `RegionVariants.stories.tsx`'s
+ * `CornerMeetsFrameSquare` is what measures it.
+ *
  * WHY an inline style and not a Tailwind `[&_[data-slot=block]]:rounded-*!`
  * wrapper class: `Block` spreads its caller's `style` AFTER its own
  * `borderRadius` (block.tsx:321), so an inline value is the mechanism the

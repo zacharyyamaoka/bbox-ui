@@ -694,3 +694,96 @@ export const FoldInEveryVariant: Story = {
     }
   },
 };
+
+/* ------------------------------------------------------------------ */
+/* The two junctions are square — in all five drawings                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The corner card's four radii, off the browser rather than off our own
+ * constant — a rule that never reached the paint would still pass a
+ * presence check.
+ */
+function cornerRadiiOf(region: HTMLElement, id: string): { tl: string; tr: string; br: string; bl: string } {
+  const style = getComputedStyle(cornerCardOf(region, id));
+  return {
+    tl: style.borderTopLeftRadius,
+    tr: style.borderTopRightRadius,
+    br: style.borderBottomRightRadius,
+    bl: style.borderBottomLeftRadius,
+  };
+}
+
+/**
+ * Zach's 2026-09-19 ruling, as a measurement: where the corner card's own
+ * edges CONTINUE the frame's border, the join is straight.
+ *
+ * The card's top edge becomes the frame's top rule (so its top-RIGHT is a
+ * junction) and its left edge becomes the frame's left rule (so its
+ * bottom-LEFT is one). A radius at either retracts the card's edge from the
+ * frame's line and kinks the border — "I don't like how the edges where it
+ * meets the region are still curve. they shuld be straight!"
+ *
+ * WHY the other two corners are asserted ROUND rather than left unmeasured:
+ * "square the corners" is the over-correction sitting right next to the
+ * right answer, and the For Loop he called done properly
+ * (`Pasted image 20260919115424.png`) rounds both — the top-left because it
+ * IS the frame's own corner (card and frame curve together, no junction),
+ * the bottom-right because it touches no frame edge. Asserting them round
+ * is what makes this case fail on the over-correction too, not only on the
+ * regression.
+ *
+ * Not a variant axis (`regionVariants.ts`'s "what every variant keeps"), so
+ * it sweeps all five through the live attribute switch — the same path an
+ * app's dropdown takes.
+ */
+export const CornerMeetsFrameSquare: Story = {
+  name: "the corner card's junctions with the frame are square (all five)",
+  render: () => <Bench />,
+  play: async ({ canvasElement }) => {
+    const html = document.documentElement;
+    const before = html.getAttribute(REGION_VARIANT_ATTR);
+    try {
+      for (const variant of REGION_VARIANT_IDS) {
+        html.setAttribute(REGION_VARIANT_ATTR, variant);
+        await waitFor(() => {
+          for (const id of REGIONS_ON_THE_BOARD) {
+            const region = regionOf(canvasElement, id);
+            const radii = cornerRadiiOf(region, id);
+            const shared = getComputedStyle(frameOf(region)).borderTopLeftRadius;
+
+            // The two junctions: straight, exactly.
+            expect(radii.tr, `${variant}/${id}: the card's top edge must leave the frame's top rule straight`).toBe("0px");
+            expect(radii.bl, `${variant}/${id}: the card's left edge must leave the frame's left rule straight`).toBe("0px");
+
+            // The shared corner curves WITH the frame, and is really a curve.
+            expect(radii.tl, `${variant}/${id}: the shared top-left follows the frame`).toBe(shared);
+            expect(shared, `${variant}: the frame's own top-left is still round`).not.toBe("0px");
+
+            // The one free corner: the variant's own call. `v2` squares it so
+            // its full-width header rule leaves the card cleanly; the other
+            // four keep the frame's radius.
+            expect(radii.br, `${variant}/${id}: the free bottom-right corner`).toBe(variant === "v2" ? "0px" : shared);
+          }
+
+          // Scoped to the CORNER card: an ordinary Block on the same board —
+          // the opaque region's card — keeps all four of its own corners, so
+          // this rule can never be mistaken for "Blocks are square now".
+          const opaque = required<HTMLElement>(canvasElement, '[data-region-id="op"] [data-block-id="op"] [data-slot="block"]', "the opaque card");
+          const card = getComputedStyle(opaque);
+          for (const [corner, value] of Object.entries({
+            tl: card.borderTopLeftRadius,
+            tr: card.borderTopRightRadius,
+            br: card.borderBottomRightRadius,
+            bl: card.borderBottomLeftRadius,
+          })) {
+            expect(value, `${variant}: a free-standing card keeps its ${corner} radius`).not.toBe("0px");
+          }
+        });
+      }
+    } finally {
+      if (before === null) html.removeAttribute(REGION_VARIANT_ATTR);
+      else html.setAttribute(REGION_VARIANT_ATTR, before);
+    }
+  },
+};
