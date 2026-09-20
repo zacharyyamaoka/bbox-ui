@@ -36,7 +36,7 @@ import { REGION_PAD_BOTTOM_PX } from "@trunk/components/region.layout";
 import { PORT_VARIANTS, PORT_VARIANT_IDS } from "@trunk/skin/portVariants";
 import { REGION_VARIANTS, REGION_VARIANT_IDS, type RegionVariantId } from "@trunk/skin/regionVariants";
 
-import { createCornerBlock, regionLayoutOf, type RegionShape } from "./shapes/region";
+import { createCornerBlock, regionLayoutOf, type RegionKind, type RegionShape } from "./shapes/region";
 import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE } from "./shapes/types";
 import { canvasOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
 
@@ -99,6 +99,33 @@ function branch(x: number, y: number): { id: TLShapeId; cornerId: TLShapeId } {
   } as never);
   const cornerId = createCornerBlock(app!.editor, id, "branch");
   if (!cornerId) throw new Error("a branch always has a corner block");
+  return { id, cornerId };
+}
+
+/** Any region kind, minted the way its dock row does. WHY this exists beside
+ *  `branch`: Zach, 2026-09-19 — "Please implement this for all region corners,
+ *  and the branch does implement a region corner". The junction rule belongs
+ *  to REGIONS, not to Branch, and only running every kind proves the predicate
+ *  (`isRegionCornerBlock`, which keys off the parent's type and its
+ *  `cornerBlockId`) is genuinely kind-blind rather than accidentally right.
+ *  The kinds are the schema's own union — "for" | "while" | "branch" | "plain"
+ *  — so a kind added later fails HERE rather than shipping a round corner. */
+function regionOfKind(kind: RegionKind, name: string, x: number, y: number): { id: TLShapeId; cornerId: TLShapeId } {
+  const id = createShapeId();
+  app!.editor.createShape({
+    id,
+    type: REGION_SHAPE_TYPE,
+    x,
+    y,
+    props: {
+      kind,
+      name,
+      w: 520,
+      arms: [{ id: "body", title: "body", open: true, h: 200 }],
+    },
+  } as never);
+  const cornerId = createCornerBlock(app!.editor, id, kind);
+  if (!cornerId) throw new Error(`a ${kind} region always has a corner block`);
   return { id, cornerId };
 }
 
@@ -341,10 +368,34 @@ describe("app-variant-switch (d) — the app's region geometry follows the drawi
  * pass v1 and lie about the rest.
  */
 describe("app-variant-switch (e) — the corner card's junctions with the frame are square", () => {
-  it("in every region drawing the card's top-right and bottom-left are 0px, while the shared and free corners follow the frame", async () => {
+  // The fourth kind is deliberately absent from the table above: a plain
+  // region is a bare scope and `cornerBlockPropsFor` returns null for it on
+  // purpose ("an empty card in the corner would claim there is a contract and
+  // then show none"). Asserting that here is what stops a future reader from
+  // "fixing" the omission by minting an empty card — and it is why "all region
+  // corners" means branch / for / while.
+  it("a plain region has no corner card to square", async () => {
     app = await mountApp();
-    const { id, cornerId } = branch(160, 140);
-    await waitFor(() => frameOf(id), { what: "the branch frame" });
+    const id = createShapeId();
+    app.editor.createShape({
+      id,
+      type: REGION_SHAPE_TYPE,
+      x: 160,
+      y: 140,
+      props: { kind: "plain", name: "Region", w: 520, arms: [{ id: "body", title: "body", open: true, h: 200 }] },
+    } as never);
+    await waitFor(() => frameOf(id), { what: "the plain frame" });
+    expect(createCornerBlock(app.editor, id, "plain"), "a plain region mints no corner block").toBeNull();
+  });
+
+  it.each([
+    ["branch", () => branch(160, 140)],
+    ["for", () => regionOfKind("for", "For Loop", 160, 140)],
+    ["while", () => regionOfKind("while", "While", 160, 140)],
+  ] as const)("in every region drawing a %s card's top-right and bottom-left are 0px, while the shared and free corners follow the frame", async (kind, make) => {
+    app = await mountApp();
+    const { id, cornerId } = make();
+    await waitFor(() => frameOf(id), { what: `the ${kind} frame` });
 
     const cardOf = () => app!.root.querySelector<HTMLElement>(`[data-shape-id="${cornerId}"] [data-slot="block"]`);
     await waitFor(cardOf, { what: "the corner card" });
