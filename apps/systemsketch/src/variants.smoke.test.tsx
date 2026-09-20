@@ -309,6 +309,83 @@ describe("app-variant-switch (c) — region v2 draws its header rule", () => {
   });
 });
 
+/** A loop minted the way PRODUCTION mints one — `arms: []`, because a loop's
+ *  body is the frame itself (`LoopTool.ts`'s `FOR_LOOP_PRESET`). Deliberately
+ *  NOT `regionOfKind`, which gives every kind one `body` arm for the corner-
+ *  junction sweep: that difference is exactly what this suite has to tell
+ *  apart. */
+function productionLoop(kind: "for" | "while", name: string, x: number, y: number): { id: TLShapeId; cornerId: TLShapeId } {
+  const id = createShapeId();
+  app!.editor.createShape({
+    id,
+    type: REGION_SHAPE_TYPE,
+    x,
+    y,
+    props: { kind, name, w: 520, arms: [] },
+  } as never);
+  const cornerId = createCornerBlock(app!.editor, id, kind);
+  if (!cornerId) throw new Error(`a ${kind} region always has a corner block`);
+  return { id, cornerId };
+}
+
+/** Every horizontal hairline actually PAINTED inside a region's frame: the
+ *  header rule when it is displayed, plus each arm header carrying a non-zero
+ *  top border. Measured off computed style rather than asserted by presence —
+ *  the header-rule element is always in the DOM and hides via `display`, and
+ *  `v3`/`v4`/`v5` zero the arm divider's WIDTH rather than removing it. */
+function insideLinesOf(frame: HTMLElement): string[] {
+  const lines: string[] = [];
+  const rule = frame.querySelector<HTMLElement>(':scope > [data-slot="region-header-rule"]');
+  if (rule && getComputedStyle(rule).display !== "none") lines.push("header-rule");
+  for (const header of frame.querySelectorAll<HTMLElement>('[data-slot="region-arm-header"]')) {
+    if (Number.parseFloat(getComputedStyle(header).borderTopWidth || "0") > 0.01) lines.push(`arm-divider:${header.textContent?.trim() ?? "?"}`);
+  }
+  return lines;
+}
+
+describe("app-variant-switch (e) — for/while draw NO line inside the frame", () => {
+  // Zach, 2026-09-20, looking at v9: "FOr loop and while loops like this no
+  // inside lines" (shown against an empty For Loop frame), then "Branch like
+  // this.." against a Branch that KEEPS its rules. v2/v9/v10 are the three
+  // variants that turn `--bbox-region-header-rule-display` on, so they are the
+  // only ones that could ever have got this wrong.
+  for (const variant of ["v2", "v9", "v10"] as const) {
+    it(`${variant}: a for and a while region paint nothing inside their frames, while a branch keeps its header rule`, async () => {
+      app = await mountApp();
+      const forLoop = productionLoop("for", "For Loop", 160, 140);
+      const whileLoop = productionLoop("while", "While Loop", 760, 140);
+      // The belt: a loop carrying an arm anyway must STILL paint no rule.
+      const armedLoop = regionOfKind("for", "For Loop (carries an arm)", 160, 640);
+      const br = branch(760, 640);
+
+      const forFrame = await waitFor(() => frameOf(forLoop.id), { what: "the for frame" });
+      const whileFrame = await waitFor(() => frameOf(whileLoop.id), { what: "the while frame" });
+      const armedFrame = await waitFor(() => frameOf(armedLoop.id), { what: "the armed-loop frame" });
+      const branchFrame = await waitFor(() => frameOf(br.id), { what: "the branch frame" });
+
+      await pick("region", variant);
+      expect(document.documentElement.dataset.bboxRegionVariant).toBe(variant);
+
+      // The branch proves the variant really is drawing rules right now, so a
+      // green loop assertion cannot be the feature being switched off wholesale.
+      await waitFor(() => (insideLinesOf(branchFrame).includes("header-rule") ? true : null), {
+        what: `the branch's header rule under ${variant} (got: ${insideLinesOf(branchFrame).join(", ") || "nothing"})`,
+      });
+
+      expect(insideLinesOf(forFrame), `${variant}: a for loop draws no inside line`).toEqual([]);
+      expect(insideLinesOf(whileFrame), `${variant}: a while loop draws no inside line`).toEqual([]);
+      expect(insideLinesOf(armedFrame), `${variant}: a loop holding an arm still draws no header rule`).not.toContain("header-rule");
+
+      // And the rule that IS drawn is a real, full-width line — otherwise
+      // "the branch keeps it" would pass on a 0px element.
+      const rule = branchFrame.querySelector<HTMLElement>(':scope > [data-slot="region-header-rule"]')!;
+      const ruleRect = rule.getBoundingClientRect();
+      expect(ruleRect.height, `${variant}: the branch rule is a real hairline`).toBeGreaterThanOrEqual(0.5);
+      expect(Math.abs(ruleRect.width - branchFrame.clientWidth), `${variant}: and spans the branch frame`).toBeLessThanOrEqual(1);
+    });
+  }
+});
+
 describe("app-variant-switch (d) — the app's region geometry follows the drawing", () => {
   it("for every region drawing the app's arm rows equal the component's (26-32px headers), the frame hugs its rows, and the record agrees with the paint", async () => {
     app = await mountApp();

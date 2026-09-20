@@ -446,6 +446,11 @@ export function Region({
     })),
   });
 
+  /** Does THIS region paint the header rule at all? See the rule's own WHY
+   *  below for the two halves. Computed here so the frame and any future
+   *  reader agree on one answer. */
+  const drawsHeaderRuleHere = kind !== "loop" && layout.arms.length > 0;
+
   const rootProps = {
     "data-slot": "region",
     "data-region-id": id,
@@ -525,12 +530,37 @@ export function Region({
           last pixel row is `corner.h - 2 * FRAME_BORDER_PX` in the frame's
           padding box — so the two are one line, not two a pixel apart.
           `display: none` unless the variant turns it on.
+
+          WHY it is ALSO gated on having arms (Zach, 2026-09-20, on v9: "For
+          loop and while loops like this no inside lines", against a Branch
+          shown WITH them): this rule is the bottom edge of the HEADER BAND —
+          it exists to divide the header from the titled arm rows underneath.
+          A `for`/`while` region has no arms at all (`FOR_LOOP_PRESET.arms:
+          []`; its body is the frame itself), so under v2/v9/v10 — the three
+          variants that set `--bbox-region-header-rule-display: block` — it
+          was drawing a full-width line across an empty body, dividing
+          nothing from nothing.
+
+          BOTH halves of the predicate are load-bearing. `arms.length > 0`
+          is the honest test — the arm rows are what the line separates, so a
+          branch that lost its arms loses the rule with them. `kind !== "loop"`
+          is the belt: a loop must never draw it even holding malformed data,
+          and that case is REAL, not hypothetical — `variants.smoke.test.tsx`'s
+          own `regionOfKind` helper mints every kind with one `body` arm, so an
+          arms-only gate would have kept painting the rule on the very for/while
+          regions Zach is complaining about. A future arm-bearing kind (match /
+          case) still keeps its rule, because only `"loop"` is excluded.
+
+          The tempting alternative — scoping the token in `regionVariants.css`
+          off the already-stamped `[data-region-kind]` — cannot work: this
+          display is an INLINE style, so it outranks any stylesheet rule no
+          matter how specific.
         */}
         <div
           data-slot="region-header-rule"
           aria-hidden
           style={{
-            display: "var(--bbox-region-header-rule-display, none)",
+            display: drawsHeaderRuleHere ? "var(--bbox-region-header-rule-display, none)" : "none",
             position: "absolute",
             left: 0,
             right: 0,
