@@ -397,6 +397,201 @@ class DockMountTests(unittest.TestCase):
         self.assertEqual(launch_systemsketch.files_root_from({"SYSTEMSKETCH_FILES_ROOT": "/tmp/elsewhere"}), Path("/tmp/elsewhere"))
 
 
+
+# --------------------------------------------------------------- the CSRF fence
+# ADDED 2026-09-19 by the judge-fix lane `host-and-locks`, after an independent
+# Codex judge reproduced a force-overwrite of a board from a foreign origin.
+# NEW CASES ONLY — nothing above this line was weakened, skipped or reworded.
+#
+# The attack these cases pin, measured against the tree before the fix:
+#
+#     POST /api/workspace/file
+#     Origin: http://localhost:31337
+#     Content-Type: text/plain;charset=UTF-8
+#     {"path": "<a board>", "source": "<theirs>", "force": true}
+#
+#     -> 200, and the board on disk was replaced.
+#
+# ``text/plain`` makes it a CORS *simple* request, so no preflight ever runs and
+# ``handle_options`` never gets a say; ``force: true`` walks straight past the
+# SHA-256 revision fence. The dock's Stable server mounts these routes on a
+# KNOWN port (:4341) over the REAL home directory, so the file at stake is one
+# of Zach's boards. The plan weights "His files are never damaged" at 25% and
+# says why: a lost board is unrecoverable, a missing feature is not.
+#
+# These cases build their requests with ``urllib`` directly rather than through
+# ``Http`` above, because ``Http.request`` re-stamps ``Content-Type:
+# application/json`` on every body — which is exactly the header under test.
+
+
+class GuardedHostTestCase(HostTestCase):
+    def raw(self, method: str, route: str, body: object | None, **headers: str):
+        """One request with EXACTLY the headers given — no json Content-Type
+        added behind the test's back."""
+        data = None if body is None else json.dumps(body).encode()
+        request = urllib.request.Request(self.http.origin + route, data=data, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                raw = response.read()
+                return response.status, dict(response.headers), (json.loads(raw) if raw else None)
+        except urllib.error.HTTPError as error:
+            raw = error.read()
+            return error.code, dict(error.headers), (json.loads(raw) if raw else None)
+
+    def create_board(self, name: str = "Zach.tldr") -> tuple[str, dict]:
+        path = str(self.workspace / name)
+        status, _, created = self.http.post("/api/workspace/file", {"path": path, "source": tldr("real"), "baseDigest": None})
+        self.assertEqual(status, 200)
+        return path, created
+
+
+class StateChangingRequestGuardTests(GuardedHostTestCase):
+    """A POST may change files only when the caller is provably not a foreign page."""
+
+    def test_a_foreign_origin_text_plain_force_post_cannot_touch_a_board(self) -> None:
+        path, _ = self.create_board()
+        status, _, body = self.raw(
+            "POST", "/api/workspace/file",
+            {"path": path, "source": tldr("stolen"), "baseDigest": None, "force": True},
+            **{"Content-Type": "text/plain;charset=UTF-8", "Origin": "http://localhost:31337"},
+        )
+        self.assertEqual(status, 403)
+        self.assertIn("error", body)
+        self.assertIn('"shape:real"', Path(path).read_text())
+
+    def test_a_foreign_origin_json_post_is_refused_too(self) -> None:
+        path, created = self.create_board()
+        for origin in ("http://localhost:31337", "http://127.0.0.1:31337", "http://evil.example", "null"):
+            status, _, body = self.raw(
+                "POST", "/api/workspace/file",
+                {"path": path, "source": tldr("stolen"), "baseDigest": created["digest"]},
+                **{"Content-Type": "application/json", "Origin": origin},
+            )
+            self.assertEqual(status, 403, origin)
+            self.assertIn("error", body)
+        self.assertIn('"shape:real"', Path(path).read_text())
+
+    def test_a_same_origin_save_still_works_fenced_and_forced(self) -> None:
+        path, created = self.create_board()
+        same = self.http.origin
+        status, _, updated = self.raw(
+            "POST", "/api/workspace/file",
+            {"path": path, "source": tldr("next"), "baseDigest": created["digest"]},
+            **{"Content-Type": "application/json", "Origin": same},
+        )
+        self.assertEqual(status, 200)
+        self.assertIn('"shape:next"', Path(path).read_text())
+        status, _, forced = self.raw(
+            "POST", "/api/workspace/file",
+            {"path": path, "source": tldr("forced"), "baseDigest": None, "force": True},
+            **{"Content-Type": "application/json; charset=utf-8", "Origin": same},
+        )
+        self.assertEqual(status, 200)
+        self.assertIn('"shape:forced"', Path(path).read_text())
+        self.assertNotEqual(forced["digest"], updated["digest"])
+
+    def test_a_save_with_no_origin_header_at_all_still_works(self) -> None:
+        """The dock's own page is same-origin; curl, the smoke suite and a
+        server-side proxy send no Origin at all. Only a browser page does."""
+        path = str(self.workspace / "Headless.tldr")
+        status, _, _ = self.raw(
+            "POST", "/api/workspace/file",
+            {"path": path, "source": tldr("plain"), "baseDigest": None},
+            **{"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(Path(path).exists())
+
+    def test_a_same_origin_post_that_is_not_json_is_refused(self) -> None:
+        path, created = self.create_board()
+        for content_type in ("text/plain;charset=UTF-8", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x"):
+            status, _, body = self.raw(
+                "POST", "/api/workspace/file",
+                {"path": path, "source": tldr("stolen"), "baseDigest": created["digest"]},
+                **{"Content-Type": content_type, "Origin": self.http.origin},
+            )
+            self.assertEqual(status, 403, content_type)
+            self.assertIn("error", body)
+        self.assertIn('"shape:real"', Path(path).read_text())
+
+    def test_a_post_with_no_content_type_is_refused(self) -> None:
+        path, created = self.create_board()
+        status, _, body = self.raw(
+            "POST", "/api/workspace/file",
+            {"path": path, "source": tldr("stolen"), "baseDigest": created["digest"]},
+        )
+        self.assertEqual(status, 403)
+        self.assertIn("error", body)
+        self.assertIn('"shape:real"', Path(path).read_text())
+
+    def test_every_state_changing_route_is_fenced_not_just_save(self) -> None:
+        """A route left out of the fence is a route that still damages files."""
+        path, created = self.create_board("Family.tldr")
+        foreign = {"Content-Type": "text/plain;charset=UTF-8", "Origin": "http://localhost:31337"}
+        attacks = (
+            ("/api/workspace/file", {"path": path, "source": tldr("stolen"), "baseDigest": None, "force": True}),
+            ("/api/workspace/directory", {"parent": str(self.workspace), "name": "Injected"}),
+            ("/api/workspace/rename", {"path": path, "destination": str(self.workspace / "Gone.tldr"), "baseDigest": created["digest"]}),
+            ("/api/workspace/trash", {"path": path, "baseDigest": created["digest"]}),
+            ("/api/workspace/reveal", {"path": path}),
+        )
+        for route, body in attacks:
+            status, _, answer = self.raw("POST", route, body, **foreign)
+            self.assertEqual(status, 403, route)
+            self.assertIn("error", answer)
+        self.assertIn('"shape:real"', Path(path).read_text())
+        self.assertFalse((self.workspace / "Injected").exists())
+        self.assertFalse((self.workspace / "Gone.tldr").exists())
+        self.assertFalse((self.trash_dir / "Family.tldr").exists())
+        self.assertEqual(self.desktop_calls(), [])
+
+    def test_an_unknown_post_route_is_still_a_404_not_a_403(self) -> None:
+        """The fence sits INSIDE the route check, so an unknown path keeps the
+        donor's 404 instead of leaking which paths this host answers."""
+        status, _, body = self.raw(
+            "POST", "/api/workspace/pick", {},
+            **{"Content-Type": "text/plain", "Origin": "http://localhost:31337"},
+        )
+        self.assertEqual(status, 404)
+        self.assertEqual(body, {"error": "not found"})
+
+
+class LoopbackCorsGuardTests(GuardedHostTestCase):
+    """``--cors-loopback`` widens who may READ a response; it must not widen
+    who may WRITE without passing a preflight the browser would have run."""
+
+    cors_loopback = True
+
+    def test_a_loopback_origin_may_save_with_json_but_never_as_a_simple_request(self) -> None:
+        path = str(self.workspace / "Dev.tldr")
+        status, _, created = self.raw(
+            "POST", "/api/workspace/file",
+            {"path": path, "source": tldr("dev"), "baseDigest": None},
+            **{"Content-Type": "application/json", "Origin": "http://localhost:5173"},
+        )
+        self.assertEqual(status, 200)
+        status, _, _ = self.raw(
+            "POST", "/api/workspace/file",
+            {"path": path, "source": tldr("stolen"), "baseDigest": None, "force": True},
+            **{"Content-Type": "text/plain;charset=UTF-8", "Origin": "http://localhost:5173"},
+        )
+        self.assertEqual(status, 403)
+        self.assertIn('"shape:dev"', Path(path).read_text())
+        self.assertEqual(created["digest"], self.http.get("/api/workspace/stat", path=path)[2]["digest"])
+
+    def test_a_non_loopback_origin_may_never_save_even_with_json(self) -> None:
+        path = str(self.workspace / "Dev.tldr")
+        self.http.post("/api/workspace/file", {"path": path, "source": tldr("dev"), "baseDigest": None})
+        for origin in ("http://evil.example", "https://localhost.evil.example", "http://127.0.0.1.evil.example:80"):
+            status, _, _ = self.raw(
+                "POST", "/api/workspace/file",
+                {"path": path, "source": tldr("stolen"), "baseDigest": None, "force": True},
+                **{"Content-Type": "application/json", "Origin": origin},
+            )
+            self.assertEqual(status, 403, origin)
+        self.assertIn('"shape:dev"', Path(path).read_text())
+
+
 if __name__ == "__main__":
     import unittest.mock  # noqa: F401 — ANY in the missing-document test
 

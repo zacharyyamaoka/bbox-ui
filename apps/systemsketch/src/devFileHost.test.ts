@@ -4,16 +4,56 @@
 //
 // Node only. Every host started here serves a mkdtemp root and is stopped in a
 // `finally`; the one case about the REAL home only computes paths.
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+//
+// AMENDED 2026-09-19 by the judge-fix lane `host-and-locks`, after an
+// independent Codex judge found dev and Stable taking DIFFERENT locks on the
+// same board (finding P1-2). ONE existing expectation was corrected, in the
+// same spirit as the two L4 cases the plan records replacing in place — and it
+// is corrected UPWARDS, not weakened:
+//
+//   was  const SHARED_LOCKS = path.join(homedir(), ".local/state/systemsketch-next/locks/workspace");
+//   now  asked of the Python that Stable actually calls (`default_lock_root`).
+//
+// The case is still named "with the lock folder the dock shares" and still
+// asserts exactly that; the literal was simply not the folder the dock shares.
+// Measured on this box: Stable resolves
+// `~/.local/share/systemsketch/runtime/locks/workspace` (the archived app's
+// own directory, which exists here), the literal above resolved the other one,
+// and `document_locks` names a lock file under its root — so two roots are two
+// lock files, and a dev save and a Stable save of one board excluded nothing.
+// Everything else in this file is untouched; the rest is NEW CASES ONLY.
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { devFileHostPlugin, resolveDevFileHostRoots, startFileHost, type RunningFileHost } from "../devFileHost";
+import { devFileHostPlugin, resolveDevFileHostRoots, resolveSharedLockRoot, startFileHost, type RunningFileHost } from "../devFileHost";
 
 const appDir = path.dirname(fileURLToPath(new URL("../vite.config.ts", import.meta.url)));
-const SHARED_LOCKS = path.join(homedir(), ".local/state/systemsketch-next/locks/workspace");
+const scriptsDir = path.resolve(appDir, "../../scripts");
+
+/**
+ * What Stable's own process computes for `home` — read out of
+ * `scripts/systemsketch_files.py` by running it, never restated as a literal
+ * here. That makes Python the ORACLE for this file's lock-root expectations:
+ * the TypeScript side cannot drift from the dock without this going red.
+ */
+function stableLockRoot(home: string): string {
+  return execFileSync(
+    "python3",
+    [
+      "-c",
+      "import sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; from systemsketch_files import default_lock_root; print(default_lock_root(Path(sys.argv[2])))",
+      scriptsDir,
+      home,
+    ],
+    { encoding: "utf8" },
+  ).trim();
+}
+
+const SHARED_LOCKS = stableLockRoot(homedir());
 
 let host: RunningFileHost | null = null;
 let temporary: string | null = null;
@@ -105,5 +145,153 @@ describe("the plugin", () => {
     const config = readFileSync(path.join(appDir, "vite.config.ts"), "utf8");
     expect(config).toMatch(/devFileHostPlugin\(/);
     expect(config).toMatch(/from "\.\/devFileHost"/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NEW CASES — judge-fix lane `host-and-locks`, 2026-09-19.
+// Nothing above is weakened; these only add.
+// ---------------------------------------------------------------------------
+
+/** One request with EXACTLY these headers. `fetch` will not let a caller set
+ *  `Origin`, and `Origin` is the whole point of the cases below. */
+function rawRequest(
+  origin: string,
+  route: string,
+  options: { method?: string; headers?: Record<string, string>; body?: string } = {},
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    void import("node:http").then(({ request: httpRequest }) => {
+      const url = new URL(route, origin);
+      const sent = httpRequest(
+        { hostname: url.hostname, port: url.port, path: url.pathname + url.search, method: options.method ?? "GET", headers: options.headers ?? {} },
+        (response) => {
+          let body = "";
+          response.setEncoding("utf8");
+          response.on("data", (chunk: string) => (body += chunk));
+          response.on("end", () => resolve({ status: response.statusCode ?? 0, body }));
+        },
+      );
+      sent.on("error", reject);
+      if (options.body !== undefined) sent.write(options.body);
+      sent.end();
+    }, reject);
+  });
+}
+
+describe("resolveSharedLockRoot — dev and Stable must name the SAME lock folder", () => {
+  // WHY this matters more than it reads (judge finding P1-2, reproduced):
+  // `document_locks` opens one lock file per board UNDER ITS ROOT. Two roots
+  // are two files, so a save from `vite dev` and a save from the dock both
+  // took a lock, both read digest D, both replaced, both verified — and the
+  // later one silently destroyed the earlier. The digest fence cannot see it:
+  // each writer's read-then-replace looked consistent to itself.
+
+  it("prefers the archived app's folder when it exists, exactly as Stable does", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "ss-home-shared-"));
+    try {
+      const archived = path.join(home, ".local/share/systemsketch/runtime/locks/workspace");
+      mkdirSync(archived, { recursive: true });
+      expect(resolveSharedLockRoot(home)).toBe(archived);
+      expect(resolveSharedLockRoot(home)).toBe(stableLockRoot(home));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to this app's own state folder when it does not, exactly as Stable does", () => {
+    const home = mkdtempSync(path.join(tmpdir(), "ss-home-fresh-"));
+    try {
+      const fallback = path.join(home, ".local/state/systemsketch-next/locks/workspace");
+      expect(resolveSharedLockRoot(home)).toBe(fallback);
+      expect(resolveSharedLockRoot(home)).toBe(stableLockRoot(home));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("gives `vite dev` the very root the dock's Stable server takes for the real HOME", () => {
+    const roots = resolveDevFileHostRoots({ HOME: homedir() } as NodeJS.ProcessEnv);
+    expect(roots?.lockRoot).toBe(stableLockRoot(homedir()));
+  });
+
+  it("is what the spawned host is actually told to use", async () => {
+    // A resolution nobody passes to the child is a resolution that locks
+    // nothing: prove the value reaches `--lock-root` and the host writes there.
+    const roots = tempRoots();
+    host = await startFileHost(roots);
+    const board = path.join(roots.filesRoot, "SystemSketch", "Locked.tldr");
+    const saved = await fetch(`${host.url}/api/workspace/file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: board, source: JSON.stringify({ tldrawFileFormatVersion: 1, schema: {}, records: [] }), baseDigest: null }),
+    });
+    expect(saved.status).toBe(200);
+    expect(readdirSync(roots.lockRoot).filter((name) => name.endsWith(".lock"))).toHaveLength(1);
+  });
+});
+
+describe("the plugin's proxy is not a hole in the file host's CSRF fence", () => {
+  // WHY the proxy needs its own check (judge finding P1-1's blast radius):
+  // vite's dev server answers cross-origin requests, and this proxy forwards
+  // whatever reaches it. Without the check, any page on any other localhost
+  // port could reach the file host THROUGH :4340 — the exact
+  // `text/plain` + `force: true` simple request the Python side now refuses.
+
+  async function withDevServer(run: (origin: string, roots: { filesRoot: string; lockRoot: string }) => Promise<void>) {
+    const roots = tempRoots();
+    const { createServer } = await import("vite");
+    const server = await createServer({
+      configFile: false,
+      root: appDir,
+      logLevel: "silent",
+      server: { port: 0, strictPort: false, host: "127.0.0.1" },
+      plugins: [devFileHostPlugin(roots)],
+    });
+    try {
+      await server.listen();
+      const origin = server.resolvedUrls?.local[0]?.replace(/\/$/, "");
+      expect(origin).toBeTruthy();
+      await run(origin as string, roots);
+    } finally {
+      await server.close();
+    }
+  }
+
+  const source = (marker: string) => JSON.stringify({ tldrawFileFormatVersion: 1, schema: {}, records: [{ id: `shape:${marker}`, typeName: "shape", type: "ss-block" }] });
+
+  it("saves a board for the app's own page and refuses the same write from another port", async () => {
+    await withDevServer(async (origin, roots) => {
+      const board = path.join(roots.filesRoot, "SystemSketch", "Proxied.tldr");
+      const self = new URL(origin).host;
+
+      // The app's own page: same-origin, JSON. This is the regression guard —
+      // the fence must not cost `pnpm --filter systemsketch dev` its Save.
+      const mine = await rawRequest(origin, "/api/workspace/file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: `http://${self}` },
+        body: JSON.stringify({ path: board, source: source("mine"), baseDigest: null }),
+      });
+      expect(mine.status).toBe(200);
+      expect(readFileSync(board, "utf8")).toContain("shape:mine");
+
+      // A page on another localhost port, as a CORS simple request.
+      const theirs = await rawRequest(origin, "/api/workspace/file", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8", Origin: "http://localhost:31337" },
+        body: JSON.stringify({ path: board, source: source("theirs"), baseDigest: null, force: true }),
+      });
+      expect(theirs.status).toBe(403);
+      expect(readFileSync(board, "utf8")).toContain("shape:mine");
+
+      // …and with JSON, which a preflight would have had to allow first.
+      const alsoTheirs = await rawRequest(origin, "/api/workspace/file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "http://evil.example" },
+        body: JSON.stringify({ path: board, source: source("theirs"), baseDigest: null, force: true }),
+      });
+      expect(alsoTheirs.status).toBe(403);
+      expect(readFileSync(board, "utf8")).toContain("shape:mine");
+    });
   });
 });

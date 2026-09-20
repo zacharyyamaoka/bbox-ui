@@ -988,6 +988,36 @@ def _post_failure_status(cause: BaseException) -> HTTPStatus:
     return HTTPStatus.CONFLICT
 
 
+def _is_json_content_type(raw: str | None) -> bool:
+    """True only for ``application/json`` (parameters allowed).
+
+    WHY this is a fence and not a formality: ``text/plain``,
+    ``application/x-www-form-urlencoded`` and ``multipart/form-data`` are the
+    three CORS-SAFELISTED request content types. A cross-origin POST carrying
+    one of them is a "simple request" — the browser sends it with no preflight
+    at all, so ``handle_options`` below never gets a vote. ``application/json``
+    is NOT safelisted, so demanding it puts every foreign page back behind a
+    preflight this host answers only under ``--cors-loopback``.
+    """
+    if not raw:
+        return False
+    return raw.split(";", 1)[0].strip().lower() == "application/json"
+
+
+def _is_same_origin(origin: str, host_header: str | None) -> bool:
+    """True when ``origin`` names the very authority this request was sent to.
+
+    The dock's Stable server serves the app AND these routes on one origin, so
+    its own page's ``Origin`` equals its ``Host``. Nothing else does.
+    """
+    if not origin or not host_header:
+        return False
+    parsed = urlparse(origin)
+    if parsed.scheme not in ("http", "https"):
+        return False
+    return parsed.netloc.lower() == host_header.strip().lower()
+
+
 def _loopback_origin(origin: str | None) -> str | None:
     """The exact ``Origin`` header value to echo, or None to send no CORS
     header at all. WHY restrict to loopback http origins: CORS is only ever
@@ -1054,6 +1084,77 @@ class WorkspaceApi:
         handler.end_headers()
         handler.wfile.write(content)
 
+    def _refuse_state_change(self, handler: BaseHTTPRequestHandler) -> str | None:
+        """Why this state-changing request must not run, or None to let it.
+
+        WHY this exists at all (judge finding P1-1, 2026-09-19, reproduced):
+        before it, ``POST /api/workspace/file`` accepted ``force: true`` from
+        ANY page, because it read neither ``Origin`` nor ``Content-Type``. A
+        page on any other localhost port could send
+
+            Content-Type: text/plain;charset=UTF-8
+            {"path": "<a board>", "source": "<theirs>", "force": true}
+
+        — a CORS *simple* request, so no preflight protected it — and
+        ``save_document(..., force=True)`` replaced the file and answered 200.
+        The dock mounts these routes on a KNOWN port over the REAL home
+        directory, so the bytes destroyed were one of Zach's boards, and
+        ``force`` is precisely the flag that skips the SHA-256 revision fence.
+        The plan weights "His files are never damaged" at 25%: a lost board is
+        unrecoverable, a missing feature is not.
+
+        The three ways a caller earns a write, and why each is safe:
+
+        * **No ``Origin`` at all** — not a browser page. The smoke suite, curl,
+          and the vite dev plugin's server-side proxy (which strips the header
+          only after making the same-origin check itself, see
+          ``apps/systemsketch/devFileHost.ts``). A local process that can send
+          this could write the file directly anyway.
+        * **``Origin`` == this request's own ``Host``** — the dock's own page,
+          served from this very origin.
+        * **A loopback http ``Origin`` while ``--cors-loopback`` is on** — the
+          pre-existing, opt-in development allowance, unchanged.
+
+        ``Content-Type: application/json`` is demanded on top of all three, so
+        that a cross-origin attempt is never a simple request and always has to
+        survive ``handle_options`` first.
+        """
+        if not _is_json_content_type(handler.headers.get("Content-Type")):
+            return "a request that changes files must be sent as application/json"
+        origin = handler.headers.get("Origin")
+        if origin is None:
+            return None
+        if _is_same_origin(origin, handler.headers.get("Host")):
+            return None
+        if self.cors_loopback and _loopback_origin(origin) is not None:
+            return None
+        return f"refused a cross-origin write from {origin}"
+
+    def _discard_body(self, handler: BaseHTTPRequestHandler) -> None:
+        """Read and drop the body of a request being refused.
+
+        WHY: leaving unread bytes in the socket desynchronises HTTP
+        keep-alive — the next request on that connection would be parsed
+        starting in the middle of this one's JSON.
+        """
+        if handler.headers.get("Transfer-Encoding"):
+            # A chunked body has no length to read to, and this handler does
+            # not decode chunks anywhere; close rather than leave the socket
+            # mid-message.
+            handler.close_connection = True
+            return
+        try:
+            length = int(handler.headers.get("Content-Length", "0"))
+        except ValueError:
+            handler.close_connection = True
+            return
+        if length <= 0:
+            return
+        if length > MAX_API_REQUEST_BYTES:
+            handler.close_connection = True
+            return
+        handler.rfile.read(length)
+
     def handle_get(self, handler: BaseHTTPRequestHandler) -> bool:
         """Answer ``handler``'s GET if its path is one of ours; False otherwise.
 
@@ -1105,6 +1206,15 @@ class WorkspaceApi:
         path = parsed.path
         if path not in self._POST_ROUTES:
             return False
+        # WHY the fence sits here, after the route check and before the body is
+        # parsed: an unknown path must keep answering the donor's 404 rather
+        # than leaking which routes exist, and a refused request must never
+        # reach save/rename/trash/reveal at all. See _refuse_state_change.
+        refusal = self._refuse_state_change(handler)
+        if refusal is not None:
+            self._discard_body(handler)
+            self._json(handler, {"error": refusal}, HTTPStatus.FORBIDDEN)
+            return True
         try:
             length = int(handler.headers.get("Content-Length", "0"))
             if length > MAX_API_REQUEST_BYTES:
