@@ -196,6 +196,15 @@ HTML = f"""<!doctype html>
 {"".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in KNOWN)}
 </tbody></table>
 
+<h2>The judge — could not run here, and why</h2>
+<table><tbody>
+<tr><td>Status</td><td><strong>Codex could not execute a single command in this background job.</strong> Two full rounds dispatched (<code>--sandbox read-only</code>, <code>xhigh</code>, <code>&lt; /dev/null</code>); both returned <em>Verdict: FIX — verification blocker, not a demonstrated implementation defect</em>, having inspected nothing.</td></tr>
+<tr><td>Cause</td><td>Its bubblewrap sandbox cannot start here. Measured: <code>unshare --user</code> ✓ and <code>unshare --user --net</code> ✓, but <code>bwrap --unshare-user …</code> → <code>setting up uid map: Permission denied</code> and <code>bwrap --unshare-net …</code> → <code>loopback: Failed RTM_NEWADDR: Operation not permitted</code>. So even <code>pwd</code> failed inside it. Reproduced with this session’s own sandbox both on and off, foreground and background — it is the job environment, not sandbox nesting, and not port contention.</td></tr>
+<tr><td>Not routed around</td><td>No auditor was substituted (the rule forbids it), and Codex was <strong>not</strong> re-run with <code>danger-full-access</code>: that would put an unsandboxed agent on a box holding <code>/home/bam/SystemSketch</code>’s 31 real boards, which is exactly the risk <code>read-only</code> exists to make mechanical.</td></tr>
+<tr><td>What it did land</td><td>One correct methodological hit, accepted and acted on: <em>“zero Export-trigger node swaps AT REST does not establish harness fragility — a trigger could be stable while idle and change during pointer movement.”</em> I then measured the case it named (open the File submenu, move onto Export): same node, still connected. That strengthens the reading but does not reproduce Playwright’s exact sequence, so the claim above now says <em>evidence, not proof</em>.</td></tr>
+<tr><td>Next</td><td>Codex ran fine on this box earlier today from an interactive session, so <code>/llm-judge</code> should work when you run it yourself. Nothing here has had an independent adversarial pass.</td></tr>
+</tbody></table>
+
 <h2>Gates</h2>
 <table><tbody>
 <tr><td>app unit</td><td>137 / 137</td></tr>
