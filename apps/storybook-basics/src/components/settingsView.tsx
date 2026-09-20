@@ -262,7 +262,12 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
                 </button>
               ))}
             </nav>
-            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
+            {/* WHY: the pane fills the window in `page` presentation, so without a
+                reading measure every option row stretches the full viewport and strands
+                its radio ~1,300px from its label — measured in a real 1400px window. The
+                cap is on the CONTENT, never on the popup, because the presentation
+                contract is that the page rect equals the viewport exactly. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto [&>*]:w-full [&>*]:max-w-2xl">
               {activeCategory?.sections.map((section) => {
                 const controlId = `${testIdPrefix ?? "settings"}-${activeCategory.id}-${section.id}`;
                 return (
