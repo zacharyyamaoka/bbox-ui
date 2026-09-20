@@ -70,13 +70,16 @@ canonical lineage, three consumers." The checkable version:
   trunk's version forward. Never average the two, and never keep both "for
   now" — that is exactly how the vendored copy above started to diverge.
 
-## SystemSketch is the tldraw host — the functionality lives here
+## The host apps only host — the functionality lives here
 
 **Most changes go in bbox-ui, where possible and appropriate.** bbox-ui is the
-library; `apps/systemsketch` is the implementation that mounts it in tldraw. The
-default home for a new capability — a component, menu, panel, setting, layout or
-scene logic, routing, a file host, a behaviour — is the trunk
-(`apps/storybook-basics/src`). The app imports it, configures it and wires it.
+library; a **host app** is the implementation that mounts it in one canvas engine —
+`apps/systemsketch` today, which Zach has said is more accurately named
+`apps/bbox-tldraw` (2026-09-19), and `apps/bbox-reactflow` when that exists.
+SystemSketch — the larger product — is a separate thing ("another monster"), not
+these apps. The default home for a new capability — a component, menu, panel,
+setting, layout or scene logic, routing, a file host, a behaviour — is the trunk
+(`apps/storybook-basics/src`). A host app imports it, configures it and wires it.
 
 Zach, 2026-09-19: *"most changes where possible and appropriate should be done
 in bbox-ui. that is the library. system sketch is the implementation that uses
@@ -88,7 +91,7 @@ tldraw. We want the functionality in bbox-ui"* — for two reasons he gave:
    rebuild, and a fix made only in the app is one the next host inherits
    nothing from.
 
-**The test, before writing code in `apps/systemsketch`: would a React Flow host
+**The test, before writing code in a host app: would a React Flow host
 need this too?** If yes, it belongs in the trunk. Code stays in the app only when
 it has to name tldraw's API to exist — a `ShapeUtil`, binding or tool,
 tldraw's `components` / `overrides` slots, `onMount`, the store and
