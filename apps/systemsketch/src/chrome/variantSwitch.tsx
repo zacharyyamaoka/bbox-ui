@@ -189,7 +189,23 @@ function VariantMenu<T extends string>({ which, label, heading, ids, titleOf, va
         title={`${heading} — ${value} · ${titleOf(value)}`}
         className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-accent hover:text-accent-foreground data-popup-open:bg-accent"
       >
-        <span className="text-muted-foreground">{label}</span>
+        {/* The WORD ("Ports" / "Regions") follows the same 1600px rule as the
+            title below, and for the same reason — extended here 2026-09-20
+            because the status strip grew (grid and help joined it for Zach's
+            bottom-right screenshot) and pushed the measured row to 486px.
+            `placeCornerCluster` then had only 417px between the dock's right
+            edge and the licence watermark, so it correctly fell through to
+            `above-licence` — reproducing the exact complaint that placement
+            exists to fix ("please move the right corner menu to be truly in
+            the right corner right now its above this text 'get a license for
+            production'", 2026-09-19). Dropping the two words returns ~82px,
+            which puts the row back on the corner's own bottom row.
+
+            The pill stays fully identified without them: `aria-label` and
+            `title` above both carry "Ports"/"Regions" in full, and so does
+            the open menu's own heading. This is the temporary review control
+            yielding to the product's chrome, which is the right way round. */}
+        <span className="hidden text-muted-foreground min-[1600px]:inline">{label}</span>
         <span className="font-medium tabular-nums">{value}</span>
         {/* WHY the title is capped tighter than it reads: this pill shares the
             bottom row with the zoom cluster, and `placeCornerCluster`
