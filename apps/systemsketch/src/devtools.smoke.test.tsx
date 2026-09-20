@@ -72,15 +72,19 @@ describe("The quick switcher — bare `S`, on the trunk's stock command palette"
     await userEvent.keyboard("s");
     const root = await waitFor(() => switcher(), { what: "the quick switcher" });
 
-    // Not a fabricated list: the same `SYSTEM_FAMILY_ITEMS` the dock renders.
+    // Not a fabricated list: the same `SYSTEM_FAMILY_ITEMS` the dock renders,
+    // under their REAL tool ids — Block is `ss-block` (shapes/types.ts:30),
+    // prefixed on purpose so it cannot collide with the trunk bench's
+    // `bbox-block`. An item whose `run()` called `setCurrentTool("block")`
+    // would throw: no state node is registered under that id.
     const block = await waitFor(
-      () => root.querySelector<HTMLElement>('[data-testid="quick-switcher-item-block"]'),
-      { what: "a `block` entry in the switcher" },
+      () => root.querySelector<HTMLElement>('[data-testid="quick-switcher-item-ss-block"]'),
+      { what: "an `ss-block` entry in the switcher" },
     );
     block.click();
 
     await waitFor(() => !switcher(), { what: "the switcher to close after running an item" });
-    await waitFor(() => app!.editor.getCurrentToolId() === "block", {
+    await waitFor(() => app!.editor.getCurrentToolId() === "ss-block", {
       what: "the editor to be on the block tool",
     });
   });

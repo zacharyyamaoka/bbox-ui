@@ -10,6 +10,7 @@ import { useEditor, usePassThroughWheelEvents } from "tldraw";
 
 import { KITS } from "../shapes/registry";
 import { SystemSketchChromeBar } from "./chromeBar";
+import { SystemSketchDevTools } from "./devtools";
 import { FloatingSelectionToolbar } from "./floatingToolbar";
 import { SystemSketchPanel } from "./panels";
 import { useProblems } from "./problems";
@@ -58,6 +59,11 @@ function SystemSketchChrome() {
   const [open, setOpen] = useState<ChromePanel | null>(null);
   const panelId = useId();
   const problems = useProblems(editor);
+  // The dev panel's own boolean, deliberately separate from `open`/`toggle`
+  // above — see `statusStrip.tsx`'s `devPanelOpen` doc for why a third
+  // `ChromePanel` value would be the wrong shape for a modal dialog.
+  const [devPanelOpen, setDevPanelOpen] = useState(false);
+  const toggleDevPanel = useCallback(() => setDevPanelOpen((current) => !current), []);
 
   /**
    * STEP 7 of docs/menus/MENU-KIT-DESIGN.md §4 — "the host attaches wheel
@@ -137,6 +143,11 @@ function SystemSketchChrome() {
       </div>
       <FloatingSelectionToolbar />
       <SystemSketchPanel open={open} onClose={close} problems={problems} id={panelId} />
+      {/* Quick switcher, dev panel and recorder: all three portal to
+          `document.body` through their own stock Dialog/Popover, so this
+          component paints nothing here itself — it only needs to be
+          mounted, the same as `kit.Overlay` above. */}
+      <SystemSketchDevTools devPanelOpen={devPanelOpen} onDevPanelOpenChange={setDevPanelOpen} />
       {/*
         Bottom-RIGHT, clear of the dock's bottom-centre column — and lifted
         48px so it clears tldraw's LICENCE WATERMARK.
@@ -156,6 +167,8 @@ function SystemSketchChrome() {
           onToggle={toggle}
           problemCount={problems.total}
           panelId={panelId}
+          devPanelOpen={devPanelOpen}
+          onToggleDevPanel={toggleDevPanel}
         />
       </div>
     </div>
