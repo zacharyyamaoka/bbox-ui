@@ -173,6 +173,22 @@ export const REGION_CORNER_BLOCK_STYLE: CSSProperties = {
   borderTopRightRadius: 0,
   borderBottomLeftRadius: 0,
   borderBottomRightRadius: `var(--bbox-region-corner-radius, ${FRAME_RADIUS})`,
+  // WHY: `v10` (the 2026-09-20 sketch) centres the header card's title in a
+  // band run the full width of the region; every other drawing leaves it
+  // where the host put it. `text-align` is INHERITED, which is the whole
+  // reason it can live on this one shared object: the corner card is a React
+  // descendant of `Region` in the DOM host and a separate `ss-block` child
+  // SHAPE in the app, and an inherited property is the only paint that
+  // crosses that boundary without either host restating it.
+  //
+  // It cannot leak onto the port labels — `BlockPort` is the card's PARENT,
+  // not its child — which is what keeps the sketch's `port 1` / `port 2` left
+  // aligned beside their dots while the title centres. The tempting
+  // alternative, a `[data-slot="block-header"]` rule in `regionVariants.css`,
+  // is ruled out twice over: that file is custom-properties-only by its own
+  // contract, and a descendant selector written in the trunk can never reach
+  // the app's child shape at all (BlockFace.tsx's own note).
+  textAlign: "var(--bbox-region-corner-title-align, initial)" as CSSProperties["textAlign"],
 };
 
 /**

@@ -412,10 +412,18 @@ describe("app-variant-switch (e) — the corner card's junctions with the frame 
 
     for (const variant of REGION_VARIANT_IDS) {
       await pick("region", variant);
+      const spec = REGION_VARIANTS[variant];
+      // WHY the settle condition is the SPEC's radius and no longer
+      // `shared !== "0px"`: that guard meant "the tokens have landed", using
+      // round-ness as a proxy for them — and `v10` (Zach's 2026-09-20 sketch)
+      // is square by design, so the proxy would never come true and this
+      // would time out rather than fail. Waiting for the declared value is
+      // the same wait made exact.
+      const wantSquare = spec.frame.radius === "0px";
       await waitFor(() => {
         const card = getComputedStyle(cardOf()!);
         const shared = getComputedStyle(frameOf(id)!).borderTopLeftRadius;
-        if (shared === "0px") return null;
+        if ((shared === "0px") !== wantSquare) return null;
         return card.borderTopRightRadius === "0px" &&
           card.borderBottomLeftRadius === "0px" &&
           card.borderTopLeftRadius === shared
@@ -428,8 +436,18 @@ describe("app-variant-switch (e) — the corner card's junctions with the frame 
       expect(card.borderTopRightRadius, `${variant}: the card's top edge leaves the frame's top rule straight`).toBe("0px");
       expect(card.borderBottomLeftRadius, `${variant}: the card's left edge leaves the frame's left rule straight`).toBe("0px");
       expect(card.borderTopLeftRadius, `${variant}: the shared top-left curves with the frame`).toBe(shared);
-      expect(shared, `${variant}: the frame's own top-left is still round`).not.toBe("0px");
-      expect(card.borderBottomRightRadius, `${variant}: the free bottom-right corner`).toBe(variant === "v2" ? "0px" : shared);
+      // Stricter than the `not.toBe("0px")` this replaces: a round drawing
+      // must still be round AND a square one must actually be square, both
+      // read from `regionVariants.ts`'s own `frame.radius` — which until now
+      // was prose nothing verified.
+      if (wantSquare) expect(shared, `${variant}: this drawing declares square corners`).toBe("0px");
+      else expect(shared, `${variant}: the frame's own top-left is still round`).not.toBe("0px");
+      // Declared, not named: `v2` and `v10` square the card's one free corner
+      // so a full-width header rule leaves it cleanly. `v9` is ruled and keeps
+      // the curve, because that is what Zach's DESIRED screenshot draws.
+      expect(card.borderBottomRightRadius, `${variant}: the free bottom-right corner`).toBe(
+        spec.corner.freeCorner === "square" ? "0px" : shared,
+      );
     }
 
     // Scoped to the CORNER: an ordinary block on the same board keeps all

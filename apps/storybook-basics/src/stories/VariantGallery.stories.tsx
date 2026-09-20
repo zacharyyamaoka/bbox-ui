@@ -29,7 +29,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
 import { PORT_VARIANTS, type PortVariantId } from "../skin/portVariants";
-import { REGION_VARIANTS, type RegionVariantId } from "../skin/regionVariants";
+import { drawsHeaderRule, REGION_VARIANTS, type RegionVariantId } from "../skin/regionVariants";
 import { BranchInLoop } from "./ControlFlowGallery.stories";
 
 const meta = {
@@ -84,7 +84,7 @@ async function expectBoardIn(root: HTMLElement, port: PortVariantId, region: Reg
 
   const frame = branchFrame(root);
   const rule = required<HTMLElement>(frame, ':scope > [data-slot="region-header-rule"]', "the branch's header rule");
-  if (REGION_VARIANTS[region].corner.integration === "ruled") {
+  if (drawsHeaderRule(REGION_VARIANTS[region])) {
     await waitFor(() => expect(getComputedStyle(rule).display).not.toBe("none"));
     const ruleRect = rule.getBoundingClientRect();
     expect(ruleRect.height).toBeGreaterThanOrEqual(0.5);

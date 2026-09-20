@@ -44,6 +44,7 @@
   --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
   --bbox-region-frame-radii: var(--bbox-region-frame-radius);
   --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
   --bbox-region-header-rule-display: none;
   --bbox-region-header-rule-stroke: var(--border);
   --bbox-region-arm-divider-width: 1px;
@@ -79,6 +80,7 @@
   --bbox-region-frame-radius: var(--radius-md);
   --bbox-region-frame-radii: var(--bbox-region-frame-radius);
   --bbox-region-corner-radius: 0px;
+  --bbox-region-corner-title-align: initial;
   --bbox-region-header-rule-display: block;
   --bbox-region-header-rule-stroke: var(--border);
   --bbox-region-arm-divider-width: 1px;
@@ -115,6 +117,7 @@
   --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
   --bbox-region-frame-radii: var(--bbox-region-frame-radius);
   --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
   --bbox-region-header-rule-display: none;
   --bbox-region-header-rule-stroke: var(--border);
   --bbox-region-arm-divider-width: 0px;
@@ -155,6 +158,7 @@
   --bbox-region-frame-radius: var(--radius-md);
   --bbox-region-frame-radii: var(--bbox-region-frame-radius) 0 0 0;
   --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
   --bbox-region-header-rule-display: none;
   --bbox-region-header-rule-stroke: var(--border);
   --bbox-region-arm-divider-width: 0px;
@@ -191,6 +195,7 @@
   --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
   --bbox-region-frame-radii: var(--bbox-region-frame-radius);
   --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
   --bbox-region-header-rule-display: none;
   --bbox-region-header-rule-stroke: var(--border);
   --bbox-region-arm-divider-width: 0px;
@@ -255,6 +260,7 @@
   --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
   --bbox-region-frame-radii: var(--bbox-region-frame-radius);
   --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
   --bbox-region-header-rule-display: none;
   --bbox-region-header-rule-stroke: var(--border);
   --bbox-region-arm-divider-width: 0px;
@@ -293,6 +299,7 @@
   --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
   --bbox-region-frame-radii: var(--bbox-region-frame-radius);
   --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
   --bbox-region-header-rule-display: none;
   --bbox-region-header-rule-stroke: var(--border);
   --bbox-region-arm-divider-width: 0px;
@@ -334,7 +341,114 @@
   --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
   --bbox-region-frame-radii: var(--bbox-region-frame-radius);
   --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
   --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   v9 / v10 — the two asks of 2026-09-20 00:45. Both ADD a drawing; not one
+   declaration above this line moved, because v1-v8 are what he is comparing.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* v9 — Top rule, ruled header. `v8` value for value, with ONE token flipped:
+   `--bbox-region-header-rule-display`. That is `v2`'s corner integration, and
+   it is the whole of Zach's "Top rule is my favorite one but add the top line
+   on the top arm" (`Pasted image 20260920004250.png`, DESIRED).
+
+   WHY the first arm's own `border-top` is NOT the mechanism: `region.tsx`
+   draws an arm divider for rows after the first only (the donor's
+   `dividerY: index === 0 ? null : rowTop`), and that rule is right — the line
+   above arm 0 belongs to the CORNER, not to the arm. Drawing it as the
+   corner's rule also puts it on the card's own bottom edge rather than 2px
+   lower at the row's top, so the card's border and the rule are ONE line; and
+   because every region paints its own, it appears at every nesting level with
+   no per-level code. The alternative — `index >= 0` on the divider — was
+   tried against DESIRED and rejected: it moves the line off the card's edge
+   and changes v1 and v8 for everyone.
+
+   WHY the free bottom-right corner stays ROUND here while `v2` squares it:
+   DESIRED keeps the curve — the rule visibly departs from a rounded corner in
+   his own screenshot. `v2`'s square is `v2`'s taste, not a consequence of
+   being ruled. */
+[data-bbox-region-variant="v9"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: block;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v10 — Header band. The hand sketch (`Pasted image 20260920004529.png`),
+   clarified the same night: "its just the block is stretch accross the entire
+   width of the region". So v9's rule, plus SQUARE everywhere and a CENTRED
+   card title — the three things a drawing owns. Every radius token is 0px,
+   including the card's shared top-left and its free bottom-right, which is
+   how the sketch's plain rectangle reads.
+
+   `--bbox-region-corner-title-align: center` is inherited from the card's own
+   root (`REGION_CORNER_BLOCK_STYLE`) into `Block`'s header slot, which is
+   where the name sits. It cannot reach the PORT labels: those are rendered by
+   `BlockPort`, which is the card's PARENT, not its child — the sketch keeps
+   `port 1` / `port 2` left-aligned beside their dots, and that is why they
+   stay that way for free.
+
+   WHAT IS NOT HERE, deliberately: the card's WIDTH. In the DOM host it is a
+   `width` prop (`hosts/nodeViews.tsx`), in the app a persisted `props.w` on a
+   real `ss-block` child shape — in neither host is it a computed style, so no
+   token in this file could ever stretch it. Over a host-made-wide card this
+   drawing IS the sketch; over a 160px card it is v9 squared. */
+[data-bbox-region-variant="v10"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: 0px;
+  --bbox-region-frame-radii: 0px;
+  --bbox-region-corner-radius: 0px;
+  --bbox-region-corner-title-align: center;
+  --bbox-region-header-rule-display: block;
   --bbox-region-header-rule-stroke: var(--border);
   --bbox-region-arm-divider-width: 1px;
   --bbox-region-arm-divider-stroke: var(--border);

@@ -70,6 +70,7 @@ import { BRANCH_NESTED } from "../presets/branch/branch.fixtures";
 import { REGION_NODE_TYPE } from "../scene/region";
 import {
   DEFAULT_REGION_VARIANT,
+  drawsHeaderRule,
   REGION_VARIANT_ATTR,
   REGION_VARIANT_IDS,
   REGION_VARIANTS,
@@ -250,7 +251,7 @@ function expectVariantPaint(root: ParentNode, variant: RegionVariantId): void {
   // The header RULE under the corner block — the line Zach pointed at in
   // `115353` — is v2's whole claim: full width, on the corner's bottom edge.
   const rule = frame.querySelector<HTMLElement>(':scope > [data-slot="region-header-rule"]');
-  if (spec.corner.integration === "ruled") {
+  if (drawsHeaderRule(spec)) {
     expect(rule, `${variant}: the header rule exists`).not.toBeNull();
     expect(getComputedStyle(rule!).display, `${variant}: the header rule is drawn`).not.toBe("none");
     const ruleRect = rule!.getBoundingClientRect();
@@ -458,6 +459,12 @@ export const V5: Story = variantStory("v5");
 export const V6: Story = variantStory("v6");
 export const V7: Story = variantStory("v7");
 export const V8: Story = variantStory("v8");
+// 2026-09-20, 00:45: v9 is v8 with the corner card's rule turned on, so the
+// FIRST arm has a line above it too; v10 is the hand sketch — the same rule,
+// square corners and a centred card title. Both ADD a drawing; v8 is
+// untouched because he is still comparing it.
+export const V9: Story = variantStory("v9");
+export const V10: Story = variantStory("v10");
 
 /* ------------------------------------------------------------------ */
 /* The gallery — every drawing, one fixture, side by side for the report */
@@ -803,24 +810,42 @@ export const CornerMeetsFrameSquare: Story = {
     try {
       for (const variant of REGION_VARIANT_IDS) {
         html.setAttribute(REGION_VARIANT_ATTR, variant);
+        const spec = REGION_VARIANTS[variant];
         await waitFor(() => {
           for (const id of REGIONS_ON_THE_BOARD) {
             const region = regionOf(canvasElement, id);
             const radii = cornerRadiiOf(region, id);
             const shared = getComputedStyle(frameOf(region)).borderTopLeftRadius;
 
-            // The two junctions: straight, exactly.
+            // The two junctions: straight, exactly. Unconditional — this is
+            // the 2026-09-19 rule itself and no drawing may opt out of it.
             expect(radii.tr, `${variant}/${id}: the card's top edge must leave the frame's top rule straight`).toBe("0px");
             expect(radii.bl, `${variant}/${id}: the card's left edge must leave the frame's left rule straight`).toBe("0px");
 
-            // The shared corner curves WITH the frame, and is really a curve.
+            // The shared corner curves WITH the frame — whatever the frame
+            // does, including nothing.
             expect(radii.tl, `${variant}/${id}: the shared top-left follows the frame`).toBe(shared);
-            expect(shared, `${variant}: the frame's own top-left is still round`).not.toBe("0px");
 
-            // The one free corner: the variant's own call. `v2` squares it so
-            // its full-width header rule leaves the card cleanly; the other
-            // four keep the frame's radius.
-            expect(radii.br, `${variant}/${id}: the free bottom-right corner`).toBe(variant === "v2" ? "0px" : shared);
+            // …and the frame really does what its SPEC says. This was
+            // `not.toBe("0px")` for every variant, which was true of the eight
+            // that existed and is a lie about `v10`, whose whole drawing is a
+            // plain square rectangle (Zach's 2026-09-20 sketch). Reading
+            // `frame.radius` makes the check stricter, not looser: a round
+            // drawing must still be round, a square one must actually BE
+            // square, and `regionVariants.ts`'s number — until now unverified
+            // prose — is now pinned to the CSS that paints it.
+            const square = spec.frame.radius === "0px";
+            if (square) expect(shared, `${variant}: this drawing declares square corners`).toBe("0px");
+            else expect(shared, `${variant}: the frame's own top-left is still round`).not.toBe("0px");
+
+            // The one free corner: the variant's own call, declared rather
+            // than named. `v2` and `v10` square it so a full-width header rule
+            // leaves the card cleanly; the rest keep the frame's radius —
+            // including `v9`, which is ruled and rounded, because that is what
+            // `…20260920004250.png` draws.
+            expect(radii.br, `${variant}/${id}: the free bottom-right corner`).toBe(
+              spec.corner.freeCorner === "square" ? "0px" : shared,
+            );
           }
 
           // Scoped to the CORNER card: an ordinary Block on the same board —

@@ -1,13 +1,14 @@
-// src/skin/regionVariants.ts — EIGHT DRAWINGS of the one Region component,
+// src/skin/regionVariants.ts — TEN DRAWINGS of the one Region component,
 // as a typed spec and one attribute. The contract the dispatcher spelled
 // out in docs/ASK-2026-09-19-PORTS-EDGES-REGIONS-FEEDBACK.md ("Contracts"),
 // owned by lane `regions`:
 //
 //   • `REGION_VARIANTS: Record<RegionVariantId, RegionVariant>`, ids
-//     `v1`..`v8`, `v1` the default so ignoring is free. `v1`-`v5` are the
+//     `v1`..`v10`, `v1` the default so ignoring is free. `v1`-`v5` are the
 //     original five; `v6`-`v8` are the three Zach picked out of the
-//     2026-09-19 babble gallery, added rather than substituted because he
-//     is still comparing them against the first five (see their block).
+//     2026-09-19 babble gallery; `v9`-`v10` are the two asks of 2026-09-20
+//     00:45. Every one is ADDED, never substituted, because he is still
+//     comparing them against each other (see each block).
 //   • The variant in force is read from `data-bbox-region-variant` — on
 //     `document.documentElement` for an app (`dataset.bboxRegionVariant`),
 //     or on ANY nearer ancestor for a gallery that shows several at once.
@@ -46,7 +47,7 @@
 // `Pasted image 20260919114919.png` is part of what Zach called "very
 // unprofessional", so a dashed proposal would be proposing the complaint.
 
-export const REGION_VARIANT_IDS = ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"] as const;
+export const REGION_VARIANT_IDS = ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"] as const;
 export type RegionVariantId = (typeof REGION_VARIANT_IDS)[number];
 
 export const DEFAULT_REGION_VARIANT: RegionVariantId = "v1";
@@ -66,7 +67,12 @@ export interface RegionVariant {
     /** CSS colour (a theme token, never a literal — skin and dark follow). */
     stroke: string;
     fill: string;
-    /** The shared top-left radius — the corner card's too. */
+    /** The shared top-left radius — the corner card's too. LOAD-BEARING, not
+     *  documentation: `"0px"` is how a drawing declares itself SQUARE, and the
+     *  two junction tests read it as their oracle (`RegionVariants.stories.tsx`'s
+     *  `CornerMeetsFrameSquare`, `variants.smoke.test.tsx`'s (e)). A value here
+     *  that disagrees with `regionVariants.css` is a failure, which is what
+     *  keeps the spec and the paint from drifting. */
     radius: string;
     /** Never set on the five shipped (see this file's header). */
     dash?: "dashed";
@@ -77,8 +83,27 @@ export interface RegionVariant {
     /** `flush`: the card's border sits on the frame's line (the Labeled
      *  Group Node look, `region.tsx`'s header). `ruled`: flush, AND the
      *  card's bottom edge continues as a full-width rule under it — the
-     *  line Zach pointed at in `Pasted image 20260919115353.png`. */
-    integration: "flush" | "ruled";
+     *  line Zach pointed at in `Pasted image 20260919115353.png` and again
+     *  in `…20260920004250.png`'s DESIRED half. `band`: ruled, AND the card
+     *  is meant to span the region's whole width with its title centred in
+     *  it (`…20260920004529.png`) — the header IS the band.
+     *
+     *  WHY `band` still says `ruled`'s rule rather than replacing the card:
+     *  Zach, 2026-09-20 — "its just the block is stretch accross the entire
+     *  width of the region". The corner card is not removed and no port
+     *  moves; its dots are already on its own left edge, which at full width
+     *  IS the region's left edge. What a DRAWING can reach is the rule, the
+     *  square corners and the centred title; the card's WIDTH is the host's
+     *  in both hosts (a `width` prop in `hosts/nodeViews.tsx`, a persisted
+     *  `props.w` in the app's `shapes/region/cornerBlock.ts`) and is never
+     *  CSS — see `region.tsx`'s `REGION_CORNER_BLOCK_STYLE`. */
+    integration: "flush" | "ruled" | "band";
+    /** The card's ONE free corner, bottom-right. Absent = the frame's shared
+     *  radius, which is what the drawing Zach approved does. `"square"` is
+     *  `v2`'s own trick — a full-width rule leaves a square corner cleanly
+     *  instead of departing from a curve. NOT implied by `ruled`: `v9` is
+     *  ruled and keeps the curve, because that is what he drew. */
+    freeCorner?: "square";
   };
   arms: {
     /** How an arm's header row is marked. The contract named
@@ -124,7 +149,7 @@ export const REGION_VARIANTS: Record<RegionVariantId, RegionVariant> = {
     title: "Ruled",
     blurb: "The corner card's bottom edge runs the full width as a header rule; every arm header sits between two rules.",
     frame: { stroke: "var(--border)", fill: "transparent", radius: "var(--radius-md)" },
-    corner: { integration: "ruled" },
+    corner: { integration: "ruled", freeCorner: "square" },
     arms: { header: "rule", divider: true, headerPx: 32, chevron: "always" },
     nested: { contrast: "none" },
     opaque: { card: "stock" },
@@ -215,7 +240,83 @@ export const REGION_VARIANTS: Record<RegionVariantId, RegionVariant> = {
     nested: { contrast: "none" },
     opaque: { card: "stock" },
   },
+
+  // ── 2026-09-20, the two asks of the 00:45 round ───────────────────────
+  // Both land as NEW ids. v1-v8 are untouched, value for value, because he
+  // is still comparing them and a drawing that changes under him is not a
+  // comparison (the same reason v6-v8 were added rather than substituted).
+  //
+  // v9 — "Top rule is my favorite one but add the top line on the top arm."
+  // v8 draws a hairline BETWEEN rows and nothing above the first, so the
+  // first arm hangs in open space beside the corner card
+  // (`…20260920004250.png`, CURRENT BAD). DESIRED puts a full-width rule
+  // directly under the card's row, at every nesting level.
+  //
+  // WHY this needed no change to `region.tsx` at all: that rule already
+  // exists as `region-header-rule`, turned on by `corner.integration:
+  // "ruled"`, which is `v2`'s. The first-arm divider (`index > 0`, the
+  // donor's `dividerY: index === 0 ? null : rowTop`) stays exactly as it
+  // was — the line above arm 0 is the CORNER's rule, not the arm's, which
+  // is why it lands on the card's own bottom edge (`corner.h - 2px`) rather
+  // than 2px lower at the row's top, and why it needs no per-level
+  // special-casing: every region paints its own.
+  //
+  // WHY v9 and not a correction to v8: this is a NEW COMBINATION — v8's arm
+  // treatment with v2's corner integration — and neither of its parents
+  // should move. If he wants v8 itself to be this, it is one token in
+  // `regionVariants.css` (`--bbox-region-header-rule-display: block`).
+  v9: {
+    id: "v9",
+    title: "Top rule, ruled header",
+    blurb:
+      "v8 with the corner card's bottom edge continued as a full-width rule, so the FIRST arm has a line above it too — at every nesting level.",
+    frame: { stroke: "var(--border)", fill: "transparent", radius: "var(--bbox-skin-radius, var(--radius-lg))" },
+    // No `freeCorner`: the card keeps the frame's curve at its one free
+    // corner, which is what DESIRED draws (`…004250.png`, right half — the
+    // rule departs from a rounded bottom-right). `v2` squares it; he did not.
+    corner: { integration: "ruled" },
+    arms: { header: "none", divider: true, headerPx: 30, chevron: "always" },
+    nested: { contrast: "none" },
+    opaque: { card: "stock" },
+  },
+
+  // v10 — "please also create a variant that looks like this"
+  // (`…20260920004529.png`, then clarified 2026-09-20: "its just the block
+  // is stretch accross the entire width of the region"). A plain rectangle:
+  // square everywhere, the header card spanning the full width as a filled
+  // band with its title centred, its ports still straddling its own left
+  // edge — which at full width is the region's left edge — a full-width
+  // rule under the band, and every arm with a rule above it.
+  //
+  // WHAT IS A DRAWING AND WHAT IS THE HOST'S, measured rather than assumed:
+  // the rule, the square corners and the centred title are all tokens here.
+  // The card's WIDTH is not, in either host — see `corner.integration`'s
+  // note. So v10 draws the band correctly over a card the host made wide,
+  // and over a 160px card it is v9 with square corners.
+  v10: {
+    id: "v10",
+    title: "Header band",
+    blurb:
+      "The sketch: a plain square rectangle whose top band IS the header card, run the full width with its title centred, ruled off from the arms below.",
+    // "0px" is the declaration that this drawing is SQUARE — the junction
+    // tests read it (see `frame.radius`).
+    frame: { stroke: "var(--border)", fill: "transparent", radius: "0px" },
+    corner: { integration: "band", freeCorner: "square" },
+    arms: { header: "none", divider: true, headerPx: 30, chevron: "always" },
+    nested: { contrast: "none" },
+    opaque: { card: "stock" },
+  },
 };
+
+/**
+ * Does this drawing continue the corner card's bottom edge as a full-width
+ * rule (`region.tsx`'s `region-header-rule`)? One name for the rule, because
+ * three acceptance suites ask it and `=== "ruled"` was already wrong the
+ * moment `band` existed — `band` is `ruled` plus a stretched, centred card.
+ */
+export function drawsHeaderRule(spec: RegionVariant): boolean {
+  return spec.corner.integration !== "flush";
+}
 
 export function isRegionVariantId(value: unknown): value is RegionVariantId {
   return typeof value === "string" && (REGION_VARIANT_IDS as readonly string[]).includes(value);
@@ -281,6 +382,7 @@ export const REGION_VARIANT_TOKENS: readonly RegionVariantToken[] = [
   { name: "bbox-region-frame-radius", paints: "border-top-left-radius (frame AND corner card — the shared corner)" },
   { name: "bbox-region-frame-radii", paints: "border-radius (frame, four corners)" },
   { name: "bbox-region-corner-radius", paints: "border-bottom-right-radius (corner card — its one free corner)" },
+  { name: "bbox-region-corner-title-align", paints: "text-align (corner card — inherited into its header slot; `v10` centres the band's title)" },
   { name: "bbox-region-header-rule-display", paints: "display (the full-width rule under the corner card)" },
   { name: "bbox-region-header-rule-stroke", paints: "background (that rule)" },
   { name: "bbox-region-arm-divider-width", paints: "border-top-width (arm header, rows after the first)" },
