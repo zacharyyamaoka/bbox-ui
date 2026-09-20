@@ -163,6 +163,16 @@ export const PressS: Story = {
     await userEvent.keyboard("{ArrowDown}");
     await waitFor(() => expect(selectedRow()?.dataset.itemId).toBe("grip-frame"));
 
+    // 3b. And the selection has to be VISIBLE, measured, not asserted as an
+    // attribute. The stock row class paints `data-selected:bg-muted`, which in
+    // Tailwind v4 matches the attribute's PRESENCE — and cmdk stamps
+    // `data-selected="false"` on every unselected row, so stock alone painted
+    // all six rows identically. `quickSwitcher.tsx`'s ROW override is what
+    // this measures; a DOM-presence check would have passed straight through
+    // the bug.
+    const paint = (id: string) => getComputedStyle(node(`item-${id}`)!).backgroundColor;
+    expect(paint("grip-frame")).not.toBe(paint("gripper"));
+
     // 4. Enter runs the selected row and closes.
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(node("input")).not.toBeInTheDocument());

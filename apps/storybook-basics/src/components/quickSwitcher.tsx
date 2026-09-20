@@ -95,6 +95,29 @@ export interface QuickSwitcherProps<TMeta = unknown> {
   testIdPrefix?: string;
 }
 
+/**
+ * WHY our rows override the stock selected-row background.
+ *
+ * The stock `CommandItem` (copied verbatim) paints selection with
+ * `data-selected:bg-muted`, and in Tailwind v4 that variant means "the
+ * attribute is PRESENT", not "it equals true". cmdk stamps
+ * `data-selected="false"` on every unselected row — React renders a boolean
+ * `false` on a `data-*` attribute as the string — so the attribute is always
+ * present and every row painted `bg-muted`. Measured in the live page: all six
+ * rows `oklch(0.97 0 0)`, selected and not, which makes the thing Enter is
+ * about to run invisible.
+ *
+ * Fixed here rather than in `command.tsx` because that file is verbatim stock
+ * under an oracle (`stockPrimitives.test.ts`) — editing it would be a silent
+ * fork of the upstream part. `!` because `[data-selected]` and
+ * `[data-selected=false]` have identical specificity, so without it the winner
+ * is whatever order Tailwind happens to emit them in.
+ *
+ * `QuickSwitcher.stories.tsx > PressS` measures the two backgrounds and fails
+ * if they match again.
+ */
+const ROW = "data-[selected=false]:bg-transparent!";
+
 function MatchText({ match }: { match: TextSearchMatch }) {
   const snippet = searchMatchSnippet(match);
   return (
@@ -367,12 +390,17 @@ export function QuickSwitcher<TMeta = unknown>(props: QuickSwitcherProps<TMeta>)
           <CommandEmpty data-testid={testId("empty")}>{emptyMessage}</CommandEmpty>
 
           {mode === "go-to"
-            ? groups.map((bucket) => (
-                <CommandGroup key={bucket.group ?? " ungrouped"} heading={bucket.group}>
+            ? groups.map((bucket, bucketIndex) => (
+                // WHY the index is in the key: an ungrouped bucket has no name,
+                // and bucket order is first-appearance order, so `index:name` is
+                // unique by construction. (It was a NUL sentinel for one commit,
+                // which made the whole file read as binary to git and grep.)
+                <CommandGroup key={`${bucketIndex}:${bucket.group ?? ""}`} heading={bucket.group}>
                   {bucket.items.map((item) => (
                     <CommandItem
                       key={item.id}
                       value={item.id}
+                      className={ROW}
                       disabled={quickSwitcherItemDisabled(item)}
                       data-testid={testId(`item-${item.id}`)}
                       data-item-id={item.id}
@@ -397,6 +425,7 @@ export function QuickSwitcher<TMeta = unknown>(props: QuickSwitcherProps<TMeta>)
                 <CommandItem
                   key={match.id}
                   value={match.id}
+                  className={ROW}
                   data-testid={testId(`match-${match.id}`)}
                   data-source-id={match.sourceId}
                   data-replaceable={match.replaceable}
