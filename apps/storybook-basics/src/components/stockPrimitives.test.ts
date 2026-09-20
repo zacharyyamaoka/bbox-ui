@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, "../../../..");
 
-const PRIMITIVES = ["dialog", "switch", "radio-group", "select", "label", "input", "table", "field", "command", "input-group", "textarea"] as const;
+const PRIMITIVES = ["dialog", "switch", "radio-group", "select", "label", "input", "table", "field", "command", "input-group", "textarea", "slider"] as const;
 
 function stockSource(name: string): string {
   const item = JSON.parse(readFileSync(path.join(repo, "docs/provenance/shadcn-base-nova", `${name}.json`), "utf8")) as { files: { content: string }[] };

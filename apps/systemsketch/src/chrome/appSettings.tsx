@@ -22,7 +22,7 @@
 // it throws (Chrome does that for a blocked third-party context, before any
 // method is called).
 import { useCallback, useMemo, useState } from "react";
-import { Info, SlidersHorizontal } from "lucide-react";
+import { Info } from "lucide-react";
 
 import {
   DEFAULT_APP_SETTINGS,
@@ -31,8 +31,19 @@ import {
   type AppSettings,
   type FileNavigationMode,
 } from "@trunk/components/appSettings";
+import { FILE_MENU_ROWS } from "@trunk/components/appMenu";
+import { readAppearancePreferences, writeAppearancePreferences, type AppearancePreferences } from "@trunk/components/appearancePreferences";
+import { readEdgePolicy, writeEdgePolicy, edgePolicyPreset, type EdgePolicy, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
+import { readGestureSettings, writeGestureSettings, type GestureSettings } from "@trunk/components/gestureSettings";
+import { readInterfaceScale, writeInterfaceScale } from "@trunk/components/interfaceScale";
+import { readToolAliases, writeToolAliases, type ToolAliasItem, type ToolAliases } from "@trunk/components/toolAliases";
+import { buildSettingsCategories, type SettingsHotkey } from "@trunk/components/settingsCategories";
 import { isNativeFileAccessSupported } from "@trunk/files/nativeFiles";
-import { SettingsView, type SettingsCategory, type SettingsPresentation } from "@trunk/components/settingsView";
+import { SettingsView, type SettingsPresentation } from "@trunk/components/settingsView";
+
+import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "./families";
+import { shortcutPlatform } from "./stockMenus";
+import { SYSTEM_FAMILY_ITEMS } from "../shapes/registry";
 
 /** The browser's own storage, or `null` when even touching it throws. */
 function viewerStorage(): Storage | null {
@@ -71,6 +82,86 @@ export function useAppSettings(): AppSettingsState {
   return useMemo(() => ({ settings, update }), [settings, update]);
 }
 
+/**
+ * One persisted record, read once at mount and written on every patch.
+ *
+ * WHY a local factory rather than a shared hook in the trunk: the trunk's
+ * settings models are deliberately pure — the archive's module-level
+ * `useSyncExternalStore` stores did NOT travel (see each model's header, and
+ * `toolPreferences.ts`'s statement of the rule). Owning the store is the
+ * host's job, and this is the whole of it: four lines, the same
+ * read-once-write-through shape `useAppSettings` above already uses and for
+ * the same reason.
+ */
+function usePersistedRecord<T>(
+  read: (storage: Storage | null) => T,
+  write: (storage: Storage | null, value: T) => void,
+): [T, (patch: Partial<T>) => void] {
+  const [value, setValue] = useState<T>(() => read(viewerStorage()));
+  const patch = useCallback(
+    (update: Partial<T>) => {
+      setValue((current) => {
+        const next = { ...current, ...update };
+        write(viewerStorage(), next);
+        return next;
+      });
+    },
+    [read, write],
+  );
+  return [value, patch];
+}
+
+/** The same, for a setting that is one value rather than a record. */
+function usePersistedValue<T>(
+  read: (storage: Storage | null) => T,
+  write: (storage: Storage | null, value: T) => unknown,
+): [T, (next: T) => void] {
+  const [value, setValue] = useState<T>(() => read(viewerStorage()));
+  const set = useCallback(
+    (next: T) => {
+      write(viewerStorage(), next);
+      // Re-read so the stored, NORMALIZED value is what the control shows —
+      // `writeInterfaceScale` clamps and snaps to a 5% step, so echoing the
+      // raw request would let the slider and the disk disagree by up to 2%.
+      setValue(read(viewerStorage()));
+    },
+    [read, write],
+  );
+  return [value, set];
+}
+
+/**
+ * Every tool in this app, as something an alias can be attached to.
+ *
+ * The trunk never names a tool (`toolAliases.ts`' own rule); this list is the
+ * host's side of that contract, assembled from the SAME arrays the dock
+ * renders so a tool cannot appear in one and not the other.
+ */
+const ALIAS_ITEMS: readonly ToolAliasItem[] = [
+  ...SIMPLE_TOOLS.map((tool) => ({ id: tool.id, label: tool.label, detail: "Toolbar tool" })),
+  ...SYSTEM_FAMILY_ITEMS.map((tool) => ({ id: tool.id, label: tool.label, detail: "System design" })),
+  ...GEO_VARIANTS.map((tool) => ({ id: tool.id, label: tool.label, detail: "Shape" })),
+  ...LINE_TOOLS.map((tool) => ({ id: tool.id, label: tool.label, detail: "Line" })),
+  ...DRAW_TOOLS.map((tool) => ({ id: tool.id, label: tool.label, detail: "Draw" })),
+];
+
+/**
+ * The app's REAL chords, taken from the burger's own row spec rather than
+ * retyped — `FILE_MENU_ROWS` is what `buildAppMenu` prints in the menu's
+ * shortcut column, so the Hotkeys list and the menu cannot drift apart. Rows
+ * without a chord (Open recent, Export to tldraw…) are not hotkeys and are
+ * dropped.
+ *
+ * Canvas keys (tldraw's own) are deliberately NOT duplicated here: the burger
+ * already opens tldraw's keyboard-shortcuts dialog, which is generated from
+ * the live action table, and a second hand-kept copy is a copy that rots.
+ */
+const HOTKEYS: readonly SettingsHotkey[] = FILE_MENU_ROWS.filter((row) => row.chord !== undefined).map((row) => ({
+  id: row.id,
+  label: row.label,
+  chord: row.chord as string,
+}));
+
 export interface SystemSketchSettingsProps {
   open: boolean;
   onOpenChange(open: boolean): void;
@@ -88,76 +179,89 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
   // silent dead end.
   const nativeSupported = useMemo(() => isNativeFileAccessSupported(window), []);
 
-  const categories = useMemo<SettingsCategory[]>(
-    () => [
-      {
-        id: "general",
-        label: "General",
-        icon: <SlidersHorizontal aria-hidden="true" />,
-        sections: [
-          {
-            id: "file-navigation",
-            title: "File navigation",
-            description: "Which dialog Open… and Save As… use.",
-            control: {
-              kind: "radio",
-              value: settings.fileNavigation,
-              options: [
-                {
-                  value: "app",
-                  label: "SystemSketch file browser",
-                  description: "Places, Recent, folders and a filter — over the boards in your workspace.",
-                },
-                {
-                  value: "native",
-                  label: "System file dialog",
-                  description: nativeSupported
-                    ? "Your browser's own Open and Save dialogs. No recent list, no rename, no Show in Files."
-                    : "This browser has no File System Access API, so Open… and Save As… will report an error.",
-                },
-              ],
-              onValueChange: (value) => update({ fileNavigation: value as FileNavigationMode }),
+  const [appearance, patchAppearance] = usePersistedRecord<AppearancePreferences>(
+    readAppearancePreferences,
+    writeAppearancePreferences,
+  );
+  const [gestures, patchGestures] = usePersistedRecord<GestureSettings>(readGestureSettings, writeGestureSettings);
+  const [edgePolicy, patchEdgePolicy] = usePersistedRecord<EdgePolicy>(readEdgePolicy, writeEdgePolicy);
+  const [interfaceScalePercent, setInterfaceScale] = usePersistedValue<number>(readInterfaceScale, writeInterfaceScale);
+  const [aliases, setAliases] = usePersistedValue<ToolAliases>(readToolAliases, writeToolAliases);
+
+  // WHY the whole list is rebuilt in the trunk from values + callbacks rather
+  // than assembled here: Zach, 2026-09-19 — "system sketch should just be
+  // kinda like importing these stock menus and doing a light bit of
+  // configuration". Everything below is binding, not authoring.
+  const categories = useMemo(
+    () =>
+      buildSettingsCategories({
+        fileNavigation: settings.fileNavigation,
+        onFileNavigationChange: (mode: FileNavigationMode) => update({ fileNavigation: mode }),
+        nativeFileAccessSupported: nativeSupported,
+        settingsPresentation: settings.settingsPresentation,
+        onSettingsPresentationChange: (presentation: SettingsPresentation) =>
+          update({ settingsPresentation: presentation }),
+        // `allowAnyPath` is deliberately NOT passed: the archive's file fence
+        // lives on its Python workspace server (`workspace_store.py`), and
+        // this app has no such server or endpoint. A switch over a fence that
+        // does not exist would be a control that lies, so the row is absent —
+        // the same "never a disabled row for a feature that does not exist"
+        // rule the burger already follows.
+        interfaceScalePercent,
+        onInterfaceScaleChange: setInterfaceScale,
+        appearance,
+        onAppearanceChange: patchAppearance,
+        gestures,
+        onGesturesChange: patchGestures,
+        edgePolicy,
+        onEdgePolicyChange: patchEdgePolicy,
+        onEdgePolicyPreset: (id: EdgePolicyPresetId) => patchEdgePolicy(edgePolicyPreset(id).policy),
+        hotkeys: HOTKEYS,
+        shortcutPlatform: shortcutPlatform(),
+        aliasItems: ALIAS_ITEMS,
+        aliases,
+        onAliasesChange: setAliases,
+        // Unchanged from before this port: Zach asked for five categories and
+        // for nothing to be removed, so About is handed over exactly as it
+        // already read, title and all.
+        about: {
+          id: "about",
+          label: "About",
+          icon: <Info aria-hidden="true" />,
+          sections: [
+            {
+              id: "about",
+              title: "SystemSketch",
+              description: "bbox-ui components on stock tldraw. Boards are plain .tldr files.",
+              control: {
+                kind: "custom",
+                render: (
+                  <p className="text-muted-foreground text-sm">
+                    Settings are remembered in this browser only. Defaults: {DEFAULT_APP_SETTINGS.fileNavigation} file
+                    navigation, settings as a {DEFAULT_APP_SETTINGS.settingsPresentation}.
+                  </p>
+                ),
+              },
             },
-          },
-          {
-            id: "settings-presentation",
-            title: "Settings presentation",
-            description: "Where this window opens.",
-            control: {
-              kind: "radio",
-              value: settings.settingsPresentation,
-              options: [
-                { value: "dialog", label: "Dialog", description: "A centred panel over the board." },
-                { value: "page", label: "Page", description: "The whole window, like a preferences screen." },
-              ],
-              onValueChange: (value) => update({ settingsPresentation: value as SettingsPresentation }),
-            },
-          },
-        ],
-      },
-      {
-        id: "about",
-        label: "About",
-        icon: <Info aria-hidden="true" />,
-        sections: [
-          {
-            id: "about",
-            title: "SystemSketch",
-            description: "bbox-ui components on stock tldraw. Boards are plain .tldr files.",
-            control: {
-              kind: "custom",
-              render: (
-                <p className="text-sm text-muted-foreground">
-                  Settings are remembered in this browser only. Defaults: {DEFAULT_APP_SETTINGS.fileNavigation} file
-                  navigation, settings as a {DEFAULT_APP_SETTINGS.settingsPresentation}.
-                </p>
-              ),
-            },
-          },
-        ],
-      },
+          ],
+        },
+      }),
+    [
+      aliases,
+      appearance,
+      edgePolicy,
+      gestures,
+      interfaceScalePercent,
+      nativeSupported,
+      patchAppearance,
+      patchEdgePolicy,
+      patchGestures,
+      setAliases,
+      setInterfaceScale,
+      settings.fileNavigation,
+      settings.settingsPresentation,
+      update,
     ],
-    [nativeSupported, settings.fileNavigation, settings.settingsPresentation, update],
   );
 
   return (
