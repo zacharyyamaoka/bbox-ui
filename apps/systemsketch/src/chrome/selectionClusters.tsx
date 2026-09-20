@@ -17,7 +17,7 @@
 // The pill is a bar over the user's drawing — every control spent here is
 // canvas taken away.
 import { useCallback } from "react";
-import { AlignStartVertical, Blend } from "lucide-react";
+import { AlignStartVertical, Focus } from "lucide-react";
 import { useEditor, useValue } from "tldraw";
 
 import { Button } from "@trunk/components/button";
@@ -33,6 +33,7 @@ import {
   setSelectionOpacityPercent,
   setStyle,
   swatchColorFor,
+  faceLabelFor,
   type ActiveStyleRow,
 } from "./arrangeActions";
 
@@ -142,6 +143,42 @@ export function OpacityCluster() {
 
 /* ------------------------------------------------------------------- style */
 
+
+/**
+ * The row's face in the pill. Identifies the FAMILY, not the value — see
+ * `StyleRow.face`'s own note for the measured reason (five raw enum values in
+ * a row, with "Draw" appearing twice). The current value stays in the
+ * trigger's `title` and `aria-label`, which is where a tooltip and a screen
+ * reader look for it anyway.
+ */
+function StyleFace({ row, swatch }: { row: ActiveStyleRow; swatch: string | null }) {
+  const testId = `ss-style-${row.id}-face`;
+  if (row.face === "swatch") {
+    return (
+      <span
+        data-testid={testId}
+        className="size-4 rounded-full border border-background/40"
+        // A null swatch means the theme has no entry for this value, or the
+        // selection is mixed — paint nothing rather than guess a colour.
+        style={swatch ? { background: swatch } : undefined}
+      />
+    );
+  }
+  if (row.face === "glyph" && row.icon) {
+    const Icon = row.icon;
+    return (
+      <span data-testid={testId} className="flex items-center">
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+    );
+  }
+  return (
+    <span data-testid={testId} className="text-xs">
+      {faceLabelFor(row, row.value)}
+    </span>
+  );
+}
+
 function StyleRowControl({ row }: { row: ActiveStyleRow }) {
   const editor = useEditor();
   const swatch = useValue(
@@ -158,20 +195,7 @@ function StyleRowControl({ row }: { row: ActiveStyleRow }) {
         aria-label={`${row.label}${row.value ? `: ${row.value}` : ": mixed"}`}
         title={row.label}
       >
-        {row.paint === "swatch" ? (
-          <span
-            data-testid={`ss-style-${row.id}-face`}
-            className="size-4 rounded-full border border-background/40"
-            // A null swatch means the theme has no entry for this value (or
-            // the selection is mixed) — paint nothing rather than guess a
-            // colour, and let the label beside it carry the truth.
-            style={swatch ? { background: swatch } : undefined}
-          />
-        ) : (
-          <span data-testid={`ss-style-${row.id}-face`} className="text-xs capitalize">
-            {row.value ?? "Mixed"}
-          </span>
-        )}
+        <StyleFace row={row} swatch={swatch} />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-1" data-testid={`ss-style-${row.id}-panel`}>
         <div className={row.paint === "swatch" ? "grid grid-cols-6 gap-1" : "flex flex-col"} role="group" aria-label={row.label}>
@@ -209,7 +233,7 @@ function StyleOption({ row, value }: { row: ActiveStyleRow; value: string }) {
       {row.paint === "swatch" ? (
         <span className="size-4 rounded-full border border-border" style={swatch ? { background: swatch } : undefined} />
       ) : (
-        <span className="text-xs capitalize">{value}</span>
+        <span className="text-xs">{row.valueLabels?.[value] ?? value}</span>
       )}
     </Button>
   );
@@ -253,7 +277,7 @@ export function FocusButton() {
       className="text-background"
       onClick={() => editor.zoomToSelection({ animation: { duration: 220 } })}
     >
-      <Blend />
+      <Focus />
     </ToolbarButton>
   );
 }

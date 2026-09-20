@@ -27,6 +27,8 @@ import {
   ArrowDown,
   ArrowUp,
   BringToFront,
+  Minus,
+  PaintBucket,
   SendToBack,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -194,9 +196,35 @@ export interface StyleRow {
   style: StyleProp<string>;
   /** The allowed values, in tldraw's own order. */
   values: readonly string[];
-  /** How the panel paints each value: a colour chip, or its name. */
+  /** How the panel paints each OPTION: a colour chip, or its name. */
   paint: "swatch" | "label";
+  /**
+   * What the row's TRIGGER shows in the pill — which is NOT the same question
+   * as how its options are painted.
+   *
+   * WHY these differ (measured in the running app, capture 01): painting each
+   * trigger with its current raw value produced the row
+   * `None Draw M Draw Middle`. That is five tldraw enum values in a row with
+   * nothing saying which family each belongs to, "M" is cryptic, and — the
+   * part that makes it a bug rather than a blemish — "Draw" appears TWICE,
+   * because `dash: "draw"` and `font: "draw"` are unrelated values that
+   * happen to share a name. A face has to identify its FAMILY first; the
+   * current value is already in the tooltip and the aria-label.
+   *
+   * `swatch` — a colour chip (the value IS the thing to show).
+   * `glyph`  — a family icon: fill, dash, align.
+   * `word`   — a readable word, for the two families whose value is the
+   *            point and reads fine: size, and the "Aa" font face.
+   */
+  face: "swatch" | "glyph" | "word";
+  /** The family glyph, for `face: "glyph"`. */
+  icon?: LucideIcon;
+  /** Readable names for raw enum values, where tldraw's are not. */
+  valueLabels?: Readonly<Record<string, string>>;
 }
+
+/** tldraw's size enum is `s | m | l | xl`; "M" alone tells the reader nothing. */
+const SIZE_LABELS = { s: "Small", m: "Medium", l: "Large", xl: "X-Large" } as const;
 
 function valuesOf(style: StyleProp<string>): readonly string[] {
   // `StyleProp.values` is the runtime enum tldraw validates against.
@@ -204,13 +232,27 @@ function valuesOf(style: StyleProp<string>): readonly string[] {
 }
 
 export const STYLE_ROWS: readonly StyleRow[] = [
-  { id: "color", label: "Color", style: DefaultColorStyle, values: valuesOf(DefaultColorStyle), paint: "swatch" },
-  { id: "fill", label: "Fill", style: DefaultFillStyle, values: valuesOf(DefaultFillStyle), paint: "label" },
-  { id: "dash", label: "Dash", style: DefaultDashStyle, values: valuesOf(DefaultDashStyle), paint: "label" },
-  { id: "size", label: "Size", style: DefaultSizeStyle, values: valuesOf(DefaultSizeStyle), paint: "label" },
-  { id: "font", label: "Font", style: DefaultFontStyle, values: valuesOf(DefaultFontStyle), paint: "label" },
-  { id: "align", label: "Align", style: DefaultHorizontalAlignStyle, values: valuesOf(DefaultHorizontalAlignStyle), paint: "label" },
+  { id: "color", label: "Color", style: DefaultColorStyle, values: valuesOf(DefaultColorStyle), paint: "swatch", face: "swatch" },
+  { id: "fill", label: "Fill", style: DefaultFillStyle, values: valuesOf(DefaultFillStyle), paint: "label", face: "glyph", icon: PaintBucket },
+  { id: "dash", label: "Dash", style: DefaultDashStyle, values: valuesOf(DefaultDashStyle), paint: "label", face: "glyph", icon: Minus },
+  { id: "size", label: "Size", style: DefaultSizeStyle, values: valuesOf(DefaultSizeStyle), paint: "label", face: "word", valueLabels: SIZE_LABELS },
+  // The font row's face is the literal "Aa" — the donor pill's own face for
+  // it, and the one every design tool uses, so it needs no icon and no value.
+  { id: "font", label: "Font", style: DefaultFontStyle, values: valuesOf(DefaultFontStyle), paint: "label", face: "word", valueLabels: { __face: "Aa" } },
+  { id: "align", label: "Align", style: DefaultHorizontalAlignStyle, values: valuesOf(DefaultHorizontalAlignStyle), paint: "label", face: "glyph", icon: AlignCenterHorizontal },
 ];
+
+/**
+ * What a row's trigger shows. `__face` is a deliberate escape hatch for a row
+ * whose face is FIXED regardless of value (the font row's "Aa"), rather than
+ * a second optional field that every other row would carry as undefined.
+ */
+export function faceLabelFor(row: StyleRow, value: string | null): string {
+  const fixed = row.valueLabels?.__face;
+  if (fixed) return fixed;
+  if (value === null) return "Mixed";
+  return row.valueLabels?.[value] ?? value;
+}
 
 /**
  * Which style rows this selection can actually change, and what each reads
