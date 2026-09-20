@@ -25,7 +25,7 @@
 // section no stock control fits (an About block), not the default.
 "use client";
 
-import { useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 
@@ -33,8 +33,10 @@ import { cn } from "../lib/utils";
 import { Button } from "./button";
 import { DialogClose, DialogOverlay, DialogPortal } from "./dialog";
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "./field";
+import { Input } from "./input";
 import { RadioGroup, RadioGroupItem } from "./radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
+import { Slider } from "./slider";
 import { Switch } from "./switch";
 
 /** Zach: "We want the option wether we see settings as a [dialog or a page]". */
@@ -50,10 +52,56 @@ export interface SettingsOption {
   disabledReason?: string;
 }
 
+/**
+ * A numeric setting with a range: interface scale, wheel-zoom sensitivity,
+ * pan and zoom speed.
+ *
+ * WHY this is a first-class kind rather than `custom`: `custom`'s own WHY
+ * below calls it "the escape hatch for a section no stock control fits (an
+ * About block), not the default", and the archived app has FOUR percentage
+ * settings, not one — interface scale
+ * (`/home/bam/systemsketch/src/settings/InterfaceSettings.tsx:794-855`),
+ * wheel zoom sensitivity (:1055-1089) and the two gesture speeds (:1153-1193,
+ * via `GestureSpeedRow`). Four hand-built controls is four chances for the
+ * readout, the preset row and the keyboard behaviour to drift apart, which
+ * is the exact failure the data-driven shell exists to prevent.
+ */
+export interface SettingsSliderControl {
+  kind: "slider";
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onValueChange(value: number): void;
+  /** The live readout and `aria-valuetext`; default is the bare number. */
+  format?(value: number): string;
+  /** End-of-track captions — the donor's "Slower"/"Faster" (:1064, :1078)
+   *  and the small/large "A" of the interface-scale row (:809, :820). */
+  minLabel?: ReactNode;
+  maxLabel?: ReactNode;
+  /** One-click jumps under the track. Donor: `INTERFACE_SCALE_PRESETS`
+   *  rendered as `aria-pressed` buttons (:823-835). */
+  presets?: readonly number[];
+  /**
+   * A text box for an exact value beside the track.
+   *
+   * WHY: Zach, after using the slider, asked to "set the scroll and zoom
+   * sensitivity exactly to a value that I want" rather than only drag toward
+   * one — the donor's `PercentInput.tsx` and the `GestureSpeedRow` comment at
+   * `InterfaceSettings.tsx:1145-1152`. A drag cannot hit 137%.
+   */
+  exactEntry?: boolean;
+  /** Restores `resetTo` and is disabled once `value` already equals it.
+   *  Donor: "Reset to 100%" (:845-852), "Reset to standard" (:1080-1089). */
+  resetTo?: number;
+  resetLabel?: string;
+}
+
 export type SettingsControl =
   | { kind: "radio"; value: string; options: readonly SettingsOption[]; onValueChange(value: string): void }
   | { kind: "switch"; checked: boolean; onCheckedChange(checked: boolean): void; disabled?: boolean }
   | { kind: "select"; value: string; options: readonly SettingsOption[]; onValueChange(value: string): void }
+  | SettingsSliderControl
   | { kind: "custom"; render: ReactNode };
 
 export interface SettingsSection {
@@ -61,6 +109,32 @@ export interface SettingsSection {
   title: string;
   description?: string;
   control: SettingsControl;
+  /**
+   * An optional sub-heading this section sits under. Consecutive sections
+   * naming the same group render beneath one heading.
+   *
+   * WHY the shell owns grouping rather than the host slicing its own
+   * `<h3>`s in through `custom`: Connections alone is nine permissions, and
+   * the archived app teaches them in four named groups — Direction,
+   * Boundaries, Data types, and how many cables meet at one port
+   * (`/home/bam/systemsketch/src/settings/InterfaceSettings.tsx:658-768`).
+   * A flat list of nine switches is the same information with the teaching
+   * removed.
+   */
+  group?: string;
+  /**
+   * One line under the group's heading, read only from the section that
+   * OPENS the group.
+   *
+   * The archive gives every one of those groups a `<p>` of its own —
+   * "Where a paste or duplicate lands.", "Which way data is allowed to run,
+   * and whether it may come back around." Without somewhere for it to live
+   * it has to be pushed onto the first ROW's description, where it reads as
+   * a statement about that one control instead of about the group (seen in
+   * the first captures of this port: "What each wheel gesture does…" sitting
+   * under "Scroll wheel down").
+   */
+  groupDescription?: string;
 }
 
 export interface SettingsCategory {
@@ -110,7 +184,178 @@ const POPUP_DIALOG =
 
 const POPUP_PAGE = "inset-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 overflow-hidden rounded-none";
 
-function renderControl(section: SettingsSection, controlId: string): ReactNode {
+/**
+ * The exact-value box beside a slider.
+ *
+ * Ported as BEHAVIOUR from `/home/bam/systemsketch/src/settings/PercentInput.tsx:1-89`
+ * onto the stock `Input`: accept any text while editing, commit on Enter or
+ * blur, abandon on Escape, and follow the outside value only while NOT
+ * editing.
+ *
+ * WHY that last clause: the slider and this box are two views of one number,
+ * so echoing every drag into the box would rewrite the digits under someone
+ * mid-type. The donor's own `draftRef` exists for exactly that, and the
+ * tempting `value={value}` controlled input is what it rejects.
+ */
+function SliderExactEntry({
+  control,
+  controlId,
+  label,
+}: {
+  control: SettingsSliderControl;
+  controlId: string;
+  label: string;
+}): ReactElement {
+  const [draft, setDraft] = useState<string | null>(null);
+  const committedRef = useRef(control.value);
+  committedRef.current = control.value;
+
+  // Donor `PercentInput.tsx:30-36` — follow the store only when idle.
+  useEffect(() => {
+    setDraft(null);
+  }, [control.value]);
+
+  function commit(raw: string) {
+    const parsed = Number.parseFloat(raw);
+    setDraft(null);
+    if (!Number.isFinite(parsed)) return;
+    const clamped = Math.min(control.max, Math.max(control.min, Math.round(parsed)));
+    if (clamped !== committedRef.current) control.onValueChange(clamped);
+  }
+
+  return (
+    <Input
+      data-slot="settings-slider-input"
+      id={`${controlId}-exact`}
+      aria-label={`${label}, exact value`}
+      inputMode="numeric"
+      className="h-8 w-20 shrink-0 text-center tabular-nums"
+      value={draft ?? String(control.value)}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onBlur={(event) => commit(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        // The donor stops these reaching the canvas, where digits are tool
+        // shortcuts (`PercentInput.tsx:52-58`). Same reason here: the kit is
+        // mounted over a host that binds keys.
+        event.stopPropagation();
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit(event.currentTarget.value);
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          setDraft(null);
+        }
+      }}
+    />
+  );
+}
+
+function renderSlider(control: SettingsSliderControl, controlId: string, titleId: string, label: string): ReactNode {
+  const format = control.format ?? String;
+  return (
+    <div data-slot="settings-slider" className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        {control.minLabel ? <span aria-hidden="true" className="text-muted-foreground shrink-0 text-xs">{control.minLabel}</span> : null}
+        <Slider
+          // WHY this className exists at all — the stock Slider renders with
+          // ZERO size on the Base UI this app pins, and it is not a copy
+          // error. `slider.tsx` is verbatim from
+          // https://ui.shadcn.com/r/styles/base-nova/slider.json and asks for
+          // its horizontal geometry through `data-horizontal:` utilities
+          // (root width, track height, indicator height). `@base-ui/react@1.8.0`
+          // does not emit that attribute: its slider state mapping
+          // (`slider/root/stateAttributesMapping.js`) leaves `orientation` to
+          // the default string handling, so the DOM carries
+          // `data-orientation="horizontal"` and nothing matches. Measured in a
+          // real browser: root 0px wide, track 0px tall, and the thumb then
+          // stays `visibility: hidden` forever because Base UI's inset
+          // alignment divides by the control's width
+          // (`slider/thumb/SliderThumb.js:160-180`) — which also takes the
+          // control OUT of the accessibility tree, so `getByRole("slider")`
+          // cannot find it.
+          //
+          // The compensation lives HERE, in the consumer, rather than in
+          // `slider.tsx`: that file's whole value is being byte-checkable
+          // against the snapshot (`stockPrimitives.test.ts`), and editing it
+          // to fix an upstream version skew is how a vendored copy quietly
+          // stops being stock. These utilities are what the dead ones would
+          // have done; they become redundant, not wrong, if either side
+          // catches up.
+          className="min-w-0 flex-1 [&_[data-slot=slider-range]]:h-full [&_[data-slot=slider-track]]:h-1"
+          // WHY the value is wrapped in an array for a SINGLE-value slider:
+          // the stock component reads `Array.isArray(value) ? value :
+          // Array.isArray(defaultValue) ? defaultValue : [min, max]`
+          // (`slider.tsx`, verbatim from the registry), so a bare number
+          // falls through to `[min, max]` and it renders TWO thumbs —
+          // measured in a real browser, both stamped `data-index="0"`.
+          // Passing `[value]` is the stock usage shadcn's own examples show.
+          value={[control.value]}
+          min={control.min}
+          max={control.max}
+          step={control.step}
+          // Base UI puts the accessible name on the THUMB's nested
+          // `<input type="range">`, reading it from the root's
+          // `aria-labelledby` through slider context (`SliderRoot.js:88-91`,
+          // `SliderThumb.js:244-251`) — so naming the root is what names the
+          // control a screen reader actually lands on.
+          aria-labelledby={titleId}
+          onValueChange={(next) => control.onValueChange(Array.isArray(next) ? next[0] : next)}
+        />
+        {control.maxLabel ? <span aria-hidden="true" className="text-muted-foreground shrink-0 text-base">{control.maxLabel}</span> : null}
+        {control.exactEntry ? <SliderExactEntry control={control} controlId={controlId} label={label} /> : null}
+        {/* The donor's live readout (`InterfaceSettings.tsx:803`), kept as a
+            real `<output>` so the number is announced as it changes rather
+            than only living in the thumb's `aria-valuetext`. */}
+        <output
+          data-slot="settings-slider-value"
+          htmlFor={controlId}
+          aria-live="polite"
+          className="w-14 shrink-0 text-right text-sm tabular-nums"
+        >
+          {format(control.value)}
+        </output>
+      </div>
+      {control.presets && control.presets.length > 0 ? (
+        <div data-slot="settings-slider-presets" role="group" aria-label={`${label} presets`} className="flex flex-wrap gap-1">
+          {control.presets.map((preset) => (
+            <Button
+              key={preset}
+              type="button"
+              size="sm"
+              variant={preset === control.value ? "secondary" : "ghost"}
+              // The donor's own semantics (:823-835): a preset is a pressed
+              // state, not a second selected-radio vocabulary.
+              aria-pressed={preset === control.value}
+              data-slot="settings-slider-preset"
+              data-preset-value={preset}
+              className="h-7 px-2 font-normal tabular-nums"
+              onClick={() => control.onValueChange(preset)}
+            >
+              {format(preset)}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+      {control.resetTo !== undefined ? (
+        <div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-slot="settings-slider-reset"
+            className="h-7 font-normal"
+            disabled={control.value === control.resetTo}
+            onClick={() => control.resetTo !== undefined && control.onValueChange(control.resetTo)}
+          >
+            {control.resetLabel ?? `Reset to ${format(control.resetTo)}`}
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function renderControl(section: SettingsSection, controlId: string, titleId: string): ReactNode {
   const control = section.control;
   switch (control.kind) {
     case "radio":
@@ -171,6 +416,8 @@ function renderControl(section: SettingsSection, controlId: string): ReactNode {
         </Select>
       );
     }
+    case "slider":
+      return renderSlider(control, controlId, titleId, section.title);
     case "custom":
       return control.render;
   }
@@ -195,6 +442,16 @@ function renderControl(section: SettingsSection, controlId: string): ReactNode {
  *     `RadioGroup` (`role="radiogroup"`, each option's `role="radio"`
  *     element carrying `data-option-value=<value>` and its visible label),
  *     `Switch` (`role="switch"`), or `Select`;
+ *   - a `slider` section: `[data-slot="settings-slider"]` holding a stock
+ *     `Slider` (its thumb's nested `input[type="range"]`, named from the
+ *     section title), a live `[data-slot="settings-slider-value"]` readout,
+ *     and — when asked for — `[data-slot="settings-slider-input"]`,
+ *     `[data-slot="settings-slider-preset"][data-preset-value=<n>]` with
+ *     `aria-pressed`, and `[data-slot="settings-slider-reset"]` disabled once
+ *     the value is already the reset target;
+ *   - the first section of a run sharing a `group` emits
+ *     `[data-slot="settings-group"][data-group=<name>]` above its title;
+ *     later sections in the same run emit none;
  *   - changing `presentation` while open re-presents the SAME open settings
  *     (same category) in the other container — no close/reopen needed.
  */
@@ -280,13 +537,36 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
                 cap is on the CONTENT, never on the popup, because the presentation
                 contract is that the page rect equals the viewport exactly. */}
             <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto [&>*]:w-full [&>*]:max-w-2xl">
-              {activeCategory?.sections.map((section) => {
+              {activeCategory?.sections.map((section, index) => {
                 const controlId = `${testIdPrefix ?? "settings"}-${activeCategory.id}-${section.id}`;
+                const titleId = `${controlId}-title`;
+                // A heading opens a run of sections, so it renders only when
+                // the group CHANGES — the donor's four `<h3>`-led blocks
+                // (`InterfaceSettings.tsx:658-768`) without the host having to
+                // hand-slice its own list into sub-lists.
+                const previousGroup = index === 0 ? undefined : activeCategory.sections[index - 1].group;
+                const opensGroup = section.group !== undefined && section.group !== previousGroup;
                 return (
                   <div key={section.id} data-slot="settings-section" data-section-id={section.id} className="flex flex-col gap-2">
-                    <FieldTitle>{section.title}</FieldTitle>
+                    {opensGroup ? (
+                      <>
+                        <h3
+                          data-slot="settings-group"
+                          data-group={section.group}
+                          className="cn-font-heading text-muted-foreground mt-2 text-xs font-medium tracking-wide uppercase first:mt-0"
+                        >
+                          {section.group}
+                        </h3>
+                        {section.groupDescription ? (
+                          <FieldDescription data-slot="settings-group-description">
+                            {section.groupDescription}
+                          </FieldDescription>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <FieldTitle id={titleId}>{section.title}</FieldTitle>
                     {section.description ? <FieldDescription>{section.description}</FieldDescription> : null}
-                    {renderControl(section, controlId)}
+                    {renderControl(section, controlId, titleId)}
                   </div>
                 );
               })}

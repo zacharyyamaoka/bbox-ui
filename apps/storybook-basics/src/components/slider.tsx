@@ -1,11 +1,18 @@
-// src/components/slider.tsx — copied verbatim from the stock shadcn
-// `new-york` Slider over Base UI's Slider primitive (the same
-// `@base-ui/react/slider` `apps/storybook-basics` already depends on —
-// confirmed against SystemSketch's own vendored copy at
-// `/home/bam/systemsketch/src/components/ui/slider.tsx`, which is this same
-// stock component). Only the `cn` import path changed to match this app's
-// own `src/lib/utils.ts` — the same routine `tooltip.tsx`/`popover.tsx`
-// already document in their own headers.
+// src/components/slider.tsx — copied verbatim from the stock shadcn Slider
+// over Base UI's Slider primitive (the same `@base-ui/react/slider`
+// `apps/storybook-basics` already depends on), fetched from
+// https://ui.shadcn.com/r/styles/base-nova/slider.json and snapshotted at
+// docs/provenance/shadcn-base-nova/slider.json. Only the one documented
+// copy-trap fix was applied: the registry's bare `cn` specifier was
+// repointed at this app's own `src/lib/utils.ts` — the same routine
+// `tooltip.tsx`/`popover.tsx` already document in their own headers, and
+// the one `stockPrimitives.test.ts` checks for every primitive in its list.
+//
+// The header used to cite the `new-york` style and SystemSketch's own
+// vendored copy at `/home/bam/systemsketch/src/components/ui/slider.tsx`.
+// That was true — both are this same component — but a second-hand citation
+// is not an oracle, so the file now names the registry URL it was fetched
+// from and is checked against the snapshot beside it.
 "use client";
 
 import { Slider as SliderPrimitive } from "@base-ui/react/slider";

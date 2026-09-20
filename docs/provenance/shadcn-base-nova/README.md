@@ -7,6 +7,13 @@ stock shadcn registry's Base UI style — the same flavour the trunk's
 trunk lacked: `dialog`, `switch`, `radio-group`, `select`, `label`, `input`,
 `table`, `field`.
 
+`slider.json` joined them on 2026-09-19 (same URL shape, HTTP 200), fetched by
+lane `settings-pages`. `src/components/slider.tsx` already existed, copied from
+this same stock component but cited second-hand through SystemSketch's vendored
+copy — which is a provenance claim, not an oracle. Snapshotting the registry
+item and adding `slider` to `stockPrimitives.test.ts`'s list is what makes the
+claim checkable; the file's own bytes did not need to change, only its header.
+
 These JSON files are the ORACLE for lane `stock-primitives`:
 `apps/storybook-basics/src/components/stockPrimitives.test.ts` checks every
 copied `src/components/<name>.tsx` against the `files[0].content` here — the
