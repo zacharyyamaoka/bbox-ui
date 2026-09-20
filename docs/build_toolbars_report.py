@@ -65,9 +65,11 @@ ITEMS = [
         "n": 4,
         "title": "Zoom menu, status strip, and the dock’s +",
         "ask": "“adding controls to when I click the zoom icon” · “adding a plus logo to the end of the tool bar”",
-        "shots": ["08-status-strip.png", "09-tool-dock.png"],
+        "shots": ["10-zoom-menu.png", "08-status-strip.png", "09-tool-dock.png"],
         "body": """<p>The zoom % was a deliberately inert readout — the code carried a comment arguing a zoom menu should not be mounted. You overruled that, so the comment was rewritten to say who reversed it and why, rather than quietly deleted.</p>
 <p>The strip is now grid · frames · warnings · zoom · <code>&lt;/&gt;</code> · <code>?</code>, and the dock has its trailing <code>+</code>.</p>
+<p class="measured">Driven in the real browser: the menu opens with all five rows and the chords from your screenshot (<code>Ctrl + =</code>, <code>Ctrl + -</code>, <code>⇧ + 0</code>, <code>⇧ + 1</code>, <code>⇧ + 2</code>); “Zoom to 100%” is correctly greyed at 100% and “Zoom to selection” greyed with nothing selected; <strong>“Zoom to fit” moved <code>getZoomLevel()</code> from 1 to 5.147</strong>.</p>
+<p class="caught">Still to fix at the time of writing: the popup is too narrow and clips its own labels — “Zoom to selection” renders as “Zoom to s…” and each chord wraps onto two lines. Behaviour is right, width is not.</p>
 <p class="note">While wiring the zoom control I picked up <code>showZoomButtons</code> — a setting that was already persisted, already had a row in Settings ▸ Appearance, and was <strong>read by nothing</strong>. It is now live: turn it on and the readout is flanked by −/+.</p>""",
     },
 ]
@@ -81,7 +83,8 @@ DECISIONS = [
 
 KNOWN = [
     ("draft.smoke × 7", "The drafts chip never appears — <code>draftSession.tsx</code> is absent and <code>chromeBar.tsx</code> has no <code>draftChip</code>. <strong>The draft-compare chrome half was never committed.</strong> A real missing feature, not a flake. It was earlier believed to be deliberately-red acceptance; that turned out to be wrong."),
-    ("menus.smoke × 1", "The burger’s Export submenu: <em>“element is not stable … detached from the DOM”</em>. Reproduces in isolation, so it is not a cross-test flake, and it predates this round entirely."),
+    ("menus.smoke × 1", "The burger’s Export submenu: <em>“element is not stable … detached from the DOM”</em>. Reproduces in isolation, so not a cross-test flake, and it predates this round. <strong>Diagnosed, not just observed:</strong> I watched the Export trigger in the running app for 2s with no interaction — <em>zero</em> node swaps, still connected. The menu does not flicker on its own. The helper captures the trigger, the sibling File submenu’s close re-renders the row list, and the click lands on a detached node. Harness fragility in <code>openSubmenu</code>, not a product defect — which is why I did not “fix” it by editing acceptance."),
+    ("A bug in the vendored Slider, found by measuring", "The pill’s opacity track was 96px wide and <strong>0px tall</strong>. The stock copy sizes every part with <code>data-horizontal:h-1</code>, which in Tailwind v4 means an attribute literally named <code>data-horizontal</code> — and that string appears <strong>nowhere in @base-ui/react 1.8.0</strong> (whole package grepped). Base UI emits <code>data-orientation</code>. Those classes are dead for every consumer, light or dark. Pinned locally; correcting the vendored file means re-snapping its provenance, which is a trunk lane."),
     ("Not built, not faked", "<strong>Wrap</strong> and <strong>Tidy</strong> are in the donor’s pill and not in this one. Wrap needs <code>wrapSelectionInto</code> ported; Tidy needs the trunk’s already-built <code>tidyTraces</code> bound to the app’s wire layer. Both are real lanes, not a row to add."),
 ]
 
