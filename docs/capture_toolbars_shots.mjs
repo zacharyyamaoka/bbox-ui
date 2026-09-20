@@ -30,6 +30,24 @@ async function shot(name, clip) {
   console.log("shot:", name);
 }
 
+/** A CLOSE-UP of one element, with a little air around it. A pill 40px tall
+ *  inside a 1400x900 frame is unreadable in a report; Zach's standing rule is
+ *  close-ups of the actual elements, not a wide shot he has to squint at. */
+async function closeUp(name, selector, pad = 14) {
+  const box = await (await page.waitForSelector(selector, { timeout: 15000 })).boundingBox();
+  if (!box) { console.log("closeUp: no box for", selector); return; }
+  await page.screenshot({
+    path: `${OUT}/${name}.png`,
+    clip: {
+      x: Math.max(0, box.x - pad),
+      y: Math.max(0, box.y - pad),
+      width: Math.min(1400 - Math.max(0, box.x - pad), box.width + pad * 2),
+      height: Math.min(900 - Math.max(0, box.y - pad), box.height + pad * 2),
+    },
+  });
+  console.log("closeUp:", name);
+}
+
 // ---- 1. A geo rectangle: the tldraw STYLE bar ----
 await page.evaluate(() => {
   const e = window.editor;
@@ -43,12 +61,14 @@ await page.evaluate(() => {
 await page.waitForSelector('[data-slot="floating-toolbar"][data-visible="true"]', { timeout: 15000 });
 await page.waitForTimeout(700);
 await shot("01-style-bar-on-geo");
+await closeUp("01b-style-bar-closeup", '[data-slot="floating-toolbar"][data-visible="true"]');
 
 // the colour panel open
 await page.click('[data-testid="ss-style-color"]');
 await page.waitForSelector('[data-testid="ss-style-color-panel"]', { timeout: 10000 });
 await page.waitForTimeout(500);
 await shot("02-colour-panel-open");
+await closeUp("02b-colour-panel-closeup", '[data-testid="ss-style-color-panel"]', 10);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(400);
 
@@ -71,11 +91,13 @@ await page.evaluate(() => {
 await page.waitForSelector('[data-slot="floating-toolbar"][data-visible="true"]', { timeout: 15000 });
 await page.waitForTimeout(700);
 await shot("03-pill-on-three-blocks");
+await closeUp("03b-pill-closeup", '[data-slot="floating-toolbar"][data-visible="true"]');
 
 await page.click('[data-testid="ss-selection-arrange"]');
 await page.waitForSelector('[data-testid="ss-arrange-panel"]', { timeout: 10000 });
 await page.waitForTimeout(500);
 await shot("04-arrange-panel-open");
+await closeUp("04b-arrange-panel-closeup", '[data-testid="ss-arrange-panel"]', 10);
 
 // prove align works, visibly
 const before = await page.evaluate(() => window.editor.getSelectedShapes().map((s) => Math.round(s.x)));
@@ -142,7 +164,8 @@ const rules = await page.evaluate(() => {
 console.log("REGION RULES:", JSON.stringify(rules, null, 1));
 
 // ---- 4. the dock + status strip ----
-await shot("07-full-app", { x: 0, y: 0, width: 1400, height: 900 });
+await closeUp("08-status-strip", '[data-slot="status-strip"]', 10);
+await closeUp("09-tool-dock", '[data-testid="ss-dock"], [data-slot="tool-dock"]', 10);
 
 console.log("PAGE ERRORS:", errors.length ? JSON.stringify(errors.slice(0, 5), null, 1) : "none");
 await browser.close();
