@@ -10,9 +10,11 @@ The full replay record lives in the vault; these entries must stand alone.
   the server, then ☰ › File › Open and pick this path". Zach: *"you should make
   it so I can open this file directly. I was able to do this is system sketch. I
   think perhaps it had like a URI or something?"* The app takes
-  `?board=<absolute path>` — a literal `=` and `/`, **never** percent-encoded,
-  and **never** wrapped in a markdown `[text](url)` link, because a chat client
-  rewrites `?board=` to `?board%3D…` and the app then rejects it. Hand over the
+  `?board=<absolute path>`. The **`=`** must stay literal and the link must
+  **never** be wrapped in a markdown `[text](url)`, because a chat client
+  rewrites `?board=` to `?board%3D…`, mangling the key. (The `/` in the value
+  may be `%2F` — `URLSearchParams.set` always escapes it and both forms parse
+  the same; an earlier version of this entry claimed otherwise.) Hand over the
   bare URL or a code span. The Open-it board row is therefore: one fence with the
   server command, and the `?board=` URL in a code span beneath it. The archived
   app is the reference — `/home/bam/systemsketch/src/workspace/workspaceModel.ts:157`

@@ -493,10 +493,18 @@ pnpm --dir <tree> --filter systemsketch exec vite --port <your own port> --stric
 
 Three things about that URL, each already measured:
 
-- **The `=` and the `/` are literal. Never percent-encode them,** and never wrap
-  the URL in a markdown `[text](url)` link — a chat client rewrites `?board=`
-  into `?board%3D…` and the app answers "Board link is invalid". A bare URL or a
-  code span; `encodeURIComponent` is for CDP navigation, not for Zach's link.
+- **The `=` is what must stay literal.** Never wrap the URL in a markdown
+  `[text](url)` link: a chat client rewrites `?board=` into `?board%3D…`, which
+  mangles the *key*, and the app then cannot find the parameter at all. Hand over
+  a bare URL or a code span.
+  The `/` inside the **value** is a different matter, and the earlier wording
+  here ("never percent-encode the `=` or the `/`") was wrong — measured
+  2026-09-20: `URLSearchParams.set` *always* escapes `/` to `%2F`, so the
+  donor's own `documentHref` has never emitted the literal-slash form. Both
+  parse to the same path; the literal form is merely readable. So build in-app
+  navigation with `documentHref`, and render a link for a human with
+  `boardLinkFor` — the paste-safe spelling, with a test pinning that the two
+  parse identically.
 - **The archived app is the reference**, not a thing to reinvent:
   `/home/bam/systemsketch/src/workspace/workspaceModel.ts:157` builds the link,
   `src/workspace/LocalWorkspace.tsx:367` reads it.
