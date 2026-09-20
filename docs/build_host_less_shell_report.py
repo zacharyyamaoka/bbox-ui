@@ -300,9 +300,9 @@ DECISIONS = [
      "It is cheap to reverse (a directory move) and it removes app→app imports before they spread. The name is yours; I would not rename anything until the first host imports it.",
      "Package + thin app; everything else as drawn."),
     ("D4", "When to start, and the first rung",
-     "Wait for the two lanes now editing chrome and main.tsx (chrome-files-settings, review-boards) to land. Then: (1) HostPort + the fake host + a contract test suite — additive, touches no existing file; (2) lift chrome out of the tldraw app behind the port, kept green by its existing real-browser suite; (3) only then the React Flow host — first opening the whiteboard, then the port on it, with a stop rule on its size.",
+     "Wait for the lanes now editing chrome/, main.tsx and App.tsx to land — five at last check (chrome-files-settings, review-boards, devtools, draft-compare, settings-pages), not the two I first named. Then: (1) HostPort + the fake host + a contract test suite — additive, touches no existing app file; (2) lift chrome out of the tldraw app behind the port, kept green by its existing real-browser suite; (3) only then the React Flow host — first opening the whiteboard, then the port on it, with a stop rule on its size.",
      "Yes, in this order",
-     "Moving chrome now collides with a lane that is rewriting it. Step 1 is the contract barrier and can run beside any lane, and step 2 is safe because the tldraw app already has a real-browser suite around it. Step 3 waits on evidence: the port has to survive tldraw AND the fake before React Flow is asked to.",
+     "Moving chrome now collides with the five lanes that are rewriting it. Step 1 is the contract barrier and can run beside any lane, and step 2 is safe because the tldraw app already has a real-browser suite around it. Step 3 waits on evidence: the port has to survive tldraw AND the fake before React Flow is asked to.",
      "Nothing starts until you say; the port spec is the first rung when you do."),
     ("D5", "Where the whiteboard lives",
      "Your diagram draws simple-reactflow-whiteboard inside the bbox-ui repo, but it is its own public repo today. Keep it separate and pin it by commit once it has a library entry, or copy it in as a package.",
@@ -454,8 +454,8 @@ def page() -> str:
 
 <h2>Order of work</h2>
 <ol>
-<li><strong>The port + a fake host + contract tests.</strong> Additive; touches no existing file, so it can run beside any lane. The no-host app then runs today — every window, an empty background — which is the thing you said you want to develop.</li>
-<li><strong>Lift chrome out of the tldraw app, behind the port.</strong> Held green by the app's existing real-browser suite. <em>Not before</em> the two lanes that are rewriting <code>chrome/</code> and <code>main.tsx</code> have landed.</li>
+<li><strong>The port + a fake host + contract tests.</strong> Additive; touches no existing app file, so it can run beside any lane. A thin no-host app can mount against the fake host, but its windows only arrive in step 2, when chrome is lifted — building them earlier would fork wiring that five live lanes are still editing.</li>
+<li><strong>Lift chrome out of the tldraw app, behind the port.</strong> Held green by the app's existing real-browser suite. <em>Not before</em> the lanes that are rewriting <code>chrome/</code>, <code>main.tsx</code> and <code>App.tsx</code> have landed — five at last check.</li>
 <li><strong>The React Flow host, last, with a stop rule on its size.</strong> First open the whiteboard (D2), then implement the port on it. By then the port has survived tldraw and the fake.</li>
 </ol>
 <p class="dim">Deliberately not done: no code, no rename, no move of chrome, no merge, and no change to <code>simple-reactflow-whiteboard</code> — I read its source but did not run its tests. The two lanes above are live; I did not touch them.</p>
