@@ -5,9 +5,21 @@
 // This file is the "Chrome bar" row of docs/menus/MENU-KIT-DESIGN.md §4's
 // host contract: crumbs/depth/canGoBack/canGoForward as plain data, the
 // callbacks, the identity, and — the line the contract is most explicit
-// about — "confirm dialogs and toasts are host's". Those two come from
-// tldraw's own `useDialogs`/`useToasts`, which is why `src/files/session.tsx`
-// takes them as callbacks instead of reaching for the hooks itself.
+// about — "confirm dialogs and toasts are host's". That line says the host
+// DECIDES them, not that the host draws them: the toast is tldraw's own
+// `useToasts`, and the confirmation is the trunk's `useConfirm`
+// (`@trunk/components/confirmDialog`). `src/files/session.tsx` takes both as
+// callbacks instead of reaching for the hooks itself.
+//
+// WHY the confirmation is not built here any more: Zach, 2026-09-19 — "all of
+// the feedback regarding the chrome should be made in bbox-ui
+// editor-components, not in system sketch, system sketch should just be kinda
+// like importing these stock menus and doing a light bit of configuration".
+// This file used to author that dialog's header, body, footer, both buttons
+// and its dismissal latch inline; a modal that lives inside one app is a modal
+// the next host (the VS Code extension, the Obsidian plugin) inherits nothing
+// from, and `ARCHITECTURE.md:44-81` measured a vendored copy diverging inside
+// a day. All that is left here is the message and the two callbacks.
 //
 // WHY there is no undo/redo pill here any more: Zach, 2026-09-19 — "Undo redo
 // should be hidden … We don't need to show that". Undo and Redo are Edit ▸
@@ -16,23 +28,12 @@
 // justification (depth arrows must not be re-labelled as document history)
 // still holds, and is why the arrows below remain honestly disabled rather
 // than quietly becoming undo/redo now that the pill is gone.
-import { useCallback, useMemo, useState } from "react";
-import {
-  TldrawUiButton,
-  TldrawUiButtonLabel,
-  TldrawUiDialogBody,
-  TldrawUiDialogCloseButton,
-  TldrawUiDialogFooter,
-  TldrawUiDialogHeader,
-  TldrawUiDialogTitle,
-  useDialogs,
-  useEditor,
-  useToasts,
-  useValue,
-} from "tldraw";
+import { useMemo, useState } from "react";
+import { useEditor, useToasts, useValue } from "tldraw";
 
 import { buildAppMenu, type MenuGroupSpec } from "@trunk/components/appMenu";
 import { ChromeBar } from "@trunk/components/chromeBar";
+import { useConfirm } from "@trunk/components/confirmDialog";
 import { FileNavigator } from "@trunk/components/fileNavigator";
 
 import { documentLocation } from "../files/launchConfig";
@@ -63,50 +64,13 @@ const DEFAULT_BOARD_NAME = "Untitled board";
 export function SystemSketchChromeBar() {
   const editor = useEditor();
   const { addToast } = useToasts();
-  const { addDialog } = useDialogs();
+  // The trunk's confirmation surface, configured: a test-id prefix, and that
+  // is the whole of this app's say in how it looks or behaves.
+  const { confirm, dialog: confirmDialog } = useConfirm({ testIdPrefix: "ss-confirm" });
   const { settings, update } = useAppSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const boardName = useValue("ss board name", () => editor.getDocumentSettings().name || DEFAULT_BOARD_NAME, [editor]);
-
-  /** tldraw's own dialog, promised. The `answered` latch is what keeps a
-   *  dismissal (backdrop, Escape, the × ) from resolving twice. */
-  const confirm = useCallback<DocumentSessionHelpers["confirm"]>(
-    (prompt) =>
-      new Promise<boolean>((resolve) => {
-        let answered = false;
-        addDialog({
-          component: ({ onClose }) => (
-            <>
-              <TldrawUiDialogHeader>
-                <TldrawUiDialogTitle>{prompt.title}</TldrawUiDialogTitle>
-                <TldrawUiDialogCloseButton />
-              </TldrawUiDialogHeader>
-              <TldrawUiDialogBody>{prompt.body}</TldrawUiDialogBody>
-              <TldrawUiDialogFooter className="tlui-dialog__footer__actions">
-                <TldrawUiButton type="normal" onClick={onClose}>
-                  <TldrawUiButtonLabel>Cancel</TldrawUiButtonLabel>
-                </TldrawUiButton>
-                <TldrawUiButton
-                  type="primary"
-                  onClick={() => {
-                    answered = true;
-                    resolve(true);
-                    onClose();
-                  }}
-                >
-                  <TldrawUiButtonLabel>{prompt.confirmLabel}</TldrawUiButtonLabel>
-                </TldrawUiButton>
-              </TldrawUiDialogFooter>
-            </>
-          ),
-          onClose: () => {
-            if (!answered) resolve(false);
-          },
-        });
-      }),
-    [addDialog],
-  );
 
   const helpers = useMemo<DocumentSessionHelpers>(() => ({ addToast, confirm }), [addToast, confirm]);
   const session = useDocumentSession({ editor, mode: settings.fileNavigation, helpers, boardName });
@@ -171,6 +135,7 @@ export function SystemSketchChromeBar() {
       />
       {session.navigatorProps ? <FileNavigator {...session.navigatorProps} /> : null}
       <SystemSketchSettings open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} update={update} />
+      {confirmDialog}
     </div>
   );
 }

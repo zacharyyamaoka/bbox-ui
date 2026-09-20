@@ -245,22 +245,34 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
             </DialogClose>
           </div>
           <div className="flex min-h-0 flex-1 gap-4">
+            {/* WHY the nav is stock `Button`s rather than the hand-styled rows
+                this file shipped first: Zach, 2026-09-19 — "as always please be
+                using stock shadcn as much as possible". The hand-rolled row had
+                re-derived `hover:bg-muted`, the active tint and the icon sizing
+                by hand, which is three chances to drift from every other
+                control in the kit and no way for a consumer to `shadcn add` the
+                same thing. `secondary` IS the stock active tint. */}
             <nav data-slot="settings-nav" aria-label="Settings categories" className="flex w-36 shrink-0 flex-col gap-0.5">
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  aria-current={cat.id === activeCategory?.id ? "page" : undefined}
-                  onClick={() => selectCategory(cat.id)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-muted hover:text-foreground",
-                    cat.id === activeCategory?.id && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground",
-                  )}
-                >
-                  {cat.icon}
-                  {cat.label}
-                </button>
-              ))}
+              {categories.map((cat) => {
+                const active = cat.id === activeCategory?.id;
+                return (
+                  <Button
+                    key={cat.id}
+                    type="button"
+                    variant={active ? "secondary" : "ghost"}
+                    size="sm"
+                    // The donor's own semantics (InterfaceSettings.tsx:164-222),
+                    // kept: the open category is the current page, not just a
+                    // differently-coloured button.
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => selectCategory(cat.id)}
+                    className={cn("justify-start gap-2 px-2 font-normal", !active && "text-muted-foreground")}
+                  >
+                    {cat.icon}
+                    {cat.label}
+                  </Button>
+                );
+              })}
             </nav>
             {/* WHY: the pane fills the window in `page` presentation, so without a
                 reading measure every option row stretches the full viewport and strands

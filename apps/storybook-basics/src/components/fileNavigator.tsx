@@ -15,7 +15,12 @@
 // the layout, copy, keyboard and sort behaviour are the donor's; only its
 // primitives change — Radix `Dialog` → stock shadcn `Dialog` (Base UI), the
 // hand-styled table → stock `Table`, `SystemSketchUiInput` → stock `Input`,
-// raw buttons → `Button`. Dropped: the `rename`, `exportTldraw` and
+// raw buttons → `Button`, the hand-built path row → stock `Breadcrumb*`.
+// Zach, 2026-09-19: "as always please be using stock shadcn as much as
+// possible" — so there is no raw `<button>` left in this file at all
+// (`trunkOwnership.test.ts` holds that line: a hand-styled control and a
+// stock one are indistinguishable to a click, and only the source says which
+// one the next host inherits). Dropped: the `rename`, `exportTldraw` and
 // `portableCopy` modes (rename is inline in the chrome bar title now; this app
 // has no `.systemsketch` export) and every tldraw/`useLocalWorkspace` import —
 // this component takes a client and callbacks, so it mounts in any host.
@@ -48,6 +53,7 @@
 //     true})` for the SAME path.
 //   - Errors: `role="alert"` text above the footer.
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -58,6 +64,14 @@ import {
 } from "react";
 import { FileIcon, FolderIcon } from "lucide-react";
 
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "./breadcrumb";
 import { Button } from "./button";
 import { Dialog, DialogContent, DialogTitle } from "./dialog";
 import { Input } from "./input";
@@ -131,6 +145,19 @@ export interface FileNavigatorProps {
    */
   testIdPrefix?: string;
 }
+
+/**
+ * A Places/Recent rail row: the donor's two-line, left-aligned shape
+ * (`LocalWorkspace.tsx:1873-1879`) expressed as the deltas a stock ghost
+ * `Button` needs, rather than as a second button implementation.
+ *
+ * WHY each override is here and not a restyle of `Button` itself: the rail is
+ * the ONE place in this kit where a control is two stacked lines of different
+ * sizes, so `h-auto flex-col items-start` is local taste, not a missing
+ * variant — pushing it into the stock part would change every button in the
+ * repo to win one rail.
+ */
+const RAIL_ROW = "h-auto flex-col items-start gap-0 whitespace-normal px-2 py-1 text-left font-normal";
 
 const SORT_COLUMNS: readonly [WorkspaceBrowserSort, string][] = [
   ["name", "Name"],
@@ -405,38 +432,39 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
           <aside className="flex flex-col gap-1 overflow-y-auto text-sm">
             <strong className="text-xs text-muted-foreground">Places</strong>
             {places.map((place) => (
-              <button
+              <Button
                 key={place.path}
                 type="button"
+                variant="ghost"
+                size="sm"
                 title={place.path}
                 data-testid={testId("place")}
-                className={cn(
-                  "flex flex-col rounded-md px-2 py-1 text-left hover:bg-muted",
-                  listing?.dir === place.path && "bg-muted",
-                )}
+                className={cn(RAIL_ROW, listing?.dir === place.path && "bg-muted")}
                 onClick={() => void load(place.path)}
               >
-                <span>{place.label}</span>
-                <small className="truncate text-muted-foreground">{place.path}</small>
-              </button>
+                <span className="w-full truncate">{place.label}</span>
+                <small className="w-full truncate text-muted-foreground">{place.path}</small>
+              </Button>
             ))}
             <strong className="mt-2 text-xs text-muted-foreground">Recent</strong>
             {recents.length ? (
               recents.map((path) => (
-                <button
+                <Button
                   key={path}
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   title={path}
                   data-testid={testId("recent")}
-                  className="flex flex-col rounded-md px-2 py-1 text-left hover:bg-muted"
+                  className={RAIL_ROW}
                   onClick={() => {
                     if (mode === "open") void runAction(() => onOpenDocument(path, { newWindow: false }));
                     else void load(parentDirectory(path));
                   }}
                 >
-                  <span>{documentTitle(path)}</span>
-                  <small className="truncate text-muted-foreground">{parentDirectory(path)}</small>
-                </button>
+                  <span className="w-full truncate">{documentTitle(path)}</span>
+                  <small className="w-full truncate text-muted-foreground">{parentDirectory(path)}</small>
+                </Button>
               ))
             ) : (
               <p className="px-2 text-muted-foreground">No recent files yet.</p>
@@ -456,31 +484,57 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
               >
                 ←
               </Button>
-              <nav
-                className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap text-sm"
+              {/* WHY the current folder is a `BreadcrumbPage` and not a
+                  disabled link: the donor got the LOOK right with
+                  `disabled:font-medium disabled:text-foreground`, but a
+                  screen reader heard "dimmed button" where the stock part
+                  says `aria-current="page"` — and the trail is the only
+                  thing on this dialog that says where you are. */}
+              <Breadcrumb
+                className="flex min-w-0 flex-1 items-center overflow-x-auto text-sm"
                 aria-label="Folder path"
                 data-testid={testId("crumbs")}
                 ref={crumbsRef}
               >
-                {trail.map((segment, index) => (
-                  <span key={segment.path} className="flex items-center gap-1">
-                    {index > 0 ? (
-                      <i aria-hidden="true" className="text-muted-foreground">
-                        /
-                      </i>
-                    ) : null}
-                    <button
-                      type="button"
-                      title={segment.path}
-                      disabled={busy || segment.path === listing?.dir}
-                      className="rounded px-1 hover:bg-muted disabled:font-medium disabled:text-foreground disabled:hover:bg-transparent"
-                      onClick={() => void load(segment.path)}
-                    >
-                      {segment.label}
-                    </button>
-                  </span>
-                ))}
-              </nav>
+                <BreadcrumbList className="flex-nowrap gap-1 whitespace-nowrap">
+                  {trail.map((segment, index) => (
+                    <Fragment key={segment.path}>
+                      {index > 0 ? <BreadcrumbSeparator>/</BreadcrumbSeparator> : null}
+                      <BreadcrumbItem>
+                        {segment.path === listing?.dir ? (
+                          <BreadcrumbPage title={segment.path} className="px-1 font-medium">
+                            {segment.label}
+                          </BreadcrumbPage>
+                        ) : (
+                          <BreadcrumbLink
+                            title={segment.path}
+                            // WHY the size overrides ride on the `Button` and
+                            // not on `BreadcrumbLink`: `BreadcrumbLink` merges
+                            // classNames by CONCATENATION (Base UI
+                            // `mergeProps`/`useRender`), so `h-auto` beside
+                            // the Button's own `h-7` would be settled by
+                            // stylesheet order rather than by tailwind-merge.
+                            // `Button`'s className goes through `cn`, which
+                            // resolves the conflict deterministically.
+                            render={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={busy}
+                                className="h-auto px-1 py-0.5 font-normal text-muted-foreground"
+                                onClick={() => void load(segment.path)}
+                              />
+                            }
+                          >
+                            {segment.label}
+                          </BreadcrumbLink>
+                        )}
+                      </BreadcrumbItem>
+                    </Fragment>
+                  ))}
+                </BreadcrumbList>
+              </Breadcrumb>
               <Button
                 type="button"
                 variant="outline"
@@ -575,18 +629,20 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                       const arrow = active ? (sort.direction === "ascending" ? "↑" : "↓") : "";
                       return (
                         <TableHead key={column} className={column === "name" ? "" : "w-24"}>
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             data-testid={testId(`sort-${column}`)}
                             aria-sort={direction}
                             aria-label={`Sort by ${label}${active ? `, ${sort.direction}` : ""}`}
                             title={`Sort by ${label}`}
-                            className="inline-flex items-center gap-1 font-medium"
+                            className="-mx-1 h-auto gap-1 px-1 py-0.5 font-medium"
                             onClick={() => toggleSort(column)}
                           >
                             {label}
                             <span aria-hidden="true">{arrow}</span>
-                          </button>
+                          </Button>
                         </TableHead>
                       );
                     })}
