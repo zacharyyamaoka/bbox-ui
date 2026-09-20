@@ -95,6 +95,49 @@ function DefaultTriggerContent({
 }
 
 /**
+ * The "you are here" mark on a row: a filled accent dot when current, the
+ * branch glyph otherwise (screenshot 05's open popover — the Main row carries
+ * a blue dot, nothing else does).
+ *
+ * WHY the dot REPLACES the glyph rather than sitting beside it: the row's
+ * left edge is the only place a reader scans to answer "which one am I on",
+ * and two marks in that slot make it a comparison rather than a glance. The
+ * branch glyph is what a row looks like when it is somewhere you could go;
+ * the dot is what it looks like when you are already there.
+ */
+function RowMark({ isCurrent }: { isCurrent: boolean }) {
+  if (isCurrent) {
+    return (
+      <span
+        aria-hidden="true"
+        data-slot="branch-chip-current-dot"
+        className="size-2 shrink-0 rounded-full bg-primary"
+      />
+    );
+  }
+  return <GitBranch aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />;
+}
+
+/**
+ * The accent bar down the left edge of the current row (screenshot 05).
+ *
+ * WHY a bar AND ordinary foreground ink on the tint, rather than accent-
+ * coloured text: accent-on-accent-soft was measured at 2.6–4.3:1 in every
+ * palette this repo ships — sub-AA. The established fix here is ink for the
+ * copy plus a saturated accent bar carrying the colour, which is exactly
+ * what the donor's own popover does.
+ */
+function CurrentBar() {
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="branch-chip-current-bar"
+      className="absolute inset-y-1 left-0 w-[3px] rounded-full bg-primary"
+    />
+  );
+}
+
+/**
  * One row: Main, or a draft with rename + a two-step discard.
  *
  * WHY discard is a two-step confirm inline in the row rather than a dialog
@@ -153,8 +196,9 @@ function DraftRow({
       // DraftsControl.tsx's `.systemsketch-drafts-row__actions`): a list of
       // drafts is scanned by name far more often than acted on — two
       // buttons per row, always on, is noise the whole rest of the time.
-      className="group flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted data-current:bg-accent/50"
+      className="group relative flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted data-current:bg-primary/15"
     >
+      {isCurrent ? <CurrentBar /> : null}
       <button
         type="button"
         onClick={onSelect}
@@ -167,7 +211,11 @@ function DraftRow({
         aria-label={`${draft.name}, ${draft.secondaryLabel}`}
         className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-1 text-left"
       >
-        <GitBranch aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+        {/* Fixed-width slot: the dot (8px) and the glyph (14px) must not
+            shift a row's copy sideways when the current row changes. */}
+        <span className="flex w-3.5 shrink-0 justify-center">
+          <RowMark isCurrent={isCurrent} />
+        </span>
         <span className="flex min-w-0 flex-col">
           <b className="truncate text-sm font-medium">{draft.name}</b>
           <small className="truncate text-xs text-muted-foreground">{draft.secondaryLabel}</small>
@@ -247,19 +295,32 @@ export function BranchChip({
         </PopoverTrigger>
       )}
       <PopoverContent container={container} align="start" className="w-64" aria-label="Drafts">
-        <p className="text-sm font-semibold">Drafts</p>
+        {/*
+         * WHY an uppercase, letter-spaced, muted eyebrow rather than a plain
+         * bold heading (screenshot 05's "DRAFTS"): the popover holds exactly
+         * one list, so its title is a section marker, not a competing label —
+         * at `text-sm font-semibold` it read as heavier than the rows it
+         * introduces. The uppercasing is CSS typography, not a changed
+         * string: the accessible name stays "Drafts".
+         */}
+        <p className="px-1 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Drafts
+        </p>
         <div className="flex flex-col gap-0.5" data-slot="branch-chip-list">
           <button
             type="button"
             data-current={activeDraftId === null || undefined}
             data-testid="branch-chip-select-main"
-            className="flex items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-muted data-current:bg-accent/50"
+            className="relative flex items-center gap-2 rounded-md px-1 py-1.5 text-left hover:bg-muted data-current:bg-primary/15"
             onClick={() => {
               onSwitchTo(null);
               setOpen(false);
             }}
           >
-            <GitBranch aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+            {activeDraftId === null ? <CurrentBar /> : null}
+            <span className="flex w-3.5 shrink-0 justify-center">
+              <RowMark isCurrent={activeDraftId === null} />
+            </span>
             <b className="text-sm font-medium">Main</b>
           </button>
           {drafts.map((draft) => (
@@ -276,11 +337,27 @@ export function BranchChip({
             />
           ))}
         </div>
+        {/*
+         * WHY a dashed, full-width, CENTRED row rather than a left-aligned
+         * ghost item (screenshot 05): a dashed outline is the established
+         * "this is a slot you can fill", and centring it stops it reading as
+         * another entry in the list above — the donor's own popover puts it
+         * in a footer, below a divider, for the same reason. It is the one
+         * action in this surface that CREATES something, so it must not be
+         * scannable as one of the things that already exist.
+         */}
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className={cn("justify-start gap-1.5")}
+          // `border-border dark:border-input` and not `border` alone: the
+          // base `buttonVariants` class is `border border-transparent`, so a
+          // bare `border-dashed` draws dashes in transparent and renders
+          // nothing at all. Same literal pair `outline` uses (button.tsx:20)
+          // — see its own WHY there for why `--input` is named in dark.
+          className={cn(
+            "mt-1 w-full justify-center gap-1.5 border border-dashed border-border text-muted-foreground hover:text-foreground dark:border-input",
+          )}
           data-testid="branch-chip-new-draft"
           onClick={() => {
             onCreate();
