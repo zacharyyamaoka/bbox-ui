@@ -55,6 +55,7 @@ from pathlib import Path
 # test suite (which inserts scripts/ itself) resolve it as a plain top-level
 # module — see scripts/tests/test_systemsketch_files_http.py's DockMountTests.
 from systemsketch_files import GioDesktop, WorkspaceApi, default_lock_root
+from systemsketch_recordings import RecordingApi
 
 PRODUCT = "systemsketch-next"
 REPO = Path(__file__).resolve().parents[1]
@@ -155,6 +156,14 @@ class StableHandler(http.server.SimpleHTTPRequestHandler):
     # trust. None until `serve()` (or a test) sets it; with no workspace
     # mounted this handler behaves exactly as it did before this changed.
     workspace: "WorkspaceApi | None" = None
+    # The recorder's own routes, on the SAME origin and for the same reason.
+    #
+    # WHY not a second server: a recording carries a full store snapshot of
+    # whatever board is open, so `RecordingApi._refuse_state_change` rejects
+    # any POST whose Origin is not this page's. A second port would be a
+    # second origin this one has to trust, which is exactly the fence that
+    # check exists to hold. None until `serve()` (or a test) sets it.
+    recordings: "RecordingApi | None" = None
 
     def do_GET(self) -> None:  # noqa: N802 — the stdlib's spelling
         if self.path.split("?")[0] == "/api/health":
@@ -167,10 +176,14 @@ class StableHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self.workspace is not None and self.workspace.handle_get(self):
             return
+        if self.recordings is not None and self.recordings.handle_get(self):
+            return
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802 — the stdlib's spelling
         if self.workspace is not None and self.workspace.handle_post(self):
+            return
+        if self.recordings is not None and self.recordings.handle_post(self):
             return
         self.send_error(501, f"Unsupported method ({self.command!r})")
 
@@ -191,8 +204,17 @@ def serve(port: int, root: Path, build: str) -> None:
     # StableHandler.workspace above. Real desktop Trash/reveal (GioDesktop);
     # the archived app's own lock folder when it exists, so a save from
     # either app excludes the other on the same file (default_lock_root).
+    files_root = files_root_from(os.environ)
     StableHandler.workspace = WorkspaceApi(
-        files_root_from(os.environ), default_lock_root(HOME), GioDesktop()
+        files_root, default_lock_root(HOME), GioDesktop()
+    )
+    # The recorder writes its folders under the SAME files root the workspace
+    # serves, so a recording lands beside the boards it recorded rather than
+    # in a second place a person has to know about. `source_root` is this
+    # checkout: `state_index` reads it to name tldraw's own states, and it is
+    # a read of source files, never of a board.
+    StableHandler.recordings = RecordingApi(
+        files_root, source_root=REPO, channel="stable", build=build
     )
     handler = functools.partial(StableHandler, directory=str(root))
     with http.server.ThreadingHTTPServer(("127.0.0.1", port), handler) as server:

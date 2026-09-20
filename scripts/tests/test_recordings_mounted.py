@@ -22,9 +22,11 @@ Run: ``python3 -m unittest discover -s scripts/tests -t scripts/tests -v``
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -35,7 +37,7 @@ SCRIPTS = PROJECT_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import systemsketch_files  # noqa: E402
-from systemsketch_files import RecordingDesktop, make_server  # noqa: E402
+from systemsketch_files import LISTENING_BANNER, RecordingDesktop, make_server  # noqa: E402
 from systemsketch_recordings import RecordingApi  # noqa: E402
 
 
@@ -143,6 +145,62 @@ class RecordingRoutesOnTheDockStableServer(unittest.TestCase):
             source,
             "do_POST must delegate to the recordings mount",
         )
+
+
+class RecordingRoutesThroughTheStandaloneCli(unittest.TestCase):
+    """What the vite dev plugin actually spawns: ``serve … --recordings``."""
+
+    def run_host(self, *extra: str) -> tuple[subprocess.Popen, str]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        (root / "files").mkdir()
+        child = subprocess.Popen(
+            [
+                sys.executable,
+                str(SCRIPTS / "systemsketch_files.py"),
+                "serve",
+                "--files-root",
+                str(root / "files"),
+                "--lock-root",
+                str(root / "locks"),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "0",
+                "--desktop",
+                f"record:{root / 'desktop.log'}",
+                *extra,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.addCleanup(lambda: (child.kill(), child.wait(timeout=5)))
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            line = child.stdout.readline()
+            if line.startswith(LISTENING_BANNER):
+                return child, line.split(" ", 1)[1].strip()
+        raise AssertionError("the host never printed its listening banner")
+
+    def test_with_the_flag_the_recording_routes_answer(self) -> None:
+        _, origin = self.run_host("--recordings")
+        status, payload = get_json(origin, "/api/recordings/last")
+        self.assertEqual(status, 200)
+        self.assertIsNone(payload["recording"])
+
+    def test_without_the_flag_they_do_not_exist(self) -> None:
+        _, origin = self.run_host()
+        status, _ = get_json(origin, "/api/recordings/last")
+        self.assertEqual(status, 404)
+
+    def test_the_vite_dev_plugin_spawns_it_with_the_flag_and_proxies_the_prefix(self) -> None:
+        # The dev proxy and the child it spawns have to agree, or the app's
+        # fetch reaches a host that does not serve the route.
+        source = (PROJECT_ROOT / "apps" / "systemsketch" / "devFileHost.ts").read_text(encoding="utf-8")
+        self.assertIn('"--recordings"', source, "the spawned host must mount the recording API")
+        self.assertIn('"/api/recordings"', source, "the proxy must forward the recording prefix")
 
 
 if __name__ == "__main__":

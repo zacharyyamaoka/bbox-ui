@@ -882,6 +882,23 @@ def trash_document(
 
 # ------------------------------------------------------------------ desktop
 
+class ApiMount(Protocol):
+    """A second API this host can delegate to, tried after ``WorkspaceApi``.
+
+    Both methods answer True when they OWNED the request (and have already
+    written the response) and False to let the host keep looking — the shape
+    ``WorkspaceApi`` itself uses, and the shape
+    ``systemsketch_recordings.RecordingApi`` was written to.
+
+    WHY a Protocol rather than importing that class: the dependency points
+    recordings → files and must not turn into a cycle. See ``make_server``.
+    """
+
+    def handle_get(self, handler: Any) -> bool: ...
+
+    def handle_post(self, handler: Any) -> bool: ...
+
+
 class Desktop(Protocol):
     """The two operations that leave the process: Trash and a file manager."""
 
@@ -1331,12 +1348,28 @@ def make_server(
     host: str = "127.0.0.1",
     port: int = 0,
     cors_loopback: bool = False,
+    recordings: "ApiMount | None" = None,
 ):
     """A ``ThreadingHTTPServer`` bound but not yet serving, whose handler
     delegates to ``WorkspaceApi`` and answers ``GET /api/health`` with
     ``{"product": PRODUCT, "filesRoot": <abs>, "workspace": <abs default dir>}``;
     every other path → 404 JSON. Port 0 = ephemeral (read it back from
-    ``server.server_address``)."""
+    ``server.server_address``).
+
+    ``recordings`` is an OPTIONAL second mount answering ``/api/recordings/*``
+    — in practice ``systemsketch_recordings.RecordingApi``, which was written
+    with this exact ``handle_get``/``handle_post`` shape for the purpose.
+    Passing nothing leaves this server byte-for-byte the host it was before
+    the parameter existed, which is what the standalone file-host tests rely
+    on.
+
+    WHY it is INJECTED rather than constructed here from a flag: importing
+    ``systemsketch_recordings`` at this module's top level is a cycle — that
+    module imports ``DEFAULT_WORKSPACE_DIRNAME`` and ``MAX_API_REQUEST_BYTES``
+    from THIS one (systemsketch_recordings.py:82). Taking the built object
+    keeps the dependency pointing one way, and it is also what lets a test
+    mount a fake.
+    """
     api = WorkspaceApi(files_root, lock_root, desktop, cors_loopback=cors_loopback)
 
     class _Handler(BaseHTTPRequestHandler):
@@ -1361,10 +1394,14 @@ def make_server(
                 return
             if api.handle_get(self):
                 return
+            if recordings is not None and recordings.handle_get(self):
+                return
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
         def do_POST(self) -> None:  # noqa: N802 — the stdlib's spelling
             if api.handle_post(self):
+                return
+            if recordings is not None and recordings.handle_post(self):
                 return
             self._send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
@@ -1405,6 +1442,11 @@ def main(argv: list[str] | None = None) -> int:
     serve_parser.add_argument("--port", type=int, default=0)
     serve_parser.add_argument("--cors-loopback", action="store_true")
     serve_parser.add_argument("--desktop", default="gio")
+    # WHY opt-IN rather than always on: this CLI is also the standalone host
+    # the file-host acceptance drives, and mounting a second API by default
+    # would change what those tests see 404 on. The vite dev plugin passes it.
+    serve_parser.add_argument("--recordings", action="store_true")
+    serve_parser.add_argument("--source-root", type=Path, default=None)
     arguments = parser.parse_args(argv)
 
     lock_root = arguments.lock_root or default_lock_root(Path.home())
@@ -1417,6 +1459,22 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"unknown --desktop value: {arguments.desktop!r}")
         return 2  # pragma: no cover — parser.error() already exits
 
+    recordings = None
+    if arguments.recordings:
+        # WHY the import is here and not at module scope: the dependency runs
+        # recordings -> files (systemsketch_recordings.py:82 imports two
+        # constants from this module), so a top-level import back would be a
+        # cycle. `make_server` takes the built object for the same reason.
+        from systemsketch_recordings import RecordingApi
+
+        recordings = RecordingApi(
+            arguments.files_root,
+            source_root=arguments.source_root or Path(__file__).resolve().parents[1],
+            channel="dev",
+            build="dev",
+            cors_loopback=arguments.cors_loopback,
+        )
+
     server = make_server(
         arguments.files_root,
         lock_root,
@@ -1424,6 +1482,7 @@ def main(argv: list[str] | None = None) -> int:
         host=arguments.host,
         port=arguments.port,
         cors_loopback=arguments.cors_loopback,
+        recordings=recordings,
     )
     host, port = server.server_address[:2]
     print(f"{LISTENING_BANNER} http://{host}:{port}", flush=True)

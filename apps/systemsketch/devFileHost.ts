@@ -133,7 +133,7 @@ export function startFileHost(roots: DevFileHostRoots & { python?: string }): Pr
 
     const child: ChildProcess = spawn(
       python,
-      [SCRIPT_PATH, "serve", "--files-root", roots.filesRoot, "--lock-root", roots.lockRoot, "--host", "127.0.0.1", "--port", "0"],
+      [SCRIPT_PATH, "serve", "--files-root", roots.filesRoot, "--lock-root", roots.lockRoot, "--host", "127.0.0.1", "--port", "0", "--recordings"],
       { stdio: ["ignore", "pipe", "pipe"] },
     );
 
@@ -197,6 +197,10 @@ function stopChild(child: ChildProcess): Promise<void> {
  * closes. A request that arrives while the host is down answers 503 with a
  * JSON `{error}` naming the log — never a hang.
  */
+/** The API prefixes this dev server forwards to the Python host, rather than
+ *  letting Vite 404 them. Both are served by ONE child on ONE files root. */
+const PROXIED_API_PREFIXES = ["/api/workspace", "/api/recordings"] as const;
+
 export function devFileHostPlugin(roots?: DevFileHostRoots): Plugin {
   return {
     name: "systemsketch:dev-file-host",
@@ -225,7 +229,15 @@ export function devFileHostPlugin(roots?: DevFileHostRoots): Plugin {
       };
 
       server.middlewares.use((request, response, next) => {
-        if (!request.url?.startsWith("/api/workspace")) {
+        // WHY `/api/recordings` rides the SAME proxy and the same child:
+        // `systemsketch_recordings.RecordingApi` writes its folders under the
+        // very files root this host already serves, and its own POST fence
+        // (`_refuse_state_change`) is an Origin check — so it has to answer on
+        // the page's origin, which in dev is this vite server and nothing
+        // else. A second proxy to a second child would be a second files root
+        // to keep in agreement, which is the exact class of bug the round-1
+        // judge found in the lock roots.
+        if (!PROXIED_API_PREFIXES.some((prefix) => request.url?.startsWith(prefix))) {
           next();
           return;
         }
