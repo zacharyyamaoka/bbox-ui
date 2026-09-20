@@ -5,6 +5,7 @@ import { expect, waitFor, within } from "storybook/test";
 import { Block } from "../components/block";
 import { Badge } from "../components/badge";
 import { Port } from "../components/port";
+import { PORT_VARIANTS, portVariantRingExpansion } from "../skin/portVariants";
 import { TraceBody } from "../components/trace";
 import { bboxSkinAttrs } from "../skin/skin";
 import { SketchAtEdge } from "../skin/SketchAtEdge";
@@ -335,12 +336,21 @@ export const SideBySide: Story = {
 
     // Port rings: the boundary derives the ring's centre-line from the
     // element's own published data-bbox-ring-expand/-pen (port.tsx, M4) —
-    // SURFACE*2 + STATE*3 and STATE, SURFACE=2/STATE=3
-    // (port.layout.ts) — the SAME formula docs/peps/0001-sketch-skin-at-
-    // the-boundary.md verified against the (now-deleted) core mechanism
-    // for a 12px dot: expand = 2*2 + 3*3 = 13, so viewBox "0 0 25 25" and
-    // pen "3". Every `BoxStage` Port is the default `md` (12px) diameter,
-    // so every dot in this story shares that one answer.
+    // GAP*2 + RING*3 and RING — the SAME formula docs/peps/0001-sketch-
+    // skin-at-the-boundary.md verified against the (now-deleted) core
+    // mechanism. Every `BoxStage` Port is the DEFAULT diameter, so every
+    // dot in this story shares one answer.
+    // 2026-09-19 (lane `ports`): the default is now the v1 variant
+    // (src/skin/portVariants.ts) — a 6px box with a 1px gap and a 1.5px
+    // ring — so expand = 1*2 + 1.5*3 = 6.5 and the twin's viewBox is
+    // 6 + 6.5 = "0 0 12.5 12.5" with pen "1.5". Was "0 0 25 25"/"3" for the
+    // old 12px `md` box with 2/3 rings (expand 13). Same derivation, same
+    // attributes, new default size — read from the registry that now owns
+    // the painted rings (`PORT_SURFACE_RING_PX`/`PORT_STATE_RING_PX` are the
+    // reserved allowance since this change, not the paint).
+    const v1 = PORT_VARIANTS.v1;
+    const expected = portVariantRingExpansion(v1);
+    const expectedSize = v1.dot.diameter + expected.expand;
     const dotGeom = [...boundary.querySelectorAll('[data-slot="port-dot"]')].map((el) => {
       const svg = el.querySelector<SVGSVGElement>(`svg[${SKETCH_TWIN_ATTR}="box"]`);
       return {
@@ -350,8 +360,8 @@ export const SideBySide: Story = {
     });
     expect(dotGeom.length).toBeGreaterThan(0);
     for (const g of dotGeom) {
-      expect(g.vb).toBe("0 0 25 25");
-      expect(g.pen).toBe("3");
+      expect(g.vb).toBe(`0 0 ${expectedSize} ${expectedSize}`);
+      expect(g.pen).toBe(String(expected.pen));
     }
 
     // Column 3 is the independence claim, asserted: drawn geometry present,

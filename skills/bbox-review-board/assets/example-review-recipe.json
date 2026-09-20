@@ -1,0 +1,91 @@
+{
+  "feature": "Cables meet a port at its centre; shared ports show a count",
+  "viewport": { "width": 1280, "height": 720 },
+  "shapes": [
+    {
+      "id": "estimate",
+      "type": "ss-block",
+      "x": 540,
+      "y": 300,
+      "props": {
+        "name": "estimate()",
+        "view": "port",
+        "w": 200,
+        "h": 120,
+        "ports": {
+          "left": [],
+          "right": [{ "id": "out", "name": "out", "type": "Pose" }],
+          "top": [],
+          "bottom": []
+        }
+      }
+    },
+    {
+      "id": "encode",
+      "type": "ss-block",
+      "x": 920,
+      "y": 320,
+      "props": {
+        "name": "encode()",
+        "view": "port",
+        "w": 200,
+        "h": 140,
+        "ports": {
+          "left": [
+            { "id": "in", "name": "in", "type": "Pose" },
+            { "id": "cfg", "name": "cfg", "type": "Config" }
+          ],
+          "right": [],
+          "top": [],
+          "bottom": []
+        }
+      }
+    }
+  ],
+  "connections": [
+    { "from": { "shape": "estimate", "port": "out" }, "to": { "shape": "encode", "port": "in" } },
+    { "from": { "shape": "estimate", "port": "out" }, "to": { "shape": "encode", "port": "in" } },
+    { "from": { "shape": "estimate", "port": "out" }, "to": { "shape": "encode", "port": "cfg" } }
+  ],
+  "callouts": [
+    {
+      "id": "step-1",
+      "kind": "step",
+      "text": "1 · Drag estimate() 120 px down",
+      "x": 40,
+      "y": 285,
+      "w": 400,
+      "h": 110,
+      "target": { "shapeId": "estimate", "anchor": "left", "dy": -20 }
+    },
+    {
+      "id": "step-2",
+      "kind": "step",
+      "text": "2 · Look at the in port: both cables end at its centre",
+      "x": 820,
+      "y": 90,
+      "w": 400,
+      "h": 110,
+      "target": { "shapeId": "encode", "anchor": "top" }
+    },
+    {
+      "id": "step-3",
+      "kind": "step",
+      "text": "3 · Drag encode() 120 px right; all three cables follow",
+      "x": 820,
+      "y": 560,
+      "w": 400,
+      "h": 110,
+      "target": { "shapeId": "encode", "anchor": "bottom" }
+    },
+    {
+      "id": "pass",
+      "kind": "pass",
+      "text": "PASS WHEN · every cable meets a port at its centre, and a shared port shows its count",
+      "x": 40,
+      "y": 530,
+      "w": 460,
+      "h": 110
+    }
+  ]
+}

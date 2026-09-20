@@ -30,6 +30,11 @@ apps/docs/CLAUDE.md
 # allowlists, model overrides), split those into a second, still-ignored file
 # rather than un-tracking this one.
 !.claude/settings.json
+# ...and the project skills. Real files live in the top-level `skills/` (a
+# tracked directory, so they survive `git stash -u` and travel with a clone);
+# `.claude/skills` is a tracked symlink to it, which is the path Claude Code
+# discovers project skills at. Same shape the archived systemsketch repo used.
+!.claude/skills
 # wrangler local state
 .wrangler/
 # Reports: the page is tracked, the captures it inlines are not (Zach, 2026-09-07).

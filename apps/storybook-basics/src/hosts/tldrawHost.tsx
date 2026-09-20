@@ -76,15 +76,14 @@ import {
 } from "react";
 
 import type { BlockSide } from "../components/port.layout";
-import { OPPOSITE_DIR, type TraceDir, type TraceTerminalSpec } from "../components/trace.layout";
+import { DEFAULT_TRACE_ROUTING, OPPOSITE_DIR, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "../components/trace.layout";
 import { Trace } from "../components/trace";
-import { fanWires } from "../components/wiring";
 import { ancestorsOf } from "../scene/region";
 import { portKey } from "../scene/scene";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import type { OpaqueRegionView } from "../scene/regionView";
-import { POINTER_OWNED_CLASS, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { POINTER_OWNED_CLASS, producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
 
@@ -126,6 +125,8 @@ interface TldrawHostContextValue {
    */
   wireScene: HostScene;
   wired: ReadonlySet<string>;
+  /** `producerCountsOf(wireScene)` — see `SceneNodeViewProps.producers`. */
+  producers: ReadonlyMap<string, number>;
   onSceneChange?(next: HostScene): void;
   anchors: Readonly<Record<string, readonly PortAnchor[]>>;
   reportAnchors(nodeId: string, anchors: PortAnchor[]): void;
@@ -356,6 +357,7 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
           scene={host.scene}
           node={node}
           wired={host.wired}
+          producers={host.producers}
           onSceneChange={host.onSceneChange}
           decorate={host.decorate}
           regionViews={host.regionViews}
@@ -453,9 +455,11 @@ interface ResolvedWireRender {
   id: string;
   from: TraceTerminalSpec;
   to: TraceTerminalSpec;
-  curve: { dx: number; dy: number };
   variant?: "data" | "async" | "delayed";
-  routing?: Parameters<typeof Trace>[0]["routing"];
+  /** Resolved here, never left `undefined` — the same reason `WireLayer`
+   *  resolves it: "never straight arrows" has to be true in every host, and
+   *  a default spelled in only two of the three is a host that disagrees. */
+  routing: TraceRouting;
   markerEnd?: Parameters<typeof Trace>[0]["markerEnd"];
   color?: string;
 }
@@ -492,7 +496,6 @@ function WireOverlay() {
     () => {
       if (!scene || !anchors) return { resolved: [] as ResolvedWireRender[], unresolvedIds: [] as string[] };
       const wires = sceneWires(scene);
-      const fans = fanWires(wires);
       const resolved: ResolvedWireRender[] = [];
       const unresolvedIds: string[] = [];
       const endPoint = (blockId: string, portId: string): { x: number; y: number; side: BlockSide } | null => {
@@ -514,7 +517,7 @@ function WireOverlay() {
         const side = anchor.side ?? (shape && anchor.x < shape.props.w / 2 ? "left" : "right");
         return { x: page.x, y: page.y, side };
       };
-      wires.forEach((wire, i) => {
+      wires.forEach((wire) => {
         const from = endPoint(wire.from.blockId, wire.from.portId);
         const to = endPoint(wire.to.blockId, wire.to.portId);
         if (!from || !to) {
@@ -526,10 +529,13 @@ function WireOverlay() {
         resolved.push({
           id: wire.id,
           from: { x: from.x, y: from.y, dir: from.side as TraceDir },
+          // The dot's measured centre, with no per-cable offset — Zach's
+          // "1 connection point in the center" (2026-09-19). The duplicate
+          // fan this host used to apply is gone for the same reason it is
+          // gone from `WireLayer`.
           to: { x: to.x, y: to.y, dir: OPPOSITE_DIR[to.side as TraceDir] },
-          curve: fans[i].offset,
           variant: wire.variant,
-          routing: wire.routing,
+          routing: wire.routing ?? DEFAULT_TRACE_ROUTING,
           markerEnd: wire.markerEnd,
           color: wire.color,
         });
@@ -545,7 +551,7 @@ function WireOverlay() {
       data-unresolved-wires={state.unresolvedIds.join(",")}
       style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, overflow: "visible", pointerEvents: "none" }}
     >
-      {state.resolved.map(({ id, from, to, curve, variant, routing, markerEnd, color }) => (
+      {state.resolved.map(({ id, from, to, variant, routing, markerEnd, color }) => (
         <g key={id} data-wire-id={id}>
           <Trace
             id={id}
@@ -555,7 +561,6 @@ function WireOverlay() {
             variant={variant ?? "data"}
             color={color}
             markerEnd={markerEnd}
-            curve={curve}
             terminals={false}
           />
         </g>
@@ -618,10 +623,13 @@ export function TldrawHost({ scene, onSceneChange, width = 720, height = 400, de
   // Hosts paint the projection; the document keeps its direct P1 cables.
   const projected = useMemo(() => projectHostScene(scene), [scene]);
   const wired = useMemo(() => wiredPortsOf(projected.scene), [projected]);
+  // Off the projection, like `wired`: the count is of the cables PAINTED
+  // at each dot (domCanvas.tsx says why at length).
+  const producers = useMemo(() => producerCountsOf(projected.scene), [projected]);
   const regionViews = useMemo(() => regionViewMap(projected.regions), [projected]);
   const context = useMemo<TldrawHostContextValue>(
-    () => ({ scene, wireScene: projected.scene, wired, onSceneChange, anchors, reportAnchors, decorate, regionViews }),
-    [scene, projected, wired, onSceneChange, anchors, reportAnchors, decorate, regionViews],
+    () => ({ scene, wireScene: projected.scene, wired, producers, onSceneChange, anchors, reportAnchors, decorate, regionViews }),
+    [scene, projected, wired, producers, onSceneChange, anchors, reportAnchors, decorate, regionViews],
   );
   // Caller's `components` layer OVER this host's own (`OnTheCanvas` stays
   // unless a caller explicitly overrides that key too) — see the prop's

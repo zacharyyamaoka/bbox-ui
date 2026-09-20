@@ -28,6 +28,21 @@ function rememberForConsole(editor: Editor) {
  * shares tldraw's IndexedDB document with the plain scratch launch. Without
  * this, two windows would live-sync one IndexedDB store and the second window
  * would open holding the first one's board.
+ *
+ * WHY this file boots `files/launchConfig` and NOT `review/boardParam` (the
+ * merge conflict this branch had to settle — work order Z4, 2026-09-20): both
+ * branches grew a `?board=` and they compute the SAME persistence key (null
+ * when `?board=` is set, undefined otherwise). `persistenceKeyForSearch` is
+ * the strict superset — it also nulls the key for `?fresh=1`, which the
+ * stopgap never knew about — and it is the half wired to the real file host,
+ * so a board opened by URL is the same document Save and Rename write back to.
+ * Booting both would OPEN THE BOARD TWICE: the files session resolves
+ * `documentLocation().initialBoard()` through the host while
+ * `openBoardFromBoot` independently fetches the same path and swaps the store,
+ * and the second swap calls `clearHistory` — so the race is silent and costs
+ * the user their undo stack. `review/boardParam.ts` stays in the tree with its
+ * own passing tests but has no production caller from here; deleting it is
+ * Zach's call on Z4, not a merge-resolution side effect.
  */
 createRoot(root).render(
   <StrictMode>

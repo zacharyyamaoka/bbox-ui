@@ -1,0 +1,470 @@
+/*
+ * src/skin/regionVariants.css — the PAINT of the eight region variants
+ * (`regionVariants.ts` is the spec and the numbers; this file is what the
+ * browser reads). Same mechanism as `skin.css`, same rules:
+ *
+ *   • ONLY custom-property declarations, keyed on `[data-bbox-region-variant]`
+ *     on any ancestor. Not one rule reaches into a component: `region.tsx`
+ *     reads every token at its own call site with `v1`'s value as the
+ *     `var()` fallback, so a consumer who never imports this file gets the
+ *     pixels they have today, and one who does never fights a specificity
+ *     battle.
+ *   • No colour literal. Every value resolves through globals.css's own
+ *     tokens (`--border`, `--muted`, `--foreground`, `--radius-*`), so all
+ *     five follow light/dark and compose with any skin.
+ *   • `v1` is spelled out even though it is every token's built-in
+ *     fallback — WHY: without it there is no way to switch BACK. A picker
+ *     sets the attribute to one of five values; "remove the attribute" is a
+ *     sixth, different operation a <select> cannot express.
+ *   • `initial` is the INERT value for the inherited-text tokens
+ *     (`*-title-*`): it makes the token guaranteed-invalid, so the
+ *     component's `font-family: var(--bbox-region-arm-title-font)` is
+ *     invalid at computed-value time and — for an inherited property — that
+ *     means `inherit`, i.e. the Bar's own text. Ported from skin.css's own
+ *     note; `currentColor` would NOT do here (it names the text colour).
+ *
+ * Imported by globals.css right after skin.css, before the `:root` theme
+ * block is consumed by anything — order matters only in that `--muted`
+ * etc. must exist by the time a frame paints, which they do.
+ *
+ * Nesting: a frame declares `--bbox-region-frame-fill` for ITS DESCENDANTS as
+ * `var(--bbox-region-nested-fill, <its own fill>)` (region.tsx), so a region
+ * inside a region reads the nested token, and a third level reads the same
+ * nested token again (one tone deeper, once — not a gradient per level).
+ */
+
+/* v1 — Labeled group. Today's look; every value equals the component's own
+   fallback. */
+[data-bbox-region-variant="v1"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v2 — Ruled. The corner card's bottom edge continues as a full-width rule
+   (the line Zach pointed at in `Pasted image 20260919115353.png`), and every
+   arm header sits between two rules: the divider above, its own rule below.
+   The card's free corner goes square so the rule leaves it cleanly; the
+   frame's radius comes down a step to match the harder reading. */
+[data-bbox-region-variant="v2"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--radius-md);
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: 0px;
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: block;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 1px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: 13px;
+  --bbox-region-arm-title-weight: 500;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v3 — Zone. No frame line at all: a faint foreground tint marks the scope
+   (the border keeps its 1px of GEOMETRY and paints nothing, skin.css's own
+   trick), each arm header is a slightly stronger band with the condition
+   in it, and there are no rules anywhere. A nested zone is one tone deeper.
+   Tints are `color-mix` over `--foreground` so they read on any canvas,
+   light or dark, rather than a fixed grey. */
+[data-bbox-region-variant="v3"] {
+  --bbox-region-frame-stroke: transparent;
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: color-mix(in oklch, var(--foreground) 3%, transparent);
+  --bbox-region-nested-fill: color-mix(in oklch, var(--foreground) 6%, transparent);
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: color-mix(in oklch, var(--foreground) 6%, transparent);
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: 13px;
+  --bbox-region-arm-title-weight: 500;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v4 — Bracket. The frame is a left bracket plus a top rule, open on the
+   right and the bottom (`1px 0 0 1px`), in a darker grey so a single L reads
+   as a deliberate margin rather than a frame that lost two sides. Arms read
+   like code: no dividers, a hairline indent guide hanging under the fold
+   chevron for the length of the arm's body, monospace headers in the muted
+   text colour, and the chevron only on hover while open (folded arms keep
+   theirs — `FoldingChevron`'s own rule).
+   The guide's `inset` top is the header height (26px, `regionVariants.ts`
+   v4 `arms.headerPx`) plus 2px; its left is the chevron's centre line: the
+   Bar's 12px padding plus half the 24px button, less the guide's own 1px. */
+[data-bbox-region-variant="v4"] {
+  --bbox-region-frame-stroke: var(--muted-foreground);
+  --bbox-region-frame-stroke-widths: 1px 0 0 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--radius-md);
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius) 0 0 0;
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: 12.5px;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: var(--bbox-skin-font-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  --bbox-region-arm-title-color: var(--muted-foreground);
+  --bbox-region-arm-decor-display: block;
+  --bbox-region-arm-decor-inset: 28px auto 6px 23px;
+  --bbox-region-arm-decor-width: 0px;
+  --bbox-region-arm-decor-stroke-widths: 0 0 0 1px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v5 — Card. The frame is filled one tone off the canvas (`--muted`), each
+   arm is an inset card on that fill (the row's own box is untouched — the
+   card is a decor box inset 3px/8px inside it, so `expectArmsStacked` and
+   every member position hold), the header text moves 8px in to sit inside
+   the card, and a nested region fills one tone deeper still. No dividers:
+   the cards separate the rows. */
+[data-bbox-region-variant="v5"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: var(--muted);
+  --bbox-region-nested-fill: color-mix(in oklch, var(--muted), var(--foreground) 5%);
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 8px;
+  --bbox-region-arm-title-size: 13px;
+  --bbox-region-arm-title-weight: 500;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: block;
+  --bbox-region-arm-decor-inset: 3px 8px 3px 8px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 1px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: var(--radius-md);
+  --bbox-region-arm-decor-fill: var(--card);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   v6 / v7 / v8 — the THREE DRAWINGS Zach picked on 2026-09-19 out of the
+   babble gallery (`reports/media/branch-arm-drawings-2026-09-19.html`),
+   where he called them V1 / V2 / V3. His numbering is the GALLERY's, not
+   this table's, so each one keeps the gallery's NAME as its title:
+
+       gallery V1 "Transparent Card" -> v6
+       gallery V2 "Edge Card"        -> v7
+       gallery V3 "Top Rule"         -> v8
+
+   WHY all three take v1's frame — a plain 1px border, TRANSPARENT fill,
+   `--radius-lg`, closed on all four sides — and vary the ARM alone: the
+   governing quote is "control flow is not a card!", and the two hard
+   constraints beside it are that the arm background stays transparent and
+   that this treatment is the BRANCH's, not the For Loop's. A drawing that
+   also moved the frame would be answering a question he did not ask, and
+   the gallery held the frame constant across all three previews.
+
+   WHY none of them sets `--bbox-region-nested-fill` (all three stay at
+   `initial`, i.e. a nested frame reads the parent's own transparent fill):
+   deepening the nested frame is the only nesting contrast this mechanism
+   has, and it paints BEHIND the arms — which is exactly the arm background
+   he ruled out. So nesting here is answered with geometry, not tone, and
+   what that costs is measured per drawing in
+   `reports/media/region-drawings-2026-09-19.html`.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* v6 — Transparent card. `v5` with the fill taken out: the arm is an inset
+   rounded outline you see the board straight through. The three numbers are
+   the gallery's own, read off the rendered page: inset 5px, 1px on all four
+   sides, radius 6px, fill fully transparent — and the header text moves in
+   by the SAME 5px so the title sits inside the outline rather than
+   straddling it. No divider: the outline already says where the arm ends,
+   and a hairline between two outlines is a third line in the same 5px. */
+[data-bbox-region-variant="v6"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 5px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: block;
+  --bbox-region-arm-decor-inset: 5px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 1px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 6px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v7 — Edge card. The same outline, run edge to edge: inset 0, radius 0,
+   and `1px 0 1px 0` so the arm draws its TOP and BOTTOM only. WHY the side
+   strokes are dropped rather than kept at 1px: at inset 0 an arm's left and
+   right lines land on the frame's own left and right borders, one pixel
+   apart, and a doubled line there reads as a seam rather than a subdivision
+   — the gallery's own wording, "one column subdivided, not cards parked in
+   a box". Header inset stays 0: with no side stroke there is nothing for
+   the title to sit inside of. */
+[data-bbox-region-variant="v7"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 0px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: block;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 1px 0px 1px 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v8 — Top rule. Nothing but the hairline BETWEEN rows: no decor box, no
+   header rule under the corner card, no band. The drawing Zach said
+   "really just looks like control flow".
+
+   SAY IT PLAINLY: these arm tokens are identical to `v1`'s, value for
+   value. `v8` is not v1 dressed up — the gallery's third pick simply IS the
+   arm treatment already shipped, and the only difference in the whole set
+   is the 30px header the three share (v1 is 32px) so that flipping between
+   v6/v7/v8 moves no row. Kept as its own id anyway for one reason: he
+   picked three drawings by name and the pill has to offer three, not two
+   plus "go back to v1 and remember why". */
+[data-bbox-region-variant="v8"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: none;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   v9 / v10 — the two asks of 2026-09-20 00:45. Both ADD a drawing; not one
+   declaration above this line moved, because v1-v8 are what he is comparing.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* v9 — Top rule, ruled header. `v8` value for value, with ONE token flipped:
+   `--bbox-region-header-rule-display`. That is `v2`'s corner integration, and
+   it is the whole of Zach's "Top rule is my favorite one but add the top line
+   on the top arm" (`Pasted image 20260920004250.png`, DESIRED).
+
+   WHY the first arm's own `border-top` is NOT the mechanism: `region.tsx`
+   draws an arm divider for rows after the first only (the donor's
+   `dividerY: index === 0 ? null : rowTop`), and that rule is right — the line
+   above arm 0 belongs to the CORNER, not to the arm. Drawing it as the
+   corner's rule also puts it on the card's own bottom edge rather than 2px
+   lower at the row's top, so the card's border and the rule are ONE line; and
+   because every region paints its own, it appears at every nesting level with
+   no per-level code. The alternative — `index >= 0` on the divider — was
+   tried against DESIRED and rejected: it moves the line off the card's edge
+   and changes v1 and v8 for everyone.
+
+   WHY the free bottom-right corner stays ROUND here while `v2` squares it:
+   DESIRED keeps the curve — the rule visibly departs from a rounded corner in
+   his own screenshot. `v2`'s square is `v2`'s taste, not a consequence of
+   being ruled. */
+[data-bbox-region-variant="v9"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: var(--bbox-skin-radius, var(--radius-lg));
+  --bbox-region-frame-radii: var(--bbox-region-frame-radius);
+  --bbox-region-corner-radius: var(--bbox-region-frame-radius);
+  --bbox-region-corner-title-align: initial;
+  --bbox-region-header-rule-display: block;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}
+
+/* v10 — Header band. The hand sketch (`Pasted image 20260920004529.png`),
+   clarified the same night: "its just the block is stretch accross the entire
+   width of the region". So v9's rule, plus SQUARE everywhere and a CENTRED
+   card title — the three things a drawing owns. Every radius token is 0px,
+   including the card's shared top-left and its free bottom-right, which is
+   how the sketch's plain rectangle reads.
+
+   `--bbox-region-corner-title-align: center` is inherited from the card's own
+   root (`REGION_CORNER_BLOCK_STYLE`) into `Block`'s header slot, which is
+   where the name sits. It cannot reach the PORT labels: those are rendered by
+   `BlockPort`, which is the card's PARENT, not its child — the sketch keeps
+   `port 1` / `port 2` left-aligned beside their dots, and that is why they
+   stay that way for free.
+
+   WHAT IS NOT HERE, deliberately: the card's WIDTH. In the DOM host it is a
+   `width` prop (`hosts/nodeViews.tsx`), in the app a persisted `props.w` on a
+   real `ss-block` child shape — in neither host is it a computed style, so no
+   token in this file could ever stretch it. Over a host-made-wide card this
+   drawing IS the sketch; over a 160px card it is v9 squared. */
+[data-bbox-region-variant="v10"] {
+  --bbox-region-frame-stroke: var(--border);
+  --bbox-region-frame-stroke-widths: 1px;
+  --bbox-region-frame-dash: solid;
+  --bbox-region-frame-fill: transparent;
+  --bbox-region-nested-fill: initial;
+  --bbox-region-frame-radius: 0px;
+  --bbox-region-frame-radii: 0px;
+  --bbox-region-corner-radius: 0px;
+  --bbox-region-corner-title-align: center;
+  --bbox-region-header-rule-display: block;
+  --bbox-region-header-rule-stroke: var(--border);
+  --bbox-region-arm-divider-width: 1px;
+  --bbox-region-arm-divider-stroke: var(--border);
+  --bbox-region-arm-header-rule-width: 0px;
+  --bbox-region-arm-header-rule-stroke: var(--border);
+  --bbox-region-arm-header-fill: transparent;
+  --bbox-region-arm-header-inset: 0px;
+  --bbox-region-arm-title-size: initial;
+  --bbox-region-arm-title-weight: initial;
+  --bbox-region-arm-title-font: initial;
+  --bbox-region-arm-title-color: initial;
+  --bbox-region-arm-decor-display: none;
+  --bbox-region-arm-decor-inset: 0px;
+  --bbox-region-arm-decor-width: auto;
+  --bbox-region-arm-decor-stroke-widths: 0px;
+  --bbox-region-arm-decor-stroke: var(--border);
+  --bbox-region-arm-decor-radius: 0px;
+  --bbox-region-arm-decor-fill: transparent;
+}

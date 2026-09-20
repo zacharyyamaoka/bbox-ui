@@ -22,8 +22,10 @@
 // the only edges this function ever emits are `ss-wire` shapes. That is
 // asserted by `src/wiring.smoke.test.tsx` ("a member INSIDE an expanded block
 // is containment, never an edge").
-import { useValue, type Editor, type TLBinding, type TLRecord, type TLShape } from "tldraw";
+import { useMemo } from "react";
+import { computed, useValue, type Computed, type Editor, type TLBinding, type TLRecord, type TLShape } from "tldraw";
 
+import { producerCounts } from "@trunk/scene/producers";
 import type { BlockScene, SceneEdge, SceneNode } from "@trunk/scene/scene";
 import type { WireStyleData } from "@trunk/scene/sceneWires";
 
@@ -195,4 +197,68 @@ export function sceneFromRecords(records: Iterable<TLRecord>): DocumentScene {
  *  recomputes exactly when the document changes — and only then. */
 export function useDocumentScene(editor: Editor): DocumentScene {
   return useValue("ss document scene", () => sceneFromRecords(editor.store.allRecords()), [editor]);
+}
+
+/* ------------------------------------------------------------------ */
+/* Producer counts — how many cables meet each port                    */
+/* ------------------------------------------------------------------ */
+
+const PRODUCER_COUNTS = new WeakMap<Editor, Computed<ReadonlyMap<string, number>>>();
+
+/**
+ * The trunk's `producerCounts` over THIS projection: `portKey(shapeId,
+ * portId)` → how many cable ends meet that port (Zach, 2026-09-19: "show the
+ * producer circle that has the number for the number of arrows intersecting
+ * at that port").
+ *
+ * WHY off the derived scene and not a per-block count of wire bindings
+ * (which is how `BlockFace` reads `wired`): the number has to be the SAME
+ * number the trunk's hosts paint — they call the identical function on their
+ * scene — and the same one every analysis over this projection sees
+ * (`problems.ts`, the wire judge). Counting bindings would be a second
+ * definition of "a cable here", free to disagree the first time the two
+ * rules differ (a half-bound wire is omitted from the scene on purpose, see
+ * `sceneFromRecords`).
+ *
+ * WHY one `computed` per editor, shared: every block face reads it, and a
+ * per-face `useDocumentScene` would rebuild the whole scene once per block
+ * on every store change — pointer moves included. One derivation, N cheap
+ * reads.
+ */
+export function documentProducerCounts(editor: Editor): Computed<ReadonlyMap<string, number>> {
+  let counts = PRODUCER_COUNTS.get(editor);
+  if (!counts) {
+    counts = computed("ss producer counts", () => producerCounts(sceneFromRecords(editor.store.allRecords())));
+    PRODUCER_COUNTS.set(editor, counts);
+  }
+  return counts;
+}
+
+/**
+ * One shape's slice of `documentProducerCounts`: `portId → count`, for the
+ * ports of `shapeId` that have any cable at all.
+ *
+ * The reactive read returns a STRING signature, not the map: `useValue`
+ * re-renders on any `Object.is` change, so returning a fresh `Map` would
+ * re-render every block on every store change. The string only changes when
+ * this shape's own counts do — a wire drawn elsewhere on the board costs
+ * this face nothing.
+ */
+export function usePortProducers(editor: Editor, shapeId: string): ReadonlyMap<string, number> {
+  const signature = useValue(
+    "ss port producers",
+    () => {
+      // Shape ids are `shape:<nanoid>` — never a `/` — so the prefix split is
+      // exact even for a port id that contains one.
+      const prefix = `${shapeId}/`;
+      const mine: [string, number][] = [];
+      for (const [key, count] of documentProducerCounts(editor).get()) {
+        if (key.startsWith(prefix)) mine.push([key.slice(prefix.length), count]);
+      }
+      mine.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      return JSON.stringify(mine);
+    },
+    [editor, shapeId],
+  );
+  return useMemo(() => new Map<string, number>(JSON.parse(signature) as [string, number][]), [signature]);
 }

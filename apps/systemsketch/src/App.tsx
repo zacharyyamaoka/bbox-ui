@@ -15,7 +15,7 @@ import "tldraw/tldraw.css";
 import "./app.css";
 
 import { PyblocksBackendPanel } from "./backend/BackendSettings";
-import { SystemSketchDock } from "./chrome/dock";
+import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./chrome/dock";
 import { Overlay } from "./chrome/overlay";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
 import { SourceContextMenu } from "./source/sourceContextMenu";
@@ -75,8 +75,15 @@ const COMPONENTS: TLComponents = {
 
 // Keyboard shortcuts for our tools. A dock row whose id has no `tools[id]`
 // entry is a silent no-op; see the `toolUi` contract in ./shapes/registry.
+//
+// Then the ONE stock tool entry this app wraps: `arrow` (key `a`). Zach, 2026-09-19: "Please
+// add the excalidraw interaction of multi pressing A to cycle through arrow
+// types." `withArrowPresetCycle` (./chrome/dock) wraps tldraw's own arrow
+// entry — its kbd, its drag-from-toolbar — with the archive's rule: A while
+// the arrow tool is live advances elbow → straight → curve, A from anywhere
+// else re-arms the last one. Wrapped last so no kit can shadow it.
 const OVERRIDES: TLUiOverrides = {
-  tools: withToolUi,
+  tools: (editor, tools) => withArrowPresetCycle(editor, withToolUi(editor, tools)),
 };
 
 /** Injected by vite.config.ts's `define` — the URL map `@tldraw/assets`'
@@ -96,10 +103,34 @@ declare const __TLDRAW_ASSET_URLS__: TLUiAssetUrlOverrides;
 
 const ASSET_URLS: TLUiAssetUrlOverrides = __TLDRAW_ASSET_URLS__;
 
+/** Injected by vite.config.ts's `define` from `TLDRAW_LICENSE_KEY` (or
+ *  `VITE_TLDRAW_LICENSE_KEY`) in the build's environment; `""` when unset.
+ *
+ *  WHY this is the only watermark handling in the app: tldraw's licence
+ *  watermark ("Get a license for production") renders for every keyless page
+ *  served over `http:` — dev server and production build alike
+ *  (@tldraw/editor LicenseManager.mjs:87-94, 180-186, 368-372;
+ *  Watermark.mjs:22) — and its own stylesheet requires it stay "visible,
+ *  unobscured, and available to user-interaction" (Watermark.mjs:123-129).
+ *  A key is the one mechanism tldraw provides to remove it, so the key is
+ *  the one thing wired here. The archive hid it a different way — its
+ *  bottom-right strip sat on the watermark's own 4px anchor one layer above
+ *  it (archive systemsketch-utilities.css:8-11, App.tsx:138) — and that is
+ *  covering, not licensing, so it is not copied. With no key, the bottom-
+ *  right cluster steps beside the watermark (./chrome/overlay.tsx
+ *  `placeCornerCluster`); with one, it drops into the true corner by
+ *  itself. */
+declare const __TLDRAW_LICENSE_KEY__: string;
+
+const TLDRAW_LICENSE_KEY: string | undefined = __TLDRAW_LICENSE_KEY__ || undefined;
+
 export function App({ persistenceKey, onEditorReady }: AppProps) {
   const handleMount = useCallback(
     (editor: Editor) => {
       const stops = KITS.flatMap((kit) => (kit.install ? [kit.install(editor)] : []));
+      // The A binding's mount-time half: re-read the remembered preset, seed
+      // tldraw's next-arrow style from it, and give Curved its bend.
+      stops.push(installArrowPresets(editor));
       onEditorReady?.(editor);
       return () => {
         for (const stop of stops) stop();
@@ -122,6 +153,7 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
         persistenceKey={key ?? undefined}
         colorScheme="system"
         assetUrls={ASSET_URLS}
+        licenseKey={TLDRAW_LICENSE_KEY}
       />
     </main>
   );

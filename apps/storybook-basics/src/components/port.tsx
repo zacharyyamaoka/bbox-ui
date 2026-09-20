@@ -27,7 +27,23 @@ import {
   type HighlighterKind,
 } from "./highlighter";
 import { HIT_REGION_FILL, HIT_REGION_OUTLINE } from "./hitRegion";
-import { PORT_DIAMETERS, PORT_HIT_PX, PORT_STATE_RING_PX, PORT_SURFACE_RING_PX, type PortSize } from "./port.layout";
+import { PORT_DIAMETERS, PORT_HIT_PX, type PortSize } from "./port.layout";
+// The visual-variant registry (lane `ports`, 2026-09-19 — see that file's
+// header for what a variant decides and where every number was read from).
+// `src/skin/` is not a canvas engine and not the scene kit, so this import
+// passes both `engineFree.test.ts` and `layering.test.ts`.
+import {
+  DEFAULT_PORT_VARIANT_ID,
+  PORT_VARIANTS,
+  PORT_VARIANT_ATTR,
+  portProducersOffsetPx,
+  portTypePaint,
+  portVariantRingExpansion,
+  portVariantVars,
+  usePortVariant,
+  type PortVariant,
+  type PortVariantId,
+} from "../skin/portVariants";
 
 /* ------------------------------------------------------------------ */
 /* Colour — state -> token, inlined from packages/bbox-ui's appearance.ts */
@@ -107,17 +123,40 @@ export interface PortDotPaintInput {
    *  report feedback; `"halo"` is the pre-existing treatment, kept as a
    *  sibling, not deleted. */
   highlighterKind?: HighlighterKind;
+  /**
+   * The visual variant in force (src/skin/portVariants.ts). Decides the
+   * ring widths and which paint grammar maps `state` onto ring, disc and
+   * core (`portGrammarPaint`). Defaults to v1 so every pure call site
+   * (`sketchAtEdge`'s ring colour, a story computing a paint) gets the
+   * default look without resolving anything; `Port` passes its own.
+   */
+  variant?: PortVariant;
+  /**
+   * The port's declared TYPE name — read only by the two by-type grammars
+   * (v2 SystemSketch-original, v3 langflow), each through its own source's
+   * palette (`portTypePaint`). Every other grammar ignores it: colour
+   * comes from STATE there (the 2026-09-10 ruling).
+   */
+  dataType?: string;
+  /** An explicit CSS colour for the type, winning over either palette. */
+  typeColor?: string;
 }
+
+const DEFAULT_VARIANT = PORT_VARIANTS[DEFAULT_PORT_VARIANT_ID];
 
 /**
  * Static half of the dot's class — sizing/shape/transition only. Every
  * colour fact is dynamic per state and lives in `portDotStyle` instead.
  *
- * `hover:scale-110` is a real CSS `:hover` pseudo-class, deliberately NOT a
- * `hover` prop — nothing outside this component ever needs to SET hover.
+ * Hover is a real CSS `:hover` pseudo-class, deliberately NOT a `hover`
+ * prop — nothing outside this component ever needs to SET hover. Since
+ * 2026-09-19 the hover rule lives in `src/skin/portVariants.css` (it
+ * reads the variant's own `--bbox-port-hover-scale`/`-ring`), so the old
+ * `hover:scale-110` utility is gone from here; `transition-transform`
+ * (Tailwind v4: `transform, translate, scale, rotate`) still animates it.
  */
 export function portDotClass(): string {
-  return "relative box-border inline-flex shrink-0 rounded-full transition-transform duration-[50ms] ease-in-out hover:scale-110 motion-reduce:transition-none motion-reduce:hover:scale-100";
+  return "relative box-border inline-flex shrink-0 rounded-full transition-transform duration-[50ms] ease-in-out motion-reduce:transition-none";
 }
 
 /**
@@ -142,6 +181,83 @@ function resolveAvailabilityPaint(
 }
 
 /**
+ * One grammar's answer for one state: the ring's colour, the disc's colour
+ * (`null` = the card, i.e. hollow) and the centre's (`null` = no core span).
+ *
+ * WHY one table per grammar, not per-channel enums: the five sources
+ * disagree about what a port's colour MEANS — STATE in this trunk (the
+ * 2026-09-10 ruling), TYPE in the original SystemSketch and in langflow —
+ * and about which circle carries it. Independent knobs would let two
+ * grammars combine into a look nobody proposed; a switch keeps each variant
+ * exactly what its source draws. Gesture facts (`hinting`, `dimmed`,
+ * `availability`) are NOT grammar: they override every variant the same
+ * way in `portRingColor`/`portDotStyle`/`portCoreStyle` below.
+ */
+export interface PortGrammarPaint {
+  ring: string | null;
+  fill: string | null;
+  core: string | null;
+}
+
+export function portGrammarPaint(
+  state: PortState,
+  variant: PortVariant = DEFAULT_VARIANT,
+  dataType?: string,
+  typeColor?: string,
+): PortGrammarPaint {
+  const tokens = STATE_TOKENS[state];
+  const tok = (token: string | null) => (token ? paintVar(token) : null);
+  switch (variant.dot.grammar) {
+    case "trunk":
+      // v1 — this trunk's own three circles, unchanged; only the scale moved.
+      return { ring: tok(tokens.ring), fill: tok(tokens.fill), core: tok(tokens.core) };
+    case "systemsketch": {
+      // v2 — block-canvas.css:1103-1132: the ring is ALWAYS the type's
+      // colour; the disc is the card (unwired), muted (`.Port_default`,
+      // owns a default), the type colour (`.Port_connected`). `received`
+      // has no original counterpart, so it borrows the trunk's own token.
+      const type = portTypePaint("systemsketch", dataType, typeColor)!;
+      const fill = state === "valueSet" ? paintVar("muted-foreground") : state === "wired" ? type.disc : state === "received" ? paintVar("bbox-received") : null;
+      return { ring: type.disc, fill, core: null };
+    }
+    case "langflow": {
+      // v3 — handleRenderComponent/index.tsx:110-131: the disc IS the type
+      // colour and the 3px ring its pale `-foreground` pair, in EVERY
+      // state. langflow lets the cable say "wired" (a connected handle only
+      // swaps to the SOURCE's colour, :144-145) — faithfully, so here.
+      const type = portTypePaint("langflow", dataType, typeColor)!;
+      return { ring: type.tint, fill: type.disc, core: null };
+    }
+    case "pearl":
+      // v4 — React Flow UI `BaseHandle`: `bg-slate-100` + `border-slate-300`
+      // at rest (neutral token mixes, so dark mode follows), stock xyflow
+      // ink once wired (`--xy-handle-background-color-default: #1a192b`,
+      // this app's `--foreground`), the trunk's received token for data.
+      switch (state) {
+        case "empty":
+          return { ring: "color-mix(in srgb, var(--foreground) 24%, var(--card))", fill: "color-mix(in srgb, var(--foreground) 5%, var(--card))", core: null };
+        case "valueSet":
+          return { ring: "color-mix(in srgb, var(--foreground) 45%, var(--card))", fill: "color-mix(in srgb, var(--foreground) 22%, var(--card))", core: null };
+        case "wired":
+          return { ring: paintVar("foreground"), fill: paintVar("foreground"), core: null };
+        case "received":
+          return { ring: paintVar("bbox-received"), fill: paintVar("bbox-received"), core: null };
+      }
+      break;
+    case "reticle":
+      // v5 — DP - Port's three circles literally: the outline takes the
+      // state colour, the background stays the card, the CENTRE is always
+      // drawn — muted until something attaches, lit when wired.
+      return {
+        ring: tok(tokens.ring),
+        fill: null,
+        core: tok(tokens.core) ?? (state === "valueSet" ? paintVar("muted-foreground") : "color-mix(in srgb, var(--foreground) 32%, var(--card))"),
+      };
+  }
+  return { ring: tok(tokens.ring), fill: tok(tokens.fill), core: tok(tokens.core) };
+}
+
+/**
  * The dot's ring colour, as one exported derivation.
  *
  * WHY extracted rather than left inline (ported from packages/bbox-ui/src/
@@ -149,27 +265,27 @@ function resolveAvailabilityPaint(
  * path instead of as box-shadow layers, and it has to be the SAME colour.
  * A second copy of this precedence is exactly how a `hinting` port would
  * end up orange in one skin and grey in another. `null` means "this state
- * paints no ring at all". Precedence: see `resolveAvailabilityPaint`'s doc.
+ * paints no ring at all". Precedence: see `resolveAvailabilityPaint`'s doc
+ * — gesture facts first, then the variant's grammar.
  */
 export function portRingColor({
   state = "empty",
   dimmed = false,
   hinting = false,
   availability,
+  variant = DEFAULT_VARIANT,
+  dataType,
+  typeColor,
 }: PortDotPaintInput): string | null {
-  const { ring } = STATE_TOKENS[state];
   const effective = resolveAvailabilityPaint(availability, hinting, dimmed);
-  return effective.hinting
-    ? paintVar("primary")
-    : effective.dimmed
-      ? paintVar("muted-foreground")
-      : ring
-        ? paintVar(ring)
-        : null;
+  if (effective.hinting) return paintVar("primary");
+  if (effective.dimmed) return paintVar("muted-foreground");
+  return portGrammarPaint(state, variant, dataType, typeColor).ring;
 }
 
 /**
- * The dot's ring/fill. `dimmed` forces the ring to `muted-foreground` and
+ * The dot's ring/fill, per the variant's grammar (`portGrammarPaint`).
+ * `dimmed` forces the ring to `muted-foreground` and
  * fades the whole dot to ~45% opacity, leaving the resting fill/core colour
  * underneath untouched (a dimmed `wired` port still reads "wired, just not
  * focused right now"). `hinting` wears `wired`'s own shape (hollow ring, lit
@@ -184,19 +300,25 @@ export function portDotStyle({
   availability,
   diagnostics,
   highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
+  variant = DEFAULT_VARIANT,
+  dataType,
+  typeColor,
 }: PortDotPaintInput): CSSProperties {
-  const { fill } = STATE_TOKENS[state];
   const effective = resolveAvailabilityPaint(availability, hinting, dimmed);
-  const ringColor = portRingColor({ state, dimmed, hinting, availability });
+  const ringColor = portRingColor({ state, dimmed, hinting, availability, variant, dataType, typeColor });
   // `hinting` (or `availability: "available"`) renders hollow (no fill),
-  // matching `wired`'s own shape.
-  const fillColor = effective.hinting ? null : fill ? paintVar(fill) : null;
-  const stateRingPx = effective.hinting ? 4 : PORT_STATE_RING_PX;
+  // matching `wired`'s own shape on the default grammar.
+  const fillColor = effective.hinting ? null : portGrammarPaint(state, variant, dataType, typeColor).fill;
+  const gapPx = variant.dot.gap;
+  // The drag preview rings a port one step heavier than its resting ring.
+  const stateRingPx = effective.hinting ? variant.dot.ring + 1 : variant.dot.ring;
 
   const layers: string[] = [];
   if (ringColor != null) {
-    layers.push(`0 0 0 ${PORT_SURFACE_RING_PX}px var(--card)`);
-    layers.push(`0 0 0 ${PORT_SURFACE_RING_PX + stateRingPx}px ${ringColor}`);
+    // The card-coloured punch-out first (0 on the ring-only variants), then
+    // the ring — the same two-layer recipe the fixed 2/3px rings used.
+    if (gapPx > 0) layers.push(`0 0 0 ${gapPx}px var(--card)`);
+    layers.push(`0 0 0 ${gapPx + stateRingPx}px ${ringColor}`);
   }
   if (effective.hinting) {
     layers.push("0 0 0 9px color-mix(in srgb, var(--bbox-primary, var(--primary)) 38%, transparent)");
@@ -225,7 +347,7 @@ export function portDotStyle({
       // coloured gap, then a solid line — one step further out than the
       // state ring, the SAME two-layer recipe that ring itself already
       // uses one step in.
-      const gap = PORT_SURFACE_RING_PX + stateRingPx + 2;
+      const gap = gapPx + stateRingPx + 2;
       layers.push(`0 0 0 ${gap}px var(--card)`);
       layers.push(`0 0 0 ${gap + 2}px ${color}`);
     }
@@ -248,12 +370,22 @@ export function portDotStyle({
 
 /** The core's own diameter as a fraction of the dot's. */
 const PORT_CORE_RATIO = 0.42;
+/** Below this box the 0.42 core is a 2px speck; a half-box core (3px in
+ *  the 6px default) is the smallest pinhead that still reads as "lit". */
+const PORT_CORE_RATIO_SMALL = 0.5;
+const PORT_CORE_SMALL_BOX_PX = 8;
+
+export function portCoreRatio(diameterPx: number): number {
+  return diameterPx <= PORT_CORE_SMALL_BOX_PX ? PORT_CORE_RATIO_SMALL : PORT_CORE_RATIO;
+}
 
 /**
- * The small inner "core" dot: lit for `wired` (disc stays hollow, core lit
+ * The small inner "core" dot — the THIRD of DP - Port's three circles. On
+ * the default grammar it is lit for `wired` (disc stays hollow, core lit
  * instead of a solid fill) and `received` (core matches the already-solid
- * fill, reading as "fully lit"). `null` means no core layer at all, not a
- * transparent one — `empty`/`valueSet` never mount the extra span.
+ * fill, reading as "fully lit"); the reticle grammar draws it in every
+ * state; the solid-disc grammars never do (the whole disc carries it).
+ * `null` means no core layer at all, not a transparent one.
  * `availability: "available"` lights the core the same way `hinting` does
  * (see `resolveAvailabilityPaint`'s doc); `"unavailable"` has no core
  * treatment of its own, same as `dimmed`.
@@ -262,11 +394,14 @@ export function portCoreStyle({
   state = "empty",
   hinting = false,
   availability,
+  variant = DEFAULT_VARIANT,
+  dataType,
+  typeColor,
 }: PortDotPaintInput): CSSProperties | null {
   const effectiveHinting = resolveAvailabilityPaint(availability, hinting, false).hinting;
-  const core = effectiveHinting ? "primary" : STATE_TOKENS[state].core;
-  if (core == null) return null;
-  return { background: paintVar(core) };
+  if (effectiveHinting) return { background: paintVar("primary") };
+  const core = portGrammarPaint(state, variant, dataType, typeColor).core;
+  return core == null ? null : { background: core };
 }
 
 /* ------------------------------------------------------------------ */
@@ -318,6 +453,45 @@ export interface PortProps extends ComponentProps<"span"> {
    * `PortEdge`'s `showCard` overlay.
    */
   showHitRegion?: boolean;
+  /**
+   * The visual variant (src/skin/portVariants.ts). Omit — the normal case
+   * — and the document-wide `<html data-bbox-port-variant>` decides,
+   * defaulting to `v1`; set it to pin THIS port (a gallery showing all
+   * five at once). When `diameter` is also omitted the variant's own dot
+   * diameter is used, which is how "the small pair is the default" reaches
+   * every port nobody sized explicitly.
+   */
+  variant?: PortVariantId;
+  /**
+   * Host-set, never persisted — the port is the current selection. Emits
+   * `data-selected`; the outline is a CSS rule in portVariants.css sized
+   * by the variant. Like `dimmed`, a modifier layered over the state, never
+   * a fifth `state` (DP - Port: "Hover and out-of-focus are modifiers, not
+   * states").
+   */
+  selected?: boolean;
+  /**
+   * How many cables meet this port (Zach, 2026-09-19: "The port only should
+   * have 1 connection point in the center. Instead you should show the
+   * producer circle that has the number for the number of arrows
+   * intersecting at that port"). Rendered as a small count circle riding
+   * the dot when 2 or more — a lone cable is the ordinary wired look and
+   * a "1" on every wired port would be noise (the original SystemSketch's
+   * own rule, `bboxUi/core/port.tsx:336`, `producers >= 2`). The number is
+   * fed by the host (lane `producers-count` computes it from the scene);
+   * this component only draws what it is handed.
+   */
+  producers?: number;
+  /**
+   * Which side of the dot the producers circle rides — the side AWAY from
+   * the label, so it never sits on the text. `LabeledPort` derives it from
+   * the label's origin; a bare `Port` defaults to `right`.
+   */
+  producersAt?: "left" | "right";
+  /** See `PortDotPaintInput.dataType` — only the by-type variants read it. */
+  dataType?: string;
+  /** See `PortDotPaintInput.typeColor`. */
+  typeColor?: string;
 }
 
 /**
@@ -327,7 +501,7 @@ export interface PortProps extends ComponentProps<"span"> {
  */
 export function Port({
   state = "empty",
-  diameter = "md",
+  diameter,
   hidden = false,
   dimmed = false,
   hinting = false,
@@ -336,17 +510,29 @@ export function Port({
   highlighterKind = DEFAULT_HIGHLIGHTER_KIND,
   hitPx = PORT_HIT_PX,
   showHitRegion = false,
+  variant: variantId,
+  selected = false,
+  producers,
+  producersAt = "right",
+  dataType,
+  typeColor,
   className,
   style,
   ...props
 }: PortProps) {
+  // Hooks before the early return — `hidden` is a prop, not a hook order.
+  const variant = usePortVariant(variantId);
   if (hidden) return null;
-  const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
+  const diameterPx = diameter === undefined ? variant.dot.diameter : typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
   // A fixed 40px hit target regardless of the painted diameter.
   const haloInset = (diameterPx - hitPx) / 2;
-  const coreStyle = portCoreStyle({ state, hinting, availability });
-  const ringColor = portRingColor({ state, dimmed, hinting, availability });
+  const coreStyle = portCoreStyle({ state, hinting, availability, variant, dataType, typeColor });
+  const ringColor = portRingColor({ state, dimmed, hinting, availability, variant, dataType, typeColor });
+  const ringExpansion = portVariantRingExpansion(variant);
   const diagnosticSeverity = maxDiagnosticSeverity(diagnostics);
+  const showProducers = producers != null && producers >= 2;
+  const producersOffset = showProducers ? portProducersOffsetPx(variant, producersAt) : null;
+  const typePaint = portTypePaint(variant.dot.grammar, dataType, typeColor);
   return (
     // Hover -> Tooltip (message + code, no actions) is §5's interaction
     // contract for "any marked text/dot"; absent/empty `diagnostics`
@@ -356,12 +542,17 @@ export function Port({
     <span
       data-slot="port-dot"
       data-state={state}
-      data-diameter={diameter}
+      data-diameter={diameter ?? diameterPx}
       data-dimmed={dimmed || undefined}
       data-hinting={hinting || undefined}
+      data-selected={selected || undefined}
       data-availability={availability}
       data-diagnostic={diagnosticSeverity}
       data-highlighter-kind={diagnosticSeverity ? highlighterKind : undefined}
+      // The variant this dot resolved to — the same attribute a host stamps
+      // on `<html>`, republished per port so a CSS-only reader (or a
+      // screenshot diff) can tell which look painted without walking up.
+      {...{ [PORT_VARIANT_ATTR]: variant.id }}
       // WHY these two: docs/peps/0001-sketch-skin-at-the-boundary.md M4.
       // The dot's state rings are `box-shadow` layers, entirely OUTSIDE
       // this element's own box, so a boundary pass needs to know how far
@@ -371,21 +562,29 @@ export function Port({
       // archaeology" by its own header, kept only because that lane could
       // not edit this file. Now that it can, these publish the SAME two
       // numbers directly (unchanged arithmetic: the ring's own centre-line
-      // sits `SURFACE*2 + STATE*3` beyond the dot's diameter, drawn with a
-      // `STATE`-wide pen) and the parser is deleted.
-      data-bbox-ring-expand={PORT_SURFACE_RING_PX * 2 + PORT_STATE_RING_PX * 3}
-      data-bbox-ring-pen={PORT_STATE_RING_PX}
+      // sits `GAP*2 + RING*3` beyond the dot's diameter, drawn with a
+      // `RING`-wide pen — now over the VARIANT's rings, `portVariantRing-
+      // Expansion`, rather than fixed constants) and the parser is deleted.
+      data-bbox-ring-expand={ringExpansion.expand}
+      data-bbox-ring-pen={ringExpansion.pen}
       // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M7. Same gap as
       // Badge's — the edge's default seed is geometry (`${w}x${h}`), this
       // component's own is semantic (`port:${state}:${diameter}`).
       // Publishing it makes the wobble pattern match what the deleted
       // in-core `SketchOutline` call used to draw, not just its amplitude.
-      data-bbox-seed={`port:${state}:${diameter}`}
+      data-bbox-seed={`port:${state}:${diameter ?? diameterPx}`}
       className={cn(portDotClass(), className)}
       style={{
         width: diameterPx,
         height: diameterPx,
-        ...portDotStyle({ state, dimmed, hinting, availability, diagnostics, highlighterKind }),
+        // The variant's numbers, published as custom properties so the
+        // hover/selected/producers rules in portVariants.css (and any
+        // CSS-only consumer below this element) read THIS dot's variant.
+        ...portVariantVars(variant),
+        // The type colour the by-type variants painted with — what the
+        // langflow hover glow in portVariants.css reads.
+        ...(typePaint ? ({ "--bbox-port-type-color": typePaint.disc } as CSSProperties) : null),
+        ...portDotStyle({ state, dimmed, hinting, availability, diagnostics, highlighterKind, variant, dataType, typeColor }),
         // WHY: docs/peps/0001-sketch-skin-at-the-boundary.md M6. The ring's
         // colour is STATE-owned (computed above by `portRingColor`, not the
         // skin), so it is published in a channel the skin never writes,
@@ -419,8 +618,32 @@ export function Port({
           data-slot="port-dot-core"
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-          style={{ width: `${PORT_CORE_RATIO * 100}%`, height: `${PORT_CORE_RATIO * 100}%`, ...coreStyle }}
+          style={{ width: `${portCoreRatio(diameterPx) * 100}%`, height: `${portCoreRatio(diameterPx) * 100}%`, ...coreStyle }}
         />
+      )}
+      {showProducers && producersOffset && (
+        // The producers count circle, riding the dot up-and-outward on the
+        // side away from the label, overlapping the painted ring by 2px like
+        // a notification badge (geometry + WHY: `portProducersOffsetPx`).
+        // Inside this span on purpose: it scales with the dot on hover and
+        // dims with it, and a wire host that resolves a port by
+        // `[data-slot="port-dot"]` never mistakes it for a second attach
+        // point (it is `pointer-events: none` and not a dot). Paint lives in
+        // portVariants.css; `data-style` picks ink vs. the original's soft
+        // chip.
+        <span
+          data-slot="port-producers"
+          data-count={producers}
+          data-style={variant.producers.style}
+          aria-label={`${producers} producers`}
+          style={{
+            left: `calc(50% + ${producersOffset.dx}px)`,
+            top: `calc(50% + ${producersOffset.dy}px)`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          {producers}
+        </span>
       )}
     </span>
     </DiagnosticTooltip>

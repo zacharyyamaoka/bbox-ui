@@ -115,9 +115,26 @@ export function keepOutsFor(
 /* Duplicate fan (D-B3)                                                */
 /* ------------------------------------------------------------------ */
 
-/** Perpendicular spread between duplicate wires sharing one endpoint pair —
- *  otherwise "two wires between the same two ports" draws as one line drawn
- *  twice and the gallery shows nothing. */
+/**
+ * Perpendicular spread between duplicate wires sharing one endpoint pair.
+ *
+ * NO LONGER APPLIED TO PAINT (2026-09-19). Zach, looking at three cables
+ * leaving one `pose` dot at three stacked offsets (`Pasted image
+ * 20260919115137.png`): "very bad. edges should always leave from the center
+ * of the port… The port only should have 1 connection point in the center.
+ * Instead you should show the producer circle that has the number for the
+ * number of arrows intersecting at that port."
+ *
+ * So the FACT this number expressed — "there are N cables here" — survives;
+ * only its expression moved, from geometry to a count badge on the dot.
+ * `fanWires` below is the grouping that count is derived from, which is why
+ * it is still here and still tested rather than deleted: the producer count
+ * and any future "which duplicate am I" affordance must agree about what
+ * counts as a duplicate, and one function is how they do.
+ *
+ * The number itself is kept at its measured value so the two halves of the
+ * story stay legible in a diff; nothing reads it any more.
+ */
 export const DUPLICATE_FAN_PX = 14;
 
 /** Unordered: a wire and a same-pair wire drawn the other way (`a→b` beside
@@ -143,8 +160,10 @@ export interface WireFan {
   offset: { dx: number; dy: number };
 }
 
-/** One `WireFan` per wire, in `wires`' own order, so `WireLayer` can zip it
- *  straight back onto the same array instead of re-grouping a second time. */
+/** One `WireFan` per wire, in `wires`' own order. `index`/`count` are the
+ *  live half — "this is cable 2 of 3 between these two dots", which is what
+ *  a producer-count badge reports; `offset` is no longer applied to paint
+ *  (see `DUPLICATE_FAN_PX`). */
 export function fanWires(wires: readonly Wire[]): WireFan[] {
   const idsByPair = new Map<string, string[]>();
   for (const wire of wires) {

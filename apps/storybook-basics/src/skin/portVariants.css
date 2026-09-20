@@ -1,0 +1,230 @@
+/*
+ * src/skin/portVariants.css — the CSS half of `src/skin/portVariants.ts`.
+ *
+ * Two jobs, and nothing else:
+ *
+ *   1. MIRROR the registry's numbers as custom properties, per variant,
+ *      under `[data-bbox-port-variant="…"]` (any ancestor — `<html>` for
+ *      the whole app), with `:root` carrying v1 so the default is a real
+ *      declaration a CSS-only consumer can `var()` (the regions lane's
+ *      frame inset by the dot radius, a host's own chrome). Every port root
+ *      ALSO publishes the same properties inline from the TypeScript table
+ *      (`portVariantVars`), so a consumer who copied only the components
+ *      still renders right; `PortVariants.stories.tsx`'s `CssMirrorAgrees`
+ *      pins this file to the table the way skin.test.ts pins skin.css.
+ *
+ *   2. The INTERACTION rules that read those properties — hover, selected,
+ *      the producers circle — which are real CSS pseudo-classes/attributes
+ *      and belong in a stylesheet, not in a `style` prop nothing outside
+ *      the component can ever set (port.tsx's own WHY on `hover`).
+ *
+ * Imported by src/globals.css right after skin.css. Purely additive: the
+ * components carry every literal as a `var()` fallback, so a page without
+ * this file paints v1.
+ *
+ * Numbers here are DUPLICATES of portVariants.ts by design (CSS cannot
+ * import a TS constant); change both, and the story goes red if you only
+ * change one.
+ */
+
+/* v1 · Fine ring (default) — React Flow's 6px handle scale, this trunk's state grammar */
+:root,
+[data-bbox-port-variant="v1"] {
+  --bbox-port-dot-diameter: 6px;
+  --bbox-port-dot-gap: 1px;
+  --bbox-port-dot-ring: 1.5px;
+  --bbox-port-ring-overhang: 2.5px;
+  --bbox-port-label-size: 12px;
+  --bbox-port-label-weight: 400;
+  --bbox-port-type-size: 12px;
+  --bbox-port-type-opacity: 0.55;
+  --bbox-port-hover-scale: 1.35;
+  --bbox-port-hover-ring: 3px;
+  --bbox-port-selected-ring: 2px;
+  --bbox-port-selected-offset: 2px;
+  --bbox-port-producers-size: 14px;
+  --bbox-port-producers-font: 9px;
+}
+
+/* v2 · SystemSketch original — block-canvas.css:1099-1132, ×2/3 */
+[data-bbox-port-variant="v2"] {
+  --bbox-port-dot-diameter: 8px;
+  --bbox-port-dot-gap: 1px;
+  --bbox-port-dot-ring: 1px;
+  --bbox-port-ring-overhang: 2px;
+  --bbox-port-label-size: 12px;
+  --bbox-port-label-weight: 400;
+  --bbox-port-type-size: 12px;
+  --bbox-port-type-opacity: 0.6;
+  --bbox-port-hover-scale: 1.25;
+  --bbox-port-hover-ring: 3px;
+  --bbox-port-selected-ring: 2px;
+  --bbox-port-selected-offset: 2px;
+  --bbox-port-producers-size: 14px;
+  --bbox-port-producers-font: 9px;
+}
+
+/* v3 · Langflow — handleRenderComponent/index.tsx:110-143 */
+[data-bbox-port-variant="v3"] {
+  --bbox-port-dot-diameter: 10px;
+  --bbox-port-dot-gap: 0px;
+  --bbox-port-dot-ring: 3px;
+  --bbox-port-ring-overhang: 3px;
+  --bbox-port-label-size: 12px;
+  --bbox-port-label-weight: 500;
+  --bbox-port-type-size: 12px;
+  --bbox-port-type-opacity: 0.5;
+  --bbox-port-hover-scale: 1.15;
+  --bbox-port-hover-ring: 0px;
+  --bbox-port-selected-ring: 2px;
+  --bbox-port-selected-offset: 2px;
+  --bbox-port-producers-size: 14px;
+  --bbox-port-producers-font: 9px;
+}
+
+/* v4 · React Flow UI pearl — ui.reactflow.dev BaseHandle */
+[data-bbox-port-variant="v4"] {
+  --bbox-port-dot-diameter: 9px;
+  --bbox-port-dot-gap: 0px;
+  --bbox-port-dot-ring: 1px;
+  --bbox-port-ring-overhang: 1px;
+  --bbox-port-label-size: 12px;
+  --bbox-port-label-weight: 400;
+  --bbox-port-type-size: 12px;
+  --bbox-port-type-opacity: 0.5;
+  --bbox-port-hover-scale: 1.3;
+  --bbox-port-hover-ring: 3px;
+  --bbox-port-selected-ring: 2px;
+  --bbox-port-selected-offset: 2px;
+  --bbox-port-producers-size: 14px;
+  --bbox-port-producers-font: 9px;
+}
+
+/* v5 · Reticle — DP - Port's three circles, centre always drawn */
+[data-bbox-port-variant="v5"] {
+  --bbox-port-dot-diameter: 12px;
+  --bbox-port-dot-gap: 0px;
+  --bbox-port-dot-ring: 1px;
+  --bbox-port-ring-overhang: 1px;
+  --bbox-port-label-size: 12px;
+  --bbox-port-label-weight: 400;
+  --bbox-port-type-size: 12px;
+  --bbox-port-type-opacity: 0.55;
+  --bbox-port-hover-scale: 1.2;
+  --bbox-port-hover-ring: 3px;
+  --bbox-port-selected-ring: 2px;
+  --bbox-port-selected-offset: 2px;
+  --bbox-port-producers-size: 14px;
+  --bbox-port-producers-font: 9px;
+}
+
+/*
+ * HOVER — a real `:hover`, never a prop (port.tsx's own WHY: nothing outside
+ * the component ever needs to SET hover). The dot grows by the variant's
+ * factor and gains a soft accent ring just past its state ring. `outline`
+ * rather than another `box-shadow` layer so the JS-computed state/diagnostic
+ * rings are left exactly as they are — an outline composes, a rewritten
+ * box-shadow would drop the diagnostic mark on hover. Chromium ≥ 94 draws
+ * outlines along `border-radius`, so it is a circle.
+ *
+ * `scale` (the standalone property), not `transform`: `hinting` sets an
+ * inline `transform: scale(1.18)` for the drag preview, and the two must
+ * compose rather than one overwriting the other.
+ */
+[data-slot="port-dot"] {
+  transition-property: transform, scale;
+}
+[data-slot="port-dot"]:hover {
+  scale: var(--bbox-port-hover-scale, 1.1);
+  outline: var(--bbox-port-hover-ring, 3px) solid color-mix(in srgb, var(--bbox-primary, var(--primary)) 35%, transparent);
+  outline-offset: calc(var(--bbox-port-ring-overhang, 2.5px) + 1px);
+}
+/*
+ * v3's hover is langflow's own: no outline, a glow in the port's TYPE
+ * colour (handleRenderComponent/index.tsx:114-123, `getNeonShadow` — eight
+ * stacked `0 0 Npx <color>` shadows while hovered/open). `filter:
+ * drop-shadow` rather than another box-shadow layer, for the same reason as
+ * the outline above: it composes with the inline ring instead of replacing
+ * it. Two drop-shadows approximate the eight-layer stack; the pulse
+ * animation langflow adds is left out — motion on every hovered port of a
+ * dense board is noise, not information.
+ */
+[data-slot="port-dot"][data-bbox-port-variant="v3"]:hover {
+  filter: drop-shadow(0 0 2px var(--bbox-port-type-color, var(--bbox-primary, var(--primary))))
+    drop-shadow(0 0 5px color-mix(in srgb, var(--bbox-port-type-color, var(--bbox-primary, var(--primary))) 70%, transparent));
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="port-dot"] {
+    transition: none;
+  }
+  [data-slot="port-dot"]:hover {
+    scale: none;
+  }
+}
+
+/*
+ * SELECTED — host-set (`selected` prop → `data-selected`), like `dimmed`:
+ * a fact about what the host is doing, never a fifth `state`. Wins over the
+ * hover outline (later rule, same specificity class + one attribute) so a
+ * selected port hovered stays visibly selected.
+ */
+[data-slot="port-dot"][data-selected="true"] {
+  outline: var(--bbox-port-selected-ring, 2px) solid var(--bbox-accent, var(--ring));
+  outline-offset: calc(var(--bbox-port-ring-overhang, 2.5px) + var(--bbox-port-selected-offset, 2px));
+}
+
+/*
+ * PRODUCERS — the count circle riding the dot (Zach, 2026-09-19: "The port
+ * only should have 1 connection point in the center. Instead you should
+ * show the producer circle that has the number for the number of arrows
+ * intersecting at that port"). Ink on card, with a card-coloured keyline
+ * so it separates from the ring it overlaps. Sized by the variant.
+ * Positioned by port.tsx (`portProducersOffsetPx` — which side depends on
+ * where the label flows); these rules own only the paint.
+ */
+[data-slot="port-producers"] {
+  position: absolute;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--bbox-port-producers-size, 14px);
+  height: var(--bbox-port-producers-size, 14px);
+  border-radius: 9999px;
+  background: var(--foreground);
+  color: var(--card);
+  font-size: var(--bbox-port-producers-font, 9px);
+  font-weight: 600;
+  line-height: 1;
+  font-family: var(--bbox-skin-font-sans, inherit);
+  letter-spacing: -0.02em;
+  box-shadow: 0 0 0 1.5px var(--card);
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
+/*
+ * v2's count is the original SystemSketch chip, not an ink disc:
+ * `.Port-count` (systemsketch block-canvas.css:1453-1470) is a soft
+ * surface-active fill with muted 600 text. Kept a circle (the count here is
+ * one or two digits and the acceptance measures w == h).
+ */
+[data-slot="port-producers"][data-style="soft"] {
+  /* Darker than the original's surface-active/muted pair: at 14px on a
+     12px row that pair measured near-invisible (v2 capture, 2026-09-19). */
+  background: color-mix(in srgb, var(--foreground) 16%, var(--card));
+  color: color-mix(in srgb, var(--foreground) 78%, var(--card));
+}
+
+/*
+ * The label's type run — the secondary text beside the name. Muted by
+ * opacity rather than a second colour token so it follows whatever colour
+ * the label itself has (a skin's `--bbox-skin-fg`, a diagnostic underline).
+ */
+[data-slot="port-label-type"] {
+  font-size: var(--bbox-port-type-size, 12px);
+  opacity: var(--bbox-port-type-opacity, 0.55);
+  font-weight: 400;
+  white-space: pre;
+}
