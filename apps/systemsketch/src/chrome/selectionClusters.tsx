@@ -132,7 +132,27 @@ export function OpacityCluster() {
         step={1}
         onValueChange={onChange}
         aria-label="Opacity"
-        className="w-24"
+        // TWO separate fixes here, and the second one is a real bug in the
+        // stock copy rather than a contrast tweak.
+        //
+        // 1. COLOURS. The stock Slider paints its track `bg-muted` and its
+        //    filled range `bg-primary`, both chosen for a LIGHT surface. This
+        //    pill is `bg-foreground` — near-black — so the track vanished
+        //    into it.
+        //
+        // 2. HEIGHT, which is why fixing the colours alone changed nothing.
+        //    Measured in the running app: the track was 96px wide and **0px
+        //    tall**, with my colours correctly applied to a box of zero
+        //    height. The stock file sizes it with `data-horizontal:h-1`, and
+        //    in Tailwind v4 that variant means an attribute literally named
+        //    `data-horizontal` — but Base UI's slider emits
+        //    `data-orientation="horizontal"`. The selector never matches, so
+        //    the track has no height on ANY surface, light or dark. Pinning
+        //    the heights here keeps the fix local; correcting the vendored
+        //    copy is a trunk change and belongs in its own lane, because
+        //    every other consumer of that file is currently rendering an
+        //    invisible track too.
+        className="w-24 [&_[data-base-ui-slider-control]]:h-4 [&_[data-slot=slider-track]]:h-1 [&_[data-slot=slider-range]]:h-1 [&_[data-slot=slider-track]]:bg-background/30 [&_[data-slot=slider-range]]:bg-background [&_[data-slot=slider-thumb]]:border-background"
       />
       <span className="w-9 text-right text-xs tabular-nums" data-testid="ss-selection-opacity-value">
         {percent}%
