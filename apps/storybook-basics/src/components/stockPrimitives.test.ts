@@ -22,6 +22,33 @@ const repo = path.resolve(here, "../../../..");
 
 const PRIMITIVES = ["dialog", "switch", "radio-group", "select", "label", "input", "table", "field", "command", "input-group", "textarea", "slider"] as const;
 
+
+/** Stock primitives carrying a DOCUMENTED deviation from the registry copy.
+ *
+ *  WHY this exists rather than dropping the file from PRIMITIVES: a deviation
+ *  that is merely exempt is a deviation nobody can see widening. Every stock
+ *  class string this repo deliberately does NOT carry is listed here, and the
+ *  check below asserts the set of missing strings is EXACTLY this list — so a
+ *  second, undeclared drift fails just as loudly as it would for a verbatim
+ *  file, and the other two guarantees (exact export list, no registry-only
+ *  specifiers) keep applying untouched. */
+const DEVIATIONS: Record<string, { readonly why: string; readonly drop: readonly string[] }> = {
+  slider: {
+    why:
+      "Stock styles the track, indicator and vertical layout behind `data-horizontal:`/" +
+      "`data-vertical:`. Base UI emits `data-orientation=\"horizontal\"`, and Tailwind lowers " +
+      "`data-horizontal:` to the attribute-PRESENCE selector `[data-horizontal]`, which can " +
+      "never match it. Measured before the fix: track height 0px. See slider.tsx's header; " +
+      "separator.tsx documents the same upstream bug.",
+    drop: [
+      "data-horizontal:w-full data-vertical:h-full",
+      "relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col",
+      "relative grow overflow-hidden rounded-full bg-muted select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1",
+      "bg-primary select-none data-horizontal:h-full data-vertical:w-full",
+    ],
+  },
+};
+
 function stockSource(name: string): string {
   const item = JSON.parse(readFileSync(path.join(repo, "docs/provenance/shadcn-base-nova", `${name}.json`), "utf8")) as { files: { content: string }[] };
   return item.files[0].content;
@@ -55,7 +82,21 @@ describe.each(PRIMITIVES)("stock %s", (name) => {
   it("carries every class string of the stock source, character for character", () => {
     const copy = readFileSync(file, "utf8");
     const missing = classStrings(stockSource(name)).filter((literal) => !copy.includes(literal));
-    expect(missing).toEqual([]);
+    const declared = [...(DEVIATIONS[name]?.drop ?? [])].sort();
+    expect([...missing].sort()).toEqual(declared);
+  });
+
+  it("declares any deviation, and a deviating file does not claim to be verbatim", () => {
+    const deviation = DEVIATIONS[name];
+    const header = readFileSync(file, "utf8").split("\n").slice(0, 40).join("\n");
+    if (!deviation) {
+      expect(header.toLowerCase()).toContain("verbatim");
+      return;
+    }
+    // A declared deviation must be explained where a reader will meet it.
+    expect(deviation.why.length).toBeGreaterThan(80);
+    expect(header.toLowerCase()).toContain("not copied verbatim");
+    expect(header.toLowerCase()).toContain("why");
   });
 
   it("resolves inside this repo and says where it came from", () => {
@@ -64,8 +105,7 @@ describe.each(PRIMITIVES)("stock %s", (name) => {
     expect(copy).not.toMatch(/@\/registry\//);
     expect(copy).not.toMatch(/icon-placeholder|IconPlaceholder/);
     expect(copy).toMatch(/from "\.\.\/lib\/utils"/);
-    const header = copy.split("\n").slice(0, 25).join("\n");
+    const header = copy.split("\n").slice(0, 40).join("\n");
     expect(header).toContain(`https://ui.shadcn.com/r/styles/base-nova/${name}.json`);
-    expect(header.toLowerCase()).toContain("verbatim");
   });
 });

@@ -14,15 +14,16 @@ import { Slider } from "./slider";
  * — that input is what `role="slider"` resolves to, and what carries
  * `aria-valuenow`/`min`/`max`/`step`).
  *
- * WHY no geometry is asserted here: slider.tsx is copied VERBATIM and the
- * stock copy styles its track/indicator behind `data-horizontal:` /
- * `data-vertical:`, which Tailwind lowers to the attribute-PRESENCE selectors
+ * WHY `TrackIsVisible` measures rather than checks classes: the stock copy
+ * styled the track and indicator behind `data-horizontal:`/`data-vertical:`,
+ * which Tailwind lowers to the attribute-PRESENCE selectors
  * `[data-horizontal]`/`[data-vertical]` — while Base UI emits
- * `data-orientation="horizontal"|"vertical"` (the same trap separator.tsx's
- * header documents, and fixed there). So the track really does render with no
- * height of its own; only the thumbs are visible. Measuring it would pin that
- * bug in place, and stockPrimitives.test.ts forbids editing the copy, so the
- * value assertions are the honest ones.
+ * `data-orientation="horizontal"|"vertical"`, so those rules never matched and
+ * the track rendered at 0px, thumbs floating on nothing. `slider.tsx` now uses
+ * `data-[orientation=…]:` (see its header; `separator.tsx` documents the same
+ * upstream bug) and `stockPrimitives.test.ts` pins the deviation. A class-name
+ * assertion would have passed the whole time the component was broken, which is
+ * exactly why this one reads the rendered box instead.
  */
 const meta = {
   title: "Basics/Slider",
@@ -95,5 +96,37 @@ export const Disabled: Story = {
     thumb.focus();
     await userEvent.keyboard("{ArrowRight}");
     await expect(thumb).toHaveAttribute("aria-valuenow", "50");
+  },
+};
+
+/**
+ * The regression guard for the orientation-selector fix. A zero-height track
+ * is what the bug looked like, so height is asserted as a positive number and
+ * the indicator is asserted to track the value, not merely to exist.
+ */
+export const TrackIsVisible: Story = {
+  args: { defaultValue: [40] },
+  play: async ({ canvasElement }) => {
+    const track = canvasElement.querySelector('[data-slot="slider-track"]');
+    const indicator = canvasElement.querySelector('[data-slot="slider-range"]');
+    await expect(track).not.toBeNull();
+    await expect(indicator).not.toBeNull();
+
+    const trackBox = (track as HTMLElement).getBoundingClientRect();
+    const fillBox = (indicator as HTMLElement).getBoundingClientRect();
+
+    // `h-1` = 0.25rem. The bug rendered 0; assert the real painted height.
+    await expect(trackBox.height).toBeGreaterThan(0);
+    await expect(trackBox.height).toBeCloseTo(4, 0);
+    await expect(fillBox.height).toBeCloseTo(trackBox.height, 0);
+
+    // The orientation attribute the corrected selector actually reads.
+    await expect(track as HTMLElement).toHaveAttribute("data-orientation", "horizontal");
+
+    // 40 of 0-100 — the indicator is a real proportion of the track, not full
+    // width and not zero. Generous bounds: thumbAlignment="edge" insets it.
+    const ratio = fillBox.width / trackBox.width;
+    await expect(ratio).toBeGreaterThan(0.25);
+    await expect(ratio).toBeLessThan(0.55);
   },
 };
