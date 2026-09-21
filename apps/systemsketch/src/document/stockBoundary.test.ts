@@ -107,7 +107,14 @@ describe("stock boundary — the seams in App.tsx", () => {
     expect(appOffenders).toEqual([]);
 
     const trunkOffenders: string[] = [];
-    for (const dir of ["components", "scene", "editor", "presets", "layout"]) {
+    // WHY "layout" is gone from this list: the kit refactor (c6f481b) applied the
+    // placement rule "does it render?" and layout/fitToContent.ts, being pure, moved
+    // into scene/ — so the directory no longer exists and the existsSync below was
+    // asserting the shape of a tree that had been superseded. The walled set is
+    // unchanged in substance: fitToContent is still scanned, now under scene/.
+    // hosts/ and skin/ stay OUT deliberately — hosts adapt an engine by definition,
+    // and skin is presentation applied on top.
+    for (const dir of ["components", "scene", "editor", "presets"]) {
       expect(existsSync(join(TRUNK, dir)), `trunk ${dir}`).toBe(true);
       for (const file of sourceFilesUnder(join(TRUNK, dir), (name) => /\.test\.tsx?$/.test(name))) {
         const matches = withoutComments(read(file)).match(enginePattern);
