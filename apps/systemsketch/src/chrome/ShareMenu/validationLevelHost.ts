@@ -139,15 +139,32 @@ function lintRulesOf(policy: EdgePolicy): LintRuleId[] {
 /**
  * The nine switches as the gates `edgeValidation.ts` understands.
  *
- * SEVEN of the nine cross: six permissions plus `typeMatching`. The judge's
+ * SIX of the nine reach the board: `allowCycles`, `allowDuplicates`,
+ * `allowSelfConnection`, `allowFanIn`, `allowCrossBoundary` and `typeMatching`.
+ * Each was confirmed by a real drag that is refused before the flip and lands
+ * after it, or the reverse. The judge's
  * `allowCrossScope` IS the stored `allowCrossBoundary` — one question ("may a
  * cable leave its parent?") under this kit's name and the donor's, an
  * equivalence `scene/validationLevel.test.ts` already pins for the four rungs.
  *
- * THE TWO THAT DO NOT, stated rather than hidden — this is the part of the
- * problem still open after this change. `allowHiddenPorts` and `allowFanOut`
- * have no gate in `edgeValidation.ts` and no rule in `lint.ts`, so flipping
- * either moves nothing on the board. That is NOT a regression and not new
+ * THE THREE THAT DO NOT, stated rather than hidden — this is the part of the
+ * problem still open after this change.
+ *
+ * `allowHiddenPorts` and `allowFanOut` have no gate in `edgeValidation.ts` and
+ * no rule in `lint.ts`, so flipping either moves nothing on the board.
+ *
+ * `allowSamePolarity` is the third, and it was missed when this comment was
+ * first written — corrected here after a verification pass measured it. It
+ * DOES cross into `ConnectionPolicy` structurally, which is why it looked like
+ * one of the crossing set, but it decides nothing: out -> out lands at preset
+ * `strict` with no switch flipped at all. The reason is written out twice
+ * elsewhere in this repo and neither place was reconciled with this comment —
+ * `chrome/problems.ts:275-280` ("`polarity` STILL contributes nothing... it
+ * needs a `directionOf`, and this document model only states a direction for a
+ * FLOATING `ss-port`") and `shapes/wire/wireGesture.ts:410-412` ("Today no
+ * port declares a direction so the judge answers `by: \"gesture\"`"). A
+ * Block's ports carry no direction field at all — `PortSpecV` is
+ * `{id, declaration}`. So this one needs schema vocabulary, not a gate. That is NOT a regression and not new
  * here: the four named rungs have always ignored them too (`ConnectionPolicy`
  * has six fields, not eight), and today's behaviour for those two switches is
  * unchanged. What changes is that it is now honest — the row that reads
