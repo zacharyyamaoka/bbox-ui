@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
-import { PanelShell } from "../components/panelShell";
+import { PanelShell } from "./panelShell";
 
 const meta = {
   title: "Basics/PanelShell",

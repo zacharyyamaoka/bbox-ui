@@ -74,6 +74,27 @@
 import type { Diagnostic, DiagnosticSeverity } from "../components/highlighter";
 import { duplicateEdges, findCycles, findDanglingEdges, portKey, producersOf, type ScenePortRef, type SceneEdgeEnds } from "./scene";
 
+// The scene's own vocabulary now has one declaration site, `./model` — see
+// that file's header for the rule about what belongs there. Re-exported from
+// here so every existing `from "./scene"` import keeps resolving, and so a
+// reader who opens this file still meets the record before the functions
+// over it.
+import type {
+  PortDirection,
+  PortDirectionOf,
+  PortTypeOf,
+  PortsOf,
+  TypeCompatible,
+} from "./model";
+export type {
+  PortDirection,
+  PortDirectionOf,
+  PortTypeOf,
+  PortsOf,
+  TypeCompatible,
+};
+
+
 /* ------------------------------------------------------------------ */
 /* The vocabulary a rule reads and writes                              */
 /* ------------------------------------------------------------------ */
@@ -90,60 +111,6 @@ export interface LintScene {
   nodes: readonly { id: string; parentId?: string }[];
   edges: readonly (SceneEdgeEnds & { id: string })[];
 }
-
-/** Per-node port vocabulary, total: same contract as `findDanglingEdges`'s
- *  own `portsOf` (scene.ts:412-416) — omitted, only node existence is
- *  checked; `undefined` for a node means "unknown vocabulary, no port
- *  judgement for it." Reused verbatim rather than re-declared so the two
- *  call sites can never drift. */
-export type PortsOf = (nodeId: string) => readonly string[] | undefined;
-
-/**
- * A port's declared type vocabulary, or `undefined` for "unconstrained" —
- * same convention as `PortsOf` above. Shape adopted from Blockly
- * `ConnectionChecker.doTypeChecks` (Apache-2.0, fetched
- * `core/connection_checker.ts:203-219`): an optional ARRAY of accepted
- * tags per side, not a single type string, so a port can legitimately
- * accept more than one shape (a union-typed input). See this file's own
- * header for why maxGraph's `Multiplicity` was rejected as the donor.
- */
-export type PortTypeOf = (ref: ScenePortRef) => readonly string[] | undefined;
-
-/**
- * Which way a port faces: does it EMIT a value or RECEIVE one?
- *
- * This kit had no such vocabulary at all before 2026-09-18. `ScenePortRef`
- * is `{nodeId, portId}`, `PortsOf` returns bare NAMES, and `SceneNode` has
- * no ports field — so nothing in `src/scene/` could tell an output from an
- * input, and `validateConnection` consequently judged output→output LEGAL
- * (measured on `ValidityPreview`'s own fixture: dragging `num1/out` painted
- * `num2/out` available). See `docs/peps/0002-the-judge-owns-edge-orientation.md`.
- *
- * Declared as a RESOLVER, not a field, for the same reason `PortTypeOf` is:
- * a `LintScene` is a structural slice that a `BlockScene`, a React Flow
- * store, or a hand-built fixture all satisfy with no adapter, and adding a
- * required field to it would break that. `undefined` means "unknown
- * direction, no judgement" — the identical convention `PortsOf` and
- * `PortTypeOf` already document, so a caller that supplies nothing gets
- * byte-identical findings to before this existed.
- *
- * Vocabulary is the donor's: SystemSketch `PortPolarity = 'source' | 'sink'`
- * (`src/blocks/connections/connectionModel.ts:88`, opened). The donor DERIVES
- * it — `portPolarity(port.side, face)`, a function of the port's lane and
- * which face of the block is showing (`connectionRules.ts:175,183`) — which
- * this kit cannot do: it has neither lanes nor faces in the scene model. So
- * the answer is asked for rather than computed.
- */
-export type PortDirection = "source" | "sink";
-
-/** A port's direction, or `undefined` for "unknown" — see `PortDirection`. */
-export type PortDirectionOf = (ref: ScenePortRef) => PortDirection | undefined;
-
-/** Compatible iff... whatever this returns says so. Default is
- *  `typesIntersect` below; a caller may substitute equality, a hierarchy
- *  check, or anything else — this file mints no opinion beyond the list
- *  shape. */
-export type TypeCompatible = (from: readonly string[], to: readonly string[]) => boolean;
 
 /**
  * Default `TypeCompatible` — Blockly's own list-intersection (same fetched

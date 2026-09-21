@@ -1,4 +1,4 @@
-// src/stories/TraceRouting.stories.tsx — P2 / Lane B of docs/TRACE-PLAN.md.
+// src/components/TraceRouting.stories.tsx — P2 / Lane B of docs/TRACE-PLAN.md.
 //
 // Four galleries over `../components/trace.routing`: the three direct
 // routings, the centre control point relocated in each, and the two honest
@@ -17,7 +17,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { CSSProperties, ReactNode } from "react";
 import { expect } from "storybook/test";
 
-import { TraceBody } from "../components/trace";
+import { TraceBody } from "./trace";
 import {
   DIR_VECTOR,
   OPPOSITE_DIR,
@@ -25,7 +25,7 @@ import {
   type Point,
   type TraceDir,
   type TraceTerminalSpec,
-} from "../components/trace.layout";
+} from "./trace.layout";
 import {
   DIRECT_ROUTINGS,
   honorsTangent,
@@ -34,8 +34,8 @@ import {
   type DirectRouting,
   type TraceCurve,
   type TraceRouteOptions,
-} from "../components/trace.routing";
-import { TraceTerminal } from "../components/traceTerminal";
+} from "./trace.routing";
+import { TraceTerminal } from "./traceTerminal";
 
 /* ------------------------------------------------------------------ */
 /* The fixture                                                          */

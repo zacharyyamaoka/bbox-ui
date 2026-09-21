@@ -1,7 +1,7 @@
 // src/components/devPanel.test.ts — the two things about `DevPanel` a
 // browser cannot see.
 //
-// The behavioural half lives in `src/stories/DevPanel.stories.tsx` (the panel
+// The behavioural half lives in `src/components/DevPanel.stories.tsx` (the panel
 // renders every row kind, a toggle reaches the host with its own id, the
 // select opens, an action card fires, the X and Escape both close). This file
 // covers what a play function structurally cannot:

@@ -9,13 +9,13 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "../components/breadcrumb";
+} from "./breadcrumb";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "../components/dropdown-menu";
+} from "./dropdown-menu";
 
 /**
  * The path row (docs/menus/screenshots/05-chrome-bar.png shows the

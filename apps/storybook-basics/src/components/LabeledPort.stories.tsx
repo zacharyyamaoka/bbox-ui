@@ -3,11 +3,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { python } from "@codemirror/lang-python";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { CodeEditor } from "../components/codeEditor";
-import { LabeledPort } from "../components/labeledPort";
-import { PORT_RING_OVERHANG_PX, PORT_LABEL_GAP, type BlockSide, type SecondarySlotLayout } from "../components/port.layout";
-import { Trace } from "../components/trace";
-import type { TraceDir, TraceTerminalSpec } from "../components/trace.layout";
+import { CodeEditor } from "./codeEditor";
+import { LabeledPort } from "./labeledPort";
+import { PORT_RING_OVERHANG_PX, PORT_LABEL_GAP, type BlockSide, type SecondarySlotLayout } from "./port.layout";
+import { Trace } from "./trace";
+import type { TraceDir, TraceTerminalSpec } from "./trace.layout";
 
 /**
  * `expect(a).toBeCloseTo(b)` on two viewport numbers reports which values

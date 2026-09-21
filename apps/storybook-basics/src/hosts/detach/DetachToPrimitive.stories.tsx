@@ -3,10 +3,10 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, waitFor } from "storybook/test";
 import type { Editor, TLShapeId } from "tldraw";
 
-import type { BlockView } from "../components/blockPort.layout";
-import type { HostScene } from "../hosts/hostScene";
-import { shapeIdForNode, TldrawHost } from "../hosts/tldrawHost";
-import { detachSelectedShapes, rebuildDetachedShapes, registerEditorContainer, RebuildContextMenu } from "../detach";
+import type { BlockView } from "../../components/blockPort.layout";
+import type { HostScene } from "../hostScene";
+import { shapeIdForNode, TldrawHost } from "../tldrawHost";
+import { detachSelectedShapes, rebuildDetachedShapes, registerEditorContainer, RebuildContextMenu } from ".";
 
 /**
  * Blocks/Detach To Primitive — Zach's "Detach to primitive" feature

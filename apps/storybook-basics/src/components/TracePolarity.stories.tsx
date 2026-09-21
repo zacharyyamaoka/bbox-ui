@@ -12,7 +12,7 @@ import {
   traceRouteStart,
   type TraceGeometry,
   type TraceRouteRequest,
-} from "../components/trace";
+} from "./trace";
 import {
   DIR_VECTOR,
   OPPOSITE_DIR,
@@ -22,8 +22,8 @@ import {
   type TraceDir,
   type TraceRouting,
   type TraceTerminalSpec,
-} from "../components/trace.layout";
-import { honorsTangent } from "../components/trace.routing";
+} from "./trace.layout";
+import { honorsTangent } from "./trace.routing";
 
 /* ==========================================================================
  * TracePolarity — the gallery Zach actually asked for.

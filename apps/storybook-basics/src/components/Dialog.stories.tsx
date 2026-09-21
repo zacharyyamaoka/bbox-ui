@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { Button } from "../components/button";
+import { Button } from "./button";
 import {
   Dialog,
   DialogClose,
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "../components/dialog";
+} from "./dialog";
 
 /**
  * Stock shadcn `base-nova` Dialog (components/dialog.tsx) — the shell the

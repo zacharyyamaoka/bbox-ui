@@ -27,7 +27,7 @@ import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
  * Block — header / body / footer, stacked. All three are plain slots: pass
  * text, pass nothing, or pass a <Bar> to compose the two components
  * together (that composition is the point of this reset pass — see
- * src/stories/Block.stories.tsx's "ComposedWithBar" story). A slot given
+ * src/components/Block.stories.tsx's "ComposedWithBar" story). A slot given
  * `undefined` is omitted entirely, not merely emptied, so a header-less
  * Block draws no stray divider line. Painted with Tailwind + the shadcn CSS
  * variables from src/globals.css.

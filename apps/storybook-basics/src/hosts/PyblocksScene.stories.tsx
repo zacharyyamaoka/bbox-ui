@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "../hosts/domCanvas";
-import { TldrawHost } from "../hosts/tldrawHost";
-import type { HostScene } from "../hosts/hostScene";
+import { DomCanvas } from "./domCanvas";
+import { TldrawHost } from "./tldrawHost";
+import type { HostScene } from "./hostScene";
 import { loadPyblocksScene } from "../scene/pyblocksScene";
 import { createSceneEventSeam, deriveSceneEvents, type SceneEvent } from "../scene/sceneEvents";
 

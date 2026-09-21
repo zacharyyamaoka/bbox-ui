@@ -12,7 +12,7 @@ import { FoldingChevron } from "./foldingChevron";
  * glyph (`getBoundingClientRect`, `getComputedStyle`), never a read of the
  * `open` prop echoed back as `aria-expanded`.
  *
- * WHY this file exists beside src/stories/Collapsible.stories.tsx rather
+ * WHY this file exists beside src/components/Collapsible.stories.tsx rather
  * than extending it: that page demos the chevron WIRED to a real
  * `Collapsible` (does clicking it hide a panel?). This one is the component
  * on its own — does the glyph actually rotate, and does `reveal` change
@@ -123,7 +123,7 @@ export const ClosedAndOpen: Story = {
  * Real cursor-driven `:hover` is not synthesizable by `userEvent` (it drives
  * pointer events, not the browser's tracked cursor), so this story
  * deliberately does not pretend to test it — the same line
- * src/stories/Collapsible.stories.tsx draws.
+ * src/components/Collapsible.stories.tsx draws.
  */
 export const RevealModes: Story = {
   render: () => (

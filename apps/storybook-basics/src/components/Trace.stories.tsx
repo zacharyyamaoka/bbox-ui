@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { Trace, TraceBody, traceGeometry, type TraceProps, type TraceRouteRequest } from "../components/trace";
+import { Trace, TraceBody, traceGeometry, type TraceProps, type TraceRouteRequest } from "./trace";
 import {
   ASYNC_CADENCE_PX,
   DATA_MARCH_CLASS,
@@ -12,10 +12,10 @@ import {
   safeElementId,
   type Point,
   type TraceDir,
-} from "../components/trace.layout";
-import { TraceTerminal } from "../components/traceTerminal";
-import { elbowPath, routeElbow } from "../components/elbow/index";
-import { elbowInputFromTerminals, routePoints } from "../components/elbow/traceContract";
+} from "./trace.layout";
+import { TraceTerminal } from "./traceTerminal";
+import { elbowPath, routeElbow } from "./elbow/index";
+import { elbowInputFromTerminals, routePoints } from "./elbow/traceContract";
 
 /* ------------------------------------------------------------------ */
 /* The fixture: one straight line between two terminals, exactly as    */

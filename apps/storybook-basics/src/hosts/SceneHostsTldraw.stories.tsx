@@ -2,11 +2,11 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "../hosts/domCanvas";
-import { dragFrom } from "../hosts/hostGestures";
-import { HOST_SCENE, topLevelNodes, type HostScene } from "../hosts/hostScene";
-import { ReactFlowHost } from "../hosts/reactFlowHost";
-import { TldrawHost } from "../hosts/tldrawHost";
+import { DomCanvas } from "./domCanvas";
+import { dragFrom } from "./hostGestures";
+import { HOST_SCENE, topLevelNodes, type HostScene } from "./hostScene";
+import { ReactFlowHost } from "./reactFlowHost";
+import { TldrawHost } from "./tldrawHost";
 import { TRACE_TERMINAL_GAP } from "../components/trace";
 
 /**

@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { CodeView } from "../components/codeView";
-import { compareBoards, type CompareChange, type RecordMap } from "../components/compareModel";
+import { CodeView } from "./codeView";
+import { compareBoards, type CompareChange, type RecordMap } from "./compareModel";
 
 /**
  * The Compare dialog's Code tab (docs/menus/screenshots/08-compare-changes.png

@@ -8,7 +8,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../components/table";
+} from "./table";
 
 /**
  * Stock shadcn `base-nova` Table (components/table.tsx) — the navigator's

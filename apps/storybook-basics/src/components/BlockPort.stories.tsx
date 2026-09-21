@@ -3,10 +3,10 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { Badge } from "../components/badge";
-import { Bar, type BarSize } from "../components/bar";
-import { Block } from "../components/block";
-import { BlockPort, RAIL_SLOT_MAIN_PX, functionPortHeaderInsetPx, railDotCentres, railPitches } from "../components/blockPort";
+import { Badge } from "./badge";
+import { Bar, type BarSize } from "./bar";
+import { Block } from "./block";
+import { BlockPort, RAIL_SLOT_MAIN_PX, functionPortHeaderInsetPx, railDotCentres, railPitches } from "./blockPort";
 import {
   BLOCK_PORT_LAYOUT_LABELS,
   BLOCK_PORT_LAYOUTS,
@@ -18,12 +18,12 @@ import {
   railPitchPx,
   type BlockPortLayout,
   type BlockView,
-} from "../components/blockPort.layout";
-import { EditableText } from "../components/editableText";
-import { Glyph } from "../components/glyph";
-import { PORT_DIAMETERS, type BlockSide, type PortSize } from "../components/port.layout";
-import type { Distribution } from "../components/portEdge.layout";
-import type { PortEdgeItem } from "../components/portEdge";
+} from "./blockPort.layout";
+import { EditableText } from "./editableText";
+import { Glyph } from "./glyph";
+import { PORT_DIAMETERS, type BlockSide, type PortSize } from "./port.layout";
+import type { Distribution } from "./portEdge.layout";
+import type { PortEdgeItem } from "./portEdge";
 
 /**
  * Basics/BlockPort — phase A1 of docs/BLOCK-PORT-EDGES-PLAN.md: a `Block`

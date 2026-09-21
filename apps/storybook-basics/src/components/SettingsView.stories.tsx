@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { Info, SlidersHorizontal } from "lucide-react";
 
-import { SettingsView, type SettingsCategory, type SettingsPresentation } from "../components/settingsView";
+import { SettingsView, type SettingsCategory, type SettingsPresentation } from "./settingsView";
 
 /**
  * Settings — a left nav of categories and the chosen one's sections, as a

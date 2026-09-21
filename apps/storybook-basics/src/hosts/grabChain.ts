@@ -1,5 +1,5 @@
 /**
- * src/interaction/grabChain.ts — the HOST half: read a real DOM press into
+ * src/hosts/grabChain.ts — the HOST half: read a real DOM press into
  * the pure chain `dragPolicy.ts` reasons about.
  *
  * Everything in this file is interaction geometry and therefore host-owned
@@ -16,7 +16,7 @@
  * same reason `nodrag` is a class and not a prop.
  */
 
-import { resolveGrab, type GrabChainLink, type GrabResolution, type GrabRole } from "./dragPolicy";
+import { resolveGrab, type GrabChainLink, type GrabResolution, type GrabRole } from "../scene/interactions/dragPolicy";
 
 /** The declaring root: `data-drag-owner="block:expanded"`. The walk stops
  *  here, so a member's own declaration shadows its parent's. */

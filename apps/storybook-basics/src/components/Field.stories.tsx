@@ -8,9 +8,9 @@ import {
   FieldGroup,
   FieldLabel,
   FieldSeparator,
-} from "../components/field";
-import { Input } from "../components/input";
-import { Switch } from "../components/switch";
+} from "./field";
+import { Input } from "./input";
+import { Switch } from "./switch";
 
 /**
  * Stock shadcn `base-nova` Field kit (components/field.tsx) — the

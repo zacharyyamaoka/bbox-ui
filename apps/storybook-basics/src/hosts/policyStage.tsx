@@ -1,5 +1,5 @@
 /**
- * src/interaction/policyStage.tsx — the shared stage every
+ * src/hosts/policyStage.tsx — the shared stage every
  * `Interaction/Drag Policy/*` story stands on.
  *
  * Zach asked for exactly this shape (`PROJECT - Black Box UI.md:2512`):
@@ -29,9 +29,9 @@
 import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 import { HIT_REGION_FILL, HIT_REGION_LINE } from "../components/hitRegion";
-import type { HostScene } from "../hosts/hostScene";
-import { ReactFlowHost } from "../hosts/reactFlowHost";
-import { DRAG_DECLARATIONS, POLICY_TABLE, type DragDeclaration, type GrabRole } from "./dragPolicy";
+import type { HostScene } from "./hostScene";
+import { ReactFlowHost } from "./reactFlowHost";
+import { DRAG_DECLARATIONS, POLICY_TABLE, type DragDeclaration, type GrabRole } from "../scene/interactions/dragPolicy";
 import { OWNER_ATTR, resolveGrabAt } from "./grabChain";
 
 /* ------------------------------------------------------------------ */

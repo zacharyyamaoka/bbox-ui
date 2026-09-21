@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { Input } from "../components/input";
-import { Label } from "../components/label";
+import { Input } from "./input";
+import { Label } from "./label";
 
 /**
  * Stock shadcn `base-nova` Label (components/label.tsx) — paired with a

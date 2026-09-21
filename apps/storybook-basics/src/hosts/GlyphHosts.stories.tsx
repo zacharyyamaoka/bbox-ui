@@ -2,10 +2,10 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "../hosts/domCanvas";
-import { dragFrom } from "../hosts/hostGestures";
-import type { HostScene } from "../hosts/hostScene";
-import { ReactFlowHost } from "../hosts/reactFlowHost";
+import { DomCanvas } from "./domCanvas";
+import { dragFrom } from "./hostGestures";
+import type { HostScene } from "./hostScene";
+import { ReactFlowHost } from "./reactFlowHost";
 
 /**
  * Basics/Glyph/In A Host — the Glyph face as a canvas node, under its

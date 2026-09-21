@@ -7,10 +7,10 @@ import {
   crossingGeometryPolicy,
   DAG_HEURISTIC_LIMIT,
   type PromotedPort,
-} from "../scene/boundary";
-import { collapseToRegion, dissolveRegion } from "../scene/collapse";
-import type { PortDirectionOf, PortTypeOf } from "../scene/lint";
-import type { BlockScene, SceneEdge, SceneNode } from "../scene/scene";
+} from "./boundary";
+import { collapseToRegion, dissolveRegion } from "./collapse";
+import type { PortDirectionOf, PortTypeOf } from "./lint";
+import type { BlockScene, SceneEdge, SceneNode } from "./scene";
 
 /**
  * Blocks/Scene/Grouping — `collapseToRegion`/`dissolveRegion` (collapse.ts),

@@ -12,8 +12,8 @@ import type { BlockSide } from "../components/port.layout";
 import { TRACE_TERMINAL_GAP } from "../components/trace";
 import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "../components/trace.layout";
 import { WireLayer } from "../components/wireLayer";
-import { type BlockScene, childrenOf, portKey, rank, type SceneNode, topologicalOrder, wiredPorts } from "../scene/scene";
-import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
+import { type BlockScene, childrenOf, portKey, rank, type SceneNode, topologicalOrder, wiredPorts } from "./scene";
+import { sceneWires, withWiredState, type WireStyleData } from "./sceneWires";
 
 /**
  * Blocks/Scene — the scene kit rendered through the EXISTING view kit

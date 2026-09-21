@@ -1,18 +1,18 @@
-// src/magnet/magnetProposals.test.ts — A1, A2, A3, A5: the pure model.
+// src/scene/interactions/magnet/magnetProposals.test.ts — A1, A2, A3, A5: the pure model.
 //
 // These are the acceptance assertions for R1, R2 and R5. Every one of them
 // is arithmetic over a few numbers, which is why they live in the `unit`
 // project (node, no browser) rather than inside a play function:
-//   pnpm exec vitest --project=unit run src/magnet/magnetProposals.test.ts
+//   pnpm exec vitest --project=unit run src/scene/interactions/magnet/magnetProposals.test.ts
 //
 // A5 is the load-bearing one: it is React Flow's candidate ordering failing
 // as a unit test, before any story runs.
 
 import { describe, expect, it, vi } from "vitest";
 
-import { effectiveHitValue, ZOOM_LEVELS } from "../hitRegions/hitPolicy";
-import { portKey, type ScenePortRef } from "../scene/scene";
-import { gestureOrientation, type ConnectionMessage, type ConnectionVerdict } from "../scene/edgeValidation";
+import { effectiveHitValue, ZOOM_LEVELS } from "../../hitPolicy";
+import { portKey, type ScenePortRef } from "../../scene";
+import { gestureOrientation, type ConnectionMessage, type ConnectionVerdict } from "../../edgeValidation";
 import {
   composeJudges,
   effectiveMagnetRadius,

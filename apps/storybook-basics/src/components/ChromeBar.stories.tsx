@@ -8,9 +8,9 @@ import {
   BranchChip,
   type BranchChipProps,
   type DraftSummary,
-} from "../components/branchChip";
-import { Bar } from "../components/bar";
-import { Button } from "../components/button";
+} from "./branchChip";
+import { Bar } from "./bar";
+import { Button } from "./button";
 import {
   ChromeBar,
   ChromeBarIcons,
@@ -19,8 +19,8 @@ import {
   type Crumb,
   type MenuAction,
   type MenuSpec,
-} from "../components/chromeBar";
-import { Toolbar, ToolbarButton } from "../components/toolbar";
+} from "./chromeBar";
+import { Toolbar, ToolbarButton } from "./toolbar";
 
 /**
  * The top-left chrome bar (docs/menus/screenshots/05-chrome-bar.png, 09's

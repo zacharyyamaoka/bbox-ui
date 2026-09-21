@@ -1,4 +1,4 @@
-// src/stories/DraftSession.stories.tsx — the draft view as one working
+// src/components/DraftSession.stories.tsx — the draft view as one working
 // surface: `BranchChip` and `DraftBar` (already in this kit) driven by the
 // real `draftModel` reducers and the real `draftChanges` merge gate.
 //
@@ -22,9 +22,9 @@ import type React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { BranchChip } from "../components/branchChip";
-import { DraftBar, type MenuAction } from "../components/draftBar";
-import { hasUnpromotedEdits, resolveMergeGate } from "../components/draftChanges";
+import { BranchChip } from "./branchChip";
+import { DraftBar, type MenuAction } from "./draftBar";
+import { hasUnpromotedEdits, resolveMergeGate } from "./draftChanges";
 import {
   MAIN_SNAPSHOT_SLOT,
   activateDraft,
@@ -44,7 +44,7 @@ import {
   writeDraftSnapshot,
   type DocumentDraftState,
   type DraftStorage,
-} from "../components/draftModel";
+} from "./draftModel";
 
 const DOC = "/boards/pose_pipeline.systemsketch";
 

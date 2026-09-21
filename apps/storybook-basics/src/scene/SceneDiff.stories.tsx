@@ -7,11 +7,11 @@ import {
   describePoseChange,
   movedEdges,
   type PriorPose,
-} from "../scene/fieldDiff";
-import { collapseContext, lineDiff, stableJson } from "../scene/lineDiff";
-import type { BlockScene, SceneNode } from "../scene/scene";
-import { diffScene, type ScenePortsOf } from "../scene/sceneDiff";
-import { compactFormerValue, wordDiff } from "../scene/wordDiff";
+} from "./fieldDiff";
+import { collapseContext, lineDiff, stableJson } from "./lineDiff";
+import type { BlockScene, SceneNode } from "./scene";
+import { diffScene, type ScenePortsOf } from "./sceneDiff";
+import { compactFormerValue, wordDiff } from "./wordDiff";
 
 /**
  * Blocks/Scene/Diff — the pure diff kit's OUTPUT, rendered with story-local

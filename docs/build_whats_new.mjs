@@ -10,7 +10,7 @@
  * file and when — that is the tag, for free, and it cannot go stale because
  * it is regenerated every run instead of stored.
  *
- * WHAT THIS PRODUCES: a JSON file (apps/storybook-basics/src/stories/
+ * WHAT THIS PRODUCES: a JSON file (apps/storybook-basics/src/
  * whats-new.generated.json, gitignored — see the root .gitignore) — one
  * entry per commit that touched a story file, newest first, each carrying
  * the story ids it resolved to so WhatsNew.stories.tsx can link straight
@@ -59,8 +59,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const STORY_GLOB = "apps/storybook-basics/src/stories/*.stories.tsx";
-const OUT = path.join(repoRoot, "apps/storybook-basics/src/stories/whats-new.generated.json");
+// WHY `:(glob)` and a recursive `**` (2026-09-21, the kit refactor): stories
+// no longer live in one flat `src/stories/` — each now sits beside the thing
+// it documents (`components/`, `scene/`, `editor/`, `presets/`, `hosts/`,
+// `skin/`). Without the `:(glob)` pathspec magic git treats `**` as a single
+// path component, and without the recursion this pathspec matched ZERO files
+// after the move — a silent empty changelog rather than a loud failure.
+const STORY_GLOB = ":(glob)apps/storybook-basics/src/**/*.stories.tsx";
+const OUT = path.join(repoRoot, "apps/storybook-basics/src/whats-new.generated.json");
 
 const args = process.argv.slice(2);
 const argOf = (flag) => {

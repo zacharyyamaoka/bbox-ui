@@ -2,14 +2,14 @@ import { useRef, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { Block } from "../components/block";
-import { BlockPort } from "../components/blockPort";
-import { LabeledPort } from "../components/labeledPort";
-import { PORT_RING_OVERHANG_PX, PORT_TEXT_SIZES } from "../components/port.layout";
-import type { PortEdgeItem } from "../components/portEdge";
-import type { PortState } from "../components/port";
-import type { Wire } from "../components/wiring";
-import { WireLayer } from "../components/wireLayer";
+import { Block } from "./block";
+import { BlockPort } from "./blockPort";
+import { LabeledPort } from "./labeledPort";
+import { PORT_RING_OVERHANG_PX, PORT_TEXT_SIZES } from "./port.layout";
+import type { PortEdgeItem } from "./portEdge";
+import type { PortState } from "./port";
+import type { Wire } from "./wiring";
+import { WireLayer } from "./wireLayer";
 import {
   DEFAULT_PORT_VARIANT_ID,
   PORT_VARIANTS,

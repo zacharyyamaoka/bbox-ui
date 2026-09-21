@@ -1,8 +1,8 @@
 /**
- * src/detach/detachPlan.ts — turn a requested id set into an ordered detach
+ * src/hosts/detach/detachPlan.ts — turn a requested id set into an ordered detach
  * plan.
  *
- * DONOR: packages/adapter-tldraw/src/detach/detachPlan.ts (read in full,
+ * DONOR: packages/adapter-tldraw/src/hosts/detach/detachPlan.ts (read in full,
  * 2026-09-18), ported near-verbatim — planning is read-only: it walks down
  * from the requested shapes (selecting a stock group detaches the bbox
  * shapes inside it) and fixes the one global lowering order the invariants

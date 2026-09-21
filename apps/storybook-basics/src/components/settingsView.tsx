@@ -4,7 +4,7 @@
 //
 // CONTRACT committed by the planning lane (docs/CHROME-FILES-SETTINGS-PLAN.md);
 // `SettingsView` THROWS until lane `settings-kit` fills it in.
-// `src/stories/SettingsView.stories.tsx` is the acceptance and is off-limits
+// `src/components/SettingsView.stories.tsx` is the acceptance and is off-limits
 // to the builder.
 //
 // Donor (read on disk, ported as BEHAVIOUR, not markup):

@@ -6,19 +6,19 @@ import {
   buildSettingsCategories,
   SETTINGS_CATEGORY_IDS,
   type SettingsHotkey,
-} from "../components/settingsCategories";
-import { SettingsView, type SettingsPresentation } from "../components/settingsView";
-import { DEFAULT_APPEARANCE_PREFERENCES, type AppearancePreferences } from "../components/appearancePreferences";
-import { DEFAULT_GESTURE_SETTINGS, type GestureSettings } from "../components/gestureSettings";
+} from "./settingsCategories";
+import { SettingsView, type SettingsPresentation } from "./settingsView";
+import { DEFAULT_APPEARANCE_PREFERENCES, type AppearancePreferences } from "./appearancePreferences";
+import { DEFAULT_GESTURE_SETTINGS, type GestureSettings } from "./gestureSettings";
 import {
   DEFAULT_EDGE_POLICY,
   edgePolicyPreset,
   type EdgePolicy,
   type EdgePolicyPresetId,
-} from "../components/edgePolicy";
-import { DEFAULT_INTERFACE_SCALE } from "../components/interfaceScale";
-import { EMPTY_TOOL_ALIASES, type ToolAliasItem, type ToolAliases } from "../components/toolAliases";
-import type { FileNavigationMode } from "../components/appSettings";
+} from "./edgePolicy";
+import { DEFAULT_INTERFACE_SCALE } from "./interfaceScale";
+import { EMPTY_TOOL_ALIASES, type ToolAliasItem, type ToolAliases } from "./toolAliases";
+import type { FileNavigationMode } from "./appSettings";
 
 /**
  * The five settings categories Zach asked to port from the archived app on

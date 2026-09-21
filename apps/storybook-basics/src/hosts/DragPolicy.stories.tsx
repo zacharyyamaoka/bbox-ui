@@ -20,11 +20,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import type { HostScene } from "../hosts/hostScene";
-import { DRAG_DECLARATIONS, resolveClick, resolveGrab } from "../interaction/dragPolicy";
-import { move, press, release } from "../interaction/dragIntent";
-import { grabChainFrom, OWNER_ATTR, resolveGrabAt } from "../interaction/grabChain";
-import { PolicyStage } from "../interaction/policyStage";
+import type { HostScene } from "./hostScene";
+import { DRAG_DECLARATIONS, resolveClick, resolveGrab } from "../scene/interactions/dragPolicy";
+import { move, press, release } from "../scene/interactions/dragIntent";
+import { grabChainFrom, OWNER_ATTR, resolveGrabAt } from "./grabChain";
+import { PolicyStage } from "./policyStage";
 
 const meta = {
   title: "Interaction/Drag Policy",

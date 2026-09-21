@@ -53,7 +53,7 @@
 // this repo's own "verify before asserting" rule.
 //
 // COMPOSING WITH WHAT THIS REPO ALREADY OWNS A PRESS THROUGH:
-// `src/interaction/dragPolicy.ts` is who decides a gesture has STARTED (a
+// `src/scene/interactions/dragPolicy.ts` is who decides a gesture has STARTED (a
 // `GrabRole` walk, a click-vs-drag threshold, pointer capture — all host
 // work per `CLAUDE.md`'s governing rule). This file does not compete with
 // that: "on pointer-down" in `HOST_CONTRACT` below means "at the moment

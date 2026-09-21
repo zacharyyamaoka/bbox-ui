@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { TraceBody } from "../components/trace";
-import { DIR_VECTOR, type Point, type TraceDir, type TraceTerminalSpec } from "../components/trace.layout";
-import { TraceTerminal } from "../components/traceTerminal";
+import { TraceBody } from "./trace";
+import { DIR_VECTOR, type Point, type TraceDir, type TraceTerminalSpec } from "./trace.layout";
+import { TraceTerminal } from "./traceTerminal";
 import {
   DEFAULT_ELBOW_OPTIONS,
   elbowPath,
@@ -14,8 +14,8 @@ import {
   type ElbowPin,
   type ElbowRect,
   type ElbowRoute,
-} from "../components/elbow/index";
-import { elbowInputFromTerminals, routePoints, type TraceElbowRequest } from "../components/elbow/traceContract";
+} from "./elbow/index";
+import { elbowInputFromTerminals, routePoints, type TraceElbowRequest } from "./elbow/traceContract";
 
 /* ------------------------------------------------------------------ */
 /* The fixtures                                                        */

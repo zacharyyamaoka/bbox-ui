@@ -49,7 +49,7 @@ __pycache__/
 # nothing wired to run its generator for him. build_whats_new.mjs itself is
 # left in place — its git-derived "what changed" answer is still correct,
 # just not currently rendered anywhere — in case a future surface wants it.
-apps/storybook-basics/src/stories/whats-new.generated.json
+apps/storybook-basics/src/whats-new.generated.json
 
 # Vitest browser-mode run artifacts (apps/systemsketch's smoke project): a
 # failure screenshot per test file and the attachment blobs behind them. They

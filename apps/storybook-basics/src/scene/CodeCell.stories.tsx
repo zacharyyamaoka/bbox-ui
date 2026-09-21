@@ -10,13 +10,13 @@ import type { PortEdgeItem } from "../components/portEdge";
 import type { BlockSide } from "../components/port.layout";
 import { WireLayer } from "../components/wireLayer";
 import type { Wire } from "../components/wiring";
-import { codeCellHeader, collapseToCode, expandCode, isCodeCell } from "../scene/codeCell";
-import { CODE_ORIGIN_STATES, ORIGIN_BADGE } from "../scene/codeOrigin";
-import { definitionsToScene, REFERENCE_EDGE_TYPE, type DefinitionNodeData, type DefinitionsView, type ReferenceEdgeData } from "../scene/definitionsToScene";
-import type { PortDirectionOf } from "../scene/lint";
-import { descendantsOf } from "../scene/region";
-import { childrenOf, wiredPorts, type BlockScene, type SceneData, type SceneNode } from "../scene/scene";
-import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
+import { codeCellHeader, collapseToCode, expandCode, isCodeCell } from "./codeCell";
+import { CODE_ORIGIN_STATES, ORIGIN_BADGE } from "./codeOrigin";
+import { definitionsToScene, REFERENCE_EDGE_TYPE, type DefinitionNodeData, type DefinitionsView, type ReferenceEdgeData } from "./definitionsToScene";
+import type { PortDirectionOf } from "./lint";
+import { descendantsOf } from "./region";
+import { childrenOf, wiredPorts, type BlockScene, type SceneData, type SceneNode } from "./scene";
+import { sceneWires, withWiredState, type WireStyleData } from "./sceneWires";
 import STEREO_DEFINITIONS from "../../../../docs/acceptance/pyblocks/stereo_definitions.expected.json";
 
 /**

@@ -1,5 +1,5 @@
 /**
- * src/detach/stockShapes.ts — measure the LIVE DOM and build the stock
+ * src/hosts/detach/stockShapes.ts — measure the LIVE DOM and build the stock
  * tldraw shapes that reproduce it.
  *
  * WHY measurement, not a ported layout function (the architectural call this

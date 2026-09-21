@@ -6,8 +6,8 @@ import { Block } from "../components/block";
 import { Port } from "../components/port";
 import { Trace } from "../components/trace";
 import type { TraceTerminalSpec } from "../components/trace.layout";
-import { findingsFor, lintScene, LINT_RULE_IDS, type LintFinding, type LintRuleId, type LintScene } from "../scene/lint";
-import { portKey, wiredPorts, type SceneEdgeEnds } from "../scene/scene";
+import { findingsFor, lintScene, LINT_RULE_IDS, type LintFinding, type LintRuleId, type LintScene } from "./lint";
+import { portKey, wiredPorts, type SceneEdgeEnds } from "./scene";
 
 /**
  * Blocks/Scene/Lint — the producer half of Zach's before/after ask

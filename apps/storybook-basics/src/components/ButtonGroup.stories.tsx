@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 import { ArrowLeft, ArrowRight, ChevronDown } from "lucide-react";
 
-import { Button } from "../components/button";
-import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "../components/button-group";
+import { Button } from "./button";
+import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "./button-group";
 
 /**
  * The back/forward pair (docs/menus/screenshots/05-chrome-bar.png) — plain

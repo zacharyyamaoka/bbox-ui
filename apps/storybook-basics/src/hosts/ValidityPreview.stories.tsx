@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "../hosts/domCanvas";
-import type { Decorate, SceneNodeDecoration } from "../hosts/nodeViews";
-import type { HostScene } from "../hosts/hostScene";
-import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "../hosts/validationScene";
+import { DomCanvas } from "./domCanvas";
+import type { Decorate, SceneNodeDecoration } from "./nodeViews";
+import type { HostScene } from "./hostScene";
+import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "./validationScene";
 import { connectionAvailability, type PortAvailability } from "../scene/availability";
 import { typesIntersect } from "../scene/lint";
 import { portKey, type ScenePortRef } from "../scene/scene";

@@ -24,101 +24,33 @@
 // is absorbed (its model half deleted, its paint half kept —
 // see `sceneWires.ts`); the other two are documented tenants for later.
 
+// The scene's own vocabulary now has one declaration site, `./model` — see
+// that file's header for the rule about what belongs there. Re-exported from
+// here so every existing `from "./scene"` import keeps resolving, and so a
+// reader who opens this file still meets the record before the functions
+// over it.
+import type {
+  BlockScene,
+  SceneData,
+  SceneEdge,
+  SceneEdgeEnds,
+  SceneNode,
+  ScenePortRef,
+  ScenePosition,
+} from "./model";
+export type {
+  BlockScene,
+  SceneData,
+  SceneEdge,
+  SceneEdgeEnds,
+  SceneNode,
+  ScenePortRef,
+  ScenePosition,
+};
+
 /* ------------------------------------------------------------------ */
 /* The record                                                          */
 /* ------------------------------------------------------------------ */
-
-/** Node/edge `data` payloads. A `type` alias (never an `interface`) is what
- *  hosts should extend with — TS gives object-literal type aliases the
- *  implicit index signature that `Record<string, unknown>` compatibility
- *  (and React Flow's own generics) require; interfaces don't get one. */
-export type SceneData = Record<string, unknown>;
-
-export interface ScenePosition {
-  x: number;
-  y: number;
-}
-
-/**
- * One block in the scene. `parentId` IS the nesting — membership is a
- * scene fact, not a layout mode (`blockMembers.tsx` renders it; it does
- * not own it).
- *
- * WHY `position` lives here and `BlockScene` has NO separate `placements`
- * table — argued both ways, decided (docs/SCENE-KIT.md §placement):
- *   FOR a separate table: the repo line "interaction geometry is
- *   host-owned". But that line names hit-testing, snapping, drag and
- *   z-order — the TRANSIENT geometry of a gesture. The same line's first
- *   half says layout geometry is portable and travels; an authored
- *   at-rest position is layout, exactly like `BlockMember.x/y` already is.
- *   AGAINST a separate table: two structures owning one fact is precisely
- *   the split-model disease this kit exists to cure (nesting/placement
- *   were fused in one place and absent everywhere else), and React Flow
- *   makes `position` REQUIRED on the node — a placements side-table would
- *   force every adapter to run a join before the types line up, and the
- *   assignability proof would need a cast, which is the criterion failing.
- * So: `position` is the node's authored at-rest placement, in the parent's
- * coordinate space when `parentId` is set (React Flow's sub-flow rule,
- * kept). A host mid-drag owns the moving copy and writes back here at
- * rest.
- *
- * Identity: `id` is the identity — opaque, unique per scene, never derived
- * from what the node is called. A display name is data (`data.name` by
- * convention), free to collide and free to change without any edge
- * noticing. This is the rule `portLane.ts` had to reconstruct with an LCS
- * diff because port lines carried no id; scene nodes never have that
- * problem because the id travels with the record. `definitionId` marks
- * membership in a definition GROUP — see `linkedCopy` below and
- * `src/scene/linking.ts` for the rules that maintain it.
- */
-export interface SceneNode<Data extends SceneData = SceneData> {
-  id: string;
-  /** Host-interpreted kind (React Flow's `nodeTypes` key). Optional. */
-  type?: string;
-  /** Authored at-rest placement. See the WHY above. */
-  position: ScenePosition;
-  /** Required (matching React Flow) so the record travels whole — `{}` is
-   *  the honest empty, `undefined` is a hole every adapter must patch. */
-  data: Data;
-  /** The nesting. Absent = top-level. */
-  parentId?: string;
-  /** The definition GROUP this node is an occurrence of: an opaque id
-   *  shared by every occurrence, minted by the host like a node id and
-   *  never equal to one — there is no privileged "definition node", the
-   *  definition IS the shared data (the function-definition model:
-   *  `src/scene/linking.ts` owns the rules). Absent = a group of one.
-   *  Extra field over React Flow's `Node` — structurally invisible to
-   *  it, deliberately. */
-  definitionId?: string;
-}
-
-/**
- * One connection. `source`/`target` are node ids; `sourceHandle`/
- * `targetHandle` are port ids on those nodes — a port is identified by
- * (node id, port id), never globally. Stricter than React Flow in one
- * spot, on purpose: handles are `string | undefined`, not
- * `string | null | undefined` — two spellings of "no handle" is one too
- * many, and `undefined` assigns into React Flow's wider type for free.
- */
-export interface SceneEdge<Data extends SceneData = SceneData> {
-  id: string;
-  /** Host-interpreted kind (React Flow's `edgeTypes` key). Optional. */
-  type?: string;
-  source: string;
-  target: string;
-  sourceHandle?: string;
-  targetHandle?: string;
-  data?: Data;
-}
-
-/** The scene: nodes + edges, nothing else. Plain mutable arrays so a host
- *  can hand them straight to its engine (React Flow's `useNodesState`
- *  wants `Node[]`, not `readonly Node[]`); the pure functions below take
- *  `readonly` views and never mutate. */
-export interface BlockScene<NodeData extends SceneData = SceneData, EdgeData extends SceneData = SceneData> {
-  nodes: SceneNode<NodeData>[];
-  edges: SceneEdge<EdgeData>[];
-}
 
 /* ------------------------------------------------------------------ */
 /* Structural slices — what each pure function actually reads.         */
@@ -126,21 +58,6 @@ export interface BlockScene<NodeData extends SceneData = SceneData, EdgeData ext
 /* React Flow store's nodes/edges, or on any host's records that speak */
 /* the vocabulary. Matching the graph data types IS the adapter.       */
 /* ------------------------------------------------------------------ */
-
-export interface SceneEdgeEnds {
-  source: string;
-  target: string;
-  /** `null` admitted here (only here) so React Flow's own `Edge[]`, whose
-   *  handles are `string | null | undefined`, feeds these functions
-   *  unmodified. */
-  sourceHandle?: string | null;
-  targetHandle?: string | null;
-}
-
-export interface ScenePortRef {
-  nodeId: string;
-  portId: string;
-}
 
 /** `${nodeId}/${portId}` — the one shared spelling of "which port",
  *  everywhere: `wiredPorts`' set members, `sceneWires`' adapter output,

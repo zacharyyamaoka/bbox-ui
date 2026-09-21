@@ -1,9 +1,9 @@
 /**
- * src/detach/lowerShared.ts — the mechanics every kind shares when it
+ * src/hosts/detach/lowerShared.ts — the mechanics every kind shares when it
  * lowers: create the primitives, nest per-port subgroups, group the result,
  * stamp the record, delete the original `bbox-node` shape.
  *
- * DONOR: packages/adapter-tldraw/src/detach/lowerShared.ts (read in full,
+ * DONOR: packages/adapter-tldraw/src/hosts/detach/lowerShared.ts (read in full,
  * 2026-09-18) — `lowerToGroup`'s structure, the rotation-carrying math, the
  * "tldraw refuses one-child groups" fallback, and the per-row nested-group
  * device are ported near-verbatim.

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { Switch } from "../components/switch";
+import { Switch } from "./switch";
 
 /**
  * Stock shadcn `base-nova` Switch (components/switch.tsx) — Settings'

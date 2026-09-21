@@ -3,13 +3,13 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
 
-import { Block } from "../components/block";
-import type { BlockMember } from "../components/blockMembers";
-import { BlockPort, railDotCentres, railPitches } from "../components/blockPort";
-import { railAxisFor, railPlanFor, type BlockPortLayout, type BlockView } from "../components/blockPort.layout";
-import type { BlockSide } from "../components/port.layout";
-import { PortEdge, laneAvailability, type PortEdgeItem } from "../components/portEdge";
-import { computeSlots, groupingSetFromText } from "../components/portEdge.layout";
+import { Block } from "./block";
+import type { BlockMember } from "./blockMembers";
+import { BlockPort, railDotCentres, railPitches } from "./blockPort";
+import { railAxisFor, railPlanFor, type BlockPortLayout, type BlockView } from "./blockPort.layout";
+import type { BlockSide } from "./port.layout";
+import { PortEdge, laneAvailability, type PortEdgeItem } from "./portEdge";
+import { computeSlots, groupingSetFromText } from "./portEdge.layout";
 
 /**
  * Basics/BlockPortLane — phase A2 of docs/BLOCK-PORT-EDGES-PLAN.md: the

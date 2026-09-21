@@ -3,15 +3,15 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
 
-import { Block } from "../components/block";
-import type { BlockMember } from "../components/blockMembers";
-import { BlockPort } from "../components/blockPort";
-import type { BlockView } from "../components/blockPort.layout";
-import type { PortEdgeItem } from "../components/portEdge";
-import { TRACE_TERMINAL_GAP } from "../components/trace";
-import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "../components/trace.layout";
-import { DUPLICATE_FAN_PX, type Wire } from "../components/wiring";
-import { WireLayer } from "../components/wireLayer";
+import { Block } from "./block";
+import type { BlockMember } from "./blockMembers";
+import { BlockPort } from "./blockPort";
+import type { BlockView } from "./blockPort.layout";
+import type { PortEdgeItem } from "./portEdge";
+import { TRACE_TERMINAL_GAP } from "./trace";
+import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "./trace.layout";
+import { DUPLICATE_FAN_PX, type Wire } from "./wiring";
+import { WireLayer } from "./wireLayer";
 import { type BlockScene, type SceneData, type ScenePosition, wiredPorts } from "../scene/scene";
 import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
 

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, userEvent, within } from "storybook/test";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 
 /**
  * The Properties/Code detail tabs (`compare/CompareDialog.tsx:43` in the

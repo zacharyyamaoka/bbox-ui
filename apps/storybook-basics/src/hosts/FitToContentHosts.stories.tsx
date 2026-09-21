@@ -46,10 +46,10 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { dragFrom, dragSteps } from "../hosts/hostGestures";
-import { DRAG_MEMBER_SCENE, type HostScene } from "../hosts/hostScene";
-import { ReactFlowHost } from "../hosts/reactFlowHost";
-import { TldrawHost } from "../hosts/tldrawHost";
+import { dragFrom, dragSteps } from "./hostGestures";
+import { DRAG_MEMBER_SCENE, type HostScene } from "./hostScene";
+import { ReactFlowHost } from "./reactFlowHost";
+import { TldrawHost } from "./tldrawHost";
 import { BLOCK_MEMBER_INSET_PX } from "../components/blockMembers";
 
 const meta = {

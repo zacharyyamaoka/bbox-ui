@@ -2,11 +2,11 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { TraceBody } from "../components/trace";
-import { TraceBadge } from "../components/traceBadge";
-import { TraceMark } from "../components/traceMark";
-import { pointAtFraction, polylinePath, resolvePathAddress, type Point } from "../components/trace.layout";
-import type { Diagnostic } from "../components/highlighter";
+import { TraceBody } from "./trace";
+import { TraceBadge } from "./traceBadge";
+import { TraceMark } from "./traceMark";
+import { pointAtFraction, polylinePath, resolvePathAddress, type Point } from "./trace.layout";
+import type { Diagnostic } from "./highlighter";
 
 /**
  * Trace/Mark — ruling 4, one 1-D address scheme unified with the pill

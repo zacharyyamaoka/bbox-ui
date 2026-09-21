@@ -3,8 +3,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
 
 import { Port } from "../components/port";
-import { catalogFor, type NodeCatalogEntry } from "../editor/nodeCatalog";
-import { EdgeDropMenu } from "../editor/edgeDropMenu";
+import { catalogFor, type NodeCatalogEntry } from "./nodeCatalog";
+import { EdgeDropMenu } from "./edgeDropMenu";
 import { validateConnection, type ConnectionVerdict } from "../scene/edgeValidation";
 import type { LintScene, PortDirection } from "../scene/lint";
 import type { SceneEdgeEnds } from "../scene/scene";

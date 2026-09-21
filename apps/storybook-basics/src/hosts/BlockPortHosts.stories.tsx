@@ -2,10 +2,10 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "../hosts/domCanvas";
-import { dragFrom, dragSteps } from "../hosts/hostGestures";
-import type { HostScene } from "../hosts/hostScene";
-import { ReactFlowHost } from "../hosts/reactFlowHost";
+import { DomCanvas } from "./domCanvas";
+import { dragFrom, dragSteps } from "./hostGestures";
+import type { HostScene } from "./hostScene";
+import { ReactFlowHost } from "./reactFlowHost";
 
 /**
  * Blocks/BlockPort/In A Host — the ported Block under its host-facing name

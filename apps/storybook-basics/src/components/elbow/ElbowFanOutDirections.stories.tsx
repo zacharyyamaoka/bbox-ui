@@ -1,4 +1,4 @@
-// src/stories/ElbowFanOutDirections.stories.tsx — the third leg of the
+// src/components/elbow/ElbowFanOutDirections.stories.tsx — the third leg of the
 // direction sweep Zach asked for, verbatim: "test all directions of
 // possible edges as well. each port could potentially have 4 output
 // directions... I also want to see top to bottom." The first two legs
@@ -46,11 +46,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { DIR_VECTOR, OPPOSITE_DIR, TRACE_DIRS, type Point, type TraceDir, type TraceTerminalSpec } from "../components/trace.layout";
-import { DEFAULT_ELBOW_OPTIONS, elbowPath, routeElbow, type ElbowRect, type ElbowRoute } from "../components/elbow/index";
-import { elbowInputFromTerminals, routePoints } from "../components/elbow/traceContract";
-import { TraceBody } from "../components/trace";
-import { TraceTerminal } from "../components/traceTerminal";
+import { DIR_VECTOR, OPPOSITE_DIR, TRACE_DIRS, type Point, type TraceDir, type TraceTerminalSpec } from "../trace.layout";
+import { DEFAULT_ELBOW_OPTIONS, elbowPath, routeElbow, type ElbowRect, type ElbowRoute } from "./index";
+import { elbowInputFromTerminals, routePoints } from "./traceContract";
+import { TraceBody } from "../trace";
+import { TraceTerminal } from "../traceTerminal";
 import {
   DirectionCell,
   Gallery,

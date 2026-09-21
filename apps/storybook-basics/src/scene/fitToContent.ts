@@ -1,5 +1,5 @@
 /**
- * src/layout/fitToContent.ts — "fit to content" as pure arithmetic.
+ * src/scene/fitToContent.ts — "fit to content" as pure arithmetic.
  *
  * Zach, 2026-09-18 (PROJECT - Black Box UI.md, "### Fit to content"): a
  * Block should grow with what is on it — with its PORT COUNT in port view,

@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { PORT_EDGE_SLOT_MIN_PX } from "../components/blockPort.layout";
-import { PortEdge, type PortEdgeItem } from "../components/portEdge";
-import { DEFAULT_ALIGN_GAP, offsetPaddingFor, type Distribution } from "../components/portEdge.layout";
+import { PORT_EDGE_SLOT_MIN_PX } from "./blockPort.layout";
+import { PortEdge, type PortEdgeItem } from "./portEdge";
+import { DEFAULT_ALIGN_GAP, offsetPaddingFor, type Distribution } from "./portEdge.layout";
 
 /**
  * Ports/PortEdge/OffsetPaddingFor — docs/PROPOSALS-2026-09-17.md P9a, the
@@ -28,11 +28,11 @@ import { DEFAULT_ALIGN_GAP, offsetPaddingFor, type Distribution } from "../compo
  * OffsetPaddingFor` went red on the non-overlap assertion below, real
  * measured boxes actually intersecting:
  *
- *   FAIL  |storybook (chromium)| src/stories/OffsetPaddingFor.stories.tsx
+ *   FAIL  |storybook (chromium)| src/components/OffsetPaddingFor.stories.tsx
  *     > Overlaid Offset Lanes
  *   AssertionError:
  *   expected true to be false // Object.is equality
- *     ❯ toBe src/stories/OffsetPaddingFor.stories.tsx:113:66
+ *     ❯ toBe src/components/OffsetPaddingFor.stories.tsx:113:66
  *       111|     for (const trailingSlot of trailingSlots) {
  *       112|       for (const leadingSlot of leadingSlots) {
  *       113|         await expect(overlapsMainAxis(trailingSlot, leadingSlot)).toBe…

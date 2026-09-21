@@ -4,10 +4,10 @@ import { expect, userEvent, waitFor } from "storybook/test";
 import { useDndContext, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
 import { python } from "@codemirror/lang-python";
 
-import { Block } from "../components/block";
-import { PortEdge, PortEdgeDndProvider, type PortEdgeItem } from "../components/portEdge";
-import { CONTAINER_PADDING, SPACING_SCHEMES, DEFAULT_ALIGN_GAP, defaultDistributionForEdges, type Distribution, type Size } from "../components/portEdge.layout";
-import type { BlockSide, PortTextLayout } from "../components/port.layout";
+import { Block } from "./block";
+import { PortEdge, PortEdgeDndProvider, type PortEdgeItem } from "./portEdge";
+import { CONTAINER_PADDING, SPACING_SCHEMES, DEFAULT_ALIGN_GAP, defaultDistributionForEdges, type Distribution, type Size } from "./portEdge.layout";
+import type { BlockSide, PortTextLayout } from "./port.layout";
 
 function required<T extends Element>(root: ParentNode, selector: string, what: string): T {
   const found = root.querySelector<T>(selector);

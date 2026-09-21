@@ -3,9 +3,9 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import { Check, ChevronDown, PaintBucket, Slash } from "lucide-react";
 
-import { Button } from "../components/button";
-import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
-import { Toolbar, ToolbarButton, ToolbarSeparator } from "../components/toolbar";
+import { Button } from "./button";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
+import { Toolbar, ToolbarButton, ToolbarSeparator } from "./toolbar";
 
 /**
  * `popover.tsx` over Base UI's Popover — the popup engine behind the

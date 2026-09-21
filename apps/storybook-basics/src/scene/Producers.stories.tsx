@@ -34,7 +34,7 @@ import { DomCanvas as DomCanvasHost } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
 import { TldrawHost } from "../hosts/tldrawHost";
-import { producerCounts } from "../scene/producers";
+import { producerCounts } from "./producers";
 import { isPortVariantId, PORT_VARIANTS, portVariantRingOverhangPx } from "../skin/portVariants";
 
 const meta = {

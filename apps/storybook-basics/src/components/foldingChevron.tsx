@@ -9,7 +9,7 @@ import { cn } from "../lib/utils";
  * rotation is driven by `open` via inline `transform`: folded (closed)
  * reads as ▶, open rotates 90° to read as ▼ — matching the sketch's plain
  * triangle either way. `Block`'s actual body/footer wiring lives at the
- * STORY level (src/stories/Block.stories.tsx's `CollapsibleHeader`), not
+ * STORY level (src/components/Block.stories.tsx's `CollapsibleHeader`), not
  * here and not as a new `Block` prop — this component only knows how to
  * show its own open/closed state and fire a click.
  */

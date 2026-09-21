@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
 import { Play } from "lucide-react";
 
-import { Button } from "../components/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/tooltip";
+import { Button } from "./button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 /**
  * Every icon-only control in this app (the kebab, the blackbox `Toggle`,

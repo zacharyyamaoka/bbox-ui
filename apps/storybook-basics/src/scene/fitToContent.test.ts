@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/layout/fitToContent.ts.
+ * Unit tests for src/scene/fitToContent.ts.
  *
  * The important one is "the RAIL_MAIN_INSET_PX cancellation" — it is the
  * donor's own warning ("any change to the body's padding or to the footer

@@ -2,11 +2,11 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "../hosts/domCanvas";
-import * as domCanvasModule from "../hosts/domCanvas";
-import { dragFrom } from "../hosts/hostGestures";
-import { HOST_SCENE, topLevelNodes, type HostScene } from "../hosts/hostScene";
-import { ReactFlowHost } from "../hosts/reactFlowHost";
+import { DomCanvas } from "./domCanvas";
+import * as domCanvasModule from "./domCanvas";
+import { dragFrom } from "./hostGestures";
+import { HOST_SCENE, topLevelNodes, type HostScene } from "./hostScene";
+import { ReactFlowHost } from "./reactFlowHost";
 
 /**
  * Blocks/Scene/In A Host — the SAME `HOST_SCENE` literal rendered through

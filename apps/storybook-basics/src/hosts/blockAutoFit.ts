@@ -23,7 +23,7 @@
 // moment as the state can.
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { blockExpandedFitHeight, type MemberFitInsets, type MemberRect } from "../layout/fitToContent";
+import { blockExpandedFitHeight, type MemberFitInsets, type MemberRect } from "../scene/fitToContent";
 
 interface FitResult {
   chromeTopPx: number;

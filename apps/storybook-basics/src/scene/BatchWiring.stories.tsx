@@ -48,9 +48,9 @@ import {
   describeBatchWireOutcome,
   type BatchWireIntent,
   type PortRef,
-} from "../scene/batchWire";
-import { validateConnectionJudge } from "../scene/batchWireJudge";
-import { portKey } from "../scene/scene";
+} from "./batchWire";
+import { validateConnectionJudge } from "./batchWireJudge";
+import { portKey } from "./scene";
 
 /** The story's own rule vocabulary — PROHIBITIONS, the way the bench's
  *  checkboxes name them. `judgeWith` (below) inverts them into

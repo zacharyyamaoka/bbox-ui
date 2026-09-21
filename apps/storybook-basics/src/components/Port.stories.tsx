@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { Port, PORT_STATES } from "../components/port";
-import { PORT_DIAMETERS } from "../components/port.layout";
+import { Port, PORT_STATES } from "./port";
+import { PORT_DIAMETERS } from "./port.layout";
 
 /**
  * Gallery scaffolding — a captioned swatch, same convention

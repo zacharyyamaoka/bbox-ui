@@ -1,5 +1,5 @@
 /**
- * src/detach/editorContainer.ts — which DOM subtree belongs to which
+ * src/hosts/detach/editorContainer.ts — which DOM subtree belongs to which
  * `Editor`, for the one query a `DetachableKind` cannot avoid: finding the
  * `.tl-shape` element a `bbox-node` shape rendered into, by id.
  *

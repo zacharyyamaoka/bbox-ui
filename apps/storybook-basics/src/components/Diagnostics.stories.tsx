@@ -2,19 +2,19 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
-import { Badge } from "../components/badge";
-import { Block } from "../components/block";
-import { HIGHLIGHTER_KINDS, type Diagnostic, type HighlighterKind } from "../components/highlighter";
-import { CodeEditor, type CodeEditorDiagnostic } from "../components/codeEditor";
-import { EditableText } from "../components/editableText";
-import { LabeledPort } from "../components/labeledPort";
-import { Port } from "../components/port";
-import { PortEdge, type PortEdgeItem } from "../components/portEdge";
-import { TraceBody } from "../components/trace";
+import { Badge } from "./badge";
+import { Block } from "./block";
+import { HIGHLIGHTER_KINDS, type Diagnostic, type HighlighterKind } from "./highlighter";
+import { CodeEditor, type CodeEditorDiagnostic } from "./codeEditor";
+import { EditableText } from "./editableText";
+import { LabeledPort } from "./labeledPort";
+import { Port } from "./port";
+import { PortEdge, type PortEdgeItem } from "./portEdge";
+import { TraceBody } from "./trace";
 import { ValueCapsule } from "../presets/value/value";
 
 /**
- * src/stories/Diagnostics.stories.tsx — the `diagnostics` axis
+ * src/components/Diagnostics.stories.tsx — the `diagnostics` axis
  * (docs/INVALID-STATES-PLAN.md), one gallery per marked component, modelled
  * on `BlockLayouts.stories.tsx`'s Gallery/Specimen/Caption idiom: several
  * variants visible at once rather than one variant per story, which is how

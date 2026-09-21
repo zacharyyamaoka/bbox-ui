@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import { FileNavigator, type FileNavigatorProps } from "../components/fileNavigator";
+import { FileNavigator, type FileNavigatorProps } from "./fileNavigator";
 import { screenshotWorkspace, type FakeWorkspaceClient } from "../files/fakeWorkspaceClient";
 
 /**

@@ -1,8 +1,8 @@
 /**
- * src/detach/rebuild.ts — the way back: put a scene node back from what its
+ * src/hosts/detach/rebuild.ts — the way back: put a scene node back from what its
  * group remembers.
  *
- * DONOR: packages/adapter-tldraw/src/detach/rebuild.ts (read in full,
+ * DONOR: packages/adapter-tldraw/src/hosts/detach/rebuild.ts (read in full,
  * 2026-09-18) — the anchor-based position/rotation recovery
  * (`anchorIdWithin`, the page-transform math) is ported near-verbatim: props
  * come from the record verbatim, never re-derived from the picture; position
@@ -26,8 +26,8 @@
  */
 import type { Editor, TLShape, TLShapeId, TLShapePartial } from "tldraw";
 
-import type { HostScene } from "../hosts/hostScene";
-import { shapeIdForNode, type BboxNodeShape } from "../hosts/tldrawHost";
+import type { HostScene } from "../hostScene";
+import { shapeIdForNode, type BboxNodeShape } from "../tldrawHost";
 import { isDetachedAnchor, readDetachedNode } from "./detachModel";
 
 export interface RebuildResult {

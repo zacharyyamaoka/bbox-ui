@@ -3,18 +3,18 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 import { EllipsisVertical, Search } from "lucide-react";
 
-import { Badge } from "../components/badge";
-import { Bar, type BarSize } from "../components/bar";
-import { Block } from "../components/block";
-import { BlockPort } from "../components/blockPort";
-import { Button } from "../components/button";
-import { EditableText } from "../components/editableText";
-import { Glyph } from "../components/glyph";
-import { Text } from "../components/text";
-import type { PortEdgeItem } from "../components/portEdge";
+import { Badge } from "./badge";
+import { Bar, type BarSize } from "./bar";
+import { Block } from "./block";
+import { BlockPort } from "./blockPort";
+import { Button } from "./button";
+import { EditableText } from "./editableText";
+import { Glyph } from "./glyph";
+import { Text } from "./text";
+import type { PortEdgeItem } from "./portEdge";
 
 /**
- * src/stories/BlockLayouts.stories.tsx — "Block Layouts", modelled directly
+ * src/components/BlockLayouts.stories.tsx — "Block Layouts", modelled directly
  * on `Bar.stories.tsx`'s `HeaderLayouts`: a labelled column/row of small
  * captioned specimens, several visible at once (docs/FEEDBACK-2026-09-17b-
  * PLAN.md, Lane C, C-6). Zach's whiteboard (`Pasted image

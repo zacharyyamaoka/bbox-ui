@@ -18,9 +18,9 @@ import {
   parkedEnds,
   setDefinitionData,
   unlinkOccurrence,
-} from "../scene/linking";
-import { type BlockScene, findDanglingEdges, portKey, type SceneNode } from "../scene/scene";
-import { sceneWires, type WireStyleData } from "../scene/sceneWires";
+} from "./linking";
+import { type BlockScene, findDanglingEdges, portKey, type SceneNode } from "./scene";
+import { sceneWires, type WireStyleData } from "./sceneWires";
 
 /**
  * Blocks/Scene/Linking — definition linking rendered live: "same name =

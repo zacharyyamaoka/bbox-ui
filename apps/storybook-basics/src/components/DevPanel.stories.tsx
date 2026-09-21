@@ -3,9 +3,9 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { ChevronDown, Circle, SlidersHorizontal, Zap } from "lucide-react";
 
-import { Button } from "../components/button";
-import { ButtonGroup } from "../components/button-group";
-import { DevPanel, type DevPanelSection } from "../components/devPanel";
+import { Button } from "./button";
+import { ButtonGroup } from "./button-group";
+import { DevPanel, type DevPanelSection } from "./devPanel";
 
 /**
  * The developer panel — the archived app's `</>` surface

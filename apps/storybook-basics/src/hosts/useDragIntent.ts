@@ -1,5 +1,5 @@
 /**
- * src/interaction/useDragIntent.ts — the React binding for
+ * src/hosts/useDragIntent.ts — the React binding for
  * `dragIntent.ts`. Listener plumbing only; every decision is in the pure
  * reducer, which is where the tests are.
  *
@@ -20,8 +20,8 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { cancel, IDLE, move, press, release, type IntentOptions, type IntentState, type Point, type ReleaseOutcome } from "./dragIntent";
-import type { DragDeclaration } from "./dragPolicy";
+import { cancel, IDLE, move, press, release, type IntentOptions, type IntentState, type Point, type ReleaseOutcome } from "../scene/interactions/dragIntent";
+import type { DragDeclaration } from "../scene/interactions/dragPolicy";
 import { resolveGrabAt } from "./grabChain";
 
 export interface UseDragIntentOptions extends IntentOptions {

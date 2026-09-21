@@ -8,8 +8,8 @@ import {
   type Diagnostic,
   type DiagnosticGroup,
   type Severity,
-} from "../components/problemsPanel";
-import { PanelShell } from "../components/panelShell";
+} from "./problemsPanel";
+import { PanelShell } from "./panelShell";
 
 const meta = {
   title: "Basics/ProblemsPanel",

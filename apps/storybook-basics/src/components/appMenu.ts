@@ -4,7 +4,7 @@
 // `buildAppMenu` and `formatShortcut` THROW until lane `chrome-rename-burger`
 // fills them in. The data below (`FILE_MENU_ROWS`, `APP_MENU_GROUP_IDS`) is
 // the spec itself and is not the builder's to reorder. Acceptance:
-// `appMenu.test.ts` (unit) and `src/stories/AppMenu.stories.tsx` — both
+// `appMenu.test.ts` (unit) and `src/editor/AppMenu.stories.tsx` — both
 // off-limits to the builder.
 //
 // WHY a builder in the trunk and not a list in apps/systemsketch: Zach,

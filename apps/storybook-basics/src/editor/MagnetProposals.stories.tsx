@@ -6,12 +6,12 @@ import { Block } from "../components/block";
 import { Port } from "../components/port";
 import { Toggle } from "../components/toggle";
 import { Trace } from "../components/trace";
-import { dragDelta } from "../interaction/dragIntent";
-import { OWNER_ATTR } from "../interaction/grabChain";
-import { MagnetProposalLayer } from "../magnet/magnetProposalLayer";
-import { composeJudges, magnetTypeJudge, type ConnectionJudge, type MagnetPort, type MagnetRadius } from "../magnet/magnetProposals";
-import type { PortTypeMatching } from "../magnet/magnetPortTypes";
-import { useMagnetDrag, type MagnetFrame } from "../magnet/useMagnetDrag";
+import { dragDelta } from "../scene/interactions/dragIntent";
+import { OWNER_ATTR } from "../hosts/grabChain";
+import { MagnetProposalLayer } from "./magnetProposalLayer";
+import { composeJudges, magnetTypeJudge, type ConnectionJudge, type MagnetPort, type MagnetRadius } from "../scene/interactions/magnet/magnetProposals";
+import type { PortTypeMatching } from "../scene/interactions/magnet/magnetPortTypes";
+import { useMagnetDrag, type MagnetFrame } from "../hosts/useMagnetDrag";
 import { validateConnection } from "../scene/edgeValidation";
 import type { LintScene } from "../scene/lint";
 import { portKey, wiredPorts, type ScenePortRef } from "../scene/scene";
@@ -25,9 +25,9 @@ import { portKey, wiredPorts, type ScenePortRef } from "../scene/scene";
  * thing bases. then it can make a trace proposals so it just automatically
  * draws it (dotted line)… if you move out of range then it disappears."*
  *
- * The model is `src/magnet/magnetProposals.ts` (pure, unit-tested in the
- * `unit` project), the binding is `src/magnet/useMagnetDrag.ts`, the paint is
- * `src/magnet/magnetProposalLayer.tsx`. This file is only the bench.
+ * The model is `src/scene/interactions/magnet/magnetProposals.ts` (pure, unit-tested in the
+ * `unit` project), the binding is `src/hosts/useMagnetDrag.ts`, the paint is
+ * `src/editor/magnetProposalLayer.tsx`. This file is only the bench.
  *
  * WHY this story renders its OWN bench rather than going through `DomCanvas`
  * — a measured constraint, not a preference. `PortEdgeItem` carries

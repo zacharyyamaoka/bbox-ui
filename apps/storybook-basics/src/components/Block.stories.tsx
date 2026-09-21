@@ -3,13 +3,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import { EllipsisVertical } from "lucide-react";
 
-import { Badge } from "../components/badge";
-import { Bar } from "../components/bar";
-import { Block } from "../components/block";
-import { EMPTY_CARD_MIN_PX, type BlockMember, type BlockMembersLayout } from "../components/blockMembers";
-import { Button } from "../components/button";
-import { CodeEditor } from "../components/codeEditor";
-import { Text } from "../components/text";
+import { Badge } from "./badge";
+import { Bar } from "./bar";
+import { Block } from "./block";
+import { EMPTY_CARD_MIN_PX, type BlockMember, type BlockMembersLayout } from "./blockMembers";
+import { Button } from "./button";
+import { CodeEditor } from "./codeEditor";
+import { Text } from "./text";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,11 +18,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../components/dropdown-menu";
-import { FoldingChevron } from "../components/foldingChevron";
-import { Glyph } from "../components/glyph";
-import { EditableText } from "../components/editableText";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/tooltip";
+} from "./dropdown-menu";
+import { FoldingChevron } from "./foldingChevron";
+import { Glyph } from "./glyph";
+import { EditableText } from "./editableText";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 const meta = {
   title: "Blocks/Block",

@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { Trace, type TraceGeometry, type TraceRouteProps } from "../components/trace";
-import type { TraceDir, TraceRouting, TraceVariant } from "../components/trace.layout";
+import { Trace, type TraceGeometry, type TraceRouteProps } from "./trace";
+import type { TraceDir, TraceRouting, TraceVariant } from "./trace.layout";
 
 /**
  * Basics/TraceArrowhead — phase B3 of docs/BLOCK-PORT-EDGES-PLAN.md §8.

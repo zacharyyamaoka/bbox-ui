@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor, within } from "storybook/test";
 import { AlignLeft, PaintBucket, Slash, Type } from "lucide-react";
 
-import { FloatingToolbar } from "../components/floatingToolbar";
+import { FloatingToolbar } from "./floatingToolbar";
 import {
   placeFloatingToolbar,
   SELECTION_MENU_MARGIN,
@@ -12,8 +12,8 @@ import {
   type SelectionMenuPlacement,
   type SelectionMenuSide,
   type Size,
-} from "../components/floatingToolbar.placement";
-import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from "../components/toolbar";
+} from "./floatingToolbar.placement";
+import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from "./toolbar";
 
 /**
  * `floatingToolbar.tsx` is the positioned shell only — it has no opinion

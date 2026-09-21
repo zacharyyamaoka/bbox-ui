@@ -3,13 +3,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import { Copy } from "lucide-react";
 
-import { ControlPanel } from "../components/controlPanel";
-import { ControlStrip } from "../components/controlStrip";
+import { ControlPanel } from "./controlPanel";
+import { ControlStrip } from "./controlStrip";
 import {
   createControlRegistry,
   type ControlDefinition,
-} from "../components/controlRegistry";
-import { DEFAULT_GLYPH_FAMILIES, swatchGlyph, type GlyphFamilies } from "../components/controlGlyphs";
+} from "./controlRegistry";
+import { DEFAULT_GLYPH_FAMILIES, swatchGlyph, type GlyphFamilies } from "./controlGlyphs";
 
 /**
  * `ControlStrip`/`ControlPanel` (`controlStrip.tsx`/`controlPanel.tsx`) are

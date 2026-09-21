@@ -1,4 +1,4 @@
-// src/stories/ControlLab.stories.tsx — ported from SystemSketch, read-only
+// src/components/ControlLab.stories.tsx — ported from SystemSketch, read-only
 // donor at /home/bam/systemsketch, revision
 // `10748b8ccdb374e71714f3d351abc43947ecfb0e`:
 //
@@ -53,14 +53,14 @@ import { useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { ControlStrip } from "../components/controlStrip";
+import { ControlStrip } from "./controlStrip";
 import type {
   BoundControl,
   ControlComposition,
   ControlLayout,
   ControlRecipe,
   ControlTrigger,
-} from "../components/controlRegistry";
+} from "./controlRegistry";
 import { demoDefinitions, demoGlyphs, demoRegistry, FONT_SIZE_PX, type DemoKind } from "./ControlStrip.stories";
 
 /**

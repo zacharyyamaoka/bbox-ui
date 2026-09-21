@@ -1,4 +1,4 @@
-// src/stories/elbowDirections.fixture.tsx — the shared harness for the
+// src/components/elbow/elbowDirections.fixture.tsx — the shared harness for the
 // elbow-direction sweep (Zach's ask, verbatim: "test all directions of
 // possible edges as well. each port could potentially have 4 output
 // directions... I also want to see top to bottom"). Measured before this
@@ -16,17 +16,17 @@
 
 import type { ReactNode } from "react";
 
-import { TraceBody } from "../components/trace";
-import { DIR_VECTOR, type Point, type TraceDir, type TraceTerminalSpec } from "../components/trace.layout";
-import { TraceTerminal } from "../components/traceTerminal";
+import { TraceBody } from "../trace";
+import { DIR_VECTOR, type Point, type TraceDir, type TraceTerminalSpec } from "../trace.layout";
+import { TraceTerminal } from "../traceTerminal";
 import {
   DEFAULT_ELBOW_OPTIONS,
   elbowPath,
   routeElbow,
   type ElbowRect,
   type ElbowRoute,
-} from "../components/elbow/index";
-import { elbowInputFromTerminals, routePoints, type TraceElbowRequest } from "../components/elbow/traceContract";
+} from "./index";
+import { elbowInputFromTerminals, routePoints, type TraceElbowRequest } from "./traceContract";
 
 /* ------------------------------------------------------------------ */
 /* Terminal gap — same rule as TraceElbow.stories.tsx's `routeStart`/       */

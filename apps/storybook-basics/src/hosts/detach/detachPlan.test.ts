@@ -1,12 +1,12 @@
 /**
- * src/detach/detachPlan.test.ts — the ordering rule, tested with no editor
+ * src/hosts/detach/detachPlan.test.ts — the ordering rule, tested with no editor
  * at all (the donor's own reason `planDetach`/`orderNodes` are kept pure —
  * see `./detachPlan.ts`'s header).
  */
 import { describe, expect, it } from "vitest";
 import type { TLShape, TLShapeId } from "tldraw";
 
-import type { HostScene } from "../hosts/hostScene";
+import type { HostScene } from "../hostScene";
 import type { DetachableKind } from "./detachableKind";
 import { orderNodes, planDetach, type PlanReader } from "./detachPlan";
 

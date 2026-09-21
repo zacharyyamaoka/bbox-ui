@@ -1,6 +1,6 @@
 // src/components/paintOrder.test.ts — Card 04 (z-order), the pure/textual
 // half. The MEASURED half — isolation, real overlap, real hit-testing —
-// lives in src/stories/PaintOrder.stories.tsx (a real DOM, run via
+// lives in src/components/PaintOrder.stories.tsx (a real DOM, run via
 // `pnpm test-stories`; this file runs in the "unit" Vitest project, plain
 // Node, same reasoning layering.test.ts's own header already gives for
 // why an import-wall / textual scan belongs there and not here).
@@ -21,7 +21,7 @@
 // name has a value, no stray/extra names) and non-empty; `paintTier`
 // returns a distinct, stable number per name it is asked for.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -30,10 +30,47 @@ import { ISOLATED_ROOT_STYLE, PAINT_TIER_ORDER, paintTier, type PaintTierName } 
 
 const COMPONENTS_DIR = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Every KIT SOURCE file under `src/components/`, recursively, as a path
+ * relative to this directory.
+ *
+ * WHY it recurses (changed 2026-09-21, the kit refactor): it used to be a
+ * flat `readdirSync`, which meant `components/elbow/` — 2,500 lines of
+ * routing math — was never scanned at all, and the refactor was about to add
+ * `components/hitRegions/` beside it. A wall that silently stops at depth 1
+ * reports green for code it never read, which is the same false-pass class
+ * `vitest.config.ts`'s own header is about. Recursing makes it strictly
+ * stronger: it now covers files it always should have.
+ *
+ * WHY `.stories.tsx` / `.fixture.tsx` are exempt: the wall polices the KIT,
+ * not its consumers. `ARCHITECTURE.md`'s load-bearing line is "components
+ * never imports scene" — a claim about what a Block needs in order to paint,
+ * which is what lets the same Block be driven by a story literal, a React
+ * Flow node or a tldraw shape. A story is the DRIVER, not the driven: it is
+ * one of the consumers that line exists to keep possible, and
+ * `BlockWiring.stories.tsx` has to build a scene in order to prove
+ * `wireLayer.tsx` wires one. Exempting stories is what lets a story live
+ * beside the component it documents (Zach, 2026-09-21) without either
+ * loosening the rule for component source or exiling the story from its
+ * subject. `.test.ts`/`.test.tsx` were already exempt for the same reason —
+ * this file imports the scene kit itself, two lines up.
+ */
 function componentSourceFiles(): string[] {
-  return readdirSync(COMPONENTS_DIR)
-    .filter((name) => /\.(ts|tsx)$/.test(name) && !name.endsWith(".test.ts") && !name.endsWith(".test.tsx"))
-    .sort();
+  const out: string[] = [];
+  const walk = (at: string, prefix: string) => {
+    for (const name of readdirSync(at).sort()) {
+      const full = join(at, name);
+      if (statSync(full).isDirectory()) {
+        walk(full, prefix + name + "/");
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(name)) continue;
+      if (/\.(test|stories|fixture)\.tsx?$/.test(name)) continue;
+      out.push(prefix + name);
+    }
+  };
+  walk(COMPONENTS_DIR, "");
+  return out.sort();
 }
 
 /**
@@ -55,7 +92,7 @@ function isCommentLine(line: string): boolean {
 describe("paintOrder — the grep guard (no raw zIndex literal survives)", () => {
   it("scans at least the files this lane itself touched, so the guard cannot silently scan zero files", () => {
     const files = componentSourceFiles();
-    for (const expected of ["block.tsx", "blockPort.tsx", "portEdge.tsx", "paintOrder.ts"]) {
+    for (const expected of ["block.tsx", "blockPort.tsx", "portEdge.tsx", "paintOrder.ts", "elbow/elbowRouter.ts"]) {
       expect(files).toContain(expected);
     }
   });

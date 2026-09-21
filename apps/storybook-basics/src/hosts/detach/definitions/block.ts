@@ -1,5 +1,5 @@
 /**
- * src/detach/definitions/block.ts — the `"block"` scene-node kind: how a
+ * src/hosts/detach/definitions/block.ts — the `"block"` scene-node kind: how a
  * `BlockPort` (`../../components/blockPort.tsx`) reduces itself.
  *
  * Composes `./port.ts`'s primitive PER PORT rather than drawing its own
@@ -20,8 +20,8 @@
  */
 import type { Editor, TLShape, TLShapeId, TLShapePartial } from "tldraw";
 
-import type { HostNodeData } from "../../hosts/hostScene";
-import { BLOCK_SIDES, type BlockSide } from "../../components/port.layout";
+import type { HostNodeData } from "../../hostScene";
+import { BLOCK_SIDES, type BlockSide } from "../../../components/port.layout";
 import { DETACH_FORMAT_VERSION } from "../detachModel";
 import type { DetachableKind, SceneReader } from "../detachableKind";
 import { containerFor } from "../editorContainer";

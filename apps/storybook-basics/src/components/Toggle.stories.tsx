@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { Square } from "lucide-react";
 
-import { Toggle } from "../components/toggle";
+import { Toggle } from "./toggle";
 
 /**
  * The "blackbox toggle" — shadcn's Toggle (ai-comment:chevron-blackbox-

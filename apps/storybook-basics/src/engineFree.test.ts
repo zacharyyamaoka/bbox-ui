@@ -3,14 +3,14 @@
 //
 // `components/layering.test.ts` already walls `components/` off from the
 // scene kit. This file walls the FOUR engine-free kits — `components/`,
-// `scene/`, `editor/`, `presets/`, `layout/` — off from BOTH canvas engines.
+// `scene/`, `editor/`, `presets/` — off from BOTH canvas engines.
 // The rebuild (`apps/systemsketch`) imports these directories through one
 // alias and mounts them inside tldraw; the day one of them imports `tldraw`
 // or `@xyflow/react` the "bbox-ui + stock tldraw" claim silently becomes
 // "tldraw + tldraw", and nothing but this file would notice.
 //
-// Only `hosts/`, `detach/` (tldraw benches) and the app itself may import an
-// engine. Deliberately textual, like layering.test.ts: the rule is "no such
+// Only `hosts/` (which now contains the tldraw benches, `hosts/detach/`) and
+// the app itself may import an engine. Deliberately textual, like layering.test.ts: the rule is "no such
 // SPECIFIER appears in non-test source", cheap and legible as a grep.
 // Comments mentioning an engine by name do not match (the pattern needs the
 // `from "…"` clause), which is exactly right — `controlValue.ts` cites a
@@ -23,8 +23,16 @@ import { describe, expect, it } from "vitest";
 
 const SRC = dirname(fileURLToPath(import.meta.url));
 
-/** The kits that must stay engine-free. `hosts/` and `detach/` are NOT here on purpose. */
-const ENGINE_FREE_DIRS = ["components", "scene", "editor", "presets", "layout"] as const;
+/** The kits that must stay engine-free. `hosts/` is NOT here on purpose —
+ *  it is where every engine-touching file lives, including `hosts/detach/`.
+ *
+ *  WHY `layout/` left this list (2026-09-21, the kit refactor): it did not
+ *  lose its wall, it stopped existing. `layout/fitToContent.ts` is pure fit
+ *  math reused across components, so it moved into `scene/` — which is on
+ *  this list — and the directory drained to empty. Leaving the name here
+ *  would fail the existsSync sanity check below; deleting it costs nothing
+ *  because the file it protected is still behind the wall. */
+const ENGINE_FREE_DIRS = ["components", "scene", "editor", "presets"] as const;
 
 const ENGINE_IMPORT_PATTERN = /from\s+["'](?:tldraw|@tldraw\/[^"']+|@xyflow\/[^"']+)["']/g;
 
@@ -66,7 +74,7 @@ describe("engine wall — the kits the rebuild imports never import a canvas eng
     }
   });
 
-  it("no non-test file under components/, scene/, editor/, presets/, layout/ imports tldraw or @xyflow/react", () => {
+  it("no non-test file under components/, scene/, editor/, presets/ imports tldraw or @xyflow/react", () => {
     const offenders: { file: string; specifier: string }[] = [];
     for (const dir of ENGINE_FREE_DIRS) {
       for (const file of sourceFilesUnder(join(SRC, dir))) {

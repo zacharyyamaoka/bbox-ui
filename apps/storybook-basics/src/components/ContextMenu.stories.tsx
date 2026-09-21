@@ -18,7 +18,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-} from "../components/context-menu";
+} from "./context-menu";
 
 /**
  * The right-click file menu (`chrome/TitleBar.tsx:275-338` in the donor).

@@ -1,5 +1,5 @@
 /**
- * src/hitRegions/hitPolicy.ts — the zoom question, as one pure function.
+ * src/scene/hitPolicy.ts — the zoom question, as one pure function.
  *
  * Every hit constant in `src/components` is SCENE-SPACE: a px value in the
  * component's own coordinate system, with no zoom compensation anywhere

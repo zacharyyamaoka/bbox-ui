@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { GLYPH_SIZES, type GlyphSize } from "../components/glyph.layout";
-import { Glyph } from "../components/glyph";
+import { GLYPH_SIZES, type GlyphSize } from "./glyph.layout";
+import { Glyph } from "./glyph";
 
 const meta = {
   title: "Basics/Glyph",

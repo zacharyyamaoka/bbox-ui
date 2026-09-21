@@ -1,5 +1,5 @@
 /**
- * src/interaction/dragPolicy.ts — who owns a press, declared by the
+ * src/scene/interactions/dragPolicy.ts — who owns a press, declared by the
  * component and implemented by the host.
  *
  * ── The requirement this exists to serve ────────────────────────────────

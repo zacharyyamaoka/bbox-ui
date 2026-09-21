@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "../hosts/domCanvas";
-import type { Decorate } from "../hosts/nodeViews";
-import type { HostScene } from "../hosts/hostScene";
+import { DomCanvas } from "./domCanvas";
+import type { Decorate } from "./nodeViews";
+import type { HostScene } from "./hostScene";
 import type { BlockView } from "../components/blockPort.layout";
 import { sceneSurfaceModel, surfaceFindings, visibilityFromHides, type HidesOf } from "../scene/bubble";
 import { lintScene, subjectKey, type LintScene } from "../scene/lint";

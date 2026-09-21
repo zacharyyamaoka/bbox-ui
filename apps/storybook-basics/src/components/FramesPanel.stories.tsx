@@ -8,8 +8,8 @@ import {
   type FramesItem,
   type FramesKindMeta,
   type FramesPanelMode,
-} from "../components/framesPanel";
-import { PanelShell } from "../components/panelShell";
+} from "./framesPanel";
+import { PanelShell } from "./panelShell";
 
 const meta = {
   title: "Basics/FramesPanel",

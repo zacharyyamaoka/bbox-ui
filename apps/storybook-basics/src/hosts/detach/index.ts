@@ -1,5 +1,5 @@
 /**
- * src/detach/index.ts — detach-to-primitives, public surface.
+ * src/hosts/detach/index.ts — detach-to-primitives, public surface.
  *
  * ARCHITECTURE, decided here rather than assumed silently (Zach's brief for
  * this lane asked for exactly this call to be reported): definitions live in
@@ -55,7 +55,7 @@ export { RebuildContextMenu } from "./rebuildContextMenu";
 
 import type { Editor, TLShapeId } from "tldraw";
 
-import type { HostScene } from "../hosts/hostScene";
+import type { HostScene } from "../hostScene";
 import { DETACHABLE_KINDS } from "./definitions";
 import { planDetach } from "./detachPlan";
 import { runDetachSweep } from "./detachSweep";

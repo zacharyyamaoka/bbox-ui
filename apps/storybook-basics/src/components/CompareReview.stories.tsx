@@ -8,9 +8,9 @@ import {
   type CompareMode,
   type CompareReviewProps,
   type CompareTab,
-} from "../components/compareReview";
-import { compareBoards, type CompareChange, type RecordMap } from "../components/compareModel";
-import type { HistoryRecord } from "../components/historyList";
+} from "./compareReview";
+import { compareBoards, type CompareChange, type RecordMap } from "./compareModel";
+import type { HistoryRecord } from "./historyList";
 import { cn } from "../lib/utils";
 
 /**

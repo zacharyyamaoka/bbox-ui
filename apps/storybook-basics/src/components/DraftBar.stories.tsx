@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import { DraftBar, type MenuAction } from "../components/draftBar";
+import { DraftBar, type MenuAction } from "./draftBar";
 
 /**
  * The draft-mode title bar

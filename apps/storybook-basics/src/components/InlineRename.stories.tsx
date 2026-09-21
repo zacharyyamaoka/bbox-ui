@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import { InlineRename } from "../components/inlineRename";
+import { InlineRename } from "./inlineRename";
 
 /**
  * One text field replacing the two duplicated editors

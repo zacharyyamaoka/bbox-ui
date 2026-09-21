@@ -7,7 +7,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../components/select";
+} from "./select";
 
 /**
  * Stock shadcn `base-nova` Select (components/select.tsx) — reserved by the

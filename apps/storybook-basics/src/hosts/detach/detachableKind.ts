@@ -1,12 +1,12 @@
 /**
- * src/detach/detachableKind.ts — the contract one detachable NODE KIND signs
+ * src/hosts/detach/detachableKind.ts — the contract one detachable NODE KIND signs
  * with the generic sweep.
  *
- * DONOR: packages/adapter-tldraw/src/detach/detachableKind.ts (read in full,
+ * DONOR: packages/adapter-tldraw/src/hosts/detach/detachableKind.ts (read in full,
  * 2026-09-18) — the phased-sweep rationale below is ported near-verbatim
  * (Zach's rule, "higher order primitives don't rewrite their own detach; it
  * propagates down through the tree", and the donor's own citation of
- * SystemSketch's `src/detach/detachableKind.ts` rejecting depth-first
+ * SystemSketch's `src/hosts/detach/detachableKind.ts` rejecting depth-first
  * recursion once edges/containers exist):
  *
  *   1. an edge must lower while BOTH endpoint shapes still stand, so its
@@ -31,7 +31,7 @@
  */
 import type { Editor, TLShape, TLShapeId } from "tldraw";
 
-import type { HostScene } from "../hosts/hostScene";
+import type { HostScene } from "../hostScene";
 
 /** When a node kind lowers — see this file's header. Every kind registered
  *  today is a leaf (Block's ports are props, not child shapes — the

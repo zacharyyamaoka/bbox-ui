@@ -6,7 +6,7 @@ import { Block } from "../components/block";
 import { Port } from "../components/port";
 import { Trace } from "../components/trace";
 import type { TraceTerminalSpec } from "../components/trace.layout";
-import { FocusControls } from "../editor/focusControls";
+import { FocusControls } from "./focusControls";
 import { focusSnapshot, focusStepLimits, type FocusDirection, type FocusStepLimits } from "../scene/focus";
 import { portKey } from "../scene/scene";
 

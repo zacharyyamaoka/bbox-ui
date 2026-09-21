@@ -125,50 +125,18 @@
 
 import type { BlockScene, SceneData, SceneEdge, SceneNode } from "./scene";
 
+// The scene's own vocabulary now has one declaration site, `./model` — see
+// that file's header for the rule about what belongs there. Re-exported from
+// here so every existing `from "./scene"` import keeps resolving, and so a
+// reader who opens this file still meets the record before the functions
+// over it.
+import type { OccurrenceData } from "./model";
+export type { OccurrenceData };
+
+
 /* ------------------------------------------------------------------ */
 /* The linked / free split — explicit in the types                     */
 /* ------------------------------------------------------------------ */
-
-/**
- * The data convention this module operates on. The split is the point
- * (Zach: "it's basically the data that is linked; appearance you have
- * much more flexibility"):
- *
- *   LINKED — shared by every occurrence of one definition:
- *     `name`          the definition's display name, and the linkage
- *                     trigger. NOT blind-copied by `setDefinitionData`;
- *                     it moves only through `commitDefinitionName`, the
- *                     one gesture whose job is to re-derive linkage.
- *                     (Donor parity: `sharedDefinitionProps` excludes
- *                     `title` too, donor 84-95 — raw spellings may
- *                     differ in whitespace, normalized names agree.)
- *     `linked`        the definition's content: port vocabulary, params,
- *                     docs — what the block IS.
- *     `expanded`      the EXPANDED view's appearance. Linked on purpose:
- *                     the expanded view is the function BODY, a function
- *                     gets one definition and all the call sites point
- *                     at that same definition. (Donor: `expandedSize` +
- *                     `expandedWeights` sit inside the shared props,
- *                     donor 91-92, while compact styling stays local.)
- *     `draftOrdinal`  present on a Draft definition; group-wide.
- *
- *   FREE — occurrence-local, never synced:
- *     `appearance`    the designated slot for per-occurrence styling
- *                     (compact view, size, accent, icon). The module
- *                     never reads it — it is named here so the split is
- *                     visible in the type, not just in a comment.
- *     …everything else a host keeps in `data`, plus `position`,
- *     `parentId`, and the node's edges. (Donor: "placement, outer
- *     wiring, current view and compact-view styling" stay local, donor
- *     674-676.)
- */
-export type OccurrenceData = SceneData & {
-  name?: string;
-  draftOrdinal?: number;
-  linked?: SceneData;
-  expanded?: SceneData;
-  appearance?: SceneData;
-};
 
 /** The facet keys `setDefinitionData` may write and the sweeps converge.
  *  `name`/`draftOrdinal` are deliberately NOT patchable here — a name

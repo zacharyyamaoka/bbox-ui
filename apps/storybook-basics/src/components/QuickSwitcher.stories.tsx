@@ -3,9 +3,9 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import { BoxIcon, FileIcon, TerminalIcon } from "lucide-react";
 
-import { QuickSwitcher } from "../components/quickSwitcher";
-import { quickSwitcherKeyDecision, type QuickSwitcherItem } from "../components/commandModel";
-import type { SearchableText, TextSourceUpdate } from "../components/boardSearch";
+import { QuickSwitcher } from "./quickSwitcher";
+import { quickSwitcherKeyDecision, type QuickSwitcherItem } from "./commandModel";
+import type { SearchableText, TextSourceUpdate } from "./boardSearch";
 
 /**
  * Press **S**.

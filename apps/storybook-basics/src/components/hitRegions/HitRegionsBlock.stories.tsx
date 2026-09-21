@@ -14,8 +14,8 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, waitFor, within } from "storybook/test";
 
-import { Block } from "../components/block";
-import { Text } from "../components/text";
+import { Block } from "../block";
+import { Text } from "../text";
 import {
   Checkbox,
   HitProbe,
@@ -24,8 +24,8 @@ import {
   ZoomStage,
   hitTargetAt,
   type HitTarget,
-} from "../hitRegions/harness";
-import type { HitPolicy } from "../hitRegions/hitPolicy";
+} from "./harness.fixture";
+import type { HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
   title: "Hit Regions/Block",

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { HistoryList, type HistoryRecord } from "../components/historyList";
+import { HistoryList, type HistoryRecord } from "./historyList";
 
 /**
  * The Compare dialog's HISTORY rail and the Block inspector's History tab

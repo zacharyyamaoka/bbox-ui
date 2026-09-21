@@ -17,7 +17,7 @@ import {
 import type { BlockSide } from "../components/port.layout";
 import type { PortEdgeItem } from "../components/portEdge";
 import { WireLayer } from "../components/wireLayer";
-import { PYBLOCKS_BACKEND_KIND, sourceActionsFor, type SourceBackendRef } from "../editor/sourceActions";
+import { PYBLOCKS_BACKEND_KIND, sourceActionsFor, type SourceBackendRef } from "./sourceActions";
 import { collapseToCode, expandCode, isCodeCell } from "../scene/codeCell";
 import { codeOriginState, ORIGIN_BADGE } from "../scene/codeOrigin";
 import type { PortDirectionOf } from "../scene/lint";

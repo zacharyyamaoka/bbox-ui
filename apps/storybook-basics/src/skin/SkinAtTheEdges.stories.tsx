@@ -5,15 +5,15 @@ import { expect, waitFor, within } from "storybook/test";
 import { Block } from "../components/block";
 import { Badge } from "../components/badge";
 import { Port } from "../components/port";
-import { PORT_VARIANTS, portVariantRingExpansion } from "../skin/portVariants";
+import { PORT_VARIANTS, portVariantRingExpansion } from "./portVariants";
 import { TraceBody } from "../components/trace";
-import { bboxSkinAttrs } from "../skin/skin";
-import { SketchAtEdge } from "../skin/SketchAtEdge";
+import { bboxSkinAttrs } from "./skin";
+import { SketchAtEdge } from "./SketchAtEdge";
 import {
   SKETCH_TWIN_ATTR,
   applySketchAtEdge,
   type SketchPassStats,
-} from "../skin/sketchAtEdge";
+} from "./sketchAtEdge";
 
 /**
  * Skin/At the edges — the PoC for Zach's 2026-09-17 ruling:

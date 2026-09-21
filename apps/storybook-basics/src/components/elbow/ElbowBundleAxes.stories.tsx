@@ -1,4 +1,4 @@
-// src/stories/ElbowBundleAxes.stories.tsx — multi-cable BUNDLES, in both
+// src/components/elbow/ElbowBundleAxes.stories.tsx — multi-cable BUNDLES, in both
 // axes. Zach's ask, verbatim: "we tend to test a lot of left to right, but I
 // also want to see top to bottom." `ElbowDirectionMatrix.stories.tsx` already
 // answered that for a SINGLE cable's bend/tangent behaviour. This file
@@ -33,9 +33,9 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { TraceBody } from "../components/trace";
-import { DIR_VECTOR, OPPOSITE_DIR, type Point, type TraceDir } from "../components/trace.layout";
-import { TraceTerminal } from "../components/traceTerminal";
+import { TraceBody } from "../trace";
+import { DIR_VECTOR, OPPOSITE_DIR, type Point, type TraceDir } from "../trace.layout";
+import { TraceTerminal } from "../traceTerminal";
 import {
   DEFAULT_NUDGE_OPTIONS,
   countCrossings,
@@ -46,8 +46,8 @@ import {
   type ElbowRoute,
   type ElbowRouteInput,
   type NudgeReport,
-} from "../components/elbow/index";
-import { routePoints } from "../components/elbow/traceContract";
+} from "./index";
+import { routePoints } from "./traceContract";
 import { Gallery } from "./elbowDirections.fixture";
 
 /* ------------------------------------------------------------------ */

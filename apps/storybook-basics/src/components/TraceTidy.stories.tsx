@@ -3,10 +3,10 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent } from "storybook/test";
 
-import { Button } from "../components/button";
-import { TraceBody } from "../components/trace";
-import { DIR_VECTOR, OPPOSITE_DIR, TRACE_DIRS, type Point, type TraceDir } from "../components/trace.layout";
-import { TraceTerminal } from "../components/traceTerminal";
+import { Button } from "./button";
+import { TraceBody } from "./trace";
+import { DIR_VECTOR, OPPOSITE_DIR, TRACE_DIRS, type Point, type TraceDir } from "./trace.layout";
+import { TraceTerminal } from "./traceTerminal";
 import {
   DEFAULT_ELBOW_OPTIONS,
   DEFAULT_NUDGE_OPTIONS,
@@ -17,16 +17,16 @@ import {
   type ElbowRect,
   type ElbowRoute,
   type ElbowRouteInput,
-} from "../components/elbow/index";
-import { routePoints } from "../components/elbow/traceContract";
-import { routesHaveSamePoints } from "../components/elbow/collisionRouting";
+} from "./elbow/index";
+import { routePoints } from "./elbow/traceContract";
+import { routesHaveSamePoints } from "./elbow/collisionRouting";
 import {
   describeTidyEdgesOutcome,
   tidyTraces,
   type TidyEdgesOutcome,
   type TidyTraceInput,
   type TidyTracesOptions,
-} from "../components/trace.tidy";
+} from "./trace.tidy";
 
 /* ------------------------------------------------------------------ */
 /* Fixtures                                                            */

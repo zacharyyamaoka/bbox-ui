@@ -1,5 +1,5 @@
 /**
- * src/magnet/useMagnetDrag.ts — the React binding: drive `scanMagnets` off
+ * src/hosts/useMagnetDrag.ts — the React binding: drive `scanMagnets` off
  * the drag lane's existing intent reducer, measuring the DOM exactly ONCE
  * per gesture.
  *
@@ -30,8 +30,8 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import type { Point as IntentPoint, IntentOptions, ReleaseOutcome } from "../interaction/dragIntent";
-import { useDragIntent, type DragIntentBinding } from "../interaction/useDragIntent";
+import type { Point as IntentPoint, IntentOptions, ReleaseOutcome } from "../scene/interactions/dragIntent";
+import { useDragIntent, type DragIntentBinding } from "./useDragIntent";
 import {
   EMPTY_MAGNET_SCAN,
   sameMagnetScan,
@@ -42,7 +42,7 @@ import {
   type MagnetPort,
   type MagnetProposal,
   type MagnetScan,
-} from "./magnetProposals";
+} from "../scene/interactions/magnet/magnetProposals";
 
 export interface MagnetFrame {
   /** Ports on the thing being dragged, at their GRAB-TIME position. */

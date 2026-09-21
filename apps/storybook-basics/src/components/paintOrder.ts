@@ -18,7 +18,7 @@
 // files. Replacing them with named tokens below is defined to be a
 // NO-OP — every one of the five reproduces its pre-existing literal
 // exactly, verified by a captured getComputedStyle before/after on the
-// same mounted stories (src/stories/PaintOrder.stories.tsx,
+// same mounted stories (src/components/PaintOrder.stories.tsx,
 // "TokensReproduceTodaysNumbers"; the raw numbers are recorded in
 // docs/provenance/z-order.md). Only `headerChrome` is new — the nesting
 // tier Zach actually asked for (a Block's header/footer must paint above

@@ -3,9 +3,9 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 import { Code2, HelpCircle, Scan, ZoomIn, ZoomOut } from "lucide-react";
 
-import { StatusStrip, type StatusStripItem } from "../components/statusStrip";
-import { ProblemsBadge } from "../components/problemsPanel";
-import { Button } from "../components/button";
+import { StatusStrip, type StatusStripItem } from "./statusStrip";
+import { ProblemsBadge } from "./problemsPanel";
+import { Button } from "./button";
 
 const meta = {
   title: "Basics/StatusStrip",

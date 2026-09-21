@@ -1,5 +1,5 @@
 /**
- * src/detach/definitions/index.ts — the one place a new detachable scene-node
+ * src/hosts/detach/definitions/index.ts — the one place a new detachable scene-node
  * kind is registered. DONOR precedent: packages/adapter-tldraw/src/detach/
  * index.ts's own `DETACHABLE_KINDS` array + comment ("the registry is the one
  * place a new detachable kind is added; nothing else — not the sweep, not

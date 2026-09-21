@@ -4,15 +4,15 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import { Play, Square } from "lucide-react";
 
-import { Badge } from "../components/badge";
-import { Bar, BAR_SIZES } from "../components/bar";
-import { Button } from "../components/button";
-import { EditableText } from "../components/editableText";
-import type { EditableTextProps } from "../components/editableText";
-import { FoldingChevron } from "../components/foldingChevron";
-import { Glyph } from "../components/glyph";
-import { Text } from "../components/text";
-import { Toggle } from "../components/toggle";
+import { Badge } from "./badge";
+import { Bar, BAR_SIZES } from "./bar";
+import { Button } from "./button";
+import { EditableText } from "./editableText";
+import type { EditableTextProps } from "./editableText";
+import { FoldingChevron } from "./foldingChevron";
+import { Glyph } from "./glyph";
+import { Text } from "./text";
+import { Toggle } from "./toggle";
 
 /**
  * WHY this lives here rather than being imported from

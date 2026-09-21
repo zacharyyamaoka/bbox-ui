@@ -4,7 +4,7 @@
 //
 // CONTRACT committed by the planning lane (docs/CHROME-FILES-SETTINGS-PLAN.md);
 // `FileNavigator` THROWS until lane `files-kit` fills it in.
-// `src/stories/FileNavigator.stories.tsx` is the acceptance and is off-limits
+// `src/components/FileNavigator.stories.tsx` is the acceptance and is off-limits
 // to the builder.
 //
 // Donor, read on disk and ported as BEHAVIOUR over stock parts:

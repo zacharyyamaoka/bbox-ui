@@ -1,8 +1,8 @@
 /**
- * src/detach/detachSweep.ts — execute a detach plan: one history stopping
+ * src/hosts/detach/detachSweep.ts — execute a detach plan: one history stopping
  * point, phases in order.
  *
- * DONOR: packages/adapter-tldraw/src/detach/detachSweep.ts (read in full,
+ * DONOR: packages/adapter-tldraw/src/hosts/detach/detachSweep.ts (read in full,
  * 2026-09-18) — the `editor.run` wrapping, the single history mark, the
  * "replace the selection with the replacements" rule and the tool-guard
  * (`editor.getCurrentToolId() !== "select"`, needed because
@@ -20,7 +20,7 @@
  */
 import type { Editor, TLShapeId } from "tldraw";
 
-import type { HostScene } from "../hosts/hostScene";
+import type { HostScene } from "../hostScene";
 import type { DetachableKind, LoweredNode } from "./detachableKind";
 import { planDetach } from "./detachPlan";
 

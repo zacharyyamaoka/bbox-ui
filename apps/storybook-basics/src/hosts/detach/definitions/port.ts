@@ -1,5 +1,5 @@
 /**
- * src/detach/definitions/port.ts — a Port's appearance expressed as
+ * src/hosts/detach/definitions/port.ts — a Port's appearance expressed as
  * editable stock tldraw primitives, measured off the live DOM.
  *
  * This is the bottom of the detach hierarchy in this app the same way it is

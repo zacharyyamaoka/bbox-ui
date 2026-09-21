@@ -1,4 +1,4 @@
-// src/stories/TraceInteractive.stories.tsx — D5 of
+// src/components/TraceInteractive.stories.tsx — D5 of
 // docs/TRACE-CONTROL-POINTS-PLAN.md, Zach's own ask by name: "right now the
 // galleries are like static, but now this can make it interactive so we can
 // see how it works." Every other `Trace*.stories.tsx` in this folder draws a
@@ -15,8 +15,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactNode } from "react";
 import { expect, waitFor } from "storybook/test";
 
-import { TraceEditor } from "../components/traceEditor";
-import type { Point, TraceRouting, TraceTerminalSpec } from "../components/trace.layout";
+import { TraceEditor } from "./traceEditor";
+import type { Point, TraceRouting, TraceTerminalSpec } from "./trace.layout";
 
 /* ------------------------------------------------------------------ */
 /* Shared page scaffolding                                              */

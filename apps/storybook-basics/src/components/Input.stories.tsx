@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { Input } from "../components/input";
+import { Input } from "./input";
 
 /**
  * Stock shadcn `base-nova` Input (components/input.tsx) — the navigator's

@@ -11,7 +11,7 @@
  * `elbow`'s. `pnpm test-stories`
  * deliberately still runs ONLY the `storybook` project (its own module doc
  * says why), so every claim here is ALSO measured in a real browser by
- * `src/stories/BlockPort.stories.tsx`, which is what proves this lane's own
+ * `src/components/BlockPort.stories.tsx`, which is what proves this lane's own
  * work rather than this file alone.
  */
 import { describe, expect, it } from "vitest";

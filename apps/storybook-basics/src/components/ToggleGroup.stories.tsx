@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { AlignCenter, AlignLeft, AlignRight, Grid2x2, List, Rows3 } from "lucide-react";
 
-import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
 
 /**
  * Segmented toggles — view mode, filters, density, table layout

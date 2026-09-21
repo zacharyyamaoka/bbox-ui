@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import { EllipsisVertical } from "lucide-react";
 
-import { Button } from "../components/button";
+import { Button } from "./button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../components/dropdown-menu";
+} from "./dropdown-menu";
 
 /**
  * The burger/kebab menu — React Flow UI's own "Node With Actions" demo

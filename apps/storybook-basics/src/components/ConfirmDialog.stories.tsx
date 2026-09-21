@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { Button } from "../components/button";
-import { ConfirmDialog, useConfirm } from "../components/confirmDialog";
+import { Button } from "./button";
+import { ConfirmDialog, useConfirm } from "./confirmDialog";
 
 /**
  * The trunk's confirmation surface — the "are you sure?" every host needs

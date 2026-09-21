@@ -25,7 +25,7 @@ import {
   ToolDock,
   type FamilyDeclaration,
   type ToolDockProps,
-} from "../components/toolDock";
+} from "./toolDock";
 import {
   DEFAULT_TOOLBAR_PREFERENCES,
   arrowPresetForActivation,
@@ -34,7 +34,7 @@ import {
   arrowPresetToolId,
   parseToolbarPreferences,
   type ArrowPreset,
-} from "../components/toolPreferences";
+} from "./toolPreferences";
 
 /**
  * Demo data below stands in for what a HOST would build once, close over

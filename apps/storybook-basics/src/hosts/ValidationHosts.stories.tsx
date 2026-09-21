@@ -2,11 +2,11 @@ import { useCallback, useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { ReactFlowHost } from "../hosts/reactFlowHost";
-import { TldrawHost } from "../hosts/tldrawHost";
-import type { Decorate } from "../hosts/nodeViews";
-import type { HostScene } from "../hosts/hostScene";
-import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "../hosts/validationScene";
+import { ReactFlowHost } from "./reactFlowHost";
+import { TldrawHost } from "./tldrawHost";
+import type { Decorate } from "./nodeViews";
+import type { HostScene } from "./hostScene";
+import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "./validationScene";
 import { connectionAvailability, type PortAvailability } from "../scene/availability";
 import { typesIntersect } from "../scene/lint";
 import { portKey, type ScenePortRef } from "../scene/scene";

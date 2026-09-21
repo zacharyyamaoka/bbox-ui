@@ -727,7 +727,7 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
           // the canvas claims a contested press 3px before a dnd-kit rail
           // (activation constraint 4) ever sees it — the more specific
           // owner has to arm first, not last. Matches the rail's own
-          // constraint; `src/interaction/dragPolicy.ts` is read-only from
+          // constraint; `src/scene/interactions/dragPolicy.ts` is read-only from
           // here (another workflow owns `src/interaction/**`), so this is
           // the one number from that lane's list this file can safely take
           // without editing it.

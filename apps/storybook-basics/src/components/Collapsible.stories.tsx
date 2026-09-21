@@ -3,14 +3,14 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { Bar } from "../components/bar";
-import { Collapsible, CollapsibleContent } from "../components/collapsible";
-import { EditableText } from "../components/editableText";
-import { FoldingChevron } from "../components/foldingChevron";
+import { Bar } from "./bar";
+import { Collapsible, CollapsibleContent } from "./collapsible";
+import { EditableText } from "./editableText";
+import { FoldingChevron } from "./foldingChevron";
 
 /**
  * `FoldingChevron` as its own standalone, story-able unit — the trigger
- * `Block`'s real header wiring (src/stories/Block.stories.tsx's
+ * `Block`'s real header wiring (src/components/Block.stories.tsx's
  * `CollapsibleHeader`) reuses. Wired here to `Collapsible` so the chevron's
  * rotation and a real hide/show panel are both demoed together.
  */

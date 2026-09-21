@@ -13,8 +13,8 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
 
-import { PORT_STATES, Port } from "../components/port";
-import { PORT_HIT_PX } from "../components/port.layout";
+import { PORT_STATES, Port } from "../port";
+import { PORT_HIT_PX } from "../port.layout";
 import {
   Checkbox,
   ConstantSlider,
@@ -24,8 +24,8 @@ import {
   ZoomStage,
   hitTargetAt,
   type HitTarget,
-} from "../hitRegions/harness";
-import { ZOOM_LEVELS, effectiveHitValue, screenHitValue, type HitPolicy } from "../hitRegions/hitPolicy";
+} from "./harness.fixture";
+import { ZOOM_LEVELS, effectiveHitValue, screenHitValue, type HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
   title: "Hit Regions/Port",

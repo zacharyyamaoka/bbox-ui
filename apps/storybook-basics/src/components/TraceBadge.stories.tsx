@@ -2,9 +2,9 @@ import { useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } 
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
 
-import { TraceBody, type TraceProps } from "../components/trace";
-import { TraceBadge } from "../components/traceBadge";
-import { TraceTerminal } from "../components/traceTerminal";
+import { TraceBody, type TraceProps } from "./trace";
+import { TraceBadge } from "./traceBadge";
+import { TraceTerminal } from "./traceTerminal";
 import {
   LABEL_POSITION_MAX,
   LABEL_POSITION_MIN,
@@ -15,7 +15,7 @@ import {
   polylinePath,
   type Point,
   type TraceTerminalSpec,
-} from "../components/trace.layout";
+} from "./trace.layout";
 
 /* ------------------------------------------------------------------ */
 /* Fixtures. Both are hand-written vertex lists — no router involved,   */

@@ -1,7 +1,7 @@
 // src/components/traceEditor.stories.tsx — the editor's STATES, colocated
 // with the component.
 //
-// WHY this is not a second copy of `src/stories/TraceInteractive.stories.tsx`:
+// WHY this is not a second copy of `src/components/TraceInteractive.stories.tsx`:
 // that file is the D5 gallery — the hero, the routings, and the two
 // acceptance gestures (A7 add / A8 collapse) driven end to end. This one
 // pins the states around those gestures that nothing currently measures:

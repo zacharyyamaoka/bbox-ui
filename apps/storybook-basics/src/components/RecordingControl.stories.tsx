@@ -1,4 +1,4 @@
-// src/stories/RecordingControl.stories.tsx — the recorder, driven.
+// src/components/RecordingControl.stories.tsx — the recorder, driven.
 //
 // The control is a pure surface (src/components/recordingControl.tsx) and the
 // machine is a pure core (src/recording/recordingCore.ts), so the ONE thing
@@ -15,8 +15,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { RecordingControl } from "../components/recordingControl";
-import { RecordingViewer } from "../components/recordingViewer";
+import { RecordingControl } from "./recordingControl";
+import { RecordingViewer } from "./recordingViewer";
 import {
   createFakeRecordingEffects,
   type FakeRecordingEffects,

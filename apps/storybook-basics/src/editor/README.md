@@ -74,7 +74,7 @@ Split the same way this kit already splits pure-vs-chrome:
   placement math, re-expressed as a pure function of an already-measured
   size instead of a live tldraw reactor.
 
-See `src/stories/EdgeDropMenu.stories.tsx` for the host-adapter pattern
+See `src/editor/EdgeDropMenu.stories.tsx` for the host-adapter pattern
 this establishes: the story owns the pointer gesture and the demo catalog;
 the kit component owns none of either.
 
@@ -113,7 +113,7 @@ selection earning neither gets an empty list rather than two dead rows.
 **Where the chrome lives: not here.** One `MenuAction[]` feeds a
 `ContextMenuGroup` *and* a dropdown *and* a `FloatingToolbar` cluster, so
 they cannot drift apart (`docs/menus/MENU-KIT-DESIGN.md` §5). This file
-never names a component. `src/stories/SourceActions.stories.tsx` is the
+never names a component. `src/editor/SourceActions.stories.tsx` is the
 reference host: it owns the right-click gesture, the selection model, the
 story-local scene adapter, and a bottom-right backend switch so both sides
 of the gate are visible without a URL flag — and its three play functions

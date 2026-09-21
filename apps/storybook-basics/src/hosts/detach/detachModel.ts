@@ -1,8 +1,8 @@
 /**
- * src/detach/detachModel.ts — what a detached group remembers about the
+ * src/hosts/detach/detachModel.ts — what a detached group remembers about the
  * scene node it used to be.
  *
- * DONOR: packages/adapter-tldraw/src/detach/detachModel.ts (read in full,
+ * DONOR: packages/adapter-tldraw/src/hosts/detach/detachModel.ts (read in full,
  * 2026-09-18) — the record shape, `toJsonSafe`/`sanitize`, `detachMeta`,
  * `readDetachedRecord` and their doc comments are ported near-verbatim from
  * that file (the donor's own header: "Everything here is pure: values in,
@@ -18,7 +18,7 @@
  */
 import type { JsonObject } from "tldraw";
 
-import type { HostNodeData } from "../hosts/hostScene";
+import type { HostNodeData } from "../hostScene";
 
 /** The single key bbox-ui's detach kit claims inside any shape's `meta`. */
 export const BBOX_UI_META_KEY = "bboxUiDetach";

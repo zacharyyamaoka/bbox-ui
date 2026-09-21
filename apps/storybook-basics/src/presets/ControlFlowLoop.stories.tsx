@@ -38,7 +38,7 @@ import {
   LOOP_WITH_BREAK,
   LOOP_WITH_TURN,
   WHILE_LOOP_RECHECK,
-} from "../presets/loop/loop.fixtures";
+} from "./loop/loop.fixtures";
 import {
   expectControlMark,
   expectCornerPorts,

@@ -28,9 +28,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { PORT_VARIANTS, type PortVariantId } from "../skin/portVariants";
-import { drawsHeaderRule, REGION_VARIANTS, type RegionVariantId } from "../skin/regionVariants";
-import { BranchInLoop } from "./ControlFlowGallery.stories";
+import { PORT_VARIANTS, type PortVariantId } from "./portVariants";
+import { drawsHeaderRule, REGION_VARIANTS, type RegionVariantId } from "./regionVariants";
+import { BranchInLoop } from "../presets/ControlFlowGallery.stories";
 
 const meta = {
   title: "Control Flow/Variant Gallery",

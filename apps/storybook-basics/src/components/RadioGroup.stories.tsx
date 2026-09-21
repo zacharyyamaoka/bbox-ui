@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { RadioGroup, RadioGroupItem } from "../components/radio-group";
+import { RadioGroup, RadioGroupItem } from "./radio-group";
 
 /**
  * Stock shadcn `base-nova` RadioGroup (components/radio-group.tsx) —

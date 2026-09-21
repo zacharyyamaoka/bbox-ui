@@ -1,4 +1,4 @@
-// src/stories/ElbowDirectionMatrix.stories.tsx — the direction sweep Zach
+// src/components/elbow/ElbowDirectionMatrix.stories.tsx — the direction sweep Zach
 // asked for, verbatim: "test all directions of possible edges as well. each
 // port could potentially have 4 output directions... I also want to see top
 // to bottom." Measured before this file existed: across the four existing
@@ -33,8 +33,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { DIR_VECTOR, TRACE_DIRS, type Point, type TraceDir, type TraceTerminalSpec } from "../components/trace.layout";
-import { DEFAULT_ELBOW_OPTIONS, type ElbowRect } from "../components/elbow/index";
+import { DIR_VECTOR, TRACE_DIRS, type Point, type TraceDir, type TraceTerminalSpec } from "../trace.layout";
+import { DEFAULT_ELBOW_OPTIONS, type ElbowRect } from "./index";
 import {
   DirectionCell,
   Gallery,

@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import { ArrowLeft, ArrowRight, Box, Frame, GitBranch, Home, Menu, MousePointer, Pencil, Plus, Square } from "lucide-react";
 
-import { Bar, BAR_SIZES } from "../components/bar";
-import { Toolbar, ToolbarButton, ToolbarGroup, ToolbarLink, ToolbarSeparator } from "../components/toolbar";
+import { Bar, BAR_SIZES } from "./bar";
+import { Toolbar, ToolbarButton, ToolbarGroup, ToolbarLink, ToolbarSeparator } from "./toolbar";
 
 /**
  * `Toolbar` is the roving-focus container underneath three of the nine

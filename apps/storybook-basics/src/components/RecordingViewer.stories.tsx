@@ -1,4 +1,4 @@
-// src/stories/RecordingViewer.stories.tsx — the player on its own.
+// src/components/RecordingViewer.stories.tsx — the player on its own.
 //
 // `RecordingControl.stories.tsx` proves the two are wired together; this file
 // proves the player itself against the design it reproduces —
@@ -8,8 +8,8 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { Button } from "../components/button";
-import { RecordingViewer } from "../components/recordingViewer";
+import { Button } from "./button";
+import { RecordingViewer } from "./recordingViewer";
 import { SAMPLE_RECORDING_BUNDLE } from "../recording/sampleRecording";
 
 const node = (id: string) => document.querySelector<HTMLElement>(`[data-testid="recording-viewer-${id}"]`);

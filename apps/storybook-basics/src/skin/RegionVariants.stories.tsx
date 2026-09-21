@@ -76,8 +76,8 @@ import {
   REGION_VARIANTS,
   regionVariantAttrs,
   type RegionVariantId,
-} from "../skin/regionVariants";
-import { expectArmsStacked, expectCornerPorts, expectRegionExpanded, expectRegionOpaque } from "./controlFlow.acceptance";
+} from "./regionVariants";
+import { expectArmsStacked, expectCornerPorts, expectRegionExpanded, expectRegionOpaque } from "../presets/controlFlow.acceptance";
 
 const meta = {
   title: "Control Flow/Region Variants",

@@ -1,5 +1,5 @@
 /**
- * src/detach/rebuildContextMenu.tsx — the right-click "Rebuild" menu item
+ * src/hosts/detach/rebuildContextMenu.tsx — the right-click "Rebuild" menu item
  * Zach asked for: "When you do rebuild, it detects if there is rebuild
  * info in the group you selected and displays the option in the right
  * click menu."
@@ -29,7 +29,7 @@
  */
 import { DefaultContextMenu, DefaultContextMenuContent, TldrawUiMenuGroup, TldrawUiMenuItem, useEditor, useValue } from "tldraw";
 
-import { useTldrawHostScene } from "../hosts/tldrawHost";
+import { useTldrawHostScene } from "../tldrawHost";
 import { rebuildDetachedShapes, selectedRebuildableIds } from "./rebuild";
 
 /**

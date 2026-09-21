@@ -1,5 +1,5 @@
 /**
- * src/magnet/magnetPortTypes.ts — the data-type gate a magnet proposal is
+ * src/scene/interactions/magnet/magnetPortTypes.ts — the data-type gate a magnet proposal is
  * judged against (Zach's R4: "it has like a particular data type. so then it
  * would only connect to the port with the correct datatype").
  *

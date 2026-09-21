@@ -1,4 +1,4 @@
-// src/magnet/magnetPortTypes.test.ts — A4: the type gate, table-driven
+// src/scene/interactions/magnet/magnetPortTypes.test.ts — A4: the type gate, table-driven
 // against the DONOR'S OWN table.
 //
 // These are not cases invented to match the port; they are the branches

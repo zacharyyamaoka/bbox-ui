@@ -15,7 +15,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
 
-import { TRACE_HIT_STROKE_PX, TraceBody } from "../components/trace";
+import { TRACE_HIT_STROKE_PX, TraceBody } from "../trace";
 import {
   Checkbox,
   ConstantSlider,
@@ -25,8 +25,8 @@ import {
   ZoomStage,
   hitTargetAt,
   type HitTarget,
-} from "../hitRegions/harness";
-import { effectiveHitValue, type HitPolicy } from "../hitRegions/hitPolicy";
+} from "./harness.fixture";
+import { effectiveHitValue, type HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
   title: "Hit Regions/Trace",

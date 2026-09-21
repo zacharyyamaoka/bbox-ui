@@ -2,15 +2,15 @@ import { useEffect, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import { CompareDialog } from "../components/compareDialog";
-import { compareBoards, type CompareChange, type RecordMap } from "../components/compareModel";
+import { CompareDialog } from "./compareDialog";
+import { compareBoards, type CompareChange, type RecordMap } from "./compareModel";
 import {
   discoverHistory,
   historyProblem,
   versionRecords,
   type CompareVersion,
-} from "../components/compareSource";
-import type { HistoryRecord } from "../components/historyList";
+} from "./compareSource";
+import type { HistoryRecord } from "./historyList";
 import { cn } from "../lib/utils";
 
 /**

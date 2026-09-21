@@ -2,26 +2,26 @@ import { useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
 
-import { Button } from "../components/button";
-import { Trace, TraceBody } from "../components/trace";
+import { Button } from "./button";
+import { Trace, TraceBody } from "./trace";
 import {
   ASYNC_CARRIER_PX,
   asyncDashOffsetForLength,
   polylineLength,
   polylinePath,
   type Point,
-} from "../components/trace.layout";
-import { TraceTerminal } from "../components/traceTerminal";
+} from "./trace.layout";
+import { TraceTerminal } from "./traceTerminal";
 import {
   CROSSING_CASING_WIDTH,
   DEFAULT_CROSSING_MARK,
   type CrossingMark,
-} from "../components/trace.crossing";
+} from "./trace.crossing";
 import {
   TUNNEL_STUB_LENGTH,
   tunnelDisplayState,
   type TunnelDisplayState,
-} from "../components/tunnel";
+} from "./tunnel";
 import { SketchAtEdge } from "../skin/SketchAtEdge";
 import { SKETCH_TWIN_ATTR } from "../skin/sketchAtEdge";
 import type { BlockScene } from "../scene/scene";

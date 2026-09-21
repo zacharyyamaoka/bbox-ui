@@ -20,7 +20,7 @@ import { type Wire } from "../components/wiring";
 import { wiredPorts, type SceneEdgeEnds } from "../scene/scene";
 import { withWiredState } from "../scene/sceneWires";
 import { WireLayer } from "../components/wireLayer";
-import { ValueCapsule, VALUE_PILL_RADIUS_CLAMP_PX } from "../presets/value/value";
+import { ValueCapsule, VALUE_PILL_RADIUS_CLAMP_PX } from "./value/value";
 
 /**
  * Presets/Value — the Value capsule, the first entry in the presets

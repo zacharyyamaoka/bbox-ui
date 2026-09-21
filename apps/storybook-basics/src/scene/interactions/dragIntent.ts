@@ -1,5 +1,5 @@
 /**
- * src/interaction/dragIntent.ts — "sense the click and drag motion".
+ * src/scene/interactions/dragIntent.ts — "sense the click and drag motion".
  *
  * Zach, `PROJECT - Black Box UI.md:2504`: *"generally where I just 1 click
  * and drag I want it to move, even if it hasn't been selected prior, you

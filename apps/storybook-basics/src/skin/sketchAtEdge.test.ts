@@ -2,7 +2,7 @@
 // sketch transform out of the core and onto the boundary.
 //
 // These are node tests (the `unit` project): pure string math, no DOM. The
-// DOM half of the pass is proven in `src/stories/SkinAtTheEdges.stories.tsx`,
+// DOM half of the pass is proven in `src/skin/SkinAtTheEdges.stories.tsx`,
 // where a play function reads the core's OWN live twin out of the rendered
 // document and compares it to the boundary's — an independent oracle in the
 // strict sense, since the core's twin is the shipped implementation this

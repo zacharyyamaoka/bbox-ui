@@ -10,8 +10,8 @@ import type { PortEdgeItem } from "../components/portEdge";
 import { TRACE_TERMINAL_GAP } from "../components/trace";
 import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "../components/trace.layout";
 import { WireLayer } from "../components/wireLayer";
-import { type BlockScene, type SceneData, type ScenePosition, wiredPorts } from "../scene/scene";
-import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
+import { type BlockScene, type SceneData, type ScenePosition, wiredPorts } from "./scene";
+import { sceneWires, withWiredState, type WireStyleData } from "./sceneWires";
 
 /**
  * Basics/CollapseWireEndpoints — Zach, reacting to a screenshot of a Block's

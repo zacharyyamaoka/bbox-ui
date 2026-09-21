@@ -1,5 +1,5 @@
 /**
- * src/magnet/magnetProposals.ts — "magnetic wire proposals", as one pure
+ * src/scene/interactions/magnet/magnetProposals.ts — "magnetic wire proposals", as one pure
  * function: which stationary port could the port I am dragging connect to
  * right now?
  *
@@ -56,15 +56,15 @@
  *     graph-global scalar — neither is prior art for a per-port magnet.
  */
 
-import { effectiveHitValue } from "../hitRegions/hitPolicy";
-import { portKey, type SceneEdgeEnds, type ScenePortRef } from "../scene/scene";
+import { effectiveHitValue } from "../../hitPolicy";
+import { portKey, type SceneEdgeEnds, type ScenePortRef } from "../../scene";
 // TYPES ONLY, never the function. `scene/edgeValidation.ts` belongs to the
 // linter lane and may move or be renamed under us; a structural judge
 // callback costs one line at the call site when it does, where an import of
 // `validateConnection` would cost a rebuild. `Diagnostic` is deliberately
 // NOT named here at all — post-rename it lives in `components/highlighter.tsx`
 // (edgeValidation.ts:49), and `src/components/**` is another lane's write set.
-import { gestureOrientation, type ConnectionMessage, type ConnectionVerdict } from "../scene/edgeValidation";
+import { gestureOrientation, type ConnectionMessage, type ConnectionVerdict } from "../../edgeValidation";
 import { arePortTypesCompatible, type PortTypeMatching } from "./magnetPortTypes";
 
 export interface Point {

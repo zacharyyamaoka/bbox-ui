@@ -11,7 +11,7 @@ import { createControlRegistry, type ControlDefinition } from "./controlRegistry
  * popover-bearing trigger opens, one renderer driven entirely by
  * `data-layout`, never by `control.kind`.
  *
- * WHY this file exists beside src/stories/ControlStrip.stories.tsx, which
+ * WHY this file exists beside src/components/ControlStrip.stories.tsx, which
  * also renders it: that page is the STRIP's page — it opens real triggers
  * and galleries the five layouts side by side so their shapes can be
  * compared. This one is the panel's own rules, the ones a gallery cannot
@@ -133,7 +133,7 @@ const meta = {
   // typegen requires every story to satisfy them. Each story below builds
   // its own real `BoundControl` inside `render`; this fixture exists only to
   // make the required-args contract type-check — same device
-  // src/stories/ControlStrip.stories.tsx uses for the same reason.
+  // src/components/ControlStrip.stories.tsx uses for the same reason.
   args: {
     control: registry.bindControl("lineStyle", {
       id: "meta-placeholder",

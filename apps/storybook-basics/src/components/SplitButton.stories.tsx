@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import { SplitButton } from "../components/splitButton";
+import { SplitButton } from "./splitButton";
 
 /**
  * "Merge ▾" (docs/menus/screenshots/09-draft-title-bar.png) — GitHub's

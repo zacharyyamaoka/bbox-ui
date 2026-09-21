@@ -1,5 +1,5 @@
 /**
- * src/hitRegions/harness.tsx — the shared stage every `Hit Regions/*`
+ * src/components/hitRegions/harness.fixture.tsx — the shared stage every `Hit Regions/*`
  * story stands on: zoom control, policy control, per-constant slider, and
  * the live hit probe.
  *
@@ -24,9 +24,18 @@
  * live on the component side (`src/components/hitRegion.ts`); the split
  * is the same core/consumer line the repo already draws.
  */
+/* WHY the `.fixture` suffix (2026-09-21, the kit refactor): this file is a
+ * STORY harness, not kit source — it exists only so the six `HitRegions*`
+ * stories beside it share one bench. It imports `scene/hitPolicy`, which
+ * `layering.test.ts`'s import wall forbids to anything under `components/`,
+ * and rightly so: the wall's rule is "a component cannot reach into the
+ * scene kit". Naming it by the convention `elbow/elbowDirections.fixture.tsx`
+ * already set is what lets that wall stay a stated rule (source vs. story
+ * support) instead of growing a hand-maintained allowlist of exceptions. */
+
 import { useState, type CSSProperties, type ReactNode } from "react";
 
-import { HIT_POLICY_LABELS, ZOOM_LEVELS, type HitPolicy } from "./hitPolicy";
+import { HIT_POLICY_LABELS, ZOOM_LEVELS, type HitPolicy } from "../../scene/hitPolicy";
 
 /* ------------------------------------------------------------------ */
 /* Small controls — same local-control idiom the existing story files  */

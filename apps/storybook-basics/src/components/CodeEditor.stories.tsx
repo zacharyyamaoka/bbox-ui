@@ -4,8 +4,8 @@ import { python } from "@codemirror/lang-python";
 import type { EditorView } from "@codemirror/view";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { CodeEditor } from "../components/codeEditor";
-import { CODE_EDITOR_THEMES } from "../components/codeEditorTheme";
+import { CodeEditor } from "./codeEditor";
+import { CODE_EDITOR_THEMES } from "./codeEditorTheme";
 
 /**
  * `CodeEditor` is controlled — the host owns `value` — so every interactive

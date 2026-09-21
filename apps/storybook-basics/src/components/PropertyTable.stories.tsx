@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 
-import { PropertyTable, type ElementReview, type TableLayout } from "../components/propertyTable";
-import { compareBoards, type RecordMap } from "../components/compareModel";
+import { PropertyTable, type ElementReview, type TableLayout } from "./propertyTable";
+import { compareBoards, type RecordMap } from "./compareModel";
 
 /**
  * The Compare dialog's Properties view

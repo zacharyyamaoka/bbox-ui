@@ -1,5 +1,5 @@
 /**
- * src/magnet/magnetProposalLayer.tsx — the paint: a magnet proposal drawn as
+ * src/editor/magnetProposalLayer.tsx — the paint: a magnet proposal drawn as
  * a dotted `Trace`, plus every fact a play function needs stamped onto
  * `data-magnet-*` attributes.
  *
@@ -36,7 +36,7 @@
 import { HIT_REGION_FILL, HIT_REGION_LINE } from "../components/hitRegion";
 import { Trace } from "../components/trace";
 import { portKey } from "../scene/scene";
-import { effectiveMagnetRadius, MAGNET_DEFAULT_RADIUS, type MagnetPort, type MagnetProposal, type MagnetScan } from "./magnetProposals";
+import { effectiveMagnetRadius, MAGNET_DEFAULT_RADIUS, type MagnetPort, type MagnetProposal, type MagnetScan } from "../scene/interactions/magnet/magnetProposals";
 
 export interface MagnetProposalLayerProps {
   enabled: boolean;

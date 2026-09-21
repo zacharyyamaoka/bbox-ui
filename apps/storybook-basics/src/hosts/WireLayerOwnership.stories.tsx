@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "../hosts/domCanvas";
-import type { HostScene } from "../hosts/hostScene";
+import { DomCanvas } from "./domCanvas";
+import type { HostScene } from "./hostScene";
 
 /**
  * Blocks/Host Fixes/Wire Layer Ownership — regression for

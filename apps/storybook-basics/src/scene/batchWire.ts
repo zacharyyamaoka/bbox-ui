@@ -43,6 +43,7 @@
 // UI.md:2748, "I think two things"); the code's names are the two above.
 // See `BatchWireIntent`.
 import { childrenOf, portKey, type BlockScene, type SceneData, type SceneEdge } from "./scene";
+import type { PortsOf } from "./model";
 
 /* ------------------------------------------------------------------ */
 /* Vocabulary                                                          */
@@ -169,7 +170,13 @@ export type WireJudge = (candidate: BatchWirePair) => WireVerdict;
  * hidden-ness concept, a host that hides a port simply omits it here —
  * one place decides what exists.
  */
-export type PortsOf = (nodeId: string) => readonly string[] | undefined;
+// DEDUPED 2026-09-21: this file declared `PortsOf` a second time, byte-for
+// -byte identical to `lint.ts`'s. Two identical exported declarations in one
+// kit is two things that can drift, so the single declaration now lives in
+// `./model` and both files re-export it — the doc comment above is kept
+// because it carries this call site's OWN "live ports" argument, which the
+// model file has no business stating.
+export type { PortsOf };
 
 /**
  * A port's NAME, for the name-match tiebreak. Defaults to the port id.

@@ -244,7 +244,7 @@ export function distributionStyle(axis: "row" | "column", distribution: Distribu
  * variable-width card lane needs a caller-side sum over real slot rects,
  * not a closed form).
  *
- * `apps/storybook-basics/src/stories/OffsetPaddingFor.stories.tsx`'s
+ * `apps/storybook-basics/src/components/OffsetPaddingFor.stories.tsx`'s
  * `OverlaidOffsetLanes` story is the regression: it renders two PortEdge
  * tracks sharing one coordinate frame with this formula as the trailing
  * track's `edgePadding`, and asserts — via real `getBoundingClientRect`

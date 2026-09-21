@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
 import { Info, SlidersHorizontal, Palette } from "lucide-react";
 
-import { SettingsView, type SettingsCategory } from "../components/settingsView";
+import { SettingsView, type SettingsCategory } from "./settingsView";
 
 /**
  * ACCEPTANCE for the judge's P2-8, settings half: the category nav is stock

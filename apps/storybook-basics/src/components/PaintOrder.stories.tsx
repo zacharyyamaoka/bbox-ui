@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { Block } from "../components/block";
-import type { BlockMember } from "../components/blockMembers";
-import { BlockPort } from "../components/blockPort";
-import { PAINT_TIER_ORDER, paintTier } from "../components/paintOrder";
-import type { PortEdgeItem } from "../components/portEdge";
-import { PortEdge } from "../components/portEdge";
+import { Block } from "./block";
+import type { BlockMember } from "./blockMembers";
+import { BlockPort } from "./blockPort";
+import { PAINT_TIER_ORDER, paintTier } from "./paintOrder";
+import type { PortEdgeItem } from "./portEdge";
+import { PortEdge } from "./portEdge";
 
 /**
  * Basics/PaintOrder — Card 04's measured suite: paintOrder.ts's ladder,

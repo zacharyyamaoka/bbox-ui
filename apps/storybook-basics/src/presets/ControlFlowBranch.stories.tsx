@@ -42,7 +42,7 @@ import {
   BRANCH_NESTED,
   BRANCH_ONE_INPUT,
   MATCH_CASE,
-} from "../presets/branch/branch.fixtures";
+} from "./branch/branch.fixtures";
 import {
   expectArmsStacked,
   expectCornerPorts,

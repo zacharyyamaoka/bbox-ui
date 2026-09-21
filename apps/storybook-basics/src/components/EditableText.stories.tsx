@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
-import { EditableText } from "../components/editableText";
+import { EditableText } from "./editableText";
 
 /**
  * `EditableText` is controlled — the host owns `editing`/the value — so every

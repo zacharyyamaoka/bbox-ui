@@ -1,4 +1,4 @@
-// src/magnet/magnetProvenance.test.ts — A12: the attribution gate.
+// src/scene/interactions/magnet/magnetProvenance.test.ts — A12: the attribution gate.
 //
 // `.claude/feedback.md`, 2026-09-17: "Every file implementing real math
 // cites where it came from... A citation must point at a file that exists on
@@ -21,7 +21,25 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-const read = (name: string) => readFileSync(fileURLToPath(new URL(`./${name}`, import.meta.url)), "utf8");
+/**
+ * The four sources this gate reads, each by its own path.
+ *
+ * WHY a table rather than `./${name}` (2026-09-21, the kit refactor): the
+ * four files no longer share a directory. The pure model (`magnetProposals`,
+ * `magnetPortTypes`) is scene-side; the React binding `useMagnetDrag` is
+ * host-side; the paint layer `magnetProposalLayer` is editor-side — the
+ * split the DAG asks for. The attribution still has to travel with all four,
+ * so the gate follows them instead of assuming they stayed together.
+ */
+const SOURCE_PATHS = {
+  "magnetProposals.ts": "./magnetProposals.ts",
+  "magnetPortTypes.ts": "./magnetPortTypes.ts",
+  "useMagnetDrag.ts": "../../../hosts/useMagnetDrag.ts",
+  "magnetProposalLayer.tsx": "../../../editor/magnetProposalLayer.tsx",
+} as const;
+
+const read = (name: keyof typeof SOURCE_PATHS) =>
+  readFileSync(fileURLToPath(new URL(SOURCE_PATHS[name], import.meta.url)), "utf8");
 
 /**
  * Comment text with the block-comment furniture removed and whitespace
@@ -32,7 +50,7 @@ const read = (name: string) => readFileSync(fileURLToPath(new URL(`./${name}`, i
  */
 const flatten = (source: string) => source.replace(/^\s*\*\s?/gm, "").replace(/\s+/g, " ");
 
-const SOURCES = ["magnetProposals.ts", "magnetPortTypes.ts", "useMagnetDrag.ts", "magnetProposalLayer.tsx"] as const;
+const SOURCES = Object.keys(SOURCE_PATHS) as (keyof typeof SOURCE_PATHS)[];
 
 /**
  * Every donor path cited by the four headers, as an absolute path. If a
@@ -70,7 +88,7 @@ describe("A12 · every cited donor path exists on disk", () => {
     // The spec's draft cited @xyflow/system@0.0.79 with line numbers that do
     // not exist here. Pin the version the headers name against the real
     // package, so a future bump makes the citation fail instead of rot.
-    const pkg = fileURLToPath(new URL("../../../../node_modules/.pnpm/@xyflow+system@0.0.82/node_modules/@xyflow/system/package.json", import.meta.url));
+    const pkg = fileURLToPath(new URL("../../../../../../node_modules/.pnpm/@xyflow+system@0.0.82/node_modules/@xyflow/system/package.json", import.meta.url));
     expect(existsSync(pkg)).toBe(true);
     expect(JSON.parse(readFileSync(pkg, "utf8")).version).toBe("0.0.82");
   });
