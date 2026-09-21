@@ -13,7 +13,9 @@
 // custom shape AND two real bindings", never an arrow. The shape owns the
 // paint and the hit geometry; `WireBindingUtil` owns which port each end
 // landed on.
-import { Polyline2d, ShapeUtil, T, createShapePropsMigrationSequence, type TLBaseShape, type TLShapeUtilCanBindOpts } from "tldraw";
+import { Polyline2d, ShapeUtil, T, createShapePropsMigrationSequence, type Editor, type TLBaseShape, type TLShapeUtilCanBindOpts, type VecLike } from "tldraw";
+
+import { TRACE_HIT_CORRIDOR_PX } from "@trunk/components/trace.hit";
 
 import { PointV } from "../shared/props";
 import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
@@ -38,6 +40,63 @@ declare module "@tldraw/tlschema" {
 }
 
 export type WireShape = TLBaseShape<"ss-wire", WireShapeProps>;
+
+/**
+ * The cable's polyline, widened into a GRAB CORRIDOR (P-003).
+ *
+ * THE PROBLEM. A wire paints a 2px line, and tldraw hit-tests an open
+ * geometry at `distance < editor.getHitTestMargin()` — 3 screen px either
+ * side of the centreline (`@tldraw/editor` `Editor.getShapeAtPoint`, the
+ * final `else` of its per-shape loop, and `options.hitTestMargin: 3`). So a
+ * cable could only be grabbed inside a 6px-wide corridor, which in practice
+ * meant grabbing it at its ENDS, where the dots are big enough to aim at.
+ *
+ * WHY THE PAD LIVES ON `distanceToPoint` AND NOT ANYWHERE ELSE. Three
+ * tempting alternatives, each rejected for a measured reason:
+ *
+ *   - `editor.options.hitTestMargin` is GLOBAL. Raising it to 6 widens the
+ *     ring around every block and region too, and `blockHitTest.smoke.test.tsx`
+ *     is built on that ring being 3.
+ *   - a `ShapeUtil.hitTestPoint` override does not exist as a seam:
+ *     `getShapeAtPoint` reads `geometry.distanceToPoint` directly and never
+ *     asks the util.
+ *   - a CLOSED ribbon polygon around the route changes which BRANCH of
+ *     `getShapeAtPoint` the cable is judged by, and that branch skips any
+ *     shape whose page bounds contain the viewport (`continue`) — i.e. a long
+ *     cable stops being clickable exactly when you zoom in on it.
+ *
+ * Overriding `distanceToPoint` is the one lever that widens SELECTION and
+ * HOVER together, because `Polyline2d.hitTestPoint` is literally
+ * `distanceToPoint(point, hitInside) <= margin` and `isPointInShape` goes
+ * through it. `nearestPoint` is deliberately NOT touched: binding and snapping
+ * must keep landing on the real centreline, not on the corridor's edge.
+ *
+ * WHY THE PAD IS READ LIVE INSTEAD OF BAKED IN AT CONSTRUCTION: the corridor
+ * is a SCREEN measurement (12 screen px, the trunk's own `TRACE_HIT_CORRIDOR_PX`)
+ * while the geometry is in page space, so the conversion needs the current
+ * zoom. tldraw caches the geometry OBJECT per shape record, not per camera —
+ * a zoom-dependent number computed in the constructor would be stale the
+ * moment anyone scrolled. Reading it inside the method costs one atom read per
+ * hit-test and is always right.
+ *
+ * `Math.max(0, …)` is what keeps this from ever making a cable HARDER to hit
+ * than stock: on a coarse pointer tldraw already uses a larger margin
+ * (`coarseHitTestMargin`), and there the pad is simply zero.
+ */
+class WireGrabCorridor extends Polyline2d {
+  constructor(
+    config: ConstructorParameters<typeof Polyline2d>[0],
+    private readonly editor: Editor,
+  ) {
+    super(config);
+  }
+
+  override distanceToPoint(point: VecLike, hitInside?: boolean): number {
+    const stock = this.editor.getHitTestMargin();
+    const wanted = TRACE_HIT_CORRIDOR_PX / 2 / this.editor.getZoomLevel();
+    return super.distanceToPoint(point, hitInside) - Math.max(0, wanted - stock);
+  }
+}
 
 export class WireShapeUtil extends ShapeUtil<WireShape> {
   static override type = WIRE_SHAPE_TYPE;
@@ -125,11 +184,12 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
    *
    * `isFilled` is not offered by `Polyline2d`'s config and does not need to
    * be: a polyline is a line, so a click in the middle of the box a cable
-   * spans is a click on the canvas.
+   * spans is a click on the canvas. How WIDE that line is to a pointer is
+   * `WireGrabCorridor`'s job — see its own note.
    */
   override getGeometry(shape: WireShape) {
     const { from, to } = wireTerminals(this.editor, shape);
-    return new Polyline2d({ points: wireRoutePoints(from, to, shape.props.routing) });
+    return new WireGrabCorridor({ points: wireRoutePoints(from, to, shape.props.routing) }, this.editor);
   }
 
   override getIndicatorPath(shape: WireShape) {

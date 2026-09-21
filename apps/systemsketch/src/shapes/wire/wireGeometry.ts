@@ -23,6 +23,7 @@
 import { Vec, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
 import { traceGeometry } from "@trunk/components/trace";
+import { traceHitPolyline } from "@trunk/components/trace.hit";
 import { OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "@trunk/components/trace.layout";
 
 import { WIRE_BINDING_TYPE } from "../types";
@@ -160,21 +161,28 @@ export function wireTerminals(editor: Editor, wire: WireShape): { from: TraceTer
  * a routing KIND into geometry (`trace.tsx`'s own P6 header). A second copy
  * is how hit geometry and paint start to disagree about where the cable is.
  *
- * The one place they are ALLOWED to disagree, stated rather than hidden:
+ * PAINT AND HIT NOW AGREE FOR ALL FOUR ROUTINGS. Two things used to make them
+ * differ and both are gone:
+ *   - the duplicate FAN moved the PAINT of a duplicate wire by up to ±7px
+ *     perpendicular while the hit polyline stayed put. Retired 2026-09-19 (see
+ *     this file's own `WIRE_TERMINAL_GAP` note).
  *   - a `curved` wire has no vertices (a cubic HAS none, and `traceGeometry`
- *     says so by returning `points: null` rather than inventing some), so its
- *     hit geometry is the chord between its two terminals — up to a few tens
- *     of px away from the drawn bow at its middle;
- * That is now the ONLY one. The duplicate FAN used to be the second — it
- * moved the PAINT of a duplicate wire by up to ±7px perpendicular while the
- * hit polyline stayed put — and it is gone (see this file's own
- * `WIRE_TERMINAL_GAP` note), so paint and hit agree exactly at both ends of
- * every cable. A curve's chord is a paint-vs-hit difference of a few tens of
- * px in the MIDDLE of a 12px-wide hit stroke, and it cannot move an endpoint.
+ *     says so by returning `points: null` rather than inventing some), so this
+ *     function used to fall back to `[geometry.start, geometry.end]` — the
+ *     CHORD. On the default cubic that is tens of px from the drawn bow at its
+ *     middle, so a press on the visible curve landed on empty canvas. Fixed by
+ *     `traceHitPolyline`, which flattens the SAME cubic that is painted (P-003;
+ *     `@trunk/components/trace.hit.ts` and its test measure the agreement
+ *     against the `d` string rather than against a second control-point
+ *     derivation).
+ *
+ * `curve` is not passed because `ss-wire` has no bend to pass — `WireShapeProps`
+ * carries no `curve`, so every curved cable here is the default cubic. The day
+ * P-028 lands an authored bend, it is handed in here and nowhere else.
  */
 export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, routing: TraceRouting): Vec[] {
   const geometry = traceGeometry({ from, to, routing, gap: WIRE_TERMINAL_GAP });
-  const points = geometry.points ?? [geometry.start, geometry.end];
+  const points = traceHitPolyline(geometry);
   // `Polyline2d` needs at least two vertices; a degenerate route (both ends
   // on one point) would otherwise throw inside the engine's segment walk.
   if (points.length < 2) return [new Vec(from.x, from.y), new Vec(to.x, to.y)];
