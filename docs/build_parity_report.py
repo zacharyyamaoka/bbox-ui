@@ -110,6 +110,8 @@ ROWS = [
     },
 ]
 
+AFTER = {'pill-surface': "Fixed dark surface in <strong>both</strong> themes. Measured: bar <code>rgb(30,30,30)</code> — FigJam's traced colour exactly — radius <strong>13px</strong>, and the open popover measures <code>rgb(30,30,30)</code> too, so trigger and panel are one surface.", 'icon-align': '<strong>One baseline.</strong> Measured: distinct content centres <code>[20]</code>, distinct button heights <code>[40]</code>. Fixed at the cause — <code>items-stretch</code> → <code>items-center</code> — not by nudging padding. Mutation-tested: reintroducing the mixed heights turns it red.', 'cell-geometry': "Every cell <strong>40px, radius 5px</strong>, filling the bar as FigJam's do, with 24px glyphs and one shared 16px chevron on each value trigger. The invented 33×32 family was deliberately not copied.", 'chrome-size': "Dock and status-strip cells raised to <strong>40×36 with 18px glyphs</strong> — level with Excalidraw's 40, just under tldraw's 44. And now it is adjustable, which is the next row.", 'interface-scale': '<strong>It applies.</strong> Measured: dock <strong>52 → 78px</strong> at 150%, pill <strong>40 → 60px</strong>, camera identical — the board does not move. Portaled menus scale with the bar that opened them. The pill needed a <code>scale</code> PROP, not CSS: its transform is inline, and the standalone <code>scale:</code> property composes outside <code>transform</code> and walks the pill 98px off its selection (mutation-tested).', 'hit-test': "<strong>Clicking the header selects the block</strong> — verified with a real click in the running app. Implemented the way this repo's own <code>RegionShapeUtil</code> already did it: one <code>isLabel</code> band, <code>excludeFromShapeBounds</code> so the block's bounds are byte-identical. <em>Narrower than your sentence, on purpose:</em> the empty interior still selects nothing, which is the donor's shipped behaviour — a claiming interior stops the frame adopting dropped blocks and kills clicks on what is painted underneath."}
+
 CONTROLS_MISSING = [
     ("Wrap selection", "Wrap into a frame / block / branch / group", "absent", "not built this round — needs <code>wrapSelectionInto</code> ported"),
     ("Tidy edges / Reset routing / Organize", "three layout actions on the pill", "absent", "not built — needs the trunk’s <code>tidyTraces</code> bound to the wire layer"),
@@ -263,7 +265,7 @@ document.getElementById("copy").addEventListener("click",function(){{
 
 
 if __name__ == "__main__":
-    html = build()
+    html = build(AFTER)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(html, encoding="utf-8")
     enc = len(quote(html, safe=""))
