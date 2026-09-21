@@ -11,6 +11,7 @@ import { portKey, wiredPorts, type SceneEdgeEnds } from "./scene";
 import {
   VALIDATION_LEVELS,
   VALIDATION_LEVEL_SPECS,
+  validationLevelSpec,
   enabledRuleCount,
   lintSceneAtLevel,
   type ValidationLevel,
@@ -149,7 +150,9 @@ function LevelBench({ level }: { level: ValidationLevel }) {
     setGeometry(next);
   }, []);
 
-  const spec = VALIDATION_LEVEL_SPECS[level];
+  // Through the accessor, not the record: a level may now BE its own spec
+  // (the caller-supplied rung), and the record is keyed only by the four names.
+  const spec = validationLevelSpec(level);
 
   return (
     <div style={{ fontFamily: "ui-sans-serif, sans-serif" }}>

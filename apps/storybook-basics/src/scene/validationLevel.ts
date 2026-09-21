@@ -62,8 +62,55 @@ import { portKey, type SceneEdgeEnds } from "./scene";
  * - `guided`     — direction and containment are real; types stay free text.
  * - `typed`      — guided, plus declared types must agree, one producer per input.
  * - `strict`     — only edges that could exist in the running program.
+ *
+ * These four are the NAMED rungs — the ones a person presses a button for and
+ * the ones a stored record can spell. `ValidationLevel` below is wider than
+ * this: it also admits a rung the caller builds.
  */
-export type ValidationLevel = "whiteboard" | "guided" | "typed" | "strict";
+export type ValidationLevelId = "whiteboard" | "guided" | "typed" | "strict";
+
+/**
+ * The FIFTH rung, and the reason this type is a union rather than four strings.
+ *
+ * Ruling 3 shipped the four named rungs wired all the way to the board, and
+ * said out loud what it had not closed: the settings panel's NINE individual
+ * permission switches sit underneath the four buttons, and a combination that
+ * matches no button had nowhere to go. Its host snapped it to the nearest
+ * name, which in practice meant the shipped default — so flipping one switch
+ * off `strict` quietly moved the whole board to `guided`, looser on six
+ * questions than the person had just asked for. The settings row said
+ * "Custom"; the board did not.
+ *
+ * So a level is now either a NAME (one of four, which is what a button presses
+ * and what a record stores) or a SPEC the caller built (which is what nine
+ * switches add up to). Everything downstream — `lintRulesForLevel`,
+ * `connectionPolicyForLevel`, `typeStrictnessForLevel`, and therefore
+ * `lintSceneAtLevel` and `validateConnectionAtLevel` — reads it through
+ * `validationLevelSpec`, so the fifth rung needed no second code path.
+ *
+ * WHY the caller supplies the spec rather than this file growing a
+ * `levelFromNineSwitches()`: the nine switches are `components/edgePolicy.ts`'s
+ * vocabulary and this file is in `scene/`, which may not import a component.
+ * More importantly they are ONE host's persisted record — a second host with a
+ * different control surface should not have to speak it. The kit owns what a
+ * rung MEANS; a host owns what its own controls add up to.
+ */
+export const CUSTOM_LEVEL_ID = "custom";
+
+/** A rung the caller built: a full spec, carrying its own `id: "custom"` so a
+ *  readout can tell it apart from the four without a second field. */
+export interface CustomValidationLevel extends ValidationLevelSpec {
+  readonly id: typeof CUSTOM_LEVEL_ID;
+  readonly rules: readonly LintRuleId[];
+  readonly policy: ConnectionPolicy;
+}
+
+/**
+ * One of the four named rungs, or a rung the caller built. Every function in
+ * this file takes this type; none of them asks which kind it got, because
+ * `validationLevelSpec` is the one place that has to know.
+ */
+export type ValidationLevel = ValidationLevelId | CustomValidationLevel;
 
 /**
  * Loosest first — and the order is LOAD-BEARING, not display sugar: it is the
@@ -71,13 +118,14 @@ export type ValidationLevel = "whiteboard" | "guided" | "typed" | "strict";
  * the one before it. A UI that prints a scale prints this array; a UI that
  * prints it backwards is showing a different scale from the one tested.
  */
-export const VALIDATION_LEVELS: readonly ValidationLevel[] = ["whiteboard", "guided", "typed", "strict"];
+export const VALIDATION_LEVELS: readonly ValidationLevelId[] = ["whiteboard", "guided", "typed", "strict"];
 
 /** How hard the two ends' declared types must agree at a given level. */
 export type TypeStrictness = "off" | "lenient" | "strict";
 
 export interface ValidationLevelSpec {
-  id: ValidationLevel;
+  /** A named rung's own id, or `"custom"` for a rung the caller built. */
+  id: ValidationLevelId | typeof CUSTOM_LEVEL_ID;
   /** The control's own row label. */
   label: string;
   /** One sentence, what this level refuses that the looser one did not. */
@@ -173,7 +221,7 @@ const STRICT: ValidationLevelSpec = {
   types: "strict",
 };
 
-export const VALIDATION_LEVEL_SPECS: Readonly<Record<ValidationLevel, ValidationLevelSpec>> = Object.freeze({
+export const VALIDATION_LEVEL_SPECS: Readonly<Record<ValidationLevelId, ValidationLevelSpec>> = Object.freeze({
   whiteboard: Object.freeze({ ...WHITEBOARD, rules: Object.freeze(WHITEBOARD.rules), policy: Object.freeze(WHITEBOARD.policy) }),
   guided: Object.freeze({ ...GUIDED, rules: Object.freeze(GUIDED.rules), policy: Object.freeze(GUIDED.policy) }),
   typed: Object.freeze({ ...TYPED, rules: Object.freeze(TYPED.rules), policy: Object.freeze(TYPED.policy) }),
@@ -188,17 +236,81 @@ export const VALIDATION_LEVEL_SPECS: Readonly<Record<ValidationLevel, Validation
  * that has never opened Settings keeps the behaviour it already had. Picking
  * the looser end here would have silently relaxed every existing board.
  */
-export const DEFAULT_VALIDATION_LEVEL: ValidationLevel = "guided";
+export const DEFAULT_VALIDATION_LEVEL: ValidationLevelId = "guided";
 
-/** A stored or user-supplied string, narrowed. Total; never throws. */
-export function isValidationLevel(value: unknown): value is ValidationLevel {
+/** A stored or user-supplied string, narrowed to one of the four NAMED rungs.
+ *  Total; never throws. A custom rung is not a string and never passes here —
+ *  that is the point: this is what a persisted id is checked with. */
+export function isValidationLevel(value: unknown): value is ValidationLevelId {
   return typeof value === "string" && (VALIDATION_LEVELS as readonly string[]).includes(value);
 }
 
+/** Is this the caller-supplied fifth rung? */
+export function isCustomValidationLevel(level: ValidationLevel): level is CustomValidationLevel {
+  return typeof level !== "string";
+}
+
+/** What to CALL this level — one of the four ids, or `"custom"`. For a readout
+ *  or a `data-` attribute; never for a stored record, which spells only the
+ *  four (a custom rung is stored as the switches it is made of). */
+export function validationLevelId(level: ValidationLevel): ValidationLevelId | typeof CUSTOM_LEVEL_ID {
+  return isCustomValidationLevel(level) ? CUSTOM_LEVEL_ID : level;
+}
+
 /** The spec for `level`, falling back to the default rather than throwing —
- *  the same malformed-input policy `lintScene` uses for an unknown rule id. */
+ *  the same malformed-input policy `lintScene` uses for an unknown rule id. A
+ *  custom rung IS its own spec, so it is handed straight back. */
 export function validationLevelSpec(level: ValidationLevel): ValidationLevelSpec {
+  if (isCustomValidationLevel(level)) return level;
   return VALIDATION_LEVEL_SPECS[level] ?? VALIDATION_LEVEL_SPECS[DEFAULT_VALIDATION_LEVEL];
+}
+
+/**
+ * Build the fifth rung.
+ *
+ * NORMALISES two things rather than trusting the caller, because a rung is
+ * read by two engines and a caller assembling one from checkboxes has no
+ * reason to know either convention:
+ *
+ *  - `dangling-edge` is forced in. It runs at EVERY named rung including
+ *    `whiteboard` (see `ALWAYS` above for why an edge naming a node the scene
+ *    does not contain is not a matter of taste), so a custom rung that could
+ *    switch it off would be looser than the loosest button.
+ *  - the rules are put in `LINT_RULE_IDS` order and de-duplicated, so two
+ *    custom rungs built from the same switches in different orders are the
+ *    same rung, and a board's findings come out in the registry's order the
+ *    way every named rung's do.
+ *
+ * Frozen, at both levels, for the reason `VALIDATION_LEVEL_SPECS` is: a spec
+ * is shared with whoever it is handed to, and a consumer editing one in place
+ * would move the board under every other reader.
+ */
+export function customValidationLevel(input: {
+  /** Which of `lint.ts`'s rules report at rest. `dangling-edge` is added if absent. */
+  rules: Iterable<LintRuleId>;
+  /** Which of `edgeValidation.ts`'s gates refuse before commit. */
+  policy: ConnectionPolicy;
+  /** How hard declared types must agree. */
+  types: TypeStrictness;
+  /** The control's own row label. Defaults to "Custom". */
+  label?: string;
+  /** One sentence for a readout. Defaults to a sentence about the counts. */
+  summary?: string;
+}): CustomValidationLevel {
+  const asked = new Set<LintRuleId>(input.rules);
+  for (const rule of ALWAYS) asked.add(rule);
+  const rules = Object.freeze(LINT_RULE_IDS.filter((rule) => asked.has(rule)));
+  const policy = Object.freeze({ ...input.policy });
+  return Object.freeze({
+    id: CUSTOM_LEVEL_ID,
+    label: input.label ?? "Custom",
+    summary:
+      input.summary ??
+      `A custom combination: ${rules.length} of ${LINT_RULE_IDS.length} checks mark up a board at rest, and the connection gates follow the same switches.`,
+    rules,
+    policy,
+    types: input.types,
+  });
 }
 
 /** Which `lint.ts` rules report at rest at this level. */

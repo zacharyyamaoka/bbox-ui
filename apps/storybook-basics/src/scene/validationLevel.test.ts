@@ -18,13 +18,17 @@ import {
   VALIDATION_LEVELS,
   VALIDATION_LEVEL_SPECS,
   connectionPolicyForLevel,
+  customValidationLevel,
   enabledRuleCount,
+  isCustomValidationLevel,
   isValidationLevel,
   lintRulesForLevel,
   lintSceneAtLevel,
   typeStrictnessForLevel,
   validateConnectionAtLevel,
-  type ValidationLevel,
+  validationLevelId,
+  validationLevelSpec,
+  type ValidationLevelId,
 } from "./validationLevel";
 
 const PERMISSIONS = [
@@ -196,7 +200,7 @@ describe("the same level drives the prevention half", () => {
 
   it("whiteboard lets a duplicate cable land; every tighter level refuses it, with a reason", () => {
     expect(validateConnectionAtLevel(board, second, "whiteboard").allowed).toBe(true);
-    for (const level of ["guided", "typed", "strict"] as ValidationLevel[]) {
+    for (const level of ["guided", "typed", "strict"] as ValidationLevelId[]) {
       const verdict = validateConnectionAtLevel(board, second, level);
       expect(verdict.allowed, level).toBe(false);
       // Ruling 1's contract: a refusal is never silent.
@@ -217,5 +221,100 @@ describe("the same level drives the prevention half", () => {
     for (const level of VALIDATION_LEVELS) {
       expect(validateConnectionAtLevel(board, ghost, level).allowed, level).toBe(false);
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* The fifth rung — the one the caller builds                          */
+/* ------------------------------------------------------------------ */
+
+describe("the fifth, caller-supplied rung", () => {
+  /** The same board the prevention cases use: one cable already on it. */
+  const board: LintScene = {
+    nodes: [{ id: "a" }, { id: "b" }],
+    edges: [{ id: "first", source: "a", sourceHandle: "out", target: "b", targetHandle: "in" }],
+  };
+  const duplicate = { id: "second", source: "a", sourceHandle: "out", target: "b", targetHandle: "in" };
+
+  /** A named rung, rebuilt through the custom door from its own spec. */
+  const rebuild = (level: ValidationLevelId) =>
+    customValidationLevel({
+      rules: VALIDATION_LEVEL_SPECS[level].rules,
+      policy: VALIDATION_LEVEL_SPECS[level].policy,
+      types: VALIDATION_LEVEL_SPECS[level].types,
+    });
+
+  it("is not one of the four, and says so in every way a reader can ask", () => {
+    const level = rebuild("strict");
+    expect(isCustomValidationLevel(level)).toBe(true);
+    expect(validationLevelId(level)).toBe("custom");
+    expect(level.id).toBe("custom");
+    for (const named of VALIDATION_LEVELS) {
+      expect(isCustomValidationLevel(named), named).toBe(false);
+      expect(validationLevelId(named), named).toBe(named);
+    }
+  });
+
+  it("IS its own spec — `validationLevelSpec` hands it straight back rather than looking it up", () => {
+    const level = rebuild("typed");
+    expect(validationLevelSpec(level)).toBe(level);
+  });
+
+  it("a rebuild of a named rung judges every candidate exactly as the named rung does", () => {
+    // The generalisation check. If these ever diverged, the fifth rung would
+    // be a second opinion rather than the same reading over other switches —
+    // which is the failure mode the four presets are protected from.
+    for (const named of VALIDATION_LEVELS) {
+      const custom = rebuild(named);
+      expect(lintSceneAtLevel(MESSY, custom, { directionOf: DIRECTION_OF, typeOf: TYPE_OF }).map((f) => f.id).sort(), `${named} at rest`).toEqual(
+        lintSceneAtLevel(MESSY, named, { directionOf: DIRECTION_OF, typeOf: TYPE_OF }).map((f) => f.id).sort(),
+      );
+      const here = validateConnectionAtLevel(board, duplicate, custom);
+      const there = validateConnectionAtLevel(board, duplicate, named);
+      expect(here.allowed, `${named} on the duplicate`).toBe(there.allowed);
+      expect(enabledRuleCount(custom), `${named} rule count`).toBe(enabledRuleCount(named));
+      expect(connectionPolicyForLevel(custom), `${named} policy`).toEqual(connectionPolicyForLevel(named));
+      expect(typeStrictnessForLevel(custom), `${named} types`).toBe(typeStrictnessForLevel(named));
+    }
+  });
+
+  it("forces `dangling-edge` in, so no custom rung can be looser than whiteboard", () => {
+    const level = customValidationLevel({ rules: [], policy: VALIDATION_LEVEL_SPECS.whiteboard.policy, types: "off" });
+    expect(level.rules).toContain("dangling-edge");
+    const ghost = { id: "ghost", source: "a", sourceHandle: "out", target: "nowhere", targetHandle: "in" };
+    expect(validateConnectionAtLevel(board, ghost, level).allowed, "a candidate naming a node the scene does not contain").toBe(false);
+  });
+
+  it("canonicalises its rule list — registry order, de-duplicated — so two spellings are one rung", () => {
+    const level = customValidationLevel({
+      rules: ["type-mismatch", "cycle", "cycle", "dangling-edge"],
+      policy: VALIDATION_LEVEL_SPECS.typed.policy,
+      types: "lenient",
+    });
+    expect([...level.rules]).toEqual(LINT_RULE_IDS.filter((rule) => ["dangling-edge", "cycle", "type-mismatch"].includes(rule)));
+  });
+
+  it("is frozen, for the reason the four are: a spec is shared with whoever holds it", () => {
+    const level = rebuild("guided");
+    expect(Object.isFrozen(level)).toBe(true);
+    expect(Object.isFrozen(level.rules)).toBe(true);
+    expect(Object.isFrozen(level.policy)).toBe(true);
+  });
+
+  it("a rung nobody could press: strict, with cycles permitted and nothing else moved", () => {
+    // The shape the host builds when a person flips ONE of the nine switches.
+    // Not reachable by any of the four buttons, and the whole reason the rung
+    // exists.
+    const level = customValidationLevel({
+      rules: VALIDATION_LEVEL_SPECS.strict.rules.filter((rule) => rule !== "cycle"),
+      policy: { ...VALIDATION_LEVEL_SPECS.strict.policy, allowCycles: true },
+      types: "strict",
+    });
+    const closesALoop = { id: "loop", source: "b", sourceHandle: "out", target: "a", targetHandle: "in" };
+    const typed = { typeOf: () => ["number"], directionOf: DIRECTION_OF };
+    expect(validateConnectionAtLevel(board, closesALoop, "strict", typed).allowed, "strict refuses the loop").toBe(false);
+    expect(validateConnectionAtLevel(board, closesALoop, level, typed).allowed, "the custom rung permits it").toBe(true);
+    // And only that: the duplicate strict refuses is still refused here.
+    expect(validateConnectionAtLevel(board, duplicate, level, typed).allowed, "allowDuplicates did not move").toBe(false);
   });
 });

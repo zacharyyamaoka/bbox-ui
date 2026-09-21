@@ -32,8 +32,8 @@ import {
   type FileNavigationMode,
 } from "@trunk/components/appSettings";
 import { FILE_MENU_ROWS } from "@trunk/components/appMenu";
-import { edgePolicyPreset, matchingEdgePolicyPreset, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
-import { LINT_RULE_TOTAL, enabledRuleCount, validationLevelSpec } from "@trunk/scene/validationLevel";
+import { edgePolicyPreset, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
+import { LINT_RULE_TOTAL, enabledRuleCount, isCustomValidationLevel, validationLevelSpec } from "@trunk/scene/validationLevel";
 import { readToolAliases, writeToolAliases, type ToolAliasItem, type ToolAliases } from "@trunk/components/toolAliases";
 import { buildSettingsCategories, type SettingsHotkey } from "@trunk/components/settingsCategories";
 import { isNativeFileAccessSupported } from "@trunk/files/nativeFiles";
@@ -216,8 +216,17 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
     const level = validationLevelOf(edgePolicy);
     const spec = validationLevelSpec(level);
     const sentence = `At ${spec.label.toLowerCase()}, ${enabledRuleCount(level)} of ${LINT_RULE_TOTAL} checks mark up a board at rest: ${spec.rules.join(", ")}.`;
-    return matchingEdgePolicyPreset(edgePolicy) === null
-      ? `Custom — linting follows the nearest level it can. ${sentence}`
+    // WHY this sentence changed on 2026-09-21: it used to read "Custom —
+    // linting follows the nearest level it can", which was an accurate
+    // description of a bug. `validationLevelOf` could only answer with one of
+    // the four named rungs, so a custom combination was snapped to the shipped
+    // default and the board ran at `guided` however the switches were set. It
+    // now answers with a rung built from the switches themselves, so the row
+    // must stop promising a fallback that no longer happens — a control whose
+    // description lies about what it does is the whole failure mode ruling 3
+    // was about.
+    return isCustomValidationLevel(level)
+      ? `Custom — these switches govern the board directly, not the nearest level. ${sentence}`
       : sentence;
   }, [edgePolicy]);
 
