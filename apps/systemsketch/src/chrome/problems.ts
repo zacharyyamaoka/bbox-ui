@@ -253,11 +253,13 @@ export interface BoardProblems {
  *   - `type-mismatch` needs a `typeOf` resolver, and `lint.ts`'s own header
  *     says the ontology is deliberately unminted ("what a type IS — equality?
  *     hierarchy? union? — is a product decision with zero data support in
- *     this repo"). The projection does carry `portTypes`, so wiring it would
- *     compile; it would also silently mint that decision from a menu lane.
+ *     this repo"). The projection does carry `portTypes` — parsed out of each
+ *     port's declaration line since ruling 8, not read off a field of its own
+ *     — so wiring it would compile; it would also silently mint that decision
+ *     from a menu lane.
  *   - `polarity` needs a `directionOf`, and this document model only states a
  *     direction for a FLOATING `ss-port` — a Block's ports have no direction
- *     field at all (plan §3's `PortSpecV` is `{id, name, type}`). A resolver
+ *     field at all (`PortSpecV` is `{id, declaration}`). A resolver
  *     that judged some edges and abstained on others would make the rule's
  *     verdict depend on which end you drew first.
  *

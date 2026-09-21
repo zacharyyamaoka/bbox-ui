@@ -27,8 +27,8 @@ afterEach(() => {
   app = null;
 });
 
-const PORTS_OUT = { left: [], right: [{ id: "out", name: "out", type: "Pose" }], top: [], bottom: [] };
-const PORTS_IN = { left: [{ id: "in", name: "in", type: "Pose" }, { id: "cfg", name: "cfg", type: "" }], right: [], top: [], bottom: [] };
+const PORTS_OUT = { left: [], right: [{ id: "out", declaration: "out: Pose" }], top: [], bottom: [] };
+const PORTS_IN = { left: [{ id: "in", declaration: "in: Pose" }, { id: "cfg", declaration: "cfg" }], right: [], top: [], bottom: [] };
 
 function block(name: string, x: number, y: number, ports: unknown): TLShapeId {
   const id = createShapeId();

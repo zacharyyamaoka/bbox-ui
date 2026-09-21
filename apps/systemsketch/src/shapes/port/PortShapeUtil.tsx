@@ -36,8 +36,12 @@ export type PortDirection = "in" | "out";
 export interface PortShapeProps {
   w: number;
   h: number;
-  name: string;
-  type: string;
+  /** The one line this port's CodeEditor edits — `port`, or `gain_x: float`.
+   *  Its type is PARSED out of what follows the first `:`
+   *  (`@trunk/scene/portDeclaration`), never stored beside it. See
+   *  `shapes/shared/props.ts`'s `PortSpecV` for the ruling and what it
+   *  rejects. */
+  declaration: string;
   direction: PortDirection;
   /** Exactly one MEASURED anchor, whose `portId` is `FLOATING_PORT_ID`. */
   anchors: PortShapeAnchor[];
@@ -57,16 +61,29 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
   static override props = {
     w: T.number,
     h: T.number,
-    name: T.string,
-    type: T.string,
+    declaration: T.string,
     direction: T.literalEnum("in", "out"),
     anchors: T.arrayOf(PortAnchorV),
   };
 
-  // Version 0, declared now for the reason BlockShapeUtil records: the sequence
-  // is what gives these props a version number in a saved file, and it cannot
-  // be retrofitted once boards exist in the wild.
-  static override migrations = createShapePropsMigrationSequence({ sequence: [] });
+  // Version 1 folds `name` + `type` into one `declaration` (ruling 8). Spelled
+  // out rather than calling `formatPortDeclaration`, for the reason
+  // BlockShapeUtil's own migration records: a shipped migration is frozen, so
+  // it must not be wired to a constructor a later edit could change.
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        id: `com.tldraw.shape.${PORT_SHAPE_TYPE}/1`,
+        up: (props: { name?: string; type?: string; declaration?: string }) => {
+          const name = props.name ?? "";
+          const type = (props.type ?? "").trim();
+          props.declaration = type === "" ? name : `${name}: ${type}`;
+          delete props.name;
+          delete props.type;
+        },
+      },
+    ],
+  });
 
   // `w`/`h` here are the SEED the shape is born with, not a size it keeps:
   // `useMeasuredShape` overwrites both from the rendered face on the first
@@ -78,7 +95,7 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
   // the real app, not assumed. Nothing reads a port's `w` but the engine's
   // own geometry, so the hug is the whole story: `getGeometry` below.
   override getDefaultProps(): PortShapeProps {
-    return { w: 120, h: 32, name: "port", type: "", direction: "out", anchors: [] };
+    return { w: 120, h: 32, declaration: "port", direction: "out", anchors: [] };
   }
 
   // WHY the whole box is filled geometry rather than a circle for the dot plus

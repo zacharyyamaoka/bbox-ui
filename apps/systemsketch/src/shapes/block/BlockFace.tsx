@@ -12,6 +12,7 @@ import { BlockPort, type BlockEdgeSpec } from "@trunk/components/blockPort";
 import type { BlockSide } from "@trunk/components/port.layout";
 import type { PortEdgeItem } from "@trunk/components/portEdge";
 import { REGION_CORNER_BLOCK_STYLE } from "@trunk/components/region";
+import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
 
 import { usePortProducers } from "../../document/sceneFromStore";
 import { isRegionCornerBlock } from "../region/cornerBlock";
@@ -20,36 +21,44 @@ import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
 import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
 
 /**
- * The rail label is the port's NAME, alone.
+ * The rail label is the NAME HALF of the port's declaration — everything
+ * before the first `:`, parsed out of the one string the port stores.
  *
- * WHY not `name + " " + type`, which is what plan §8.5 and this lane's brief
- * both asked for: the two rails of a block sit on the same row and flow
+ * WHY not the whole declaration, which is what a face that stores one line
+ * would obviously paint: the two rails of a block sit on the same row and flow
  * INWARD from opposite edges (`inwardTextLayout`, components/port.layout.ts),
- * so on the plan's own default 160px block two concatenated labels run
- * straight through each other. Measured on the smoke fixture — `estimate()`
- * with a left `frame:Frame` and a right `Pose:Pose` — "frame Frame" spanned
- * x139-248 and "Pose Pose" x175-261: 73px of overlapping, unreadable text,
- * visible in reports/media/.../ss-L0/04-ports-render-as-dots.png. Nothing
- * downstream can rescue it: `width={props.w}` is the authored box (the brief),
- * the default is 160 (documentModel.test asserts it), and the measurement
- * pass reads the rendered size back rather than growing it, so the block can
- * never widen to fit its own labels.
+ * so on the plan's own default 160px block two annotated labels run straight
+ * through each other. Measured on the smoke fixture — `estimate()` with a left
+ * `frame: Frame` and a right `Pose: Pose` — "frame Frame" spanned x139-248 and
+ * "Pose Pose" x175-261: 73px of overlapping, unreadable text, visible in
+ * reports/media/.../ss-L0/04-ports-render-as-dots.png. Nothing downstream can
+ * rescue it: `width={props.w}` is the authored box (the brief), the default is
+ * 160 (documentModel.test asserts it), and the measurement pass reads the
+ * rendered size back rather than growing it, so the block can never widen to
+ * fit its own labels.
  *
  * Zach's "render stored properties truthfully" rule is what settles which way
  * to cut. Two strings painted on top of each other make authored characters
- * disappear, which is the failure that rule exists to forbid; a name rendered
- * whole, with the type simply not on the rail, hides nothing — `type` is still
- * in `props.ports[side][].type`, still in the document-model contract, still
- * what the wire binding and L2's inspector read.
+ * disappear, which is the failure that rule exists to forbid; the name
+ * rendered whole, with the annotation simply not on the rail, hides nothing
+ * the board does not show elsewhere — the declaration is intact in
+ * `props.ports[side][].declaration`, it is what a wire drop reads for its
+ * datatype (`wire/wireGesture.ts`), and it is what `lintScene`'s
+ * `type-mismatch` judges (`document/sceneFromStore.ts`).
  *
- * The real home for a type is `LabeledPort`'s secondary slot (the trunk draws
- * it for exactly this), but `PortEdgeItem` carries one `label` and no
- * secondary field — widening it is a change to the trunk, outside this lane's
- * write set. Owed upstream: a `secondary` on `PortEdgeItem`, and then this
- * function hands the type to it instead of dropping it.
+ * STILL OWED, and now sharper than before ruling 8 folded the two fields into
+ * one: the rail shows a PREFIX of an authored string rather than a whole
+ * separate field, so `feedback_truthful_property_rendering`'s abbreviation
+ * clause applies to it — "show an explicit ellipsis and keep the complete raw
+ * value immediately discoverable". The honest fix is the trunk's own secondary
+ * slot (`LabeledPort` draws one for exactly this) fed a `secondary` on
+ * `PortEdgeItem`, which carries one `label` and nothing else today. Widening
+ * it is a change to the trunk, outside this lane's write set. Owed upstream:
+ * a `secondary` on `PortEdgeItem`, and then this function hands it the
+ * annotation instead of dropping it.
  */
 function labelOf(port: BlockPortSpec): string {
-  return port.name;
+  return parsePortDeclaration(port.declaration).name;
 }
 
 export function BlockFace({ shape }: { shape: BlockShape }) {

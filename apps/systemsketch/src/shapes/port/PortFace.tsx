@@ -11,6 +11,7 @@ import { useEditor, useValue, type Editor, type TLBinding } from "tldraw";
 
 import { CodeEditor } from "@trunk/components/codeEditor";
 import { LabeledPort } from "@trunk/components/labeledPort";
+import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
 import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, PORT_TEXT_SIZES, type PortTextLayout } from "@trunk/components/port.layout";
 import { POINTER_OWNED_CLASS } from "@trunk/hosts/nodeViews";
 
@@ -92,26 +93,40 @@ function stopEditing(editor: Editor): void {
 }
 
 /**
- * The label at rest: the name, then the type, both LITERAL.
+ * The label at rest: the declaration line, painted as two runs — the name, and
+ * the `:` with everything after it, muted.
  *
- * `white-space: pre` on each run is the whole point — Zach's truthful-property
- * -rendering rule ("Names, literals, labels … retain every authored character:
- * no silent normalization, trimming, substitution, or clipping"). The archive
- * trimmed both and substituted "port"/"Any" for an empty one
- * (floatingPortLayout.ts:19-21); this does not, so a name authored as
- * `"gain_x  "` renders — and reads back — with its two trailing spaces, which
- * is what `src/port.smoke.test.tsx` measures.
+ * THE TWO RUNS ARE TYPOGRAPHY, NOT A DATA SPLIT. They concatenate back to
+ * `props.declaration` character for character, colon included, which is the
+ * whole of Zach's truthful-property-rendering rule ("Names, literals, labels …
+ * retain every authored character: no silent normalization, trimming,
+ * substitution, or clipping… Typography may restyle text; it may not make
+ * characters disappear"). `white-space: pre` on each run is what keeps that
+ * true of whitespace: a line authored as `"gain_x  : float"` renders — and
+ * reads back — with its two trailing spaces inside the name, which is what
+ * `src/port.smoke.test.tsx` measures. The archive trimmed both halves and
+ * substituted "port"/"Any" for an empty one (floatingPortLayout.ts:19-21).
  *
- * WHY the two runs stay in reading order (name, then type) on BOTH directions,
- * rather than mirroring so the name always hugs the dot: the archive's own
- * export draws them in this order whichever side the label sits on
- * (FloatingPortShapeUtil.tsx:83-88 — `<tspan>{name}</tspan><tspan
+ * WHY the colon is PAINTED, where the two separate `name`/`type` props this
+ * replaced were drawn with a 6px gap and no punctuation: there is one stored
+ * string now, and it is the string the editor opens on. Dropping the colon at
+ * rest and putting it back on double-click would make the label and its own
+ * editor disagree about what the port says — exactly the drift
+ * `LABEL_FONT_PX`'s note calls out on the size axis. The gap goes with it:
+ * the spacing is now whatever the author typed after the colon.
+ *
+ * WHY the runs stay in reading order (name, then annotation) on BOTH
+ * directions, rather than mirroring so the name always hugs the dot: the
+ * archive's own export draws them in this order whichever side the label sits
+ * on (FloatingPortShapeUtil.tsx:83-88 — `<tspan>{name}</tspan><tspan
  * dx=7>{type}</tspan>` under a single `textAnchor` flip). Mirroring was tried
  * here first and rendered an output port as "Image mask", which reads as a
  * type-first annotation language and made the two directions scan differently
- * — capture 03 in reports/media/lanes-2026-09-18/ss-L2.
+ * — capture 03 in reports/media/lanes-2026-09-18/ss-L2. It is also no longer
+ * expressible: mirroring one authored line would reorder its own characters.
  */
-function RestingLabel({ name, type }: { name: string; type: string }) {
+function RestingLabel({ declaration }: { declaration: string }) {
+  const { name, type, annotated } = parsePortDeclaration(declaration);
   return (
     <span
       data-slot="port-label"
@@ -119,7 +134,6 @@ function RestingLabel({ name, type }: { name: string; type: string }) {
       style={{
         display: "inline-flex",
         alignItems: "baseline",
-        gap: 6,
         fontSize: LABEL_FONT_PX,
         // The skin seam, exactly as the trunk's own resting label sets it
         // (labeledPort.tsx:240) — inline so it beats inheritance, falling back
@@ -131,35 +145,42 @@ function RestingLabel({ name, type }: { name: string; type: string }) {
       <span data-slot="ss-port-name" style={{ whiteSpace: "pre" }}>
         {name}
       </span>
-      {type === "" ? null : (
+      {annotated ? (
         <span data-slot="ss-port-type" style={{ whiteSpace: "pre", opacity: 0.55 }}>
-          {type}
+          {`:${type}`}
         </span>
-      )}
+      ) : null}
     </span>
   );
 }
 
 /**
- * The label while renaming: the trunk's single-line `CodeEditor`, the same
+ * The label while editing: the trunk's single-line `CodeEditor`, the same
  * field its own `DefaultPortLabel` swaps in (labeledPort.tsx:155-186).
  *
- * WHY a local `draft` rather than reading `shape.props.name` straight back:
- * the write is per keystroke, so the prop changes under the editor on every
- * character; feeding the store's value back in would re-dispatch the document
- * mid-keystroke. The store still holds the only committed copy — `onWrite`
- * fires first, every time.
+ * It edits the WHOLE declaration — `gain_x: float`, colon and annotation
+ * included — because that is the only string the port stores (ruling 8, see
+ * `shapes/shared/props.ts`). This is what gives a port's type an editing
+ * surface at all: before the collapse this session wrote `props.name` and the
+ * separately-stored `props.type` had no writer anywhere in the app, so a type
+ * could be read and painted but never changed by the person looking at it.
+ *
+ * WHY a local `draft` rather than reading `shape.props.declaration` straight
+ * back: the write is per keystroke, so the prop changes under the editor on
+ * every character; feeding the store's value back in would re-dispatch the
+ * document mid-keystroke. The store still holds the only committed copy —
+ * `onWrite` fires first, every time.
  */
 function LabelEditor({ shape, align }: { shape: PortShape; align: "left" | "right" }) {
   const editor = useEditor();
-  const [draft, setDraft] = useState(shape.props.name);
+  const [draft, setDraft] = useState(shape.props.declaration);
   // The value to put back on Escape — captured once, at the moment the session
   // opened, like the trunk's own `snapshotRef` (labeledPort.tsx:136).
-  const snapshot = useRef(shape.props.name);
+  const snapshot = useRef(shape.props.declaration);
 
   const write = useCallback(
     (next: string) => {
-      editor.updateShape({ id: shape.id, type: PORT_SHAPE_TYPE, props: { name: next } });
+      editor.updateShape({ id: shape.id, type: PORT_SHAPE_TYPE, props: { declaration: next } });
     },
     [editor, shape.id],
   );
@@ -179,11 +200,14 @@ function LabelEditor({ shape, align }: { shape: PortShape; align: "left" | "righ
         fontSizePx={LABEL_FONT_PX}
         align={align}
         autoFocus="select"
-        ariaLabel="Port name"
+        // "Port declaration", not "Port name": the field holds `gain_x: float`,
+        // and an assistive reader that announced it as a name would describe
+        // the wrong thing to edit.
+        ariaLabel="Port declaration"
         // Lazily, on the first keystroke that changes anything
-        // (codeEditorGesture.ts's `begin`): one undo step per rename rather
+        // (codeEditorGesture.ts's `begin`): one undo step per edit rather
         // than one per character.
-        beginEdit={() => editor.markHistoryStoppingPoint("rename port")}
+        beginEdit={() => editor.markHistoryStoppingPoint("edit port")}
         onWrite={(next) => {
           setDraft(next);
           write(next);
@@ -216,7 +240,7 @@ function LabelEditor({ shape, align }: { shape: PortShape; align: "left" | "righ
 
 export function PortFace({ shape }: { shape: PortShape }) {
   const editor = useEditor();
-  const { w, h, name, type, direction } = shape.props;
+  const { w, h, declaration, direction } = shape.props;
 
   // WHY the wired state is read from BINDINGS rather than passed in (the same
   // reading BlockFace.tsx:66-75 documents): L3 lands wires without touching
@@ -377,7 +401,7 @@ export function PortFace({ shape }: { shape: PortShape }) {
             // the seam the trunk built for exactly this (`labelSlot`'s own doc,
             // labeledPort.tsx:311-318): the placement math above it is
             // untouched.
-            labelSlot={editing ? <LabelEditor shape={shape} align={align} /> : <RestingLabel name={name} type={type} />}
+            labelSlot={editing ? <LabelEditor shape={shape} align={align} /> : <RestingLabel declaration={declaration} />}
           />
         </span>
         {direction === "in" ? labelSpacer : null}

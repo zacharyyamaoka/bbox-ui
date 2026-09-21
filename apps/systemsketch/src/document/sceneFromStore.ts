@@ -25,6 +25,7 @@
 import { useMemo } from "react";
 import { computed, useValue, type Computed, type Editor, type TLBinding, type TLRecord, type TLShape } from "tldraw";
 
+import { parsePortDeclaration, portTypeOfDeclaration } from "@trunk/scene/portDeclaration";
 import { producerCounts } from "@trunk/scene/producers";
 import type { BlockScene, SceneEdge, SceneNode } from "@trunk/scene/scene";
 import type { WireStyleData } from "@trunk/scene/sceneWires";
@@ -51,11 +52,17 @@ export type DocNodeData = {
   name: string;
   view?: "simple" | "port" | "expanded";
   ports?: Partial<Record<"top" | "right" | "bottom" | "left", string[]>>;
+  /** Port id → its DECLARED type, parsed out of the port's one stored
+   *  declaration line (ruling 8 — there is no separate type field to read).
+   *  A port that states none is absent, never `""`. */
   portTypes?: Record<string, string>;
   code?: string;
   language?: string;
   direction?: "in" | "out";
-  type?: string;
+  /** An `ss-port`'s whole declaration line, verbatim — the string the shape
+   *  stores and `applySceneDiff` writes back. `name` above is its parsed name
+   *  half, for anything that wants a display name. */
+  declaration?: string;
   regionKind?: "for" | "while" | "branch" | "plain";
   cornerBlockId?: string;
 };
@@ -86,12 +93,15 @@ function blockData(shape: BlockShape): DocNodeData {
   for (const side of PORT_SIDES) {
     ports[side] = shape.props.ports[side].map((port) => port.id);
     for (const port of shape.props.ports[side]) {
-      // A declared-but-empty type is the honest "no type stated", so it never
-      // enters the vocabulary `lintScene`'s `type-mismatch` rule reads — the
-      // kit-wide "undefined = unknown, no judgement" convention
-      // (@trunk/scene/lint.ts's `PortTypeOf`). Writing `""` in here would
-      // turn "unknown" into a type name that matches nothing.
-      if (port.type) portTypes[port.id] = port.type;
+      // PARSED, not read off a second field (ruling 8). `portTypeOfDeclaration`
+      // answers `undefined` for a line that states no type — `frame`, `frame:`,
+      // `frame:   ` alike — so an unannotated port never enters the vocabulary
+      // `lintScene`'s `type-mismatch` rule reads, which is the kit-wide
+      // "undefined = unknown, no judgement" convention (@trunk/scene/lint.ts's
+      // `PortTypeOf`). Writing `""` in here would turn "unknown" into a type
+      // name that matches nothing.
+      const declared = portTypeOfDeclaration(port.declaration);
+      if (declared !== undefined) portTypes[port.id] = declared;
     }
   }
   return { kind: "block", name: shape.props.name, view: shape.props.view, ports, portTypes };
@@ -109,11 +119,15 @@ function dataOf(shape: TLShape): DocNodeData | null {
     return { kind, name: "", code: String(props.code ?? ""), language: String(props.language ?? "") };
   }
   if (kind === "port") {
+    // The line is carried whole so a write-back cannot re-space it, and its
+    // name half is projected beside it so anything wanting a display name gets
+    // one without re-parsing. Both are views of ONE stored string.
+    const declaration = String(props.declaration ?? "");
     return {
       kind,
-      name: String(props.name ?? ""),
+      name: parsePortDeclaration(declaration).name,
       direction: props.direction === "in" ? "in" : "out",
-      type: String(props.type ?? ""),
+      declaration,
     };
   }
   return {

@@ -28,8 +28,10 @@ import { BlockFace } from "./BlockFace";
 
 export interface BlockPortSpec {
   id: string;
-  name: string;
-  type: string;
+  /** The one line this port's CodeEditor edits — `frame` or `frame: Frame`.
+   *  Its type is PARSED out of it (`@trunk/scene/portDeclaration`), never
+   *  stored beside it; see `PortSpecV`'s own note for the ruling. */
+  declaration: string;
 }
 
 export interface BlockPortAnchor {
@@ -105,11 +107,37 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
     anchors: T.arrayOf(PortAnchorV),
   };
 
-  // WHY an empty sequence and not "no migrations": the sequence is what gives
-  // this shape's props a version number in a saved file. Declaring it now (at
-  // version 0) is what lets a later lane ADD a migration; retrofitting the
-  // sequence after boards exist in the wild cannot.
-  static override migrations = createShapePropsMigrationSequence({ sequence: [] });
+  // Version 0 was an empty sequence, declared so that a later lane could add a
+  // migration at all ("retrofitting the sequence after boards exist in the
+  // wild cannot"). This is that later lane.
+  //
+  // WHY the fold is spelled out here instead of calling
+  // `formatPortDeclaration`, which is the one place that mints `name: type`
+  // everywhere else in this repo: a migration is a HISTORICAL record of what
+  // one saved version meant, and it has to keep producing the same bytes for
+  // that version forever. Wiring it to a live constructor makes every future
+  // edit of that constructor silently rewrite the past — the one case where
+  // "one spelling, cannot drift" is the wrong rule. tldraw says the same
+  // thing about its own: a shipped migration is frozen.
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        id: `com.tldraw.shape.${BLOCK_SHAPE_TYPE}/1`,
+        // `{id, name, type}` → `{id, declaration}` (ruling 8).
+        up: (props: { ports?: Record<string, { id: string; name?: string; type?: string; declaration?: string }[]> }) => {
+          for (const side of Object.values(props.ports ?? {})) {
+            for (const port of side) {
+              const name = port.name ?? "";
+              const type = (port.type ?? "").trim();
+              port.declaration = type === "" ? name : `${name}: ${type}`;
+              delete port.name;
+              delete port.type;
+            }
+          }
+        },
+      },
+    ],
+  });
 
   override getDefaultProps(): BlockShapeProps {
     return {

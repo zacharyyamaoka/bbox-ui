@@ -18,7 +18,7 @@ afterEach(() => {
 
 interface PortShapeLike {
   id: TLShapeId;
-  props: { name: string; type: string; direction: "in" | "out"; anchors: { portId: string; x: number; y: number; side: string | null }[] };
+  props: { declaration: string; direction: "in" | "out"; anchors: { portId: string; x: number; y: number; side: string | null }[] };
 }
 
 describe("L2 — floating port shape", () => {
@@ -32,15 +32,16 @@ describe("L2 — floating port shape", () => {
     await waitFor(() => app!.editor.getCurrentToolId() === PORT_TOOL_ID, { what: "the port tool is current" });
   });
 
-  it("renders the trunk LabeledPort, measures its single anchor onto the dot, and carries its name and type literally", async () => {
+  it("renders the trunk LabeledPort, measures its single anchor onto the dot, and carries its declaration literally", async () => {
     app = await mountApp();
     const id = createShapeId();
-    app.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 200, y: 160, props: { name: "gain_x  ", type: "float", direction: "in" } } as never);
+    app.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 200, y: 160, props: { declaration: "gain_x  : float", direction: "in" } } as never);
 
     const dot = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-slot="port"] [data-slot="port-dot"]`), { what: "the LabeledPort's dot" });
     const label = app.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-slot="port-label"]`);
-    expect(label?.textContent).toContain("gain_x  "); // truthful rendering: every authored character, trailing spaces included
-    expect(label?.textContent).toContain("float");
+    // Truthful rendering: the two painted runs reassemble the authored line
+    // byte for byte — trailing spaces inside the name, colon included.
+    expect(label?.textContent).toBe("gain_x  : float");
 
     const anchors = await waitFor(() => {
       const live = app!.editor.getShape(id) as PortShapeLike;
@@ -58,7 +59,7 @@ describe("L2 — floating port shape", () => {
     app = await mountApp();
     const mk = (direction: "in" | "out", y: number) => {
       const id = createShapeId();
-      app!.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 100, y, props: { name: "p", type: "", direction } } as never);
+      app!.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 100, y, props: { declaration: "p", direction } } as never);
       return id;
     };
     const inId = mk("in", 100);
@@ -74,14 +75,17 @@ describe("L2 — floating port shape", () => {
     expect(b.dot).toBeGreaterThan(b.label);
   });
 
-  it("double-click edits the name inline and writes it back", async () => {
+  it("double-click edits the declaration inline and writes it back", async () => {
     app = await mountApp();
     const id = createShapeId();
-    app.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 200, y: 160, props: { name: "old", type: "", direction: "out" } } as never);
+    app.editor.createShape({ id, type: PORT_SHAPE_TYPE, x: 200, y: 160, props: { declaration: "old", direction: "out" } } as never);
     const label = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-slot="port-label"]`), { what: "label" });
     await userEvent.dblClick(label);
     await waitFor(() => app!.editor.getEditingShapeId() === id, { what: "editing the port" });
-    await userEvent.keyboard("{Control>}a{/Control}new_name{Enter}");
-    await waitFor(() => (app!.editor.getShape(id) as PortShapeLike).props.name === "new_name", { what: "name written back" });
+    // The TYPE is typed here too, which is the whole of ruling 8: before the
+    // collapse `props.type` had no writer in the app at all, so this keystroke
+    // could not have existed.
+    await userEvent.keyboard("{Control>}a{/Control}new_name: float{Enter}");
+    await waitFor(() => (app!.editor.getShape(id) as PortShapeLike).props.declaration === "new_name: float", { what: "declaration written back" });
   });
 });

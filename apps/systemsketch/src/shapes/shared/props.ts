@@ -10,13 +10,29 @@
 // the other.
 import { T } from "tldraw";
 
-/** One declared port. The triple is the whole vocabulary a writer needs:
- *  `id` is what a wire binding names, `name` is what the rail renders, and
- *  `type` is the datatype label beside it. */
+/**
+ * One declared port. A PAIR, not a triple: `id` is what a wire binding names,
+ * and `declaration` is the one line the port's CodeEditor edits — `frame` or
+ * `frame: Frame`.
+ *
+ * WHY there is no third `type` field, which is what this validator carried
+ * until 2026-09-21 (ruling 8). Zach: "right now we just support by default
+ * only a single line CodeEditor, we don't have this cnocept of Type as a
+ * seperate thing.. You can parse it from the CodeEditor though for what
+ * follows the : it just python". The type is DERIVED on read
+ * (`@trunk/scene/portDeclaration`'s `portTypeOfDeclaration`), never stored
+ * beside the name.
+ *
+ * What that rejects is not hypothetical: with `type` stored separately, the
+ * only writer of it in the whole app was a fixture or the pyblocks backend.
+ * `PortFace`'s rename session edited `props.name` alone, so a type on a board
+ * could be READ by `lintScene` and painted on a free port, and could not be
+ * changed by the person looking at it. Folding it into the line gives it an
+ * editing surface for free — you type the `: float`.
+ */
 export const PortSpecV = T.object({
   id: T.string,
-  name: T.string,
-  type: T.string,
+  declaration: T.string,
 });
 
 /**

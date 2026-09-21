@@ -62,7 +62,7 @@ afterEach(() => {
   forgetVariants();
 });
 
-const PORTS_OUT = { left: [], right: [{ id: "out", name: "out", type: "Pose" }], top: [], bottom: [] };
+const PORTS_OUT = { left: [], right: [{ id: "out", declaration: "out: Pose" }], top: [], bottom: [] };
 
 function block(name: string, x: number, y: number, ports: unknown): TLShapeId {
   const id = createShapeId();

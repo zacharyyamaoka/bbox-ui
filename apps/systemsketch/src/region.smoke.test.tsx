@@ -10,6 +10,8 @@ import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
 
+import { portTypeOfDeclaration } from "@trunk/scene/portDeclaration";
+
 import { sceneFromRecords } from "./document/sceneFromStore";
 import { BLOCK_SHAPE_TYPE, BRANCH_TOOL_ID, LOOP_TOOL_ID, REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "./shapes/types";
 import { canvasOf, centreOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
@@ -31,7 +33,7 @@ interface BlockLike {
   parentId: string;
   x: number;
   y: number;
-  props: { name: string; ports: Record<string, { id: string; name: string; type: string }[]> };
+  props: { name: string; ports: Record<string, { id: string; declaration: string }[]> };
 }
 
 async function pickSystemRow(pattern: RegExp) {
@@ -67,7 +69,10 @@ describe("L5 — regions: control flow is containment, the header is a real bloc
 
     const corner = await waitFor(() => (region.props.cornerBlockId ? (app!.editor.getShape(region.props.cornerBlockId as TLShapeId) as BlockLike | undefined) : undefined), { what: "the corner block" });
     expect(corner.parentId).toBe(region.id);
-    expect(corner.props.ports.left.map((p) => p.type)).toEqual(["Iterable"]);
+    // The declared type is PARSED out of the one stored line (ruling 8) — the
+    // corner card's inlet is `Iterable: Iterable`, name then annotation.
+    expect(corner.props.ports.left.map((p) => p.declaration)).toEqual(["Iterable: Iterable"]);
+    expect(corner.props.ports.left.map((p) => portTypeOfDeclaration(p.declaration))).toEqual(["Iterable"]);
     expect(corner.props.ports.right.map((p) => p.id)).toEqual(["iter"]);
     // Top-left: the corner block's page position is within 24px of the region's own top-left.
     const regionEl = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${region.id}"] [data-slot="region"]`), { what: "the Region face (trunk component)" });
@@ -103,7 +108,7 @@ describe("L5 — regions: control flow is containment, the header is a real bloc
     const regionId = createShapeId();
     app.editor.createShape({ id: regionId, type: REGION_SHAPE_TYPE, x: 400, y: 100, props: { kind: "plain", name: "", w: 300, h: 240 } } as never);
     const a = createShapeId();
-    app.editor.createShape({ id: a, type: BLOCK_SHAPE_TYPE, x: 60, y: 160, props: { name: "a", view: "port", ports: { left: [], right: [{ id: "out", name: "out", type: "" }], top: [], bottom: [] } } } as never);
+    app.editor.createShape({ id: a, type: BLOCK_SHAPE_TYPE, x: 60, y: 160, props: { name: "a", view: "port", ports: { left: [], right: [{ id: "out", declaration: "out" }], top: [], bottom: [] } } } as never);
     const dot = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${a}"] [data-port-id="out"] [data-slot="port-dot"]`), { what: "dot" });
     const regionEl = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${regionId}"]`), { what: "region" });
     await userEvent.dragAndDrop(dot, regionEl);

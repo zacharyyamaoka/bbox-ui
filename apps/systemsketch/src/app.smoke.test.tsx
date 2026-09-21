@@ -26,7 +26,7 @@ interface BlockShapeLike {
   type: string;
   x: number;
   y: number;
-  props: { w: number; h: number; ports: Record<string, { id: string; name: string; type: string }[]>; anchors: { portId: string; x: number; y: number; side: string | null }[] };
+  props: { w: number; h: number; ports: Record<string, { id: string; declaration: string }[]>; anchors: { portId: string; x: number; y: number; side: string | null }[] };
 }
 
 describe("L0 — the app is stock tldraw with one system slot", () => {
@@ -81,7 +81,7 @@ describe("L0 — the app is stock tldraw with one system slot", () => {
       props: {
         name: "estimate()",
         view: "port",
-        ports: { left: [{ id: "frame", name: "frame", type: "Frame" }], right: [{ id: "pose", name: "Pose", type: "Pose" }], top: [], bottom: [] },
+        ports: { left: [{ id: "frame", declaration: "frame: Frame" }], right: [{ id: "pose", declaration: "Pose: Pose" }], top: [], bottom: [] },
       },
     } as never);
 
@@ -127,7 +127,7 @@ describe("L0 — the app is stock tldraw with one system slot", () => {
       type: BLOCK_SHAPE_TYPE,
       x: 100,
       y: 100,
-      props: { name: "mover", view: "port", ports: { left: [{ id: "in", name: "in", type: "" }], right: [], top: [], bottom: [] } },
+      props: { name: "mover", view: "port", ports: { left: [{ id: "in", declaration: "in" }], right: [], top: [], bottom: [] } },
     } as never);
     const header = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-slot="block-header"]`), { what: "the header" });
     const from = centreOf(header);

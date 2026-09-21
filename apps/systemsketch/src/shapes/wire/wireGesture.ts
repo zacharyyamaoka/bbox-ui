@@ -55,6 +55,7 @@ import { atom, type Atom, type Editor, type TLShape, type TLShapeId } from "tldr
 import type { TraceTerminalSpec } from "@trunk/components/trace.layout";
 import type { PortDirection } from "@trunk/scene/lint";
 import { validateConnection, type ValidateConnectionOptions } from "@trunk/scene/edgeValidation";
+import { portTypeOfDeclaration } from "@trunk/scene/portDeclaration";
 
 import { sceneFromRecords, type DocumentScene } from "../../document/sceneFromStore";
 import type { WireEnd } from "../../document/editEvents";
@@ -240,7 +241,7 @@ export function connectionRules(scene: DocumentScene): ValidateConnectionOptions
  *
  * An `ss-port` declares its own `direction`, so the answer is exact: an `in`
  * port needs something that EMITS. A block's ports declare no direction at
- * all (plan §3 — a block's port is `{id, name, type}`), so there is nothing
+ * all (a block's port is `{id, declaration}` — ruling 8), so there is nothing
  * to invert and the honest default is "find me a consumer": dragging out of a
  * block reads as "and then this goes to…". Stated as a call rather than a
  * fact, because the day `ss-block` ports carry a direction this function is
@@ -249,27 +250,30 @@ export function connectionRules(scene: DocumentScene): ValidateConnectionOptions
 function wantFor(editor: Editor, ref: DotRef): PendingEdgeDrop["want"] {
   const shape = editor.getShape(ref.nodeId);
   if (!shape) return { direction: "sink" };
-  const props = shape.props as { direction?: string; type?: string };
+  const props = shape.props as { direction?: string; declaration?: string };
   if (shape.type === PORT_SHAPE_TYPE) {
+    const declared = portTypeOfDeclaration(props.declaration ?? "");
     return {
       direction: props.direction === "in" ? "source" : "sink",
-      ...(props.type ? { types: [props.type] } : {}),
+      ...(declared === undefined ? {} : { types: [declared] }),
     };
   }
   const declared = blockPortType(shape, ref.portId);
-  return { direction: "sink", ...(declared ? { types: [declared] } : {}) };
+  return { direction: "sink", ...(declared === undefined ? {} : { types: [declared] }) };
 }
 
-/** The declared datatype of one of a block's ports, or `""` when it declares
- *  none — the same "empty is unset" reading `sceneFromRecords` applies. */
-function blockPortType(shape: TLShape, portId: string): string {
-  const ports = (shape.props as { ports?: Record<string, { id: string; type: string }[]> }).ports;
-  if (!ports) return "";
+/** The declared datatype of one of a block's ports, PARSED out of its one
+ *  declaration line (ruling 8 — there is no second field to read), or
+ *  `undefined` when it states none: the same "undefined = unknown, no
+ *  judgement" reading `sceneFromRecords` applies. */
+function blockPortType(shape: TLShape, portId: string): string | undefined {
+  const ports = (shape.props as { ports?: Record<string, { id: string; declaration: string }[]> }).ports;
+  if (!ports) return undefined;
   for (const side of Object.values(ports)) {
     const found = side.find((port) => port.id === portId);
-    if (found) return found.type;
+    if (found) return portTypeOfDeclaration(found.declaration);
   }
-  return "";
+  return undefined;
 }
 
 /* ------------------------------------------------------------------ */

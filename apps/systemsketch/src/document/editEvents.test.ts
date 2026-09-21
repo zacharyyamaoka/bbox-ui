@@ -99,7 +99,7 @@ describe("subscribeEditEvents — one batch per store transaction", () => {
     const a = createShapeId("a");
     const b = createShapeId("b");
     const w = createShapeId("w");
-    const ports = { left: [{ id: "in", name: "in", type: "" }], right: [{ id: "out", name: "out", type: "" }], top: [], bottom: [] };
+    const ports = { left: [{ id: "in", declaration: "in" }], right: [{ id: "out", declaration: "out" }], top: [], bottom: [] };
     t.store.put([t.shape(a, BLOCK_SHAPE_TYPE, { ports }), t.shape(b, BLOCK_SHAPE_TYPE, { ports })]);
     t.store.put([
       t.shape(w, WIRE_SHAPE_TYPE),
@@ -116,7 +116,7 @@ describe("subscribeEditEvents — one batch per store transaction", () => {
     const b = createShapeId("b");
     const c = createShapeId("c");
     const w = createShapeId("w");
-    const ports = { left: [{ id: "in", name: "in", type: "" }], right: [{ id: "out", name: "out", type: "" }], top: [], bottom: [] };
+    const ports = { left: [{ id: "in", declaration: "in" }], right: [{ id: "out", declaration: "out" }], top: [], bottom: [] };
     t.store.put([t.shape(a, BLOCK_SHAPE_TYPE, { ports }), t.shape(b, BLOCK_SHAPE_TYPE, { ports }), t.shape(c, BLOCK_SHAPE_TYPE, { ports })]);
     const wb = createBindingId("wb");
     t.store.put([

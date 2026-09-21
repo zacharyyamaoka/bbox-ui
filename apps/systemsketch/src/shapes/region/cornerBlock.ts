@@ -150,18 +150,19 @@ export function cornerBlockPropsFor(kind: RegionKind): Partial<BlockShapeProps> 
         view: "port",
         ports: {
           ...NO_PORTS,
-          left: [{ id: "iterable", name: "Iterable", type: "Iterable" }],
+          left: [{ id: "iterable", declaration: "Iterable: Iterable" }],
           // The element's own type is whatever the collection holds, which
-          // this header cannot know — `""` is the document model's honest
-          // "no type stated" (sceneFromStore.ts's `portTypes` drops it).
-          right: [{ id: "iter", name: "Iter", type: "" }],
+          // this header cannot know — a bare name with no `:` is the document
+          // model's honest "no type stated" (sceneFromStore.ts's `portTypes`
+          // drops it).
+          right: [{ id: "iter", declaration: "Iter" }],
         },
       };
     case "while":
       return {
         name: "While Loop",
         view: "port",
-        ports: { ...NO_PORTS, left: [{ id: "condition", name: "Bool", type: "Bool" }] },
+        ports: { ...NO_PORTS, left: [{ id: "condition", declaration: "Bool: Bool" }] },
       };
     case "branch":
       return {
@@ -170,7 +171,7 @@ export function cornerBlockPropsFor(kind: RegionKind): Partial<BlockShapeProps> 
         // `Pasted image 20260918145125.png` / `…144504.png`: Zach's own
         // sketches label the selector's inlet `input 1`. A second condition
         // is an ordinary rail edit on a real block — no region API needed.
-        ports: { ...NO_PORTS, left: [{ id: "input_1", name: "input 1", type: "" }] },
+        ports: { ...NO_PORTS, left: [{ id: "input_1", declaration: "input 1" }] },
       };
     // A plain region is a bare scope: a frame you drop things into, with no
     // interface to publish. It gets no corner block at all rather than an

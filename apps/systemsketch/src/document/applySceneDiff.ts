@@ -37,6 +37,7 @@
 // faithful apply instead of inventing either.
 import type { Editor, TLParentId, TLShape, TLShapeId } from "tldraw";
 
+import { withPortDeclarationType } from "@trunk/scene/portDeclaration";
 import type { SceneEdge, SceneNode } from "@trunk/scene/scene";
 import { diffScene, type SceneEdgeDiff, type SceneNodeDiff } from "@trunk/scene/sceneDiff";
 import type { WireStyleData } from "@trunk/scene/sceneWires";
@@ -79,16 +80,18 @@ type DocEdge = SceneEdge<WireStyleData>;
  *
  * The scene DOES own which ports exist, on which side, in what order — so a
  * port it no longer names is dropped, and an id it newly names is created with
- * its id as its first name (the only string available). Only the fields the
- * scene cannot speak are inherited, and they are inherited BY ID across sides,
- * so a port moved from `left` to `right` keeps its name too.
+ * its id as its first declaration (the only string available). The authored
+ * declaration is inherited BY ID across sides, so a port moved from `left` to
+ * `right` keeps the line someone typed on it.
  *
- * `type` is inherited the same way, for a sharper reason: `blockData` writes
- * `portTypes` only for a NON-EMPTY type ("a declared-but-empty type is the
- * honest 'no type stated'"), so a missing entry means "no opinion", never
- * "clear it". Clearing a port's type is a document edit that cannot be
- * expressed through this seam; treating absence as a clear would erase every
- * type on the board on the next unrelated edit.
+ * `portTypes` RE-ANNOTATES rather than replaces, for a reason ruling 8 made
+ * sharper: a type is not a field of its own any more, it is a slice of the
+ * declaration, so honouring a producer's type has to splice that slice and
+ * leave the authored name alone (`withPortDeclarationType`). Absence still
+ * means "no opinion", never "clear it" — `blockData` omits a port that states
+ * no type ("undefined = unknown, no judgement"), so treating a missing entry
+ * as a clear would strip every annotation on the board on the next unrelated
+ * edit.
  */
 function blockPorts(data: DocNodeData, existing: TLShape | undefined): BlockPorts {
   const authored = new Map<string, BlockPort>();
@@ -98,8 +101,9 @@ function blockPorts(data: DocNodeData, existing: TLShape | undefined): BlockPort
   }
   const rail = (ids: readonly string[] | undefined): BlockPort[] =>
     (ids ?? []).map((id) => {
-      const before = authored.get(id);
-      return { id, name: before?.name ?? id, type: data.portTypes?.[id] ?? before?.type ?? "" };
+      const declaration = authored.get(id)?.declaration ?? id;
+      const stated = data.portTypes?.[id];
+      return { id, declaration: stated === undefined ? declaration : withPortDeclarationType(declaration, stated) };
     });
   return {
     left: rail(data.ports?.left),
@@ -141,7 +145,10 @@ function propsFromData(data: DocNodeData, existing?: TLShape): Record<string, un
     return { code: data.code ?? "", ...(data.language ? { language: data.language } : {}) };
   }
   if (data.kind === "port") {
-    return { name: data.name, type: data.type ?? "", direction: data.direction ?? "out" };
+    // The whole line, verbatim when the projection carried one. A producer
+    // that only knows a name still lands a valid declaration — a bare name IS
+    // one (`@trunk/scene/portDeclaration`).
+    return { declaration: data.declaration ?? data.name, direction: data.direction ?? "out" };
   }
   return { name: data.name, ...(data.regionKind ? { kind: data.regionKind } : {}), cornerBlockId: data.cornerBlockId ?? "" };
 }

@@ -94,10 +94,10 @@ describe("ss-block (L0)", () => {
         view: "port",
         ports: {
           left: [
-            { id: "frame", name: "frame", type: "Frame" },
-            { id: "gain", name: "gain", type: "Float" },
+            { id: "frame", declaration: "frame: Frame" },
+            { id: "gain", declaration: "gain: Float" },
           ],
-          right: [{ id: "pose", name: "Pose", type: "Pose" }],
+          right: [{ id: "pose", declaration: "Pose: Pose" }],
           top: [],
           bottom: [],
         },
@@ -154,7 +154,8 @@ describe("ss-code (L1)", () => {
 
 describe("ss-port (L2)", () => {
   it("defaults match the contract", () => {
-    expect(defaultsOf(PORT_SHAPE_TYPE)).toEqual({ w: 120, h: 32, name: "port", type: "", direction: "out", anchors: [] });
+    // ONE stored string, not a name beside a type (ruling 8).
+    expect(defaultsOf(PORT_SHAPE_TYPE)).toEqual({ w: 120, h: 32, declaration: "port", direction: "out", anchors: [] });
   });
 
   it("validates a measured floating port whose one anchor is FLOATING_PORT_ID", () => {
@@ -163,8 +164,7 @@ describe("ss-port (L2)", () => {
       shapeRecord(s, createShapeId("p1"), PORT_SHAPE_TYPE, {
         w: 120,
         h: 32,
-        name: "gain",
-        type: "float",
+        declaration: "gain: float",
         direction: "in",
         anchors: [{ portId: FLOATING_PORT_ID, x: 6, y: 16, side: null }],
       }),
@@ -187,7 +187,7 @@ describe("ss-wire + ss-wire-binding (L3)", () => {
       shapeRecord(s, id, BLOCK_SHAPE_TYPE, {
         ...defaultsOf(BLOCK_SHAPE_TYPE),
         name,
-        ports: { left: [{ id: "in", name: "in", type: "" }], right: [{ id: "out", name: "out", type: "" }], top: [], bottom: [] },
+        ports: { left: [{ id: "in", declaration: "in" }], right: [{ id: "out", declaration: "out" }], top: [], bottom: [] },
       });
     s.put([
       block(a, "a"),
@@ -233,7 +233,7 @@ describe("ss-region (L5)", () => {
         {
           ...defaultsOf(BLOCK_SHAPE_TYPE),
           name: "For Loop",
-          ports: { left: [{ id: "iterable", name: "Iterable", type: "Iterable" }], right: [{ id: "iter", name: "iter", type: "" }], top: [], bottom: [] },
+          ports: { left: [{ id: "iterable", declaration: "Iterable: Iterable" }], right: [{ id: "iter", declaration: "iter" }], top: [], bottom: [] },
         },
         { parentId: region },
       ),

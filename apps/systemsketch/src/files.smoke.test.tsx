@@ -96,7 +96,7 @@ async function hostWrite(path: string, source: string, options: { force?: boolea
 
 function placeBlock(editor: Editor, name: string, x = 240, y = 240): TLShapeId {
   const id = createShapeId();
-  editor.createShape({ id, type: BLOCK_SHAPE_TYPE, x, y, props: { name, view: "port", ports: { left: [{ id: "in", name: "in", type: "" }], right: [], top: [], bottom: [] } } } as never);
+  editor.createShape({ id, type: BLOCK_SHAPE_TYPE, x, y, props: { name, view: "port", ports: { left: [{ id: "in", declaration: "in" }], right: [], top: [], bottom: [] } } } as never);
   return id;
 }
 
