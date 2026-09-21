@@ -21,6 +21,8 @@ import { createShapeId, type Editor, type TLShapeId } from "tldraw";
 import { userEvent } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest";
 
+import { DEFAULT_NEW_DOCUMENT_SUFFIX } from "@trunk/files/workspaceModel";
+
 import { LEGACY_SYSTEMSKETCH_URL } from "./chrome/legacyApp";
 import { memoryDocumentLocation, resetLaunchConfig, setDocumentLocation, setFileHostBaseUrl, type MemoryDocumentLocation } from "./files/launchConfig";
 import { AUTOSAVE_DEBOUNCE_MS } from "./files/session";
@@ -144,8 +146,11 @@ const rowFor = (path: string) => document.querySelector<HTMLElement>(`[data-test
 /* ------------------------------------------------------------ app mode */
 
 describe("app file navigation (the default) — real .tldr files through the local file host", () => {
-  it("Save As… from a scratch board writes a real .tldr, and the board survives open → edit → save → reopen", async () => {
-    const path = `${host.workspace}/roundtrip.tldr`;
+  it("Save As… from a scratch board writes a real .bbox, and the board survives open → edit → save → reopen", async () => {
+    // `.bbox` is what a NEW document gets (Zach, 2026-09-21). The fixtures
+    // below that are pre-written to disk deliberately stay `.tldr` — the
+    // rename changed what we write, not what we read.
+    const path = `${host.workspace}/roundtrip${DEFAULT_NEW_DOCUMENT_SUFFIX}`;
     const first = await mountOn(null);
     placeBlock(first.app.editor, "rt-1");
 
@@ -159,7 +164,7 @@ describe("app file navigation (the default) — real .tldr files through the loc
     const onDisk = await eventually(async () => {
       const doc = await hostLoad(path);
       return doc.source ? doc : null;
-    }, "roundtrip.tldr written into the temp workspace");
+    }, `roundtrip${DEFAULT_NEW_DOCUMENT_SUFFIX} written into the temp workspace`);
     expect(blockNamesIn(onDisk.source)).toEqual(["rt-1"]);
     // From a scratch board the window moves onto the file (a recorded
     // `assign`, or `replaceBoard` — either names the board); the reopen below
@@ -225,11 +230,17 @@ describe("app file navigation (the default) — real .tldr files through the loc
     expect(stat.digest).toBe(written.digest);
   });
 
-  it("Open… lists the workspace; a .tldr row opens that board, a .systemsketch row hands off to the archived app", async () => {
+  // WHY a `.bbox` row is opened HERE and not in its own case: the rename is
+  // only real if the NEW extension and the ONES ALREADY ON DISK are proved by
+  // the same journey, through the same navigator. Zach has 84 `.systemsketch`
+  // and 31 `.tldr` boards; "we write .bbox now" must not have cost him any.
+  it("Open… lists the workspace; .bbox and .tldr rows open that board, a .systemsketch row hands off to the archived app", async () => {
     const tldr = `${host.workspace}/pick-me.tldr`;
+    const bbox = `${host.workspace}/pick-me-too.bbox`;
     const legacy = `${host.workspace}/legacy-board.systemsketch`;
     const source = await boardWith(["picked"]);
     await hostWrite(tldr, source);
+    await hostWrite(bbox, await boardWith(["picked-bbox"]));
     await hostWrite(legacy, JSON.stringify({ systemSketch: { formatVersion: 2 }, ...JSON.parse(source) }));
 
     const first = await mountOn(null);
@@ -239,6 +250,14 @@ describe("app file navigation (the default) — real .tldr files through the loc
     await waitFor(() => first.location.board === tldr, { what: "the window now names pick-me.tldr" });
     const reopened = await remount(first.location.board);
     await waitFor(() => blockNamed(reopened.app.editor, "picked"), { what: "the picked board's block" });
+
+    const bboxWindow = await remount(null);
+    await runFileCommand(bboxWindow.app, "Open…");
+    await waitFor(() => navigatorDialog("open"), { what: "the navigator for the .bbox row" });
+    await userEvent.dblClick(await waitFor(() => rowFor(bbox), { what: "the pick-me-too.bbox row" }));
+    await waitFor(() => bboxWindow.location.board === bbox, { what: "the window now names pick-me-too.bbox" });
+    const reopenedBbox = await remount(bboxWindow.location.board);
+    await waitFor(() => blockNamed(reopenedBbox.app.editor, "picked-bbox"), { what: "the .bbox board's block" });
 
     const second = await remount(null);
     await runFileCommand(second.app, "Open…");
@@ -250,11 +269,16 @@ describe("app file navigation (the default) — real .tldr files through the loc
     expect(url.searchParams.get("board")).toBe(legacy);
   });
 
-  it("New reserves the next Untitled .tldr in the workspace folder, and the file appears once the board has content", async () => {
+  it("New reserves the next Untitled .bbox in the workspace folder, and the file appears once the board has content", async () => {
     const first = await mountOn(null);
     await runFileCommand(first.app, "New");
     const untitled = await waitFor(() => first.location.board, { what: "a board path for the new document" });
-    expect(untitled).toMatch(new RegExp(`^${host.workspace.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/Untitled( \\d+)?\\.tldr$`));
+    // The one assertion that pins WHAT WE WRITE. `DEFAULT_NEW_DOCUMENT_SUFFIX`
+    // is the component's own constant, so this cannot drift from the model.
+    expect(DEFAULT_NEW_DOCUMENT_SUFFIX).toBe(".bbox");
+    expect(untitled).toMatch(
+      new RegExp(`^${host.workspace.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/Untitled( \\d+)?\\${DEFAULT_NEW_DOCUMENT_SUFFIX}$`),
+    );
 
     const second = await remount(untitled);
     await waitFor(() => /Untitled/.test(titleOf(second.app)?.textContent ?? ""), { what: "the title reads Untitled…" });
@@ -269,7 +293,7 @@ describe("app file navigation (the default) — real .tldr files through the loc
     await runFileCommand(first.app, "New window");
     const opened = await waitFor(() => (first.location.windows[0]?.url ? first.location.windows[0] : null), { what: "a second window pointed at a board" });
     const board = new URL(opened.url!, window.location.href).searchParams.get("board");
-    expect(board).toMatch(/\/Untitled( \d+)?\.tldr$/);
+    expect(board).toMatch(new RegExp(`/Untitled( \\d+)?\\${DEFAULT_NEW_DOCUMENT_SUFFIX}$`));
     expect(board!.startsWith(`${host.workspace}/`)).toBe(true);
     expect(first.location.assigned).toEqual([]);
     expect(first.location.board).toBeNull();
@@ -416,8 +440,8 @@ describe("native file navigation — the browser's File System Access pickers, n
     await closeMenus();
   });
 
-  it("Save As… calls showSaveFilePicker for a .tldr and writes the board through the handle — no navigator, no host", async () => {
-    const saved = fakeHandle("native-board.tldr");
+  it("Save As… calls showSaveFilePicker for a .bbox and writes the board through the handle — no navigator, no host", async () => {
+    const saved = fakeHandle("native-board.bbox");
     const calls: { suggestedName?: string; types?: { accept: Record<string, readonly string[]> }[] }[] = [];
     stubWindow("showSaveFilePicker", async (options: (typeof calls)[number]) => {
       calls.push(options);
@@ -428,8 +452,13 @@ describe("native file navigation — the browser's File System Access pickers, n
     await runFileCommand(mounted, "Save As…");
     await waitFor(() => blockNamesIn(saved.content || null).includes("native-1"), { what: "the board written through the handle" });
     expect(calls).toHaveLength(1);
-    expect(calls[0].suggestedName).toMatch(/\.tldr$/);
-    expect(Object.values(calls[0].types?.[0]?.accept ?? {}).flat()).toContain(".tldr");
+    expect(calls[0].suggestedName).toMatch(new RegExp(`\\${DEFAULT_NEW_DOCUMENT_SUFFIX}$`));
+    // The filter still OFFERS `.tldr`, or the 31 boards this build already
+    // wrote would be greyed out in the OS dialog — the rename is what we
+    // write, never what we can open.
+    const offered = Object.values(calls[0].types?.[0]?.accept ?? {}).flat();
+    expect(offered).toContain(DEFAULT_NEW_DOCUMENT_SUFFIX);
+    expect(offered).toContain(".tldr");
     expect(navigatorDialog("saveAs")).toBeNull();
     await waitFor(() => titleOf(mounted)?.textContent?.includes("native-board"), { what: "the title reads the picked file's name" });
   });
@@ -518,8 +547,11 @@ function holdWriteResponses(count: number) {
 
 describe("app file navigation — a document this window has left is never written again", () => {
   it("P1-3: a save that answers after Save As never drags the window back onto the old file, and the next edit goes to the NEW one", async () => {
+    // `a` is pre-written and therefore a legacy `.tldr`; `b` is minted by Save
+    // As, so it takes what this build writes. Both halves of the rename, in
+    // one journey.
     const a = `${host.workspace}/stale-a.tldr`;
-    const b = `${host.workspace}/stale-b.tldr`;
+    const b = `${host.workspace}/stale-b${DEFAULT_NEW_DOCUMENT_SUFFIX}`;
     await hostWrite(a, await boardWith(["a-seed"]));
 
     const { app: mounted, location } = await mountOn(a);

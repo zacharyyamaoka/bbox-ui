@@ -38,7 +38,8 @@ export interface DocumentLocation {
    *  file-backed board); `null` drops `?board=`. */
   replaceBoard(path: string | null): void;
   /** Leave this page for `url` (Open/New from a scratch board; a
-   *  `.systemsketch` handed to the archived app). */
+   *  `.systemsketch` handed to the archived app — `.bbox` and `.tldr` open
+   *  in this one). */
   assign(url: string): void;
   /** Open a new window NOW; `null` when the browser refused (pop-up blocked). */
   openWindow(): WindowTarget | null;

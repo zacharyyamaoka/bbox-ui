@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   NATIVE_PICKER_ID,
-  TLDR_PICKER_TYPES,
+  BOARD_PICKER_TYPES,
   createNativeFileAccess,
   isNativeFileAccessSupported,
   sha256Hex,
@@ -77,7 +77,7 @@ describe("native file access", () => {
     const showOpenFilePicker = vi.fn(async () => [picked]);
     const files = createNativeFileAccess(host({ showOpenFilePicker, showSaveFilePicker: vi.fn() }));
     const doc = await files.open();
-    expect(showOpenFilePicker).toHaveBeenCalledWith(expect.objectContaining({ id: NATIVE_PICKER_ID, types: TLDR_PICKER_TYPES, multiple: false }));
+    expect(showOpenFilePicker).toHaveBeenCalledWith(expect.objectContaining({ id: NATIVE_PICKER_ID, types: BOARD_PICKER_TYPES, multiple: false }));
     expect(doc).toMatchObject({ name: "Board.tldr", title: "Board", source: '{"records":[]}', digest: sha('{"records":[]}') });
     expect(doc!.handle).toBe(picked);
   });
@@ -95,7 +95,7 @@ describe("native file access", () => {
     const showSaveFilePicker = vi.fn(async () => target);
     const files = createNativeFileAccess(host({ showOpenFilePicker: vi.fn(), showSaveFilePicker }));
     const doc = await files.saveAs("Untitled board", '{"v":1}');
-    expect(showSaveFilePicker).toHaveBeenCalledWith(expect.objectContaining({ id: NATIVE_PICKER_ID, suggestedName: "Untitled board.tldr", types: TLDR_PICKER_TYPES }));
+    expect(showSaveFilePicker).toHaveBeenCalledWith(expect.objectContaining({ id: NATIVE_PICKER_ID, suggestedName: "Untitled board.bbox", types: BOARD_PICKER_TYPES }));
     expect(target.writes).toEqual(['{"v":1}']);
     expect(doc).toMatchObject({ name: "Picked Name.tldr", title: "Picked Name", source: '{"v":1}', digest: sha('{"v":1}') });
   });

@@ -8,9 +8,13 @@
 //   - cases for functions deliberately NOT ported are dropped (the envelope,
 //     `exportedTldrawPath`, `workspaceBrowserDirectory`, the external-reload
 //     fences `nextSyncAction`/`canApplyExternalReload`);
-//   - the new-document default is `.tldr` here (workspaceModel.ts header), so
-//     the two donor cases that pinned `.systemsketch` as the default pin
-//     `.tldr` instead — and still prove a typed known suffix is honoured;
+//   - the new-document default is `.bbox` here (workspaceModel.ts header, and
+//     Zach's 2026-09-21 ruling "lets call this file type .bbox"), so the donor
+//     cases that pinned `.systemsketch` as the default pin `.bbox` instead —
+//     and still prove a typed known suffix is honoured. The suffixes this
+//     build no longer WRITES (`.systemsketch`, `.tldr`) keep their own cases,
+//     because "still opens" is the half of the rename that can silently
+//     regress;
 //   - storage/`now`/`base` are passed explicitly (the port takes no
 //     `window` default);
 //   - the formatting helpers from LocalWorkspace.tsx:1662-1688 gain cases.
@@ -18,10 +22,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   autosaveRetryDelay,
+  BBOX_SUFFIX,
   autosaveSchedule,
   breadcrumbTrail,
   browserRows,
   claimUntitledPath,
+  DEFAULT_NEW_DOCUMENT_SUFFIX,
+  DOCUMENT_SUFFIXES,
   documentEncoding,
   documentHref,
   documentPathFor,
@@ -52,13 +59,32 @@ function memoryStorage(initial = "[]") {
 }
 
 describe("local workspace model", () => {
-  it("makes new documents .tldr and honours a typed .systemsketch", () => {
-    expect(documentPathFor("/home/zach/SystemSketch", "API map")).toBe("/home/zach/SystemSketch/API map.tldr");
+  it("makes new documents .bbox and honours a typed .tldr or .systemsketch", () => {
+    expect(DEFAULT_NEW_DOCUMENT_SUFFIX).toBe(BBOX_SUFFIX);
+    expect(documentPathFor("/home/zach/SystemSketch", "API map")).toBe("/home/zach/SystemSketch/API map.bbox");
+    expect(documentPathFor("/home/zach/SystemSketch", "API map.bbox")).toBe("/home/zach/SystemSketch/API map.bbox");
     expect(documentPathFor("/home/zach/SystemSketch", "API map.tldr")).toBe("/home/zach/SystemSketch/API map.tldr");
     expect(documentPathFor("/home/zach/SystemSketch", "Legacy.systemsketch")).toBe("/home/zach/SystemSketch/Legacy.systemsketch");
-    expect(documentPathFor("/home/zach/SystemSketch", "../bad/name")).toBe("/home/zach/SystemSketch/-bad-name.tldr");
+    expect(documentPathFor("/home/zach/SystemSketch", "../bad/name")).toBe("/home/zach/SystemSketch/-bad-name.bbox");
     expect(documentPathFor("/home/zach/SystemSketch", "Board", ".systemsketch")).toBe("/home/zach/SystemSketch/Board.systemsketch");
     expect(documentPathFor("/home/zach/SystemSketch", "   ")).toBeNull();
+  });
+
+  // The half of the rename that can regress in silence: nothing ON DISK moved,
+  // so every suffix that opened before this ruling still has to open after it.
+  it("still opens every extension already on disk — 84 .systemsketch and 31 .tldr boards", () => {
+    expect([...DOCUMENT_SUFFIXES]).toEqual([".bbox", ".systemsketch", ".tldr"]);
+    expect(documentSuffix("/home/bam/SystemSketch/bbox-ui-v3.systemsketch")).toBe(".systemsketch");
+    expect(documentSuffix("/home/bam/SystemSketch/02_literal_argument.tldr")).toBe(".tldr");
+    expect(documentSuffix("/home/bam/SystemSketch/Arm.bbox")).toBe(".bbox");
+    expect(documentSuffix("/home/bam/SystemSketch/Arm.BBOX")).toBe(".bbox");
+    expect(documentSuffix("/home/bam/SystemSketch/notes.json")).toBeNull();
+    // A bare ".bbox" is a dotfile, not a board — the length guard, kept.
+    expect(documentSuffix("/home/bam/SystemSketch/.bbox")).toBeNull();
+    expect(documentTitle("/home/bam/SystemSketch/Arm.bbox")).toBe("Arm");
+    expect(documentEncoding("/boards/Map.bbox")).toBe("tldraw");
+    expect(renamedDocumentPath("/boards/Old.systemsketch", "New")).toBe("/boards/New.systemsketch");
+    expect(renamedDocumentPath("/boards/Old.bbox", "New")).toBe("/boards/New.bbox");
   });
 
   it("reads a title out of either extension, and renaming never changes the type", () => {
@@ -75,10 +101,11 @@ describe("local workspace model", () => {
     expect(parentDirectory("/Map.tldr")).toBe("/");
   });
 
-  it("allocates the next untitled document by title, across both extensions", () => {
-    expect(nextUntitledDocumentPath("/boards", ["/boards/Untitled.systemsketch"])).toBe("/boards/Untitled 2.tldr");
-    expect(nextUntitledDocumentPath("/boards", [])).toBe("/boards/Untitled.tldr");
-    expect(nextUntitledDocumentPath("/boards", ["/boards/Untitled.tldr", "/boards/Untitled 2.systemsketch"])).toBe("/boards/Untitled 3.tldr");
+  it("allocates the next untitled document by title, across every extension", () => {
+    expect(nextUntitledDocumentPath("/boards", ["/boards/Untitled.systemsketch"])).toBe("/boards/Untitled 2.bbox");
+    expect(nextUntitledDocumentPath("/boards", [])).toBe("/boards/Untitled.bbox");
+    expect(nextUntitledDocumentPath("/boards", ["/boards/Untitled.tldr", "/boards/Untitled 2.systemsketch"])).toBe("/boards/Untitled 3.bbox");
+    expect(nextUntitledDocumentPath("/boards", ["/boards/Untitled.bbox"])).toBe("/boards/Untitled 2.bbox");
     expect(nextUntitledDocumentPath("/boards", [], ".systemsketch")).toBe("/boards/Untitled.systemsketch");
   });
 
@@ -224,14 +251,14 @@ describe("untitled reservations across windows", () => {
     const first = nextUntitledDocumentPath("/boards", []);
     claimUntitledPath(first, 1000, storage);
     const second = nextUntitledDocumentPath("/boards", readUntitledClaims(1000, storage));
-    expect(first).toBe("/boards/Untitled.tldr");
-    expect(second).toBe("/boards/Untitled 2.tldr");
+    expect(first).toBe("/boards/Untitled.bbox");
+    expect(second).toBe("/boards/Untitled 2.bbox");
   });
 
   it("reserves the title, so a claim blocks that name in either extension", () => {
     const storage = memoryStorage();
     claimUntitledPath("/boards/Untitled.systemsketch", 1000, storage);
-    expect(nextUntitledDocumentPath("/boards", readUntitledClaims(1000, storage))).toBe("/boards/Untitled 2.tldr");
+    expect(nextUntitledDocumentPath("/boards", readUntitledClaims(1000, storage))).toBe("/boards/Untitled 2.bbox");
   });
 
   it("lets a stale reservation expire so names are never lost for good", () => {

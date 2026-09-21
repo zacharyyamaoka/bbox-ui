@@ -11,6 +11,7 @@ import {
 } from "./compareReview";
 import { compareBoards, type CompareChange, type RecordMap } from "./compareModel";
 import type { HistoryRecord } from "./historyList";
+import { DEFAULT_NEW_DOCUMENT_SUFFIX } from "../files/workspaceModel";
 import { cn } from "../lib/utils";
 
 /**
@@ -246,7 +247,7 @@ export const NoSnapshotLoaded: Story = {
     <Demo
       comparison={null}
       versions={[LIVE_RECORD]}
-      problem="No prior versions found beside this board. Save a `<name>.v1.systemsketch` next to it to compare against."
+      problem={`No prior versions found beside this board. Save a \`<name>.v1${DEFAULT_NEW_DOCUMENT_SUFFIX}\` next to it to compare against.`}
       noSnapshot
     />
   ),

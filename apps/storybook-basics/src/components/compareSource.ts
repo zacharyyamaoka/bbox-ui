@@ -1,6 +1,6 @@
 /**
  * src/components/compareSource.ts — where the "before" side of a comparison
- * comes from: the `<stem>.vN.systemsketch` sibling convention.
+ * comes from: the `<stem>.vN.<ext>` sibling convention.
  *
  * Ported from /home/bam/systemsketch/src/compare/compareSource.ts:1-111,
  * with the one structural change this repo's core rule requires (CLAUDE.md,
@@ -29,7 +29,7 @@
  *   `discoverHistory` changes; `compareReview.tsx` above it already speaks
  *   in entries and does not care where they came from.
  */
-
+import { DEFAULT_NEW_DOCUMENT_SUFFIX, DOCUMENT_SUFFIXES } from "../files/workspaceModel"
 import type { HistoryRecord } from "./historyList"
 
 /** One endpoint a comparison can be pointed at. */
@@ -52,18 +52,28 @@ export type ReadSource = (path: string) => Promise<string | null>
 /** How many `.vN` siblings to probe for before giving up. Donor :43. */
 export const HISTORY_PROBE_DEPTH = 6
 
-/** The two extensions a SystemSketch board can carry. Donor :46. */
-const BOARD_EXTENSION = /^(.*)(\.systemsketch|\.tldr)$/
+/**
+ * Every extension a board can carry. Donor :46 hardcoded two; this builds the
+ * alternation from `DOCUMENT_SUFFIXES` so the version-probe cannot fall behind
+ * the file type. It already nearly did: when `.bbox` landed (Zach, 2026-09-21)
+ * a hardcoded pair would have left `pipeline.bbox` unmatched, and the fallback
+ * below would then have probed `pipeline.bbox.v1.systemsketch` — a path that
+ * can never exist, so Compare would have reported "no prior versions" for
+ * every new board and been believed.
+ */
+const BOARD_EXTENSION = new RegExp(`^(.*)(${DOCUMENT_SUFFIXES.map((suffix) => suffix.replace(".", "\\.")).join("|")})$`)
 
 /**
  * Split a board path into the stem a `.vN` sibling hangs off, and its
- * extension. Donor :45-49, unchanged: an unrecognised path keeps its whole
- * self as the stem and is assumed to be `.systemsketch`, so a probe still
- * produces a well-formed candidate rather than throwing.
+ * extension. Donor :45-49: an unrecognised path keeps its whole self as the
+ * stem and is assumed to carry the type this build writes, so a probe still
+ * produces a well-formed candidate rather than throwing. (The donor's
+ * assumption was `.systemsketch` because that was ITS own type; the constant
+ * moved, the rule did not.)
  */
 export function stemOf(path: string): { stem: string; extension: string } {
   const match = path.match(BOARD_EXTENSION)
-  if (!match) return { stem: path, extension: ".systemsketch" }
+  if (!match) return { stem: path, extension: DEFAULT_NEW_DOCUMENT_SUFFIX }
   return { stem: match[1], extension: match[2] }
 }
 
@@ -77,7 +87,7 @@ export function fileNameOf(path: string): string {
  * `discoverHistory`, split out so the convention can be tested without a
  * reader at all.
  *
- * WHY: this IS the `<name>.v1.systemsketch` convention. It is the only
+ * WHY: this IS the `<name>.v1.<ext>` convention. It is the only
  * thing standing in for a version store, so it is worth pinning on its own
  * rather than only through whatever a fake reader happened to answer.
  */
@@ -151,7 +161,7 @@ export async function discoverHistory(
 export function historyProblem(versions: readonly CompareVersion[]): string | null {
   const priors = versions.filter((version) => !version.isCurrent)
   if (priors.length > 0) return null
-  return "No prior versions found beside this board. Save a `<name>.v1.systemsketch` next to it to compare against."
+  return `No prior versions found beside this board. Save a \`<name>.v1${DEFAULT_NEW_DOCUMENT_SUFFIX}\` next to it to compare against.`
 }
 
 /**

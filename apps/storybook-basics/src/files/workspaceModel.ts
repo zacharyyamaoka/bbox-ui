@@ -18,18 +18,39 @@
 // build — the digest fence still refuses to clobber, see the plan).
 //
 // THE ONE DELIBERATE CHANGE: the donor defaulted every NEW document to
-// `.systemsketch`. This app's file format is a plain `.tldr` (the rebuild
-// plan §8.3; `apps/systemsketch/src/chrome/fileActions.ts` header), so
-// `documentPathFor` and `nextUntitledDocumentPath` default to
-// `DEFAULT_NEW_DOCUMENT_SUFFIX` = `.tldr`. Everything else — both suffixes
-// recognized, titles judged across both, a typed known suffix honoured — is
-// unchanged.
+// `.systemsketch`. What this app WRITES is now `.bbox` — Zach, 2026-09-21:
+// "lets call this file type .bbox as this project is no longer system sketch
+// its just the bbox whiteboard". Everything else — every known suffix still
+// recognized, titles judged across all of them, a typed known suffix
+// honoured — is unchanged.
+//
+// WHY three suffixes and not one: a rename of what we WRITE must never be a
+// break of what we READ. On disk right now sit 84 `.systemsketch` boards (the
+// archived app's envelope, still handed off to it by
+// `apps/systemsketch/src/files/session.tsx`) and 31 `.tldr` boards this build
+// itself wrote before the rename. Dropping either suffix from
+// `DOCUMENT_SUFFIXES` would not "migrate" those files, it would make them
+// invisible to the navigator — the one outcome the rename is not allowed to
+// have. The tempting alternative, rewriting the extension on disk, is a
+// migration, and a migration is a thing Zach asks for, not a thing a rename
+// does behind him.
+//
+// WHY `.bbox` carries the SAME BYTES as `.tldr`: the rename changes the name
+// of the format, not the format. `serializeBoard`
+// (`apps/systemsketch/src/chrome/FileMenu/fileActions.ts`) is unchanged, so a
+// `.bbox` is a plain tldraw document — which is why `documentEncoding` calls
+// it `"tldraw"` and why the file host holds it to the same no-envelope rule
+// a `.tldr` gets.
 
+export const BBOX_SUFFIX = ".bbox";
 export const SYSTEMSKETCH_SUFFIX = ".systemsketch";
 export const TLDRAW_SUFFIX = ".tldr";
-export const DOCUMENT_SUFFIXES = [SYSTEMSKETCH_SUFFIX, TLDRAW_SUFFIX] as const;
+/** Every suffix that OPENS. `.bbox` leads because it is what we write, and
+ *  `default_document_path`'s python twin walks this same order. */
+export const DOCUMENT_SUFFIXES = [BBOX_SUFFIX, SYSTEMSKETCH_SUFFIX, TLDRAW_SUFFIX] as const;
 export type DocumentSuffix = (typeof DOCUMENT_SUFFIXES)[number];
-export const DEFAULT_NEW_DOCUMENT_SUFFIX: DocumentSuffix = TLDRAW_SUFFIX;
+/** The one suffix this build WRITES. */
+export const DEFAULT_NEW_DOCUMENT_SUFFIX: DocumentSuffix = BBOX_SUFFIX;
 export const RECENT_DOCUMENTS_KEY = "systemsketch.recentDocuments.v1";
 export const MAX_RECENT_DOCUMENTS = 12;
 export const UNTITLED_CLAIMS_KEY = "systemsketch.untitledClaims.v1";
@@ -51,7 +72,10 @@ export function documentSuffix(path: string): DocumentSuffix | null {
   );
 }
 
-/** Which on-disk encoding a path implies. The suffix decides; nothing else does. Donor: :53. */
+/** Which on-disk ENCODING a path implies — not which extension it has. The
+ *  suffix decides; nothing else does. `.bbox` and `.tldr` are the same bytes
+ *  under two names (see the header), so only `.systemsketch` reads as the
+ *  archive's envelope. Donor: :53. */
 export function documentEncoding(path: string): "systemsketch" | "tldraw" {
   return documentSuffix(path) === SYSTEMSKETCH_SUFFIX ? "systemsketch" : "tldraw";
 }
@@ -72,7 +96,7 @@ export function parentDirectory(path: string): string {
 /**
  * Turn a typed name into a document path. A name that already names a known
  * type keeps it, so `Export.tldr` in Save As really does write a `.tldr`;
- * anything else takes `fallbackSuffix`, which is `.tldr` here (the header's
+ * anything else takes `fallbackSuffix`, which is `.bbox` here (the header's
  * deliberate change from the donor's `.systemsketch` default).
  * Donor: :115.
  */
@@ -90,7 +114,10 @@ export function documentPathFor(
   return `${directory.replace(/\/$/, "")}/${safe}${suffix}`;
 }
 
-/** Rename keeps the document's type: a `.tldr` renamed is still a `.tldr`. Donor: :130. */
+/** Rename keeps the document's type: a `.tldr` renamed is still a `.tldr`,
+ *  and a `.systemsketch` renamed is still a `.systemsketch`. WHY rename is not
+ *  the migration hook: changing someone's extension while they were only
+ *  changing its name is a conversion they did not ask for. Donor: :130. */
 export function renamedDocumentPath(path: string, rawName: string): string | null {
   return documentPathFor(
     parentDirectory(path),
@@ -102,8 +129,8 @@ export function renamedDocumentPath(path: string, rawName: string): string | nul
 /**
  * Allocate the next free `Untitled` document. Collision is judged on the
  * *title*, not the full path, so a folder already holding `Untitled.tldr` gets
- * `Untitled 2.systemsketch` rather than two files that read as the same name.
- * Donor: :143, plus a `suffix` parameter defaulting to `.tldr` (header).
+ * `Untitled 2.bbox` rather than two files that read as the same name.
+ * Donor: :143, plus a `suffix` parameter defaulting to `.bbox` (header).
  */
 export function nextUntitledDocumentPath(
   directory: string,

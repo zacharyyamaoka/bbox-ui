@@ -40,7 +40,7 @@
 //     → activates (:2165-2185). Enter = activate selection; ↑/↓ move and
 //     clamp; Backspace (outside a text field) → parent (:1843-1866). A hidden
 //     selection re-aims at the first visible document (:1785-1789).
-//   - Empty folder: "This folder has no SystemSketch documents yet." /
+//   - Empty folder: "This folder has no boards yet." /
 //     filtered: "Nothing here matches “q”." (:2187-2193).
 //   - Footer: Cancel · (open mode) "Open in new window" · primary "Open" /
 //     "Open folder" when a folder is selected / "Save" (saveAs mode) /
@@ -84,6 +84,7 @@ import {
   breadcrumbTrail,
   browserRows,
   documentPathFor,
+  documentSuffix,
   documentTitle,
   formatFileSize,
   formatRelativeDay,
@@ -121,7 +122,8 @@ export interface FileNavigatorProps {
   onSaveAs?(path: string, options: { force: boolean }): Promise<void>;
   /** saveAs mode: the name field's starting text (the board's title). */
   defaultName?: string;
-  /** saveAs mode: suffix for a name typed without one. Default `.tldr`. */
+  /** saveAs mode: suffix for a name typed without one, when no row was
+   *  picked. Default `.bbox`. */
   suffix?: DocumentSuffix;
   /** Header eyebrow + title; defaults "Local workspace" and "Open a
    *  document" / "Save a copy". */
@@ -212,6 +214,18 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
   const [name, setName] = useState(defaultName ?? "");
   const [error, setError] = useState<string | null>(null);
   const [replacePath, setReplacePath] = useState<string | null>(null);
+  /**
+   * The suffix of the row the person picked in saveAs mode, if any.
+   *
+   * WHY this state exists — Zach, 2026-09-21 made `.bbox` the suffix a NEW
+   * document gets. Picking an existing row fills the name field with that
+   * row's TITLE, suffix stripped, so without this a click on
+   * `02_literal_argument.tldr` followed by Save would propose
+   * `02_literal_argument.bbox` — a NEW file beside the one he pointed at,
+   * with no conflict, no "Replace it?" prompt, and the original untouched. A
+   * default for new names must not silently convert a file someone selected.
+   */
+  const [pickedSuffix, setPickedSuffix] = useState<DocumentSuffix | null>(null);
   const [busy, setBusy] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderName, setFolderName] = useState("");
@@ -256,6 +270,17 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
   }, [open]);
 
   const rows = useMemo(() => browserRows(listing, query, sort.column, sort.direction), [listing, query, sort]);
+  /**
+   * The suffix this dialog will actually write, in precedence order: one the
+   * person typed, then the one they picked off the list, then the app's
+   * default for a new document.
+   *
+   * WHY it is computed rather than shown from `suffix`: the span beside the
+   * name field is the only place the extension is visible, so it has to be
+   * the extension. Typing "board.tldr" while the span reads ".bbox" told the
+   * truth about the default and a lie about the file.
+   */
+  const effectiveSuffix: DocumentSuffix = documentSuffix(name) ?? pickedSuffix ?? suffix;
   const selectedRow = rows.find((row) => row.path === selectedPath) ?? null;
   const trail = listing ? breadcrumbTrail(listing.dir, listing.root) : [];
 
@@ -303,6 +328,7 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
         await onOpenDocument(row.path, { newWindow: false });
       } else {
         setName(row.title);
+        setPickedSuffix(documentSuffix(row.path));
         setReplacePath(null);
         setError(null);
       }
@@ -336,7 +362,7 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
           await activate(selectedRow);
           if (selectedRow.kind === "folder") setBusy(false);
         } else {
-          const proposedPath = force && replacePath ? replacePath : listing ? documentPathFor(listing.dir, name, suffix) : null;
+          const proposedPath = force && replacePath ? replacePath : listing ? documentPathFor(listing.dir, name, effectiveSuffix) : null;
           if (!proposedPath) throw new Error("Enter a file name.");
           attemptedPath = proposedPath;
           if (!onSaveAs) throw new Error("Saving is not available here.");
@@ -354,7 +380,7 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
         setBusy(false);
       }
     },
-    [activate, listing, mode, name, onSaveAs, replacePath, selectedRow, suffix],
+    [activate, effectiveSuffix, listing, mode, name, onSaveAs, replacePath, selectedRow],
   );
 
   const openInNewWindow = useCallback(async () => {
@@ -663,6 +689,7 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                         if (row.kind === "folder") void load(row.path);
                         else if (mode === "saveAs") {
                           setName(row.title);
+                          setPickedSuffix(documentSuffix(row.path));
                           setReplacePath(null);
                           setError(null);
                         }
@@ -687,7 +714,7 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
               </Table>
               {!busy && listing && !rows.length ? (
                 <p className="p-3 text-sm text-muted-foreground">
-                  {query ? `Nothing here matches “${query}”.` : "This folder has no SystemSketch documents yet."}
+                  {query ? `Nothing here matches “${query}”.` : "This folder has no boards yet."}
                 </p>
               ) : null}
             </div>
@@ -715,7 +742,9 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                     }
                   }}
                 />
-                <span className="text-sm text-muted-foreground">{suffix}</span>
+                <span className="text-sm text-muted-foreground" data-testid={testId("suffix")}>
+                  {effectiveSuffix}
+                </span>
               </div>
             ) : null}
           </div>

@@ -5,6 +5,7 @@ import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 import { FileNavigator, type FileNavigatorProps } from "./fileNavigator";
 import { screenshotWorkspace, type FakeWorkspaceClient } from "../files/fakeWorkspaceClient";
 import { WorkspaceConflict } from "../files/workspaceClient";
+import { DEFAULT_NEW_DOCUMENT_SUFFIX } from "../files/workspaceModel";
 
 /**
  * The app's own file browser — "LOCAL WORKSPACE · Open a document" (Zach's
@@ -169,7 +170,7 @@ export const FoldersAndNewFolder: Story = {
     await ready("open");
     await userEvent.click(row("recordings"));
     await waitFor(() => expect(q("crumbs")).toHaveTextContent(/SystemSketch.*recordings/));
-    await expect(within(document.body).getByText("This folder has no SystemSketch documents yet.")).toBeInTheDocument();
+    await expect(within(document.body).getByText("This folder has no boards yet.")).toBeInTheDocument();
     await userEvent.click(q("parent")!);
     await waitFor(() => expect(rowNames()).toContain("02_literal_argument.tldr"));
 
@@ -218,12 +219,58 @@ export const SaveACopy: Story = {
     await expect(dialog).toHaveTextContent("Save a copy");
     const name = q<HTMLInputElement>("name")!;
     await expect(name).toHaveValue("Untitled board");
-    await expect(dialog).toHaveTextContent(".tldr");
+    // What a NEW document gets. Zach, 2026-09-21: "lets call this file type
+    // .bbox as this project is no longer system sketch its just the bbox
+    // whiteboard". Read from the component's own constant, so the label and
+    // the path it writes cannot drift apart.
+    await expect(q("suffix")).toHaveTextContent(DEFAULT_NEW_DOCUMENT_SUFFIX);
     await expect(q("confirm")).toHaveTextContent("Save");
     await userEvent.clear(name);
     await userEvent.type(name, "roundtrip");
     await userEvent.click(q("confirm")!);
-    await waitFor(() => expect(SAVES).toEqual([[`${WS}/roundtrip.tldr`, { force: false }]]));
+    await waitFor(() => expect(SAVES).toEqual([[`${WS}/roundtrip${DEFAULT_NEW_DOCUMENT_SUFFIX}`, { force: false }]]));
+  },
+};
+
+/**
+ * The half of the `.bbox` rename that is easy to get wrong: picking a row
+ * fills the name field with its TITLE, so a naive default would have proposed
+ * `02_literal_argument.bbox` — a NEW file beside the `.tldr` the person was
+ * pointing at, no conflict, no Replace prompt, the original left untouched.
+ * Zach has 31 `.tldr` and 84 `.systemsketch` boards; "we write .bbox now" is
+ * not allowed to mean "we fork the one you clicked".
+ */
+export const PickingAnExistingRowKeepsThatFilesExtension: Story = {
+  render: () => (
+    <Harness
+      mode="saveAs"
+      defaultName="Untitled board"
+      onSaveAs={async (path, options) => {
+        SAVES.push([path, options]);
+      }}
+    />
+  ),
+  play: async () => {
+    SAVES.length = 0;
+    await ready("saveAs");
+    await expect(q("suffix")).toHaveTextContent(DEFAULT_NEW_DOCUMENT_SUFFIX);
+
+    await userEvent.click(row("02_literal_argument.tldr"));
+    await waitFor(() => expect(q<HTMLInputElement>("name")).toHaveValue("02_literal_argument"));
+    // The label follows the pick, so the extension is never a surprise.
+    await waitFor(() => expect(q("suffix")).toHaveTextContent(".tldr"));
+    await userEvent.click(q("confirm")!);
+    await waitFor(() => expect(SAVES).toEqual([[`${WS}/02_literal_argument.tldr`, { force: false }]]));
+
+    // A typed suffix still beats everything, and the label says so rather than
+    // continuing to advertise the picked one.
+    SAVES.length = 0;
+    const name = q<HTMLInputElement>("name")!;
+    await userEvent.clear(name);
+    await userEvent.type(name, "elsewhere.systemsketch");
+    await waitFor(() => expect(q("suffix")).toHaveTextContent(".systemsketch"));
+    await userEvent.click(q("confirm")!);
+    await waitFor(() => expect(SAVES).toEqual([[`${WS}/elsewhere.systemsketch`, { force: false }]]));
   },
 };
 

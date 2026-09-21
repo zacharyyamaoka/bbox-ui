@@ -402,9 +402,12 @@ export function useDocumentSession(options: {
   const openDocument = useCallback(
     (path: string, target: { newWindow: boolean }) => {
       const location = documentLocation();
-      // A `.systemsketch` is the archived app's envelope; this build reads and
-      // writes plain `.tldr` only, so the row hands the file to the app that
-      // owns it rather than failing to parse it.
+      // A `.systemsketch` is the archived app's ENVELOPE — a different format,
+      // not a different name — so the row hands the file to the app that owns
+      // it rather than failing to parse it. `.bbox` and `.tldr` both open
+      // here: they are the same plain tldraw bytes under the old name and the
+      // new one (Zach, 2026-09-21, "lets call this file type .bbox"), and the
+      // rename deliberately did NOT touch what already opens.
       const href = documentSuffix(path) === SYSTEMSKETCH_SUFFIX ? legacyBoardHref(path) : location.boardHref(path);
       if (target.newWindow) {
         // This window keeps its own board, so there is nothing to write first

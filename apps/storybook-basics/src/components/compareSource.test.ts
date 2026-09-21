@@ -20,6 +20,7 @@ import {
   versionCandidates,
   versionRecords,
 } from "./compareSource"
+import { DEFAULT_NEW_DOCUMENT_SUFFIX } from "../files/workspaceModel"
 
 const BOARD = "/home/bam/boards/pipeline.systemsketch"
 
@@ -41,8 +42,22 @@ describe("stemOf", () => {
 
   // Donor :47: an unrecognised path keeps its whole self as the stem, so a
   // probe still produces a well-formed candidate rather than throwing.
-  it("keeps an unrecognised path whole and assumes .systemsketch", () => {
-    expect(stemOf("/b/notes")).toEqual({ stem: "/b/notes", extension: ".systemsketch" })
+  it("keeps an unrecognised path whole and assumes the type this build writes", () => {
+    expect(stemOf("/b/notes")).toEqual({ stem: "/b/notes", extension: DEFAULT_NEW_DOCUMENT_SUFFIX })
+  })
+
+  // The regression the suffix-driven regex exists to prevent: a hardcoded
+  // `(.systemsketch|.tldr)` leaves a `.bbox` board unmatched, the fallback then
+  // treats the WHOLE path as the stem, and every probe asks for
+  // `pipeline.bbox.v1.systemsketch` — a path that cannot exist. Compare would
+  // have reported "no prior versions" for every new board, and been believed.
+  it("splits a .bbox board off its extension, so its .vN siblings are probed", () => {
+    expect(stemOf("/home/bam/boards/pipeline.bbox")).toEqual({
+      stem: "/home/bam/boards/pipeline",
+      extension: ".bbox",
+    })
+    expect(versionCandidates("/home/bam/boards/pipeline.bbox")[0].path).toBe("/home/bam/boards/pipeline.v1.bbox")
+    expect(fileNameOf("/home/bam/boards/pipeline.bbox")).toBe("pipeline.bbox")
   })
 
   // A dotted stem is the trap the regex is greedy for: `.v1` has to hang
@@ -153,7 +168,7 @@ describe("historyProblem", () => {
   it("is the screenshot's sentence when only the live board is there", async () => {
     const history = await discoverHistory(BOARD, readerFor())
     expect(historyProblem(history)).toBe(
-      "No prior versions found beside this board. Save a `<name>.v1.systemsketch` next to it to compare against.",
+      `No prior versions found beside this board. Save a \`<name>.v1${DEFAULT_NEW_DOCUMENT_SUFFIX}\` next to it to compare against.`,
     )
   })
 

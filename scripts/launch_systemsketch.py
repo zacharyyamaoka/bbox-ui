@@ -8,9 +8,9 @@
                       build always names the commit it came from.
   --old               Open the archived SystemSketch (/home/bam/systemsketch) in
                       its own window, through its own launcher.
-  <file>              A .systemsketch/.tldr double-clicked in the file manager
-                      goes to the archived app: the new one cannot open a path
-                      yet (it opens .tldr through its ☰ menu).
+  <file>              A board double-clicked in the file manager. A .bbox or
+                      .tldr opens HERE, on `?board=<path>`; a .systemsketch is
+                      the archived app's envelope and goes to the archived app.
   --status / --stop   Report or stop the Stable server this launcher owns.
 
 Zach, 2026-09-19: "update my dock app to launch the new system sketch and then
@@ -54,7 +54,15 @@ from pathlib import Path
 # this file in scripts/, and both the CLI (script-dir on sys.path[0]) and the
 # test suite (which inserts scripts/ itself) resolve it as a plain top-level
 # module — see scripts/tests/test_systemsketch_files_http.py's DockMountTests.
-from systemsketch_files import GioDesktop, WorkspaceApi, default_lock_root
+from systemsketch_files import (
+    BBOX_SUFFIX,
+    GioDesktop,
+    SYSTEMSKETCH_SUFFIX,
+    TLDRAW_SUFFIX,
+    WorkspaceApi,
+    default_lock_root,
+    document_suffix,
+)
 from systemsketch_recordings import RecordingApi
 
 PRODUCT = "systemsketch-next"
@@ -137,7 +145,7 @@ def build_stable() -> dict:
 
 
 def files_root_from(environment: dict[str, str]) -> Path:
-    """The folder the file host reads and writes real ``.tldr``/``.systemsketch``
+    """The folder the file host reads and writes real ``.bbox``/``.tldr``/``.systemsketch``
     documents under. ``SYSTEMSKETCH_FILES_ROOT`` overrides it (matching the
     dev-file-host lane and the smoke tests); by default it's the real home
     folder, same as the archived app."""
@@ -336,6 +344,39 @@ def legacy(*arguments: str, wait: bool) -> int:
 
 # ---------------------------------------------------------------- the CLI
 
+#: The suffixes THIS app can open. ``.systemsketch`` is deliberately absent:
+#: it is the archived app's envelope, a different format rather than a
+#: different name, and this build reads plain tldraw documents only
+#: (apps/systemsketch/src/files/session.tsx makes the same split in the ☰
+#: navigator).
+OWN_SUFFIXES = (BBOX_SUFFIX, TLDRAW_SUFFIX)
+
+
+def opens_here(file: Path) -> bool:
+    """Does a double-clicked board belong to THIS app?
+
+    WHY this function exists at all: before the file type was renamed to
+    ``.bbox`` (Zach, 2026-09-21) every ``<file>`` argument went to the archived
+    app unconditionally, which was harmless only because every board on disk
+    was one the archived app could read. The moment this build starts WRITING
+    ``.bbox``, that unconditional hand-off becomes a double-click that opens
+    the wrong application on a file it cannot parse — a regression the rename
+    would have caused silently.
+    """
+    return document_suffix(file.name) in OWN_SUFFIXES
+
+
+def board_url(file: Path) -> str:
+    """The URL that opens ``file`` in this app.
+
+    `?board=<absolute path>` is the app's own contract — "the URL is the
+    document" (apps/systemsketch/src/files/launchConfig.ts). The path is passed
+    RAW, not percent-encoded: that is the spelling the app parses and the one
+    Zach is handed everywhere else.
+    """
+    return f"http://127.0.0.1:{PORT}/?board={file}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("file", nargs="?", type=Path)
@@ -352,10 +393,19 @@ def main() -> int:
         if arguments.serve:
             serve(PORT, arguments.root, arguments.build)
             return 0
+        own_file = arguments.file.expanduser().resolve() if arguments.file is not None else None
+        if own_file is not None and opens_here(own_file):
+            record = build_stable() if stable_record() is None else stable_record()
+            ensure_server(record)
+            # The ☰ "Switch to old SystemSketch" row needs the old Stable up.
+            legacy("--no-open", wait=False)
+            print(board_url(own_file))
+            open_window(board_url(own_file))
+            return 0
         if arguments.old or arguments.file is not None:
             # WHY --new-window: the old launcher focuses any window of class
             # "systemsketch" and stops — which is now THIS app's window.
-            extra = [str(arguments.file.expanduser().resolve())] if arguments.file is not None else []
+            extra = [str(own_file)] if own_file is not None else []
             return legacy("--open", "--new-window", *extra, wait=True)
         if arguments.stop:
             print("Stopped the new SystemSketch." if stop_server() else "No server owned by this launcher was running.")

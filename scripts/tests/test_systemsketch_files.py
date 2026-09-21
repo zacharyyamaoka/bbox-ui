@@ -136,7 +136,7 @@ class WorkspaceStoreTests(unittest.TestCase):
         )
         self.assertEqual(
             listing["defaultDocument"],
-            str(self.root / "SystemSketch" / "Untitled.systemsketch"),
+            str(self.root / "SystemSketch" / "Untitled.bbox"),
         )
         self.assertTrue(self.path.read_text(encoding="utf-8").endswith("\n"))
 
@@ -474,7 +474,7 @@ class WorkspaceStoreTests(unittest.TestCase):
         self.assertEqual(len(list(self.lock_root.glob("*.lock"))), 1)
 
     def test_the_suffix_decides_the_encoding_in_both_directions(self) -> None:
-        """A `.systemsketch` must carry the envelope; a `.tldr` must not."""
+        """A `.systemsketch` carries the envelope; a `.bbox`/`.tldr` must not."""
         with self.assertRaisesRegex(WorkspaceFormatError, "must carry a systemSketch envelope"):
             save_document(
                 str(self.path), tldraw_source(), self.root, lock_root=self.lock_root
@@ -483,12 +483,40 @@ class WorkspaceStoreTests(unittest.TestCase):
             save_document(
                 str(self.legacy), document_source(), self.root, lock_root=self.lock_root
             )
+        # The new extension is held to the same rule as the old plain one — a
+        # rename that quietly relaxed the format check would let the two types
+        # become one type with several names.
+        bbox = self.root / "SystemSketch" / "Envelope.bbox"
+        with self.assertRaisesRegex(WorkspaceFormatError, r"a \.bbox document must stay a plain tldraw file"):
+            save_document(
+                str(bbox), document_source(), self.root, lock_root=self.lock_root
+            )
 
         # Reading is the lenient direction: a hand-renamed file still opens.
         renamed_by_hand = self.root / "SystemSketch" / "ByHand.systemsketch"
         renamed_by_hand.parent.mkdir(parents=True, exist_ok=True)
         renamed_by_hand.write_text(tldraw_source(), encoding="utf-8")
         self.assertEqual(load_document(str(renamed_by_hand), self.root)["title"], "ByHand")
+
+    def test_a_bbox_board_round_trips_and_lists_as_a_plain_tldraw_document(self) -> None:
+        """The rename is a rename: same bytes, new name, listed beside the old."""
+        board = self.root / "SystemSketch" / "Arm.bbox"
+        board.parent.mkdir(parents=True, exist_ok=True)
+        saved = save_document(
+            str(board), tldraw_source(), self.root, lock_root=self.lock_root
+        )
+        loaded = load_document(str(board), self.root)
+        self.assertEqual(loaded["digest"], saved["digest"])
+        self.assertEqual(loaded["title"], "Arm")
+
+        # Every suffix already on disk is still listed beside it.
+        (self.root / "SystemSketch" / "Legacy.tldr").write_text(tldraw_source(), encoding="utf-8")
+        (self.root / "SystemSketch" / "Old.systemsketch").write_text(document_source(), encoding="utf-8")
+        listing = list_documents(None, self.root)
+        self.assertEqual(
+            sorted((item["title"], item["kind"]) for item in listing["documents"]),
+            [("Arm", "tldraw"), ("Legacy", "tldraw"), ("Old", "systemsketch")],
+        )
 
     def test_a_legacy_pyblocks_systemsketch_is_readable_but_never_writable(self) -> None:
         legacy = self.root / "SystemSketch" / "Golden.systemsketch"
@@ -599,8 +627,13 @@ class WorkspaceStoreTests(unittest.TestCase):
         legacy_default.write_text(tldraw_source(), encoding="utf-8")
         self.assertEqual(default_document_path(self.root), legacy_default)
 
-        current_default = self.root / "SystemSketch" / "Untitled.systemsketch"
-        current_default.write_text(document_source(), encoding="utf-8")
+        envelope_default = self.root / "SystemSketch" / "Untitled.systemsketch"
+        envelope_default.write_text(document_source(), encoding="utf-8")
+        self.assertEqual(default_document_path(self.root), envelope_default)
+
+        # .bbox is what this build writes, so once one exists it wins outright.
+        current_default = self.root / "SystemSketch" / "Untitled.bbox"
+        current_default.write_text(tldraw_source(), encoding="utf-8")
         self.assertEqual(default_document_path(self.root), current_default)
 
     def test_paths_are_confined_to_the_configured_root(self) -> None:
@@ -609,7 +642,7 @@ class WorkspaceStoreTests(unittest.TestCase):
             save_document(
                 str(outside), document_source(), self.root, lock_root=self.lock_root
             )
-        with self.assertRaisesRegex(WorkspacePathError, "end with .systemsketch or .tldr"):
+        with self.assertRaisesRegex(WorkspacePathError, "end with .bbox or .systemsketch or .tldr"):
             save_document(
                 str(self.root / "board.json"),
                 document_source(),

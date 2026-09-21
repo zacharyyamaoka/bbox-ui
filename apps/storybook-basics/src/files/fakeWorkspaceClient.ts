@@ -22,6 +22,7 @@ import {
   type WorkspaceListing,
   type WorkspaceWriteInput,
 } from "./workspaceClient";
+import { documentEncoding, documentSuffix } from "./workspaceModel";
 
 export interface FakeFile {
   source: string;
@@ -59,11 +60,13 @@ function fakeDigest(source: string): string {
   return `fake-${hash.toString(16)}-${source.length}`;
 }
 
+/** WHY it defers to `workspaceModel` instead of naming the suffixes: this fake
+ *  stands in for the real Python host in every story, so a suffix it does not
+ *  know is a board that silently vanishes from a fixture listing — and the
+ *  fixture is the only place a story can be wrong without any test failing.
+ *  It went stale exactly once, when `.bbox` landed. */
 function kindOf(path: string): WorkspaceDocumentKind | null {
-  const lower = path.toLowerCase();
-  if (lower.endsWith(".systemsketch")) return "systemsketch";
-  if (lower.endsWith(".tldr")) return "tldraw";
-  return null;
+  return documentSuffix(path) === null ? null : (documentEncoding(path) as WorkspaceDocumentKind);
 }
 
 function parentOf(path: string): string {
@@ -77,8 +80,8 @@ function baseName(path: string): string {
 
 function titleOf(path: string): string {
   const name = baseName(path);
-  const kind = kindOf(name);
-  return kind === "systemsketch" ? name.slice(0, -".systemsketch".length) : kind === "tldraw" ? name.slice(0, -".tldr".length) : name;
+  const suffix = documentSuffix(name);
+  return suffix ? name.slice(0, -suffix.length) : name;
 }
 
 export function createFakeWorkspaceClient(options: FakeWorkspaceOptions): FakeWorkspaceClient {
@@ -234,7 +237,7 @@ export function createFakeWorkspaceClient(options: FakeWorkspaceOptions): FakeWo
 
 /** The fixture the navigator story and tests render: Zach's screenshot
  *  `Pasted image 20260919135724.png`, abridged — a `recordings` folder, a mix
- *  of `.tldr` and `.systemsketch` boards, under `/home/bam/SystemSketch`.
+ *  of `.bbox`, `.tldr` and `.systemsketch` boards, under `/home/bam/SystemSketch`.
  *  These are NAMES only; nothing here touches the real folder. */
 export function screenshotWorkspace(): FakeWorkspaceClient {
   const at = (name: string, mtime: number, source = '{"tldrawFileFormatVersion":1,"schema":{},"records":[]}') => [`/home/bam/SystemSketch/${name}`, { source, mtime }] as const;

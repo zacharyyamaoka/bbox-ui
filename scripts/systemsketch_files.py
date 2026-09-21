@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The new SystemSketch's local file host: safe, digest-fenced .tldr files on disk.
+"""The bbox whiteboard's local file host: safe, digest-fenced .bbox files on disk.
 
 CONTRACT committed by the planning lane (docs/CHROME-FILES-SETTINGS-PLAN.md).
 Constants and exception classes are final; every function and method below
@@ -65,15 +65,35 @@ from typing import Any, Protocol
 from urllib.parse import parse_qs, urlparse
 
 
+#: The suffix this build WRITES. Zach, 2026-09-21: "lets call this file type
+#: .bbox as this project is no longer system sketch its just the bbox
+#: whiteboard". The TypeScript twin of every constant below is
+#: ``apps/storybook-basics/src/files/workspaceModel.ts`` — the two must agree,
+#: because the browser decides what to name a file and this host decides
+#: whether to accept it.
+BBOX_SUFFIX = ".bbox"
 SYSTEMSKETCH_SUFFIX = ".systemsketch"
 TLDRAW_SUFFIX = ".tldr"
-DOCUMENT_SUFFIXES = (SYSTEMSKETCH_SUFFIX, TLDRAW_SUFFIX)
-DOCUMENT_KINDS = {SYSTEMSKETCH_SUFFIX: "systemsketch", TLDRAW_SUFFIX: "tldraw"}
+#: Every suffix that OPENS, newest first. Read order matters in exactly one
+#: place (:func:`default_document_path`), and there the newest name should win.
+DOCUMENT_SUFFIXES = (BBOX_SUFFIX, SYSTEMSKETCH_SUFFIX, TLDRAW_SUFFIX)
+#: WHY ``.bbox`` maps to the *tldraw* kind rather than a third one: the rename
+#: changed the name of the format, not the format. A ``.bbox`` holds the exact
+#: bytes ``serializeTldrawJson`` produced for a ``.tldr``, so it is held to the
+#: same no-envelope rule and reports the same kind. Inventing a "bbox" kind
+#: would claim a difference that is not on disk.
+DOCUMENT_KINDS = {
+    BBOX_SUFFIX: "tldraw",
+    SYSTEMSKETCH_SUFFIX: "systemsketch",
+    TLDRAW_SUFFIX: "tldraw",
+}
+#: The suffixes that must stay a PLAIN tldraw document — no envelope.
+PLAIN_TLDRAW_SUFFIXES = (BBOX_SUFFIX, TLDRAW_SUFFIX)
 SYSTEMSKETCH_ENVELOPE_KEY = "systemSketch"
 SYSTEMSKETCH_FORMAT_VERSION = 2
 DEFAULT_WORKSPACE_DIRNAME = "SystemSketch"
 DEFAULT_DOCUMENT_STEM = "Untitled"
-DEFAULT_DOCUMENT_NAME = f"{DEFAULT_DOCUMENT_STEM}{SYSTEMSKETCH_SUFFIX}"
+DEFAULT_DOCUMENT_NAME = f"{DEFAULT_DOCUMENT_STEM}{BBOX_SUFFIX}"
 MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
 MAX_API_REQUEST_BYTES = 64 * 1024 * 1024
 SAVE_VERIFY_ATTEMPTS = 3
@@ -142,10 +162,12 @@ def default_workspace_dir(files_root: Path) -> Path:
 def default_document_path(files_root: Path) -> Path:
     """Donor workspace_store.py:86-98.
 
-    The document a clean launch opens. New workspaces get
-    ``Untitled.systemsketch``, but a workspace that already holds an
+    The document a clean launch opens. New workspaces get ``Untitled.bbox``,
+    but a workspace that already holds an ``Untitled.systemsketch`` or
     ``Untitled.tldr`` from before this file type existed keeps opening that
-    one. Changing the default extension must not orphan someone's board.
+    one. Changing the default extension must not orphan someone's board — which
+    is the whole reason this walks :data:`DOCUMENT_SUFFIXES` instead of just
+    naming the default.
     """
     workspace = default_workspace_dir(files_root)
     for suffix in DOCUMENT_SUFFIXES:
@@ -204,8 +226,7 @@ def resolve_document_path(
     )
     if document_suffix(resolved.name) is None:
         raise WorkspacePathError(
-            "a SystemSketch document must end with "
-            + " or ".join(DOCUMENT_SUFFIXES)
+            "a board must end with " + " or ".join(DOCUMENT_SUFFIXES)
         )
     return resolved
 
@@ -390,8 +411,8 @@ def normalize_document_source(source: object, *, suffix: str | None = None) -> s
     Reading passes no ``suffix``: anything openable should open, including a
     ``.tldr`` hand-renamed to ``.systemsketch``. Writing passes the
     destination suffix, and then the rule is exact — a ``.systemsketch`` must
-    carry the envelope and a ``.tldr`` must not. That is what stops the two
-    types from quietly becoming one type with two names.
+    carry the envelope and a ``.bbox``/``.tldr`` must not. That is what stops
+    the types from quietly becoming one type with several names.
     """
     document = _parse_document(source)
     has_envelope = document.get(SYSTEMSKETCH_ENVELOPE_KEY) is not None
@@ -399,9 +420,9 @@ def normalize_document_source(source: object, *, suffix: str | None = None) -> s
         raise WorkspaceFormatError(
             f"a {SYSTEMSKETCH_SUFFIX} document must carry a {SYSTEMSKETCH_ENVELOPE_KEY} envelope"
         )
-    if suffix == TLDRAW_SUFFIX and has_envelope:
+    if suffix in PLAIN_TLDRAW_SUFFIXES and has_envelope:
         raise WorkspaceFormatError(
-            f"a {TLDRAW_SUFFIX} document must stay a plain tldraw file "
+            f"a {suffix} document must stay a plain tldraw file "
             f"(it carries a {SYSTEMSKETCH_ENVELOPE_KEY} envelope)"
         )
     return json.dumps(document, ensure_ascii=False, indent=2) + "\n"

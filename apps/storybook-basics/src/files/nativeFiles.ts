@@ -30,6 +30,7 @@
 // file implements with the same error class and the same digest (SHA-256 of
 // the file's UTF-8 bytes, the host's `document_digest`).
 import { WorkspaceConflict } from "./workspaceClient";
+import { BBOX_SUFFIX, DOCUMENT_SUFFIXES, TLDRAW_SUFFIX } from "./workspaceModel";
 
 /** The slice of `FileSystemFileHandle` this file uses — structural, so a test
  *  (and a node run) can hand in a fake without a DOM lib. */
@@ -108,18 +109,27 @@ export const NATIVE_PICKER_ID = "systemsketch-boards";
 /**
  * `application/vnd.tldraw+json` is tldraw's own `TLDRAW_FILE_MIMETYPE`
  * (tldraw 5.3.2, `lib/utils/tldr/file.ts`) — spelled out rather than imported
- * because `src/files/` imports no engine (the trunk's one rule).
+ * because `src/files/` imports no engine (the trunk's one rule). A `.bbox`
+ * carries those exact bytes under a different name, so both extensions sit on
+ * the one MIME type rather than inventing a second one that would describe the
+ * same document.
+ *
+ * WHY `.bbox` is listed FIRST, and why `.tldr` is still listed at all: the
+ * first entry is what Chrome pre-selects and appends in Save As, so leading
+ * with `.bbox` is what makes the rename real in the OS dialog; keeping `.tldr`
+ * is what keeps the 31 boards this build already wrote selectable in Open
+ * instead of greyed out. Zach, 2026-09-21: "lets call this file type .bbox".
  */
-export const TLDR_PICKER_TYPES: readonly NativePickerType[] = Object.freeze([
-  { description: "tldraw board", accept: { "application/vnd.tldraw+json": [".tldr"] } },
+export const BOARD_PICKER_TYPES: readonly NativePickerType[] = Object.freeze([
+  { description: "bbox board", accept: { "application/vnd.tldraw+json": [BBOX_SUFFIX, TLDRAW_SUFFIX] } },
 ]);
 
 /** One board opened or saved through the native dialog. */
 export interface NativeDocument {
   handle: NativeFileHandleLike;
-  /** The file name as the OS reported it, e.g. "roundtrip.tldr". */
+  /** The file name as the OS reported it, e.g. "roundtrip.bbox". */
   name: string;
-  /** `name` without its `.tldr` suffix — what the chrome bar shows. */
+  /** `name` without its board suffix — what the chrome bar shows. */
   title: string;
   /** The text last read from, or written to, the file. */
   source: string;
@@ -168,7 +178,9 @@ export async function sha256Hex(text: string, subtle: Pick<SubtleCrypto, "digest
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-const NATIVE_SUFFIX = ".tldr";
+/** The suffix Save As appends. The pickers still OPEN every suffix in
+ *  `DOCUMENT_SUFFIXES` — this is only what a NEW file is named. */
+const NATIVE_SUFFIX: string = BBOX_SUFFIX;
 
 /**
  * Every stream this file opens asks for the File System Access API's own
@@ -231,10 +243,17 @@ async function discardWritable(writable: NativeWritableLike): Promise<void> {
   }
 }
 
-/** `.tldr` stripped case-insensitively, mirroring `workspaceModel.documentTitle`
- *  for the one suffix native mode ever sees. */
+/** Any known board suffix stripped case-insensitively, mirroring
+ *  `workspaceModel.documentTitle`.
+ *
+ *  WHY it sweeps `DOCUMENT_SUFFIXES` rather than just the one we write: native
+ *  mode now sees more than one suffix, and a chrome bar reading
+ *  "series_a_pose_pipeline_v7.tldr" instead of "series_a_pose_pipeline_v7"
+ *  is exactly the kind of quiet regression a rename leaves behind. */
 function nativeDocumentTitle(name: string): string {
-  return name.toLowerCase().endsWith(NATIVE_SUFFIX) ? name.slice(0, -NATIVE_SUFFIX.length) : name;
+  const lowered = name.toLowerCase();
+  const suffix = DOCUMENT_SUFFIXES.find((candidate) => lowered.length > candidate.length && lowered.endsWith(candidate));
+  return suffix ? name.slice(0, -suffix.length) : name;
 }
 
 /** A picker's own `AbortError` — cancel — vs. every other failure, which is
@@ -314,7 +333,7 @@ export function createNativeFileAccess(host: NativePickerHost): NativeFileAccess
       try {
         handles = await host.showOpenFilePicker({
           id: NATIVE_PICKER_ID,
-          types: TLDR_PICKER_TYPES,
+          types: BOARD_PICKER_TYPES,
           excludeAcceptAllOption: false,
           multiple: false,
         });
@@ -397,7 +416,7 @@ export function createNativeFileAccess(host: NativePickerHost): NativeFileAccess
         handle = await host.showSaveFilePicker({
           id: NATIVE_PICKER_ID,
           suggestedName: `${suggestedTitle}${NATIVE_SUFFIX}`,
-          types: TLDR_PICKER_TYPES,
+          types: BOARD_PICKER_TYPES,
         });
       } catch (cause) {
         if (isPickerCancellation(cause)) return null;
