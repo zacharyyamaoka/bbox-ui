@@ -195,6 +195,7 @@ def card(item, n):
         '<div class="ev"><b>donor</b> <code>' + esc(clip(item.get("donorEvidence", ""), 240)) + '</code></div>'
         '<div class="ev"><b>proof</b> <code>' + esc(clip(item.get("proofMissing", ""), 300)) + '</code></div>'
         '</details>'
+        '<textarea class="note" rows="1" placeholder="Notes on this one… (optional)"></textarea>'
         '</div>'
         '<div class="vote">'
         '<button class="up" data-v="yes" title="build it">▲ Yes</button>'
@@ -273,6 +274,11 @@ def build(backlog):
  .e-unbuiltproductwork{color:var(--no);border-color:var(--no)}
  details{font-size:12.5px;color:var(--muted)} details code{font-size:11.5px;word-break:break-word}
  .ev{margin:5px 0} .ev b{color:var(--fg);font-weight:600;margin-right:5px}
+ .note{width:100%;margin-top:9px;font:inherit;font-size:13px;padding:7px 10px;border-radius:8px;
+   border:1px solid var(--line);background:var(--bg);color:var(--fg);resize:vertical;
+   min-height:36px;transition:min-height .12s ease}
+ .note:focus{outline:none;border-color:var(--accent);min-height:88px}
+ .note.has{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
  .vote{display:flex;flex-direction:column;gap:7px}
  .vote button{font:inherit;font-size:13.5px;font-weight:600;padding:9px 15px;border-radius:9px;
    border:1px solid var(--line);background:transparent;color:var(--fg);cursor:pointer;min-width:80px}
@@ -328,7 +334,9 @@ setSize(read("triage-shot-w") || 460);
 function tally(){
   var y=cards.filter(function(c){return c.dataset.vote==="yes"}).length;
   var n=cards.filter(function(c){return c.dataset.vote==="no"}).length;
-  document.getElementById("tally").textContent=y+" yes \\u00b7 "+n+" no \\u00b7 "+(cards.length-y-n)+" undecided";
+  var notes=cards.filter(function(c){var t=c.querySelector(".note");return t&&t.value.trim()}).length;
+  document.getElementById("tally").textContent=
+    y+" yes \\u00b7 "+n+" no \\u00b7 "+(cards.length-y-n)+" undecided"+(notes?(" \\u00b7 "+notes+" noted"):"");
 }
 function setVote(card,v){
   card.dataset.vote=v||"";
@@ -345,18 +353,39 @@ cards.forEach(function(card){
       setVote(card, card.dataset.vote===b.dataset.v ? "" : b.dataset.v);
     });
   });
+  var note=card.querySelector(".note");
+  if(note){
+    var saved=read("triage-note-"+card.dataset.n);
+    if(saved){ note.value=saved; note.classList.add("has"); }
+    note.addEventListener("input",function(){
+      save("triage-note-"+card.dataset.n, note.value);
+      note.classList.toggle("has", note.value.trim().length>0);
+      tally();
+    });
+  }
 });
 tally();
 document.getElementById("allno").addEventListener("click",function(){
   cards.forEach(function(c){ if(!c.dataset.vote) setVote(c,"no") });
 });
 document.getElementById("clear").addEventListener("click",function(){
-  cards.forEach(function(c){ setVote(c,"") });
+  var noted=cards.filter(function(c){var t=c.querySelector(".note");return t&&t.value.trim()}).length;
+  if(noted && !confirm("Clear all votes AND "+noted+" note"+(noted>1?"s":"")+"?")) return;
+  cards.forEach(function(c){
+    setVote(c,"");
+    var t=c.querySelector(".note");
+    if(t){ t.value=""; t.classList.remove("has"); save("triage-note-"+c.dataset.n,""); }
+  });
+  tally();
 });
 document.getElementById("copy").addEventListener("click",function(){
-  var yes=[],no=[],un=[];
+  var yes=[],no=[],un=[],noted=0;
   cards.forEach(function(c){
+    var t=c.querySelector(".note"), note=t?t.value.trim():"";
     var line="- "+c.dataset.name+"  ("+c.dataset.area+", "+c.dataset.effort+", wave "+c.dataset.wave+")";
+    // The note travels WITH its item. A note on an unvoted card still ships:
+    // the note is the signal, and dropping it would lose what he typed.
+    if(note){ noted++; line+="\\n    note: "+note.replace(/\\n+/g," / "); }
     if(c.dataset.vote==="yes") yes.push(line);
     else if(c.dataset.vote==="no") no.push(line);
     else un.push(line);
@@ -365,6 +394,7 @@ document.getElementById("copy").addEventListener("click",function(){
   L.push("## Build these ("+yes.length+")",""); L.push.apply(L,yes.length?yes:["_none_"]); L.push("");
   L.push("## Skip these ("+no.length+")",""); L.push.apply(L,no.length?no:["_none_"]); L.push("");
   if(un.length){L.push("## Not decided ("+un.length+")",""); L.push.apply(L,un); L.push("")}
+  if(noted) L.push("_"+noted+" of these carry a note._","");
   var out=document.getElementById("out");
   out.value=L.join("\\n"); out.classList.add("show"); out.focus(); out.select();
   // .catch, not try/catch: writeText returns a promise, so a sync catch cannot
@@ -385,7 +415,7 @@ document.getElementById("copy").addEventListener("click",function(){
         'Every card carries the grep that proves it is missing.</p>\n'
         '<div class="how"><b>Scroll and vote.</b> ▲ Yes = build it, ▼ No = skip it. '
         '<b>Click any screenshot to enlarge it</b> (Esc or click anywhere to close), and use the '
-        'size buttons at the bottom to make them bigger or denser. Your picks save as you go, so you '
+        'size buttons at the bottom to make them bigger or denser. Each card also has a <b>notes box</b> \u2014 type anything you want me to know and it travels with that item into the copied list. Your picks and notes save as you go, so you '
         'can close the tab and come back. Unvoted items are reported as “not yet decided”, never as yes.</div>\n'
         '<div class="nav">' + nav + '</div>\n'
         + "".join(body) + "\n"
