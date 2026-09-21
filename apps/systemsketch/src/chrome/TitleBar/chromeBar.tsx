@@ -38,6 +38,7 @@ import { FileNavigator } from "@trunk/components/fileNavigator";
 
 import { documentLocation } from "../../files/launchConfig";
 import { useDocumentSession, type DocumentSessionHelpers } from "../../files/session";
+import { useCompareView } from "../CompareView";
 import { SystemSketchSettings, useAppSettings } from "../ShareMenu";
 import { legacyAppActionsFor } from "../legacyApp";
 import { shortcutPlatform, useStockMenus } from "../FileMenu";
@@ -75,6 +76,9 @@ export function SystemSketchChromeBar() {
   const helpers = useMemo<DocumentSessionHelpers>(() => ({ addToast, confirm }), [addToast, confirm]);
   const session = useDocumentSession({ editor, mode: settings.fileNavigation, helpers, boardName });
   const stock = useStockMenus();
+  // Ruling 10 — the Compare view, reachable. Two rows and a modal; every
+  // decision behind them is in ../CompareView/compareView.tsx.
+  const compare = useCompareView(editor);
 
   // The door back to the archived app: its own group, last, so it reads as a
   // way OUT rather than as another file command. It navigates through the
@@ -98,9 +102,12 @@ export function SystemSketchChromeBar() {
         export: stock.export,
         preferences: stock.preferences,
         onKeyboardShortcuts: stock.openKeyboardShortcuts,
-        extra: legacyGroups,
+        // Compare BEFORE the legacy group, which stays last by its own rule
+        // below ("so it reads as a way OUT rather than as another file
+        // command").
+        extra: [compare.group, ...legacyGroups],
       }),
-    [legacyGroups, session.file, stock],
+    [compare.group, legacyGroups, session.file, stock],
   );
 
   return (
@@ -135,6 +142,7 @@ export function SystemSketchChromeBar() {
       />
       {session.navigatorProps ? <FileNavigator {...session.navigatorProps} /> : null}
       <SystemSketchSettings open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} update={update} />
+      {compare.dialog}
       {confirmDialog}
     </div>
   );

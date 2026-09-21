@@ -144,3 +144,38 @@ story-local scene adapter, and a bottom-right backend switch so both sides
 of the gate are visible without a URL flag — and its three play functions
 assert the negative against a menu that is genuinely open, because a menu
 that never opened satisfies "the group is absent" vacuously.
+
+## `sceneCompare.ts` + `sceneDiffMarks.tsx` — the compare view (ruling 10)
+
+Zach, 2026-09-21: *"we want to support the Compare view."*
+
+The compare SURFACE (`components/compareDialog.tsx` → `compareReview.tsx` →
+`propertyTable.tsx` → `codeView.tsx`) and the compare ENGINE
+(`scene/sceneDiff.ts`'s `diffScene`) were both already built, tested and
+storied — and could not meet, because `components/` may not import `scene/`.
+These two files are that meeting, and they are here for the DAG reason rather
+than a taste one: this is the only kit allowed to import both.
+
+| Half | What it is |
+|---|---|
+| **`sceneCompare.ts`** | Pure. `compareScenes(before, after, options)` runs `diffScene` and turns its rows into the `BoardCompare` the dialog already consumes. It decides only NAMING and SUBJECT; every judgement about what changed stays in the engine, so a surface can never hold a second opinion about it. |
+| **`sceneDiffMarks.tsx`** | Chrome. An outline over every node a comparison names, measured off the node's REAL rendered box (`getBoundingClientRect`) through the `data-scene-node` attribute `hosts/domCanvas.tsx` already stamps — a convention, not an import, so any host can opt in. |
+
+Two rules worth knowing before touching either:
+
+- **A mark whose node is not on this side is skipped, never drawn at a guessed
+  position.** That is what lets the same layer run on the `before` and `after`
+  panes with no per-side filtering: an `added` node is legitimately absent from
+  the baseline.
+- **`omitNodeFields` exists because a host keeps its port vocabulary in
+  `data`.** `diffScene` promises a port insertion is a port row and not a
+  modification of its block — but both host families store port ids in
+  `node.data.ports`, so the insertion changes the node's own data too, and the
+  surface would report one fact twice: once readably, once as a JSON blob.
+  It is deliberately NOT defaulted; a host names its own key.
+
+`SceneCompare.stories.tsx` is the reference host wiring, and the one that
+measures: `MarksOnTheBoards` checks a mark's rectangle against the node's own,
+inflated by the exported `DIFF_MARK_INSET`, rather than against a literal.
+`apps/systemsketch/src/chrome/CompareView/` is the same composition in the real
+app, reachable from the burger.
