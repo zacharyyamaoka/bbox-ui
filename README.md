@@ -41,6 +41,112 @@ look at how these solved it:
 | [shadcn/ui](https://ui.shadcn.com) · [`shadcn-ui/ui`](https://github.com/shadcn-ui/ui) (MIT) | The registry contract — `registry.json`, `shadcn build`, `/r/*.json`. |
 | [Fumadocs](https://fumadocs.dev) (MIT) | The framework under `apps/docs`. Check its docs before hand-rolling anything. |
 
+## Architecture — where does this file go?
+
+Settled 2026-09-21. `ARCHITECTURE.md` is the normative record; this is the short
+version you need before adding a file.
+
+**One question decides it: does it render?**
+
+| Ask | Answer |
+|---|---|
+| Does it render, or touch the DOM? | `components/` or `editor/` |
+| Is it pure, and reused across components? | `scene/` — **domain vocabulary and all** |
+| Is it pure, and used by exactly one component? | inside that component |
+| Is it applied on top, component unaware? | `skin/` |
+| Is it a configuration of existing components? | `presets/` |
+
+The trap worth naming: **`scene/` IS the domain model**, so a pure file that
+mentions ports and blocks fifty times still belongs there. Purity decides, not
+vocabulary.
+
+### The dependency DAG — the whole architecture in four lines
+
+```
+  scene  ←──────  components     components never imports scene
+    ↑                 ↑
+    └──── editor ────┘             editor imports both; nothing imports editor
+```
+
+`components` not importing `scene` is the load-bearing one: it is what lets the
+same `Block` be driven by a story literal, a React Flow node, a tldraw shape or a
+server-side render. Checked by grep in CI's stead.
+
+### The shape
+
+```
+src/
+  components/         one folder per component, self-contained
+    PortEdge/
+      PortEdge.tsx           the view
+      portEdge.types.ts      what it stores
+      usePortEdge.ts         its own behaviour
+      skin/                  its local presentation
+      PortEdge.stories.tsx   the story lives WITH the component
+      PortEdge.test.tsx
+      index.ts
+    Badge/
+      badge.tsx              one file is fine — the folder is the constant, not the contents
+
+  scene/              flat, grouped by what the operation DOES
+    model.ts                 the types
+    tidy.ts  collapse.ts  containment.ts  linking.ts  history.ts
+    layout/                  a folder when the concept is large
+    interactions/            pure interaction policy
+      magnet/  dragPolicy.ts  dragIntent.ts  grabChain.ts
+
+  editor/             one folder per editor component, named for what it IS
+    ContextualPopupMenu/  FileMenu/  TitleBar/  Toolbar/  InspectorPanel/ …
+
+  presets/            one folder per preset, peer to components
+  skin/               applied on top; components are unaware
+```
+
+**Every component gets a folder**, because every component needs a story. The
+*contents* vary — a 90-line Badge is one file in a folder, a 1,498-line PortEdge
+is several. The folder is the constant.
+
+**Screen position is never a folder name.** `MOC - SystemSketch Chrome` is a
+*view* that groups the editor components by where they sit; the folder is named
+for what the thing is.
+
+### What earns a place outside the three kits
+
+Only three reasons, and each says why no single component can hold the thing:
+
+1. **Applied on top, component unaware** — `skin/`. Components declare the token
+   contract; skin injects the values, including the sketch technique.
+2. **Between components with no common owner** — no `TraceBlock` component
+   exists, so magnetic snapping cannot belong to either side.
+3. **Every component needs it** — detach-to-primitive can't live in one of them.
+
+The counter-example that makes this decidable: `PortEdge` owns its own
+drag-and-drop, because `PortEdge` *is* the component containing both the port and
+the edge. **If a component contains both sides of an interaction, the interaction
+lives there.**
+
+### The editor rule
+
+An editor entry point makes **at most one call into `scene/`**, with the
+projection sandwich (`sceneNow` → scene fn → `applyScene`) exempt. All real logic
+lives in `scene/`; the editor supplies the UI entry point and nothing else. If a
+handler needs more than one call, the composition is missing from `scene/` — add
+it there.
+
+### Rejected, so it is not relitigated
+
+- **A feature manifest / plugin registry.** The single-call rule makes it
+  unnecessary: if an entry point is one call into scene, there is no tangle to
+  undo. See `ARCHITECTURE.md`'s naming section for the same discipline applied to
+  the kit names.
+- **An Obsidian-style plugin runtime.** An extension API is a product in itself.
+- **Hoisting aspects (`interaction/`, `drag/`) to top level.** Measured against
+  285 real repos: zero have one. What the industry hoists is `hooks`, `style`,
+  `layout` — infrastructure only.
+
+Full write-up with the measurements, the philosophy and its provenance:
+`docs/build_architecture_final.py` generates it.
+
 ## Components
 
 ### Port
