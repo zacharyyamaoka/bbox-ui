@@ -42,9 +42,14 @@ export {
   WIRE_TERMINAL_GAP,
   portTerminal,
   resolveWireEnds,
+  wireAutomaticRoute,
+  wireElbowInput,
+  wirePinnedRoute,
   wireRoutePoints,
+  wireRouteSegments,
   wireTerminals,
   type WireEnds,
+  type WireRouteSegment,
 } from "./wireGeometry";
 
 export const wireKit: ShapeKit = {

@@ -22,7 +22,9 @@
 
 import { Vec, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
-import { traceGeometry } from "@trunk/components/trace";
+import { pinElbowSegment, removePin, routeElbow, type ElbowAxis, type ElbowPin, type ElbowRouteInput } from "@trunk/components/elbow";
+import { elbowInputFromTerminals } from "@trunk/components/elbow/traceContract";
+import { traceGeometry, traceRouteEnd, traceRouteStart } from "@trunk/components/trace";
 import { traceHitPolyline } from "@trunk/components/trace.hit";
 import { OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "@trunk/components/trace.layout";
 
@@ -177,16 +179,143 @@ export function wireTerminals(editor: Editor, wire: WireShape): { from: TraceTer
  *     derivation).
  *
  * `curve` is not passed because `ss-wire` has no bend to pass — `WireShapeProps`
- * carries no `curve`, so every curved cable here is the default cubic. The day
- * P-028 lands an authored bend, it is handed in here and nowhere else.
+ * carries no `curve`, so every curved cable here is the default cubic. `pins`
+ * IS passed, and is read by exactly one branch: `traceGeometryBetween`'s
+ * `routing === "elbow"` arm hands it to the router, and the three direct
+ * routings ignore it (`trace.routing.ts`'s `TraceRouteOptions`). So a cable
+ * authored as an elbow and then switched to `curved` keeps its pins in the
+ * record, unread, and gets them back when it is switched home — which is the
+ * behaviour you want from a routing PICKER and the reason the pins are not
+ * cleared on a routing change.
  */
-export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, routing: TraceRouting): Vec[] {
-  const geometry = traceGeometry({ from, to, routing, gap: WIRE_TERMINAL_GAP });
+export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, routing: TraceRouting, pins: readonly ElbowPin[] = []): Vec[] {
+  const geometry = traceGeometry({ from, to, routing, gap: WIRE_TERMINAL_GAP, pins });
   const points = traceHitPolyline(geometry);
   // `Polyline2d` needs at least two vertices; a degenerate route (both ends
   // on one point) would otherwise throw inside the engine's segment walk.
   if (points.length < 2) return [new Vec(from.x, from.y), new Vec(to.x, to.y)];
   return points.map((point) => new Vec(point.x, point.y));
+}
+
+/* ------------------------------------------------------------------ *
+ * P-028 — the AUTHORED half of an elbow route.
+ *
+ * Everything below is assembly, not geometry: the math is the trunk's
+ * `@trunk/components/elbow` (`routeElbow`, `createPin`/`mergePin`/
+ * `resolvePin`), ported verbatim there from SystemSketch. This file's whole
+ * job is to hand that router the SAME input the paint is built from, because
+ * the moment the handle frame and the paint frame differ by even the terminal
+ * gap, a dragged pin lands somewhere the user did not put it.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The router input behind a wire's painted elbow route — the pulled-back
+ * terminals, the sides derived once, and the wire's persisted pins.
+ *
+ * WHY the pull-back is restated here instead of being skipped: `traceGeometry`
+ * routes between `traceRouteStart(from, gap)` and `traceRouteEnd(to, gap)`,
+ * NOT between the dot centres (`trace.tsx`'s own `TraceGeometry.start/end`
+ * doc: "the terminals pulled back by `gap`"). A pin is a fraction in the frame
+ * spanned by the route's two ENDPOINTS (`elbowPins.ts`'s `resolvePin`), so
+ * building it from the un-pulled-back centres would shift every pin by
+ * `WIRE_TERMINAL_GAP` worth of span — small, systematic, and invisible until a
+ * block is dragged and the error scales.
+ */
+export function wireElbowInput(from: TraceTerminalSpec, to: TraceTerminalSpec, pins: readonly ElbowPin[]): ElbowRouteInput {
+  return elbowInputFromTerminals({
+    from: traceRouteStart(from, WIRE_TERMINAL_GAP),
+    to: traceRouteEnd(to, WIRE_TERMINAL_GAP),
+    pins,
+  });
+}
+
+/** One draggable interior segment of an elbow route. `index` addresses the
+ *  AUTO route's segment list, which is the index space a pin lives in
+ *  (`elbowRouter.ts`'s `routeElbow` header: "pin indices always address the
+ *  *auto* route, never the pinned output"). */
+export interface WireRouteSegment {
+  index: number;
+  axis: ElbowAxis;
+  /** Midpoint of the segment AS DRAWN, in the wire's own space. */
+  x: number;
+  y: number;
+  /** True when a pin already governs this segment — i.e. the user authored
+   *  it. Drives the handle's look and what a double-click does. */
+  pinned: boolean;
+}
+
+/**
+ * The interior segments of a wire's elbow route, as grab targets.
+ *
+ * Two routes are computed, and the reason is the index space. The pin index
+ * must come from the AUTO route (see `WireRouteSegment.index`), but the handle
+ * has to sit where the cable is actually DRAWN, which is the pinned route. In
+ * the ordinary case — one pin moving one rail — the two polylines have the
+ * same segment count and the same axes, so the pinned midpoint is the honest
+ * position for the auto index.
+ *
+ * When they DISAGREE (a pin collapsed a corner, so `dedupe`/`enforceOrthogonal`
+ * returned fewer points) the pinned route's segment `i` is no longer the auto
+ * route's segment `i`, and using it would put a handle on a segment that
+ * re-pins a different rail. So the guard below falls back to the auto
+ * midpoint: a handle that may sit off the drawn cable is a cosmetic defect,
+ * while a handle that re-pins the wrong rail is a correctness one.
+ */
+export function wireRouteSegments(from: TraceTerminalSpec, to: TraceTerminalSpec, pins: readonly ElbowPin[]): WireRouteSegment[] {
+  const input = wireElbowInput(from, to, pins);
+  const auto = routeElbow({ ...input, pins: [] });
+  const drawn = pins.length === 0 ? auto : routeElbow(input);
+  const congruent =
+    drawn.segments.length === auto.segments.length &&
+    auto.segments.every((segment, at) => drawn.segments[at].index === segment.index && drawn.segments[at].axis === segment.axis);
+  return auto.segments
+    .filter((segment) => segment.pinnable)
+    .map((segment) => {
+      const shown = congruent ? (drawn.segments.find((candidate) => candidate.index === segment.index) ?? segment) : segment;
+      return {
+        index: segment.index,
+        axis: segment.axis,
+        x: shown.midpoint.x,
+        y: shown.midpoint.y,
+        pinned: pins.some((pin) => pin.index === segment.index),
+      };
+    });
+}
+
+/**
+ * A drag of segment `index` to `pointer` (wire space) as the whole new pin
+ * list, or `null` when that segment cannot be pinned — which is the trunk's
+ * own `pinElbowSegment` contract, re-exposed with this wire's frame already
+ * applied so no caller has to remember the gap.
+ *
+ * Deliberately NOT a wrapper that falls back to "the old list": `null` means
+ * "nothing happened", and `WireShapeUtil.onHandleDrag` turns that into no
+ * shape update at all rather than an identical write per pointer move.
+ */
+export function wirePinnedRoute(
+  from: TraceTerminalSpec,
+  to: TraceTerminalSpec,
+  pins: readonly ElbowPin[],
+  index: number,
+  pointer: Point,
+): ElbowPin[] | null {
+  return pinElbowSegment(wireElbowInput(from, to, pins), index, pointer);
+}
+
+/**
+ * The same segment released back to AUTOMATIC: the pin list without the pin
+ * on `index`, or `null` when there was none to drop — so a caller can tell
+ * "un-authored it" from "nothing to do" without comparing arrays.
+ *
+ * This is the whole of auto ↔ authored in one direction. The other direction
+ * is `wirePinnedRoute`; there is no third "routeMode" flag, and deliberately
+ * so: a mode field and a pin list can disagree, and then the picture and the
+ * badge that describes it are two answers to one question. `pins.length > 0`
+ * IS the mode.
+ */
+export function wireAutomaticRoute(pins: readonly ElbowPin[], index: number): ElbowPin[] | null {
+  if (!pins.some((pin) => pin.index === index)) return null;
+  return removePin(pins, index);
 }
 
 /*

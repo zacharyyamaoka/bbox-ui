@@ -56,3 +56,29 @@ export const PortAnchorV = T.object({
 });
 
 export const PointV = T.object({ x: T.number, y: T.number });
+
+/**
+ * One authored corner of an elbow cable (P-028), in the exact shape the
+ * trunk's router persists: `@trunk/components/elbow/elbowPins.ts`'s
+ * `ElbowPin`, which is itself a verbatim port of SystemSketch's.
+ *
+ * WHY the validator is spelled out here rather than derived from that type:
+ * `T.*` is a RUNTIME wall — a `.tldr` written by pyblocks, by the archive, or
+ * by a future version of this app has to be judged by a value, and a
+ * TypeScript interface judges nothing. The two are pinned together by
+ * `documentModel.test.ts`, which puts a real pin through the store, and by
+ * `WireShapeProps.pins` being typed as `ElbowPin[]` — change the trunk's
+ * interface and that assignment stops compiling.
+ *
+ * `axis` is the axis the SEGMENT runs along, so `"x"` (horizontal) means the
+ * pin governs the segment's `y`. `t` is a fraction in the endpoint frame and
+ * is deliberately NOT clamped to 0..1 here: the router's own `PIN_T_LIMIT`
+ * (±6) is what bounds it, and a stricter wall here would reject a file the
+ * router itself considers legal.
+ */
+export const ElbowPinV = T.object({
+  index: T.number,
+  axis: T.literalEnum("x", "y"),
+  t: T.number,
+  offset: T.number,
+});

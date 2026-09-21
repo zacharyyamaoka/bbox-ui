@@ -195,7 +195,10 @@ describe("ss-port (L2)", () => {
 
 describe("ss-wire + ss-wire-binding (L3)", () => {
   it("defaults: data, elbow (Zach's datum), loose ends", () => {
-    expect(defaultsOf(WIRE_SHAPE_TYPE)).toEqual({ variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 } });
+    // P-028: `pins: []` is the AUTOMATIC route. A cable is never born
+    // authored — `pins.length > 0` is the whole of the auto/authored mode,
+    // so a non-empty default would mean "every new wire is hand-routed".
+    expect(defaultsOf(WIRE_SHAPE_TYPE)).toEqual({ variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [] });
   });
 
   it("a wire bound at both ends to two blocks validates and round-trips with its bindings", () => {
@@ -212,7 +215,11 @@ describe("ss-wire + ss-wire-binding (L3)", () => {
     s.put([
       block(a, "a"),
       block(b, "b"),
-      shapeRecord(s, w, WIRE_SHAPE_TYPE, defaultsOf(WIRE_SHAPE_TYPE)),
+      // P-028: an AUTHORED cable specifically, not the default one — a pin is
+      // the prop whose round trip could plausibly break (a nested record
+      // inside an array, judged by `ElbowPinV`), and `t`/`offset` are floats
+      // that a lossy serializer would round.
+      shapeRecord(s, w, WIRE_SHAPE_TYPE, { ...defaultsOf(WIRE_SHAPE_TYPE), pins: [{ index: 1, axis: "y" as const, t: 0.625, offset: -3.5 }] }),
       { id: createBindingId("wa"), typeName: "binding" as const, type: WIRE_BINDING_TYPE, fromId: w, toId: a, meta: {}, props: { terminal: "start", portId: "out" } },
       { id: createBindingId("wb"), typeName: "binding" as const, type: WIRE_BINDING_TYPE, fromId: w, toId: b, meta: {}, props: { terminal: "end", portId: "in" } },
     ]);
@@ -222,6 +229,12 @@ describe("ss-wire + ss-wire-binding (L3)", () => {
   it("there is no control variant — data lines only", () => {
     const s = store();
     expect(() => s.put([shapeRecord(s, createShapeId("w2"), WIRE_SHAPE_TYPE, { ...defaultsOf(WIRE_SHAPE_TYPE), variant: "control" })])).toThrow();
+  });
+
+  it("a pin must name an axis the router knows (P-028)", () => {
+    const s = store();
+    expect(() => s.put([shapeRecord(s, createShapeId("w3"), WIRE_SHAPE_TYPE, { ...defaultsOf(WIRE_SHAPE_TYPE), pins: [{ index: 1, axis: "z", t: 0.5, offset: 0 }] })])).toThrow();
+    expect(() => s.put([shapeRecord(s, createShapeId("w4"), WIRE_SHAPE_TYPE, { ...defaultsOf(WIRE_SHAPE_TYPE), pins: [{ index: 1, axis: "x", t: 0.5 }] })])).toThrow();
   });
 
   it("the wire binding refuses a region as a target and a code shape as a target (never mix data and control lines; code speaks no ports)", () => {

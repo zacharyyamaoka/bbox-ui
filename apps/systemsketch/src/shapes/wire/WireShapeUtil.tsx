@@ -13,14 +13,15 @@
 // custom shape AND two real bindings", never an arrow. The shape owns the
 // paint and the hit geometry; `WireBindingUtil` owns which port each end
 // landed on.
-import { Polyline2d, ShapeUtil, T, createShapePropsMigrationSequence, type Editor, type TLBaseShape, type TLShapeUtilCanBindOpts, type VecLike } from "tldraw";
+import { Polyline2d, ShapeUtil, T, createShapePropsMigrationSequence, type Editor, type TLBaseShape, type TLHandle, type TLHandleDragInfo, type TLShapePartial, type TLShapeUtilCanBindOpts, type VecLike } from "tldraw";
 
+import type { ElbowPin } from "@trunk/components/elbow";
 import { TRACE_HIT_CORRIDOR_PX } from "@trunk/components/trace.hit";
 
-import { PointV } from "../shared/props";
+import { ElbowPinV, PointV } from "../shared/props";
 import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import { WireFace } from "./WireFace";
-import { wireRoutePoints, wireTerminals } from "./wireGeometry";
+import { wireAutomaticRoute, wirePinnedRoute, wireRoutePoints, wireRouteSegments, wireTerminals } from "./wireGeometry";
 
 export interface WireShapeProps {
   variant: "data" | "async" | "delayed";
@@ -31,6 +32,30 @@ export interface WireShapeProps {
    *  anchor, never from these numbers. */
   start: { x: number; y: number };
   end: { x: number; y: number };
+  /**
+   * P-028. The AUTHORED route: one `ElbowPin` per interior segment the user
+   * has dragged. Empty — the default — means the route is AUTOMATIC and the
+   * A* router owns every corner.
+   *
+   * WHY the persisted form is a pin and not the polyline the user sees: a pin
+   * is a fraction in the frame spanned by the cable's two ENDPOINTS
+   * (`@trunk/components/elbow/elbowPins.ts`, ported verbatim from
+   * SystemSketch), so when a block moves, the authored corner moves WITH it.
+   * Excalidraw stores a dragged segment as absolute element-local points and
+   * Zach ruled that out by name: "When I drag the box, the arrow elbow stays
+   * in the same place. This is not desirable."
+   *
+   * WHY there is no `routeMode: "auto" | "authored"` prop beside it, which is
+   * what the donor's `ConnectionShapeUtil` carries: a mode flag and a pin
+   * list are two answers to one question and can disagree. `pins.length > 0`
+   * IS the mode, and it cannot be out of step with itself.
+   *
+   * READ BY ONE ROUTING. `traceGeometryBetween` hands `pins` to the router in
+   * its `elbow` arm only; the three direct routings ignore them. That is why
+   * switching a cable to `curved` does not clear this list — the authored
+   * elbow is still there when you switch back.
+   */
+  pins: ElbowPin[];
 }
 
 declare module "@tldraw/tlschema" {
@@ -98,6 +123,35 @@ class WireGrabCorridor extends Polyline2d {
   }
 }
 
+/** The one spelling of a pin handle's id, so the two functions below are the
+ *  only places that know it. */
+const PIN_HANDLE_PREFIX = "pin:";
+
+/** `pin:<segment index>` -> the index, or `null` for any handle that is not
+ *  one of ours. Never a bare `parseInt` on the whole id: a future handle kind
+ *  on this shape must not be silently read as a pin. */
+function pinHandleIndex(handleId: string): number | null {
+  if (!handleId.startsWith(PIN_HANDLE_PREFIX)) return null;
+  const index = Number(handleId.slice(PIN_HANDLE_PREFIX.length));
+  return Number.isInteger(index) && index >= 0 ? index : null;
+}
+
+/**
+ * A valid tldraw fractional index for the n-th handle.
+ *
+ * `a0`..`az` in tldraw's own base-62 alphabet — 62 slots, where a route with
+ * more than a handful of interior segments is already pathological. Past the
+ * end every handle shares the last key, which only means the engine's
+ * `sortByIndex` leaves them in the order they were generated; nothing here
+ * reads a handle's index for anything but ordering (the shift-snap reference
+ * `DraggingHandle` looks for is a `vertex` NEIGHBOUR, and these handles never
+ * serve as one another's).
+ */
+const HANDLE_INDEX_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+function handleIndexKey(at: number): TLHandle["index"] {
+  return `a${HANDLE_INDEX_ALPHABET[Math.min(at, HANDLE_INDEX_ALPHABET.length - 1)]}` as TLHandle["index"];
+}
+
 export class WireShapeUtil extends ShapeUtil<WireShape> {
   static override type = WIRE_SHAPE_TYPE;
 
@@ -111,6 +165,7 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     color: T.string,
     start: PointV,
     end: PointV,
+    pins: T.arrayOf(ElbowPinV),
   };
 
   // Version 0, declared now for the reason BlockShapeUtil records: the
@@ -122,7 +177,9 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     // Elbow is Zach's datum (plan §2, from the archive's own toolbar default
     // at /home/bam/systemsketch/src/toolbar/toolbarModel.ts:38-46): a system
     // diagram reads as orthogonal runs.
-    return { variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 } };
+    // `pins: []` — a new cable is AUTOMATIC. Authoring is something the user
+    // does, never a state a cable is born in.
+    return { variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [] };
   }
 
   /**
@@ -189,16 +246,103 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
    */
   override getGeometry(shape: WireShape) {
     const { from, to } = wireTerminals(this.editor, shape);
-    return new WireGrabCorridor({ points: wireRoutePoints(from, to, shape.props.routing) }, this.editor);
+    return new WireGrabCorridor({ points: wireRoutePoints(from, to, shape.props.routing, shape.props.pins) }, this.editor);
   }
 
   override getIndicatorPath(shape: WireShape) {
     const { from, to } = wireTerminals(this.editor, shape);
-    const points = wireRoutePoints(from, to, shape.props.routing);
+    const points = wireRoutePoints(from, to, shape.props.routing, shape.props.pins);
     const path = new Path2D();
     path.moveTo(points[0].x, points[0].y);
     for (const point of points.slice(1)) path.lineTo(point.x, point.y);
     return path;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * P-028 — authoring the route.
+   *
+   * tldraw's handle seam is used exactly as stock: `getHandles` publishes
+   * grab points in SHAPE space, `select.idle` hit-tests them through its own
+   * `shape_handle` overlay, and `DraggingHandle.update()` calls
+   * `onHandleDrag` on every pointer move with the handle moved to the
+   * pointer. Nothing here listens for a pointer itself — the gesture is the
+   * engine's, which is ARCHITECTURE.md's rule for a canvas-spanning drag.
+   *
+   * WHY handles rather than a second in-shape affordance: a handle is only
+   * offered when the cable is the ONLY selected shape
+   * (`ShapeHandleOverlayUtil.isActive`), which is precisely "the user is
+   * looking at this one cable" — and it costs no paint, no hit area and no
+   * DOM on the other 99% of frames.
+   * ---------------------------------------------------------------- */
+
+  /**
+   * One grab point per interior segment of the elbow route.
+   *
+   * `virtual` for a segment the router owns, `vertex` for one the user has
+   * pinned — stock tldraw draws both, and the difference is the only place
+   * "this route is authored" is visible on the canvas.
+   *
+   * A non-elbow routing gets NO handles, and that is a statement rather than
+   * an omission: `pins` is read by the elbow router alone
+   * (`wireGeometry.ts`'s `wireRoutePoints`), so a handle on a `curved` cable
+   * would move a number that changes nothing on screen.
+   */
+  override getHandles(shape: WireShape): TLHandle[] {
+    if (shape.props.routing !== "elbow") return [];
+    const { from, to } = wireTerminals(this.editor, shape);
+    return wireRouteSegments(from, to, shape.props.pins).map((segment, at) => ({
+      id: `${PIN_HANDLE_PREFIX}${segment.index}`,
+      type: segment.pinned ? "vertex" : "virtual",
+      // A fractional index only orders handles; these are generated rather
+      // than stored because the list is derived fresh from the route on every
+      // read and has no identity to preserve between reads.
+      index: handleIndexKey(at),
+      x: segment.x,
+      y: segment.y,
+    }));
+  }
+
+  /**
+   * The drag itself. `info.handle` arrives already moved to the pointer, in
+   * shape space — and because every `ss-wire` sits at the page origin
+   * (`WireFace`'s own note), shape space IS page space, so it can be handed
+   * to the router untransformed.
+   *
+   * Returning `undefined` when the pin list did not change is not an
+   * optimisation: `DraggingHandle.update()` writes the shape only when
+   * `onHandleDrag` returns changes, so a segment that cannot be pinned
+   * produces no record write at all instead of one identical write per
+   * pointer move (and therefore no spurious entry under the single
+   * `markHistoryStoppingPoint` the engine already opened).
+   */
+  override onHandleDrag(shape: WireShape, info: TLHandleDragInfo<WireShape>): TLShapePartial<WireShape> | undefined {
+    const index = pinHandleIndex(info.handle.id);
+    if (index === null || shape.props.routing !== "elbow") return undefined;
+    const { from, to } = wireTerminals(this.editor, shape);
+    const pins = wirePinnedRoute(from, to, shape.props.pins, index, { x: info.handle.x, y: info.handle.y });
+    if (!pins) return undefined;
+    return { id: shape.id, type: shape.type, props: { pins } };
+  }
+
+  /**
+   * Double-click an authored corner to hand it back to the router — the
+   * AUTHORED → AUTO direction, and the only way back short of deleting the
+   * cable.
+   *
+   * WHY a double-click on the handle rather than a button in the selection
+   * pill: the corner is the thing being un-authored, so the gesture lands on
+   * it. This is also the seam stock tldraw already routes
+   * (`SelectTool.Idle`'s `double_click` on `target: "handle"` calls
+   * `onDoubleClickHandle` and, only if it returns nothing, falls through to
+   * "start editing the shape"). Returning the changes is therefore also what
+   * keeps a double-click on a cable from trying to edit it.
+   */
+  override onDoubleClickHandle(shape: WireShape, handle: TLHandle): TLShapePartial<WireShape> | undefined {
+    const index = pinHandleIndex(handle.id);
+    if (index === null) return undefined;
+    const pins = wireAutomaticRoute(shape.props.pins, index);
+    if (!pins) return undefined;
+    return { id: shape.id, type: shape.type, props: { pins } };
   }
 
   override component(shape: WireShape) {

@@ -65,6 +65,13 @@ export function WireFace({ shape }: { shape: WireShape }) {
         to,
         variant: live.props.variant,
         routing: live.props.routing,
+        // P-028. The authored corners, handed straight through. `Trace` is
+        // the ONE dispatch that turns a routing kind into geometry
+        // (`trace.tsx`'s P6 header), and `WireShapeUtil.getGeometry` asks it
+        // the same question with the same `pins` — which is what keeps the
+        // hit corridor on the cable the user can see, exactly as it already
+        // does for the four routings.
+        pins: live.props.pins,
         // `color: ""` is the schema's "unset" (a `T.string` cannot be null
         // without changing the persisted contract), and `Trace` reads an
         // absent `color` as its own default. Passing the empty string through
@@ -89,6 +96,7 @@ export function WireFace({ shape }: { shape: WireShape }) {
             from={painted.from}
             to={painted.to}
             routing={painted.routing}
+            pins={painted.pins}
             variant={painted.variant}
             color={painted.color}
             // The dots are REAL `Port`s rendered by the blocks at each end,
