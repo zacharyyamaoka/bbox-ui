@@ -400,14 +400,27 @@ async function typeWritingThrough(text: string, read: () => string) {
  * since the last one — and panel unmount and tab switch are the routes that
  * get there.
  *
- * WHAT ACTUALLY PROTECTS THE TEXT IN THIS APP, and it is not a fourth commit
- * route: no exit route carries text at all. Each of the four text surfaces
- * writes through on every keystroke, so the store is never behind the field:
+ * WHAT PROTECTS THE TEXT ON THE FOUR SURFACES BELOW, and it is not a fourth
+ * commit route: none of these exit routes carries text at all. Each of the
+ * four writes through on every keystroke, so the store is never behind the
+ * field:
  *
  *   shapes/block/BlockFace.tsx:186   the block title      EditableText `onChange`
  *   shapes/port/PortFace.tsx:236     the port declaration CodeEditor  `onWrite`
  *   shapes/code/CodeFace.tsx:148     a code cell          CodeEditor  `onWrite`
  *   chrome/panels.tsx:152            the description      Textarea    `onChange`
+ *
+ * CORRECTION, 2026-09-21 — this list is the four surfaces this file drives,
+ * NOT the app. It used to read "no exit route in this app carries text at
+ * all", and that generalisation was false: `src/backend/BackendSettings.tsx`'s
+ * pyblocks URL field buffered in a `useState` draft and committed only from
+ * React's `onBlur` and from Enter, so closing the popover over the focused
+ * field left the store holding the old url. Reproduced in real Chromium and
+ * fixed with the same `FieldGesture` the two `CodeEditor` rows above already
+ * use, in its `exit` mode; the gate for it is
+ * `src/backendUrlCommit.smoke.test.tsx`. A four-row enumeration is not a
+ * proof that the set is closed — the next buffered field will not be in this
+ * list either.
  *
  * MEASURED WHILE WRITING THIS, and worth keeping because it is the opposite of
  * what the routes look like: on BOTH routes below a `blur` does fire, even

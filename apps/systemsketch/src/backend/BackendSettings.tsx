@@ -24,10 +24,11 @@
 // that a whiteboard shows nothing of it. Closed, the trigger reads
 // `Backend: none` and the popup does not exist — which is both the honest
 // reading of the promise and a smaller piece of chrome over the board.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useToasts } from "tldraw";
 
 import { StatusDot } from "@trunk/components/chromeBar";
+import { FieldGesture } from "@trunk/components/codeEditorGesture";
 import { Popover, PopoverContent, PopoverTrigger } from "@trunk/components/popover";
 import {
   DEFAULT_PYBLOCKS_URL,
@@ -75,6 +76,77 @@ function healthLabel(health: PyblocksHealthResult | null): string {
   return parts.join(" · ");
 }
 
+/**
+ * The pyblocks URL field, as its own component so it has an UNMOUNT of its
+ * own to commit from — P-030, "nothing you type is ever lost", on the exit
+ * route the browser does not report.
+ *
+ * WHY a `FieldGesture` (`@trunk/components/codeEditorGesture`) rather than a
+ * third hand-rolled commit call: that class already IS this app's answer to
+ * the hazard, and its header states it — "no `blur` fires for a focused
+ * element removed from the DOM, so a naive commit-on-blur field silently
+ * drops whatever was typed the instant its panel unmounts." `CodeEditor`
+ * drives it from its own unmount effect (codeEditor.tsx:515) and that is why
+ * the port declaration and the code cell were already safe. This field was
+ * not: it buffered in `urlDraft` and committed only from React's `onBlur` and
+ * from Enter, so Escape-with-the-caret-still-in-the-field left the store
+ * holding the OLD url while the reopened field showed the new one. Measured
+ * in real Chromium; `src/backendUrlCommit.smoke.test.tsx` is the gate.
+ *
+ * WHY `exit` mode and not the `live` mode `CodeEditor` uses: a live write
+ * here re-mints the backend client and restarts the 15 s health poll on
+ * every keystroke, and `normalizePyblocksUrl` refuses every half-typed
+ * prefix on the way (`h`, `ht`, `http:/`…), so the field would paint an
+ * error per character. `exit` exists for exactly that — "a write that is
+ * genuinely expensive" — and it is still loss-free, because unmount is
+ * itself an end boundary.
+ *
+ * WHY the component owns only the gesture and not the draft: the draft has a
+ * second reader — the `kind` select reads it to build the setting when the
+ * person switches to pyblocks without ever touching the URL — so it stays in
+ * the panel and this component stays presentational plus one lifecycle.
+ */
+function BackendUrlField({
+  value,
+  onDraft,
+  onCommit,
+}: {
+  value: string;
+  onDraft: (text: string) => void;
+  /** MUST be referentially stable, and MUST read the current setting at CALL
+   *  time rather than closing over it — the unmount commit fires from a
+   *  render this component never saw. See `commitUrl`'s guard. */
+  onCommit: (text: string) => void;
+}) {
+  const gestureRef = useRef<FieldGesture | null>(null);
+  if (gestureRef.current === null) {
+    gestureRef.current = new FieldGesture({ write: (text) => onCommit(text) }, "exit");
+  }
+  const gesture = gestureRef.current;
+
+  // The last line of the contract: every OTHER exit route already calls
+  // `commit()`, and `FieldGesture.commit()` is idempotent, so a real blur
+  // followed by this cleanup writes once. Same shape as `CodeEditor`'s.
+  useLayoutEffect(() => () => gesture.commit(), [gesture]);
+
+  return (
+    <input
+      data-testid="ss-backend-url"
+      className="w-52 rounded-md border border-border bg-background px-1.5 py-1 font-mono"
+      value={value}
+      onFocus={(event) => gesture.focus(event.currentTarget.value)}
+      onChange={(event) => {
+        onDraft(event.target.value);
+        gesture.change(event.target.value);
+      }}
+      onBlur={() => gesture.commit()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") gesture.commit();
+      }}
+    />
+  );
+}
+
 export function PyblocksBackendPanel() {
   const { addToast } = useToasts();
   const storage = useMemo(viewerStorage, []);
@@ -97,6 +169,17 @@ export function PyblocksBackendPanel() {
   if (seamRef.current === null) seamRef.current = createSceneEventSeam();
   const seam = seamRef.current;
 
+  /**
+   * The live setting, readable from a callback that outlives the render it
+   * was created in. Assigned during RENDER on purpose, not from an effect:
+   * the one caller that needs it is the URL field's unmount commit, and in
+   * React's commit phase a child's cleanup runs BEFORE the parent's effects
+   * — so an effect-assigned ref would still read `pyblocks` at the exact
+   * moment the person has just chosen `none`.
+   */
+  const settingRef = useRef(setting);
+  settingRef.current = setting;
+
   const client = useMemo(() => backendClientFor(setting), [setting]);
   const surfaces = pyblocksSurfaces(setting, health);
 
@@ -118,6 +201,13 @@ export function PyblocksBackendPanel() {
 
   const commitUrl = useCallback(
     (text: string) => {
+      // WHY the kind is re-read here and not closed over: this now runs from
+      // the field's UNMOUNT as well as from blur and Enter, and one way the
+      // field unmounts is the person choosing `Backend: none`. Committing a
+      // url then would resurrect pyblocks a keystroke after it was switched
+      // off — the setting the person chose last must win.
+      // `src/backendUrlCommit.smoke.test.tsx` holds this case.
+      if (settingRef.current.kind !== "pyblocks") return;
       const url = normalizePyblocksUrl(text);
       if (url === null) {
         // Refused while it is still a SETTING, with the field still in front
@@ -218,16 +308,7 @@ export function PyblocksBackendPanel() {
               <>
                 <label className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">URL</span>
-                  <input
-                    data-testid="ss-backend-url"
-                    className="w-52 rounded-md border border-border bg-background px-1.5 py-1 font-mono"
-                    value={urlDraft}
-                    onChange={(event) => setUrlDraft(event.target.value)}
-                    onBlur={(event) => commitUrl(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") commitUrl(event.currentTarget.value);
-                    }}
-                  />
+                  <BackendUrlField value={urlDraft} onDraft={setUrlDraft} onCommit={commitUrl} />
                 </label>
                 {urlError ? <span className="text-destructive">{urlError}</span> : null}
                 <span
