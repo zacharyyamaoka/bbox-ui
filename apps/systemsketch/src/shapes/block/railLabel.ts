@@ -12,53 +12,92 @@
 // afterwards, with the label snapping back to `gain_x`. An editing surface the
 // board OFFERS and then discards is worse than no editing surface, so this is
 // the function that reads both halves of what the rail reports.
-import { withPortDeclarationName } from "@trunk/scene/portDeclaration";
+//
+// P-056 (2026-09-21) widened the first function below from "reorder and
+// rename" to "add and remove too", and moved its semantics out to
+// `@trunk/scene/portList` — see that module's header for why the pure part
+// belongs in `scene/`. What stays here is the part that is genuinely this
+// app's: a `BlockPortSpec` is the record, and a NEW one needs an id, which
+// only the host can mint.
+import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
+import { portsFromLineItems, uniquePortId, type PortListEdit } from "@trunk/scene/portList";
 
 import type { BlockPortSpec } from "./BlockShapeUtil";
 
-/** What `onItemsChange` hands back — `PortEdgeItem` narrowed to the two fields
- *  a stored port actually takes anything from. */
+/** What `onItemsChange` hands back — `PortEdgeItem` narrowed to the fields a
+ *  stored port actually takes anything from. */
 export interface RailItem {
   id: string;
   label: string;
+  /** P-056. The WHOLE declaration, as the multi-line lane shows it — the rail
+   *  paints only the name half (`labelOf`), so this is the only field that
+   *  can carry a re-typed annotation, and the only one a NEW port can be
+   *  declared by. Absent on a report from a surface that has no lane. */
+  laneLine?: string;
 }
 
 /**
- * The rail's ports after a change, in the order the rail now shows them, with
- * any edited label folded back into the port's stored declaration.
+ * The rail's ports after a change: reordered, renamed, re-declared, ADDED and
+ * REMOVED — plus the ports that went, so the caller can delete the cables
+ * that were plugged into them.
  *
- * WHY the label is spliced in as the NAME HALF rather than written as the
- * whole declaration: the rail PAINTS the name half and nothing else
- * (`labelOf`, and the measured overlap ruling above it), so the string the
- * person edited is a name — the annotation was never on screen. Writing the
- * field's contents over the whole line would delete a `: float` the editor
- * never showed them, which is precisely what
- * `feedback_truthful_property_rendering` forbids. `withPortDeclarationName`
- * is the trunk's own splice for this and returns the type segment VERBATIM,
- * so an authored `:  Frame ` keeps its spacing through a rename.
+ * Every rule about what a reported line MEANS lives in
+ * `@trunk/scene/portList`'s `portsFromLineItems` and is tested there. The one
+ * rule that lives HERE is the id, because minting one is the host's job:
  *
- * A consequence worth stating because it is a real edge and not an oversight:
- * a colon TYPED into the rail becomes part of the name
- * (`gain_x: float` + `a:b` -> `a:b: float`). It is odd, but it is lossless and
- * it round-trips; the alternative — treating a typed colon as a re-annotation
- * — would silently drop the stored annotation the field never displayed, and
- * that is the failure this function exists to avoid. Editing a rail port's
- * ANNOTATION has no surface on the card yet; see this file's NOT-DONE note in
- * the commit.
- *
- * An item naming a port the block no longer has is dropped rather than minted:
- * this function reorders and renames, it never creates a port.
+ * `taken` is every port id on the WHOLE BLOCK, not on this one wall, because
+ * an `ss-wire-binding` stores a bare `portId` with no side — two walls
+ * sharing an id would make a cable ambiguous about which dot it meets. And an
+ * id is minted ONCE, from the name the line declared, and never re-derived
+ * afterwards: it is what a binding names, so following a later rename would
+ * silently move every wire on the block.
  */
-export function portsFromRailItems(stored: readonly BlockPortSpec[], items: readonly RailItem[]): BlockPortSpec[] {
-  const byId = new Map(stored.map((port) => [port.id, port]));
-  return items.flatMap((item) => {
-    const port = byId.get(item.id);
-    if (!port) return [];
-    const declaration = withPortDeclarationName(port.declaration, item.label);
-    // Identity when nothing changed — a pure reorder must not mint new port
-    // objects, or every drag would look like an edit to anything comparing
-    // records. `withPortDeclarationName(line, parse(line).name)` reassembles
-    // `line` byte for byte, so this is exact, not approximate.
-    return [declaration === port.declaration ? port : { ...port, declaration }];
+export function portsFromRailItems(stored: readonly BlockPortSpec[], items: readonly RailItem[], taken: ReadonlySet<string>): PortListEdit<BlockPortSpec> {
+  const used = new Set(taken);
+  return portsFromLineItems(stored, items, (declaration) => {
+    const id = uniquePortId(declaration, used);
+    used.add(id);
+    return { id, declaration };
   });
+}
+
+/**
+ * P-014. WHICH GESTURE this `onItemsChange` belongs to, as a stable key — or
+ * `null` when the change is its own discrete edit and deserves its own undo
+ * entry.
+ *
+ * `PortEdge` reports a reorder and a label keystroke through the same
+ * callback (this file's header), and the two want OPPOSITE things from the
+ * undo stack: a drop is one edit and marks every time, while a run of
+ * keystrokes on one port is one edit and must mark only once. Nothing in the
+ * callback says which arrived, so this reads it off the change itself.
+ *
+ * `label:<portId>` is returned only for the one shape a keystroke can have:
+ * the same ports, in the same order, with EXACTLY ONE name changed. Anything
+ * else — a reorder, a port gone, two labels at once, an id the block does not
+ * have — is `null`, i.e. "mark now". WHY that direction on the unknown case:
+ * marking too often costs an extra Ctrl+Z, marking too rarely welds the edit
+ * onto the action before it, and this app has already shipped the second (a
+ * glyph pick that deleted the block it was picked on, measured 2026-09-21).
+ * An unclassifiable change takes the recoverable error.
+ *
+ * WHAT THIS CANNOT SEE, stated because it is a real residual: two SEPARATE
+ * rename sessions on the same port, back to back with nothing in between,
+ * share a key and therefore one undo entry. Closing it needs a real
+ * begin/end signal from `PortEdge` — which publishes none today, and adding
+ * one is a trunk change. The cost is one merged entry in a rare sequence;
+ * what it replaces is SIX entries for every single rename.
+ */
+export function railGestureKey(stored: readonly BlockPortSpec[], items: readonly RailItem[]): string | null {
+  if (items.length !== stored.length) return null;
+  let renamed: string | null = null;
+  for (let at = 0; at < items.length; at += 1) {
+    const item = items[at];
+    const port = stored[at];
+    if (item.id !== port.id) return null; // the order moved: a reorder, not typing
+    if (item.label === parsePortDeclaration(port.declaration).name) continue;
+    if (renamed !== null) return null; // two at once is not a keystroke
+    renamed = item.id;
+  }
+  return renamed === null ? null : `label:${renamed}`;
 }

@@ -6,7 +6,7 @@
 // `shape.props` into the two components' props and to route their callbacks
 // back into the store.
 import { useEffect, useRef } from "react";
-import { useEditor, useValue, type TLBinding } from "tldraw";
+import { useEditor, useValue, type Editor, type TLBinding, type TLShapeId } from "tldraw";
 
 import { Block } from "@trunk/components/block";
 import {
@@ -24,6 +24,7 @@ import { GlyphPicker } from "@trunk/editor/glyphPicker";
 import { POINTER_OWNED_CLASS } from "@trunk/hosts/nodeViews";
 import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
 
+import { createGestureMark, type GestureMark } from "../../document/gestureHistory";
 import { usePortProducers } from "../../document/sceneFromStore";
 import { availabilityAt, wireAvailability } from "../wire/portAvailability";
 import { isRegionCornerBlock } from "../region/cornerBlock";
@@ -31,7 +32,8 @@ import { stopEditing } from "../shared/editingSession";
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
 import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
-import { portsFromRailItems } from "./railLabel";
+import { portLaneRequest } from "./portLaneHost";
+import { portsFromRailItems, railGestureKey } from "./railLabel";
 
 /**
  * The rail label is the NAME HALF of the port's declaration — everything
@@ -116,7 +118,17 @@ function BlockGlyph({ shape }: { shape: BlockShape }) {
   return (
     <GlyphPicker
       value={shape.props.glyph}
-      onChange={(glyph) => editor.updateShape({ id: shape.id, type: BLOCK_SHAPE_TYPE, props: { glyph } })}
+      // P-014. The mark is what makes point 3 above TRUE — it claimed "one
+      // history entry per pick" while writing with no stopping point at all,
+      // so the pick merged into the store transaction before it. Measured in
+      // real Chromium 2026-09-21: pick a glyph on a freshly placed block,
+      // press Ctrl+Z, and the BLOCK was deleted. A discrete edit marks
+      // unconditionally; only a per-keystroke run needs the latch the two
+      // text editors below use.
+      onChange={(glyph) => {
+        editor.markHistoryStoppingPoint("set glyph");
+        editor.updateShape({ id: shape.id, type: BLOCK_SHAPE_TYPE, props: { glyph } });
+      }}
       sizePreset="sm"
       portalContainer={editor.getContainer()}
       className={POINTER_OWNED_CLASS}
@@ -198,6 +210,12 @@ function BlockTitleEditor({ shape, caretAt }: { shape: BlockShape; caretAt?: num
   const write = (name: string) => {
     editor.updateShape({ id: shape.id, type: BLOCK_SHAPE_TYPE, props: { name } });
   };
+  // P-014. One mark for the whole session, not one per keystroke — this
+  // control mounts fresh per session (see `snapshot` above, which relies on
+  // exactly that), so the remount IS the gesture boundary and the key can be
+  // a constant. `document/gestureHistory.ts` carries the measurement.
+  const gesture = useRef<GestureMark | null>(null);
+  if (!gesture.current) gesture.current = createGestureMark();
 
   return (
     <EditableText
@@ -208,10 +226,14 @@ function BlockTitleEditor({ shape, caretAt }: { shape: BlockShape; caretAt?: num
       lines="single"
       editing
       caretAt={caretAt}
-      // Per keystroke, like every other real edit in this app. One undo step
-      // per gesture rather than one per character.
+      // The WRITE is per keystroke — nothing typed is ever pending, which is
+      // P-030's whole contract. The undo ENTRY is not: `begin` marks on the
+      // first keystroke of the session and is a no-op on every later one, so
+      // the run collapses to one Ctrl+Z (P-014). Measured before the fix:
+      // renaming a block to "detect" cost SIX presses and the first five left
+      // the card reading "detec", "dete", …
       onChange={(next) => {
-        editor.markHistoryStoppingPoint("rename block");
+        gesture.current!.begin(editor, "rename block");
         write(next);
       }}
       // ENTER CLOSES THE SESSION; A BLUR DOES NOT — see `onCommit`'s own doc
@@ -323,6 +345,10 @@ function BlockDescriptionEditor({ shape, caretAt }: { shape: BlockShape; caretAt
   const write = (description: string) => {
     editor.updateShape({ id: shape.id, type: BLOCK_SHAPE_TYPE, props: { description } });
   };
+  // P-014, the title's latch for the title's reason — this control also
+  // mounts fresh per session, so the remount is the gesture boundary.
+  const gesture = useRef<GestureMark | null>(null);
+  if (!gesture.current) gesture.current = createGestureMark();
 
   return (
     // `data-editing="true"` on the SAME element the resting sentence marks, so
@@ -341,7 +367,7 @@ function BlockDescriptionEditor({ shape, caretAt }: { shape: BlockShape; caretAt
         caretAt={caretAt}
         placeholder="What does this block do?"
         onChange={(next) => {
-          editor.markHistoryStoppingPoint("edit description");
+          gesture.current!.begin(editor, "edit description");
           write(next);
         }}
         // Ctrl/Cmd+Enter closes the session; a blur does not — the same split
@@ -429,6 +455,42 @@ function BlockDescriptionText({ shape, editField }: { shape: BlockShape; editFie
   );
 }
 
+/**
+ * Delete every cable plugged into one of these ports.
+ *
+ * P-056. THE DECISION, because removing a wired port is the interesting case
+ * and doing nothing is also a choice: the cable GOES.
+ *
+ * WHY, and it is this app's existing rule rather than a new one.
+ * `WireBindingUtil.onBeforeDeleteToShape` already deletes the wire when the
+ * BLOCK it is bound to is deleted, for the reason written there — "a wire
+ * without an end is not a document fact". A binding naming a port id the block
+ * no longer owns IS a wire without an end; it just arrives by a props change
+ * instead of a shape deletion, which is precisely why tldraw's own binding
+ * cleanup does not fire and something has to say it here.
+ *
+ * WHAT IT REJECTS. Leaving the binding dangling is the tempting alternative,
+ * and it looks kinder — delete a port by accident and the wiring survives to
+ * be re-attached. It is not kinder. `resolveWireEnds`/`portTerminal`
+ * (`../wire/wireGeometry.ts`) resolve a terminal by looking the port up on the
+ * bound shape and answer `null` when it is not there, so the cable stops being
+ * painted while its record stays in the store: an invisible edge that
+ * `sceneFromRecords` skips, that the linter cannot see, and that comes back to
+ * life pointing somewhere else the moment a NEW port is minted with the same
+ * id (`uniquePortId` reuses a name freely once nothing holds it). An invisible
+ * record that can silently re-attach is worse than a visible deletion. The
+ * undo story is what makes the visible deletion cheap: the port and its cables
+ * leave in ONE transaction, so one Ctrl+Z brings all of it back.
+ */
+function deleteCablesAtPorts(editor: Editor, blockId: TLShapeId, portIds: readonly string[]): void {
+  const gone = new Set(portIds);
+  const cables = editor
+    .getBindingsToShape(blockId, WIRE_BINDING_TYPE as TLBinding["type"])
+    .filter((binding) => gone.has(String((binding.props as { portId?: string }).portId ?? "")))
+    .map((binding) => binding.fromId);
+  if (cables.length > 0) editor.deleteShapes(cables);
+}
+
 export function BlockFace({ shape }: { shape: BlockShape }) {
   const editor = useEditor();
   const { view, ports, w, h } = shape.props;
@@ -438,6 +500,12 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
   // one opened without a press on either lands on the title. See
   // `BlockEditFieldRef`.
   const editField = useRef<BlockEditField>("title");
+  // P-014. The rail's undo claim. Unlike the two text editors, this one lives
+  // in the FACE and not in a control that remounts per session, because
+  // `PortEdge` has no session object to hang it on — so the gesture boundary
+  // is the KEY (`railGestureKey`) rather than a remount.
+  const railGesture = useRef<GestureMark | null>(null);
+  if (!railGesture.current) railGesture.current = createGestureMark();
   const editing = useValue("ss-block editing", () => editor.getEditingShapeId() === shape.id, [editor, shape.id]);
   useEffect(() => {
     if (!editing) editField.current = "title";
@@ -497,6 +565,22 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
   // here would be the divergence Zach's 2026-09-19 trunk rule forbids.
   const isRegionCorner = useValue("ss-block is its region's corner card", () => isRegionCornerBlock(editor, shape.id), [editor, shape.id]);
 
+  // P-056. Which dot the user last clicked, board-wide — the whole trigger for
+  // the multi-line port lane. `null` at every other moment, so nothing about a
+  // rail changes until someone asks for it.
+  //
+  // WHY a board-wide fact read HERE rather than a `useState` in this face: the
+  // click arrives at `shapes/wire/wireGesture.ts`, a document-level listener
+  // installed once by the app — it has an editor and a shape id, not a React
+  // handle on whichever face is painting that shape. See `portLaneHost.ts`.
+  const laneRequest = useValue("ss-block port lane", () => portLaneRequest(editor).get(), [editor]);
+  // Every port id on the WHOLE block, which is the scope an id has to be
+  // unique in: an `ss-wire-binding` stores a bare `portId` with no side, so
+  // two walls sharing an id would make a cable ambiguous. Read here, once per
+  // render, rather than inside the per-side handler, so all four walls mint
+  // against the same set.
+  const takenPortIds = new Set(PORT_SIDES.flatMap((side) => ports[side].map((port) => port.id)));
+
   const edges: Partial<Record<BlockSide, BlockEdgeSpec>> = Object.fromEntries(
     PORT_SIDES.map((side) => [
       side,
@@ -505,6 +589,14 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           (port): PortEdgeItem => ({
             id: port.id,
             label: labelOf(port),
+            // P-056. The rail paints the NAME HALF (see `labelOf`'s ruling);
+            // the lane is an overlay beside the rail and has the room for the
+            // whole line, so it is the one surface that can show — and
+            // therefore RE-TYPE — the annotation. Fed on every render whether
+            // a lane is open or not, which is what lets `portsFromRailItems`
+            // tell a lane write (this changed) from a rail rename (the label
+            // changed) out of one callback.
+            laneLine: port.declaration,
             state: wired.has(port.id) ? "wired" : undefined,
             // `undefined` is "no opinion", and `Port` reads it as "paint the
             // at-rest grammar" — see `availabilityAt` for why the dot the
@@ -529,21 +621,51 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
         // every keystroke away. `portsFromRailItems` reads both halves; its own
         // header carries the measurement and the splice rule.
         onItemsChange: (items: PortEdgeItem[]) => {
-          // The same mark the title editor sets before ITS per-keystroke write
-          // (`BlockTitleEditor`), and for the reason that one exists: without a
-          // stopping point the rename merges into whatever entry was already
-          // open, so the first Ctrl+Z after renaming a port undid the action
-          // BEFORE it — measured 2026-09-21, one undo after renaming a port on
-          // a freshly placed block deleted the block. Undo granularity inside
-          // the rename is per keystroke, exactly as it is for the title; that
-          // is this app's existing shape for text edits and this lane did not
-          // change it.
-          editor.markHistoryStoppingPoint("edit ports");
-          editor.updateShape({
-            id: shape.id,
-            type: BLOCK_SHAPE_TYPE,
-            props: { ports: { ...ports, [side]: portsFromRailItems(ports[side], items) } },
+          // A stopping point is what keeps the rename off the entry BEFORE it:
+          // measured 2026-09-21, one undo after renaming a port on a freshly
+          // placed block deleted the block.
+          //
+          // P-014 makes it one stopping point per GESTURE rather than one per
+          // keystroke — the same file measured "gain_y" costing SIX Ctrl+Z.
+          // `railGestureKey` reads which gesture this callback belongs to out
+          // of the change itself, because `PortEdge` reports a reorder and a
+          // keystroke through this one callback and says nothing about which
+          // arrived. A drop (`null`) is discrete and marks every time; a run
+          // of keystrokes on one port shares a key and marks once.
+          const key = railGestureKey(ports[side], items);
+          if (key === null) {
+            railGesture.current!.end();
+            editor.markHistoryStoppingPoint("reorder ports");
+          } else {
+            railGesture.current!.begin(editor, `${side}/${key}`, "rename port");
+          }
+          // P-056: the report can now ADD and REMOVE ports, not only reorder
+          // and rename them, so it carries a second half — the ports that just
+          // stopped existing.
+          const edit = portsFromRailItems(ports[side], items, takenPortIds);
+          // ONE transaction, so the whole edit is ONE undo entry: a port and
+          // the cables that were plugged into it come back together, which is
+          // the only version of "undo the delete" that leaves a board the user
+          // recognises.
+          editor.run(() => {
+            editor.updateShape({
+              id: shape.id,
+              type: BLOCK_SHAPE_TYPE,
+              props: { ports: { ...ports, [side]: edit.ports } },
+            });
+            if (edit.removed.length > 0) deleteCablesAtPorts(editor, shape.id, edit.removed.map((port) => port.id));
           });
+        },
+        // P-056. The lane opens when the user clicks one of THIS wall's dots.
+        // `PortEdge` still refuses a wall that cannot host one (a row edge, a
+        // collapsed family) — see its `laneOpen` doc — so a click on a top or
+        // bottom dot, or on a simple view's collapsed stand-in, opens nothing
+        // rather than opening something wrong.
+        portEdgeProps: {
+          laneOpen: laneRequest !== null && laneRequest.nodeId === shape.id && ports[side].some((port) => port.id === laneRequest.portId),
+          onLaneOpenChange: (next: boolean) => {
+            if (!next) portLaneRequest(editor).set(null);
+          },
         },
       } satisfies BlockEdgeSpec,
     ]),

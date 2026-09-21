@@ -7,7 +7,7 @@
 // the smallest one that is still honest: one at a time, Escape closes, the
 // launcher toggles. The state itself lives in `./overlay.tsx`, which is the
 // one component that both the strip and this panel are rendered from.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Frame, GitBranch, Repeat, RotateCw, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
 import { useEditor, useValue, type Editor } from "tldraw";
 
@@ -17,6 +17,7 @@ import { ToggleGroup, ToggleGroupItem } from "@trunk/components/toggle-group";
 import { ProblemsPanel } from "@trunk/components/problemsPanel";
 import { InspectorPanel } from "@trunk/editor/inspectorPanel";
 
+import { createGestureMark, type GestureMark } from "../document/gestureHistory";
 import { BLOCK_SHAPE_TYPE } from "../shapes/types";
 import type { BlockShape } from "../shapes/block/BlockShapeUtil";
 
@@ -108,11 +109,15 @@ function ProblemsSurface({ problems }: { problems: BoardProblems }) {
  * multi-target write that is hard to notice and hard to undo. Zero or many
  * selected lands on the panel's own empty state.
  *
- * WHY the description write is NOT squashed into one history entry the way
- * the measured writes in `shapes/shared/measure.ts` are: typing a description
- * is a real edit, and `editor.updateShape` per keystroke is the same
- * granularity the rail-reorder in `shapes/block/BlockFace.tsx` already uses
- * for a real edit.
+ * WHY the description WRITE is per keystroke and its undo ENTRY is not
+ * (P-014): nothing typed here is ever pending, which is P-030's contract, but
+ * one Ctrl+Z has to take the whole typing run back. This paragraph used to
+ * argue the opposite and it was wrong twice over — `update` carried no
+ * history mark at all, so the first keystroke of a description, a glyph pick
+ * and a visibility toggle each merged into whatever store transaction came
+ * before them. Measured on the canvas door of the SAME picker, 2026-09-21:
+ * pick a glyph on a freshly placed block, press Ctrl+Z, and the block was
+ * deleted.
  */
 function InspectorSurface({ editor }: { editor: Editor }) {
   const block = useValue<BlockShape | null>(
@@ -124,12 +129,34 @@ function InspectorSurface({ editor }: { editor: Editor }) {
     [editor],
   );
 
+  // P-014. The panel's undo claim, and it has to distinguish two kinds of
+  // write: a pick and a toggle are DISCRETE (mark every time), typing is a
+  // RUN (mark once). `document/gestureHistory.ts` carries the mechanism.
+  //
+  // The key names the block, so selecting another one starts a new entry.
+  // What it cannot see — the same residual `railGestureKey` records — is two
+  // separate typing runs on the SAME block's description with no other marked
+  // edit between them; they share an entry. Closing it needs a blur signal
+  // from `@trunk/editor/inspectorPanel`, which forwards none today.
+  const gesture = useRef<GestureMark | null>(null);
+  if (!gesture.current) gesture.current = createGestureMark();
+
   const update = useCallback(
     (props: Partial<BlockShape["props"]>) => {
       if (!block) return;
       editor.updateShape({ id: block.id, type: BLOCK_SHAPE_TYPE, props } as never);
     },
     [editor, block],
+  );
+
+  /** A write that is its own edit: mark now, and end any open typing run. */
+  const discrete = useCallback(
+    (name: string, props: Partial<BlockShape["props"]>) => {
+      gesture.current!.end();
+      editor.markHistoryStoppingPoint(name);
+      update(props);
+    },
+    [editor, update],
   );
 
   return (
@@ -145,12 +172,15 @@ function InspectorSurface({ editor }: { editor: Editor }) {
       // a Base UI popup left to default into `document.body` lands outside
       // the board's stacking context.
       glyph={block?.props.glyph ?? ""}
-      onGlyphChange={block ? (glyph) => update({ glyph }) : undefined}
+      onGlyphChange={block ? (glyph) => discrete("set glyph", { glyph }) : undefined}
       glyphPortalContainer={editor.getContainer()}
       description={block?.props.description ?? ""}
       descriptionVisible={block?.props.showDescription ?? true}
-      onDescriptionChange={(description) => update({ description })}
-      onDescriptionVisibleChange={(showDescription) => update({ showDescription })}
+      onDescriptionChange={(description) => {
+        gesture.current!.begin(editor, `description/${block?.id ?? ""}`, "edit description");
+        update({ description });
+      }}
+      onDescriptionVisibleChange={(showDescription) => discrete("show description", { showDescription })}
       // `ss` — the same prefix every other acceptance target in this app
       // carries (`statusStrip.tsx`'s `idTag`).
       testIdPrefix="ss-inspector"
