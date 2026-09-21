@@ -22,6 +22,7 @@ import { PyblocksBackendPanel } from "./backend/BackendSettings";
 import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./chrome/Toolbar";
 import { installCameraGestures, useInterfaceScaleRootProps } from "./chrome/ShareMenu";
 import { Overlay } from "./chrome/overlay";
+import { installSelectionHistory } from "./document/selectionHistory";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
 import { SourceContextMenu } from "./source/sourceContextMenu";
 
@@ -143,6 +144,12 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
       // ./chrome/ShareMenu/cameraGestureHost.tsx for why obeying the chosen
       // convention takes two tldraw calls rather than one.
       stops.push(installCameraGestures(editor));
+      // The mouse's two side buttons, walking the selections this session has
+      // made. Zach, 2026-09-11: "if I click in, pressing back should take me to
+      // the previous layer." Installed here rather than mounted as chrome
+      // because it paints nothing — it is a gesture over the live editor, the
+      // same shape as the wheel conventions above.
+      stops.push(installSelectionHistory(editor));
       onEditorReady?.(editor);
       return () => {
         for (const stop of stops) stop();
