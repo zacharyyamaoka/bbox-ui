@@ -162,13 +162,26 @@ export function placeEdgeDropMenu(
 /* The chrome                                                          */
 /* ------------------------------------------------------------------ */
 
-export interface EdgeDropMenuProps {
+/**
+ * `E` is the HOST's own entry type, which may extend `NodeCatalogEntry` with
+ * whatever it needs to actually build the thing (a box size, a view, the port
+ * ids to mint). The kit still reads nothing but the base fields.
+ *
+ * WHY generic rather than plain `NodeCatalogEntry`: `judge` and `onPick` take
+ * an entry, and under `strictFunctionTypes` a host callback narrowed to its
+ * own richer entry type is NOT assignable to one declared over the base — so
+ * a non-generic prop forces every host to re-look-up its own row by id inside
+ * the callback, and a lookup that can miss is a drift the type system was
+ * about to prevent for free. `= NodeCatalogEntry` keeps every existing call
+ * site (and the story below) inferring exactly what it did before.
+ */
+export interface EdgeDropMenuProps<E extends NodeCatalogEntry = NodeCatalogEntry> {
   anchor: EdgeDropMenuAnchor;
   viewport: EdgeDropMenuViewport;
   /** Every candidate the host is willing to offer BEFORE the judge runs —
    *  typically `catalogFor`'s own result (polarity/type already narrowed).
    *  `judge` below is what decides which of these actually render. */
-  entries: readonly NodeCatalogEntry[];
+  entries: readonly E[];
   /**
    * Card 23's gate: would picking `entry` produce an edge the host's own
    * `validateConnection` allows? The host wires this to that function
@@ -177,8 +190,8 @@ export interface EdgeDropMenuProps {
    * never re-implements or bypasses that judgement, it only asks it once
    * per entry and renders nothing for a refusal.
    */
-  judge: (entry: NodeCatalogEntry) => boolean;
-  onPick: (entry: NodeCatalogEntry) => void;
+  judge: (entry: E) => boolean;
+  onPick: (entry: E) => void;
   onDismiss: () => void;
   preferSide?: EdgeDropMenuSide;
   title?: string;
@@ -198,7 +211,7 @@ function cancelsOffer(event: KeyboardEvent): boolean {
   return event.key === "Escape" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z");
 }
 
-export function EdgeDropMenu({
+export function EdgeDropMenu<E extends NodeCatalogEntry = NodeCatalogEntry>({
   anchor,
   viewport,
   entries,
@@ -208,7 +221,7 @@ export function EdgeDropMenu({
   preferSide = "end",
   title = "Insert a node",
   className,
-}: EdgeDropMenuProps) {
+}: EdgeDropMenuProps<E>) {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState<EdgeDropMenuSize | null>(null);
   const dismissRef = useRef(onDismiss);

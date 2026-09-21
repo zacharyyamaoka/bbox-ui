@@ -8,6 +8,10 @@
 // gesture (`./wireGesture.ts`), the catalog, and what picking one MEANS; the
 // kit component owns none of that.
 //
+// The five rows it offers, and why they are those five, live next door in
+// `./edgeDropCatalog.ts` — the pure half, so the table and the port specs it
+// mints are unit-testable without a browser. This file is the React half.
+//
 // CARD 23's rule, which this file exists to honour: the convenience gesture
 // routes through the SAME judge as the raw press. `judge` below calls
 // `validateConnection` with `connectionRules` — the identical options
@@ -19,7 +23,7 @@ import { useCallback, useMemo } from "react";
 import { createShapeId, useEditor, useValue } from "tldraw";
 
 import { EdgeDropMenu } from "@trunk/editor/edgeDropMenu";
-import { catalogFor, type NodeCatalogEntry } from "@trunk/editor/nodeCatalog";
+import { catalogFor } from "@trunk/editor/nodeCatalog";
 import { validateConnection } from "@trunk/scene/edgeValidation";
 
 import { sceneFromRecords, type DocNodeData, type DocumentScene } from "../../document/sceneFromStore";
@@ -27,45 +31,13 @@ import type { BlockShape } from "../block";
 import { InFlightWire } from "./WireFace";
 import { BLOCK_SHAPE_TYPE } from "../types";
 import { createWire } from "./createWire";
+import { EDGE_DROP_CATALOG, landingPortId, presetDocPorts, presetPorts, type EdgeDropPreset } from "./edgeDropCatalog";
 import { connectionRules, pendingEdgeDrop, type PendingEdgeDrop } from "./wireGesture";
 
 /** The id the hypothetical node wears while the judge looks at it. Never
  *  persisted — the real shape id is minted in `onPick`, after a verdict. */
 const CANDIDATE_NODE_ID = "ss-drop-candidate";
 const CANDIDATE_EDGE_ID = "ss-drop-candidate-edge";
-
-/** The two port ids every offered node is created with. Deliberately the same
- *  two strings the entry advertises (`inputs: 1, outputs: 1`), so what the
- *  judge examined and what `onPick` builds cannot drift. */
-const OFFERED_IN = "in";
-const OFFERED_OUT = "out";
-
-/**
- * What this app is willing to create from a loose end.
- *
- * ONE entry, and that is the point: "everything is really a block" (Zach, the
- * 2026-09-18 ASK). A function call, a definition, a class and — once L5 lands
- * — a loop's header contract are all `ss-block`, so a catalog of node KINDS
- * would be a catalog of one thing wearing four names. What actually varies is
- * a block's ports and its name, and that is authoring, not picking.
- *
- * The catalog is host-authored on purpose (`nodeCatalog.ts`'s own header: the
- * kit "ships no catalog of its own"), which is what leaves room for L4 to
- * grow this list into real presets — a `for` region, a code cell — without
- * touching the trunk.
- *
- * No `icon`: this app mounts no `GlyphResolverProvider`, so a `lucide:` name
- * would render an empty slot marked `data-unresolved` (glyph.tsx's own
- * contract). An absent icon renders the same empty slot honestly.
- */
-const CATALOG: readonly NodeCatalogEntry[] = [
-  { id: "block", label: "Block", kind: BLOCK_SHAPE_TYPE, inputs: 1, outputs: 1 },
-];
-
-/** The default box `ss-block` is created with — read from the contract rather
- *  than restated, so the placement below cannot drift from the shape. */
-const BLOCK_W = 160;
-const BLOCK_H = 100;
 
 /**
  * This kit's ONE `components.InFrontOfTheCanvas` contribution: the cable
@@ -93,7 +65,7 @@ function EdgeDropOffer() {
   const scene = useValue("ss drop scene", () => sceneFromRecords(editor.store.allRecords()), [editor]);
 
   const want = pending?.want;
-  const entries = useMemo(() => (want ? catalogFor(CATALOG, want) : []), [want]);
+  const entries = useMemo(() => (want ? catalogFor(EDGE_DROP_CATALOG, want) : []), [want]);
 
   /**
    * Would the cable this entry would create be legal? Asked over a
@@ -103,25 +75,30 @@ function EdgeDropOffer() {
    * scene has never heard of.
    */
   const judge = useCallback(
-    (entry: NodeCatalogEntry) => {
+    (entry: EdgeDropPreset) => {
       if (!pending) return false;
+      const ends = candidateEdge(pending, CANDIDATE_NODE_ID, entry);
+      if (!ends) return false;
       const data: DocNodeData = {
         kind: "block",
         name: entry.label,
-        view: "port",
-        ports: { left: [OFFERED_IN], right: [OFFERED_OUT], top: [], bottom: [] },
+        view: entry.view,
+        // The SAME table `onPick` mints the real ports from, in the
+        // id-only spelling the scene speaks — so what the judge examined
+        // and what gets created cannot drift, whatever the preset's arity.
+        ports: presetDocPorts(entry),
       };
       const hypothetical: DocumentScene = {
         nodes: [...scene.nodes, { id: CANDIDATE_NODE_ID, type: "block", position: pending.page, data }],
         edges: scene.edges,
       };
-      return validateConnection(hypothetical, candidateEdge(pending, CANDIDATE_NODE_ID), connectionRules(hypothetical)).allowed;
+      return validateConnection(hypothetical, ends, connectionRules(hypothetical)).allowed;
     },
     [pending, scene],
   );
 
   const onPick = useCallback(
-    (entry: NodeCatalogEntry) => {
+    (entry: EdgeDropPreset) => {
       if (!pending) return;
       const nodeId = createShapeId();
       const wantsConsumer = pending.want.direction === "sink";
@@ -129,8 +106,14 @@ function EdgeDropOffer() {
       // where the cable was DROPPED, not so its corner does: a consumer's
       // `in` dot is on its left wall, a producer's `out` dot on its right, so
       // the two cases offset opposite ways. Vertically centred either way.
-      const x = wantsConsumer ? pending.page.x : pending.page.x - BLOCK_W;
-      const y = pending.page.y - BLOCK_H / 2;
+      //
+      // The box comes from the PRESET, not from one pair of module constants:
+      // a Group is 320x240 and a Branch is taller than a Block, so a shared
+      // constant would put four of the five offers in the wrong place.
+      // Placing the landing DOT rather than the box centre is W1-25's job and
+      // deliberately not done here.
+      const x = wantsConsumer ? pending.page.x : pending.page.x - entry.w;
+      const y = pending.page.y - entry.h / 2;
       // ONE transaction: the node and its cable are one thing the user did,
       // so they are one undo step and — through `editEventsFromDiff` — one
       // batch of edit events.
@@ -144,24 +127,23 @@ function EdgeDropOffer() {
           y,
           props: {
             name: entry.label,
-            view: "port",
-            ports: {
-              // The offered port inherits the anchored port's declared type,
-              // so the cable the user just asked for is type-agreeing by
-              // construction rather than by luck. `""` when the anchored end
-              // declares none — the same "empty is unset" reading
-              // `sceneFromRecords` applies.
-              left: [{ id: OFFERED_IN, name: OFFERED_IN, type: pending.want.types?.[0] ?? "" }],
-              right: [{ id: OFFERED_OUT, name: OFFERED_OUT, type: pending.want.types?.[0] ?? "" }],
-              top: [],
-              bottom: [],
-            },
+            view: entry.view,
+            w: entry.w,
+            h: entry.h,
+            // The offered ports inherit the anchored port's declared type, so
+            // the cable the user just asked for is type-agreeing by
+            // construction rather than by luck (`presetPorts`' own WHY).
+            ports: presetPorts(entry, pending.want.types?.[0] ?? ""),
           },
         });
-        const ends = candidateEdge(pending, nodeId);
+        // Non-null: `catalogFor` already filtered this list on exactly the
+        // polarity `candidateEdge` needs a dot for, and `judge` refused every
+        // entry it came back `null` for — so an entry that reaches here has
+        // one. Asserted from the other side in `edgeDropCatalog.test.ts`.
+        const bound = candidateEdge(pending, nodeId, entry)!;
         createWire(editor, {
-          from: { nodeId: ends.source, portId: ends.sourceHandle },
-          to: { nodeId: ends.target, portId: ends.targetHandle },
+          from: { nodeId: bound.source, portId: bound.sourceHandle },
+          to: { nodeId: bound.target, portId: bound.targetHandle },
         });
       });
       pendingEdgeDrop(editor).set(null);
@@ -200,17 +182,24 @@ function EdgeDropOffer() {
   );
 }
 
-/** The candidate edge for `nodeId` answering `pending`, oriented so the
- *  anchored end keeps the role it already has: a cable wanting a CONSUMER
- *  runs anchored → new, one wanting a PRODUCER runs new → anchored. Shared by
- *  the judge and `onPick` so the edge examined is the edge created. */
+/** The candidate edge for `nodeId` answering `pending` with `entry`, oriented
+ *  so the anchored end keeps the role it already has: a cable wanting a
+ *  CONSUMER runs anchored → new, one wanting a PRODUCER runs new → anchored.
+ *  Shared by the judge and `onPick` so the edge examined is the edge created.
+ *
+ *  `null` when the preset has no dot on the rail the cable needs — unreachable
+ *  from the menu (`catalogFor` filters on exactly that polarity before the
+ *  judge ever runs), so it is a total signature rather than a second opinion. */
 function candidateEdge(
   pending: PendingEdgeDrop,
   nodeId: string,
-): { id: string; source: string; sourceHandle: string; target: string; targetHandle: string } {
+  entry: EdgeDropPreset,
+): { id: string; source: string; sourceHandle: string; target: string; targetHandle: string } | null {
+  const portId = landingPortId(entry, pending.want.direction);
+  if (portId === undefined) return null;
   return pending.want.direction === "sink"
-    ? { id: CANDIDATE_EDGE_ID, source: pending.from.nodeId, sourceHandle: pending.from.portId, target: nodeId, targetHandle: OFFERED_IN }
-    : { id: CANDIDATE_EDGE_ID, source: nodeId, sourceHandle: OFFERED_OUT, target: pending.from.nodeId, targetHandle: pending.from.portId };
+    ? { id: CANDIDATE_EDGE_ID, source: pending.from.nodeId, sourceHandle: pending.from.portId, target: nodeId, targetHandle: portId }
+    : { id: CANDIDATE_EDGE_ID, source: nodeId, sourceHandle: portId, target: pending.from.nodeId, targetHandle: pending.from.portId };
 }
 
 /** The box `EdgeDropMenu` clamps itself inside: the editor container's own

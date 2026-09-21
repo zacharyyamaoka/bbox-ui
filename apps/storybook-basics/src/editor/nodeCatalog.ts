@@ -97,12 +97,19 @@ export interface NodeCatalogWant {
  * presets never carried. Total and order-preserving — entries qualify or
  * they don't, and the catalog's own order survives into the result
  * (matches `blockPickerPresetsFor`'s plain `.filter`).
+ *
+ * Generic over the HOST's own entry type, which typically extends
+ * `NodeCatalogEntry` with whatever it needs to build the thing (a box size,
+ * the port ids to mint). A filter that narrowed its result back to the base
+ * would force the caller to re-look-up its own row by id — and a lookup that
+ * can miss is exactly the drift the types were about to prevent for free.
+ * Nothing here reads a field outside the base.
  */
-export function catalogFor(
-  catalog: readonly NodeCatalogEntry[],
+export function catalogFor<E extends NodeCatalogEntry>(
+  catalog: readonly E[],
   want: NodeCatalogWant,
   compatible: TypeCompatible = typesIntersect,
-): NodeCatalogEntry[] {
+): E[] {
   return catalog.filter((entry) => {
     const suppliesNeededPolarity = want.direction === "source" ? entry.outputs > 0 : entry.inputs > 0;
     if (!suppliesNeededPolarity) return false;
