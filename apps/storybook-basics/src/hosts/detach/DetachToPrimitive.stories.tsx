@@ -137,8 +137,25 @@ async function waitForPortDotsToSettle(container: Element, maxWaitMs = 3000) {
 /* One gallery cell — mounts its own host, drives it to `phase`          */
 /* ------------------------------------------------------------------ */
 
-function GalleryCell({ view, phase, name, w }: { view: BlockView; phase: Phase; name?: string; w?: number }) {
-  const [scene, setScene] = useState<HostScene>(() => sceneFor(view, name, w));
+function GalleryCell({
+  view,
+  phase,
+  name,
+  w,
+  makeScene,
+}: {
+  view: BlockView;
+  phase: Phase;
+  name?: string;
+  w?: number;
+  /** Overrides `sceneFor` for a row that needs a different fixture — used
+   *  by `MemberComesForFree` below, which needs a SECOND node parented to
+   *  "proc". Everything else about the cell (the settle wait, the detach,
+   *  the camera re-pin) is identical, which is the point: the member case
+   *  is not a special path through the kit. */
+  makeScene?: () => HostScene;
+}) {
+  const [scene, setScene] = useState<HostScene>(() => (makeScene ? makeScene() : sceneFor(view, name, w)));
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
   const editorRef = useRef<Editor | null>(null);
@@ -1012,5 +1029,131 @@ export const RebuildMenuOpenForCapture: Story = {
     editor.setCamera({ x: 0, y: 0, z: 2 });
     await nextPaint();
     await openContextMenu(canvasEl);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* RULING 5 — a member Block lowers with no member-specific code        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A parent Block with one MEMBER Block — `parentId` IS the membership
+ * (`../hostScene.ts:105`), and `BlockNodeView` turns each child into a
+ * `BlockMember` rendering a full nested `SceneNodeView`
+ * (`../nodeViews.tsx:416`), i.e. a real nested `[data-slot="block"]` inside
+ * the parent's own DOM rather than a second tldraw shape.
+ *
+ * WHY this fixture is the honest test of Zach's ruling ("by making it work
+ * on the basic components a primitive so then it comes for free for the
+ * higher level things"): before the primitive registry, `definitions/
+ * block.ts` lowered a Block by hand-querying the parts it knew about, and
+ * its own header said so in as many words — "`BlockMembers` ... is
+ * explicitly not lowered here." A member simply VANISHED on detach. Nothing
+ * in the detach kit mentions members today either; the member card lowers
+ * because a member IS a `[data-slot="block"]`, and that slot has a
+ * primitive (`../detach/primitives/blockCard.ts`) which descends. If that
+ * claim is wrong, this story is the thing that goes red.
+ */
+function sceneWithMember(): HostScene {
+  return {
+    nodes: [
+      {
+        id: "proc",
+        type: "block",
+        position: { x: 24, y: 24 },
+        data: { name: "proc", view: "expanded", w: 220, h: 170, ports: { left: ["in"], right: ["out"] } },
+      },
+      { id: "kid", type: "block", parentId: "proc", position: { x: 0, y: 0 }, data: { name: "kid", view: "simple", w: 120, h: 44 } },
+    ],
+    edges: [],
+  };
+}
+
+/** The live MEMBER's own card — the nested `[data-slot="block"]` inside the
+ *  parent's members region (`../../components/blockMembers.tsx:319`), never
+ *  the parent's own card, which is the first `[data-slot="block"]` in
+ *  document order. */
+function liveMemberCardRect(root: HTMLElement): DOMRect {
+  const member = requiredEl<HTMLElement>(root, '[data-slot="block-members"] [data-slot="block"]', "the live member Block card");
+  return localRect(root, member.getBoundingClientRect());
+}
+
+const centreOf = (rect: DOMRect) => ({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+
+/** The nearest stock `geo` shape's box to `expected`, proximity-matched for
+ *  the same reason `nearestEllipseCentre` is: a lowered primitive carries
+ *  no data-* linking it back to the live part it replaced. The distance cap
+ *  turns "matched the parent card instead" into a loud failure rather than
+ *  a silently wrong number. */
+function nearestGeoRect(root: HTMLElement, expected: { x: number; y: number }, maxDistancePx: number): DOMRect {
+  const rects = Array.from(root.querySelectorAll<HTMLElement>('.tl-shape[data-shape-type="geo"]')).map((el) =>
+    localRect(root, el.getBoundingClientRect()),
+  );
+  if (rects.length === 0) throw new Error("no detached geo primitives found");
+  const nearest = rects
+    .map((rect) => ({ rect, d: Math.hypot(centreOf(rect).x - expected.x, centreOf(rect).y - expected.y) }))
+    .sort((a, b) => a.d - b.d)[0];
+  if (nearest.d > maxDistancePx) {
+    throw new Error(
+      `nearest detached primitive is ${nearest.d.toFixed(1)}px from the live member card — the member was not lowered, or the wrong shape matched`,
+    );
+  }
+  return nearest.rect;
+}
+
+const MEMBER_PHASES: Phase[] = ["before", "detached"];
+
+export const MemberComesForFree: Story = {
+  name: "Ruling 5 — a member Block lowers for free",
+  render: () => (
+    <div style={{ display: "flex", gap: 16 }}>
+      {MEMBER_PHASES.map((phase) => (
+        <div key={phase}>
+          <div style={{ font: "11px system-ui", opacity: 0.5, marginBottom: 2 }}>{phase === "before" ? "Before" : "Detached (stock primitives)"}</div>
+          <GalleryCell view="expanded" phase={phase} makeScene={sceneWithMember} />
+        </div>
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const cells = Array.from(canvasElement.querySelectorAll<HTMLElement>("[data-cell-phase]"));
+    expect(cells).toHaveLength(MEMBER_PHASES.length);
+    await waitFor(
+      () => {
+        for (const cell of cells) expect(cell.hasAttribute("data-cell-settled")).toBe(true);
+      },
+      { timeout: 8000 },
+    );
+
+    const byPhase = new Map(cells.map((cell) => [cell.getAttribute("data-cell-phase") as Phase, cell]));
+    const beforeEl = byPhase.get("before")!;
+    const detachedEl = byPhase.get("detached")!;
+
+    const liveParent = cardRectFor(beforeEl, "before");
+    const liveMember = liveMemberCardRect(beforeEl);
+    // Guards against a vacuous pass: the member must actually be a
+    // DISTINCT, smaller box inside the parent, or "nearest geo rect" could
+    // be matching the parent card and reporting a fake success.
+    expect(liveMember.width, "the member card must be narrower than its parent's").toBeLessThan(liveParent.width);
+    expect(liveMember.height, "the member card must be shorter than its parent's").toBeLessThan(liveParent.height);
+
+    // Half the member's own diagonal: close enough that only a shape
+    // standing where the member stood can match, loose enough to absorb the
+    // stroke/rasterisation residual `TOLERANCE_PX` documents.
+    const maxDistancePx = Math.hypot(liveMember.width, liveMember.height) / 2;
+    const detachedMember = nearestGeoRect(detachedEl, centreOf(liveMember), maxDistancePx);
+
+    const offset = offsetsBetween("member", "member card before→detached", liveMember, detachedMember);
+    // eslint-disable-next-line no-console
+    console.table([offset]);
+    expect(offset.dx, "member card dx").toBeLessThanOrEqual(offset.tolerance);
+    expect(offset.dy, "member card dy").toBeLessThanOrEqual(offset.tolerance);
+    expect(offset.dw, "member card dw").toBeLessThanOrEqual(offset.tolerance);
+    expect(offset.dh, "member card dh").toBeLessThanOrEqual(offset.tolerance);
+
+    // STOCK means stock, same bar as the main gallery.
+    for (const type of emittedShapeTypes(detachedEl)) {
+      expect(STOCK_TYPES.has(type)).toBe(true);
+    }
   },
 };
