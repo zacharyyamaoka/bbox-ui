@@ -7,13 +7,18 @@
 // the smallest one that is still honest: one at a time, Escape closes, the
 // launcher toggles. The state itself lives in `./overlay.tsx`, which is the
 // one component that both the strip and this panel are rendered from.
-import { useEffect, useState } from "react";
-import { Box, GitBranch, Repeat, RotateCw, Square } from "lucide-react";
-import { useEditor, type Editor } from "tldraw";
+import { useCallback, useEffect, useState } from "react";
+import { Box, Frame, GitBranch, Repeat, RotateCw, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
+import { useEditor, useValue, type Editor } from "tldraw";
 
 import { FramesPanel, type FramesPanelMode, type FramesPanelProps } from "@trunk/components/framesPanel";
 import { PanelShell } from "@trunk/components/panelShell";
+import { ToggleGroup, ToggleGroupItem } from "@trunk/components/toggle-group";
 import { ProblemsPanel } from "@trunk/components/problemsPanel";
+import { InspectorPanel } from "@trunk/editor/inspectorPanel";
+
+import { BLOCK_SHAPE_TYPE } from "../shapes/types";
+import type { BlockShape } from "../shapes/block/BlockShapeUtil";
 
 import { EXPANDED_BLOCK_KIND, useFrames } from "./frames";
 import { PROBLEM_SEVERITIES, type BoardProblems } from "./problems";
@@ -40,6 +45,7 @@ const FRAME_KINDS: FramesPanelProps["kinds"] = {
 const PANEL_TITLE: Record<ChromePanel, string> = {
   frames: "Frames",
   problems: "Problems",
+  inspector: "Inspector",
 };
 
 function FramesSurface({ editor }: { editor: Editor }) {
@@ -86,14 +92,127 @@ function ProblemsSurface({ problems }: { problems: BoardProblems }) {
   );
 }
 
+/**
+ * RULING 9's host half — the right-hand inspector, wired to the ONE selected
+ * block. Zach: "the eye visibility control for this is in the right hand
+ * inspector menu."
+ *
+ * `@trunk/editor/inspectorPanel` is engine-agnostic by its kit's own rule
+ * (`src/editor/README.md`: no `Editor`, no `useValue`), so THIS file is where
+ * tldraw enters: it reads the selection live and turns each callback into an
+ * `editor.updateShape`.
+ *
+ * WHY only a single selection gets a subject, rather than editing the first
+ * of many: a description belongs to one block, and a panel that silently
+ * edited whichever block happened to be first in a marquee is the kind of
+ * multi-target write that is hard to notice and hard to undo. Zero or many
+ * selected lands on the panel's own empty state.
+ *
+ * WHY the description write is NOT squashed into one history entry the way
+ * the measured writes in `shapes/shared/measure.ts` are: typing a description
+ * is a real edit, and `editor.updateShape` per keystroke is the same
+ * granularity the rail-reorder in `shapes/block/BlockFace.tsx` already uses
+ * for a real edit.
+ */
+function InspectorSurface({ editor }: { editor: Editor }) {
+  const block = useValue<BlockShape | null>(
+    "ss inspector subject",
+    () => {
+      const only = editor.getOnlySelectedShape();
+      return only && only.type === BLOCK_SHAPE_TYPE ? (only as BlockShape) : null;
+    },
+    [editor],
+  );
+
+  const update = useCallback(
+    (props: Partial<BlockShape["props"]>) => {
+      if (!block) return;
+      editor.updateShape({ id: block.id, type: BLOCK_SHAPE_TYPE, props } as never);
+    },
+    [editor, block],
+  );
+
+  return (
+    <InspectorPanel
+      subject={block ? block.props.name : null}
+      description={block?.props.description ?? ""}
+      descriptionVisible={block?.props.showDescription ?? true}
+      onDescriptionChange={(description) => update({ description })}
+      onDescriptionVisibleChange={(showDescription) => update({ showDescription })}
+      // `ss` — the same prefix every other acceptance target in this app
+      // carries (`statusStrip.tsx`'s `idTag`).
+      testIdPrefix="ss-inspector"
+    />
+  );
+}
+
+/**
+ * The rail's own surface switcher — Frames · Problems · Inspector, inside the
+ * panel rather than out in the status strip.
+ *
+ * WHY it is here and not a sixth launcher beside Frames and Problems, which
+ * is where the other two live and is the obvious seat for a third: MEASURED
+ * in the running app at 1400x900, keyless, 2026-09-21. A sixth strip cell
+ * takes the strip from 301.7px to 339.7px wide, and the bottom-right corner
+ * row has ~7px of slack between the dock (right edge 870.5) and tldraw's
+ * licence watermark (left edge 1296). With the cell added, `placeCornerCluster`
+ * (chrome/overlay.tsx) reported `above-licence` and the whole cluster lifted
+ * off the corner row — clearance -31.1px. That is the placement Zach rejected
+ * by name on 2026-09-19, and `src/corner.smoke.test.tsx` /
+ * `src/chromeSize.smoke.test.tsx` are the committed acceptance for it.
+ *
+ * So the third surface costs the corner nothing. What it costs instead, said
+ * plainly: opening the Inspector takes two presses (a launcher, then this
+ * row), and while the Inspector is showing neither strip launcher is lit.
+ * The panel's own header says "Inspector", which is the signal that replaces
+ * the lit button.
+ */
+function SurfaceSwitch({ open, onSurfaceChange }: { open: ChromePanel; onSurfaceChange(panel: ChromePanel): void }) {
+  return (
+    <div
+      data-slot="ss-panel-surfaces"
+      // Sticky, because `PanelShell`'s body is the scroll region: a Frames
+      // list long enough to scroll must not carry the switcher off the top.
+      className="sticky top-0 z-10 border-b border-border bg-popover px-3.5 py-2"
+    >
+      <ToggleGroup
+        value={[open]}
+        onValueChange={(value: string[]) => {
+          // Single-select semantics on a `multiple`-shaped primitive
+          // (ToggleGroup.stories.tsx's own note): pressing the active item
+          // hands back an empty array, and the rail always shows SOMETHING,
+          // so an empty change is a no-op rather than a fourth state.
+          const next = value[0];
+          if (next) onSurfaceChange(next as ChromePanel);
+        }}
+        spacing={0}
+        aria-label="Panel surface"
+      >
+        <ToggleGroupItem value="frames" variant="outline" aria-label="Frames" data-testid="ss-panel-surface-frames">
+          <Frame />
+        </ToggleGroupItem>
+        <ToggleGroupItem value="problems" variant="outline" aria-label="Problems" data-testid="ss-panel-surface-problems">
+          <TriangleAlert />
+        </ToggleGroupItem>
+        <ToggleGroupItem value="inspector" variant="outline" aria-label="Inspector" data-testid="ss-panel-surface-inspector">
+          <SlidersHorizontal />
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+  );
+}
+
 export interface SystemSketchPanelProps {
   open: ChromePanel | null;
   onClose(): void;
+  /** Switch which surface the open rail shows. The strip's own launchers set
+   *  this too — pressing Frames while the Inspector is showing swaps it. */
+  onSurfaceChange(panel: ChromePanel): void;
   problems: BoardProblems;
   id: string;
 }
 
-export function SystemSketchPanel({ open, onClose, problems, id }: SystemSketchPanelProps) {
+export function SystemSketchPanel({ open, onClose, onSurfaceChange, problems, id }: SystemSketchPanelProps) {
   const editor = useEditor();
 
   // WHY the listener is on the window and capture-free, and WHY it is only
@@ -122,7 +241,14 @@ export function SystemSketchPanel({ open, onClose, problems, id }: SystemSketchP
       className="pointer-events-auto absolute top-2 right-2 bottom-[6.5rem] w-[340px] max-w-[calc(100%-1rem)]"
     >
       <PanelShell eyebrow="Right panel" title={PANEL_TITLE[open]} onClose={onClose} data-surface={open}>
-        {open === "frames" ? <FramesSurface editor={editor} /> : <ProblemsSurface problems={problems} />}
+        <SurfaceSwitch open={open} onSurfaceChange={onSurfaceChange} />
+        {open === "frames" ? (
+          <FramesSurface editor={editor} />
+        ) : open === "problems" ? (
+          <ProblemsSurface problems={problems} />
+        ) : (
+          <InspectorSurface editor={editor} />
+        )}
       </PanelShell>
     </div>
   );

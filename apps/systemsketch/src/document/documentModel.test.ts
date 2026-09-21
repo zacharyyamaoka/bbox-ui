@@ -79,6 +79,11 @@ describe("ss-block (L0)", () => {
       h: 100,
       name: "block",
       view: "port",
+      // RULING 9: the description ships empty and its eye ships ON — the
+      // frozen v1 field's own `defaultValue: true`
+      // (packages/bbox-ui/src/block.fields.ts:120-124).
+      description: "",
+      showDescription: true,
       ports: { left: [], right: [], top: [], bottom: [] },
       anchors: [],
     });
@@ -92,6 +97,11 @@ describe("ss-block (L0)", () => {
         h: 120,
         name: "estimate()",
         view: "port",
+        // RULING 9's pair — "fully-populated" means every prop the contract
+        // has, so the description and its eye are enumerated here like the
+        // rest. The double space is deliberate: the round trip must not trim.
+        description: "Estimates  pose from a frame.",
+        showDescription: false,
         ports: {
           left: [
             { id: "frame", declaration: "frame: Frame" },

@@ -63,7 +63,7 @@ function labelOf(port: BlockPortSpec): string {
 
 export function BlockFace({ shape }: { shape: BlockShape }) {
   const editor = useEditor();
-  const { name, view, ports, w, h } = shape.props;
+  const { name, view, ports, description, showDescription, w, h } = shape.props;
 
   // WHY the wired set is read from BINDINGS rather than passed in: L3 lands
   // wires without touching this file. `getBindingsToShape` is stock, the
@@ -155,6 +155,15 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
       <BlockPort id={shape.id} view={view} edges={edges}>
         <Block
           header={name}
+          // RULING 9, the paint half. Zach: "the eye visibility control for
+          // this is in the right hand inspector menu" — so the SHAPE carries
+          // the pair and paints it, and nothing here draws a control. The
+          // control is `chrome/panels.tsx`'s `InspectorSurface`; putting an
+          // eye on the block itself is the tempting alternative this
+          // deliberately rejects, because an eye that rides the thing it
+          // hides vanishes along with its own effect.
+          description={description}
+          showDescription={showDescription}
           width={w}
           // WHY the SIMPLE view hugs and the other two do not: `Block`'s
           // height is optional precisely so a card can hug its rendered

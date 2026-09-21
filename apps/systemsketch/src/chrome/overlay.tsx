@@ -336,7 +336,7 @@ function SystemSketchChrome() {
         <SystemSketchChromeBar />
       </div>
       <FloatingSelectionToolbar />
-      <SystemSketchPanel open={open} onClose={close} problems={problems} id={panelId} />
+      <SystemSketchPanel open={open} onClose={close} onSurfaceChange={setOpen} problems={problems} id={panelId} />
       {/* Quick switcher, dev panel and recorder: all three portal to
           `document.body` through their own stock Dialog/Popover, so this
           component paints nothing here itself — it only needs to be

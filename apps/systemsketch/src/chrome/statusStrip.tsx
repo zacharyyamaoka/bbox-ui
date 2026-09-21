@@ -31,8 +31,26 @@ import { StatusStrip, type StatusStripItem } from "@trunk/components/statusStrip
 import { useStockMenus } from "./FileMenu";
 import { ZoomMenu } from "./ZoomMenu";
 
-/** Which right-hand panel is open. One at a time, or none. */
-export type ChromePanel = "frames" | "problems";
+/** Which right-hand panel is open. One at a time, or none.
+ *
+ *  `inspector` is RULING 9's host — Zach: "the eye visibility control for this
+ *  is in the right hand inspector menu." It is a third surface of the SAME
+ *  one-at-a-time rail (`./panels.tsx`), reached from that rail's own surface
+ *  switcher rather than from a sixth launcher here.
+ *
+ *  WHY no launcher in this strip, which is where Frames and Problems get
+ *  theirs and is the obvious place to put it — MEASURED in the running app at
+ *  1400x900, keyless (2026-09-21): a sixth cell takes the strip from 301.7px
+ *  to 339.7px, and the corner row it rides in has only ~7px of slack between
+ *  the dock's right edge (870.5) and tldraw's licence watermark (1296). With
+ *  the cell added `placeCornerCluster` reported `above-licence` and the
+ *  cluster left the corner row — clearance -31.1px. That is exactly the
+ *  placement Zach rejected on 2026-09-19 ("please move the right corner menu
+ *  to be truly in the right corner right now its above this text 'get a
+ *  license for production'"), and `src/corner.smoke.test.tsx` and
+ *  `src/chromeSize.smoke.test.tsx` pin it. So the third surface pays no
+ *  corner width; see `./panels.tsx`'s `SurfaceSwitch`. */
+export type ChromePanel = "frames" | "problems" | "inspector";
 
 export interface SystemSketchStatusStripProps {
   open: ChromePanel | null;

@@ -48,6 +48,22 @@ export interface BlockShapeProps {
   h: number;
   name: string;
   view: BlockView;
+  /** RULING 9. The sentence under the title — one stored string, painted by
+   *  the trunk's own `BlockDescription`. Empty is the "never written" state
+   *  and paints nothing (`blockDescriptionIsPainted`). */
+  description: string;
+  /** RULING 9's eye, stored. Ported from the frozen v1 field
+   *  (`packages/bbox-ui/src/block.fields.ts:120-124`, `defaultValue: true`),
+   *  which is why the default below is `true` and not `false`.
+   *
+   *  WHY this is persisted rather than a runtime-only view flag, the way
+   *  `received` is for a port (ARCHITECTURE.md's "Why `received` is
+   *  runtime-only"): the opposite test applies. `received` is a fact only a
+   *  live host can know, so persisting it would LIE after reload. "I do not
+   *  want this block's description on the board" is an authoring decision
+   *  about the document, and a board that forgot it on reload would be the
+   *  thing that lies. */
+  showDescription: boolean;
   ports: Record<PortSide, BlockPortSpec[]>;
   /** MEASURED shape-local dot centres, written back by the host. A writer
    *  (pyblocks) leaves this `[]` and the first render fills it. */
@@ -98,6 +114,8 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
     h: T.number,
     name: T.string,
     view: T.literalEnum("simple", "port", "expanded"),
+    description: T.string,
+    showDescription: T.boolean,
     ports: T.object({
       left: T.arrayOf(PortSpecV),
       right: T.arrayOf(PortSpecV),
@@ -136,6 +154,18 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
           }
         },
       },
+      {
+        id: `com.tldraw.shape.${BLOCK_SHAPE_TYPE}/2`,
+        // Ruling 9: every board saved before the description existed gets the
+        // v1 field's own default — no description, and the eye ON, so the
+        // first sentence anyone types is visible without hunting for a
+        // toggle. Frozen like the one above: it describes what version 1
+        // meant, forever.
+        up: (props: { description?: string; showDescription?: boolean }) => {
+          props.description = "";
+          props.showDescription = true;
+        },
+      },
     ],
   });
 
@@ -145,6 +175,8 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
       h: 100,
       name: "block",
       view: "port",
+      description: "",
+      showDescription: true,
       ports: { left: [], right: [], top: [], bottom: [] },
       anchors: [],
     };

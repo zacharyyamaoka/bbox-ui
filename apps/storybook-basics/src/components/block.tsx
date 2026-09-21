@@ -21,6 +21,7 @@ import {
   type BlockMember,
   type BlockMembersLayout,
 } from "./blockMembers";
+import { BlockDescription, blockDescriptionIsPainted } from "./blockDescription";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 
 /**
@@ -84,6 +85,31 @@ export interface BlockProps {
    * region is omitted entirely (the existing contract).
    */
   showHeaderDivider?: boolean;
+  /**
+   * The sentence under the title. Ported from the frozen v1 lineage —
+   * `packages/bbox-ui/src/blockFace.tsx:437-454` paints it immediately after
+   * the header in both header modes, which is the placement restated here.
+   *
+   * WHY it is a Block prop and not something a caller stuffs into `body`:
+   * v1 governs it as a FIELD (`block.fields.ts`'s `DESCRIPTION_FIELD`) with
+   * its own visibility toggle, so "is there a description, and is it shown"
+   * is a question about the block, answerable without inspecting whatever
+   * ReactNode a host happened to pass. The whiteboard's right-hand inspector
+   * asks exactly that question.
+   */
+  description?: string;
+  /**
+   * Whether the description paints. Defaults to `true` — the donor field's
+   * own `defaultValue: true` (`block.fields.ts:120-124`), so no existing
+   * caller changes and a newly-typed description is visible immediately.
+   *
+   * WHY a separate boolean rather than clearing `description` to hide it
+   * (Zach, ruling 9 — the control is an EYE, in the right-hand inspector):
+   * an eye hides; it does not delete. Folding the two into one field would
+   * mean toggling visibility off threw the author's text away, and toggling
+   * it back on gave them an empty block.
+   */
+  showDescription?: boolean;
   /**
    * Membership — "boxes all the way down". Members render in their own
    * region between body and footer; `membersLayout` picks how the ONE
@@ -199,6 +225,8 @@ export function Block({
   height,
   style,
   showHeaderDivider = true,
+  description,
+  showDescription = true,
   members,
   membersLayout = "free",
   onMembersChange,
@@ -395,6 +423,14 @@ export function Block({
         >
           {header}
         </div>
+      )}
+      {/* The donor's placement, verbatim in intent: directly after the
+          header, before the body, in every view. `blockDescriptionIsPainted`
+          is v1's own `resolved.description && data.description` gate — an
+          empty string paints nothing even with the eye on, so an untouched
+          block never reserves a blank line. */}
+      {blockDescriptionIsPainted(description, showDescription) && (
+        <BlockDescription>{description}</BlockDescription>
       )}
       {body !== undefined && (
         <div
