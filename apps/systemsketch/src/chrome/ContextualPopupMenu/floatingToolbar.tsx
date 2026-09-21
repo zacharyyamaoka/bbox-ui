@@ -40,6 +40,7 @@ import {
   CELL_TRIGGER,
   EdgeTypeCluster,
   FocusButton,
+  GroupCluster,
   OpacityCluster,
   PILL_SEPARATOR,
   StyleCluster,
@@ -343,6 +344,12 @@ export function FloatingSelectionToolbar() {
       <ArrangeCluster />
       <OpacityCluster />
       <FocusButton />
+      {/* P-048. Beside Focus and not behind Arrange: folding a selection into
+          a region is a STRUCTURAL edit, not an alignment, and it is the one
+          gesture Zach called "the bread and butter of what we are doing here".
+          `GroupCluster` renders one cell or none, so it costs the bar the same
+          32px whichever way the selection reads. */}
+      <GroupCluster />
 
       {/* A rule on the bar's FULL height, `rgb(56,56,56)` — traced. The kit's
           own `ToolbarSeparator` defaults to `bg-border`, a page token, which

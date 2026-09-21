@@ -17,7 +17,7 @@
 // The pill is a bar over the user's drawing — every control spent here is
 // canvas taken away.
 import { useCallback } from "react";
-import { AlignStartVertical, Focus } from "lucide-react";
+import { AlignStartVertical, Focus, Group, Ungroup } from "lucide-react";
 import { useEditor, useValue, type TLShapeId } from "tldraw";
 
 import { Button } from "@trunk/components/button";
@@ -28,6 +28,7 @@ import { ToolbarButton } from "@trunk/components/toolbar";
 
 import { traceGeometry } from "@trunk/components/trace";
 
+import { groupSelection, groupableSelection, selectedRegionId, ungroupSelection } from "../../document/grouping";
 import { WIRE_ROUTINGS, setWireRouting, type WireRouting } from "./selectionActions";
 import {
   activeStyleRows,
@@ -535,6 +536,53 @@ export function EdgeTypeCluster({ wires, routing }: { wires: readonly TLShapeId[
 /* -------------------------------------------------------------------- misc */
 
 /** Zoom the camera onto the selection alone — the donor pill's "Focus". */
+/* --------------------------------------------------------------- grouping */
+
+/**
+ * Group and Ungroup — P-048's surface, and the only place in the app a person
+ * reaches `@trunk/scene/collapse`.
+ *
+ * ONE CELL AT A TIME, never both: over a lone region the box is already
+ * closed, so the honest offer is to open it; over anything else there is
+ * something to fold. A pair of cells where one is always dead spends canvas
+ * on a control that cannot be pressed — this pill's own rule.
+ *
+ * WHY the work is not done here: `src/document/grouping.ts` owns the algebra
+ * AND the store write, because the same pair has to be callable from a
+ * keyboard binding and from a test without a pill on screen.
+ */
+export function GroupCluster() {
+  const editor = useEditor();
+  const regionId = useValue("ss group selected region", () => selectedRegionId(editor), [editor]);
+  const groupable = useValue("ss group member count", () => groupableSelection(editor).length, [editor]);
+
+  if (regionId) {
+    return (
+      <ToolbarButton
+        data-testid="ss-selection-ungroup"
+        aria-label="Ungroup"
+        title="Ungroup — the cables stay wired, straight to what they reached before"
+        className={CELL_ICON}
+        onClick={() => ungroupSelection(editor)}
+      >
+        <Ungroup />
+      </ToolbarButton>
+    );
+  }
+  if (groupable === 0) return null;
+  return (
+    <ToolbarButton
+      data-testid="ss-selection-group"
+      aria-label="Group"
+      title="Group into a region — every crossing cable becomes a port"
+      className={CELL_ICON}
+      onClick={() => groupSelection(editor)}
+    >
+      <Group />
+    </ToolbarButton>
+  );
+}
+
 export function FocusButton() {
   const editor = useEditor();
   const hasSelection = useValue("ss focus has selection", () => editor.getSelectedShapeIds().length > 0, [editor]);
