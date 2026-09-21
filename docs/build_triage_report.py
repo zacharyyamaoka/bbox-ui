@@ -31,7 +31,13 @@ from urllib.parse import quote
 
 DONOR_ASSETS = pathlib.Path("/home/bam/systemsketch/docs/assets")
 OUT = pathlib.Path("/home/bam/bbox-ui/reports/media/parity-triage-2026-09-20.html")
-THUMB_MAX_BYTES = 120_000  # per image, after downscale
+# Every image is thumbnailed, never passed through whole. 166 cards at even
+# 47 KB each is 7.8 MB, which is 4x the preview's 2,097,024-byte ENCODED
+# ceiling — measured, the first build came out at 8,462,804. A triage card is
+# displayed in a 260px column, so 400px wide at JPEG q62 is already more detail
+# than the layout can show.
+THUMB_W = 300
+THUMB_Q = 60
 
 # Words that carry no matching signal.
 STOP = {
@@ -86,27 +92,100 @@ def match_image(name: str, area: str, hint: str = "") -> pathlib.Path | None:
     strong = best is not None and (
         len(want & set(tokens(best.stem))) >= 2 or any(len(w) >= 7 for w in want & set(tokens(best.stem)))
     )
-    return best if strong else None
+    if strong:
+        return best
+    # Fall back to a picture of the AREA. A representative shot of the wire
+    # layer beside a wire feature helps him orient while triaging; a blank card
+    # helps nobody, and 76 of 166 came back blank on the strict rule alone.
+    # The caller labels these "representative" so the report never implies the
+    # picture IS the feature.
+    rep = AREA_REPRESENTATIVE.get(area)
+    if rep:
+        cand = DONOR_ASSETS / rep
+        if cand.exists():
+            return cand
+    return None
+
+
+# One honest stand-in per area, chosen by hand from the donor's own captures.
+AREA_REPRESENTATIVE = {}
+
+
+def pick_area_representatives() -> None:
+    """Choose the largest capture whose name starts with each area's keyword."""
+    keys = {
+        "wires": ("edge-", "connector-", "trace-", "tidy-"),
+        "shapes": ("block-", "port-", "region-", "loop-"),
+        "pill": ("contextual-", "appearance-", "figjam-"),
+        "menus": ("menu-", "toolbar-", "command-"),
+        "panels": ("inspector-", "frames-", "library-"),
+        "files": ("workspace-", "draft-", "compare-", "file-"),
+        "settings": ("interface-", "wheel-", "zoom-", "theme-"),
+        "keyboard": ("command-palette-",),
+        "canvas": ("canvas-", "viewport-", "zoom-"),
+        "backend": ("code-", "type-", "literal-"),
+    }
+    for area, prefixes in keys.items():
+        best, best_size = None, 0
+        for _stem, path, _have in ASSETS:
+            if path.name.startswith(prefixes):
+                sz = path.stat().st_size
+                if sz > best_size:
+                    best, best_size = path, sz
+        if best:
+            AREA_REPRESENTATIVE[area] = best.name
+
+
+_THUMBS: dict[str, str] = {}
+# path -> css class. Many cards legitimately share one picture (the area
+# fallback), and inlining the same base64 once per card is what took the first
+# build to 6,335,259 encoded bytes against a 2,097,024 ceiling. Each unique
+# image is emitted ONCE in a stylesheet and referenced by class instead.
+_CLASSES: dict[str, str] = {}
+
+
+def img_class(path) -> str:
+    key = str(path)
+    if key not in _CLASSES:
+        _CLASSES[key] = f"i{len(_CLASSES)}"
+    return _CLASSES[key]
+
+
+def image_stylesheet() -> str:
+    rules = []
+    for key, cls in _CLASSES.items():
+        u = _THUMBS.get(key, "")
+        if u:
+            rules.append(f".{cls}{{background-image:url({u})}}")
+    return "\n".join(rules)
 
 
 def uri(path: pathlib.Path | None) -> str:
     if path is None or not path.exists():
         return ""
-    data = path.read_bytes()
-    if len(data) > THUMB_MAX_BYTES:
-        try:
-            from PIL import Image
-            import io
-            im = Image.open(io.BytesIO(data)).convert("RGB")
-            w = 560
-            if im.width > w:
-                im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
-            buf = io.BytesIO()
-            im.save(buf, format="JPEG", quality=72, optimize=True)
-            return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-        except Exception:
-            return ""
-    return "data:image/png;base64," + base64.b64encode(data).decode()
+    key = str(path)
+    if key in _THUMBS:  # the same donor capture can serve several rows
+        return _THUMBS[key]
+    try:
+        from PIL import Image
+        import io
+        im = Image.open(path).convert("RGB")
+        if im.width > THUMB_W:
+            im = im.resize((THUMB_W, round(im.height * THUMB_W / im.width)), Image.LANCZOS)
+        # A very tall capture (a full-page shot) would blow the budget on rows
+        # nobody reads; crop to a 4:3-ish card and say so with the caption.
+        if im.height > THUMB_W:
+            im = im.crop((0, 0, im.width, THUMB_W))
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", quality=THUMB_Q, optimize=True)
+        out = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        out = ""
+    _THUMBS[key] = out
+    return out
+
+
+pick_area_representatives()
 
 
 WAVE_NOTE = {
@@ -117,14 +196,30 @@ WAVE_NOTE = {
 }
 
 
+def _clip(text: str, n: int) -> str:
+    """Trim long evidence. It lives inside a collapsed <details>, and the
+    report has to fit the preview's 2,097,024-byte encoded ceiling with 468
+    cards in it — the first build without this was 10,924 bytes over."""
+    text = (text or "").strip()
+    return text if len(text) <= n else text[: n - 1].rstrip() + "\u2026"
+
+
 def card(item: dict, n: int) -> str:
+    q = (item.get("zachQuote") or "").strip()
+    if len(q) > 320:
+        q = q[:317].rstrip() + "\u2026"
+    quote_html = f'<blockquote class="zq">{q}</blockquote>' if q else ""
     img_path = match_image(item.get("name", ""), item.get("area", ""), item.get("image", ""))
     u = uri(img_path)
-    shot = (
-        f'<img alt="{item.get("name","")}" src="{u}" loading="lazy">'
-        f'<div class="cap">{img_path.name}</div>' if u
-        else '<div class="noshot">no donor capture matched<br><span>the feature is real; the picture is not</span></div>'
-    )
+    is_rep = bool(img_path) and img_path.name == AREA_REPRESENTATIVE.get(item.get("area", ""))
+    if u:
+        label = ("representative \u2014 " if is_rep else "") + img_path.name
+        shot = (f'<div class="thumb {img_class(img_path)}" role="img" '
+                f'aria-label="{item.get("name","")}"></div>'
+                f'<div class="cap{" rep" if is_rep else ""}">{label}</div>')
+    else:
+        shot = '<div class="noshot">no donor capture matched<br><span>the feature is real; the picture is not</span></div>'
+
     notice = int(item.get("noticeability", 3) or 3)
     return f"""
 <article class="card" data-n="{n}" data-name="{item.get('name','')}" data-area="{item.get('area','')}"
@@ -139,7 +234,11 @@ def card(item: dict, n: int) -> str:
       <span class="pill notice" title="how much you'd notice it missing">{'●' * notice}{'○' * (5 - notice)}</span>
       <span class="pill bbox">{item.get('inBbox','')}</span>
     </div>
-    <details><summary>evidence</summary><code>{item.get('donorEvidence','')}</code></details>
+    {quote_html}
+    <details><summary>evidence &amp; proof it\u2019s missing</summary>
+      <div class="ev"><b>donor</b> <code>{_clip(item.get('donorEvidence',''), 200)}</code></div>
+      <div class="ev"><b>proof</b> <code>{_clip(item.get('proofMissing',''), 240)}</code></div>
+    </details>
   </div>
   <div class="vote">
     <button class="up" data-v="yes" title="build it">▲ Yes</button>
@@ -165,6 +264,7 @@ def build(backlog: dict) -> str:
     dont_html = "".join(
         f"<tr><td>{d.get('name','')}</td><td>{d.get('why','')}</td></tr>" for d in dont
     )
+    image_css = "\n" + image_stylesheet()
     matched = sum(1 for wnum in waves for it in waves[wnum]
                   if match_image(it.get("name", ""), it.get("area", ""), it.get("image", "")))
     return f"""<!doctype html>
@@ -194,7 +294,8 @@ def build(backlog: dict) -> str:
  @media (max-width:860px){{.card{{grid-template-columns:1fr}}}}
  .card[data-vote="yes"]{{border-color:var(--yes);box-shadow:inset 3px 0 0 var(--yes)}}
  .card[data-vote="no"]{{border-color:var(--no);opacity:.5}}
- .shot img{{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:8px;background:#111}}
+ .thumb{{width:100%;aspect-ratio:4/3;background-size:cover;background-position:top center;background-repeat:no-repeat;border:1px solid var(--line);border-radius:8px;background-color:#111}}
+ .cap.rep{{opacity:.55;font-style:italic}}
  .cap{{font-size:10px;color:var(--muted);margin-top:4px;font-family:ui-monospace,monospace;
    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
  .noshot{{padding:26px 10px;text-align:center;border:1px dashed var(--line);border-radius:8px;
@@ -209,7 +310,11 @@ def build(backlog: dict) -> str:
  .e-oneliner,.e-port{{color:var(--yes);border-color:var(--yes)}}
  .e-realwork{{color:var(--warn);border-color:var(--warn)}}
  .e-unbuiltproductwork{{color:var(--no);border-color:var(--no)}}
- details{{font-size:12px;color:var(--muted)}} details code{{font-size:11px}}
+ details{{font-size:12px;color:var(--muted)}} details code{{font-size:11px;word-break:break-word}}
+ .ev{{margin:5px 0}} .ev b{{color:var(--fg);font-weight:600;margin-right:5px}}
+ .zq{{margin:0 0 8px;padding:7px 11px;border-left:3px solid var(--accent);border-radius:0 6px 6px 0;
+   background:color-mix(in srgb,var(--accent) 9%,transparent);font-size:13px;font-style:italic}}
+ .zq::before{{content:'\\201C'}} .zq::after{{content:'\\201D'}}
  .vote{{display:flex;flex-direction:column;gap:6px}}
  .vote button{{font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:9px;
    border:1px solid var(--line);background:transparent;color:var(--fg);cursor:pointer;min-width:74px}}
@@ -228,7 +333,7 @@ def build(backlog: dict) -> str:
  #out{{width:100%;margin-top:10px;font-family:ui-monospace,monospace;font-size:12px;padding:10px;
    border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--fg);display:none}}
  #out.show{{display:block}}
-</style></head><body><div class="wrap">
+{image_css}</style></head><body><div class="wrap">
 <h1>Parity backlog — what the old app had that this one doesn’t</h1>
 <p class="sub">{total} candidates · {matched} with a real screenshot from the old app’s own {len(ASSETS)} captures · 20 Sep 2026</p>
 <div class="how"><b>Scroll and vote.</b> ▲ Yes = build it, ▼ No = skip it. Nothing is implemented until you’ve been through this.
@@ -298,14 +403,39 @@ document.getElementById("copy").addEventListener("click",function(){{
 """
 
 
+# WHY this ships as TWO files rather than one: 468 cards with legible
+# thumbnails do not fit the preview's 2,097,024-byte ENCODED ceiling. The
+# alternative was crushing the JPEGs until the pictures stopped being useful,
+# which defeats the point of a media-rich triage. Splitting by wave keeps every
+# image legible AND puts the items he would act on first in the file he opens
+# first. Each part cross-links to the other.
+PARTS = {
+    "A": {"waves": ["1", "2"], "title": "Part A \u2014 act on these first",
+          "file": "parity-triage-2026-09-20-A.html"},
+    "B": {"waves": ["3", "4"], "title": "Part B \u2014 the rest",
+          "file": "parity-triage-2026-09-20-B.html"},
+}
+
 if __name__ == "__main__":
     src = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "docs/parity-backlog.json")
     backlog = json.loads(src.read_text())
-    html = build(backlog)
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(html, encoding="utf-8")
-    enc = len(quote(html, safe=""))
-    n = sum(len(v) for v in backlog.get("waves", {}).values())
-    print(f"wrote {OUT} ({OUT.stat().st_size:,} bytes) — {n} candidates")
-    print(f"encoded data: URL {enc:,} / 2,097,024 "
-          f"({'OK' if enc < 2_097_024 else 'OVER CAP — browser only, say so in the handoff'})")
+    outdir = OUT.parent
+    outdir.mkdir(parents=True, exist_ok=True)
+    for key, part in PARTS.items():
+        sub = {
+            "waves": {w: backlog["waves"][w] for w in part["waves"] if w in backlog["waves"]},
+            # the "do not build" table belongs with part A, where he starts
+            "doNotBuild": backlog.get("doNotBuild", []) if key == "A" else [],
+        }
+        other = PARTS["B" if key == "A" else "A"]
+        _THUMBS.clear(); _CLASSES.clear()
+        html = build(sub).replace(
+            "<h1>Parity backlog",
+            f'<p style="margin:0 0 4px"><a href="{other["file"]}" '
+            f'style="color:var(--accent)">\u2192 {other["title"]}</a></p><h1>{part["title"]}: parity backlog', 1)
+        dst = outdir / part["file"]
+        dst.write_text(html, encoding="utf-8")
+        enc = len(quote(html, safe=""))
+        n = sum(len(v) for v in sub["waves"].values())
+        ok = "OK" if enc < 2_097_024 else "OVER CAP"
+        print(f"{part['file']}: {dst.stat().st_size:>10,} bytes · {n:>3} cards · encoded {enc:>9,} / 2,097,024  {ok}")
