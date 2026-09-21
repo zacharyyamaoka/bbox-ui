@@ -198,7 +198,15 @@ describe("ss-wire + ss-wire-binding (L3)", () => {
     // P-028: `pins: []` is the AUTOMATIC route. A cable is never born
     // authored — `pins.length > 0` is the whole of the auto/authored mode,
     // so a non-empty default would mean "every new wire is hand-routed".
-    expect(defaultsOf(WIRE_SHAPE_TYPE)).toEqual({ variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [] });
+    // P-023: `tunnel: false`, `layer: ""` for the same reason — tunnelling is
+    // something the user does to a cable, never a state it is born in, and a
+    // cable is born on no layer.
+    //
+    // `toEqual` on the WHOLE bag is deliberate and stays that way: it is what
+    // makes adding a prop to this shape an EDIT TO THIS LINE, so a new
+    // persisted field cannot be introduced without someone stating its
+    // default here.
+    expect(defaultsOf(WIRE_SHAPE_TYPE)).toEqual({ variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [], tunnel: false, layer: "" });
   });
 
   it("a wire bound at both ends to two blocks validates and round-trips with its bindings", () => {

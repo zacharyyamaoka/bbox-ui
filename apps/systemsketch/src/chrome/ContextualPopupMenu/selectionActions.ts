@@ -104,6 +104,14 @@ export interface SelectionSubject {
    *  selection (and for no selection at all — `wires` is the emptiness test,
    *  not this). */
   wireRouting: WireRouting | null;
+  /** P-023. Whether every selected cable agrees on tunnelling, or `null` when
+   *  they disagree. Same `wires`-is-the-emptiness-test rule as `wireRouting`,
+   *  and same reason it is a LIST question rather than a lone-selection one:
+   *  tunnelling a bundle in one press is most of the value. */
+  wireTunnel: boolean | null;
+  /** P-023. The layer every selected cable agrees on (`""` for none), or
+   *  `null` when they disagree. */
+  wireLayer: string | null;
 }
 
 export function selectionSubjectOf(editor: Editor): SelectionSubject {
@@ -112,6 +120,8 @@ export function selectionSubjectOf(editor: Editor): SelectionSubject {
   const only = shapes.length === 1 ? shapes[0] : null;
   const wires = shapes.filter((shape): shape is WireShape => shape.type === WIRE_SHAPE_TYPE);
   const routings = new Set(wires.map((wire) => wire.props.routing));
+  const tunnels = new Set(wires.map((wire) => wire.props.tunnel));
+  const layers = new Set(wires.map((wire) => wire.props.layer));
   return {
     ids,
     only,
@@ -119,6 +129,8 @@ export function selectionSubjectOf(editor: Editor): SelectionSubject {
     codeLanguage: only && only.type === CODE_SHAPE_TYPE ? (only as CodeShape).props.language : null,
     wires: wires.map((wire) => wire.id),
     wireRouting: routings.size === 1 ? [...routings][0] : null,
+    wireTunnel: tunnels.size === 1 ? [...tunnels][0] : null,
+    wireLayer: layers.size === 1 ? [...layers][0] : null,
   };
 }
 
@@ -154,6 +166,38 @@ export function setWireRouting(editor: Editor, ids: readonly TLShapeId[], routin
   if (ids.length === 0) return;
   editor.markHistoryStoppingPoint("wire routing");
   editor.updateShapes<WireShape>(ids.map((id) => ({ id, type: WIRE_SHAPE_TYPE, props: { routing } })));
+}
+
+/**
+ * P-023. Turn tunnelling on or off for every cable handed in — ONE undo step,
+ * the same batched-undoable-write idiom as `setWireRouting` above and
+ * `setStyle` in ./arrangeActions.ts.
+ *
+ * A plain prop write and not a `StyleProp`, for the reason `setWireRouting`
+ * already records: a style writes to the OTHER kinds in a mixed selection, and
+ * tunnelling is a fact about a cable that no block or code cell has an answer
+ * for.
+ */
+export function setWireTunnel(editor: Editor, ids: readonly TLShapeId[], tunnel: boolean): void {
+  if (ids.length === 0) return;
+  editor.markHistoryStoppingPoint("wire tunnel");
+  editor.updateShapes<WireShape>(ids.map((id) => ({ id, type: WIRE_SHAPE_TYPE, props: { tunnel } })));
+}
+
+/**
+ * P-023. File every cable handed in onto `layer` — `""` takes them off every
+ * layer.
+ *
+ * The caller resolves the typed name through `canonicalBoardLayer` FIRST
+ * (`shapes/wire/wireTunnel.ts`), so that typing `diagnostics` beside an
+ * existing `Diagnostics` joins that layer instead of forking it. Doing the
+ * case-fold here instead would hide it from the control that has to SHOW the
+ * resolved name back to the person typing.
+ */
+export function setWireLayer(editor: Editor, ids: readonly TLShapeId[], layer: string): void {
+  if (ids.length === 0) return;
+  editor.markHistoryStoppingPoint("wire layer");
+  editor.updateShapes<WireShape>(ids.map((id) => ({ id, type: WIRE_SHAPE_TYPE, props: { layer } })));
 }
 
 /** Offset of a duplicate from its original, in page units. Small enough to

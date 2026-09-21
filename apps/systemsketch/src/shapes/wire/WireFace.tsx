@@ -31,6 +31,7 @@ import { Trace } from "@trunk/components/trace";
 
 import { WIRE_TERMINAL_GAP, directionTowards, wireTerminals } from "./wireGeometry";
 import { wireDrag } from "./wireGesture";
+import { wireTunnelState } from "./wireTunnel";
 import type { WireShape } from "./WireShapeUtil";
 
 export function WireFace({ shape }: { shape: WireShape }) {
@@ -77,6 +78,17 @@ export function WireFace({ shape }: { shape: WireShape }) {
         // absent `color` as its own default. Passing the empty string through
         // would paint `stroke: ""`, i.e. nothing.
         color: live.props.color || undefined,
+        // P-023. The four-state answer, assembled in `./wireTunnel.ts` from
+        // two document props and two runtime facts, and DECIDED by the
+        // trunk's own `tunnelDisplayState`. It is read inside this `useValue`
+        // so that focusing a layer, hovering a block, or selecting a cable
+        // repaints every affected cable with no record write anywhere — the
+        // donor's rule that focus "never mutates or dirties the board".
+        //
+        // `Trace` does the rest: it already supplies the points a `hidden`
+        // tunnel needs (sampling a curve off the mounted path), shortens the
+        // drawn `d` to the two mouths, and paints the vias.
+        tunnel: wireTunnelState(editor, live),
       };
     },
     [editor, shape.id],
@@ -106,6 +118,7 @@ export function WireFace({ shape }: { shape: WireShape }) {
             // why 8 replaces the trunk's glyph-sized 16.
             terminals={false}
             gap={WIRE_TERMINAL_GAP}
+            tunnel={painted.tunnel}
           />
         </g>
       </svg>

@@ -13,10 +13,14 @@
 // custom shape AND two real bindings", never an arrow. The shape owns the
 // paint and the hit geometry; `WireBindingUtil` owns which port each end
 // landed on.
-import { Polyline2d, ShapeUtil, T, createShapePropsMigrationSequence, type Editor, type TLBaseShape, type TLHandle, type TLHandleDragInfo, type TLShapePartial, type TLShapeUtilCanBindOpts, type VecLike } from "tldraw";
+import { Polyline2d, ShapeUtil, T, Vec, createShapePropsMigrationSequence, type Editor, type TLBaseShape, type TLHandle, type TLHandleDragInfo, type TLShapeId, type TLShapePartial, type TLShapeUtilCanBindOpts, type VecLike } from "tldraw";
 
 import type { ElbowPin } from "@trunk/components/elbow";
 import { TRACE_HIT_CORRIDOR_PX } from "@trunk/components/trace.hit";
+import { tunnelHidesRun, tunnelMouths } from "@trunk/components/tunnel";
+import type { Point } from "@trunk/components/trace.layout";
+
+import { wireTunnelState } from "./wireTunnel";
 
 import { ElbowPinV, PointV } from "../shared/props";
 import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
@@ -56,6 +60,31 @@ export interface WireShapeProps {
    * elbow is still there when you switch back.
    */
   pins: ElbowPin[];
+  /**
+   * P-023. Does this cable LEAVE THE SURFACE when nothing is about it?
+   *
+   * Document data, not view state, and `@trunk/scene/layers.ts`'s header
+   * argues the split at length: which cables tunnel and which layer they
+   * travel on is a decision a person makes and expects to still be true
+   * tomorrow, so it survives reload, copy-paste and a change of host. FOCUS —
+   * which layer the view is looking at right now — is the opposite and lives
+   * in a runtime atom (`./wireTunnel.ts`), exactly as the donor split it
+   * (`props.tunnel` / `props.tunnelLayer` on the record, focus in a WeakMap).
+   */
+  tunnel: boolean;
+  /**
+   * P-023. Which layer this cable travels on. `""` is "no layer", never a
+   * layer named `""`.
+   *
+   * WHY there is no `layers: []` registry beside it: `@trunk/scene/layers.ts`
+   * rejected one by name — a registry admits an entry no cable is on and a
+   * cable naming an entry the registry lacks, two states that cannot be typed
+   * away, bought for no capability since every question anyone asks of a layer
+   * is answerable from the cables in one pass. `boardTunnelLayers` IS that
+   * pass. The cost is stated there too and is real: a brand-new EMPTY layer
+   * does not survive a reload, because there is nothing on it.
+   */
+  layer: string;
 }
 
 declare module "@tldraw/tlschema" {
@@ -112,15 +141,78 @@ class WireGrabCorridor extends Polyline2d {
   constructor(
     config: ConstructorParameters<typeof Polyline2d>[0],
     private readonly editor: Editor,
+    private readonly wireId: TLShapeId,
+    private readonly routePoints: readonly Point[],
   ) {
     super(config);
   }
 
+  /**
+   * P-023 — A HIDDEN RUN IS NOT THERE TO BE GRABBED.
+   *
+   * The whole point of a tunnel is that "a diagnostics node wired to
+   * everything does not drag cables across the board". A cable that stopped
+   * PAINTING its middle but kept answering hit tests along it would defeat
+   * that twice over: a press on empty board would select an invisible cable,
+   * and — worse, because it is self-inflicted — hovering empty board would
+   * make the cable reappear, since `contextFocused` reads the hover that the
+   * hit test just produced. So when the run is hidden, distance is measured
+   * against the two MOUTHS only: the same two stubs `Trace` actually draws
+   * (`@trunk/components/tunnel`'s `tunnelMouths`, the one function that owns
+   * that geometry), so what is grabbable is exactly what is visible.
+   *
+   * `preview` and `revealed` fall through to the full polyline untouched,
+   * which is what lets a hover that started on a stub carry on down the
+   * revealed route rather than dropping the moment it leaves the stub.
+   *
+   * WHY THE STATE IS READ HERE AND NOT IN `getGeometry`: same reason the pad
+   * below is, and one more. Same reason — tldraw caches the geometry OBJECT
+   * per shape record, so anything camera- or view-dependent computed in the
+   * constructor is stale the moment it changes. One more — the display state
+   * depends on the HOVER and on a runtime focus atom, neither of which is in
+   * the wire's record; reading them inside the cached computed would make
+   * every cable on the board recompute its geometry on every pointer move.
+   *
+   * WHY NOT A `Group2d` OF THE TWO STUBS, which is the structurally obvious
+   * answer: `Group2d`'s constructor forces `isClosed: true`
+   * (@tldraw/editor `Group2d.ts:18`), which moves the shape into
+   * `getShapeAtPoint`'s CLOSED branch — and that branch skips any shape whose
+   * page bounds contain the viewport. That is the third rejected alternative
+   * already recorded above, measured on this very shape: a long cable stops
+   * being clickable exactly when you zoom in on it.
+   *
+   * `nearestPoint` is still NOT touched, for the reason it was not touched
+   * before: binding and snapping must keep landing on the real centreline.
+   */
   override distanceToPoint(point: VecLike, hitInside?: boolean): number {
     const stock = this.editor.getHitTestMargin();
     const wanted = TRACE_HIT_CORRIDOR_PX / 2 / this.editor.getZoomLevel();
-    return super.distanceToPoint(point, hitInside) - Math.max(0, wanted - stock);
+    const pad = Math.max(0, wanted - stock);
+    const wire = this.editor.getShape<WireShape>(this.wireId);
+    if (wire && tunnelHidesRun(wireTunnelState(this.editor, wire))) {
+      const mouths = tunnelMouths(this.routePoints, false);
+      // `null` means the cable is too short to have a middle worth hiding —
+      // `tunnelPathPresentation`'s own rule, and then nothing is hidden and
+      // the whole cable stays grabbable.
+      if (mouths) return Math.min(distanceToPolyline(mouths.start, point), distanceToPolyline(mouths.end, point)) - pad;
+    }
+    return super.distanceToPoint(point, hitInside) - pad;
   }
+}
+
+/** Distance from `point` to a polyline, as `Polyline2d` measures it — the
+ *  minimum over its segments. Written out rather than built as a second
+ *  `Polyline2d` per hit test because a mouth is two or three points and this
+ *  runs on every pointer move. */
+function distanceToPolyline(points: readonly Point[], point: VecLike): number {
+  if (points.length === 0) return Infinity;
+  if (points.length === 1) return Vec.Dist(points[0], point);
+  let nearest = Infinity;
+  for (let index = 1; index < points.length; index += 1) {
+    const distance = Vec.DistanceToLineSegment(points[index - 1], points[index], point);
+    if (distance < nearest) nearest = distance;
+  }
+  return nearest;
 }
 
 /** The one spelling of a pin handle's id, so the two functions below are the
@@ -166,12 +258,47 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     start: PointV,
     end: PointV,
     pins: T.arrayOf(ElbowPinV),
+    tunnel: T.boolean,
+    layer: T.string,
   };
 
-  // Version 0, declared now for the reason BlockShapeUtil records: the
-  // sequence is what gives these props a version number in a saved file, and
-  // it cannot be retrofitted once boards exist.
-  static override migrations = createShapePropsMigrationSequence({ sequence: [] });
+  // The sequence is what gives these props a version number in a saved file,
+  // and it cannot be retrofitted once boards exist (BlockShapeUtil's own
+  // note). It stayed empty until P-023 added the first two props a board
+  // written before them cannot carry.
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        id: `com.tldraw.shape.${WIRE_SHAPE_TYPE}/1`,
+        // P-023. A cable saved before tunnelling has neither prop, and
+        // `T.boolean`/`T.string` reject `undefined` — so without this a board
+        // from yesterday fails validation on open rather than opening with
+        // every cable untunnelled. The defaults are the ones
+        // `getDefaultProps` gives a NEW cable, which is the only answer that
+        // leaves an old board painting exactly as it did.
+        //
+        // `pins` IS ALSO FILLED HERE, and it is not P-023's prop. P-028 added
+        // `props.pins` to this shape and left this sequence empty, so a board
+        // written before it carries no `pins` and `T.arrayOf` rejects
+        // `undefined` — measured, at HEAD, before this lane touched anything:
+        // `src/document/portDeclarationMigration.test.ts`'s "the REAL legacy
+        // fixture on disk opens through tldraw's own file parser" was already
+        // FAILING with `invalidRecords … (type = ss-wire) props pins:
+        // "Expected an array, got undefined"` on the committed fixture
+        // `src/review/__fixtures__/two-blocks.tldr`, which is the same path a
+        // `?board=` link takes (`review/boardParam.ts`). It is fixed in this
+        // step rather than in one of its own because a board at version 0
+        // needs all three filled to reach version 1 at all — a separate
+        // migration could only run after this one had already been handed
+        // records this validator rejects.
+        up: (props: { tunnel?: boolean; layer?: string; pins?: ElbowPin[] }) => {
+          props.tunnel ??= false;
+          props.layer ??= "";
+          props.pins ??= [];
+        },
+      },
+    ],
+  });
 
   override getDefaultProps(): WireShapeProps {
     // Elbow is Zach's datum (plan §2, from the archive's own toolbar default
@@ -179,7 +306,10 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     // diagram reads as orthogonal runs.
     // `pins: []` — a new cable is AUTOMATIC. Authoring is something the user
     // does, never a state a cable is born in.
-    return { variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [] };
+    // `tunnel: false`, `layer: ""` — a cable is born visible and unfiled.
+    // Tunnelling is something the user does (P-023), never a state a cable is
+    // born in, for the same reason `pins: []` is empty.
+    return { variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [], tunnel: false, layer: "" };
   }
 
   /**
@@ -246,7 +376,11 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
    */
   override getGeometry(shape: WireShape) {
     const { from, to } = wireTerminals(this.editor, shape);
-    return new WireGrabCorridor({ points: wireRoutePoints(from, to, shape.props.routing, shape.props.pins) }, this.editor);
+    const points = wireRoutePoints(from, to, shape.props.routing, shape.props.pins);
+    // The route is handed to the corridor as well as to the polyline: a hidden
+    // tunnel measures against its two mouths, which are sliced out of these
+    // same points, so hit and paint cannot disagree about where the stubs end.
+    return new WireGrabCorridor({ points }, this.editor, shape.id, points);
   }
 
   override getIndicatorPath(shape: WireShape) {

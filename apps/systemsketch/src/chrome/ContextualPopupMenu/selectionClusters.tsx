@@ -16,12 +16,13 @@
 // being visible on the floating toolbar I want them hidden behind a icon".
 // The pill is a bar over the user's drawing — every control spent here is
 // canvas taken away.
-import { useCallback } from "react";
-import { AlignStartVertical, Focus, Group, Ungroup } from "lucide-react";
+import { useCallback, useState } from "react";
+import { AlignStartVertical, Eye, EyeOff, Focus, Group, Ungroup, Waypoints } from "lucide-react";
 import { useEditor, useValue, type TLShapeId } from "tldraw";
 
 import { Button } from "@trunk/components/button";
 import { PILL_POPOVER } from "@trunk/components/floatingToolbar";
+import { Input } from "@trunk/components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@trunk/components/popover";
 import { Slider } from "@trunk/components/slider";
 import { ToolbarButton } from "@trunk/components/toolbar";
@@ -29,7 +30,13 @@ import { ToolbarButton } from "@trunk/components/toolbar";
 import { traceGeometry } from "@trunk/components/trace";
 
 import { groupSelection, groupableSelection, selectedRegionId, ungroupSelection } from "../../document/grouping";
-import { WIRE_ROUTINGS, setWireRouting, type WireRouting } from "./selectionActions";
+import {
+  boardTunnelLayers,
+  canonicalBoardLayer,
+  focusedTunnelLayer,
+  setFocusedTunnelLayer,
+} from "../../shapes/wire/wireTunnel";
+import { WIRE_ROUTINGS, setWireLayer, setWireRouting, setWireTunnel, type WireRouting } from "./selectionActions";
 import {
   activeStyleRows,
   arrangeGroupsFor,
@@ -525,6 +532,162 @@ export function EdgeTypeCluster({ wires, routing }: { wires: readonly TLShapeId[
                 <RoutingGlyph routing={entry.id} />
                 <span className="text-[11px]">{entry.label}</span>
               </Button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+
+/**
+ * P-023: tunnelling, and the layer a cable travels on.
+ *
+ * WHAT WAS ALREADY BUILT, so this file is small: the four-state machine
+ * (`@trunk/components/tunnel`), the drawn mouths and vias (`Trace`), the layer
+ * derivation (`@trunk/scene/layers`) and the host glue
+ * (`shapes/wire/wireTunnel.ts`). The backlog's proof of the gap was that the
+ * app imported the first three ZERO times. This cluster is the PRESS that
+ * reaches them, and it writes exactly two props.
+ *
+ * ONE FAMILY, ONE TRIGGER — this file's law. Tunnelling, layer membership and
+ * layer focus are one family (they are the same feature seen from the cable,
+ * from the set and from the view) so they collapse behind a single cell.
+ *
+ * WHY THE FOCUS CONTROL LIVES HERE, beside two writes, despite being the one
+ * thing in the popover that does NOT touch the document: because focusing a
+ * layer is how you find out what is on it, and a person filing a cable onto
+ * `Diagnostics` is exactly the person who wants to see `Diagnostics`. Putting
+ * the eye on a different surface would mean a round trip for every assignment.
+ * The rows are marked as the view control they are — `aria-pressed` on an eye,
+ * never a checkbox that reads like data.
+ *
+ * WHY IT APPEARS FOR ANY SELECTION CONTAINING A CABLE, like the routing row
+ * above rather than like the block-view toggle: tunnelling is a property, not
+ * a face, and "select these forty diagnostics cables and tunnel all of them"
+ * is the whole point of the feature.
+ */
+export function TunnelCluster({
+  wires,
+  tunnel,
+  layer,
+}: {
+  wires: readonly TLShapeId[];
+  tunnel: boolean | null;
+  layer: string | null;
+}) {
+  const editor = useEditor();
+  // Derived from the board's own cables, so a layer appears in this list the
+  // moment a cable is filed onto it and disappears when the last one leaves —
+  // `@trunk/scene/layers`' whole contract decision, and the reason there is no
+  // registry to keep in step.
+  const layers = useValue("ss tunnel layers", () => boardTunnelLayers(editor), [editor]);
+  const focused = useValue("ss tunnel focus", () => focusedTunnelLayer(editor).get(), [editor]);
+  // WHY the field is LOCAL and not bound straight to `layer`: a layer name is
+  // typed a character at a time, and writing the record on each keystroke
+  // would file the selection onto `D`, then `Di`, then `Dia` — three junk
+  // layers in the derived list and three undo entries. `null` means "not
+  // typing"; the field shows the selection's own layer until then.
+  const [draft, setDraft] = useState<string | null>(null);
+
+  if (wires.length === 0) return null;
+
+  const commitLayer = (raw: string) => {
+    // Resolve against the board's existing spelling FIRST, so `diagnostics`
+    // joins `Diagnostics` rather than forking it — `canonicalSceneLayer`'s
+    // reason for existing.
+    setWireLayer(editor, wires, canonicalBoardLayer(editor, raw));
+    setDraft(null);
+  };
+
+  const mixedLayer = layer === null;
+  const fieldValue = draft ?? (mixedLayer ? "" : layer);
+
+  return (
+    <div className="flex h-10 shrink-0 items-center" data-testid="ss-selection-tunnel">
+      <Popover>
+        <PopoverTrigger
+          render={<Button variant="ghost" size="sm" className={CELL_ICON} />}
+          data-testid="ss-wire-tunnel"
+          aria-pressed={tunnel === true}
+          aria-label={tunnel === null ? "Tunnel: mixed" : tunnel ? "Tunnel: on" : "Tunnel: off"}
+          title="Tunnel and layer"
+        >
+          <Waypoints />
+        </PopoverTrigger>
+        <PopoverContent align="start" className={`w-56 p-2 ${PILL_POPOVER}`} data-testid="ss-wire-tunnel-panel">
+          <div className="flex flex-col gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid="ss-wire-tunnel-toggle"
+              aria-pressed={tunnel === true}
+              aria-label="Tunnel when idle"
+              title="Hide the long run, leaving a stub and a via at each port"
+              className={`${ON_PILL} h-8 w-full justify-start gap-2 rounded-[5px] border-0 px-2 text-[11px] font-normal ${tunnel === true ? "bg-[#8a38f5] hover:bg-[#8a38f5]" : ""}`}
+              // A MIXED selection turns ON. The alternative — toggling off
+              // whatever each cable happens to be — makes one press produce two
+              // different outcomes on two cables, which is not a toggle.
+              onClick={() => setWireTunnel(editor, wires, tunnel !== true)}
+            >
+              <Waypoints />
+              <span className="text-[11px]">Tunnel when idle</span>
+            </Button>
+
+            <div className="mt-1 px-1 text-[11px] text-white/60">Layer</div>
+            <Input
+              data-testid="ss-wire-layer-input"
+              aria-label="Layer"
+              placeholder={mixedLayer ? "Mixed" : "None"}
+              value={fieldValue}
+              // The pill is a FIXED dark surface in both colour schemes, and the stock
+              // Input carries a `dark:bg-input/30` of its own — a PAGE token, which
+              // is what painted the field two-tone here. Both variants are pinned to
+              // the same literal so there is no theme left for it to be wrong in,
+              // the same reasoning `ToggleGroupItem` above already records.
+              className="h-8 w-full rounded-[5px] border-[#383838] bg-[#2a2a2a] text-[11px] text-white placeholder:text-white/40 dark:bg-[#2a2a2a]"
+              onChange={(event) => setDraft(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") commitLayer(event.currentTarget.value);
+                // Escape abandons the draft rather than writing it — the same
+                // commit/cancel pair `EditableText` uses everywhere else here.
+                if (event.key === "Escape") setDraft(null);
+              }}
+              onBlur={(event) => {
+                if (draft !== null) commitLayer(event.currentTarget.value);
+              }}
+            />
+
+            {layers.map((name) => (
+              <div key={name} className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid={`ss-wire-layer-${name}`}
+                  aria-pressed={layer === name}
+                  aria-label={`Put on layer ${name}`}
+                  className={`${ON_PILL} h-8 min-w-0 flex-1 justify-start gap-2 rounded-[5px] border-0 px-2 text-[11px] font-normal ${layer === name ? "bg-[#8a38f5] hover:bg-[#8a38f5]" : ""}`}
+                  onClick={() => setWireLayer(editor, wires, name)}
+                >
+                  <span className="truncate text-[11px]">{name}</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid={`ss-wire-layer-focus-${name}`}
+                  aria-pressed={focused === name}
+                  aria-label={`Focus layer ${name}`}
+                  title="Show only this layer; tunnel every other cable"
+                  className={`${ON_PILL} h-8 w-8 shrink-0 rounded-[5px] border-0 p-0 ${focused === name ? "bg-[#8a38f5] hover:bg-[#8a38f5]" : ""}`}
+                  // Toggling: pressing the focused layer clears focus, which is
+                  // `setFocusedTunnelLayer`'s own rule and what makes this read
+                  // as a filter rather than a mode.
+                  onClick={() => setFocusedTunnelLayer(editor, name)}
+                >
+                  {focused === name ? <Eye /> : <EyeOff />}
+                </Button>
+              </div>
             ))}
           </div>
         </PopoverContent>

@@ -45,6 +45,7 @@ import {
   PILL_SEPARATOR,
   StyleCluster,
   TriggerChevron,
+  TunnelCluster,
 } from "./selectionClusters";
 import { useInterfaceScale } from "../ShareMenu";
 import type { CodeLanguage } from "../../shapes/code";
@@ -331,6 +332,10 @@ export function FloatingSelectionToolbar() {
           `EdgeTypeCluster` hides itself when no cable is selected, so it needs
           no condition here — the same contract Arrange and Focus follow. */}
       <EdgeTypeCluster wires={subject.wires} routing={subject.wireRouting} />
+
+      {/* P-023. Beside the edge type and on the same contract: it hides itself
+          when no cable is selected, and it writes only to the cables. */}
+      <TunnelCluster wires={subject.wires} tunnel={subject.wireTunnel} layer={subject.wireLayer} />
 
       {subject.blockView !== null || subject.codeLanguage !== null || subject.wires.length > 0 ? (
         <ToolbarSeparator className={PILL_SEPARATOR} />
