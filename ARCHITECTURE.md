@@ -113,6 +113,35 @@ are consumers."* This is that chart. It answers "I changed X — what else needs
 updating?" and it is the thing to re-read before starting any cross-cutting
 change.
 
+### The vocabulary — the six names, and what each one is
+
+Settled 2026-09-21. Use these words; they are the API of the conversation as much
+as of the code.
+
+| Name | What it is | Where it lives today |
+|---|---|---|
+| **`components`** | The atoms that DRAW a scene element. | `apps/storybook-basics/src/components/` |
+| **`scene`** | The model, and every pure function over it. | `.../src/scene/` |
+| **`editor`** | The authoring surfaces that produce scene mutations. | `.../src/editor/` |
+| **`hosts`** | The engine adapters — DOM, React Flow, tldraw. Each owns the viewport, hit-testing and drag. | `.../src/hosts/` |
+| **whiteboard** | **The integrated app.** It puts `components` and `editor` together, uses `scene` functions to modify them, and shows the result through a `host`. | `apps/systemsketch/` — **rename pending**, see below |
+| **site** | bbox-ui.com — a first-class deliverable, not a by-product. | `apps/docs/` |
+
+Plus the two deliberate exceptions that sit outside the kits: `skin/` (applied on
+top, the component unaware) and `presets/` (configurations of existing components).
+
+**`whiteboard` is the name, and `systemsketch` is the old one.** Zach, 2026-09-21:
+the file type is `.bbox` because *"this project is no longer system sketch its
+just the bbox whiteboard"*. The directory rename is deferred only because
+`apps/systemsketch/src/` was being edited when the decision landed — renaming a
+tree while a lane is inside it is the merge-conflict this repo's dispatch rules
+exist to prevent. Do it as its own change, alone, and update the `@trunk` alias
+consumers in the same pass.
+
+WHY `whiteboard` rather than `app`: there will be more than one consumer of the
+kits — the site already is one — so "the app" stops being unambiguous the
+moment a second one exists. `whiteboard` says which product it is.
+
 ### The three kits — the core
 
 | Kit | What it is | Rule |
