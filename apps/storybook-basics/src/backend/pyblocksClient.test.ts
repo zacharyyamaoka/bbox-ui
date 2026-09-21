@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 import { authorId } from "../scene/history";
-import { PyblocksSceneError } from "../scene/pyblocksScene";
+import { PyblocksSceneError } from "../hosts/pyblocksScene";
 import type { SceneEventBatch } from "../scene/sceneEvents";
 import { createPyblocksClient, PyblocksRequestError, type FetchLike } from "./pyblocksClient";
 

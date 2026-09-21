@@ -1,4 +1,4 @@
-// src/scene/pyblocksScene.ts — the pyblocks → SystemSketch document
+// src/hosts/pyblocksScene.ts — the pyblocks → bbox studio document
 // contract, TypeScript side. SKELETON committed by the planning lane
 // (docs/PYBLOCKS-BACKEND-PLAN.md, lane `trunk-loader-events`): the TYPES
 // below are the frozen contract both sides build against; the functions
@@ -21,11 +21,37 @@
 // `kind` is not `data`/`state` is kept here truthfully (nothing pyblocks
 // said is dropped) but is NOT a wire; regions/nesting carry that fact.
 //
-// Pure: no React, no DOM, no canvas engine. Same rule as scene.ts.
+// WHY THIS LIVES IN `hosts/` AND NOT `scene/` (moved 2026-09-21): it used
+// to sit in `scene/` and import `hosts/hostScene`, which is the kit DAG
+// backwards — `scene/` is `f(scene) -> data` and never reaches into a host
+// (ARCHITECTURE.md). That import was not an implementation accident, it is
+// what this module IS: the document's per-node bag is
+// `PyblocksHostNodeData = HostNodeData & {pyblocks}` (this file's own
+// header above — "a `BlockScene` whose `data` bags are this app's own
+// `HostNodeData` plus a `pyblocks` namespace"), `loadPyblocksScene` hands
+// back a `HostScene`, and the dangling-edge `problems` it reports are read
+// with `hostPortsOf` — the host family's port vocabulary, `value`
+// writers/readers asymmetry and all, which the scene kit is not allowed to
+// know.
+//
+// Generifying it over the node-data bag, the way `scene/sceneEvents.ts` WAS
+// generified in the same pass, is not available here: with
+// `PyblocksSceneDocument<Data extends SceneData = SceneData>` the
+// acceptance's own `const authored: HostScene = { nodes:
+// doc.scene.nodes.map(...) }` (`pyblocksScene.test.ts`) stops compiling —
+// TS2559, "has no properties in common with type 'HostNodeData'" — because
+// a `SceneData` index signature hands every field back as `unknown`. The
+// only way to keep the file in `scene/` was to edit an acceptance that is
+// off-limits, so it moved to the kit it was always written against. Its
+// stories (`PyblocksScene.stories.tsx`) and its acceptance already lived
+// here.
+//
+// Still pure: no React, no DOM, no canvas engine. `hosts/` PERMITS an
+// engine; this file simply has no use for one.
 
-import { hostPortsOf, type HostNodeData, type HostScene } from "../hosts/hostScene";
-import { findDanglingEdges, rank, type SceneEdge, type SceneNode, type ScenePosition } from "./scene";
-import type { WireStyleData } from "./sceneWires";
+import { hostPortsOf, type HostNodeData, type HostScene } from "./hostScene";
+import { findDanglingEdges, rank, type SceneEdge, type SceneNode, type ScenePosition } from "../scene/scene";
+import type { WireStyleData } from "../scene/sceneWires";
 
 export const PYBLOCKS_SCENE_SCHEMA_VERSION = 1 as const;
 export const PYBLOCKS_SCENE_KIND = "pyblocks-scene" as const;

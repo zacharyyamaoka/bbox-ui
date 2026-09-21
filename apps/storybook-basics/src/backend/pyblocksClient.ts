@@ -18,7 +18,7 @@
 //   POST /api/systemsketch/events        — NEW: {batches: SceneEventBatch[]} → PyblocksEventsEcho
 // `/api/analyze` (BlockView) stays as it is; the app never calls it.
 
-import { parsePyblocksScene, type PyblocksSceneDocument } from "../scene/pyblocksScene";
+import { parsePyblocksScene, type PyblocksSceneDocument } from "../hosts/pyblocksScene";
 import type { SceneEventBatch } from "../scene/sceneEvents";
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;

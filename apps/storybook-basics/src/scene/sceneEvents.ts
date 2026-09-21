@@ -30,21 +30,63 @@
 //
 // Pure: no React, no DOM, no canvas engine.
 
-import { hostPortsOf, type HostScene, type HostNodeData } from "../hosts/hostScene";
 import { BLOCK_SIDES, type BlockSide } from "../components/port.layout";
 import type { BlockView } from "../components/blockPort.layout";
-import type { SceneEdge, SceneEdgeEnds, SceneNode, ScenePosition } from "./scene";
-import { diffScene } from "./sceneDiff";
-import type { WireStyleData } from "./sceneWires";
+import type { PortsOf } from "./model";
+import type { BlockScene, SceneData, SceneEdge, SceneEdgeEnds, SceneNode, ScenePosition } from "./scene";
+import { diffScene, type ScenePortsOf } from "./sceneDiff";
 import { shouldNotify, type AuthorId } from "./history";
+
+/* ------------------------------------------------------------------ */
+/* What a node has to carry for these events to exist                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The node `data` fields this union names — and so the only shape a scene
+ * must have for its edits to be derivable. Every field is optional: a node
+ * carrying none of them still reports `node-added`, `node-moved`,
+ * `node-reparented` and `data-changed`.
+ *
+ * WHY this type exists instead of one host family's node data (2026-09-21):
+ * this file used to type its events as `SceneNode<HostNodeData>` and read
+ * its port vocabulary from `hosts/hostScene`'s `hostPortsOf`, which made a
+ * `scene/` module import `hosts/` — the kit DAG backwards (ARCHITECTURE.md:
+ * `scene` is `f(scene) → data`, and `hostScene.ts`'s own header says
+ * `HostNodeData` is "what THIS host family stores per node"). Nothing
+ * engine-shaped travelled through that import, so it was a layering defect
+ * and never a runtime bug — but it also meant the events could only be
+ * derived from scenes carrying one app's data bag. Naming the shape the
+ * union actually reads, and taking the port vocabulary as a PARAMETER,
+ * deletes the import and generalises the module in the same move.
+ * `HostNodeData` satisfies this structurally — no adapter, no cast.
+ */
+export type SceneEventNodeData = SceneData & {
+  /** `node-renamed`. */
+  name?: string;
+  /** `node-view-changed`. */
+  view?: BlockView;
+  /** `node-resized` — both walls travel on both sides. */
+  w?: number;
+  h?: number;
+  /** `code-changed`. */
+  code?: string;
+  /** `value-changed`. */
+  value?: string;
+  /** Which wall each port sits on: `ports-reordered`'s `side`, and the
+   *  default port vocabulary (`wallPortsOf`). */
+  ports?: Partial<Record<BlockSide, string[]>>;
+  /** `port-renamed` reads the LABEL, never the port id — the id is what an
+   *  edge's `sourceHandle` names, so renaming it would break the wire. */
+  portLabels?: Record<string, string>;
+};
 
 /* ------------------------------------------------------------------ */
 /* The union — one member per fact a consumer could act on             */
 /* ------------------------------------------------------------------ */
 
-export type SceneEvent =
-  | { type: "node-added"; nodeId: string; node: SceneNode<HostNodeData> }
-  | { type: "node-removed"; nodeId: string; node: SceneNode<HostNodeData> }
+export type SceneEvent<NodeData extends SceneEventNodeData = SceneEventNodeData, EdgeData extends SceneData = SceneData> =
+  | { type: "node-added"; nodeId: string; node: SceneNode<NodeData> }
+  | { type: "node-removed"; nodeId: string; node: SceneNode<NodeData> }
   | { type: "node-moved"; nodeId: string; from: ScenePosition; to: ScenePosition }
   | { type: "node-resized"; nodeId: string; from: { w?: number; h?: number }; to: { w?: number; h?: number } }
   | { type: "node-reparented"; nodeId: string; from?: string; to?: string }
@@ -60,8 +102,8 @@ export type SceneEvent =
   | { type: "port-removed"; nodeId: string; portId: string; side?: BlockSide }
   /** `data.portLabels[portId]` changed. */
   | { type: "port-renamed"; nodeId: string; portId: string; from?: string; to?: string }
-  | { type: "wire-connected"; edgeId: string; edge: SceneEdge<WireStyleData> }
-  | { type: "wire-disconnected"; edgeId: string; edge: SceneEdge<WireStyleData> }
+  | { type: "wire-connected"; edgeId: string; edge: SceneEdge<EdgeData> }
+  | { type: "wire-disconnected"; edgeId: string; edge: SceneEdge<EdgeData> }
   /** `source`/`sourceHandle`/`target`/`targetHandle` changed. */
   | { type: "wire-rewired"; edgeId: string; from: SceneEdgeEnds; to: SceneEdgeEnds }
   /** Any node `data` key this union does not name — reported, never
@@ -74,7 +116,7 @@ export type SceneEventType = SceneEvent["type"];
 
 /** One gesture's events, stamped the way `history.ts` stamps a batch —
  *  same `AuthorId`, so a consumer can self-skip through `shouldNotify`. */
-export interface SceneEventBatch {
+export interface SceneEventBatch<NodeData extends SceneEventNodeData = SceneEventNodeData, EdgeData extends SceneData = SceneData> {
   id: string;
   author: AuthorId;
   label: string;
@@ -83,7 +125,7 @@ export interface SceneEventBatch {
   /** The document these events edit — `PyblocksSceneDocument.source.uri`
    *  when a pyblocks board is open, else the board's own path. */
   documentUri?: string;
-  events: SceneEvent[];
+  events: SceneEvent<NodeData, EdgeData>[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -101,8 +143,8 @@ export interface SceneEventBatch {
  * `w`, `h`, `code`, `value`, `ports`, `portLabels`, `writers`, `readers`,
  * `content`). Then edges in the same union order: connected|disconnected
  * (exclusive) → rewired → wire-data-changed (sorted keys). A node that is
- * added or removed reports NO other event; its port vocabulary is read
- * with `hostPortsOf` (hostScene.ts) per side. Total: identical scenes
+ * added or removed reports NO other event; its port vocabulary comes from
+ * the caller's `portsOf`, one resolver per side. Total: identical scenes
  * yield `[]`.
  */
 /* ------------------------------------------------------------------ */
@@ -156,21 +198,21 @@ function unionIdsInOrder(before: readonly { id: string }[], after: readonly { id
   return ids;
 }
 
-function dataOf(node: SceneNode<HostNodeData>): Record<string, unknown> {
+function dataOf(node: SceneNode<SceneEventNodeData>): Record<string, unknown> {
   return node.data as Record<string, unknown>;
 }
 
 /** Which wall a port sits on, or `undefined` when the node does not place
  *  it on one (a `value` node's writers/readers are lanes, not walls —
  *  `hostPortsOf`'s own asymmetry). */
-function sideOf(node: SceneNode<HostNodeData>, portId: string): BlockSide | undefined {
+function sideOf(node: SceneNode<SceneEventNodeData>, portId: string): BlockSide | undefined {
   for (const side of BLOCK_SIDES) {
     if ((node.data.ports?.[side] ?? []).includes(portId)) return side;
   }
   return undefined;
 }
 
-function endsOf(edge: SceneEdge<WireStyleData>): SceneEdgeEnds {
+function endsOf(edge: SceneEdge<SceneData>): SceneEdgeEnds {
   return { source: edge.source, sourceHandle: edge.sourceHandle, target: edge.target, targetHandle: edge.targetHandle };
 }
 
@@ -178,13 +220,43 @@ function sameIdSet(before: readonly string[], after: readonly string[]): boolean
   return before.length === after.length && [...before].sort().join("\u0000") === [...after].sort().join("\u0000");
 }
 
-export function deriveSceneEvents(before: HostScene, after: HostScene): SceneEvent[] {
-  const portsBefore = hostPortsOf(before);
-  const portsAfter = hostPortsOf(after);
+/**
+ * The port vocabulary readable off the scene ITSELF: the ids on each wall
+ * of `data.ports`, in `BLOCK_SIDES` order. `deriveSceneEvents`' default.
+ *
+ * WHY a default at all, rather than "no resolver, no port events": a wall
+ * is the one place this union already knows ports live (`ports-reordered`
+ * carries a `BlockSide`), so reading it needs nothing this file does not
+ * already know. A producer whose nodes speak ports some OTHER way — a
+ * `value` node's `writers`/`readers`, this app's own asymmetry — hands in
+ * its own resolver instead, and `hosts/hostScene.ts`'s `hostPortsOf` is
+ * exactly that resolver for this app's host family. Omitting it there
+ * would silently stop reporting a value node's ports, which is why the
+ * host call sites pass it explicitly.
+ */
+export function wallPortsOf(scene: { nodes: readonly SceneNode<SceneEventNodeData>[] }): PortsOf {
+  const byId = new Map(scene.nodes.map((node) => [node.id, node]));
+  return (nodeId) => {
+    const node = byId.get(nodeId);
+    if (!node) return undefined;
+    return BLOCK_SIDES.flatMap((side) => node.data.ports?.[side] ?? []);
+  };
+}
+
+export function deriveSceneEvents<NodeData extends SceneEventNodeData = SceneEventNodeData, EdgeData extends SceneData = SceneData>(
+  before: BlockScene<NodeData, EdgeData>,
+  after: BlockScene<NodeData, EdgeData>,
+  // Same third parameter, same type, as the differ this function is built
+  // on — `diffScene(before, after, portsOf)` takes it straight through, so
+  // a caller never has to satisfy two spellings of "which ports exist".
+  portsOf: ScenePortsOf = { before: wallPortsOf(before), after: wallPortsOf(after) },
+): SceneEvent<NodeData, EdgeData>[] {
+  const portsBefore = portsOf.before;
+  const portsAfter = portsOf.after;
   // The three states, id-matched, per node / edge / PORT — `diffScene` is
   // the donor and the port rows are the half a structural walk of
   // `{nodes, edges}` cannot see on its own (`sceneDiff.ts`'s "THE GAP").
-  const diff = diffScene(before, after, { before: portsBefore, after: portsAfter });
+  const diff = diffScene(before, after, portsOf);
   const operationOf = new Map(diff.nodes.map((row) => [row.id, row.operation]));
   const edgeOperationOf = new Map(diff.edges.map((row) => [row.id, row.operation]));
   const beforeNodes = new Map(before.nodes.map((node) => [node.id, node]));
@@ -192,7 +264,7 @@ export function deriveSceneEvents(before: HostScene, after: HostScene): SceneEve
   const beforeEdges = new Map(before.edges.map((edge) => [edge.id, edge]));
   const afterEdges = new Map(after.edges.map((edge) => [edge.id, edge]));
 
-  const events: SceneEvent[] = [];
+  const events: SceneEvent<NodeData, EdgeData>[] = [];
 
   for (const nodeId of unionIdsInOrder(before.nodes, after.nodes)) {
     // WHY an added or removed node reports nothing else about itself: the
@@ -349,26 +421,31 @@ export function deriveSceneEvents(before: HostScene, after: HostScene): SceneEve
 /* The seam                                                            */
 /* ------------------------------------------------------------------ */
 
-export type SceneEventListener = (batch: SceneEventBatch) => void;
+export type SceneEventListener<NodeData extends SceneEventNodeData = SceneEventNodeData, EdgeData extends SceneData = SceneData> = (
+  batch: SceneEventBatch<NodeData, EdgeData>,
+) => void;
 
-export interface SceneEventSeam {
+export interface SceneEventSeam<NodeData extends SceneEventNodeData = SceneEventNodeData, EdgeData extends SceneData = SceneData> {
   /** Deliver to every subscriber except the batch's own author
    *  (`history.ts`'s `shouldNotify`). No subscribers → no-op. */
-  publish(batch: SceneEventBatch): void;
+  publish(batch: SceneEventBatch<NodeData, EdgeData>): void;
   /** Returns the unsubscribe. `subscriber` is the listener's own
    *  `AuthorId`, for the self-skip; omit it to hear everything. */
-  subscribe(listener: SceneEventListener, subscriber?: AuthorId): () => void;
+  subscribe(listener: SceneEventListener<NodeData, EdgeData>, subscriber?: AuthorId): () => void;
   /** How many listeners are attached — a story asserts `0` by default. */
   readonly size: number;
 }
 
 /** A fresh seam with zero subscribers. No module-level state: each app
  *  instance owns its own (history.ts's own rule). */
-export function createSceneEventSeam(): SceneEventSeam {
+export function createSceneEventSeam<
+  NodeData extends SceneEventNodeData = SceneEventNodeData,
+  EdgeData extends SceneData = SceneData,
+>(): SceneEventSeam<NodeData, EdgeData> {
   // A `Set` of entries, not a `Map` keyed by listener: the same function may
   // subscribe twice (two panels, one render), and each subscription owns its
   // own unsubscribe.
-  const entries = new Set<{ listener: SceneEventListener; subscriber?: AuthorId }>();
+  const entries = new Set<{ listener: SceneEventListener<NodeData, EdgeData>; subscriber?: AuthorId }>();
   return {
     publish(batch) {
       // Iterate a COPY: a listener that unsubscribes (or subscribes) while

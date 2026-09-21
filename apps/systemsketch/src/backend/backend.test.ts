@@ -23,7 +23,7 @@ import type { PyblocksEventsEcho, PyblocksHealthResult } from "@trunk/backend/py
 import type { HostScene } from "@trunk/hosts/hostScene";
 import { authorId } from "@trunk/scene/history";
 import { createSceneEventSeam, type SceneEventBatch } from "@trunk/scene/sceneEvents";
-import { loadPyblocksScene, type PyblocksSceneDocument } from "@trunk/scene/pyblocksScene";
+import { loadPyblocksScene, type PyblocksSceneDocument } from "@trunk/hosts/pyblocksScene";
 
 import { boardLintFindings, shapeIdOfSubject } from "../chrome/problems";
 import { pyblocksBoardFrom } from "./OpenPython";

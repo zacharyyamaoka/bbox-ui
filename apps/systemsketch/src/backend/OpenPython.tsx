@@ -31,13 +31,14 @@ import type { MenuAction } from "@trunk/components/chromeBar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@trunk/components/dropdown-menu";
 import type { PyblocksClient } from "@trunk/backend/pyblocksClient";
 import type { HostNodeData } from "@trunk/hosts/hostScene";
+import { withPortDeclarationName } from "@trunk/scene/portDeclaration";
 import type { SceneNode } from "@trunk/scene/scene";
 import {
   loadPyblocksScene,
   type LoadedPyblocksScene,
   type PyblocksHostNodeData,
   type PyblocksSceneDocument,
-} from "@trunk/scene/pyblocksScene";
+} from "@trunk/hosts/pyblocksScene";
 
 import type { BlockShape } from "../shapes/block";
 import type { RegionShape } from "../shapes/region";
@@ -118,7 +119,10 @@ const REGION_FIT_PADDING_PX = 40;
 
 export interface PyblocksBoard {
   scene: DocumentScene;
-  /** Shape id → port id → the port's AUTHORED name.
+  /** Shape id → port id → the port's AUTHORED name (the NAME half of its
+   *  declaration line — the backend reports a name and an annotation
+   *  separately, and `applyPyblocksBoard` splices each into the one string
+   *  the port stores).
    *
    *  WHY this rides beside the scene instead of in it: `DocNodeData` has no
    *  `portLabels` field (`sceneFromStore.ts` projects port IDS only — "the
@@ -318,9 +322,17 @@ export function applyPyblocksBoard(editor: Editor, board: PyblocksBoard): void {
       for (const side of PORT_SIDES) {
         ports[side] = before[side].map((port) => {
           const name = labels[port.id];
-          if (!name || name === port.name) return port;
+          if (!name) return port;
+          // The NAME half only. A port stores one declaration line (ruling 8)
+          // and `applyScene` may already have annotated it from the same
+          // backend's `portTypes`, so an authored label has to splice itself
+          // in front of the colon rather than overwrite the line —
+          // `withPortDeclarationName` keeps the annotation exactly as it was
+          // spelled, down to its spacing.
+          const declaration = withPortDeclarationName(port.declaration, name);
+          if (declaration === port.declaration) return port;
           changed = true;
-          return { ...port, name };
+          return { ...port, declaration };
         });
       }
       if (changed) editor.updateShape({ id: shape.id, type: BLOCK_SHAPE_TYPE, props: { ports } } as never);

@@ -36,7 +36,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useEditor, type Editor } from "tldraw";
 
-import type { HostScene } from "@trunk/hosts/hostScene";
+import { hostPortsOf, type HostScene } from "@trunk/hosts/hostScene";
 import { deriveSceneEvents, type SceneEventBatch, type SceneEventSeam } from "@trunk/scene/sceneEvents";
 
 import { sceneFromRecords } from "../document/sceneFromStore";
@@ -108,7 +108,13 @@ export function createSceneEventBridge(source: SceneEventBridgeSource): SceneEve
     clear();
     if (stopped) return;
     const next = source.read();
-    const events = deriveSceneEvents(previous, next);
+    // WHY the port vocabulary is handed in rather than left to the default:
+    // `deriveSceneEvents` is generic over node data (2026-09-21) and its
+    // own default can only read `data.ports` walls. This family also speaks
+    // ports through a `value` node's `writers`/`readers`, and only the host
+    // knows that — `hostPortsOf` is where it is written down. Omitting it
+    // would quietly stop publishing a value node's port-added/port-removed.
+    const events = deriveSceneEvents(previous, next, { before: hostPortsOf(previous), after: hostPortsOf(next) });
     previous = next;
     if (events.length === 0) return;
     const documentUri = source.documentUri?.();

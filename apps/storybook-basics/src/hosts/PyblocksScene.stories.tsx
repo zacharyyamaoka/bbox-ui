@@ -4,8 +4,8 @@ import { expect, waitFor } from "storybook/test";
 
 import { DomCanvas } from "./domCanvas";
 import { TldrawHost } from "./tldrawHost";
-import type { HostScene } from "./hostScene";
-import { loadPyblocksScene } from "../scene/pyblocksScene";
+import { hostPortsOf, type HostScene } from "./hostScene";
+import { loadPyblocksScene } from "./pyblocksScene";
 import { createSceneEventSeam, deriveSceneEvents, type SceneEvent } from "../scene/sceneEvents";
 
 // The FROZEN contract bytes, imported rather than retyped: these are the
@@ -216,6 +216,14 @@ export const RegionForIfTldraw: Story = {
 const EDIT_BEFORE = editSessionFixture.before as unknown as HostScene;
 const EDIT_AFTER = editSessionFixture.after as unknown as HostScene;
 
+// WHY the host hands the deriver a port resolver instead of the deriver
+// reaching for one: `scene/sceneEvents.ts` is generic over node data and
+// its default reads `data.ports` walls only — which is every port a `block`
+// speaks and NONE of the ports a `value` node speaks (`writers`/`readers`,
+// this family's own asymmetry, hostScene.ts's `portIdsOf`). Knowing that
+// asymmetry is the host's job; the scene kit is not allowed to know it.
+const EDIT_PORTS = { before: hostPortsOf(EDIT_BEFORE), after: hostPortsOf(EDIT_AFTER) };
+
 function describeEvent(event: SceneEvent): string {
   return "nodeId" in event ? `${event.type} · ${event.nodeId}` : `${event.type} · ${event.edgeId}`;
 }
@@ -238,7 +246,7 @@ function EditSessionPanel() {
   // A seam per panel, never a module-level bus — `history.ts`'s own rule,
   // restated here so the counter below is this panel's own truth.
   const seam = useMemo(() => createSceneEventSeam(), []);
-  const events = useMemo(() => deriveSceneEvents(EDIT_BEFORE, EDIT_AFTER), []);
+  const events = useMemo(() => deriveSceneEvents(EDIT_BEFORE, EDIT_AFTER, EDIT_PORTS), []);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", gap: 24 }}>
@@ -307,6 +315,6 @@ export const EditSessionEvents: Story = {
     // every field equal, differ from the frozen bytes in exactly one token.
     // Delete `"from": null,` at `events_edit_session.json:512` and the
     // acceptance file goes green with no implementation change.
-    expect(withoutAbsentKeys(deriveSceneEvents(EDIT_BEFORE, EDIT_AFTER))).toEqual(withoutAbsentKeys(frozen));
+    expect(withoutAbsentKeys(deriveSceneEvents(EDIT_BEFORE, EDIT_AFTER, EDIT_PORTS))).toEqual(withoutAbsentKeys(frozen));
   },
 };

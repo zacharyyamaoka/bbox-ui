@@ -1,4 +1,4 @@
-// src/scene/pyblocksScene.test.ts — ACCEPTANCE for the pyblocks → scene
+// src/hosts/pyblocksScene.test.ts — ACCEPTANCE for the pyblocks → scene
 // loader (docs/PYBLOCKS-BACKEND-PLAN.md, lane `trunk-loader-events`).
 // Committed BEFORE the implementation exists and expected to be RED until
 // the lane lands. Off-limits to the builder: if an assertion cannot be met,
@@ -8,15 +8,15 @@
 // acceptance (docs/fixtures/pyblocks-scene/test_systemsketch_scene_acceptance.py)
 // asserts its projection EQUALS these bytes; this file asserts the loader
 // accepts them and lays them out. Node project, no DOM:
-// `pnpm exec vitest --project=unit run src/scene/pyblocksScene.test.ts`.
+// `pnpm exec vitest --project=unit run src/hosts/pyblocksScene.test.ts`.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
-import { hostPortsOf, topLevelNodes, type HostScene } from "../hosts/hostScene";
-import { isRegion } from "./region";
-import { childrenOf, findDanglingEdges, rank } from "./scene";
+import { hostPortsOf, topLevelNodes, type HostScene } from "./hostScene";
+import { isRegion } from "../scene/region";
+import { childrenOf, findDanglingEdges, rank } from "../scene/scene";
 import {
   PYBLOCKS_SCENE_KIND,
   PYBLOCKS_SCENE_SCHEMA_VERSION,
