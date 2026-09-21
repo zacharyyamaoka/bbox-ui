@@ -91,3 +91,45 @@ export const SYSTEM_FAMILY_ITEMS: readonly ToolItem[] = KITS.flatMap((kit) => [.
 export function withToolUi(editor: Editor, tools: TLUiToolsContextType): TLUiToolsContextType {
   return KITS.reduce((acc, kit) => kit.toolUi(editor, acc), tools);
 }
+
+/**
+ * Take `key` off `toolId`'s `kbd`, leaving that tool's other chords alone.
+ *
+ * WHY this exists at all — Zach, 2026-09-21: *"Yes, please unbind B from
+ * pencil"*. tldraw ships the draw tool as `kbd: "d,b,x"`
+ * (tldraw 5.3.2 `lib/ui/hooks/useTools.mjs:75`), and a kit that also wants
+ * `b` does NOT displace it: `useKeyboardShortcuts` builds ONE registration
+ * per tool and its `handleKeyDown` `break`s out of the inner *parsed-chord*
+ * loop only, so it keeps walking the registry and fires EVERY match. Two
+ * tools holding `b` therefore both run, stock-first — the pencil arms, then
+ * the Block arms over it, and what Zach sees is the pencil flashing before
+ * the tool he asked for.
+ *
+ * WHY a released key rather than a re-ordered override: there is no order to
+ * win. The dispatcher has no "first match wins" and no `stopPropagation` to
+ * reach for, so the only way one key means one tool is for exactly one entry
+ * to claim it. Taking the letter off the loser is that.
+ *
+ * It also fixes the SHOWN shortcut for free: tldraw's own keyboard-shortcuts
+ * dialog and its toolbar tooltips read this same `kbd`, so the pencil stops
+ * advertising a key it no longer has.
+ */
+export function releaseShortcut(
+  tools: TLUiToolsContextType,
+  toolId: string,
+  key: string,
+): TLUiToolsContextType {
+  const tool = tools[toolId];
+  if (!tool?.kbd) return tools;
+  // tldraw's own chord separator, and its own whitespace tolerance
+  // (`getKeys` strips spaces before splitting on ",").
+  const kept = tool.kbd
+    .split(",")
+    .map((chord) => chord.trim())
+    .filter((chord) => chord.length > 0 && chord.toLowerCase() !== key.toLowerCase());
+  if (kept.length === tool.kbd.split(",").filter((chord) => chord.trim().length > 0).length) return tools;
+  // An empty `kbd` is how tldraw spells "this tool has no shortcut":
+  // `useKeyboardShortcuts` skips a falsy `kbd`, and `parseKbd` returns [] for
+  // one, so either way nothing is registered.
+  return { ...tools, [toolId]: { ...tool, kbd: kept.join(",") } };
+}
