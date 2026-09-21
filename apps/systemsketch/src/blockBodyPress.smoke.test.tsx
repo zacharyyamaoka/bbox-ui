@@ -260,3 +260,51 @@ describe("P-001 — the shape's own HTML takes pointer events at rest", () => {
     expect(card.contains(hit), `the point resolved to <${hit?.tagName.toLowerCase()}> outside the card`).toBe(true);
   });
 });
+
+describe("P-044 — a drag that starts on a block's TEXT moves the shape", () => {
+  // SCOPE, said plainly: this covers the BLOCK's own text — the title in the
+  // header and the description under it. It does NOT cover the `ss-code`
+  // face, which is the surface P-044's own evidence points at and where the
+  // app ships the opposite ON PURPOSE (`code.smoke.test.tsx:64`, "the grab
+  // ring moves the shape; a press inside the editor face does not (the editor
+  // owns its pointer)"). Changing that is a different lane and a different
+  // conversation; see this lane's report.
+  //
+  // For a block, the answer turns out to be two independent mechanisms that
+  // already agree, and both are measured here rather than assumed:
+  //   1. there is no text to select — tldraw's `.tl-container *` carries
+  //      `user-select: none` (tldraw.css:283-291), and a block's text is not
+  //      `contenteditable`, so the `user-select: text` exception below it
+  //      never applies;
+  //   2. the press reaches the host — the header always did, and the
+  //      description now does, via the P-007 change above.
+  it("the title and the description are unselectable, and a drag from either moves the block", async () => {
+    app = await mountApp();
+    const id = makeBlock("estimate()", 200, 200, { view: "port", w: 240, h: 170, description: "reads a frame and answers with a pose" });
+    const card = await cardOf(id);
+    const header = await headerOf(id);
+    const description = await waitFor(() => card.querySelector<HTMLElement>('[data-slot="block-description"]'), { what: "the description" });
+
+    for (const [what, element] of [["title", header], ["description", description]] as const) {
+      expect(getComputedStyle(element).userSelect, `${what} must not be selectable text`).toBe("none");
+      expect(element.textContent?.trim().length, `${what} must actually paint characters, or this proves nothing`).toBeGreaterThan(3);
+
+      const rect = element.getBoundingClientRect();
+      const from = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      const before = app!.editor.getShapePageBounds(id)!;
+      app!.editor.selectNone();
+      window.getSelection()?.removeAllRanges();
+
+      await dragFromScreen(from, { dx: 70, dy: 50 });
+      await waitFor(() => {
+        const now = app!.editor.getShapePageBounds(id)!;
+        return now.x !== before.x || now.y !== before.y ? true : null;
+      }, { what: `the block moved by a drag from its ${what}` });
+
+      const after = app!.editor.getShapePageBounds(id)!;
+      expect(Math.abs(after.x - before.x - 70), `${what}: moved ${after.x - before.x}px in x, dragged 70`).toBeLessThanOrEqual(4);
+      expect(Math.abs(after.y - before.y - 50), `${what}: moved ${after.y - before.y}px in y, dragged 50`).toBeLessThanOrEqual(4);
+      expect(window.getSelection()?.toString() ?? "", `${what}: the drag selected text instead of moving the shape`).toBe("");
+    }
+  });
+});
