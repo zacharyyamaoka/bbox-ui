@@ -50,16 +50,28 @@ interface BlockShapeLike {
 
 const NO_PORTS = { left: [], right: [], top: [], bottom: [] };
 
-function placeBlock(name: string): TLShapeId {
+function placeBlock(name: string, description = ""): TLShapeId {
   const id = createShapeId();
   app!.editor.createShape({
     id,
     type: BLOCK_SHAPE_TYPE,
     x: 240,
     y: 200,
-    props: { name, view: "simple", w: 320, h: 90, ports: NO_PORTS },
+    props: { name, description, view: "simple", w: 320, h: 90, ports: NO_PORTS },
   } as never);
   return id;
+}
+
+/**
+ * The description AT REST on THIS block's card — `data-editing="false"`, so it
+ * is never the editing control, which wears the same `data-slot` because it is
+ * the same sentence.
+ */
+async function descriptionOf(id: TLShapeId): Promise<HTMLElement> {
+  return waitFor(
+    () => document.querySelector<HTMLElement>(`[data-ss-node="${id}"] [data-slot="block-description"][data-editing="false"]`),
+    { what: `the resting description of ${id}` },
+  );
 }
 
 /**
@@ -495,5 +507,143 @@ describe("P-030 — every exit route, including the ones that unmount a focused 
 
     expect((await descriptionField()).value).toBe(AWKWARD_TITLE);
     expect((app.editor.getShape(id) as BlockShapeLike).props.description).toBe(AWKWARD_TITLE);
+  });
+});
+
+/**
+ * P-026's open half: the DESCRIPTION edits in place, on the card, the way the
+ * title already does. Before this, `BlockFace` handed `Block` a plain string
+ * and the right-hand inspector's textarea was the only way to change it —
+ * "a panel field somewhere else", which is what P-039 objects to.
+ *
+ * Every case here goes through a real double-click on the painted sentence.
+ */
+describe("P-026 — a block's description edits in place, on the card", () => {
+  const SENTENCE = "Estimates pose from a frame.";
+
+  it("a double-click on the sentence swaps it for a control in the same box, and typing writes props.description", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate", SENTENCE);
+    const sentence = await descriptionOf(id);
+    expect(sentence.textContent).toBe(SENTENCE);
+    const restingFont = getComputedStyle(sentence).fontSize;
+    const restingBox = sentence.getBoundingClientRect();
+
+    await userEvent.dblClick(sentence);
+    await waitFor(() => app!.editor.getEditingShapeId() === id, { what: "the description session opened" });
+
+    // IN PLACE is the item, so it is asserted structurally: the control is a
+    // descendant of this block's own card, not of a panel elsewhere.
+    const control = await waitFor(
+      () => document.querySelector<HTMLTextAreaElement>(`[data-ss-node="${id}"] [data-slot="block-description"][data-editing="true"] [data-slot="editable-text-input"]`),
+      { what: "the EditableText control in the description region" },
+    );
+    // A sentence, so a textarea — plain Enter is a newline here, not a commit.
+    expect(control.tagName).toBe("TEXTAREA");
+    // "The control must not move the text": same type size, and the region it
+    // paints in has not moved. Measured, not inferred from DOM position.
+    //
+    // WHY the REGION and not the control's own box: `EditableText` gives its
+    // control 4px of padding paired with -4px of margin (its
+    // `CONTROL_INK_MARGIN_PX`, so a leading glyph's ink is not clipped by the
+    // browser's forced `overflow: clip` on a form control). That pair cancels
+    // for the text origin and for the parent's width, but it does leave the
+    // control's BORDER box 4px outside the text — so comparing border boxes
+    // measures that documented margin, not a shift anyone can see. The two
+    // `BlockDescription` wrappers are the same element in both states, so
+    // their boxes are the honest before/after.
+    expect(getComputedStyle(control).fontSize).toBe(restingFont);
+    const editingRegion = document
+      .querySelector<HTMLElement>(`[data-ss-node="${id}"] [data-slot="block-description"][data-editing="true"]`)!
+      .getBoundingClientRect();
+    // Measured exactly 0 on both axes at 1400x900; the half-pixel is slack for
+    // a fractional layout, not an admission that a visible shift is fine.
+    expect(Math.abs(editingRegion.top - restingBox.top)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(editingRegion.left - restingBox.left)).toBeLessThanOrEqual(0.5);
+    // …and the control lives inside that region rather than escaping the card.
+    const controlBox = control.getBoundingClientRect();
+    expect(controlBox.right).toBeLessThanOrEqual(editingRegion.right + 1);
+
+    await userEvent.keyboard("{Control>}a{/Control}");
+    await typeWritingThrough("Solves IK.", () => (app!.editor.getShape(id) as BlockShapeLike).props.description);
+
+    // What `canEdit` took away on this surface too: tldraw's own double-click
+    // branch would otherwise drop a stock `text` shape on the block.
+    expect(app.editor.getCurrentPageShapes().filter((shape) => shape.type === "text")).toHaveLength(0);
+
+    // Ctrl+Enter is the multi-line commit key, and it ends the session.
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => app!.editor.getEditingShapeId() === null, { what: "the session closed on Ctrl+Enter" });
+    expect((await descriptionOf(id)).textContent).toBe("Solves IK.");
+  });
+
+  it("the title and the description are two doors, not one: the press decides which opens", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate", SENTENCE);
+
+    await userEvent.dblClick(await descriptionOf(id));
+    await waitFor(() => app!.editor.getEditingShapeId() === id, { what: "a session opened from the description" });
+    await waitFor(
+      () => document.querySelector(`[data-ss-node="${id}"] [data-slot="block-description"][data-editing="true"]`),
+      { what: "the description is the one editing" },
+    );
+    // …and the title is still its resting span, not a second open control.
+    expect(document.querySelector(`[data-ss-node="${id}"] [data-slot="ss-block-title"][data-editing="true"]`)).toBeNull();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => app!.editor.getEditingShapeId() === null, { what: "the description session closed" });
+
+    await settleClicks();
+    await userEvent.dblClick(await titleOf(id));
+    await waitFor(() => app!.editor.getEditingShapeId() === id, { what: "a session opened from the title" });
+    await waitFor(
+      () => document.querySelector(`[data-ss-node="${id}"] [data-slot="ss-block-title"] [data-slot="editable-text-input"]`),
+      { what: "the title is the one editing" },
+    );
+    expect(document.querySelector(`[data-ss-node="${id}"] [data-slot="block-description"][data-editing="true"]`)).toBeNull();
+  });
+
+  it("emptying the description mid-edit does not tear the control out from under the caret", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate", SENTENCE);
+    await userEvent.dblClick(await descriptionOf(id));
+    const control = await waitFor(
+      () => document.querySelector<HTMLTextAreaElement>(`[data-ss-node="${id}"] [data-slot="editable-text-input"]`),
+      { what: "the description control" },
+    );
+
+    // `blockDescriptionIsPainted` is false for an empty string, which is
+    // exactly right at REST and would be a disaster here — see the ordering
+    // note in shapes/block/BlockFace.tsx's `BlockDescriptionText`.
+    await userEvent.keyboard("{Control>}a{/Control}{Backspace}");
+    await waitFor(() => (app!.editor.getShape(id) as BlockShapeLike).props.description === "", { what: "the description was emptied" });
+    expect(control.isConnected).toBe(true);
+    expect(control.ownerDocument.activeElement).toBe(control);
+
+    // …and typing into it still lands, which is what "still editable" means.
+    await typeWritingThrough("new", () => (app!.editor.getShape(id) as BlockShapeLike).props.description);
+  });
+
+  it("Escape puts the sentence back, and an awkward one survives a commit character for character", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate", SENTENCE);
+    await userEvent.dblClick(await descriptionOf(id));
+    await waitFor(() => app!.editor.getEditingShapeId() === id, { what: "the session opened" });
+    await userEvent.keyboard("{Control>}a{/Control}throw away");
+    await waitFor(() => (app!.editor.getShape(id) as BlockShapeLike).props.description === "throw away", { what: "the replacement was written" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => (app!.editor.getShape(id) as BlockShapeLike).props.description === SENTENCE, { what: "Escape put the sentence back" });
+
+    await settleClicks();
+    await userEvent.dblClick(await descriptionOf(id));
+    await waitFor(() => app!.editor.getEditingShapeId() === id, { what: "a second session opened" });
+    await userEvent.keyboard("{Control>}a{/Control}");
+    await userEvent.keyboard(AWKWARD_TITLE);
+    await waitFor(() => (app!.editor.getShape(id) as BlockShapeLike).props.description === AWKWARD_TITLE, {
+      what: `props.description is exactly ${JSON.stringify(AWKWARD_TITLE)}`,
+    });
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => app!.editor.getEditingShapeId() === null, { what: "the session closed" });
+    expect((app.editor.getShape(id) as BlockShapeLike).props.description).toBe(AWKWARD_TITLE);
+    expect((await descriptionOf(id)).textContent).toBe(AWKWARD_TITLE);
   });
 });

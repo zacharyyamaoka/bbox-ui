@@ -111,6 +111,29 @@ export interface BlockProps {
    */
   showDescription?: boolean;
   /**
+   * The description region, rendered BY THE HOST instead of by this component.
+   * When present it replaces the whole region — the `<p>` included — and both
+   * `description` and `showDescription` are then the host's business.
+   *
+   * WHY a host would need this at all: a host that lets a person edit the
+   * description WHERE IT IS PAINTED has to swap the sentence for a control in
+   * this exact spot, between the header and the body, and a `string` prop
+   * cannot carry a control. `header` and `body` already work this way; this is
+   * the same seam for the one region that did not have it. Zach's "edit it in
+   * place, on the card, not in a panel field somewhere else" (P-039/P-026) is
+   * what it is for, and `apps/systemsketch/src/shapes/block/BlockFace.tsx` is
+   * the caller.
+   *
+   * WHY it is additive rather than widening `description` to a `ReactNode`,
+   * which is the obvious move: `description` is a governed FIELD (see its own
+   * doc above) and `blockDescriptionIsPainted` has to be able to ask whether
+   * it is empty. A ReactNode cannot be asked that, so widening the prop would
+   * either drop the gate or make it lie. Every existing caller is byte
+   * -identical, because a caller that passes nothing here takes the branch it
+   * always took.
+   */
+  descriptionSlot?: ReactNode;
+  /**
    * Membership — "boxes all the way down". Members render in their own
    * region between body and footer; `membersLayout` picks how the ONE
    * member list is laid out (free = a frame inside, stack = an ordered
@@ -227,6 +250,7 @@ export function Block({
   showHeaderDivider = true,
   description,
   showDescription = true,
+  descriptionSlot,
   members,
   membersLayout = "free",
   onMembersChange,
@@ -429,9 +453,11 @@ export function Block({
           is v1's own `resolved.description && data.description` gate — an
           empty string paints nothing even with the eye on, so an untouched
           block never reserves a blank line. */}
-      {blockDescriptionIsPainted(description, showDescription) && (
-        <BlockDescription>{description}</BlockDescription>
-      )}
+      {descriptionSlot !== undefined
+        ? descriptionSlot
+        : blockDescriptionIsPainted(description, showDescription) && (
+            <BlockDescription>{description}</BlockDescription>
+          )}
       {body !== undefined && (
         <div
           data-slot="block-body"

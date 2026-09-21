@@ -9,6 +9,11 @@ import { useEffect, useRef } from "react";
 import { useEditor, useValue, type TLBinding } from "tldraw";
 
 import { Block } from "@trunk/components/block";
+import {
+  BLOCK_DESCRIPTION_FONT_PX,
+  BlockDescription,
+  blockDescriptionIsPainted,
+} from "@trunk/components/blockDescription";
 import { BlockPort, type BlockEdgeSpec } from "@trunk/components/blockPort";
 import { caretOffsetFromPoint } from "@trunk/components/caretGeometry";
 import { EditableText } from "@trunk/components/editableText";
@@ -141,6 +146,27 @@ function BlockGlyph({ shape }: { shape: BlockShape }) {
 const BLOCK_TITLE_FONT_PX = 14;
 
 /**
+ * Which of a block's two texts the open editing session belongs to.
+ *
+ * WHY a ref threaded through the face rather than a second piece of tldraw
+ * state: the session itself is `editingShapeId`, which names a SHAPE, and a
+ * block has two editable strings on it. Something has to say which one, and it
+ * must not be a `useState` — it is written from a pointerdown CAPTURE handler
+ * during the gesture that opens the session, and re-rendering mid-gesture is
+ * exactly what `BlockTitle`'s caret hint already documents as the thing to
+ * avoid. The read happens in the render that the session's own
+ * `useValue` triggers, which is strictly after the press, so the ref is always
+ * current by the time anyone looks at it.
+ *
+ * It is reset to `"title"` whenever a session ends (`BlockFace`), so a session
+ * opened from the keyboard — or by a press that landed on neither text — gets
+ * the title, which is the block's primary field and what double-clicking a
+ * block meant before there was a second one.
+ */
+type BlockEditField = "title" | "description";
+type BlockEditFieldRef = { current: BlockEditField };
+
+/**
  * The title while editing: the trunk's own `EditableText`, controlled by the
  * store.
  *
@@ -224,7 +250,7 @@ function BlockTitleEditor({ shape, caretAt }: { shape: BlockShape; caretAt?: num
  * being edited (it is what gates its own keyboard handling), so a second
  * "am I editing" flag would be one more thing to fall out of sync.
  */
-function BlockTitle({ shape }: { shape: BlockShape }) {
+function BlockTitle({ shape, editField }: { shape: BlockShape; editField: BlockEditFieldRef }) {
   const editor = useEditor();
   const editing = useValue("ss-block editing", () => editor.getEditingShapeId() === shape.id, [editor, shape.id]);
 
@@ -237,7 +263,10 @@ function BlockTitle({ shape }: { shape: BlockShape }) {
     if (!editing) caretHint.current = null;
   }, [editing]);
 
-  if (editing) return <BlockTitleEditor shape={shape} caretAt={caretHint.current ?? undefined} />;
+  // ONE session, TWO fields: `editingShapeId` names the shape, and the shared
+  // ref names which of its two texts the press that opened the session landed
+  // on. See `BlockEditFieldRef`.
+  if (editing && editField.current === "title") return <BlockTitleEditor shape={shape} caretAt={caretHint.current ?? undefined} />;
   return (
     <span
       data-slot="ss-block-title"
@@ -254,6 +283,7 @@ function BlockTitle({ shape }: { shape: BlockShape }) {
       // press, which is what opens the session in the first place and what
       // keeps a drag from the title moving the block (P-044).
       onPointerDownCapture={(event) => {
+        editField.current = "title";
         caretHint.current = caretOffsetFromPoint(event.currentTarget, event.clientX, event.clientY);
       }}
     >
@@ -262,9 +292,155 @@ function BlockTitle({ shape }: { shape: BlockShape }) {
   );
 }
 
+/**
+ * The description while editing — the trunk's own `EditableText`, controlled by
+ * the store, inside the trunk's own `BlockDescription` box.
+ *
+ * WHY the control is WRAPPED in `BlockDescription` rather than replacing it:
+ * that component owns the region's padding, its 12px type and its `pre-wrap`,
+ * and `EditableText`'s whole in-flow-control design is "the text must not
+ * move". Painting the control in a differently-padded box of this file's own
+ * making would move it by exactly the amount those two paddings disagree, and
+ * would be a second copy of trunk numbers to drift — the thing ARCHITECTURE.md
+ * forbids. The box is the same box; only its contents swap.
+ *
+ * WHY `lines="multi"`: a description is a sentence, and the field it mirrors
+ * in the inspector is a `<textarea>` (`editor/inspectorPanel.tsx`). That also
+ * decides the commit key — plain Enter inserts a newline and Ctrl/Cmd+Enter
+ * ends the session, which is `EditableText`'s own multi-line contract.
+ *
+ * The write policy is the title's, for the title's reasons: per keystroke,
+ * straight into the record, no local draft. P-030's gate
+ * (`src/textEditing.smoke.test.tsx`) is what holds that in place.
+ */
+function BlockDescriptionEditor({ shape, caretAt }: { shape: BlockShape; caretAt?: number }) {
+  const editor = useEditor();
+  // The value to put back on Escape, captured once — this component mounts
+  // fresh per session, so "once" is the session's opening value.
+  const snapshot = useRef(shape.props.description);
+
+  const write = (description: string) => {
+    editor.updateShape({ id: shape.id, type: BLOCK_SHAPE_TYPE, props: { description } });
+  };
+
+  return (
+    // `data-editing="true"` on the SAME element the resting sentence marks, so
+    // one selector pair tells a probe — or a person reading the DOM — which of
+    // the two is on screen. The trunk's own `data-slot` is untouched (see the
+    // resting branch for why).
+    <BlockDescription data-editing="true" style={{ display: "flex" }}>
+      <EditableText
+        className={`min-w-0 flex-1 ${POINTER_OWNED_CLASS}`}
+        size="custom"
+        sizePx={BLOCK_DESCRIPTION_FONT_PX}
+        lines="multi"
+        justify="left"
+        align="top"
+        editing
+        caretAt={caretAt}
+        placeholder="What does this block do?"
+        onChange={(next) => {
+          editor.markHistoryStoppingPoint("edit description");
+          write(next);
+        }}
+        // Ctrl/Cmd+Enter closes the session; a blur does not — the same split
+        // `BlockTitleEditor` documents, and for the same measured reason.
+        onCommit={(_next, via) => {
+          if (via === "enter") stopEditing(editor);
+        }}
+        onCancel={() => {
+          write(snapshot.current);
+          stopEditing(editor);
+        }}
+      >
+        {shape.props.description}
+      </EditableText>
+    </BlockDescription>
+  );
+}
+
+/**
+ * P-026's open half: the description edits IN PLACE, on the card, where it is
+ * painted — the same move the title got in `954a482`.
+ *
+ * WHAT IT REPLACES: `BlockFace` passed `description` to `Block` as a plain
+ * string, so the ONLY way to change it was the right-hand inspector's textarea
+ * — a panel field somewhere else, which is precisely what P-039 objects to.
+ * The inspector keeps working and is unchanged; it is now a second door onto
+ * the same value rather than the only one, exactly as the glyph picker is.
+ *
+ * WHY the editing branch is tested BEFORE the paint gate, rather than after
+ * it: `blockDescriptionIsPainted` is false for an empty string, so a person who
+ * opens this editor and then selects all and deletes would have the control
+ * yanked out from under their caret the instant the text hit empty — mid-edit,
+ * with the session still open and the keyboard still aimed at it. Ordering the
+ * two checks this way keeps the control mounted for as long as the session
+ * owns it. The gate is untouched and still governs the RESTING state, so an
+ * untouched block paints exactly as it did.
+ *
+ * WHAT THIS DOES NOT REACH, and it is deliberate: a block whose description is
+ * empty paints no sentence, so there is nothing to press and the inspector
+ * stays its only door. Painting an empty line at rest to give it one is the
+ * tempting alternative, and it is the thing `blockDescriptionIsPainted` exists
+ * to prevent — every untouched block on the board would reserve a blank row.
+ */
+function BlockDescriptionText({ shape, editField }: { shape: BlockShape; editField: BlockEditFieldRef }) {
+  const editor = useEditor();
+  const editing = useValue("ss-block editing", () => editor.getEditingShapeId() === shape.id, [editor, shape.id]);
+  const { description, showDescription } = shape.props;
+
+  // P-021 on this surface: which character of the sentence the press landed
+  // on. A ref for `BlockTitle`'s reason — recording it must not re-render
+  // mid-gesture — and cleared when the session ends so a session opened
+  // without a press on the text falls back to the component's own default.
+  const caretHint = useRef<number | null>(null);
+  useEffect(() => {
+    if (!editing) caretHint.current = null;
+  }, [editing]);
+
+  if (editing && editField.current === "description") {
+    return <BlockDescriptionEditor shape={shape} caretAt={caretHint.current ?? undefined} />;
+  }
+  // The trunk's gate, unchanged and still the authority on the resting state.
+  if (!blockDescriptionIsPainted(description, showDescription)) return null;
+  return (
+    <BlockDescription
+      // WHY the state marker is an attribute beside the trunk's `data-slot`
+      // rather than an `ss-`-prefixed slot of this app's own, which is what
+      // the title does: `BlockDescription` stamps `data-slot="block-
+      // description"` and spreads its caller's props AFTER it, so passing a
+      // slot here would REPLACE the trunk's — and two other acceptance files
+      // already find this sentence by it (`src/inspector.smoke.test.tsx:60`,
+      // `src/blockBodyPress.smoke.test.tsx:286`). The title's resting span is
+      // this app's own element, so it had no such slot to protect.
+      data-editing="false"
+      // The last moment the painted sentence exists. Capture phase, and
+      // nothing is stopped — tldraw still gets the press, which is what opens
+      // the session and what keeps a drag from the description moving the
+      // block (P-044, asserted in src/blockBodyPress.smoke.test.tsx).
+      onPointerDownCapture={(event) => {
+        editField.current = "description";
+        caretHint.current = caretOffsetFromPoint(event.currentTarget, event.clientX, event.clientY);
+      }}
+    >
+      {description}
+    </BlockDescription>
+  );
+}
+
 export function BlockFace({ shape }: { shape: BlockShape }) {
   const editor = useEditor();
-  const { view, ports, description, showDescription, w, h } = shape.props;
+  const { view, ports, w, h } = shape.props;
+
+  // Which of the block's two texts the open session belongs to. Shared by the
+  // title and the description, and reset the moment a session ends so the next
+  // one opened without a press on either lands on the title. See
+  // `BlockEditFieldRef`.
+  const editField = useRef<BlockEditField>("title");
+  const editing = useValue("ss-block editing", () => editor.getEditingShapeId() === shape.id, [editor, shape.id]);
+  useEffect(() => {
+    if (!editing) editField.current = "title";
+  }, [editing]);
 
   // WHY the wired set is read from BINDINGS rather than passed in: L3 lands
   // wires without touching this file. `getBindingsToShape` is stock, the
@@ -378,7 +554,7 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           header={
             <span data-slot="ss-block-header-line" className="flex min-w-0 items-center gap-1.5">
               <BlockGlyph shape={shape} />
-              <BlockTitle shape={shape} />
+              <BlockTitle shape={shape} editField={editField} />
             </span>
           }
           // RULING 9, the paint half. Zach: "the eye visibility control for
@@ -388,8 +564,12 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           // eye on the block itself is the tempting alternative this
           // deliberately rejects, because an eye that rides the thing it
           // hides vanishes along with its own effect.
-          description={description}
-          showDescription={showDescription}
+          // P-026: the host paints this region itself, because a `string`
+          // prop cannot carry an editing control and the whole item is that
+          // the control appears WHERE THE SENTENCE IS. `description` /
+          // `showDescription` move into that component with it — the trunk's
+          // own `blockDescriptionIsPainted` still decides the resting state.
+          descriptionSlot={<BlockDescriptionText shape={shape} editField={editField} />}
           width={w}
           // WHY the SIMPLE view hugs and the other two do not: `Block`'s
           // height is optional precisely so a card can hug its rendered
