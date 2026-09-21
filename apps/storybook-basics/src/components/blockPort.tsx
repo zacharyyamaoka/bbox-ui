@@ -507,6 +507,30 @@ function BlockPortRail({
           typeColor={item.typeColor}
           producers={item.producers}
           selected={item.selected}
+          // P-037. `LabeledPort`'s built-in label is click-to-edit by DEFAULT
+          // (`DefaultPortLabel`'s `disabled = false`) and its `onLabelWrite` is
+          // optional, so a rail whose host never wired one opened a real
+          // `CodeEditor`, took every keystroke and dropped them on the floor —
+          // "an unwired label simply reflects whatever the host passes", which
+          // is a fine preview in a story and a lie on a board. Measured in the
+          // real app 2026-09-21: double-clicking a rail label of a port storing
+          // `gain_x: float`, typing `gain_y`, and finding the record unchanged
+          // and the label snapped back.
+          //
+          // WHY this pair is needed HERE at all, when `PortEdge` already
+          // threads `editingEnabled`/`onLabelWrite` through its own default
+          // fill: this `renderItem` REPLACES that fill (portEdge.tsx:553), so
+          // everything the fill forwards has to be forwarded again — the same
+          // trap this file already records for `diagnostics`/`availability`.
+          //
+          // WHY the write routes through `onItemsChange` rather than a new
+          // `onLabelWrite` on `BlockEdgeSpec`: that is exactly what `PortEdge`
+          // does with its own (`handlePortLabelWrite`, portEdge.tsx:1340), so a
+          // rail and a bare edge report a rename identically and a host needs
+          // one handler, not two. It also makes the gate honest — a label is
+          // editable exactly when the host said where the text should go.
+          disabled={!spec.onItemsChange}
+          onLabelWrite={spec.onItemsChange ? (value) => spec.onItemsChange?.(spec.items.map((it) => (it.id === item.id ? { ...it, label: value } : it))) : undefined}
         >
           {item.label}
         </LabeledPort>

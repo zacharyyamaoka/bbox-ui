@@ -31,6 +31,7 @@ import { stopEditing } from "../shared/editingSession";
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
 import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
+import { portsFromRailItems } from "./railLabel";
 
 /**
  * The rail label is the NAME HALF of the port's declaration — everything
@@ -519,20 +520,29 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
         ),
         // A rail reorder is a real edit — one undo step, unlike the measured
         // writes in shared/measure.ts.
+        //
+        // P-037: this callback reports TWO kinds of change, not one. `PortEdge`
+        // routes a label the user typed on the card back through the same
+        // `items` array it uses for order (portEdge.tsx:1340), so reading only
+        // the order — which is what this handler did until now — meant the
+        // board opened a `CodeEditor` on a rail label and then silently threw
+        // every keystroke away. `portsFromRailItems` reads both halves; its own
+        // header carries the measurement and the splice rule.
         onItemsChange: (items: PortEdgeItem[]) => {
-          const byId = new Map(ports[side].map((port) => [port.id, port]));
+          // The same mark the title editor sets before ITS per-keystroke write
+          // (`BlockTitleEditor`), and for the reason that one exists: without a
+          // stopping point the rename merges into whatever entry was already
+          // open, so the first Ctrl+Z after renaming a port undid the action
+          // BEFORE it — measured 2026-09-21, one undo after renaming a port on
+          // a freshly placed block deleted the block. Undo granularity inside
+          // the rename is per keystroke, exactly as it is for the title; that
+          // is this app's existing shape for text edits and this lane did not
+          // change it.
+          editor.markHistoryStoppingPoint("edit ports");
           editor.updateShape({
             id: shape.id,
             type: BLOCK_SHAPE_TYPE,
-            props: {
-              ports: {
-                ...ports,
-                [side]: items.flatMap((item) => {
-                  const port = byId.get(item.id);
-                  return port ? [port] : [];
-                }),
-              },
-            },
+            props: { ports: { ...ports, [side]: portsFromRailItems(ports[side], items) } },
           });
         },
       } satisfies BlockEdgeSpec,
