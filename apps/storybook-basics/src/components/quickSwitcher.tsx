@@ -38,6 +38,7 @@ import {
   groupQuickSwitcherItems,
   quickSwitcherItemDisabled,
   type QuickSwitcherItem,
+  type QuickSwitcherMode,
 } from "./commandModel";
 import {
   replaceAllInSources,
@@ -64,7 +65,11 @@ import { Tabs, TabsList, TabsTrigger } from "./tabs";
 import { Toggle } from "./toggle";
 import { cn } from "../lib/utils";
 
-export type QuickSwitcherMode = "go-to" | "find";
+// Re-exported, not re-declared: the keyboard rule in `commandModel.ts` now
+// names a mode too (Ctrl+F asks for "find"), and one union has to be the
+// union. Every existing `import { QuickSwitcherMode } from "./quickSwitcher"`
+// keeps resolving.
+export type { QuickSwitcherMode };
 
 const MODE_LABELS: ReadonlyArray<{ mode: QuickSwitcherMode; label: string }> = [
   { mode: "go-to", label: "Go to" },
@@ -174,12 +179,29 @@ export function QuickSwitcher<TMeta = unknown>(props: QuickSwitcherProps<TMeta>)
   // dozens of times an hour, and finding yesterday's query already in the box
   // — with yesterday's list under it — is one keystroke of confusion every
   // single time. `initialMode` is re-applied for the same reason.
+  /**
+   * WHY the input is focused explicitly here, when the stock Dialog already
+   * autofocuses it: the line above can CHANGE THE MODE after the dialog has
+   * opened, and a `Tabs` whose value changes moves focus onto the tab that
+   * just became active. Measured in the real app (2026-09-21, three-page
+   * board, `src/boardFind.smoke.test.tsx`): opening with Ctrl/Cmd+F —
+   * `initialMode="find"` while the last session left `mode` at `"go-to"` —
+   * left `document.activeElement` on the "Find" TAB BUTTON, so every
+   * character typed next went nowhere. Opening with the bare letter, which
+   * changes nothing, focused the input correctly. One rAF is enough because
+   * it runs after the dialog's own mount-time focus, and re-focusing an
+   * already-focused input is a no-op.
+   */
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
   React.useEffect(() => {
     if (!open) return;
     setGoToQuery("");
     setFindQuery("");
     setStatus("");
     setMode(findAvailable ? initialMode : "go-to");
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
   }, [open, initialMode, findAvailable]);
 
   const visibleItems = React.useMemo(
@@ -295,6 +317,7 @@ export function QuickSwitcher<TMeta = unknown>(props: QuickSwitcherProps<TMeta>)
         ) : null}
 
         <CommandInput
+          ref={inputRef}
           value={query}
           onValueChange={(value) => {
             setQuery(value);

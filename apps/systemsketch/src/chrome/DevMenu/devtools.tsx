@@ -13,7 +13,12 @@ import { useEditor, useValue } from "tldraw";
 
 import { DevPanel, type DevPanelSection } from "@trunk/components/devPanel";
 import { QuickSwitcher } from "@trunk/components/quickSwitcher";
-import { quickSwitcherKeyDecision, type QuickSwitcherItem } from "@trunk/components/commandModel";
+import {
+  quickSwitcherKeyDecision,
+  type QuickSwitcherItem,
+  type QuickSwitcherMode,
+} from "@trunk/components/commandModel";
+import type { TextSearchMatch, TextSourceUpdate } from "@trunk/components/boardSearch";
 import { readToolAliases } from "@trunk/components/toolAliases";
 import { RecordingControl, recordingStatusLabel } from "@trunk/components/recordingControl";
 import { RecordingViewer } from "@trunk/components/recordingViewer";
@@ -24,6 +29,12 @@ import { useRecordingElapsed, useRecordingState } from "@trunk/recording/useReco
 
 import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "../families";
 import { SYSTEM_FAMILY_ITEMS } from "../../shapes/registry";
+import {
+  applyBoardTextUpdates,
+  boardTextSources,
+  revealBoardTextMatch,
+  type BoardTextMeta,
+} from "../../document/boardText";
 
 /**
  * The browser's own storage, or `null` when even touching it throws —
@@ -77,22 +88,51 @@ function useToolSwitcherItems(editor: ReturnType<typeof useEditor>, open: boolea
 }
 
 /** `S` opens it; typing or an open layer refuses it; Ctrl/Cmd+K always opens
- *  it. The policy is entirely `quickSwitcherKeyDecision`'s — this is the
- *  thin `window` listener the trunk's own story says a host needs
- *  (`QuickSwitcher.stories.tsx`, `Host`, ~line 71-121): read the decision,
- *  and do nothing else. */
-function useQuickSwitcherOpener(open: boolean, setOpen: (open: boolean) => void): void {
+ *  it on Go to and Ctrl/Cmd+F always opens it on Find. The policy is entirely
+ *  `quickSwitcherKeyDecision`'s — this is the thin `window` listener the
+ *  trunk's own story says a host needs (`QuickSwitcher.stories.tsx`, `Host`,
+ *  ~line 71-121): read the decision, take the mode it names, and do nothing
+ *  else.
+ *
+ *  WHY `preventDefault` matters more for Ctrl+F than for the other two: it is
+ *  the one binding the BROWSER already owns. Without it Chrome's find bar
+ *  opens on top of this dialog and searches the rendered DOM — which on a
+ *  canvas is only the shapes currently painted into the viewport, on the
+ *  current page. See the WHY in `commandModel.ts`'s own header. */
+function useQuickSwitcherOpener(
+  open: boolean,
+  openAt: (mode: QuickSwitcherMode) => void,
+): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const decision = quickSwitcherKeyDecision(event, { open });
       if (!decision.open) return;
       event.preventDefault();
       event.stopPropagation();
-      setOpen(true);
+      openAt(decision.mode);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [open, setOpen]);
+  }, [open, openAt]);
+}
+
+/** Nothing is searchable while the dialog is shut, and saying so with a
+ *  FROZEN empty array is what keeps this out of the hot path: `useValue` only
+ *  recomputes when a signal it READ has changed, and the closed branch reads
+ *  none — so dragging a shape around a closed board re-derives nothing. */
+const NO_SOURCES: ReturnType<typeof boardTextSources> = [];
+
+/**
+ * Every string on the board, as the trunk's Find half wants them — recomputed
+ * only while the dialog is open, and then on every document change, so a
+ * replacement's own write is reflected in the results it came from.
+ */
+function useBoardTextSources(editor: ReturnType<typeof useEditor>, open: boolean) {
+  return useValue(
+    "ss board text",
+    () => (open ? boardTextSources(editor) : NO_SOURCES),
+    [editor, open],
+  );
 }
 
 export interface SystemSketchDevToolsProps {
@@ -111,8 +151,29 @@ export function SystemSketchDevTools({ devPanelOpen, onDevPanelOpenChange }: Sys
   /* ---------------------------------------------------------------- */
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  useQuickSwitcherOpener(switcherOpen, setSwitcherOpen);
+  const [switcherMode, setSwitcherMode] = useState<QuickSwitcherMode>("go-to");
+  const openSwitcherAt = useCallback((mode: QuickSwitcherMode) => {
+    setSwitcherMode(mode);
+    setSwitcherOpen(true);
+  }, []);
+  useQuickSwitcherOpener(switcherOpen, openSwitcherAt);
   const items = useToolSwitcherItems(editor, switcherOpen);
+  const searchSources = useBoardTextSources(editor, switcherOpen);
+
+  const onSelectMatch = useCallback(
+    (match: TextSearchMatch<BoardTextMeta>) => revealBoardTextMatch(editor, match),
+    [editor],
+  );
+  // One match and every match go through the same write-back, because "one
+  // batch per gesture" is the rule either way (`@trunk/scene/history.ts`).
+  const onReplace = useCallback(
+    (update: TextSourceUpdate<BoardTextMeta>) => applyBoardTextUpdates(editor, [update]),
+    [editor],
+  );
+  const onReplaceAll = useCallback(
+    (updates: TextSourceUpdate<BoardTextMeta>[]) => applyBoardTextUpdates(editor, updates),
+    [editor],
+  );
 
   /* ---------------------------------------------------------------- */
   /* Recording — installed once, for as long as this component lives   */
@@ -230,7 +291,16 @@ export function SystemSketchDevTools({ devPanelOpen, onDevPanelOpenChange }: Sys
 
   return (
     <>
-      <QuickSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} items={items} />
+      <QuickSwitcher
+        open={switcherOpen}
+        onOpenChange={setSwitcherOpen}
+        items={items}
+        initialMode={switcherMode}
+        searchSources={searchSources}
+        onSelectMatch={onSelectMatch}
+        onReplace={onReplace}
+        onReplaceAll={onReplaceAll}
+      />
       <DevPanel
         open={devPanelOpen}
         onOpenChange={onDevPanelOpenChange}

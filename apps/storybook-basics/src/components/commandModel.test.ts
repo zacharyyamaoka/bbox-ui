@@ -182,6 +182,7 @@ describe("the bare-letter rule", () => {
     expect(quickSwitcherKeyDecision({ key: "s", target: { tagName: "CANVAS" } }, noLayer)).toEqual({
       open: true,
       source: "letter",
+      mode: "go-to",
     });
     expect(shouldOpenQuickSwitcher({ key: "s", target: { tagName: "CANVAS" } }, noLayer)).toBe(true);
   });
@@ -190,6 +191,7 @@ describe("the bare-letter rule", () => {
     expect(quickSwitcherKeyDecision({ key: "S", shiftKey: true }, noLayer)).toEqual({
       open: true,
       source: "letter",
+      mode: "go-to",
     });
   });
 
@@ -258,7 +260,7 @@ describe("the chord", () => {
     ["ctrl", { key: "k", ctrlKey: true }],
     ["cmd", { key: "k", metaKey: true }],
   ])("opens on %s+K", (_name, event) => {
-    expect(quickSwitcherKeyDecision(event, noLayer)).toEqual({ open: true, source: "chord" });
+    expect(quickSwitcherKeyDecision(event, noLayer)).toEqual({ open: true, source: "chord", mode: "go-to" });
   });
 
   it("opens on Ctrl+K even from inside a text field — it is not a character", () => {
@@ -267,7 +269,7 @@ describe("the chord", () => {
     // from inside the editor.
     expect(
       quickSwitcherKeyDecision({ key: "k", ctrlKey: true, target: { tagName: "INPUT" } }, noLayer),
-    ).toEqual({ open: true, source: "chord" });
+    ).toEqual({ open: true, source: "chord", mode: "go-to" });
   });
 
   it("refuses Ctrl+Alt+K, which is somebody else's chord", () => {
@@ -279,6 +281,48 @@ describe("the chord", () => {
 
   it("refuses a bare K — that is tldraw's laser tool", () => {
     expect(quickSwitcherKeyDecision({ key: "k" }, noLayer)).toEqual({ open: false, reason: "modifier" });
+  });
+
+  /* ---------------------------------------------------------------- */
+  /* Ctrl/Cmd+F — the same surface, opened on Find (parity item P-024)  */
+  /* ---------------------------------------------------------------- */
+
+  it.each([
+    ["ctrl", { key: "f", ctrlKey: true }],
+    ["cmd", { key: "f", metaKey: true }],
+  ])("opens on %s+F, and asks for the FIND half", (_name, event) => {
+    expect(quickSwitcherKeyDecision(event, noLayer)).toEqual({ open: true, source: "chord", mode: "find" });
+  });
+
+  it("opens Find from inside a text field — Ctrl+F is not a character either", () => {
+    expect(
+      quickSwitcherKeyDecision({ key: "f", ctrlKey: true, target: { tagName: "INPUT" } }, noLayer),
+    ).toEqual({ open: true, source: "chord", mode: "find" });
+  });
+
+  it("refuses a BARE f — that is tldraw's frame tool — and names it a near-miss", () => {
+    expect(quickSwitcherKeyDecision({ key: "f" }, noLayer)).toEqual({ open: false, reason: "modifier" });
+  });
+
+  it("refuses Ctrl+Alt+F, which is somebody else's chord", () => {
+    expect(quickSwitcherKeyDecision({ key: "f", ctrlKey: true, altKey: true }, noLayer)).toEqual({
+      open: false,
+      reason: "modifier",
+    });
+  });
+
+  it("obeys the same guards as every other binding", () => {
+    expect(quickSwitcherKeyDecision({ key: "f", ctrlKey: true, repeat: true }, noLayer)).toEqual({
+      open: false,
+      reason: "repeat",
+    });
+    expect(quickSwitcherKeyDecision({ key: "f", ctrlKey: true }, { ...noLayer, open: true })).toEqual({
+      open: false,
+      reason: "already-open",
+    });
+    expect(
+      quickSwitcherKeyDecision({ key: "f", ctrlKey: true }, { root: { querySelector: () => ({}) } }),
+    ).toEqual({ open: false, reason: "layer-open" });
   });
 
   it("names an unbound key as such rather than as a modifier miss", () => {

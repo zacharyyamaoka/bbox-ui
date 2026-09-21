@@ -134,8 +134,14 @@ export interface QuickSwitcherKeyEnvironment {
   root?: QuickSwitcherLayerRoot | null;
 }
 
+/** Which half of the switcher a binding lands on. Declared HERE, not in
+ *  `quickSwitcher.tsx`, because the keyboard rule below now has to name one
+ *  and the component imports this file (never the reverse). `quickSwitcher.tsx`
+ *  re-exports it, so every existing importer keeps working. */
+export type QuickSwitcherMode = "go-to" | "find";
+
 export type QuickSwitcherKeyOutcome =
-  | { open: true; source: "letter" | "chord" }
+  | { open: true; source: "letter" | "chord"; mode: QuickSwitcherMode }
   | {
       open: false;
       reason:
@@ -245,19 +251,41 @@ export function isQuickSwitcherTypingTarget(target: unknown): boolean {
  * `Shift` is allowed on the letter: `Shift+S` arrives as `key === "S"` and
  * nothing else is bound to it, so treating the two the same costs nothing.
  * `Alt` is not, because `Alt+S` is a menu mnemonic on Windows and Linux.
+ *
+ * A THIRD binding, added 2026-09-21 (parity item P-024, "Ctrl+F opens board
+ * Find and Replace"):
+ *
+ * - **Ctrl/Cmd+F** — the same surface, opened on its FIND half. It is a chord
+ *   by every rule above (fires from inside a text field, refused with Alt
+ *   held), and it differs from Ctrl+K in exactly one respect: the `mode` it
+ *   asks for. That is why the outcome grew a `mode` field rather than this
+ *   file growing a second near-identical decision function — the guards
+ *   (autorepeat, IME, an already-claimed event, an open layer) are the
+ *   expensive, easy-to-get-wrong half and there must be one copy of them.
+ *
+ *   WHY the browser's own Ctrl+F is displaced rather than shared: the board is
+ *   a canvas. Chrome's find bar searches rendered DOM text, and a tldraw board
+ *   paints shape text into a transformed HTML layer that is clipped to the
+ *   viewport — so the browser's Ctrl+F finds only what is already on screen
+ *   and silently misses every off-screen and other-page shape. A host that
+ *   binds this must `preventDefault`, and the donor did the same
+ *   (/home/bam/systemsketch/src/commands/boardSearch.ts's host).
  */
 export function quickSwitcherKeyDecision(
   event: QuickSwitcherKeyEvent,
   environment: QuickSwitcherKeyEnvironment = {},
 ): QuickSwitcherKeyOutcome {
   const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
-  const chord = (event.ctrlKey === true || event.metaKey === true) && event.altKey !== true && key === "k";
+  const modified = (event.ctrlKey === true || event.metaKey === true) && event.altKey !== true;
+  const chord = modified && (key === "k" || key === "f");
   const letter = key === "s" && event.ctrlKey !== true && event.metaKey !== true && event.altKey !== true;
 
   if (!chord && !letter) {
     // Name the near-miss so a host can tell "S with Ctrl held" (a different
-    // command) apart from a key nobody bound.
-    if (key === "s" || key === "k") return { open: false, reason: "modifier" };
+    // command) apart from a key nobody bound. `f` is here for the mirror
+    // reason: a BARE f is tldraw's frame tool, and a host reading
+    // "not-a-binding" for it would be told something false.
+    if (key === "s" || key === "k" || key === "f") return { open: false, reason: "modifier" };
     return { open: false, reason: "not-a-binding" };
   }
   if (event.defaultPrevented === true) return { open: false, reason: "default-prevented" };
@@ -266,7 +294,7 @@ export function quickSwitcherKeyDecision(
   if (environment.open === true) return { open: false, reason: "already-open" };
   if (letter && isQuickSwitcherTypingTarget(event.target)) return { open: false, reason: "typing" };
   if (quickSwitcherLayerIsOpen(environment.root)) return { open: false, reason: "layer-open" };
-  return { open: true, source: chord ? "chord" : "letter" };
+  return { open: true, source: chord ? "chord" : "letter", mode: key === "f" ? "find" : "go-to" };
 }
 
 /** The boolean form, for a host that does not care why it was refused. */
