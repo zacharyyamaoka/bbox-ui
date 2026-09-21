@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useEditor, useValue, type Editor, type TLBinding } from "tldraw";
 
+import { caretOffsetFromPoint } from "@trunk/components/caretGeometry";
 import { CodeEditor } from "@trunk/components/codeEditor";
 import { LabeledPort } from "@trunk/components/labeledPort";
 import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
@@ -125,12 +126,28 @@ function stopEditing(editor: Editor): void {
  * — capture 03 in reports/media/lanes-2026-09-18/ss-L2. It is also no longer
  * expressible: mirroring one authored line would reorder its own characters.
  */
-function RestingLabel({ declaration }: { declaration: string }) {
+function RestingLabel({ declaration, onCaretHint }: { declaration: string; onCaretHint(offset: number): void }) {
   const { name, type, annotated } = parsePortDeclaration(declaration);
   return (
     <span
       data-slot="port-label"
       data-editing="false"
+      // P-021, the reading half. The two runs below concatenate to
+      // `declaration` character for character (see this function's own doc), so
+      // an offset into this span's text IS an offset into the stored string —
+      // no mapping table, nothing to drift.
+      //
+      // WHY pointerdown-CAPTURE on the resting label, and not a `dblclick`
+      // handler or tldraw's own `onDoubleClick`: by the time anything knows a
+      // double-click happened, this span is GONE — `editing` has flipped and
+      // `LabelEditor` has replaced it — so there is no longer any text under
+      // the pointer to ask about. The second press of the double-click is the
+      // last moment the painted label still exists, and capture phase runs
+      // before any host handler can consume the event. Recording on EVERY
+      // press (the first one too, which merely selects) costs one
+      // `caretRangeFromPoint` and means the hint is always the press the user
+      // actually aimed with.
+      onPointerDownCapture={(event) => onCaretHint(caretOffsetFromPoint(event.currentTarget, event.clientX, event.clientY))}
       style={{
         display: "inline-flex",
         alignItems: "baseline",
@@ -171,7 +188,7 @@ function RestingLabel({ declaration }: { declaration: string }) {
  * document mid-keystroke. The store still holds the only committed copy —
  * `onWrite` fires first, every time.
  */
-function LabelEditor({ shape, align }: { shape: PortShape; align: "left" | "right" }) {
+function LabelEditor({ shape, align, cursorAt }: { shape: PortShape; align: "left" | "right"; cursorAt?: number }) {
   const editor = useEditor();
   const [draft, setDraft] = useState(shape.props.declaration);
   // The value to put back on Escape — captured once, at the moment the session
@@ -199,7 +216,14 @@ function LabelEditor({ shape, align }: { shape: PortShape; align: "left" | "righ
         columns={Math.max(MIN_LABEL_COLUMNS, draft.length)}
         fontSizePx={LABEL_FONT_PX}
         align={align}
+        // P-021, the writing half. `cursorAt` wins over `autoFocus="select"`
+        // inside CodeEditor (codeEditor.tsx:406-415), so the select-all stays
+        // as the fallback for a session opened with no press on the text —
+        // a rename reached by keyboard, or a double-click on the dot rather
+        // than the label. Those have no clicked character, and select-all is
+        // the right OS rename idiom when the whole label is the target.
         autoFocus="select"
+        cursorAt={cursorAt}
         // "Port declaration", not "Port name": the field holds `gain_x: float`,
         // and an assistive reader that announced it as a name would describe
         // the wrong thing to edit.
@@ -258,6 +282,26 @@ export function PortFace({ shape }: { shape: PortShape }) {
   // set it on a double-click, and this reads it back. No second "am I editing"
   // state to fall out of sync with the engine's.
   const editing = useValue("ss-port editing", () => editor.getEditingShapeId() === shape.id, [editor, shape.id]);
+
+  /**
+   * P-021: which character of the declaration the last press on the painted
+   * label landed on, or `null` when the session was not opened by pressing the
+   * text.
+   *
+   * A REF, not state: writing it must not re-render — the press that records
+   * it is the same press tldraw is using to select or to open the rename, and
+   * a render in the middle of that is a chance for the face to move under the
+   * pointer. Nothing reads it except the `LabelEditor` mounted by the render
+   * `editing` flips on, which happens after.
+   */
+  const caretHint = useRef<number | null>(null);
+
+  // Forget the hint the moment the session ends, so the NEXT rename — which
+  // may be opened from the keyboard, or by pressing the dot — starts from the
+  // select-all fallback rather than inheriting a caret the user never aimed.
+  useEffect(() => {
+    if (!editing) caretHint.current = null;
+  }, [editing]);
 
   const align = direction === "out" ? "right" : "left";
 
@@ -401,7 +445,18 @@ export function PortFace({ shape }: { shape: PortShape }) {
             // the seam the trunk built for exactly this (`labelSlot`'s own doc,
             // labeledPort.tsx:311-318): the placement math above it is
             // untouched.
-            labelSlot={editing ? <LabelEditor shape={shape} align={align} /> : <RestingLabel declaration={declaration} />}
+            labelSlot={
+              editing ? (
+                <LabelEditor shape={shape} align={align} cursorAt={caretHint.current ?? undefined} />
+              ) : (
+                <RestingLabel
+                  declaration={declaration}
+                  onCaretHint={(offset) => {
+                    caretHint.current = offset;
+                  }}
+                />
+              )
+            }
           />
         </span>
         {direction === "in" ? labelSpacer : null}
