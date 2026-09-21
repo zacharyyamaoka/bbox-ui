@@ -19,8 +19,8 @@ import "./app.css";
 import "./interface-scale.css";
 
 import { PyblocksBackendPanel } from "./backend/BackendSettings";
-import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./chrome/dock";
-import { useInterfaceScaleRootProps } from "./chrome/interfaceScaleHost";
+import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./chrome/Toolbar";
+import { useInterfaceScaleRootProps } from "./chrome/ShareMenu";
 import { Overlay } from "./chrome/overlay";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
 import { SourceContextMenu } from "./source/sourceContextMenu";
@@ -83,7 +83,7 @@ const COMPONENTS: TLComponents = {
 //
 // Then the ONE stock tool entry this app wraps: `arrow` (key `a`). Zach, 2026-09-19: "Please
 // add the excalidraw interaction of multi pressing A to cycle through arrow
-// types." `withArrowPresetCycle` (./chrome/dock) wraps tldraw's own arrow
+// types." `withArrowPresetCycle` (./chrome/Toolbar/dock) wraps tldraw's own arrow
 // entry — its kbd, its drag-from-toolbar — with the archive's rule: A while
 // the arrow tool is live advances elbow → straight → curve, A from anywhere
 // else re-arms the last one. Wrapped last so no kit can shadow it.
@@ -151,7 +151,7 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
   // Zach, 2026-09-20: "As I move the interface scale I would expect for it to
   // resize but its not... also I want that interface scale setting to
   // persist." It already persisted (`@trunk/components/interfaceScale`, written
-  // by chrome/appSettings.tsx); nothing read it back, so nothing ever resized.
+  // by chrome/ShareMenu/appSettings.tsx); nothing read it back, so nothing ever resized.
   // This hook is that read: it writes `--ss-interface-scale` and its inverse
   // onto the DOCUMENT ELEMENT (so Base UI's body-level portals can see them
   // too) and hands back the `data-interface-scale` attribute for this element.

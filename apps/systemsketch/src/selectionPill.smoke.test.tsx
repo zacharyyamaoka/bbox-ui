@@ -14,7 +14,7 @@ import { createShapeId, DefaultColorStyle, type TLShapeId } from "tldraw";
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { activeStyleRows } from "./chrome/arrangeActions";
+import { activeStyleRows } from "./chrome/ContextualPopupMenu";
 import { BLOCK_SHAPE_TYPE } from "./shapes/types";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";
 

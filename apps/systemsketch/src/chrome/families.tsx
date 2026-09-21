@@ -1,11 +1,15 @@
 // src/chrome/families.tsx — the ROWS behind the dock's families.
 //
 // The app's own family (System design) is built from the kit registry and is
-// declared next to the dock that mounts it (src/chrome/dock.tsx). What lives
+// declared next to the dock that mounts it (src/chrome/Toolbar/dock.tsx). What lives
 // here is the other half: the rows that wrap tldraw's OWN stock tools, so
 // adding "star" to the shape popout is a data edit and never a component one —
 // the whole point of `@trunk/components/toolDock`'s `FamilyDeclaration`, whose
 // donor hand-edited six places per family.
+// WHY this stays flat rather than moving into `Toolbar/`: `Toolbar/dock.tsx`,
+// `DevMenu/devtools.tsx` and `ShareMenu/appSettings.tsx` all read these rows.
+// Shared by three components, owned by none — putting it inside any one of
+// them would make the other two reach into a sibling's folder. See ./README.md.
 import type { ReactNode } from "react";
 import {
   Circle,

@@ -1,4 +1,4 @@
-// src/chrome/selectionActions.ts — what the floating pill can DO to whatever
+// src/chrome/ContextualPopupMenu/selectionActions.ts — what the floating pill can DO to whatever
 // is selected, as plain functions over the editor.
 //
 // EVERYTHING IS A BLOCK (plan §2, Zach's 2026-09-18 ASK). That rule is the
@@ -13,9 +13,9 @@
 // (`shapes/wire/wireGesture.ts`), never from a menu.
 import type { Editor, TLShape, TLShapeId } from "tldraw";
 
-import type { BlockShape, BlockShapeProps } from "../shapes/block";
-import type { CodeLanguage, CodeShape } from "../shapes/code";
-import { BLOCK_SHAPE_TYPE, CODE_SHAPE_TYPE } from "../shapes/types";
+import type { BlockShape, BlockShapeProps } from "../../shapes/block";
+import type { CodeLanguage, CodeShape } from "../../shapes/code";
+import { BLOCK_SHAPE_TYPE, CODE_SHAPE_TYPE } from "../../shapes/types";
 
 /** `ss-block`'s `view`, read off the schema rather than re-spelled here —
  *  `src/shapes/block/index.ts` publishes the props type but not this union,

@@ -1,4 +1,4 @@
-// src/chrome/stockMenus.ts — Edit ▸, View ▸, Export ▸ and Preferences ▸,
+// src/chrome/FileMenu/stockMenus.ts — Edit ▸, View ▸, Export ▸ and Preferences ▸,
 // built from tldraw's OWN action table.
 //
 // This file is configuration, not chrome: it decides WHICH of tldraw's actions

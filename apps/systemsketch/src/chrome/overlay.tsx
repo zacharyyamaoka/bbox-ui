@@ -9,13 +9,13 @@ import { useCallback, useId, useLayoutEffect, useRef, useState, type RefObject }
 import { useEditor, usePassThroughWheelEvents } from "tldraw";
 
 import { KITS } from "../shapes/registry";
-import { SystemSketchChromeBar } from "./chromeBar";
-import { SystemSketchDevTools } from "./devtools";
-import { FloatingSelectionToolbar } from "./floatingToolbar";
+import { SystemSketchChromeBar } from "./TitleBar";
+import { SystemSketchDevTools } from "./DevMenu";
+import { FloatingSelectionToolbar } from "./ContextualPopupMenu";
 import { SystemSketchPanel } from "./panels";
 import { useProblems } from "./problems";
 import { SystemSketchStatusStrip, type ChromePanel } from "./statusStrip";
-import { VariantSwitch } from "./variantSwitch";
+import { VariantSwitch } from "./DevMenu";
 
 export function Overlay() {
   return (

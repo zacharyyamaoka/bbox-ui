@@ -72,7 +72,7 @@ export function bootOptionsFor(search: string, origin: string): BootOptions {
 /**
  * Fetch `url`, parse it as a `.tldr` and swap it in for the current board.
  *
- * WHY the swap is duplicated from `chrome/fileActions.ts`'s `openBoard` rather
+ * WHY the swap is duplicated from `chrome/FileMenu/fileActions.ts`'s `openBoard` rather
  * than imported: that file is being rewritten on
  * `claude/chrome-files-settings-2026-09-19`, and importing it would couple two
  * in-flight branches. Every step is deliberate and measured there (see the doc

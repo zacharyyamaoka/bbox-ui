@@ -10,7 +10,7 @@
 // from a string to the number 12345, which the block validator refuses.
 // __fixtures__/empty.tldr is a valid board with ZERO shapes: mount the real app
 // with `persistenceKey: null`, touch nothing, and write `serializeBoard(editor)`
-// (chrome/fileActions.ts) out verbatim — the app's own serializer, not a
+// (chrome/FileMenu/fileActions.ts) out verbatim — the app's own serializer, not a
 // hand-edited file, so "it parses" is a measurement.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createShapeId, type Editor, type TLShapeId } from "tldraw";

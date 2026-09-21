@@ -129,7 +129,7 @@ async function remount(board: string | null) {
 async function boardWith(names: string[]): Promise<string> {
   const { app: scratch } = await remount(null);
   names.forEach((name, index) => placeBlock(scratch.editor, name, 200 + index * 260, 200));
-  const { serializeBoard } = await import("./chrome/fileActions");
+  const { serializeBoard } = await import("./chrome/FileMenu");
   const source = await serializeBoard(scratch.editor);
   scratch.unmount();
   app = null;

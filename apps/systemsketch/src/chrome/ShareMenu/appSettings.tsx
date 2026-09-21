@@ -1,4 +1,4 @@
-// src/chrome/appSettings.tsx — Settings, configured.
+// src/chrome/ShareMenu/appSettings.tsx — Settings, configured.
 //
 // Zach, 2026-09-19: "Please add the setting page. We want the option wether we
 // see settings as a [dialog or a page]. You can reference the one in old
@@ -40,10 +40,10 @@ import { buildSettingsCategories, type SettingsHotkey } from "@trunk/components/
 import { isNativeFileAccessSupported } from "@trunk/files/nativeFiles";
 import { SettingsView, type SettingsPresentation } from "@trunk/components/settingsView";
 
-import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "./families";
+import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "../families";
 import { setInterfaceScalePercent, useInterfaceScalePercent } from "./interfaceScaleHost";
-import { shortcutPlatform } from "./stockMenus";
-import { SYSTEM_FAMILY_ITEMS } from "../shapes/registry";
+import { shortcutPlatform } from "../FileMenu";
+import { SYSTEM_FAMILY_ITEMS } from "../../shapes/registry";
 
 /** The browser's own storage, or `null` when even touching it throws. */
 function viewerStorage(): Storage | null {

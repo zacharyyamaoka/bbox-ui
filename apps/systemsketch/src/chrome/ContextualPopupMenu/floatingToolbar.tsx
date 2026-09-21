@@ -1,4 +1,4 @@
-// src/chrome/floatingToolbar.tsx — the FigJam-style pill that follows the
+// src/chrome/ContextualPopupMenu/floatingToolbar.tsx — the FigJam-style pill that follows the
 // selection, and the placement LOOP the kit deliberately refuses to own.
 //
 // `@trunk/components/floatingToolbar` is paint only: it takes `x`, `y`,
@@ -44,8 +44,8 @@ import {
   StyleCluster,
   TriggerChevron,
 } from "./selectionClusters";
-import { useInterfaceScale } from "./interfaceScaleHost";
-import type { CodeLanguage } from "../shapes/code";
+import { useInterfaceScale } from "../ShareMenu";
+import type { CodeLanguage } from "../../shapes/code";
 import {
   BLOCK_VIEWS,
   CODE_LANGUAGES,
@@ -61,7 +61,7 @@ import {
  * How much of the viewport's bottom edge belongs to the tool dock, in screen
  * px, handed to `placeFloatingToolbar` as its `bottomObstacleTop`.
  *
- * Measured against `src/chrome/dock.tsx`: the dock is one `h-9` row of tool
+ * Measured against `src/chrome/Toolbar/dock.tsx`: the dock is one `h-9` row of tool
  * cells inside a rounded `ToolDock` shell, sitting on
  * `calc(var(--tl-space-3) + var(--tl-sab))` of bottom padding. 96px covers
  * that plus the pill's own 20px margin with room to spare — the value only

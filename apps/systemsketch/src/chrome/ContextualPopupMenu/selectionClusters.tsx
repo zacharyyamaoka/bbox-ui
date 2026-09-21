@@ -1,4 +1,4 @@
-// src/chrome/selectionClusters.tsx — the CONTENT of the selection pill:
+// src/chrome/ContextualPopupMenu/selectionClusters.tsx — the CONTENT of the selection pill:
 // Arrange, opacity, and the tldraw style bar. `floatingToolbar.tsx` owns
 // where the pill goes (seven numbered placement steps against
 // docs/menus/MENU-KIT-DESIGN.md §4); this file owns what is inside it, so

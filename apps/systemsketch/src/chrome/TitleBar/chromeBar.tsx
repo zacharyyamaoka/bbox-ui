@@ -1,4 +1,4 @@
-// src/chrome/chromeBar.tsx — the top-left cluster: the trunk's `ChromeBar`
+// src/chrome/TitleBar/chromeBar.tsx — the top-left cluster: the trunk's `ChromeBar`
 // (burger · depth arrows · board name · depth badge), the Settings surface and
 // the file navigator it raises.
 //
@@ -36,11 +36,11 @@ import { ChromeBar } from "@trunk/components/chromeBar";
 import { useConfirm } from "@trunk/components/confirmDialog";
 import { FileNavigator } from "@trunk/components/fileNavigator";
 
-import { documentLocation } from "../files/launchConfig";
-import { useDocumentSession, type DocumentSessionHelpers } from "../files/session";
-import { SystemSketchSettings, useAppSettings } from "./appSettings";
-import { legacyAppActionsFor } from "./legacyApp";
-import { shortcutPlatform, useStockMenus } from "./stockMenus";
+import { documentLocation } from "../../files/launchConfig";
+import { useDocumentSession, type DocumentSessionHelpers } from "../../files/session";
+import { SystemSketchSettings, useAppSettings } from "../ShareMenu";
+import { legacyAppActionsFor } from "../legacyApp";
+import { shortcutPlatform, useStockMenus } from "../FileMenu";
 
 /**
  * What an unnamed, file-less board is called.

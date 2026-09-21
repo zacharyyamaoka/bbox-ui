@@ -37,7 +37,7 @@ export interface MenuRow {
  * reading this helper used to do — returned **"eteDel"**. That is not a
  * cosmetic wrinkle in a test: it cost the shipped product a feature. A lane
  * took the red as a product defect and suppressed the Delete row's whole
- * shortcut column in `src/chrome/stockMenus.ts` so this reader would go green,
+ * shortcut column in `src/chrome/FileMenu/stockMenus.ts` so this reader would go green,
  * which is the acceptance harness dictating the UI. Reading what is
  * structurally left cannot express that pressure — the label and the shortcut
  * are separate elements in `chromeBar.tsx`'s `BurgerMenuEntry`, and they are

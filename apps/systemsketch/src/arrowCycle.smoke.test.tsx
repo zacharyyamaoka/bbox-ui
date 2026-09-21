@@ -30,7 +30,7 @@ import { ArrowShapeKindStyle, type TLArrowShape, type TLShapeId } from "tldraw";
 import { userEvent } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { PREFERENCES_KEY } from "./chrome/preferences";
+import { PREFERENCES_KEY } from "./chrome/ShareMenu";
 import { canvasOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
 
 type Preset = "straight" | "curve" | "elbow";

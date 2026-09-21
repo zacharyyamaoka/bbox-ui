@@ -298,7 +298,7 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
 /**
  * Put the board on the canvas, in ONE undo step.
  *
- * WHY history is NOT cleared, unlike `chrome/fileActions.ts`'s `openBoard`:
+ * WHY history is NOT cleared, unlike `chrome/FileMenu/fileActions.ts`'s `openBoard`:
  * that one swaps a whole `.tldr` document and a Ctrl+Z through it would
  * resurrect the previous board's records underneath the new ones. This is a
  * scene DIFF through `applyScene`, which is already a single transaction —
@@ -434,7 +434,7 @@ export function OpenPythonMenu({ client, onOpened, onError, onBoardApplied }: Op
       //
       // WHY the name is written even though nothing reads it yet: the chrome
       // bar's title is `useState(DEFAULT_BOARD_NAME)`, local to
-      // `src/chrome/chromeBar.tsx` (L4's file, outside this lane's write set),
+      // `src/chrome/TitleBar/chromeBar.tsx` (L4's file, outside this lane's write set),
       // so the bar still reads "Untitled board" after a file opens and
       // `File ▸ Save` derives its filename from that. Writing the truth where
       // the engine already keeps it turns that into a ONE-LINE fix in L4's
@@ -490,7 +490,7 @@ export function OpenPythonMenu({ client, onOpened, onError, onBoardApplied }: Op
   /**
    * The row, as a `MenuAction` — the shape `@trunk/components/chromeBar`
    * takes for every host-supplied menu row in this app
-   * (`src/chrome/fileActions.ts` builds the File group the same way).
+   * (`src/chrome/FileMenu/fileActions.ts` builds the File group the same way).
    */
   const actions: MenuAction[] = [
     {
@@ -506,7 +506,7 @@ export function OpenPythonMenu({ client, onOpened, onError, onBoardApplied }: Op
     <div className="pointer-events-auto flex flex-col items-end gap-1">
       {/*
         WHY the input is rendered and hidden rather than created on demand the
-        way `chrome/fileActions.ts`'s `pickTldrawFile` does: the acceptance
+        way `chrome/FileMenu/fileActions.ts`'s `pickTldrawFile` does: the acceptance
         drives it with Playwright's `setInputFiles`, which needs an element
         that is in the document before the click. A real person still reaches
         it through the menu row above, which clicks it — one input, one path,

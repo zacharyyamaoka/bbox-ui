@@ -1,4 +1,4 @@
-// src/chrome/interfaceScaleHost.tsx — the live, subscribable half of the
+// src/chrome/ShareMenu/interfaceScaleHost.tsx — the live, subscribable half of the
 // interface-scale preference, and the props that stamp it on the app root.
 //
 // Zach, 2026-09-20: "As I move the interface scale I would expect for it to
@@ -17,7 +17,7 @@
 //
 // WHY a module store (subscribe + snapshot) and not React state, and why here:
 // exactly the two-surface problem `./preferences.ts` already solves the same
-// way. The Settings slider WRITES (chrome/appSettings.tsx, a dialog that
+// way. The Settings slider WRITES (chrome/ShareMenu/appSettings.tsx, a dialog that
 // unmounts); `App.tsx`'s `<main>` READS to carry the CSS variables (a root
 // that never unmounts). They share no subtree, so the value has to live
 // outside both. The donor kept its own singleton in the model file

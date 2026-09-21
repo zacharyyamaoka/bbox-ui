@@ -3,7 +3,7 @@
  *
  * Ported from /home/bam/systemsketch/src/settings/interface-settings.css:1-44.
  * The variables are written onto the DOCUMENT ELEMENT by
- * chrome/interfaceScaleHost.tsx (mounted from src/App.tsx); every rule here
+ * chrome/ShareMenu/interfaceScaleHost.tsx (mounted from src/App.tsx); every rule here
  * reads them and nothing else. They live on `:root` rather than on the app's
  * `<main>` because Base UI portals every trunk menu to `document.body`, a
  * SIBLING of that element — measured: a popup zoomed from a `<main>`-scoped
@@ -99,7 +99,7 @@
 /*
  * The floating selection pill.
  *
- * `chrome/floatingToolbar.tsx:108-124` computes a real-viewport-pixel anchor
+ * `chrome/ContextualPopupMenu/floatingToolbar.tsx:108-124` computes a real-viewport-pixel anchor
  * from `editor.getSelectionRotatedScreenBounds()` and the kit paints it as an
  * INLINE `transform: translate(...)`. Inside the host zoom that translate is
  * multiplied — at 160% a pill anchored at screen (600, 400) paints at

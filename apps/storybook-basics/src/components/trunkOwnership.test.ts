@@ -33,7 +33,7 @@ const repo = path.resolve(here, "../../../..");
 
 const read = (relative: string) => readFileSync(path.join(repo, relative), "utf8");
 
-const CHROME_BAR = "apps/systemsketch/src/chrome/chromeBar.tsx";
+const CHROME_BAR = "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx";
 const CONFIRM_DIALOG = "apps/storybook-basics/src/components/confirmDialog.tsx";
 const FILE_NAVIGATOR = "apps/storybook-basics/src/components/fileNavigator.tsx";
 const SETTINGS_VIEW = "apps/storybook-basics/src/components/settingsView.tsx";

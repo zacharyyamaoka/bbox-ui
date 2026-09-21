@@ -1,4 +1,4 @@
-// src/chrome/zoomMenu.tsx — the zoom % readout, as a menu trigger.
+// src/chrome/ZoomMenu/zoomMenu.tsx — the zoom % readout, as a menu trigger.
 //
 // Zach, 2026-09-20, looking at a screenshot of old SystemSketch's zoom menu
 // (its status-strip zoom control opened a five-row popout: Zoom in, Zoom out,

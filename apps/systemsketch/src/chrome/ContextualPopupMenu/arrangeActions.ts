@@ -1,4 +1,4 @@
-// src/chrome/arrangeActions.ts — Arrange, opacity and tldraw style, as plain
+// src/chrome/ContextualPopupMenu/arrangeActions.ts — Arrange, opacity and tldraw style, as plain
 // functions over the editor. No React, no JSX: the pill renders these, the
 // zoom menu could, a keyboard shortcut could. Same split as
 // `selectionActions.ts`, which this file sits beside rather than inside —

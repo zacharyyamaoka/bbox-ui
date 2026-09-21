@@ -20,7 +20,7 @@ export const blockKit: ShapeKit = {
   bindingUtils: [],
   tools: [BlockTool],
   // The first row of the ONE system family, and the tool its face arms by
-  // default (src/chrome/preferences.ts's `lastSystemTool`).
+  // default (src/chrome/ShareMenu/preferences.ts's `lastSystemTool`).
   familyItems: [{ id: BLOCK_TOOL_ID, label: "Block", icon: createElement(Box), shortcutHint: "B" }],
   toolUi: (editor, tools) => ({
     ...tools,

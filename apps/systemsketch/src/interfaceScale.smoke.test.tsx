@@ -6,7 +6,7 @@
 //
 // The value already persisted before this lane — `@trunk/components/
 // interfaceScale` is a character-for-character port of the donor model and
-// `chrome/appSettings.tsx` already wrote through it. Nothing read it back, so
+// `chrome/ShareMenu/appSettings.tsx` already wrote through it. Nothing read it back, so
 // nothing ever resized. That makes this file's job specific: prove the APPLY,
 // and prove the two things the apply must not break.
 //
@@ -21,7 +21,7 @@ import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { INTERFACE_SCALE_STORAGE_KEY, readInterfaceScale } from "@trunk/components/interfaceScale";
-import { setInterfaceScalePercent } from "./chrome/interfaceScaleHost";
+import { setInterfaceScalePercent } from "./chrome/ShareMenu";
 import { mountApp, nextFrame, waitFor, type MountedApp } from "./testing/harness";
 
 const DOCK = '[data-slot="tool-dock"]';
@@ -63,7 +63,7 @@ async function applyScale(percent: number): Promise<void> {
  * WHY every measurement here goes through this and not a bare
  * `getBoundingClientRect()`: two things in this app settle a frame or more
  * after the DOM says they exist. The pill's placement resolves in a
- * microtask (`placeFloatingToolbar` is async — chrome/floatingToolbar.tsx's
+ * microtask (`placeFloatingToolbar` is async — chrome/ContextualPopupMenu/floatingToolbar.tsx's
  * STEP 5 pass counter exists because of it), and every Base UI popup opens
  * through a `zoom-in-95` enter animation, which is a real transform and so a
  * real change in the painted rect. Measured once, on a loaded box, both read

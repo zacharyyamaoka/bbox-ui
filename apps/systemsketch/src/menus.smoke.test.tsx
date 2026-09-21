@@ -112,7 +112,7 @@ describe("L4 — editor menus through tldraw's component seams", () => {
 
     // The serializer the file commands use is still exposed as a pure function of the editor.
     placeBlock("saved");
-    const { serializeBoard } = await import("./chrome/fileActions");
+    const { serializeBoard } = await import("./chrome/FileMenu");
     const text = await serializeBoard(app.editor);
     const parsed = JSON.parse(text) as { records: { typeName: string; type?: string }[] };
     expect(parsed.records.some((r) => r.typeName === "shape" && r.type === BLOCK_SHAPE_TYPE)).toBe(true);

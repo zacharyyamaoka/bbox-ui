@@ -6,7 +6,7 @@
 // has to empty the window in place. App mode navigates instead, and a fresh
 // page load needs none of this.
 //
-// WHY this is not `clearBoard` from `../chrome/fileActions`: `clearBoard`
+// WHY this is not `clearBoard` from `../chrome/FileMenu/fileActions`: `clearBoard`
 // deletes the shapes on the CURRENT page. That is exactly right for "empty
 // this board" and exactly wrong for "start a new document". Reproduced by an
 // independent judge, 2026-09-19: open a two-page file, File ▸ New, Save As —
@@ -44,7 +44,7 @@ export function resetDocumentToBlank(editor: Editor): void {
     // the survivor is called "Page 2" until they are gone.
     editor.renamePage(fresh.id, FIRST_PAGE_NAME);
   });
-  // WHY outside the transaction, and why at all: `../chrome/fileActions.ts`'s
+  // WHY outside the transaction, and why at all: `../chrome/FileMenu/fileActions.ts`'s
   // `loadBoardText` learned the same lesson from the same place — a whole
   // document swap is recorded as a USER history entry, so without this one
   // line Ctrl+Z immediately after New silently brings the old board back.

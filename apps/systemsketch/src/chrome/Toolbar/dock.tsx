@@ -1,4 +1,4 @@
-// src/chrome/dock.tsx — the toolbar, mounted as `components.Toolbar`.
+// src/chrome/Toolbar/dock.tsx — the toolbar, mounted as `components.Toolbar`.
 //
 // This is `@trunk/components/toolDock` — the trunk's own FigJam-style dock —
 // with tldraw wired into its four seams: which tool is live, which geo variant
@@ -26,15 +26,15 @@ import {
   type ArrowPreset,
 } from "@trunk/components/toolPreferences";
 
-import { SYSTEM_FAMILY_ITEMS } from "../shapes/registry";
-import { ARROW_PRESET_SECTION, DRAW_TOOLS, GEO_VARIANTS, GEO_VARIANT_IDS, LINE_TOOLS, SIMPLE_TOOLS } from "./families";
+import { SYSTEM_FAMILY_ITEMS } from "../../shapes/registry";
+import { ARROW_PRESET_SECTION, DRAW_TOOLS, GEO_VARIANTS, GEO_VARIANT_IDS, LINE_TOOLS, SIMPLE_TOOLS } from "../families";
 import {
   arrowPresetOf,
   getDockPreferences,
   rehydrateDockPreferences,
   updateDockPreferences,
   useDockPreferences,
-} from "./preferences";
+} from "../ShareMenu";
 
 /**
  * THE headline of this rebuild. Zach, 2026-09-18, looking at

@@ -1,4 +1,4 @@
-// src/chrome/devtools.tsx — mounting the trunk's quick switcher, dev panel
+// src/chrome/DevMenu/devtools.tsx — mounting the trunk's quick switcher, dev panel
 // and recorder, none of which this app built.
 //
 // Lane `devtools-2026-09-19` built all three entirely in `@trunk` and
@@ -22,8 +22,8 @@ import { createBrowserRecordingEffects } from "@trunk/recording/recordingEffects
 import { createRecordingClient, type RecordingBundle } from "@trunk/recording/recordingClient";
 import { useRecordingElapsed, useRecordingState } from "@trunk/recording/useRecording";
 
-import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "./families";
-import { SYSTEM_FAMILY_ITEMS } from "../shapes/registry";
+import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "../families";
+import { SYSTEM_FAMILY_ITEMS } from "../../shapes/registry";
 
 /**
  * The browser's own storage, or `null` when even touching it throws —
@@ -41,7 +41,7 @@ function viewerStorage(): Storage | null {
 
 /**
  * Every tool this app has, as a `Go to` row — the SAME arrays the dock and
- * Settings' alias editor render (`chrome/appSettings.tsx`'s `ALIAS_ITEMS`),
+ * Settings' alias editor render (`chrome/ShareMenu/appSettings.tsx`'s `ALIAS_ITEMS`),
  * so a tool cannot appear on the toolbar and be missing from the switcher.
  * `run()` arms the real tool by its real id; nothing here invents a shorter
  * one, because the id is also what `editor.setCurrentTool` must recognise.

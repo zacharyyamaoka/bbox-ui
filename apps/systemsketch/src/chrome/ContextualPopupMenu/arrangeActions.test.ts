@@ -1,4 +1,4 @@
-// src/chrome/arrangeActions.test.ts — the pure half of the selection pill's
+// src/chrome/ContextualPopupMenu/arrangeActions.test.ts — the pure half of the selection pill's
 // Arrange / opacity / style vocabulary. No editor, no DOM: everything here is
 // a function of its arguments, which is the whole reason `arrangeActions.ts`
 // keeps them separate from the React that renders them.

@@ -29,10 +29,10 @@
 // this script fails naming it — update the seam here, do not work around it:
 const SEAMS = {
   editorHandle: 'window.editor — <app>/src/main.tsx, set only under import.meta.env.DEV',
-  serializeBoard: '/src/chrome/fileActions.ts  serializeBoard(editor) -> .tldr text',
+  serializeBoard: '/src/chrome/FileMenu/fileActions.ts  serializeBoard(editor) -> .tldr text',
   // Whichever of these the app has — the first is what the unmerged files lane
   // (claude/chrome-files-settings-2026-09-19) replaced the second with.
-  loadBoard: '/src/chrome/fileActions.ts  loadBoardText(editor, text) -> {ok} (preferred)  |  openBoard(editor, helpers) -> file chooser (main, until that lane merges)',
+  loadBoard: '/src/chrome/FileMenu/fileActions.ts  loadBoardText(editor, text) -> {ok} (preferred)  |  openBoard(editor, helpers) -> file chooser (main, until that lane merges)',
   createWire: '/src/shapes/wire/createWire.ts  createWire(editor, {from,to,routing?,color?}) -> id | null',
   // SOFT — informational only, never fails a build if it moves:
   problems: '/src/document/sceneFromStore.ts sceneFromRecords + /src/chrome/problems.ts boardLintFindings -> what the Problems badge will show',
@@ -255,7 +255,7 @@ async function main() {
     const missing = expectedIds(recipe).filter((id) => !built.ids.includes(id))
     if (missing.length) throw new Error(`the editor did not create: ${missing.join(', ')}`)
     const boardText = await page.evaluate(async () => {
-      const { serializeBoard } = await import('/src/chrome/fileActions.ts')
+      const { serializeBoard } = await import('/src/chrome/FileMenu/fileActions.ts')
       return serializeBoard(window.editor)
     })
     const parsed = JSON.parse(boardText)
@@ -276,12 +276,12 @@ async function main() {
     await reopened.goto(server.url)
     await reopened.waitForFunction(() => Boolean(window.editor), null, { timeout: 60_000 })
     const loader = await reopened.evaluate(async () => {
-      const module = await import('/src/chrome/fileActions.ts')
+      const module = await import('/src/chrome/FileMenu/fileActions.ts')
       return typeof module.loadBoardText === 'function' ? 'loadBoardText' : 'openBoard'
     })
     if (loader === 'loadBoardText') {
       const result = await reopened.evaluate(async (text) => {
-        const { loadBoardText } = await import('/src/chrome/fileActions.ts')
+        const { loadBoardText } = await import('/src/chrome/FileMenu/fileActions.ts')
         return loadBoardText(window.editor, text)
       }, boardText)
       if (!result?.ok) throw new Error(`the saved board did not load through the app's loadBoardText: ${JSON.stringify(result)}`)
@@ -293,7 +293,7 @@ async function main() {
         .catch(() => { throw new Error(`the file chooser never opened — seam changed? ${SEAMS.loadBoard}`) })
       await reopened.evaluate(() => {
         window.__toasts = []
-        void import('/src/chrome/fileActions.ts').then(({ openBoard }) => openBoard(window.editor, {
+        void import('/src/chrome/FileMenu/fileActions.ts').then(({ openBoard }) => openBoard(window.editor, {
           addToast: (toast) => window.__toasts.push(toast),
           confirm: async () => true,
         }))
@@ -371,11 +371,11 @@ async function probeSeams(page) {
         found.push(`${path} could not be imported: ${error}`)
       }
     }
-    await need('/src/chrome/fileActions.ts', ['serializeBoard'])
+    await need('/src/chrome/FileMenu/fileActions.ts', ['serializeBoard'])
     try {
-      const module = await import(/* @vite-ignore */ '/src/chrome/fileActions.ts')
+      const module = await import(/* @vite-ignore */ '/src/chrome/FileMenu/fileActions.ts')
       if (typeof module.loadBoardText !== 'function' && typeof module.openBoard !== 'function') {
-        found.push('/src/chrome/fileActions.ts exports neither loadBoardText() nor openBoard()')
+        found.push('/src/chrome/FileMenu/fileActions.ts exports neither loadBoardText() nor openBoard()')
       }
     } catch { /* already reported by need() above */ }
     await need('/src/shapes/wire/createWire.ts', ['createWire'])

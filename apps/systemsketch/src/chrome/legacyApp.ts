@@ -14,6 +14,9 @@
 // WHY the row only exists on a loopback origin: the archived app is a local
 // install on this machine, never a deployed site. Served from anywhere else,
 // the row would point at nothing, so it is absent rather than broken.
+// WHY this stays flat rather than moving into `TitleBar/` or `FileMenu/`: it
+// is a menu ROW, consumed by `TitleBar/chromeBar.tsx` and by
+// `files/session.tsx` alike. See ./README.md.
 import { createElement } from "react";
 import { History } from "lucide-react";
 

@@ -85,7 +85,7 @@ describe("stock boundary — the seams in App.tsx", () => {
   it("the toolbar is the trunk's ToolDock through components.Toolbar — one system family slot", () => {
     const source = app();
     expect(source).toMatch(/Toolbar:\s*\w+/);
-    const dock = withoutComments(read(join(SRC, "chrome", "dock.tsx")));
+    const dock = withoutComments(read(join(SRC, "chrome", "Toolbar", "dock.tsx")));
     expect(dock).toMatch(/from ["']@trunk\/components\/toolDock["']/);
     expect(dock).toContain('id: "system"');
     // Exactly one system-family declaration: the archive's second "bbox"

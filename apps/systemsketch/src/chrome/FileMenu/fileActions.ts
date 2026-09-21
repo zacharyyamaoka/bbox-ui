@@ -1,4 +1,4 @@
-// src/chrome/fileActions.ts — the ONE place this app turns a board into bytes
+// src/chrome/FileMenu/fileActions.ts — the ONE place this app turns a board into bytes
 // and back.
 //
 // A plain `.tldr` is the file format (plan §8.3): our shapes' props ARE the
@@ -34,7 +34,7 @@ import {
  * WHY they arrive as callbacks instead of this file calling `useToasts()` /
  * `useDialogs()` itself: those are React hooks, and every function here is a
  * plain async function a test (or a keyboard shortcut, or a later command
- * palette) can call with no component mounted. `src/chrome/chromeBar.tsx` is
+ * palette) can call with no component mounted. `src/chrome/TitleBar/chromeBar.tsx` is
  * the one place that reads the hooks and closes over them — the same
  * "confirm dialogs and toasts are host's" split
  * docs/menus/MENU-KIT-DESIGN.md §4 draws for the chrome bar itself.

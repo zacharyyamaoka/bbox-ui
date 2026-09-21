@@ -16,7 +16,7 @@
 // address bar, and to the File menu's callbacks.
 //
 // WHY one hook instead of a context: every consumer of this state is inside
-// `src/chrome/chromeBar.tsx` — the burger, the title, the rename field, the
+// `src/chrome/TitleBar/chromeBar.tsx` — the burger, the title, the rename field, the
 // navigator dialog and the keyboard shortcuts. A context would add a provider
 // to `App.tsx` (a file the stock-boundary test reads) to serve exactly one
 // subtree.
@@ -49,7 +49,7 @@ import {
   replaceRememberedDocumentPath,
 } from "@trunk/files/workspaceModel";
 
-import { fileNameFor, loadBoardText, serializeBoard } from "../chrome/fileActions";
+import { fileNameFor, loadBoardText, serializeBoard } from "../chrome/FileMenu";
 import { LEGACY_SYSTEMSKETCH_URL } from "../chrome/legacyApp";
 import { documentLocation, fileHostBaseUrl } from "./launchConfig";
 import { installUnsavedWorkGuard } from "./lifecycle";

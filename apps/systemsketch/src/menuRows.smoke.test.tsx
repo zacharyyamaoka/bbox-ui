@@ -1,7 +1,7 @@
 // src/menuRows.smoke.test.tsx — the acceptance for P2-9 (independent Codex
 // judge, VERDICT: FAIL, 2026-09-19).
 //
-// The finding: `src/chrome/stockMenus.ts` had suppressed the Edit ▸ Delete
+// The finding: `src/chrome/FileMenu/stockMenus.ts` had suppressed the Edit ▸ Delete
 // row's keyboard shortcut in the PRODUCT so that a BROKEN acceptance reader
 // would go green. `src/testing/menus.ts`'s `rowsOf` recovered a row's label by
 // subtracting the shortcut STRING from the row's full text, so "Delete" + "Del"

@@ -686,7 +686,7 @@ function layoutInput(editor: Editor, shape: RegionShape, height: number, arms: r
     // number this file hands tldraw — the header bands it hit-tests, the hug
     // written into `props.h` — has to be the same rows, or a drawing switch
     // leaves the paint and the geometry a few px apart per arm.
-    // `chrome/variantSwitch.tsx` re-settles `props.h` when the drawing changes.
+    // `chrome/DevMenu/variantSwitch.tsx` re-settles `props.h` when the drawing changes.
     armHeaderPx: REGION_VARIANTS[readRegionVariant()].arms.headerPx,
     arms: arms.map((arm) => ({ id: arm.id, open: arm.open, bodyHeight: arm.h })),
   };

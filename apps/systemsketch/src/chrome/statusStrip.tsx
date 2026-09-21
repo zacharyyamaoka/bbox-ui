@@ -28,8 +28,8 @@ import { Button } from "@trunk/components/button";
 import { ProblemsBadge } from "@trunk/components/problemsPanel";
 import { StatusStrip, type StatusStripItem } from "@trunk/components/statusStrip";
 
-import { useStockMenus } from "./stockMenus";
-import { ZoomMenu } from "./zoomMenu";
+import { useStockMenus } from "./FileMenu";
+import { ZoomMenu } from "./ZoomMenu";
 
 /** Which right-hand panel is open. One at a time, or none. */
 export type ChromePanel = "frames" | "problems";
@@ -43,7 +43,7 @@ export interface SystemSketchStatusStripProps {
   panelId: string;
   /**
    * WHY this is its own boolean rather than a third `ChromePanel`: the dev
-   * panel (`chrome/devtools.tsx`) is `@trunk/components/devPanel`'s own
+   * panel (`chrome/DevMenu/devtools.tsx`) is `@trunk/components/devPanel`'s own
    * dialog, not another member of `./panels.tsx`'s one-at-a-time right-rail
    * `SystemSketchPanel` — pressing it must not close Frames or Problems, and
    * pressing Frames must not close it. Overloading `ChromePanel` would make

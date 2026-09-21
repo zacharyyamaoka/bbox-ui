@@ -11,6 +11,11 @@
 // NEVER MIX DATA AND CONTROL LINES shows up here as what this file reads:
 // containment, and only containment. A region's contents and an expanded
 // Block's members are `parentId` children; nothing below looks at a wire.
+// WHY this file is NOT inside `TitleBar/` even though the chrome mapping put
+// it there: measured, `TitleBar/chromeBar.tsx` never mentions frames, and
+// `panels.tsx` is the ONLY consumer of `useFrames`. This is the Frames
+// PANEL's model, so it stays beside the panel cluster it feeds until that
+// cluster gets a component name of its own. See ./README.md.
 import { useCallback, useMemo } from "react";
 import { useValue, type Editor, type TLShape, type TLShapeId } from "tldraw";
 

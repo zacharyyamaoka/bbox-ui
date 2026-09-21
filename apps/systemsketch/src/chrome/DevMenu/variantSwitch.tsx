@@ -1,4 +1,4 @@
-// src/chrome/variantSwitch.tsx — the TEMPORARY bottom-right pill that flips
+// src/chrome/DevMenu/variantSwitch.tsx — the TEMPORARY bottom-right pill that flips
 // the two open design proposals live: the port style (the `ports` lane's
 // five, `@trunk/skin/portVariants`) and the region drawing (the `regions`
 // lane's five, `@trunk/skin/regionVariants`).
@@ -56,8 +56,8 @@ import {
   type RegionVariantId,
 } from "@trunk/skin/regionVariants";
 
-import { reconcileRegionProps, type RegionShape } from "../shapes/region";
-import { REGION_SHAPE_TYPE } from "../shapes/types";
+import { reconcileRegionProps, type RegionShape } from "../../shapes/region";
+import { REGION_SHAPE_TYPE } from "../../shapes/types";
 
 /** The two per-viewer keys, spelled by the lane brief. */
 export const PORT_VARIANT_STORAGE_KEY = "bbox.portVariant";

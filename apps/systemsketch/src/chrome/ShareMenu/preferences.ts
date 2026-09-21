@@ -1,4 +1,4 @@
-// src/chrome/preferences.ts — which member each tool family last used, and
+// src/chrome/ShareMenu/preferences.ts — which member each tool family last used, and
 // which arrow preset A lands on next.
 //
 // `@trunk/components/toolDock` is controlled and stores nothing itself
@@ -27,7 +27,7 @@ import {
   type ArrowPreset,
 } from "@trunk/components/toolPreferences";
 
-import { BLOCK_TOOL_ID } from "../shapes/types";
+import { BLOCK_TOOL_ID } from "../../shapes/types";
 
 export const PREFERENCES_KEY = "systemsketch.dock-preferences.v1";
 
