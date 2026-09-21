@@ -65,9 +65,12 @@ LAYERS = [
      "Panel, Inspector Panel — compose from only Button / Glyph / Toggle / EditableText / Flex "
      "/ Badge. A thin layer over six primitives is not a blob.", "good"),
     ("scene", 81, 17,
-     "31 files, <b>0</b> React, <b>0</b> DOM. Four of the five apparent <code>document</code> hits "
-     "are the word “document” in comments about the document <i>model</i>; the fifth is a "
-     "parameter name. Genuinely pure — composition here is function composition.", "good"),
+     "<code>apps/storybook-basics/src/scene/</code> — 61 files, 30 of them tests, so <b>31 "
+     "sources</b>. <b>0</b> React, <b>0</b> tldraw. Seven apparent <code>document</code> hits across "
+     "five files: six are the word “document” in comments about the document <i>model</i>, and "
+     "the seventh is <code>const document = parsePyblocksScene(json)</code> — a local shadowing "
+     "the global, not the DOM. Genuinely pure, and already flat and named by concept "
+     "(history, containment, batchWire, linking, collapse…).", "good"),
     ("editor", 127, 27,
      "No composition discipline. Every feature reaches into the same chrome files, so two agents "
      "adding two features collide on one file. <b>This is where a blob would form.</b>", "bad"),

@@ -1,0 +1,49 @@
+{
+  "_why": "The standard sub-headers that repeat inside every component folder. Zach proposed the idea and five of the aspects (click, hover, drag, visual appearance, adding members); the rest were DERIVED by classifying all 468 backlog items until coverage stopped improving. Coverage: 438/468 = 94%, median 2 aspects per item. The 30 that do not fit are system-scope, not component-scope, and belong in a separate SYSTEM bucket.",
+  "_method": "docs/build_architecture_proposal.py sibling analysis; keyword classification over name+whatItDoes+area. NOTE: this is a VOCABULARY derivation, not an item classifier — 60% of items match more than one aspect, so counts are indicative of which aspects earn their place, not of a final assignment.",
+  "groups": {
+    "INTERACTION": {
+      "_what": "what a person DOES to the component. Lives in components/<Name>/ — the handlers.",
+      "aspects": {
+        "click / selection": 107,
+        "drag / resize / move": 106,
+        "add / remove members": 85,
+        "navigation / camera": 71,
+        "keyboard": 40,
+        "text editing": 38,
+        "hover / affordance": 29
+      }
+    },
+    "MODEL": {
+      "_what": "what the component IS and how it is drawn. Mostly scene/ (pure) plus the shape's own geometry.",
+      "aspects": {
+        "how it paints": 154,
+        "anatomy / slots": 100,
+        "semantics / kinds": 76,
+        "what it stores": 75,
+        "layout / geometry": 72,
+        "visual appearance": 68
+      }
+    },
+    "CHROME": {
+      "_what": "the editor surfaces that reach the component. Each entry point is ONE call into scene/.",
+      "aspects": {
+        "menus / commands": 118,
+        "files / history": 46,
+        "validation / problems": 22
+      }
+    }
+  },
+  "uncovered_system_scope": {
+    "count": 30,
+    "examples": [
+      "The whole whiteboard is a System, and you are always inside one",
+      "Components nest into Systems, unbounded",
+      "CAD exporter maps hardware to components",
+      "Standard drop-in components: Data Recorders, Visualizers, Loggers",
+      "Obsidian plugin, in the same repo",
+      "Hyperedge trunks"
+    ],
+    "_verdict": "Not features OF a component. They need a system-level home or an explicit out-of-scope ruling."
+  }
+}
