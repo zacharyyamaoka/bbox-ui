@@ -32,15 +32,22 @@ import {
   type FileNavigationMode,
 } from "@trunk/components/appSettings";
 import { FILE_MENU_ROWS } from "@trunk/components/appMenu";
-import { readAppearancePreferences, writeAppearancePreferences, type AppearancePreferences } from "@trunk/components/appearancePreferences";
 import { readEdgePolicy, writeEdgePolicy, edgePolicyPreset, type EdgePolicy, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
-import { readGestureSettings, writeGestureSettings, type GestureSettings } from "@trunk/components/gestureSettings";
+import { matchingEdgePolicyPreset } from "@trunk/components/edgePolicy";
+import {
+  DEFAULT_VALIDATION_LEVEL,
+  LINT_RULE_TOTAL,
+  enabledRuleCount,
+  isValidationLevel,
+  validationLevelSpec,
+} from "@trunk/scene/validationLevel";
 import { readToolAliases, writeToolAliases, type ToolAliasItem, type ToolAliases } from "@trunk/components/toolAliases";
 import { buildSettingsCategories, type SettingsHotkey } from "@trunk/components/settingsCategories";
 import { isNativeFileAccessSupported } from "@trunk/files/nativeFiles";
 import { SettingsView, type SettingsPresentation } from "@trunk/components/settingsView";
 
 import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "../families";
+import { useAppearancePreferences, useGestureSettings } from "./cameraGestureHost";
 import { setInterfaceScalePercent, useInterfaceScalePercent } from "./interfaceScaleHost";
 import { shortcutPlatform } from "../FileMenu";
 import { SYSTEM_FAMILY_ITEMS } from "../../shapes/registry";
@@ -179,11 +186,16 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
   // silent dead end.
   const nativeSupported = useMemo(() => isNativeFileAccessSupported(window), []);
 
-  const [appearance, patchAppearance] = usePersistedRecord<AppearancePreferences>(
-    readAppearancePreferences,
-    writeAppearancePreferences,
-  );
-  const [gestures, patchGestures] = usePersistedRecord<GestureSettings>(readGestureSettings, writeGestureSettings);
+  // WHY these two do NOT use `usePersistedRecord` like their neighbour below:
+  // exactly the reason spelled out for `interfaceScalePercent` a few lines on.
+  // Both records have a second reader outside this dialog — the canvas, through
+  // `installCameraGestures` — and `usePersistedRecord` keeps its value in local
+  // `useState`, invisible to anything that is not this dialog. Kept here, the
+  // wheel convention would save and the wheel would not change until reload,
+  // which is the same bug Zach reported for the interface-scale slider on
+  // 2026-09-20. `./cameraGestureHost` is the module store both surfaces share.
+  const [appearance, patchAppearance] = useAppearancePreferences();
+  const [gestures, patchGestures] = useGestureSettings();
   const [edgePolicy, patchEdgePolicy] = usePersistedRecord<EdgePolicy>(readEdgePolicy, writeEdgePolicy);
   // WHY this one setting does NOT use `usePersistedValue` like its neighbours:
   // its value has a second reader outside this dialog. `usePersistedValue`
@@ -196,6 +208,31 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
   const interfaceScalePercent = useInterfaceScalePercent();
   const setInterfaceScale = setInterfaceScalePercent;
   const [aliases, setAliases] = usePersistedValue<ToolAliases>(readToolAliases, writeToolAliases);
+
+  // Ruling 3's binding, and the ONLY thing the app adds to it: the settings
+  // panel carries the CONTROL, `@trunk/scene/validationLevel` owns what a level
+  // MEANS, and this is the one line that joins them. It is here rather than in
+  // the trunk because `components/layering.test.ts`'s import wall forbids any
+  // trunk component from importing the scene kit; a host may import both, and
+  // that is exactly what a host is for.
+  //
+  // WHY the level is DERIVED from the stored policy rather than persisted
+  // beside it: the nine switches are the source of truth (the archive's own
+  // rule, stated at `edge-policy-preset` in settingsCategories.tsx — "a preset
+  // is a shortcut into the same nine switches, never a second source of
+  // truth"). Storing the level too would let the two disagree, and the row
+  // already knows how to say "Custom" when the switches match no rung.
+  const validationSummary = useMemo(() => {
+    const level = matchingEdgePolicyPreset(edgePolicy);
+    if (level === null || !isValidationLevel(level)) {
+      const fallback = validationLevelSpec(DEFAULT_VALIDATION_LEVEL);
+      return `Custom — linting follows the nearest level it can, ${fallback.label.toLowerCase()} (${enabledRuleCount(
+        DEFAULT_VALIDATION_LEVEL,
+      )} of ${LINT_RULE_TOTAL} checks).`;
+    }
+    const spec = validationLevelSpec(level);
+    return `At ${spec.label.toLowerCase()}, ${enabledRuleCount(level)} of ${LINT_RULE_TOTAL} checks mark up a board at rest: ${spec.rules.join(", ")}.`;
+  }, [edgePolicy]);
 
   // WHY the whole list is rebuilt in the trunk from values + callbacks rather
   // than assembled here: Zach, 2026-09-19 — "system sketch should just be
@@ -225,6 +262,7 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
         edgePolicy,
         onEdgePolicyChange: patchEdgePolicy,
         onEdgePolicyPreset: (id: EdgePolicyPresetId) => patchEdgePolicy(edgePolicyPreset(id).policy),
+        validationSummary,
         hotkeys: HOTKEYS,
         shortcutPlatform: shortcutPlatform(),
         aliasItems: ALIAS_ITEMS,
@@ -270,6 +308,7 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
       settings.fileNavigation,
       settings.settingsPresentation,
       update,
+      validationSummary,
     ],
   );
 

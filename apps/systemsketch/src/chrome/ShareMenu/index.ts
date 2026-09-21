@@ -5,5 +5,6 @@
 // Outside this folder, import the folder; inside it, import files by name. That
 // is what keeps renaming or splitting the internals a change nobody else sees.
 export * from "./appSettings";
+export * from "./cameraGestureHost";
 export * from "./interfaceScaleHost";
 export * from "./preferences";

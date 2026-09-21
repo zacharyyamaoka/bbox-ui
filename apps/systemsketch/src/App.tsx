@@ -20,7 +20,7 @@ import "./interface-scale.css";
 
 import { PyblocksBackendPanel } from "./backend/BackendSettings";
 import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./chrome/Toolbar";
-import { useInterfaceScaleRootProps } from "./chrome/ShareMenu";
+import { installCameraGestures, useInterfaceScaleRootProps } from "./chrome/ShareMenu";
 import { Overlay } from "./chrome/overlay";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
 import { SourceContextMenu } from "./source/sourceContextMenu";
@@ -136,6 +136,13 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
       // The A binding's mount-time half: re-read the remembered preset, seed
       // tldraw's next-arrow style from it, and give Curved its bend.
       stops.push(installArrowPresets(editor));
+      // The wheel preferences' apply side. Zach, ruling 2: "its about giving
+      // the user flexibility to do what they want." They persisted long before
+      // this line; nothing read them back, so nothing ever moved — the same
+      // shape as the interface-scale bug of 2026-09-20. See
+      // ./chrome/ShareMenu/cameraGestureHost.tsx for why obeying the chosen
+      // convention takes two tldraw calls rather than one.
+      stops.push(installCameraGestures(editor));
       onEditorReady?.(editor);
       return () => {
         for (const stop of stops) stop();

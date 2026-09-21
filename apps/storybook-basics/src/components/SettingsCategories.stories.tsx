@@ -13,9 +13,20 @@ import { DEFAULT_GESTURE_SETTINGS, type GestureSettings } from "./gestureSetting
 import {
   DEFAULT_EDGE_POLICY,
   edgePolicyPreset,
+  matchingEdgePolicyPreset,
   type EdgePolicy,
   type EdgePolicyPresetId,
 } from "./edgePolicy";
+// A story is a CONSUMER of the kits, not part of the components kit — which is
+// why `components/layering.test.ts`'s import wall exempts `.stories.tsx` by
+// name. Reaching into `scene/` here is the point: this harness stands in for
+// `apps/systemsketch`, and a host is the layer that owns both kits.
+import {
+  LINT_RULE_TOTAL,
+  enabledRuleCount,
+  isValidationLevel,
+  validationLevelSpec,
+} from "../scene/validationLevel";
 import { DEFAULT_INTERFACE_SCALE } from "./interfaceScale";
 import { EMPTY_TOOL_ALIASES, type ToolAliasItem, type ToolAliases } from "./toolAliases";
 import type { FileNavigationMode } from "./appSettings";
@@ -61,6 +72,15 @@ interface Spies {
   onInterfaceScaleChange?: (percent: number) => void;
   onGesturesChange?: (patch: Partial<GestureSettings>) => void;
   onAliasesChange?: (next: ToolAliases) => void;
+}
+
+/** What the host reports back about the chosen level — the linter half of
+ *  ruling 3, which `scene/validationLevel.ts` owns and this file only prints. */
+function validationLintSummary(policy: EdgePolicy): string {
+  const level = matchingEdgePolicyPreset(policy);
+  if (level === null || !isValidationLevel(level)) return "Custom — these switches match no level.";
+  const spec = validationLevelSpec(level);
+  return `At ${spec.label.toLowerCase()}, ${enabledRuleCount(level)} of ${LINT_RULE_TOTAL} checks mark up a board at rest.`;
 }
 
 /**
@@ -111,6 +131,10 @@ function Harness({ initial = "dialog", spies = {} }: { initial?: SettingsPresent
       setEdgePolicy((current) => ({ ...current, ...patch }));
     },
     onEdgePolicyPreset: (id: EdgePolicyPresetId) => setEdgePolicy({ ...edgePolicyPreset(id).policy }),
+    // The same one line `apps/systemsketch/src/chrome/ShareMenu/appSettings.tsx`
+    // computes — the level's MEANING crossing from `scene/` as a string,
+    // because a component may not import the scene kit.
+    validationSummary: validationLintSummary(edgePolicy),
     hotkeys: HOTKEYS,
     shortcutPlatform: "other",
     aliasItems: TOOLS,
@@ -242,6 +266,57 @@ export const FlippingAPermissionReachesTheHost: Story = {
   },
 };
 
+/**
+ * Connections: the level is a SCALE, and moving it changes how much the board
+ * is linted at rest — not only what may be drawn.
+ *
+ * Zach, ruling 3: "have the connection validation setting in the settings panel
+ * so you can switch between what level of linting you want from whiteboard,
+ * where anything goes to like evalid code, etc." Every number asserted below
+ * comes from `scene/validationLevel.ts`'s own exports, never typed in.
+ */
+export const ValidationLevelDrivesTheLinterToo: Story = {
+  render: () => <Harness />,
+  play: async () => {
+    await body().findByRole("dialog");
+    await openCategory("Connections");
+
+    const row = () => section("edge-policy-preset")!;
+    await expect(row()).toHaveTextContent("Validation level");
+
+    // The shipped default rung, and the linting it runs.
+    await expect(within(row()).getByRole("button", { pressed: true })).toHaveTextContent("Guided");
+    await expect(row().querySelector('[data-slot="validation-lint-summary"]')).toHaveTextContent(
+      `${enabledRuleCount("guided")} of ${LINT_RULE_TOTAL} checks`,
+    );
+
+    // All the way down: anything goes, and the linter follows it down.
+    await userEvent.click(within(row()).getByRole("button", { name: "Whiteboard" }));
+    await waitFor(() =>
+      expect(row().querySelector('[data-slot="validation-lint-summary"]')).toHaveTextContent(
+        `${enabledRuleCount("whiteboard")} of ${LINT_RULE_TOTAL} checks`,
+      ),
+    );
+    await expect(row().querySelector('[data-slot="edge-policy-count"]')).toHaveTextContent("0/9");
+
+    // All the way up: every check on, proved against the level's own spec.
+    await userEvent.click(within(row()).getByRole("button", { name: "Strict" }));
+    await waitFor(() =>
+      expect(row().querySelector('[data-slot="validation-lint-summary"]')).toHaveTextContent(
+        `${enabledRuleCount("strict")} of ${LINT_RULE_TOTAL} checks`,
+      ),
+    );
+    expect(enabledRuleCount("strict")).toBe(LINT_RULE_TOTAL);
+    expect(enabledRuleCount("whiteboard")).toBeLessThan(enabledRuleCount("guided"));
+
+    // Hand-flipping one switch leaves no level — and the linting line says so
+    // rather than claiming a rung that is no longer selected.
+    await userEvent.click(within(section("allowFanOut")!).getByRole("switch"));
+    await waitFor(() => expect(row()).toHaveTextContent("Custom —"));
+    await expect(row().querySelector('[data-slot="validation-lint-summary"]')).toHaveTextContent("match no level");
+  },
+};
+
 /** Appearance: the interface scale Zach asked to move here, driven three
  *  ways — the slider itself, a preset, and the reset. */
 export const InterfaceScaleLivesInAppearance: Story = {
@@ -304,13 +379,27 @@ export const DirectWheelZoomSwapsTheLiveHalf: Story = {
       expect(section("pan-speed")!.querySelector('[data-slot="settings-slider-value"]')).toHaveTextContent("137%"),
     );
 
-    await userEvent.click(within(section("direct-wheel-zoom")!).getByRole("switch"));
+    // BOTH conventions are offered by name (ruling 2, 2026-09-21) — this row
+    // was a bare toggle until then, and a toggle frames one convention as the
+    // default and the other as the deviation. Addressed the same way the
+    // `settings-presentation` radio already is, by its option value.
+    const wheel = section("direct-wheel-zoom")!;
+    await expect(wheel.querySelectorAll('[role="radio"]')).toHaveLength(2);
+    await expect(wheel.querySelector('[role="radio"][data-option-value="pan"]')).not.toBeNull();
+    await expect(wheel.querySelector('[role="radio"][data-option-value="zoom"]')).not.toBeNull();
+
+    await userEvent.click(wheel.querySelector('[role="radio"][data-option-value="zoom"]')!);
     await waitFor(() => expect(section("wheel-zoom-sensitivity")).not.toBeNull());
     // The half that no longer owns the wheel is gone, not inert.
     await expect(section("wheel-binding-wheelDown")).toBeNull();
     await expect(section("pan-speed")).toBeNull();
     await expect(section("scroll-down-zooms-in")).not.toBeNull();
     await expect(section("modifier-wheel-zooms-oppositely")).not.toBeNull();
+
+    // And back — the choice is a scale you can walk either way, not a latch.
+    await userEvent.click(section("direct-wheel-zoom")!.querySelector('[role="radio"][data-option-value="pan"]')!);
+    await waitFor(() => expect(section("wheel-binding-wheelDown")).not.toBeNull());
+    await expect(section("wheel-zoom-sensitivity")).toBeNull();
   },
 };
 

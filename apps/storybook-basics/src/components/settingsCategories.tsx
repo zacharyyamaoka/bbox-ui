@@ -102,6 +102,14 @@ import type { SettingsCategory, SettingsPresentation, SettingsSection } from "./
 import { ToolAliasEditor } from "./toolAliasEditor";
 import type { ToolAliasItem, ToolAliases } from "./toolAliases";
 import type { FileNavigationMode } from "./appSettings";
+import {
+  WHEEL_CONVENTIONS_IN_ORDER,
+  WHEEL_CONVENTION_DESCRIPTIONS,
+  WHEEL_CONVENTION_LABELS,
+  appearanceForWheelConvention,
+  wheelConventionOf,
+  type WheelConvention,
+} from "./cameraGestures";
 
 /** The five category ids, stable for a host that wants to open one directly. */
 export const SETTINGS_CATEGORY_IDS = Object.freeze({
@@ -149,6 +157,19 @@ export interface SettingsCategoriesInput {
   edgePolicy: EdgePolicy;
   onEdgePolicyChange(patch: Partial<EdgePolicy>): void;
   onEdgePolicyPreset(id: EdgePolicyPresetId): void;
+  /**
+   * One line, computed by the HOST, saying how much LINTING the chosen level
+   * runs — e.g. "4 of 7 lint rules on at this level". Omitted → the line is
+   * absent, and every existing caller renders exactly what it did before.
+   *
+   * WHY the host computes it instead of this file: the answer lives in
+   * `src/scene/validationLevel.ts`, and `components/layering.test.ts`'s import
+   * wall means no file in this directory may import the scene kit — the rule
+   * that lets a `Block` be driven by a story literal, a React Flow node or a
+   * tldraw shape. So the level's MEANING crosses as a string, the same way
+   * `aliasItems` crosses as data because "the trunk never names a tool".
+   */
+  validationSummary?: string;
 
   // ── Hotkeys and aliases ───────────────────────────────────────────────
   /** The host's REAL chords. Empty → the Hotkeys group is omitted rather
@@ -328,16 +349,36 @@ function pointerCategory(input: SettingsCategoriesInput): SettingsCategory {
       },
     },
     {
-      // Ported from `InterfaceSettings.tsx:922-943`.
+      // Ported from `InterfaceSettings.tsx:922-943` as a SWITCH; shown as a
+      // two-option radio since 2026-09-21 (ruling 2).
+      //
+      // WHY a radio and not the archive's toggle: Zach asked for both
+      // conventions to be OFFERED — "wheel = zoom (Figma-ish) vs wheel = pan,
+      // ctrl+wheel = zoom (Excalidraw/tldraw)... its about giving the user
+      // flexibility to do what they want". A switch labelled after one of them
+      // frames the other as the default and this one as the deviation; a radio
+      // that names both, with the app each comes from, is the same stored
+      // boolean presented as the choice it actually is. Same control kind the
+      // other two either/or rows in this file already use (`file-navigation`,
+      // `settings-presentation`), so it is this page's own idiom, not a new one.
+      //
+      // The STORAGE is unchanged: still `directWheelZoom` in
+      // `systemsketch.appearance.v1`, read and written through
+      // `cameraGestures.ts`'s pair of pure translators, so a browser that had
+      // already chosen keeps its choice.
       id: "direct-wheel-zoom",
-      title: "Direct wheel zoom",
-      description: "Off: scroll pans and Ctrl/Cmd + scroll zooms. On: scroll zooms directly.",
+      title: "What the scroll wheel does",
       group: "Wheel behaviour",
-      groupDescription: "Use normal whiteboard navigation, or make the wheel zoom directly.",
+      groupDescription: "Pick the convention you already have muscle memory for. Everything below follows it.",
       control: {
-        kind: "switch",
-        checked: appearance.directWheelZoom,
-        onCheckedChange: (checked) => input.onAppearanceChange({ directWheelZoom: checked }),
+        kind: "radio",
+        value: wheelConventionOf(appearance),
+        options: WHEEL_CONVENTIONS_IN_ORDER.map((convention) => ({
+          value: convention,
+          label: WHEEL_CONVENTION_LABELS[convention],
+          description: WHEEL_CONVENTION_DESCRIPTIONS[convention],
+        })),
+        onValueChange: (value) => input.onAppearanceChange(appearanceForWheelConvention(value as WheelConvention)),
       },
     },
   ];
@@ -569,10 +610,22 @@ function connectionsCategory(input: SettingsCategoriesInput): SettingsCategory {
       // into the same nine switches, never a second source of truth. Flip one
       // switch and the row honestly reads Custom instead of lying about which
       // preset is on. `matchingEdgePolicyPreset` is that derivation.
+      // Ruling 3 (Zach, 2026-09-21): "have the connection validation setting in
+      // the settings panel so you can switch between what level of linting you
+      // want from whiteboard, where anything goes to like evalid code, etc."
+      //
+      // The four rungs, their labels and their summaries were already here —
+      // this row has BEEN the scale since the port. What changed is that the
+      // scale now means something at rest too: `src/scene/validationLevel.ts`
+      // maps the same four ids onto which of the linter's rules run, and
+      // `validationSummary` is the host reporting that back. So the row is
+      // renamed from "Edge creation policy" (prevention only) to what it
+      // actually governs — and no id, preset or stored key moves, because the
+      // persisted record is unchanged.
       id: "edge-policy-preset",
-      title: "Edge creation policy",
+      title: "Validation level",
       description:
-        "What the app will let you wire. Slide it all the way down for a plain whiteboard — any port to any port — or all the way up so only edges that could exist in the running program can be drawn at all.",
+        "How much the board checks your work — what it will let you wire, and how much it marks up at rest. Slide it all the way down for a plain whiteboard — any port to any port, nothing flagged — or all the way up so only edges that could exist in the running program are drawable at all.",
       control: {
         kind: "custom",
         render: (
@@ -605,8 +658,13 @@ function connectionsCategory(input: SettingsCategoriesInput): SettingsCategory {
             <p data-slot="edge-policy-summary" className="text-muted-foreground text-sm">
               {preset
                 ? edgePolicyPreset(preset).summary
-                : "Custom — these rules do not match a preset. Pick one above to start over."}
+                : "Custom — these rules do not match a level. Pick one above to start over."}
             </p>
+            {input.validationSummary === undefined ? null : (
+              <p data-slot="validation-lint-summary" className="text-muted-foreground text-sm">
+                {input.validationSummary}
+              </p>
+            )}
           </div>
         ),
       },
