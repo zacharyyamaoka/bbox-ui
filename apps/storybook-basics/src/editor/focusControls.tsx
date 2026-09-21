@@ -25,6 +25,29 @@ import { Button } from "../components/button";
 import { Slider } from "../components/slider";
 import type { FocusDirection, FocusStepLimits } from "../scene/focus";
 
+/** What the lens does to everything OUTSIDE the focused set. */
+/**
+ * WHY both range inputs carry `!` on their width, and `shrink-0`.
+ *
+ * `slider.tsx` is verbatim stock and its root carries
+ * `data-[orientation=horizontal]:w-full`. `cn`/tailwind-merge keeps that
+ * variant class ALONGSIDE the plain `w-[clamp(…)]` below — they are different
+ * keys to it — and the variant then wins on specificity, because an attribute
+ * selector beats none. A `w-full` inside a shrink-to-fit parent is circular,
+ * and the browser resolves it to ZERO: measured in the running app
+ * (`focusLens.smoke.test.tsx`, 2026-09-21) the track came back
+ * `width: 0` inside `apps/systemsketch`'s floating mount, where Playwright
+ * then refused to click it as "not visible". It only looked right in the
+ * story because the bench around it has a definite width.
+ *
+ * `!` puts the explicit width back in front, and `shrink-0` keeps the row
+ * from taking it away again when the whole control is narrower than its
+ * content.
+ */
+
+/** What the lens does to everything OUTSIDE the focused set. */
+export type FocusLensMode = "dim" | "hide";
+
 export interface FocusControlsProps {
   /** Something is selected that COULD start a focus (donor's
    *  `propagationSeedFromSelection` result) — shows the "Focus" trigger
@@ -38,12 +61,25 @@ export interface FocusControlsProps {
   onStart: () => void;
   onStepsChange: (direction: FocusDirection, value: number) => void;
   onClear: () => void;
+  /**
+   * DIM leaves the rest of the board painted faintly; HIDE takes it away.
+   *
+   * WHY the toggle is OPTIONAL and the control is unchanged without it: the
+   * archive's lens only ever dimmed (`propagation-focus.css` is the whole of
+   * its paint), so a host that wants exactly the ported behaviour passes
+   * neither prop and gets exactly it. Hiding is a real second mode and not a
+   * stronger dim — the host has to take the hidden shapes out of hit-testing
+   * too, or the board lets you grab what you just put away — so this kit will
+   * not offer the choice unless a host says it can honour it.
+   */
+  mode?: FocusLensMode;
+  onModeChange?: (mode: FocusLensMode) => void;
   className?: string;
 }
 
 /** The small selection lens: one explicit seed, separately bounded
  *  directions. Donor's own line, `PropagationFocusControls.tsx:22`. */
-export function FocusControls({ hasSeed, active, limits, upstreamSteps, downstreamSteps, onStart, onStepsChange, onClear, className }: FocusControlsProps) {
+export function FocusControls({ hasSeed, active, limits, upstreamSteps, downstreamSteps, onStart, onStepsChange, onClear, mode = "dim", onModeChange, className }: FocusControlsProps) {
   if (!hasSeed && !active) return null;
   return (
     <div
@@ -95,7 +131,7 @@ export function FocusControls({ hasSeed, active, limits, upstreamSteps, downstre
                 data-testid="focus-upstream"
                 aria-label="Upstream propagation steps"
                 aria-valuetext={limits.upstream === 0 ? "No upstream steps reachable" : `${upstreamSteps} of ${limits.upstream} upstream steps`}
-                className="w-[clamp(96px,10vw,150px)]"
+                className="w-[clamp(96px,10vw,150px)]! shrink-0"
                 min={limits.upstream === 0 ? 0 : 1}
                 max={limits.upstream}
                 step={1}
@@ -130,7 +166,7 @@ export function FocusControls({ hasSeed, active, limits, upstreamSteps, downstre
               data-testid="focus-downstream"
               aria-label="Downstream propagation steps"
               aria-valuetext={limits.downstream === 0 ? "No downstream steps reachable" : `${downstreamSteps} of ${limits.downstream} downstream steps`}
-              className="w-[clamp(96px,10vw,150px)]"
+              className="w-[clamp(96px,10vw,150px)]! shrink-0"
               min={limits.downstream === 0 ? 0 : 1}
               max={limits.downstream}
               step={1}
@@ -146,6 +182,20 @@ export function FocusControls({ hasSeed, active, limits, upstreamSteps, downstre
               {limits.downstream}
             </output>
           </label>
+          {onModeChange ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-testid="focus-mode"
+              data-mode={mode}
+              aria-pressed={mode === "hide"}
+              title={mode === "dim" ? "Isolate: hide everything outside the focus" : "Focus: dim everything outside the focus instead of hiding it"}
+              onClick={() => onModeChange(mode === "dim" ? "hide" : "dim")}
+            >
+              {mode === "dim" ? "Isolate" : "Dim"}
+            </Button>
+          ) : null}
           <Button type="button" variant="ghost" size="sm" data-testid="focus-clear" title="Clear focus" onClick={onClear}>
             Clear
           </Button>

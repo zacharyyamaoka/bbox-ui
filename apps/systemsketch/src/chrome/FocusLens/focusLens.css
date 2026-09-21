@@ -1,0 +1,23 @@
+/* src/chrome/FocusLens/focusLens.css — the DIM half of the focus lens
+   (parity item P-025). Presentation only: no document record changes, and no
+   authored opacity flattened.
+
+   Ported from the archive's `src/propagation/propagation-focus.css`, including
+   the reason it uses `filter: opacity()` rather than the `opacity` property —
+   a filter COMPOSES with each shape's own saved opacity, so a shape the user
+   set to 30% does not jump to full strength the moment it enters the focused
+   set. Same 0.17, same 120ms.
+
+   The archive marked every included host with a `data-propagation-focus`
+   attribute and then kept them marked through pans with a MutationObserver,
+   because tldraw unmounts off-screen shapes. This does not: `focusLens.tsx`
+   emits ONE generated rule naming the included ids, so a shape that re-mounts
+   mid-pan is already covered by the stylesheet and nothing has to notice it
+   arriving. The generated rule ties this one on specificity and wins on
+   document order — it is a <style> inside the container, this file is in the
+   bundle's head. */
+
+.tl-container[data-ss-focus="dim"] .tl-shape[data-shape-id] {
+  filter: opacity(0.17);
+  transition: filter 120ms ease-out;
+}

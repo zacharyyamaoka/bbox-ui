@@ -12,6 +12,7 @@ import { KITS } from "../shapes/registry";
 import { SystemSketchChromeBar } from "./TitleBar";
 import { SystemSketchDevTools } from "./DevMenu";
 import { FloatingSelectionToolbar } from "./ContextualPopupMenu";
+import { FocusLens } from "./FocusLens";
 import { SystemSketchPanel } from "./panels";
 import { useProblems } from "./problems";
 import { SystemSketchStatusStrip, type ChromePanel } from "./statusStrip";
@@ -336,6 +337,18 @@ function SystemSketchChrome() {
         <SystemSketchChromeBar />
       </div>
       <FloatingSelectionToolbar />
+      {/*
+        The propagation focus lens (P-025). Top-CENTRE, and that is NOT where
+        the archive put it — its controls rode inside the selection pill
+        (`SystemSketchChrome`'s `propagation-focus` item). Moved here for one
+        reason: this pill FOLLOWS the selection, and the lens survives the
+        selection changing (you pick a seed, then look around), so a control
+        that vanishes the moment you click elsewhere cannot be the thing that
+        clears the lens. Top-centre is the only edge of this overlay nothing
+        else claims — the chrome bar is top-LEFT, the dock bottom-centre, the
+        status strip bottom-right.
+      */}
+      <FocusLens />
       <SystemSketchPanel open={open} onClose={close} onSurfaceChange={setOpen} problems={problems} id={panelId} />
       {/* Quick switcher, dev panel and recorder: all three portal to
           `document.body` through their own stock Dialog/Popover, so this

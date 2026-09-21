@@ -23,6 +23,7 @@ import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./c
 import { installCameraGestures, useInterfaceScaleRootProps } from "./chrome/ShareMenu";
 import { Overlay } from "./chrome/overlay";
 import { installSelectionHistory } from "./document/selectionHistory";
+import { focusShapeVisibility } from "./chrome/FocusLens";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
 import { SourceContextMenu } from "./source/sourceContextMenu";
 
@@ -196,6 +197,11 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
         overrides={OVERRIDES}
         onMount={handleMount}
         persistenceKey={key ?? undefined}
+        // The ISOLATE half of the focus lens, through tldraw's own seam for it.
+        // With nothing isolated this answers `"inherit"` for every shape, which
+        // is exactly what tldraw does without the prop — see
+        // ./chrome/FocusLens/focusVisibility.ts for why hiding cannot be CSS.
+        getShapeVisibility={focusShapeVisibility}
         colorScheme="system"
         assetUrls={ASSET_URLS}
         licenseKey={TLDRAW_LICENSE_KEY}
