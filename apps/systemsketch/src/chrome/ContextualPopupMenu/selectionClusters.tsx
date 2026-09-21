@@ -18,7 +18,7 @@
 // canvas taken away.
 import { useCallback } from "react";
 import { AlignStartVertical, Focus } from "lucide-react";
-import { useEditor, useValue } from "tldraw";
+import { useEditor, useValue, type TLShapeId } from "tldraw";
 
 import { Button } from "@trunk/components/button";
 import { PILL_POPOVER } from "@trunk/components/floatingToolbar";
@@ -26,6 +26,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@trunk/components/popov
 import { Slider } from "@trunk/components/slider";
 import { ToolbarButton } from "@trunk/components/toolbar";
 
+import { traceGeometry } from "@trunk/components/trace";
+
+import { WIRE_ROUTINGS, setWireRouting, type WireRouting } from "./selectionActions";
 import {
   activeStyleRows,
   arrangeGroupsFor,
@@ -408,6 +411,123 @@ export function StyleCluster() {
       {rows.map((row) => (
         <StyleRowControl key={row.id} row={row} />
       ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- edge type */
+
+/**
+ * The 28 x 16 box every routing glyph is drawn in, and the two terminals every
+ * one of them is routed between.
+ *
+ * The pair is chosen so all four routings are TELLABLE APART at this size: a
+ * vertical drop between the ends (10 of 16px) is what separates `straight`
+ * from `slanted`, and opposing wall normals are what make `curved` bow and
+ * `elbow` turn. Terminals a few px inside the box leave room for the 1.6px
+ * stroke's round caps.
+ */
+const GLYPH_BOX = { w: 28, h: 16 } as const;
+const GLYPH_FROM = { x: 3, y: 13, dir: "right" } as const;
+const GLYPH_TO = { x: 25, y: 3, dir: "left" } as const;
+
+/**
+ * What a routing looks like — drawn by the REAL router, not by hand.
+ *
+ * WHY this calls `traceGeometry` instead of carrying four hand-authored `d`
+ * strings, which is what a menu icon normally is: a hand-drawn icon is a claim
+ * about what the router does, and a claim drifts. This one cannot — it is the
+ * same pure function `WireFace` and `WireShapeUtil.getGeometry` both ask, so
+ * the picture in the menu IS the route the board will draw. It also means a
+ * change to the elbow router shows up here for free, which is the point of the
+ * router being pure.
+ *
+ * `gap: 0` because there are no terminal glyphs to clear at this size — the
+ * board's own 8px pull-back (`WIRE_TERMINAL_GAP`) would eat most of a 22px
+ * span.
+ */
+export function RoutingGlyph({ routing }: { routing: WireRouting }) {
+  const path = traceGeometry({ from: GLYPH_FROM, to: GLYPH_TO, routing, gap: 0 }).path;
+  return (
+    <svg
+      viewBox={`0 0 ${GLYPH_BOX.w} ${GLYPH_BOX.h}`}
+      width={GLYPH_BOX.w}
+      height={GLYPH_BOX.h}
+      aria-hidden="true"
+      className="shrink-0"
+      data-testid={`ss-edge-routing-glyph-${routing}`}
+    >
+      <path d={path} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * P-008: the edge type selector.
+ *
+ * Until this existed, `ss-wire.routing` was a real prop with four legal values,
+ * a default of `elbow`, and NO way to change it inside the app — the backlog's
+ * own proof was that `grep -rn "routing" apps/systemsketch/src/chrome/` found
+ * two comment lines and nothing that writes. A board could only be re-routed by
+ * hand-editing the saved file.
+ *
+ * ONE FAMILY, ONE TRIGGER — this file's own law, and Zach's ("instead of being
+ * visible on the floating toolbar I want them hidden behind a icon"). Four
+ * routings collapse behind one cell, exactly like the style rows above. The
+ * "S-curve button" the ask names is the `curved` entry: in this repo the
+ * default bezier IS the S (see `WIRE_ROUTINGS`' own parity note).
+ *
+ * WHY it appears for ANY selection containing a cable rather than only for a
+ * lone cable: a routing is a property, not a face, and re-routing a bundle in
+ * one press is most of the value. The write is scoped to the cable ids —
+ * a mixed selection of blocks and cables re-routes the cables and leaves the
+ * blocks alone.
+ */
+export function EdgeTypeCluster({ wires, routing }: { wires: readonly TLShapeId[]; routing: WireRouting | null }) {
+  const editor = useEditor();
+  if (wires.length === 0) return null;
+  const current = WIRE_ROUTINGS.find((entry) => entry.id === routing) ?? null;
+
+  return (
+    <div className="flex h-10 shrink-0 items-center" data-testid="ss-selection-edge-type">
+      <Popover>
+        <PopoverTrigger
+          render={<Button variant="ghost" size="sm" className={CELL_TRIGGER} />}
+          data-testid="ss-edge-routing"
+          aria-label={`Edge type: ${current ? current.label : "mixed"}`}
+          title="Edge type"
+        >
+          {/* A mixed selection has no route to draw, so it says so in the
+              trigger's own text cell rather than picking one cable's answer
+              to stand for all of them. */}
+          {current ? (
+            <RoutingGlyph routing={current.id} />
+          ) : (
+            <span className="px-1 text-[11px] leading-none font-normal whitespace-nowrap">Mixed</span>
+          )}
+          <TriggerChevron />
+        </PopoverTrigger>
+        <PopoverContent align="start" className={`w-auto p-2 ${PILL_POPOVER}`} data-testid="ss-edge-routing-panel">
+          <div className="flex flex-col gap-1" role="group" aria-label="Edge type">
+            {WIRE_ROUTINGS.map((entry) => (
+              <Button
+                key={entry.id}
+                variant="ghost"
+                size="sm"
+                aria-pressed={entry.id === routing}
+                data-testid={`ss-edge-routing-${entry.id}`}
+                aria-label={entry.label}
+                title={entry.hint}
+                className={`${ON_PILL} h-8 w-full justify-start gap-2 rounded-[5px] border-0 px-2 text-[11px] font-normal ${entry.id === routing ? "bg-[#8a38f5] hover:bg-[#8a38f5]" : ""}`}
+                onClick={() => setWireRouting(editor, wires, entry.id)}
+              >
+                <RoutingGlyph routing={entry.id} />
+                <span className="text-[11px]">{entry.label}</span>
+              </Button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

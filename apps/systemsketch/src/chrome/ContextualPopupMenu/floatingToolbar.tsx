@@ -38,6 +38,7 @@ import {
   ArrangeCluster,
   CELL_ICON,
   CELL_TRIGGER,
+  EdgeTypeCluster,
   FocusButton,
   OpacityCluster,
   PILL_SEPARATOR,
@@ -323,7 +324,14 @@ export function FloatingSelectionToolbar() {
           construction rather than by an `else`. */}
       <StyleCluster />
 
-      {subject.blockView !== null || subject.codeLanguage !== null ? (
+      {/* P-008. Unlike the two rows above, this one is NOT gated on a lone
+          selection: routing is a property of a cable, not a face, so selecting
+          a bundle and re-routing all of it in one press is most of the point.
+          `EdgeTypeCluster` hides itself when no cable is selected, so it needs
+          no condition here — the same contract Arrange and Focus follow. */}
+      <EdgeTypeCluster wires={subject.wires} routing={subject.wireRouting} />
+
+      {subject.blockView !== null || subject.codeLanguage !== null || subject.wires.length > 0 ? (
         <ToolbarSeparator className={PILL_SEPARATOR} />
       ) : null}
 
