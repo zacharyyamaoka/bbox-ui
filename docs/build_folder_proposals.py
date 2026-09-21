@@ -49,55 +49,90 @@ PORTEDGE_FACTS = [
 # `kept` = an AI analysis block on his page that he retained (still his stated position by
 # adoption, but not his voice — attributed separately so the citation is honest).
 PRINCIPLES = [
-    ("P1", "Isolation, then together", "mine", 36,
+    ("P1", "Isolation, then together", "mine", "PROJECT:36",
      "being able to see each of the components in isolation and then also together right.",
      "The organising goal of the whole library. Any scheme has to make a part legible alone "
      "<em>and</em> legible in composition."),
-    ("P2", "Solve it once", "mine", 38,
+    ("P2", "Solve it once", "mine", "PROJECT:38",
      "let me solve it once and make it right",
      "Anti-duplication, stated as a value. Copying an aspect into every component folder is the "
      "thing this rejects."),
-    ("P3", "The portability line", "mine", 92,
+    ("P3", "The portability line", "mine", "PROJECT:92",
      "If you look at it like static UI. without all the interactions, that certainly is stuff "
      "that is very portable. alot of the interactions though not so much.",
      "<b>The sharpest structural principle on the page.</b> You already split a component along "
      "static-vs-interaction, on portability grounds. That is a reason to cut there rather than "
      "anywhere else."),
-    ("P4", "Detach is universal", "mine", 103,
+    ("P4", "Detach is universal", "mine", "PROJECT:103",
      "All components support \u2018detach to primative\u2019, which means even the most complex "
      "composite component can also support \u2018detach to primative\u2019",
      "If <em>every</em> component supports it, it cannot live inside any one of them. This is the "
      "principled case for a top-level <code>detach/</code> — which already exists, 1,357 lines."),
-    ("P5", "Extraction regret", "mine", 125,
+    ("P5", "Extraction regret", "mine", "PROJECT:125",
      "There seems to be alot of things that its a shame they haven\u2019t been like extracted from "
      "a particular library, for example like the elbow routing",
      "You have already named the failure mode: reusable logic trapped inside something specific. "
      "Argues for hoisting cross-cutting aspects out."),
-    ("P6", "Capability tiers", "mine", 132,
+    ("P6", "Capability tiers", "mine", "PROJECT:132",
      "What is possible with just the whiteboard and no contextual menu? what is possible with the "
      "whiteboard and a contextual menu? What is possible with the whiteboard and a inspector menu? "
      "These are different things right...",
      "You already think of the editing surfaces as <em>tiers of capability</em>. That is a ready-made "
      "organising axis for <code>edit/</code> — and a better one than “menus vs panels”."),
-    ("P7", "Simple / Port / Expanded", "mine", 202,
+    ("P7", "Simple / Port / Expanded", "mine", "PROJECT:202",
      "3 key views — Simple, Port, Expanded (S/P/E)",
      "States are a first-class axis, not a detail. A component library is mostly states, so a scheme "
      "that has no home for them is incomplete."),
-    ("P8", "Specific, solved generally", "mine", 783,
+    ("P8", "Specific, solved generally", "mine", "PROJECT:783",
      "For me one trick is to just try to solve a very specific problem in the most general way "
      "possible — that way you at least get 1 problem, and you are open to get as many other ones "
      "as you may end up getting.",
      "Against speculative structure. Build the folder when there is a specific problem in it, not "
      "in advance — which is an argument for graduating rather than imposing."),
-    ("P9", "What is portable", "kept", 283,
+    ("P9", "What is portable", "kept", "PROJECT:283",
      "What is portable is <b>the model and the algorithms, never the components.</b>",
      "The components/scene split is about portability, not tidiness. Explains why scene must stay "
      "pure and why components may not import it."),
-    ("P10", "One pure core, N host bindings", "kept", 285,
+    ("P10", "One pure core, N host bindings", "kept", "PROJECT:285",
      "one pure core, N host bindings that share nothing with each other",
      "The narrow waist. <b>The layer boundary is what carries the value</b> — which means the "
      "within-layer folder shape, the thing you are asking about, is a second-order decision. Worth "
      "saying plainly rather than overselling any option below."),
+    ("P11", "Presets get folders too", "mine", "PROJECT:2360",
+     "in story board please organize though so its kinda clear.. We will have lots of block "
+     "presets coming up. each should kidna get their own folder as if it was a component, even "
+     "though its just a preset.",
+     "<b>A settled instruction, already given.</b> One folder per preset, peer to components — "
+     "even though a preset is not a component. Any scheme has to carry this, and none of mine did "
+     "until now. Reinforced by <em>“All of these can be made with specific settings of the basic "
+     "components, no need for new things”</em> (MOC:221): presets get folders, not component "
+     "code."),
+    ("P12", "You already over-modularised once", "mine", "MOC:475",
+     "frusterating with kinda like the amount of duplication going on… The goal was to basically "
+     "get a more modular structure going on. <b>I think I went quite overboard though and got lost "
+     "in the weeds.</b> there is this fine balance…",
+     "<b>The strongest argument in the whole document, and it is a warning.</b> The restart was "
+     "caused by duplication; the over-correction was caused by too much structure. You have named "
+     "both failure modes yourself, which is exactly the case for graduating rather than imposing."),
+    ("P13", "Prefer one big refactor", "mine", "MOC:485",
+     "So let me actually just get fabel 5.1 to just refactor this all in one shot... that is really "
+     "how you want to be working more efficiently right Zach, not these small steps ideally...",
+     "<b>This cuts against my own recommendation</b> and I would rather surface it than bury it. "
+     "Proposal 5 sells “incremental, stoppable migration” as a virtue; you have said you "
+     "prefer one shot. See the note under the recommendation."),
+    ("P14", "Hand-wire it, do not auto-generate", "mine", "PROJECT:3377",
+     "you could almost like auto generate these inspector panels I don’t see right now me having "
+     "like that many different options so I think we can almost hand design them and hand wire them "
+     "for now",
+     "An explicit rejection of premature generality, in the exact place a framework is most "
+     "tempting. Ratifies killing the manifest/registry idea, and warns against any scheme whose "
+     "value is “it would scale”."),
+    ("P15", "Two surfaces, always", "mine", "MOC:285",
+     "1. All the behaviors I request. They should be reflected in the isolated /create page as part "
+     "of bbox-ui  2. Then they should also be relflected in system sketch",
+     "Every behaviour owes an isolated bench <em>and</em> the consuming app. This is why the "
+     "cross-app <code>@trunk</code> boundary exists, and why “it works in Storybook” is only "
+     "half of done."),
 ]
 
 PROPOSALS = [
@@ -417,7 +452,7 @@ def build():
         f'<tr id="{pid}"><td class="pid2">{pid}</td><td><b>{name}</b>'
         f'<span class="src {src}">{"his" if src == "mine" else "kept"}</span><br>'
         f'<span class="quote">\u201c{quote}\u201d</span>'
-        f'<br><span class="cite">PROJECT - Black Box UI.md:{line}</span></td>'
+        f'<br><span class="cite">{line if isinstance(line,str) else "PROJECT:"+str(line)}</span></td>'
         f'<td class="cons">{cons}</td></tr>'
         for pid, name, src, line, quote, cons in PRINCIPLES)
     facts = "".join(f"<tr><td><b>{a}</b></td><td>{b}</td></tr>" for a, b in PORTEDGE_FACTS)
@@ -668,6 +703,7 @@ serves every draggable part. Copying it into <code>components/port/drag.ts</code
 <code>components/block/drag.ts</code> is the opposite of “solve it once and make it right”.
 <a class="pref" href="#P4">P4</a> proves the pattern already works — <code>detach/</code> is a
 top-level folder precisely because <em>every</em> component supports detach.</td></tr>
+<tr><td class="pid2">P12</td><td><b>You have already over-corrected once.</b> The restart came from duplication; the thing that went wrong next was <em>too much</em> structure — “quite overboard… lost in the weeds”. That is the single strongest reason to spend folders only where a component has earned them, and it is your own account of what happened. <a class="pref" href="#P14">P14</a> says the same thing from the other side: hand-wire it, do not auto-generate.</td></tr>
 <tr><td class="pid2">P8</td><td><b>Do not impose folders in advance.</b> “Solve a very specific
 problem in the most general way possible” cuts against creating seven sub-folders for a 90-line
 component that has no code to put in them. Split a component the day it has a specific problem —
@@ -684,6 +720,28 @@ graduated scheme. Feature-named files come <em>after</em> that, only if a compon
 organise by <b>capability tier</b> — what works with no menu, with a contextual menu, with an
 inspector — because that is how you already reason about those surfaces. It is a better cut than
 “menus vs panels”, which is about widgets rather than about what the user can do.</p>
+
+<div class="find" style="border-left-color:var(--no)">
+<h3>Two corrections a fuller read of your page forced</h3>
+<p><b>1 — You already answered part of this, and none of my six schemes honoured it.</b>
+<a class="pref" href="#P11">P11</a>: <em>“each should kidna get their own folder as if it was a
+component, even though its just a preset.”</em> Presets are peer to components at level 1.
+So <code>components/</code> is not only the 77 parts — <code>loop/</code>, <code>while/</code>,
+<code>branch/</code> and the rest sit beside them, holding configuration rather than component
+code (<a class="pref" href="#P11">MOC:221</a>: <em>“no need for new things”</em>). Every
+scheme above should be read with a <code>presets/</code> peer folder added.</p>
+<p><b>2 — My “incremental migration” selling point contradicts a preference you have
+stated.</b> <a class="pref" href="#P13">P13</a>: <em>“just refactor this all in one shot… not
+these small steps ideally.”</em> I listed “incremental, stoppable” as a virtue of proposal
+5 and as a mark against 1 and 2. On your stated preference that is backwards.</p>
+<p>The resolution is that these are different decisions and only one of them is about speed.
+<b>How much structure</b> to impose is settled by <a class="pref" href="#P12">P12</a> — you have
+already been “quite overboard… lost in the weeds” once, so the answer is: only where a
+component has earned it. <b>How fast to get there</b> is settled by P13: once you have picked the
+target shape, do it in one pass, not a component a week. Graduated is about the <em>destination</em>,
+not the pace. So: decide the scheme now, apply it to all 22 large components in one shot, and leave
+the 55 small ones alone permanently — that is one refactor, not a drip.</p>
+</div>
 
 <h2>The one thing worth writing down</h2>
 <p>The missing artifact is small: <b>a list of which aspects are cross-cutting and which are
