@@ -159,19 +159,47 @@ describe("the selection pill — opacity", () => {
 });
 
 describe("the selection pill — the tldraw style bar", () => {
-  it("appears for a stock geo shape and NOT for one of the app's own blocks", async () => {
+  // AMENDED BY P-035, and the amendment SHARPENS the claim rather than
+  // relaxing it.
+  //
+  // This case used to assert "the style bar appears for a geo and NOT for one
+  // of the app's own blocks", at CLUSTER granularity. That passed only while
+  // no `ss-*` shape declared a `StyleProp` at all, so the cluster was empty
+  // for a block by arithmetic. P-035 gives `ss-block`/`ss-port`/`ss-wire` a
+  // real style of their own (`ss:diff`), so the cluster now renders for a
+  // block — carrying exactly one row.
+  //
+  // The thing the original case was protecting is NOT that cluster's absence.
+  // `isNativeTldrawSelection`'s own note says what it is: never "silently hand
+  // a new app shape the style bar and let a user set a `dash` on it". So the
+  // assertion moves to ROW granularity, where that danger actually lives, and
+  // is now two-way: tldraw's six rows must never reach a block, and the app's
+  // Diff row must never reach a geo. Measured before the amendment, at the
+  // commit that added the prop: the old cluster-level line timed out at 10s
+  // with the pill showing the Diff trigger beside the block-view toggle.
+  it("gives a geo tldraw's OWN rows and none of the app's, and an ss- block the app's row and none of tldraw's", async () => {
     app = await mountApp();
 
+    const rowsOnPill = async (): Promise<string[]> => {
+      const bar = await pill();
+      await waitFor(() => bar.querySelector('[data-testid="ss-selection-style"]'), { what: "the style bar" });
+      return [...bar.querySelectorAll<HTMLElement>('[data-testid^="ss-style-"]')]
+        .map((element) => element.getAttribute("data-testid")!)
+        .filter((id) => /^ss-style-[a-z]+$/.test(id))
+        .map((id) => id.replace("ss-style-", ""));
+    };
+
     app.editor.select(placeGeo(300, 300));
-    const withGeo = await pill();
-    await waitFor(() => withGeo.querySelector('[data-testid="ss-selection-style"]'), { what: "the style bar on a geo" });
+    const onGeo = await rowsOnPill();
+    expect(onGeo, "a geo carries tldraw's colour row").toContain("color");
+    expect(onGeo, "a geo must NEVER be offered the app's diff mark").not.toContain("diff");
 
     app.editor.selectNone();
     app.editor.select(placeBlock("mine", 700, 300));
-    const withBlock = await pill();
-    await waitFor(() => (withBlock.querySelector('[data-testid="ss-selection-style"]') === null ? true : null), {
-      what: "NO style bar on an ss- block",
-    });
+    const onBlock = await rowsOnPill();
+    // The whole point of the original case, kept verbatim in force: no `dash`,
+    // no `fill`, no `font` on one of ours.
+    expect(onBlock, "an ss- block gets ONLY its own row — never a dash or a fill").toEqual(["diff"]);
   });
 
   it("picking a colour writes tldraw's own style onto the shape", async () => {

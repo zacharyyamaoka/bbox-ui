@@ -410,7 +410,7 @@ export function PortFace({ shape }: { shape: PortShape }) {
   );
 
   return (
-    <NodeShapeFrame<PortShape> shapeId={shape.id} shapeType={PORT_SHAPE_TYPE} w={w} h={h}>
+    <NodeShapeFrame<PortShape> shapeId={shape.id} shapeType={PORT_SHAPE_TYPE} w={w} h={h} diff={shape.props.diff}>
       {/* WHY this exact nesting — `data-block-id` OUTSIDE `data-port-id`, with
           the trunk's LabeledPort (and so `[data-slot="port-dot"]`) inside: it
           is the DOM contract `sightPortDots` reads

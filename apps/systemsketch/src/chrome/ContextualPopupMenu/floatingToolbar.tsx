@@ -319,11 +319,19 @@ export function FloatingSelectionToolbar() {
         </DropdownMenu>
       ) : null}
 
-      {/* The tldraw style bar. It renders ONLY for a selection made entirely
-          of tldraw's own shapes, so it can never appear beside the block-view
-          toggle above — a selection is one or the other, never both. The two
-          rows above and this one are therefore mutually exclusive by
-          construction rather than by an `else`. */}
+      {/* The style bar. Which rows it shows is `getSharedStyles()`' answer and
+          nothing else, so it needs no condition here.
+
+          SUPERSEDED BY P-035, and worth stating because the old note read as a
+          guarantee: this used to say the cluster "renders ONLY for a selection
+          made entirely of tldraw's own shapes… mutually exclusive by
+          construction". That was never construction — it was arithmetic that
+          happened to hold while no `ss-*` shape declared a style. `ss:diff`
+          (shapes/shared/diffMark.ts) is declared on `ss-block`, `ss-port` and
+          `ss-wire`, so this cluster now renders ONE row, Diff, right beside
+          the block-view toggle above. Deliberate: marking the block you are
+          looking at is the same gesture as changing its view. The six tldraw
+          rows still never appear here, because no `ss-*` shape carries them. */}
       <StyleCluster />
 
       {/* P-008. Unlike the two rows above, this one is NOT gated on a lone

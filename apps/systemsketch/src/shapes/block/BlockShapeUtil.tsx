@@ -23,6 +23,7 @@ import {
 } from "tldraw";
 
 import { PortAnchorV, PortSpecV } from "../shared/props";
+import { DiffMarkStyle, type DiffMark } from "../shared/diffMark";
 import { BLOCK_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE, type PortSide } from "../types";
 import { BlockFace } from "./BlockFace";
 
@@ -84,6 +85,21 @@ export interface BlockShapeProps {
    * would be the thing that lies.
    */
   glyph: string;
+  /**
+   * P-035. What a comparison did to this block — `normal` when it is not part
+   * of one. A real tldraw `StyleProp`, so one press marks every selected
+   * block, port and cable at once and the NEXT block drawn is born with the
+   * same mark; the full argument, including why this is the diff half alone
+   * and not the backlog's six-value `state`, is `../shared/diffMark.ts`.
+   *
+   * WHY persisted, unlike a port's `received` and unlike the severity half:
+   * ruling 9's test again. "This block is part of the change I am proposing"
+   * is an authoring decision about the document, and a board that forgot it on
+   * reload would be the thing that lies. `error`/`warning` fail the same test
+   * from the other side — they are derived by `lintScene`, so persisting a
+   * hand-painted one would contradict the board it sits on.
+   */
+  diff: DiffMark;
   ports: Record<PortSide, BlockPortSpec[]>;
   /** MEASURED shape-local dot centres, written back by the host. A writer
    *  (pyblocks) leaves this `[]` and the first render fills it. */
@@ -143,6 +159,12 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
     // fallback into a record the store refuses, i.e. a board that no longer
     // opens. The grammar is enforced where it is written, not where it is read.
     glyph: T.string,
+    // P-035. The validator IS the style: a `StyleProp` is a `T.Validatable`,
+    // and putting it here (rather than a bare `T.literalEnum`) is what makes
+    // tldraw index it in `editor.styleProps["ss-block"]` — which is the ONE
+    // registration that buys all three StyleProp behaviours at once. Hand-
+    // rolling the enum would give the shape a prop and nothing else.
+    diff: DiffMarkStyle,
     ports: T.object({
       left: T.arrayOf(PortSpecV),
       right: T.arrayOf(PortSpecV),
@@ -202,6 +224,25 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
           props.glyph = "";
         },
       },
+      {
+        id: `com.tldraw.shape.${BLOCK_SHAPE_TYPE}/4`,
+        // P-035. EVERY board written before a block could carry a diff mark
+        // gets `normal`, the same answer `getDefaultProps` gives a new block —
+        // the only value that leaves an old board painting exactly as it did.
+        //
+        // This step is not optional and it is not paperwork. `DiffMarkStyle`
+        // rejects `undefined`, so without it every legacy board fails
+        // validation and REFUSES TO OPEN — not "opens unpainted". That is the
+        // regression P-028 shipped when it added `props.pins` with an empty
+        // sequence and took the committed fixture
+        // `src/review/__fixtures__/two-blocks.tldr` down with it, caught a
+        // wave later by an unrelated lane. `src/document/diffMarkMigration.test.ts`
+        // is this lane's version of not repeating it, and it opens that same
+        // real file.
+        up: (props: { diff?: string }) => {
+          props.diff ??= "normal";
+        },
+      },
     ],
   });
 
@@ -214,6 +255,12 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
       description: "",
       showDescription: true,
       glyph: "",
+      // A block is born UNMARKED, for the same reason a cable is born
+      // untunnelled and with no pins: a mark is something the user does, never
+      // a state a shape is born in. `createShapes` overwrites this with the
+      // ARMED value when one is set (Editor.mjs:6336-6338), which is exactly
+      // how "draw three more added blocks" works.
+      diff: "normal",
       ports: { left: [], right: [], top: [], bottom: [] },
       anchors: [],
     };

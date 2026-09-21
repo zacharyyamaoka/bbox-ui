@@ -23,11 +23,24 @@ import type { Point } from "@trunk/components/trace.layout";
 import { wireTunnelState } from "./wireTunnel";
 
 import { ElbowPinV, PointV } from "../shared/props";
+import { DiffMarkStyle, type DiffMark } from "../shared/diffMark";
 import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import { WireFace } from "./WireFace";
 import { wireAutomaticRoute, wirePinnedRoute, wireRoutePoints, wireRouteSegments, wireTerminals } from "./wireGeometry";
 
 export interface WireShapeProps {
+  /**
+   * P-035. What a comparison did to this cable — `normal` when it is not part
+   * of one. A real tldraw `StyleProp`, and the ONE prop on this shape that is
+   * one: `routing` and `tunnel` both refuse to be styles because "a style
+   * writes to the OTHER kinds in a mixed selection, and tunnelling is a fact
+   * about a cable that no block or code cell has an answer for"
+   * (`chrome/ContextualPopupMenu/selectionActions.ts:151,176`). A diff mark is
+   * the exact inverse — Zach: "all the visual primitives should support kinda
+   * these states" — so writing across a mixed selection is the POINT. Full
+   * argument: `../shared/diffMark.ts`.
+   */
+  diff: DiffMark;
   variant: "data" | "async" | "delayed";
   routing: "straight" | "slanted" | "curved" | "elbow";
   color: string;
@@ -252,6 +265,10 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     // not a cable (plan §2). The validator is what makes that structural —
     // `documentModel.test.ts` puts a `variant: "control"` record at this
     // wall and requires it to throw.
+    // P-035. See `BlockShapeUtil`'s note on the same line: registering the
+    // style HERE is what puts it in `editor.styleProps["ss-wire"]`, and that
+    // index is what `setStyleForSelectedShapes` and `createShapes` read.
+    diff: DiffMarkStyle,
     variant: T.literalEnum("data", "async", "delayed"),
     routing: T.literalEnum("straight", "slanted", "curved", "elbow"),
     color: T.string,
@@ -297,6 +314,18 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
           props.pins ??= [];
         },
       },
+      {
+        id: `com.tldraw.shape.${WIRE_SHAPE_TYPE}/2`,
+        // P-035. A cable saved before diff marks existed carries no `diff`,
+        // and `DiffMarkStyle` rejects `undefined` exactly as `T.arrayOf` did
+        // for `pins` — so leaving this out would take the committed fixture
+        // `src/review/__fixtures__/two-blocks.tldr` down a SECOND time, the
+        // same way P-028 did. `src/document/diffMarkMigration.test.ts` opens
+        // that real file through the same parser `review/boardParam.ts` uses.
+        up: (props: { diff?: string }) => {
+          props.diff ??= "normal";
+        },
+      },
     ],
   });
 
@@ -309,7 +338,11 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     // `tunnel: false`, `layer: ""` — a cable is born visible and unfiled.
     // Tunnelling is something the user does (P-023), never a state a cable is
     // born in, for the same reason `pins: []` is empty.
-    return { variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [], tunnel: false, layer: "" };
+    // `diff: "normal"` — a cable is born unmarked, the same rule as `pins: []`
+    // and `tunnel: false` on the two lines above: marking is something the
+    // user does, never a state a cable is born in. The ARMED value, when one
+    // is set, replaces this in `createShapes` (Editor.mjs:6336-6338).
+    return { diff: "normal", variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [], tunnel: false, layer: "" };
   }
 
   /**

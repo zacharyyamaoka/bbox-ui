@@ -550,7 +550,7 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
   );
 
   return (
-    <NodeShapeFrame<BlockShape> shapeId={shape.id} shapeType={BLOCK_SHAPE_TYPE} w={w} h={h}>
+    <NodeShapeFrame<BlockShape> shapeId={shape.id} shapeType={BLOCK_SHAPE_TYPE} w={w} h={h} diff={shape.props.diff}>
       {/* `id` is the tldraw shape id, stamped as `data-block-id` — the anchor
           of both the dot sighting (shared/measure.ts) and the drag-ownership
           lookup (shared/pointerOwnership.ts). */}

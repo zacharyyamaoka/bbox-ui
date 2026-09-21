@@ -29,6 +29,8 @@ import { HTMLContainer, useEditor, useValue } from "tldraw";
 
 import { Trace } from "@trunk/components/trace";
 
+import { diffMarkPaint } from "../shared/diffMark";
+
 import { WIRE_TERMINAL_GAP, directionTowards, wireTerminals } from "./wireGeometry";
 import { wireDrag } from "./wireGesture";
 import { wireTunnelState } from "./wireTunnel";
@@ -78,6 +80,17 @@ export function WireFace({ shape }: { shape: WireShape }) {
         // absent `color` as its own default. Passing the empty string through
         // would paint `stroke: ""`, i.e. nothing.
         color: live.props.color || undefined,
+        // P-035. The comparison mark, as PAINT rather than as a layer.
+        //
+        // WHY a cable takes its mark on its own stroke while a block takes a
+        // wash and a ring: `docs/INVALID-STATES-PLAN.md` §6 puts "cable
+        // backdrops" on the DIAGNOSTIC side of the channel split and leaves
+        // the diff lane "the fill/wash/chip/typography channels". A line has
+        // no fill, so its stroke IS its fill channel — and a backdrop behind
+        // the run would be the one treatment §6 forbids here, because it is
+        // the treatment reserved for the axis that has to remain visible AT
+        // THE SAME TIME on a cable that is both changed and broken.
+        diff: live.props.diff,
         // P-023. The four-state answer, assembled in `./wireTunnel.ts` from
         // two document props and two runtime facts, and DECIDED by the
         // trunk's own `tunnelDisplayState`. It is read inside this `useValue`
@@ -102,7 +115,7 @@ export function WireFace({ shape }: { shape: WireShape }) {
         data-slot="wire-layer"
         style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, overflow: "visible", pointerEvents: "none" }}
       >
-        <g data-wire-id={shape.id}>
+        <g data-wire-id={shape.id} data-ss-diff={painted.diff === "normal" ? undefined : painted.diff}>
           <Trace
             id={shape.id}
             from={painted.from}
@@ -110,7 +123,12 @@ export function WireFace({ shape }: { shape: WireShape }) {
             routing={painted.routing}
             pins={painted.pins}
             variant={painted.variant}
-            color={painted.color}
+            // The mark wins over the authored colour while it is on, and the
+            // authored colour comes straight back when it is taken off — the
+            // mark is a LENS, not an edit. `props.color` is untouched either
+            // way, which is what makes "take the diff lens off" a style write
+            // and not a colour restore.
+            color={diffMarkPaint(painted.diff)?.ink ?? painted.color}
             // The dots are REAL `Port`s rendered by the blocks at each end,
             // so `Trace` must not draw its own terminal glyphs on top of
             // them — the donor passes the same `false` for the same reason.

@@ -27,6 +27,7 @@ import {
   ArrowDown,
   ArrowUp,
   BringToFront,
+  GitCompareArrows,
   Minus,
   PaintBucket,
   SendToBack,
@@ -44,6 +45,8 @@ import {
   type StyleProp,
   type TLShapeId,
 } from "tldraw";
+
+import { DIFF_MARK_LABELS, DiffMarkStyle } from "../../shapes/shared/diffMark";
 
 /* ------------------------------------------------------------------ arrange */
 
@@ -179,15 +182,23 @@ export function setSelectionOpacityPercent(editor: Editor, percent: number): voi
 /* -------------------------------------------------------------------- style */
 
 /**
- * The tldraw style rows the pill offers for a NATIVE tldraw shape (a geo box,
- * an arrow, a draw stroke, a text label) — Zach's second ask on 2026-09-20:
+ * The style rows the pill offers — Zach's second ask on 2026-09-20:
  * "FLoating toolbar over the tldraw primatives for styling".
  *
- * These are tldraw's own `StyleProp`s and their own option sets, read off the
- * exported style objects rather than re-listed as string literals here. A
- * hand-written copy would be a second place for the enum to be wrong the day
- * tldraw adds a colour — the exact trap `selectionActions.ts` calls out for
- * `BlockView`.
+ * Every option set is read off the `StyleProp` object rather than re-listed as
+ * string literals here. A hand-written copy would be a second place for the
+ * enum to be wrong the day tldraw adds a colour — the exact trap
+ * `selectionActions.ts` calls out for `BlockView`.
+ *
+ * AMENDED BY P-035, and the amendment matters to how this list reads: until
+ * then every row here was one of TLDRAW'S OWN styles, so the whole cluster was
+ * native-only as an emergent property — no `ss-*` shape declared a style, so
+ * `getSharedStyles()` returned nothing for one. `ss:diff` is this app's OWN
+ * `StyleProp` (`shapes/shared/diffMark.ts`), declared on `ss-block`, `ss-port`
+ * and `ss-wire`, so the Diff row appears for THOSE and the six tldraw rows do
+ * not — and vice versa. The mechanism that sorts them is unchanged and is
+ * still tldraw's: `activeStyleRows` drops any row the selection does not
+ * actually carry. Nothing here switches on a shape type, and nothing should.
  */
 export interface StyleRow {
   /** Stable id for a test id and a React key. */
@@ -240,6 +251,26 @@ export const STYLE_ROWS: readonly StyleRow[] = [
   // it, and the one every design tool uses, so it needs no icon and no value.
   { id: "font", label: "Font", style: DefaultFontStyle, values: valuesOf(DefaultFontStyle), paint: "label", face: "word", valueLabels: { __face: "Aa" } },
   { id: "align", label: "Align", style: DefaultHorizontalAlignStyle, values: valuesOf(DefaultHorizontalAlignStyle), paint: "label", face: "glyph", icon: AlignCenterHorizontal },
+  // P-035, the app's own style. LAST because it is the only row the six above
+  // can never share a selection with, so it never shifts one of their triggers
+  // sideways.
+  //
+  // `face: "glyph"` and not `"swatch"`, for this file's own reason: a swatch
+  // says "the value IS the thing to show", and a diff mark's value is a WORD
+  // ("Added"), not a colour — the colour is how it is painted on the board,
+  // not what it is. `valueLabels` carries Zach's spelling for the trunk's
+  // `modified` ("Changed"), exactly as `SIZE_LABELS` carries "Medium" for
+  // tldraw's `m`.
+  {
+    id: "diff",
+    label: "Diff",
+    style: DiffMarkStyle as unknown as StyleProp<string>,
+    values: valuesOf(DiffMarkStyle as unknown as StyleProp<string>),
+    paint: "label",
+    face: "glyph",
+    icon: GitCompareArrows,
+    valueLabels: DIFF_MARK_LABELS,
+  },
 ];
 
 /**
@@ -280,9 +311,38 @@ export function activeStyleRows(shared: ReadonlySharedStyleMap): ActiveStyleRow[
   return rows;
 }
 
+/**
+ * Set a style on the selection AND arm it for the next shape drawn.
+ *
+ * FIXED BY P-035, and the bug was not P-035's: this function called only
+ * `setStyleForSelectedShapes`, so NO row in this pill has ever armed anything.
+ * Pick blue with a geo selected, draw a second geo, and it came out black —
+ * which is not what tldraw does and not what any design tool does. Measured by
+ * `src/diffMark.smoke.test.tsx`'s arming case, which timed out at 10s waiting
+ * for `getStyleForNextShape` to report the value that had just been picked.
+ *
+ * The fix is tldraw's own two lines, in tldraw's own order, inside one
+ * `editor.run` — `StylePanelContext.mjs:18-31`, the stock style panel's
+ * `onValueChange`. Both calls, because they answer different questions:
+ * `setStyleForSelectedShapes` writes the shapes that exist,
+ * `setStyleForNextShapes` writes `instanceState.stylesForNextShape`, which
+ * `createShapes` folds into the initial props of every shape made afterwards
+ * (Editor.mjs:6336-6338). A StyleProp is the pair; one without the other is
+ * just a prop with a menu.
+ *
+ * DELIBERATELY NOT COPIED from the stock handler: its accel-key escape hatch
+ * (hold Ctrl to set the selection WITHOUT arming). It reads
+ * `editor.inputs.getAccelKey()` through `unsafe__withoutCapture`, which
+ * `tldraw`'s package does not re-export, and it is a behaviour with no test
+ * here. Named rather than silently dropped, so whoever wants it knows exactly
+ * which four lines to lift and from where.
+ */
 export function setStyle(editor: Editor, style: StyleProp<string>, value: string): void {
   editor.markHistoryStoppingPoint("style");
-  editor.setStyleForSelectedShapes(style, value);
+  editor.run(() => {
+    if (editor.isIn("select")) editor.setStyleForSelectedShapes(style, value);
+    editor.setStyleForNextShapes(style, value);
+  });
 }
 
 /* ----------------------------------------------------------------- selection */

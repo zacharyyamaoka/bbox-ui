@@ -87,6 +87,11 @@ describe("ss-block (L0)", () => {
       // P-036/P-043: a block ships with no icon. `""` is the "never chosen"
       // state (`decodeGlyphContent` -> `{kind:"none"}`), not a placeholder.
       glyph: "",
+      // P-035: a block ships UNMARKED. `"normal"` is the value that means "not
+      // part of any comparison", and it is also `DiffMarkStyle.defaultValue`,
+      // which is what makes an unarmed board paint exactly as it did before
+      // the prop existed.
+      diff: "normal",
       ports: { left: [], right: [], top: [], bottom: [] },
       anchors: [],
     });
@@ -112,6 +117,12 @@ describe("ss-block (L0)", () => {
         // one the picker mints and the resolver has to find again by the exact
         // kebab it stored.
         glyph: "lucide:rocket",
+        // P-035 — "fully-populated" means every prop the contract has, so the
+        // diff mark is enumerated here too, and `modified` specifically: it is
+        // the value whose SPELLING could drift, because the pill shows it as
+        // "Changed" (`DIFF_MARK_LABELS`) while the record must keep the
+        // trunk's `DIFF_OPERATIONS` word.
+        diff: "modified",
         ports: {
           left: [
             { id: "frame", declaration: "frame: Frame" },
@@ -175,7 +186,8 @@ describe("ss-code (L1)", () => {
 describe("ss-port (L2)", () => {
   it("defaults match the contract", () => {
     // ONE stored string, not a name beside a type (ruling 8).
-    expect(defaultsOf(PORT_SHAPE_TYPE)).toEqual({ w: 120, h: 32, declaration: "port", direction: "out", anchors: [] });
+    // P-035 adds `diff` — a port is born unmarked, like a block and a cable.
+    expect(defaultsOf(PORT_SHAPE_TYPE)).toEqual({ w: 120, h: 32, declaration: "port", direction: "out", diff: "normal", anchors: [] });
   });
 
   it("validates a measured floating port whose one anchor is FLOATING_PORT_ID", () => {
@@ -186,6 +198,10 @@ describe("ss-port (L2)", () => {
         h: 32,
         declaration: "gain: float",
         direction: "in",
+        // P-035 — every prop the contract has, and `added` here rather than
+        // `normal` so the round trip below proves a MARK survives a save, not
+        // just that the default does.
+        diff: "added",
         anchors: [{ portId: FLOATING_PORT_ID, x: 6, y: 16, side: null }],
       }),
     ]);
@@ -206,7 +222,9 @@ describe("ss-wire + ss-wire-binding (L3)", () => {
     // makes adding a prop to this shape an EDIT TO THIS LINE, so a new
     // persisted field cannot be introduced without someone stating its
     // default here.
-    expect(defaultsOf(WIRE_SHAPE_TYPE)).toEqual({ variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [], tunnel: false, layer: "" });
+    // P-035 adds `diff`, on the same rule as `pins`/`tunnel`/`layer` above: a
+    // cable is born unmarked.
+    expect(defaultsOf(WIRE_SHAPE_TYPE)).toEqual({ diff: "normal", variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [], tunnel: false, layer: "" });
   });
 
   it("a wire bound at both ends to two blocks validates and round-trips with its bindings", () => {

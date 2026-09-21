@@ -398,12 +398,20 @@ function StyleOption({ row, value }: { row: ActiveStyleRow; value: string }) {
 }
 
 /**
- * The style bar for a NATIVE tldraw selection — Zach's ask 2 on 2026-09-20.
+ * The style bar — Zach's ask 2 on 2026-09-20.
  *
  * Which rows appear is `editor.getSharedStyles()`' answer, not a switch on
  * shape type: select an arrow and there is no Fill row, because an arrow has
  * no fill. See `activeStyleRows`' own note for why re-deriving that per kind
  * would get arrows and text subtly wrong.
+ *
+ * P-035 is the proof that answer was the right one to take. It added `ss:diff`
+ * — this app's own `StyleProp` — to `ss-block`, `ss-port` and `ss-wire`, and
+ * this component needed NO change to start offering it: `getSharedStyles()`
+ * simply began reporting a style for shapes it had never reported one for, and
+ * the Diff row appeared. A `isNativeTldrawSelection()` gate here, which was the
+ * tempting shortcut while every style happened to be tldraw's, would have had
+ * to be found and unpicked instead.
  */
 export function StyleCluster() {
   const editor = useEditor();

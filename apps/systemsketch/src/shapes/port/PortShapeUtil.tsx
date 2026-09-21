@@ -21,6 +21,7 @@ import {
 } from "tldraw";
 
 import { PortAnchorV } from "../shared/props";
+import { DiffMarkStyle, type DiffMark } from "../shared/diffMark";
 import { PORT_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE, type PortSide } from "../types";
 import { PortFace } from "./PortFace";
 
@@ -43,6 +44,10 @@ export interface PortShapeProps {
    *  rejects. */
   declaration: string;
   direction: PortDirection;
+  /** P-035. What a comparison did to this port — see `../shared/diffMark.ts`
+   *  for why the diff half is a `StyleProp` and the severity half is not, and
+   *  `BlockShapeUtil`'s own `diff` note for why it persists. */
+  diff: DiffMark;
   /** Exactly one MEASURED anchor, whose `portId` is `FLOATING_PORT_ID`. */
   anchors: PortShapeAnchor[];
 }
@@ -63,6 +68,9 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
     h: T.number,
     declaration: T.string,
     direction: T.literalEnum("in", "out"),
+    // P-035. The style IS the validator — see `BlockShapeUtil`'s note on the
+    // same line for why this registration is the whole mechanism.
+    diff: DiffMarkStyle,
     anchors: T.arrayOf(PortAnchorV),
   };
 
@@ -82,6 +90,16 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
           delete props.type;
         },
       },
+      {
+        id: `com.tldraw.shape.${PORT_SHAPE_TYPE}/2`,
+        // P-035. Every board written before a port could carry a diff mark
+        // gets `normal`. Without it `DiffMarkStyle` rejects the absent value
+        // and the board REFUSES TO OPEN — the P-028 `pins` regression, which
+        // `src/document/diffMarkMigration.test.ts` exists to not repeat.
+        up: (props: { diff?: string }) => {
+          props.diff ??= "normal";
+        },
+      },
     ],
   });
 
@@ -95,7 +113,11 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
   // the real app, not assumed. Nothing reads a port's `w` but the engine's
   // own geometry, so the hug is the whole story: `getGeometry` below.
   override getDefaultProps(): PortShapeProps {
-    return { w: 120, h: 32, declaration: "port", direction: "out", anchors: [] };
+    // `diff: "normal"` — a port is born unmarked; marking is something the
+    // user does. `createShapes` replaces it with the ARMED value when one is
+    // set, which is the StyleProp half that makes marking a whole new subgraph
+    // one press instead of one press per shape.
+    return { w: 120, h: 32, declaration: "port", direction: "out", diff: "normal", anchors: [] };
   }
 
   // WHY the whole box is filled geometry rather than a circle for the dot plus
