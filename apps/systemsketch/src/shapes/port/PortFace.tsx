@@ -18,6 +18,7 @@ import { POINTER_OWNED_CLASS } from "@trunk/hosts/nodeViews";
 
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { FLOATING_PORT_ID, PORT_SHAPE_TYPE, WIRE_BINDING_TYPE } from "../types";
+import { availabilityAt, wireAvailability } from "../wire/portAvailability";
 import type { PortDirection, PortShape } from "./PortShapeUtil";
 
 /** Room between the dot and the shape's own edge, so the selection outline
@@ -278,6 +279,16 @@ export function PortFace({ shape }: { shape: PortShape }) {
     [editor, shape.id],
   );
 
+  // P-005: how this dot should paint while a cable is in flight —
+  // `undefined` whenever one is not, which is what keeps the at-rest grammar
+  // above in charge. A floating port has exactly one dot, so unlike a block's
+  // rails this is one lookup rather than one per item.
+  const eligible = useValue(
+    "ss-port availability",
+    () => availabilityAt(wireAvailability(editor).get(), shape.id, FLOATING_PORT_ID),
+    [editor, shape.id],
+  );
+
   // tldraw's own editing session is the switch: `canEdit` lets the select tool
   // set it on a double-click, and this reads it back. No second "am I editing"
   // state to fall out of sync with the engine's.
@@ -437,6 +448,11 @@ export function PortFace({ shape }: { shape: PortShape }) {
             edge={direction === "in" ? "left" : "right"}
             textLayout={TEXT_LAYOUT_FOR[direction]}
             state={wired ? "wired" : "empty"}
+            // P-005, the standalone-port half. `undefined` at rest, so the
+            // at-rest grammar (`wired`/`empty`) is what paints; during a cable
+            // drag it becomes the same verdict the DROP will give, computed
+            // once at the press by `installWireGesture`.
+            availability={eligible}
             // WHY the label slot rather than LabeledPort's built-in field: the
             // built-in takes ONE string (`children`) and owns its own
             // click-to-edit session, and this face needs two runs (name, then

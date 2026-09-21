@@ -53,7 +53,8 @@
 import { atom, type Atom, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
 import type { TraceTerminalSpec } from "@trunk/components/trace.layout";
-import type { PortDirection } from "@trunk/scene/lint";
+import { connectionAvailability } from "@trunk/scene/availability";
+import type { PortDirection, PortsOf } from "@trunk/scene/lint";
 import { validateConnectionAtLevel, type ValidationVocabulary } from "@trunk/scene/validationLevel";
 import { portTypeOfDeclaration } from "@trunk/scene/portDeclaration";
 
@@ -63,6 +64,7 @@ import { currentValidationLevel } from "../../chrome/ShareMenu/validationLevelHo
 import type { WireEnd } from "../../document/editEvents";
 import { PORT_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import { createWire } from "./createWire";
+import { wireAvailability } from "./portAvailability";
 import { portTerminal } from "./wireGeometry";
 
 /** How far the pointer must travel before a press counts as a drag. Below it,
@@ -246,7 +248,14 @@ function portsOfScene(scene: DocumentScene): (nodeId: string) => readonly string
  * candidate naming a port no node has is not a taste question, and it is the
  * one gate no rung can switch off.
  */
-export function connectionVocabulary(scene: DocumentScene): ValidationVocabulary {
+export function connectionVocabulary(scene: DocumentScene): ValidationVocabulary & { portsOf: PortsOf } {
+  // The return type NARROWS `ValidationVocabulary`, whose `portsOf` is
+  // optional, to say out loud what the paragraph above already argues: this
+  // board always knows its own ports, and `dangling-edge` is the one gate no
+  // rung can switch off. `connectionAvailability` REQUIRES a `portsOf` — it
+  // cannot enumerate targets without one — so without this narrowing the
+  // preview would have to either re-derive the vocabulary (a second copy to
+  // drift from the gate's) or carry a `??` fallback that can never run.
   return { portsOf: portsOfScene(scene), typeOf: portTypesOfScene(scene) };
 }
 
@@ -306,6 +315,7 @@ export function installWireGesture(editor: Editor): () => void {
   const container = editor.getContainer();
   const doc = container.ownerDocument;
   const { drag: dragAtom, drop: dropAtom } = overlayState(editor);
+  const availableAtom = wireAvailability(editor);
   let drag: ActiveDrag | null = null;
 
   const pagePointOf = (event: PointerEvent) => editor.screenToPage({ x: event.clientX, y: event.clientY });
@@ -349,7 +359,44 @@ export function installWireGesture(editor: Editor): () => void {
     drag = { pointerId: event.pointerId, from: ref, origin: { x: event.clientX, y: event.clientY } };
     dropAtom.set(null);
     dragAtom.set({ anchor, pointer: { x: page.x, y: page.y } });
+    // P-005. Computed HERE and nowhere else: `onPointerMove` deliberately
+    // never recomputes it — the legal move set is a property of where the
+    // gesture STARTED, and re-judging every port on every frame would also be
+    // the one place this feature could cost real time on a large board.
+    availableAtom.set(eligiblePorts(ref));
   };
+
+  /**
+   * Every other port on the board, judged against a cable leaving `from` —
+   * asked of the SAME judge, at the SAME level, with the SAME vocabulary that
+   * `commit` will use when the pointer comes up.
+   *
+   * WHY that identity is spelled out as one function rather than two similar
+   * call sites: the highlight's only job is to predict the drop. The moment
+   * the preview and the gate read different rules, the preview is a lie that
+   * looks authoritative — the failure `@trunk/editor/README.md`'s card 23
+   * describes ("JointJS's `Connect` tool skips `validateMagnet` where its raw
+   * press gates it, and that is how a 'validated' graph grows invalid
+   * edges"), just pointing the other way.
+   *
+   * It inherits the gate's blind spots too, and that is correct rather than a
+   * gap: no `directionOf` is supplied because nothing in this document
+   * declares one at the scene level, so the judge's polarity rule is inert
+   * for both of them together.
+   */
+  function eligiblePorts(from: DotRef) {
+    const scene = sceneFromRecords(editor.store.allRecords());
+    const level = currentValidationLevel();
+    const vocabulary = connectionVocabulary(scene);
+    return connectionAvailability(
+      scene,
+      { nodeId: from.nodeId, portId: from.portId },
+      {
+        portsOf: vocabulary.portsOf,
+        validate: (judged, candidate) => validateConnectionAtLevel(judged, candidate, level, vocabulary),
+      },
+    );
+  }
 
   // Paint only. Whether this press BECOMES a cable is decided in `finish`,
   // from the pointer's own release position — never from whether these fired.
@@ -365,6 +412,11 @@ export function installWireGesture(editor: Editor): () => void {
     const active = drag;
     drag = null;
     dragAtom.set(null);
+    // The marked set is cleared with the gesture, not with the drop — a
+    // cancelled drag, a miss and a landing all end the highlight. JointJS
+    // `_unmarkAvailableMagnets` sits at exactly this point in its own
+    // lifecycle (see `./portAvailability.ts`).
+    availableAtom.set(null);
     if (cancelled) return;
     // WHY the travel is measured HERE, from the press point to the release
     // point, instead of being accumulated by the move handler: a `moved` flag
@@ -456,6 +508,7 @@ export function installWireGesture(editor: Editor): () => void {
     // the board they were made on.
     dragAtom.set(null);
     dropAtom.set(null);
+    availableAtom.set(null);
     drag = null;
   };
 }

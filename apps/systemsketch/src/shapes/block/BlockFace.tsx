@@ -17,6 +17,7 @@ import { POINTER_OWNED_CLASS } from "@trunk/hosts/nodeViews";
 import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
 
 import { usePortProducers } from "../../document/sceneFromStore";
+import { availabilityAt, wireAvailability } from "../wire/portAvailability";
 import { isRegionCornerBlock } from "../region/cornerBlock";
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
@@ -141,6 +142,16 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
   // the same `producerCounts` the trunk hosts call (see `usePortProducers`).
   const producers = usePortProducers(editor, shape.id);
 
+  // P-005: while a cable is in flight, which of THIS block's dots could take
+  // it. `null` at every other moment, which is what makes the rails paint
+  // normally at rest — an eligible ring that outlived its gesture would be a
+  // permanent decoration claiming to be a live answer.
+  //
+  // The map is computed once per gesture by `installWireGesture` and read
+  // here through `useValue`, so a rail repaints when the gesture starts and
+  // again when it ends, and not on a single pointermove in between.
+  const eligible = useValue("ss-block port availability", () => wireAvailability(editor).get(), [editor]);
+
   // WHY: a region's corner card wears the trunk's own per-corner radii — the
   // two corners where its edges CONTINUE the frame's border go square, so the
   // border leaves the card straight instead of kinking twice on its way round
@@ -170,6 +181,11 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
             id: port.id,
             label: labelOf(port),
             state: wired.has(port.id) ? "wired" : undefined,
+            // `undefined` is "no opinion", and `Port` reads it as "paint the
+            // at-rest grammar" — see `availabilityAt` for why the dot the
+            // cable is LEAVING is deliberately in that bucket rather than
+            // marked available.
+            availability: availabilityAt(eligible, shape.id, port.id),
             // The RAW count, 1 included. One cable needs no number — the
             // wired dot already says "one" — but that threshold is a paint
             // rule with one owner, `Port`'s own `producers >= 2`; repeating

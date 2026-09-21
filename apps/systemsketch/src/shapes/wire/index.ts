@@ -36,6 +36,7 @@ export { WireShapeUtil, type WireShape, type WireShapeProps } from "./WireShapeU
 export { WireBindingUtil, type WireBinding, type WireBindingProps } from "./WireBindingUtil";
 export { createWire, type CreateWireOptions } from "./createWire";
 export { installWireGesture, pendingEdgeDrop, wireDrag, type PendingEdgeDrop, type WireDragState } from "./wireGesture";
+export { availabilityAt, wireAvailability, type PortAvailabilityPaint, type WireAvailabilityMap } from "./portAvailability";
 export { InFlightWire, WireFace } from "./WireFace";
 export {
   WIRE_TERMINAL_GAP,
