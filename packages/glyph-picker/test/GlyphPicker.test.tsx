@@ -17,10 +17,10 @@ import type { EmojiEntry } from "../src/emojiLibrary";
 // windowed grid, real search) is what the mandatory real-browser
 // Storybook proof is for (this file's own header) — a unit test only
 // needs the wiring to be provably real, not the data to be complete.
-vi.mock("../src/data/lucide-icons.json", () => ({
+vi.mock("@bbox-ui/glyph-content/data/lucide-icons.json", () => ({
   default: { version: "test", icons: [{ name: "Rocket", kebab: "rocket", tags: ["launch"], node: [] }] },
 }));
-vi.mock("../src/data/emoji.json", () => ({
+vi.mock("@bbox-ui/glyph-content/data/emoji.json", () => ({
   default: {
     version: "test",
     emoji: [{ char: "🚀", name: "rocket", slug: "rocket", group: "Travel & Places", keywords: ["launch"], skinTone: false }],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import lucideData from "../src/data/lucide-icons.json";
+import lucideData from "@bbox-ui/glyph-content/data/lucide-icons.json";
 import { buildLucideLibrary, searchLucide, type LucideLibraryEntry } from "../src/lucideLibrary";
 
 function entry(kebab: string, tags: readonly string[] = []): LucideLibraryEntry {

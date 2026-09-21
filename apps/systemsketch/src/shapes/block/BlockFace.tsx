@@ -12,6 +12,8 @@ import { BlockPort, type BlockEdgeSpec } from "@trunk/components/blockPort";
 import type { BlockSide } from "@trunk/components/port.layout";
 import type { PortEdgeItem } from "@trunk/components/portEdge";
 import { REGION_CORNER_BLOCK_STYLE } from "@trunk/components/region";
+import { GlyphPicker } from "@trunk/editor/glyphPicker";
+import { POINTER_OWNED_CLASS } from "@trunk/hosts/nodeViews";
 import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
 
 import { usePortProducers } from "../../document/sceneFromStore";
@@ -59,6 +61,56 @@ import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
  */
 function labelOf(port: BlockPortSpec): string {
   return parsePortDeclaration(port.declaration).name;
+}
+
+/**
+ * P-043's canvas trigger: the block's own icon, and pressing it opens the ONE
+ * picker (`@trunk/editor/glyphPicker`) — the same surface the right-hand
+ * inspector's row opens (chrome/panels.tsx).
+ *
+ * Three things here are not obvious and are the whole reason this is a named
+ * component rather than four lines inlined in the header:
+ *
+ * 1. `POINTER_OWNED_CLASS` ("nodrag"). `contentOwnsPress`
+ *    (shapes/shared/pointerOwnership.ts) answers "does the CONTENT own this
+ *    press, or does tldraw?" and for `ss-block` its rule is that a press on
+ *    `[data-slot="block-header"]` belongs to tldraw — the header IS the drag
+ *    handle. An icon living in that header is therefore a drag surface by
+ *    default: press it and the block slides, the popover never opens. The
+ *    `nodrag` class is the FIRST thing `contentOwnsPress` checks, so wearing
+ *    it is what carves this one 18px square out of the drag handle. It costs
+ *    exactly that square; the rest of the header still drags.
+ *
+ * 2. `portalContainer={editor.getContainer()}`. Base UI portals to
+ *    `document.body` by default, and tldraw's canvas is its own stacking
+ *    context — a popup in the body can land UNDER the board. The picker
+ *    publishes `portalContainer` for precisely this ("tldraw's own container
+ *    element, so the picker paints above the canvas rather than under it").
+ *
+ * 3. The write is a plain `editor.updateShape`, one history entry per pick.
+ *    Same granularity as the rail reorder below and the inspector's
+ *    description: choosing an icon is a real edit, not a measurement.
+ *
+ * WHY the empty slot paints at all, rather than appearing on hover the way
+ * Notion's "Add icon" does: the trunk's `Glyph` already answers this — an
+ * empty `content` renders "the dashed, 40%-opacity square Notion shows for
+ * 'add icon'" (components/glyph.tsx). Reveal-on-hover would be the prettier
+ * board, and it is deliberately not built: P-043's whole content is that a
+ * glyph is a CLICKABLE thing, and an affordance that only exists once the
+ * pointer is already on it cannot teach that. Revisit when the board is busy
+ * enough for the squares to read as noise.
+ */
+function BlockGlyph({ shape }: { shape: BlockShape }) {
+  const editor = useEditor();
+  return (
+    <GlyphPicker
+      value={shape.props.glyph}
+      onChange={(glyph) => editor.updateShape({ id: shape.id, type: BLOCK_SHAPE_TYPE, props: { glyph } })}
+      sizePreset="sm"
+      portalContainer={editor.getContainer()}
+      className={POINTER_OWNED_CLASS}
+    />
+  );
 }
 
 export function BlockFace({ shape }: { shape: BlockShape }) {
@@ -154,7 +206,17 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           lookup (shared/pointerOwnership.ts). */}
       <BlockPort id={shape.id} view={view} edges={edges}>
         <Block
-          header={name}
+          // The header is the icon and the name on one line — Notion's order,
+          // icon first. `min-w-0` + `truncate` on the name half and NOT on the
+          // row: without it the flex row refuses to shrink below its text and
+          // a long name pushes the icon out of the 160px card instead of
+          // eliding itself.
+          header={
+            <span data-slot="ss-block-header-line" className="flex min-w-0 items-center gap-1.5">
+              <BlockGlyph shape={shape} />
+              <span className="min-w-0 truncate">{name}</span>
+            </span>
+          }
           // RULING 9, the paint half. Zach: "the eye visibility control for
           // this is in the right hand inspector menu" — so the SHAPE carries
           // the pair and paints it, and nothing here draws a control. The

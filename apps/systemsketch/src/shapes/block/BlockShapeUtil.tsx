@@ -64,6 +64,26 @@ export interface BlockShapeProps {
    *  about the document, and a board that forgot it on reload would be the
    *  thing that lies. */
   showDescription: boolean;
+  /**
+   * P-036 / P-043. The block's icon, stored as ONE encoded string in
+   * `@bbox-ui/glyph-content`'s grammar — `""` (no icon), `lucide:<kebab>`,
+   * `emoji:<char>`, a `data:`/`http(s):` image URL, or `text:<chars>`.
+   *
+   * WHY one string rather than a `{kind, value}` pair, which is what the
+   * union it decodes to would suggest: the grammar's own header gives the
+   * reason and this app inherits it — a glyph has to be the same
+   * `string | number | boolean` FieldValue every other field already is, or
+   * it cannot ride the same inspector rows, the same tldraw `T.string`
+   * validator, or the same Storybook `args`. It is also the donor's
+   * (`iconRef.ts`) spelling by value, so a board saved by the archive
+   * carries icons this app can already read.
+   *
+   * WHY persisted, unlike a port's `received` state: same test ruling 9
+   * applied to `showDescription`. "This block wears a rocket" is an
+   * authoring decision about the document; a board that forgot it on reload
+   * would be the thing that lies.
+   */
+  glyph: string;
   ports: Record<PortSide, BlockPortSpec[]>;
   /** MEASURED shape-local dot centres, written back by the host. A writer
    *  (pyblocks) leaves this `[]` and the first render fills it. */
@@ -116,6 +136,13 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
     view: T.literalEnum("simple", "port", "expanded"),
     description: T.string,
     showDescription: T.boolean,
+    // Deliberately `T.string` and not a validator that enforces the grammar:
+    // `decodeGlyphContent`'s final `else` is a documented LENIENCY clause — a
+    // bare `"🔍"` from before the grammar existed still renders, as text. A
+    // validator that rejected anything unprefixed would turn that documented
+    // fallback into a record the store refuses, i.e. a board that no longer
+    // opens. The grammar is enforced where it is written, not where it is read.
+    glyph: T.string,
     ports: T.object({
       left: T.arrayOf(PortSpecV),
       right: T.arrayOf(PortSpecV),
@@ -166,6 +193,15 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
           props.showDescription = true;
         },
       },
+      {
+        id: `com.tldraw.shape.${BLOCK_SHAPE_TYPE}/3`,
+        // P-036/P-043: every board saved before a block could carry an icon
+        // gets the empty slot, which is the "never chosen" state and paints
+        // nothing. Frozen like the two above.
+        up: (props: { glyph?: string }) => {
+          props.glyph = "";
+        },
+      },
     ],
   });
 
@@ -177,6 +213,7 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
       view: "port",
       description: "",
       showDescription: true,
+      glyph: "",
       ports: { left: [], right: [], top: [], bottom: [] },
       anchors: [],
     };

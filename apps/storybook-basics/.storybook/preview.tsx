@@ -36,8 +36,16 @@ type SkinGlobal = BboxSkin | "";
  * comment, ported from packages/bbox-ui/src/glyph.tsx) means the resolver
  * function has to be assembled by a HOST — here, this Storybook app's
  * preview decorator, wrapping every story. A handful of statically-imported
- * icons looked up by name is enough to demo Glyph for real; the full
- * Notion-style picker (packages/glyph-picker) is out of scope for this pass.
+ * icons looked up by name is enough to demo Glyph for real.
+ *
+ * SUPERSEDED IN PART, 2026-09-21 (P-036/P-043): the sentence that used to end
+ * this comment — "the full Notion-style picker (packages/glyph-picker) is out
+ * of scope for this pass" — is no longer true. The trunk has its own picker at
+ * `src/editor/glyphPicker/`, and it mounts its OWN `LucideGlyphResolver` over
+ * the whole Lucide library. A nested provider wins for its subtree, so any
+ * story that renders a `GlyphPicker` gets all 1,818 icons while every other
+ * story keeps this four-icon stand-in. Both are correct; this one is just the
+ * cheap default, not a ceiling.
  */
 const LUCIDE_ICONS: Record<string, ReactNode> = {
   rocket: <Rocket />,

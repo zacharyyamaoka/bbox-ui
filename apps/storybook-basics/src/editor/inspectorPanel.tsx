@@ -29,6 +29,7 @@ import { cn } from "../lib/utils";
 import { Label } from "../components/label";
 import { Textarea } from "../components/textarea";
 import { Toggle } from "../components/toggle";
+import { GlyphPicker } from "./glyphPicker";
 
 export interface InspectorPanelProps {
   /**
@@ -39,6 +40,23 @@ export interface InspectorPanelProps {
    * column with no pointer way out".
    */
   subject: string | null;
+  /**
+   * P-043: the inspector's half of "one picker, every trigger". The block's
+   * icon in `@bbox-ui/glyph-content`'s encoded grammar — the SAME string the
+   * canvas trigger writes, so the two rows are two doors onto one value, not
+   * two features.
+   *
+   * Optional, and absent means "this host has no glyph to offer": the row
+   * disappears rather than rendering a picker whose picks go nowhere. That is
+   * the case for any caller predating P-036, and it is checked on
+   * `onGlyphChange` rather than on `glyph` itself, because `""` is a perfectly
+   * real glyph value (no icon chosen) and must not read as "no such field".
+   */
+  glyph?: string;
+  onGlyphChange?(next: string): void;
+  /** Where the picker's popover mounts — a canvas host passes its engine
+   *  container so the popup paints above the board. See `GlyphPickerProps`. */
+  glyphPortalContainer?: HTMLElement | null;
   /** The stored string, verbatim. Never trimmed for display. */
   description: string;
   /** `ss-block`'s `showDescription` — the donor field's `defaultValue: true`. */
@@ -53,6 +71,9 @@ export interface InspectorPanelProps {
 
 export function InspectorPanel({
   subject,
+  glyph,
+  onGlyphChange,
+  glyphPortalContainer,
   description,
   descriptionVisible,
   onDescriptionChange,
@@ -81,6 +102,37 @@ export function InspectorPanel({
           {subject}
         </span>
       </div>
+
+      {/*
+       * THE ICON ROW — P-043's second door onto the same picker the block's
+       * own glyph opens (apps/systemsketch/src/shapes/block/BlockFace.tsx's
+       * `BlockGlyph`). One component, two triggers: that is the item's whole
+       * content, and it is why this imports `./glyphPicker` rather than
+       * drawing a swatch-and-menu of its own.
+       *
+       * WHY it sits above Description and below Selected: it is the same
+       * ordering the thing it edits has — a block's header is its icon and
+       * its name, and its description comes after. An inspector that ordered
+       * its rows differently from the object would make the user re-find
+       * them.
+       *
+       * WHY `onGlyphChange` is the presence test rather than `glyph`: see the
+       * prop's own doc. `""` is a real value.
+       */}
+      {onGlyphChange ? (
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="inspector-glyph">Icon</Label>
+          <GlyphPicker
+            value={glyph ?? ""}
+            onChange={onGlyphChange}
+            sizePreset="md"
+            padding={4}
+            portalContainer={glyphPortalContainer}
+            className="rounded-md border border-input bg-transparent hover:bg-accent"
+            data-testid={testId("glyph")}
+          />
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">

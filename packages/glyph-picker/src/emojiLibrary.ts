@@ -4,7 +4,7 @@
  * The emoji set for the picker's Emoji tab: names from unicode-emoji-json,
  * keywords from emojibase. Ported BY VALUE, unchanged, from SystemSketch's
  * `src/blocks/ui/iconPicker/emojiLibrary.ts` — this file has no tldraw
- * touches at all, so nothing about it needed adapting. `data/emoji.json`
+ * touches at all, so nothing about it needed adapting. `@bbox-ui/glyph-content/data/emoji.json`
  * is the same generated file, copied byte-for-byte.
  */
 
@@ -57,7 +57,7 @@ export function peekEmojiLibrary(): EmojiLibrary | null {
 export function loadEmojiLibrary(): Promise<EmojiLibrary> {
   if (loaded) return Promise.resolve(loaded);
   if (!loading) {
-    loading = import("./data/emoji.json").then((module) => {
+    loading = import("@bbox-ui/glyph-content/data/emoji.json").then((module) => {
       const data = (module.default ?? module) as unknown as { version: string; emoji: EmojiEntry[] };
       loaded = buildEmojiLibrary(data.version, data.emoji);
       return loaded;

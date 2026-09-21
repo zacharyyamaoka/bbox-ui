@@ -135,6 +135,18 @@ function InspectorSurface({ editor }: { editor: Editor }) {
   return (
     <InspectorPanel
       subject={block ? block.props.name : null}
+      // P-043's second door. The picker this opens IS the one the block's own
+      // glyph opens (shapes/block/BlockFace.tsx's `BlockGlyph`) — same
+      // component, same encoded string, same store write — so a pick made
+      // here and a pick made out on the canvas cannot drift apart.
+      //
+      // `portalContainer` is tldraw's container for the same reason it is
+      // there: this panel renders inside `components.InFrontOfTheCanvas`, and
+      // a Base UI popup left to default into `document.body` lands outside
+      // the board's stacking context.
+      glyph={block?.props.glyph ?? ""}
+      onGlyphChange={block ? (glyph) => update({ glyph }) : undefined}
+      glyphPortalContainer={editor.getContainer()}
       description={block?.props.description ?? ""}
       descriptionVisible={block?.props.showDescription ?? true}
       onDescriptionChange={(description) => update({ description })}

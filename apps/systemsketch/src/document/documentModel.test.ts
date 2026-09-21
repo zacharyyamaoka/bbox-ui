@@ -84,6 +84,9 @@ describe("ss-block (L0)", () => {
       // (packages/bbox-ui/src/block.fields.ts:120-124).
       description: "",
       showDescription: true,
+      // P-036/P-043: a block ships with no icon. `""` is the "never chosen"
+      // state (`decodeGlyphContent` -> `{kind:"none"}`), not a placeholder.
+      glyph: "",
       ports: { left: [], right: [], top: [], bottom: [] },
       anchors: [],
     });
@@ -102,6 +105,13 @@ describe("ss-block (L0)", () => {
         // rest. The double space is deliberate: the round trip must not trim.
         description: "Estimates  pose from a frame.",
         showDescription: false,
+        // P-036/P-043 — "fully-populated" means every prop the contract has,
+        // so the icon is enumerated here too. A `lucide:` name specifically,
+        // because that is the kind whose ROUND TRIP could plausibly break:
+        // an emoji or a `data:` URL is inert text, while a lucide name is the
+        // one the picker mints and the resolver has to find again by the exact
+        // kebab it stored.
+        glyph: "lucide:rocket",
         ports: {
           left: [
             { id: "frame", declaration: "frame: Frame" },

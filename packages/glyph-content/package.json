@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The Glyph `content` grammar: encode/decode/compare for the encoded-string value a glyph field holds (lucide:<name>, emoji:<char>, a data:/http(s): image URL, text:<chars>, or \"\"). Zero dependencies — no React, no host engine, no picker UI.",
+  "description": "The Glyph `content` grammar: encode/decode/compare for the encoded-string value a glyph field holds (lucide:<name>, emoji:<char>, a data:/http(s): image URL, text:<chars>, or \"\"), plus the two generated icon/emoji data files both picker lineages search. Zero dependencies \u2014 no React, no host engine, no picker UI.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./data/*": "./src/data/*"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

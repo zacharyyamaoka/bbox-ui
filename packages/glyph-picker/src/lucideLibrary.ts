@@ -5,7 +5,7 @@
  * `import()`, per docs/GLYPH-PLAN.md D6 (SystemSketch's proven path over
  * `lucide-react/dynamic`, which emits one chunk file per icon: 1,818 of
  * them). Ported BY VALUE from SystemSketch's own
- * `src/blocks/ui/iconPicker/lucideLibrary.ts`; `data/lucide-icons.json` is
+ * `src/blocks/ui/iconPicker/lucideLibrary.ts`; `@bbox-ui/glyph-content/data/lucide-icons.json` is
  * the same generated file, copied byte-for-byte.
  *
  * WHY `byKebab`, which the donor does not have (only `byName`, keyed by the
@@ -57,7 +57,7 @@ export function subscribeLucideLibrary(listener: () => void): () => void {
 export function loadLucideLibrary(): Promise<LucideLibrary> {
   if (loaded) return Promise.resolve(loaded);
   if (!loading) {
-    loading = import("./data/lucide-icons.json").then((module) => {
+    loading = import("@bbox-ui/glyph-content/data/lucide-icons.json").then((module) => {
       const data = (module.default ?? module) as unknown as { version: string; icons: LucideLibraryEntry[] };
       loaded = buildLucideLibrary(data.version, data.icons);
       for (const listener of listeners) listener();
