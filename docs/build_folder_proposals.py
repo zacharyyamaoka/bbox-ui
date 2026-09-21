@@ -44,12 +44,70 @@ PORTEDGE_FACTS = [
      "<code>.tsx</code>. These belong in <code>scene/</code>."),
 ]
 
+
+# Verified verbatim against the project page, with line numbers. `mine` = Zach's own prose;
+# `kept` = an AI analysis block on his page that he retained (still his stated position by
+# adoption, but not his voice — attributed separately so the citation is honest).
+PRINCIPLES = [
+    ("P1", "Isolation, then together", "mine", 36,
+     "being able to see each of the components in isolation and then also together right.",
+     "The organising goal of the whole library. Any scheme has to make a part legible alone "
+     "<em>and</em> legible in composition."),
+    ("P2", "Solve it once", "mine", 38,
+     "let me solve it once and make it right",
+     "Anti-duplication, stated as a value. Copying an aspect into every component folder is the "
+     "thing this rejects."),
+    ("P3", "The portability line", "mine", 92,
+     "If you look at it like static UI. without all the interactions, that certainly is stuff "
+     "that is very portable. alot of the interactions though not so much.",
+     "<b>The sharpest structural principle on the page.</b> You already split a component along "
+     "static-vs-interaction, on portability grounds. That is a reason to cut there rather than "
+     "anywhere else."),
+    ("P4", "Detach is universal", "mine", 103,
+     "All components support \u2018detach to primative\u2019, which means even the most complex "
+     "composite component can also support \u2018detach to primative\u2019",
+     "If <em>every</em> component supports it, it cannot live inside any one of them. This is the "
+     "principled case for a top-level <code>detach/</code> — which already exists, 1,357 lines."),
+    ("P5", "Extraction regret", "mine", 125,
+     "There seems to be alot of things that its a shame they haven\u2019t been like extracted from "
+     "a particular library, for example like the elbow routing",
+     "You have already named the failure mode: reusable logic trapped inside something specific. "
+     "Argues for hoisting cross-cutting aspects out."),
+    ("P6", "Capability tiers", "mine", 132,
+     "What is possible with just the whiteboard and no contextual menu? what is possible with the "
+     "whiteboard and a contextual menu? What is possible with the whiteboard and a inspector menu? "
+     "These are different things right...",
+     "You already think of the editing surfaces as <em>tiers of capability</em>. That is a ready-made "
+     "organising axis for <code>edit/</code> — and a better one than “menus vs panels”."),
+    ("P7", "Simple / Port / Expanded", "mine", 202,
+     "3 key views — Simple, Port, Expanded (S/P/E)",
+     "States are a first-class axis, not a detail. A component library is mostly states, so a scheme "
+     "that has no home for them is incomplete."),
+    ("P8", "Specific, solved generally", "mine", 783,
+     "For me one trick is to just try to solve a very specific problem in the most general way "
+     "possible — that way you at least get 1 problem, and you are open to get as many other ones "
+     "as you may end up getting.",
+     "Against speculative structure. Build the folder when there is a specific problem in it, not "
+     "in advance — which is an argument for graduating rather than imposing."),
+    ("P9", "What is portable", "kept", 283,
+     "What is portable is <b>the model and the algorithms, never the components.</b>",
+     "The components/scene split is about portability, not tidiness. Explains why scene must stay "
+     "pure and why components may not import it."),
+    ("P10", "One pure core, N host bindings", "kept", 285,
+     "one pure core, N host bindings that share nothing with each other",
+     "The narrow waist. <b>The layer boundary is what carries the value</b> — which means the "
+     "within-layer folder shape, the thing you are asking about, is a second-order decision. Worth "
+     "saying plainly rather than overselling any option below."),
+]
+
 PROPOSALS = [
     {
         "id": "1", "name": "Aspect-first",
         "tag": "your proposal, literally",
         "idea": "Level 2 is the aspect vocabulary. The same sub-headers repeat inside every "
                 "component, so finding “how dragging works” is the same move on every part.",
+        "why": [("P1","Repeating the same sub-headers is what makes a part legible alone \u2014 read one component folder and you know the shape of every other."),("P7","Gives states an obvious home: <code>states.tsx</code> beside <code>anatomy</code>."),("P6","Its editor column can carry your capability tiers directly.")],
+        "tension": ("P2 + P8","Copying <code>drag.ts</code> into every component folder is exactly what \u201csolve it once\u201d rejects \u2014 and creating seven folders before there is code for them is structure ahead of the specific problem."),
         "trees": {
             "components": """components/
   portEdge/
@@ -92,6 +150,8 @@ PROPOSALS = [
         "idea": "Level 2 uses the same three names as level 0: view / model / wire. The structure "
                 "is self-similar, so there is exactly one concept to learn and it applies at every "
                 "depth.",
+        "why": [("P3","<code>view</code> / <code>model</code> is your portability line drawn literally \u2014 the static portable part split from the part that is not."),("P9","Makes \u201cthe model and the algorithms are what travels\u201d visible in the folder names."),("P1","Self-similarity: one learned shape works at every level.")],
+        "tension": ("P2","Still puts per-component copies of cross-cutting behaviour in each folder, and forces <code>scene/</code> to reorganise around components when several of its concepts legitimately span them."),
         "trees": {
             "components": """components/
   portEdge/
@@ -132,6 +192,8 @@ PROPOSALS = [
         "idea": "Level 2 splits behaviour from presentation. Straight out of "
                 "<code>C - Headless UI Components</code> in your MOC, and your Storybook already "
                 "has a <code>Skin</code> bucket.",
+        "why": [("P3","<b>This is your portability sentence turned into folders.</b> <code>headless/</code> is what you called \u201cvery portable\u201d; <code>skin/</code> is what you said is not."),("P9","Matches what actually travels between hosts."),("P10","Keeps the pure core pure by construction, at component level.")],
+        "tension": ("P1 + P6","Answers \u201cwhere does drag live\u201d with \u201csomewhere in headless/\u201d \u2014 not legible in isolation \u2014 and says nothing about the edit surfaces."),
         "trees": {
             "components": """components/
   portEdge/
@@ -170,6 +232,8 @@ PROPOSALS = [
         "tag": "off-the-shelf, zero invention",
         "idea": "Level 2 is the conventional React component-library layout — what shadcn, "
                 "Radix and most of the ecosystem do. Nothing here is designed by us.",
+        "why": [("P8","Maximally unspeculative \u2014 invents nothing, adds no scheme to mis-apply."),("P5","Being conventional is what makes a part easy to lift out of the repo later.")],
+        "tension": ("P1 + P3 + P7","Organises by artifact type, so it answers \u201cwhere are the types\u201d but not \u201cwhere is drag\u201d or \u201cwhere are the states\u201d \u2014 and a 1,498-line file stays 1,498 lines."),
         "trees": {
             "components": """components/
   portEdge/
@@ -208,6 +272,8 @@ PROPOSALS = [
                 "component earns them. The aspect vocabulary supplies the suffixes, so the naming "
                 "is identical to proposal 1 — but it scales down to a 90-line component without "
                 "ceremony.",
+        "why": [("P8","<b>The most direct expression of your own trick.</b> Split when a specific component has a specific problem; stay general by keeping the same aspect vocabulary everywhere."),("P1","<code>ls components/portEdge/</code> still shows the aspects, so isolation survives."),("P2","Cross-cutting aspects stay hoisted, so nothing is solved twice.")],
+        "tension": ("P7","Has no dedicated home for states \u2014 S/P/E would land in the main file or a <code>.states.tsx</code>, which is a convention rather than a structure."),
         "trees": {
             "components": """components/
   portEdge/                     1,498 lines -> earns files
@@ -253,6 +319,8 @@ PROPOSALS = [
         "idea": "Level 2 inside a component stays minimal, because cross-cutting aspects are "
                 "hoisted to their own <b>top-level trunk folders</b>. This is not a proposal so "
                 "much as a description: the repo already does this, and it already works.",
+        "why": [("P2","<b>The literal implementation of \u201csolve it once\u201d</b> \u2014 <code>dragPolicy.ts</code> serves every draggable part, written once."),("P4","<code>detach/</code> is a top-level folder because every component supports detach. The principle predicted the folder."),("P5","Hoisting is the cure for extraction regret \u2014 the elbow-routing complaint, pre-empted.")],
+        "tension": ("P1","Component-local behaviour has nowhere to go, so it stays in the component file \u2014 which is how <code>portEdge.tsx</code> reached 1,498 lines. Legible together, not in isolation."),
         "trees": {
             "components": """components/
   portEdge/
@@ -320,6 +388,7 @@ def tree_block(label, text):
 
 def prop_html(p):
     fors = "".join(f"<li>{x}</li>" for x in p["for"])
+    whys = "".join(f'<li><a class="pref" href="#{pid}">{pid}</a> {txt}</li>' for pid, txt in p["why"])
     ags = "".join(f"<li>{x}</li>" for x in p["against"])
     label, cls = {"yes": ("recommended", "b-yes"), "no": ("weakest here", "b-no"),
                   "half": ("situational", "b-half")}[p["rec"]]
@@ -333,6 +402,8 @@ def prop_html(p):
   <div class="trees">{trees}</div>
   <div class="two"><div><h4>For</h4><ul>{fors}</ul></div>
     <div><h4>Against</h4><ul>{ags}</ul></div></div>
+  <div class="why"><h4>Why this follows from what you have written</h4><ul>{whys}</ul>
+    <p class="tens"><b>But it cuts against {p['tension'][0]}.</b> {p['tension'][1]}</p></div>
   <p class="best"><b>Best when.</b> {p['best']}</p>
   <div class="vote"><button data-v="yes">▲ This one</button>
     <button data-v="maybe">● Maybe</button><button data-v="no">▼ No</button>
@@ -342,6 +413,13 @@ def prop_html(p):
 
 def build():
     props = "".join(prop_html(p) for p in PROPOSALS)
+    prin_rows = "".join(
+        f'<tr id="{pid}"><td class="pid2">{pid}</td><td><b>{name}</b>'
+        f'<span class="src {src}">{"his" if src == "mine" else "kept"}</span><br>'
+        f'<span class="quote">\u201c{quote}\u201d</span>'
+        f'<br><span class="cite">PROJECT - Black Box UI.md:{line}</span></td>'
+        f'<td class="cons">{cons}</td></tr>'
+        for pid, name, src, line, quote, cons in PRINCIPLES)
     facts = "".join(f"<tr><td><b>{a}</b></td><td>{b}</td></tr>" for a, b in PORTEDGE_FACTS)
     mark = {"yes": '<span class="m y">●</span>', "no": '<span class="m n">○</span>',
             "part": '<span class="m p">◑</span>'}
@@ -393,6 +471,20 @@ code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:.87em;
 pre.tree{margin:0;background:color-mix(in srgb,var(--fg) 5%,transparent);border:1px solid var(--line);
   border-radius:9px;padding:12px 13px;overflow-x:auto;font-family:ui-monospace,monospace;
   font-size:12.2px;line-height:1.62;white-space:pre}
+.why{background:color-mix(in srgb,var(--accent) 7%,transparent);border-radius:9px;padding:12px 15px;margin:10px 0 0}
+.why h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--accent)}
+.why ul{margin:0;padding-left:17px;font-size:13.5px}.why li{margin-bottom:5px}
+.why .tens{margin:9px 0 0;font-size:13.5px;color:var(--fg);border-top:1px dashed var(--line);padding-top:8px}
+a.pref{display:inline-block;min-width:24px;font-weight:700;font-size:11.5px;color:#fff;
+  background:var(--accent);border-radius:5px;padding:1px 5px;text-decoration:none;margin-right:5px}
+table.prin td{font-size:14px}
+td.pid2{font-weight:700;color:var(--accent);width:34px;vertical-align:top}
+.quote{font-style:italic;color:var(--fg)}
+.cite{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted)}
+.src{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;padding:1.5px 6px;border-radius:99px;margin-left:7px;vertical-align:middle}
+.src.mine{background:color-mix(in srgb,var(--yes) 22%,transparent);color:var(--yes)}
+.src.kept{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
+td.cons{color:var(--muted);font-size:13px;width:40%}
 .find{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--warn);
   border-radius:0 12px 12px 0;padding:16px 19px;margin:0 0 14px}
 .find h3{margin:0 0 9px;font-size:16.5px;letter-spacing:-.01em}
@@ -463,6 +555,27 @@ Level 1 is settled — one folder per component. These are five answers to level
 <b>complete scheme across all three folders</b> rather than a menu per folder, so they are directly
 comparable. Every one is shown against the same worked example: <b><code>portEdge</code>, your
 largest real component at 1,498 lines</b>.
+</div>
+
+<h2>The principles these are judged against</h2>
+<p>You asked for reasoning tied to what you have actually written down. These are verbatim from
+<code>PROJECT - Black Box UI.md</code>, with line numbers so you can check every one. Each
+proposal below cites them, <b>including the one it cuts against</b> — every scheme violates
+something, and saying which is the useful part.</p>
+<table class="prin"><tbody>{prin_rows}</tbody></table>
+<p class="cav"><b>On attribution:</b> P1–P8 are your own prose. P9 and P10 are from an AI
+analysis block on your page that you kept — your position by adoption, not your voice. Marked
+so the citation is honest.</p>
+
+<div class="find" style="border-left-color:var(--accent)">
+<h3>What P10 means for this whole question</h3>
+<p>“One pure core, N host bindings that share nothing with each other” says the value is
+carried by the <b>boundary between</b> components / scene / edit — not by the folder shape
+<em>inside</em> any of them. That boundary already holds: components imports no engine, scene has
+no React or DOM.</p>
+<p>So the honest framing is that <b>this is a second-order decision</b>. Every option below
+preserves the thing that matters; they differ on navigation, duplication and migration cost. That
+is a reason to pick the cheapest one that answers your actual question, not the most elegant one.</p>
 </div>
 
 <h2>Three things the measurement found first</h2>
@@ -546,33 +659,51 @@ says <code>scene/</code>, and that is a real migration, not a rename.</p>
 <p class="sub" style="font-size:13px">● yes · ◑ partly · ○ no</p>
 
 <h2>Recommendation</h2>
-<p><b>Keep proposal 6 for cross-cutting aspects, add proposal 5 for component-local ones, and
-write down which is which.</b></p>
-<p>That is not a compromise — it is what the measurement forces. An aspect like drag genuinely
-is cross-cutting: <code>dragPolicy.ts</code> serves every draggable part, and copying it into
-<code>components/port/drag.ts</code> and <code>components/block/drag.ts</code> would be strictly
-worse. But component-<em>local</em> behaviour has nowhere to go today, which is precisely how
-<code>portEdge.tsx</code> reached 1,498 lines. Proposal 5 gives it a home without imposing
-sub-folders on the 30 components that are under 150 lines.</p>
-<p>The missing artifact is small and it is the whole point: <b>a written list of which aspects are
-cross-cutting and which are local.</b> Today that split is implicit, which is why nobody can
-answer “where should this go” without reading the repo. Suggested starting split, from the
-16-aspect vocabulary:</p>
-<table><thead><tr><th>Cross-cutting — a top-level folder</th><th>Component-local — a dotted file inside the folder</th></tr></thead>
+<p><b>Proposal 6 for cross-cutting aspects, proposal 5 for component-local ones, and when a
+component does get split, cut it on proposal 2’s line.</b></p>
+<p>Three principles pick this, and they pick it for different reasons, which is why I trust it:</p>
+<table><tbody>
+<tr><td class="pid2">P2</td><td><b>Keep cross-cutting aspects hoisted.</b> <code>dragPolicy.ts</code>
+serves every draggable part. Copying it into <code>components/port/drag.ts</code> and
+<code>components/block/drag.ts</code> is the opposite of “solve it once and make it right”.
+<a class="pref" href="#P4">P4</a> proves the pattern already works — <code>detach/</code> is a
+top-level folder precisely because <em>every</em> component supports detach.</td></tr>
+<tr><td class="pid2">P8</td><td><b>Do not impose folders in advance.</b> “Solve a very specific
+problem in the most general way possible” cuts against creating seven sub-folders for a 90-line
+component that has no code to put in them. Split a component the day it has a specific problem —
+which today is 22 of 77.</td></tr>
+<tr><td class="pid2">P3</td><td><b>When you do split, cut on the portability line.</b> This is the
+detail I would have got wrong without the principle. The natural instinct is to split by feature
+(<code>drag</code>, <code>hover</code>, <code>paint</code>), but your own sentence says the load-bearing
+line is static-versus-interaction. So the first cut is
+<code>portEdge.view.tsx</code> · <code>portEdge.model.ts</code> ·
+<code>portEdge.interactions.ts</code> — proposal 2’s names, applied inside proposal 5’s
+graduated scheme. Feature-named files come <em>after</em> that, only if a component is still too big.</td></tr>
+</tbody></table>
+<p>And for <code>edit/</code>, <a class="pref" href="#P6">P6</a> supplies an axis nobody proposed:
+organise by <b>capability tier</b> — what works with no menu, with a contextual menu, with an
+inspector — because that is how you already reason about those surfaces. It is a better cut than
+“menus vs panels”, which is about widgets rather than about what the user can do.</p>
+
+<h2>The one thing worth writing down</h2>
+<p>The missing artifact is small: <b>a list of which aspects are cross-cutting and which are
+component-local.</b> Today that split is implicit, which is why the question “where should this
+go” has no answer without reading the repo. Two rules make it decidable, and the second is
+already in your <code>ARCHITECTURE.md</code>:</p>
+<p style="padding:10px 14px;border-radius:8px;background:color-mix(in srgb,var(--accent) 9%,transparent)">
+<b>1.</b> If more than one component needs it, it is cross-cutting — hoist it
+(<a class="pref" href="#P2">P2</a>, <a class="pref" href="#P5">P5</a>).<br>
+<b>2.</b> If it spans the canvas it belongs to the host; if it is bounded by one component’s box
+it is ours — already written in <code>ARCHITECTURE.md</code>.</p>
+<table><thead><tr><th>Cross-cutting — top-level folder</th><th>Component-local — inside the folder</th></tr></thead>
 <tbody><tr><td>drag / resize / move · hover / affordance · visual appearance · layout / geometry ·
 hit regions · keyboard</td>
 <td>anatomy / slots · how it paints · what it stores · semantics / kinds · add / remove members ·
-text editing</td></tr></tbody></table>
-<p>Two rules make it decidable rather than a taste call, and the second is already in your
-architecture doc: <b>if more than one component needs it, it is cross-cutting</b>; and
-<b>if it spans the canvas it is the host’s, if it is bounded by one component’s box it is
-local.</b></p>
+text editing · <b>states (S/P/E)</b></td></tr></tbody></table>
 <p>On the single-call rule: restate it as <b>“at most one <em>scene</em> call per entry
-point”</b>, with the projection sandwich exempt. The honest minimum today is five operations,
-visible at <code>sourceContextMenu.tsx:165-176</code> — <code>sceneNow(editor)</code>, the scene
-call, a guard, <code>markHistoryStoppingPoint</code>, <code>applyScene</code>. That handler is the
-best example of the intended architecture in the repo, and the rule as originally worded would
-fail it.</p>
+point”</b>, with the projection sandwich exempt. The honest minimum today is five operations, at
+<code>sourceContextMenu.tsx:165-176</code> — and that handler is the repo’s best example of the
+intended architecture, which the rule as first worded would have failed.</p>
 
 <h2>What none of these decide</h2>
 <p>Two questions are genuinely open and no folder scheme answers them:</p>
