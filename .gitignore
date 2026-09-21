@@ -57,3 +57,4 @@ apps/storybook-basics/src/stories/whats-new.generated.json
 # evidence for the session that produced them, never repo content.
 **/__screenshots__/
 **/.vitest-attachments/
+docs/node-editor-corpus.json
