@@ -29,12 +29,24 @@
 // value — which is the failure mode this file has to be proof against,
 // because its callers hand it a whole scene and get no error back.
 //
-// Nothing calls this yet, and that is deliberate rather than an oversight: it
-// is the seam L4's menus and L5's region tools mutate through, and stream 3's
-// `to_systemsketch()` writes through. Built now, small, with the rules that
-// are expensive to rediscover already in it — one transaction, and the four
-// gaps above — so the first caller inherits a correct undo story and a
-// faithful apply instead of inventing either.
+// WHY EVERY CALL STATES A SCOPE, which is the fifth gap and the only one that
+// LOST WORK (found 2026-09-21): this function diffed `next` against
+// `sceneFromRecords(editor.store.allRecords())` — THE WHOLE STORE — and
+// deleted every node the diff called `removed`. That is right for a caller
+// whose scene IS the whole board (`source/sourceContextMenu.tsx`: convert a
+// selection to a code cell, and the blocks it folded in really must go). It
+// is catastrophic for a caller whose scene describes only PART of the board:
+// `backend/OpenPython.tsx` hands over one Python file's projection, so
+// re-opening that file deleted every cable the person had drawn on top of it,
+// and opening a SECOND file wiped the first one. Both silent, both measured
+// in `src/openPythonScope.smoke.test.tsx`.
+//
+// The fix is not a narrower diff — it is the missing question. `ApplyScope`
+// makes every caller say WHOSE SHAPES THIS APPLY MAY DELETE, and it is a
+// required argument precisely so the next caller cannot inherit the
+// board-wide default by saying nothing. Matching and UPDATING still span the
+// whole store (a scene that names an existing id must still update it in
+// place, which is what keeps a re-open a diff); only DELETION is scoped.
 import type { Editor, TLParentId, TLShape, TLShapeId } from "tldraw";
 
 import { withPortDeclarationType } from "@trunk/scene/portDeclaration";
@@ -56,6 +68,60 @@ const SHAPE_TYPE_OF: Record<DocNodeData["kind"], string> = {
   port: PORT_SHAPE_TYPE,
   region: REGION_SHAPE_TYPE,
 };
+
+/* ------------------------------------------------------------------ */
+/* Scope — whose shapes an apply may delete                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The `shape.meta` key carrying WHICH SOURCE minted a shape.
+ *
+ * WHY `meta` and not the shape id's spelling: `OpenPython.tsx` mints semantic
+ * ids (`shape:function:run@3:0/…`), which does distinguish "a pyblocks node"
+ * from "a shape a person drew" — but not one FILE from another, and not at
+ * all for cables, because `createWire` mints its own `createShapeId()` and the
+ * scene's edge id never reaches the record. A tag answers both, and `meta` is
+ * stock: it survives save/load/copy/paste, tldraw ignores it, and a `.bbox`
+ * written here opens anywhere.
+ */
+export const SCENE_SOURCE_META_KEY = "bboxSceneSource";
+
+/**
+ * What the scene handed to `applyScene` is a picture OF, and therefore what
+ * this apply is allowed to take off the board.
+ *
+ * - `document` — the scene IS the whole board, projected and edited. Anything
+ *   it stops naming is gone on purpose. `source/sourceContextMenu.tsx`.
+ * - `source` — the scene is ONE producer's view of part of the board. This
+ *   apply owns only the shapes it created under that same `source` name;
+ *   everything else on the board is somebody else's and is left alone.
+ *   `backend/OpenPython.tsx`.
+ */
+export type ApplyScope = { kind: "document" } | { kind: "source"; source: string };
+
+/** The `meta` a created shape carries, so a later apply can recognise it.
+ *  Empty under `document`, where ownership is not a question. */
+function stampOf(scope: ApplyScope): { meta?: Record<string, string> } {
+  return scope.kind === "source" ? { meta: { [SCENE_SOURCE_META_KEY]: scope.source } } : {};
+}
+
+/**
+ * Whether this apply may DELETE the shape under `id`.
+ *
+ * Deliberately asks the RECORD, not the incoming scene: ownership is a fact
+ * about what is on the board, written when the shape was created, and a
+ * producer that has forgotten a node must not be able to claim one it never
+ * made. A shape that is not there answers `true` — deleting nothing is not a
+ * loss, and `deleteShapes` on a missing id is already a no-op.
+ */
+function mayDeleteIn(editor: Editor, scope: ApplyScope): (id: string) => boolean {
+  if (scope.kind === "document") return () => true;
+  return (id) => {
+    const shape = editor.getShape(id as TLShapeId);
+    if (!shape) return true;
+    return (shape.meta as Record<string, unknown> | undefined)?.[SCENE_SOURCE_META_KEY] === scope.source;
+  };
+}
 
 type BlockPorts = BlockShapeProps["ports"];
 type BlockPort = BlockPorts["left"][number];
@@ -274,12 +340,20 @@ interface EdgePlan {
  * `wire.rebound`-vs-`wire.removed`+`wire.added` event shape and every
  * consumer's reference to that cable with it. The id-churn bargain buys
  * correctness for a rewiring; it buys nothing at all for a repaint.
+ *
+ * `mayDelete` is the scope gate, and it is asked in TWO places for one
+ * reason: a rewiring is a delete AND a create, so a cable this apply does not
+ * own has to be left alone WHOLE. Dropping only its delete would leave the
+ * board with the person's cable plus a second copy of it on the new route —
+ * a duplicate is not a safer failure than a deletion, it is a stranger one.
+ * A restyle is not a delete and is not gated: it writes only the fields the
+ * scene states, and nothing is lost if a producer repaints a line it named.
  */
-function classifyEdges(rows: readonly SceneEdgeDiff<WireStyleData>[]): EdgePlan {
+function classifyEdges(rows: readonly SceneEdgeDiff<WireStyleData>[], mayDelete: (id: string) => boolean): EdgePlan {
   const plan: EdgePlan = { removed: [], created: [], restyled: [] };
   for (const row of rows) {
     if (row.operation === "removed") {
-      plan.removed.push(row.id as TLShapeId);
+      if (mayDelete(row.id)) plan.removed.push(row.id as TLShapeId);
       continue;
     }
     if (!row.after) continue;
@@ -288,6 +362,7 @@ function classifyEdges(rows: readonly SceneEdgeDiff<WireStyleData>[]): EdgePlan 
       continue;
     }
     if (isRewired(row)) {
+      if (!mayDelete(row.id)) continue;
       plan.removed.push(row.id as TLShapeId);
       plan.created.push(row.after);
     } else {
@@ -324,7 +399,56 @@ function movedNodes(current: DocumentScene, next: DocumentScene, reported: Reado
 }
 
 /**
+ * The shapes a node delete would take as COLLATERAL, and where each one goes
+ * instead — the descendants of the doomed set that this apply does not own.
+ *
+ * WHY it exists: `editor.deleteShapes` cascades to CHILDREN, so "only delete
+ * what I made" is only true as far as the first container. Drop a note of
+ * your own inside an expanded block, let the producer forget that block, and
+ * the scope rule above would have promised your note was safe and then taken
+ * it anyway — one level down, and just as silently as the bug this file was
+ * fixed for. `source/sourceContextMenu.tsx` already named this hoist as owed
+ * upstream ("`applySceneDiff.ts` could hoist survivors out of a removed
+ * parent"); this is that, for the shapes ownership says are not ours.
+ *
+ * A survivor goes to the nearest ancestor OUTSIDE the doomed subtree, not
+ * straight to the page: a note inside a surviving region should stay in it.
+ * `reparentShapes` (used by the caller) preserves page position, so nothing
+ * teleports. A survivor nested inside another survivor is left alone — it
+ * rides along with the one above it, still in the place it was put.
+ */
+function hoistedSurvivors(
+  editor: Editor,
+  removed: readonly TLShapeId[],
+  mayDelete: (id: string) => boolean,
+): { id: TLShapeId; parentId: TLParentId }[] {
+  if (removed.length === 0) return [];
+  const doomed = editor.getShapeAndDescendantIds([...removed]);
+  const survives = (id: TLShapeId) => doomed.has(id) && !mayDelete(String(id));
+  const out: { id: TLShapeId; parentId: TLParentId }[] = [];
+  for (const id of doomed) {
+    if (!survives(id)) continue;
+    let parent = editor.getShape(id)?.parentId;
+    let sheltered = false;
+    while (parent && doomed.has(parent as TLShapeId)) {
+      if (survives(parent as TLShapeId)) {
+        sheltered = true;
+        break;
+      }
+      parent = editor.getShape(parent as TLShapeId)?.parentId;
+    }
+    if (sheltered) continue;
+    out.push({ id, parentId: (parent ?? editor.getAncestorPageId(id) ?? editor.getCurrentPageId()) as TLParentId });
+  }
+  return out;
+}
+
+/**
  * Bring the document to `next`, in ONE transaction.
+ *
+ * `scope` says whose shapes this apply may DELETE — see `ApplyScope`. It is
+ * required, and that is the point: the board-wide default it replaces is what
+ * made `Open Python file…` delete the person's own cables.
  *
  * Order is load-bearing and is the order below: delete, then create nodes,
  * then update nodes, then move the rest, then wire. A cable can only be
@@ -332,22 +456,33 @@ function movedNodes(current: DocumentScene, next: DocumentScene, reported: Reado
  * `canBind` and answers `null` if it cannot find one), and a node can only be
  * deleted before the edges naming it are re-derived.
  */
-export function applyScene(editor: Editor, next: DocumentScene): void {
+export function applyScene(editor: Editor, next: DocumentScene, scope: ApplyScope): void {
+  // The WHOLE store, still, and deliberately: matching is by id, so a scene
+  // that names a shape already on the board must UPDATE it in place — that is
+  // what makes re-opening a file a diff rather than a rebuild, and it is the
+  // reason `OpenPython.tsx` carries pyblocks' semantic ids through verbatim.
+  // Scope narrows what may be deleted, never what may be recognised.
   const current = sceneFromRecords(editor.store.allRecords());
   const diff = diffScene(current, next);
   const reported = new Set(diff.nodes.map((row) => row.id));
   const moved = movedNodes(current, next, reported);
-  const edges = classifyEdges(diff.edges);
+  const mayDelete = mayDeleteIn(editor, scope);
+  const edges = classifyEdges(diff.edges, mayDelete);
   if (diff.nodes.length === 0 && moved.length === 0 && diff.edges.length === 0) return;
 
   editor.run(() => {
-    const removedNodes = diff.nodes.filter((row) => row.operation === "removed").map((row) => row.id as TLShapeId);
+    const removedNodes = diff.nodes
+      .filter((row) => row.operation === "removed" && mayDelete(row.id))
+      .map((row) => row.id as TLShapeId);
+    const survivors = hoistedSurvivors(editor, removedNodes, mayDelete);
     // Wires first: deleting a NODE already cascades to its cables
     // (`WireBindingUtil.onBeforeDeleteToShape`), and asking for a shape that
     // the cascade already removed is a no-op, not an error.
     if (edges.removed.length > 0) editor.deleteShapes(edges.removed);
+    for (const survivor of survivors) editor.reparentShapes([survivor.id], survivor.parentId);
     if (removedNodes.length > 0) editor.deleteShapes(removedNodes);
 
+    const stamp = stampOf(scope);
     for (const row of inCreationOrder(diff.nodes.filter((r) => r.operation === "added"))) {
       const node = row.after;
       if (!node) continue;
@@ -358,6 +493,9 @@ export function applyScene(editor: Editor, next: DocumentScene): void {
         x: node.position.x,
         y: node.position.y,
         props: propsFromData(node.data),
+        // The provenance the NEXT apply reads. Written on create only: this
+        // apply owns what it made, never what it merely recognised.
+        ...stamp,
       } as never);
     }
 
@@ -411,6 +549,12 @@ export function applyScene(editor: Editor, next: DocumentScene): void {
         ...(edge.data?.variant ? { variant: edge.data.variant } : {}),
         ...(edge.data?.routing ? { routing: edge.data.routing } : {}),
         ...(edge.data?.color ? { color: edge.data.color } : {}),
+        // A cable is the one thing here whose id CANNOT carry provenance:
+        // `createWire` mints its own `createShapeId()` and the scene's edge id
+        // never reaches the record, so without this tag a re-open could not
+        // tell its own line from the person's and would have to keep both
+        // forever.
+        ...stamp,
       });
     }
   });

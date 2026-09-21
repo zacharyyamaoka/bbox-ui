@@ -42,7 +42,7 @@ import {
 
 import type { BlockShape } from "../shapes/block";
 import type { RegionShape } from "../shapes/region";
-import { applyScene } from "../document/applySceneDiff";
+import { applyScene, SCENE_SOURCE_META_KEY } from "../document/applySceneDiff";
 import type { DocNodeData, DocumentScene } from "../document/sceneFromStore";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, REGION_SHAPE_TYPE } from "../shapes/types";
 
@@ -72,6 +72,28 @@ function toShapeId(pyblocksId: string): string {
  *  diff-on-re-open reason as above. */
 function cornerIdFor(regionShapeId: string): string {
   return `${regionShapeId}#corner`;
+}
+
+/**
+ * WHICH pyblocks answer a board is — the name `applyScene` records on every
+ * shape it mints for it, and the only shapes a later open of the SAME answer
+ * is allowed to take off the board (`document/applySceneDiff.ts`'s
+ * `ApplyScope`).
+ *
+ * WHY the VIEW is in the key and not just the file: a second view of one file
+ * is a different picture of it, containing different blocks, and the analyzer
+ * says nothing about the ones it left out. Keyed by uri alone, picking a
+ * second definition out of the same file would delete the first — which is
+ * half of the data loss this key exists to stop, and the half that looks most
+ * like "it worked" until you notice what is missing.
+ *
+ * WHY it is derived from the DOCUMENT and not from the picker's arguments:
+ * the document is what actually came back, so the key cannot drift from the
+ * board it names when a request for `viewId: null` is answered with the
+ * server's own choice (`source.selectedViewId`).
+ */
+export function pyblocksSourceKey(document: PyblocksSceneDocument): string {
+  return `pyblocks:${document.source.uri}#${document.source.selectedViewId ?? ""}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -119,6 +141,9 @@ const REGION_FIT_PADDING_PX = 40;
 
 export interface PyblocksBoard {
   scene: DocumentScene;
+  /** `pyblocksSourceKey(loaded.document)` — the provenance every shape this
+   *  board mints is stamped with, and the scope of what a re-open may delete. */
+  source: string;
   /** Shape id → port id → the port's AUTHORED name (the NAME half of its
    *  declaration line — the backend reports a name and an annotation
    *  separately, and `applyPyblocksBoard` splices each into the one string
@@ -296,7 +321,46 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
     ];
   });
 
-  return { scene: { nodes, edges }, portLabels, problems };
+  return { scene: { nodes, edges }, source: pyblocksSourceKey(loaded.document), portLabels, problems };
+}
+
+/** The gap left between a board already on the canvas and a board arriving
+ *  from a file that has never been opened here. */
+const NEW_BOARD_GUTTER_PX = 160;
+
+/**
+ * Where a board lands: in place when this file+view has been opened here
+ * before, clear to the RIGHT of everything else when it has not.
+ *
+ * WHY this exists beside the scope fix rather than after it: `ApplyScope`
+ * stops a second `Open Python file…` from DELETING the first board, which is
+ * the data loss. It does not stop the second board being drawn on top of the
+ * first — pyblocks lays every unplaced node out from `{40,40}`
+ * (`layoutUnplaced`), so two files land in the same rectangle and the person
+ * gets one unreadable pile instead of one missing board. Shipping the scope
+ * fix alone would have traded a loud bug for a quiet one.
+ *
+ * WHY only a re-open is exempt: a board already on the canvas under this same
+ * source is the one this apply is a DIFF of, and shifting it would drag every
+ * node away from where the person left it on every re-open.
+ *
+ * Top-level nodes only: `position` is parent-relative (`sceneFromStore.ts`),
+ * so a member's coordinates are already inside a frame that is itself moving.
+ */
+function landedClearOfExistingBoards(editor: Editor, board: PyblocksBoard): DocumentScene {
+  const alreadyHere = editor
+    .getCurrentPageShapes()
+    .some((shape) => (shape.meta as Record<string, unknown> | undefined)?.[SCENE_SOURCE_META_KEY] === board.source);
+  const bounds = editor.getCurrentPageBounds();
+  if (alreadyHere || !bounds) return board.scene;
+  const topLevel = board.scene.nodes.filter((node) => !node.parentId);
+  if (topLevel.length === 0) return board.scene;
+  const dx = Math.round(bounds.maxX + NEW_BOARD_GUTTER_PX - Math.min(...topLevel.map((node) => node.position.x)));
+  if (dx <= 0) return board.scene;
+  return {
+    nodes: board.scene.nodes.map((node) => (node.parentId ? node : { ...node, position: { x: node.position.x + dx, y: node.position.y } })),
+    edges: board.scene.edges,
+  };
 }
 
 /**
@@ -308,10 +372,17 @@ export function pyblocksBoardFrom(loaded: LoadedPyblocksScene): PyblocksBoard {
  * scene DIFF through `applyScene`, which is already a single transaction —
  * so Ctrl+Z is "no, put my board back", which is the behaviour a person
  * wants the first time they open the wrong file.
+ *
+ * WHY the apply is scoped to this file+view (`board.source`) and not to the
+ * document: pyblocks describes ONE Python file. A document-scoped apply
+ * treats every shape the projection does not mention as deleted — so
+ * re-opening a file silently took every cable the person had drawn on it, and
+ * opening a second file wiped the first. Measured, and pinned by
+ * `src/openPythonScope.smoke.test.tsx`.
  */
 export function applyPyblocksBoard(editor: Editor, board: PyblocksBoard): void {
   editor.run(() => {
-    applyScene(editor, board.scene);
+    applyScene(editor, landedClearOfExistingBoards(editor, board), { kind: "source", source: board.source });
     fitRegionsToMembers(editor, board);
     for (const [shapeId, labels] of board.portLabels) {
       const shape = editor.getShape(shapeId as TLShapeId);

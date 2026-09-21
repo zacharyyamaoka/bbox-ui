@@ -28,6 +28,19 @@
 // `scene/boundary.ts`'s `port-inner` case. Building the fixture through the
 // gesture would therefore have tested a board nobody can have.
 //
+// ONE EXPECTATION WAS FLIPPED, 2026-09-21, and it is declared here because
+// this file's last section was written as a MEASUREMENT of a bug, not as a
+// promise. Its fourth case asserted that re-applying a board "silently drops
+// the cable the person drew" — true when it was written, and the data loss
+// that lane was later opened to fix. `applyScene` now takes an `ApplyScope`,
+// and the two rules that were conflated are separated below: under the scope
+// `Open Python file…` actually uses (`source`) the person's cable SURVIVES
+// while the file's own line still goes, and under the scope
+// `source/sourceContextMenu.tsx` uses (`document`) the original measurement
+// stands, unchanged, as its own case. Nothing was deleted; the one sentence
+// that encoded the bug as expected behaviour is now the sentence that would
+// fail if it came back.
+//
 // WHY the assertion is a FINGERPRINT of the definition's whole interior and
 // not "the edge count did not change": all three things Zach reported — a
 // `mut` pill that vanished, one that moved with its cable looping back on
@@ -39,7 +52,7 @@ import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
 
-import { applyScene } from "./document/applySceneDiff";
+import { applyScene, SCENE_SOURCE_META_KEY } from "./document/applySceneDiff";
 import { sceneFromRecords } from "./document/sceneFromStore";
 import { createWire } from "./shapes/wire/createWire";
 import { BLOCK_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "./shapes/types";
@@ -328,37 +341,86 @@ describe("the boundary holds: an occurrence's external wiring never reaches insi
 /* ------------------------------------------------------------------ */
 /* The OTHER way into the expanded view, measured while looking for the */
 /* first: the board-apply seam. `Open Python file…` does not patch —    */
-/* `document/applySceneDiff.ts` brings the WHOLE store to the scene it  */
-/* is handed, so anything already on the board that the incoming scene  */
-/* does not name is deleted. Re-opening the same file is therefore the  */
-/* one action that CAN rewrite an expanded definition's interior, and   */
-/* this pins exactly how far it reaches.                                */
+/* `document/applySceneDiff.ts` brings the board to the scene it is     */
+/* handed, and WHAT IT MAY DELETE while doing so is now the caller's    */
+/* own declaration (`ApplyScope`). Re-opening a file is therefore still */
+/* the one action that can rewrite an expanded definition's interior,   */
+/* and these two cases pin exactly how far each scope reaches.          */
 /* ------------------------------------------------------------------ */
 
+/** The provenance a pyblocks open stamps on every shape it mints —
+ *  `backend/OpenPython.tsx`'s `pyblocksSourceKey`, spelled by hand here
+ *  because this fixture is built with `createWire`, not through the menu. */
+const SOURCE = "pyblocks:file:///tmp/a07.py#function:remember@4:0";
+
+/** The person's cable into the definition's boundary port, drawn by hand. */
+async function drawIntoTheBoundary(def: Definition): Promise<TLShapeId> {
+  const source = makeBlock("first_label", 900, 120, { ports: ports([], [["out", "first_label: str"]]) });
+  await anchorsMeasured(source, 1);
+  // Both top-level, so the gesture's cross-scope gate lets this one through.
+  await drag({ block: source, port: "out" }, { block: def.frame, port: "boundary-input-label" });
+  return wires().find((wire) => !def.cables.includes(wire.id))!.id;
+}
+
+/** `before`, with the line for `wireId` taken out — what the fingerprint is
+ *  expected to read once exactly that one cable has gone. */
+function without(before: string, wireId: TLShapeId): string {
+  return before.replace(new RegExp(`\\{"wireId":"${wireId}".*\\n?`, "g"), "").trimEnd();
+}
+
 describe("re-applying a board reaches the expanded view — how far", () => {
-  it("is idempotent for the definition's own interior, and silently drops the cable the person drew", async () => {
+  it("source scope: the file's own line goes, the cable the person drew STAYS, the interior is idempotent", async () => {
     app = await mountApp();
     const def = await buildDefinition(60, 60);
-    const source = makeBlock("first_label", 900, 120, { ports: ports([], [["out", "first_label: str"]]) });
-    await anchorsMeasured(source, 1);
-    // Both top-level, so the gesture's cross-scope gate lets this one through.
-    await drag({ block: source, port: "out" }, { block: def.frame, port: "boundary-input-label" });
-    const drawn = wires().find((wire) => !def.cables.includes(wire.id))!;
-    expect(drawn).toBeTruthy();
+    const drawn = await drawIntoTheBoundary(def);
 
-    // What pyblocks would hand back on a re-open of the unchanged file: the
-    // board without the person's own cable on it.
-    const board = sceneFromRecords(app.editor.store.allRecords());
-    board.edges = board.edges.filter((edge) => edge.id !== drawn.id);
+    // What a pyblocks open leaves behind: the FILE's cables carry its
+    // provenance, the person's carries none. This is the one fact the scope
+    // rule reads, so it is stated explicitly rather than assumed.
+    for (const id of def.cables) {
+      app.editor.updateShape({ id, type: WIRE_SHAPE_TYPE, meta: { [SCENE_SOURCE_META_KEY]: SOURCE } } as never);
+    }
     const before = fingerprint(def);
 
-    applyScene(app.editor, board);
-    await waitFor(() => (app!.editor.getShape(drawn.id) === undefined ? true : null), { what: "the re-apply settled" });
+    // The answer on a re-open: the same file, minus ONE line it no longer
+    // draws — and it has never heard of the person's cable.
+    const dropped = def.cables[0];
+    const board = sceneFromRecords(app.editor.store.allRecords());
+    board.edges = board.edges.filter((edge) => edge.id !== drawn && edge.id !== dropped);
+
+    applyScene(app.editor, board, { kind: "source", source: SOURCE });
+    await waitFor(() => (app!.editor.getShape(dropped) === undefined ? true : null), { what: "the line the file dropped left the board" });
+
+    // BOTH halves, from one apply of one scene: the producer's own cable is
+    // gone because the producer stopped drawing it; the person's is still
+    // there because the producer never owned it. A fix that simply stopped
+    // deleting would fail the first line; the bug this replaces failed the
+    // second.
+    expect(app.editor.getShape(dropped), "the file's own line survived a re-open that dropped it").toBeUndefined();
+    expect(app.editor.getShape(drawn), "the re-open deleted the cable the person drew").toBeTruthy();
+    expect(fingerprint(def), "the re-open rewrote the definition's interior").toBe(without(before, dropped));
+  });
+
+  it("document scope: the scene IS the board, so a cable it stops naming is still deleted", async () => {
+    // The ORIGINAL fourth case of this file, unchanged in every measurement —
+    // it is the contract `source/sourceContextMenu.tsx` depends on, where the
+    // scene handed in is the whole board's own projection and a node it stops
+    // naming was folded into a code cell on purpose.
+    app = await mountApp();
+    const def = await buildDefinition(60, 60);
+    const drawn = await drawIntoTheBoundary(def);
+
+    const board = sceneFromRecords(app.editor.store.allRecords());
+    board.edges = board.edges.filter((edge) => edge.id !== drawn);
+    const before = fingerprint(def);
+
+    applyScene(app.editor, board, { kind: "document" });
+    await waitFor(() => (app!.editor.getShape(drawn) === undefined ? true : null), { what: "the re-apply settled" });
 
     // The interior survives a re-open UNCHANGED — ids, bindings, paint and
     // route. That is the property a definition's body depends on, and it is
     // asserted here so a future change to `applySceneDiff` cannot quietly
     // start rebuilding bodies.
-    expect(fingerprint(def)).toBe(before.replace(new RegExp(`\\{"wireId":"${drawn.id}".*\\n?`, "g"), "").trimEnd());
+    expect(fingerprint(def)).toBe(without(before, drawn));
   });
 });

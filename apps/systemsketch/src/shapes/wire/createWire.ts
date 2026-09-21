@@ -37,6 +37,16 @@ export interface CreateWireOptions {
   variant?: WireShapeProps["variant"];
   routing?: WireShapeProps["routing"];
   color?: string;
+  /** Stock `shape.meta`, verbatim.
+   *
+   *  WHY a constructor takes it rather than the caller patching it on
+   *  afterwards: `applySceneDiff.ts` tags what it creates so a later apply can
+   *  tell its own cables from the person's, and a second `updateShape` would
+   *  put that tag in a different store transaction from the shape it
+   *  describes — which is exactly the split `editor.run` below exists to
+   *  prevent, and would publish the cable on the edit-event seam once as an
+   *  untagged `wire.added` and again as a change. */
+  meta?: Record<string, string>;
 }
 
 /**
@@ -88,6 +98,7 @@ export function createWire(editor: Editor, options: CreateWireOptions): TLShapeI
       x: 0,
       y: 0,
       ...(Object.keys(props).length > 0 ? { props } : {}),
+      ...(options.meta ? { meta: options.meta } : {}),
     });
     editor.createBindings<WireBinding>([
       { id: createBindingId(), type: WIRE_BINDING_TYPE, fromId: id, toId: fromShape.id, props: { terminal: "start", portId: options.from.portId } },

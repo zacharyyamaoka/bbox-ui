@@ -170,8 +170,15 @@ function SourceMenuGroup() {
         return;
       }
       // One undo step — `applyScene` runs the whole diff inside `editor.run`.
+      //
+      // `document` scope, and it is the honest one: `sceneNow` projects the
+      // WHOLE store and `planConvertToCode` edits that projection, so a node
+      // the plan stops naming is one it deliberately folded into the cell and
+      // really must leave the board. The other scope (`source`) exists for a
+      // producer that only describes PART of the board — see
+      // `document/applySceneDiff.ts`'s `ApplyScope`.
       editor.markHistoryStoppingPoint("convert to code");
-      applyScene(editor, plan.scene);
+      applyScene(editor, plan.scene, { kind: "document" });
       editor.setSelectedShapes([plan.cellId as TLShapeId]);
     },
     [addToast, editor],
@@ -218,7 +225,9 @@ function SourceMenuGroup() {
           const cell = editor.getShape(cellId as TLShapeId);
           const children = editor.getSortedChildIdsForParent(cellId as TLShapeId);
           if (cell && children.length > 0) editor.reparentShapes([...children], cell.parentId);
-          applyScene(editor, fresh.scene);
+          // `document` scope, same reason as `convertToCode` above: the plan
+          // is an edit of the whole board's own projection.
+          applyScene(editor, fresh.scene, { kind: "document" });
         });
       };
       if (plan.textWasEdited && plan.discardedText !== null) confirmDiscard(dialogs, plan.discardedText, run);
