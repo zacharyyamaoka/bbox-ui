@@ -67,6 +67,25 @@ export interface EditableTextProps extends Omit<ComponentProps<"div">, "onChange
   /**
    * Fires on Enter (single), Ctrl/Cmd+Enter (multi), or blur — and SAYS WHICH.
    *
+   * THOSE ARE ALL THE ROUTES, AND UNMOUNT IS DELIBERATELY NOT ONE (backlog
+   * P-030, "nothing you type is ever lost"). The hazard the item names is
+   * real — Chrome fires no `blur` for a focused element removed from the DOM,
+   * so a panel closing or a tab switching under a focused field skips a
+   * blur-commit entirely. It cannot bite THIS component, because this
+   * component never holds the text: the control below is fully controlled
+   * (`value={children}`), so a host that did not already have every keystroke
+   * could not render a second one. There is nothing buffered here for an exit
+   * to deliver, which is why adding an unmount route would be a callback that
+   * can only ever re-send a string its host already has.
+   *
+   * What the hazard CAN bite is a host that buffers — a `useState` draft fed
+   * to `children` and written back only in `onCommit`. That is the design to
+   * avoid, and it is avoided by writing through in `onChange`, which is what
+   * every text surface in bbox studio does (the four are listed in
+   * `apps/systemsketch/src/textEditing.smoke.test.tsx`, whose second P-030
+   * describe drives a panel closing and a session ending under a focused
+   * field and asserts the store per KEYSTROKE, not per commit).
+   *
    * WHY `via` exists, and why it is a second argument rather than a second
    * callback: a host that owns an editing SESSION (tldraw's `editingShapeId`,
    * for instance) needs to close that session on the key and NOT on the blur,

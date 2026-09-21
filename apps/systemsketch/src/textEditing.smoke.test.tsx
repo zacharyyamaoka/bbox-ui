@@ -8,7 +8,9 @@
 //   P-030  WYSIWYG commit: whatever was typed is what the store holds —
 //          leading, trailing and doubled whitespace and non-ASCII included
 //          (Zach's `feedback_truthful_property_rendering`: "no silent
-//          normalization, trimming, substitution, or clipping").
+//          normalization, trimming, substitution, or clipping"), AND on every
+//          exit route, including the routes that fire no `blur` at all. The
+//          second describe below is the one the item exists for.
 //
 // WHY the click position is not passed to `dblClick`: vitest's
 // `UserEventDoubleClickOptions` is an EMPTY interface in 4.1.11 (checked in
@@ -43,7 +45,7 @@ interface CodeShapeLike {
 
 interface BlockShapeLike {
   id: TLShapeId;
-  props: { name: string };
+  props: { name: string; description: string };
 }
 
 const NO_PORTS = { left: [], right: [], top: [], bottom: [] };
@@ -323,5 +325,175 @@ describe("P-039 / P-026 — a block's title edits in place, on the card", () => 
     await userEvent.keyboard("{Enter}");
     await waitFor(() => app!.editor.getEditingShapeId() === null, { what: "the session closed" });
     expect((app.editor.getShape(id) as BlockShapeLike).props.name).toBe(AWKWARD_TITLE);
+  });
+});
+
+/**
+ * Open the right rail on the Inspector the way a person does — the status
+ * strip's Frames launcher, then the rail's own surface switch. The same two
+ * presses `src/inspector.smoke.test.tsx` drives; restated here rather than
+ * shared because a smoke test that imports another smoke test's helper pulls
+ * its module graph in too.
+ */
+async function openInspector(): Promise<HTMLElement> {
+  const launcher = await waitFor(() => app!.root.querySelector<HTMLElement>('[data-testid="ss-status-frames"]'), {
+    what: "the Frames launcher in the status strip",
+  });
+  await userEvent.click(launcher);
+  const tab = await waitFor(() => app!.root.querySelector<HTMLElement>('[data-testid="ss-panel-surface-inspector"]'), {
+    what: "the Inspector surface switch",
+  });
+  await userEvent.click(tab);
+  return waitFor(() => app!.root.querySelector<HTMLElement>('[data-slot="panel-shell"][data-surface="inspector"]'), {
+    what: "the inspector panel",
+  });
+}
+
+const descriptionField = () =>
+  waitFor(() => app!.root.querySelector<HTMLTextAreaElement>('[data-testid="ss-inspector-description-text"]'), {
+    what: "the description field",
+  });
+
+/**
+ * Type `text` one character at a time and check `read()` after EVERY one.
+ *
+ * WHY this and not one `keyboard(text)` followed by one assertion at the end:
+ * the end-state assertion is satisfied by a field that buffers the whole
+ * sentence and delivers it on the way out, which is exactly the design P-030
+ * is about. Asserting per keystroke is the only shape that can tell
+ * write-through apart from a buffer, and write-through is what makes every
+ * exit route below safe — there is no pending text for an exit to lose,
+ * because there is never any pending text.
+ *
+ * WHY the assertion is bare rather than wrapped in `waitFor`, which is what
+ * the rest of this file uses: `waitFor` polls for up to ten seconds, so it
+ * would pass a field that debounced its write — and a debounced write loses
+ * exactly the tail P-030 is about when the field is torn out mid-timer. A
+ * keystroke is a DISCRETE event, so React flushes the store write before
+ * `userEvent.keyboard` resolves; anything later than that is the bug.
+ */
+async function typeWritingThrough(text: string, read: () => string) {
+  let typed = "";
+  for (const character of text) {
+    await userEvent.keyboard(character);
+    typed += character;
+    expect(read()).toBe(typed);
+  }
+}
+
+/**
+ * P-030's HARD HALF, and the reason the item exists: a focused text control
+ * REMOVED FROM THE DOM. Chrome fires no `blur` for such an element, so any
+ * surface whose text only reaches the store on a commit loses everything typed
+ * since the last one — and panel unmount and tab switch are the routes that
+ * get there.
+ *
+ * WHAT ACTUALLY PROTECTS THE TEXT IN THIS APP, and it is not a fourth commit
+ * route: no exit route carries text at all. Each of the four text surfaces
+ * writes through on every keystroke, so the store is never behind the field:
+ *
+ *   shapes/block/BlockFace.tsx:186   the block title      EditableText `onChange`
+ *   shapes/port/PortFace.tsx:236     the port declaration CodeEditor  `onWrite`
+ *   shapes/code/CodeFace.tsx:148     a code cell          CodeEditor  `onWrite`
+ *   chrome/panels.tsx:152            the description      Textarea    `onChange`
+ *
+ * MEASURED WHILE WRITING THIS, and worth keeping because it is the opposite of
+ * what the routes look like: on BOTH routes below a `blur` does fire, even
+ * though the element is being removed. tldraw refocuses its own container on
+ * the way out of a session and on its own Escape handling
+ * (`useDocumentEvents.mjs`), and that `focus()` blurs the field synchronously
+ * before React unmounts it. So the browser hazard is real but unreachable
+ * here — which is precisely why these tests do not lean on a blur counter as
+ * their oracle. They assert the store per keystroke instead, which is a claim
+ * about this app and not about tldraw's keyboard wiring.
+ */
+describe("P-030 — every exit route, including the ones that unmount a focused field", () => {
+  it("the panel closes under the description field while focus is inside it", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate");
+    await openInspector();
+    app.editor.select(id);
+    const field = await descriptionField();
+    await userEvent.click(field);
+
+    await typeWritingThrough(AWKWARD_TITLE, () => (app!.editor.getShape(id) as BlockShapeLike).props.description);
+
+    // The field really is the focused element when the panel is told to close
+    // — otherwise the case being measured is one the user had already left,
+    // which is the easy one.
+    expect(field.ownerDocument.activeElement).toBe(field);
+
+    // Escape closes the rail (chrome/panels.tsx:240) — a real user action, and
+    // a keyboard one, which is the only kind that does not begin with a press
+    // landing somewhere else.
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => !field.isConnected, { what: "the panel closed under the field" });
+
+    expect((app.editor.getShape(id) as BlockShapeLike).props.description).toBe(AWKWARD_TITLE);
+
+    // …and it is all still there when the panel comes back, character for
+    // character, which is the half a person would actually notice.
+    //
+    // WHY the block is selected again first: that one Escape did two things on
+    // purpose. `chrome/panels.tsx:235-236` says the listener deliberately does
+    // not stop propagation — "closing the panel and cancelling the gesture at
+    // the same time is the behaviour both stock tldraw and the donor have" —
+    // so tldraw's own handler cleared the selection as well, and an inspector
+    // with no subject shows its empty state rather than a field. Re-selecting
+    // is what a person does by clicking the block again.
+    app.editor.select(id);
+    await openInspector();
+    expect((await descriptionField()).value).toBe(AWKWARD_TITLE);
+  });
+
+  it("the block's title control is unmounted mid-edit while it still holds focus", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate");
+    await userEvent.dblClick(await titleOf(id));
+    await waitFor(() => app!.editor.getEditingShapeId() === id, { what: "the title session opened" });
+    const control = await waitFor(
+      () => document.querySelector<HTMLInputElement>(`[data-ss-node="${id}"] [data-slot="editable-text-input"]`),
+      { what: "the title control" },
+    );
+
+    await userEvent.keyboard("{Control>}a{/Control}");
+    await typeWritingThrough("pose_from_frame", () => (app!.editor.getShape(id) as BlockShapeLike).props.name);
+    expect(control.ownerDocument.activeElement).toBe(control);
+
+    // The engine's own route out of a session — `shapes/shared/editingSession.
+    // ts`'s two calls, which is what a tool change, a programmatic close or a
+    // document reload takes. Driven directly rather than through a press,
+    // because a press blurs the field before React unmounts anything and so
+    // cannot produce the unmount-while-focused case at all.
+    app.editor.setEditingShape(null);
+    app.editor.complete();
+
+    await waitFor(() => !control.isConnected, { what: "the control was removed from the DOM" });
+    expect((app.editor.getShape(id) as BlockShapeLike).props.name).toBe("pose_from_frame");
+    expect((await titleOf(id)).textContent).toBe("pose_from_frame");
+  });
+
+  it("switching the rail to another surface and back keeps the description exactly as typed", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate");
+    await openInspector();
+    app.editor.select(id);
+    const field = await descriptionField();
+    await userEvent.click(field);
+    await typeWritingThrough(AWKWARD_TITLE, () => (app!.editor.getShape(id) as BlockShapeLike).props.description);
+
+    const frames = await waitFor(() => app!.root.querySelector<HTMLElement>('[data-testid="ss-panel-surface-frames"]'), {
+      what: "the Frames surface switch",
+    });
+    await userEvent.click(frames);
+    await waitFor(() => !field.isConnected, { what: "the surface switch unmounted the description field" });
+
+    const back = await waitFor(() => app!.root.querySelector<HTMLElement>('[data-testid="ss-panel-surface-inspector"]'), {
+      what: "the Inspector surface switch",
+    });
+    await userEvent.click(back);
+
+    expect((await descriptionField()).value).toBe(AWKWARD_TITLE);
+    expect((app.editor.getShape(id) as BlockShapeLike).props.description).toBe(AWKWARD_TITLE);
   });
 });
