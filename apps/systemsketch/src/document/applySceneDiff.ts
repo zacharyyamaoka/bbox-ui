@@ -416,15 +416,34 @@ function movedNodes(current: DocumentScene, next: DocumentScene, reported: Reado
  * `reparentShapes` (used by the caller) preserves page position, so nothing
  * teleports. A survivor nested inside another survivor is left alone — it
  * rides along with the one above it, still in the place it was put.
+ *
+ * TWO REASONS A DESCENDANT SURVIVES, not one. Ownership is the first (above).
+ * The second is that THE INCOMING SCENE STILL NAMES IT — `kept` — and it is
+ * the one that makes dissolving a container possible at all: `next` says the
+ * container is gone and its children are now the page's, which is a `removed`
+ * row and a pile of `modified` rows. Without this, the `removed` row runs
+ * first, `deleteShapes` cascades to every child, and the `modified` pass then
+ * finds no record to update and skips it (`if (!before) continue`) — so
+ * ungrouping a region deleted its members and every cable they carried,
+ * silently, exactly like the scope bug this function was written for. Measured
+ * 2026-09-21 by `src/grouping.smoke.test.tsx`: after Ungroup the board came
+ * back with zero edges and zero members.
+ *
+ * WHY ordering the passes differently would not fix it: the delete has to
+ * happen before the wires are re-derived (`applyScene`'s own order note), and
+ * a child cannot be reparented out of a parent that is about to be deleted
+ * without exactly this hoist. Keeping the survivor alive is the smaller,
+ * truer change than resequencing a transaction whose order is load-bearing.
  */
 function hoistedSurvivors(
   editor: Editor,
   removed: readonly TLShapeId[],
   mayDelete: (id: string) => boolean,
+  kept: ReadonlySet<string>,
 ): { id: TLShapeId; parentId: TLParentId }[] {
   if (removed.length === 0) return [];
   const doomed = editor.getShapeAndDescendantIds([...removed]);
-  const survives = (id: TLShapeId) => doomed.has(id) && !mayDelete(String(id));
+  const survives = (id: TLShapeId) => doomed.has(id) && (!mayDelete(String(id)) || kept.has(String(id)));
   const out: { id: TLShapeId; parentId: TLParentId }[] = [];
   for (const id of doomed) {
     if (!survives(id)) continue;
@@ -474,7 +493,9 @@ export function applyScene(editor: Editor, next: DocumentScene, scope: ApplyScop
     const removedNodes = diff.nodes
       .filter((row) => row.operation === "removed" && mayDelete(row.id))
       .map((row) => row.id as TLShapeId);
-    const survivors = hoistedSurvivors(editor, removedNodes, mayDelete);
+    // `next`'s own node ids: a shape the incoming scene still names is not
+    // collateral, whoever owns it. See `hoistedSurvivors`.
+    const survivors = hoistedSurvivors(editor, removedNodes, mayDelete, new Set(next.nodes.map((node) => node.id)));
     // Wires first: deleting a NODE already cascades to its cables
     // (`WireBindingUtil.onBeforeDeleteToShape`), and asking for a shape that
     // the cascade already removed is a no-op, not an error.
