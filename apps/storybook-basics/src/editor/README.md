@@ -78,6 +78,31 @@ See `src/editor/EdgeDropMenu.stories.tsx` for the host-adapter pattern
 this establishes: the story owns the pointer gesture and the demo catalog;
 the kit component owns none of either.
 
+## `portOverflowChip.tsx` — the "+X more" chip (ruling 7)
+
+Zach, 2026-09-21: *"ideally this just comes from the port edge
+implementation... but YOu do need to provide the chrome to do this... should
+be in bbox-editor."*
+
+The split that sentence describes, and where each half lives:
+
+| Half | Owner | Why it cannot live on the other side |
+|---|---|---|
+| Which slots are cut, and how many PORTS that hides | `components/portEdge.layout.ts`'s `splitByMaxVisible` (pure, unit-tested) | Grouping means a cut slot can hold several ports — only the component that built the slots knows the real count |
+| Where the marker lands on the track | `components/portEdge.tsx`'s `useMoreIndicatorPosition` | It measures the last visible port's real box off the track's own ref |
+| The chip, and the list of hidden ports behind it | **here** | It is chrome, and `components/` may not import `editor/` |
+
+The seam is `PortEdgeProps.renderOverflow`, a render prop — the only shape
+that respects the DAG. `PortEdge` still draws a bare, inert `+N more` line
+when no chrome is supplied, because a capped edge that drew nothing would
+silently swallow ports; that fallback is a truthfulness floor, not a second
+chip.
+
+`src/editor/PortOverflowChip.stories.tsx` is the reference host wiring, and
+its `GroupedCut` story is what makes the split falsifiable: one slot is cut,
+three ports go with it, and the chip reads **+3**. A chip counting anything
+for itself would say +1.
+
 ## `sourceActions.ts` — the pyblocks-gated source actions
 
 "Convert to code" and "Expand to blocks" — the two gestures of the

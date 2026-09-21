@@ -319,6 +319,52 @@ export function computeSlots(order: string[], set: GroupingSetDef, mode: "off" |
   return slots;
 }
 
+/* ------------------------------------------------------------------ */
+/* The overflow decision — RULING 7's "comes from the port edge         */
+/* implementation" half.                                               */
+/* ------------------------------------------------------------------ */
+
+/** What a `maxVisible` cut leaves behind. Pure data: no DOM, no chrome,
+ *  no wording — the caller (`editor/portOverflowChip.tsx` today) decides
+ *  how, or whether, to say it. */
+export interface SlotOverflow {
+  /** The slots that stay on the track. */
+  visible: Slot[];
+  /** The slots cut from the track entirely — not grouped, not collapsed,
+   *  gone. */
+  hidden: Slot[];
+  /** How many PORTS those cut slots held. See the WHY below for why this
+   *  is not `hidden.length`. */
+  hiddenPortCount: number;
+}
+
+/**
+ * Split an edge's slots at `maxVisible` (undefined — the normal case —
+ * cuts nothing).
+ *
+ * WHY: Zach, ruling 7 on the "+X more" chip — "ideally this just comes
+ * from the port edge implementation... but YOu do need to provide the
+ * chrome to do this... should be in bbox-editor". This function is the
+ * first half of that split, and it is pure precisely so the second half
+ * (the chrome, in `editor/`) can be swapped without the COUNT ever being
+ * recomputed by whoever draws it. A chip that counts for itself is a
+ * second source of truth for the same fact.
+ *
+ * WHY `hiddenPortCount` sums MEMBERS rather than counting cut slots:
+ * grouping merges N ports into one slot box, so a cut landing past a real
+ * group hides N ports in one slot. `hidden.length` would report "+1 more"
+ * for a family of four — a false count, which
+ * `feedback_truthful_property_rendering` rules out just as firmly for a
+ * number as for a label.
+ */
+export function splitByMaxVisible(slots: Slot[], maxVisible: number | undefined): SlotOverflow {
+  if (maxVisible == null) return { visible: slots, hidden: [], hiddenPortCount: 0 };
+  const cut = Math.max(0, maxVisible);
+  const visible = slots.slice(0, cut);
+  const hidden = slots.slice(cut);
+  return { visible, hidden, hiddenPortCount: hidden.reduce((n, s) => n + s.members.length, 0) };
+}
+
 /**
  * The pixel gap BETWEEN adjacent top-level slot boxes a `Distribution`
  * actually produces on the edge's main axis — the same number flexbox

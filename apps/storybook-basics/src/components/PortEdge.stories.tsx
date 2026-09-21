@@ -5,7 +5,7 @@ import { useDndContext, type DragEndEvent, type DragOverEvent } from "@dnd-kit/c
 import { python } from "@codemirror/lang-python";
 
 import { Block } from "./block";
-import { PortEdge, PortEdgeDndProvider, type PortEdgeItem } from "./portEdge";
+import { PORT_EDGE_MORE_GAP_PX, PortEdge, PortEdgeDndProvider, type PortEdgeItem } from "./portEdge";
 import { CONTAINER_PADDING, SPACING_SCHEMES, DEFAULT_ALIGN_GAP, defaultDistributionForEdges, type Distribution, type Size } from "./portEdge.layout";
 import type { BlockSide, PortTextLayout } from "./port.layout";
 
@@ -340,6 +340,15 @@ function SingleEdgeDemo() {
         textLayout={textLayout}
         editing={editing}
         onEditingChange={setEditing}
+        // RULING 11 (2026-09-21) flipped `editMode`'s default to `"multi"`.
+        // This story's SUBJECT is per-port single-line editing (F1c/F1d/F1e
+        // below: one port's own editor, its display text gone while editing,
+        // its id surviving the rename), so it now names the mode it is about
+        // instead of inheriting it. The default itself is pinned by
+        // `EditModeDefaultIsMulti` at the bottom of this file — deliberately
+        // a separate story, so "single-line still works" and "multi-line is
+        // what you get for free" can never be satisfied by the same run.
+        editMode="single"
         laneLanguage={pythonSyntax ? python() : undefined}
       />
     </div>
@@ -2028,8 +2037,14 @@ export const MaxVisible: Story = {
     if (!(lastMember instanceof HTMLElement)) throw new Error("expected the last visible port slot");
     const lastRect = lastMember.getBoundingClientRect();
     const indicatorRect = indicator.getBoundingClientRect();
-    await expect(indicatorRect.top).toBeGreaterThanOrEqual(lastRect.bottom - 1);
-    await expect(Math.abs(indicatorRect.left - lastRect.left)).toBeLessThanOrEqual(2);
+    // Tightened 2026-09-21 from `>= bottom - 1` / `<= 2px` to the exact
+    // geometry: the old tolerances were each exactly wide enough to hide a
+    // real `CONTAINER_BORDER`-sized offset in `useMoreIndicatorPosition`
+    // (border box vs padding box — see that hook's own comment), which is
+    // how a 2px misplacement sat here reporting green. Now stated as the
+    // component's own exported gap.
+    await expect(Math.abs(indicatorRect.top - (lastRect.bottom + PORT_EDGE_MORE_GAP_PX))).toBeLessThanOrEqual(1);
+    await expect(Math.abs(indicatorRect.left - lastRect.left)).toBeLessThanOrEqual(1);
 
     // Live: raising the cap shrinks the hidden count and moves the line;
     // dropping it to the full roster removes the line entirely.
@@ -2061,14 +2076,16 @@ export const MaxVisible: Story = {
  * way), armed + single-line (one port's own inline `CodeEditor`), armed +
  * multi-line (the rail-wide lane, `PortLaneOverlay`). `editMode` is the
  * seam that picks between the second and third — per-edge, matching how
- * `mode`/`groupMode` already work on this component, and defaulting to
- * `"single"` because renaming one port is the common case; a caller opts
- * into the bigger, rarer capability (paste a block of text, add/remove/
- * reorder ports in one edit) rather than the small one being the special
- * case. See `PortEdgeProps.editMode`'s own doc in `portEdge.tsx` for the
- * full reasoning, including the graceful fallback to `"single"` when the
- * lane's own preconditions (column edge, auto mode, no collapsed group)
- * are not met.
+ * `mode`/`groupMode` already work on this component.
+ *
+ * This story drives BOTH explicitly, via the segmented control, so neither
+ * depends on which one happens to be the default. Which one IS the default
+ * changed on 2026-09-21 (ruling 11 — it is now `"multi"`); the story that
+ * pins the DEFAULT specifically is `EditModeDefaultIsMulti`, below. See
+ * `PortEdgeProps.editMode`'s own doc in `portEdge.tsx` for the full
+ * reasoning, including the graceful fallback to `"single"` when the lane's
+ * own preconditions (column edge, auto mode, no collapsed group) are not
+ * met.
  */
 function EditModeDemo() {
   const [editMode, setEditMode] = useState<"single" | "multi">("single");
@@ -2165,3 +2182,104 @@ export const EditModeSingleVsMulti: Story = {
   },
 };
 
+
+/* ------------------------------------------------------------------ */
+/* EditModeDefaultIsMulti — RULING 11 (2026-09-21). Zach: "We are goign  */
+/* to change the Ux/UI on this for now like support the multi line port  */
+/* editor as the default one."                                          */
+/*                                                                      */
+/* The story above proves both modes work when a caller NAMES one. This  */
+/* one proves the thing that actually changed: what you get when nobody  */
+/* names anything. Three edges, one assertion each —                     */
+/*   1. no `editMode` prop at all  -> the rail-wide multi-line lane      */
+/*   2. `editMode="single"`        -> still reachable, unchanged         */
+/*   3. no prop, on a ROW edge     -> degrades to single, never dead-ends*/
+/* — because "the default flipped" is only safe if (3) holds: a row edge */
+/* cannot open the lane (`laneAvailability`), and a default that left    */
+/* every click on one doing nothing would be a worse bug than the one    */
+/* the ruling fixes.                                                     */
+/*                                                                      */
+/* The same ruling REJECTED hover-the-end-of-a-lane-to-add-a-port as     */
+/* superseded by this, so there is deliberately no story for that: the   */
+/* add-a-port gesture is now "type another line into the lane."          */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_MODE_ITEMS: PortEdgeItem[] = [
+  { id: "pose", label: "pose", state: "wired" },
+  { id: "gain", label: "gain", state: "empty" },
+  { id: "reset", label: "reset", state: "empty" },
+];
+
+function DefaultEditModeBench({ benchId, edge, editMode }: { benchId: string; edge: BlockSide; editMode?: "single" | "multi" }) {
+  const [items, setItems] = useState<PortEdgeItem[]>(DEFAULT_MODE_ITEMS);
+  return (
+    <div data-testid={benchId} style={{ position: "relative" }}>
+      <PortEdge
+        edge={edge}
+        items={items}
+        onItemsChange={setItems}
+        editing
+        // `editMode` is spread rather than passed as `editMode={undefined}`
+        // on purpose: the point of bench 1 is that the prop is ABSENT, and
+        // an explicit `undefined` would test the same code path only by
+        // accident of how destructuring defaults happen to work today.
+        {...(editMode ? { editMode } : {})}
+        size={edge === "top" ? { width: 260, height: 110 } : { width: 200, height: 220 }}
+      />
+    </div>
+  );
+}
+
+export const EditModeDefaultIsMulti: Story = {
+  render: () => (
+    <div style={{ display: "flex", gap: 48, alignItems: "flex-start", padding: 16 }}>
+      <DefaultEditModeBench benchId="default-mode" edge="left" />
+      <DefaultEditModeBench benchId="explicit-single" edge="left" editMode="single" />
+      <DefaultEditModeBench benchId="row-fallback" edge="top" />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const bench = (id: string) => required<HTMLElement>(canvasElement, `[data-testid="${id}"]`, `the ${id} bench`);
+
+    // Arming alone still paints nothing — F1a's guarantee, and it has to
+    // survive the default flipping or the flip broke it.
+    for (const id of ["default-mode", "explicit-single", "row-fallback"]) {
+      await expect(bench(id).querySelectorAll('[data-slot="port-edge-lane"]')).toHaveLength(0);
+      await expect(bench(id).querySelectorAll('[data-slot="code-editor"]')).toHaveLength(0);
+    }
+
+    // (1) THE RULING: no `editMode`, one port click -> the rail-wide lane.
+    const defaultBench = bench("default-mode");
+    await userEvent.click(required<HTMLElement>(defaultBench, '[data-slot="port-edge-member"]', "a port to click"));
+    const lane = await waitFor(() => required<HTMLElement>(defaultBench, '[data-slot="port-edge-lane"]', "the rail-wide lane"));
+    // Specific, not "it mounted": the lane is the WHOLE rail's document —
+    // one line per port on the edge, in track order, which is exactly what
+    // distinguishes it from a single port's own one-line editor.
+    await waitFor(() => {
+      expect(lane.querySelectorAll(".cm-line")).toHaveLength(DEFAULT_MODE_ITEMS.length);
+    });
+    await expect(Array.from(lane.querySelectorAll(".cm-line")).map((l) => l.textContent)).toEqual(DEFAULT_MODE_ITEMS.map((i) => i.label));
+
+    // (2) `editMode="single"` is still reachable and unchanged: this port's
+    // own editor, and NO lane anywhere in that bench.
+    const singleBench = bench("explicit-single");
+    await userEvent.click(required<HTMLElement>(singleBench, '[data-slot="port-label-display"]', "a port label to click"));
+    await waitFor(() => {
+      expect(singleBench.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(1);
+    });
+    await expect(singleBench.querySelectorAll('[data-slot="port-edge-lane"]')).toHaveLength(0);
+    // And it edits ONE port, not the rail: a single line holding one label.
+    const singleEditor = required<HTMLElement>(singleBench, '[data-slot="code-editor"]', "the single-line editor");
+    await expect(singleEditor.querySelectorAll(".cm-line")).toHaveLength(1);
+
+    // (3) THE SAFETY THE FLIP RESTS ON: a row edge cannot open the lane, so
+    // the new default degrades to single-line editing rather than to a
+    // click that does nothing.
+    const rowBench = bench("row-fallback");
+    await userEvent.click(required<HTMLElement>(rowBench, '[data-slot="port-label-display"]', "a port label on the row edge"));
+    await waitFor(() => {
+      expect(rowBench.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(1);
+    });
+    await expect(rowBench.querySelectorAll('[data-slot="port-edge-lane"]')).toHaveLength(0);
+  },
+};

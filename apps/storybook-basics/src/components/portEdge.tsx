@@ -80,6 +80,7 @@ import {
   distributionStyle,
   groupingSetFromText,
   interSlotGapPx,
+  splitByMaxVisible,
   type Distribution,
   type Size,
   type Slot,
@@ -129,6 +130,24 @@ export interface PortEdgeItem {
   producers?: number;
   /** Host-set selection, forwarded to the default `LabeledPort`. */
   selected?: boolean;
+}
+
+/**
+ * RULING 7's payload: everything `PortEdge` knows about a `maxVisible` cut,
+ * handed to whatever chrome is drawing it. The chrome never recomputes any
+ * of this — see `PortEdgeProps.renderOverflow`.
+ */
+export interface PortEdgeOverflow {
+  /** How many PORTS are hidden — members, not slot boxes, so a cut through
+   *  a real group still reports the true number (`splitByMaxVisible`). */
+  readonly hiddenCount: number;
+  /** The hidden ports themselves, in track order — what a chip can list
+   *  when asked, so "+3 more" is discoverable rather than merely honest. */
+  readonly hiddenItems: readonly PortEdgeItem[];
+  /** Which edge was cut, and the axis it runs on — a row edge's chrome
+   *  sits after the last port, a column edge's sits under it. */
+  readonly edge: BlockSide;
+  readonly axis: "row" | "column";
 }
 
 export type PortEdgeArrangeMode = "auto" | "custom";
@@ -252,18 +271,31 @@ export interface PortEdgeProps {
    * will appear, or the full multi line will appear." Per-edge (like
    * `mode`/`groupMode` — `PortEdge` already takes per-edge config, so this
    * follows the existing shape rather than inventing a global one).
-   * `"single"` is the default: a port click opens just that port's own
-   * label, which is the common case (rename one port) and what F1a/F1c/F1d
-   * already prove. `"multi"` opens the rail-wide lane instead — the same
-   * `PortLaneOverlay`/`reconcilePortLane` (`./portLane.ts`) machinery
-   * Phase 4 built, letting a pasted multi-line block add/remove/reorder
-   * ports in one edit; unchanged, just re-triggered. Falls back to `"single"`
-   * behaviour when the lane genuinely cannot open here (`laneAvailability`
-   * refuses — collapsed real family, row edge, custom mode) rather than
-   * leaving a click that does nothing: a control that silently no-ops on
-   * every click is worse than one that does the smaller of the two things it
-   * knows how to do (truthful rendering's spirit, PORT-EDGE-PLAN-PHASE4.md
-   * §5, applied to a click affordance rather than a disabled button).
+   *
+   * WHY `"multi"` is the DEFAULT (ruling 11, 2026-09-21 — this used to
+   * default to `"single"`): Zach, "We are goign to change the Ux/UI on this
+   * for now like support the multi line port editor as the default one."
+   * The rail-wide lane is now what an armed port click opens unless a
+   * caller asks otherwise — one editor that can rename, add, remove AND
+   * reorder every port on the edge in one paste, instead of the smaller
+   * gesture that can only rename the one port you hit. `"single"` stays
+   * fully reachable, and unchanged, by passing it explicitly.
+   *
+   * The same ruling REJECTED hovering the end of a port lane to add a port
+   * ("superseded by this") — do not build that; typing a new line into the
+   * multi-line lane IS the add-a-port gesture now.
+   *
+   * `"multi"` opens the rail-wide lane — the same `PortLaneOverlay`/
+   * `reconcilePortLane` (`./portLane.ts`) machinery Phase 4 built, letting a
+   * pasted multi-line block add/remove/reorder ports in one edit; unchanged,
+   * just re-triggered. It falls back to `"single"` behaviour when the lane
+   * genuinely cannot open here (`laneAvailability` refuses — collapsed real
+   * family, row edge, custom mode) rather than leaving a click that does
+   * nothing: a control that silently no-ops on every click is worse than one
+   * that does the smaller of the two things it knows how to do (truthful
+   * rendering's spirit, PORT-EDGE-PLAN-PHASE4.md §5, applied to a click
+   * affordance rather than a disabled button). That fallback is why flipping
+   * the default is safe on a row edge: it degrades, it never dead-ends.
    */
   editMode?: "single" | "multi";
   /**
@@ -293,8 +325,33 @@ export interface PortEdgeProps {
    * those slots stop occupying track space altogether rather than shrinking
    * into one. Read and confirmed before adding this: `renderCollapsed`
    * does not fit the shape of this problem.
+   *
+   * RULING 7 (2026-09-21): this prop owns the DECISION and the COUNT; it
+   * does not own the chip that says so. See `renderOverflow` below.
    */
   maxVisible?: number;
+  /**
+   * RULING 7 — the "+X more" overflow chrome's seam. Zach: "ideally this
+   * just comes from the port edge implementation... but YOu do need to
+   * provide the chrome to do this... should be in bbox-editor".
+   *
+   * So the split is: THIS component decides what overflows (`maxVisible`
+   * cuts slots, `splitByMaxVisible` in `./portEdge.layout.ts`), counts the
+   * real ports behind the cut, and measures where the marker belongs on the
+   * track — three things only the component that owns the track can know.
+   * The CHROME that draws it is supplied from outside and lives in
+   * `editor/` (`editor/portOverflowChip.tsx`'s `PortOverflowChip`), which
+   * `components/` may not import (the DAG: components never imports editor).
+   * A render prop is therefore the only seam that respects both halves.
+   *
+   * WHY there is still a default when this is omitted: a capped edge that
+   * drew nothing would silently swallow ports, which
+   * `feedback_truthful_property_rendering` rules out. The fallback is
+   * deliberately the barest possible truthful marker — one line of muted
+   * italic text, no border, no interaction — so it reads as the component
+   * refusing to lie, not as chrome competing with `editor/`'s.
+   */
+  renderOverflow?(overflow: PortEdgeOverflow): ReactNode;
   /**
    * The visual variant for every default port on this edge (src/skin/
    * portVariants.ts). Omit — the normal case — and each port reads the
@@ -1130,7 +1187,11 @@ function PortLaneOverlay({
 /* div's — the ref is guaranteed attached by then, mount or update alike.  */
 /* ------------------------------------------------------------------ */
 
-const MORE_INDICATOR_GAP_PX = 6;
+/** The gap between the last visible port's box and the overflow marker,
+ *  on whichever axis the edge runs. Exported so a story (or an `editor/`
+ *  chip) asserts placement against the component's OWN number rather than
+ *  a literal copied into a test. */
+export const PORT_EDGE_MORE_GAP_PX = 6;
 
 function useMoreIndicatorPosition(trackRef: RefObject<HTMLDivElement | null>, axis: "row" | "column", hiddenCount: number) {
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -1153,10 +1214,24 @@ function useMoreIndicatorPosition(trackRef: RefObject<HTMLDivElement | null>, ax
       }
       const trackRect = track.getBoundingClientRect();
       const lastRect = last.getBoundingClientRect();
+      // WHY the two `client*` terms: `getBoundingClientRect()` returns the
+      // BORDER box, but CSS `left`/`top` on an absolutely positioned child
+      // are measured from the containing block's PADDING box. The track
+      // draws a `CONTAINER_BORDER`-wide border (2px, whenever
+      // `showContainer` is on), so the naive difference placed the marker
+      // exactly one border-width down and to the right of the port it is
+      // supposed to sit beside. Found by measuring the real chip against
+      // `PORT_EDGE_MORE_GAP_PX` in `editor/PortOverflowChip.stories.tsx`;
+      // the older assertion in `PortEdge.stories.tsx`'s `MaxVisible` used a
+      // ±2px tolerance, which is precisely the size of the error, so it
+      // reported green. `clientLeft`/`clientTop` ARE the border widths, so
+      // this stays correct if the border ever changes or is switched off.
+      const originX = trackRect.left + track.clientLeft;
+      const originY = trackRect.top + track.clientTop;
       setPos(
         axis === "column"
-          ? { left: lastRect.left - trackRect.left, top: lastRect.bottom - trackRect.top + MORE_INDICATOR_GAP_PX }
-          : { left: lastRect.right - trackRect.left + MORE_INDICATOR_GAP_PX, top: lastRect.top - trackRect.top + lastRect.height / 2 },
+          ? { left: lastRect.left - originX, top: lastRect.bottom - originY + PORT_EDGE_MORE_GAP_PX }
+          : { left: lastRect.right - originX + PORT_EDGE_MORE_GAP_PX, top: lastRect.top - originY + lastRect.height / 2 },
       );
     };
     measure();
@@ -1190,10 +1265,14 @@ function PortEdgeBody({
   size,
   renderItem,
   renderCollapsed,
+  renderOverflow,
   textLayout,
   editing = false,
   onEditingChange,
-  editMode = "single",
+  // RULING 11: the multi-line lane is the DEFAULT editor an armed port
+  // click opens. See `PortEdgeProps.editMode` for Zach's own words and for
+  // why the `lane.available` fallback below makes this safe everywhere.
+  editMode = "multi",
   laneLanguage,
   maxVisible,
   variant,
@@ -1214,9 +1293,16 @@ function PortEdgeBody({
   // slot falls past the cutoff, and `hiddenPortCount` sums those members'
   // real count rather than counting 1 per cut slot, so the "+N more" text
   // stays a true port count even when the cut lands inside a group.
-  const slots = maxVisible != null ? allSlots.slice(0, maxVisible) : allSlots;
-  const hiddenSlots = maxVisible != null ? allSlots.slice(maxVisible) : [];
-  const hiddenPortCount = hiddenSlots.reduce((n, s) => n + s.members.length, 0);
+  //
+  // RULING 7: the cut itself is a PURE function (`splitByMaxVisible`), so
+  // the count can be unit-tested — and re-derived by nobody — without
+  // mounting anything. See `portEdge.layout.test.ts`.
+  const { visible: slots, hidden: hiddenSlots, hiddenPortCount } = splitByMaxVisible(allSlots, maxVisible);
+  // RULING 7's other half of the payload: WHICH ports fell past the cut, in
+  // track order. Resolved here rather than inside the chrome, for the same
+  // reason the count is — the chrome is handed the answer, it never goes
+  // looking for one.
+  const hiddenItems = hiddenSlots.flatMap((slot) => slot.members.map((m) => itemsById.get(m.id)).filter((it): it is PortEdgeItem => it != null));
 
   // Still what a HOST's own toggle button should read for its
   // disabled/reason state (both `PortEdge.stories.tsx` and
@@ -1380,6 +1466,15 @@ function PortEdgeBody({
           <PortLaneOverlay trackRef={trackRef} visualOrder={visualOrder} onItemsChange={onItemsChange} onClose={() => setLaneOpen(false)} language={laneLanguage} />
         )}
         {hiddenPortCount > 0 && moreIndicatorPos && (
+          // RULING 7's seam, in one element. The POSITION is this
+          // component's (it owns `trackRef`, and the anchor is measured off
+          // the last visible port's real box — `useMoreIndicatorPosition`);
+          // WHAT gets drawn at that position is the caller's, which is how
+          // `editor/portOverflowChip.tsx` supplies chrome that `components/`
+          // is not allowed to import. `pointerEvents` is `auto` only when a
+          // caller actually rendered something interactive — the bare
+          // fallback below is text, and text that eats clicks over a track
+          // would be a new way to miss a port.
           <span
             data-slot="port-edge-more"
             style={{
@@ -1387,14 +1482,29 @@ function PortEdgeBody({
               left: moreIndicatorPos.left,
               top: moreIndicatorPos.top,
               transform: axis === "row" ? "translateY(-50%)" : undefined,
-              fontSize: 12,
-              fontStyle: "italic",
-              color: "var(--muted-foreground)",
               whiteSpace: "nowrap",
-              pointerEvents: "none",
+              // WHY `flex` rather than the default block: as a block, this
+              // box's height is a LINE box, so half-leading pads whatever
+              // sits in it and the thing a reader actually sees ends up a
+              // couple of pixels below the anchor the hook measured — and
+              // on a row edge, `translateY(-50%)` then centres the leading
+              // instead of the content. A flex container blockifies its
+              // child, so the box is exactly the marker's own height and
+              // the measured anchor is the marker's real position. Measured
+              // at 2.125px of drift before this line.
+              display: "flex",
+              alignItems: "center",
+              // Supplied chrome can open something (the chip's own list of
+              // hidden ports), so it rides the same tier the lane overlay
+              // does — above every slot card on the track, walled off by
+              // this root's own `ISOLATED_ROOT_STYLE`. The bare fallback is
+              // inert text and claims no tier at all.
+              ...(renderOverflow
+                ? { pointerEvents: "auto", zIndex: paintTier("laneOverlay") }
+                : { fontSize: 12, fontStyle: "italic", color: "var(--muted-foreground)", pointerEvents: "none" }),
             }}
           >
-            +{hiddenPortCount} more
+            {renderOverflow ? renderOverflow({ hiddenCount: hiddenPortCount, hiddenItems, edge, axis }) : `+${hiddenPortCount} more`}
           </span>
         )}
         {mode === "custom"
