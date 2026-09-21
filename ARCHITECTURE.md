@@ -124,23 +124,33 @@ as of the code.
 | **`scene`** | The model, and every pure function over it. | `.../src/scene/` |
 | **`editor`** | The authoring surfaces that produce scene mutations. | `.../src/editor/` |
 | **`hosts`** | The engine adapters — DOM, React Flow, tldraw. Each owns the viewport, hit-testing and drag. | `.../src/hosts/` |
-| **whiteboard** | **The integrated app.** It puts `components` and `editor` together, uses `scene` functions to modify them, and shows the result through a `host`. | `apps/systemsketch/` — **rename pending**, see below |
+| **studio** | **The integrated app, and its name is bbox studio.** It puts `components` and `editor` together, uses `scene` functions to modify them, and shows the result through a `host`. | `apps/systemsketch/` — **rename pending**, see below |
 | **site** | bbox-ui.com — a first-class deliverable, not a by-product. | `apps/docs/` |
 
 Plus the two deliberate exceptions that sit outside the kits: `skin/` (applied on
 top, the component unaware) and `presets/` (configurations of existing components).
 
-**`whiteboard` is the name, and `systemsketch` is the old one.** Zach, 2026-09-21:
-the file type is `.bbox` because *"this project is no longer system sketch its
-just the bbox whiteboard"*. The directory rename is deferred only because
-`apps/systemsketch/src/` was being edited when the decision landed — renaming a
-tree while a lane is inside it is the merge-conflict this repo's dispatch rules
-exist to prevent. Do it as its own change, alone, and update the `@trunk` alias
-consumers in the same pass.
+**The app is called `bbox studio`; `systemsketch` is the old name.** Zach,
+2026-09-21: *"lets call the app bbox studio it is a whiteboard, its called bbox
+studio"*. Earlier the same day the file type became `.bbox` because *"this
+project is no longer system sketch its just the bbox whiteboard"*.
 
-WHY `whiteboard` rather than `app`: there will be more than one consumer of the
-kits — the site already is one — so "the app" stops being unambiguous the
-moment a second one exists. `whiteboard` says which product it is.
+**Keep the two words apart, because they are not the same kind of word.**
+*Whiteboard* is the common noun — what kind of thing the app is, and the word
+to use when describing its behaviour ("the whiteboard puts components and editor
+together"). *Studio* is the proper noun — what it is called, and what a user
+sees. Prose should say "the whiteboard" when it means the category and "bbox
+studio" when it means the product; the directory is `studio`.
+
+WHY a name rather than `app`: the kits already have more than one consumer —
+the site is one — so "the app" stops being unambiguous the moment a second
+exists.
+
+The `apps/systemsketch` → `apps/studio` directory rename is deferred only
+because `apps/systemsketch/src/` was being edited when the decision landed —
+renaming a tree while a lane is inside it is the merge-conflict this repo's
+dispatch rules exist to prevent. Do it as its own change, alone, and update the
+`@trunk` alias consumers in the same pass.
 
 ### The three kits — the core
 

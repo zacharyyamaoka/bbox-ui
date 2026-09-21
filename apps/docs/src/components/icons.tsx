@@ -7,7 +7,7 @@ export const Icons = {
    *
    * WHY it says only "bbox", re-centred and scaled: it renders at 24px in the
    * site header (`size-6`), where a second word is a smudge rather than a word.
-   * "whiteboard" is five times wider than the "ui" it replaced, so the product
+   * A second word is far wider than the "ui" it replaced, so the product
    * name lives in the wordmark beside the mark (`siteConfig.name`) and the mark
    * stays a mark. The transform was measured with `getBBox()` in a browser, not
    * derived from the path data — these glyph outlines carry curve control
@@ -16,7 +16,7 @@ export const Icons = {
    */
   logo: (props: IconProps) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="50 44 400 412" {...props}>
-      <title>bbox whiteboard</title>
+      <title>bbox studio</title>
       <rect x="58" y="52" width="384" height="396" rx="52" className="fill-foreground" />
       <path
         className="fill-background"

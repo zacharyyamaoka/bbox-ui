@@ -1,5 +1,5 @@
 export const siteConfig = {
-  name: "bbox whiteboard",
+  name: "bbox studio",
   url: "https://bbox-ui.com/",
   description:
     "Presentational components for black-box system design — blocks, ports, edges.",
