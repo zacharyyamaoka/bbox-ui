@@ -26,6 +26,10 @@ import { createSceneEventSeam, type SceneEventBatch } from "@trunk/scene/sceneEv
 import { loadPyblocksScene, type PyblocksSceneDocument } from "@trunk/hosts/pyblocksScene";
 
 import { boardLintFindings, shapeIdOfSubject } from "../chrome/problems";
+// Ruling 3 gave `boardLintFindings` a required level. These cases are about
+// what a person SEES when they open one of these boards, so they ask at the
+// level a person who has never opened Settings is on — the shipped default.
+import { DEFAULT_VALIDATION_LEVEL } from "@trunk/scene/validationLevel";
 import { pyblocksBoardFrom } from "./OpenPython";
 
 import {
@@ -484,17 +488,17 @@ describe("the board the projection hands the linter", () => {
   const boardFor = (name: string) => pyblocksBoardFrom(loadPyblocksScene(fixture(name)));
 
   it("reports NO cycle on linear_chain — a straight line is not a loop", () => {
-    const findings = boardLintFindings(boardFor("linear_chain").scene);
+    const findings = boardLintFindings(boardFor("linear_chain").scene, DEFAULT_VALIDATION_LEVEL);
     expect(findings.filter((finding) => finding.ruleId === "cycle")).toEqual([]);
   });
 
   it("opens linear_chain with a clean Problems panel — no error of any rule", () => {
-    const findings = boardLintFindings(boardFor("linear_chain").scene);
+    const findings = boardLintFindings(boardFor("linear_chain").scene, DEFAULT_VALIDATION_LEVEL);
     expect(findings.filter((finding) => finding.severity === "error").map((finding) => finding.message)).toEqual([]);
   });
 
   it("reports NO cycle on region_for_if either", () => {
-    const findings = boardLintFindings(boardFor("region_for_if").scene);
+    const findings = boardLintFindings(boardFor("region_for_if").scene, DEFAULT_VALIDATION_LEVEL);
     expect(findings.filter((finding) => finding.ruleId === "cycle")).toEqual([]);
   });
 
@@ -515,7 +519,7 @@ describe("the board the projection hands the linter", () => {
         { id: "shape:fb-in", source: feedback, sourceHandle: "out", target: corner.id, targetHandle: "boundary-input-raw", data: { variant: "data" as const, routing: "elbow" as const } },
       ],
     };
-    const cycles = boardLintFindings(scene).filter((finding) => finding.ruleId === "cycle");
+    const cycles = boardLintFindings(scene, DEFAULT_VALIDATION_LEVEL).filter((finding) => finding.ruleId === "cycle");
     expect(cycles.length).toBeGreaterThan(0);
     expect(cycles.map((finding) => finding.subject.id)).toContain(feedback);
   });
@@ -531,7 +535,7 @@ describe("the board the projection hands the linter", () => {
         { id: "e2", source: "b", sourceHandle: "out", target: "a", targetHandle: "in", data: { variant: "data" as const, routing: "elbow" as const } },
       ],
     };
-    expect(boardLintFindings(scene).filter((finding) => finding.ruleId === "cycle").map((finding) => finding.subject.id).sort()).toEqual(["a", "b"]);
+    expect(boardLintFindings(scene, DEFAULT_VALIDATION_LEVEL).filter((finding) => finding.ruleId === "cycle").map((finding) => finding.subject.id).sort()).toEqual(["a", "b"]);
   });
 
   it("points a Problems row at the SHAPE, even when the node id carries slashes", () => {

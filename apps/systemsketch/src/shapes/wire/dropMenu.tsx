@@ -14,17 +14,19 @@
 //
 // CARD 23's rule, which this file exists to honour: the convenience gesture
 // routes through the SAME judge as the raw press. `judge` below calls
-// `validateConnection` with `connectionRules` — the identical options
-// `wireGesture.commit` uses — over a scene with the candidate node
-// hypothetically added. One gate, no second entry point; JointJS's `Connect`
-// tool skipping `validateMagnet` where its raw press gates it is the exact
-// failure that rule rules out.
+// `validateConnectionAtLevel` with `connectionVocabulary` — the identical
+// options `wireGesture.commit` uses, at the identical level — over a scene
+// with the candidate node hypothetically added. One gate, no second entry
+// point; JointJS's `Connect` tool skipping `validateMagnet` where its raw
+// press gates it is the exact failure that rule rules out. Ruling 3 makes that
+// sharing load-bearing rather than tidy: a catalogue that offered an entry the
+// raw press would then refuse is a menu that lies.
 import { useCallback, useMemo } from "react";
 import { createShapeId, useEditor, useValue } from "tldraw";
 
 import { EdgeDropMenu } from "@trunk/editor/edgeDropMenu";
 import { catalogFor } from "@trunk/editor/nodeCatalog";
-import { validateConnection } from "@trunk/scene/edgeValidation";
+import { validateConnectionAtLevel } from "@trunk/scene/validationLevel";
 
 import { sceneFromRecords, type DocNodeData, type DocumentScene } from "../../document/sceneFromStore";
 import type { BlockShape } from "../block";
@@ -32,7 +34,8 @@ import { InFlightWire } from "./WireFace";
 import { BLOCK_SHAPE_TYPE } from "../types";
 import { createWire } from "./createWire";
 import { EDGE_DROP_CATALOG, landingPortId, presetDocPorts, presetPorts, type EdgeDropPreset } from "./edgeDropCatalog";
-import { connectionRules, pendingEdgeDrop, type PendingEdgeDrop } from "./wireGesture";
+import { connectionVocabulary, pendingEdgeDrop, type PendingEdgeDrop } from "./wireGesture";
+import { useValidationLevel } from "../../chrome/ShareMenu/validationLevelHost";
 
 /** The id the hypothetical node wears while the judge looks at it. Never
  *  persisted — the real shape id is minted in `onPick`, after a verdict. */
@@ -63,6 +66,11 @@ function EdgeDropOffer() {
   // agent's board, a collaborator) cannot leave the offer judging a scene
   // that no longer exists.
   const scene = useValue("ss drop scene", () => sceneFromRecords(editor.store.allRecords()), [editor]);
+  // The same level `wireGesture.commit` reads at pointer-up (ruling 3), through
+  // the same module store — subscribed here rather than read once so a level
+  // changed while a drop is pending re-greys the catalogue instead of offering
+  // an entry the press would refuse.
+  const level = useValidationLevel();
 
   const want = pending?.want;
   const entries = useMemo(() => (want ? catalogFor(EDGE_DROP_CATALOG, want) : []), [want]);
@@ -92,9 +100,9 @@ function EdgeDropOffer() {
         nodes: [...scene.nodes, { id: CANDIDATE_NODE_ID, type: "block", position: pending.page, data }],
         edges: scene.edges,
       };
-      return validateConnection(hypothetical, ends, connectionRules(hypothetical)).allowed;
+      return validateConnectionAtLevel(hypothetical, ends, level, connectionVocabulary(hypothetical)).allowed;
     },
-    [pending, scene],
+    [level, pending, scene],
   );
 
   const onPick = useCallback(

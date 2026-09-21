@@ -32,15 +32,8 @@ import {
   type FileNavigationMode,
 } from "@trunk/components/appSettings";
 import { FILE_MENU_ROWS } from "@trunk/components/appMenu";
-import { readEdgePolicy, writeEdgePolicy, edgePolicyPreset, type EdgePolicy, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
-import { matchingEdgePolicyPreset } from "@trunk/components/edgePolicy";
-import {
-  DEFAULT_VALIDATION_LEVEL,
-  LINT_RULE_TOTAL,
-  enabledRuleCount,
-  isValidationLevel,
-  validationLevelSpec,
-} from "@trunk/scene/validationLevel";
+import { edgePolicyPreset, matchingEdgePolicyPreset, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
+import { LINT_RULE_TOTAL, enabledRuleCount, validationLevelSpec } from "@trunk/scene/validationLevel";
 import { readToolAliases, writeToolAliases, type ToolAliasItem, type ToolAliases } from "@trunk/components/toolAliases";
 import { buildSettingsCategories, type SettingsHotkey } from "@trunk/components/settingsCategories";
 import { isNativeFileAccessSupported } from "@trunk/files/nativeFiles";
@@ -48,6 +41,7 @@ import { SettingsView, type SettingsPresentation } from "@trunk/components/setti
 
 import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "../families";
 import { useAppearancePreferences, useGestureSettings } from "./cameraGestureHost";
+import { useEdgePolicy, validationLevelOf } from "./validationLevelHost";
 import { setInterfaceScalePercent, useInterfaceScalePercent } from "./interfaceScaleHost";
 import { shortcutPlatform } from "../FileMenu";
 import { SYSTEM_FAMILY_ITEMS } from "../../shapes/registry";
@@ -90,7 +84,7 @@ export function useAppSettings(): AppSettingsState {
 }
 
 /**
- * One persisted record, read once at mount and written on every patch.
+ * One persisted value, read once at mount and written on every change.
  *
  * WHY a local factory rather than a shared hook in the trunk: the trunk's
  * settings models are deliberately pure — the archive's module-level
@@ -99,26 +93,14 @@ export function useAppSettings(): AppSettingsState {
  * host's job, and this is the whole of it: four lines, the same
  * read-once-write-through shape `useAppSettings` above already uses and for
  * the same reason.
+ *
+ * WHY there is no longer a record-shaped twin beside it: every record setting
+ * this dialog binds now has a SECOND reader outside the dialog (the canvas),
+ * and a value kept in this component's `useState` is invisible to it. The
+ * three that do — appearance, gestures, edge policy — live in module stores in
+ * this folder instead. This one survives because a tool ALIAS has exactly one
+ * reader, and it is the dialog.
  */
-function usePersistedRecord<T>(
-  read: (storage: Storage | null) => T,
-  write: (storage: Storage | null, value: T) => void,
-): [T, (patch: Partial<T>) => void] {
-  const [value, setValue] = useState<T>(() => read(viewerStorage()));
-  const patch = useCallback(
-    (update: Partial<T>) => {
-      setValue((current) => {
-        const next = { ...current, ...update };
-        write(viewerStorage(), next);
-        return next;
-      });
-    },
-    [read, write],
-  );
-  return [value, patch];
-}
-
-/** The same, for a setting that is one value rather than a record. */
 function usePersistedValue<T>(
   read: (storage: Storage | null) => T,
   write: (storage: Storage | null, value: T) => unknown,
@@ -186,17 +168,25 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
   // silent dead end.
   const nativeSupported = useMemo(() => isNativeFileAccessSupported(window), []);
 
-  // WHY these two do NOT use `usePersistedRecord` like their neighbour below:
+  // WHY these two do NOT use `usePersistedValue` like their neighbour below:
   // exactly the reason spelled out for `interfaceScalePercent` a few lines on.
   // Both records have a second reader outside this dialog — the canvas, through
-  // `installCameraGestures` — and `usePersistedRecord` keeps its value in local
+  // `installCameraGestures` — and `usePersistedValue` keeps its value in local
   // `useState`, invisible to anything that is not this dialog. Kept here, the
   // wheel convention would save and the wheel would not change until reload,
   // which is the same bug Zach reported for the interface-scale slider on
   // 2026-09-20. `./cameraGestureHost` is the module store both surfaces share.
   const [appearance, patchAppearance] = useAppearancePreferences();
   const [gestures, patchGestures] = useGestureSettings();
-  const [edgePolicy, patchEdgePolicy] = usePersistedRecord<EdgePolicy>(readEdgePolicy, writeEdgePolicy);
+  // WHY this one moved off `usePersistedRecord` on 2026-09-21 (ruling 3): it
+  // now has the same second reader the two above have — the CANVAS. The
+  // Problems panel lints at this level and the wire gesture gates at it, and
+  // `usePersistedRecord` keeps its value in local `useState`, invisible to
+  // both. Kept here, the level would save and the board would not change until
+  // reload: the identical bug Zach reported for the interface-scale slider on
+  // 2026-09-20. `./validationLevelHost` is the module store all three surfaces
+  // share.
+  const [edgePolicy, patchEdgePolicy] = useEdgePolicy();
   // WHY this one setting does NOT use `usePersistedValue` like its neighbours:
   // its value has a second reader outside this dialog. `usePersistedValue`
   // keeps the value in local `useState`, which is invisible to `App.tsx` — so
@@ -223,15 +213,12 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
   // truth"). Storing the level too would let the two disagree, and the row
   // already knows how to say "Custom" when the switches match no rung.
   const validationSummary = useMemo(() => {
-    const level = matchingEdgePolicyPreset(edgePolicy);
-    if (level === null || !isValidationLevel(level)) {
-      const fallback = validationLevelSpec(DEFAULT_VALIDATION_LEVEL);
-      return `Custom — linting follows the nearest level it can, ${fallback.label.toLowerCase()} (${enabledRuleCount(
-        DEFAULT_VALIDATION_LEVEL,
-      )} of ${LINT_RULE_TOTAL} checks).`;
-    }
+    const level = validationLevelOf(edgePolicy);
     const spec = validationLevelSpec(level);
-    return `At ${spec.label.toLowerCase()}, ${enabledRuleCount(level)} of ${LINT_RULE_TOTAL} checks mark up a board at rest: ${spec.rules.join(", ")}.`;
+    const sentence = `At ${spec.label.toLowerCase()}, ${enabledRuleCount(level)} of ${LINT_RULE_TOTAL} checks mark up a board at rest: ${spec.rules.join(", ")}.`;
+    return matchingEdgePolicyPreset(edgePolicy) === null
+      ? `Custom — linting follows the nearest level it can. ${sentence}`
+      : sentence;
   }, [edgePolicy]);
 
   // WHY the whole list is rebuilt in the trunk from values + callbacks rather

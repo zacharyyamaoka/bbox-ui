@@ -21,10 +21,13 @@ import { useCallback, useMemo } from "react";
 import type { Editor, TLShapeId } from "tldraw";
 
 import type { Diagnostic, DiagnosticGroup, Severity } from "@trunk/components/problemsPanel";
-import { lintScene, type LintFinding, type PortsOf } from "@trunk/scene/lint";
+import { type LintFinding, type PortsOf } from "@trunk/scene/lint";
+import { lintSceneAtLevel, type ValidationLevel } from "@trunk/scene/validationLevel";
 import { findCycles, type SceneEdgeEnds } from "@trunk/scene/scene";
 
 import { useDocumentScene, type DocNodeData, type DocumentScene } from "../document/sceneFromStore";
+import { portTypesOfScene } from "../document/sceneVocabulary";
+import { useValidationLevel } from "./ShareMenu/validationLevelHost";
 import { FLOATING_PORT_ID, PORT_SIDES } from "../shapes/types";
 
 /**
@@ -225,13 +228,18 @@ function nodesOnRealCycles(scene: DocumentScene): Set<string> {
 }
 
 /**
- * Every rule, over this board — the pure half of `useProblems`, exported so a
- * projection can be graded against the linter with no React tree at all
- * (`src/backend/backend.test.ts` runs it over the committed pyblocks
+ * The rules THIS LEVEL runs, over this board — the pure half of `useProblems`,
+ * exported so a projection can be graded against the linter with no React tree
+ * at all (`src/backend/backend.test.ts` runs it over the committed pyblocks
  * fixtures).
+ *
+ * `level` is REQUIRED, deliberately. It was added by ruling 3, and a default
+ * would have let a caller keep the old "every rule at every level" behaviour
+ * without ever saying so — which is exactly the state this lane found the
+ * feature in: a level chosen in Settings that no surface read.
  */
-export function boardLintFindings(scene: DocumentScene): LintFinding[] {
-  const findings = lintScene(scene, { portsOf: portsOfScene(scene) });
+export function boardLintFindings(scene: DocumentScene, level: ValidationLevel): LintFinding[] {
+  const findings = lintSceneAtLevel(scene, level, { portsOf: portsOfScene(scene), typeOf: portTypesOfScene(scene) });
   if (!findings.some((finding) => finding.ruleId === "cycle")) return findings;
   const real = nodesOnRealCycles(scene);
   return findings.filter((finding) => finding.ruleId !== "cycle" || real.has(finding.subject.id));
@@ -247,29 +255,40 @@ export interface BoardProblems {
 }
 
 /**
- * Every rule runs. Two of them (`type-mismatch`, `polarity`) contribute
- * nothing, and that is on purpose rather than an oversight:
+ * The rules the CHOSEN LEVEL runs, and only those.
  *
- *   - `type-mismatch` needs a `typeOf` resolver, and `lint.ts`'s own header
- *     says the ontology is deliberately unminted ("what a type IS — equality?
- *     hierarchy? union? — is a product decision with zero data support in
- *     this repo"). The projection does carry `portTypes` — parsed out of each
- *     port's declaration line since ruling 8, not read off a field of its own
- *     — so wiring it would compile; it would also silently mint that decision
- *     from a menu lane.
- *   - `polarity` needs a `directionOf`, and this document model only states a
- *     direction for a FLOATING `ss-port` — a Block's ports have no direction
- *     field at all (`PortSpecV` is `{id, declaration}`). A resolver
- *     that judged some edges and abstained on others would make the rule's
- *     verdict depend on which end you drew first.
+ * Ruling 3 changed this paragraph. It used to read "every rule runs" — every
+ * rule, at every level, including "Whiteboard — anything goes" — because
+ * nothing here had ever read the setting. Now the level decides, and the two
+ * rules that used to be inert have separate fates:
  *
- * Both become one-line additions the day the schema has the vocabulary.
+ *   - `type-mismatch` NOW CONTRIBUTES, at `typed` and `strict` only. Its
+ *     resolver is `document/sceneVocabulary.ts`'s `portTypesOfScene`, and the
+ *     objection that used to keep it out — that wiring it would silently mint
+ *     the type ontology from a menu lane, when `lint.ts`'s own header calls
+ *     that a product decision with no data support — is answered by the level
+ *     itself: the user is the one choosing, and the two loose rungs withhold
+ *     the resolver outright (`validationLevel.ts`'s `vocabularyForLevel`,
+ *     `types: "off"`). The shipped default is `guided`, so a board that has
+ *     never opened Settings sees no change from this.
+ *   - `polarity` STILL contributes nothing, and still on purpose: it needs a
+ *     `directionOf`, and this document model only states a direction for a
+ *     FLOATING `ss-port` — a Block's ports have no direction field at all
+ *     (`PortSpecV` is `{id, declaration}`). A resolver that judged some edges
+ *     and abstained on others would make the rule's verdict depend on which
+ *     end you drew first. It becomes a one-line addition the day the schema
+ *     has the vocabulary.
  */
 export function useProblems(editor: Editor): BoardProblems {
   const scene = useDocumentScene(editor);
+  // Ruling 3, the read side. `useValidationLevel` is a live module store, not
+  // this component's state: the Settings dialog that WRITES the level unmounts,
+  // and this panel never does, so a hook local to either would leave the board
+  // marked up at whatever level it was mounted with until reload.
+  const level = useValidationLevel();
 
   const { groups, counts, total, shapeIdByRow } = useMemo(() => {
-    const findings = boardLintFindings(scene);
+    const findings = boardLintFindings(scene, level);
     const diagnostics: Diagnostic[] = [];
     // WHY a side table keyed by row id, rather than re-parsing the id string
     // in `reveal`: `LintFinding.id` is
@@ -299,7 +318,7 @@ export function useProblems(editor: Editor): BoardProblems {
       total: diagnostics.length,
       shapeIdByRow: rows,
     };
-  }, [scene]);
+  }, [scene, level]);
 
   const reveal = useCallback(
     (diagnostic: Diagnostic) => {

@@ -21,10 +21,24 @@
 // Every claim is MEASURED — `getBoundingClientRect`, the mounted
 // `SVGPathElement`'s `getPointAtLength`, and tldraw's own clip API — never
 // DOM presence.
+//
+// ONE SETUP LINE WAS ADDED, 2026-09-21, by the lane wiring RULING 3, and it
+// moves no assertion: case (b) needs two cables between one pair of dots, and
+// ruling 3 makes the chosen validation level govern the connect gesture. The
+// shipped default (`guided`) has always said "a second cable between the exact
+// same two port faces: refused" in Settings — the board simply never read it.
+// So (b) now says out loud which rung it draws at, `whiteboard`, where "draw
+// as many wires as you want" is the user's own answer. The geometry it asserts
+// is unchanged and still the point: duplicates reach a board at every level
+// through `createWire` (paste, import, the pyblocks projection), which never
+// passes the gate.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
 
+import { EDGE_POLICY_STORAGE_KEY } from "@trunk/components/edgePolicy";
+
+import { resetValidationLevelCache, setValidationLevel } from "./chrome/ShareMenu/validationLevelHost";
 import { BLOCK_SHAPE_TYPE, BRANCH_TOOL_ID, REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "./shapes/types";
 import { canvasOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
 
@@ -32,6 +46,10 @@ let app: MountedApp | null = null;
 afterEach(() => {
   app?.unmount();
   app = null;
+  // Ruling 3's level is a MODULE store, so it outlives an unmount — left set,
+  // it would decide the next file's gates too.
+  window.localStorage.removeItem(EDGE_POLICY_STORAGE_KEY);
+  resetValidationLevelCache();
 });
 
 const PORTS_OUT = { left: [], right: [{ id: "out", declaration: "out: Pose" }], top: [], bottom: [] };
@@ -125,6 +143,9 @@ describe("fix-edges (a) — elbow is the datum, in the app", () => {
 describe("fix-edges (b) — one attach point per port, at the dot's centre", () => {
   it("two cables between the same two dots share ONE start and ONE end, both on the dots' centre lines", async () => {
     app = await mountApp();
+    // Drawn at `whiteboard` — see this file's header: ruling 3, one setup
+    // line, no assertion moved.
+    setValidationLevel("whiteboard");
     const a = block("a()", 60, 120, PORTS_OUT);
     const b = block("b()", 520, 320, PORTS_IN);
     await anchorsMeasured(a, 1);

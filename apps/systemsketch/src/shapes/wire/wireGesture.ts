@@ -54,10 +54,12 @@ import { atom, type Atom, type Editor, type TLShape, type TLShapeId } from "tldr
 
 import type { TraceTerminalSpec } from "@trunk/components/trace.layout";
 import type { PortDirection } from "@trunk/scene/lint";
-import { validateConnection, type ValidateConnectionOptions } from "@trunk/scene/edgeValidation";
+import { validateConnectionAtLevel, type ValidationVocabulary } from "@trunk/scene/validationLevel";
 import { portTypeOfDeclaration } from "@trunk/scene/portDeclaration";
 
 import { sceneFromRecords, type DocumentScene } from "../../document/sceneFromStore";
+import { portTypesOfScene } from "../../document/sceneVocabulary";
+import { currentValidationLevel } from "../../chrome/ShareMenu/validationLevelHost";
 import type { WireEnd } from "../../document/editEvents";
 import { PORT_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import { createWire } from "./createWire";
@@ -211,29 +213,41 @@ function portsOfScene(scene: DocumentScene): (nodeId: string) => readonly string
 }
 
 /**
- * The rules this app's connect gesture gates on.
+ * What this board KNOWS about its own ports — the vocabulary the judge reads.
+ * Which of the judge's gates actually run is not here: that is the chosen
+ * level's answer, and `validateConnectionAtLevel` takes it separately.
  *
- * `allowFanIn: true` is a deliberate override of
- * `DEFAULT_CONNECTION_POLICY`, and it is the app's own stance rather than a
- * convenience: `@trunk/components/wiring.ts:20-22` states it verbatim —
- * "draw as many wires as you want... even multiple wires between the same two
- * ports... nothing here validates" — and `DUPLICATE_FAN_PX` exists precisely
- * so several cables into one dot stay visibly several.
- * `src/wiring.smoke.test.tsx` holds this as an assertion: two drags between
- * the same two dots must produce two wires.
+ * WHAT HAPPENED TO `allowFanIn: true`, because it was a stated taste and not a
+ * convenience. It read: `@trunk/components/wiring.ts:20-22` says "draw as many
+ * wires as you want... even multiple wires between the same two ports...
+ * nothing here validates", `DUPLICATE_FAN_PX` exists so several cables into
+ * one dot stay visibly several, and `src/wiring.smoke.test.tsx` holds it as an
+ * assertion. That intent is PRESERVED, not deleted — it now lives at the two
+ * rungs where it is the user's own answer: `whiteboard` and `guided` both
+ * carry `allowFanIn: true` (`scene/validationLevel.ts`), and `guided` is the
+ * shipped default, so the board a person opens without ever touching Settings
+ * still takes as many cables into a dot as they draw. `typed` and `strict`
+ * turn it off, and that is the whole point of choosing them — "each input
+ * takes one producer" is the sentence the settings row prints for `typed`.
+ * Hardcoding it here OVERRODE that choice, which is the bug ruling 3 names.
  *
- * `typeOf` is deliberately NOT supplied, so `type-mismatch` never gates.
- * Zach, 2026-09-17 (quoted in edgeValidation.ts's own header): "by default I
- * think everything should connect and everything after that should have a
+ * `typeOf` IS now supplied, and the same reasoning governs it. It used to be
+ * withheld so `type-mismatch` could never gate — Zach, 2026-09-17: "by default
+ * I think everything should connect and everything after that should have a
  * reason... Whether we choose to display that reason, allow it in an error
- * state or not allow it at all, is a later decision that can be made." A
- * mismatched cable is therefore ALLOWED here and reported at rest by
- * `lintScene`'s `type-mismatch` in L4's problems panel — annotation, not
- * prevention. `portsOf` IS supplied, because `dangling-edge` is structural:
- * a candidate naming a port no node has is not a taste question.
+ * state or not allow it at all, is a later decision that can be made." Ruling 3
+ * IS that later decision, and it is a dial rather than a verdict: at
+ * `whiteboard` and `guided` the level withholds this resolver itself
+ * (`vocabularyForLevel`, `types: "off"`), so a mismatched cable is still drawn
+ * and still only annotated at rest. At `typed` and `strict` the user has asked
+ * for prevention and gets it.
+ *
+ * `portsOf` is unconditional, because `dangling-edge` is structural: a
+ * candidate naming a port no node has is not a taste question, and it is the
+ * one gate no rung can switch off.
  */
-export function connectionRules(scene: DocumentScene): ValidateConnectionOptions {
-  return { portsOf: portsOfScene(scene), policy: { allowFanIn: true } };
+export function connectionVocabulary(scene: DocumentScene): ValidationVocabulary {
+  return { portsOf: portsOfScene(scene), typeOf: portTypesOfScene(scene) };
 }
 
 /**
@@ -398,10 +412,15 @@ export function installWireGesture(editor: Editor): () => void {
    */
   function commit(from: DotRef, to: DotRef) {
     const scene = sceneFromRecords(editor.store.allRecords());
-    const verdict = validateConnection(
+    // Ruling 3's gate, read at pointer-up rather than at install: the level is
+    // a module store (`chrome/ShareMenu/validationLevelHost.ts`) precisely so a
+    // change in the Settings dialog governs the very next cable, with no
+    // reload and nothing to re-install.
+    const verdict = validateConnectionAtLevel(
       scene,
       { id: CANDIDATE_EDGE_ID, source: from.nodeId, sourceHandle: from.portId, target: to.nodeId, targetHandle: to.portId },
-      connectionRules(scene),
+      currentValidationLevel(),
+      connectionVocabulary(scene),
     );
     // A refusal is silent for now, and that is a gap with an owner rather
     // than a decision: `verdict.refusal` is already `Diagnostic`-shaped, so

@@ -19,10 +19,26 @@
 // The case is therefore REVERSED, not deleted or relaxed: same measurement,
 // opposite sign, and it now fails loudly if any per-cable offset comes back.
 // Every other case in this file is untouched.
+//
+// ONE SETUP LINE WAS ADDED, 2026-09-21, by the lane wiring RULING 3 — declared
+// here for the same reason, and it changes no assertion. Ruling 3 makes the
+// chosen validation level govern the connect gesture, and the shipped default
+// (`guided`) has ALWAYS said "a second cable between the exact same two port
+// faces: refused" in Settings — the board simply never read it
+// (`shapes/wire/wireGesture.ts` hardcoded `{ allowFanIn: true }`). The
+// duplicate case below is about ROUTING GEOMETRY, not policy, so it now says
+// out loud which level it is drawing at — `whiteboard`, the rung on which
+// "draw as many wires as you want" is the user's own answer — and every
+// measurement in it is byte-for-byte what it was. A board can still carry
+// duplicates at any level: `createWire` (paste, import, the pyblocks
+// projection) never passes the gate.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
 
+import { EDGE_POLICY_STORAGE_KEY } from "@trunk/components/edgePolicy";
+
+import { resetValidationLevelCache, setValidationLevel } from "./chrome/ShareMenu/validationLevelHost";
 import { sceneFromRecords } from "./document/sceneFromStore";
 import { BLOCK_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "./shapes/types";
 import { canvasOf, centreOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
@@ -31,6 +47,10 @@ let app: MountedApp | null = null;
 afterEach(() => {
   app?.unmount();
   app = null;
+  // Ruling 3's level is a MODULE store, so it outlives an unmount — left set,
+  // it would decide the next file's gates too.
+  window.localStorage.removeItem(EDGE_POLICY_STORAGE_KEY);
+  resetValidationLevelCache();
 });
 
 const PORTS_OUT = { left: [], right: [{ id: "out", declaration: "out: Pose" }], top: [], bottom: [] };
@@ -126,6 +146,10 @@ describe("L3 — wires are data lines between real dots", () => {
 
   it("two wires between the same two dots share ONE route (the fan is gone; a count says there are two)", async () => {
     app = await mountApp();
+    // Drawn at `whiteboard` — the rung where a duplicate is the user's own
+    // answer. See this file's header: ruling 3, one setup line, no assertion
+    // moved.
+    setValidationLevel("whiteboard");
     const a = block("a", 60, 120, PORTS_OUT);
     const b = block("b", 420, 140, PORTS_IN);
     await anchorsMeasured(a, 1);
