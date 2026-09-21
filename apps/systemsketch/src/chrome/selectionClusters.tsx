@@ -21,6 +21,7 @@ import { AlignStartVertical, Focus } from "lucide-react";
 import { useEditor, useValue } from "tldraw";
 
 import { Button } from "@trunk/components/button";
+import { PILL_POPOVER } from "@trunk/components/floatingToolbar";
 import { Popover, PopoverContent, PopoverTrigger } from "@trunk/components/popover";
 import { Slider } from "@trunk/components/slider";
 import { ToolbarButton } from "@trunk/components/toolbar";
@@ -37,11 +38,92 @@ import {
   type ActiveStyleRow,
 } from "./arrangeActions";
 
-/** The pill is `bg-foreground text-background` — a dark bar. Every control in
- *  it restates its colours for that surface, the same reason the block-view
- *  toggle group already does (see `floatingToolbar.tsx`'s own note: the stock
- *  pressed state assumes a LIGHT surface and goes unreadable here). */
-const ON_PILL = "text-background hover:bg-background/20 hover:text-background";
+/* ------------------------------------------------- THE FIGJAM CELL FAMILIES
+ *
+ * Measured, not chosen. `/home/bam/systemsketch/docs/assets/figjam-chrome-
+ * traced.json` is a live `getComputedStyle`/`getBoundingClientRect` dump of
+ * FigJam's own selection pill, and EVERY cell in it is 40px tall with a 5px
+ * radius — 15 buttons across two pills, not one exception. The bar is 40 with
+ * `padding: 0 4px`, so a cell fills the bar's full height; it does not float
+ * inside it.
+ *
+ * WHY that matters and is not a 2px nicety: a 28px or 32px cell inside a 40px
+ * bar is exactly the tldraw-stock silhouette Zach rejected on 2026-09-20
+ * ("It feels like you are making this look like the tldraw stock floating
+ * toolbar which I don't like"), and it is what this file shipped — `size="sm"`
+ * everywhere, so `h-7` (28px) on the style triggers and Arrange, `h-8` (32px)
+ * on Focus/Duplicate/Delete.
+ *
+ * WHAT WE DELIBERATELY DID NOT COPY: the donor ALSO has a 33x32 / radius-7 /
+ * 18px-stroked family (`systemsketch-chrome.css:944-977`, `:1036-1048`) and it
+ * is tempting because it is the one that looks most like a toolbar button.
+ * It has no FigJam counterpart — it is SystemSketch's own pre-FigJam chrome,
+ * first committed in c5502b6d before the trace landed, and copying it
+ * reproduces the complaint instead of fixing it. Height and glyph size are
+ * coupled: a 40px cell around a 16px lucide glyph is WORSE than today.
+ */
+
+/**
+ * Ink and feedback for anything sitting on the fixed dark pill.
+ *
+ * WHY every one of these restates a colour the component already had: the
+ * kit's variants are PAGE-relative, and the pill is now a FIXED dark surface
+ * that does not move with the page. Each line below is one page token that was
+ * measured painting the wrong thing on this bar:
+ *
+ *   hover        `hover:text-foreground` (toolbar.tsx:89) — near-black in
+ *                light mode, so hovering an icon turned it the pill's own
+ *                colour and the glyph vanished under the cursor.
+ *   open trigger `aria-expanded:bg-muted` (button.tsx:24) — measured with the
+ *                Arrange popover open: `oklch(0.97 0 0)` in light, a near-WHITE
+ *                chip cut out of the dark pill; `oklab(0.269 0 0 / 0.5)` in
+ *                dark. FigJam holds an open trigger at the same #383838 as
+ *                hover, so the bar reads as one surface with one cell lit.
+ *   focus ring   `focus-visible:ring-ring/50` — a light-theme grey halo. The
+ *                ring stays (it is the bar's only keyboard affordance) but is
+ *                derived from the pill's ink.
+ *
+ * `#383838` is FigJam's traced hover and divider colour.
+ */
+const ON_PILL =
+  "text-white hover:bg-[#383838] hover:text-white dark:hover:bg-[#383838]"
+  + " aria-expanded:bg-[#383838] aria-expanded:text-white focus-visible:ring-white/40";
+
+/** F2 — plain icon button. Traced 32 x 40, radius 5, padding 0 4px, one
+ *  24x24 glyph. Duplicate, Delete, Focus, Arrange. */
+export const CELL_ICON =
+  `${ON_PILL} h-10 w-8 shrink-0 rounded-[5px] border-0 p-0 [&_svg:not([class*='size-'])]:size-6`;
+
+/** F1 — trigger carrying a value. Traced 56 x 40 (54 for the colour variant),
+ *  radius 5, 8px clear each side, a 24x24 glyph butted with ZERO gap against
+ *  a 16x16 chevron. The width is left to the content so the colour variant
+ *  lands on its own 54 rather than being padded to a number it never had. */
+export const CELL_TRIGGER =
+  `${ON_PILL} h-10 shrink-0 gap-0 rounded-[5px] border-0 px-2 text-[11px] font-normal [&_svg:not([class*='size-'])]:size-6`;
+
+/** F3 — a cell inside a popover. Traced 24 x 24 on a 32px pitch. Ink and
+ *  hover come from the pill because the panel now shares the pill's surface. */
+export const CELL_OPTION =
+  `${ON_PILL} size-6 shrink-0 rounded-[5px] border-0 p-0 [&_svg:not([class*='size-'])]:size-4`;
+
+/** The pill's own separator: 1px on the bar's FULL 40px height, `rgb(56,56,56)`
+ *  traced, 4px clear each side. A half-height rule reads as a generic toolbar;
+ *  FigJam's runs edge to edge. */
+export const PILL_SEPARATOR = "h-10 self-center bg-[#383838]";
+
+/**
+ * ONE chevron, 16x16, filled, on every trigger that has a value — the donor
+ * ships a single shared path (`CHEVRON_PATH`/`CHEVRON_VIEWBOX`,
+ * `figjamTokens.ts:81-84`) for the same reason: a per-control chevron is how
+ * a bar stops reading as one family.
+ */
+export function TriggerChevron() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 shrink-0" fill="currentColor">
+      <path d="M4.2 6.3a.7.7 0 0 1 1 0L8 9.1l2.8-2.8a.7.7 0 1 1 1 1L8.5 10.6a.7.7 0 0 1-1 0L4.2 7.3a.7.7 0 0 1 0-1Z" />
+    </svg>
+  );
+}
 
 /* ----------------------------------------------------------------- arrange */
 
@@ -54,7 +136,11 @@ export function ArrangeCluster() {
   return (
     <Popover>
       <PopoverTrigger
-        render={<Button variant="ghost" size="sm" className={ON_PILL} />}
+        // F2, not a shrunken trigger: Arrange carries no VALUE to show, so it
+        // is a plain icon cell. The donor's own Arrange trigger (family C,
+        // `chrome.css:1098-1109`, 46x32 with a chevron) is part of the
+        // invented family with no FigJam measurement behind it.
+        render={<Button variant="ghost" size="sm" className={CELL_ICON} />}
         data-testid="ss-selection-arrange"
         aria-label="Arrange"
         title="Arrange"
@@ -64,18 +150,22 @@ export function ArrangeCluster() {
             that no upstream "arrange" glyph exists to vendor. */}
         <AlignStartVertical />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-1" data-testid="ss-arrange-panel">
+      <PopoverContent align="start" className={`w-auto p-2 ${PILL_POPOVER}`} data-testid="ss-arrange-panel">
         {groups.map((group, index) => (
           <div key={group.id}>
             {/* A rule between families, never above the first. The four groups
                 stack inside the panel rather than spreading across the pill's
                 row — the donor moved them here and noted "they read better
                 than they ever did crammed into the pill's row". */}
-            {index > 0 ? <div className="my-1 h-px bg-border" /> : null}
+            {/* Panel chrome is pill-relative now, not page-relative: the
+                panel shares the bar's #1e1e1e surface, so `bg-border` and
+                `text-muted-foreground` would be a light page's hairline and
+                grey on a dark card. */}
+            {index > 0 ? <div className="my-2 h-px bg-[#383838]" /> : null}
             {group.heading ? (
-              <div className="px-2 pt-1 pb-0.5 text-[11px] text-muted-foreground">{group.heading}</div>
+              <div className="px-1 pt-1 pb-1 text-[11px] font-normal text-white/60">{group.heading}</div>
             ) : null}
-            <div className="flex gap-0.5" role="group" aria-label={group.heading ?? "Order"}>
+            <div className="flex gap-2" role="group" aria-label={group.heading ?? "Order"}>
               {group.actions.map((action) => {
                 const Icon = action.icon;
                 return (
@@ -83,6 +173,7 @@ export function ArrangeCluster() {
                     key={action.id}
                     variant="ghost"
                     size="sm"
+                    className={CELL_OPTION}
                     data-testid={`ss-arrange-${action.id}`}
                     aria-label={action.label}
                     title={action.label}
@@ -124,7 +215,10 @@ export function OpacityCluster() {
     // mean opening a popover to find out what the opacity already is. The
     // donor's pill shows it inline for the same reason (screenshot: a track
     // and "100%").
-    <div className="flex items-center gap-2 px-1" data-testid="ss-selection-opacity">
+    // `h-10` so this row fills the bar like every cell beside it — without it
+    // an intrinsically-sized flex child sits at whatever height its content
+    // happens to be and reintroduces a second baseline.
+    <div className="flex h-10 shrink-0 items-center gap-2 px-1" data-testid="ss-selection-opacity">
       <Slider
         value={[percent]}
         min={0}
@@ -136,9 +230,16 @@ export function OpacityCluster() {
         // stock copy rather than a contrast tweak.
         //
         // 1. COLOURS. The stock Slider paints its track `bg-muted` and its
-        //    filled range `bg-primary`, both chosen for a LIGHT surface. This
-        //    pill is `bg-foreground` — near-black — so the track vanished
-        //    into it.
+        //    filled range `bg-primary`, both chosen for a LIGHT surface.
+        //
+        //    The FIRST fix here reached for `bg-background/30` — correct only
+        //    while the pill was `bg-foreground`, i.e. only in light mode. In
+        //    dark mode `--background` is near-BLACK, so the track painted
+        //    solid black on what was then a near-white pill: the fix assumed
+        //    a dark bar and the bar was not one. Now that the pill is a FIXED
+        //    #1e1e1e in both schemes, the track is written against that fixed
+        //    surface literally — white at 30%, a white range, a white thumb
+        //    rim — and there is no theme left for it to be wrong in.
         //
         // 2. HEIGHT, which is why fixing the colours alone changed nothing.
         //    Measured in the running app: the track was 96px wide and **0px
@@ -152,9 +253,9 @@ export function OpacityCluster() {
         //    copy is a trunk change and belongs in its own lane, because
         //    every other consumer of that file is currently rendering an
         //    invisible track too.
-        className="w-24 [&_[data-base-ui-slider-control]]:h-4 [&_[data-slot=slider-track]]:h-1 [&_[data-slot=slider-range]]:h-1 [&_[data-slot=slider-track]]:bg-background/30 [&_[data-slot=slider-range]]:bg-background [&_[data-slot=slider-thumb]]:border-background"
+        className="w-24 [&_[data-base-ui-slider-control]]:h-4 [&_[data-slot=slider-track]]:h-1 [&_[data-slot=slider-range]]:h-1 [&_[data-slot=slider-track]]:bg-white/30 [&_[data-slot=slider-range]]:bg-white [&_[data-slot=slider-thumb]]:border-white [&_[data-slot=slider-thumb]]:bg-white"
       />
-      <span className="w-9 text-right text-xs tabular-nums" data-testid="ss-selection-opacity-value">
+      <span className="w-9 text-right text-[11px] tabular-nums" data-testid="ss-selection-opacity-value">
         {percent}%
       </span>
     </div>
@@ -174,26 +275,42 @@ export function OpacityCluster() {
 function StyleFace({ row, swatch }: { row: ActiveStyleRow; swatch: string | null }) {
   const testId = `ss-style-${row.id}-face`;
   if (row.face === "swatch") {
+    // F1c, traced: an 18px disc centred in a 22x22 box — NOT an 18px cell.
+    // The box is what makes the colour trigger land on 54 rather than 56, and
+    // it is why the disc reads as a swatch rather than as a small button.
+    // `data-testid` stays on the DISC, because selectionPill.smoke.test.tsx
+    // asserts the painted `backgroundColor` of exactly that element against
+    // tldraw's own theme.
     return (
-      <span
-        data-testid={testId}
-        className="size-4 rounded-full border border-background/40"
-        // A null swatch means the theme has no entry for this value, or the
-        // selection is mixed — paint nothing rather than guess a colour.
-        style={swatch ? { background: swatch } : undefined}
-      />
+      <span className="flex size-[22px] shrink-0 items-center justify-center">
+        <span
+          data-testid={testId}
+          className="size-[18px] rounded-full border border-white/40"
+          // A null swatch means the theme has no entry for this value, or the
+          // selection is mixed — paint nothing rather than guess a colour.
+          style={swatch ? { background: swatch } : undefined}
+        />
+      </span>
     );
   }
   if (row.face === "glyph" && row.icon) {
     const Icon = row.icon;
+    // 24px, the traced glyph box. Height and glyph size are coupled: a 16px
+    // lucide stroke adrift in a 40px cell reads worse than the 28px cell it
+    // replaced — see the family note at the top of this file.
     return (
-      <span data-testid={testId} className="flex items-center">
-        <Icon className="size-4" aria-hidden="true" />
+      <span data-testid={testId} className="flex size-6 shrink-0 items-center justify-center">
+        <Icon className="size-6" aria-hidden="true" />
       </span>
     );
   }
+  // F1t, the text-value combobox. FigJam's is a fixed 144px because its
+  // value is a font size like "Small"; ours are "Medium" and "Aa", so we take
+  // the family's PADDING and height (0 8px 0 12px, 40 tall) and let the width
+  // follow the content. Padding a 30px label out to 144px would copy the
+  // number and lose the shape.
   return (
-    <span data-testid={testId} className="text-xs">
+    <span data-testid={testId} className="pl-1 text-[11px] leading-none font-normal whitespace-nowrap">
       {faceLabelFor(row, row.value)}
     </span>
   );
@@ -210,15 +327,16 @@ function StyleRowControl({ row }: { row: ActiveStyleRow }) {
   return (
     <Popover>
       <PopoverTrigger
-        render={<Button variant="ghost" size="sm" className={ON_PILL} />}
+        render={<Button variant="ghost" size="sm" className={CELL_TRIGGER} />}
         data-testid={`ss-style-${row.id}`}
         aria-label={`${row.label}${row.value ? `: ${row.value}` : ": mixed"}`}
         title={row.label}
       >
         <StyleFace row={row} swatch={swatch} />
+        <TriggerChevron />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-1" data-testid={`ss-style-${row.id}-panel`}>
-        <div className={row.paint === "swatch" ? "grid grid-cols-6 gap-1" : "flex flex-col"} role="group" aria-label={row.label}>
+      <PopoverContent align="start" className={`w-auto p-2 ${PILL_POPOVER}`} data-testid={`ss-style-${row.id}-panel`}>
+        <div className={row.paint === "swatch" ? "grid grid-cols-6 gap-2" : "flex flex-col gap-1"} role="group" aria-label={row.label}>
           {row.values.map((value) => (
             <StyleOption key={value} row={row} value={value} />
           ))}
@@ -236,6 +354,7 @@ function StyleOption({ row, value }: { row: ActiveStyleRow; value: string }) {
     [editor, row.paint, value],
   );
   const selected = row.value === value;
+  const isSwatch = row.paint === "swatch";
 
   return (
     <Button
@@ -247,13 +366,21 @@ function StyleOption({ row, value }: { row: ActiveStyleRow; value: string }) {
       data-testid={`ss-style-${row.id}-${value}`}
       aria-label={value}
       title={value}
-      className={selected ? "ring-1 ring-ring" : undefined}
+      // The panel now wears the pill's own #1e1e1e surface, so every option's
+      // ink, hover and selected ring are pill-relative too — `ring-ring` and
+      // `border-border` are page tokens and drew a light-theme hairline here.
+      // `#8a38f5` is FigJam's traced selected-cell accent (figjamTokens.ts:24).
+      className={
+        isSwatch
+          ? `${CELL_OPTION} ${selected ? "ring-2 ring-[#8a38f5] ring-offset-2 ring-offset-[#1e1e1e]" : ""}`
+          : `${ON_PILL} h-8 w-full justify-start rounded-[5px] border-0 px-2 text-[11px] font-normal ${selected ? "bg-[#8a38f5] hover:bg-[#8a38f5]" : ""}`
+      }
       onClick={() => setStyle(editor, row.style, value)}
     >
-      {row.paint === "swatch" ? (
-        <span className="size-4 rounded-full border border-border" style={swatch ? { background: swatch } : undefined} />
+      {isSwatch ? (
+        <span className="size-[18px] rounded-full border border-white/40" style={swatch ? { background: swatch } : undefined} />
       ) : (
-        <span className="text-xs">{row.valueLabels?.[value] ?? value}</span>
+        <span className="text-[11px]">{row.valueLabels?.[value] ?? value}</span>
       )}
     </Button>
   );
@@ -274,7 +401,10 @@ export function StyleCluster() {
   const rows = useValue("ss style rows", () => activeStyleRows(editor.getSharedStyles()), [editor]);
   if (rows.length === 0) return null;
   return (
-    <div className="flex items-center" data-testid="ss-selection-style">
+    // `h-10` and `items-center`: this wrapper is itself a flex child of the
+    // bar, and a wrapper shorter than 40 would put its whole row on a second
+    // baseline no matter how tall the cells inside it are.
+    <div className="flex h-10 shrink-0 items-center" data-testid="ss-selection-style">
       {rows.map((row) => (
         <StyleRowControl key={row.id} row={row} />
       ))}
@@ -294,7 +424,7 @@ export function FocusButton() {
       data-testid="ss-selection-focus"
       aria-label="Focus"
       title="Zoom to this selection"
-      className="text-background"
+      className={CELL_ICON}
       onClick={() => editor.zoomToSelection({ animation: { duration: 220 } })}
     >
       <Focus />

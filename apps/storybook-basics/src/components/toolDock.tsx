@@ -47,6 +47,61 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Toolbar, ToolbarButton, ToolbarSeparator } from "./toolbar";
 
+/**
+ * The dock's tool-cell height, px — the one number behind Zach's 4K
+ * complaint, 2026-09-20: "All of the scalling of everyhing feel just a bit
+ * off right now... Compare the chrome size though to the same screen in
+ * exali draw or tldraw... Feels like by default needs to be bigger."
+ *
+ * MEASURED from his own three screenshots, same window, CSS px: tldraw.com's
+ * active tool cell is 44 x 44, Excalidraw's is 40 x 40, this dock's was
+ * 36 x 32 — 73% of tldraw and 80% of Excalidraw. FigJam's live trace
+ * (/home/bam/systemsketch/docs/assets/figjam-chrome-traced.json) says every
+ * real FigJam cell is 40px tall. Two of the three references say 40, so 40
+ * is the cell, and `devicePixelRatio` was 1 throughout — this was a DEFAULT,
+ * never a DPI bug.
+ *
+ * WHY the size is spelled here rather than by raising the `Bar` cascade:
+ * `ToolDock` mounts a bare `<Toolbar>` with no `BarSizeProvider` above it, so
+ * `useBarSize()` returns `undefined` and every cell falls through to
+ * `ToolbarButton`'s "default" rung — `h-8` = 32px (toolbar.tsx:81,:91).
+ * VERIFIED live in the running app before this change: every dock cell
+ * rendered `data-size="default"` at 36 x 32 with a 16px glyph. The cascade
+ * cannot express 40 either way — its top rung `xl` clamps down to `lg` = 36px
+ * (barSize.tsx:79-84) — and growing that ladder moves every Bar consumer in
+ * the trunk at once, which is its own unit of work, not this one.
+ *
+ * WHY the cell grows TALLER but not WIDER (36px wide, unchanged): the host
+ * seats the bottom-right cluster (variant pill + status strip) between this
+ * dock's right edge and tldraw's licence watermark
+ * (apps/systemsketch/src/chrome/overlay.tsx, `placeCornerCluster`), and
+ * MEASURED in the running app at 1400 x 900 there are exactly 13.89px of
+ * clear canvas between dock right (870.5) and cluster left (884.39). A
+ * 40-wide cell widens the dock by 32px — 16 of them on the right — which
+ * pushes that row out of `beside-licence` into the `above-licence` fallback,
+ * the placement Zach already rejected ("please move the right corner menu to
+ * be truly in the right corner"). FigJam's own plain icon button is 32 x 40,
+ * a cell taller than it is wide, so this is the donor's shape and not a
+ * compromise invented to dodge the watermark.
+ */
+export const TOOL_DOCK_CELL_HEIGHT = 40;
+
+/**
+ * Applied to every cell in the dock — tools, family faces and the library
+ * trigger alike — so the row has ONE height and one glyph size. `h-10`/`w-9`
+ * override `ToolbarButton`'s own `h-8 px-2.5` through `cn`'s `twMerge`
+ * (className is merged last), which is why this does not need the button to
+ * grow a fourth rung.
+ *
+ * WHY the glyph moves with the height (16px -> 18px, tldraw's own icon size
+ * inside its 40px chip): height and icon size are coupled. A 16px lucide
+ * stroke adrift in a 40px box reads WORSE than today's 32px cell — it is the
+ * "feels like tldraw stock" tell the parity spec calls out. `px-0` because
+ * the width is now fixed; the glyph is centred by the button's own
+ * `justify-center`.
+ */
+const TOOL_CELL_CLASS = "h-10 w-9 px-0 [&_svg:not([class*='size-'])]:size-[18px]";
+
 /** One row inside a family's popout, or one always-visible dock cell. */
 export interface ToolItem {
   id: string;
@@ -260,7 +315,7 @@ function FamilyCell({
         // systemsketch-toolbar.css:77-88 — see its own comment below) and
         // reads its color off THIS button's own pressed/open state rather
         // than carrying any state of its own.
-        className={cn("group relative")}
+        className={cn(TOOL_CELL_CLASS, "group relative")}
         aria-label={`${currentItem?.label ?? family.label} — open ${family.label} tools`}
         aria-pressed={active}
         data-slot="tool-dock-family"
@@ -312,7 +367,7 @@ function FamilyCell({
           own default width is `w-(--anchor-width)` (chromeBar.tsx's burger
           trigger and branchChip.tsx's drafts trigger already override this
           the same way) — tied to the TRIGGER's own width, which for a
-          ~32px icon-only family cell would squeeze a real label + shortcut
+          36 x 40 icon-only family cell would squeeze a real label + shortcut
           + check-mark row down to nothing. */}
       <DropdownMenuContent side="top" align="center" sideOffset={11} collisionPadding={12} className="w-56">
         {family.sections.map((section, index) => (
@@ -355,6 +410,7 @@ function LibraryCell({ slot, testIdPrefix }: { slot: LibrarySlotProps; testIdPre
         aria-pressed={slot.open}
         data-slot="tool-dock-library"
         data-testid={testIdPrefix ? `${testIdPrefix}-library` : undefined}
+        className={TOOL_CELL_CLASS}
         title="Library"
         render={<PopoverTrigger />}
       >
@@ -422,6 +478,7 @@ export function ToolDock({
             aria-pressed={tool.active}
             disabled={tool.disabled}
             title={tool.disabled ? (tool.disabledTitle ?? `${tool.label} is unavailable`) : tool.label}
+            className={TOOL_CELL_CLASS}
             data-testid={testIdPrefix ? `${testIdPrefix}-tool-${tool.id}` : undefined}
             onClick={tool.onSelect}
           >

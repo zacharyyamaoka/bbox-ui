@@ -14,7 +14,7 @@ import { Copy, Trash2 } from "lucide-react";
 import { useEditor, useValue } from "tldraw";
 
 import { Button } from "@trunk/components/button";
-import { FloatingToolbar } from "@trunk/components/floatingToolbar";
+import { FloatingToolbar, PILL_POPOVER } from "@trunk/components/floatingToolbar";
 import {
   SELECTION_OVERLAY_INSET,
   floatingToolbarMaxWidth,
@@ -34,7 +34,17 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@trunk/components/toggle-group";
 import { ToolbarButton, ToolbarSeparator } from "@trunk/components/toolbar";
 
-import { ArrangeCluster, FocusButton, OpacityCluster, StyleCluster } from "./selectionClusters";
+import {
+  ArrangeCluster,
+  CELL_ICON,
+  CELL_TRIGGER,
+  FocusButton,
+  OpacityCluster,
+  PILL_SEPARATOR,
+  StyleCluster,
+  TriggerChevron,
+} from "./selectionClusters";
+import { useInterfaceScale } from "./interfaceScaleHost";
 import type { CodeLanguage } from "../shapes/code";
 import {
   BLOCK_VIEWS,
@@ -71,6 +81,11 @@ interface Placement {
 
 export function FloatingSelectionToolbar() {
   const editor = useEditor();
+  // The pill is placed by a MEASURED loop and writes its position as an
+  // inline transform, so it cannot be scaled from a stylesheet — see
+  // `FloatingToolbarProps.scale`. The factor rides in as a prop and is
+  // composed into that same transform.
+  const interfaceScale = useInterfaceScale();
   const pill = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [placement, setPlacement] = useState<Placement | null>(null);
@@ -206,7 +221,8 @@ export function FloatingSelectionToolbar() {
       y={placement?.y ?? 0}
       side={placement?.side ?? "above"}
       visible={visible}
-      maxWidth={geometry ? floatingToolbarMaxWidth({ w: geometry.vw, h: geometry.vh }) : undefined}
+      scale={interfaceScale}
+      maxWidth={geometry ? floatingToolbarMaxWidth({ w: geometry.vw, h: geometry.vh }, interfaceScale) : undefined}
       aria-label="Selection actions"
       // WHY the pointer-events class is conditional rather than always on:
       // `.ss-chrome` is `pointer-events: none` so the canvas stays clickable
@@ -234,7 +250,7 @@ export function FloatingSelectionToolbar() {
             if (next.length > 0) onView(String(next[0]) as BlockView);
           }}
           aria-label="Block view"
-          className="bg-background/15"
+          className="h-10 shrink-0 bg-white/10"
         >
           {BLOCK_VIEWS.map((view) => (
             <ToggleGroupItem
@@ -244,13 +260,15 @@ export function FloatingSelectionToolbar() {
               // WHY the pressed colours are restated here: `toggleVariants`
               // paints a pressed item `bg-muted` with the page's normal
               // foreground text (toggle.tsx:17), which assumes a LIGHT
-              // surface. This pill is `bg-foreground text-background` — a
-              // dark bar — so the stock pressed state put near-white text on
-              // a near-white chip and the active view became unreadable
-              // (measured in the running app, capture 02). Inverting the
-              // pair keeps the same "the pressed one is the solid one"
-              // reading against a dark background.
-              className="text-background aria-pressed:bg-background aria-pressed:text-foreground hover:bg-background/20 hover:text-background"
+              // surface, and this pill is a FIXED #1e1e1e in both colour
+              // schemes. The first version of this fix used
+              // `text-background`/`bg-background`, which was right only while
+              // the pill inverted the page — in dark mode `--background` is
+              // near-black and the pressed chip went black-on-black. Literals
+              // against the literal surface have no theme left to be wrong in.
+              // `#9747ff` is FigJam's traced accent for a LABELLED chip
+              // (figjamTokens.ts:17), as opposed to #8a38f5 for an icon cell.
+              className="h-10 rounded-[5px] px-3 text-[11px] font-normal text-white aria-pressed:bg-[#9747ff] aria-pressed:text-white hover:bg-[#383838] hover:text-white"
             >
               {view.label}
             </ToggleGroupItem>
@@ -261,21 +279,34 @@ export function FloatingSelectionToolbar() {
       {subject.codeLanguage !== null ? (
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button variant="ghost" size="sm" className="text-background hover:text-foreground" />}
+            render={<Button variant="ghost" size="sm" className={`${CELL_TRIGGER} pr-2 pl-3`} />}
             data-testid="ss-selection-language"
             aria-label="Code language"
           >
             {CODE_LANGUAGES.find((language) => language.id === subject.codeLanguage)?.label ?? subject.codeLanguage}
+            <TriggerChevron />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
+          <DropdownMenuContent
+            align="start"
+            className={`w-48 ${PILL_POPOVER} p-2`}
+            // `DropdownMenuContent` writes its radius as an INLINE style
+            // (`dropdown-menu.tsx:178`, the skin seam), and an inline style
+            // beats any class — so `rounded-[13px]` inside PILL_POPOVER can
+            // never reach it and the popover has to be told here.
+            style={{ borderRadius: "13px" }}
+          >
             <DropdownMenuGroup>
-              <DropdownMenuLabel>Language</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-[11px] text-white/60">Language</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={subject.codeLanguage}
                 onValueChange={(next) => onLanguage(next as CodeLanguage)}
               >
                 {CODE_LANGUAGES.map((language) => (
-                  <DropdownMenuRadioItem key={language.id} value={language.id}>
+                  <DropdownMenuRadioItem
+                    key={language.id}
+                    value={language.id}
+                    className="rounded-[5px] text-[11px] text-white data-highlighted:bg-[#383838] data-highlighted:text-white"
+                  >
                     {language.label}
                   </DropdownMenuRadioItem>
                 ))}
@@ -292,7 +323,9 @@ export function FloatingSelectionToolbar() {
           construction rather than by an `else`. */}
       <StyleCluster />
 
-      {subject.blockView !== null || subject.codeLanguage !== null ? <ToolbarSeparator /> : null}
+      {subject.blockView !== null || subject.codeLanguage !== null ? (
+        <ToolbarSeparator className={PILL_SEPARATOR} />
+      ) : null}
 
       {/* Arrange, opacity and Focus are TRUE OF EVERY SHAPE — a Block, a Code
           cell, a geo box, a mixed bag of all three — so unlike the rows above
@@ -303,13 +336,16 @@ export function FloatingSelectionToolbar() {
       <OpacityCluster />
       <FocusButton />
 
-      <ToolbarSeparator />
+      {/* A rule on the bar's FULL height, `rgb(56,56,56)` — traced. The kit's
+          own `ToolbarSeparator` defaults to `bg-border`, a page token, which
+          on a fixed dark pill draws a light-theme hairline. */}
+      <ToolbarSeparator className={PILL_SEPARATOR} />
 
       <ToolbarButton
         data-testid="ss-selection-duplicate"
         aria-label="Duplicate"
         title="Duplicate"
-        className="text-background"
+        className={CELL_ICON}
         onClick={() => duplicateSelection(editor)}
       >
         <Copy />
@@ -318,7 +354,7 @@ export function FloatingSelectionToolbar() {
         data-testid="ss-selection-delete"
         aria-label="Delete"
         title="Delete"
-        className="text-background"
+        className={CELL_ICON}
         onClick={() => deleteSelection(editor)}
       >
         <Trash2 />

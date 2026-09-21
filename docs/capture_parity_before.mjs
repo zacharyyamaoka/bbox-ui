@@ -135,6 +135,55 @@ const measured = await page.evaluate(() => {
     centres,
   };
 });
+
+// --- extra shots that only make sense for the AFTER column ---
+if (STAGE === "after") {
+  // interface scale at 150%, proving the chrome grows
+  await page.evaluate(async () => {
+    localStorage.setItem("systemsketch.interface-scale.v1", JSON.stringify({ version: 1, percent: 150 }));
+    window.dispatchEvent(new StorageEvent("storage", { key: "systemsketch.interface-scale.v1" }));
+    await new Promise((r) => setTimeout(r, 700));
+  });
+  await closeUp("scale-150", '[data-slot="tool-dock"]', 12);
+  await page.evaluate(async () => {
+    localStorage.setItem("systemsketch.interface-scale.v1", JSON.stringify({ version: 1, percent: 100 }));
+    window.dispatchEvent(new StorageEvent("storage", { key: "systemsketch.interface-scale.v1" }));
+    await new Promise((r) => setTimeout(r, 500));
+  });
+
+  // the expanded block selected BY ITS HEADER — the hit-test fix
+  await clear();
+  await page.evaluate(() => {
+    const e = window.editor;
+    const parent = "shape:" + crypto.randomUUID();
+    e.createShape({ id: parent, type: "ss-block", x: 360, y: 220,
+      props: { name: "block", view: "expanded", w: 620, h: 400, ports: { left: [], right: [], top: [], bottom: [] } } });
+    e.selectNone();
+  });
+  await page.waitForTimeout(800);
+  const header = await page.evaluate(() => {
+    const el = document.querySelector('[data-shape-id]');
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + 18 };
+  });
+  await page.mouse.click(header.x, header.y);
+  await page.waitForTimeout(500);
+  const n = await page.evaluate(() => window.editor.getSelectedShapeIds().length);
+  console.log("header click -> selected:", n);
+  await closeUp("expanded-header-selected", '[data-shape-id]', 24);
+
+  // a tight close-up of the pill for the alignment row
+  await clear();
+  await page.evaluate(() => {
+    const e = window.editor; const id = "shape:" + crypto.randomUUID();
+    e.createShape({ id, type: "geo", x: 460, y: 420, props: { w: 300, h: 180, geo: "rectangle" } });
+    e.select(id);
+  });
+  await page.waitForSelector('[data-slot="floating-toolbar"][data-visible="true"]');
+  await page.waitForTimeout(700);
+  await closeUp("pill-closeup", '[data-slot="floating-toolbar"][data-visible="true"]', 8);
+}
+
 console.log("MEASURED " + STAGE + ":", JSON.stringify(measured, null, 1));
 console.log("PAGE ERRORS:", errors.length ? JSON.stringify(errors.slice(0, 4)) : "none");
 await browser.close();

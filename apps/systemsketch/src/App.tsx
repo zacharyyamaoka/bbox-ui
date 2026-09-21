@@ -13,9 +13,14 @@ import { Tldraw, type Editor, type TLComponents, type TLUiAssetUrlOverrides, typ
 
 import "tldraw/tldraw.css";
 import "./app.css";
+// The apply side of the interface-scale preference. Imported AFTER app.css so
+// its `zoom` rules sit last in the cascade; it defines its own `:root`
+// fallbacks, so nothing here depends on the variables below being present.
+import "./interface-scale.css";
 
 import { PyblocksBackendPanel } from "./backend/BackendSettings";
 import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./chrome/dock";
+import { useInterfaceScaleRootProps } from "./chrome/interfaceScaleHost";
 import { Overlay } from "./chrome/overlay";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
 import { SourceContextMenu } from "./source/sourceContextMenu";
@@ -141,8 +146,34 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
 
   const key = persistenceKey === undefined ? DEFAULT_PERSISTENCE_KEY : persistenceKey;
 
+  // The interface-scale preference, carried but never APPLIED here.
+  //
+  // Zach, 2026-09-20: "As I move the interface scale I would expect for it to
+  // resize but its not... also I want that interface scale setting to
+  // persist." It already persisted (`@trunk/components/interfaceScale`, written
+  // by chrome/appSettings.tsx); nothing read it back, so nothing ever resized.
+  // This hook is that read: it writes `--ss-interface-scale` and its inverse
+  // onto the DOCUMENT ELEMENT (so Base UI's body-level portals can see them
+  // too) and hands back the `data-interface-scale` attribute for this element.
+  // src/interface-scale.css turns those variables into `zoom` on tldraw's two
+  // INTERFACE layers.
+  //
+  // WHY neither this element nor the document element is itself zoomed: both
+  // contain the canvas. Zooming either would scale board geometry and the
+  // camera with the chrome, which is the one thing this feature must not do.
+  // The donor splits it exactly this way — its `.systemsketch-app` carries the
+  // variables while `.tlui-layout` and `.systemsketch-surface-host` carry the
+  // zoom; the only difference here is that the carrier has to be `:root`,
+  // because this app's menus portal to `document.body` rather than into the
+  // tldraw container (see interfaceScaleHost.tsx).
+  const interfaceScale = useInterfaceScaleRootProps();
+
   return (
-    <main data-testid="systemsketch-app" style={{ position: "fixed", inset: 0 }}>
+    <main
+      data-testid="systemsketch-app"
+      data-interface-scale={interfaceScale["data-interface-scale"]}
+      style={{ position: "fixed", inset: 0 }}
+    >
       <Tldraw
         shapeUtils={SHAPE_UTILS}
         bindingUtils={BINDING_UTILS}

@@ -1,0 +1,165 @@
+/*
+ * src/interface-scale.css — the APPLY side of the interface-scale preference.
+ *
+ * Ported from /home/bam/systemsketch/src/settings/interface-settings.css:1-44.
+ * The variables are written onto the DOCUMENT ELEMENT by
+ * chrome/interfaceScaleHost.tsx (mounted from src/App.tsx); every rule here
+ * reads them and nothing else. They live on `:root` rather than on the app's
+ * `<main>` because Base UI portals every trunk menu to `document.body`, a
+ * SIBLING of that element — measured: a popup zoomed from a `<main>`-scoped
+ * variable resolved to the fallback 1 while the dock it opened from was 1.5.
+ *
+ * WHY the zoom goes on tldraw's INTERFACE layers and never on the app root:
+ * the root contains the canvas. tldraw keeps its interface in layers that are
+ * SIBLINGS of `.tl-canvas` — `.tlui-layout` (TldrawUi.mjs:118, where
+ * `components.Toolbar` renders this app's dock) and `.tl-canvas__in-front`
+ * (where `components.InFrontOfTheCanvas` renders `.ss-chrome`). Scaling those
+ * two scales every pixel of chrome and leaves board geometry and camera zoom
+ * untouched. The donor makes the identical split for the identical reason
+ * (`interface-settings.css:6-11`: two hosts, `.tlui-layout` and
+ * `.systemsketch-surface-host`, never `.systemsketch-app`).
+ *
+ * WHY `zoom` and not `transform: scale`: chrome at 160% has to genuinely
+ * REFLOW — the pill wraps, `max-w-[calc(100%-1rem)]` on the side panel
+ * re-resolves, the dock's flex row re-wraps. `transform` paints a
+ * 100%-laid-out bar bigger and runs it off the screen edge with no wrap.
+ * `zoom` is a layout scale, so hit-testing is native and exact.
+ *
+ * The one thing `zoom` costs, and it is why the exemptions below exist: it
+ * establishes a new coordinate scale, so a length written INSIDE a zoomed
+ * layer paints at length x scale. That is right for chrome laid out against
+ * the window and wrong for chrome positioned from a screen measurement.
+ * MEASURED in Chrome 153: `translate(300px, 200px)` inside `zoom: 1.25` paints
+ * at x = 375, and it walks further the further the camera is panned.
+ */
+
+:root {
+  --ss-interface-scale: 1;
+  --ss-interface-scale-inverse: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* The two hosts                                                       */
+/* ------------------------------------------------------------------ */
+
+/* `.ss-chrome` alone would leave the TOOL DOCK at 100% — the surface Zach is
+ * actually looking at — because the dock renders through tldraw's `Toolbar`
+ * slot, inside `.tlui-layout`, not inside this app's overlay. */
+.tlui-layout,
+.ss-chrome {
+  zoom: var(--ss-interface-scale);
+}
+
+/* ------------------------------------------------------------------ */
+/* Portaled surfaces                                                   */
+/* ------------------------------------------------------------------ */
+
+/* tldraw's own menus, dialogs, tooltips and toasts portal OUT of
+ * `.tlui-layout`, so they never inherit its zoom — without this every menu
+ * stays at 100% while the bar that opened it grows. Donor:
+ * `interface-settings.css:37-43`, kept selector for selector. */
+.tl-container > * > .tlui-menu,
+.tlui-popover__content,
+.tlui-dialog__positioner,
+.tlui-tooltip,
+.tlui-toast__container {
+  zoom: var(--ss-interface-scale);
+}
+
+/* The trunk's own menus go further out still: Base UI portals to
+ * `document.body`, outside `.tl-container` entirely. Every popout the dock
+ * and the chrome bar open is one of these.
+ *
+ * WHY the POPUP and never the Positioner (`dropdown-menu.tsx:66-74`): Floating
+ * UI writes real viewport pixels into the positioner's own transform, and
+ * zooming that element multiplies them exactly the way zoom multiplies the
+ * pill's translate — menus would fly off their triggers at a rate proportional
+ * to their distance from the origin. Zooming the popup instead only changes
+ * its measured size, which Floating UI reads AFTER layout, so flip and shift
+ * stay correct. */
+[data-slot="dropdown-menu-content"],
+[data-slot="dropdown-menu-sub-content"],
+[data-slot="context-menu-content"],
+[data-slot="popover-content"],
+[data-slot="dialog-content"],
+[data-slot="tooltip-content"],
+/* Settings is its own popup: `settingsView.tsx:490` renders the stock Dialog
+ * POPUP with `data-slot="settings-view"` instead of `dialog-content`, so the
+ * generic rule above misses it. MEASURED: without this line the Settings
+ * dialog was the one surface that stayed 100% while the slider inside it
+ * scaled everything behind it. */
+[data-slot="settings-view"] {
+  zoom: var(--ss-interface-scale);
+}
+
+/* ------------------------------------------------------------------ */
+/* Exemptions — surfaces positioned from a SCREEN measurement          */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The floating selection pill.
+ *
+ * `chrome/floatingToolbar.tsx:108-124` computes a real-viewport-pixel anchor
+ * from `editor.getSelectionRotatedScreenBounds()` and the kit paints it as an
+ * INLINE `transform: translate(...)`. Inside the host zoom that translate is
+ * multiplied — at 160% a pill anchored at screen (600, 400) paints at
+ * (960, 640), off the selection and probably off the viewport. Cancelling the
+ * layer's zoom on this element puts it back in real pixels: `zoom` multiplies
+ * an element's own used lengths as well as its descendants', so scale x
+ * inverse = 1 and the translate lands exactly where the placement policy put
+ * it.
+ *
+ * WHY that leaves the pill at 100% while the rest of the chrome grows, and
+ * why this lane stops here: the donor re-applies the scale as
+ * `transform: scale(var(--interface-scale))` with `transform-origin: 0 0` on
+ * top of its own translate (`systemsketch-chrome.css:838-846`), and it can do
+ * that from CSS only because it writes x/y as CUSTOM PROPERTIES. This kit
+ * writes `transform` inline (`@trunk/components/floatingToolbar` :241), and an
+ * inline transform beats any stylesheet rule — so the scale has to travel as a
+ * PROP on the kit component, which belongs to the lane that owns that file.
+ * The composition is not optional either: the CSS `scale` property applies
+ * OUTSIDE `transform`, so `scale: S` would multiply the translate again, and
+ * correcting it needs a transform-origin equal to the (x, y) the placement
+ * policy chose, which CSS cannot name. Correct-and-unscaled is the honest
+ * intermediate state; scaled-and-drifting is not.
+ *
+ * The three lines that finish it, together, in the pill's own lane:
+ *   1. kit: `scale?: number` -> `transform: translate(x,y) scale(s)`,
+ *      `transformOrigin: "0 0"`.
+ *   2. host: `scale={scale}` and
+ *      `floatingToolbarMaxWidth({w, h}, scale)` — the cap is in LOCAL units
+ *      once a transform re-inflates it, which is why that helper already
+ *      takes the parameter. Passing it BEFORE (1) lands would be a
+ *      regression: with the pill at net zoom 1 the cap is already painted
+ *      pixels, so dividing it would cut the pill to 62% of the viewport at
+ *      160% and let it overflow at 80%.
+ *   3. host: `bottomObstacleTop: geometry.vh - DOCK_OBSTACLE_HEIGHT * scale`,
+ *      and `[scale]` in the measure effect's deps — a ResizeObserver is blind
+ *      to BOTH zoom and transform (measured: zero callbacks across either).
+ */
+.ss-chrome [data-slot="floating-toolbar"] {
+  zoom: var(--ss-interface-scale-inverse);
+}
+
+/*
+ * The bottom-right cluster (status strip + variant switch).
+ *
+ * `chrome/overlay.tsx`'s `useCornerPlacement` feeds `placeCornerCluster` a
+ * mix of rulers: `rectOf(container)`, `rectOf(watermark)` and `rectOf(dock)`
+ * are `getBoundingClientRect` — real painted pixels — while the cluster
+ * itself is measured with `el.offsetWidth`, which reports the UNZOOMED border
+ * box. MEASURED in Chrome 153: 150 vs 187.5 at 125%. Under a scaled layer the
+ * policy would believe the cluster is narrower than it paints and step it ONTO
+ * tldraw's licence watermark, which `overlay.tsx:74-82` calls a hard wall
+ * ("Covering is removing"). Cancelling the zoom here keeps every rect in that
+ * function in one space, so the placement stays byte-identical to 100% and the
+ * licence notice stays uncovered.
+ *
+ * The fix that lets this cluster scale is `rectIn(container, el, scale)` in
+ * `overlay.tsx` — convert all four rects into the layer's local units once, at
+ * the one seam where screen measurements enter — and it belongs to the lane
+ * that owns that file.
+ */
+.ss-chrome [data-corner-placement] {
+  zoom: var(--ss-interface-scale-inverse);
+}

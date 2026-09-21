@@ -60,6 +60,34 @@ declare module "@tldraw/tlschema" {
 
 export type BlockShape = TLBaseShape<"ss-block", BlockShapeProps>;
 
+/**
+ * Height of the expanded block's header band, shape-local px — the strip
+ * `getGeometry` below hands tldraw as the block's one grab surface.
+ *
+ * MEASURED, not guessed: 37px, off the real app on :4340 via
+ * `getComputedStyle`/`offsetHeight` of
+ * `[data-slot="block"] > [data-slot="block-header"]`, and it is 37 for every
+ * name length tried (the header is one line and truncates rather than wraps):
+ * `py-2` 8 + 8, `text-sm` line-height 20, `border-b` 1.
+ *
+ * WHY A CONSTANT AND NOT A MEASURED PROP, which is what the donor's
+ * `layoutBlock().header` and this repo's own `props.anchors` would suggest:
+ * the header is CSS here, so the honest source IS a measurement — but the only
+ * place to write one back is `shapes/shared/measure.ts` plus a new `headerH`
+ * prop, and `document/documentModel.test.ts:77-84` pins `defaultsOf("ss-block")`
+ * with an exact `toEqual`, i.e. a new prop turns a committed acceptance test
+ * red. Both files are outside this lane. So: a measured constant, and the
+ * failure direction is deliberately the safe one — if the header ever grows
+ * (interface scale, a bigger font), the band UNDER-covers and the extra pixels
+ * fall through to the hollow interior, which selects nothing. It never
+ * over-claims body the user expects to be see-through.
+ *
+ * When the interface-scale lane lands, this becomes `props.headerH` written by
+ * `measure.ts` from `offsetTop + offsetHeight` (NOT `getBoundingClientRect`,
+ * which is multiplied by the camera zoom — `measure.ts:11-14`).
+ */
+const BLOCK_HEADER_BAND_PX = 37;
+
 export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
   static override type = BLOCK_SHAPE_TYPE;
 
@@ -176,7 +204,67 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
    */
   override getGeometry(shape: BlockShape) {
     const box = new Rectangle2d({ width: shape.props.w, height: shape.props.h, isFilled: true });
-    return shape.props.view === "expanded" ? new Group2d({ children: [box] }) : box;
+    if (shape.props.view !== "expanded") return box;
+
+    // WHY the header is an `isLabel` CHILD and not `isFilled: true` on the body
+    // (Zach, 2026-09-20: "in expanded view I can only select it by hovering
+    // over the edge … if I hover over the header and other parts it should
+    // also become selected!!!"):
+    //
+    // `isFilled` is NOT the knob, twice over. tldraw 5.3.2's frame-like branch
+    // of `getShapeAtPoint` (Editor.js:4325-4344) never reads it — it answers in
+    // three steps, and these are the whole contract: (1) a child with `isLabel`
+    // whose BOUNDS hold the point returns the shape; (2) the outline within
+    // `hitTestMargin` returns the shape — that 3px ring is the "edge" Zach can
+    // hit today and the ONLY thing that answered before this band existed;
+    // (3) anything else inside returns `undefined` and STOPS the search. And
+    // the wrapper cannot be filled at all: `Group2d`'s constructor hard-codes
+    // `super({ ...config, isClosed: true, isFilled: false })`, which is why the
+    // live editor reports `Group2d { isFilled: false }` no matter what. The
+    // body rect above was ALREADY `isFilled: true` while this bug was live.
+    // A label band is the only seam there is.
+    //
+    // Only the HEADER, deliberately — the interior stays hollow:
+    //   - step (3) is the same predicate `getDraggingOverShape` asks
+    //     (`isPointInShape(…, { hitInside: true })`), so an interior that
+    //     stopped answering "inside" is a container that can no longer adopt a
+    //     dropped block;
+    //   - every pixel promoted to chrome is a pixel where an `ss-wire` painted
+    //     underneath stops being clickable. Donor's words for the full-fill
+    //     version (systemsketch 93c84177): "a container ceasing to be one".
+    // Label children are invisible to (3), to drops and to the marquee —
+    // `Group2d.hitTestPoint` and `hitTestLineSegment` both default to
+    // `Geometry2dFilters.EXCLUDE_LABELS` — so this cannot break either.
+    //
+    // Same three rules, and the same shape of fix, as this repo's own
+    // `RegionShapeUtil.getGeometry` (shapes/region/RegionShapeUtil.tsx:375-408).
+    const headerH = Math.min(BLOCK_HEADER_BAND_PX, shape.props.h);
+    return new Group2d({
+      children: [
+        box,
+        ...(headerH > 0
+          ? [
+              new Rectangle2d({
+                x: 0,
+                y: 0,
+                width: shape.props.w,
+                height: headerH,
+                isFilled: true,
+                isLabel: true,
+                // Or a laid-out band widens `geometry.bounds` and a 1x1
+                // drag-create placeholder snaps to its own layout on the first
+                // pointer move (the failure `shapes/region/cornerBlock.ts`
+                // records as "a drag-create whose frame lands 239px right of
+                // the release point"). The `Math.min` above is the second half
+                // of that guard: bounds are safe either way, but an unclamped
+                // 37px band under a 1x1 placeholder would still CLAIM 37px of
+                // empty canvas as "select me".
+                excludeFromShapeBounds: true,
+              }),
+            ]
+          : []),
+      ],
+    });
   }
 
   override getIndicatorPath(shape: BlockShape) {

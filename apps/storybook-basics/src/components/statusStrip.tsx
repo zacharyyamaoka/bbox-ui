@@ -28,6 +28,31 @@ import { Fragment, type ReactNode } from "react";
 import { cn } from "../lib/utils";
 import { Toolbar, ToolbarButton, ToolbarSeparator } from "./toolbar";
 
+/**
+ * The strip's cell, sized to match the dock's (toolDock.tsx's
+ * `TOOL_DOCK_CELL_HEIGHT` and its WHY, which carries the measurements): the
+ * dock and this strip share the bottom row of the app, so a 40px dock cell
+ * beside a 32px strip cell would trade Zach's "everything feels a bit off"
+ * for a bottom row that is visibly two different sizes.
+ *
+ * WHY it is a second literal rather than an import from `toolDock`: the
+ * status strip is a peer surface, not a part of the dock — a strip that
+ * imported the dock would drag a dropdown menu, a popover and every family
+ * type into any host that only wants the strip. The two constants are pinned
+ * EQUAL by measurement instead
+ * (apps/systemsketch/src/chromeSize.smoke.test.tsx asserts the two rendered
+ * cells are the same height in the real app), which is the check that
+ * actually matters — a shared constant would still let one of them be
+ * overridden downstream without anyone noticing.
+ *
+ * WHY the width does not move (36px, as before): growing this strip widens
+ * the bottom-right cluster, and `placeCornerCluster`
+ * (apps/systemsketch/src/chrome/overlay.tsx) has only 13.89px of measured
+ * clearance between it and the dock at 1400 x 900 before the whole row falls
+ * through to the "above-licence" placement Zach rejected.
+ */
+const STRIP_CELL_CLASS = "h-10 w-9 px-0 [&_svg:not([class*='size-'])]:size-[18px]";
+
 export interface StatusStripItem {
   id: string;
   icon: ReactNode;
@@ -112,7 +137,7 @@ function StripButton({ item }: { item: StatusStripItem }) {
       // box (`-top-1 -right-1` etc) — the default `overflow-clip` most
       // buttons in this kit use (see `bar.tsx`'s `cellClass`) would clip
       // exactly the corner these two are drawn in.
-      className="relative overflow-visible"
+      className={cn(STRIP_CELL_CLASS, "relative overflow-visible")}
     >
       {item.icon}
       {item.badge !== undefined ? <ItemBadge value={item.badge} /> : null}

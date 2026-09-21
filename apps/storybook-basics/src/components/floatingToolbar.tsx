@@ -45,6 +45,68 @@ import { Toolbar } from "./toolbar";
  * plumbing, and nothing here owns a second roving-focus root underneath it.
  */
 
+/**
+ * THE PILL SURFACE — dark ink-on-#1e1e1e, in BOTH colour schemes, always.
+ *
+ * WHY a literal hex rather than `bg-foreground text-background`, which is
+ * what this file shipped until 2026-09-20: `foreground`/`background` are not
+ * a pill colour, they are an INVERSION OF THE PAGE. `globals.css:101-102`,
+ * inside `@media (prefers-color-scheme: dark)`, sets
+ * `--foreground: oklch(0.985 0 0)` — that is `#fafafa` — so on a dark canvas
+ * the pill rendered near-WHITE with near-black icons. Measured in the running
+ * app at 4340, dark scheme: `backgroundColor: oklch(0.985 0 0)`. That is
+ * tldraw's stock floating-toolbar look, and it is the thing Zach named:
+ * "It feels like you are making this look like the tldraw stock floating
+ * toolbar which I don't like ... Our goal was for it to be more like system
+ * sketch which is copying the figjam floating tool bar."
+ *
+ * FigJam's own DOM traces at `bg=rgb(30,30,30)` with `color=rgb(255,255,255)`
+ * (`/home/bam/systemsketch/docs/assets/figjam-chrome-traced.json`), and the
+ * donor pins exactly that pair in BOTH themes with the reason written at the
+ * seam (`src/theme/tokens.css:109-128`): following tldraw's tooltip flip
+ * "would put the appearance controls' white glyphs on a white bar."
+ *
+ * WHY exported constants rather than the donor's `--systemsketch-pill-*`
+ * custom properties declared on the app root: the popovers this pill opens
+ * PORTAL OUT of its DOM subtree, so a variable scoped to the pill element is
+ * invisible to its own menu — the donor says so at `pillSkins.css:15-23` and
+ * scopes the tokens on `.systemsketch-app`, "the nearest ancestor both the bar
+ * and its portaled popovers share". Declaring that root scope means editing
+ * `globals.css`, which another lane owns this round. A literal shared through
+ * the module system reaches the portaled popover just as reliably AND is
+ * theme-independent by construction — there is no token left for a
+ * `prefers-color-scheme` block to flip. When the root scope lands, these two
+ * constants become `var(--bbox-pill-surface)` / `var(--bbox-pill-ink)` and
+ * nothing else moves.
+ */
+export const PILL_SURFACE = "bg-[#1e1e1e] text-white";
+
+/** FigJam's three-layer float, traced verbatim. The 10px-offset middle layer
+ *  is what lifts the bar off the canvas; Tailwind's `shadow-lg` is a
+ *  two-layer `-3px`/`-4px` spread and reads flat beside it. */
+export const PILL_SHADOW =
+  "shadow-[0_0_0.5px_rgb(0_0_0/12%),0_10px_16px_rgb(0_0_0/12%),0_2px_5px_rgb(0_0_0/15%)]";
+
+/** 13px on the bar and on every popover it opens — traced `r=13px` on the
+ *  FigJam toolbar and on all five of its traced popovers. */
+export const PILL_RADIUS = "rounded-[13px]";
+
+/**
+ * The one class every popover the pill opens must wear — the donor's rule,
+ * ported. There, it is literally one CSS class
+ * (`.systemsketch-appearance__panel`, `appearance.css:143-155`) re-declaring
+ * the bar's four surface tokens, worn by every appearance popover
+ * (`ContextualControls.tsx:278`) AND by the Arrange popover
+ * (`SystemSketchChrome.tsx:456`), which is not an appearance control at all.
+ * Without it the trigger and its own menu do not share a surface: measured
+ * before this change, the bar was `oklch(0.985 0 0)` and the open panel
+ * `oklch(0.205 0 0)` — a light pill with a dark menu hanging off it.
+ *
+ * `ring-0` because the stock popover ring is `ring-foreground/10`, a PAGE
+ * token: on a fixed dark surface in light mode it draws a near-black hairline.
+ */
+export const PILL_POPOVER = `${PILL_SURFACE} ${PILL_SHADOW} ${PILL_RADIUS} border-0 ring-0`;
+
 export interface FloatingToolbarProps {
   /**
    * Computed by the host's own `placeFloatingToolbar` call, in whatever
@@ -81,6 +143,22 @@ export interface FloatingToolbarProps {
    * about the pill's maximum width can never independently drift.
    */
   maxWidth?: number;
+  /**
+   * The host's interface-scale factor (1 = 100%). Applied as a `scale()`
+   * composed INSIDE the same `transform` as the translate below.
+   *
+   * WHY it has to travel as a prop rather than as CSS, measured: this
+   * component writes `transform` INLINE, and an inline transform beats any
+   * stylesheet rule, so an `interface-scale.css` rule can never reach it. The
+   * standalone `scale:` property is not a substitute either — it composes
+   * OUTSIDE `transform`, so it re-multiplies the translate and walks the pill
+   * off its own selection by (scale - 1) x the offset. Composing both in ONE
+   * transform, with `transform-origin: 0 0`, is what keeps the pill anchored
+   * to the point the placement policy chose while still growing with the rest
+   * of the chrome. The donor does the same thing for the same reason
+   * (`systemsketch-chrome.css:838-846`).
+   */
+  scale?: number;
   "aria-label": string;
   /**
    * `ControlStrip`, an opacity slider, an arrange cluster — anything the
@@ -133,6 +211,7 @@ export function FloatingToolbar({
   side,
   visible,
   maxWidth,
+  scale = 1,
   "aria-label": ariaLabel,
   children,
   className,
@@ -146,7 +225,24 @@ export function FloatingToolbar({
       data-side={side}
       data-visible={visible}
       className={cn(
-        "absolute top-0 left-0 flex flex-wrap items-stretch rounded-xl bg-foreground px-1 text-background shadow-lg transition-opacity duration-75 ease-in-out",
+        // WHY `items-center` and not `items-stretch`, which is what this line
+        // carried until 2026-09-20 and is the whole of defect 1: `cn` is
+        // `twMerge`, this className is passed THROUGH to `Toolbar`, and
+        // `Toolbar`'s own root sets `items-center` — so the class named here
+        // wins the merge and `align-items: stretch` reached the bar. Stretch
+        // does nothing to a flex child that already has a definite height; it
+        // drops it at CROSS-START instead. Measured in the running app at
+        // 4340 with the old line, dark scheme, one geo box selected:
+        //   ss-style-* (h28, inside an items-center wrapper)  centreY 20
+        //   ss-selection-arrange (h28, a direct bar child)    centreY 14
+        //   ss-selection-focus/duplicate/delete (h32)         centreY 16
+        // Three baselines in a 40px bar. The cause is this one word; the
+        // cells' matching 40px heights (selectionClusters.tsx) are the other
+        // half — FigJam's every cell fills the bar, traced 40px tall.
+        "absolute top-0 left-0 flex flex-wrap items-center px-1 transition-opacity duration-75 ease-in-out",
+        PILL_SURFACE,
+        PILL_SHADOW,
+        PILL_RADIUS,
         // Wrap, never scroll — the same reasoning `floatingToolbarMaxWidth`'s
         // own doc comment gives (floatingToolbar.placement.ts): an
         // `overflow-x` scrollbar would turn this into a scroll container,
@@ -159,7 +255,13 @@ export function FloatingToolbar({
         visible && "opacity-100",
         className,
       )}
-      style={{ transform: `translate(${x}px, ${y}px)`, maxWidth }}
+      style={{
+        // ONE transform: translate then scale, origin at the placed point, so
+        // growing the pill never moves the corner the placement policy chose.
+        transform: scale === 1 ? `translate(${x}px, ${y}px)` : `translate(${x}px, ${y}px) scale(${scale})`,
+        transformOrigin: "0 0",
+        maxWidth,
+      }}
     >
       {children}
     </Toolbar>

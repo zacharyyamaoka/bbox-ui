@@ -35,13 +35,13 @@ import { FILE_MENU_ROWS } from "@trunk/components/appMenu";
 import { readAppearancePreferences, writeAppearancePreferences, type AppearancePreferences } from "@trunk/components/appearancePreferences";
 import { readEdgePolicy, writeEdgePolicy, edgePolicyPreset, type EdgePolicy, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
 import { readGestureSettings, writeGestureSettings, type GestureSettings } from "@trunk/components/gestureSettings";
-import { readInterfaceScale, writeInterfaceScale } from "@trunk/components/interfaceScale";
 import { readToolAliases, writeToolAliases, type ToolAliasItem, type ToolAliases } from "@trunk/components/toolAliases";
 import { buildSettingsCategories, type SettingsHotkey } from "@trunk/components/settingsCategories";
 import { isNativeFileAccessSupported } from "@trunk/files/nativeFiles";
 import { SettingsView, type SettingsPresentation } from "@trunk/components/settingsView";
 
 import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "./families";
+import { setInterfaceScalePercent, useInterfaceScalePercent } from "./interfaceScaleHost";
 import { shortcutPlatform } from "./stockMenus";
 import { SYSTEM_FAMILY_ITEMS } from "../shapes/registry";
 
@@ -185,7 +185,16 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
   );
   const [gestures, patchGestures] = usePersistedRecord<GestureSettings>(readGestureSettings, writeGestureSettings);
   const [edgePolicy, patchEdgePolicy] = usePersistedRecord<EdgePolicy>(readEdgePolicy, writeEdgePolicy);
-  const [interfaceScalePercent, setInterfaceScale] = usePersistedValue<number>(readInterfaceScale, writeInterfaceScale);
+  // WHY this one setting does NOT use `usePersistedValue` like its neighbours:
+  // its value has a second reader outside this dialog. `usePersistedValue`
+  // keeps the value in local `useState`, which is invisible to `App.tsx` — so
+  // the slider wrote localStorage and the interface never changed, which is
+  // exactly the bug Zach reported on 2026-09-20. `./interfaceScaleHost` is the
+  // same module-store shape `./preferences.ts` already uses for the other
+  // two-surface value, and it normalizes on write for the same reason the
+  // comment in `usePersistedValue` gives.
+  const interfaceScalePercent = useInterfaceScalePercent();
+  const setInterfaceScale = setInterfaceScalePercent;
   const [aliases, setAliases] = usePersistedValue<ToolAliases>(readToolAliases, writeToolAliases);
 
   // WHY the whole list is rebuilt in the trunk from values + callbacks rather
