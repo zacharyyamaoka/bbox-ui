@@ -364,6 +364,26 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
     });
   }
 
+  /**
+   * P-039: the block's title edits in place, and this one line is the whole
+   * subscription to tldraw's editing lifecycle — the same "canEdit is the
+   * whole subscription" note `PortShapeUtil` carries. The select tool asks
+   * exactly this before a double-click (or Enter on a selected shape) calls
+   * `setEditingShape`; `BlockFace`'s `BlockTitle` reads that id back and swaps
+   * the painted title for the trunk's `EditableText`.
+   *
+   * WHAT IT TAKES AWAY, which matters as much as what it adds: with `canEdit`
+   * false, tldraw's own double-click branch falls through to
+   * `handleDoubleClickOnCanvas` (SelectTool/childStates/Idle.ts:465-472) —
+   * "if the shape cannot edit, then create a text shape and begin editing the
+   * text shape". So a double-click on a block CREATED A STRAY STOCK `text`
+   * SHAPE lying on top of it and typed the new name into that. Same failure
+   * PortFace.tsx:317-322 records meeting on an overflowing port label.
+   */
+  override canEdit(): boolean {
+    return true;
+  }
+
   override getIndicatorPath(shape: BlockShape) {
     const path = new Path2D();
     path.rect(0, 0, shape.props.w, shape.props.h);

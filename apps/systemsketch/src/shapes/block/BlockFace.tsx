@@ -5,10 +5,13 @@
 // SystemSketch IS bbox-ui + stock tldraw, so this file's entire job is to turn
 // `shape.props` into the two components' props and to route their callbacks
 // back into the store.
+import { useEffect, useRef } from "react";
 import { useEditor, useValue, type TLBinding } from "tldraw";
 
 import { Block } from "@trunk/components/block";
 import { BlockPort, type BlockEdgeSpec } from "@trunk/components/blockPort";
+import { caretOffsetFromPoint } from "@trunk/components/caretGeometry";
+import { EditableText } from "@trunk/components/editableText";
 import type { BlockSide } from "@trunk/components/port.layout";
 import type { PortEdgeItem } from "@trunk/components/portEdge";
 import { REGION_CORNER_BLOCK_STYLE } from "@trunk/components/region";
@@ -19,6 +22,7 @@ import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
 import { usePortProducers } from "../../document/sceneFromStore";
 import { availabilityAt, wireAvailability } from "../wire/portAvailability";
 import { isRegionCornerBlock } from "../region/cornerBlock";
+import { stopEditing } from "../shared/editingSession";
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
 import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
@@ -114,9 +118,153 @@ function BlockGlyph({ shape }: { shape: BlockShape }) {
   );
 }
 
+/**
+ * The block's title, in px — `text-sm`, read off `Block`'s own root class
+ * (`components/block.tsx:277`, `"relative flex flex-col text-sm"`), which the
+ * header inherits rather than restating.
+ *
+ * WHY the editing control has to be TOLD this rather than inheriting it the
+ * way the resting span does: `EditableText` writes a `fontSize` onto its own
+ * box from its size ladder (`editableText.layout.ts`), so it always overrides
+ * inheritance — leave it at the default `md` and the title jumps from 14px to
+ * 24px the instant you click it, which is the one thing that component's whole
+ * in-flow-control design exists to prevent ("the text must not move").
+ * `size="custom"` plus this number is the escape hatch it publishes for a host
+ * whose typography it cannot see.
+ *
+ * It is a constant and not a measurement for the same reason
+ * `BLOCK_HEADER_BAND_PX` in `BlockShapeUtil.tsx` is, and it has the same
+ * safety net: `src/textEditing.smoke.test.tsx` measures the control's computed
+ * font-size against the resting title's, so a change to `Block`'s own class
+ * turns that test red rather than shipping a jump.
+ */
+const BLOCK_TITLE_FONT_PX = 14;
+
+/**
+ * The title while editing: the trunk's own `EditableText`, controlled by the
+ * store.
+ *
+ * WHY the value is `shape.props.name` straight from the record, with no local
+ * draft (which is what `PortFace`'s `LabelEditor` keeps): that one exists
+ * because CodeMirror owns a DOCUMENT and feeding the store's value back into
+ * it mid-keystroke re-dispatches that document. `EditableText` is a plain
+ * controlled `<input>` — the store IS its value, React reconciles the caret,
+ * and a draft here would only create a second copy that nothing reconciles if
+ * the write is ever rejected.
+ *
+ * WHY `POINTER_OWNED_CLASS` ("nodrag") is on the control and NOT on the
+ * resting title: the header is the block's drag handle by
+ * `contentOwnsPress`'s own rule (shapes/shared/pointerOwnership.ts), and
+ * `src/blockBodyPress.smoke.test.tsx`'s P-044 case is a committed assertion
+ * that a drag from the title still moves the block. That stays true — only the
+ * mounted control claims the pointer, so a caret drag selects text instead of
+ * sliding the card, and the instant the session ends the header is a drag
+ * surface again.
+ */
+function BlockTitleEditor({ shape, caretAt }: { shape: BlockShape; caretAt?: number }) {
+  const editor = useEditor();
+  // The value to put back on Escape, captured once: this component mounts
+  // fresh per session (the branch below swaps one element type for another),
+  // so "once" is the session's opening value.
+  const snapshot = useRef(shape.props.name);
+
+  const write = (name: string) => {
+    editor.updateShape({ id: shape.id, type: BLOCK_SHAPE_TYPE, props: { name } });
+  };
+
+  return (
+    <EditableText
+      data-slot="ss-block-title"
+      className={`min-w-0 ${POINTER_OWNED_CLASS}`}
+      size="custom"
+      sizePx={BLOCK_TITLE_FONT_PX}
+      lines="single"
+      editing
+      caretAt={caretAt}
+      // Per keystroke, like every other real edit in this app. One undo step
+      // per gesture rather than one per character.
+      onChange={(next) => {
+        editor.markHistoryStoppingPoint("rename block");
+        write(next);
+      }}
+      // ENTER CLOSES THE SESSION; A BLUR DOES NOT — see `onCommit`'s own doc
+      // in editableText.tsx for the measurement. Closing on every commit
+      // closed this session ~0ms after the double-click opened it, because
+      // opening it produces one spurious blur-commit of its own. A real blur
+      // (pressing the canvas, another shape) is already handled by tldraw:
+      // leaving `editing_shape` clears the id and this control unmounts. And
+      // nothing is at risk in the gap — `onChange` above has already written
+      // every keystroke into the store.
+      onCommit={(_next, via) => {
+        if (via === "enter") stopEditing(editor);
+      }}
+      onCancel={() => {
+        write(snapshot.current);
+        stopEditing(editor);
+      }}
+    >
+      {shape.props.name}
+    </EditableText>
+  );
+}
+
+/**
+ * P-039 / P-026: the title edits IN PLACE, on the card, where it is painted —
+ * not in a panel field somewhere else.
+ *
+ * WHAT IT REPLACES, so the change is legible: before this, a block's name had
+ * NO editing surface anywhere in the app, and double-clicking a block fell
+ * through tldraw's own "this shape cannot edit" branch
+ * (SelectTool/childStates/Idle.ts:465-472), which CREATES A STOCK TEXT SHAPE
+ * on top of the block and types into that instead. `BlockShapeUtil.canEdit`
+ * is the subscription that takes that branch away.
+ *
+ * The session is tldraw's `editingShapeId`, not a `useState` here, for the
+ * reason `PortFace` records: the engine already has to know which shape is
+ * being edited (it is what gates its own keyboard handling), so a second
+ * "am I editing" flag would be one more thing to fall out of sync.
+ */
+function BlockTitle({ shape }: { shape: BlockShape }) {
+  const editor = useEditor();
+  const editing = useValue("ss-block editing", () => editor.getEditingShapeId() === shape.id, [editor, shape.id]);
+
+  // P-021 on this surface: which character of the title the press that opened
+  // the session landed on. A ref for the reason `PortFace`'s twin is one —
+  // recording it must not re-render mid-gesture — and cleared when the session
+  // ends so a rename opened from the keyboard falls back to select-all.
+  const caretHint = useRef<number | null>(null);
+  useEffect(() => {
+    if (!editing) caretHint.current = null;
+  }, [editing]);
+
+  if (editing) return <BlockTitleEditor shape={shape} caretAt={caretHint.current ?? undefined} />;
+  return (
+    <span
+      data-slot="ss-block-title"
+      // The same `data-editing` marker `PortFace`'s resting label carries, and
+      // the same reason: the editing control wears `data-slot="ss-block-title"`
+      // too (it IS the title), so this attribute is the only thing that tells
+      // a probe — or a person reading the DOM — which of the two is on screen.
+      // `EditableText` already stamps `data-editing="true"` on its own root.
+      data-editing="false"
+      className="min-w-0 truncate"
+      // The last moment the painted title exists — see `caretGeometry.ts` and
+      // `PortFace`'s twin for why the press, not the double-click, is what can
+      // be asked. Capture phase, and nothing is stopped: tldraw still gets the
+      // press, which is what opens the session in the first place and what
+      // keeps a drag from the title moving the block (P-044).
+      onPointerDownCapture={(event) => {
+        caretHint.current = caretOffsetFromPoint(event.currentTarget, event.clientX, event.clientY);
+      }}
+    >
+      {shape.props.name}
+    </span>
+  );
+}
+
 export function BlockFace({ shape }: { shape: BlockShape }) {
   const editor = useEditor();
-  const { name, view, ports, description, showDescription, w, h } = shape.props;
+  const { view, ports, description, showDescription, w, h } = shape.props;
 
   // WHY the wired set is read from BINDINGS rather than passed in: L3 lands
   // wires without touching this file. `getBindingsToShape` is stock, the
@@ -230,7 +378,7 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           header={
             <span data-slot="ss-block-header-line" className="flex min-w-0 items-center gap-1.5">
               <BlockGlyph shape={shape} />
-              <span className="min-w-0 truncate">{name}</span>
+              <BlockTitle shape={shape} />
             </span>
           }
           // RULING 9, the paint half. Zach: "the eye visibility control for

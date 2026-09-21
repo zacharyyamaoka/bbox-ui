@@ -64,14 +64,47 @@ export interface EditableTextProps extends Omit<ComponentProps<"div">, "onChange
   editing?: boolean;
   /** Fires on every keystroke — write-through, like SystemSketch's `writeField`. */
   onChange?: (value: string) => void;
-  /** Fires on Enter (single), Ctrl/Cmd+Enter (multi), or blur. */
-  onCommit?: (value: string) => void;
+  /**
+   * Fires on Enter (single), Ctrl/Cmd+Enter (multi), or blur — and SAYS WHICH.
+   *
+   * WHY `via` exists, and why it is a second argument rather than a second
+   * callback: a host that owns an editing SESSION (tldraw's `editingShapeId`,
+   * for instance) needs to close that session on the key and NOT on the blur,
+   * because the blur is not always the user leaving. Measured in this app,
+   * 2026-09-21: opening a block's title editor fires exactly one spurious
+   * blur-commit during the double-click that opened it — focus lands on the
+   * freshly mounted control inside React's synchronous flush for the
+   * pointerdown, and the rest of the gesture takes it away again — so a host
+   * that closed on every commit closed the session ~0ms after opening it and
+   * the title looked un-editable. `PortFace.tsx` records the same trap from
+   * the CodeEditor side, where the answer was to not wire the callback at all.
+   * Naming the route keeps the honest exit available instead.
+   *
+   * Nothing is at risk either way: this component is write-through, so
+   * `onChange` has already delivered every keystroke before any commit fires.
+   */
+  onCommit?: (value: string, via: EditableTextCommitRoute) => void;
   /** Fires on Escape. The host decides what reverting means. */
   onCancel?: () => void;
   /** Shown on the control, and at rest (muted, `data-placeholder`) when the text is empty. */
   placeholder?: string;
   /** The host may still pass `editing` while `readOnly` — the control just refuses input. */
   readOnly?: boolean;
+  /**
+   * Where the caret goes when the control mounts, as a character offset —
+   * INSTEAD of this component's own default (select-all on `single`,
+   * caret-end on `multi`). Out-of-range values clamp.
+   *
+   * WHY the host supplies it rather than this file computing it (backlog
+   * P-021, "the caret lands on the character you clicked"): the press that
+   * opens an editing session lands on the RESTING text, which this component
+   * is about to unmount. By the time the control exists there is nothing left
+   * under the pointer to ask about, and this component never sees the pointer
+   * event at all — the host owns the gesture that decided to start editing, so
+   * the host is the only place that can still answer. `components/
+   * caretGeometry.ts` is the shared way to turn that press into this number.
+   */
+  caretAt?: number;
   maxLength?: number;
   /**
    * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's EditableText
@@ -82,6 +115,9 @@ export interface EditableTextProps extends Omit<ComponentProps<"div">, "onChange
    */
   diagnostics?: Diagnostic[];
 }
+
+/** How an edit ended: the commit KEY, or focus leaving the control. */
+export type EditableTextCommitRoute = "enter" | "blur";
 
 type ControlElement = HTMLInputElement | HTMLTextAreaElement;
 
@@ -171,6 +207,7 @@ function EditableTextControl({
   placeholder,
   readOnly,
   maxLength,
+  caretAt,
   diagnostics,
   onChange,
   onCommit,
@@ -181,9 +218,10 @@ function EditableTextControl({
   placeholder?: string;
   readOnly: boolean;
   maxLength?: number;
+  caretAt?: number;
   diagnostics?: Diagnostic[];
   onChange?: (value: string) => void;
-  onCommit?: (value: string) => void;
+  onCommit?: (value: string, via: EditableTextCommitRoute) => void;
   onCancel?: () => void;
 }) {
   // Two typed refs rather than one `ControlElement` ref cast onto whichever
@@ -197,18 +235,45 @@ function EditableTextControl({
   useEffect(() => {
     const el = lines === "single" ? inputRef.current : textareaRef.current;
     if (!el) return;
-    el.focus();
-    // WHY select-all vs caret-end rather than one rule for both: a single
-    // line is almost always a short label a person means to REPLACE (select
-    // all is the shadcn/OS-native rename idiom); a multi-line body is almost
-    // always something a person means to CONTINUE (caret-end matches
-    // clicking into a text area you're already writing in).
-    if (lines === "single") {
-      el.select();
-    } else {
-      const end = el.value.length;
-      el.setSelectionRange(end, end);
-    }
+
+    const take = () => {
+      // Already ours: do nothing. Re-running `focus()` here would also re-run
+      // the selection below and yank a caret the person has since moved.
+      if (el.ownerDocument.activeElement === el) return;
+      el.focus();
+      // An explicit `caretAt` beats both defaults below — it is the host
+      // saying "the person aimed at this character", which is a stronger
+      // statement than either idiom. See the prop's own doc.
+      if (caretAt !== undefined) {
+        const at = Math.max(0, Math.min(caretAt, el.value.length));
+        el.setSelectionRange(at, at);
+        return;
+      }
+      // WHY select-all vs caret-end rather than one rule for both: a single
+      // line is almost always a short label a person means to REPLACE (select
+      // all is the shadcn/OS-native rename idiom); a multi-line body is almost
+      // always something a person means to CONTINUE (caret-end matches
+      // clicking into a text area you're already writing in).
+      if (lines === "single") {
+        el.select();
+      } else {
+        const end = el.value.length;
+        el.setSelectionRange(end, end);
+      }
+    };
+
+    // WHY TWICE, on mount and again on the next frame — the same two-step
+    // `codeEditor.tsx:400-419` already uses, for the same measured reason.
+    // A canvas host mounts this control INSIDE the pointer gesture that asked
+    // for it (React flushes a discrete pointerdown synchronously), and the
+    // rest of that gesture then takes focus back: measured in the app on
+    // 2026-09-21, a block's title editor mounted focused, was blurred before
+    // the double-click finished, and every keystroke after it went to the
+    // canvas — the shape was in an editing session with a control nobody was
+    // typing into. One frame later the gesture is over and the focus sticks.
+    take();
+    const frame = requestAnimationFrame(take);
+    return () => cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -251,7 +316,7 @@ function EditableTextControl({
       lines === "single" ? event.key === "Enter" : event.key === "Enter" && (event.metaKey || event.ctrlKey);
     if (isCommitKey) {
       event.preventDefault();
-      onCommit?.(event.currentTarget.value);
+      onCommit?.(event.currentTarget.value, "enter");
     }
     // Plain Enter on multi falls through untouched — the textarea's own
     // native newline, exactly as the contract asks. Escape is handled
@@ -260,7 +325,7 @@ function EditableTextControl({
 
   const handleBlur = (event: FocusEvent<ControlElement>) => {
     setFocused(false);
-    onCommit?.(event.currentTarget.value);
+    onCommit?.(event.currentTarget.value, "blur");
   };
 
   // WHY these four stop their OWN propagation rather than being gated by a
@@ -364,6 +429,7 @@ export function EditableText({
   placeholder = "",
   readOnly = false,
   maxLength,
+  caretAt,
   diagnostics,
   className,
   style,
@@ -464,6 +530,7 @@ export function EditableText({
         placeholder={placeholder}
         readOnly={readOnly}
         maxLength={maxLength}
+        caretAt={caretAt}
         diagnostics={diagnostics}
         onChange={onChange}
         onCommit={onCommit}
