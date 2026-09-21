@@ -119,14 +119,14 @@ change.
 |---|---|---|
 | **`components`** | The atoms that DRAW a scene element: `Block`, `Port`, `Trace`, `Bar`, `CodeEditor`, and their composites. | Props in, DOM out. No state beyond its own gesture. **Imports no canvas engine, and imports no scene.** |
 | **`scene`** | The ensemble: what exists, what connects, what nests, what identity is — plus every pure function over it (`topologicalOrder`, `findCycles`, `wiredPorts`, tidy, lint, rank). | `f(scene) → data`. **No React, no DOM, no engine, not even their types.** Runs in Node, which is why its tests are milliseconds. |
-| **`edit`** | The authoring surfaces: inspector panel, glyph picker, the quick-pick menu, style controls. *Not "menus"* — what unites them is that they **produce scene mutations**. | Reads a scene, renders with `components`, emits a mutation. Imports both other kits; nothing imports it. |
+| **`editor`** | The authoring surfaces: inspector panel, glyph picker, the quick-pick menu, style controls. *Not "menus"* — what unites them is that they **produce scene mutations**. | Reads a scene, renders with `components`, emits a mutation. Imports both other kits; nothing imports it. **One folder per editor component**, named for what it is, never for where it sits on screen. |
 
 The dependency DAG, which is the whole architecture in four lines:
 
 ```
   scene  ←──────  components        components never imports scene
     ↑                 ↑
-    └───── edit ──────┘             edit imports both; nothing imports edit
+    └───── editor ────┘             editor imports both; nothing imports editor
 ```
 
 `components` not importing `scene` is the load-bearing one. It is what lets the
@@ -136,7 +136,7 @@ a server-side render, and it is checked by grep in CI's stead — see
 
 ### The naming, and what it rejects
 
-`components` / `scene` / `edit` — atom, ensemble, mutation. Considered and
+`components` / `scene` / `editor` — atom, ensemble, mutation. Considered and
 rejected, recorded so it is not relitigated:
 
 - **`view`** for the first — says what it does, not what it is, and "UI kit" is
@@ -149,6 +149,13 @@ rejected, recorded so it is not relitigated:
   (Excalidraw's `ExcalidrawElement`, tldraw's shapes) — the side we did not
   pick, when we already ship `SceneNode` for it.
 - **`graph`** for the second — suggests charts, and does not cover placement.
+- **`edit`** for the third — the original name, used until 2026-09-21. Renamed to
+  `editor` by Zach: *"components, scene, editor are the new temrinology we want to
+  use"*. The rename also closes a doc/disk drift — the folder on disk was already
+  `editor/` while this file said `edit`, so two names were live at once. The
+  *reason* for the original choice still stands and still governs what belongs
+  here: what unites these surfaces is that they produce scene mutations, not that
+  they are menus.
 
 ### Consumers — two kinds, and the difference matters
 
