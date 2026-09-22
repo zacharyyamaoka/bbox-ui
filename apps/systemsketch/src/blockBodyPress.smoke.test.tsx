@@ -26,7 +26,7 @@ import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
 
-import { BLOCK_SHAPE_TYPE } from "./shapes/types";
+import { BLOCK_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "./shapes/types";
 import { canvasOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
 
 let app: MountedApp | null = null;
@@ -38,6 +38,20 @@ afterEach(() => {
 const ONE_PORT_EACH = {
   left: [{ id: "in", declaration: "frame" }],
   right: [{ id: "out", declaration: "pose" }],
+  top: [],
+  bottom: [],
+};
+
+// TWO ports on one wall — 2026-09-22, Codex audit: a single-port rail can
+// never actually exercise a reorder (nothing to reorder INTO), so the old
+// "a rail drag reorders" fixture proved something weaker than its own name
+// by construction, one port short of the thing it claimed to test.
+const TWO_PORTS_RIGHT = {
+  left: [],
+  right: [
+    { id: "first", declaration: "first" },
+    { id: "second", declaration: "second" },
+  ],
   top: [],
   bottom: [],
 };
@@ -90,6 +104,31 @@ async function dragFromScreen(screen: { x: number; y: number }, by: { dx: number
     sourcePosition: { x: Math.round(screen.x - rect.left), y: Math.round(screen.y - rect.top) },
     targetPosition: { x: Math.round(screen.x + by.dx), y: Math.round(screen.y + by.dy) },
   });
+}
+
+/**
+ * A real pointer-event drag between two exact viewport points, dispatched
+ * straight onto `from` — `BlockPort.stories.tsx`'s own `dragElement`, the
+ * proven way to trigger a dnd-kit `PointerSensor` reorder (its
+ * `activationConstraint: { distance: 4 }` needs a real intermediate move,
+ * which is why there is one below). `dragFromScreen`/`userEvent.dragAndDrop`
+ * above is target-relative (`canvasOf`'s own box) and tuned for tldraw's own
+ * gesture layer — right for a block body drag, but it never proved it could
+ * arm a SORTABLE drag, and measured live (2026-09-22) it does not.
+ */
+async function dragAlongRail(from: Element, start: { x: number; y: number }, end: { x: number; y: number }) {
+  const fire = (type: string, x: number, y: number) =>
+    from.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, button: 0, buttons: type === "pointerup" ? 0 : 1, pointerType: "mouse", clientX: x, clientY: y }),
+    );
+  fire("pointerdown", start.x, start.y);
+  await new Promise((r) => setTimeout(r, 30));
+  fire("pointermove", start.x, start.y + 10); // clears activationConstraint.distance
+  await new Promise((r) => setTimeout(r, 30));
+  fire("pointermove", end.x, end.y);
+  await new Promise((r) => setTimeout(r, 30));
+  fire("pointerup", end.x, end.y);
+  await new Promise((r) => setTimeout(r, 100));
 }
 
 /** Settled = the measurement pass (shapes/shared/measure.ts) has written the
@@ -221,28 +260,74 @@ describe("P-007 — a simple- or port-view block is grabbed by its BODY", () => 
   });
 
   it("a port rail still owns its own press: a rail drag reorders, it never moves the block", async () => {
+    // THE MISDIRECTION THIS REPLACES (Codex audit, 2026-09-22, on the
+    // version that pressed the CARD'S CENTRE): with only one port on the
+    // rail, that centre coincides with the port DOT — and `wireGesture.ts`
+    // (:362-395) captures a dot press and stops propagation before dnd-kit's
+    // sortable listener ever sees it. So the old assertion ("the block
+    // didn't move") was real, but it proved "a wire-start press doesn't
+    // move the block", not "a rail drag reorders and isn't a block drag" —
+    // a single-port rail can never exercise a reorder anyway, there being
+    // nothing to reorder into. This version presses the LABEL of a rail
+    // with two ports, well clear of the dot and its 40px hit halo
+    // (`port.tsx`'s `port-dot-halo`, "the REAL hit element" for the dot —
+    // its own comment), drags ALONG the rail past the neighbour, and reads
+    // the reorder off the shape's own `props.ports.right`, not off the DOM.
     app = await mountApp();
-    const id = makeBlock("railed()", 200, 200, { view: "port", w: 220, h: 160 });
-    const rail = await waitFor(() => document.querySelector<HTMLElement>(`[data-ss-node="${id}"] [data-slot="block-port-rail"]`), { what: "a port rail" });
+    const id = makeBlock("railed()", 200, 200, { view: "port", w: 220, h: 220, ports: TWO_PORTS_RIGHT });
+    const rail = await waitFor(() => document.querySelector<HTMLElement>(`[data-ss-node="${id}"] [data-slot="block-port-rail"][data-edge="right"]`), { what: "the right rail" });
+    const cards = await waitFor(() => {
+      const found = Array.from(rail.querySelectorAll<HTMLElement>('[data-slot="port-edge-card"]'));
+      return found.length === 2 ? found : null;
+    }, { what: "both port cards" });
+
+    const portIds = () => (app!.editor.getShape(id) as { props: { ports: { right: { id: string }[] } } }).props.ports.right.map((p) => p.id);
+    expect(portIds(), "the fixture's order before any gesture").toEqual(["first", "second"]);
+
     // The PORT'S OWN CARD, not the rail's raw bounding box — see
     // `blockPort.tsx`'s rail-wrapper `pointerEvents: "none"` (2026-09-22):
-    // the rail's box is `RAIL_CROSS_PX` wide and spans the whole body band
-    // so its cross centre lands on the wall and a `distribution: "aligned"`
-    // rail packs its one port from the band's start, so the box's own
-    // geometric centre is neither over the dot nor even reliably over the
-    // block — pressing there now falls through to whatever is underneath,
-    // by design (that fallthrough is P-003/this file's own fix for the
+    // the rail's box is `RAIL_CROSS_PX` wide and spans the whole body band,
+    // so its geometric centre is not reliably over any port at all —
+    // pressing there now falls through to whatever is underneath, by
+    // design (that fallthrough is P-003/this file's own fix for the
     // wireGrab bug the same box caused). `[data-slot="port-edge-card"]` is
     // the actual dnd-kit-sortable surface (`portEdge.tsx`'s
-    // `SortableSlotCard`), which re-arms `pointerEvents: "auto"` — pressing
-    // it is what "a rail drag reorders" has always meant.
-    const card = await waitFor(() => rail.querySelector<HTMLElement>('[data-slot="port-edge-card"]'), { what: "a port card" });
+    // `SortableSlotCard`), which re-arms `pointerEvents: "auto"`.
+    const firstCard = cards[0];
+    const label = firstCard.querySelector<HTMLElement>('[data-slot="port-label"]')!;
+    const labelRect = label.getBoundingClientRect();
+    const point = { x: labelRect.left + labelRect.width / 2, y: labelRect.top + labelRect.height / 2 };
+
+    // Mechanical proof the press really lands on the label — clear of the
+    // dot AND its hit halo (`port-dot-halo` is a CHILD of `port-dot`, so
+    // `.closest` catches landing on either) — or this proves nothing about
+    // a rail reorder.
+    const hitAtPress = document.elementFromPoint(point.x, point.y);
+    expect(hitAtPress?.closest('[data-slot="port-dot"]'), "the press must not resolve to the dot or its halo").toBeNull();
+    expect(firstCard.contains(hitAtPress), "the press must still land inside this port's own card").toBe(true);
+
     const before = app.editor.getShapePageBounds(id)!;
-    const cardRect = card.getBoundingClientRect();
-    await dragFromScreen({ x: cardRect.left + cardRect.width / 2, y: cardRect.top + cardRect.height / 2 }, { dx: 60, dy: 60 });
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    const wiresBefore = app.editor.getCurrentPageShapes().filter((s) => s.type === WIRE_SHAPE_TYPE).length;
+
+    // Drag ALONG the rail (the column axis) onto the second card's own
+    // centre — a real dnd-kit reorder gesture, never diagonal or off the
+    // rail. Aimed at the CENTRE and not past it: the track itself is also a
+    // registered `useDroppable` (`portEdge.tsx:1763`, `id: containerId`), so
+    // overshooting past the last card's own box hands `closestCenter` the
+    // whole track as the closer droppable instead of the neighbour's own
+    // slot — measured live, that resolved `over` to `"right-rail"`, not
+    // `"second"`, and the reorder silently no-op'd.
+    const secondRect = cards[1].getBoundingClientRect();
+    const target = { x: point.x, y: secondRect.top + secondRect.height / 2 };
+    await dragAlongRail(firstCard, point, target);
+    await waitFor(() => (portIds()[0] === "second" ? true : null), { what: "the rail order to swap" });
+
     const after = app.editor.getShapePageBounds(id)!;
+    const wiresAfter = app.editor.getCurrentPageShapes().filter((s) => s.type === WIRE_SHAPE_TYPE).length;
+
+    expect(portIds(), "the drag reordered the rail exactly as a swap would").toEqual(["second", "first"]);
     expect({ x: after.x, y: after.y }, "the rail is dnd-kit's, not the host's").toEqual({ x: before.x, y: before.y });
+    expect(wiresAfter, "a label drag must never start a wire").toBe(wiresBefore);
   });
 
   it("GUARD: the rail's empty margin, outside the block's wall and clear of any dot, passes a press through to the canvas", async () => {
