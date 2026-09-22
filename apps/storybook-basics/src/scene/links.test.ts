@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { addLink, deleteWithLinks, edgeRef, linkedClosure, linksOf, nodeRef, parseRef, portRef, pruneLinks, removeLink } from "./links";
+import { addLink, deleteWithLinks, edgeRef, linkedClosure, linksOf, nodeRef, parseRef, portRef, pruneLinks, removeLink, substituteMember } from "./links";
 import type { BlockScene } from "./scene";
 
 type NodeData = { name?: string; ports?: string[] };
@@ -74,6 +74,38 @@ describe("addLink / removeLink", () => {
   it("linksOf lists every set a ref belongs to, in scene order", () => {
     expect(linksOf(scene(), portRef("frame", "p1")).map((link) => link.id)).toEqual(["L-a", "L-b"]);
     expect(linksOf(scene(), edgeRef("free"))).toEqual([]);
+  });
+});
+
+describe("substituteMember — what a ref named became these ones (judge round 3, finding 5)", () => {
+  it("rewrites EVERY set that names the ref, in place, deduplicated", () => {
+    // `p1` sits in two sets in this fixture, which is the whole point: the
+    // old `find`-the-first-one rewrite left the second naming a dead port.
+    const s = scene();
+    const next = substituteMember(s, portRef("frame", "p1"), [portRef("frame", "p1a"), edgeRef("mid"), portRef("frame", "p1b")]);
+    expect(next.links).toEqual([
+      { id: "L-a", members: [edgeRef("a~0"), portRef("frame", "p1a"), edgeRef("mid"), portRef("frame", "p1b"), edgeRef("a~1")] },
+      { id: "L-b", members: [edgeRef("b~0"), portRef("frame", "p1a"), edgeRef("mid"), portRef("frame", "p1b"), edgeRef("b~1")] },
+    ]);
+    // A replacement already in the set collapses instead of doubling — how
+    // two spliced halves become one cable on unsplit.
+    expect(substituteMember(s, portRef("frame", "p1"), [edgeRef("a~0")]).links![0].members).toEqual([edgeRef("a~0"), edgeRef("a~1")]);
+  });
+
+  it("an empty replacement drops the member, and a set left under two members goes with it", () => {
+    const s = addLink(scene(), { id: "pair", members: [portRef("frame", "p2"), nodeRef("kid")] });
+    expect(substituteMember(s, portRef("frame", "p2"), []).links!.map((link) => link.id)).toEqual(["L-a", "L-b"]);
+    expect(substituteMember(s, portRef("frame", "p1"), []).links!.map((link) => link.members)).toEqual([
+      [edgeRef("a~0"), edgeRef("a~1")],
+      [edgeRef("b~0"), edgeRef("b~1")],
+      [portRef("frame", "p2"), nodeRef("kid")],
+    ]);
+  });
+
+  it("the SAME scene when no set names the ref — and the key disappears when the last set does", () => {
+    const s = scene();
+    expect(substituteMember(s, edgeRef("free"), [edgeRef("x")])).toBe(s);
+    expect(substituteMember({ links: [{ id: "solo", members: [nodeRef("a"), nodeRef("b")] }] }, nodeRef("a"), []).links).toBeUndefined();
   });
 });
 
