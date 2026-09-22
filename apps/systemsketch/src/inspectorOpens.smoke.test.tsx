@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { BlockShape } from "./shapes/block/BlockShapeUtil";
 import { createCornerBlock } from "./shapes/region/cornerBlock";
-import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE } from "./shapes/types";
+import { BLOCK_SHAPE_TYPE, BLOCK_TOOL_ID, REGION_SHAPE_TYPE } from "./shapes/types";
 import { canvasOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
 
 let app: MountedApp | null = null;
@@ -80,6 +80,24 @@ async function inspectorNaming(name: string): Promise<HTMLElement> {
   return waitFor(() => (subjectText() === name ? inspectorPanel() : null), { what: `the Inspector naming ${name}` });
 }
 
+/** Run `during` and report whether ANY right-rail panel was in the DOM at any
+ *  moment of it — a MutationObserver, so a panel that opened mid-gesture and
+ *  closed again before the end is still caught. */
+async function railAppearedDuring(during: () => Promise<void>): Promise<boolean> {
+  let seen = railPanel() !== null;
+  const watch = new MutationObserver(() => {
+    if (railPanel()) seen = true;
+  });
+  watch.observe(app!.root, { childList: true, subtree: true });
+  try {
+    await during();
+    await settle();
+  } finally {
+    watch.disconnect();
+  }
+  return seen || railPanel() !== null;
+}
+
 /** Let any selection-driven React update land before asserting an absence. */
 async function settle() {
   for (let i = 0; i < 4; i += 1) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -114,6 +132,42 @@ describe("clicking an object opens the right-hand Inspector on it", () => {
     // block's own stored description.
     const field = inspectorPanel()!.querySelector<HTMLTextAreaElement>('[data-testid="ss-inspector-description-text"]');
     expect(field?.value).toBe(DESCRIPTION);
+  });
+
+  it("the panel it opens is on the RIGHT edge of the viewport, measured", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate()", 300, 300);
+    await clickBlock(id);
+    const panel = await inspectorNaming("estimate()");
+    const rect = panel.getBoundingClientRect();
+    expect(rect.width, "painted").toBeGreaterThan(100);
+    expect(rect.left, "right half of the viewport").toBeGreaterThan(innerWidth / 2);
+    expect(innerWidth - rect.right, "hugs the right edge").toBeLessThanOrEqual(24);
+    expect(innerWidth - rect.right, "not past it").toBeGreaterThanOrEqual(0);
+  });
+
+  it("closing the panel by hand, then clicking the SAME still-selected block, opens it again", async () => {
+    app = await mountApp();
+    const id = placeBlock("estimate()", 300, 300);
+    await clickBlock(id);
+    await inspectorNaming("estimate()");
+    // Closed by hand WITHOUT touching the selection: the strip's Frames
+    // launcher swaps the rail to Frames, and pressing it again closes it.
+    // WHY not the panel's own ✕: measured at 1400x900, tldraw's `SharePanel`
+    // slot (`PyblocksBackendPanel`, `data-testid="ss-backend"`) paints ON TOP
+    // of it — `elementFromPoint` at the ✕'s centre is the backend widget and
+    // Playwright times out on "intercepts pointer events". Escape is no good
+    // here either: it also clears the selection, which is not this case.
+    await pressStrip("ss-status-frames");
+    await waitFor(() => app!.root.querySelector('[data-slot="panel-shell"][data-surface="frames"]'), { what: "the rail swapped to Frames" });
+    await pressStrip("ss-status-frames");
+    await waitFor(() => (railPanel() === null ? true : null), { what: "the rail closed by hand" });
+    expect(app.editor.getSelectedShapeIds(), "the block is still selected").toEqual([id]);
+
+    await clickBlock(id);
+
+    await inspectorNaming("estimate()");
+    expect(app.editor.getSelectedShapeIds()).toEqual([id]);
   });
 
   it("clicking another block while it is open retargets the SAME panel — no close and reopen", async () => {
@@ -241,21 +295,29 @@ describe("selecting never hijacks a rail showing Frames or Problems", () => {
 });
 
 describe("the canvas gestures around a click are intact", () => {
-  it("a press-drag on a block still moves it by the distance dragged", async () => {
+  it("a press-drag on an UNSELECTED block moves it by the distance dragged, and never opens the Inspector", async () => {
     app = await mountApp();
     const id = placeBlock("estimate()", 300, 300);
     const start = await bodyPointOf(id);
+    await settle();
+    expect(app.editor.getSelectedShapeIds(), "unselected before the press").toEqual([]);
     const before = { x: app.editor.getShape(id)!.x, y: app.editor.getShape(id)!.y };
     const element = document.elementFromPoint(start.x, start.y)!;
     const rect = element.getBoundingClientRect();
-    await userEvent.dragAndDrop(element, canvasOf(app.root), {
-      sourcePosition: { x: Math.round(start.x - rect.left), y: Math.round(start.y - rect.top) },
-      targetPosition: { x: Math.round(start.x + 120), y: Math.round(start.y + 60) },
+    // A drag is a move, not a click: the rail must not appear at ANY point of
+    // it — not on the press that selects the block, not on release.
+    const opened = await railAppearedDuring(async () => {
+      await userEvent.dragAndDrop(element, canvasOf(app!.root), {
+        sourcePosition: { x: Math.round(start.x - rect.left), y: Math.round(start.y - rect.top) },
+        targetPosition: { x: Math.round(start.x + 120), y: Math.round(start.y + 60) },
+      });
+      await waitFor(() => (app!.editor.getShape(id)!.x !== before.x ? true : null), { what: "the block moved" });
     });
-    await waitFor(() => (app!.editor.getShape(id)!.x !== before.x ? true : null), { what: "the block moved" });
     const after = app.editor.getShape(id)!;
     expect(Math.abs(after.x - before.x - 120)).toBeLessThanOrEqual(2);
     expect(Math.abs(after.y - before.y - 60)).toBeLessThanOrEqual(2);
+    expect(app.editor.getSelectedShapeIds(), "the drag did select it").toEqual([id]);
+    expect(opened, "the rail stayed closed through the drag and after release").toBe(false);
   });
 
   it("a marquee over several blocks does not open the Inspector", async () => {
@@ -325,10 +387,11 @@ describe("the canvas gestures around a click are intact", () => {
 });
 
 describe("a region is inspected through its corner card", () => {
-  function placeRegionWithCard(): { regionId: TLShapeId; cardId: TLShapeId } {
+  function placeRegionWithCard(kind: "while" | "for" = "while"): { regionId: TLShapeId; cardId: TLShapeId } {
     const regionId = createShapeId();
-    app!.editor.createShape({ id: regionId, type: REGION_SHAPE_TYPE, x: 240, y: 180, props: { kind: "while", name: "While Loop", w: 460, h: 300 } } as never);
-    const cardId = createCornerBlock(app!.editor, regionId, "while");
+    const name = kind === "for" ? "For Loop" : "While Loop";
+    app!.editor.createShape({ id: regionId, type: REGION_SHAPE_TYPE, x: 240, y: 180, props: { kind, name, w: 460, h: 300 } } as never);
+    const cardId = createCornerBlock(app!.editor, regionId, kind);
     if (!cardId) throw new Error("no corner card minted");
     return { regionId, cardId };
   }
@@ -352,20 +415,20 @@ describe("a region is inspected through its corner card", () => {
     expect((app.editor.getShape(regionId)!.props as Record<string, unknown>).description, "nothing written to the region").toBeUndefined();
   });
 
-  it("a click on the corner card opens the Inspector on the card, whichever of card or region it selects", async () => {
+  it("a click on a For Loop's corner card selects exactly the REGION and opens the Inspector on the card", async () => {
     app = await mountApp();
-    const { regionId, cardId } = placeRegionWithCard();
+    const { regionId, cardId } = placeRegionWithCard("for");
     const card = await cardOf(cardId);
     const header = await waitFor(() => card.querySelector<HTMLElement>(':scope > [data-slot="block-header"]'), { what: "the card header" });
     const rect = header.getBoundingClientRect();
     // Right end of the header: clear of the glyph (which opens its own picker).
     await clickAtScreen({ x: rect.right - 12, y: rect.top + rect.height / 2 });
 
-    await waitFor(() => {
-      const selected = app!.editor.getSelectedShapeIds();
-      return selected.length === 1 && (selected[0] === cardId || selected[0] === regionId) ? true : null;
-    }, { what: "the card or its region selected" });
-    await inspectorNaming("While Loop");
+    // Lane A's redirect (`shapes/region/cornerBlock.ts`): a press on the card
+    // selects its REGION.
+    await waitFor(() => (app!.editor.getSelectedShapeIds().length > 0 ? true : null), { what: "a selection" });
+    expect(app.editor.getSelectedShapeIds()).toEqual([regionId]);
+    await inspectorNaming("For Loop");
   });
 
   it("a directly selected corner card is its own subject", async () => {
@@ -409,6 +472,25 @@ describe("objects the Inspector has nothing to say about do not open it", () => 
     await waitFor(() => (app!.editor.getSelectedShapeIds()[0] === regionId ? true : null), { what: "the plain region selected" });
     await settle();
     expect(railPanel()).toBeNull();
+  });
+
+  it("placing a block with the dock's Block tool (a real click, tool armed) does not open it", async () => {
+    app = await mountApp();
+    const face = await waitFor(() => app!.root.querySelector<HTMLElement>('[data-testid="ss-dock-family-system"]'), { what: "the dock's system face" });
+    await userEvent.click(face);
+    await waitFor(() => app!.editor.getCurrentToolId() === BLOCK_TOOL_ID, { what: "the Block tool armed" });
+    const canvas = canvasOf(app.root);
+    const rect = canvas.getBoundingClientRect();
+
+    const opened = await railAppearedDuring(async () => {
+      await userEvent.click(canvas, { position: { x: Math.round(rect.width * 0.4), y: Math.round(rect.height * 0.4) } });
+      const placed = await waitFor(() => app!.editor.getCurrentPageShapes().find((s) => s.type === BLOCK_SHAPE_TYPE), { what: "the placed block" });
+      // The stock tool selects what it created — exactly one inspectable
+      // shape, so only the current-tool guard keeps the rail shut.
+      await waitFor(() => (app!.editor.getSelectedShapeIds()[0] === placed.id ? true : null), { what: "the new block selected" });
+      await waitFor(() => app!.editor.getCurrentToolId() === "select", { what: "back to select" });
+    });
+    expect(opened).toBe(false);
   });
 
   it("a programmatic selection is not a click and does not open it", async () => {

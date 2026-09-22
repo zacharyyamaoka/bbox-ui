@@ -50,12 +50,15 @@ function sameIds(a: readonly TLShapeId[], b: readonly TLShapeId[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
 
-/** A press or a release, or a click tldraw's click manager derived from them —
- *  never a `pointer_move` (a marquee grows its selection on moves). */
-function isClickEvent(info: TLEventInfo): boolean {
-  if (info.type === "click") return true;
-  return info.type === "pointer" && (info.name === "pointer_down" || info.name === "pointer_up");
-}
+/**
+ * The select tool's two "pressed, not yet moved" states. A pointer_up that
+ * arrives in one of these is a completed CLICK; one that arrives in
+ * `select.translating`, `select.brushing`, a resize, a rotate — or in any
+ * other tool entirely (a dock tool placing a block) — is not.
+ * Ids: tldraw 5.3.2 `SelectTool/childStates/PointingShape.ts` /
+ * `PointingSelection.ts`, `static override id`.
+ */
+const CLICK_STATES = ["select.pointing_shape", "select.pointing_selection"] as const;
 
 /**
  * Keep the rail following the canvas selection. `open` / `setOpen` are
@@ -66,14 +69,17 @@ function isClickEvent(info: TLEventInfo): boolean {
  * user opened themselves stay open on its empty state when they deselect.
  *
  * Opening:
- *   - only from a POINTER press/release in the select tool, and only when the
- *     result is one inspectable shape. WHY pointer-gated rather than on every
- *     selection change: the ask is "when we click on objects". Creating a block
- *     with the dock tool, a Frames row focusing a region, a quick-switcher jump
- *     and every programmatic `editor.select` also change the selection, and
- *     none of them is a click on the object. A marquee is excluded too — it
- *     grows its selection on `pointer_move`, so a drag across several blocks
- *     never passes through "one block, opened".
+ *   - only when a CLICK COMPLETES in the select tool, and only when the result
+ *     is one inspectable shape. WHY on the completed click and not on the
+ *     selection change: the ask is "when we click on objects". A press-drag on
+ *     an unselected block selects it on `pointer_down`, before tldraw has
+ *     decided it is a drag — opening then pops the rail open mid-drag, and a
+ *     drag is a move, not a click. And clicking a block that is ALREADY
+ *     selected (after closing the panel by hand) changes no selection at all,
+ *     yet it is still a click on the object and must open it. Creating a block
+ *     with a dock tool, a Frames row focusing a region, a quick-switcher jump
+ *     and every programmatic `editor.select` are not clicks either. A marquee
+ *     ends in `select.brushing`, never in a click state.
  *   - only when the rail is CLOSED. WHY never switch a rail that is already
  *     showing Frames or Problems: both of them select shapes themselves
  *     (Frames' focus, Problems' reveal), and even a plain canvas click while
@@ -102,52 +108,44 @@ export function useInspectorFollowsSelection(
   rail.current = { open, setOpen };
 
   useEffect(() => {
-    // The pointer event tldraw is dispatching right now, if any. Store
-    // after-change handlers run at the end of the atomic operation the event
-    // is handled in (`@tldraw/store` `flushAtomicCallbacks`), still inside the
-    // same synchronous dispatch, so a microtask is enough to tell "this change
-    // came from that click" from a later programmatic write.
-    //
-    // WHY not `editor.inputs.isPointing`: tldraw clears it BEFORE handing
-    // `pointer_up` to the state chart (Editor.ts's `pointer_up` case), and a
-    // click that selects on release — a member of a multi-selection, a
-    // host-side reselection like a corner card resolving to its region — would
-    // read as "not a click".
-    let clicking: TLEventInfo | null = null;
+    // Ordering, from tldraw 5.3.2 `Editor._flushEventForTick`: `before-event`
+    // is emitted BEFORE the state chart handles the event, and `event` AFTER.
+    // So `before-event` for a pointer_up still sees the state the press left
+    // the tool in (pointing = a click, translating = a drag), and `event` sees
+    // the selection that click produced — including a host-side redirect made
+    // on pointer_down, like a corner card resolving to its region
+    // (`shapes/region/cornerBlock.ts`).
+    let clickCompleting: TLEventInfo | null = null;
     const onBeforeEvent = (info: TLEventInfo) => {
-      if (!isClickEvent(info)) return;
-      clicking = info;
-      queueMicrotask(() => {
-        if (clicking === info) clicking = null;
-      });
+      if (info.type !== "pointer" || info.name !== "pointer_up") return;
+      clickCompleting = editor.isInAny(...CLICK_STATES) ? info : null;
     };
-    editor.on("before-event", onBeforeEvent);
-
-    const stop = editor.sideEffects.registerAfterChangeHandler("instance_page_state", (prev, next) => {
-      if (sameIds(prev.selectedShapeIds, next.selectedShapeIds)) return;
+    const onEvent = (info: TLEventInfo) => {
+      if (info !== clickCompleting) return;
+      clickCompleting = null;
       const { open: current, setOpen: set } = rail.current;
-
-      if (next.selectedShapeIds.length === 0) {
-        if (current === "inspector" && openedBySelection.current) {
-          openedBySelection.current = false;
-          set(null);
-        }
-        return;
-      }
-
       if (current !== null) return;
-      if (!clicking) return;
-      if (editor.getCurrentToolId() !== "select") return;
-      if (editor.isInAny("select.brushing", "select.scribble_brushing")) return;
-      if (next.selectedShapeIds.length !== 1) return;
-      if (!inspectorSubjectOf(editor, editor.getShape(next.selectedShapeIds[0]))) return;
-
+      if (!inspectorSubjectOf(editor, editor.getOnlySelectedShape())) return;
       openedBySelection.current = true;
       set("inspector");
+    };
+    editor.on("before-event", onBeforeEvent);
+    editor.on("event", onEvent);
+
+    // Closing still follows the SELECTION, whatever emptied it.
+    const stop = editor.sideEffects.registerAfterChangeHandler("instance_page_state", (prev, next) => {
+      if (sameIds(prev.selectedShapeIds, next.selectedShapeIds)) return;
+      if (next.selectedShapeIds.length !== 0) return;
+      const { open: current, setOpen: set } = rail.current;
+      if (current === "inspector" && openedBySelection.current) {
+        openedBySelection.current = false;
+        set(null);
+      }
     });
 
     return () => {
       editor.off("before-event", onBeforeEvent);
+      editor.off("event", onEvent);
       stop();
     };
   }, [editor]);
