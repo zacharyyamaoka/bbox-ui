@@ -82,14 +82,23 @@ export function siteActionsFor(
 const STATUS_POLL_MS = 5000;
 
 /**
- * `siteActionsFor`, live: same rows, same order, same ids — `sites.test.ts`
- * keeps asserting the plain function's exact labels — but each row's
- * `label` grows a status suffix (`describeStatus`) and a dead loopback row
- * is `disabled` rather than left to open a connection-refused tab (Zach,
- * 2026-09-22: "Rows must degrade honestly... if nothing is listening on the
- * port, say so in the row rather than opening a connection-refused tab").
+ * `siteActionsFor`, live: same rows, same order, same ids, and — since
+ * 2026-09-22's regression — the exact same `label` string, always.
+ * `sites.smoke.test.tsx` keys a row by its rendered name and clicks it by
+ * that name; folding the channel badge into `label` broke both assertions
+ * ("the row is no longer named 'Open Storybook'"). The badge is instead a
+ * separate `MenuAction.badge` node — its own `data-slot="site-channel-badge"`
+ * element, rendered by the trunk AFTER the label
+ * (`apps/storybook-basics/src/editor/chromeBar.tsx`'s `BurgerMenuEntry`) —
+ * so nothing about the row's name changes no matter what the badge says.
  *
- * WHY a hook and not a wrapper around the plain function: the label has to
+ * A dead loopback row is `disabled` rather than left to open a
+ * connection-refused tab (Zach, 2026-09-22), but ONLY once a probe has
+ * POSITIVELY reported it dead — every row starts (and stays, while a probe
+ * is slow or never resolves) enabled, because "unknown" is not "dead" and a
+ * stalled network call must never make a row unclickable.
+ *
+ * WHY a hook and not a wrapper around the plain function: the badge has to
  * change as `/api/health` answers come back and 5s later go stale, which
  * needs state and an effect — `siteActionsFor` itself stays synchronous and
  * untouched (see siteStatus.ts's own header for why the two are split).
@@ -133,7 +142,16 @@ export function useSiteActionsWithStatus(
         const mismatch = statusMismatchesOwn(status, ownStatus);
         return {
           ...row,
-          label: suffix ? `${row.label} ${suffix}${mismatch ? " — different from this board" : ""}` : row.label,
+          badge: suffix
+            ? createElement(
+                "span",
+                { "data-slot": "site-channel-badge" },
+                mismatch ? `${suffix} · different from this board` : suffix,
+              )
+            : undefined,
+          // `status.kind === "dead"` is the ONLY thing that disables a row —
+          // "unknown" (no probe answer yet, or none in flight) is never
+          // treated as dead.
           disabled: row.disabled || status.kind === "dead",
         };
       }),
