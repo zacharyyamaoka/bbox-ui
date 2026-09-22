@@ -59,6 +59,7 @@
  */
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { Diagnostic } from "./highlighter";
 // The visual-variant registry (lane `ports`, 2026-09-19): pinned per
@@ -66,7 +67,7 @@ import type { Diagnostic } from "./highlighter";
 import type { PortVariantId } from "../skin/portVariants";
 import { LabeledPort } from "./labeledPort";
 import { Port, type PortState } from "./port";
-import { BLOCK_SIDES, type BlockSide, type PortSize } from "./port.layout";
+import { BLOCK_SIDES, PORT_RING_OVERHANG_PX, type BlockSide, type PortSize } from "./port.layout";
 import { PortEdge, type PortEdgeGroupMode, type PortEdgeItem, type PortEdgeProps } from "./portEdge";
 import type { Distribution } from "./portEdge.layout";
 import {
@@ -82,6 +83,20 @@ import {
   type RailPlan,
 } from "./blockPort.layout";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
+import { MutationLineMark, SideEffectDivider } from "./sideEffectMarks";
+import {
+  hasSideEffects,
+  mutationRoute,
+  partitionMutations,
+  sideEffectWallLayout,
+  type BlockSideEffects,
+  type MutationLink,
+  type MutationRoute,
+  type SideEffectDirection,
+  type SideEffectPort,
+} from "./sideEffects.layout";
+
+export type { BlockSideEffects, MutationLink, SideEffectDirection, SideEffectPort } from "./sideEffects.layout";
 
 export type { BlockPortLayout, BlockView } from "./blockPort.layout";
 // D-5: the header-content inset a caller applies to its OWN header (see
@@ -191,6 +206,28 @@ export interface BlockPortProps {
    * small pair); set it to pin this block, as the variant gallery does.
    */
   variant?: PortVariantId;
+  /**
+   * Side-effect ports (./sideEffects.layout.ts) — drawn ON the top wall,
+   * inputs left of a centre divider tick and outputs right of it. Omit (the
+   * normal case) and nothing on the top wall changes: no divider, no row.
+   *
+   * WHY a sibling of `edges` and not a fifth `edges` key or a `top` rail:
+   * a side effect is not an ordinary top-wall port. Its seat is a rule
+   * about DIRECTION (Zach, 2026-09-22: "Splits down the middle… put it
+   * towards the back end"), not a `PortEdge` distribution a caller could
+   * reorder or respace, and the divider between the two halves is not
+   * something a `PortEdge` rail knows how to draw. Keyed by direction for
+   * the same reason `edges` is keyed by side (see `BlockSideEffects`).
+   */
+  sideEffects?: BlockSideEffects;
+  /**
+   * "This input is mutated and leaves through that output side effect" —
+   * each drawn as a dotted line INSIDE the block, from the input port's
+   * dot (a `left`-wall item) to the output effect's dot. A link that names
+   * anything else is not drawn, and its `from→to` is listed on this
+   * wrapper's `data-unresolved-mutations`.
+   */
+  mutations?: readonly MutationLink[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -347,6 +384,8 @@ export function BlockPort({
   id,
   functionPort = false,
   variant,
+  sideEffects,
+  mutations,
 }: BlockPortProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const collapse = collapsePorts ?? view === "simple";
@@ -363,12 +402,19 @@ export function BlockPort({
   // `outputStart = slot + inputs.length`, i.e. the INPUT count).
   const leadCount = edges.left?.items.length ?? 0;
 
+  const mutationSplit = partitionMutations(
+    mutations,
+    sideEffects,
+    (edges.left?.items ?? []).map((item) => item.id),
+  );
+
   return (
     <div
       data-slot="block-port"
       data-view={view}
       data-port-layout={portLayout}
       data-block-id={id}
+      data-unresolved-mutations={mutations ? mutationSplit.unresolved.map((link) => `${link.from}→${link.to}`).join(",") : undefined}
       ref={wrapperRef}
       // The isolation invariant (paintOrder.ts): this wrapper emits the
       // `portDot` tier below (the function port and every rail), so it
@@ -404,7 +450,256 @@ export function BlockPort({
           return <BlockPortRail key={side} edge={side} spec={spec} plan={finalPlan} bands={bands} diameter={diameter} variant={variant} />;
         })}
       {bands && functionPort && <BlockFunctionPort bands={bands} diameter={diameter} variant={variant} />}
+      {bands && hasSideEffects(sideEffects) && <BlockSideEffectRail effects={sideEffects!} bands={bands} diameter={diameter} variant={variant} />}
+      {bands && mutationSplit.resolved.length > 0 && (
+        <MutationLines wrapperRef={wrapperRef} links={mutationSplit.resolved} bands={bands} measureKey={layoutKey} />
+      )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Side effects — the top wall's own row                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every side-effect dot and the divider tick, on the Block's top border
+ * line. Positions come from `sideEffectWallLayout` alone.
+ *
+ * WHY this element is stamped `data-slot="block-port-rail"` +
+ * `data-edge="top"` although it is not a `PortEdge`: that pair is the
+ * kit's one published answer to "which wall is this dot on", and three
+ * readers already ask it — `wireLayer.tsx`'s `railEdgeOf` (a wire leaves
+ * or arrives along the wall's normal), `hosts/portDotSightings.ts`, and
+ * the drag policy's `"block-port-rail": "owns-pointer"`. Stamped, an
+ * effect dot is wireable, host-resolvable and pointer-owning with zero
+ * code in any of them. `data-rail-kind` is what tells the two kinds of
+ * top-wall row apart for anyone who needs to.
+ *
+ * WHY it paints at `portDot`, above the Block, like every rail: the dots
+ * straddle the border and the labels and divider sit wholly OUTSIDE it,
+ * so inside the Block's `overflow: clip` card they would be cut in half
+ * or vanish, and under the header chrome they would not be hittable.
+ */
+function BlockSideEffectRail({
+  effects,
+  bands,
+  diameter,
+  variant,
+}: {
+  effects: BlockSideEffects;
+  bands: BlockBands;
+  diameter?: PortSize;
+  variant?: PortVariantId;
+}) {
+  const inputs = effects.inputs ?? [];
+  const outputs = effects.outputs ?? [];
+  const layout = sideEffectWallLayout(bands.blockWidth, inputs.length, outputs.length);
+  return (
+    <div
+      data-slot="block-port-rail"
+      data-edge="top"
+      data-rail-kind="side-effects"
+      style={{ position: "absolute", left: bands.blockLeft, top: bands.blockTop, width: bands.blockWidth, height: 0, zIndex: paintTier("portDot") }}
+    >
+      <SideEffectDivider x={layout.dividerX} />
+      {inputs.map((effect, index) => (
+        <SideEffectDot key={effect.id} effect={effect} direction="input" x={layout.inputXs[index]} diameter={diameter} variant={variant} />
+      ))}
+      {outputs.map((effect, index) => (
+        <SideEffectDot key={effect.id} effect={effect} direction="output" x={layout.outputXs[index]} diameter={diameter} variant={variant} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One side-effect dot, centred on the wall line at `x`. The holder is
+ * EXACTLY the dot's box (the label is absolutely positioned off it, the
+ * same pattern as `renderCollapsed`'s count below), so a wire resolving
+ * `[data-port-id]` measures the dot's own centre and nothing else.
+ */
+function SideEffectDot({
+  effect,
+  direction,
+  x,
+  diameter,
+  variant,
+}: {
+  effect: SideEffectPort;
+  direction: SideEffectDirection;
+  x: number;
+  diameter?: PortSize;
+  variant?: PortVariantId;
+}) {
+  return (
+    <span
+      data-slot="block-side-effect"
+      data-side-effect-direction={direction}
+      data-port-id={effect.id}
+      style={{ position: "absolute", left: x, top: 0, display: "flex", transform: "translate(-50%, -50%)" }}
+    >
+      <Port state={effect.state ?? "empty"} diameter={diameter} variant={variant} />
+      {effect.label !== undefined && (
+        <span
+          data-slot="block-side-effect-label"
+          style={{
+            position: "absolute",
+            // Beside the dot and wholly above the wall: its bottom edge
+            // clears the wall line (the dot's own centre) by the ring's
+            // overhang, and it starts past the dot's painted ring.
+            //
+            // WHY an input's label reads LEFT of its dot and an output's
+            // RIGHT: both grow AWAY from the divider. Measured on the
+            // gallery, an input label written rightward ("input port" at
+            // the quarter point of a 240px wall) ran straight through the
+            // divider tick into the outputs' half — the one ambiguity the
+            // divider exists to remove.
+            ...(direction === "input" ? { right: `calc(100% + ${PORT_RING_OVERHANG_PX + 2}px)` } : { left: `calc(100% + ${PORT_RING_OVERHANG_PX + 2}px)` }),
+            bottom: `calc(50% + ${PORT_RING_OVERHANG_PX}px)`,
+            fontSize: 11,
+            lineHeight: 1,
+            // `pre`, not `nowrap`: every authored character — a double
+            // space included — survives exactly as typed.
+            whiteSpace: "pre",
+            color: "var(--foreground)",
+            pointerEvents: "none",
+          }}
+        >
+          {effect.label}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Mutation lines — drawn INSIDE the Block, under its content           */
+/* ------------------------------------------------------------------ */
+
+/** The dot a mutation end sits on, owned by THIS wrapper (never a member's
+ *  own nested BlockPort — the same ownership rule `wireLayer.tsx`'s
+ *  `resolveDot` applies). */
+function ownDot(wrapper: HTMLElement, selector: string): HTMLElement | null {
+  for (const holder of wrapper.querySelectorAll<HTMLElement>(selector)) {
+    if (holder.closest('[data-slot="block-port"]') !== wrapper) continue;
+    return holder.querySelector<HTMLElement>('[data-slot="port-dot"]');
+  }
+  return null;
+}
+
+interface DrawnMutation {
+  link: MutationLink;
+  route: MutationRoute;
+}
+
+function sameRoutes(a: DrawnMutation[], b: DrawnMutation[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (drawn, i) =>
+        drawn.link.from === b[i].link.from &&
+        drawn.link.to === b[i].link.to &&
+        drawn.route.points.every((p, j) => Math.abs(p.x - b[i].route.points[j].x) < 0.25 && Math.abs(p.y - b[i].route.points[j].y) < 0.25),
+    )
+  );
+}
+
+/**
+ * Every resolved mutation link as a dotted orthogonal line with a small
+ * arrowhead at the effect end, routed by `mutationRoute`.
+ *
+ * WHY it is portalled INTO the Block, at the `underlay` tier, when every
+ * other thing this wrapper draws sits beside the Block above it: the line
+ * runs through the Block's interior, and in an expanded Block that
+ * interior is member cards. Drawn in this wrapper it could only paint
+ * wholly above the Block (over every member) or wholly below it (under the
+ * card's own opaque surface, i.e. invisible) — the Block is an isolated
+ * root, so nothing outside it can slot in between its surface and its
+ * content. Inside it, a negative tier paints after the card's own
+ * background and before the header, body and members, so the line reads
+ * on the card and disappears behind a member, never across one.
+ *
+ * Measured, not computed: both ends are rendered dots whose position the
+ * rail and the side-effect row already decided, so reading them back is
+ * the one derivation (the rule `wireLayer.tsx` states for itself: it never
+ * invents a point). Coordinates are the Block's PADDING box, which is what
+ * an absolutely-positioned child of it is laid out against.
+ */
+function MutationLines({
+  wrapperRef,
+  links,
+  bands,
+  measureKey,
+}: {
+  wrapperRef: RefObject<HTMLDivElement | null>;
+  links: MutationLink[];
+  bands: BlockBands;
+  measureKey: string;
+}) {
+  const [block, setBlock] = useState<HTMLElement | null>(null);
+  const [routes, setRoutes] = useState<DrawnMutation[]>([]);
+  const linkKey = links.map((link) => `${link.from}>${link.to}`).join(",");
+
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const blockElement = wrapper.querySelector<HTMLElement>('[data-slot="block"]');
+    setBlock(blockElement);
+    if (!blockElement) return;
+
+    const measure = () => {
+      const blockRect = blockElement.getBoundingClientRect();
+      const originX = blockRect.left + blockElement.clientLeft;
+      const originY = blockRect.top + blockElement.clientTop;
+      const next: DrawnMutation[] = [];
+      for (const link of links) {
+        const fromDot = ownDot(wrapper, `[data-slot="block-port-rail"][data-edge="left"] [data-port-id="${link.from}"]`);
+        const toDot = ownDot(wrapper, `[data-slot="block-side-effect"][data-port-id="${link.to}"]`);
+        if (!fromDot || !toDot) continue;
+        const fromRect = fromDot.getBoundingClientRect();
+        const toRect = toDot.getBoundingClientRect();
+        next.push({
+          link,
+          route: mutationRoute(
+            { x: fromRect.left + fromRect.width / 2 - originX, y: fromRect.top + fromRect.height / 2 - originY },
+            { x: toRect.left + toRect.width / 2 - originX, y: toRect.top + toRect.height / 2 - originY },
+            fromRect.width / 2,
+            toRect.height / 2,
+          ),
+        });
+      }
+      setRoutes((previous) => (sameRoutes(previous, next) ? previous : next));
+    };
+
+    // The rails' dots land one pass after `bands` does (the same race
+    // `wireLayer.tsx` documents), so measure now AND once more next frame.
+    measure();
+    const frame = requestAnimationFrame(measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrapper);
+    observer.observe(blockElement);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wrapperRef, bands, measureKey, linkKey]);
+
+  if (!block || routes.length === 0) return null;
+  return createPortal(
+    <svg
+      data-slot="block-mutation-lines"
+      aria-hidden
+      width="100%"
+      height="100%"
+      style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none", zIndex: paintTier("underlay") }}
+    >
+      {routes.map(({ link, route }) => (
+        <MutationLineMark key={`${link.from}>${link.to}`} from={link.from} to={link.to} route={route} />
+      ))}
+    </svg>,
+    block,
   );
 }
 
