@@ -34,7 +34,7 @@
 // 1 Modified". Re-porting the superseded diff would rebuild exactly that
 // disagreement. This module therefore takes the COUNT as a number and never
 // computes one.
-import { snapshotDigest } from "./draftModel";
+import { snapshotDigest } from "../components/draftModel";
 
 /**
  * Is there anything in this draft to promote at all?

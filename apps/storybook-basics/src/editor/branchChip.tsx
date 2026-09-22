@@ -18,10 +18,10 @@ import { useState, type ReactElement } from "react";
 import { ChevronDown, GitBranch, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "../lib/utils";
-import { Badge } from "./badge";
-import { Button, buttonVariants } from "./button";
-import { InlineRename } from "./inlineRename";
-import { Popover, PopoverContent, PopoverTrigger } from "./popover";
+import { Badge } from "../components/badge";
+import { Button, buttonVariants } from "../components/button";
+import { InlineRename } from "../components/inlineRename";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
 
 export interface DraftSummary {
   id: string;

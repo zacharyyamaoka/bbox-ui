@@ -8,7 +8,7 @@ import {
   BranchChip,
   type BranchChipProps,
   type DraftSummary,
-} from "../components/branchChip";
+} from "./branchChip";
 import { Bar } from "../components/bar";
 import { Button } from "../components/button";
 import {

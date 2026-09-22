@@ -28,8 +28,10 @@ export type LabeledGroupProps = Omit<RegionProps, "corner" | "cornerSize" | "kin
 /**
  * WHY this repeats region.tsx's FRAME_RADIUS chain instead of importing it:
  * that constant is module-private, and the tab must round with the SAME
- * token the frame reads. `LabeledGroup` stories measure the two corners
- * against each other, so a drift between the strings fails a test.
+ * token the frame reads. The `LabeledGroup` stories compare the two rendered
+ * radii, so a drift that changes what either draws fails a test — a string
+ * edit that happens to resolve to the same pixels would not, so keep the
+ * two chains identical by hand.
  */
 const TAB_RADIUS = "var(--bbox-region-frame-radius, var(--bbox-skin-radius, var(--radius-lg)))";
 

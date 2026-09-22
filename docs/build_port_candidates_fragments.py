@@ -366,7 +366,7 @@ def landed_ledger() -> str:
         ("Errors bubble through folds", [TRUNK / "scene/bubble.ts"]),
         ("Diagnostics paint — error/warning rungs (§3.4)",
          [TRUNK / "components/highlighter.tsx", TRUNK / "components/traceMark.tsx"]),
-        ("Value capsule preset (§3.3, first half)", [TRUNK / "presets/value/value.tsx"]),
+        ("Value capsule preset (§3.3, first half)", [TRUNK / "components/block.value.tsx"]),
         ("Linked copies — definition identity (§3.5)", [TRUNK / "scene/linking.ts"]),
         ("Compare model + word/field/line diff",
          [TRUNK / "scene/sceneDiff.ts", TRUNK / "scene/wordDiff.ts", TRUNK / "scene/fieldDiff.ts",

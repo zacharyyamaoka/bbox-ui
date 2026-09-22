@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from "react"
 
 import { cn } from "../lib/utils"
 import { FoldingChevron } from "../components/foldingChevron"
-import { absoluteTime, relativeTime } from "../components/historyTime"
+import { absoluteTime, relativeTime } from "./historyTime"
 
 /**
  * src/editor/historyList.tsx — the Compare dialog's HISTORY rail and the

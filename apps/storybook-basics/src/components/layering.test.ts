@@ -67,6 +67,14 @@ const COMPONENTS_DIR = dirname(fileURLToPath(import.meta.url));
 // synchronous, and legible as a straight `grep`.
 const SCENE_IMPORT_PATTERN = /from\s+["'](?:\.\.\/){1,3}scene(?:\/[^"']*)?["']/g;
 
+// The same wall toward the editor kit (2026-09-22). WHY: when the chrome moved
+// to editor/ on Zach's word ("Things that are needed to display information
+// on the components, belong with the components"), the line between the kits
+// was drawn by what a component itself imports. A component that later
+// reached back into editor/ would pull chrome under a Block without anyone
+// deciding it — this is what keeps the line where the move put it.
+const EDITOR_IMPORT_PATTERN = /from\s+["'](?:\.\.\/){1,3}editor(?:\/[^"']*)?["']/g;
+
 /**
  * Every KIT SOURCE file under `src/components/`, recursively, as a path
  * relative to this directory.
@@ -126,6 +134,15 @@ describe("layering — the import wall (D2 mechanism 1)", () => {
       if (matches) {
         for (const specifier of matches) offenders.push({ file, specifier });
       }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("no src/components/*.{ts,tsx} file imports from the editor kit", () => {
+    const offenders: { file: string; specifier: string }[] = [];
+    for (const file of componentSourceFiles()) {
+      const matches = readFileSync(join(COMPONENTS_DIR, file), "utf8").match(EDITOR_IMPORT_PATTERN);
+      for (const specifier of matches ?? []) offenders.push({ file, specifier });
     }
     expect(offenders).toEqual([]);
   });

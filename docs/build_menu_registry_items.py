@@ -80,7 +80,7 @@ ITEMS = [
     ("chrome-bar", "editor/chromeBar.tsx", "Chrome Bar",
      "Burger menu, back/forward, home and an eliding breadcrumb with a status dot — the editor's "
      "top-left identity strip."),
-    ("branch-chip", "components/branchChip.tsx", "Branch Chip",
+    ("branch-chip", "editor/branchChip.tsx", "Branch Chip",
      "The branch or draft selector: current name, a count badge, and a popover of alternates with "
      "inline rename."),
     ("panel-shell", "editor/panelShell.tsx", "Panel Shell",

@@ -2222,52 +2222,52 @@
         {
           "path": "apps/storybook-basics/src/components/badge.tsx",
           "type": "registry:component",
-          "target": "components/bbox/badge.tsx"
+          "target": "components/bbox/components/badge.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/bar.tsx",
           "type": "registry:component",
-          "target": "components/bbox/bar.tsx"
+          "target": "components/bbox/components/bar.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/barSize.tsx",
           "type": "registry:component",
-          "target": "components/bbox/barSize.tsx"
-        },
-        {
-          "path": "apps/storybook-basics/src/components/branchChip.tsx",
-          "type": "registry:component",
-          "target": "components/bbox/branchChip.tsx"
+          "target": "components/bbox/components/barSize.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/button.tsx",
           "type": "registry:component",
-          "target": "components/bbox/button.tsx"
+          "target": "components/bbox/components/button.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/editableText.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/editableText.layout.ts"
+          "target": "components/bbox/components/editableText.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/glyph.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/glyph.layout.ts"
+          "target": "components/bbox/components/glyph.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/inlineRename.tsx",
           "type": "registry:component",
-          "target": "components/bbox/inlineRename.tsx"
+          "target": "components/bbox/components/inlineRename.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/popover.tsx",
           "type": "registry:component",
-          "target": "components/bbox/popover.tsx"
+          "target": "components/bbox/components/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/editor/branchChip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/editor/branchChip.tsx"
         },
         {
           "path": "apps/storybook-basics/src/lib/utils.ts",
           "type": "registry:lib",
-          "target": "components/lib/utils.ts"
+          "target": "components/bbox/lib/utils.ts"
         }
       ],
       "dependencies": [
@@ -2489,14 +2489,14 @@
           "target": "components/bbox/components/foldingChevron.tsx"
         },
         {
-          "path": "apps/storybook-basics/src/components/historyTime.ts",
-          "type": "registry:lib",
-          "target": "components/bbox/components/historyTime.ts"
-        },
-        {
           "path": "apps/storybook-basics/src/editor/historyList.tsx",
           "type": "registry:component",
           "target": "components/bbox/editor/historyList.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/editor/historyTime.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editor/historyTime.ts"
         },
         {
           "path": "apps/storybook-basics/src/lib/utils.ts",
@@ -2649,11 +2649,6 @@
           "target": "components/bbox/components/glyph.layout.ts"
         },
         {
-          "path": "apps/storybook-basics/src/components/historyTime.ts",
-          "type": "registry:lib",
-          "target": "components/bbox/components/historyTime.ts"
-        },
-        {
           "path": "apps/storybook-basics/src/components/tabs.tsx",
           "type": "registry:component",
           "target": "components/bbox/components/tabs.tsx"
@@ -2687,6 +2682,11 @@
           "path": "apps/storybook-basics/src/editor/historyList.tsx",
           "type": "registry:component",
           "target": "components/bbox/editor/historyList.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/editor/historyTime.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editor/historyTime.ts"
         },
         {
           "path": "apps/storybook-basics/src/editor/lineDiff.ts",
