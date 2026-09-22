@@ -111,10 +111,11 @@ def by_file_export(entries):
 
 NEW_PATH = {old: MOVES.get(old, old) for old in (r["path"] for r in landed_rows)}
 per_title_l, kids_l = tree_of(landed_index)
-landed_title_of = {e["importPath"].replace("./src/", ""): e["title"] for e in landed_index.values() if e["type"] == "story"}
+# keyed by file NAME: story files move between kit folders, their names are unique and stay put
+landed_title_of = {e["importPath"].rsplit("/", 1)[-1]: e["title"] for e in landed_index.values() if e["type"] == "story"}
 homes_l = defaultdict(set)
 for row in landed_rows:
-    homes_l[row["subject"]].add(landed_title_of[NEW_PATH[row["path"]]].split("/")[0])
+    homes_l[row["subject"]].add(landed_title_of[row["path"].rsplit("/", 1)[-1]].split("/")[0])
 lists_l = {node: len(ch) for node, ch in kids_l.items() if node}
 widest_l = max(lists_l, key=lists_l.get)
 M["landed"] = dict(
@@ -210,7 +211,7 @@ def outline_html(key: str) -> str:
 
 def titles_for(subject: str) -> dict:
     out = {k: sorted({r[k] for r in rows if r["subject"] == subject}) for k in TREES}
-    out["landed"] = sorted({landed_title_of[NEW_PATH[r["path"]]] for r in landed_rows if r["subject"] == subject})
+    out["landed"] = sorted({landed_title_of[r["path"].rsplit("/", 1)[-1]] for r in landed_rows if r["subject"] == subject})
     return out
 
 
@@ -497,35 +498,30 @@ MUTATIONS = [  # measured 2026-09-22 with `pnpm exec vitest --project=unit run s
     ("<code>Scene/Badge</code> on a file in <code>components/</code>", "section ≠ folder", "1 failed"),
     ("<code>host:react-flow</code> dropped from SceneHosts", "tag disagrees with imports", "1 failed"),
     ("<code>area:basics</code> put back on Badge", "retired tag", "1 failed"),
+    ("<code>Scene/Lint</code> — a scene story with no family", "Scene family required", "1 failed"),
 ]
 mut_rows = "".join(f"<tr><td>{a}</td><td>{b}</td><td class='red'>{c}</td></tr>" for a, b, c in MUTATIONS)
-LANDED_Q = [
-    ("l1", "Merge it?", f"It is on <code>claude/storybook-server-launch-e5f2cc</code> (commit <code>{LANDED_REV}</code>), not on main. A dry-run merge with main and with the in-flight lane <code>claude/system-sketch-ui-feedback-14bfc3</code> is textually clean.",
-     "If you say nothing it stays on the branch. Whoever merges the other lane second retitles its one new story — <code>MemberStackKeyboardReorder.stories.tsx</code> arrives as <code>Blocks/Member stack</code>; it becomes <code>Components/Blocks/BlockMembers/Keyboard Reorder</code> with <code>object:block</code>. The guard names the file, so it cannot slip through."),
-    ("l2", f"Your Hosts section trades back “one home per thing” for {len(L['split'])} components: {esc(', '.join(L['split']))} — their host board is under Hosts, a section away from them.",
-     "Keep it — it is what you asked for, and <code>object:</code> tags pull a component's stories back together in the filter.",
-     "Default: keep. Alternative: give those boards back to their component as <em>In A Host</em> and rely on the <code>host:</code> filter alone for the engine view."),
-    ("l3", "Scene is flat (11 entries) now that its host boards left it, so the Model &amp; Diff / Wiring / Validation / Layout split from your L191 note is not a level.",
-     "Flat — 11 fits one screen, and the test keeps any section over 15 honest.",
-     "Default: flat. Say so if you want those four groups back; it is four titles' worth of change."),
+APPLIED = [  # Zach's answers to this report, 2026-09-22
+    ("Merge it?", "“do /merge-ready”", "Queued as a merge-ready candidate for the integrator. Nothing merges from this lane."),
+    ("Host boards a section away from 7 components?", "“give thoose components back their thing and use tag to filter… stories in /hosts should be things that do not fit naturally within the components”",
+     "Eleven stories moved out of <code>hosts/</code> — the seven named, plus DragPolicy, FoldBubbling and ValidityPreview, whose code is <code>scene/</code>'s. Hosts keeps the pyblocks loader and tldraw detach."),
+    ("Scene flat at 11?", "“Lets keep the grouping I think we will be adding more functinality in the future”",
+     "Scene has Model &amp; Diff, Wiring, Validation, Layout &amp; Drag — a closed list in the test, required like Components'."),
 ]
-landed_q_html = "".join(
-    f'<div class="q" data-q="{qid}"><p class="qq"><b>{q}</b></p><p><b>Recommend:</b> {rec}</p><p class="def">{default}</p>'
-    f'<textarea placeholder="Your answer (blank = take the default)"></textarea></div>'
-    for qid, q, rec, default in LANDED_Q
-)
+landed_q_html = "<ul class='plain'>" + "".join(f"<li><b>{q}</b> You: <em>{said}</em> → {done}</li>" for q, said, done in APPLIED) + "</ul>" + (
+    '<div class="q" data-q="notes"><p class="qq"><b>Anything else?</b></p><textarea placeholder="Notes on the sidebar as it is now"></textarea></div>')
 landed_html = f"""
 <h1>Storybook sidebar — B landed: the repo's top level, then families</h1>
-<p class="sub">22 Sep 2026 · bbox-ui <code>apps/storybook-basics</code> · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{LANDED_REV}</code>, not merged · every number read from the real Storybook's own <code>index.json</code></p>
+<p class="sub">22 Sep 2026 · bbox-ui <code>apps/storybook-basics</code> · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{LANDED_REV}</code>, queued with <code>/merge-ready</code> · every number read from the real Storybook's own <code>index.json</code></p>
 <div class="tldr">
-<p><b>Done.</b> The sidebar's sections are the repo's six top-level folders — <b>Components · Scene · Editor · Hosts · Presets · Skin</b> — with a family level under Components only (Ports, Blocks, Traces, Text &amp; Marks, Menus &amp; Bars, Panels &amp; Dialogs, Stock). A unit test now fails any story that breaks that shape.</p>
-<p><b>Hosts is a section, as you asked:</b> {len(L['kids']['Hosts'])} engine boards together. But most engine examples do not live in <code>hosts/</code> — measured by import, {len(engine_files)} story files reach React Flow or tldraw and only {len(engine_in_hosts)} of them are there (the rest: {esc(engine_elsewhere)}). So every story also carries <code>host:dom</code> / <code>host:react-flow</code> / <code>host:tldraw</code>: tick one in the sidebar filter and only those examples remain, wherever they sit. The video ends on exactly that.</p>
-<p><b>What the Hosts section cost, plainly:</b> the first glance is {L['glance']} rows, not the {M['b']['glance']} B was proposed at (Hosts adds 13, and Scene goes flat), and {len(L['split'])} components have their host board a section away. Against today it is still {T['glance']} → {L['glance']} rows and {len(T['roots'])} → {len(L['roots'])} sections, with none holding a single item.</p>
+<p><b>Done, with your three answers applied.</b> The sidebar's sections are the repo's six top-level folders — <b>Components · Scene · Editor · Hosts · Presets · Skin</b>. Components has families (Ports, Blocks, Traces, Text &amp; Marks, Menus &amp; Bars, Panels &amp; Dialogs, Stock), and so does Scene, as you asked (Model &amp; Diff, Wiring, Validation, Layout &amp; Drag). A unit test fails any story that breaks that shape.</p>
+<p><b>Host boards live with their component</b>, as you asked — <code>Components/Blocks/BlockPort/In A Host</code>, <code>Scene/Model &amp; Diff/Scene/In A Host (tldraw)</code> — and <code>src/hosts/</code> keeps only stories about host-side code ({esc(' and '.join(L['kids']['Hosts']))}). Every engine example is the <b><code>host:</code> tag filter</b> instead: measured by import, {len(engine_files)} story files reach React Flow or tldraw, and a section could never have held them all. Tick <code>host:tldraw</code> in the sidebar filter and only those remain, each still inside its own component — the video ends on exactly that.</p>
+<p><b>Merging:</b> queued with <code>/merge-ready</code>, as you said. The integrator merges it; nothing merges from this lane.</p>
 <div class="nums">
 <div class="num"><b>{T['glance']} → {L['glance']}</b><span>rows at first glance</span></div>
 <div class="num"><b>{len(T['roots'])} → {len(L['roots'])}</b><span>sections · single-item sections {len(T['singletons'])} → {len(L['singletons'])}</span></div>
 <div class="num"><b>{T['widest'][1]} → {L['widest'][1]}</b><span>longest list ({esc(L['widest'][0])})</span></div>
-<div class="num"><b>{host_tagged_files}</b><span>story files tagged with the hosts they render in</span></div>
+<div class="num"><b>{len(T['split'])} → {len(L['split'])}</b><span>components split across sections</span></div>
 </div></div>
 
 <div class="hero">
@@ -533,7 +529,7 @@ landed_html = f"""
   <div><b>The real sidebar, recorded from this branch's Storybook</b> (9 s, cropped to the sidebar):
   <ol><li>every section open, nothing else — scrolled top to bottom: it fits in about two screens</li>
   <li>the sidebar's tag filter opened, <code>host:tldraw</code> ticked ({host_counts['host:tldraw']} stories; <code>host:react-flow</code> {host_counts['host:react-flow']}, <code>host:dom</code> {host_counts['host:dom']})</li>
-  <li>what is left: only tldraw examples — {tldraw_by_section}. Only {tldraw_sections.get('Hosts', 0)} of the {host_counts['host:tldraw']} are in Hosts, which is why the tag exists.</li></ol>
+  <li>what is left: only tldraw examples — {tldraw_by_section}. Only {tldraw_sections.get('Hosts', 0)} of the {host_counts['host:tldraw']} sit in Hosts; the tag is how you see them together, each still under its own component.</li></ol>
   <details><summary>No video? GIF fallback</summary><img src="{landed_gif}" alt="GIF of the landed sidebar and the host filter"></details></div>
 </div>
 
@@ -541,10 +537,11 @@ landed_html = f"""
 <div class="card-grid">
   <div class="scrollshot"><img data-same-as="glance-landed" alt="Landed sidebar at first glance"></div>
   <div>
-  <h4>Sections</h4><ul class="plain">{''.join(f"<li><b>{esc(r)}</b> · {L['root_sizes'][r]}" + (f" — {esc(', '.join(L['kids'][r]))}" if r in ('Components', 'Hosts') else '') + "</li>" for r in L['roots'])}</ul>
+  <h4>Sections</h4><ul class="plain">{''.join(f"<li><b>{esc(r)}</b> · {L['root_sizes'][r]}" + (f" — {esc(', '.join(L['kids'][r]))}" if r in ('Components', 'Scene', 'Hosts') else '') + "</li>" for r in L['roots'])}</ul>
   <h4>How a title is built</h4><ul class="plain">
   <li><b>Section = the file's top-level folder</b>, no exceptions. Four story files that were shelved away from their code moved next to it: <code>FitToContent</code> → <code>scene/</code>, <code>PortVariants</code> and <code>Styles</code> → <code>skin/</code>, <code>ChromeRename</code> → <code>components/</code>.</li>
-  <li><b>A family level only where a section would list more than 15 things.</b> That is only Components (79); Hosts sits at 13 and reads better flat than as five families of two.</li>
+  <li><b>A component's host boards sit with it</b>, as <em>In A Host</em>. Eleven stories left <code>hosts/</code> for the kit whose code they show; both engine walls in the repo already exempt stories, because a story is a bench.</li>
+  <li><b>Families under Components and Scene</b>, each a closed list in the test. Every other section stays flat, and a flat section over 15 fails the test.</li>
   <li>Then the component's code name, then an aspect in words: <code>Components/Ports/PortEdge/Hit Regions</code>.</li>
   <li>Tags: <code>object:</code> (what it is about — replaces <code>area:</code>, which only repeated the section), <code>host:</code> (measured), <code>lane:</code> (unchanged).</li></ul>
   </div>
@@ -553,26 +550,27 @@ landed_html = f"""
 <h2>Held by a test, not a convention</h2>
 <p><code>src/storyOrganisation.test.ts</code> runs in the <code>unit</code> project, so <code>pnpm test</code> catches it. It reads titles with Storybook's <em>own</em> CSF parser, not a regex. It fails on: a section that is not the file's folder, a family outside the closed list, a flat section over 15, a missing or foreign <code>object:</code> tag, any <code>area:</code> tag, and <code>host:</code> tags that disagree with what the file actually imports (it walks the imports). What it cannot judge: whether a component is in the <em>right</em> family.</p>
 <div class="tablewrap"><table class="mut"><thead><tr><th>Deliberate breakage</th><th>Rule it tests</th><th>Result</th></tr></thead><tbody>{mut_rows}
-<tr><td>all five restored</td><td></td><td class="green">557 passed</td></tr></tbody></table></div>
+<tr><td>all restored</td><td></td><td class="green">579 passed</td></tr></tbody></table></div>
 
 <h2>Gates</h2>
 <div class="tablewrap"><table class="gates"><tbody>
 <tr><th><code>pnpm typecheck</code></th><td class="green">exit 0</td><td>covers <code>.storybook/preview.tsx</code> and the new test</td></tr>
-<tr><th>guard test</th><td class="green">557 / 557</td><td>151 files × section, tags, hosts; 79 × family</td></tr>
-<tr><th><code>pnpm test</code> (both projects)</th><td>3,088 then 3,089 of 3,091</td><td>The failures moved between runs — run 1: FitToContentHosts <em>Drag A Member (tldraw)</em> and two more; run 2: SceneHosts <em>A Member's Header Does Not Drag Its Parent (ReactFlow)</em> and Grouping <em>Boundary Classes</em>. Those three files alone, twice: <b>14 / 14</b>. Load average was 11 from other sessions; all are timing-measured drags. No story file changed anything but its title and tags (and the four moved files' import paths).</td></tr>
-<tr><th>Story ids in the repo</th><td class="green">0 stale</td><td>{ref_total} references to {len(ref_ids)} ids in {len(ref_files)} files, rewritten from the old→new map; at <code>{LANDED_REV}</code> {live_total} references resolve and {stale_total} point at an id that no longer exists. Vault links ({vault_distinct}) left as history.</td></tr>
+<tr><th>guard test</th><td class="green">579 / 579</td><td>151 files × section, tags, hosts; 101 × family (Components and Scene)</td></tr>
+<tr><th>unit project</th><td class="green">2,425 / 2,425</td><td>every pure test in the package, the guard among them</td></tr>
+<tr><th><code>pnpm test</code> (both projects)</th><td>3,111 of 3,113</td><td>After the host boards moved: FramesPanel <em>Inline Rename Failure</em> and AppMenu <em>Rows Run And Toggles Are Checkboxes</em> failed — files this round did not touch — and pass alone, 12 / 12 twice. The round before, a different three failed the same way and passed alone. Load average 7–11 from other sessions; all timing-measured.</td></tr>
+<tr><th>Story ids in the repo</th><td class="green">0 stale</td><td>{ref_total} references to {len(ref_ids)} ids in {len(ref_files)} files, rewritten from the old→new map (and when the host boards moved, 91 more ids changed: 72 references in 17 files); at <code>{LANDED_REV}</code> {live_total} references resolve and {stale_total} point at an id that no longer exists. Vault links ({vault_distinct}) left as history.</td></tr>
 <tr><th>Independent audit</th><td class="green">7 / 7 confirmed</td><td>A read-only auditor on a different model re-derived every claim its own way (own import walk, own id sweep, own mutation probes on a scratch copy). Its edge case — a type-only import would count as rendering in a host — turned out <b>not</b> hypothetical: the two recording-panel stories reached tldraw only through <code>import type</code>, which erases, so their <code>host:tldraw</code> tags were over-claims. Fixed in the test and the tags; the full <code>unit</code> project is 2,403 / 2,403. It also caught docs still prescribing the old titles — the forward-looking one is rewritten, the control-flow plan carries a dated note, story comments naming their old titles are updated (53 lines).</td></tr>
-<tr><th>Merge, dry run</th><td class="green">clean</td><td><code>git merge-tree</code> with <code>main</code> and with <code>claude/system-sketch-ui-feedback-14bfc3</code>: no conflicts.</td></tr>
+<tr><th>Merge, dry run</th><td class="green">clean</td><td><code>git merge-tree</code> at <code>{LANDED_REV}</code> with <code>main</code> and with <code>claude/system-sketch-ui-feedback-14bfc3</code>: no conflicts. That lane's one new story (<code>MemberStackKeyboardReorder</code>, titled <code>Blocks/Member stack</code>) then fails the guard by name until it is retitled <code>Components/Blocks/BlockMembers/Keyboard Reorder</code> — whoever merges second does it.</td></tr>
 </tbody></table></div>
 
-<h2>Needs you</h2>
+<h2>Your answers, applied</h2>
 {landed_q_html}
 <p><button class="btn" id="copy">Copy all feedback</button><span id="copied"></span></p>
 <textarea id="out" hidden rows="10"></textarea>
 
 <h2>Not done on purpose</h2>
 <ul class="plain">
-<li>Not merged, not pushed — integration is your call.</li>
+<li>Not merged or pushed from this lane — it is queued with <code>/merge-ready</code> and the integrator lands it.</li>
 <li>Your :5421 Storybook (the <code>bbox-ui-toolbar</code> tree) is untouched and still shows the old titles until this branch lands there.</li>
 <li>The proposal previews (:5423–5425) are stopped and their configs deleted; their indexes are kept beside this report so the record below still rebuilds.</li>
 <li>Historical reports under <code>reports/</code> keep their old story links, and the briefs of lanes that already ran (<code>docs/lanes/*</code>, finished plans) keep the titles they were given — they are records of what was asked. The test fails anyone who copies one.</li>

@@ -172,6 +172,9 @@ async function captureLanded(browser) {
   await page.getByText("host:tldraw", { exact: true }).click();
   await page.waitForTimeout(1200);
   await page.keyboard.press("Escape");
+  // WHY: the cursor is left over the sidebar by the filter click, and Storybook
+  // opens an item's hover menu under it — park it on the canvas.
+  await page.mouse.move(900, 450);
   await page.waitForTimeout(600);
   await settle(page, EXPAND_GROUPS);
   await page.waitForTimeout(500);
