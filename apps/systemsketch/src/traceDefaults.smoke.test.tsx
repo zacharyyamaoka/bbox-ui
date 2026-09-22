@@ -132,6 +132,61 @@ describe("trace defaults — the app", () => {
     }, { what: `ends touch the rings (start ${inkGap(path, false, from).toFixed(2)}px, end ${inkGap(path, true, to).toFixed(2)}px)` });
   });
 
+  it("an async (dashed) wire paints with a BUTT cap and still lands both ends on the ring", async () => {
+    // 2026-09-22 audit: `wireTerminalGap()` had no wire-variant input, so it
+    // always assumed the `round` cap `traceRingGapPx` defaults to — correct
+    // for a plain `data` line, wrong for `async`/`delayed`, which
+    // `traceStrokeStyle` paints with a BUTT cap. A butt cap reaches nothing
+    // past the path's end, so the old fixed pull-back left the ink exactly
+    // `strokeWidth / 2` (1px) short of the ring on those two variants — the
+    // spacing Zach reported. This is that case, isolated.
+    app = await mountApp();
+    const a = block("src", 60, 120, PORTS_OUT);
+    const b = block("estimate()", 420, 140, PORTS_IN);
+    const from = await dotOf(a, "frame");
+    const to = await dotOf(b, "frame");
+    await waitFor(() => ((app!.editor.getShape(b) as { props: { anchors: unknown[] } }).props.anchors.length === 1 ? true : null), { what: "b's anchor measured" });
+    await waitFor(() => ((app!.editor.getShape(a) as { props: { anchors: unknown[] } }).props.anchors.length === 3 ? true : null), { what: "a's anchors measured" });
+    const wire = createWire(app.editor, { from: { nodeId: a, portId: "frame" }, to: { nodeId: b, portId: "frame" }, variant: "async" });
+    expect(wire).not.toBeNull();
+
+    const path = await waitFor(() => app!.root.querySelector<SVGPathElement>(`[data-shape-id="${wire}"] [data-slot="trace-line"]`), { what: "the trace path" });
+
+    // The paint: a REAL butt cap, read off the computed style — never asserted
+    // against `wireTerminalGap`'s own implementation, or the check would
+    // agree with a bug in it rather than with what the browser draws.
+    await waitFor(() => (getComputedStyle(path).strokeLinecap === "butt" ? true : null), { what: "computed stroke-linecap = butt" });
+    expect(getComputedStyle(path).strokeLinecap).toBe("butt");
+
+    // Both ends touch the SAME ring `inkGap` measures for the `data` case
+    // above — same rendered-ring approach, no half-stroke added back for the
+    // butt cap (its `cap` term in `inkGap` is 0, which is the whole point).
+    await waitFor(() => {
+      const start = inkGap(path, false, from);
+      const end = inkGap(path, true, to);
+      return Math.abs(start) <= TOUCH_TOLERANCE_PX && Math.abs(end) <= TOUCH_TOLERANCE_PX ? true : null;
+    }, { what: `ends touch the rings (start ${inkGap(path, false, from).toFixed(2)}px, end ${inkGap(path, true, to).toFixed(2)}px)` });
+
+    // tldraw's own engine geometry (the hit corridor's vertices) has to agree
+    // with the paint — this is the same wall `wireElbowInput`/`wireRoutePoints`
+    // share one `wireTerminalGap(variant)` call to hold up.
+    const paintStart = path.getPointAtLength(0);
+    const paintEnd = path.getPointAtLength(path.getTotalLength());
+    const vertices = app.editor.getShapeGeometry(wire!).vertices;
+    const geoStart = vertices[0];
+    const geoEnd = vertices[vertices.length - 1];
+    expect(Math.hypot(geoStart.x - paintStart.x, geoStart.y - paintStart.y), "hit geometry start vs paint").toBeLessThanOrEqual(0.5);
+    expect(Math.hypot(geoEnd.x - paintEnd.x, geoEnd.y - paintEnd.y), "hit geometry end vs paint").toBeLessThanOrEqual(0.5);
+
+    // And a press on the cable still selects it.
+    app.editor.selectNone();
+    const middle = new DOMPoint(path.getPointAtLength(path.getTotalLength() / 2).x, path.getPointAtLength(path.getTotalLength() / 2).y).matrixTransform(path.getScreenCTM()!);
+    const under = document.elementFromPoint(middle.x, middle.y)!;
+    const rect = under.getBoundingClientRect();
+    await userEvent.click(under, { position: { x: Math.round(middle.x - rect.left), y: Math.round(middle.y - rect.top) } });
+    expect(app.editor.getSelectedShapeIds(), "a press on the drawn async cable").toEqual([wire]);
+  });
+
   it("a LIVE port-style switch moves the painted ends AND the engine's hit geometry onto the new ring, for v3, v1 and back to v2", async () => {
     app = await mountApp();
     const a = block("src", 60, 120, PORTS_OUT);
