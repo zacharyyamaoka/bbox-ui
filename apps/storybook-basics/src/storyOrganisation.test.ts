@@ -39,7 +39,7 @@ const SECTIONS: Record<string, string> = {
 /**
  * The sections that carry a family level, each with its closed list. Add a
  * family here, deliberately — never by typing a new one into a title.
- * WHY Scene has families at 11 entries (under the 15 below): Zach, 2026-09-22,
+ * WHY Scene has families at 14 entries (under the 15 below): Zach, 2026-09-22,
  * "Lets keep the grouping I think we will be adding more functinality in the
  * future" — the split is by what an operation DOES (his L191 note: layout
  * operations, validation operations…), so new scene functions have a place.
@@ -82,11 +82,26 @@ const storyFiles: StoryFile[] = sourceFiles
   });
 
 // ---- which host engines a file reaches, by walking its relative imports ----
-const SPECIFIER = /(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|import\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
+// The same statement-bounded patterns as src/engineFree.test.ts's engine wall
+// (IMPORT_EDGE_PATTERN / REEXPORT_EDGE_PATTERN): `[^"']*?` cannot cross a
+// quote, so the lazy middle never runs past one statement's `from "…"` into the
+// next — which is what a semicolon-bounded pattern did in the 18 files here
+// written without semicolons, swallowing the real import after a type-only one.
+const IMPORT_EDGE = /(?:^|\n)[ \t]*import\s+(type\s+)?(?:([^"']*?)\bfrom\s+)?["']([^"']+)["']/g;
+const REEXPORT_EDGE = /(?:^|\n)[ \t]*export\s+(type\s+)?[^"']*?\bfrom\s+["']([^"']+)["']/g;
+const DYNAMIC_IMPORT = /\bimport\(\s*["']([^"']+)["']\s*\)/g;
 const withoutComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'])\/\/[^\n]*/g, "$1");
-// WHY: `import type … from "../hosts/domCanvas"` erases at build time, so the
-// story does not render in that host and must not be told to claim it.
-const withoutTypeOnly = (s: string) => s.replace(/^\s*(?:import|export)\s+type\s[^;]*;/gm, "");
+
+/** Runtime edges only. WHY skip `import type` / `export type`: they erase at
+ *  build time, so a story reaching a host only through one does not render in
+ *  it and must not be told to claim it (the engine wall's carve-out 1). */
+function runtimeSpecifiers(source: string): string[] {
+  const out: string[] = [];
+  for (const m of source.matchAll(IMPORT_EDGE)) if (!m[1]) out.push(m[3]);
+  for (const m of source.matchAll(REEXPORT_EDGE)) if (!m[1]) out.push(m[2]);
+  for (const m of source.matchAll(DYNAMIC_IMPORT)) out.push(m[1]);
+  return out;
+}
 
 function resolveRelative(from: string, spec: string): string | undefined {
   const base = path.resolve(path.dirname(from), spec);
@@ -99,8 +114,7 @@ const edges = new Map<string, { local: string[]; packages: string[] }>();
 for (const file of sourceFiles) {
   const local: string[] = [];
   const packages: string[] = [];
-  for (const m of withoutTypeOnly(withoutComments(readFileSync(file, "utf8"))).matchAll(SPECIFIER)) {
-    const spec = m[1] ?? m[2] ?? m[3];
+  for (const spec of runtimeSpecifiers(withoutComments(readFileSync(file, "utf8")))) {
     if (spec.startsWith(".")) {
       const target = resolveRelative(file, spec);
       if (target) local.push(target);

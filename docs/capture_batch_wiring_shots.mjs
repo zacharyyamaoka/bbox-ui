@@ -112,7 +112,7 @@ await shoot("07-armed-vanish");
 /* 8 — the container shorthand: ONE selected node standing for its members.
  *     Uses the shared host bench, which has a real nesting (`kid` inside
  *     `proc`) that this lane's own fixture deliberately does not. */
-await page.goto(`http://localhost:${port}/iframe.html?id=blocks-scene-in-a-host--dom-canvas&viewMode=story`, { waitUntil: "networkidle" }).catch(() => {});
+await page.goto(`http://localhost:${port}/iframe.html?id=scene-model-diff-scene-in-a-host--scene-dom-canvas&viewMode=story`, { waitUntil: "networkidle" }).catch(() => {});
 await page.waitForTimeout(400);
 
 await writeFile(path.join(outDir, "shots.json"), JSON.stringify(shots, null, 2));

@@ -443,7 +443,7 @@ export const LockedBends: Story = {
     <Page>
       <Caption
         title="Locked bends"
-        text="lockBends is the read-only display case: the corner is drawn and reported but neither drags nor double-click-deletes. The terminals are untouched by it and still move — the mirror image of the LockedEndpoints story in Trace/Interactive."
+        text="lockBends is the read-only display case: the corner is drawn and reported but neither drags nor double-click-deletes. The terminals are untouched by it and still move — the mirror image of the LockedEndpoints story in Components › Traces › Trace › Interactive."
       />
       <Canvas testId="locked-bends-canvas">
         <TraceEditor

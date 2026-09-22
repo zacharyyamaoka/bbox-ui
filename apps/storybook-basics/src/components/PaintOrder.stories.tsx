@@ -9,7 +9,7 @@ import type { PortEdgeItem } from "./portEdge";
 import { PortEdge } from "./portEdge";
 
 /**
- * Basics/PaintOrder — Card 04's measured suite: paintOrder.ts's ladder,
+ * Components/Blocks/PaintOrder — Card 04's measured suite: paintOrder.ts's ladder,
  * the isolation invariant, and the nesting tier (Card 04) it exists to
  * make possible. Every claim here is measured
  * (`getComputedStyle`/`getBoundingClientRect`/`document.elementFromPoint`),

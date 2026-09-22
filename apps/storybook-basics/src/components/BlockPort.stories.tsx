@@ -26,7 +26,7 @@ import type { Distribution } from "./portEdge.layout";
 import type { PortEdgeItem } from "./portEdge";
 
 /**
- * Basics/BlockPort — phase A1 of docs/BLOCK-PORT-EDGES-PLAN.md: a `Block`
+ * Components/Blocks/BlockPort — phase A1 of docs/BLOCK-PORT-EDGES-PLAN.md: a `Block`
  * wearing real `PortEdge` rails, in each of the donor's four view rules.
  *
  * Every claim below is MEASURED off `getBoundingClientRect`, never inferred

@@ -300,8 +300,8 @@ one thing, and six components living in two places.
 - **Families: Components and Scene have one, with closed lists.**
   Components: `Ports`, `Blocks`, `Traces`, `Text & Marks`, `Menus & Bars`,
   `Panels & Dialogs`, `Stock`. Scene, by what an operation does: `Model &
-  Diff`, `Wiring`, `Validation`, `Layout & Drag` — kept at 11 entries on
-  purpose, Zach: *"I think we will be adding more functinality in the
+  Diff`, `Wiring`, `Validation`, `Layout & Drag` — kept although its 14
+  entries would fit flat, Zach: *"I think we will be adding more functinality in the
   future"*. Every other section stays flat, and a flat section over 15
   entries fails the test — give it a family list instead. Add a family in
   `src/storyOrganisation.test.ts` deliberately, never in a title.

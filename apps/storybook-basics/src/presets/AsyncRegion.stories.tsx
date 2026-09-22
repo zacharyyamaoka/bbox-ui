@@ -15,7 +15,7 @@ import { type SceneEdge, wiredPorts } from "../scene/scene";
 import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
 
 /**
- * Basics/AsyncRegion — phase B2 of docs/BLOCK-PORT-EDGES-PLAN.md §7: the
+ * Presets/AsyncRegion — phase B2 of docs/BLOCK-PORT-EDGES-PLAN.md §7: the
  * async-region communication gallery, ported as a SPEC, never as layout
  * code. Every placement below is a `PortEdge` configuration
  * (`groups`+`groupMode:"grouped"` per family, on the wall facing the

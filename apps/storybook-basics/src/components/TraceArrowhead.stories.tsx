@@ -5,7 +5,7 @@ import { Trace, type TraceGeometry, type TraceRouteProps } from "./trace";
 import type { TraceDir, TraceRouting, TraceVariant } from "./trace.layout";
 
 /**
- * Basics/TraceArrowhead — phase B3 of docs/BLOCK-PORT-EDGES-PLAN.md §8.
+ * Components/Traces/Trace/Arrowhead — phase B3 of docs/BLOCK-PORT-EDGES-PLAN.md §8.
  *
  * The in-flight Trace already ships `markerEnd = "arrow"` as its OWN
  * default (`trace.tsx:664`), the chevron marker with `context-stroke` colour
