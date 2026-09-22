@@ -11,7 +11,8 @@
     "test-stories": "vitest --project=storybook run",
     "test-unit": "vitest --project=unit run",
     "test": "vitest run",
-    "whats-new": "node ../../docs/build_whats_new.mjs"
+    "whats-new": "node ../../docs/build_whats_new.mjs",
+    "verify-settings-panel-real": "node ../../docs/capture_settings_panel_real.mjs http://localhost:${STORYBOOK_PORT:-5421} /tmp/settings-panel-real-capture"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

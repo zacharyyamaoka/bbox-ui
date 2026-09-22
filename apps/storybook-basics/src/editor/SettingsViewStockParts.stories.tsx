@@ -138,3 +138,85 @@ export const CategoryNavIsStockButtons: Story = {
     await expect(document.querySelector(`[data-testid="${P}"] [data-section-id="file-navigation"]`)).toBeNull();
   },
 };
+
+// ── Finding 2 (`settings-panel-fixes` verdict, 2026-09-22) ─────────────────
+// The existing fixtures (here and in `SettingsCategories.stories.tsx`) are
+// all short real-world copy, so a row that only stops SCROLLING sideways —
+// `overflow-x: hidden` on the pane's `ScrollArea` viewport — because it is
+// CLIPPING content, not because the content fits, would still pass every
+// story above. This one supplies unbroken text a real setting would never
+// carry (no spaces for the flex row to wrap on) specifically to catch that:
+// a clipped row still leaves `scrollWidth > clientWidth`, so the assertion
+// below is the one the judge asked for, not "no visible scrollbar".
+const LONG_TITLE =
+  "AWordThatNeverBreaksBecauseSettingsPanelsDoNotUsuallyGetOneLikeThisAtAllAndItKeepsGoingForAGoodWhileLongerStillWellPastWhereAnyRealSettingNameWouldEverStopSoItIsGuaranteedWiderThanTheRowItSitsIn";
+const LONG_OPTION_LABEL = "AnEquallyUnbrokenSelectedValueThatAStockSelectTriggerWouldOtherwiseGrowToFit";
+
+function LongContentCategories(): SettingsCategory[] {
+  return [
+    {
+      id: "stress",
+      label: "Stress",
+      icon: <SlidersHorizontal />,
+      sections: [
+        {
+          id: "long-title",
+          title: LONG_TITLE,
+          description: LONG_TITLE,
+          control: { kind: "switch", checked: true, onCheckedChange: () => {} },
+        },
+        {
+          id: "long-select",
+          title: "A select with an unbroken selected value",
+          control: {
+            kind: "select",
+            value: "long",
+            options: [
+              { value: "long", label: LONG_OPTION_LABEL },
+              { value: "short", label: "Short" },
+            ],
+            onValueChange: () => {},
+          },
+        },
+      ],
+    },
+  ];
+}
+
+function LongContentHarness() {
+  const [open, setOpen] = useState(true);
+  return (
+    <SettingsView
+      open={open}
+      onOpenChange={setOpen}
+      presentation="dialog"
+      categories={LongContentCategories()}
+      testIdPrefix="stock-settings-long"
+    />
+  );
+}
+
+export const LongUnbrokenContentNeverScrollsSideways: Story = {
+  render: () => <LongContentHarness />,
+  play: async () => {
+    await waitFor(() => expect(document.querySelector('[data-testid="stock-settings-long"]')).not.toBeNull());
+    const pane = document.querySelector<HTMLElement>('[data-testid="stock-settings-long"] [data-slot="settings-pane"]')!;
+    const viewport = pane.closest('[data-slot="scroll-area"]')!.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')!;
+    await expect(viewport.scrollWidth, "unbroken title/description never scroll sideways").toBeLessThanOrEqual(
+      viewport.clientWidth,
+    );
+
+    // The long option is the SELECTED one, so its label is what the closed
+    // trigger shows — the exact case `select.tsx`'s stock `w-fit
+    // whitespace-nowrap` trigger has no cap for on its own.
+    const trigger = document.querySelector<HTMLElement>(
+      '[data-testid="stock-settings-long"] [data-section-id="long-select"] [data-slot="select-trigger"]',
+    )!;
+    const paneRect = pane.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    await expect(triggerRect.right, "the select trigger stays inside the pane").toBeLessThanOrEqual(paneRect.right + 1);
+    await expect(viewport.scrollWidth, "still zero horizontal overflow with the trigger open").toBeLessThanOrEqual(
+      viewport.clientWidth,
+    );
+  },
+};
