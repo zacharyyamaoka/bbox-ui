@@ -47,11 +47,11 @@ export {
   type TerminalTarget,
 } from "./terminalRebind";
 export {
-  WIRE_TERMINAL_GAP,
   portTerminal,
   resolveWireEnds,
   wireAutomaticRoute,
   wireElbowInput,
+  wireTerminalGap,
   wirePinnedRoute,
   wireRoutePoints,
   wireRouteSegments,

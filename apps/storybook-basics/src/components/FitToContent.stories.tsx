@@ -357,7 +357,7 @@ function SqueezeDemo() {
     <Stage width={1180}>
       <Toolbar>
         <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--muted-foreground)" }}>
-          today, with no floor: a typed {MANUAL_HEIGHT_PX}px box. Watch the dots walk out of the bottom wall.
+          a typed {MANUAL_HEIGHT_PX}px box. BlockPort floors it (`minBlockHeightFor`): the box grows, no dot walks out of the bottom wall.
         </span>
       </Toolbar>
       <Row gap={40}>
@@ -382,17 +382,23 @@ export const OverflowWithoutAFloor: Story = {
 
     await waitFor(() => expect(dots(8)).toHaveLength(8));
 
-    // Every box is the SAME height regardless of port count — the bug,
-    // measured rather than described.
+    // 2026-09-22 — this story used to MEASURE the bug: every box the same
+    // typed height and the eighth dot below the bottom wall. Zach: "Please
+    // enforce a minimum height on the blocks … You should never have a
+    // rendering issue like this", and `BlockPort` now floors every Block at
+    // `minBlockHeightFor`, so the same typed height renders clamped UP
+    // wherever the ports need it and is left alone where they do not.
     const heights = LADDER_COUNTS.map((n) => box(n).height);
-    for (const h of heights) expect(h).toBeCloseTo(MANUAL_HEIGHT_PX, 0);
+    for (const h of heights) expect(h).toBeGreaterThanOrEqual(MANUAL_HEIGHT_PX - 0.5);
+    expect(box(8).height, "eight ports need more than the typed box").toBeGreaterThan(MANUAL_HEIGHT_PX);
 
     // `aligned` keeps its pitch (portEdge.tsx:490 is `flexShrink: 0`), so
-    // the failure is OVERFLOW, not compression: at 8 ports the last dot is
-    // below the Block's bottom wall.
-    const eight = box(8);
-    const last = dots(8).at(-1)!.getBoundingClientRect();
-    expect(last.bottom).toBeGreaterThan(eight.bottom);
+    // the failure used to be OVERFLOW: at 8 ports the last dot hung below
+    // the Block's bottom wall. Now every dot of every card is inside it.
+    for (const n of LADDER_COUNTS) {
+      const bottom = box(n).bottom;
+      for (const d of dots(n)) expect(d.getBoundingClientRect().bottom, `${n} ports`).toBeLessThanOrEqual(bottom + 1);
+    }
 
     // ...and at 2 ports nothing is wrong, which is why this is easy to
     // ship and hard to notice.
@@ -853,14 +859,17 @@ export const DistributionChangesTheFloor: Story = {
 
     await waitFor(() => expect(pitchesOf("sized", "space-evenly")).toHaveLength(DIST_PORTS - 1));
 
-    // Top row — one band for all: `aligned` and `space-between` hold the
-    // full pitch; the two schemes that spend gap on the ENDS come up short.
-    // This is the second bug of the family, and it is invisible until you
-    // measure it.
-    expect(pitchesOf("unsized", "aligned")[0]).toBeCloseTo(FULL_PITCH_PX, 0);
-    expect(pitchesOf("unsized", "space-between")[0]).toBeCloseTo(FULL_PITCH_PX, 0);
-    expect(pitchesOf("unsized", "space-around")[0]).toBeLessThan(FULL_PITCH_PX - 2);
-    expect(pitchesOf("unsized", "space-evenly")[0]).toBeLessThan(FULL_PITCH_PX - 2);
+    // Top row — one band for all. This row used to come up short for the
+    // two schemes that spend gap on the ENDS (the second bug of the
+    // family). Since 2026-09-22 `BlockPort` floors every Block at
+    // `minBlockHeightFor`, which sizes the band for the rail's OWN
+    // distribution — so the tempting one-size height is clamped up and all
+    // four hold the full pitch here too (Zach: "Please enforce a minimum
+    // height on the blocks … that can be calculated from the minimum port
+    // spacing").
+    for (const { label } of DISTRIBUTIONS) {
+      expect(pitchesOf("unsized", label)[0], `unsized ${label}`).toBeCloseTo(FULL_PITCH_PX, 0);
+    }
 
     // Bottom row — sized per distribution: all four land on the same pitch,
     // every consecutive pair, not just the first.

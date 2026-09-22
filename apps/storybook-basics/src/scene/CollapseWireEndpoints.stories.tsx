@@ -7,7 +7,7 @@ import { Block } from "../components/block";
 import { BlockPort } from "../components/blockPort";
 import { collapsedWallCenterPx, type BlockBands, type BlockView } from "../components/blockPort.layout";
 import type { PortEdgeItem } from "../components/portEdge";
-import { TRACE_TERMINAL_GAP } from "../components/trace";
+import { paintedPullBackAtPx } from "../presets/wireEnds.acceptance";
 import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "../components/trace.layout";
 import { WireLayer } from "../components/wireLayer";
 import { type BlockScene, type SceneData, type ScenePosition, wiredPorts } from "./scene";
@@ -114,8 +114,8 @@ function toScreen(svg: SVGSVGElement, x: number, y: number): { x: number; y: num
 }
 
 /**
- * The rendered trace's TRUE terminal (undoing `Trace`'s own
- * `TRACE_TERMINAL_GAP` pull-back — see `BlockWiring.stories.tsx`'s
+ * The rendered trace's TRUE terminal (undoing the ring pull-back of the
+ * dot at `target` — see `BlockWiring.stories.tsx`'s
  * `expectTerminalOnDot`, same math), asserted against an arbitrary target
  * point rather than a specific dot element — because the whole point here
  * is to check the wire lands on the Block's own measured EDGE, independent
@@ -134,9 +134,14 @@ function expectTerminalAt(
   const total = line.getTotalLength();
   const local = end === "from" ? line.getPointAtLength(0) : line.getPointAtLength(total);
   const sign = end === "from" ? -1 : 1;
+  // The pull-back is the dot's OWN painted ring (+ the round cap) since
+  // 2026-09-22 — Zach: "make the trace end exactly at the port" — read
+  // off the pixels by `paintedPullBackPx`, never off `WireLayer`'s own
+  // radius function.
+  const pullBack = paintedPullBackAtPx(document, target, line);
   const trueLocal = {
-    x: local.x + sign * DIR_VECTOR[dir].x * TRACE_TERMINAL_GAP,
-    y: local.y + sign * DIR_VECTOR[dir].y * TRACE_TERMINAL_GAP,
+    x: local.x + sign * DIR_VECTOR[dir].x * pullBack,
+    y: local.y + sign * DIR_VECTOR[dir].y * pullBack,
   };
   const screen = toScreen(svg, trueLocal.x, trueLocal.y);
   expectWithin(screen.x, target.x, tolerance, `${what} — x`);

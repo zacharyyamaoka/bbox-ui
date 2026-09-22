@@ -750,6 +750,16 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           // (BlockPort.stories.tsx:154-156, `BandedFace` at 240). So `props.h`
           // IS the authored box in port and expanded views, and the
           // measurement simply confirms it.
+          //
+          // A stored `h` too short for the walls' ports is NOT trusted as-is
+          // (2026-09-22, Zach: "You should never have a rendering issue like
+          // this"): the trunk's `BlockPort` renders the Block at least
+          // `minBlockHeightFor` tall, and `shared/measure.ts` then writes the
+          // rendered height back into `props.h` like any other measured size.
+          // WHY persist it rather than only render it: `props.h` is tldraw's
+          // geometry — hit-testing, selection, snapping — and a box drawn
+          // taller than its record is a box you cannot click the bottom of.
+          // The write is `history: "ignore"`, so it is never an undo step.
           height={view === "simple" ? undefined : h}
           // The trunk's radii, spread the way `hosts/nodeViews.tsx` spreads
           // them — `Block` applies its caller's `style` AFTER its own

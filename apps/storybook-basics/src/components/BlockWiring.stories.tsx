@@ -8,7 +8,7 @@ import type { BlockMember } from "./blockMembers";
 import { BlockPort } from "./blockPort";
 import type { BlockView } from "./blockPort.layout";
 import type { PortEdgeItem } from "./portEdge";
-import { TRACE_TERMINAL_GAP } from "./trace";
+import { paintedPullBackPx } from "../presets/wireEnds.acceptance";
 import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "./trace.layout";
 import { DUPLICATE_FAN_PX, type Wire } from "./wiring";
 import { WireLayer } from "./wireLayer";
@@ -124,9 +124,9 @@ function toScreen(svg: SVGSVGElement, x: number, y: number): { x: number; y: num
 
 /**
  * B1's actual claim: the TERMINAL `WireLayer` resolved — not the visibly
- * drawn line, which `Trace` deliberately pulls back `TRACE_TERMINAL_GAP`
- * (16px) short of it so the arrowhead and the port's own ring never
- * collide (`trace.tsx`'s own doc on `TRACE_TERMINAL_GAP`). Reconstructing
+ * drawn line, which ends ON the dot's painted ring rather than at its
+ * centre (`trace.tsx`'s `traceRingGapPx`; until 2026-09-22 a fixed 16px
+ * `TRACE_TERMINAL_GAP`). Reconstructing
  * the true terminal from the rendered path's own endpoint plus that
  * documented pull-back — `traceRouteStart`/`traceRouteEnd`, run backwards —
  * is what proves `WireLayer`'s OWN derivation is right, rather than
@@ -143,9 +143,14 @@ function expectTerminalOnDot(svg: SVGSVGElement, line: SVGPathElement, end: "fro
   const total = line.getTotalLength();
   const local = end === "from" ? line.getPointAtLength(0) : line.getPointAtLength(total);
   const sign = end === "from" ? -1 : 1;
+  // The pull-back is the dot's OWN painted ring (+ the round cap) since
+  // 2026-09-22 — Zach: "make the trace end exactly at the port" — read
+  // off the pixels by `paintedPullBackPx`, never off `WireLayer`'s own
+  // radius function.
+  const pullBack = paintedPullBackPx(dot, line);
   const trueLocal = {
-    x: local.x + sign * DIR_VECTOR[dir].x * TRACE_TERMINAL_GAP,
-    y: local.y + sign * DIR_VECTOR[dir].y * TRACE_TERMINAL_GAP,
+    x: local.x + sign * DIR_VECTOR[dir].x * pullBack,
+    y: local.y + sign * DIR_VECTOR[dir].y * pullBack,
   };
   const screen = toScreen(svg, trueLocal.x, trueLocal.y);
   const centre = dotCentre(dot);

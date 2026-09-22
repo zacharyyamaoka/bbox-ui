@@ -77,7 +77,7 @@ import {
 
 import type { BlockSide } from "../components/port.layout";
 import { DEFAULT_TRACE_ROUTING, OPPOSITE_DIR, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "../components/trace.layout";
-import { Trace } from "../components/trace";
+import { Trace, traceRingGapPx, traceRouteEnd, traceRouteStart } from "../components/trace";
 import { ancestorsOf } from "../scene/region";
 import { portKey } from "../scene/scene";
 import { sceneWires } from "../scene/sceneWires";
@@ -110,6 +110,9 @@ export interface PortAnchor {
   x: number;
   y: number;
   side: BlockSide | null;
+  /** The dot's painted outer radius, shape-local px (`PortDotSighting.
+   *  ringRadius`) — where the wire overlay ends the cable. */
+  ringRadius: number;
 }
 
 interface TldrawHostContextValue {
@@ -266,7 +269,7 @@ function sameAnchors(a: readonly PortAnchor[] | undefined, b: readonly PortAncho
   if (!a) return b.length === 0;
   return (
     a.length === b.length &&
-    a.every((p, i) => p.handleId === b[i].handleId && Math.abs(p.x - b[i].x) < 0.5 && Math.abs(p.y - b[i].y) < 0.5 && p.side === b[i].side)
+    a.every((p, i) => p.handleId === b[i].handleId && Math.abs(p.x - b[i].x) < 0.5 && Math.abs(p.y - b[i].y) < 0.5 && p.side === b[i].side && Math.abs(p.ringRadius - b[i].ringRadius) < 0.5)
   );
 }
 
@@ -304,7 +307,7 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
     // resolves identically.
     const anchors = sightPortDots(wrapper, nodeId, { members: true }).map((sighting): PortAnchor => {
       const local = editor.getPointInShapeSpace(shape.id, editor.screenToPage({ x: sighting.clientX, y: sighting.clientY }));
-      return { portId: sighting.portId, ownerId: sighting.ownerId, handleId: sighting.handleId, x: local.x, y: local.y, side: sighting.side };
+      return { portId: sighting.portId, ownerId: sighting.ownerId, handleId: sighting.handleId, x: local.x, y: local.y, side: sighting.side, ringRadius: sighting.ringRadius };
     });
     bridge.reportAnchors(nodeId, anchors);
   }, [editor, nodeId, shape.id]);
@@ -507,7 +510,7 @@ function WireOverlay() {
       const wires = sceneWires(scene);
       const resolved: ResolvedWireRender[] = [];
       const unresolvedIds: string[] = [];
-      const endPoint = (blockId: string, portId: string): { x: number; y: number; side: BlockSide } | null => {
+      const endPoint = (blockId: string, portId: string): { x: number; y: number; side: BlockSide; ringRadius: number } | null => {
         // WHY the ancestor walk: only TOP-LEVEL nodes get a shape
         // (`handleMount`/`topLevelNodes`), so a member has no
         // `shapeIdForNode` of its own and `anchors[memberId]` is never
@@ -524,7 +527,7 @@ function WireOverlay() {
         const page = transform.applyToPoint({ x: anchor.x, y: anchor.y });
         const shape = editor.getShape<BboxNodeShape>(shapeIdForNode(shapeNodeId));
         const side = anchor.side ?? (shape && anchor.x < shape.props.w / 2 ? "left" : "right");
-        return { x: page.x, y: page.y, side };
+        return { x: page.x, y: page.y, side, ringRadius: anchor.ringRadius };
       };
       wires.forEach((wire) => {
         const from = endPoint(wire.from.blockId, wire.from.portId);
@@ -537,12 +540,18 @@ function WireOverlay() {
         }
         resolved.push({
           id: wire.id,
-          from: { x: from.x, y: from.y, dir: from.side as TraceDir },
+          // Each end ON its dot's painted ring, pulled back here per end and
+          // handed to `Trace` with `gap={0}` — the same fix, for the same
+          // quote, as `WireLayer` (wireLayer.tsx: "make the trace end exactly
+          // at the port"). Under the shapes a centre-bound wire would hide
+          // behind an opaque dot but show through a hollow one, and the two
+          // hosts would disagree about where a cable ends.
+          from: traceRouteStart({ x: from.x, y: from.y, dir: from.side as TraceDir }, traceRingGapPx(from.ringRadius)),
           // The dot's measured centre, with no per-cable offset — Zach's
           // "1 connection point in the center" (2026-09-19). The duplicate
           // fan this host used to apply is gone for the same reason it is
           // gone from `WireLayer`.
-          to: { x: to.x, y: to.y, dir: OPPOSITE_DIR[to.side as TraceDir] },
+          to: traceRouteEnd({ x: to.x, y: to.y, dir: OPPOSITE_DIR[to.side as TraceDir] }, traceRingGapPx(to.ringRadius)),
           variant: wire.variant,
           routing: wire.routing ?? DEFAULT_TRACE_ROUTING,
           markerEnd: wire.markerEnd,
@@ -571,6 +580,7 @@ function WireOverlay() {
             color={color}
             markerEnd={markerEnd}
             terminals={false}
+            gap={0}
           />
         </g>
       ))}

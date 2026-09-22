@@ -678,6 +678,13 @@ function SansFontReferenceBox({ testId }: { testId: string }) {
 }
 
 export const NoSkinRegression: Story = {
+  // Pinned to the v1 port style (2026-09-22). This story's reference boxes
+  // are the PRE-SKIN literals — v1's look — and its subject is the SKIN
+  // seam, not the port proposal: v2 (now the toolbar's default, Zach: "lets
+  // do ports v2 as the default ones") sets a mono label face by design,
+  // which would fail the "inherit" reference for a reason that is not a skin
+  // regression at all.
+  globals: { portVariant: "v1" },
   render: () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 32 }}>
       <div style={{ display: "flex", gap: 24, alignItems: "center" }}>

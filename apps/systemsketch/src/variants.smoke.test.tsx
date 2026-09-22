@@ -25,6 +25,17 @@
 //       COMPONENT's rows (what the trunk's `Region` paints) — header heights
 //       26-32px by variant — and the frame hugs its rows with no dead band.
 //
+// THREE DEFAULT-ONLY LINES MOVED, 2026-09-22, lane `trace-defaults` —
+// declared here because this file was committed ahead of its implementation
+// and a silent edit to it is the thing that rule exists to prevent. Zach:
+// "Please also lets do ports v2 as the default ones … and for regions make
+// v9 the default one." So (a)'s "v1/v1 by default" now reads the app's
+// defaults (`APP_DEFAULT_PORT_VARIANT` / `APP_DEFAULT_REGION_VARIANT`,
+// stamped on <html> like any pick), (b)'s resting dot box is that default's,
+// and (c) — whose claim is "v2 draws a rule v1 does not" — now PICKS v1
+// before asserting its "no rule" precondition, since v9 (the new resting
+// drawing) draws one. No other assertion moved.
+//
 // "Reload" in a browser test cannot navigate the page away from the runner,
 // so it is simulated by what a reload actually does to this app: the React
 // tree goes away, the `<html>` attributes go with the old document, and
@@ -37,6 +48,7 @@ import { REGION_PAD_BOTTOM_PX } from "@trunk/components/region.layout";
 import { PORT_VARIANTS, PORT_VARIANT_IDS } from "@trunk/skin/portVariants";
 import { REGION_VARIANTS, REGION_VARIANT_IDS, type RegionVariantId } from "@trunk/skin/regionVariants";
 
+import { APP_DEFAULT_PORT_VARIANT, APP_DEFAULT_REGION_VARIANT } from "./chrome/DevMenu/variantSwitch";
 import { createCornerBlock, regionLayoutOf, type RegionKind, type RegionShape } from "./shapes/region";
 import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE } from "./shapes/types";
 import { canvasOf, mountApp, waitFor, type MountedApp } from "./testing/harness";
@@ -217,12 +229,15 @@ describe("app-variant-switch (a) — a bottom-right pill beside the zoom cluster
     const hit = document.elementFromPoint(pillRect.left + pillRect.width / 2, pillRect.top + pillRect.height / 2);
     expect(hit && pill.contains(hit), "the pill's centre hit-tests to the pill").toBe(true);
 
-    // Defaults: nothing stored → v1/v1, and v1 is the ABSENT attribute
-    // (both variant tables resolve a missing attribute to v1).
-    expect(trigger("port")?.getAttribute("data-value")).toBe("v1");
-    expect(trigger("region")?.getAttribute("data-value")).toBe("v1");
-    expect(document.documentElement.dataset.bboxPortVariant ?? "v1").toBe("v1");
-    expect(document.documentElement.dataset.bboxRegionVariant ?? "v1").toBe("v1");
+    // Defaults: nothing stored → the app's defaults, v2/v9 since 2026-09-22,
+    // STAMPED on <html> (only v1 is the absent attribute, and each variant's
+    // CSS is keyed on the attribute — see `APP_DEFAULT_PORT_VARIANT`).
+    expect(trigger("port")?.getAttribute("data-value")).toBe(APP_DEFAULT_PORT_VARIANT);
+    expect(trigger("region")?.getAttribute("data-value")).toBe(APP_DEFAULT_REGION_VARIANT);
+    expect(APP_DEFAULT_PORT_VARIANT).toBe("v2");
+    expect(APP_DEFAULT_REGION_VARIANT).toBe("v9");
+    expect(document.documentElement.dataset.bboxPortVariant).toBe(APP_DEFAULT_PORT_VARIANT);
+    expect(document.documentElement.dataset.bboxRegionVariant).toBe(APP_DEFAULT_REGION_VARIANT);
 
     // Each menu offers exactly the table's ids, titled from the variant
     // tables. COUNT DERIVED, NOT SPELLED (2026-09-19): the two tables no
@@ -256,7 +271,7 @@ describe("app-variant-switch (b) — the port style switches live and is remembe
     app = await mountApp();
     const first = block("estimate()", 200, 220, PORTS_OUT);
     const dot = await dotOf(first, "out");
-    expect(dot.getBoundingClientRect().width, "v1's dot box by default").toBeCloseTo(PORT_VARIANTS.v1.dot.diameter, 0);
+    expect(dot.getBoundingClientRect().width, "the default's dot box").toBeCloseTo(PORT_VARIANTS[APP_DEFAULT_PORT_VARIANT].dot.diameter, 0);
 
     await pick("port", "v3");
     expect(document.documentElement.dataset.bboxPortVariant).toBe("v3");
@@ -289,6 +304,10 @@ describe("app-variant-switch (c) — region v2 draws its header rule", () => {
     const { id, cornerId } = branch(160, 140);
     const frame = await waitFor(() => frameOf(id), { what: "the branch frame" });
     const rule = await waitFor(() => frame.querySelector<HTMLElement>(':scope > [data-slot="region-header-rule"]'), { what: "the header rule element" });
+    // v9 — the resting drawing since 2026-09-22 — draws a rule of its own,
+    // so the "v1 has none" precondition is taken ON v1, picked by name.
+    await pick("region", "v1");
+    await waitFor(() => (getComputedStyle(rule).display === "none" ? true : null), { what: "no rule in v1" });
     expect(getComputedStyle(rule).display, "no rule in v1").toBe("none");
 
     await pick("region", "v2");

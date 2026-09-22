@@ -28,16 +28,21 @@
 import { HTMLContainer, useEditor, useValue } from "tldraw";
 
 import { Trace } from "@trunk/components/trace";
+import { usePortVariant } from "@trunk/skin/portVariants";
 
 import { diffMarkPaint } from "../shared/diffMark";
 
-import { WIRE_TERMINAL_GAP, directionTowards, wireTerminals } from "./wireGeometry";
+import { directionTowards, wireTerminalGap, wireTerminals } from "./wireGeometry";
 import { wireDrag } from "./wireGesture";
 import { wireTunnelState } from "./wireTunnel";
 import type { WireShape } from "./WireShapeUtil";
 
 export function WireFace({ shape }: { shape: WireShape }) {
   const editor = useEditor();
+  // Subscribed, not read once: the port style is an `<html>` attribute the
+  // variant pill flips live, and the cable's end has to follow the ring of
+  // the dot now painted (`wireTerminalGap`).
+  const portVariant = usePortVariant();
 
   // WHY `useValue` and not `shape.props` alone: a wire's two ends live in
   // OTHER shapes' records (their measured `anchors` and their page
@@ -132,10 +137,10 @@ export function WireFace({ shape }: { shape: WireShape }) {
             // The dots are REAL `Port`s rendered by the blocks at each end,
             // so `Trace` must not draw its own terminal glyphs on top of
             // them — the donor passes the same `false` for the same reason.
-            // `gap` follows from that: see `WIRE_TERMINAL_GAP`'s own doc for
-            // why 8 replaces the trunk's glyph-sized 16.
+            // `gap` follows from that: see `wireTerminalGap`'s own doc for
+            // why the dot's own ring replaces the trunk's glyph-sized 16.
             terminals={false}
-            gap={WIRE_TERMINAL_GAP}
+            gap={wireTerminalGap(portVariant.id)}
             tunnel={painted.tunnel}
           />
         </g>
@@ -157,7 +162,7 @@ export function WireFace({ shape }: { shape: WireShape }) {
  * (@tldraw/editor's DefaultCanvas — `.tl-canvas__in-front` is a sibling of
  * `.tl-canvas`, `position: absolute; inset: 0`), so it carries no camera
  * transform. `editor.pageToScreen` is the conversion, and it is exact at any
- * zoom; what does NOT scale is the 2px stroke and the 8px terminal gap, which
+ * zoom; what does NOT scale is the 2px stroke and the ~7px terminal gap, which
  * stay constant screen px while the board's own cables scale with it. For an
  * in-flight preview that is arguably the right answer — the line you are
  * dragging stays legible zoomed out — and it is stated here rather than
@@ -165,6 +170,7 @@ export function WireFace({ shape }: { shape: WireShape }) {
  */
 export function InFlightWire() {
   const editor = useEditor();
+  const portVariant = usePortVariant();
 
   const painted = useValue(
     "ss-wire in flight",
@@ -202,7 +208,7 @@ export function InFlightWire() {
         routing="elbow"
         variant="data"
         terminals={false}
-        gap={WIRE_TERMINAL_GAP}
+        gap={wireTerminalGap(portVariant.id)}
       />
     </svg>
   );

@@ -263,7 +263,11 @@ function SceneCard({
             strokeDasharray="3 5"
           />
         )}
-        <TraceBody id={`trace-${id}`} path={path} points={routePoints(route)} />
+        {/* `markerEnd="arrow"` BY NAME since heads stopped being the default
+            (2026-09-22, `DEFAULT_TRACE_MARKER_END`): this gallery's 16px
+            `TERMINAL_GAP` is the chevron's room, and its step 6 asserts
+            the head sits at the `to` end only. */}
+        <TraceBody id={`trace-${id}`} path={path} points={routePoints(route)} markerEnd="arrow" />
         <TraceTerminal {...scene.from} />
         <TraceTerminal {...scene.to} />
       </svg>

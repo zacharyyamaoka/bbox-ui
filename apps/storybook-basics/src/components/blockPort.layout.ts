@@ -28,7 +28,7 @@
  * Insetting the border box by `RAIL_MAIN_INSET_PX` makes the stated rule the
  * measured one: first dot centre at `bandTop + slotMainPx / 2`, exactly.
  */
-import { PORT_DIAMETERS, PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, type BlockSide, type PortSize } from "./port.layout";
+import { BLOCK_SIDES, PORT_DIAMETERS, PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, type BlockSide, type PortSize } from "./port.layout";
 import {
   CONTAINER_BORDER,
   CONTAINER_PADDING,
@@ -563,4 +563,218 @@ export function collapsedWallCenterPx(bands: BlockBands, edge: BlockSide): { x: 
 export function functionPortHeaderInsetPx(diameter: PortSize = "md"): number {
   const diameterPx = typeof diameter === "number" ? diameter : PORT_DIAMETERS[diameter];
   return diameterPx / 2 + PORT_RING_OVERHANG_PX + PORT_LABEL_GAP;
+}
+
+/* ------------------------------------------------------------------ */
+/* The band a rail needs — the inverse of the clamp                    */
+/* (moved here verbatim from `scene/fitToContent.ts`, which re-exports) */
+/* ------------------------------------------------------------------ */
+
+export interface RailBandMetrics {
+  /** Main-axis size of one slot box. Default: the rail's own slot size. */
+  slotMainPx?: number;
+  /** The port-to-port gap the band must be able to afford. */
+  gapPx?: number;
+  /** `RailPlan.endMarginPx` — the inset applied at BOTH ends of the rail's
+   *  content box. Zero for a body-band rail, `RAIL_END_MARGIN_PX` for a
+   *  wall-spanning one. */
+  endMarginPx?: number;
+  /**
+   * The rail's own `Distribution`. Omit for `aligned`, which is port
+   * view's left/right-only default.
+   *
+   * WHY this is a parameter at all — a finding, not a guess: the required
+   * band is NOT the same for every distribution, because the space-*
+   * schemes spend some of the band on END gaps that `aligned` does not
+   * have. Sizing a band for `aligned` and then rendering it
+   * `space-around` drops the real pitch from 42px to 33px, a silent 21%
+   * squeeze — measured by `fitToContent.test.ts`'s
+   * "holds the full pitch in EVERY distribution", which failed exactly
+   * this way on its first run and is the reason this field exists.
+   */
+  distribution?: Distribution;
+}
+
+/**
+ * How many gap-widths a distribution spends across `slotCount` boxes.
+ *
+ * Straight from CSS Box Alignment Level 3's normative definitions, already
+ * quoted in `portEdge.layout.ts`'s `mainAxisPositions` docblock (spec read
+ * 2026-09-17 at https://www.w3.org/TR/css-align-3/) — read the gap count
+ * off each definition rather than re-deriving it:
+ *
+ *   • `aligned`       — a real flexbox `gap`, only BETWEEN boxes → n-1.
+ *   • `space-between` — flush at both ends, gaps only between     → n-1.
+ *   • `space-around`  — a HALF gap at each end (two halves = one)  → n.
+ *   • `space-evenly`  — a FULL gap at each end                     → n+1.
+ */
+function gapCountFor(slotCount: number, distribution?: Distribution): number {
+  if (slotCount <= 0) return 0;
+  if (distribution == null || distribution.mode === "aligned") return slotCount - 1;
+  switch (distribution.scheme) {
+    case "space-between":
+      return slotCount - 1;
+    case "space-around":
+      return slotCount;
+    case "space-evenly":
+      return slotCount + 1;
+  }
+}
+
+/**
+ * The band height at which `slotCount` slots all keep their FULL pitch.
+ *
+ * ── The derivation, because it is the whole point of this function ──
+ *
+ * `blockPort.layout.ts`'s `railBoxFor` turns a band into a track box:
+ *
+ *     trackMain = (bandEnd - endMargin) - (bandStart + endMargin)
+ *                 + 2 * RAIL_MAIN_INSET_PX
+ *
+ * and `portEdge.tsx`'s track then spends `CONTAINER_BORDER` +
+ * `CONTAINER_PADDING` on each side before its first slot box. Since
+ * `RAIL_MAIN_INSET_PX` is DEFINED as `CONTAINER_BORDER + CONTAINER_PADDING`
+ * (blockPort.layout.ts:101), those two cancel exactly and the usable
+ * content main is simply:
+ *
+ *     contentMain = band - 2 * endMargin
+ *
+ * `n` slot boxes at full pitch need `n*slot + (n-1)*gap`. Setting the two
+ * equal and solving for the band gives the return value below.
+ *
+ * ── WHY: the coupling this docblock would otherwise only warn about ──
+ *
+ * The donor's own comment at `layoutBlock.ts:497-501` says it plainly:
+ * "`layoutBlock` compresses `pitch` to whatever room is left, so adding a
+ * port to a full box silently squeezes every existing row. This is the
+ * exact inverse of that clamp and therefore lives beside it: any change to
+ * the body's padding or to the footer has to move both numbers together or
+ * neither."
+ *
+ * A comment cannot enforce that. So the cancellation above is pinned as a
+ * ROUND-TRIP TEST instead (`fitToContent.test.ts`, "the RAIL_MAIN_INSET_PX
+ * cancellation"): the test feeds this function's output through the REAL
+ * `railBoxFor` and the REAL `CONTAINER_BORDER`/`CONTAINER_PADDING`, and
+ * asserts the content main lands on exactly `n*slot + (n-1)*gap`. Change
+ * `CONTAINER_PADDING` without `railBoxFor` following — or hardcode `16`
+ * where `RAIL_MAIN_INSET_PX` belongs — and that test goes red instead of
+ * this file quietly disagreeing with the renderer.
+ *
+ * Returns 0 for `slotCount <= 0`: an unpopulated edge imposes no floor at
+ * all, which is what keeps `Block`'s "omit height to hug" contract intact
+ * for every Block that has no ports (see `resolveBlockHeight`).
+ */
+export function railBandHeightForSlots(slotCount: number, metrics: RailBandMetrics = {}): number {
+  const { slotMainPx = PORT_EDGE_SLOT_MIN_PX, gapPx = RAIL_GAP_PX, endMarginPx = 0, distribution } = metrics;
+  if (slotCount <= 0) return 0;
+  return slotCount * slotMainPx + gapCountFor(slotCount, distribution) * gapPx + 2 * endMarginPx;
+}
+
+/* ------------------------------------------------------------------ */
+/* minBlockHeightFor — the floor a Block's ports impose on its height  */
+/* ------------------------------------------------------------------ */
+
+export interface MinBlockHeightInput {
+  view: BlockView;
+  /** Port view only; ignored elsewhere, exactly as `railPlanFor` ignores it. */
+  portLayout?: BlockPortLayout;
+  /** Port COUNT per wall. Top/bottom walls never set a height floor — their
+   *  rails run along the width — but they are still read, because a
+   *  populated top/bottom wall switches port view's side rails to
+   *  `space-around` (E-3), which needs more band than `aligned`. */
+  ports: Partial<Record<BlockSide, number>>;
+  /** Defaults to `view === "simple"`, `BlockPort`'s own default. */
+  collapsePorts?: boolean;
+  /** A caller's explicit per-wall `distribution` — `BlockEdgeSpec.
+   *  distribution`, the one field of the plan a caller may reach past. */
+  distributions?: Partial<Record<BlockSide, Distribution>>;
+  /** MEASURED header band, px (block top → body top). 0 when headerless. */
+  headerPx?: number;
+  /** MEASURED footer band, px (body bottom → block bottom). 0 when footerless. */
+  footerPx?: number;
+}
+
+/**
+ * The shortest box a Block can have without a single port on its left or
+ * right wall hanging past its bottom edge, px. 0 when neither side wall has
+ * a port, so a portless Block keeps hugging.
+ *
+ * WHY: Zach, 2026-09-22 — "Please enforce a minimum height on the blocks …
+ * that can be calculated from the minimum port spacing. You should never
+ * have a rendering issue like this", on a `src` block whose third right-wall
+ * port hung below the card. An `aligned` rail never compresses (its slots are
+ * `flexShrink: 0`, see `railPitchForBand`), so a box shorter than its rail
+ * does not squeeze the ports — it drops the last ones off the bottom. The
+ * truthful-rendering rule forbids hiding or overlapping them, so the box
+ * grows instead.
+ *
+ * WHY built from `railPlanFor` + `railBandHeightForSlots` and nothing else:
+ * those are the SAME two functions the renderer places ports with (the
+ * plan) and the fit-to-content floor sizes bands with (the band, pinned
+ * against the real `railBoxFor` by a round-trip test). A floor that
+ * restated the spacing would be a second copy of the rule, free to drift
+ * the day `RAIL_GAP_PX` or a view rule changes. Per wall:
+ *
+ *   band   = edgePadding (an `offset` lane's push-down) +
+ *            railBandHeightForSlots(slots, the plan's own margin + scheme)
+ *   height = band                       for a `block`-band rail
+ *          = header + band + footer     for a `body`-band rail
+ *
+ * and the Block's floor is the largest of those. A collapsed wall (simple
+ * view) is ONE slot, whatever its count — that is what collapsing means.
+ *
+ * DEVIATION from the brief's "(max ports) × pitch", stated: that sum is
+ * `n·(slot + gap)`, one gap MORE than the rail actually occupies (`n·slot +
+ * (n−1)·gap` for `aligned`). This returns the rail's own length, so the floor
+ * is exactly the box at which the last dot's slot meets the body's bottom
+ * edge — never shorter (the bug), never an arbitrary gap taller.
+ *
+ * Provenance: class (c), ours — composition of this file's own two
+ * functions; the rule it enforces is SystemSketch's
+ * `blockPortViewHeightForSlots` (`layoutBlock.ts:495-517`), already cited by
+ * `scene/fitToContent.ts`'s `blockPortViewMinHeight`, which is the
+ * port-view-only special case of this function.
+ */
+export function minBlockHeightFor(input: MinBlockHeightInput): number {
+  const { view, portLayout = "inline", ports, collapsePorts = view === "simple", distributions, headerPx = 0, footerPx = 0 } = input;
+  const count = (side: BlockSide) => Math.max(0, ports[side] ?? 0);
+  const populatedEdges = BLOCK_SIDES.filter((side) => count(side) > 0);
+  let floor = 0;
+  for (const edge of ["left", "right"] as const) {
+    const n = count(edge);
+    if (n === 0) continue;
+    const plan = railPlanFor({
+      view,
+      portLayout,
+      edge,
+      itemIds: Array.from({ length: n }, (_, i) => `${edge}-${i}`),
+      leadCount: count("left"),
+      collapsePorts,
+      populatedEdges,
+    });
+    const distribution = distributions?.[edge] ?? plan.distribution;
+    // An `aligned` rail spends its OWN gap and push-down; a distributed one
+    // has neither, and is floored at the Block's rail gap (the full pitch —
+    // `railBandHeightForSlots`' own "holds the full pitch in EVERY
+    // distribution" finding).
+    //
+    // A LONE dot — a collapsed wall, or a wall with one port — has no
+    // neighbour to keep a pitch from, so it needs one slot and none of a
+    // space-* scheme's END gaps: `space-evenly` would otherwise demand
+    // 24 + 2·18 = 60px for a single centred dot and inflate a 46px value
+    // capsule into a circle (measured on the tldraw scene bench).
+    const aligned = distribution.mode === "aligned" ? distribution : null;
+    const slots = plan.collapsed ? 1 : n;
+    const band =
+      (aligned?.edgePadding ?? 0) +
+      (slots === 1
+        ? railBandHeightForSlots(1, { endMarginPx: plan.endMarginPx })
+        : railBandHeightForSlots(slots, {
+            endMarginPx: plan.endMarginPx,
+            distribution,
+            ...(aligned ? { gapPx: aligned.gap } : null),
+          }));
+    floor = Math.max(floor, plan.band === "body" ? headerPx + band + footerPx : band);
+  }
+  return floor;
 }

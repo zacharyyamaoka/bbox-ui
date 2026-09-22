@@ -57,8 +57,8 @@
  * `Block` stays a stock seam this file composes from the outside, never a
  * file this one edits.
  */
-import type { CSSProperties, ReactNode, RefObject } from "react";
-import { useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactElement, ReactNode, RefObject } from "react";
+import { cloneElement, isValidElement, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { Diagnostic } from "./highlighter";
@@ -74,6 +74,7 @@ import {
   PORT_EDGE_SLOT_MIN_PX,
   RAIL_CROSS_PX,
   functionPortCenterPx,
+  minBlockHeightFor,
   railAxisFor,
   railBoxFor,
   railPlanFor,
@@ -402,6 +403,51 @@ export function BlockPort({
   // `outputStart = slot + inputs.length`, i.e. the INPUT count).
   const leadCount = edges.left?.items.length ?? 0;
 
+  // The floor the walls' ports impose (`minBlockHeightFor`), from the
+  // MEASURED header/footer bands and the same plan the rails are placed
+  // with. Handed to the Block as a CSS `min-height`, so an authored or
+  // stored `height` that is too short renders clamped UP and every other
+  // height is untouched.
+  //
+  // WHY: Zach, 2026-09-22 — "Please enforce a minimum height on the blocks
+  // … that can be calculated from the minimum port spacing. You should never
+  // have a rendering issue like this", on a port hanging below its block.
+  // WHY here, once, rather than in each host: every host (DOM canvas, React
+  // Flow node, tldraw bench, the SystemSketch app's `ss-block`) mounts its
+  // Block inside a `BlockPort`, and this is the one place that already
+  // knows both the walls and the measured bands. WHY `min-height` and not a
+  // replaced `height`: a floor RAISES a short box and leaves a taller one
+  // alone (`resolveBlockHeight`'s own rule) — a deliberately tall block is
+  // never "corrected". Growing the box is the truthful-rendering answer;
+  // clipping or overlapping the ports is not.
+  //
+  // Depends only on header/footer, never on the Block's own height, so the
+  // clamp cannot feed back into itself: measure → floor → grow → re-measure
+  // yields the same floor.
+  const floorPx = bands
+    ? minBlockHeightFor({
+        view,
+        portLayout,
+        collapsePorts: collapse,
+        ports: Object.fromEntries(BLOCK_SIDES.map((side) => [side, edges[side]?.items.length ?? 0])),
+        distributions: Object.fromEntries(
+          BLOCK_SIDES.flatMap((side) => (edges[side]?.distribution ? [[side, edges[side]!.distribution!]] : [])),
+        ),
+        headerPx: bands.bodyTop - bands.blockTop,
+        footerPx: bands.blockTop + bands.blockHeight - bands.bodyBottom,
+      })
+    : 0;
+  // `cloneElement` adds ONE style key to the caller's own element and
+  // changes nothing else about it — `children` stays "composed, never rebuilt
+  // from props" (`BlockPortProps.children`). `Block` spreads its caller's
+  // `style` last, so this lands on its root.
+  const floored =
+    floorPx > 0 && isValidElement<{ style?: CSSProperties }>(children)
+      ? cloneElement(children as ReactElement<{ style?: CSSProperties }>, {
+          style: { ...(children.props as { style?: CSSProperties }).style, minHeight: floorPx },
+        })
+      : children;
+
   const mutationSplit = partitionMutations(
     mutations,
     sideEffects,
@@ -422,7 +468,7 @@ export function BlockPort({
       // Block's own root.
       style={{ ...ISOLATED_ROOT_STYLE, position: "relative", width: "max-content" }}
     >
-      {children}
+      {floored}
       {bands &&
         populated.map((side) => {
           const spec = edges[side]!;

@@ -61,7 +61,8 @@ import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "
 
 import type { ElbowRect } from "./elbow/index";
 import type { BlockSide } from "./port.layout";
-import { Trace } from "./trace";
+import { portDotRingRadiusPx } from "../skin/portVariants";
+import { Trace, traceRingGapPx, traceRouteEnd, traceRouteStart } from "./trace";
 import { TraceBadge } from "./traceBadge";
 import { DEFAULT_TRACE_ROUTING, OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "./trace.layout";
 import { keepOutsFor, type KeepOutRect, type Wire, type WireEnd } from "./wiring";
@@ -132,6 +133,13 @@ function resolveDot(container: HTMLElement, end: WireEnd): HTMLElement | null {
 function railEdgeOf(dot: HTMLElement): BlockSide | null {
   const edge = dot.closest<HTMLElement>('[data-slot="block-port-rail"]')?.getAttribute("data-edge");
   return edge === "top" || edge === "right" || edge === "bottom" || edge === "left" ? edge : null;
+}
+
+/** The painted dot a resolved end draws — the `[data-slot="port-dot"]`
+ *  inside a labelled rail item, or the resolved element itself when it IS
+ *  the dot (a collapsed stand-in wraps a bare `Port`, so it has one too). */
+function paintedDotOf(resolved: HTMLElement): Element {
+  return resolved.querySelector('[data-slot="port-dot"]') ?? resolved;
 }
 
 function centreOf(dot: HTMLElement, containerRect: DOMRect): { x: number; y: number } {
@@ -238,8 +246,23 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
     // from geometry to a badge). Two cables sharing a pair therefore draw
     // on top of each other on the stub; that overlap is the accepted cost
     // of the rule, not an oversight.
-    const from: TraceTerminalSpec = { ...centreOf(fromDot, containerRect), dir: fromEdge as TraceDir };
-    const to: TraceTerminalSpec = { ...centreOf(toDot, containerRect), dir: OPPOSITE_DIR[toEdge as TraceDir] };
+    //
+    // The route then starts and ends ON each dot's painted ring, pulled back
+    // HERE by that dot's own measured radius (`gap={0}` below). Zach,
+    // 2026-09-22: "make the trace end exactly at the port … right now there
+    // is this spacing which is not desirable!" — the spacing was `Trace`'s
+    // default 16px `TRACE_TERMINAL_GAP`, sized for its own r=9 glyph plus a
+    // chevron, landing ~10px short of a real 5.5-6px dot. Per END rather
+    // than one `gap` for both, because the two dots need not match (a
+    // collapsed stand-in, an `md` function port, a pinned variant).
+    const from: TraceTerminalSpec = traceRouteStart(
+      { ...centreOf(fromDot, containerRect), dir: fromEdge as TraceDir },
+      traceRingGapPx(portDotRingRadiusPx(paintedDotOf(fromDot))),
+    );
+    const to: TraceTerminalSpec = traceRouteEnd(
+      { ...centreOf(toDot, containerRect), dir: OPPOSITE_DIR[toEdge as TraceDir] },
+      traceRingGapPx(portDotRingRadiusPx(paintedDotOf(toDot))),
+    );
     const routing = wire.routing ?? DEFAULT_TRACE_ROUTING;
     if (routing !== "elbow") {
       resolved.push({ wire, from, to, routing });
@@ -397,6 +420,7 @@ export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: Wi
               color={wire.color}
               markerEnd={wire.markerEnd}
               terminals={false}
+              gap={0}
               obstacles={obstacles}
               fromBox={fromBox}
               toBox={toBox}
