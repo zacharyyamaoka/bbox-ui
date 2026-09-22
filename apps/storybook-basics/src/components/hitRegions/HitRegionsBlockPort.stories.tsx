@@ -18,7 +18,8 @@
  *     member is its own `block:solid` node, so a press on one selects IT.
  *   - Expanded Opaque is `block:solid` again: the members are hidden, so
  *     there is nothing to pass a press through to.
- * Port dots, their halos and the rail box own their press in every view.
+ * Port dots, their halos and port/group labels own their press in every
+ * view. The rail's own empty margin does not — see below.
  *
  * WHY Expanded Opaque is composed here: `BlockView` on this base is
  * `simple | port | expanded` (blockPort.layout.ts:45) — BlockPort has no
@@ -27,12 +28,20 @@
  * expanded size with the members replaced by a line saying what is hidden,
  * and the same `expanded` rails, so the four panels differ only in view.
  *
- * THE RAIL MARGIN on THIS base: `block-port-rail` is a real box
- * (`RAIL_CROSS_PX` across, pointer events on), so a press on the rail
- * between dots lands on the rail and `DRAG_DECLARATIONS` makes it
- * `owns-pointer` — it does NOT pass through to the block underneath. The
- * `expectRailMargin` check below measures that rather than assuming it; a
- * sibling branch may change it, and this story will say so when it does.
+ * THE RAIL MARGIN on THIS base: `block-port-rail`'s own box is
+ * `pointer-events: none` (`blockPort.tsx`'s `BlockPortRail`, the `style`
+ * object passed to the rail's root div) — WHY: Zach, 2026-09-21, "a port
+ * rail's empty margin no longer swallows presses". Only the dots, labels
+ * and lane furniture the rail draws re-arm `pointer-events: auto` on
+ * themselves. So a press on the rail's own empty margin (clear of every
+ * dot and label) passes straight through to whatever is behind it — the
+ * block's own face, or the canvas past the block's edge, since the rail's
+ * box straddles the block's border by design. The `expectRailMargin` check
+ * below measures that rather than assuming it: it locates a clear point by
+ * geometry alone (never by asking `elementFromPoint` to land on the rail,
+ * which after this change it never will) and asserts the press resolves
+ * anywhere EXCEPT the rail. Do not revert this to "the rail owns its own
+ * margin" — that was the pre-2026-09-21 behavior this file used to encode.
  */
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
@@ -234,25 +243,35 @@ async function expectDotOwnsPress(stage: HTMLElement, node: HTMLElement) {
 }
 
 /**
- * The rail between dots, measured: scan the left rail's own box for a point
- * the browser gives to the rail and to no dot or label, then read what it
- * resolves to. On this base: the rail itself, `owns-pointer`.
+ * The rail between dots, measured: find a point inside the left rail's own
+ * box that is clear of every dot and label box (by geometry — `getBoundingClientRect`
+ * on each, never by asking `elementFromPoint` to land on the rail, which it
+ * no longer does now that the rail's empty margin is `pointer-events: none`
+ * — see the file header), then read what the press actually resolves to.
+ *
+ * On this base: the empty margin passes through to whatever is behind it
+ * (the block's own face, since the rail box straddles the block's border —
+ * or, past the block's edge, the canvas). Two checks, at two different
+ * layers, both of which the pre-2026-09-21 rail would have failed: the
+ * DOM's own `elementFromPoint` chain never touches the rail, and the
+ * host's declaration resolution never attributes the press to the rail
+ * either.
  */
 async function expectRailMargin(stage: HTMLElement, node: HTMLElement) {
   const rail = required<HTMLElement>(node, '[data-slot="block-port-rail"][data-edge="left"]', "the left rail");
   const box = rail.getBoundingClientRect();
+  const claimed = Array.from(rail.querySelectorAll<HTMLElement>('[data-slot="port-dot"], [data-slot="port-label"]')).map((el) => el.getBoundingClientRect());
   let found: { x: number; y: number } | null = null;
   for (let y = box.top + 1; y < box.bottom - 1 && !found; y += 2) {
     const x = box.left + box.width / 2;
-    const top = document.elementFromPoint(x, y);
-    if (top?.closest('[data-slot="block-port-rail"]') === rail && !top.closest('[data-slot="port-dot"], [data-slot="port-label"]')) {
-      found = { x, y };
-    }
+    const clearOfClaimed = claimed.every((r) => y < r.top - 1 || y > r.bottom + 1 || x < r.left - 1 || x > r.right + 1);
+    if (clearOfClaimed) found = { x, y };
   }
-  expect(found, "a point on the rail that is neither a dot nor a label").not.toBeNull();
+  expect(found, "a point inside the rail's box, clear of every dot and label box").not.toBeNull();
+  const top = document.elementFromPoint(found!.x, found!.y);
+  expect(top?.closest('[data-slot="block-port-rail"]'), "the rail's empty margin claims nothing at the DOM level").toBeNull();
   const hit = await probeHost(stage, found!.x, found!.y);
-  expect(hit.kind).toBe("part");
-  expect(hit.via).toBe("block-port-rail");
+  expect(hit.via, "the host never attributes the press to the rail either").not.toBe("block-port-rail");
 }
 
 async function expectHeaderAndDot(canvasElement: HTMLElement, view: PanelView) {
