@@ -8,7 +8,7 @@ import type { HostScene } from "./hostScene";
 import { ReactFlowHost } from "./reactFlowHost";
 
 /**
- * Basics/Glyph/In A Host — the Glyph face as a canvas node, under its
+ * Hosts/Glyph — the Glyph face as a canvas node, under its
  * host-facing name `glyph` (H6). Story-name tags carry the host; untagged
  * stories elsewhere are plain DOM.
  */

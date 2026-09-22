@@ -1,5 +1,5 @@
 /**
- * Blocks/Scene/Batch Wiring — wiring N ports in one gesture, inside the
+ * Scene/BatchWiring — wiring N ports in one gesture, inside the
  * DOM Canvas.
  *
  * THE FEATURE, from its donor (SystemSketch `batchWiring.ts`, read at

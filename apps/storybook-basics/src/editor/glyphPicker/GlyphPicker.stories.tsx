@@ -6,7 +6,7 @@ import { Block } from "../../components/block";
 import { GlyphPicker } from "./glyphPicker";
 
 /**
- * Blocks/Editor/Glyph Picker — P-036 / P-043, 2026-09-21.
+ * Editor/GlyphPicker — P-036 / P-043, 2026-09-21.
  *
  * Zach specified this one by pointing: *"copied from Notion almost exactly"*,
  * and *"We want a much Larger library … Right now its a bit to limited … I

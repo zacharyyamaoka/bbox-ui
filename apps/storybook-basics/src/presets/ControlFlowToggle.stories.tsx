@@ -1,5 +1,5 @@
 /**
- * Control Flow/Toggle — the opaque (P5) ⇄ expanded (P1) flip, on all three
+ * Presets/ControlFlow/Toggle — the opaque (P5) ⇄ expanded (P1) flip, on all three
  * hosts (docs/CONTROL-FLOW-PLAN.md lane E, §2.B and §3.4).
  *
  * The claim these stories exist to make is not "a card appears". It is

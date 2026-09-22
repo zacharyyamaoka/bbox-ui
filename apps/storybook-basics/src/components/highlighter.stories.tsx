@@ -21,7 +21,7 @@ import {
  * `DiagnosticTooltip` (the hover half), and the three style recipes every
  * mark-bearing component paints with.
  *
- * WHY beside `Styles/Diagnostics`: that file is the AXIS — one gallery per
+ * WHY beside `Components/Text & Marks/Diagnostics`: that file is the AXIS — one gallery per
  * marked component (Port, Block, Trace, EditableText, …), showing what a
  * diagnostic looks like on each of them. It never renders `DiagnosticFlag`
  * or `DiagnosticTooltip` directly, because a host never does either: they

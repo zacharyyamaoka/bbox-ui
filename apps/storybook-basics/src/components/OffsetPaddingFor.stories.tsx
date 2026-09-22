@@ -6,7 +6,7 @@ import { PortEdge, type PortEdgeItem } from "./portEdge";
 import { DEFAULT_ALIGN_GAP, offsetPaddingFor, type Distribution } from "./portEdge.layout";
 
 /**
- * Ports/PortEdge/OffsetPaddingFor — docs/PROPOSALS-2026-09-17.md P9a, the
+ * Components/Ports/PortEdge/Offset Padding — docs/PROPOSALS-2026-09-17.md P9a, the
  * story `offsetPaddingFor` never had. The function has zero production call
  * sites (`blockPort.layout.ts`'s own offset rail uses its sibling
  * `offsetEdgePaddingPx` instead), so nothing rendered would ever have

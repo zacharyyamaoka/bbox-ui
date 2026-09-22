@@ -17,7 +17,7 @@ import type { LintScene } from "../scene/lint";
 import { portKey, wiredPorts, type ScenePortRef } from "../scene/scene";
 
 /**
- * Blocks/Scene/Magnet Proposals — Zach's "magnetic wire proposals"
+ * Editor/MagnetProposals — Zach's "magnetic wire proposals"
  * (`PROJECT - Black Box UI.md`, §"Magnetic wire proposals"): *"if you move a
  * node close enough… then it should kinda like automatically propose a
  * connection… if you turn it on… different ports basically could have like

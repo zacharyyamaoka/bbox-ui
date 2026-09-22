@@ -1,5 +1,5 @@
 /**
- * Control Flow/Loop — the loop PRESET (docs/CONTROL-FLOW-PLAN.md lane B),
+ * Presets/ControlFlow/Loop — the loop PRESET (docs/CONTROL-FLOW-PLAN.md lane B),
  * built entirely out of `presets/loop/loop.ts`'s factories over the generic
  * Region lane A shipped. There is no Loop component in this repo and these
  * stories are the proof: every board below is `forLoopNode` /

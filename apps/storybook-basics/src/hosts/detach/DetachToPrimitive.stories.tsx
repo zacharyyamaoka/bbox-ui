@@ -9,7 +9,7 @@ import { shapeIdForNode, TldrawHost } from "../tldrawHost";
 import { detachSelectedShapes, rebuildDetachedShapes, registerEditorContainer, RebuildContextMenu } from ".";
 
 /**
- * Blocks/Detach To Primitive — Zach's "Detach to primitive" feature
+ * Hosts/DetachToPrimitive — Zach's "Detach to primitive" feature
  * (`/home/bam/zach_brain/Projects/bbox-ui/PROJECT - Black Box UI.md:3160`),
  * quoted in full in this lane's dispatch brief. Success, in his own words:
  * "for each component, 1 story in (tldraw) host that shows a before and

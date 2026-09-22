@@ -9,7 +9,7 @@ import { pointAtFraction, polylinePath, resolvePathAddress, type Point } from ".
 import type { Diagnostic } from "./highlighter";
 
 /**
- * Trace/Mark — ruling 4, one 1-D address scheme unified with the pill
+ * Components/Traces/TraceMark — ruling 4, one 1-D address scheme unified with the pill
  * (`PathAddress`, `trace.layout.ts`). Zach: "Interesting idea for marks on
  * cable getting 1d coordinate... if there is a pill already we don't
  * likely want to render it directly on the pill." And the negative-end

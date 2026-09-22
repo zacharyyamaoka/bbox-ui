@@ -1,5 +1,5 @@
 /**
- * Control Flow/Region Variants — the region DRAWINGS over one region
+ * Skin/RegionVariants — the region DRAWINGS over one region
  * component, switched by an attribute, measured per variant
  * (docs/ASK-2026-09-19-PORTS-EDGES-REGIONS-FEEDBACK.md, lane `regions`).
  *

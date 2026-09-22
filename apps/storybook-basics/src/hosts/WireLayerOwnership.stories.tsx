@@ -5,7 +5,7 @@ import { DomCanvas } from "./domCanvas";
 import type { HostScene } from "./hostScene";
 
 /**
- * Blocks/Host Fixes/Wire Layer Ownership — regression for
+ * Hosts/WireLayer Ownership — regression for
  * `WireLayer.resolveDot`'s member-ownership bug (host-fixes lane, defect 2).
  *
  * `proc` is an expanded Block with its own `in` port; `kid` is a MEMBER of

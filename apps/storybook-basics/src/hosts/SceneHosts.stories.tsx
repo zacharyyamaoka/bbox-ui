@@ -9,7 +9,7 @@ import { HOST_SCENE, topLevelNodes, type HostScene } from "./hostScene";
 import { ReactFlowHost } from "./reactFlowHost";
 
 /**
- * Blocks/Scene/In A Host — the SAME `HOST_SCENE` literal rendered through
+ * Hosts/Scene — the SAME `HOST_SCENE` literal rendered through
  * both hosts (H1: one scene, two hosts, no per-host fixture). Story names
  * carry the host tag — "(DOM Canvas)" / "(ReactFlow)"; an untagged story
  * anywhere in this app is plain DOM, no host.

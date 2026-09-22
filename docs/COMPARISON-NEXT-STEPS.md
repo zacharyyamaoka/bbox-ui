@@ -37,9 +37,11 @@ by the tags lane), tsc clean.
 | `diffScene`'s paired `portsOf` resolvers | **§3's "port-level diff is impossible" is no longer true** — port add/remove works today; the honest remainder is port *rename* detection (ids cannot say "renamed"), which belongs to S7 or an `{id,label}` resolver widening |
 | `SceneDiff.stories.tsx` (4 stories, math output only) | §6 S4 partially — the paint gallery remains (N3) |
 
-New story files this plan specifies carry the repo's tag convention
-(`CLAUDE.md` § story tags): `tags: ["area:blocks", "lane:<implementing
-lane's slug>"]` — scene-diff stories title under `Blocks/…`, so `area:blocks`.
+New story files this plan specifies follow `CLAUDE.md` § Story titles and §
+Story tags: scene-diff stories live in `src/scene/`, so they title under
+`Scene/…` with `tags: ["object:scene", "lane:<implementing lane's slug>"]`
+(plus the `host:` tags their imports imply). `src/storyOrganisation.test.ts`
+fails anything else. (Until 2026-09-22 this said `Blocks/…` and `area:blocks`.)
 
 ---
 

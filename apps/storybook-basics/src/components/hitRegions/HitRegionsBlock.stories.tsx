@@ -1,5 +1,5 @@
 /**
- * Hit Regions/Block — the component with NO hit constant, on purpose. As a
+ * Components/Blocks/Block/Hit Regions — the component with NO hit constant, on purpose. As a
  * DOM element Block's pointer target is the browser's own hit test, which
  * stops at the border box exactly — the same "there was no number to
  * choose" React Flow's DOM nodes have. Contrast tldraw, which grabs a

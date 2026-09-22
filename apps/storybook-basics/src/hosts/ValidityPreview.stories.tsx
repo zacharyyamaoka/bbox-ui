@@ -11,7 +11,7 @@ import { typesIntersect } from "../scene/lint";
 import { portKey, type ScenePortRef } from "../scene/scene";
 
 /**
- * Blocks/Scene/Validity Preview — ruling 5, "Show the legal move set
+ * Hosts/ValidityPreview — ruling 5, "Show the legal move set
  * during the gesture, not the error after it... Drag time validity
  * preview! actually even langflow has this. yes 100% lets implement this
  * feature... should be on by default!" (Zach, 2026-09-17).

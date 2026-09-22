@@ -6,7 +6,7 @@ import { PORT_EDGE_MORE_GAP_PX, PortEdge, type PortEdgeItem } from "../component
 import { PortOverflowChip } from "./portOverflowChip";
 
 /**
- * Blocks/Editor/Port Overflow Chip — RULING 7, 2026-09-21. Zach, on the
+ * Editor/PortOverflowChip — RULING 7, 2026-09-21. Zach, on the
  * "+X more" chip: *"ideally this just comes from the port edge
  * implementation... but YOu do need to provide the chrome to do this...
  * should be in bbox-editor"*.

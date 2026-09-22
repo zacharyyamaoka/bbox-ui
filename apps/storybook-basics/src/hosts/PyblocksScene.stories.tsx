@@ -18,7 +18,7 @@ import regionForIfDocument from "../../../../docs/fixtures/pyblocks-scene/region
 import editSessionFixture from "../../../../docs/fixtures/pyblocks-scene/events_edit_session.json";
 
 /**
- * Blocks/Scene/Pyblocks — a pyblocks document, loaded and rendered by hosts
+ * Hosts/Pyblocks — a pyblocks document, loaded and rendered by hosts
  * that know nothing about pyblocks (docs/PYBLOCKS-BACKEND-PLAN.md, lane
  * `trunk-loader-events`).
  *

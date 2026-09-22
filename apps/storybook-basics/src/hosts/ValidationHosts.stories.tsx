@@ -12,7 +12,7 @@ import { typesIntersect } from "../scene/lint";
 import { portKey, type ScenePortRef } from "../scene/scene";
 
 /**
- * Blocks/Scene/Validation In A Host — ruling 8, Zach's own success
+ * Hosts/Validation — ruling 8, Zach's own success
  * criteria verbatim: "success looks like many different stories of DOM
  * canvas for some of the static considerations, but then also the same
  * examples in a host reactflow/tldraw so I can check that the gestures

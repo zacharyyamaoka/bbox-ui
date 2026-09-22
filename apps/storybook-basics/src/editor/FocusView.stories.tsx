@@ -11,7 +11,7 @@ import { focusSnapshot, focusStepLimits, type FocusDirection, type FocusStepLimi
 import { portKey } from "../scene/scene";
 
 /**
- * Blocks/Editor/Focus View — the propagation-focus reading lens, ported
+ * Editor/FocusView — the propagation-focus reading lens, ported
  * from SystemSketch (Zach, 2026-09-18, quoted in full in
  * `docs/ALGORITHM-PROVENANCE.md` and the vault callout under "The focus
  * slider"). `scene/focus.ts` is the pure traversal; `editor/focusControls.tsx`

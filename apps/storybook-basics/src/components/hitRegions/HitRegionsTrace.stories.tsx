@@ -1,5 +1,5 @@
 /**
- * Hit Regions/Trace — the invisible 12px hit band (`TRACE_HIT_STROKE_PX`,
+ * Components/Traces/Trace/Hit Regions — the invisible 12px hit band (`TRACE_HIT_STROKE_PX`,
  * trace.tsx:131), painted, probed, and adjustable.
  *
  * Two findings this file makes visible:

@@ -1,5 +1,5 @@
 /**
- * Blocks/Fit To Content Hosts — Zach's second success criterion: "a non
+ * Hosts/FitToContent — Zach's second success criterion: "a non
  * buggy example of me being able to drag around a child member in
  * reactflow/tldraw and having the parent frame redraw itself
  * automatically." The first criterion (a plain-DOM before/after gallery)

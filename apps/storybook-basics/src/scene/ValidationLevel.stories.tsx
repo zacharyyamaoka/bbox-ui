@@ -18,7 +18,7 @@ import {
 } from "./validationLevel";
 
 /**
- * Blocks/Scene/Validation level — ruling 3, made visible.
+ * Scene/ValidationLevel — ruling 3, made visible.
  *
  * Zach, verbatim: "have the connection validation setting in the settings panel
  * so you can switch between what level of linting you want from whiteboard,

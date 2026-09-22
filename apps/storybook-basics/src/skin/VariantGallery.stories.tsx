@@ -1,5 +1,5 @@
 /**
- * Control Flow/Variant Gallery — the cf-F gallery board (a branch inside a loop, a
+ * Skin/VariantGallery — the cf-F gallery board (a branch inside a loop, a
  * bypass around both, a `mut` cable) under whichever PORT style and REGION
  * drawing the Storybook toolbar has picked.
  *

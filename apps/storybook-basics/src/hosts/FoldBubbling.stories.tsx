@@ -10,7 +10,7 @@ import { sceneSurfaceModel, surfaceFindings, visibilityFromHides, type HidesOf }
 import { lintScene, subjectKey, type LintScene } from "../scene/lint";
 
 /**
- * Blocks/Scene/Fold Bubbling — ruling 3, Zach's IDE-tree-view analogy
+ * Hosts/FoldBubbling — ruling 3, Zach's IDE-tree-view analogy
  * verbatim: "if something is hidden then the parent that hides it should
  * get the error... kinda like the ultimate version of that is in the IDE
  * tree view how a file colour may be red if it contains an error within

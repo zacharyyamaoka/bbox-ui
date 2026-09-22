@@ -1,5 +1,5 @@
 /**
- * Interaction/Drag Policy — one story per component, each with the table
+ * Hosts/DragPolicy — one story per component, each with the table
  * of expected interaction beside a live React Flow canvas Zach can grab.
  *
  * Zach, `PROJECT - Black Box UI.md:2508-2512`:

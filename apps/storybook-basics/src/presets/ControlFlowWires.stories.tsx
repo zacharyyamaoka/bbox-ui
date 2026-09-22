@@ -10,7 +10,7 @@ import {
 } from "./controlFlow.acceptance";
 
 /**
- * Control Flow/Wires — lane D of docs/CONTROL-FLOW-PLAN.md, on plain blocks.
+ * Presets/ControlFlow/Wires — lane D of docs/CONTROL-FLOW-PLAN.md, on plain blocks.
  *
  * Zach's rule, verbatim: "data cables that aren't flowing through the branch
  * should actively avoid the branch — bypass by going above or below it." The

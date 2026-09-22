@@ -9,7 +9,7 @@ import { POINTER_OWNED_CLASS } from "./nodeViews";
 import { ReactFlowHost } from "./reactFlowHost";
 
 /**
- * Basics/CodeEditor/In A Host — the CodeEditor as a canvas node under its
+ * Hosts/CodeEditor — the CodeEditor as a canvas node under its
  * host-facing name `code` (H6). The interesting seam: the editor owns its
  * pointer (caret, selection), so inside a gesturing host the node is
  * repositioned by the host-owned grab ring around it, never through the

@@ -18,7 +18,7 @@ import type { BlockSide } from "../components/port.layout";
 import type { WireStyleData } from "./sceneWires";
 
 /**
- * Blocks/Scene/Grouping — `collapseToRegion`/`dissolveRegion` (collapse.ts),
+ * Scene/Grouping — `collapseToRegion`/`dissolveRegion` (collapse.ts),
  * `classifyBoundary`/`promoteBoundary` (boundary.ts) and the v1-vs-measured
  * promotion policies, DRAWN.
  *

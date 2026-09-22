@@ -16,7 +16,7 @@ import { type BlockScene, childrenOf, portKey, rank, type SceneNode, topological
 import { sceneWires, withWiredState, type WireStyleData } from "./sceneWires";
 
 /**
- * Blocks/Scene — the scene kit rendered through the EXISTING view kit
+ * Scene — the scene kit rendered through the EXISTING view kit
  * (docs/SCENE-KIT.md). One `BlockScene` literal is the single source of
  * truth for everything on the bench: placement (`position`), nesting
  * (`parentId`), connectivity (`edges`), and the derived captions

@@ -1,5 +1,5 @@
 /**
- * Control Flow/Host Edges — the gap docs/CONTROL-FLOW-PLAN.md §1 marks with
+ * Presets/ControlFlow/HostEdges — the gap docs/CONTROL-FLOW-PLAN.md §1 marks with
  * two ⚠️ rows, closed and measured.
  *
  * Every interesting control-flow cable lands on a block INSIDE something: a

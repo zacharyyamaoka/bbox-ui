@@ -30,7 +30,8 @@ MAIN = Path("/home/bam/bbox-ui")
 MEDIA = MAIN / "reports/media/storybook-org-2026-09-22"
 OUT = MAIN / "reports/media/storybook-org-2026-09-22.html"
 SNAP = MEDIA / "snapshot"  # the proposal servers are gone; their indexes were saved before they stopped
-BEFORE_REV, LANDED_REV = "eeb748b", "5828461"
+BEFORE_REV = "eeb748b"  # the last commit with the old titles
+LANDED_REV = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
 VAULT = Path("/home/bam/zach_brain")
 
 TREES = {
@@ -126,6 +127,12 @@ M["landed"] = dict(
 host_counts = Counter(t for e in landed_index.values() if e["type"] == "story" for t in e["tags"] if t.startswith("host:"))
 tldraw_sections = Counter(e["title"].split("/")[0] for e in landed_index.values() if e["type"] == "story" and "host:tldraw" in e["tags"])
 tldraw_by_section = ", ".join(f"{sec} {n}" for sec, n in tldraw_sections.most_common())
+ENGINE_TAGS = {"host:react-flow", "host:tldraw"}
+_files_by_path = {e["importPath"]: e for e in landed_index.values() if e["type"] == "story"}
+engine_files = [p for p, e in _files_by_path.items() if ENGINE_TAGS & set(e["tags"])]
+engine_in_hosts = [p for p in engine_files if "/hosts/" in p]
+engine_elsewhere = ", ".join(f"{sec} {n}" for sec, n in Counter(
+    _files_by_path[p]["title"].split("/")[0] for p in engine_files if p not in engine_in_hosts).most_common()) + " files"
 landed_files = {e["importPath"]: e for e in landed_index.values() if e["type"] == "story"}
 host_tagged_files = sum(1 for e in landed_files.values() if any(t.startswith("host:") for t in e["tags"]))
 host_files = Counter(t for e in {e["importPath"]: e for e in landed_index.values()}.values() for t in e["tags"] if t.startswith("host:"))
@@ -493,7 +500,7 @@ MUTATIONS = [  # measured 2026-09-22 with `pnpm exec vitest --project=unit run s
 ]
 mut_rows = "".join(f"<tr><td>{a}</td><td>{b}</td><td class='red'>{c}</td></tr>" for a, b, c in MUTATIONS)
 LANDED_Q = [
-    ("l1", "Merge it?", "It is on <code>claude/storybook-server-launch-e5f2cc</code> (commit <code>5828461</code>), not on main. A dry-run merge with main and with the in-flight lane <code>claude/system-sketch-ui-feedback-14bfc3</code> is textually clean.",
+    ("l1", "Merge it?", f"It is on <code>claude/storybook-server-launch-e5f2cc</code> (commit <code>{LANDED_REV}</code>), not on main. A dry-run merge with main and with the in-flight lane <code>claude/system-sketch-ui-feedback-14bfc3</code> is textually clean.",
      "If you say nothing it stays on the branch. Whoever merges the other lane second retitles its one new story — <code>MemberStackKeyboardReorder.stories.tsx</code> arrives as <code>Blocks/Member stack</code>; it becomes <code>Components/Blocks/BlockMembers/Keyboard Reorder</code> with <code>object:block</code>. The guard names the file, so it cannot slip through."),
     ("l2", f"Your Hosts section trades back “one home per thing” for {len(L['split'])} components: {esc(', '.join(L['split']))} — their host board is under Hosts, a section away from them.",
      "Keep it — it is what you asked for, and <code>object:</code> tags pull a component's stories back together in the filter.",
@@ -509,10 +516,10 @@ landed_q_html = "".join(
 )
 landed_html = f"""
 <h1>Storybook sidebar — B landed: the repo's top level, then families</h1>
-<p class="sub">22 Sep 2026 · bbox-ui <code>apps/storybook-basics</code> · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>5828461</code>, not merged · every number read from the real Storybook's own <code>index.json</code></p>
+<p class="sub">22 Sep 2026 · bbox-ui <code>apps/storybook-basics</code> · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{LANDED_REV}</code>, not merged · every number read from the real Storybook's own <code>index.json</code></p>
 <div class="tldr">
 <p><b>Done.</b> The sidebar's sections are the repo's six top-level folders — <b>Components · Scene · Editor · Hosts · Presets · Skin</b> — with a family level under Components only (Ports, Blocks, Traces, Text &amp; Marks, Menus &amp; Bars, Panels &amp; Dialogs, Stock). A unit test now fails any story that breaks that shape.</p>
-<p><b>Hosts is a section, as you asked:</b> {len(L['kids']['Hosts'])} engine boards together. But most engine examples do not live in <code>hosts/</code> — measured by import, 21 story files reach React Flow or tldraw and only 10 of them are there (the control-flow presets, Producers and the recording panels are the rest). So every story also carries <code>host:dom</code> / <code>host:react-flow</code> / <code>host:tldraw</code>: tick one in the sidebar filter and only those examples remain, wherever they sit. The video ends on exactly that.</p>
+<p><b>Hosts is a section, as you asked:</b> {len(L['kids']['Hosts'])} engine boards together. But most engine examples do not live in <code>hosts/</code> — measured by import, {len(engine_files)} story files reach React Flow or tldraw and only {len(engine_in_hosts)} of them are there (the rest: {esc(engine_elsewhere)}). So every story also carries <code>host:dom</code> / <code>host:react-flow</code> / <code>host:tldraw</code>: tick one in the sidebar filter and only those examples remain, wherever they sit. The video ends on exactly that.</p>
 <p><b>What the Hosts section cost, plainly:</b> the first glance is {L['glance']} rows, not the {M['b']['glance']} B was proposed at (Hosts adds 13, and Scene goes flat), and {len(L['split'])} components have their host board a section away. Against today it is still {T['glance']} → {L['glance']} rows and {len(T['roots'])} → {len(L['roots'])} sections, with none holding a single item.</p>
 <div class="nums">
 <div class="num"><b>{T['glance']} → {L['glance']}</b><span>rows at first glance</span></div>
@@ -553,7 +560,8 @@ landed_html = f"""
 <tr><th><code>pnpm typecheck</code></th><td class="green">exit 0</td><td>covers <code>.storybook/preview.tsx</code> and the new test</td></tr>
 <tr><th>guard test</th><td class="green">557 / 557</td><td>151 files × section, tags, hosts; 79 × family</td></tr>
 <tr><th><code>pnpm test</code> (both projects)</th><td>3,088 then 3,089 of 3,091</td><td>The failures moved between runs — run 1: FitToContentHosts <em>Drag A Member (tldraw)</em> and two more; run 2: SceneHosts <em>A Member's Header Does Not Drag Its Parent (ReactFlow)</em> and Grouping <em>Boundary Classes</em>. Those three files alone, twice: <b>14 / 14</b>. Load average was 11 from other sessions; all are timing-measured drags. No story file changed anything but its title and tags (and the four moved files' import paths).</td></tr>
-<tr><th>Story ids in the repo</th><td class="green">0 stale</td><td>{ref_total} references to {len(ref_ids)} ids in {len(ref_files)} files, rewritten from the old→new map; at <code>5828461</code> {live_total} references resolve and {stale_total} point at an id that no longer exists. Vault links ({vault_distinct}) left as history.</td></tr>
+<tr><th>Story ids in the repo</th><td class="green">0 stale</td><td>{ref_total} references to {len(ref_ids)} ids in {len(ref_files)} files, rewritten from the old→new map; at <code>{LANDED_REV}</code> {live_total} references resolve and {stale_total} point at an id that no longer exists. Vault links ({vault_distinct}) left as history.</td></tr>
+<tr><th>Independent audit</th><td class="green">7 / 7 confirmed</td><td>A read-only auditor on a different model re-derived every claim its own way (own import walk, own id sweep, own mutation probes on a scratch copy). Its edge case — a type-only import would count as rendering in a host — turned out <b>not</b> hypothetical: the two recording-panel stories reached tldraw only through <code>import type</code>, which erases, so their <code>host:tldraw</code> tags were over-claims. Fixed in the test and the tags; the full <code>unit</code> project is 2,403 / 2,403. It also caught docs still prescribing the old titles — the forward-looking one is rewritten, the control-flow plan carries a dated note, story comments naming their old titles are updated (53 lines).</td></tr>
 <tr><th>Merge, dry run</th><td class="green">clean</td><td><code>git merge-tree</code> with <code>main</code> and with <code>claude/system-sketch-ui-feedback-14bfc3</code>: no conflicts.</td></tr>
 </tbody></table></div>
 
@@ -567,7 +575,7 @@ landed_html = f"""
 <li>Not merged, not pushed — integration is your call.</li>
 <li>Your :5421 Storybook (the <code>bbox-ui-toolbar</code> tree) is untouched and still shows the old titles until this branch lands there.</li>
 <li>The proposal previews (:5423–5425) are stopped and their configs deleted; their indexes are kept beside this report so the record below still rebuilds.</li>
-<li>Historical reports under <code>reports/</code> keep their old story links; they describe the past.</li>
+<li>Historical reports under <code>reports/</code> keep their old story links, and the briefs of lanes that already ran (<code>docs/lanes/*</code>, finished plans) keep the titles they were given — they are records of what was asked. The test fails anyone who copies one.</li>
 </ul>
 
 <h2 class="record">How we got here — the three proposals</h2>

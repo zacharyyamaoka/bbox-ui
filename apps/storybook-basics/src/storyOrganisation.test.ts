@@ -51,6 +51,11 @@ const COMPONENT_FAMILIES = [
  * WHY 15: a section with no family level must fit one screen of the sidebar.
  * Components (79 entries) is the only section over it; Hosts sits at 13 —
  * thirteen "X in a host" boards read better flat than as five families of two.
+ *
+ * Family lists are deliberately NOT capped: Stock holds 22 and Panels &
+ * Dialogs 18. A family is the last level before the component itself, and
+ * splitting either would add a fourth level to reach a Button — the depth
+ * this layout exists to avoid. Stock is vendored shadcn, browsed rarely.
  */
 const MAX_FLAT_SECTION = 15;
 
@@ -77,6 +82,9 @@ const storyFiles: StoryFile[] = sourceFiles
 // ---- which host engines a file reaches, by walking its relative imports ----
 const SPECIFIER = /(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|import\s*["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
 const withoutComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'])\/\/[^\n]*/g, "$1");
+// WHY: `import type … from "../hosts/domCanvas"` erases at build time, so the
+// story does not render in that host and must not be told to claim it.
+const withoutTypeOnly = (s: string) => s.replace(/^\s*(?:import|export)\s+type\s[^;]*;/gm, "");
 
 function resolveRelative(from: string, spec: string): string | undefined {
   const base = path.resolve(path.dirname(from), spec);
@@ -89,7 +97,7 @@ const edges = new Map<string, { local: string[]; packages: string[] }>();
 for (const file of sourceFiles) {
   const local: string[] = [];
   const packages: string[] = [];
-  for (const m of withoutComments(readFileSync(file, "utf8")).matchAll(SPECIFIER)) {
+  for (const m of withoutTypeOnly(withoutComments(readFileSync(file, "utf8"))).matchAll(SPECIFIER)) {
     const spec = m[1] ?? m[2] ?? m[3];
     if (spec.startsWith(".")) {
       const target = resolveRelative(file, spec);

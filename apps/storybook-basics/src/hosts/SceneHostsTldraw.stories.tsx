@@ -10,7 +10,7 @@ import { TldrawHost } from "./tldrawHost";
 import { TRACE_TERMINAL_GAP } from "../components/trace";
 
 /**
- * Blocks/Scene/In A Host (tldraw) — the SAME `HOST_SCENE` literal the DOM
+ * Hosts/Scene (tldraw) — the SAME `HOST_SCENE` literal the DOM
  * Canvas and React Flow benches render (SceneHosts.stories.tsx), now
  * through tldraw, which turns H1's "one scene, two hosts" into a genuine
  * three-host proof. Story names carry the host tag, matching the existing

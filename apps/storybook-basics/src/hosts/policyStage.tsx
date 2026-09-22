@@ -1,6 +1,6 @@
 /**
  * src/hosts/policyStage.tsx — the shared stage every
- * `Interaction/Drag Policy/*` story stands on.
+ * `Hosts/DragPolicy/*` story stands on.
  *
  * Zach asked for exactly this shape (`PROJECT - Black Box UI.md:2512`):
  *

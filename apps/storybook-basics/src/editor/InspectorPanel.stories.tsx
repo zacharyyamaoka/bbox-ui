@@ -6,7 +6,7 @@ import { Block } from "../components/block";
 import { InspectorPanel } from "./inspectorPanel";
 
 /**
- * Blocks/Editor/Inspector Panel — RULING 9, 2026-09-21. Zach: *"the eye
+ * Editor/InspectorPanel — RULING 9, 2026-09-21. Zach: *"the eye
  * visibility control for this is in the right hand inspector menu"*.
  *
  * The bench below is deliberately the WHOLE loop — the panel and a real

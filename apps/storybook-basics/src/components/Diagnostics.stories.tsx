@@ -61,14 +61,10 @@ function Gallery({ children }: { children: ReactNode }) {
 }
 
 const meta = {
-  // Nested under "Styles" (area:styles) rather than a bare top-level
-  // "Diagnostics" group: CLAUDE.md's `area:` vocabulary is closed to the
-  // segments already listed there, and this file is the same shape of
-  // thing `Styles.stories.tsx` already is — a cross-cutting visual
-  // language demonstrated across every component it touches, not a
-  // single component's own story. Adding a new area name is out of this
-  // lane's write set (CLAUDE.md is not in it); this reuses an existing one
-  // honestly rather than inventing "diagnostics" unilaterally.
+  // Under Components › Text & Marks (it lives in components/, and it is the
+  // diagnostic MARK drawn across every component it touches). It sat under
+  // "Styles" until 2026-09-22, when the area: vocabulary that put it there
+  // was retired — see CLAUDE.md § Story titles.
   title: "Components/Text & Marks/Diagnostics",
   tags: ["object:text-marks", "lane:invalid-states-impl"],
 } satisfies Meta;

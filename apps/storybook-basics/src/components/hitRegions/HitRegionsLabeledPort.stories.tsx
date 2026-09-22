@@ -1,5 +1,5 @@
 /**
- * Hit Regions/LabeledPort — the composite owns TWO pointer targets: the
+ * Components/Ports/LabeledPort/Hit Regions — the composite owns TWO pointer targets: the
  * dot's 40px halo (Port's `PORT_HIT_PX`) and the label's click-to-edit
  * box. The second is an IMPLICIT region — no named constant; the target is
  * the label's own rendered box, so it grows and shrinks with the text.

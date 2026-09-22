@@ -1,5 +1,5 @@
 /**
- * Control Flow/Branch — `if`/`elif`/`else` and `match`/`case`, drawn as the
+ * Presets/ControlFlow/Branch — `if`/`elif`/`else` and `match`/`case`, drawn as the
  * generic Region (lane A) carrying branch DATA (docs/CONTROL-FLOW-PLAN.md
  * lane C). There is no branch component: every story below mounts a scene
  * literal from `presets/branch/branch.fixtures.ts` into the ordinary hosts.

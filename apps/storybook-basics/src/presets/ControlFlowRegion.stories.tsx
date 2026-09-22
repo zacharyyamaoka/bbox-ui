@@ -1,5 +1,5 @@
 /**
- * Control Flow/Region — the region KIT, on its own, before any loop or
+ * Presets/ControlFlow/Region — the region KIT, on its own, before any loop or
  * branch preset exists (docs/CONTROL-FLOW-PLAN.md lane A).
  *
  * What these stories are actually claiming, in Zach's own two sentences:

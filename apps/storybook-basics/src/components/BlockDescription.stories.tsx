@@ -5,7 +5,7 @@ import { Block } from "./block";
 import { BLOCK_DESCRIPTION_FONT_PX, BLOCK_DESCRIPTION_PADDING_X_PX } from "./blockDescription";
 
 /**
- * Blocks/Block Description — RULING 9's paint half, 2026-09-21.
+ * Components/Blocks/BlockDescription — RULING 9's paint half, 2026-09-21.
  *
  * Ported from the frozen v1 lineage rather than designed here:
  * `packages/bbox-ui/src/block.fields.ts:120-124` (the governed toggle,

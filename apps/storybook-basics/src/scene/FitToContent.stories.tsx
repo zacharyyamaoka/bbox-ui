@@ -1,5 +1,5 @@
 /**
- * Blocks/Fit To Content — the three cases Zach named (PROJECT - Black Box
+ * Scene/FitToContent — the three cases Zach named (PROJECT - Black Box
  * UI.md, "### Fit to content", 2026-09-18), plus the bug he remembered.
  *
  *   • port view     — "dynamically resizes as you add more ports"

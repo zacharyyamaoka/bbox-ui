@@ -279,7 +279,7 @@ Write set: `docs/build_menu_registry_items.py` (`region` item), `registry.json` 
 
 ## 8 · What Zach will see (for the report builder — capture these)
 
-Storybook on `:5421` after merge. Sidebar filter → tag `area:control-flow` (and `lane:control-flow`).
+Storybook on `:5421` after merge. Sidebar → Presets › ControlFlow, or filter `lane:control-flow` (the `area:control-flow` tag this line used to name was retired 2026-09-22).
 
 | Story (title → id) | Host | The state it shows |
 |---|---|---|
@@ -544,6 +544,8 @@ Every brief assumes: you are in your own worktree cut from the integration branc
 **Do not touch:** the six acceptance files (§7); `hostScene.ts`, `regionScene.ts`, `regionView.ts`, `wiring.ts`, `wireLayer.tsx`, `sceneWires.ts`, `domCanvas.tsx`, `reactFlowHost.tsx`, `tldrawHost.tsx`, `portDotSightings.ts` (other lanes); `block.tsx`, `blockPort.tsx`, `blockMembers.tsx`, `scene/scene.ts`, `collapse.ts`, `boundary.ts`, `region.ts`, `elbow/*`.
 
 **Build, in this order:**
+
+> **2026-09-22 — the titles and tags in the lane steps below are superseded.** They record what those lanes were told. Control-flow stories now title under `Presets/ControlFlow/…` (Branch, Loop, Region, Toggle, Wires, HostEdges, Gallery, EdgeDefaults) with `object:region`; `area:` tags are retired. `CLAUDE.md` § Story titles is the rule and `src/storyOrganisation.test.ts` enforces it.
 
 1. `scene/controlFlow.ts` bodies. `armsOf` = `childrenOf(scene, id).filter(isArm)`; `bodyChildrenOf` = the complement; `armOf` = `regionOf`'s walk with `isArm`; `hiddenSummary`: `nodes` = `descendantsOf(scene, [id])` minus the region minus arms, `arms` = `armsOf().length`, `edges` = `classifyBoundary(scene, {containerId: id}).edges` with `kind` in `{"interior", "port-inner"}`; unknown id → all zeros. `describeHidden` per its doc. Gate: `pnpm exec vitest --project=unit run src/scene/controlFlow.test.ts` → all green.
 2. `components/region.layout.ts`'s `regionLayout` exactly as `region.layout.test.ts` pins it (corner at origin; body under it; rows stack; folded = 0; hug vs explicit; min clamp; pure). Gate: that test file green.

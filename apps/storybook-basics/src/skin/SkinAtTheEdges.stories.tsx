@@ -16,7 +16,7 @@ import {
 } from "./sketchAtEdge";
 
 /**
- * Skin/At the edges — the PoC for Zach's 2026-09-17 ruling:
+ * Skin/SkinAtTheEdges — the PoC for Zach's 2026-09-17 ruling:
  *
  *   "I don't want the code base to be affected by the skin. Sketch
  *    skinning should be something very much done just like at the edges

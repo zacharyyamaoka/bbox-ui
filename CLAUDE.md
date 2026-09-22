@@ -339,7 +339,8 @@ config that wires it up from this repo alone.
   files, so it added nothing a filter needed.)
 - **`host:<engine>`** — `host:dom`, `host:react-flow`, `host:tldraw`: which
   hosts the file's stories render in, *measured* — the test walks the file's
-  relative imports and fails when the tags disagree, so add or drop them when
+  relative imports (type-only imports erase, so they don't count) and fails
+  when the tags disagree, so add or drop them when
   your imports change. Filter `host:tldraw` to see every tldraw example,
   including the ones under Presets and Scene, not just the Hosts section.
 - **`lane:<slug>`** — one per file, naming the delivery that produced or most

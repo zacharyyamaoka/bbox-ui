@@ -19,7 +19,7 @@ import type { HostScene } from "../hosts/hostScene";
 import type { WireStyleData } from "./sceneWires";
 
 /**
- * Blocks/Scene/Diff — the pure diff kit, rendered ON the things it
+ * Scene/SceneDiff — the pure diff kit, rendered ON the things it
  * describes.
  *
  * WHY this file now imports components when its previous version
