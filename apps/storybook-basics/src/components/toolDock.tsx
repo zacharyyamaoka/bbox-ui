@@ -30,7 +30,7 @@
  */
 
 import type { ReactNode } from "react";
-import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
 
 import { cn } from "../lib/utils";
 import { Button } from "./button";
@@ -376,6 +376,25 @@ function FamilyCell({
             {section.items.map((item) => (
               <DropdownMenuItem
                 key={item.id}
+                // WHY a persistent tint replaces the trailing check (Zach,
+                // 2026-09-21): a check glued to the end of the row shared the
+                // shortcut column's `ml-auto` slot, so on the current row `R`
+                // landed one glyph short of where every OTHER row's shortcut
+                // sits — the row itself is now the indicator, so the
+                // shortcut's `ml-auto` is never contested and every row's
+                // hint lands on the same right edge. Ported from the
+                // archived app's `.systemsketch-tool-menu__item[data-isactive
+                // ='true']` (systemsketch-toolbar.css:149-152, `background:
+                // var(--ss-accent-soft)`) rather than invented, using the
+                // trunk's OWN existing token for the same idea
+                // (branchChip.tsx's `data-current:bg-primary/15` current-row
+                // rows) instead of introducing a second one. Deliberately a
+                // different token from `focus:bg-accent` just below (the
+                // item's own hover/keyboard-highlight style) so "the tool
+                // you're on" and "the row Enter would run" stay two visibly
+                // different things even while the pointer sits elsewhere.
+                data-current={current === item.id || undefined}
+                className="data-current:bg-primary/15"
                 onClick={() => {
                   onSelectItem(item.id);
                 }}
@@ -385,7 +404,6 @@ function FamilyCell({
                 </span>
                 {item.label}
                 {item.shortcutHint ? <DropdownMenuShortcut>{item.shortcutHint}</DropdownMenuShortcut> : null}
-                {current === item.id ? <Check className="ml-auto size-3.5 shrink-0" /> : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
