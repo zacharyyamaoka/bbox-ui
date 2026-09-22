@@ -85,9 +85,46 @@ export async function openBurger(app: MountedApp): Promise<HTMLElement> {
 }
 
 /** Open the submenu whose trigger reads `label` inside `popup`; resolves the submenu popup. */
+/** Resolve once `element` has stopped moving.
+ *
+ *  WHY this exists: a Base UI popup animates open, so a row found the instant it
+ *  mounts is still travelling. Playwright refuses to click a moving target
+ *  ("element is not stable") and spends its whole timeout retrying. That is a
+ *  race, not a product fault, and it only started failing when the burger grew
+ *  two Compare rows (ruling 10) — a taller menu animates further, so the window
+ *  in which the row is still moving got longer. Waiting on geometry rather than
+ *  on a fixed sleep keeps this honest if the animation changes again. */
+async function settled(element: HTMLElement): Promise<boolean> {
+  let previous = element.getBoundingClientRect();
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    if (!document.contains(element)) return false;
+    const current = element.getBoundingClientRect();
+    if (Math.abs(current.top - previous.top) < 0.5 && Math.abs(current.left - previous.left) < 0.5) return true;
+    previous = current;
+  }
+  return document.contains(element);
+}
+
+/** Find `label` in `popup`, wait for it to stop moving, and hand back a node
+ *  that is still in the document.
+ *
+ *  WHY the retry: `closeMenus()` starts an exit animation but the closing popup
+ *  stays mounted while it plays, so a row queried immediately after re-opening
+ *  can belong to the menu that is on its way OUT. Clicking it does nothing and
+ *  Playwright reports either "not stable" (it is still moving) or "detached"
+ *  (it finished leaving) depending on timing — two faces of one stale node. */
+async function liveRow(popup: HTMLElement, label: string): Promise<HTMLElement> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const row = await waitFor(() => rowsOf(popup).find((candidate) => candidate.label === label)?.element, { what: `the "${label}" row` });
+    if (await settled(row)) return row;
+  }
+  throw new Error(`the "${label}" row kept detaching — the menu never settled`);
+}
+
 export async function openSubmenu(popup: HTMLElement, label: string): Promise<HTMLElement> {
   const before = new Set(document.querySelectorAll('[data-slot="dropdown-menu-sub-content"]'));
-  const trigger = await waitFor(() => rowsOf(popup).find((row) => row.label === label)?.element, { what: `the "${label}" row` });
+  const trigger = await liveRow(popup, label);
   await userEvent.click(trigger);
   return waitFor(() => {
     const opened = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-sub-content"]')).filter((candidate) => !before.has(candidate));
@@ -98,7 +135,7 @@ export async function openSubmenu(popup: HTMLElement, label: string): Promise<HT
 
 /** Click the row reading `label` in `popup`. */
 export async function clickRow(popup: HTMLElement, label: string): Promise<void> {
-  const row = await waitFor(() => rowsOf(popup).find((candidate) => candidate.label === label)?.element, { what: `the "${label}" row` });
+  const row = await liveRow(popup, label);
   await userEvent.click(row);
 }
 

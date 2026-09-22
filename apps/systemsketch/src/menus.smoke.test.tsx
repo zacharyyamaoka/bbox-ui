@@ -77,9 +77,16 @@ describe("L4 — editor menus through tldraw's component seams", () => {
     await waitFor(() => app!.editor.getShape(id) === undefined, { what: "Ctrl+Z undid it" });
   });
 
-  it("the burger is File first, then Settings, Edit, View, Export, Preferences, Keyboard shortcuts, and the old-app switch — grouped like the old app", async () => {
+  it("the burger is File first, then Settings, Edit, View, Export, Preferences, Keyboard shortcuts, Compare, and the old-app switch — grouped like the old app", async () => {
     app = await mountApp();
     const root = await openBurger(app);
+    // WHY the two Compare rows sit here and this list grew: ruling 10 ("we want
+    // to support the Compare view") put Compare on the burger, and `useCompareView`
+    // hands its group to `buildAppMenu`'s `extra` (chrome/TitleBar/chromeBar.tsx:81,
+    // :108). This assertion is the app's whole menu, so ADDING a feature to the
+    // menu is supposed to change it — a stale list here means the test was
+    // asserting the absence of a feature, which is what it was doing before
+    // 2026-09-21. Updated rather than loosened: it still pins the exact order.
     expect(rowsOf(root).map((row) => row.label)).toEqual([
       "File",
       "Settings",
@@ -88,10 +95,12 @@ describe("L4 — editor menus through tldraw's component seams", () => {
       "Export",
       "Preferences",
       "Keyboard shortcuts",
+      "Compare changes…",
+      "Set compare baseline to this board",
       "Switch to old SystemSketch",
     ]);
-    // File | Settings | Edit View Export | Preferences Keyboard shortcuts | old app.
-    expect(separatorsOf(root)).toBe(4);
+    // File | Settings | Edit View Export | Preferences Keyboard shortcuts | Compare ×2 | old app.
+    expect(separatorsOf(root)).toBe(5);
 
     const file = await openSubmenu(root, "File");
     expect(rowsOf(file).map((row) => [row.label, row.shortcut])).toEqual([
