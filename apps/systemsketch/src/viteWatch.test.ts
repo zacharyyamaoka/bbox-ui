@@ -79,6 +79,22 @@ describe("vite.config.ts server.watch.ignored", () => {
     expect([...(await touched(probes))]).toEqual([]);
   });
 
+  // WHY a separate case: the app accepts a board suffix in any case
+  // (`@trunk/files/workspaceModel`'s `documentSuffix` lower-cases the name
+  // before comparing), so `Board.TLDR` opens, autosaves — and, if Vite's
+  // ignore were case-sensitive, reloads the page on every save. A Codex
+  // audit on 2026-09-22 caught exactly that with the first `**/*.tldr` globs.
+  it("a board suffix in any case is invisible too — the app opens `.TLDR` as readily as `.tldr`", async () => {
+    const probes = [
+      path.join(APP_ROOT, `${TAG}.TLDR`),
+      path.join(APP_ROOT, `${TAG}.BBOX`),
+      path.join(APP_ROOT, `${TAG}.SYSTEMSKETCH`),
+      path.join(APP_ROOT, "src", `${TAG}.Tldr`),
+      path.join(APP_ROOT, "src", `${TAG}.Bbox`),
+    ];
+    expect([...(await touched(probes))]).toEqual([]);
+  });
+
   it("source under src/review/ is still watched — the ignore is the app's review/ folder, not every folder named review", async () => {
     const source = path.join(APP_ROOT, "src", "review", `${TAG}.ts`);
     expect([...(await touched([source]))]).toEqual([source]);

@@ -50,6 +50,7 @@ import {
 } from "@trunk/files/workspaceModel";
 
 import { fileNameFor, loadBoardText, serializeBoard } from "../chrome/FileMenu";
+import { listenForDocumentEdits, runDerived } from "../document/derivedWrites";
 import { LEGACY_SYSTEMSKETCH_URL } from "../chrome/legacyApp";
 import { documentLocation, fileHostBaseUrl } from "./launchConfig";
 import { installUnsavedWorkGuard } from "./lifecycle";
@@ -223,7 +224,6 @@ export function useDocumentSession(options: {
 
   /* ------------------------------------------------------------ autosave */
 
-  const suppressRef = useRef(0);
   const pendingSinceRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   /**
@@ -252,26 +252,28 @@ export function useDocumentSession(options: {
   /**
    * Run `fn` without it looking like a person edited the board.
    *
-   * WHY the release is deferred a macrotask instead of being a plain
-   * try/finally: `editor.run` flushes its store listeners at the END of the
-   * transaction, which is not always inside this call frame. Releasing
-   * synchronously let a document SWAP (opening a file) schedule an autosave
-   * of the board that was just loaded — harmless when it succeeded, and
-   * actively wrong for a file this build could not read.
+   * WHY `runDerived` and not the counter this used to hold, released a
+   * `setTimeout(0)` later: tldraw delivers store listeners on the next
+   * ANIMATION FRAME, which a macrotask does not outlive, so the load's own
+   * diff reached the autosave as a person's edit and opening a `?board=` file
+   * wrote it back (Zach, 2026-09-22: "the page keeps on reloading"). The
+   * derived extent is checked inside the write itself — see
+   * `document/derivedWrites.ts` for why that, and not a record ledger, is the
+   * one that cannot mistake an undo for a load.
+   *
+   * The pending timer is still dropped: a swap is not the moment for an
+   * autosave queued against the previous document to fire into this one —
+   * every caller that swaps has already written it (`waitForSave`).
    */
   const withoutAutosave = useCallback(
     <T,>(fn: () => T): T => {
-      suppressRef.current += 1;
       try {
-        return fn();
+        return runDerived(editor, fn);
       } finally {
-        window.setTimeout(() => {
-          suppressRef.current = Math.max(0, suppressRef.current - 1);
-          cancelAutosave();
-        }, 0);
+        cancelAutosave();
       }
     },
-    [cancelAutosave],
+    [cancelAutosave, editor],
   );
 
   /* ----------------------------------------------------- the save queue */
@@ -447,6 +449,17 @@ export function useDocumentSession(options: {
     try {
       const picked = await native.open();
       if (!picked) return;
+      // WHY the wait, after the picker and before the swap (Codex audit,
+      // 2026-09-22, P1): loading `picked` replaces the board on screen and
+      // `adoptDocument` then forgets the old file's dirty flag — so an edit
+      // still inside the debounce, or one whose save was refused, went nowhere.
+      // The picker comes FIRST because it needs this gesture's user
+      // activation, which awaiting a save would spend. A document that could
+      // not be written is not left, the same rule as New and Open Recent.
+      if (!(await waitForSaveRef.current())) {
+        reportCouldNotLeave();
+        return;
+      }
       const result = withoutAutosave(() => loadBoardText(editor, picked.source));
       if (!result.ok) {
         setStatus({ tone: "error", label: `Could not read ${picked.title}` });
@@ -463,7 +476,7 @@ export function useDocumentSession(options: {
       setStatus({ tone: "error", label: describe(cause) });
       helpersRef.current.addToast({ severity: "error", title: "Could not open a board", description: describe(cause) });
     }
-  }, [adoptDocument, editor, native, withoutAutosave]);
+  }, [adoptDocument, editor, native, reportCouldNotLeave, withoutAutosave]);
 
   /* ------------------------------------------------------------- save */
 
@@ -853,27 +866,40 @@ export function useDocumentSession(options: {
   }, [mode, openBoardPath]);
 
   useEffect(() => {
-    const stop = editor.store.listen(
-      () => {
-        if (suppressRef.current > 0) return;
-        const current = documentRef.current;
-        // No target, no autosave — and crucially no picker: an autosave must
-        // never be the thing that raises a Save As dialog.
-        if ((current.path === null && current.native === null) || !current.readable) return;
-        dirtyRef.current = true;
-        setStatus((previous) => (previous.tone === "error" ? previous : { tone: "pending", label: "Unsaved changes" }));
-        const now = Date.now();
-        const schedule = autosaveSchedule(now, pendingSinceRef.current, AUTOSAVE_DEBOUNCE_MS, AUTOSAVE_MAX_DELAY_MS);
-        pendingSinceRef.current = schedule.pendingSince;
-        if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-        timerRef.current = window.setTimeout(() => {
-          timerRef.current = null;
-          pendingSinceRef.current = null;
-          void saveRef.current({ auto: true });
-        }, schedule.delayMs);
-      },
-      { scope: "document", source: "user" },
-    );
+    // WHY `listenForDocumentEdits` and not `store.listen({ source: "user" })`:
+    // it runs INSIDE the write, so an edit is dirty the instant it is made (a
+    // listener hears it a frame later — long enough for File ▸ New to leave
+    // first), and it can ask whether the write was the app's own load or
+    // repair (`document/derivedWrites.ts`). Undo and redo are never derived:
+    // they always dirty the board and always save.
+    let statusQueued = false;
+    const stop = listenForDocumentEdits(editor, () => {
+      const current = documentRef.current;
+      // No target, no autosave — and crucially no picker: an autosave must
+      // never be the thing that raises a Save As dialog.
+      if ((current.path === null && current.native === null) || !current.readable) return;
+      dirtyRef.current = true;
+      // The repaint waits a microtask: this runs mid-write, and a store write
+      // can land while React is rendering some other component.
+      if (!statusQueued) {
+        statusQueued = true;
+        queueMicrotask(() => {
+          statusQueued = false;
+          setStatus((previous) =>
+            previous.tone === "error" || previous.label === "Unsaved changes" ? previous : { tone: "pending", label: "Unsaved changes" },
+          );
+        });
+      }
+      const now = Date.now();
+      const schedule = autosaveSchedule(now, pendingSinceRef.current, AUTOSAVE_DEBOUNCE_MS, AUTOSAVE_MAX_DELAY_MS);
+      pendingSinceRef.current = schedule.pendingSince;
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        pendingSinceRef.current = null;
+        void saveRef.current({ auto: true });
+      }, schedule.delayMs);
+    });
     return () => {
       stop();
       cancelAutosave();

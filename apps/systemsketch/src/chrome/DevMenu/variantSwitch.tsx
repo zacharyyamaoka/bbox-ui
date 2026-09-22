@@ -57,6 +57,7 @@ import {
 
 import { reconcileRegionProps, type RegionShape } from "../../shapes/region";
 import { REGION_SHAPE_TYPE } from "../../shapes/types";
+import { runRepair } from "../../document/derivedWrites";
 
 /** The two per-viewer keys, spelled by the lane brief. */
 export const PORT_VARIANT_STORAGE_KEY = "bbox.portVariant";
@@ -153,7 +154,9 @@ function setPortVariant(id: PortVariantId | null): void {
  * not an edit to the document — it must not become the first Ctrl-Z of the
  * session (`shared/measure.ts`'s reason). WHY `ignoreShapeLock`: a locked
  * region is locked against its author, not against a repair of its own
- * geometry.
+ * geometry. WHY `runRepair` (derived, `document/derivedWrites.ts`): the
+ * switch settles on every mount too, and a board opened and left alone must
+ * not be written back.
  */
 export function resettleRegions(editor: Editor): void {
   const updates: TLShapePartial[] = [];
@@ -165,7 +168,7 @@ export function resettleRegions(editor: Editor): void {
     const { w, h, arms } = settled.props;
     updates.push({ id: region.id, type: REGION_SHAPE_TYPE, props: { w, h, arms } } as TLShapePartial);
   }
-  if (updates.length > 0) editor.run(() => editor.updateShapes(updates), { history: "ignore", ignoreShapeLock: true });
+  if (updates.length > 0) runRepair(editor, () => editor.updateShapes(updates), { ignoreShapeLock: true });
 }
 
 /* ------------------------------------------------------------------ */
