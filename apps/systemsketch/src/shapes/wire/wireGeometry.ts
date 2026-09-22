@@ -20,18 +20,45 @@
 // shape exists at paint time), and the side fallback is
 // `anchor.side ?? (x < w/2 ? "left" : "right")`.
 
-import { Vec, type Editor, type TLShape, type TLShapeId } from "tldraw";
+import { Vec, atom, type Atom, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
 import { pinElbowSegment, removePin, routeElbow, type ElbowAxis, type ElbowPin, type ElbowRouteInput } from "@trunk/components/elbow";
 import { elbowInputFromTerminals } from "@trunk/components/elbow/traceContract";
 import { traceGeometry, traceRingGapPx, traceRouteEnd, traceRouteStart } from "@trunk/components/trace";
 import { traceHitPolyline } from "@trunk/components/trace.hit";
 import { OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "@trunk/components/trace.layout";
-import { PORT_VARIANTS, portVariantRingRadiusPx, readPortVariantId, type PortVariantId } from "@trunk/skin/portVariants";
+import { PORT_VARIANTS, portVariantRingRadiusPx, readPortVariantId, subscribePortVariant, type PortVariantId } from "@trunk/skin/portVariants";
 
 import { WIRE_BINDING_TYPE } from "../types";
 import type { WireBinding } from "./WireBindingUtil";
 import type { WireShape } from "./WireShapeUtil";
+
+/**
+ * The port style in force, as a tldraw SIGNAL.
+ *
+ * WHY a signal and not a plain `readPortVariantId()`: the engine caches every
+ * wire's geometry (its hit corridor, its handles) in a computed cache that
+ * re-runs only when a signal it READ changes. The variant lives on an `<html>`
+ * attribute the engine cannot see, so a live switch (v2 → v3: the ring grows
+ * 6 → 8px) left the cached corridor on the old ends while the paint moved —
+ * found by the 2026-09-22 audit of this lane. Mirroring the attribute into an
+ * atom makes every geometry that reads `wireTerminalGap()` depend on it, so a
+ * switch invalidates exactly those caches and nothing else.
+ *
+ * Created lazily and kept in sync through the trunk's own attribute
+ * subscription (`subscribePortVariant`, the one `usePortVariant` rides), so
+ * the app and the ports can never disagree about which variant is in force.
+ * Never unsubscribed: it is one observer for the page's lifetime.
+ */
+let portVariantSignal: Atom<PortVariantId> | null = null;
+function activePortVariant(): PortVariantId {
+  if (portVariantSignal === null) {
+    const signal = atom<PortVariantId>("ss port variant", readPortVariantId());
+    portVariantSignal = signal;
+    subscribePortVariant(() => signal.set(readPortVariantId()));
+  }
+  return portVariantSignal.get();
+}
 
 /**
  * How far the painted line stops short of a dot's measured centre, at each
@@ -50,14 +77,14 @@ import type { WireShape } from "./WireShapeUtil";
  * ONE function for the paint, the hit polyline AND the pin frame
  * (`wireElbowInput`): a pin is a fraction of the frame between the pulled-
  * back ends, so the three must agree or a dragged pin lands somewhere the
- * user did not put it. A variant switch moves every end by at most ~1.5px,
- * and paint and geometry move together.
+ * user did not put it. A variant switch moves every end by at most ~2.5px
+ * (v1 5.5px ring → v3 8px), and paint and geometry move together (`activePortVariant`).
  *
  * Since 2026-09-19 every cable's painted end sits ALONG THE WALL NORMAL and
  * zero px across it (Zach: "The port only should have 1 connection point in
  * the center"); `src/fixes.smoke.test.tsx` measures that zero.
  */
-export function wireTerminalGap(variant: PortVariantId = readPortVariantId()): number {
+export function wireTerminalGap(variant: PortVariantId = activePortVariant()): number {
   return traceRingGapPx(portVariantRingRadiusPx(PORT_VARIANTS[variant]));
 }
 

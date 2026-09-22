@@ -61,7 +61,7 @@ import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "
 
 import type { ElbowRect } from "./elbow/index";
 import type { BlockSide } from "./port.layout";
-import { portDotRingRadiusPx } from "../skin/portVariants";
+import { portDotRingRadiusPx, usePortVariant } from "../skin/portVariants";
 import { Trace, traceRingGapPx, traceRouteEnd, traceRouteStart } from "./trace";
 import { TraceBadge } from "./traceBadge";
 import { DEFAULT_TRACE_ROUTING, OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "./trace.layout";
@@ -309,6 +309,11 @@ function samePoints(a: readonly Point[] | undefined, b: readonly Point[]): boole
 
 export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: WireLayerProps) {
   const [state, setState] = useState<WireLayerState>(EMPTY_STATE);
+  // The port style in force, subscribed through the SAME store every `Port`
+  // re-renders from — so a live switch commits the new dots and re-runs the
+  // measurement below in one pass. Without it the ring pull-back stayed at
+  // the OLD variant's radius until something else moved (2026-09-22 audit).
+  const portVariantId = usePortVariant().id;
   // In a ref so a caller's inline arrow does not re-identify
   // `reportGeometry` (which would re-render every `Trace`).
   const onWireGeometryRef = useRef(onWireGeometry);
@@ -384,7 +389,7 @@ export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: Wi
     // expanded, say, which changes where dots sit but not necessarily the
     // fixture's own outer box.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [containerRef, wires, layoutKey]);
+  }, [containerRef, wires, layoutKey, portVariantId]);
 
   const badged = state.resolved.filter(({ wire }) => wire.badge !== undefined && badgePoints[wire.id]);
 

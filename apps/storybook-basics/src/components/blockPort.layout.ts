@@ -778,3 +778,17 @@ export function minBlockHeightFor(input: MinBlockHeightInput): number {
   }
   return floor;
 }
+
+/**
+ * The `min-height` a Block gets once its port floor is applied on top of
+ * whatever its caller already asked for: the LARGER of the two. A caller's
+ * `style={{ minHeight: 300 }}` must survive a 146px floor — the floor only
+ * ever raises a box (`resolveBlockHeight`'s "floored, never overridden").
+ * A non-numeric caller value (`"10rem"`, `"50%"`) cannot be compared here,
+ * so CSS compares it: `max(10rem, 146px)`.
+ */
+export function floorMinHeight(callerMinHeight: number | string | undefined, floorPx: number): number | string {
+  if (callerMinHeight === undefined || callerMinHeight === "") return floorPx;
+  if (typeof callerMinHeight === "number") return Math.max(callerMinHeight, floorPx);
+  return `max(${callerMinHeight}, ${floorPx}px)`;
+}

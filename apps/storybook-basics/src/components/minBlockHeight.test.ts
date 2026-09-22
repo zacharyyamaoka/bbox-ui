@@ -20,6 +20,7 @@ import {
   RAIL_END_MARGIN_PX,
   RAIL_GAP_PX as GAP,
   alignedFirstCentrePx,
+  floorMinHeight,
   minBlockHeightFor,
   railPitchPx,
   railPlanFor,
@@ -108,5 +109,21 @@ describe("minBlockHeightFor", () => {
         distributions: { right: { mode: "aligned", anchor: "start", gap: 6, edgePadding: 10 } },
       }),
     ).toBe(HEADER + 10 + 3 * SLOT + 2 * 6);
+  });
+});
+
+describe("floorMinHeight — the floor never lowers a caller's own min-height", () => {
+  it("takes the floor when the caller set none", () => {
+    expect(floorMinHeight(undefined, 146)).toBe(146);
+    expect(floorMinHeight("", 146)).toBe(146);
+  });
+  it("keeps a caller's LARGER numeric min-height (the audit's case: 300 must not become 146)", () => {
+    expect(floorMinHeight(300, 146)).toBe(300);
+  });
+  it("raises a caller's SMALLER numeric min-height to the floor", () => {
+    expect(floorMinHeight(40, 146)).toBe(146);
+  });
+  it("hands a non-numeric caller value to CSS max()", () => {
+    expect(floorMinHeight("10rem", 146)).toBe("max(10rem, 146px)");
   });
 });

@@ -523,6 +523,15 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+/**
+ * The same `<html>` attribute subscription `usePortVariant` rides, for a
+ * NON-React reader that caches geometry off the variant (a canvas engine's
+ * reactive store, `WireLayer`'s measurement). Returns the unsubscribe.
+ */
+export function subscribePortVariant(listener: () => void): () => void {
+  return subscribe(listener);
+}
+
 function serverSnapshot(): PortVariantId {
   return DEFAULT_PORT_VARIANT_ID;
 }

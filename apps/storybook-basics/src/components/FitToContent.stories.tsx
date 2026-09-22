@@ -388,9 +388,35 @@ export const OverflowWithoutAFloor: Story = {
     // rendering issue like this", and `BlockPort` now floors every Block at
     // `minBlockHeightFor`, so the same typed height renders clamped UP
     // wherever the ports need it and is left alone where they do not.
-    const heights = LADDER_COUNTS.map((n) => box(n).height);
-    for (const h of heights) expect(h).toBeGreaterThanOrEqual(MANUAL_HEIGHT_PX - 0.5);
+    //
+    // Per card, the exact height it must render at, from an oracle written
+    // out here rather than asked of `minBlockHeightFor`: the typed box
+    // WHEREVER the ports fit in it (untouched — a floor, not a resize), and
+    // otherwise exactly the MEASURED header + footer plus the rail's own
+    // length, n·slot + (n−1)·gap. A clamp that grew every block, or grew the
+    // ones that need it by the wrong amount, fails the ±0.5px here.
+    // Chrome as the rails define their band (blockPort.tsx's `useBlockBands`):
+    // block border-box top -> header bottom, and footer top -> border-box
+    // bottom. So the top border counts, and with no footer nothing does.
+    const chromeOf = (n: number) => {
+      const block = canvasElement.querySelector(`[data-testid="squeeze-${n}"] [data-slot="block"]`)!;
+      const rect = block.getBoundingClientRect();
+      const header = block.querySelector(':scope > [data-slot="block-header"]')?.getBoundingClientRect();
+      const footer = block.querySelector(':scope > [data-slot="block-footer"]')?.getBoundingClientRect();
+      return (header ? header.bottom - rect.top : 0) + (footer ? rect.bottom - footer.top : 0);
+    };
+    let grew = 0;
+    for (const n of LADDER_COUNTS) {
+      const needed = chromeOf(n) + n * PORT_EDGE_SLOT_MIN_PX + (n - 1) * RAIL_GAP_PX;
+      const want = Math.max(MANUAL_HEIGHT_PX, needed);
+      if (needed > MANUAL_HEIGHT_PX) grew += 1;
+      expect(Math.abs(box(n).height - want), `${n} ports: rendered ${box(n).height}px, want ${want}px`).toBeLessThanOrEqual(0.5);
+    }
+    // Both regimes are really exercised: 2 ports fit the typed box, 8 do not.
+    expect(box(2).height, "two ports fit — the typed box is left alone").toBeCloseTo(MANUAL_HEIGHT_PX, 0);
     expect(box(8).height, "eight ports need more than the typed box").toBeGreaterThan(MANUAL_HEIGHT_PX);
+    expect(grew).toBeGreaterThan(0);
+    expect(grew).toBeLessThan(LADDER_COUNTS.length);
 
     // `aligned` keeps its pitch (portEdge.tsx:490 is `flexShrink: 0`), so
     // the failure used to be OVERFLOW: at 8 ports the last dot hung below
