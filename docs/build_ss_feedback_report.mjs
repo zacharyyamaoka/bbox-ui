@@ -425,7 +425,7 @@ figcaption{color:var(--muted);font-size:13px;margin-top:8px}.grid{display:grid;g
 table{border-collapse:collapse;width:100%;font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 td,th{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
 code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in oklab,var(--fg) 8%,transparent);padding:1px 5px;border-radius:4px}
-ul{padding-left:20px}.missing{color:var(--bad)}.small{font-size:13px;color:var(--muted)}
+ul{padding-left:20px}a{color:var(--accent)}a:hover{text-decoration:underline}.missing{color:var(--bad)}.small{font-size:13px;color:var(--muted)}
 </style></head><body><main>
 <h1>SystemSketch feedback — ${DATE}</h1>
 <p class="lede">${facts.lede ?? "Your three items from the Sep 21 daily note, built in three isolated lanes"}, merged on <code>${esc(facts.branch)}</code> @ <code>${esc(facts.sha)}</code>. Everything below was measured off the real running app at build time. <span class="pill ${allPass ? "pass" : "fail"}">${verdicts.filter((row) => row[2]).length}/${verdicts.length} checks pass</span></p>
