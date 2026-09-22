@@ -1,0 +1,216 @@
+<!--
+  bbox-ui Storybook's channel badge — Stable / Preview, answering "am I on
+  the latest?" (Zach, 2026-09-22: "right now I am not sure I am on the
+  latest?"). Storybook reads manager-head.html from BOTH `storybook dev`
+  (Preview) and `storybook build`'s static output (Stable, served by
+  scripts/bboxui_server.py) — see its own doc comment below for why one
+  script here covers both channels, and bbox_release.py's module docstring
+  for the Stable/Preview/Remote model this mirrors.
+
+  WHY manager-head.html and not a story decorator or a component under
+  src/: the sidebar/toolbar chrome Zach actually looks at is Storybook's own
+  packaged manager UI, not our source — there is no app layout of ours to
+  mount a badge into the way apps/docs mounts PreviewChannelBadge into its
+  own React tree. manager-head.html is Storybook's supported extension
+  point for exactly this: raw HTML/script injected into the manager shell's
+  <head>, present in dev and in the built static site alike.
+-->
+<script>
+  (function () {
+    // WHY hardcoded rather than read from an env var: manager-head.html is
+    // interpolated at build/dev time from Storybook's own "env" preset, not
+    // from arbitrary process.env — and these two ports are already the
+    // published, documented default for this product (bbox_release.py's
+    // STORYBOOK config). Zach reconfiguring them locally is not a case this
+    // badge needs to survive; the same class of literal fallback already
+    // exists in bboxui_badge.js and preview-channel-badge.tsx.
+    var STABLE_PORT = 5430;
+    var PREVIEW_PORT = 5431;
+    var STABLE_ORIGIN = "http://127.0.0.1:" + STABLE_PORT;
+    var PREVIEW_ORIGIN = "http://127.0.0.1:" + PREVIEW_PORT;
+    // WHY location.port and nothing fancier: this page is either being
+    // served BY the Stable python server (bboxui_server.py, bound to
+    // STABLE_PORT) or by Storybook's own `dev`/`preview` process — whichever
+    // port the browser actually loaded is definitive, no separate signal
+    // needs to be threaded through the environment the way docs' Preview
+    // does with NEXT_PUBLIC_BBOXUI_CHANNEL (Storybook's manager bundle is
+    // the same bytes regardless of who's serving it, so a build-time env var
+    // baked into that bundle couldn't tell the two apart anyway).
+    var isStable = String(window.location.port) === String(STABLE_PORT);
+
+    function formatTime(iso) {
+      if (!iso) return "unknown";
+      var date = new Date(iso);
+      if (isNaN(date.getTime())) return iso;
+      return date.toLocaleString();
+    }
+
+    function shortSha(sha) {
+      return sha ? sha.slice(0, 7) : "unknown";
+    }
+
+    function freshnessLabel(status) {
+      if (status.liveMatchesStable) return { text: "up to date", behind: false };
+      if (typeof status.commitsAheadOfStable === "number" && status.commitsAheadOfStable > 0) {
+        var n = status.commitsAheadOfStable;
+        return { text: n + " commit" + (n === 1 ? "" : "s") + " behind your checkout", behind: true };
+      }
+      if (status.live && status.live.dirty) {
+        return { text: "your checkout has changes Stable doesn't have", behind: true };
+      }
+      return { text: "may be out of date", behind: true };
+    }
+
+    function mount() {
+      var badge = document.createElement("div");
+      badge.id = "bboxui-storybook-channel-badge";
+      badge.style.cssText = [
+        "position:fixed", "right:16px", "bottom:16px", "z-index:2147483647",
+        "font:12px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+        "background:rgba(20,20,22,0.92)", "color:#e8e8ea",
+        "border:1px solid rgba(255,255,255,0.14)", "border-radius:10px",
+        "padding:10px 12px", "box-shadow:0 6px 24px rgba(0,0,0,0.35)",
+        "display:flex", "align-items:center", "gap:10px", "pointer-events:none",
+        "max-width:420px"
+      ].join(";");
+      document.body.appendChild(badge);
+      renderUnknown(badge);
+      refresh(badge);
+      setInterval(function () { refresh(badge); }, 5000);
+    }
+
+    function renderUnknown(badge) {
+      badge.innerHTML = "";
+      var label = document.createElement("span");
+      label.style.opacity = "0.85";
+      label.style.pointerEvents = "auto";
+      label.textContent = isStable
+        ? "bbox-ui Storybook · Stable · checking…"
+        : "bbox-ui Storybook · Preview · live, following disk";
+      badge.appendChild(label);
+    }
+
+    function refresh(badge) {
+      fetch(STABLE_ORIGIN + "/api/health")
+        .then(function (response) {
+          if (!response.ok) throw new Error("health failed: " + response.status);
+          return response.json();
+        })
+        .then(function (status) { render(badge, status); })
+        .catch(function () { renderStableUnreachable(badge); });
+    }
+
+    function renderStableUnreachable(badge) {
+      badge.innerHTML = "";
+      var label = document.createElement("span");
+      label.style.opacity = "0.85";
+      label.style.pointerEvents = "auto";
+      label.textContent = isStable
+        ? "bbox-ui Storybook · Stable · server unreachable"
+        : "bbox-ui Storybook · Preview · live, following disk · Stable not running";
+      badge.appendChild(label);
+    }
+
+    function makeButton(text) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.style.cssText = [
+        "appearance:none", "border:1px solid rgba(255,255,255,0.2)", "background:#2b6cff",
+        "color:#fff", "font:inherit", "font-weight:600", "padding:6px 10px",
+        "border-radius:7px", "cursor:pointer", "pointer-events:auto"
+      ].join(";");
+      return button;
+    }
+
+    function render(badge, status) {
+      badge.innerHTML = "";
+      var fresh = freshnessLabel(status);
+
+      var label = document.createElement("span");
+      label.style.pointerEvents = "auto";
+      label.style.opacity = "0.85";
+
+      if (isStable) {
+        var dirtySuffix = status.dirty ? " +uncommitted" : "";
+        label.textContent =
+          "bbox-ui Storybook · Stable · " + shortSha(status.commit) + dirtySuffix +
+          " · built " + formatTime(status.builtAt) + " · ";
+        var freshSpan = document.createElement("span");
+        freshSpan.textContent = fresh.text;
+        freshSpan.style.color = fresh.behind ? "#ffb020" : "#57d18c";
+        freshSpan.style.fontWeight = "600";
+        label.appendChild(freshSpan);
+        label.title = (status.branch ? "branch " + status.branch : "") +
+          (status.dirtyPaths && status.dirtyPaths.length ? "\nuncommitted: " + status.dirtyPaths.join(", ") : "");
+        badge.appendChild(label);
+
+        var toPreview = makeButton("Switch to Preview");
+        toPreview.addEventListener("click", function () {
+          toPreview.disabled = true;
+          toPreview.textContent = "Starting Preview…";
+          fetch(STABLE_ORIGIN + "/api/start-preview", { method: "POST" })
+            .then(function (response) {
+              if (!response.ok) throw new Error("start-preview failed: " + response.status);
+              return response.json();
+            })
+            .then(function (payload) { window.location.href = payload.url; })
+            .catch(function () {
+              toPreview.disabled = false;
+              toPreview.textContent = "Switch failed — retry";
+            });
+        });
+        badge.appendChild(toPreview);
+        return;
+      }
+
+      var live = status.live || {};
+      var liveDirtySuffix = live.dirty ? " +uncommitted" : "";
+      label.textContent =
+        "bbox-ui Storybook · Preview · " + (live.branch ? live.branch + " · " : "") +
+        shortSha(live.commit) + liveDirtySuffix + " · live, following disk";
+      badge.appendChild(label);
+
+      if (status.liveMatchesStable) {
+        var matches = document.createElement("span");
+        matches.style.pointerEvents = "auto";
+        matches.style.color = "#57d18c";
+        matches.textContent = "Stable matches Preview";
+        badge.appendChild(matches);
+      } else {
+        var promoteButton = makeButton("Promote to Stable");
+        promoteButton.addEventListener("click", function () {
+          promoteButton.disabled = true;
+          promoteButton.textContent = "Building…";
+          fetch(STABLE_ORIGIN + "/api/promote", { method: "POST" })
+            .then(function (response) {
+              if (!response.ok) throw new Error("promote failed: " + response.status);
+              return response.json();
+            })
+            .then(function (payload) { render(badge, payload); })
+            .catch(function () {
+              promoteButton.disabled = false;
+              promoteButton.textContent = "Build failed — retry";
+            });
+        });
+        badge.appendChild(promoteButton);
+      }
+
+      // WHY this button can exist unconditionally here but not the mirror
+      // image on the Stable side without an extra round trip: reaching this
+      // branch already proves STABLE_ORIGIN answered /api/health, so Stable
+      // is known-running right now — no separate "is it up" check needed.
+      var toStable = makeButton("Open Stable");
+      toStable.addEventListener("click", function () {
+        window.location.href = STABLE_ORIGIN + "/";
+      });
+      badge.appendChild(toStable);
+    }
+
+    if (document.body) {
+      mount();
+    } else {
+      document.addEventListener("DOMContentLoaded", mount);
+    }
+  })();
+</script>

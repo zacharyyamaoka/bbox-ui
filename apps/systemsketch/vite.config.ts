@@ -8,6 +8,7 @@ import { getAssetUrls } from "@tldraw/assets/selfHosted";
 import { defineConfig, type Plugin } from "vite";
 
 import { devFileHostPlugin } from "./devFileHost";
+import { statusEndpointPlugin } from "./statusEndpoint";
 
 const TRUNK = path.resolve(__dirname, "../storybook-basics/src");
 
@@ -130,7 +131,7 @@ export default defineConfig({
   // why `vite dev` needs this at all: without it, Open/Save works from the
   // dock's Stable server but 404s from `pnpm --filter systemsketch dev`,
   // the two surfaces Zach actually uses.
-  plugins: [react(), tailwindcss(), selfHostedTldrawAssets(), devFileHostPlugin()],
+  plugins: [react(), tailwindcss(), selfHostedTldrawAssets(), devFileHostPlugin(), statusEndpointPlugin()],
   define: {
     // Consumed by src/App.tsx, which declares it ambient and passes it
     // straight to `<Tldraw assetUrls={…}>`. See the WHY above for why the
