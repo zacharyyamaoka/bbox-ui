@@ -25,9 +25,9 @@
 // section no stock control fits (an About block), not the default.
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type ReactNode } from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { XIcon } from "lucide-react";
+import { SearchIcon, XIcon } from "lucide-react";
 
 import { cn } from "../lib/utils";
 import { Button } from "../components/button";
@@ -35,6 +35,7 @@ import { DialogClose, DialogOverlay, DialogPortal } from "../components/dialog";
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "../components/field";
 import { Input } from "../components/input";
 import { RadioGroup, RadioGroupItem } from "../components/radio-group";
+import { ScrollArea } from "../components/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/select";
 import { Slider } from "../components/slider";
 import { Switch } from "../components/switch";
@@ -181,6 +182,17 @@ export interface SettingsCategory {
   id: string;
   label: string;
   icon?: ReactNode;
+  /**
+   * An optional heading this category sits under in the nav. Consecutive
+   * categories naming the same group render beneath one heading.
+   *
+   * WHY the nav groups at all: Zach named Obsidian as the reference, and its
+   * nav is grouped (Options / Core plugins / Community plugins) rather than
+   * flat. The same reason `SettingsSection.group` exists one level down — a
+   * flat list of six is the same information with the teaching removed, and
+   * "About" is genuinely not the same kind of thing as "Connections".
+   */
+  group?: string;
   sections: readonly SettingsSection[];
 }
 
@@ -194,6 +206,16 @@ export interface SettingsViewProps {
   onCategoryChange?(id: string): void;
   /** Header text; default "Settings". */
   title?: string;
+  /**
+   * Show the "Search settings…" box above the nav, filtering rows in place.
+   * Default `false`, so a host with three settings does not get a search box
+   * for three settings.
+   *
+   * Zach, 2026-09-22, approving P2 alongside P1. Obsidian has one, and this
+   * panel is 31 settings across six categories — past the point where browsing
+   * beats searching.
+   */
+  searchable?: boolean;
   /** Portal target inside the host's token scope (menu-kit host contract §4). */
   container?: HTMLElement | null;
   /** Host CSS on the popup — stacking only; the kit ships zero z-index. */
@@ -216,13 +238,56 @@ export interface SettingsViewProps {
 // zoom kept from dialog.tsx). Keeping the animation entirely in `POPUP_BASE`
 // (present at every presentation, never toggled) means a presentation swap
 // can never retrigger it.
+//
+// WHY the padding moved OFF the popup and onto the header / sidebar / pane:
+// the Obsidian shape this now clones has a nav column with its own background
+// and a full-height divider running to the popup's edges. A `p-4` on the popup
+// insets that divider by 16px on every side and the column stops reading as a
+// column. Each region owns its own padding instead.
 const POPUP_BASE =
-  "fixed z-50 flex flex-col gap-4 bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0";
+  "fixed z-50 flex flex-col overflow-hidden bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0";
 
+/**
+ * Zach, 2026-09-22, on the panel that shipped at `sm:max-w-lg`: "Seems to
+ * skinny" and "The height should be limited in this modal view".
+ *
+ * WHY a `min()` on BOTH axes rather than the old `w-full` + `max-w-*` pair:
+ * those two complaints pull opposite ways. `max-w-lg` alone pinned the dialog
+ * to 512px on a 2560px monitor (measured); dropping the cap entirely would
+ * make it fill a large screen, which is the "height should be limited"
+ * complaint in the other direction. `min(<ideal>, <viewport minus gutter>)`
+ * states the ideal size once and lets the window shrink it — so the SAME rule
+ * gives 1040x720 on a desktop and 350x720 in vitest's 414px-wide browser
+ * frame, with the 2rem gutter the acceptance story measures preserved at
+ * every size.
+ *
+ * 1040 is the reference: Obsidian's own settings window is ~905px of a 1032px
+ * window, and our category names are longer ("Hotkeys and aliases"), so the
+ * nav needs the extra width to avoid truncating.
+ */
 const POPUP_DIALOG =
-  "top-1/2 left-1/2 w-full max-w-[calc(100%-2rem)] max-h-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl sm:max-w-lg";
+  "top-1/2 left-1/2 h-[min(720px,calc(100vh-4rem))] w-[min(1040px,calc(100vw-4rem))] max-h-[calc(100%-2rem)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl";
 
-const POPUP_PAGE = "inset-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 overflow-hidden rounded-none";
+const POPUP_PAGE = "inset-0 h-screen w-screen max-w-none max-h-none translate-x-0 translate-y-0 rounded-none";
+
+/**
+ * Which control kinds get the control BESIDE the name, and which get it
+ * underneath.
+ *
+ * Zach, 2026-09-22: "Generally I feel the entire settings thing is really
+ * unprofessionally done", pointing at Obsidian. The single biggest difference
+ * between the two — bigger than the width, the icons or the scrollbar — is
+ * that Obsidian's row is `name + description | control`, so the eye runs down
+ * one column of controls, while this panel stacked all three and produced a
+ * ragged column of prose with controls buried in it.
+ *
+ * It is NOT "everything right-aligned", though: Obsidian stacks its own
+ * multi-line controls (a theme picker, a text area) under the name for the
+ * same reason we do. A switch or a select is a small fixed affordance and
+ * belongs on the right; a radio stack, a slider with its presets and reset,
+ * or a host's `custom` block are full-width things and belong below.
+ */
+const WIDE_CONTROL_KINDS: ReadonlySet<SettingsControl["kind"]> = new Set(["radio", "slider", "custom"]);
 
 /**
  * The exact-value box beside a slider.
@@ -604,6 +669,39 @@ function renderControl(section: SettingsSection, controlId: string, titleId: str
   }
 }
 
+/** Case-insensitive substring match over everything a row says about itself.
+ *  The group name is included so "wheel" finds the whole Wheel gestures run. */
+function sectionMatches(section: SettingsSection, query: string): boolean {
+  if (!query) return true;
+  return `${section.title} ${section.description ?? ""} ${section.group ?? ""}`
+    .toLowerCase()
+    .includes(query);
+}
+
+/**
+ * The matched substring, wrapped in a `<mark>`.
+ *
+ * WHY only the FIRST occurrence: a row's title is a few words and its
+ * description a sentence or two, so the first hit is the one that tells you
+ * why the row survived the filter. Marking every occurrence turns a search for
+ * a common word ("scroll") into a row of highlighter stripes that is harder to
+ * read than no highlight at all.
+ */
+function highlight(text: string, query: string): ReactNode {
+  if (!query) return text;
+  const at = text.toLowerCase().indexOf(query);
+  if (at < 0) return text;
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark data-slot="settings-match" className="rounded-[3px] bg-primary/25 px-px text-inherit">
+        {text.slice(at, at + query.length)}
+      </mark>
+      {text.slice(at + query.length)}
+    </>
+  );
+}
+
 /**
  * DOM contract (what the acceptance story measures; the builder keeps it):
  *   - one element `[data-slot="settings-view"]` — the stock Dialog POPUP
@@ -617,7 +715,27 @@ function renderControl(section: SettingsSection, controlId: string, titleId: str
  *   - both: Escape and the header's Close button call `onOpenChange(false)`;
  *     focus is trapped while open (stock Dialog behaviour, not re-implemented);
  *   - nav: `[data-slot="settings-nav"]` holding one button per category,
- *     `aria-current="page"` on the active one;
+ *     `aria-current="page"` on the active one. Since 2026-09-22 it may ALSO
+ *     hold `[data-slot="settings-nav-group"][data-group=<name>]` headings
+ *     between the buttons, so a test that wants the category rows selects
+ *     `button` rather than taking every child;
+ *   - the sidebar around it is `[data-slot="settings-sidebar"]`; with
+ *     `searchable`, `[data-slot="settings-search"]` holds
+ *     `[data-slot="settings-search-input"]` above the nav, and each nav button
+ *     carries `[data-slot="settings-nav-count"]` with its live match count
+ *     while a query is active;
+ *   - a matched substring in a visible title or description is wrapped in
+ *     `[data-slot="settings-match"]`;
+ *   - a query matching nothing anywhere renders `[data-slot="settings-empty"]`
+ *     and no sections;
+ *   - each row is a stock `Field`: `orientation="horizontal"` (name and
+ *     description left in `[data-slot=field-content]`, control right) for a
+ *     `switch` or `select`, `orientation="vertical"` for the full-width kinds
+ *     (`radio`, `slider`, `custom`). The control sits in
+ *     `[data-slot="settings-control"]`;
+ *   - NOTHING scrolls horizontally: both scrollers are stock `ScrollArea`s
+ *     whose viewport is `overflow-x: hidden`, so the content pane's
+ *     `scrollWidth` equals its `clientWidth` at every width;
  *   - each rendered section: `[data-slot="settings-section"]
  *     [data-section-id=<id>]`, its title as visible text, its control a stock
  *     `RadioGroup` (`role="radiogroup"`, each option's `role="radio"`
@@ -647,6 +765,7 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
     category,
     onCategoryChange,
     title = "Settings",
+    searchable = false,
     container,
     popupClassName,
     testIdPrefix,
@@ -657,13 +776,41 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
   // the Dialog, so switching `presentation` re-renders the SAME element in
   // place and the open category survives it for free.
   const [uncontrolledCategoryId, setUncontrolledCategoryId] = useState<string | undefined>(undefined);
-  const activeCategoryId = category ?? uncontrolledCategoryId ?? categories[0]?.id;
-  const activeCategory = categories.find((candidate) => candidate.id === activeCategoryId) ?? categories[0];
+  const [rawQuery, setRawQuery] = useState("");
+  const query = searchable ? rawQuery.trim().toLowerCase() : "";
+
+  const counts = new Map(categories.map((cat) => [cat.id, cat.sections.filter((s) => sectionMatches(s, query)).length]));
+  // A category with nothing matching drops out of the nav entirely — the
+  // count would be a permanent "(0)" telling you not to click it.
+  const visibleCategories = query ? categories.filter((cat) => (counts.get(cat.id) ?? 0) > 0) : categories;
+
+  const requestedId = category ?? uncontrolledCategoryId ?? categories[0]?.id;
+  const requested = categories.find((candidate) => candidate.id === requestedId) ?? categories[0];
+  /**
+   * WHY the active category is DERIVED from the query rather than corrected by
+   * an effect: filtering can hide the category you were on, and a `useEffect`
+   * that then calls `selectCategory` would (a) render one frame of an empty
+   * pane, (b) fire `onCategoryChange` at a host that never asked, and (c)
+   * overwrite the category you chose, so clearing the search would NOT take
+   * you back to it. Deriving keeps `uncontrolledCategoryId` untouched: search,
+   * read a result, clear the box, and you are back where you were.
+   */
+  const activeCategory =
+    requested && visibleCategories.includes(requested) ? requested : visibleCategories[0];
+  const visibleSections = activeCategory?.sections.filter((s) => sectionMatches(s, query)) ?? [];
 
   function selectCategory(id: string) {
     onCategoryChange?.(id);
     if (category === undefined) setUncontrolledCategoryId(id);
   }
+
+  // Switching category starts you at the top of the new one, the way every
+  // settings surface does. ScrollArea's viewport is the scroller, not the root.
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const viewport = paneRef.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (viewport) viewport.scrollTop = 0;
+  }, [activeCategory?.id]);
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -675,7 +822,7 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
           data-testid={testIdPrefix}
           className={cn(POPUP_BASE, presentation === "page" ? POPUP_PAGE : POPUP_DIALOG, popupClassName)}
         >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border pb-3">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
             <DialogPrimitive.Title className="cn-font-heading text-base leading-none font-medium">
               {title}
             </DialogPrimitive.Title>
@@ -684,76 +831,221 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
               <span className="sr-only">Close</span>
             </DialogClose>
           </div>
-          <div className="flex min-h-0 flex-1 gap-4">
-            {/* WHY the nav is stock `Button`s rather than the hand-styled rows
-                this file shipped first: Zach, 2026-09-19 — "as always please be
-                using stock shadcn as much as possible". The hand-rolled row had
-                re-derived `hover:bg-muted`, the active tint and the icon sizing
-                by hand, which is three chances to drift from every other
-                control in the kit and no way for a consumer to `shadcn add` the
-                same thing. `secondary` IS the stock active tint. */}
-            <nav data-slot="settings-nav" aria-label="Settings categories" className="flex w-36 shrink-0 flex-col gap-0.5">
-              {categories.map((cat) => {
-                const active = cat.id === activeCategory?.id;
-                return (
-                  <Button
-                    key={cat.id}
-                    type="button"
-                    variant={active ? "secondary" : "ghost"}
-                    size="sm"
-                    // The donor's own semantics (InterfaceSettings.tsx:164-222),
-                    // kept: the open category is the current page, not just a
-                    // differently-coloured button.
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => selectCategory(cat.id)}
-                    className={cn("justify-start gap-2 px-2 font-normal", !active && "text-muted-foreground")}
-                  >
-                    {cat.icon}
-                    {cat.label}
-                  </Button>
-                );
-              })}
-            </nav>
-            {/* WHY: the pane fills the window in `page` presentation, so without a
-                reading measure every option row stretches the full viewport and strands
-                its radio ~1,300px from its label — measured in a real 1400px window. The
-                cap is on the CONTENT, never on the popup, because the presentation
-                contract is that the page rect equals the viewport exactly. */}
-            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto [&>*]:w-full [&>*]:max-w-2xl">
-              {activeCategory?.sections.map((section, index) => {
-                const controlId = `${testIdPrefix ?? "settings"}-${activeCategory.id}-${section.id}`;
-                const titleId = `${controlId}-title`;
-                // A heading opens a run of sections, so it renders only when
-                // the group CHANGES — the donor's four `<h3>`-led blocks
-                // (`InterfaceSettings.tsx:658-768`) without the host having to
-                // hand-slice its own list into sub-lists.
-                const previousGroup = index === 0 ? undefined : activeCategory.sections[index - 1].group;
-                const opensGroup = section.group !== undefined && section.group !== previousGroup;
-                return (
-                  <div key={section.id} data-slot="settings-section" data-section-id={section.id} className="flex flex-col gap-2">
-                    {opensGroup ? (
-                      <>
-                        <h3
-                          data-slot="settings-group"
-                          data-group={section.group}
-                          className="cn-font-heading text-muted-foreground mt-2 text-xs font-medium tracking-wide uppercase first:mt-0"
-                        >
-                          {section.group}
-                        </h3>
-                        {section.groupDescription ? (
-                          <FieldDescription data-slot="settings-group-description">
-                            {section.groupDescription}
-                          </FieldDescription>
-                        ) : null}
-                      </>
-                    ) : null}
-                    <FieldTitle id={titleId}>{section.title}</FieldTitle>
-                    {section.description ? <FieldDescription>{section.description}</FieldDescription> : null}
-                    {renderControl(section, controlId, titleId)}
+          <div className="flex min-h-0 flex-1">
+            {/* The nav column. `bg-background` against the popup's `bg-popover`
+                is what makes it read as a column at all — in dark mode those
+                are two different neutrals, which is Obsidian's own treatment. */}
+            <aside
+              data-slot="settings-sidebar"
+              className="flex w-44 shrink-0 flex-col border-r border-border bg-background sm:w-56"
+            >
+              {searchable ? (
+                <div data-slot="settings-search" className="shrink-0 p-2.5 pb-1.5">
+                  <div className="relative">
+                    <SearchIcon
+                      aria-hidden="true"
+                      className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
+                    />
+                    <Input
+                      data-slot="settings-search-input"
+                      type="search"
+                      aria-label="Search settings"
+                      placeholder="Search settings…"
+                      className="h-8 pl-8 text-sm"
+                      value={rawQuery}
+                      onChange={(event) => setRawQuery(event.currentTarget.value)}
+                      // Same reason `SliderExactEntry` stops its keys: the kit
+                      // is mounted over a host that binds letters to tools, so
+                      // typing "v" in the search box must not pick the select
+                      // tool.
+                      //
+                      // Escape is the exception, and the asymmetry is the
+                      // point: with text in the box it clears the box and is
+                      // swallowed, so the search is abandoned without losing
+                      // the dialog; with the box ALREADY empty it is allowed
+                      // through to the Dialog and closes as it always has.
+                      // Stopping it unconditionally is the tempting one-liner,
+                      // and it makes Escape stop closing Settings entirely once
+                      // a search box exists — measured red by
+                      // `SearchRestoresYourCategoryAndEscapeClearsIt`.
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          if (rawQuery === "") return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setRawQuery("");
+                          return;
+                        }
+                        event.stopPropagation();
+                      }}
+                    />
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              ) : null}
+              <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:overflow-x-hidden!">
+                {/* WHY the nav is stock `Button`s rather than the hand-styled rows
+                    this file shipped first: Zach, 2026-09-19 — "as always please be
+                    using stock shadcn as much as possible". The hand-rolled row had
+                    re-derived `hover:bg-muted`, the active tint and the icon sizing
+                    by hand, which is three chances to drift from every other
+                    control in the kit and no way for a consumer to `shadcn add` the
+                    same thing. `secondary` IS the stock active tint. */}
+                <nav data-slot="settings-nav" aria-label="Settings categories" className="flex flex-col gap-0.5 p-2">
+                  {visibleCategories.map((cat, index) => {
+                    const active = cat.id === activeCategory?.id;
+                    const previousGroup = index === 0 ? undefined : visibleCategories[index - 1].group;
+                    const opensGroup = cat.group !== undefined && cat.group !== previousGroup;
+                    const count = counts.get(cat.id) ?? 0;
+                    return (
+                      <Fragment key={cat.id}>
+                        {opensGroup ? (
+                          <div
+                            data-slot="settings-nav-group"
+                            data-group={cat.group}
+                            className="cn-font-heading text-muted-foreground mt-3 px-2 pb-1 text-[11px] font-semibold tracking-wider uppercase first:mt-0"
+                          >
+                            {cat.group}
+                          </div>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant={active ? "secondary" : "ghost"}
+                          size="sm"
+                          // The donor's own semantics (InterfaceSettings.tsx:164-222),
+                          // kept: the open category is the current page, not just a
+                          // differently-coloured button.
+                          aria-current={active ? "page" : undefined}
+                          onClick={() => selectCategory(cat.id)}
+                          className={cn("justify-start gap-2 px-2 font-normal", !active && "text-muted-foreground")}
+                        >
+                          {cat.icon}
+                          {/* `min-w-0` + `truncate`: "Hotkeys and aliases" is
+                              wider than the 176px nav at the small breakpoint,
+                              and a nav row that pushes is how a horizontal
+                              scrollbar gets back in. */}
+                          <span className="min-w-0 flex-1 truncate text-left">{cat.label}</span>
+                          {query ? (
+                            <span
+                              data-slot="settings-nav-count"
+                              className="text-muted-foreground shrink-0 text-xs tabular-nums"
+                            >
+                              {count}
+                            </span>
+                          ) : null}
+                        </Button>
+                      </Fragment>
+                    );
+                  })}
+                </nav>
+              </ScrollArea>
+            </aside>
+            {/* The ONE content scroller.
+                WHY a stock `ScrollArea` rather than `overflow-y-auto`: Zach,
+                2026-09-22 — "there shouldnt be a scroll bar at the bottom" and
+                "the scroll bar should be more intergrated see how it looks in
+                obsidan". `overflow-y-auto` alone computes `overflow-x: auto`
+                (CSS Overflow: a non-`visible` value on one axis forces the
+                other's `visible` to `auto`), so the pane carried a LATENT
+                classic horizontal scrollbar on every render, waiting for any
+                overflow at all — and a classic bar also steals layout height.
+                ScrollArea's viewport, pinned `overflow-x: hidden` here, makes
+                that structurally impossible, and its overlaid 10px thumb is
+                Obsidian's treatment rather than the platform default.
+                WHY: the pane fills the window in `page` presentation, so
+                without a reading measure every option row stretches the full
+                viewport and strands its radio ~1,300px from its label —
+                measured in a real 1400px window. The cap is on the CONTENT,
+                never on the popup, because the presentation contract is that
+                the page rect equals the viewport exactly.
+                WHY `max-w-2xl` survived the 2026-09-22 widening unchanged: the
+                popup grew from 512 to 1040 and the pane from 320 to 816, and
+                the tempting move was to grow the measure with it. Measured
+                against the reference instead — Obsidian's own settings window
+                in Zach's screenshot is a ~697px pane holding ~572px cards, a
+                ratio of 0.82. 672 of 816 is 0.82. Widening to `max-w-3xl`
+                would have pushed each row's right-aligned control ~96px
+                further from the text it belongs to, which is the same
+                stranding this comment exists to prevent, just smaller.
+                `trunkOwnership.test.ts` pins both the class and this WHY. */}
+            <ScrollArea
+              ref={paneRef}
+              className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:overflow-x-hidden!"
+            >
+              <div data-slot="settings-pane" className="flex w-full max-w-2xl min-w-0 flex-col px-5 py-4 pb-8">
+                {visibleCategories.length === 0 ? (
+                  <p data-slot="settings-empty" className="text-muted-foreground py-8 text-sm">
+                    No setting matches “{rawQuery.trim()}”.
+                  </p>
+                ) : (
+                  visibleSections.map((section, index) => {
+                    const controlId = `${testIdPrefix ?? "settings"}-${activeCategory!.id}-${section.id}`;
+                    const titleId = `${controlId}-title`;
+                    // A heading opens a run of sections, so it renders only when
+                    // the group CHANGES — the donor's four `<h3>`-led blocks
+                    // (`InterfaceSettings.tsx:658-768`) without the host having to
+                    // hand-slice its own list into sub-lists. Computed over the
+                    // FILTERED list, so a search never leaves a heading standing
+                    // over nothing.
+                    const previousGroup = index === 0 ? undefined : visibleSections[index - 1].group;
+                    const opensGroup = section.group !== undefined && section.group !== previousGroup;
+                    const wide = WIDE_CONTROL_KINDS.has(section.control.kind);
+                    return (
+                      <Fragment key={section.id}>
+                        {opensGroup ? (
+                          <div className="mt-7 flex flex-col gap-1 pb-2 first:mt-0">
+                            <h3
+                              data-slot="settings-group"
+                              data-group={section.group}
+                              className="cn-font-heading text-base leading-none font-medium"
+                            >
+                              {section.group}
+                            </h3>
+                            {section.groupDescription ? (
+                              <FieldDescription data-slot="settings-group-description">
+                                {section.groupDescription}
+                              </FieldDescription>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        <div
+                          data-slot="settings-section"
+                          data-section-id={section.id}
+                          // The hairline between rows, Obsidian's own. Suppressed
+                          // on the first row and on any row that opens a group,
+                          // where the heading is already the divider.
+                          className={cn(
+                            "border-t border-border",
+                            (index === 0 || opensGroup) && "border-t-0",
+                          )}
+                        >
+                          {/* THE ROW. `orientation="horizontal"` is the whole
+                              answer to "unprofessionally done": FieldContent is
+                              `flex-1`, so the name and description take the left
+                              column and the control is a shrink-0 right column —
+                              Obsidian's shape, from a stock part this file was
+                              already importing and using only inside radio
+                              options. */}
+                          <Field orientation={wide ? "vertical" : "horizontal"} className="gap-3 py-3.5">
+                            <FieldContent>
+                              <FieldTitle id={titleId}>{highlight(section.title, query)}</FieldTitle>
+                              {section.description ? (
+                                <FieldDescription>{highlight(section.description, query)}</FieldDescription>
+                              ) : null}
+                            </FieldContent>
+                            <div
+                              data-slot="settings-control"
+                              className={cn("min-w-0", !wide && "shrink-0")}
+                            >
+                              {renderControl(section, controlId, titleId)}
+                            </div>
+                          </Field>
+                        </div>
+                      </Fragment>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
           </div>
         </DialogPrimitive.Popup>
       </DialogPortal>

@@ -57,6 +57,7 @@
 // command rather than a hand-typed table that can rot. Rebinding is NOT in
 // it, and the section says so out loud rather than leaving a dead control.
 import type { ReactNode } from "react";
+import { Cable, Info, Keyboard, MousePointer2, Palette, SlidersHorizontal } from "lucide-react";
 
 import { formatShortcut, type KeyChord, type ShortcutPlatform } from "./appMenu";
 import {
@@ -195,6 +196,17 @@ export interface SettingsCategoriesInput {
   about?: SettingsCategory;
 }
 
+/**
+ * The nav heading the five settings categories sit under, mirroring Obsidian's
+ * own grouped nav (Options / Core plugins / Community plugins). The host's
+ * About block gets "App" in `buildSettingsCategories` below.
+ *
+ * Zach, 2026-09-22: "All the section son the left navigator should have icons"
+ * plus Obsidian named as the reference. The `icon` field on each category
+ * answers the first half; this answers the grouping the reference also has.
+ */
+const OPTIONS_GROUP = "Options";
+
 /** "Saved on this computer" — the archive's own footer, one line, per
  *  category that persists to the browser (`InterfaceSettings.tsx:337-344`). */
 function savedHere(detail: string): ReactNode {
@@ -267,7 +279,7 @@ function generalCategory(input: SettingsCategoriesInput): SettingsCategory {
     });
   }
 
-  return { id: SETTINGS_CATEGORY_IDS.general, label: "General", sections };
+  return { id: SETTINGS_CATEGORY_IDS.general, label: "General", group: OPTIONS_GROUP, icon: <SlidersHorizontal />, sections };
 }
 
 // ──────────────────────────── Appearance ────────────────────────────────
@@ -276,6 +288,8 @@ function appearanceCategory(input: SettingsCategoriesInput): SettingsCategory {
   return {
     id: SETTINGS_CATEGORY_IDS.appearance,
     label: "Appearance",
+    group: OPTIONS_GROUP,
+    icon: <Palette />,
     sections: [
       {
         // Ported from `InterfaceSettings.tsx:794-855` (the archive's whole
@@ -522,7 +536,7 @@ function pointerCategory(input: SettingsCategoriesInput): SettingsCategory {
     );
   }
 
-  return { id: SETTINGS_CATEGORY_IDS.pointer, label: "Mouse and scrolling", sections };
+  return { id: SETTINGS_CATEGORY_IDS.pointer, label: "Mouse and scrolling", group: OPTIONS_GROUP, icon: <MousePointer2 />, sections };
 }
 
 // ──────────────────────────── Connections ───────────────────────────────
@@ -741,7 +755,7 @@ function connectionsCategory(input: SettingsCategoriesInput): SettingsCategory {
     },
   });
 
-  return { id: SETTINGS_CATEGORY_IDS.connections, label: "Connections", sections };
+  return { id: SETTINGS_CATEGORY_IDS.connections, label: "Connections", group: OPTIONS_GROUP, icon: <Cable />, sections };
 }
 
 // ─────────────────── Hotkeys and aliases (was Tool aliases) ─────────────
@@ -805,7 +819,7 @@ function hotkeysCategory(input: SettingsCategoriesInput): SettingsCategory {
     },
   });
 
-  return { id: SETTINGS_CATEGORY_IDS.hotkeys, label: "Hotkeys and aliases", sections };
+  return { id: SETTINGS_CATEGORY_IDS.hotkeys, label: "Hotkeys and aliases", group: OPTIONS_GROUP, icon: <Keyboard />, sections };
 }
 
 /**
@@ -823,6 +837,14 @@ export function buildSettingsCategories(input: SettingsCategoriesInput): Setting
     connectionsCategory(input),
     hotkeysCategory(input),
   ];
-  if (input.about !== undefined) categories.push(input.about);
+  if (input.about !== undefined) {
+    // WHY the defaults are applied here rather than demanded of the host: the
+    // host owns About's CONTENT (its own product name and build string — see
+    // the `about` field's doc comment, which is why it is a whole category and
+    // not a ReactNode). Which nav heading it sits under and which glyph sits
+    // beside it are chrome, and chrome belongs in the trunk. `??` not
+    // overwrite: a host that genuinely wants its own icon or heading keeps it.
+    categories.push({ icon: <Info />, ...input.about, group: input.about.group ?? "App" });
+  }
   return categories;
 }

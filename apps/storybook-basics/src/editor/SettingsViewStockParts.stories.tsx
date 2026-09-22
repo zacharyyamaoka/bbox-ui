@@ -94,7 +94,19 @@ function Harness() {
 }
 
 const nav = () => document.querySelector<HTMLElement>(`[data-testid="${P}"] [data-slot="settings-nav"]`)!;
-const items = () => Array.from(nav().children) as HTMLElement[];
+/**
+ * The category ROWS.
+ *
+ * WHY this selects buttons rather than taking `nav().children`, which is what
+ * it did until 2026-09-22: the nav now interleaves
+ * `[data-slot="settings-nav-group"]` headings between the rows (Obsidian's
+ * grouped nav, which Zach named as the reference), so "every child" is no
+ * longer "every category". The ASSERTIONS below are unchanged — the rows are
+ * still stock `Button`s, still in declaration order, still carrying
+ * `aria-current="page"` on the open one, and Tab still walks them in that
+ * order. Only the way this helper finds them moved.
+ */
+const items = () => Array.from(nav().querySelectorAll<HTMLElement>('button[data-slot="button"]'));
 
 export const CategoryNavIsStockButtons: Story = {
   render: () => <Harness />,
