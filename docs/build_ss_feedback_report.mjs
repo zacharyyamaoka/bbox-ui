@@ -191,6 +191,13 @@ async function inspectorState(page) {
       text: panel?.textContent?.replace(/\s+/g, " ").slice(0, 160) ?? null,
       rect: rect && { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
       activeIsBody: document.activeElement === document.body || !!document.activeElement?.closest(".tl-container"),
+      closeHit: (() => {
+        const close = panel?.querySelector('button[aria-label^="Close"]');
+        if (!close) return null;
+        const box = close.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return !!hit && (hit === close || close.contains(hit));
+      })(),
     };
   });
 }
@@ -382,6 +389,7 @@ function verdictRows(evidence) {
   rows.push(["Clicking a block opens the Inspector", `surface = ${onBlock.surface}; panel text: “${esc(onBlock.text ?? "")}”`, onBlock.surface === "inspector" && /Pose estimator/.test(onBlock.text ?? "")]);
   const onRegion = evidence.inspectorOnRegion;
   rows.push(["Clicking the For Loop card inspects the region (via its card)", `surface = ${onRegion.surface}; selection ${JSON.stringify(onRegion.selected)}; text “${esc(onRegion.text ?? "")}”`, onRegion.surface === "inspector" && /For Loop/.test(onRegion.text ?? "")]);
+  rows.push(["The Inspector's ✕ is clickable (not under the backend chip)", `elementFromPoint at the ✕'s centre is the close button: ${onBlock.closeHit}`, onBlock.closeHit === true]);
   rows.push(["Deselecting closes a selection-opened Inspector", `open after empty-canvas click: ${evidence.inspectorAfterDeselect.open}`, !evidence.inspectorAfterDeselect.open]);
   const menu = evidence.menu;
   if (menu) {
@@ -456,6 +464,7 @@ ${facts.laneB}
 </div>
 ${facts.laneC}
 
+${facts.extra ?? ""}
 ${facts.needs ? `<h2>Needs you</h2>${facts.needs}` : ""}
 ${facts.board ? `<h2>Seeded review board</h2>${facts.board}` : ""}
 
