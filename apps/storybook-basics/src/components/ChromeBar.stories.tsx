@@ -296,11 +296,14 @@ export const DeepPathCompacted: Story = {
 
 /**
  * The trailing depth badge is itself a menu — every level, elided or not,
- * with a `Check` on the current one and its raw depth as the shortcut
- * column (ported, TitleBar.tsx:572-623). Assertions are scoped to the
- * MENU itself (`findByTestId` + `within`), not the whole document — three
- * of these five names are ALSO the live breadcrumb text sitting right next
- * to it, and an unscoped `getByText` would find both and fail as ambiguous.
+ * with its raw depth as the shortcut column (ported, TitleBar.tsx:572-623).
+ * The current row carries a persistent `data-current` tint rather than a
+ * `Check` (2026-09-21: a check there shared the shortcut column's space —
+ * see toolDock.tsx's identical fix); `aria-current="page"` is the
+ * accessible state, asserted below. Assertions are scoped to the MENU
+ * itself (`findByTestId` + `within`), not the whole document — three of
+ * these five names are ALSO the live breadcrumb text sitting right next to
+ * it, and an unscoped `getByText` would find both and fail as ambiguous.
  */
 export const StructuralPathMenu: Story = {
   args: { crumbs: deepCrumbs, depth: 5 },
@@ -309,13 +312,19 @@ export const StructuralPathMenu: Story = {
     const body = within(document.body);
     await userEvent.click(canvas.getByRole("button", { name: /structural path/i }));
 
-    const menu = within(await body.findByTestId("chrome-bar-path"));
+    const menuEl = await body.findByTestId("chrome-bar-path");
+    const menu = within(menuEl);
     await expect(menu.getByText("Structural path · 5 levels")).toBeInTheDocument();
     // Every level is listed, not just the ones the compacted breadcrumb kept.
     for (const name of [...HIDDEN_BY_COMPACTION, ...VISIBLE_AFTER_COMPACTION]) {
       await expect(menu.getByText(name)).toBeInTheDocument();
     }
-    await expect(menu.getByRole("menuitem", { name: /Camera Block/ })).toHaveAttribute("aria-current", "page");
+    const currentRow = menu.getByRole("menuitem", { name: /Camera Block/ });
+    await expect(currentRow).toHaveAttribute("aria-current", "page");
+    await expect(currentRow).toHaveAttribute("data-current", "true");
+    // No check glyph left in the menu at all (2026-09-21: the highlight
+    // above replaces it, see toolDock.tsx's identical fix).
+    await expect(menuEl.querySelector("svg.lucide-check")).toBeNull();
   },
 };
 
