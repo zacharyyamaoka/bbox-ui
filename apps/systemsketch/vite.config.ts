@@ -162,6 +162,24 @@ export default defineConfig({
   server: {
     port: 4340,
     strictPort: true,
+    watch: {
+      // WHY: board files are DATA the running app writes, not source. A
+      // `?board=` window autosaves into its file, and a file Vite watches
+      // turns every save into a full page reload — which reopens the board
+      // and, with anything that saves on open, saves it again. Zach hit that
+      // loop on 2026-09-22 ("the page keeps on reloading") with the seeded
+      // review board, which lives INSIDE this root. So: the app's own
+      // `review/` folder (seeded boards and their recipes), and every board
+      // suffix this app opens or hands off (`@trunk/files/workspaceModel`'s
+      // `.bbox`, `.tldr`, `.systemsketch`) wherever it sits.
+      //
+      // WHY `<root>/review/**` and not `**/review/**`: `src/review/*.ts` is
+      // SOURCE (the `?board=` stopgap and its tests) and must keep its HMR.
+      // Nothing imports a board through the module graph for HMR to matter:
+      // the tests that read `.tldr` fixtures read them with `fs` or `?raw`
+      // once per run. Pinned by `src/viteWatch.test.ts`.
+      ignored: [`${path.resolve(__dirname, "review")}/**`, "**/*.tldr", "**/*.bbox", "**/*.systemsketch"],
+    },
     fs: {
       // The alias points OUTSIDE this app's root, so the dev server has to be
       // allowed to serve the monorepo (the trunk's files and the shared pnpm
