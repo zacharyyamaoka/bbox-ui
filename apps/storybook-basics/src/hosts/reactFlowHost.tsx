@@ -30,6 +30,7 @@ import "@xyflow/react/dist/style.css";
 
 import {
   Background,
+  ConnectionMode,
   Controls,
   getBezierPath,
   getSmoothStepPath,
@@ -38,8 +39,10 @@ import {
   NodeResizer,
   Position,
   ReactFlow,
+  useReactFlow,
   useStore,
-  useUpdateNodeInternals,
+  useStoreApi,
+  type Connection,
   type Edge,
   type EdgeProps,
   type EdgeTypes,
@@ -47,6 +50,7 @@ import {
   type NodeChange,
   type NodeDimensionChange,
   type NodeProps,
+  type OnConnectEnd,
   type ReactFlowState,
   type Viewport,
 } from "@xyflow/react";
@@ -57,7 +61,7 @@ import { DEFAULT_TRACE_ROUTING, type Point, type TraceRouting } from "../compone
 import { ResolvedWireTrace, resolveWires, type ResolvedWire, type ResolvedWires, type WireSpace } from "../components/wireLayer";
 import type { Wire } from "../components/wiring";
 import { ancestorsOf } from "../scene/region";
-import { portKey } from "../scene/scene";
+import { portKey, type SceneEdgeEnds, type ScenePortRef } from "../scene/scene";
 import { sceneWires, type WireStyleData } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import type { OpaqueRegionView } from "../scene/regionView";
@@ -84,6 +88,8 @@ const HostSceneContext = createContext<{
   decorate?: Decorate;
   /** The opaque projection's cards — see `SceneNodeViewProps.regionViews`. */
   regionViews?: ReadonlyMap<string, OpaqueRegionView>;
+  /** `ReactFlowHostProps.connectable` — read by `MeasuredPortHandles`. */
+  connectable?: boolean;
 } | null>(null);
 
 /* ------------------------------------------------------------------ */
@@ -238,27 +244,45 @@ function sameHandles(a: MeasuredHandle[], b: MeasuredHandle[]): boolean {
   return a.length === b.length && a.every((h, i) => h.handleId === b[i].handleId && Math.abs(h.x - b[i].x) < 0.5 && Math.abs(h.y - b[i].y) < 0.5 && h.side === b[i].side);
 }
 
+/**
+ * The press target a CONNECT gesture starts on, when the host is
+ * `connectable` — a square over the dot, larger than the dot's own box but
+ * well inside its 40px hit halo. ADDED 2026-09-22 (lane
+ * `frame-auto-port-edges`).
+ *
+ * WHY the dot and not the label: React Flow's connection gesture can only
+ * start on a `Handle`, and a handle over the DOT splits the port's two
+ * gestures cleanly — press the dot to draw a cable, press the label to
+ * reorder the port (dnd-kit's sortable card, which the label still
+ * belongs to). That is also what a person reaches for: a dot is where a
+ * cable attaches.
+ */
+const CONNECT_HANDLE_PX = 16;
+
 /** Invisible and inert: the handle exists so React Flow can resolve and
- *  route an edge end; the DOT stays the visible affordance. */
-function handleStyle(h: MeasuredHandle): CSSProperties {
+ *  route an edge end; the DOT stays the visible affordance. With
+ *  `connectable`, still invisible but PRESSABLE — see `CONNECT_HANDLE_PX`. */
+function handleStyle(h: MeasuredHandle, connectable = false): CSSProperties {
   return {
     position: "absolute",
     left: h.x,
     top: h.y,
     transform: "translate(-50%, -50%)",
-    width: 2,
-    height: 2,
+    width: connectable ? CONNECT_HANDLE_PX : 2,
+    height: connectable ? CONNECT_HANDLE_PX : 2,
     minWidth: 0,
     minHeight: 0,
     border: "none",
     background: "transparent",
     opacity: 0,
-    pointerEvents: "none",
+    pointerEvents: connectable ? "all" : "none",
+    cursor: connectable ? "crosshair" : undefined,
   };
 }
 
 function MeasuredPortHandles({ nodeId, rootRef }: { nodeId: string; rootRef: React.RefObject<HTMLDivElement | null> }) {
-  const updateNodeInternals = useUpdateNodeInternals();
+  const store = useStoreApi();
+  const connectable = useContext(HostSceneContext)?.connectable ?? false;
   const [handles, setHandles] = useState<MeasuredHandle[]>([]);
 
   // Every render, equality-guarded: a rail reorder moves dots WITHOUT
@@ -275,6 +299,18 @@ function MeasuredPortHandles({ nodeId, rootRef }: { nodeId: string; rootRef: Rea
   // Rails land one layout pass after the Block they attach to (the same
   // race WireLayer documents), and fonts/editor chrome can settle later
   // still — one deferred frame plus a ResizeObserver covers both.
+  //
+  // WHY a MutationObserver as well (lane `frame-auto-port-edges`, judge
+  // round 1 follow-up, measured 2026-09-22): a dot can MOVE without the
+  // node's box changing size — a member Block's `useBlockBands` lands its
+  // rail one layout pass later, and at viewport zoom 1.5 that rail landed
+  // 19 node-px below where the deferred frame had already measured the
+  // dot. The root's size was unchanged, so the ResizeObserver slept
+  // through it and the handle stayed 28 screen px off its dot for good —
+  // a connect gesture then started from where the dot USED to be. The
+  // rail's move is a `style` write on a descendant; observing the subtree
+  // for exactly that (plus mounts/unmounts) re-measures on the actual
+  // trigger. `sameHandles` keeps a no-op mutation from re-rendering.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -285,17 +321,35 @@ function MeasuredPortHandles({ nodeId, rootRef }: { nodeId: string; rootRef: Rea
     const frame = requestAnimationFrame(measure);
     const observer = new ResizeObserver(measure);
     observer.observe(root);
+    const mutations = new MutationObserver(measure);
+    mutations.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["style"] });
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      mutations.disconnect();
     };
   }, [nodeId, rootRef]);
 
   // Handles moved → React Flow must re-read its handle bounds or edges
   // keep pointing at where the dots USED to be.
+  //
+  // WHY the store action directly and not `useUpdateNodeInternals`
+  // (lane `frame-auto-port-edges`, 2026-09-22): the stock hook is this
+  // exact lookup followed by `requestAnimationFrame(() =>
+  // updateNodeInternals(...))` (@xyflow/react 12.11.6 index.mjs:3940) —
+  // one frame during which the DOM handle already sits on its dot but the
+  // store still has no bounds for it, so a press there starts NO
+  // connection (`XYHandle.onPointerDown` resolves the handle through the
+  // store, not the DOM). Under load that frame stretches; a connect
+  // gesture made right after a rail landed silently did nothing
+  // ("expected +0 to be 1" in the full gate at load avg 5.5). Reading the
+  // bounds in the same effect closes the gap to the passive-effect flush.
   useEffect(() => {
-    updateNodeInternals(nodeId);
-  }, [handles, nodeId, updateNodeInternals]);
+    const { domNode, updateNodeInternals } = store.getState();
+    const nodeElement = domNode?.querySelector(`.react-flow__node[data-id="${nodeId}"]`);
+    if (!nodeElement) return;
+    updateNodeInternals(new Map([[nodeId, { id: nodeId, nodeElement: nodeElement as HTMLDivElement, force: true }]]), { triggerFitView: false });
+  }, [handles, nodeId, store]);
 
   return (
     <>
@@ -304,8 +358,8 @@ function MeasuredPortHandles({ nodeId, rootRef }: { nodeId: string; rootRef: Rea
         // wire and a target in another; React Flow resolves each end
         // against its own type's handle list.
         <Fragment key={h.handleId}>
-          <Handle type="source" id={h.handleId} position={h.side} isConnectable={false} style={handleStyle(h)} />
-          <Handle type="target" id={h.handleId} position={h.side} isConnectable={false} style={handleStyle(h)} />
+          <Handle type="source" id={h.handleId} position={h.side} isConnectable={connectable} style={handleStyle(h, connectable)} />
+          <Handle type="target" id={h.handleId} position={h.side} isConnectable={connectable} style={handleStyle(h, connectable)} />
         </Fragment>
       ))}
     </>
@@ -429,7 +483,7 @@ const RESIZE_CONTROL_Z_INDEX = 20;
 /** Every host-facing name renders through the one shared node component;
  *  `SceneNodeView` owns the type switch, so a fifth kind is one case
  *  there, zero here. */
-const NODE_TYPES = { block: BboxNode, glyph: BboxNode, code: BboxNode, value: BboxNode, region: BboxNode };
+const NODE_TYPES = { block: BboxNode, glyph: BboxNode, code: BboxNode, value: BboxNode, region: BboxNode, frame: BboxNode };
 
 /** Where a node drag may START, per host-facing type. Interaction
  *  geometry — host-owned, never written into the scene record. */
@@ -445,6 +499,14 @@ const DRAG_HANDLE_FOR_TYPE: Record<string, string | undefined> = {
   // once lane A renders one. Harmless before then — no region node exists to
   // match, and a frame is not a header.
   region: `[${OWN_DRAG_HANDLE_ATTR}]`,
+  // frame (ADDED 2026-09-22, lane `frame-auto-port-edges`): a frame has no
+  // `block-header`; its title (above the box, or the header bar's text) is
+  // the grab. `frame-title` is stamped only by `components/frame.tsx`, on
+  // one element per frame. Known limit, not a rule: a frame NESTED as a
+  // member also stamps one, and React Flow's `hasSelector` walk matches
+  // the nearest — the same defect-6 class `OwnDragHandleMarker` closes
+  // for blocks, owed here the day a frame holds a frame.
+  frame: `[data-slot="frame-title"]`,
   // glyph: the whole face is inert — drag anywhere.
   // code: the wrapper's grab ring (the editor itself is `nodrag`).
   // value: the pill's non-editor face (the editor carries `nodrag`;
@@ -573,7 +635,7 @@ const KitRoutesContext = createContext<{
  *  (rect-to-offsetWidth ratio) rather than from React Flow's store. */
 function flowSpaceOf(viewport: HTMLElement): WireSpace {
   const rect = viewport.getBoundingClientRect();
-  return { left: rect.left, top: rect.top, scale: viewport.offsetWidth > 0 ? rect.width / viewport.offsetWidth : 1 };
+  return { left: rect.left, top: rect.top, scale: viewport.offsetWidth > 0 && rect.width > 0 ? rect.width / viewport.offsetWidth : 1 };
 }
 
 /** Every node's at-rest box as one string — compared by value, so the
@@ -743,6 +805,109 @@ export interface ReactFlowHostProps {
    *  retracts a wire the kit no longer draws — it fell back to the stock
    *  path, or left the scene — exactly as `WireLayer.onWireGeometry` does. */
   onWireGeometry?(wireId: string, points: readonly Point[] | null): void;
+  /**
+   * ADDED 2026-09-22 (lane `frame-auto-port-edges`), the connect gesture —
+   * four additive seams, every one omitted by every bench that predates
+   * them (byte-identical output: handles stay inert, `nodesConnectable`
+   * stays false).
+   *
+   * `connectable` turns React Flow's stock connection gesture on: a drag
+   * from a port's dot (the measured `Handle` over it, `CONNECT_HANDLE_PX`)
+   * to another dot, in `ConnectionMode.Loose` — any handle to any handle,
+   * so that WHETHER a pair may connect is the scene's judgement
+   * (`isValidConnection`, below), never React Flow's handle-type rule.
+   * Zach, 2026-09-22: "first do with zero data validation, inputs can go to
+   * outputs etc, but then we can test it as well with validation".
+   */
+  connectable?: boolean;
+  /**
+   * React Flow's own `isValidConnection`, with the candidate already
+   * translated to SCENE ends (a member's `portKey` handle resolved back to
+   * `{member, port}`). Return `false` to refuse the drop. Omitted = every
+   * pair is legal.
+   */
+  isValidConnection?(candidate: SceneEdgeEnds): boolean;
+  /** React Flow's `onConnect`, in scene ends. The host commits nothing
+   *  itself — the caller decides what edge (if any) enters the scene. */
+  onConnect?(candidate: SceneEdgeEnds): void;
+  /**
+   * React Flow's `onConnectEnd` — fired on EVERY release, connected or not
+   * (`connectionState.isValid`). `pointer` is the release point in FLOW px
+   * (the viewport's own space, the same space `onWireGeometry` reports in),
+   * which is what lets a caller treat a drop ON A WALL — no handle under
+   * the pointer — as "make a port here" (docs: React Flow's own "add node
+   * on edge drop" pattern, `connectionState.isValid === false`).
+   */
+  onConnectEnd?(state: HostConnectEnd): void;
+  /**
+   * React Flow's `onDelete` — the Delete/Backspace key on a React Flow
+   * selection (top-level nodes, edges). Ids only; the caller runs
+   * `deleteWithLinks` (scene/links.ts) or whatever policy it holds. This
+   * host never removes a node itself (`applyPositionChanges` ignores
+   * `remove` changes), so omitting this leaves the key inert, as before.
+   */
+  onDeleteElements?(ids: { nodes: string[]; edges: string[] }): void;
+}
+
+/** What `onConnectEnd` reports, in scene vocabulary. */
+export interface HostConnectEnd {
+  /** The port the gesture started on. */
+  from: ScenePortRef;
+  /** The port under the pointer at release, or `null` for none. */
+  to: ScenePortRef | null;
+  /** React Flow's own verdict for the pair, `null` when no handle was hit. */
+  valid: boolean | null;
+  /** Release point, flow px. */
+  pointer: { x: number; y: number };
+}
+
+/**
+ * The inverse of `anchorEnd`: a React Flow node id + handle id back to the
+ * scene port the handle stands for. A member's handle is `portKey(member,
+ * port)`, so the FIRST `/` splits it — and the prefix is checked against
+ * the scene, because a port id may itself contain `/` only if no node by
+ * the prefix exists (this kit mints neither).
+ */
+function sceneEndOf(scene: HostScene, nodeId: string, handleId: string | null | undefined): ScenePortRef {
+  if (handleId == null) return { nodeId, portId: "" };
+  const slash = handleId.indexOf("/");
+  if (slash > 0) {
+    const memberId = handleId.slice(0, slash);
+    if (scene.nodes.some((node) => node.id === memberId)) return { nodeId: memberId, portId: handleId.slice(slash + 1) };
+  }
+  return { nodeId, portId: handleId };
+}
+
+type ScreenToFlow = (client: { x: number; y: number }) => { x: number; y: number };
+
+/** The pointer's client px off a mouse or touch release — what
+ *  `screenToFlowPosition` takes. `null` for an event with neither. */
+function clientPointOf(event: MouseEvent | TouchEvent): { x: number; y: number } | null {
+  if ("clientX" in event) return { x: event.clientX, y: event.clientY };
+  const touch = event.changedTouches?.[0] ?? event.touches?.[0];
+  return touch ? { x: touch.clientX, y: touch.clientY } : null;
+}
+
+/**
+ * Mounted INSIDE `<ReactFlow>` (where `useReactFlow` is legal) to hand the
+ * instance's own `screenToFlowPosition` to the host's connect-end handler.
+ * Renders nothing. ADDED 2026-09-22 (judge round 1, finding 2).
+ */
+function FlowSpaceBridge({ target }: { target: React.MutableRefObject<ScreenToFlow | null> }) {
+  const { screenToFlowPosition } = useReactFlow();
+  useLayoutEffect(() => {
+    target.current = (client) => screenToFlowPosition(client, { snapToGrid: false });
+    return () => {
+      target.current = null;
+    };
+  }, [screenToFlowPosition, target]);
+  return null;
+}
+
+function sceneEndsOf(scene: HostScene, connection: Connection | Edge): SceneEdgeEnds {
+  const source = sceneEndOf(scene, connection.source, connection.sourceHandle);
+  const target = sceneEndOf(scene, connection.target, connection.targetHandle);
+  return { source: source.nodeId, sourceHandle: source.portId || undefined, target: target.nodeId, targetHandle: target.portId || undefined };
 }
 
 /**
@@ -806,7 +971,23 @@ function anchorEnd(scene: HostScene, nodeId: string, handleId: string | undefine
   return { nodeId: topLevelId, handleId: handleId === undefined ? undefined : portKey(nodeId, handleId) };
 }
 
-export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children, decorate, onWireGeometry }: ReactFlowHostProps) {
+export function ReactFlowHost({
+  scene,
+  onSceneChange,
+  width = 640,
+  height = 360,
+  defaultViewport,
+  fitView,
+  resizable,
+  children,
+  decorate,
+  onWireGeometry,
+  connectable = false,
+  isValidConnection,
+  onConnect,
+  onConnectEnd,
+  onDeleteElements,
+}: ReactFlowHostProps) {
   // Hosts paint the projection; the document keeps its direct P1 cables.
   // Identity on an all-expanded scene (same arrays out), so `wired`, the
   // edge list and every memo below are unchanged for every bench that has
@@ -818,8 +999,42 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
   const producers = useMemo(() => producerCountsOf(projected.scene), [projected]);
   const regionViews = useMemo(() => regionViewMap(projected.regions), [projected]);
   const context = useMemo(
-    () => ({ scene, wired, producers, onSceneChange, resizable, decorate, regionViews }),
-    [scene, wired, producers, onSceneChange, resizable, decorate, regionViews],
+    () => ({ scene, wired, producers, onSceneChange, resizable, decorate, regionViews, connectable }),
+    [scene, wired, producers, onSceneChange, resizable, decorate, regionViews, connectable],
+  );
+  // The connect seams, in scene vocabulary (see `ReactFlowHostProps`).
+  const latestScene = useRef(scene);
+  latestScene.current = scene;
+  const handleIsValidConnection = useCallback(
+    (candidate: Connection | Edge) => (isValidConnection ? isValidConnection(sceneEndsOf(latestScene.current, candidate)) : true),
+    [isValidConnection],
+  );
+  const handleConnect = useCallback((connection: Connection) => onConnect?.(sceneEndsOf(latestScene.current, connection)), [onConnect]);
+  // `screenToFlowPosition`, captured from React Flow's own instance by the
+  // bridge mounted inside `<ReactFlow>` below — a hook cannot run out here.
+  const flowSpaceRef = useRef<ScreenToFlow | null>(null);
+  const handleConnectEnd = useCallback<OnConnectEnd>(
+    (event, state) => {
+      if (!onConnectEnd || !state.fromHandle) return;
+      const from = sceneEndOf(latestScene.current, state.fromHandle.nodeId, state.fromHandle.id);
+      const to = state.toHandle ? sceneEndOf(latestScene.current, state.toHandle.nodeId, state.toHandle.id) : null;
+      // WHY the release point is converted from the EVENT's client px and
+      // never read off `state.to` (judge round 1, finding 2 — verified in
+      // @xyflow/system 0.0.82 `index.mjs:2477,2507,2566`): for an empty
+      // drop, `state.to` is `getEventPosition(event, containerBounds)`, the
+      // pointer in the PANE's own screen px, while every box a caller
+      // compares it against is measured in FLOW px. At zoom 1 with a zero
+      // pan the two coincide, which is exactly how the identity-viewport
+      // story hid it; at zoom 2 or after a pan the wall is missed or `t` is
+      // wrong. `screenToFlowPosition` is React Flow's own documented inverse
+      // of the viewport transform (`ReactFlowInstance`'s example uses
+      // `event.clientX/Y`), so the point lands in the space `onWireGeometry`
+      // and the wall boxes already share.
+      const client = clientPointOf(event);
+      const pointer = flowSpaceRef.current && client ? flowSpaceRef.current(client) : { x: state.to?.x ?? 0, y: state.to?.y ?? 0 };
+      onConnectEnd({ from, to, valid: state.isValid, pointer });
+    },
+    [onConnectEnd],
   );
 
   // Host-owned measurement cache, by node id — NEVER part of the scene
@@ -977,13 +1192,24 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
             // without editing it.
             nodeDragThreshold={4}
             // Wires are declared by the scene record; interactive connecting
-            // is phase-2 work (the port-side affordances are the expensive
-            // part — ARCHITECTURE.md's "drawing an edge splits").
-            nodesConnectable={false}
+            // is opt-in per bench (`connectable`, ADDED 2026-09-22) — the
+            // port-side affordances are the expensive part
+            // (ARCHITECTURE.md's "drawing an edge splits"), and a bench that
+            // never asked keeps its handles inert.
+            nodesConnectable={connectable}
+            // Loose: WHETHER two ports may connect is the scene's judgement
+            // (`isValidConnection`), not React Flow's source/target rule —
+            // with validation off, "inputs can go to outputs etc" (Zach).
+            connectionMode={ConnectionMode.Loose}
+            isValidConnection={handleIsValidConnection}
+            onConnect={connectable ? handleConnect : undefined}
+            onConnectEnd={connectable ? handleConnectEnd : undefined}
+            onDelete={onDeleteElements ? ({ nodes, edges }) => onDeleteElements({ nodes: nodes.map((node) => node.id), edges: edges.map((edge) => edge.id) }) : undefined}
           >
             <Background />
             <Controls showInteractive={false} />
             <KitWireRouter wires={wires} layoutKey={scene} onResolved={onResolved} />
+            {connectable && <FlowSpaceBridge target={flowSpaceRef} />}
             {children}
           </ReactFlow>
         </KitRoutesContext.Provider>

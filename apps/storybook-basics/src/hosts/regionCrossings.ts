@@ -16,15 +16,24 @@
 // uses). Each host already reports its drawn polylines in that space
 // (`DomCanvas.onWireGeometry`, `ReactFlowHost.onWireGeometry`), so the glue
 // needs nothing else from either one.
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
-
-import { wallCrossings } from "../components/blockRegion.crossings";
+//
+// GENERALISED 2026-09-22 (lane `frame-auto-port-edges`): the measuring is now
+// `frameCrossings.ts`'s `useWallCrossings`, which answers for N containers
+// (frames, expanded blocks, region frames) with the richer crossing a port
+// needs (which wall, `t`, entering/leaving, which wire). This hook is that
+// glue narrowed to ONE region and mapped to the frame-local points
+// `BlockRegion.crossings` paints — same numbers, same settle-by-value, same
+// follow-up frame; `WallCrossingMirror.stories.tsx` measures it unchanged.
+// One measuring recipe, not two.
+//
+// WHY the import moved (merge, 2026-09-22): this lane delegated away the
+// local `wallCrossings` while the region lineages were being reconciled into
+// one component, so `RegionPoint` now comes from `blockRegion.views.layout`
+// — `components/region.ts` no longer exists. The delegation is this lane's;
+// the path is the reconciliation's. Neither side alone had both.
 import type { RegionPoint } from "../components/blockRegion.views.layout";
 import type { Point } from "../components/trace.layout";
-
-function sameCrossings(a: readonly RegionPoint[], b: readonly RegionPoint[]): boolean {
-  return a.length === b.length && a.every((p, i) => Math.abs(p.x - b[i].x) < 0.01 && Math.abs(p.y - b[i].y) < 0.01);
-}
+import { useWallCrossings } from "./frameCrossings";
 
 export interface RegionWallCrossings {
   /** Frame-local, ready for `BlockRegion.crossings` (via `SceneNodeDecoration`). */
@@ -39,48 +48,16 @@ export interface RegionWallCrossings {
 /**
  * The wall crossings of `regionId`'s frame by every wire in `liveWireIds`,
  * measured in the space `spaceOf()` returns (the element the host reports
- * its polylines relative to). Runs after every render and settles by value,
- * plus one follow-up frame for a host that commits its node positions a
- * render after the scene changed (React Flow's store does) — the same
- * "picked up without a dependency list to get wrong" device the bench's
- * `useWallCrossings` uses.
+ * its polylines relative to). Every live wire is tested against the frame —
+ * no `through` filter, no end skipping — exactly the reading this hook had
+ * before it delegated to `useWallCrossings`.
  */
 export function useRegionWallCrossings(spaceOf: () => Element | null | undefined, regionId: string, liveWireIds: readonly string[]): RegionWallCrossings {
-  const [paths, setPaths] = useState<Record<string, readonly Point[]>>({});
-  const [crossings, setCrossings] = useState<RegionPoint[]>([]);
-  // A `null` report DELETES the entry: the host stopped drawing that wire,
-  // and a crossing computed off its last path would freeze on the wall.
-  const onWireGeometry = useCallback((wireId: string, points: readonly Point[] | null) => {
-    setPaths((previous) => {
-      if (points) return { ...previous, [wireId]: points };
-      if (!(wireId in previous)) return previous;
-      const { [wireId]: _dropped, ...rest } = previous;
-      return rest;
-    });
-  }, []);
-  useLayoutEffect(() => {
-    const measure = () => {
-      const space = spaceOf();
-      const frame = space?.querySelector<HTMLElement>(`[data-slot="region-frame"][data-region-id="${regionId}"]`);
-      let next: RegionPoint[] = [];
-      if (space instanceof HTMLElement && frame) {
-        const spaceBox = space.getBoundingClientRect();
-        const scale = space.offsetWidth > 0 ? spaceBox.width / space.offsetWidth : 1;
-        const frameBox = frame.getBoundingClientRect();
-        const rect = {
-          x: (frameBox.left - spaceBox.left) / scale,
-          y: (frameBox.top - spaceBox.top) / scale,
-          w: frameBox.width / scale,
-          h: frameBox.height / scale,
-        };
-        next = liveWireIds.flatMap((wireId) => (paths[wireId] ? wallCrossings(paths[wireId], rect) : []));
-      }
-      setCrossings((previous) => (sameCrossings(previous, next) ? previous : next));
-    };
-    measure();
-    const frame = requestAnimationFrame(measure);
-    return () => cancelAnimationFrame(frame);
-  });
-  const trackedWireIds = useMemo(() => Object.keys(paths).sort(), [paths]);
-  return { crossings, onWireGeometry, trackedWireIds };
+  const glue = useWallCrossings(
+    spaceOf,
+    [regionId],
+    liveWireIds.map((id) => ({ id })),
+    (id) => [`[data-slot="region-frame"][data-region-id="${id}"]`],
+  );
+  return { crossings: glue.markersOf(regionId), onWireGeometry: glue.onWireGeometry, trackedWireIds: glue.trackedWireIds };
 }

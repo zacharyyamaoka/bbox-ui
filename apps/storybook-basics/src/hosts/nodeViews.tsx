@@ -37,6 +37,7 @@ import { childrenOf, portKey, type SceneNode, wiredPorts } from "../scene/scene"
 import { withWiredState } from "../scene/sceneWires";
 import { useAutoFitHeight } from "./blockAutoFit";
 import { type HostNodeData, type HostScene } from "./hostScene";
+import { FrameNodeView } from "./frameNodeView";
 import { useFreeMemberDrag, type UseFreeMemberDragResult } from "./memberDrag";
 import { regionFaceOf, toggleRegionView } from "./regionScene";
 
@@ -72,6 +73,11 @@ export interface SceneNodeDecoration {
    *  because the frame's box and the cable's route are both measured facts
    *  no single node owns. Ignored on anything but a region. */
   crossings?: readonly RegionPoint[];
+  /** Host-set port selection, by port id — forwarded to each port item's
+   *  `selected`. A story that wires the Delete key to `deleteWithLinks`
+   *  (scene/links.ts) selects a wall port through this. ADDED 2026-09-22,
+   *  lane `frame-auto-port-edges`; absent = nothing selected, as before. */
+  selectedPorts?: readonly string[];
 }
 
 /** `undefined` for a node this decorator has no opinion on — same
@@ -237,7 +243,11 @@ function pressOwnedInside(event: ReactPointerEvent<HTMLElement>): boolean {
  * this wrapper is how the two would drift into dragging differently, and
  * the marker/stopPropagation pair is exactly the part that must not.
  */
-function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResult, content: ReactNode): BlockMember {
+// Exported 2026-09-22 (lane `frame-auto-port-edges`): `frameNodeView.tsx`
+// renders a frame's free members through this SAME wrapper, for exactly the
+// reason the comment above gives — a second copy is how two node kinds
+// would drift into dragging differently.
+export function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResult, content: ReactNode): BlockMember {
   const live = drag.liveFor(kid.id, kid.position);
   return {
     id: kid.id,
@@ -283,7 +293,7 @@ function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResul
  * here would be a second place for the rule to drift; the host's job is to
  * say what the scene says.
  */
-function withProducers(items: PortEdgeItem[], nodeId: string, producers: ReadonlyMap<string, number> | undefined): PortEdgeItem[] {
+export function withProducers(items: PortEdgeItem[], nodeId: string, producers: ReadonlyMap<string, number> | undefined): PortEdgeItem[] {
   if (!producers || producers.size === 0) return items;
   return items.map((item) => {
     const count = producers.get(portKey(nodeId, item.id));
@@ -318,8 +328,18 @@ function edgeSpecsOf(
                 // every edit event already calls it (hostScene.ts's
                 // `portLabels`).
                 label: node.data.portLabels?.[id] ?? id,
+                // `portTypes` is deliberately NOT painted here (hostScene.ts:
+                // "Data only — nothing in this family paints it yet"), and
+                // `PyblocksScene.stories.tsx` pins a block rail's label as the
+                // bare name. A FRAME's walls paint the type (`frameNodeView.
+                // tsx`, Zach's "port Pose"); a block's rails wait for the
+                // Block-on-Frame fold (docs/FRAME-PLAN.md §3.1).
                 availability: decoration?.availability?.[id],
                 diagnostics: decoration?.portDiagnostics?.[id],
+                // ADDED 2026-09-22 (lane `frame-auto-port-edges`): host-set port
+                // selection, `undefined` (byte-identical) unless a decorator
+                // names this port.
+                selected: decoration?.selectedPorts?.includes(id) || undefined,
               }),
             ),
             node.id,
@@ -715,6 +735,11 @@ export function SceneNodeView(props: SceneNodeViewProps): ReactNode {
       );
     case "region":
       return <RegionNodeView {...props} />;
+    case "frame":
+      // ADDED 2026-09-22 (lane `frame-auto-port-edges`): the Frame substrate
+      // as a node of its own — `hosts/frameNodeView.tsx`, which composes the
+      // same helpers this file exports (`freeMemberOf`, `withProducers`).
+      return <FrameNodeView {...props} />;
     case "block":
     default:
       return <BlockNodeView {...props} />;
