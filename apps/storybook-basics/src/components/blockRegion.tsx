@@ -59,23 +59,52 @@
 // edge and never clipped; arms stacked under it and folded by the chevron;
 // the opaque card untouched.
 //
+// ── THE VIEWS (Zach, 2026-09-22, `BlockRegionViews.stories.tsx`) ─────────
+// "regions do not have a simple view. they just have port, expanded and
+// expanded opaque view." So `view` is `port` | `expanded` | `opaque`, and
+// there is deliberately no `simple`. `opaque` keeps its original meaning, the
+// P5 card every host already draws, unless `opaqueFace="frame"` asks for
+// Expanded Opaque: the frame at its expanded size, the members hidden, glyph +
+// Title + Type centred. `onToggleView` draws the Blackbox toggle in the
+// frame's top-right corner. Every one of these defaults to what this component
+// drew before, so no host changes. The views are ported from the sibling
+// branch's `region.tsx` (`view: "port"`, `opaqueFace: "frame"`,
+// `RegionViewToggle`) and its `blockOpaqueTitle.tsx`, trimmed to the corner
+// header this component already has: no `headerStyle`, no `crossings`.
+//
+// WHY no region-level chevron anywhere in this file (Zach, 2026-09-22):
+// "Please do not put chevron drop downs on the regions." The region's view
+// changes through the Blackbox toggle and the host's view selector, never
+// through a chevron on its corner. The chevrons that remain are the ARM
+// rows' own fold controls (`ArmRow`), which fold one arm of a branch and
+// never collapse the region itself.
+//
 // Pure: no React state beyond two measurements (the corner's box and the
 // variant in force), no DOM outside its own subtree, no scene import (the
 // `layering.test.ts` import wall).
 
 import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { flushSync } from "react-dom";
+import { Square } from "lucide-react";
 
 import { Bar } from "./bar";
 import { Block, REGION_FRAME_RADIUS } from "./block";
 import { BlockMembers, type BlockMember } from "./blockMembers";
+import { BlockPort, type BlockEdgeSpec } from "./blockPort";
+import { offsetEdgePaddingPx, RAIL_GAP_PX } from "./blockPort.layout";
+import { Button } from "./button";
 import { FoldingChevron } from "./foldingChevron";
+import { Glyph } from "./glyph";
+import type { BlockSide } from "./port.layout";
+import type { PortEdgeItem } from "./portEdge";
 import {
   REGION_ARM_FADE_OPACITY,
+  REGION_CARD_WIDTH_PX,
   REGION_CORNER_WIDTH_PX,
   regionLayout,
   type RegionLayout,
 } from "./blockRegion.layout";
+import { REGION_CONTROL_BOX_WIDTH_PX, regionControlSplitPx, regionRailBandPx } from "./blockRegion.views.layout";
 import {
   DEFAULT_REGION_VARIANT,
   REGION_VARIANT_ATTR,
@@ -85,7 +114,20 @@ import {
 } from "../skin/regionVariants";
 
 export type RegionKind = "loop" | "branch" | "group";
-export type RegionView = "expanded" | "opaque";
+/**
+ * `port` is the region collapsed all the way to a block. There is
+ * deliberately no `simple` (Zach, 2026-09-22: "regions do not have a simple
+ * view").
+ */
+export type RegionView = "expanded" | "opaque" | "port";
+
+/**
+ * What `view="opaque"` draws. `card` is the P5 card (the host's own
+ * `corner`, or the title card) and stays the default, so every host keeps
+ * what it drew. `frame` is Zach's "Expanded Opaque": the frame keeps its
+ * size, the members go, and glyph + Title + Type sit centred.
+ */
+export type RegionOpaqueFace = "card" | "frame";
 
 export interface RegionArm {
   id: string;
@@ -128,6 +170,32 @@ export interface BlockRegionProps {
   /** The free body a loop/group drops into — `BlockMembers layout="free"`. */
   members?: BlockMember[];
   arms?: RegionArm[];
+  /** `@bbox-ui/glyph-content` grammar (`lucide:repeat`). Drawn on the
+   *  port card's header and, large, on the Expanded Opaque face. */
+  glyph?: string;
+  /** The secondary run beside the title — the region's type. Rendered as
+   *  authored, muted, after the title. */
+  type?: ReactNode;
+  /**
+   * The region's CONTROL ports (a loop's `Iterable`) when BlockRegion draws
+   * its own corner from `title`: on the corner card's left wall while
+   * expanded, above the split line in the `port` view, boxed into the
+   * corner of the Expanded Opaque face. Ignored when `corner` is given (a
+   * host's card already carries its ports).
+   */
+  controlPorts?: PortEdgeItem[];
+  /**
+   * The ORDINARY ports — the region's boundary. Drawn under the split in the
+   * `port` view and on the walls of the Expanded Opaque face; the expanded
+   * view never draws them, because there the cable crosses the wall itself.
+   */
+  boundaryPorts?: Partial<Record<"left" | "right", PortEdgeItem[]>>;
+  /** Default `card`. */
+  opaqueFace?: RegionOpaqueFace;
+  /** Present = draw the Blackbox toggle at the frame's top-right, in the
+   *  expanded view and on the Expanded Opaque face. The caller owns the
+   *  view; this only asks for it to flip. */
+  onToggleView?(): void;
   className?: string;
   style?: CSSProperties;
 }
@@ -380,14 +448,284 @@ function ArmRow({
  * reference label is as wide as its text. A region whose card carries ports
  * passes its own sized card as `corner`.
  */
-function TitleCorner({ title, opaque }: { title: ReactNode; opaque: boolean }) {
+function TitleCorner({
+  id,
+  title,
+  type,
+  controlPorts,
+  opaque,
+}: {
+  id: string;
+  title: ReactNode;
+  type?: ReactNode;
+  controlPorts: PortEdgeItem[];
+  opaque: boolean;
+}) {
+  const header =
+    type === undefined ? (
+      title
+    ) : (
+      <span data-slot="region-corner-heading" style={{ display: "inline-flex", gap: 6, whiteSpace: "nowrap" }}>
+        <span>{title}</span>
+        <span data-slot="region-corner-type" className="text-muted-foreground">
+          {type}
+        </span>
+      </span>
+    );
+  if (controlPorts.length === 0) {
+    return <Block header={header} showHeaderDivider={false} shape={opaque ? "card" : "region-corner"} style={{ width: "max-content" }} />;
+  }
+  // With control ports the card is the region's INTERFACE, so it carries the
+  // region's id (this file's header: the element owning the ports owns the
+  // id). WHY a body sized by the rail band: `BlockPort` places a port-view
+  // rail against the Block's BODY band, so a header-only card would hang its
+  // dots below itself, into the frame — the same reason `nodeViews.tsx` gives
+  // its corner a `region-corner-band`.
   return (
-    <Block
-      header={title}
-      showHeaderDivider={false}
-      shape={opaque ? "card" : "region-corner"}
-      style={{ width: "max-content" }}
-    />
+    <BlockPort id={id} view="port" edges={{ left: { items: controlPorts } }}>
+      <Block
+        header={header}
+        width={REGION_CORNER_WIDTH_PX}
+        body={<div data-slot="region-corner-band" style={{ height: regionRailBandPx(controlPorts.length) }} />}
+        shape={opaque ? "card" : "region-corner"}
+      />
+    </BlockPort>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* The views (Zach, 2026-09-22) — ported from the sibling branch's      */
+/* `region.tsx` (RegionViewToggle, RegionPortCard, RegionOpaqueFrame)   */
+/* ------------------------------------------------------------------ */
+
+/** `block.tsx`'s body is `p-2`. The port card's section box cancels it with
+ *  a negative margin so the split line is placed in the SAME coordinates
+ *  the rail packs from (the body band's top), not 8px lower. */
+const BLOCK_BODY_PADDING_PX = 8;
+
+/** Inset of the Blackbox toggle from the frame's top-right corner. */
+const REGION_TOGGLE_INSET_PX = 4;
+
+const REGION_STROKE = "var(--bbox-region-frame-stroke, var(--border))";
+
+/**
+ * The Blackbox toggle: hollow square while expanded, FILLED while the
+ * inside is hidden. The stock `Button`, so press and focus ring are
+ * shadcn's.
+ *
+ * WHY no background behind the pressed state, only a hover ring (Zach,
+ * 2026-09-22): "Once this toggle is toggled can you please not have the
+ * background be a lighter grey? thats annoying. It should be more seamless."
+ * The filled square alone says "pressed"; a grey plate behind it made the
+ * toggle read as a button parked on the frame rather than part of it. So the
+ * ghost variant's `hover:bg-muted` is replaced by a ring, at rest and pressed
+ * alike. The tempting alternative, shadcn's `Toggle` with its
+ * `data-pressed:bg-muted`, is exactly the lighter grey he rejected.
+ *
+ * WHY a square and not a `FoldingChevron`: a chevron reads "fold this row"
+ * (the arms use it for exactly that), and Zach asked for no chevrons on
+ * regions at all. The square is his mark for "show the inside / hide it".
+ */
+export function BlockRegionBlackboxToggle({ pressed, onToggle, style }: { pressed: boolean; onToggle?(): void; style?: CSSProperties }) {
+  return (
+    <Button
+      data-slot="region-blackbox-toggle"
+      data-state={pressed ? "opaque" : "expanded"}
+      variant="ghost"
+      size="icon-xs"
+      aria-label="Blackbox toggle"
+      aria-pressed={pressed}
+      onClick={onToggle}
+      className="hover:bg-transparent hover:ring-1 hover:ring-ring/50 dark:hover:bg-transparent"
+      style={{ position: "absolute", top: REGION_TOGGLE_INSET_PX, right: REGION_TOGGLE_INSET_PX, ...style }}
+    >
+      <Square aria-hidden fill={pressed ? "currentColor" : "none"} />
+    </Button>
+  );
+}
+
+/** glyph · Title · Type on one line, centred — the port card's header. */
+function RegionHeadingRow({ glyph, title, type }: { glyph?: string; title: ReactNode; type?: ReactNode }) {
+  return (
+    <div data-slot="region-heading" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, whiteSpace: "nowrap" }}>
+      {glyph !== undefined && <Glyph content={glyph} sizePreset="sm" />}
+      <span data-slot="region-heading-title" style={{ fontWeight: 600 }}>
+        {title}
+      </span>
+      {type !== undefined && (
+        <span data-slot="region-heading-type" className="text-muted-foreground">
+          {type}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The Expanded Opaque face's centre: a large glyph, then Title over Type.
+ * Ported from the sibling branch's `blockOpaqueTitle.tsx` (`BlockOpaqueTitle`)
+ * as a private piece, because this lineage has no such component and only
+ * this face uses it.
+ */
+function RegionOpaqueTitle({ glyph, title, type }: { glyph?: string; title: ReactNode; type?: ReactNode }) {
+  return (
+    <div data-slot="region-opaque-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {glyph !== undefined && <Glyph content={glyph} sizePreset="lg" />}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.2 }}>
+        <span data-slot="region-opaque-title-name" style={{ fontWeight: 600 }}>
+          {title}
+        </span>
+        {type !== undefined && (
+          <span data-slot="region-opaque-title-type" className="text-muted-foreground" style={{ fontSize: 12 }}>
+            {type}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The ordinary ports' rails: left after the control ports, right pushed
+ *  down to start at slot `ordinaryStart`. */
+function sectionEdges(
+  controlPorts: PortEdgeItem[],
+  boundaryPorts: Partial<Record<"left" | "right", PortEdgeItem[]>>,
+  ordinaryStart: number,
+): Partial<Record<BlockSide, BlockEdgeSpec>> {
+  const left = [...controlPorts, ...(boundaryPorts.left ?? [])];
+  const right = boundaryPorts.right ?? [];
+  const aligned = (slots: number) => ({ mode: "aligned" as const, anchor: "start" as const, gap: RAIL_GAP_PX, edgePadding: offsetEdgePaddingPx(slots) });
+  const edges: Partial<Record<BlockSide, BlockEdgeSpec>> = {};
+  if (left.length > 0) edges.left = { items: left, distribution: aligned(ordinaryStart - controlPorts.length) };
+  if (right.length > 0) edges.right = { items: right, distribution: aligned(ordinaryStart) };
+  return edges;
+}
+
+/**
+ * The PORT view: the region collapsed to a block. Header row glyph + Title
+ * Type; the control ports first; a ruled line; then the ordinary (boundary)
+ * ports — the left ones under the control ports, the right ones starting
+ * BELOW the line, not beside a control port.
+ *
+ * WHY the right rail is pushed down rather than sharing rows: the line is a
+ * statement about the whole card — "above it is how you drive the region,
+ * below it is what flows through" — so no ordinary port may sit above it on
+ * either wall. The push is `offsetEdgePaddingPx`, the device
+ * `portLayout: "offset"` already uses to put one lane below another.
+ */
+function RegionPortCard({
+  id,
+  glyph,
+  title,
+  type,
+  controlPorts,
+  boundaryPorts,
+}: {
+  id: string;
+  glyph?: string;
+  title: ReactNode;
+  type?: ReactNode;
+  controlPorts: PortEdgeItem[];
+  boundaryPorts: Partial<Record<"left" | "right", PortEdgeItem[]>>;
+}) {
+  const nControl = controlPorts.length;
+  const slots = Math.max(nControl + (boundaryPorts.left?.length ?? 0), nControl + (boundaryPorts.right?.length ?? 0));
+  const split = regionControlSplitPx(nControl);
+  return (
+    <BlockPort id={id} view="port" edges={sectionEdges(controlPorts, boundaryPorts, nControl)}>
+      <Block
+        width={REGION_CARD_WIDTH_PX}
+        header={<RegionHeadingRow glyph={glyph} title={title} type={type} />}
+        body={
+          slots > 0 ? (
+            <div
+              data-slot="region-port-sections"
+              // `flex: 1` (not `alignSelf: stretch`): the body is a flex ROW,
+              // so stretch only reaches the height — the width has to grow
+              // along the main axis, into the padding the margin gives back.
+              style={{ position: "relative", flex: 1, margin: -BLOCK_BODY_PADDING_PX, height: regionRailBandPx(slots) }}
+            >
+              {split !== null && (
+                <div
+                  data-slot="region-control-split"
+                  aria-hidden
+                  style={{ position: "absolute", left: 0, right: 0, top: split - FRAME_BORDER_PX / 2, height: FRAME_BORDER_PX, background: REGION_STROKE }}
+                />
+              )}
+            </div>
+          ) : undefined
+        }
+      />
+    </BlockPort>
+  );
+}
+
+/**
+ * The Expanded Opaque face: the frame at its expanded size, no members, the
+ * boundary ports on its walls, the control ports boxed into the corner by an
+ * L, and glyph / Title / Type centred.
+ *
+ * WHY ONE `BlockPort` + `Block` and not the frame div with ports stuck on:
+ * the region's id must resolve to ONE box owning EVERY port the face shows,
+ * because `wireLayer.tsx` takes the first `[data-block-id]` and looks only
+ * inside it. Two id-carrying boxes would leave one set unresolvable.
+ */
+function RegionOpaqueFrame({
+  id,
+  glyph,
+  title,
+  type,
+  controlPorts,
+  boundaryPorts,
+  width,
+  height,
+  toggle,
+}: {
+  id: string;
+  glyph?: string;
+  title: ReactNode;
+  type?: ReactNode;
+  controlPorts: PortEdgeItem[];
+  boundaryPorts: Partial<Record<"left" | "right", PortEdgeItem[]>>;
+  width: number;
+  height: number;
+  toggle: ReactNode;
+}) {
+  const split = regionControlSplitPx(controlPorts.length);
+  return (
+    <div data-slot="region-opaque-face" style={{ position: "relative", width, height }}>
+      <BlockPort id={id} view="port" edges={sectionEdges(controlPorts, boundaryPorts, controlPorts.length)}>
+        <Block
+          width={width}
+          height={height}
+          body={<RegionOpaqueTitle glyph={glyph} title={title} type={type} />}
+          // The FRAME's paint, not a card's: it is the same box the expanded
+          // view drew, only with its inside hidden — which is also why the
+          // pressed toggle has no plate of its own to sit on.
+          style={{ background: "var(--bbox-region-fill-here, transparent)", boxShadow: "none", borderRadius: FRAME_RADIUS, borderColor: REGION_STROKE }}
+        />
+      </BlockPort>
+      {split !== null && (
+        // An L — across under the control ports, then up to the top wall —
+        // boxing them into the corner, split from the ordinary ports.
+        <div
+          data-slot="region-control-split"
+          data-split="corner"
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: REGION_CONTROL_BOX_WIDTH_PX,
+            height: split + FRAME_BORDER_PX / 2,
+            borderRight: `${FRAME_BORDER_PX}px solid ${REGION_STROKE}`,
+            borderBottom: `${FRAME_BORDER_PX}px solid ${REGION_STROKE}`,
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      {toggle}
+    </div>
   );
 }
 
@@ -402,10 +740,20 @@ export function BlockRegion({
   height,
   members,
   arms,
+  glyph,
+  type,
+  controlPorts,
+  boundaryPorts,
+  opaqueFace = "card",
+  onToggleView,
   className,
   style,
 }: BlockRegionProps) {
-  const corner = givenCorner ?? (title === undefined ? null : <TitleCorner title={title} opaque={view === "opaque"} />);
+  const corner =
+    givenCorner ??
+    (title === undefined ? null : (
+      <TitleCorner id={id} title={title} type={type} controlPorts={controlPorts ?? []} opaque={view === "opaque"} />
+    ));
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const variant = useRegionVariant(root);
   const spec = REGION_VARIANTS[variant];
@@ -437,6 +785,62 @@ export function BlockRegion({
     // stamp: writing it here would shadow every ancestor's choice.
     "data-region-variant": variant,
   } as const;
+
+  // The words the port card and the opaque face paint for themselves. The id
+  // is the fallback because it is the one truthful name a region always has.
+  const words = { glyph, title: title ?? id, type };
+
+  // Port: the region as a block. The root keeps the region id; the card
+  // carries the block id (the one-owner rule, `RegionPortCard`). No toggle:
+  // the Blackbox toggle flips Expanded ⇄ Expanded Opaque, and leaving Port
+  // is the host's view selector's job.
+  if (view === "port") {
+    return (
+      <div {...rootProps} ref={setRoot} className={className} style={{ width: "max-content", ...style }}>
+        <RegionPortCard id={id} {...words} controlPorts={controlPorts ?? []} boundaryPorts={boundaryPorts ?? {}} />
+      </div>
+    );
+  }
+
+  // Expanded Opaque: the frame's box with its inside hidden, at the size the
+  // expanded view laid out.
+  if (view === "opaque" && opaqueFace === "frame") {
+    return (
+      <div
+        {...rootProps}
+        data-region-opaque-face="frame"
+        ref={setRoot}
+        className={className}
+        style={{
+          position: "relative",
+          width: "max-content",
+          ...({ "--bbox-region-fill-here": "var(--bbox-region-frame-fill, transparent)" } as CSSProperties),
+          ...style,
+        }}
+      >
+        <RegionOpaqueFrame
+          id={id}
+          {...words}
+          controlPorts={controlPorts ?? []}
+          boundaryPorts={boundaryPorts ?? {}}
+          width={layout.width}
+          height={layout.height}
+          // WHY the frame's border added to the inset: the expanded toggle is
+          // placed in the frame's PADDING box, this one in the face's border
+          // box, so without it the square hops a pixel when pressed.
+          toggle={
+            onToggleView ? (
+              <BlockRegionBlackboxToggle
+                pressed
+                onToggle={onToggleView}
+                style={{ top: REGION_TOGGLE_INSET_PX + FRAME_BORDER_PX, right: REGION_TOGGLE_INSET_PX + FRAME_BORDER_PX }}
+              />
+            ) : null
+          }
+        />
+      </div>
+    );
+  }
 
   // P5, opaque: the root wraps ONLY the corner card — the host's, or with
   // `title` the one `TitleCorner` draws, which turns itself back into a plain
@@ -579,6 +983,9 @@ export function BlockRegion({
         {layout.arms.map((row, index) => (
           <ArmRow key={row.id} arm={(arms ?? [])[index]} row={row} index={index} chevron={spec.arms.chevron} />
         ))}
+        {/* Last in DOM order, so it paints over any member or arm row that
+            reaches the top-right corner without needing a z-index. */}
+        {onToggleView && <BlockRegionBlackboxToggle pressed={false} onToggle={onToggleView} />}
       </div>
     </div>
   );
