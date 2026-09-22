@@ -31,8 +31,18 @@ const richCorner: BlockRegionProps = { id: "f", view: canBeOpaque, corner: rich 
 
 // With `cornerSize`, rich content is allowed — it is never copied.
 const sizedRich: BlockRegionProps = { id: "g", view: canBeOpaque, title: rich, cornerCard: { header: rich }, cornerSize: { w: 160, h: 40 } };
-// And in a region that can never be opaque, nothing is measured at all.
-const neverOpaque: BlockRegionProps = { id: "h", view: "expanded", title: rich };
+// Re-judge 4: rich content and an arbitrary corner need `cornerSize` WHATEVER
+// `view` says — a view is runtime state a wrapper's default can flip.
+// @ts-expect-error — rich `title` with `view: "expanded"` still needs `cornerSize`.
+const richExpanded: BlockRegionProps = { id: "h", view: "expanded", title: rich };
+// @ts-expect-error — rich `title` with no `view` at all, likewise.
+const richNoView: BlockRegionProps = { id: "i", title: rich };
+// @ts-expect-error — an arbitrary `corner` with no `view`, likewise.
+const cornerNoView: BlockRegionProps = { id: "j", corner: rich };
+// @ts-expect-error — an arbitrary `corner` in a `port` view, likewise.
+const cornerPort: BlockRegionProps = { id: "k", view: "port", corner: rich };
+// Text needs nothing: it is measured, safely, whatever the view.
+const textNoView: BlockRegionProps = { id: "l", title: "Loop" };
 
 // LabeledGroup: the label is the corner; nothing may replace it.
 const labeled: LabeledGroupProps = { id: "g1", label: "Authored label" };
@@ -42,11 +52,15 @@ const labeledWithCard: LabeledGroupProps = { id: "g2", label: "Authored label", 
 const labeledWithCorner: LabeledGroupProps = { id: "g3", label: "Authored label", corner: rich };
 // @ts-expect-error — the label is measured text, never a node.
 const labeledRich: LabeledGroupProps = { id: "g4", label: rich };
+// Re-judge 4: `Omit` let these back in through a SPREAD; `never` refuses it.
+const injected = { cornerCard: { header: "Replacement" } };
+// @ts-expect-error — a spread carrying `cornerCard` no longer typechecks.
+const labeledSpread: LabeledGroupProps = { id: "g5", label: "Authored label", ...injected };
 
 describe("RegionCornerProps / LabeledGroupProps type pins", () => {
   it("compiles exactly the allowed shapes (the @ts-expect-error lines are the assertions)", () => {
-    const allowed = [textTitle, textHeader, sizedRich, neverOpaque, labeled];
-    const refused = [richTitle, richType, richHeader, richCorner, labeledWithCard, labeledWithCorner, labeledRich];
-    expect(allowed.length + refused.length).toBe(12);
+    const allowed = [textTitle, textHeader, sizedRich, textNoView, labeled];
+    const refused = [richTitle, richType, richHeader, richCorner, richExpanded, richNoView, cornerNoView, cornerPort, labeledWithCard, labeledWithCorner, labeledRich, labeledSpread];
+    expect(allowed.length + refused.length).toBe(17);
   });
 });

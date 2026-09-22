@@ -94,7 +94,7 @@ import { BlockPort, type BlockEdgeSpec } from "./blockPort";
 import { offsetEdgePaddingPx, RAIL_GAP_PX } from "./blockPort.layout";
 import { Button } from "./button";
 import { FoldingChevron } from "./foldingChevron";
-import { ControlMark, type ControlMarkKind } from "./controlMark";
+import { ControlMark, isControlMarkKind, type ControlMarkKind } from "./controlMark";
 import { Badge } from "./badge";
 import { Glyph } from "./glyph";
 import type { Diagnostic } from "./highlighter";
@@ -215,8 +215,9 @@ export type RegionCornerProps =
       view?: RegionView;
     }
   | {
-      /** Rich title / type / header content in a region that CAN be opaque:
-       *  never copied, so the caller sizes the corner. */
+      /** Rich title / type / header content: never copied, so the caller
+       *  sizes the corner — whatever `view` says, because a view is runtime
+       *  state a wrapper's default can flip to opaque (re-judge 4). */
       corner?: undefined;
       cornerCard?: RegionCornerCard<ReactNode>;
       title?: ReactNode;
@@ -225,27 +226,8 @@ export type RegionCornerProps =
       view?: RegionView;
     }
   | {
-      /** Rich content in a region that is never opaque — never measured. */
-      corner?: undefined;
-      cornerCard?: RegionCornerCard<ReactNode>;
-      title?: ReactNode;
-      type?: ReactNode;
-      cornerSize?: CornerSize;
-      view?: "expanded" | "port";
-    }
-  | {
-      /** An arbitrary corner, supplied whole, in a region that is never
-       *  opaque — it is never measured by a hidden copy. */
-      corner: ReactNode;
-      cornerCard?: undefined;
-      title?: ReactNode;
-      type?: ReactNode;
-      cornerSize?: CornerSize;
-      view?: "expanded" | "port";
-    }
-  | {
-      /** An arbitrary corner in a region that CAN be opaque: the caller
-       *  sizes it. */
+      /** An arbitrary corner, supplied whole: never copied, so the caller
+       *  sizes it — again regardless of `view`. */
       corner: ReactNode;
       cornerCard?: undefined;
       title?: ReactNode;
@@ -643,7 +625,17 @@ function CornerCardView({
   measureOnly?: boolean;
 }) {
   const text = measureOnly ? primitiveOnly(card.header) : card.header;
-  const chips = card.chips;
+  // The copy's chips pass the same guard as its text: a badge that is not a
+  // string/number, and any mark that is not a known `ControlMarkKind`, is
+  // dropped from the copy — `primitiveOnly`'s WHY, for fields the types
+  // already narrow but a cast, plain JS or a spread can still reach.
+  const chips: RegionHeaderChips | undefined =
+    measureOnly && card.chips !== undefined
+      ? {
+          badge: card.chips.badge === undefined ? undefined : (primitiveOnly(card.chips.badge) ?? undefined),
+          marks: (Array.isArray(card.chips.marks) ? card.chips.marks : []).filter(isControlMarkKind),
+        }
+      : card.chips;
   const header =
     chips !== undefined && (chips.badge !== undefined || (chips.marks?.length ?? 0) > 0) ? (
       // The same Bar a block node's header takes when it has chips

@@ -12,7 +12,13 @@ import { CircleStop, RotateCw } from "lucide-react";
 
 import { Badge } from "./badge";
 
-export type ControlMarkKind = "break" | "continue" | "pass";
+export const CONTROL_MARK_KINDS = ["break", "continue", "pass"] as const;
+export type ControlMarkKind = (typeof CONTROL_MARK_KINDS)[number];
+
+/** A runtime whitelist, for content that may have reached past the types. */
+export function isControlMarkKind(value: unknown): value is ControlMarkKind {
+  return typeof value === "string" && (CONTROL_MARK_KINDS as readonly string[]).includes(value);
+}
 
 export function ControlMark({ mark }: { mark: ControlMarkKind }) {
   return (

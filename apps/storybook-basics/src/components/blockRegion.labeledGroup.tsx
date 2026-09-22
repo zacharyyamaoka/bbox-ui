@@ -29,8 +29,21 @@ import { BlockRegion, type BlockRegionProps, type RegionText } from "./blockRegi
 export type LabeledGroupProps = Omit<BlockRegionProps, "title" | "type" | "corner" | "cornerCard" | "cornerSize" | "kind" | "arms"> & {
   /** The group's title. Rendered as authored — no trimming or casing. */
   label: RegionText;
+  // `never`, not just omitted: `Omit` does not stop an object SPREAD from
+  // carrying these back in (re-judge 4). Stripped at runtime below too.
+  title?: never;
+  type?: never;
+  corner?: never;
+  cornerCard?: never;
+  cornerSize?: never;
+  kind?: never;
+  arms?: never;
 };
 
-export function LabeledGroup({ label, ...region }: LabeledGroupProps) {
+export function LabeledGroup(props: LabeledGroupProps) {
+  // Destructured OUT, whatever the types said: a spread from plain JS or an
+  // `any` must never reach BlockRegion, which would let `cornerCard`/`corner`
+  // silently replace the label this preset exists to draw.
+  const { label, title: _title, type: _type, corner: _corner, cornerCard: _cornerCard, cornerSize: _cornerSize, kind: _kind, arms: _arms, ...region } = props;
   return <BlockRegion {...region} kind="group" title={label} />;
 }

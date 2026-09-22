@@ -555,3 +555,51 @@ export const RichContentIsNeverCopied: Story = {
     expect(countOf("cast-popover"), "a cast title's popover while opaque: the face's own, no copy").toBe(1);
   },
 };
+
+/**
+ * Codex re-judge 4: the chips too. An open Popover smuggled in as the badge
+ * and as a mark — past the types with a cast — in a `cornerCard` loaded
+ * straight into Expanded Opaque with no `cornerSize`, so a copy IS mounted.
+ * The copy drops both (`primitiveOnly` on the badge, the `ControlMarkKind`
+ * whitelist on the marks): no popover in `document.body`, and the copy keeps
+ * the one genuine mark it was given.
+ */
+function RichChipsBench() {
+  return (
+    <div style={{ padding: 24 }}>
+      <BlockRegion
+        id="rich-chips"
+        kind="loop"
+        view="opaque"
+        opaqueFace="frame"
+        width={300}
+        cornerCard={{
+          header: "Loop",
+          bandHeight: 32,
+          chips: {
+            badge: (<OpenPopover testId="badge-popover" label="Badge" />) as unknown as string,
+            marks: ["break", (<OpenPopover testId="mark-popover" label="Mark" />) as unknown as "pass"],
+          },
+        }}
+      />
+    </div>
+  );
+}
+
+export const RichChipsAreNeverCopied: Story = {
+  name: "A rich badge or mark is never copied while opaque",
+  render: () => <RichChipsBench />,
+  play: async ({ canvasElement }) => {
+    const region = regionOf(canvasElement, "rich-chips");
+    await waitFor(() => expect(region.getAttribute("data-region-view")).toBe("opaque"));
+    const copy = required<HTMLElement>(region, '[data-slot="region-corner-measure"]', "the measuring copy");
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    // The corner is not drawn while opaque, so the ONLY place either popover
+    // could come from is the copy.
+    expect(countOf("badge-popover"), "a rich badge's popover while opaque").toBe(0);
+    expect(countOf("mark-popover"), "a rich mark's popover while opaque").toBe(0);
+    expect(copy.querySelector("[data-testid], button, [aria-haspopup]"), "the copy holds no node from the chips").toBeNull();
+    // The genuine mark survives the whitelist — the guard drops, it does not blank.
+    expect(Array.from(copy.querySelectorAll('[data-slot="control-mark"]')).map((mark) => mark.getAttribute("data-mark"))).toEqual(["break"]);
+  },
+};
