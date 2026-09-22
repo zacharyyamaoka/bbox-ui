@@ -36,10 +36,16 @@ function scene(): BlockScene<NodeData, EdgeData> {
 
 /** The host's port removal — a port is `data.ports` here. */
 const ops = {
-  deletePort: (s: BlockScene<NodeData, EdgeData>, nodeId: string, portId: string) => ({
-    ...s,
-    nodes: s.nodes.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, ports: (node.data.ports ?? []).filter((id) => id !== portId) } } : node)),
-  }),
+  // Like the real host's `removeWallPort`: the SAME scene when there is
+  // nothing to remove — that identity is how `deleteWithLinks` learns, with
+  // no `portExists`, that a port it was asked to delete was not there.
+  deletePort: (s: BlockScene<NodeData, EdgeData>, nodeId: string, portId: string) =>
+    (s.nodes.find((node) => node.id === nodeId)?.data.ports ?? []).includes(portId)
+      ? {
+          ...s,
+          nodes: s.nodes.map((node) => (node.id === nodeId ? { ...node, data: { ...node.data, ports: (node.data.ports ?? []).filter((id) => id !== portId) } } : node)),
+        }
+      : s,
   portExists: (s: BlockScene<NodeData, EdgeData>, nodeId: string, portId: string) =>
     (s.nodes.find((node) => node.id === nodeId)?.data.ports ?? []).includes(portId),
 };
@@ -127,10 +133,83 @@ describe("deleteWithLinks", () => {
   });
 
   it("without a deletePort op, a live port is reported unhandled — never silently skipped", () => {
-    const result = deleteWithLinks(scene(), [portRef("frame", "p1")]);
+    // Liveness established (`portExists`), no way to remove it: the port is
+    // reported, and its linked cables still go.
+    const result = deleteWithLinks(scene(), [portRef("frame", "p1")], { portExists: ops.portExists });
     expect(result.unhandled).toEqual([portRef("frame", "p1")]);
-    // Its linked cables still went, and the sets are pruned to nothing.
     expect(result.scene.edges.map((edge) => edge.id)).toEqual(["free"]);
+    // No vocabulary at all: the port's liveness is UNKNOWN, so it carries
+    // nothing — reported, and the scene comes back as it was (judge round 2,
+    // finding 2: fail closed).
+    const s = scene();
+    const blind = deleteWithLinks(s, [portRef("frame", "p1")]);
+    expect(blind.unhandled).toEqual([portRef("frame", "p1")]);
+    expect(blind.scene).toBe(s);
+  });
+
+  it("a STALE PORT seed deletes nothing live — with a port vocabulary it is stale, without one it is unknown; either way it never walks (judge round 2, finding 2)", () => {
+    const s: BlockScene<NodeData, EdgeData> = {
+      nodes: [
+        { id: "ext", position: { x: 0, y: 0 }, data: { ports: ["out"] } },
+        { id: "frame", position: { x: 100, y: 0 }, data: { ports: ["p2"] } },
+        { id: "kid", parentId: "frame", position: { x: 10, y: 10 }, data: { ports: ["in"] } },
+      ],
+      edges: [
+        { id: "a~0", source: "ext", sourceHandle: "out", target: "frame", targetHandle: "ghost" },
+        { id: "a~1", source: "frame", sourceHandle: "ghost@inner", target: "kid", targetHandle: "in" },
+      ],
+      // `ghost` is named by the set but is not on the frame's wall.
+      links: [{ id: "L", members: [edgeRef("a~0"), portRef("frame", "ghost"), edgeRef("a~1")] }],
+    };
+    const known = deleteWithLinks(s, [portRef("frame", "ghost")], ops);
+    expect(known.stale).toEqual([portRef("frame", "ghost")]);
+    expect(known.deleted).toEqual({ nodes: [], edges: [], ports: [] });
+    // Nothing live went; the set merely lost the member that named nothing.
+    expect(known.scene.nodes).toBe(s.nodes);
+    expect(known.scene.edges).toBe(s.edges);
+    expect(known.scene.links).toEqual([{ id: "L", members: [edgeRef("a~0"), edgeRef("a~1")] }]);
+    const blind = deleteWithLinks(s, [portRef("frame", "ghost")]);
+    expect(blind.scene).toBe(s);
+    expect(blind.unhandled).toEqual([portRef("frame", "ghost")]);
+    expect(blind.deleted).toEqual({ nodes: [], edges: [], ports: [] });
+    // With a `deletePort` but no `portExists`, the host is asked and
+    // declines (nothing to remove) — still nothing else is touched.
+    const half = deleteWithLinks(s, [portRef("frame", "ghost")], { deletePort: ops.deletePort });
+    expect(half.scene).toBe(s);
+    expect(half.unhandled).toEqual([portRef("frame", "ghost")]);
+  });
+
+  it("a stale port never BRIDGES two sets, and an unverifiable one is reported rather than crossed", () => {
+    const s: BlockScene<NodeData, EdgeData> = {
+      nodes: [
+        { id: "ext", position: { x: 0, y: 0 }, data: { ports: ["out"] } },
+        { id: "frame", position: { x: 100, y: 0 }, data: { ports: ["p2"] } },
+        { id: "kid", parentId: "frame", position: { x: 10, y: 10 }, data: { ports: ["in"] } },
+      ],
+      edges: [
+        { id: "a~0", source: "ext", sourceHandle: "out", target: "frame", targetHandle: "ghost" },
+        { id: "b~0", source: "frame", sourceHandle: "ghost@inner", target: "kid", targetHandle: "in" },
+      ],
+      links: [
+        { id: "L1", members: [edgeRef("a~0"), portRef("frame", "ghost")] },
+        { id: "L2", members: [portRef("frame", "ghost"), edgeRef("b~0")] },
+      ],
+    };
+    const known = deleteWithLinks(s, [edgeRef("a~0")], ops);
+    expect(known.scene.edges.map((edge) => edge.id)).toEqual(["b~0"]);
+    expect(known.deleted.edges).toEqual(["a~0"]);
+    // L1 lost its only live member and went; L2 is pruned of the ghost and,
+    // left with one member, goes too.
+    expect(known.scene.links).toBeUndefined();
+    const blind = deleteWithLinks(s, [edgeRef("a~0")]);
+    expect(blind.scene.edges.map((edge) => edge.id)).toEqual(["b~0"]);
+    expect(blind.unhandled).toEqual([portRef("frame", "ghost")]);
+    // …and the closure itself, asked with a tri-state liveness, neither
+    // adds nor walks through "unknown".
+    const unverified = new Set<string>();
+    const live = (ref: string) => (ref === portRef("frame", "ghost") ? undefined : ref === edgeRef("a~0") || ref === edgeRef("b~0"));
+    expect([...linkedClosure(s, [edgeRef("a~0")], live, unverified)]).toEqual([edgeRef("a~0")]);
+    expect([...unverified]).toEqual([portRef("frame", "ghost")]);
   });
 
   it("a set left with one member is dropped whole; a set with two survivors keeps them", () => {

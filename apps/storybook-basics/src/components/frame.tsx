@@ -286,6 +286,7 @@ function FrameRail({
   box,
   diameter,
   variant,
+  authored,
 }: {
   frameId: string;
   side: BlockSide;
@@ -293,6 +294,8 @@ function FrameRail({
   box: FrameBox;
   diameter?: PortSize;
   variant?: PortVariantId;
+  /** Every port id authored on ANY wall of this frame. */
+  authored: ReadonlySet<string>;
 }) {
   const plan = frameRailPlan(side, wall.distribution);
   const rail = frameRailBox(side, box, wall.distribution);
@@ -327,9 +330,19 @@ function FrameRail({
           measurement only. Its box is `inset: 0` of the item span, which
           is the dot's box, so both faces measure the same centre and ring
           (`portDotRingRadiusPx` reads this anchor's own offsetWidth). */}
-      <span data-slot="block-port-rail" data-edge={OPPOSITE_SIDE[side]} data-rail-kind="inner-face" aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-        <span data-slot="frame-port-inner-face" data-port-id={innerFaceHandle(item.id)} data-outer-port-id={item.id} style={{ position: "absolute", inset: 0 }} />
-      </span>
+      {/* WHY the anchor is withheld when its spelling is an AUTHORED id
+          (judge round 2, finding 5): a frame with ports `p` and `p@inner`
+          rendered two elements with `data-port-id="p@inner"` — the derived
+          inner face of `p` and the authored right-wall port — and a host's
+          handle discovery, which walks `[data-port-id]` in document order,
+          bound the authored port to whichever came first. The model already
+          refuses to mint that inner face (`withInnerFaces`); the renderer
+          now says the same thing. */}
+      {authored.has(innerFaceHandle(item.id)) ? null : (
+        <span data-slot="block-port-rail" data-edge={OPPOSITE_SIDE[side]} data-rail-kind="inner-face" aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          <span data-slot="frame-port-inner-face" data-port-id={innerFaceHandle(item.id)} data-outer-port-id={item.id} style={{ position: "absolute", inset: 0 }} />
+        </span>
+      )}
     </span>
   );
   return (
@@ -460,6 +473,9 @@ export function Frame({
   // (judge round 1, finding 6: a bare `<Frame id="f" />` rendered zero
   // rails because a wall with no `walls` entry was skipped).
   const rails = portEdges;
+  // Every id authored on any wall — what a derived inner face may never
+  // spell (finding 5 of judge round 2; see `FrameRail`).
+  const authoredIds = new Set<string>(BLOCK_SIDES.flatMap((side) => (walls?.[side]?.items ?? []).map((item) => item.id)));
 
   const titleNode = showTitle ? (
     <span data-slot="frame-title" data-title-placement={titlePlacement} className="truncate" style={{ fontSize: 13, fontWeight: 600, lineHeight: "18px" }}>
@@ -537,7 +553,7 @@ export function Frame({
       {box && showPortEdgeLines && rails.map((side) => <PortEdgeLine key={`line-${side}`} side={side} box={box} color={portEdgeLineColor} distribution={walls?.[side]?.distribution} />)}
       {box &&
         rails.map((side) => (
-          <FrameRail key={side} frameId={id} side={side} wall={walls?.[side] ?? { items: [] }} box={box} diameter={diameter} variant={variant} />
+          <FrameRail key={side} frameId={id} side={side} wall={walls?.[side] ?? { items: [] }} box={box} diameter={diameter} variant={variant} authored={authoredIds} />
         ))}
     </div>
   );

@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ElbowRect } from "../components/elbow";
-import { edgeRef, portRef } from "./links";
+import { deleteWithLinks, edgeRef, portRef } from "./links";
 import type { BlockScene } from "./scene";
 import {
   INNER_FACE_SUFFIX,
@@ -188,6 +188,67 @@ describe("wallCrossings — detection, always computable", () => {
     // leaves from", boundaryCrossing.ts:196-199).
     const stubOut = wallCrossings({ points: [{ x: 100, y: 50 }, { x: 60, y: 50 }], boxes: BOXES, through: ["F"] });
     expect(stubOut.map((hit) => [hit.side, hit.direction])).toEqual([["left", "exit"]]);
+  });
+
+  it("wallPoint is alongSide's inverse on every wall", () => {
+    expect(wallPoint(BOX, "left", 0.25)).toEqual({ x: 100, y: 25 });
+  });
+});
+
+describe("wallCrossings — sub-pixel segments, collinear runs, vertices on the wall, thin frames (judge round 2, finding 1)", () => {
+  const crossingsOf = (points: { x: number; y: number }[], boxes = BOXES, through = ["F"]) =>
+    wallCrossings({ points, boxes, through }).map((hit) => [hit.containerId, hit.side, hit.direction, Number(hit.t.toFixed(3))] as const);
+
+  it("a SUB-PIXEL corner tangent is still no crossing, on any corner — a 0.28px segment through (100, 0) used to split a cable twice", () => {
+    const tangents: Record<string, { x: number; y: number }[]> = {
+      "top-left": [{ x: 99.9, y: 0.1 }, { x: 100.1, y: -0.1 }],
+      "top-right": [{ x: 299.9, y: -0.1 }, { x: 300.1, y: 0.1 }],
+      "bottom-right": [{ x: 300.1, y: 99.9 }, { x: 299.9, y: 100.1 }],
+      "bottom-left": [{ x: 100.1, y: 100.1 }, { x: 99.9, y: 99.9 }],
+    };
+    for (const [corner, points] of Object.entries(tangents)) expect(crossingsOf(points), corner).toEqual([]);
+  });
+
+  it("a short run ALONG a wall is no crossing — whether it starts on the wall, ends on it, or both", () => {
+    expect(crossingsOf([{ x: 150, y: 0 }, { x: 150.3, y: 0 }])).toEqual([]);
+    expect(crossingsOf([{ x: 100, y: 40 }, { x: 100, y: 40.2 }])).toEqual([]);
+    expect(crossingsOf([{ x: 90, y: 100 }, { x: 100, y: 100 }, { x: 100.4, y: 100 }])).toEqual([]);
+    // A zero-length path has no inside-state to change.
+    expect(crossingsOf([{ x: 100, y: 50 }, { x: 100, y: 50 }])).toEqual([]);
+  });
+
+  it("a run along the wall that then TURNS IN crosses once, where it leaves the wall — a vertex the clipper stays silent on", () => {
+    // The clipper reports only the touch at (100, 0); the entry at (200, 0)
+    // is a vertex on the top wall where the state goes on → in.
+    expect(crossingsOf([{ x: 50, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 50 }])).toEqual([["F", "top", "enter", 0.5]]);
+    // …and the mirror: in, along the wall, then off it.
+    expect(crossingsOf([{ x: 200, y: 50 }, { x: 200, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 0 }])).toEqual([["F", "top", "exit", 0.5]]);
+  });
+
+  it("DUPLICATE zero-length events coalesce: a vertex repeated on the wall is one crossing, with one side", () => {
+    expect(crossingsOf([{ x: 50, y: 50 }, { x: 100, y: 50 }, { x: 100, y: 50 }, { x: 150, y: 50 }])).toEqual([["F", "left", "enter", 0.5]]);
+    expect(crossingsOf([{ x: 150, y: 50 }, { x: 300, y: 50 }, { x: 300, y: 50 }, { x: 300, y: 50 }, { x: 350, y: 50 }])).toEqual([["F", "right", "exit", 0.5]]);
+  });
+
+  it("a VERTEX exactly on a wall: touching from outside, sliding along, then entering is one crossing at the entry point", () => {
+    expect(crossingsOf([{ x: 50, y: 50 }, { x: 100, y: 50 }, { x: 100, y: 80 }, { x: 150, y: 80 }])).toEqual([["F", "left", "enter", 0.8]]);
+    // Touching the wall from INSIDE and turning back is no crossing.
+    expect(crossingsOf([{ x: 150, y: 50 }, { x: 100, y: 60 }, { x: 150, y: 70 }])).toEqual([]);
+    // Touching the wall from outside and turning back is no crossing either.
+    expect(crossingsOf([{ x: 50, y: 50 }, { x: 100, y: 60 }, { x: 50, y: 70 }])).toEqual([]);
+  });
+
+  it("a THIN nested frame keeps both of its crossings, ordered with the outer frame's — the old ½px probe jumped its whole interior", () => {
+    const thin: ElbowRect = { x: 150, y: 0, w: 0.2, h: 100 };
+    const boxes = new Map([["F", BOX], ["T", thin]]);
+    expect(crossingsOf([{ x: 60, y: 50 }, { x: 160, y: 50 }], boxes, ["F", "T"])).toEqual([
+      ["F", "left", "enter", 0.5],
+      ["T", "left", "enter", 0.5],
+      ["T", "right", "exit", 0.5],
+    ]);
+    // A 0.05px frame, crossed diagonally, is still two crossings.
+    const hair: ElbowRect = { x: 200, y: 20, w: 0.05, h: 60 };
+    expect(crossingsOf([{ x: 199, y: 49 }, { x: 201, y: 51 }], new Map([["H", hair]]), ["H"]).map((hit) => hit[2])).toEqual(["enter", "exit"]);
   });
 
   it("wallPoint is alongSide's inverse on every wall", () => {
@@ -382,5 +443,121 @@ describe("splitEdgeAtWalls — one cable becomes a chain through a REAL port, as
   it("unsplit refuses a port that is not the shared end of exactly one arriving and one departing cable", () => {
     const s = scene();
     expect(unsplitWallPort(s, { containerId: "F", portId: "nope" }, { removePort })).toBe(s);
+  });
+
+  it("a REFUSED port aborts the whole split — the scene comes back untouched, no segment, no link (judge round 2, finding 4)", () => {
+    const s = scene();
+    const through = wallCrossings({ points: [{ x: 60, y: 50 }, { x: 340, y: 50 }], boxes: BOXES, through: ["F"] });
+    expect(through.length).toBe(2);
+    // The host refuses the SECOND port (say, the id is already taken):
+    // the first must not survive on the wall.
+    const refusing = { ...ops, addPort: (current: BlockScene<NodeData, EdgeData>, port: MintedWallPort) => (port.portId === "F-p1" ? current : ops.addPort(current, port)) };
+    const refused = splitEdgeAtWalls(s, "e1", through, refusing);
+    expect(refused.scene).toBe(s);
+    expect(refused.ports).toEqual([]);
+    expect(refused.link).toBeUndefined();
+    // A reserved id is refused BEFORE the host is asked at all.
+    const reserved = splitEdgeAtWalls(s, "e1", through, { ...ops, mintPortId: () => "x@inner" });
+    expect(reserved.scene).toBe(s);
+    expect(reserved.ports).toEqual([]);
+    // So is a mint that hands two crossings the same id.
+    const dup = splitEdgeAtWalls(s, "e1", through, { ...ops, mintPortId: () => "dup" });
+    expect(dup.scene).toBe(s);
+    // A host that answers `null` is a refusal too.
+    const nulling = splitEdgeAtWalls(s, "e1", through, { ...ops, addPort: () => null });
+    expect(nulling.scene).toBe(s);
+  });
+});
+
+describe("splitEdgeAtWalls — SEQUENTIAL splits of one cable are one set (judge round 2, finding 3)", () => {
+  /** Two frames side by side; `e1` runs from `outer` (left of F) into `inner` (inside G). */
+  const G_BOX: ElbowRect = { x: 400, y: 0, w: 200, h: 100 };
+  const TWO = new Map([["F", BOX], ["G", G_BOX]]);
+  function two(): BlockScene<NodeData, EdgeData> {
+    return {
+      nodes: [
+        { id: "F", type: "frame", position: { x: 100, y: 0 }, data: { ports: {} } },
+        { id: "G", type: "frame", position: { x: 400, y: 0 }, data: { ports: {} } },
+        { id: "inner", parentId: "G", position: { x: 80, y: 30 }, data: {} },
+        { id: "outer", position: { x: 0, y: 30 }, data: {} },
+      ],
+      edges: [
+        { id: "e0", source: "x", target: "y" },
+        { id: "e1", source: "outer", sourceHandle: "out", target: "inner", targetHandle: "in", data: { color: "red" } },
+        { id: "e2", source: "a", target: "b" },
+      ],
+    };
+  }
+  const portExists = (s: BlockScene<NodeData, EdgeData>, nodeId: string, portId: string) =>
+    Object.values(s.nodes.find((node) => node.id === nodeId)?.data.ports ?? {}).some((ids) => ids.includes(portId));
+  const deletePort = (s: BlockScene<NodeData, EdgeData>, nodeId: string, portId: string) => removePort(s, { containerId: nodeId, portId });
+
+  /** Cut `e1` through F's two walls, then cut the LAST segment through G's wall. */
+  function sequential() {
+    const original = two();
+    const snapshot = JSON.stringify(original);
+    const throughF = wallCrossings({ points: [{ x: 60, y: 50 }, { x: 500, y: 50 }], boxes: TWO, through: ["F"] });
+    const afterF = splitEdgeAtWalls(original, "e1", throughF, ops).scene;
+    expect(afterF.edges.map((edge) => edge.id)).toEqual(["e0", "e1~0", "e1~1", "e1~2", "e2"]);
+    // The last segment now runs from F's right wall into G — and crosses G's left wall.
+    const throughG = wallCrossings({ points: [{ x: 300, y: 50 }, { x: 500, y: 50 }], boxes: TWO, through: ["G"] });
+    expect(throughG.map((hit) => [hit.containerId, hit.side, hit.direction])).toEqual([["G", "left", "enter"]]);
+    const result = splitEdgeAtWalls(afterF, "e1~2", throughG, ops);
+    // Undo is a snapshot: nothing above mutated its input.
+    expect(JSON.stringify(original)).toBe(snapshot);
+    return { original, afterF, result };
+  }
+
+  it("the second cut joins the first cut's set — one link, the root origin, every piece in path order", () => {
+    const { result } = sequential();
+    expect(result.scene.edges.map((edge) => edge.id)).toEqual(["e0", "e1~0", "e1~1", "e1~2~0", "e1~2~1", "e2"]);
+    expect(result.ports.map((port) => port.portId)).toEqual(["G-p0"]);
+    expect(result.scene.links).toEqual([
+      { id: "link:e1", members: [edgeRef("e1~0"), portRef("F", "F-p0"), edgeRef("e1~1"), portRef("F", "F-p1"), edgeRef("e1~2~0"), portRef("G", "G-p0"), edgeRef("e1~2~1")], origin: edgeRef("e1") },
+    ]);
+    expect(result.link).toEqual(result.scene.links![0]);
+  });
+
+  it("unsplit in ANY order brings back `e1` — never `e1~2` — and the set goes only with the last cut", () => {
+    const { original, result } = sequential();
+    const orders: [string, string][][] = [
+      [["G", "G-p0"], ["F", "F-p0"], ["F", "F-p1"]],
+      [["F", "F-p0"], ["F", "F-p1"], ["G", "G-p0"]],
+      [["F", "F-p1"], ["G", "G-p0"], ["F", "F-p0"]],
+      [["F", "F-p0"], ["G", "G-p0"], ["F", "F-p1"]],
+    ];
+    for (const order of orders) {
+      let current = result.scene;
+      order.forEach(([containerId, portId], step) => {
+        current = unsplitWallPort(current, { containerId, portId }, { removePort });
+        if (step < order.length - 1) {
+          expect(current.links?.length, `${order.map((o) => o[1]).join(",")} after ${step + 1}`).toBe(1);
+          expect(current.links![0].origin).toBe(edgeRef("e1"));
+        }
+      });
+      expect(current.edges.map((edge) => edge.id), order.map((o) => o[1]).join(",")).toEqual(["e0", "e1", "e2"]);
+      const restored = current.edges[1];
+      expect([restored.source, restored.sourceHandle, restored.target, restored.targetHandle]).toEqual(["outer", "out", "inner", "in"]);
+      expect(restored.data).toEqual({ color: "red" });
+      expect(current.links).toBeUndefined();
+      // Byte-identical up to the two walls the host's `removePort` emptied.
+      const expected = { ...original, nodes: original.nodes.map((node) => (node.id === "F" ? { ...node, data: { ports: { left: [], right: [] } } } : node.id === "G" ? { ...node, data: { ports: { left: [] } } } : node)) };
+      expect(JSON.stringify(current)).toBe(JSON.stringify(expected));
+    }
+  });
+
+  it("a linked delete afterwards takes the WHOLE cable — every segment and every port, from any piece", () => {
+    const { result } = sequential();
+    for (const seed of [edgeRef("e1~2~1"), edgeRef("e1~0"), portRef("G", "G-p0"), portRef("F", "F-p1")]) {
+      const { scene: next, deleted, stale, unhandled } = deleteWithLinks(result.scene, [seed], { deletePort, portExists });
+      expect(next.edges.map((edge) => edge.id), seed).toEqual(["e0", "e2"]);
+      expect(deleted.edges.sort(), seed).toEqual(["e1~0", "e1~1", "e1~2~0", "e1~2~1"]);
+      expect(deleted.ports.map((port) => port.portId).sort(), seed).toEqual(["F-p0", "F-p1", "G-p0"]);
+      expect(stale).toEqual([]);
+      expect(unhandled).toEqual([]);
+      expect(next.links).toBeUndefined();
+      expect(portExists(next, "F", "F-p0")).toBe(false);
+      expect(portExists(next, "G", "G-p0")).toBe(false);
+    }
   });
 });

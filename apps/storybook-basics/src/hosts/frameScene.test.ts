@@ -82,4 +82,17 @@ describe("split → unsplit through the host bindings (finding 5)", () => {
       expect(JSON.stringify(back)).toBe(JSON.stringify(original));
     }
   });
+
+  it("a minted id the host refuses — reserved, or already on the wall — aborts the split whole: the SAME scene, no dangling faces (judge round 2, finding 4)", () => {
+    const original = scene();
+    const crossings = wallCrossings({ points: [{ x: 60, y: 60 }, { x: 180, y: 60 }], boxes: new Map([["F", { x: 100, y: 0, w: 200, h: 100 }]]), through: ["F"] });
+    const reserved = splitEdgeAtFrameWalls(original, "w", crossings, { trackOf: () => track, mintPortId: () => "x@inner" });
+    expect(reserved.scene).toBe(original);
+    expect(reserved.ports).toEqual([]);
+    expect(reserved.link).toBeUndefined();
+    // `p` is authored on F's left wall already.
+    const taken = splitEdgeAtFrameWalls(original, "w", crossings, { trackOf: () => track, mintPortId: () => "p" });
+    expect(taken.scene).toBe(original);
+    expect(framePortsOf(taken.scene)("F")).toEqual(["p", "p@inner", "p@inner@inner"]);
+  });
 });

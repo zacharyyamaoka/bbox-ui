@@ -43,6 +43,7 @@ const STILLS = [
   { name: "frame-alone", id: `${FRAME_STORIES}--frame-alone`, w: 900, h: 420 },
   { name: "frame-ports-every-wall", id: `${FRAME_STORIES}--ports-on-every-wall`, w: 620, h: 420 },
   { name: "frame-every-toggle", id: `${FRAME_STORIES}--every-toggle-try-it`, w: 760, h: 420 },
+  { name: "frame-authored-collision", id: `${FRAME_STORIES}--authored-inner-face-collision`, w: 620, h: 360 },
   // The two play-function stories whose END STATE is the picture: the play
   // autoplays on load, so wait for the facts it ends on (four linked sets)
   // rather than a fixed sleep.

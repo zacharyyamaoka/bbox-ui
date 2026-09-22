@@ -156,6 +156,46 @@ const FOUR_WALLS: Partial<Record<BlockSide, FrameWall>> = {
   bottom: { items: [port("log", "str"), port("err", "str")] },
 };
 
+/* ------------------------------------------------------------------ */
+/* An authored `p@inner` — the renderer must not spell it twice          */
+/* ------------------------------------------------------------------ */
+
+export const AuthoredInnerFaceCollision: Story = {
+  name: "An authored `p@inner` keeps its wall — no derived inner face may spell it (judge round 2, finding 5)",
+  render: () => (
+    <div style={{ padding: 40 }}>
+      <Frame id="coll" title="Frame" width={360} height={200} walls={{ left: { items: [port("p", "Pose"), port("q", "float")] }, right: { items: [port("p@inner", "str")] } }} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const frame = await waitFor(() => required<HTMLElement>(canvasElement, '[data-frame-id="coll"]', "the frame"));
+    await waitFor(() => expect(frame.querySelectorAll('[data-slot="port-dot"]').length).toBe(3));
+    const box = boxOf(frame);
+    // Exactly ONE element spells `p@inner`: the authored port's own item,
+    // on the right rail — never a derived inner face of `p`.
+    const spelt = frame.querySelectorAll('[data-port-id="p@inner"]');
+    expect(spelt.length).toBe(1);
+    const only = spelt[0] as HTMLElement;
+    expect(only.getAttribute("data-slot")).toBe("block-port-item");
+    expect(only.closest('[data-slot="block-port-rail"]')?.getAttribute("data-edge")).toBe("right");
+    expect(only.closest('[data-rail-kind="inner-face"]')).toBeNull();
+    expect(offWall(centreOf(required<HTMLElement>(only, '[data-slot="port-dot"]', "p@inner's dot")), box, "right")).toBeLessThanOrEqual(PX);
+    // `p` itself: one item, and NO derived inner anchor at all.
+    expect(frame.querySelectorAll('[data-port-id="p"]').length).toBe(1);
+    // `q` has no collision, so its derived inner face is there — facing
+    // right, on q's own dot box.
+    const qInner = frame.querySelectorAll('[data-port-id="q@inner"]');
+    expect(qInner.length).toBe(1);
+    expect(qInner[0].closest('[data-slot="block-port-rail"]')?.getAttribute("data-edge")).toBe("right");
+    expect(qInner[0].closest('[data-rail-kind="inner-face"]')).not.toBeNull();
+    // The authored `p@inner` is a real right-wall port, so IT gets an inner
+    // face of its own, spelt `p@inner@inner`, facing left.
+    const pInnerInner = frame.querySelectorAll('[data-port-id="p@inner@inner"]');
+    expect(pInnerInner.length).toBe(1);
+    expect(pInnerInner[0].closest('[data-slot="block-port-rail"]')?.getAttribute("data-edge")).toBe("left");
+  },
+};
+
 export const PortsOnEveryWall: Story = {
   name: "Ports on every wall — two faces, one owner box, hit area past the wall",
   render: () => (
