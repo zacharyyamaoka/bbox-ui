@@ -57,7 +57,7 @@
 // is already the exact same union as `TraceDir` — `from` leaves along the
 // FROM port's own wall, `to` arrives travelling AGAINST the TO port's wall
 // (`OPPOSITE_DIR`).
-import { useCallback, useLayoutEffect, useState, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 import type { ElbowRect } from "./elbow/index";
 import type { BlockSide } from "./port.layout";
@@ -77,6 +77,15 @@ export interface WireLayerProps {
   containerRef: RefObject<HTMLElement | null>;
   /** Re-measure signal — bump when items/views change. */
   layoutKey?: unknown;
+  /**
+   * The polyline each wire was DRAWN on, in the container's space, reported
+   * by `Trace` itself (sampled for a curve) — the geometry this layer
+   * already reads back for its pills, handed on. Added for the region views'
+   * wall-crossing markers (`regionViews.layout.ts`'s `wallCrossings`): one
+   * derivation of where a cable runs, read back, never re-routed by the
+   * caller. Called only when a wire's route actually moved.
+   */
+  onWireGeometry?(wireId: string, points: readonly Point[]): void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -275,8 +284,13 @@ function samePoints(a: readonly Point[] | undefined, b: readonly Point[]): boole
 /* WireLayer                                                            */
 /* ------------------------------------------------------------------ */
 
-export function WireLayer({ wires, containerRef, layoutKey }: WireLayerProps) {
+export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: WireLayerProps) {
   const [state, setState] = useState<WireLayerState>(EMPTY_STATE);
+  // In a ref so a caller's inline arrow does not re-identify
+  // `reportGeometry` (which would re-render every `Trace`).
+  const onWireGeometryRef = useRef(onWireGeometry);
+  onWireGeometryRef.current = onWireGeometry;
+  const reportedRef = useRef<Record<string, readonly Point[]>>({});
   // The polyline each badged wire rides, reported by `Trace` itself rather
   // than re-routed here — one derivation, read back (the same rule
   // `trace.tsx` states for its own `sides`). Kept OUT of `state` on
@@ -288,6 +302,12 @@ export function WireLayer({ wires, containerRef, layoutKey }: WireLayerProps) {
   const reportGeometry = useCallback((wireId: string, points: readonly Point[] | null) => {
     if (!points || points.length < 2) return;
     setBadgePoints((previous) => (samePoints(previous[wireId], points) ? previous : { ...previous, [wireId]: points }));
+    // Outside the updater (React may run an updater twice): its own
+    // last-seen map, the same "only when the route moved" guard.
+    if (!samePoints(reportedRef.current[wireId], points)) {
+      reportedRef.current[wireId] = points;
+      onWireGeometryRef.current?.(wireId, points);
+    }
   }, []);
 
   useLayoutEffect(() => {
