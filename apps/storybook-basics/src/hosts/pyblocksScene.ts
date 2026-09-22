@@ -359,12 +359,54 @@ export function layoutUnplaced(scene: HostScene, isUnplaced: (node: SceneNode<Ho
   };
 }
 
-/** `parsePyblocksScene` then `layoutUnplaced`; the one call an app makes. */
+/**
+ * The scene without any region VIEW state a network document carried:
+ * `data.region.view` and `data.region.presentation` are dropped, every other
+ * field kept. The SAME node object when there is nothing to drop.
+ *
+ * WHY at this boundary, and why dropped rather than migrated (Codex re-judge,
+ * 2026-09-22): a region's view — Expanded, Expanded Opaque, Port — is
+ * client-owned UI state, and pyblocks never authors it. Its projection
+ * contract names no `region` field at all (the node `data` shape,
+ * docs/lanes/pb-pyblocks-scene-projection.md:80-91; "regions always
+ * expanded" is `data.view`, :54), the frozen outputs carry none
+ * (docs/fixtures/pyblocks-scene/{linear_chain,region_for_if}.scene.json),
+ * and the pyblocks server has no `/api/systemsketch/scene` route to author
+ * one (`/home/bam/pyblocks/pyblocks/server.py:124-159`, its POST whitelist and dispatch, lists only
+ * `/api/systemsketch/file` and `/release`). But `parsePyblocksScene` passes
+ * unknown data through untouched, so a response COULD carry a historical
+ * `region.view: "opaque"` — which meant the folded card before 2026-09-22 and
+ * renders Expanded Opaque now. Dropping it means network bytes can never set
+ * a view, stale or otherwise: every region loads Expanded, the view the
+ * projection promises, and the person's own toggles own it from there.
+ * `parsePyblocksScene` still hands back the document exactly as sent.
+ */
+export function withoutRegionViewState(scene: HostScene): HostScene {
+  // `isRecord` first: `parsePyblocksScene` keeps unknown data untouched, so
+  // `region` may arrive as null, a string or a number — none of which is
+  // view state, so it passes through as sent (and `in` on it would throw).
+  const carriesViewState = (node: SceneNode<HostNodeData>) => {
+    const region: unknown = node.data.region;
+    return isRecord(region) && ("view" in region || "presentation" in region);
+  };
+  if (!scene.nodes.some(carriesViewState)) return scene;
+  return {
+    ...scene,
+    nodes: scene.nodes.map((node) => {
+      if (!carriesViewState(node)) return node;
+      const { view: _view, presentation: _presentation, ...region } = node.data.region!;
+      return { ...node, data: { ...node.data, region } };
+    }),
+  };
+}
+
+/** `parsePyblocksScene`, `withoutRegionViewState`, then `layoutUnplaced`;
+ *  the one call an app makes. */
 export function loadPyblocksScene(json: unknown): LoadedPyblocksScene {
   const document = parsePyblocksScene(json);
   // `controlEdges` never enters the scene — see this file's header. The
   // document keeps them whole beside it, so nothing pyblocks said is lost.
-  const scene = layoutUnplaced({ nodes: document.scene.nodes, edges: document.scene.edges });
+  const scene = layoutUnplaced(withoutRegionViewState({ nodes: document.scene.nodes, edges: document.scene.edges }));
   const problems = findDanglingEdges(scene, hostPortsOf(scene)).map((end) =>
     end.reason === "missing-node"
       ? `edge ${end.edgeId}: ${end.end} names no node (${end.nodeId})`

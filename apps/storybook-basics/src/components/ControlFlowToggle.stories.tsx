@@ -1,8 +1,19 @@
 /**
- * Components/Blocks/Region/Toggle — the opaque (P5) ⇄ expanded (P1) flip, on all three
+ * Components/Blocks/BlockRegion/Toggle — the Blackbox toggle (Expanded ⇄
+ * Expanded Opaque) and the P/E selector (Port ⇄ Expanded), on all three
  * hosts (docs/CONTROL-FLOW-PLAN.md lane E, §2.B and §3.4).
  *
- * The claim these stories exist to make is not "a card appears". It is
+ * Zach, 2026-09-22: "Please do not put chevron drop downs on the regions."
+ * and "the blackbox toggle goes in the right corner. your chevron was in the
+ * left next to the title, they are completely different operations as
+ * well... chevron folds, blackbox makes opaque without folding." So there is
+ * no region chevron anywhere here: the toggle at the frame's top-right hides
+ * the inside at the SAME size, and folding the region down to a block is the
+ * P/E selector's Port — a dropdown in the story, the pattern
+ * `BlockRegionViews.stories.tsx` set (the app's floating toolbar is not this
+ * file's job).
+ *
+ * The claim these stories exist to make is not "a face appears". It is
  * **the toggle is a PROJECTION, not a document edit** — so the things that
  * must NOT change are asserted as hard as the thing that does:
  *
@@ -13,38 +24,44 @@
  *     `getBoundingClientRect`, on whichever element the host actually
  *     positions (a `position:absolute` div, a `.react-flow__node`
  *     transform, a tldraw shape);
+ *   • the Expanded Opaque face is the expanded frame's own box, ±1px, and
+ *     the promoted ports sit ON its walls;
  *   • every crossing cable keeps its id and its OUTSIDE end: `e-seed` still
  *     starts at `src/pose` and `e-out` still ends at `enc/pose`; only the
- *     hidden end moved, onto the card's promoted port;
+ *     hidden end moved, onto the face's promoted port;
  *   • the loop's private `Iter` cable (`e-iter`, a `port-inner` edge) is
  *     GONE rather than re-pointed — a region's own interior wiring is not a
- *     value arriving from outside, and drawing it on the card would be
+ *     value arriving from outside, and drawing it on the face would be
  *     exactly the "data and control mixed" failure the language forbids;
  *   • clicking again restores the frame with every wire resolved, off the
- *     same untouched document.
+ *     same untouched document;
+ *   • a press-drag that STARTS on the toggle never moves the region — the
+ *     toggle owns its press on every canvas, the way the chevron did.
  *
- * "Everything is a block" is what makes the card work at all: the opaque
- * card is the SAME `BlockPort id="loop"` the frame's corner renders, with
- * more ports on it. `merge/pose` resolves through the identical
- * `[data-block-id]` → `[data-port-id]` walk as any other port, which is why
- * `WireLayer`, React Flow's handles and tldraw's anchors needed no
- * region-specific code for the projected edges.
+ * "Everything is a block" is what makes the face work at all: the opaque
+ * face is a `BlockPort id="loop"` with more ports on it. `merge/pose`
+ * resolves through the identical `[data-block-id]` → `[data-port-id]` walk
+ * as any other port, which is why `WireLayer`, React Flow's handles and
+ * tldraw's anchors needed no region-specific code for the projected edges.
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, waitFor } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { DomCanvas as DomCanvasHost } from "../hosts/domCanvas";
+import { dragFrom } from "../hosts/hostGestures";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
+import { regionPresentationOf, setRegionPresentation, setRegionView, type RegionPresentation } from "../hosts/regionScene";
 import { TldrawHost } from "../hosts/tldrawHost";
 import { ARM_NODE_TYPE, describeHidden, hiddenSummary } from "../scene/controlFlow";
 import { REGION_NODE_TYPE } from "../scene/region";
-import { expectRegionExpanded, expectRegionOpaque, expectWirePainted } from "./region.acceptance";
+import { expectRegionExpanded, expectRegionOpaque, expectWirePainted } from "./blockRegion.acceptance";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 
 const meta = {
-  title: "Components/Blocks/Region/Toggle",
-  tags: ["object:region", "host:dom", "host:react-flow", "host:tldraw", "lane:control-flow"],
+  title: "Components/Blocks/BlockRegion/Toggle",
+  tags: ["object:region", "host:dom", "host:react-flow", "host:tldraw", "lane:region-host-toggle"],
 } satisfies Meta;
 
 export default meta;
@@ -106,7 +123,7 @@ const NESTED_SCENE: HostScene = {
       id: "loop",
       type: REGION_NODE_TYPE,
       position: { x: 190, y: 32 },
-      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 420, h: 330 },
+      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque", presentation: "expanded" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 420, h: 330 },
     },
     { id: "br", type: REGION_NODE_TYPE, parentId: "loop", position: { x: 36, y: 86 }, data: { name: "Branch", region: { kind: "branch" }, ports: { left: ["fast"] }, w: 330 } },
     { id: "if", type: ARM_NODE_TYPE, parentId: "br", position: { x: 0, y: 0 }, data: { name: "if fast:", arm: { open: true, h: 96 } } },
@@ -141,39 +158,78 @@ function PositionsProbe({ scene }: { scene: HostScene }) {
   return <pre data-slot="positions">{JSON.stringify(scene.nodes.map((node) => [node.id, node.position]))}</pre>;
 }
 
-function StatefulDomCanvas({ initial }: { initial: HostScene }) {
+const PRESENTATION_ITEMS: Record<RegionPresentation, string> = { port: "Port", expanded: "Expanded" };
+
+/**
+ * The P/E selector for the loop. Regions have no Simple (Zach, 2026-09-22:
+ * "regions do not have a simple view. they just have port, expanded and
+ * expanded opaque view"), so it offers two. A stock `Select` in the story's
+ * own canvas, where Zach looks — not a Storybook args control — writing the
+ * scene through `setRegionPresentation`, the same write the app's toolbar
+ * will make.
+ */
+function PresentationSelect({ scene, onSceneChange }: { scene: HostScene; onSceneChange(next: HostScene): void }) {
+  const loop = scene.nodes.find((node) => node.id === "loop");
+  const value = loop ? regionPresentationOf(loop) : "expanded";
+  return (
+    <Select
+      value={value}
+      items={PRESENTATION_ITEMS}
+      onValueChange={(next) => (next === "port" || next === "expanded") && onSceneChange(setRegionPresentation(scene, "loop", next))}
+    >
+      <SelectTrigger aria-label="Region view" style={{ width: 160 }}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {(Object.keys(PRESENTATION_ITEMS) as RegionPresentation[]).map((key) => (
+          <SelectItem key={key} value={key}>
+            {PRESENTATION_ITEMS[key]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function Bench({ initial, host }: { initial: HostScene; host: (scene: HostScene, onSceneChange: (next: HostScene) => void) => ReactNode }) {
   const [scene, setScene] = useState(initial);
   return (
-    <div>
-      <DomCanvasHost scene={scene} onSceneChange={setScene} width={800} height={368} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {host(scene, setScene)}
+      {/* WHY under the canvas, not above it: above, the Select's list opens
+          down INTO the canvas, and tldraw's own page menu paints over it —
+          measured 2026-09-22, the "Port" option was covered and a real click
+          landed on tldraw's "Page 1" instead. */}
+      <PresentationSelect scene={scene} onSceneChange={setScene} />
       <PositionsProbe scene={scene} />
     </div>
   );
 }
 
+function StatefulDomCanvas({ initial }: { initial: HostScene }) {
+  return <Bench initial={initial} host={(scene, onSceneChange) => <DomCanvasHost scene={scene} onSceneChange={onSceneChange} width={800} height={368} />} />;
+}
+
 function StatefulReactFlow({ initial }: { initial: HostScene }) {
-  const [scene, setScene] = useState(initial);
   return (
-    <div>
-      <ReactFlowHost scene={scene} onSceneChange={setScene} width={800} height={400} defaultViewport={{ x: 0, y: 0, zoom: 1 }} />
-      <PositionsProbe scene={scene} />
-    </div>
+    <Bench
+      initial={initial}
+      host={(scene, onSceneChange) => (
+        <ReactFlowHost scene={scene} onSceneChange={onSceneChange} width={800} height={400} defaultViewport={{ x: 0, y: 0, zoom: 1 }} />
+      )}
+    />
   );
 }
 
 function StatefulTldraw({ initial }: { initial: HostScene }) {
-  const [scene, setScene] = useState(initial);
-  return (
-    <div>
-      <TldrawHost scene={scene} onSceneChange={setScene} width={800} height={400} />
-      <PositionsProbe scene={scene} />
-    </div>
-  );
+  return <Bench initial={initial} host={(scene, onSceneChange) => <TldrawHost scene={scene} onSceneChange={onSceneChange} width={800} height={400} />} />;
 }
 
 /* ------------------------------------------------------------------ */
 /* Measured helpers                                                     */
 /* ------------------------------------------------------------------ */
+
+const TOLERANCE_PX = 2;
 
 function required<T extends Element>(root: ParentNode, selector: string, what: string): T {
   const found = root.querySelector<T>(selector);
@@ -181,20 +237,42 @@ function required<T extends Element>(root: ParentNode, selector: string, what: s
   return found;
 }
 
+function regionOf(root: ParentNode, regionId: string): HTMLElement {
+  return required<HTMLElement>(root, `[data-slot="region"][data-region-id="${regionId}"]`, `region \`${regionId}\``);
+}
+
+function toggleOf(root: ParentNode, regionId: string): HTMLElement {
+  return required<HTMLElement>(regionOf(root, regionId), '[aria-label="Blackbox toggle"]', `region \`${regionId}\`'s Blackbox toggle`);
+}
+
 /**
- * The region's own fold control, in BOTH views — it lives in the corner
- * card's header expanded and in the card's header opaque, which is the same
- * slot (pyblocks `viewer/nodes/RegionInterface.tsx:80`). Scoped to
- * `[data-block-id="<region>"]` rather than the region root on purpose: a
- * nested region's arms carry their own `[data-slot="folding-chevron"]`, and
- * the region root contains them all.
+ * No REGION-level chevron: the corner card carries none, and every chevron
+ * left under the region folds something else — an arm row
+ * (`region-arm-header`) or a member's own body (inside a member block). The
+ * arms' chevrons stay by Zach's own distinction ("chevron folds").
  */
-function chevronOf(root: ParentNode, regionId: string): HTMLElement {
-  return required<HTMLElement>(
-    root,
-    `[data-region-id="${regionId}"] [data-block-id="${regionId}"] [data-slot="folding-chevron"]`,
-    `region \`${regionId}\`'s fold chevron`,
-  );
+function expectNoRegionChevron(root: ParentNode, regionId: string): void {
+  const region = regionOf(root, regionId);
+  expect(region.querySelectorAll('[data-slot="region-corner"] [data-slot="folding-chevron"]'), "a chevron on the corner card").toHaveLength(0);
+  for (const chevron of Array.from(region.querySelectorAll<HTMLElement>('[data-slot="folding-chevron"]'))) {
+    const foldsAnArm = chevron.closest('[data-slot="region-arm-header"]') !== null;
+    const owner = chevron.closest("[data-block-id]")?.getAttribute("data-block-id");
+    expect(foldsAnArm || (owner !== null && owner !== undefined && owner !== regionId), "a chevron that folds the region itself").toBe(true);
+  }
+}
+
+/** The toggle sits INSIDE `box`'s top-right corner: within its right and top
+ *  edges, and no further than 12px from either. */
+function expectToggleInTopRight(toggle: HTMLElement, box: HTMLElement): void {
+  const t = toggle.getBoundingClientRect();
+  const b = box.getBoundingClientRect();
+  expect(t.width, "the toggle is drawn").toBeGreaterThan(0);
+  expect(t.right, "toggle's right edge inside the frame").toBeLessThanOrEqual(b.right + TOLERANCE_PX);
+  expect(t.top, "toggle's top edge inside the frame").toBeGreaterThanOrEqual(b.top - TOLERANCE_PX);
+  expect(b.right - t.right, "toggle hugs the right wall").toBeLessThanOrEqual(12);
+  expect(t.top - b.top, "toggle hugs the top wall").toBeLessThanOrEqual(12);
+  // And it is the RIGHT corner, not the left one the chevron used to sit in.
+  expect(t.left, "toggle is on the right half").toBeGreaterThan(b.left + b.width / 2);
 }
 
 /** Where the HOST put the region, in screen px. The element every host
@@ -222,7 +300,8 @@ function railPortIds(card: HTMLElement, edge: "left" | "right"): (string | null)
  * decided (`merge/pose` is a sink → left; `smooth/out` is a source →
  * right). `toEqual` rather than a containment check — a promoted port
  * landing on the wrong wall, or a second copy of one, is exactly the kind
- * of failure a `querySelector` presence test cannot see.
+ * of failure a `querySelector` presence test cannot see. Holds for the
+ * Expanded Opaque face and the Port card alike.
  */
 async function expectOpaqueCardPorts(root: ParentNode): Promise<void> {
   await waitFor(() => {
@@ -230,6 +309,185 @@ async function expectOpaqueCardPorts(root: ParentNode): Promise<void> {
     expect(railPortIds(card, "left")).toEqual(["Iterable", "merge/pose"]);
     expect(railPortIds(card, "right")).toEqual(["Iter", "smooth/out"]);
   });
+}
+
+/** Each port's dot centre sits ON its wall of `box` — the promoted seats
+ *  hug the frame they cross, not the inside of it. */
+function expectDotsOnWalls(root: ParentNode, box: HTMLElement, walls: Record<"left" | "right", string[]>): void {
+  const b = box.getBoundingClientRect();
+  for (const [wall, ids] of Object.entries(walls) as ["left" | "right", string[]][]) {
+    for (const id of ids) {
+      const dot = required<HTMLElement>(root, `[data-region-id="loop"] [data-block-id="loop"] [data-port-id="${id}"] [data-slot="port-dot"]`, `${id}'s dot`).getBoundingClientRect();
+      const centreX = dot.left + dot.width / 2;
+      const wallX = wall === "left" ? b.left : b.right;
+      expect(Math.abs(centreX - wallX), `${id}'s dot sits on the ${wall} wall`).toBeLessThanOrEqual(TOLERANCE_PX);
+      expect(dot.top >= b.top && dot.bottom <= b.bottom, `${id}'s dot is within the wall's span`).toBe(true);
+    }
+  }
+}
+
+function expectMembersHidden(root: ParentNode): void {
+  expect(regionOf(root, "loop").querySelectorAll("[data-member-id]"), "members hidden").toHaveLength(0);
+  for (const id of ["merge", "smooth"]) {
+    expect(root.querySelector(`[data-block-id="${id}"]`), `member \`${id}\` is hidden`).toBeNull();
+  }
+}
+
+async function chooseRegionView(canvasElement: HTMLElement, label: string): Promise<void> {
+  const trigger = await within(canvasElement).findByRole("combobox", { name: "Region view" });
+  await userEvent.click(trigger);
+  await userEvent.click(await within(document.body).findByRole("option", { name: label }));
+  await waitFor(() => expect(trigger.textContent).toContain(label));
+}
+
+/**
+ * A press that STARTS on the toggle and travels 60×40px must move nothing:
+ * not the host's box, not the scene record, and it must not flip the view
+ * either. `dragFrom` fires the pointer AND mouse families in the browser's
+ * order, so React Flow's d3-drag and tldraw's state chart both really see
+ * the press and have to be kept out of it — a pointer-only drag would make
+ * this vacuous.
+ */
+async function expectToggleDragMovesNothing(canvasElement: HTMLElement): Promise<void> {
+  const view = regionOf(canvasElement, "loop").getAttribute("data-region-view");
+  const positions = probeText(canvasElement);
+  const box = hostBoxOf(canvasElement, "loop");
+  const toggle = toggleOf(canvasElement, "loop");
+  const t = toggle.getBoundingClientRect();
+  await dragFrom(toggle, { x: t.left + t.width / 2 + 60, y: t.top + t.height / 2 + 40 });
+  expect(probeText(canvasElement), "a drag from the toggle wrote no position").toBe(positions);
+  expect(hostBoxOf(canvasElement, "loop"), "a drag from the toggle moved the region").toEqual(box);
+  expect(regionOf(canvasElement, "loop").getAttribute("data-region-view")).toBe(view);
+}
+
+/**
+ * The positive control that keeps `expectToggleDragMovesNothing` honest: the
+ * SAME drag from a point on the face that is NOT the toggle does move the
+ * region, so the host was able to drag right there and it was the toggle's
+ * ownership that stopped it. Only on the two canvases — the DOM host has no
+ * node drag at all (`domCanvas.tsx`'s deliberate incapability).
+ */
+async function expectFaceDragMovesRegion(canvasElement: HTMLElement): Promise<void> {
+  const face = required<HTMLElement>(canvasElement, '[data-region-id="loop"] [data-slot="region-opaque-face"]', "the opaque face");
+  const toggle = toggleOf(canvasElement, "loop").getBoundingClientRect();
+  const f = face.getBoundingClientRect();
+  // Just left of the toggle, on the same row: the face, and nothing else.
+  const pressAt = { x: toggle.left - 24, y: toggle.top + toggle.height / 2 };
+  expect(pressAt.x).toBeGreaterThan(f.left + f.width / 2);
+  const before = hostBoxOf(canvasElement, "loop");
+  await dragFrom(face, { x: pressAt.x + 60, y: pressAt.y + 40 }, { pressAt });
+  // ±10px, `SceneHosts.stories.tsx`'s own tolerance for the same `dragFrom`
+  // node drag: the host may eat the threshold step. The claim is "it moved
+  // by roughly the drag", which a 0px result cannot pass.
+  await waitFor(() => {
+    const after = hostBoxOf(canvasElement, "loop");
+    expect(Math.abs(after.left - before.left - 60), "the face drags the region").toBeLessThanOrEqual(10);
+    expect(Math.abs(after.top - before.top - 40), "the face drags the region").toBeLessThanOrEqual(10);
+  });
+}
+
+/**
+ * The whole ruling, on one host: no chevron; the toggle in the frame's
+ * top-right; a real click to Expanded Opaque at the same size with the
+ * members hidden and the promoted ports on the walls; the projection's
+ * cables and the untouched document; a click back; a drag from the toggle
+ * that moves nothing; and the P/E selector to Port and back.
+ */
+async function playToggle(canvasElement: HTMLElement, options: { hostDrags: boolean; checkAllWires: boolean }): Promise<void> {
+  await expectRegionExpanded(canvasElement, "loop");
+  expectNoRegionChevron(canvasElement, "loop");
+  const positionsBefore = probeText(canvasElement);
+  const boxBefore = hostBoxOf(canvasElement, "loop");
+  const frame = required<HTMLElement>(regionOf(canvasElement, "loop"), '[data-slot="region-frame"]', "the frame");
+  const frameBefore = frame.getBoundingClientRect();
+  expectToggleInTopRight(toggleOf(canvasElement, "loop"), frame);
+  expect(toggleOf(canvasElement, "loop").getAttribute("aria-pressed")).toBe("false");
+  if (options.checkAllWires) {
+    // Every cable the expanded document declares is painted and resolved —
+    // the baseline the flip has to preserve for the four that survive it.
+    for (const id of ["e-iterable", "e-iter", "e-seed", "e-ms", "e-out"]) {
+      await expectWirePainted(canvasElement, id);
+    }
+  }
+
+  // Expanded → Expanded Opaque, by a real click on the toggle.
+  await userEvent.click(toggleOf(canvasElement, "loop"));
+
+  await expectRegionOpaque(canvasElement, "loop");
+  await expectOpaqueCardPorts(canvasElement);
+  expectNoRegionChevron(canvasElement, "loop");
+  expectMembersHidden(canvasElement);
+  const face = required<HTMLElement>(canvasElement, '[data-region-id="loop"] [data-slot="region-opaque-face"] [data-slot="block"]', "the opaque face");
+  const faceRect = face.getBoundingClientRect();
+  expect(Math.abs(faceRect.width - frameBefore.width), "Expanded Opaque keeps the frame's width").toBeLessThanOrEqual(1);
+  expect(Math.abs(faceRect.height - frameBefore.height), "Expanded Opaque keeps the frame's height").toBeLessThanOrEqual(1);
+  expect(Math.abs(faceRect.left - frameBefore.left), "…and its place").toBeLessThanOrEqual(1);
+  expect(Math.abs(faceRect.top - frameBefore.top), "…and its place").toBeLessThanOrEqual(1);
+  expectDotsOnWalls(canvasElement, face, { left: ["Iterable", "merge/pose"], right: ["Iter", "smooth/out"] });
+  expectToggleInTopRight(toggleOf(canvasElement, "loop"), face);
+  expect(toggleOf(canvasElement, "loop").getAttribute("aria-pressed")).toBe("true");
+
+  // The crossing cables survive with their ids and their OUTSIDE ends; the
+  // interior one and the region's private `Iter` cable do not.
+  if (options.checkAllWires) {
+    await expectWirePainted(canvasElement, "e-seed");
+    await expectWirePainted(canvasElement, "e-out");
+    await expectWirePainted(canvasElement, "e-iterable");
+    expect(canvasElement.querySelector('[data-wire-id="e-iter"]'), "the loop's private Iter cable is hidden, not re-pointed").toBeNull();
+    expect(canvasElement.querySelector('[data-wire-id="e-ms"]'), "an interior cable is hidden").toBeNull();
+  }
+
+  // The ruling, measured: one field changed, so nothing moved.
+  expect(probeText(canvasElement), "no node's position changed").toBe(positionsBefore);
+  await waitFor(() => expect(hostBoxOf(canvasElement, "loop")).toEqual(boxBefore));
+
+  // A drag that starts on the pressed toggle moves nothing.
+  await expectToggleDragMovesNothing(canvasElement);
+
+  // Expanded Opaque → Expanded, by the same toggle.
+  await userEvent.click(toggleOf(canvasElement, "loop"));
+  await expectRegionExpanded(canvasElement, "loop");
+  expectNoRegionChevron(canvasElement, "loop");
+  if (options.checkAllWires) {
+    for (const id of ["e-iterable", "e-iter", "e-seed", "e-ms", "e-out"]) {
+      await expectWirePainted(canvasElement, id);
+    }
+  }
+  expect(probeText(canvasElement)).toBe(positionsBefore);
+  await waitFor(() => expect(hostBoxOf(canvasElement, "loop")).toEqual(boxBefore));
+  await expectToggleDragMovesNothing(canvasElement);
+
+  // P/E: Port is the region collapsed to a block — no frame, no toggle, no
+  // members, the same walls as the opaque face. And back.
+  await chooseRegionView(canvasElement, "Port");
+  await waitFor(() => expect(regionOf(canvasElement, "loop").getAttribute("data-region-view")).toBe("port"));
+  const port = regionOf(canvasElement, "loop");
+  expect(port.querySelector('[data-slot="region-frame"]'), "no frame in Port").toBeNull();
+  expect(port.querySelector('[data-slot="region-opaque-face"]'), "no opaque face in Port").toBeNull();
+  expect(port.querySelector('[aria-label="Blackbox toggle"]'), "no Blackbox toggle in Port").toBeNull();
+  expectNoRegionChevron(canvasElement, "loop");
+  expectMembersHidden(canvasElement);
+  await expectOpaqueCardPorts(canvasElement);
+  const card = required<HTMLElement>(port, '[data-block-id="loop"] [data-slot="block"]', "the port card").getBoundingClientRect();
+  expect(card.width, "Port is a block, smaller than the frame").toBeLessThan(frameBefore.width);
+  if (options.checkAllWires) {
+    await expectWirePainted(canvasElement, "e-seed");
+    await expectWirePainted(canvasElement, "e-out");
+  }
+  expect(probeText(canvasElement), "Port writes no position").toBe(positionsBefore);
+
+  await chooseRegionView(canvasElement, "Expanded");
+  await expectRegionExpanded(canvasElement, "loop");
+  expect(toggleOf(canvasElement, "loop").getAttribute("aria-pressed"), "back to what the toggle last said").toBe("false");
+  expect(probeText(canvasElement)).toBe(positionsBefore);
+
+  // Last, because it moves the region: the positive control for the drag
+  // checks above, on the opaque face.
+  if (options.hostDrags) {
+    await userEvent.click(toggleOf(canvasElement, "loop"));
+    await expectRegionOpaque(canvasElement, "loop");
+    await expectFaceDragMovesRegion(canvasElement);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -240,40 +498,9 @@ export const DomCanvas: Story = {
   name: "Toggle (DOM Canvas)",
   render: () => <StatefulDomCanvas initial={TOGGLE_SCENE} />,
   play: async ({ canvasElement }) => {
-    await expectRegionExpanded(canvasElement, "loop");
-    const positionsBefore = probeText(canvasElement);
-    const boxBefore = hostBoxOf(canvasElement, "loop");
-    // Every cable the expanded document declares is painted and resolved —
-    // the baseline the flip has to preserve for the four that survive it.
-    for (const id of ["e-iterable", "e-iter", "e-seed", "e-ms", "e-out"]) {
-      await expectWirePainted(canvasElement, id);
-    }
-
-    await userEvent.click(chevronOf(canvasElement, "loop"));
-
-    await expectRegionOpaque(canvasElement, "loop");
-    await expectOpaqueCardPorts(canvasElement);
-
-    // The crossing cables survive with their ids and their OUTSIDE ends;
-    // the interior one and the region's private `Iter` cable do not.
-    await expectWirePainted(canvasElement, "e-seed");
-    await expectWirePainted(canvasElement, "e-out");
-    await expectWirePainted(canvasElement, "e-iterable");
-    expect(canvasElement.querySelector('[data-wire-id="e-iter"]'), "the loop's private Iter cable is hidden, not re-pointed").toBeNull();
-    expect(canvasElement.querySelector('[data-wire-id="e-ms"]'), "an interior cable is hidden").toBeNull();
-
-    // The ruling, measured: one field changed, so nothing moved.
-    expect(probeText(canvasElement), "no node's position changed").toBe(positionsBefore);
-    expect(hostBoxOf(canvasElement, "loop")).toEqual(boxBefore);
-
-    await userEvent.click(chevronOf(canvasElement, "loop"));
-
-    await expectRegionExpanded(canvasElement, "loop");
-    for (const id of ["e-iterable", "e-iter", "e-seed", "e-ms", "e-out"]) {
-      await expectWirePainted(canvasElement, id);
-    }
-    expect(probeText(canvasElement)).toBe(positionsBefore);
-    expect(hostBoxOf(canvasElement, "loop")).toEqual(boxBefore);
+    // The DOM host has no node drag at all, so its drag check proves only
+    // that nothing here invents one; the canvases below carry the control.
+    await playToggle(canvasElement, { hostDrags: false, checkAllWires: true });
   },
 };
 
@@ -281,26 +508,12 @@ export const ReactFlow: Story = {
   name: "Toggle (ReactFlow)",
   render: () => <StatefulReactFlow initial={TOGGLE_SCENE} />,
   play: async ({ canvasElement }) => {
-    await expectRegionExpanded(canvasElement, "loop");
-    const positionsBefore = probeText(canvasElement);
-    const boxBefore = hostBoxOf(canvasElement, "loop");
-
-    // The chevron carries `POINTER_OWNED_CLASS` ("nodrag"), which is the
-    // only reason this click is a click: the region's drag handle IS the
-    // corner card's header, and React Flow would otherwise claim the press
-    // as the first pixels of a node drag.
-    await userEvent.click(chevronOf(canvasElement, "loop"));
-
-    await expectRegionOpaque(canvasElement, "loop");
-    await expectOpaqueCardPorts(canvasElement);
-    expect(probeText(canvasElement)).toBe(positionsBefore);
-    await waitFor(() => {
-      expect(hostBoxOf(canvasElement, "loop")).toEqual(boxBefore);
-    });
-
-    await userEvent.click(chevronOf(canvasElement, "loop"));
-    await expectRegionExpanded(canvasElement, "loop");
-    expect(probeText(canvasElement)).toBe(positionsBefore);
+    // The toggle carries `POINTER_OWNED_CLASS` ("nodrag"), which is the only
+    // reason a press on it is a click on the opaque face: that face IS the
+    // region's drag handle there (`reactFlowHost.tsx`'s `ownHeaderOf`), and
+    // React Flow would otherwise claim the press as the first pixels of a
+    // node drag.
+    await playToggle(canvasElement, { hostDrags: true, checkAllWires: false });
   },
 };
 
@@ -308,25 +521,10 @@ export const Tldraw: Story = {
   name: "Toggle (tldraw)",
   render: () => <StatefulTldraw initial={TOGGLE_SCENE} />,
   play: async ({ canvasElement }) => {
-    await expectRegionExpanded(canvasElement, "loop");
-    const positionsBefore = probeText(canvasElement);
-    const boxBefore = hostBoxOf(canvasElement, "loop");
-
     // tldraw's half of the same ownership marker: `contentOwnsPress` reads
     // `.nodrag` and calls `editor.markEventAsHandled`, so the canvas never
     // sees this pointerdown and the button gets its click.
-    await userEvent.click(chevronOf(canvasElement, "loop"));
-
-    await expectRegionOpaque(canvasElement, "loop");
-    await expectOpaqueCardPorts(canvasElement);
-    expect(probeText(canvasElement)).toBe(positionsBefore);
-    await waitFor(() => {
-      expect(hostBoxOf(canvasElement, "loop")).toEqual(boxBefore);
-    });
-
-    await userEvent.click(chevronOf(canvasElement, "loop"));
-    await expectRegionExpanded(canvasElement, "loop");
-    expect(probeText(canvasElement)).toBe(positionsBefore);
+    await playToggle(canvasElement, { hostDrags: true, checkAllWires: false });
   },
 };
 
@@ -375,5 +573,87 @@ export const NestedOpaque: Story = {
     await expectWirePainted(canvasElement, "e-out");
     expect(canvasElement.querySelector('[data-wire-id="e-int"]'), "an interior cable is hidden").toBeNull();
     expect(canvasElement.querySelector('[data-wire-id="e-iter"]'), "the region's private cable is hidden").toBeNull();
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* A record renders literally (Codex re-judge)                           */
+/* ------------------------------------------------------------------ */
+
+/** Exactly what `setRegionView(…, "opaque")` writes — `view: "opaque"`, no
+ *  `presentation` — serialised and loaded back the way a file would be. It
+ *  must render as what the writer meant: Expanded Opaque, never Port. */
+const WRITER_OPAQUE_SCENE = JSON.parse(JSON.stringify(setRegionView(TOGGLE_SCENE, "loop", "opaque"))) as HostScene;
+
+/** And what the P/E selector writes for Port, through the same trip. */
+const WRITER_PORT_SCENE = JSON.parse(JSON.stringify(setRegionPresentation(TOGGLE_SCENE, "loop", "port"))) as HostScene;
+
+export const LiteralRecord: Story = {
+  name: "A record renders what its writer meant, after a JSON round-trip",
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div data-bench="opaque">
+        <StatefulDomCanvas initial={WRITER_OPAQUE_SCENE} />
+      </div>
+      <div data-bench="port">
+        <StatefulDomCanvas initial={WRITER_PORT_SCENE} />
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    expect(WRITER_OPAQUE_SCENE.nodes.find((node) => node.id === "loop")?.data.region).toEqual({ kind: "loop", loop: "for", view: "opaque" });
+    const opaque = required<HTMLElement>(canvasElement, '[data-bench="opaque"]', "the opaque bench");
+    await expectRegionOpaque(opaque, "loop");
+    required(regionOf(opaque, "loop"), ':scope > [data-slot="region-opaque-face"]', "the Expanded Opaque face");
+    expectMembersHidden(opaque);
+    // Its P/E selector says Expanded: the record is Expanded Opaque, not Port.
+    expect((await within(opaque).findByRole("combobox", { name: "Region view" })).textContent).toContain("Expanded");
+
+    const port = required<HTMLElement>(canvasElement, '[data-bench="port"]', "the port bench");
+    await waitFor(() => expect(regionOf(port, "loop").getAttribute("data-region-view")).toBe("port"));
+    expect(regionOf(port, "loop").querySelector('[data-slot="region-opaque-face"]'), "Port is not the opaque face").toBeNull();
+    expectMembersHidden(port);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* Loaded straight into Expanded Opaque — the size holds (Codex audit)   */
+/* ------------------------------------------------------------------ */
+
+/** A HUG-sized group (no `h`) that starts in Expanded Opaque, so nothing has
+ *  ever drawn its corner expanded. */
+const DIRECT_OPAQUE_SCENE: HostScene = {
+  nodes: [
+    {
+      id: "grp",
+      type: REGION_NODE_TYPE,
+      position: { x: 40, y: 24 },
+      data: { name: "Group", region: { kind: "group", view: "opaque", presentation: "expanded" }, ports: { left: ["in"], right: ["out"] }, w: 320 },
+    },
+    { id: "inner", type: "block", parentId: "grp", position: { x: 24, y: 16 }, data: { name: "inner", view: "simple", w: 120, h: 44 } },
+  ],
+  edges: [],
+};
+
+export const DirectOpaqueKeepsItsSize: Story = {
+  name: "Loaded in Expanded Opaque, the box holds across opaque → expanded → opaque",
+  render: () => <StatefulDomCanvas initial={DIRECT_OPAQUE_SCENE} />,
+  play: async ({ canvasElement }) => {
+    await expectRegionOpaque(canvasElement, "grp");
+    const faceOf = () =>
+      required<HTMLElement>(regionOf(canvasElement, "grp"), ':scope > [data-slot="region-opaque-face"]', "the opaque face").getBoundingClientRect();
+    const first = faceOf();
+
+    await userEvent.click(toggleOf(canvasElement, "grp"));
+    await expectRegionExpanded(canvasElement, "grp");
+    const frame = required<HTMLElement>(regionOf(canvasElement, "grp"), ':scope > [data-slot="region-frame"]', "the frame").getBoundingClientRect();
+    expect(Math.abs(frame.height - first.height), "expanded keeps the height it was loaded at").toBeLessThanOrEqual(1);
+    expect(Math.abs(frame.width - first.width)).toBeLessThanOrEqual(1);
+
+    await userEvent.click(toggleOf(canvasElement, "grp"));
+    await expectRegionOpaque(canvasElement, "grp");
+    const again = faceOf();
+    expect(Math.abs(again.height - first.height), "opaque again keeps the same height").toBeLessThanOrEqual(1);
+    expect(Math.abs(again.width - first.width)).toBeLessThanOrEqual(1);
   },
 };

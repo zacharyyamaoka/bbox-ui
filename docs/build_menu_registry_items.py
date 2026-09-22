@@ -106,7 +106,7 @@ ITEMS = [
     ("draft-bar", "editor/draftBar.tsx", "Draft Bar",
      "The draft-mode strip: exit, draft name, and a change-gated compare/merge pair."),
     # ── The control-flow kit's ONE distributable surface ────────────────
-    # WHY `region` is an item and the `loop` / `branch` PRESETS are not,
+    # WHY `block-region` is an item and the `loop` / `branch` PRESETS are not,
     # even though a consumer plainly wants a for-loop: an item is a file
     # tree this script can target, and `target_for` above has exactly two
     # rules — `src/components/X -> components/bbox/X` and
@@ -122,13 +122,24 @@ ITEMS = [
     # would mean shipping the whole scene+host lineage under a component
     # target, which is a different distribution decision than this script
     # makes. `docs/CONTROL-FLOW-PLAN.md` §11 item 6 owns that follow-up (a
-    # `presets/` target rule); until it lands, a consumer installs `region`
-    # and writes the three fields (`region.kind`, `ports`, arms) itself —
-    # which is all a preset ever was.
-    ("region", "components/region.tsx", "Region",
+    # `presets/` target rule); until it lands, a consumer installs
+    # `block-region` and writes the three fields (`region.kind`, `ports`,
+    # arms) itself — which is all a preset ever was.
+    #
+    # `labeled-group` IS an item, and that is the same rule, not an exception:
+    # it is a COMPONENT preset (`components/blockRegion.labeledGroup.tsx`,
+    # BlockRegion given only a title), so it lands under the component target
+    # like any other component. Renamed from `region` on 2026-09-22 with the
+    # component (Zach: "Block Region is stanadlone component that composes the
+    # Block with a 'region'"); `region` could not build on main before
+    # 2026-09-22, so no consumer ever installed the old name.
+    ("block-region", "components/blockRegion.tsx", "Block Region",
      "A control-flow frame with a real Block integral to its top-left corner — the frame carries "
      "scope and no value ports; arms stack under the corner block with a fold chevron each. Loops "
      "and branches are data presets over it."),
+    ("labeled-group", "components/blockRegion.labeledGroup.tsx", "Labeled Group",
+     "A Block Region with only a title: a thin frame and a title card in its top-left corner, "
+     "square where the card meets the frame. React Flow UI's Labeled Group Node, as a preset."),
 ]
 
 # The sixteen items that publish the design trunk's own components (CLAUDE.md,
@@ -156,6 +167,13 @@ TRUNK_ITEMS = [
     ("trace-editor", "components/traceEditor.tsx"),
     ("trace-tidy", "components/trace.tidy.ts"),
     ("wire-layer", "components/wireLayer.tsx"),
+]
+
+# Names this script used to build and no longer does. Removed from
+# registry.json on the next run (see `main`). Keep a name here only while an
+# old registry.json could still carry it.
+RETIRED_ITEMS = [
+    "region",  # renamed `block-region` with the component, 2026-09-22
 ]
 
 LEGACY_ITEMS = [
@@ -375,7 +393,28 @@ def main() -> None:
         if added:
             print(f"  repaired legacy item {name}: +{added} missing files")
 
+    # WHY retirement is explicit: this script MERGES into registry.json (it
+    # keeps hand-authored items it does not build), so renaming an item in
+    # ITEMS used to leave the old entry behind, pointing at files that no
+    # longer exist. `--check` still said "up to date" and only
+    # `npx shadcn build` failed (2026-09-22, `region` -> `block-region`).
+    for name in RETIRED_ITEMS:
+        if name in existing:
+            del existing[name]
+            order.remove(name)
+            print(f"  retired item {name}")
+
     reg["items"] = [existing[n] for n in order]
+
+    # Every file every item ships must exist. This is the same failure as the
+    # stale entry above, caught on ANY item, generated or hand-authored,
+    # before shadcn does.
+    missing = [(it["name"], f["path"]) for it in reg["items"] for f in it["files"] if not (REPO / f["path"]).is_file()]
+    if missing:
+        for name, path in missing:
+            print(f"  MISSING  {name}: {path}")
+        raise SystemExit("registry items list files that do not exist — rename or retire them")
+
     out = json.dumps(reg, indent=2) + "\n"
 
     if check:

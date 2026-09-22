@@ -1131,7 +1131,7 @@ class FrameSidecar:
 # A modal has no folder to sit in, so the same four inputs travel over one
 # route instead. The shapes are the written page's own variables, unrenamed —
 # `__FRAMES__`, `__ROWS__`, `__DETAILS__` and the packet — so the React viewer
-# (apps/storybook-basics/src/components/recordingViewer.tsx) is reproducing a
+# (apps/storybook-basics/src/editor/recordingViewer.tsx) is reproducing a
 # design rather than inventing one.
 
 VIEWER_MAX_FRAMES = 120

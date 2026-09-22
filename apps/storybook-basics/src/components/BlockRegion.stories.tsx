@@ -1,5 +1,5 @@
 /**
- * Components/Blocks/Region — the region KIT, on its own, before any loop or
+ * Components/Blocks/BlockRegion — the region KIT, on its own, before any loop or
  * branch preset exists (docs/CONTROL-FLOW-PLAN.md lane A).
  *
  * What these stories are actually claiming, in Zach's own two sentences:
@@ -27,7 +27,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { regionLayout } from "./region.layout";
+import { regionLayout } from "./blockRegion.layout";
 import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
@@ -40,10 +40,10 @@ import {
   expectMemberInside,
   expectRegionExpanded,
   expectRegionOpaque,
-} from "./region.acceptance";
+} from "./blockRegion.acceptance";
 
 const meta = {
-  title: "Components/Blocks/Region",
+  title: "Components/Blocks/BlockRegion",
   tags: ["object:region", "host:dom", "host:react-flow", "lane:control-flow"],
 } satisfies Meta;
 
@@ -83,7 +83,7 @@ const EMPTY_SCENE: HostScene = {
  *  Nothing else in the record differs, which is the whole point of the
  *  toggle lane E builds on top of this. */
 const EMPTY_OPAQUE_SCENE: HostScene = {
-  nodes: [{ ...EMPTY_SCENE.nodes[0], data: { ...EMPTY_SCENE.nodes[0].data, region: { kind: "group", view: "opaque" } } }],
+  nodes: [{ ...EMPTY_SCENE.nodes[0], data: { ...EMPTY_SCENE.nodes[0].data, region: { kind: "group", view: "opaque", presentation: "expanded" } } }],
   edges: [],
 };
 

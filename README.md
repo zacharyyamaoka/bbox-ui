@@ -256,12 +256,19 @@ return completionMenu({
 
 Try every option by hand in Storybook: **Components → AutocompleteMenu**.
 
-### Region
+### BlockRegion
 
-A control-flow frame with a **real Block integral to its top-left corner**.
-The frame carries scope and owns no value ports of its own; the corner card
-carries the interface, so a loop's `Iterable`/`Iter` and a branch's
-conditions are ordinary ports on an ordinary block.
+A frame with a **real Block integral to its top-left corner** — a composite of
+a Block and a region. The frame carries scope and owns no value ports of its
+own; the corner card carries the interface, so a loop's `Iterable`/`Iter` and a
+branch's conditions are ordinary ports on an ordinary block.
+
+- **Corner**: pass `title` and BlockRegion draws the corner Block itself;
+  pass `corner` for a card with ports. Either way the card is a `Block` with
+  `shape="region-corner"`: rounded where it shares the frame's corner and at
+  its free bottom-right, square where its edges run on as the frame's.
+- **Labeled Group** is the preset with only a title — React Flow UI's Labeled
+  Group Node: `<LabeledGroup label="Sensors" members={…} />`.
 
 - **View**: `expanded` (the frame, its free body and its arm rows) ·
   `opaque` (the corner card alone, widened, with a footer stating what it
@@ -269,7 +276,7 @@ conditions are ordinary ports on an ordinary block.
 - **Arms**: full-width rows stacked under the corner block, each with its
   own fold chevron. A folded arm keeps its header and drops its body; a
   non-active arm fades to `REGION_ARM_FADE_OPACITY`.
-- **Geometry** is a pure twin — `regionLayout()` in `region.layout.ts`
+- **Geometry** is a pure twin — `regionLayout()` in `blockRegion.layout.ts`
   returns the corner, the body and every arm row, so a host that needs arm
   geometry without rendering (a drop target, an SVG export) reads the same
   numbers the paint used.
@@ -278,10 +285,10 @@ conditions are ordinary ports on an ordinary block.
   presets* over this one component, not components of their own.
 
 ```tsx
-<Region
+<BlockRegion
   id="loop"
   kind="loop"
-  corner={<BlockPort id="loop" view="port" edges={walls}><Block header="For Loop" /></BlockPort>}
+  corner={<BlockPort id="loop" view="port" edges={walls}><Block header="For Loop" shape="region-corner" /></BlockPort>}
   width={520}
   members={bodyMembers}
   arms={[{ id: "if", title: "if fast:", open: true, members: armMembers }]}
@@ -289,13 +296,14 @@ conditions are ordinary ports on an ordinary block.
 ```
 
 ```bash
-npx shadcn@latest add zacharyyamaoka/bbox-ui/region
+npx shadcn@latest add zacharyyamaoka/bbox-ui/block-region
+npx shadcn@latest add zacharyyamaoka/bbox-ui/labeled-group
 ```
 
 The loop and branch presets are deliberately **not** installable items —
 they are scene-node factories over a host, not components. See
 `docs/CONTROL-FLOW-PLAN.md` §11 item 6. See the whole language on one board
-in Storybook: **Control Flow → Gallery**.
+in Storybook: **Components → Blocks → BlockRegion → Gallery**.
 
 ## One core, two hosts — the adapter diff
 

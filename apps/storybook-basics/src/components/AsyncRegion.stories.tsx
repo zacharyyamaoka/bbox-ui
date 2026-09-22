@@ -15,7 +15,7 @@ import { type SceneEdge, wiredPorts } from "../scene/scene";
 import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
 
 /**
- * Components/Blocks/Region/Async — phase B2 of docs/BLOCK-PORT-EDGES-PLAN.md §7: the
+ * Components/Blocks/BlockRegion/Async — phase B2 of docs/BLOCK-PORT-EDGES-PLAN.md §7: the
  * async-region communication gallery, ported as a SPEC, never as layout
  * code. Every placement below is a `PortEdge` configuration
  * (`groups`+`groupMode:"grouped"` per family, on the wall facing the
@@ -462,7 +462,7 @@ function CommunicationPatternsStory() {
 }
 
 const meta = {
-  title: "Components/Blocks/Region/Async",
+  title: "Components/Blocks/BlockRegion/Async",
   tags: ["object:region", "lane:baseline"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },

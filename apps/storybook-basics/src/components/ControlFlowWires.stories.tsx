@@ -7,10 +7,10 @@ import {
   expectWireAvoids,
   expectWireBadge,
   expectWirePainted,
-} from "./region.acceptance";
+} from "./blockRegion.acceptance";
 
 /**
- * Components/Blocks/Region/Wires — lane D of docs/CONTROL-FLOW-PLAN.md, on plain blocks.
+ * Components/Blocks/BlockRegion/Wires — lane D of docs/CONTROL-FLOW-PLAN.md, on plain blocks.
  *
  * Zach's rule, verbatim: "data cables that aren't flowing through the branch
  * should actively avoid the branch — bypass by going above or below it." The
@@ -102,7 +102,7 @@ function expectDetour(root: ParentNode, wireId: string, obstacleSelector: string
 }
 
 const meta = {
-  title: "Components/Blocks/Region/Wires",
+  title: "Components/Blocks/BlockRegion/Wires",
   tags: ["object:region", "host:dom", "lane:control-flow"],
 } satisfies Meta;
 

@@ -12,7 +12,6 @@
 // viewport.
 
 import { useRef, type ReactNode } from "react";
-import { CircleStop, RotateCw } from "lucide-react";
 
 import { Badge } from "../components/badge";
 import { Bar } from "../components/bar";
@@ -20,14 +19,14 @@ import { Block } from "../components/block";
 import { BlockPort, type BlockEdgeSpec } from "../components/blockPort";
 import type { BlockMember } from "../components/blockMembers";
 import { CodeEditor } from "../components/codeEditor";
-import { FoldingChevron } from "../components/foldingChevron";
+import { ControlMark } from "../components/controlMark";
 import { Glyph } from "../components/glyph";
 import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
-import { Region, REGION_CORNER_BLOCK_STYLE, type RegionArm } from "../components/region";
-import { REGION_CARD_WIDTH_PX, REGION_CORNER_WIDTH_PX } from "../components/region.layout";
+import { BlockRegion, type RegionArm, type RegionCornerCard } from "../components/blockRegion";
+import { REGION_CORNER_WIDTH_PX } from "../components/blockRegion.layout";
 import { portViewSlotCount, railBandHeightForSlots, resolveBlockHeight } from "../scene/fitToContent";
 import { ValueCapsule } from "../components/block.value";
 import { armsOf, bodyChildrenOf, describeHidden, hiddenSummary } from "../scene/controlFlow";
@@ -39,7 +38,7 @@ import { withWiredState } from "../scene/sceneWires";
 import { useAutoFitHeight } from "./blockAutoFit";
 import { type HostNodeData, type HostScene } from "./hostScene";
 import { useFreeMemberDrag, type UseFreeMemberDragResult } from "./memberDrag";
-import { regionViewOf, toggleRegionView } from "./regionScene";
+import { regionFaceOf, toggleRegionView } from "./regionScene";
 
 /**
  * The story-lane decoration seam (2026-09-18, "final spec" lane, D7's
@@ -334,20 +333,6 @@ function withPromotedPorts(
   return merged;
 }
 
-/** A control-exit mark: DP - Break & Continue, B5 — "a mark beside the
- *  call, never a cable". Drawn as a `Badge`, and deliberately given NO port
- *  and NO edge: `expectControlMark` asserts no wire may originate at one,
- *  which only stays true because nothing here ever mints a handle for it. */
-function ControlMark({ mark }: { mark: NonNullable<HostNodeData["marks"]>[number] }) {
-  return (
-    <Badge data-slot="control-mark" data-mark={mark} size="sm" variant="outline">
-      {mark === "break" && <CircleStop aria-hidden />}
-      {mark === "continue" && <RotateCw aria-hidden />}
-      {mark}
-    </Badge>
-  );
-}
-
 /**
  * A node's header.
  *
@@ -458,12 +443,12 @@ function BlockNodeView({ scene, node, wired, producers, onSceneChange, decorate,
 /* ------------------------------------------------------------------ */
 
 /**
- * One `type: "region"` scene node → the `Region` component.
+ * One `type: "region"` scene node → the `BlockRegion` component.
  *
  * WHY there is no second node and no `data-block-id` on the frame (plan
  * §2.A): a region IS one node whose ports are its CORNER BLOCK's ports.
  * This function builds exactly one `BlockPort id={node.id}` — the same
- * builder a plain block gets (`edgeSpecsOf`) — and hands it to `Region` as
+ * builder a plain block gets (`edgeSpecsOf`) — and hands it to `BlockRegion` as
  * its `corner`. "Everything is a block" is therefore not a slogan here: a
  * loop's `Iterable` resolves through the identical `[data-block-id]` ->
  * `[data-port-id]` walk as any other port, so `WireLayer`, React Flow's
@@ -477,7 +462,6 @@ function BlockNodeView({ scene, node, wired, producers, onSceneChange, decorate,
 function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate, regionViews }: SceneNodeViewProps) {
   const decoration = decorate?.(node);
   const region = node.data.region ?? { kind: "group" as const };
-  const view = regionViewOf(node);
   // Present only for an OUTERMOST opaque region — `projectOpaqueRegions`
   // gives a region nested inside another opaque one no card of its own,
   // because it is not on screen (regionView.ts's outermost-wins rule).
@@ -504,7 +488,26 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
       />,
     );
 
-  const opaque = view === "opaque";
+  // WHY the scene's two fields map onto BlockRegion's three views this way
+  // (Zach, 2026-09-22: "regions do not have a simple view. they just have
+  // port, expanded and expanded opaque view"): `presentation` is the P/E
+  // selector and wins outright — Port is the region collapsed to a block,
+  // what the old opaque card used to be. Inside Expanded, `view` is the
+  // Blackbox toggle: `"opaque"` draws the SAME frame at the SAME size with
+  // the members hidden (`opaqueFace="frame"`), never a smaller card, because
+  // "blackbox makes opaque without folding". Both hide the inside, so both
+  // take the projection's promoted ports (`isOpaqueRegion`).
+  const face = regionFaceOf(node);
+  const hidesInside = face !== "expanded";
+
+  // The region's walls: its OWN interface, plus — while its inside is hidden
+  // — one seat per promoted port on the side `promoteBoundary` decided. "The
+  // opaque card is the same block with more ports" (plan §5), literally: the
+  // same `edgeSpecsOf` builder, the same rails, the same dot DOM, one extra
+  // item per hidden endpoint.
+  const ownEdges = edgeSpecsOf(scene, node, wired, producers, onSceneChange, decoration);
+  const cardEdges = withPromotedPorts(ownEdges, node.id, hidesInside ? projected?.ports : undefined, wired, producers);
+
   // WHY the corner card is given a BODY sized by the rail band, instead of
   // being left to hug its header: `BlockPort` places a port-view rail
   // against the Block's BODY band, and that band is measured as
@@ -517,73 +520,61 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
   // REAL `railBoxFor`), so this is the stock number rather than a guess —
   // and an empty `slots` leaves `body` undefined, keeping a portless
   // region's card byte-identical to a plain hugging Block.
-  // The card's walls: the region's OWN interface, plus — while opaque — one
-  // seat per promoted port on the side `promoteBoundary` decided. "The
-  // opaque card is the same block with more ports" (plan §5), literally:
-  // the same `edgeSpecsOf` builder, the same rails, the same dot DOM, one
-  // extra item per hidden endpoint.
-  const cardEdges = withPromotedPorts(
-    edgeSpecsOf(scene, node, wired, producers, onSceneChange, decoration),
-    node.id,
-    opaque ? projected?.ports : undefined,
-    wired,
-    producers,
-  );
   const cornerSlots = portViewSlotCount({
-    leftCount: cardEdges.left?.items.length ?? 0,
-    rightCount: cardEdges.right?.items.length ?? 0,
+    leftCount: ownEdges.left?.items.length ?? 0,
+    rightCount: ownEdges.right?.items.length ?? 0,
     portLayout: "inline",
   });
-  const corner = (
-    <BlockPort id={node.id} view="port" edges={cardEdges}>
-      <Block
-        header={
-          // WHY the chevron rides the corner card's own header in BOTH
-          // views, in the SAME slot: the donor does exactly that
-          // (pyblocks `viewer/nodes/RegionInterface.tsx:80` puts the fold
-          // control in one slot expanded and collapsed), and it is what
-          // makes the toggle discoverable from the card you are looking
-          // at — an opaque card whose only affordance lived on the frame
-          // could never be re-expanded, because the frame is what the
-          // opaque view removes.
-          <Bar
-            size="md"
-            left={
-              <FoldingChevron
-                open={!opaque}
-                onClick={() => onSceneChange?.(toggleRegionView(scene, node.id))}
-                aria-label={opaque ? "Expand region" : "Collapse region"}
-                // POINTER_OWNED_CLASS: a canvas host must not start a node
-                // drag on this press. React Flow's `nodeDragThreshold` would
-                // otherwise swallow the click as the first 4px of a drag on
-                // the header, which IS the region's drag handle
-                // (`DRAG_HANDLE_FOR_TYPE`) — the toggle would work in the
-                // DOM host and silently do nothing on a canvas.
-                className={POINTER_OWNED_CLASS}
-              />
-            }
-            center={node.data.name}
-            right={headerChipsOf(node)}
-          />
-        }
-        width={opaque ? REGION_CARD_WIDTH_PX : REGION_CORNER_WIDTH_PX}
-        body={cornerSlots > 0 ? <div data-slot="region-corner-band" style={{ height: railBandHeightForSlots(cornerSlots) }} /> : undefined}
-        // P5's "a card whose footer states what it hides", measured off the
-        // scene by `hiddenSummary` — never a narrated sentence. The
-        // projection's own count is preferred (it was computed against the
-        // same scene the painted edges came from); `hiddenSummary` is the
-        // fallback for a bench that renders an opaque region without
-        // running the projection at all.
-        footer={opaque ? <span data-slot="region-hidden">{describeHidden(projected?.hidden ?? hiddenSummary(scene, node.id))}</span> : undefined}
-        // Expanded only: the corner's non-shared corners go square so the
-        // card reads as PART of the frame (see REGION_CORNER_BLOCK_STYLE's
-        // own WHY on the mechanism). An opaque card is a free-standing
-        // card again and keeps its own radius.
-        style={opaque ? undefined : REGION_CORNER_BLOCK_STYLE}
-        diagnostics={decoration?.diagnostics}
-      />
-    </BlockPort>
-  );
+  // WHY no chevron on this header any more (Zach, 2026-09-22): "Please do
+  // not put chevron drop downs on the regions." and "the blackbox toggle
+  // goes in the right corner. your chevron was in the left next to the
+  // title, they are completely different operations as well... chevron
+  // folds, blackbox makes opaque without folding." The region's view now
+  // changes through BlockRegion's Blackbox toggle (top-right of the frame)
+  // and the host's P/E selector; the header is the plain block header every
+  // node gets. The arms keep their own fold chevrons — those fold one arm,
+  // not the region.
+  //
+  // WHY the corner goes in as DATA (`cornerCard`) and not as a rendered
+  // `corner` node (Codex re-judge, 2026-09-22): BlockRegion renders a data
+  // card itself, so it can also mount a hidden, id-free copy of it to size
+  // Expanded Opaque when the region is loaded straight into it — it never
+  // clones caller-rendered content, which could carry a portal. BlockRegion
+  // draws it as the same `BlockPort id={node.id}` around a Block with
+  // `shape="region-corner"` (the corner's junctions with the frame go
+  // square so the card reads as PART of the frame, block.tsx's `BlockShape`
+  // WHY).
+  // The header as TEXT plus chips as DATA, not `headerOf(node)`'s node: the
+  // corner is measured by a hidden copy, which may only render primitive
+  // text (`RegionCornerProps`). BlockRegion draws the chips with the same
+  // Bar / Badge / ControlMark `headerOf` uses.
+  const cornerCard: RegionCornerCard = {
+    header: node.data.name ?? "",
+    chips: { badge: node.data.badge, marks: node.data.marks },
+    width: REGION_CORNER_WIDTH_PX,
+    edges: ownEdges,
+    ...(cornerSlots > 0 ? { bandHeight: railBandHeightForSlots(cornerSlots) } : null),
+    diagnostics: decoration?.diagnostics,
+  };
+
+  // The Port card and the Expanded Opaque face draw their own walls from
+  // BlockRegion's two port lists: the region's own LEFT ports are its
+  // control ports (a loop's `Iterable`), boxed above the split; its own
+  // RIGHT ports lead the right wall, then every promoted seat on its side.
+  // So each wall reads exactly as the old card's did — own interface first,
+  // promoted seats after — and a port never changes wall between views.
+  const ownLeftCount = ownEdges.left?.items.length ?? 0;
+  const controlPorts = cardEdges.left?.items.slice(0, ownLeftCount) ?? [];
+  const boundaryPorts = {
+    left: cardEdges.left?.items.slice(ownLeftCount) ?? [],
+    right: cardEdges.right?.items ?? [],
+  };
+  // P5's "a card whose footer states what it hides", measured off the scene
+  // by `hiddenSummary` — never a narrated sentence. The projection's own
+  // count is preferred (it was computed against the same scene the painted
+  // edges came from); `hiddenSummary` is the fallback for a bench that
+  // renders an opaque region without running the projection at all.
+  const hiddenFooter = <span data-slot="region-hidden">{describeHidden(projected?.hidden ?? hiddenSummary(scene, node.id))}</span>;
 
   const arms: RegionArm[] = armsOf(scene, node.id).map((arm) => ({
     id: arm.id,
@@ -603,11 +594,26 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
   }));
 
   return (
-    <Region
+    <BlockRegion
       id={node.id}
       kind={region.kind}
-      view={view}
-      corner={corner}
+      view={face}
+      opaqueFace="frame"
+      title={node.data.name ?? node.id}
+      controlPorts={controlPorts}
+      boundaryPorts={boundaryPorts}
+      hiddenFooter={hiddenFooter}
+      // The P/E selector leaves Port; the toggle only flips Expanded ⇄
+      // Expanded Opaque, so BlockRegion draws it in exactly those two.
+      onToggleView={onSceneChange ? () => onSceneChange(toggleRegionView(scene, node.id)) : undefined}
+      // POINTER_OWNED_CLASS: a canvas host must not start a node drag on
+      // this press. On tldraw the region's whole face is the drag surface,
+      // and on React Flow the Expanded Opaque face is (`OwnDragHandleMarker`)
+      // — without the marker the press becomes the first pixels of a region
+      // drag, and the toggle works in the DOM host and silently does nothing
+      // on a canvas.
+      toggleClassName={POINTER_OWNED_CLASS}
+      cornerCard={cornerCard}
       {...(node.data.w === undefined ? null : { width: node.data.w })}
       {...(node.data.h === undefined ? null : { height: node.data.h })}
       members={bodyChildrenOf(scene, node.id).map(memberViewOf)}

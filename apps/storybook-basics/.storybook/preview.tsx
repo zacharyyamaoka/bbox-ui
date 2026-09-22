@@ -153,7 +153,7 @@ const preview: Preview = {
             "Ports",
             ["Port", "LabeledPort", "PortEdge"],
             "Blocks",
-            ["Block", "BlockPort", "Region", ["Labeled Group", "Loop", "Branch", "*"], "*"],
+            ["Block", "BlockPort", "BlockRegion", ["Labeled Group", "Loop", "Branch", "*"], "*"],
             "Traces",
             ["Trace", "*"],
             "Text & Marks",

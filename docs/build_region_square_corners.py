@@ -119,20 +119,34 @@ def gate(stem: str) -> dict:
     }
 
 
+# WHY pinned to a commit and no longer read from the working tree: on
+# 2026-09-22 `region.tsx` became `blockRegion.tsx` and the radii moved onto
+# Block's own `shape="region-corner"` (block.tsx, `SHAPE_RADII`). This page is
+# the dated 2026-09-19 record and its prose names `REGION_CORNER_BLOCK_STYLE`,
+# so it quotes the object from the last commit that held it rather than
+# re-describing today's code under yesterday's words.
+CORNER_STYLE_REV = "73d7e07"
+CORNER_STYLE_PATH = "apps/storybook-basics/src/components/region.tsx"
+
+
 def corner_style_source() -> list[tuple[str, str]]:
-    """The four radii, quoted verbatim out of the live `region.tsx` — the page
-    cannot describe a rule the file no longer holds."""
-    src = SB / "src" / "components" / "region.tsx"
-    SOURCES.append(str(src))
+    """The four radii, quoted verbatim out of `region.tsx` at CORNER_STYLE_REV —
+    the page cannot describe a rule the file did not hold."""
+    SOURCES.append(f"{CORNER_STYLE_PATH} @ {CORNER_STYLE_REV}")
+    text = subprocess.run(["git", "show", f"{CORNER_STYLE_REV}:{CORNER_STYLE_PATH}"],
+                          cwd=REPO, capture_output=True, text=True, check=True).stdout
     body = re.search(
-        r"export const REGION_CORNER_BLOCK_STYLE: CSSProperties = \{(.*?)\n\};", src.read_text(), re.S
+        r"export const REGION_CORNER_BLOCK_STYLE: CSSProperties = \{(.*?)\n\};", text, re.S
     )
     if not body:
         raise SystemExit("REGION_CORNER_BLOCK_STYLE not found in region.tsx")
+    # Radius keys only: the object later gained `textAlign` (v10, 2026-09-20)
+    # and its WHY comment, which made this reader fail before the move did.
     rows = []
     for line in body.group(1).strip().splitlines():
         key, _, value = line.strip().rstrip(",").partition(": ")
-        rows.append((key, value))
+        if key.endswith("Radius"):
+            rows.append((key, value))
     if len(rows) != 4:
         raise SystemExit(f"expected four radii, read {len(rows)}")
     return rows

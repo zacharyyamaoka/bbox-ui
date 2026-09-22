@@ -14,7 +14,7 @@
 // parent's coordinate space when `parentId` is set" (scene.ts:60-72), so
 // the only way a child's authored position survives its sibling arm folding
 // is for the ARM to be the parent. An `arm` node's own `position` is
-// derived (arms stack under the corner block, `components/region.layout.ts`)
+// derived (arms stack under the corner block, `components/blockRegion.layout.ts`)
 // and a host never reads it. The donor reached the same shape from the
 // other direction: SystemSketch materialised one invisible frame shape per
 // arm (`src/branch/branchArmFrames.ts:56-61`, "an idempotent projection,

@@ -1,4 +1,4 @@
-// src/components/region.acceptance.ts — the STORY-LEVEL acceptance
+// src/components/blockRegion.acceptance.ts — the STORY-LEVEL acceptance
 // assertions for docs/CONTROL-FLOW-PLAN.md, committed before any builder
 // existed and OFF-LIMITS to builders. A lane's stories import these and
 // call them from `play`; the assertions define "done" for what Zach will

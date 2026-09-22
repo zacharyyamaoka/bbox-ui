@@ -129,7 +129,15 @@ function ownHeaderOf(root: HTMLElement, nodeId: string): HTMLElement | null {
   for (const header of Array.from(block.querySelectorAll<HTMLElement>('[data-slot="block-header"]'))) {
     if (header.closest("[data-block-id]") === block) return header;
   }
-  return null;
+  // A region's Expanded Opaque face has no header at all — it is the frame
+  // with its inside hidden. WHY the whole face is the handle then, rather
+  // than no handle: the face is a SOLID block (`dragPolicy.ts`'s
+  // `block:solid`, face `grab`) with no child canvas left to protect, and
+  // the old opaque card it replaces dragged by its header. With no fallback
+  // an opaque region could not be moved on React Flow at all. Its Blackbox
+  // toggle is carved back out by `nodrag`.
+  const face = root.querySelector<HTMLElement>(`[data-slot="region"][data-region-id="${nodeId}"] > [data-slot="region-opaque-face"]`);
+  return face;
 }
 
 /**
