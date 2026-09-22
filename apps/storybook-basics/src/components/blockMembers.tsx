@@ -48,9 +48,12 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { cn } from "../lib/utils";
+import { captureEditingFocus, isSingleLineTextEditor, reorderDeltaForKey, reorderHintText, type ReorderChord } from "./keyboardReorder";
+import "./keyboardReorder.css";
 
 /* ------------------------------------------------------------------ */
 /* Vocabulary — the donor's enums, restated as string unions.           */
@@ -113,6 +116,32 @@ export interface BlockMembersProps {
    * kanban-style card surface" wrapper did wrong.
    */
   showCards: boolean;
+  /**
+   * The IDE move-line chord, applied to a STACKED MEMBER
+   * (`keyboardReorder.ts`): while a single-line text editor inside a member
+   * has focus — its title, in practice — ↑/↓ under this modifier moves that
+   * member one slot within this stack, and the editor stays open, focused,
+   * caret in place. Needs `layout: "stack"` and `onMembersChange` (the same
+   * gate drag-to-reorder has); omit and no key is claimed.
+   *
+   * Zach, 2026-09-21: "it should be able to reorder any members that are
+   * organized in a stack ... If you are editing their title and you do the
+   * ide hot keys then it should change its order in that stack."
+   */
+  reorderChord?: ReorderChord;
+}
+
+/**
+ * Move `activeId` to where `overId` sits — `arrayMove` over the FULL member
+ * list, so a hidden member (visible: false) keeps its membership through a
+ * reorder of its visible siblings. The ONE reorder a drop and the keyboard
+ * chord both run, so the two can never disagree about the resulting list.
+ */
+export function moveMember(members: BlockMember[], activeId: string, overId: string): BlockMember[] {
+  const from = members.findIndex((member) => member.id === activeId);
+  const to = members.findIndex((member) => member.id === overId);
+  if (from === -1 || to === -1 || from === to) return members;
+  return arrayMove(members, from, to);
 }
 
 /* ------------------------------------------------------------------ */
@@ -267,7 +296,31 @@ function neutralizeScale(transform: Parameters<typeof CSS.Transform.toString>[0]
   return { ...transform, scaleX: 1, scaleY: 1 };
 }
 
-function SortableMemberSlot(props: MemberSlotProps) {
+/**
+ * The chord hint's spot inside a member slot: the right end, vertically
+ * centred — clear of a title, which starts at the left. Inside the slot
+ * rather than beside it because the parent Block clips its own box.
+ */
+const MEMBER_REORDER_HINT_STYLE: CSSProperties = {
+  position: "absolute",
+  right: 8,
+  top: "50%",
+  transform: "translateY(-50%)",
+  fontSize: 10,
+  lineHeight: 1,
+  whiteSpace: "nowrap",
+  color: "var(--muted-foreground)",
+  pointerEvents: "none",
+};
+
+function SortableMemberSlot(
+  props: MemberSlotProps & {
+    /** `BlockMembersProps.reorderChord`'s key handler, bound to this stack. */
+    onReorderKey?(memberId: string, event: KeyboardEvent<HTMLDivElement>): void;
+    reorderHint?: string;
+  },
+) {
+  const { onReorderKey, reorderHint } = props;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.member.id });
   const style: CSSProperties = {
     ...slotStyle(props),
@@ -286,8 +339,16 @@ function SortableMemberSlot(props: MemberSlotProps) {
       style={style}
       {...attributes}
       {...listeners}
+      onKeyDown={onReorderKey ? (event) => onReorderKey(props.member.id, event) : undefined}
     >
       {memberSlotChildren(props)}
+      {reorderHint && (
+        // Shown only while this member's own title editor has focus —
+        // keyboardReorder.css, which also keeps a nested stack's out.
+        <span data-slot="block-member-reorder-hint" aria-hidden style={MEMBER_REORDER_HINT_STYLE}>
+          {reorderHint}
+        </span>
+      )}
     </div>
   );
 }
@@ -296,13 +357,51 @@ function SortableMemberSlot(props: MemberSlotProps) {
 /* The region                                                          */
 /* ------------------------------------------------------------------ */
 
-export function BlockMembers({ layout, members, onMembersChange, gap, gutter, insetBackground, showMembers, showCards }: BlockMembersProps) {
+export function BlockMembers({ layout, members, onMembersChange, gap, gutter, insetBackground, showMembers, showCards, reorderChord }: BlockMembersProps) {
+  // `reorderChord`'s focus hand-back, run in the layout effect of the render
+  // that carries the new order — see `captureEditingFocus` for why moving a
+  // member needs one, and portEdge.tsx's identical `pendingFocusRestore`.
+  // Hooks above the early return below, which is a prop, not a hook order.
+  const pendingFocusRestore = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const restore = pendingFocusRestore.current;
+    pendingFocusRestore.current = null;
+    restore?.();
+  });
+
   // Both toggles off: nothing member-related renders at all — the Block
   // itself still stands (its header/body/footer are not this region's).
   if (!showMembers && !showCards) return null;
 
   const rendered = members.filter((member) => member.visible !== false);
   const sortable = layout === "stack" && onMembersChange !== undefined;
+
+  // WHY a keydown on the member SLOT rather than a keymap inside one
+  // editor: a member's content is arbitrary (a Block whose title is an
+  // `EditableText`, a `CodeEditor`, …), so the stack cannot reach into it —
+  // it listens for the chord bubbling out of whichever single-line editor
+  // sits inside. `defaultPrevented` is the editor's own claim (a multi-line
+  // CodeEditor's Alt+↑/↓ move-line) and wins; the `closest` check makes a
+  // nested stack's member answer only to its own stack.
+  const handleReorderKey =
+    sortable && reorderChord && showMembers
+      ? (memberId: string, event: KeyboardEvent<HTMLDivElement>) => {
+          if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+          if (!(event.target instanceof Element) || !isSingleLineTextEditor(event.target)) return;
+          if (event.target.closest('[data-slot="block-member"]') !== event.currentTarget) return;
+          const delta = reorderDeltaForKey(event, "column", reorderChord);
+          if (delta === null) return;
+          // Claimed even at an end — the chord means "move this member".
+          event.preventDefault();
+          event.stopPropagation();
+          const index = rendered.findIndex((member) => member.id === memberId);
+          const neighbour = rendered[index + delta];
+          if (index === -1 || !neighbour) return;
+          pendingFocusRestore.current = captureEditingFocus(event.target);
+          onMembersChange(moveMember(members, memberId, neighbour.id));
+        }
+      : undefined;
+  const reorderHint = handleReorderKey && reorderChord ? reorderHintText("column", reorderChord) : undefined;
 
   const regionStyle: CSSProperties =
     layout === "free"
@@ -324,7 +423,11 @@ export function BlockMembers({ layout, members, onMembersChange, gap, gutter, in
     >
       {rendered.map((member) => {
         const slotProps: MemberSlotProps = { member, layout, gutter, showMembers, showCards };
-        return sortable ? <SortableMemberSlot key={member.id} {...slotProps} /> : <StaticMemberSlot key={member.id} {...slotProps} />;
+        return sortable ? (
+          <SortableMemberSlot key={member.id} {...slotProps} onReorderKey={handleReorderKey} reorderHint={reorderHint} />
+        ) : (
+          <StaticMemberSlot key={member.id} {...slotProps} />
+        );
       })}
     </div>
   );
@@ -351,13 +454,8 @@ function MemberDndBoundary({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over || over.id === active.id) return;
-    // Indexes resolved against the FULL member list, so a hidden member
-    // (visible: false) keeps its membership through a reorder of its
-    // visible siblings.
-    const from = members.findIndex((member) => member.id === active.id);
-    const to = members.findIndex((member) => member.id === over.id);
-    if (from === -1 || to === -1) return;
-    onMembersChange(arrayMove(members, from, to));
+    const next = moveMember(members, String(active.id), String(over.id));
+    if (next !== members) onMembersChange(next);
   }
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

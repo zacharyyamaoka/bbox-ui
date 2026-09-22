@@ -1,0 +1,35 @@
+/* src/components/keyboardReorder.css — when the move-this-item chord's hint
+ * (keyboardReorder.ts) shows: only while a SINGLE-line editor inside that
+ * item holds focus.
+ *
+ * WHY CSS `:has(:focus)` and not React state from focus/blur events: the
+ * editor closing is an UNMOUNT (Enter swaps it back to resting text), and
+ * Chrome fires no blur for a focused element removed from the DOM — so a
+ * state flag set on focus was measured staying lit after the editor was
+ * gone. `:focus` is recomputed by the browser itself and cannot go stale.
+ */
+
+[data-slot="port-edge-reorder-hint"],
+[data-slot="block-member-reorder-hint"] {
+  display: none;
+}
+
+[data-slot="port-edge-member"]:has([data-slot="code-editor"][data-multiline="false"] .cm-content:focus)
+  > [data-slot="port-edge-reorder-hint"] {
+  display: block;
+}
+
+/* The `:not(...)` keeps a member of a NESTED stack from lighting its outer
+ * member's hint too — only the innermost member being edited shows one,
+ * matching the keydown handler, which answers only to its own slot. */
+[data-slot="block-member"]:has(
+    :is(input[data-slot="editable-text-input"], [data-slot="code-editor"][data-multiline="false"] .cm-content):focus
+  ):not(
+    :has(
+      [data-slot="block-member"]
+        :is(input[data-slot="editable-text-input"], [data-slot="code-editor"][data-multiline="false"] .cm-content):focus
+    )
+  )
+  > [data-slot="block-member-reorder-hint"] {
+  display: block;
+}

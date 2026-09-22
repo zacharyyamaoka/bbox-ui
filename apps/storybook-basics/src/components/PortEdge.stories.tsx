@@ -1,13 +1,15 @@
 import { Profiler, useEffect, useLayoutEffect, useRef, useState, type ProfilerOnRenderCallback } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, waitFor } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import { useDndContext, type DragEndEvent, type DragOverEvent } from "@dnd-kit/core";
 import { python } from "@codemirror/lang-python";
+import { EditorView } from "@codemirror/view";
 
 import { Block } from "./block";
 import { PORT_EDGE_MORE_GAP_PX, PortEdge, PortEdgeDndProvider, type PortEdgeItem } from "./portEdge";
 import { CONTAINER_PADDING, SPACING_SCHEMES, DEFAULT_ALIGN_GAP, defaultDistributionForEdges, type Distribution, type Size } from "./portEdge.layout";
 import type { BlockSide, PortTextLayout } from "./port.layout";
+import type { ReorderChord } from "./keyboardReorder";
 
 function required<T extends Element>(root: ParentNode, selector: string, what: string): T {
   const found = root.querySelector<T>(selector);
@@ -2281,5 +2283,283 @@ export const EditModeDefaultIsMulti: Story = {
       expect(rowBench.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(1);
     });
     await expect(rowBench.querySelectorAll('[data-slot="port-edge-lane"]')).toHaveLength(0);
+  },
+};
+
+
+/* ------------------------------------------------------------------ */
+/* KeyboardReorder — the IDE move-line chord, applied to PORTS. Zach,    */
+/* 2026-09-21: "Can you please show a prototype of how I could reorder   */
+/* the ports in single line mode by using the ctrl up or down (for a     */
+/* column) or (ctrl left right) for a row. Please show how that can be   */
+/* used to reorder ports."                                              */
+/*                                                                      */
+/* Click a label to open its single-line editor, then press the chord:   */
+/* the port moves one slot and you keep typing. The chord itself is a    */
+/* taste call, so the story carries a live switch — Ctrl+arrows (his     */
+/* literal spec, the default) vs Alt+arrows (VS Code / CodeMirror's own  */
+/* move-line, which leaves Ctrl+arrows as word-jump everywhere) — and    */
+/* remembers the pick. Tagged per story (`lane:ide-hotkey-reorder`)      */
+/* rather than retagging this whole baseline file.                       */
+/* ------------------------------------------------------------------ */
+
+const REORDER_CHORD_STORAGE_KEY = "bbox-ui:keyboard-reorder-chord";
+
+function useStoredReorderChord(): [ReorderChord, (next: ReorderChord) => void] {
+  const [chord, setChord] = useState<ReorderChord>(() => {
+    try {
+      return window.localStorage.getItem(REORDER_CHORD_STORAGE_KEY) === "alt" ? "alt" : "ctrl";
+    } catch {
+      return "ctrl";
+    }
+  });
+  const choose = (next: ReorderChord) => {
+    setChord(next);
+    try {
+      window.localStorage.setItem(REORDER_CHORD_STORAGE_KEY, next);
+    } catch {
+      // A blocked store only costs the memory, never the switch.
+    }
+  };
+  return [chord, choose];
+}
+
+const KEYBOARD_COLUMN_ITEMS: PortEdgeItem[] = [
+  { id: "gain", label: "gain", state: "wired" },
+  { id: "pose", label: "pose", state: "empty" },
+  { id: "reset", label: "reset", state: "empty" },
+  { id: "enable", label: "enable", state: "received" },
+  { id: "target", label: "target", state: "empty" },
+];
+
+const KEYBOARD_ROW_ITEMS: PortEdgeItem[] = [
+  { id: "clock", label: "clock", state: "wired" },
+  { id: "data", label: "data", state: "empty" },
+  { id: "valid", label: "valid", state: "empty" },
+  { id: "ready", label: "ready", state: "empty" },
+  { id: "error", label: "error", state: "empty" },
+];
+
+function KeyboardReorderBench({ benchId, edge, initial, chord }: { benchId: string; edge: BlockSide; initial: PortEdgeItem[]; chord: ReorderChord }) {
+  const [items, setItems] = useState(initial);
+  const row = edge === "top" || edge === "bottom";
+  return (
+    <div data-testid={benchId} style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: row ? 0 : 90, paddingTop: row ? 20 : 0 }}>
+      <PortEdge
+        edge={edge}
+        items={items}
+        onItemsChange={setItems}
+        editing
+        editMode="single"
+        reorderChord={chord}
+        size={row ? { width: 440, height: 110 } : { width: 200, height: 260 }}
+      />
+      <code data-testid={`${benchId}-order`} style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+        {items.map((item) => item.label).join(" · ")}
+      </code>
+    </div>
+  );
+}
+
+function KeyboardReorderDemo() {
+  const [chord, setChord] = useStoredReorderChord();
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start", padding: 16 }}>
+      <div data-testid="reorder-chord" style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 12 }}>
+        Reorder chord
+        <Segmented
+          options={[
+            { value: "ctrl", label: "Ctrl + arrows" },
+            { value: "alt", label: "Alt + arrows" },
+          ]}
+          value={chord}
+          onChange={setChord}
+        />
+      </div>
+      <div style={{ display: "flex", gap: 48, alignItems: "flex-start" }}>
+        <KeyboardReorderBench benchId="column-edge" edge="left" initial={KEYBOARD_COLUMN_ITEMS} chord={chord} />
+        <KeyboardReorderBench benchId="row-edge" edge="top" initial={KEYBOARD_ROW_ITEMS} chord={chord} />
+      </div>
+      <p style={{ fontSize: 12, color: "var(--muted-foreground)", maxWidth: 560, margin: 0 }}>
+        Click a label, then {chord === "ctrl" ? "Ctrl" : "Alt"}+↑/↓ on the column or {chord === "ctrl" ? "Ctrl" : "Alt"}+←/→ on the row moves that port one slot — the editor stays open with your caret where it was. Only the axis-matched pair is taken: Ctrl+←/→ on the column is still word-jump.
+      </p>
+    </div>
+  );
+}
+
+/** The label a port card is showing right now — the open editor's text
+ *  while editing, the resting span's otherwise. */
+function portCardLabel(card: Element): string {
+  const editing = card.querySelector(".cm-content");
+  if (editing) return editing.textContent ?? "";
+  return card.querySelector('[data-slot="port-label-display"]')?.textContent ?? "";
+}
+
+/** Labels in SCREEN order — sorted by each card's measured centre on the
+ *  edge's own axis, never by DOM order, which is what React happens to
+ *  leave behind rather than what a reader sees. */
+function portLabelsOnScreen(bench: HTMLElement, axis: "row" | "column"): string[] {
+  return Array.from(bench.querySelectorAll('[data-slot="port-edge-card"]'))
+    .map((card) => {
+      const r = card.getBoundingClientRect();
+      return { label: portCardLabel(card), at: axis === "column" ? r.top + r.height / 2 : r.left + r.width / 2 };
+    })
+    .sort((a, b) => a.at - b.at)
+    .map((entry) => entry.label);
+}
+
+function openEditorView(bench: HTMLElement): { editor: HTMLElement; view: EditorView } {
+  const editors = bench.querySelectorAll<HTMLElement>('[data-slot="code-editor"]');
+  if (editors.length !== 1) throw new Error(`expected exactly one open label editor, found ${editors.length}`);
+  const view = EditorView.findFromDOM(required<HTMLElement>(editors[0], ".cm-editor", "the CodeMirror root"));
+  if (!view) throw new Error("expected a CodeMirror view on the open editor");
+  return { editor: editors[0], view };
+}
+
+/** The editor is still open, focused, on the port labelled `label`, with
+ *  the caret at `head` — the whole of acceptance item 2 in one check. */
+async function expectStillEditing(bench: HTMLElement, editor: HTMLElement, label: string, head: number) {
+  await expect(editor.isConnected).toBe(true);
+  const { editor: current, view } = openEditorView(bench);
+  await expect(current).toBe(editor);
+  await expect(editor.contains(document.activeElement)).toBe(true);
+  await expect(view.state.doc.toString()).toBe(label);
+  await expect(view.state.selection.main.head).toBe(head);
+}
+
+/** The chord hints actually painted — every port carries one, CSS shows
+ *  only the one whose editor has focus (keyboardReorder.css). */
+function visibleReorderHints(bench: HTMLElement): HTMLElement[] {
+  return Array.from(bench.querySelectorAll<HTMLElement>('[data-slot="port-edge-reorder-hint"]')).filter((hint) => getComputedStyle(hint).display !== "none");
+}
+
+const CTRL_UP = "{Control>}{ArrowUp}{/Control}";
+const CTRL_DOWN = "{Control>}{ArrowDown}{/Control}";
+const CTRL_LEFT = "{Control>}{ArrowLeft}{/Control}";
+const CTRL_RIGHT = "{Control>}{ArrowRight}{/Control}";
+const ALT_DOWN = "{Alt>}{ArrowDown}{/Alt}";
+const ALT_LEFT = "{Alt>}{ArrowLeft}{/Alt}";
+
+export const KeyboardReorder: Story = {
+  tags: ["lane:ide-hotkey-reorder"],
+  render: () => <KeyboardReorderDemo />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const column = required<HTMLElement>(canvasElement, '[data-testid="column-edge"]', "the column bench");
+    const row = required<HTMLElement>(canvasElement, '[data-testid="row-edge"]', "the row bench");
+    const order = (bench: HTMLElement) => required<HTMLElement>(canvasElement, `[data-testid="${bench.dataset.testid}-order"]`, "the order readout").textContent;
+
+    // The stored pick may be Alt from an earlier visit — start on the default.
+    await userEvent.click(await canvas.findByRole("button", { name: "Ctrl + arrows" }));
+
+    // ---- Column, Ctrl: open `pose`, type, then move it ----------------
+    await userEvent.click(await within(column).findByText("pose"));
+    const columnEditor = await waitFor(() => openEditorView(column).editor);
+    await userEvent.keyboard("{End}_v2");
+    await expectStillEditing(column, columnEditor, "pose_v2", 7);
+
+    // The hint shows while the editor is open, on the dot's outward side —
+    // entirely left of the text it must not cover.
+    const hints = visibleReorderHints(column);
+    await expect(hints).toHaveLength(1);
+    const hint = hints[0];
+    await expect(hint.closest('[data-slot="port-edge-member"]')).toBe(columnEditor.closest('[data-slot="port-edge-member"]'));
+    await expect(hint.textContent).toBe("Ctrl ↑↓ reorder");
+    await expect(hint.getBoundingClientRect().right).toBeLessThanOrEqual(columnEditor.getBoundingClientRect().left);
+
+    await userEvent.keyboard(CTRL_DOWN);
+    await waitFor(() => expect(portLabelsOnScreen(column, "column")).toEqual(["gain", "reset", "pose_v2", "enable", "target"]));
+    await expect(order(column)).toBe("gain · reset · pose_v2 · enable · target");
+    await expectStillEditing(column, columnEditor, "pose_v2", 7);
+
+    await userEvent.keyboard(CTRL_UP);
+    await userEvent.keyboard(CTRL_UP);
+    await waitFor(() => expect(portLabelsOnScreen(column, "column")).toEqual(["pose_v2", "gain", "reset", "enable", "target"]));
+    await expectStillEditing(column, columnEditor, "pose_v2", 7);
+
+    // The first slot + move-up is a no-op: no wrap, editor still open.
+    await userEvent.keyboard(CTRL_UP);
+    await new Promise((r) => setTimeout(r, 250));
+    await expect(portLabelsOnScreen(column, "column")).toEqual(["pose_v2", "gain", "reset", "enable", "target"]);
+    await expectStillEditing(column, columnEditor, "pose_v2", 7);
+
+    // The cross-axis pair is NOT taken on a column: Ctrl+← is still the
+    // editor's word-jump (caret to 0), and nothing moves.
+    await userEvent.keyboard(CTRL_LEFT);
+    await expect(openEditorView(column).view.state.selection.main.head).toBe(0);
+    await expect(order(column)).toBe("pose_v2 · gain · reset · enable · target");
+
+    // Still editable after all that: type more, commit, and it sticks.
+    await userEvent.keyboard("{End}x{Enter}");
+    await waitFor(() => expect(column.querySelectorAll('[data-slot="code-editor"]')).toHaveLength(0));
+    await expect(order(column)).toBe("pose_v2x · gain · reset · enable · target");
+    await expect(visibleReorderHints(column)).toHaveLength(0);
+
+    // The last slot + move-down is a no-op too.
+    await userEvent.click(await within(column).findByText("target"));
+    const lastEditor = await waitFor(() => openEditorView(column).editor);
+    await userEvent.keyboard("{End}");
+    await userEvent.keyboard(CTRL_DOWN);
+    await new Promise((r) => setTimeout(r, 250));
+    await expect(order(column)).toBe("pose_v2x · gain · reset · enable · target");
+    await expectStillEditing(column, lastEditor, "target", 6);
+    await userEvent.keyboard("{Enter}");
+
+    // ---- Row, Ctrl: ←/→ is the axis now -------------------------------
+    await userEvent.click(await within(row).findByText("clock"));
+    const rowEditor = await waitFor(() => openEditorView(row).editor);
+    await userEvent.keyboard("{End}");
+    await expect(visibleReorderHints(row).map((h) => h.textContent)).toEqual(["Ctrl ←→ reorder"]);
+    await userEvent.keyboard(CTRL_RIGHT);
+    await waitFor(() => expect(portLabelsOnScreen(row, "row")).toEqual(["data", "clock", "valid", "ready", "error"]));
+    await expectStillEditing(row, rowEditor, "clock", 5);
+
+    // Ctrl+↑/↓ falls through on a row — nothing moves, the editor stays.
+    await userEvent.keyboard(CTRL_UP);
+    await userEvent.keyboard(CTRL_DOWN);
+    await new Promise((r) => setTimeout(r, 250));
+    await expect(order(row)).toBe("data · clock · valid · ready · error");
+    await expect(openEditorView(row).editor).toBe(rowEditor);
+    await expect(rowEditor.contains(document.activeElement)).toBe(true);
+
+    await userEvent.keyboard("{End}");
+    await userEvent.keyboard(CTRL_LEFT);
+    await waitFor(() => expect(portLabelsOnScreen(row, "row")).toEqual(["clock", "data", "valid", "ready", "error"]));
+    await expectStillEditing(row, rowEditor, "clock", 5);
+    await userEvent.keyboard(CTRL_LEFT);
+    await new Promise((r) => setTimeout(r, 250));
+    await expect(order(row)).toBe("clock · data · valid · ready · error");
+    await expectStillEditing(row, rowEditor, "clock", 5);
+    await userEvent.keyboard("{Enter}");
+
+    // ---- The Alt variant, switched live --------------------------------
+    await userEvent.click(await canvas.findByRole("button", { name: "Alt + arrows" }));
+    await userEvent.click(await within(column).findByText("gain"));
+    const altEditor = await waitFor(() => openEditorView(column).editor);
+    await userEvent.keyboard("{End}");
+    await expect(visibleReorderHints(column).map((h) => h.textContent)).toEqual(["Alt ↑↓ reorder"]);
+    await userEvent.keyboard(ALT_DOWN);
+    await waitFor(() => expect(portLabelsOnScreen(column, "column")).toEqual(["pose_v2x", "reset", "gain", "enable", "target"]));
+    await expectStillEditing(column, altEditor, "gain", 4);
+    // Under Alt, Ctrl+↓ is no longer the chord.
+    await userEvent.keyboard(CTRL_DOWN);
+    await new Promise((r) => setTimeout(r, 250));
+    await expect(order(column)).toBe("pose_v2x · reset · gain · enable · target");
+    await userEvent.keyboard("{Enter}");
+
+    await userEvent.click(await within(row).findByText("valid"));
+    const altRowEditor = await waitFor(() => openEditorView(row).editor);
+    await userEvent.keyboard("{End}");
+    await userEvent.keyboard(ALT_LEFT);
+    await waitFor(() => expect(portLabelsOnScreen(row, "row")).toEqual(["clock", "valid", "data", "ready", "error"]));
+    await expectStillEditing(row, altRowEditor, "valid", 5);
+    // …and under Alt, Ctrl+← on a row is word-jump again.
+    await userEvent.keyboard(CTRL_LEFT);
+    await expect(openEditorView(row).view.state.selection.main.head).toBe(0);
+    await expect(order(row)).toBe("clock · valid · data · ready · error");
+    await userEvent.keyboard("{Enter}");
+
+    // Leave the stored pick on the default for the next visitor.
+    await userEvent.click(await canvas.findByRole("button", { name: "Ctrl + arrows" }));
   },
 };
