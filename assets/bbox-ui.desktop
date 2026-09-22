@@ -1,21 +1,41 @@
+# assets/bbox-ui.desktop — the dock icon Zach presses.
+#
+# Zach, 2026-09-21: "please connect the bbox whiteboard app to open when I
+# press bbox-ui". It used to open the DOCS SITE (scripts/launch_bboxui.py);
+# it now opens the whiteboard, and the site it used to open is one ☰ row
+# inside that app (apps/systemsketch/src/chrome/sites.ts) plus the right-click
+# actions below.
+#
+# WHY StartupWMClass says `systemsketch` and not `bbox-ui`: it must match the
+# WM_CLASS the window actually carries, which scripts/launch_systemsketch.py
+# gives Chrome as `--class=$APP_ID` (APP_ID defaults to "systemsketch", and it
+# is shared with the archived app ON PURPOSE so the in-app "Switch to old
+# SystemSketch" row keeps both under one dock icon). A class that matched this
+# file's name instead would leave the running window with no icon to group
+# under.
 [Desktop Entry]
 Type=Application
 Name=bbox-ui
-GenericName=Black box design kit
-Comment=Stable by default — local Preview (HMR) and the real deployed site one click away
-Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_bboxui.py --open
+GenericName=Black box whiteboard
+Comment=Blocks, ports and edges on a board — ☰ also opens bbox-ui.com and Storybook
+Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_systemsketch.py --open
+TryExec=/usr/bin/python3
 Icon=bbox-ui
 Terminal=false
-Categories=Development;
-Keywords=bbox-ui;Design;Components;Registry;
-StartupWMClass=bbox-ui
+Categories=Development;Graphics;
+Keywords=bbox-ui;Whiteboard;Design;Components;Registry;Blocks;Ports;Edges;
+StartupWMClass=systemsketch
 StartupNotify=true
-Actions=OpenPreview;OpenRemote;
+Actions=OpenSite;OpenSitePreview;UpdateFromMain;
 
-[Desktop Action OpenPreview]
-Name=Open Preview (local, HMR)
+[Desktop Action OpenSite]
+Name=Open bbox-ui.com (deployed)
+Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_bboxui.py --remote --open
+
+[Desktop Action OpenSitePreview]
+Name=Open the site's local Preview (HMR)
 Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_bboxui.py --preview --open
 
-[Desktop Action OpenRemote]
-Name=Open Remote (bbox-ui.com, deployed)
-Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_bboxui.py --remote --open
+[Desktop Action UpdateFromMain]
+Name=Update the whiteboard to latest main
+Exec=/usr/bin/python3 /home/bam/bbox-ui/scripts/launch_systemsketch.py --update --open

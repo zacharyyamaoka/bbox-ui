@@ -18,6 +18,15 @@ just have a button to switch to the old one". The dock icon runs this; the
 button is the ☰ row "Switch to old SystemSketch" (apps/systemsketch/src/chrome/
 legacyApp.ts) and the dock's right-click action of the same name.
 
+Zach, 2026-09-21: "connect the bbox whiteboard app to open when I press
+bbox-ui, and then somewhere in that whiteboard app in a drop down menu
+somewhere give the option to open the bbox-ui.com site and the storybook
+site". So assets/bbox-ui.desktop now runs THIS launcher, and --open also
+brings Storybook up on :5421 — the ☰ rows in apps/systemsketch/src/chrome/
+sites.ts are links, and a page cannot start a process. Same division of
+labour as the old-app row above: the menu navigates, the launcher is what
+makes sure there is something at the other end.
+
 WHY a pinned build and not `vite dev`: the archived app taught this the hard
 way — the thing in the dock is the build Zach trusts, and a dev server shows
 whatever half-edit a peer session has on disk at that second. Live work stays
@@ -84,6 +93,11 @@ CDP_PORT = int(os.environ.get("SYSTEMSKETCH_NEXT_CDP_PORT", "4325"))
 # Paths that decide what a build contains. A dirty file here means the build
 # would not be the commit it claims to be.
 BUILD_INPUTS = ["apps/systemsketch", "apps/storybook-basics/src", "pnpm-lock.yaml", "package.json"]
+
+# The Storybook the ☰ "Open Storybook" row points at. Its default port is
+# apps/storybook-basics/package.json's own (`storybook dev -p ${STORYBOOK_PORT:-5421}`).
+STORYBOOK_PORT = int(os.environ.get("STORYBOOK_PORT", "5421"))
+STORYBOOK_PACKAGE = "bbox-storybook-basics"
 
 
 class LaunchError(RuntimeError):
@@ -330,6 +344,51 @@ def open_window(url: str) -> None:
     )
 
 
+def storybook_responds(timeout: float = 0.6) -> bool:
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{STORYBOOK_PORT}/", timeout=timeout)
+        return True
+    except urllib.error.HTTPError:
+        return True
+    except (OSError, urllib.error.URLError):
+        return False
+
+
+def ensure_storybook() -> None:
+    """Start Storybook on :STORYBOOK_PORT if nothing is already answering there.
+
+    WHY a DEV server, when everything else this launcher owns is a pinned
+    build: Storybook here IS the live trunk by design — it is the surface the
+    lanes deliver into and the one Zach watches change — so pinning it would
+    show him the one thing it exists not to show.
+
+    WHY it leaves a server it did not start alone, rather than checking whose
+    it is: a peer session's Storybook on that port is serving the same trunk
+    from a sibling worktree, which is exactly as good an answer for a link,
+    and this tree shares its git index with those sessions (CLAUDE.md,
+    "Several agent sessions edit this tree at once"). Never contest the port.
+
+    WHY failure here is silent: this runs off the critical path, after the
+    board's own server is healthy. A missing pnpm must not cost him the
+    window he actually pressed the icon for — it costs him one menu row,
+    and the log below says why.
+    """
+    if storybook_responds():
+        return
+    pnpm = shutil.which("pnpm", path=tool_environment()["PATH"])
+    if pnpm is None:
+        return
+    environment = tool_environment()
+    environment["STORYBOOK_PORT"] = str(STORYBOOK_PORT)
+    STATE_HOME.mkdir(parents=True, exist_ok=True)
+    with (STATE_HOME / "storybook.log").open("ab") as output:
+        subprocess.Popen(
+            [pnpm, "--dir", str(REPO), "--filter", STORYBOOK_PACKAGE, "run", "storybook"],
+            cwd=REPO, env=environment, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
+            start_new_session=True, close_fds=True,
+        )
+
+
 def legacy(*arguments: str, wait: bool) -> int:
     if not LEGACY_LAUNCHER.exists():
         raise LaunchError(f"the archived SystemSketch is not installed at {LEGACY_LAUNCHER}")
@@ -414,6 +473,7 @@ def main() -> int:
             record, current = stable_record(), health()
             print(f"Stable build: {record['build'][:9]} — {record['subject']} (built {record['built']})" if record else "Stable build: none yet (run --update)")
             print(f"Server: healthy on :{PORT}, serving {current['build'][:9]}" if current else f"Server: stopped (:{PORT})")
+            print(f"Storybook: {'up' if storybook_responds() else 'not running'} (:{STORYBOOK_PORT})")
             return 0
         record = build_stable() if arguments.update or stable_record() is None else stable_record()
         ensure_server(record)
@@ -424,6 +484,9 @@ def main() -> int:
             # The ☰ "Switch to old SystemSketch" row needs the old Stable up;
             # its launcher reuses a healthy one or starts it. Off the critical path.
             legacy("--no-open", wait=False)
+            # Same deal for the ☰ "Open Storybook" row. Also off the critical
+            # path — Storybook takes ~20s to serve, the window opens now.
+            ensure_storybook()
             open_window(url)
         return 0
     except (OSError, LaunchError, subprocess.SubprocessError) as cause:

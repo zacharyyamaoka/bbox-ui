@@ -41,6 +41,7 @@ import { useDocumentSession, type DocumentSessionHelpers } from "../../files/ses
 import { useCompareView } from "../CompareView";
 import { SystemSketchSettings, useAppSettings } from "../ShareMenu";
 import { legacyAppActionsFor } from "../legacyApp";
+import { siteActionsFor } from "../sites";
 import { shortcutPlatform, useStockMenus } from "../FileMenu";
 
 /**
@@ -90,6 +91,21 @@ export function SystemSketchChromeBar() {
     return rows.length > 0 ? [{ id: "legacy", items: rows }] : [];
   }, []);
 
+  // The OTHER doors out — bbox-ui.com and Storybook (`../sites.ts`). Its own
+  // group, because leaving for a different artifact and stepping this window
+  // back a version are different kinds of move and the dropdown should rule
+  // between them.
+  //
+  // WHY these open a new window while the legacy row navigates this one: the
+  // archived app is the same artifact one version back, so Alt+← brings you
+  // home. The docs site and Storybook are different things, and navigating
+  // away would put a board with unsaved work behind a Back button. That
+  // asymmetry is `sites.ts`'s own reasoning, kept by using its default opener.
+  const siteGroups = useMemo<MenuGroupSpec[]>(() => {
+    const rows = siteActionsFor(window.location.hostname);
+    return rows.length > 0 ? [{ id: "sites", items: rows }] : [];
+  }, []);
+
   const menu = useMemo(
     () =>
       buildAppMenu({
@@ -105,9 +121,9 @@ export function SystemSketchChromeBar() {
         // Compare BEFORE the legacy group, which stays last by its own rule
         // below ("so it reads as a way OUT rather than as another file
         // command").
-        extra: [compare.group, ...legacyGroups],
+        extra: [compare.group, ...siteGroups, ...legacyGroups],
       }),
-    [compare.group, legacyGroups, session.file, stock],
+    [compare.group, siteGroups, legacyGroups, session.file, stock],
   );
 
   return (
