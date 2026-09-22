@@ -210,6 +210,15 @@ export function shapeIdForNode(nodeId: string): TLShapeId {
 export function contentOwnsPress(nodeType: string | undefined, nodeId: string, target: Element): boolean {
   if (target.closest(`.${POINTER_OWNED_CLASS}`)) return true;
   if (target.closest('[data-slot="block-port-rail"]')) return true;
+  // WHY: a button's click is its whole job, and tldraw's select tool
+  // captures the pointer, so the click never reaches it. A region's arm
+  // fold chevron is a plain `<button>` (region.tsx builds it and knows no
+  // host marker), and a region answers `false` below for everything else.
+  // Measured with a real mouse, 2026-09-22: on a top-level branch both arm
+  // chevrons stayed open, and a press-and-drag on one moved the whole
+  // region 40,30. The same rule protects member regions from their own
+  // drag surface — see nodeViews.tsx `MEMBER_DRAG_VETO`.
+  if (target.closest("button")) return true;
   if ((nodeType ?? "block") === "block") {
     const header = target.closest('[data-slot="block-header"]');
     if (!header) return true;
