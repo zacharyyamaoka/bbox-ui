@@ -7,7 +7,12 @@ import { dragFrom } from "./hostGestures";
 import { HOST_SCENE, topLevelNodes, type HostScene } from "./hostScene";
 import { ReactFlowHost } from "./reactFlowHost";
 import { TldrawHost } from "./tldrawHost";
-import { TRACE_TERMINAL_GAP } from "../components/trace";
+// WHY: the retired `TRACE_TERMINAL_GAP` ruler measured how far a wire
+// pulled back from a FIXED constant; since 2026-09-22 a host ends a wire
+// ON its dot's painted ring, so the oracle re-measures that ring instead
+// (`wireEnds.acceptance.ts`'s `paintedPullBackPx`) — a reconstruction that
+// still used the constant would pass against the wrong ruler.
+import { paintedPullBackPx } from "../presets/wireEnds.acceptance";
 
 /**
  * Blocks/Scene/In A Host (tldraw) — the SAME `HOST_SCENE` literal the DOM
@@ -82,11 +87,18 @@ function screenPointAt(path: SVGPathElement, length: number): { x: number; y: nu
   return { x: screen.x, y: screen.y };
 }
 
-function dotCentre(host: HTMLElement, blockId: string, portId: string): { x: number; y: number } {
+function dotElement(host: HTMLElement, blockId: string, portId: string): HTMLElement {
   const wrap = required<HTMLElement>(host, `[data-block-id="${blockId}"] [data-port-id="${portId}"]`, `${blockId}/${portId}'s dot`);
-  const dot = wrap.querySelector<HTMLElement>('[data-slot="port-dot"]') ?? wrap;
+  return wrap.querySelector<HTMLElement>('[data-slot="port-dot"]') ?? wrap;
+}
+
+function dotCentre(dot: HTMLElement): { x: number; y: number } {
   const rect = dot.getBoundingClientRect();
   return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 const DIR_VECTOR: Record<string, { x: number; y: number }> = {
@@ -96,13 +108,13 @@ const DIR_VECTOR: Record<string, { x: number; y: number }> = {
   left: { x: -1, y: 0 },
 };
 
-/** Where a wire's drawn path should START/END for a dot on `side`: the
- *  trace pulls each terminal back by `TRACE_TERMINAL_GAP` along the flow
- *  (trace.tsx's `traceRouteStart`/`traceRouteEnd`), so the measured claim is
- *  "path endpoint ≈ dot centre + gap along the wall normal", not "on the
- *  dot". */
-function pulledBack(dot: { x: number; y: number }, side: string): { x: number; y: number } {
-  return { x: dot.x + DIR_VECTOR[side].x * TRACE_TERMINAL_GAP, y: dot.y + DIR_VECTOR[side].y * TRACE_TERMINAL_GAP };
+/** Where a wire's drawn path should START/END for a dot on `side`: since
+ *  2026-09-22 the pull-back is the dot's own rendered ring, not a fixed
+ *  constant, so the caller passes `paintedPullBackPx(dot, path)` — the
+ *  measured claim is "path endpoint ≈ dot centre + the dot's own ring
+ *  radius along the wall normal", not "on the dot". */
+function pulledBack(dot: { x: number; y: number }, side: string, pullBackPx: number): { x: number; y: number } {
+  return { x: dot.x + DIR_VECTOR[side].x * pullBackPx, y: dot.y + DIR_VECTOR[side].y * pullBackPx };
 }
 
 /** Every scene edge, resolved and drawn: the layer's unresolved channel is
@@ -143,14 +155,14 @@ export const SceneTldraw: Story = {
     await waitFor(() => {
       const path = required<SVGPathElement>(host, '[data-wire-id="e-set"] [data-slot="trace-line"]', "e-set's path");
       const start = screenPointAt(path, 0);
-      const expectedStart = pulledBack(dotCentre(host, "proc", "out"), "right");
-      expect(Math.abs(start.x - expectedStart.x)).toBeLessThanOrEqual(10);
-      expect(Math.abs(start.y - expectedStart.y)).toBeLessThanOrEqual(10);
+      const outDot = dotElement(host, "proc", "out");
+      const expectedStart = pulledBack(dotCentre(outDot), "right", paintedPullBackPx(outDot, path));
+      expect(distance(start, expectedStart)).toBeLessThanOrEqual(0.5);
 
       const end = screenPointAt(path, path.getTotalLength());
-      const expectedEnd = pulledBack(dotCentre(host, "gain", "set"), "left");
-      expect(Math.abs(end.x - expectedEnd.x)).toBeLessThanOrEqual(10);
-      expect(Math.abs(end.y - expectedEnd.y)).toBeLessThanOrEqual(10);
+      const setDot = dotElement(host, "gain", "set");
+      const expectedEnd = pulledBack(dotCentre(setDot), "left", paintedPullBackPx(setDot, path));
+      expect(distance(end, expectedEnd)).toBeLessThanOrEqual(0.5);
     });
 
     /* The async variant survives the trip: e-cfg's data rode the scene
@@ -270,9 +282,9 @@ export const ViewportAndShapeDrag: Story = {
     await waitFor(() => {
       const path = required<SVGPathElement>(host, '[data-wire-id="e-set"] [data-slot="trace-line"]', "e-set's path");
       const start = screenPointAt(path, 0);
-      const expected = pulledBack(dotCentre(host, "proc", "out"), "right");
-      expect(Math.abs(start.x - expected.x)).toBeLessThanOrEqual(10);
-      expect(Math.abs(start.y - expected.y)).toBeLessThanOrEqual(10);
+      const outDot = dotElement(host, "proc", "out");
+      const expected = pulledBack(dotCentre(outDot), "right", paintedPullBackPx(outDot, path));
+      expect(distance(start, expected)).toBeLessThanOrEqual(0.5);
     });
 
     /* -- Pan, via tldraw's own wheel gesture ------------------------- */
@@ -368,9 +380,9 @@ export const RailReorderAndCaretInsideAShape: Story = {
     await waitFor(() => {
       const path = required<SVGPathElement>(host, '[data-wire-id="e-set"] [data-slot="trace-line"]', "e-set's path");
       const start = screenPointAt(path, 0);
-      const expected = pulledBack(dotCentre(host, "proc", "out"), "right");
-      expect(Math.abs(start.x - expected.x)).toBeLessThanOrEqual(10);
-      expect(Math.abs(start.y - expected.y)).toBeLessThanOrEqual(10);
+      const outDot = dotElement(host, "proc", "out");
+      const expected = pulledBack(dotCentre(outDot), "right", paintedPullBackPx(outDot, path));
+      expect(distance(start, expected)).toBeLessThanOrEqual(0.5);
     });
 
     /* -- The caret boundary: a press inside the Code face ------------- */

@@ -34,12 +34,17 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { TRACE_TERMINAL_GAP } from "../components/trace";
 import { dragFrom } from "../hosts/hostGestures";
 import { HOST_SCENE, type HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
 import { TldrawHost } from "../hosts/tldrawHost";
 import { expectMemberInside } from "./controlFlow.acceptance";
+// WHY: the retired `TRACE_TERMINAL_GAP` ruler measured how far a wire
+// pulled back from a FIXED constant; since 2026-09-22 a host ends a wire
+// ON its dot's painted ring, so the oracle re-measures that ring instead
+// (`paintedPullBackPx`) — a reconstruction that still used the constant
+// would pass against the wrong ruler.
+import { paintedPullBackPx } from "./wireEnds.acceptance";
 
 const meta = {
   title: "Control Flow/Host Edges",
@@ -50,17 +55,26 @@ export default meta;
 type Story = StoryObj;
 
 /**
- * How close the painted end has to sit to the dot it claims to land on.
+ * How close React Flow's painted end has to sit to the dot it claims to
+ * land on — React Flow's bezier ends on the measured handle centre, so this
+ * is measurement noise, not a geometry correction (tldraw's own checks use
+ * the tighter `RING_TOLERANCE_PX` against the rendered-ring oracle below,
+ * since tldraw's `Trace` stops short of the terminal on purpose).
  *
  * 14px is a hair under one port card's height and well under the ~36px
  * member gutter — a wire anchored to the PARENT's box instead of the
  * member's (the bug this lane fixes) misses by tens of px, so this cannot
- * pass by accident. It is not zero because the two hosts arrive at the dot
- * by different geometry: React Flow's bezier ends on the measured handle
- * centre, tldraw's `Trace` stops `TRACE_TERMINAL_GAP` short of the terminal
- * so its arrowhead and disc stay visible (trace.tsx:604-617).
+ * pass by accident.
  */
 const MEMBER_ANCHOR_TOLERANCE_PX = 14;
+
+/**
+ * How close tldraw's painted end has to sit to the RING oracle
+ * (`paintedPullBackPx` — the dot's own rendered ring radius plus the line's
+ * computed cap, `wireEnds.acceptance.ts`). This one is measurement noise
+ * only, not "which geometry system got there" slop, so it stays tight.
+ */
+const RING_TOLERANCE_PX = 0.5;
 
 /**
  * `HOST_SCENE`, plus exactly the thing that fixture deliberately lacks.
@@ -141,14 +155,17 @@ function screenPointAt(path: SVGPathElement, length: number): { x: number; y: nu
  * wire. Same rule `portDotSightings.ts`'s `dotOwnerId` and
  * `wireLayer.tsx:80-92` apply — the NEAREST `[data-block-id]` owns the dot.
  */
-function dotCentre(host: HTMLElement, blockId: string, portId: string): { x: number; y: number } {
+function dotElement(host: HTMLElement, blockId: string, portId: string): HTMLElement {
   const block = required<HTMLElement>(host, `[data-block-id="${blockId}"]`, `block \`${blockId}\``);
   const wrap = Array.from(block.querySelectorAll<HTMLElement>(`[data-port-id="${portId}"]`)).find(
     (candidate) => candidate.closest("[data-block-id]") === block,
   );
   if (!wrap) throw new Error(`expected ${blockId}/${portId}'s own dot`);
-  const dot = wrap.querySelector<HTMLElement>('[data-slot="port-dot"]') ?? wrap;
-  const rect = dot.getBoundingClientRect();
+  return wrap.querySelector<HTMLElement>('[data-slot="port-dot"]') ?? wrap;
+}
+
+function dotCentre(host: HTMLElement, blockId: string, portId: string): { x: number; y: number } {
+  const rect = dotElement(host, blockId, portId).getBoundingClientRect();
   return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 }
 
@@ -164,13 +181,15 @@ const DIR_VECTOR: Record<string, { x: number; y: number }> = {
 };
 
 /** Where tldraw's painted line is CONTRACTUALLY supposed to stop for a dot
- *  on `side`: `TRACE_TERMINAL_GAP` back along the wall normal, so the
- *  arrowhead and the opaque terminal disc stay visible (trace.tsx:604-617).
- *  `SceneHostsTldraw.stories.tsx` uses the identical correction for every
- *  top-level wire it measures; a member's wire is measured the same way,
- *  which is the point — it is an ordinary wire now. */
-function pulledBack(dot: { x: number; y: number }, side: keyof typeof DIR_VECTOR): { x: number; y: number } {
-  return { x: dot.x + DIR_VECTOR[side].x * TRACE_TERMINAL_GAP, y: dot.y + DIR_VECTOR[side].y * TRACE_TERMINAL_GAP };
+ *  on `side`: since 2026-09-22 that is the dot's own rendered ring, not a
+ *  fixed constant, so the caller passes `paintedPullBackPx(dot, path)` — the
+ *  ring radius plus the line's computed cap, so the arrowhead and the
+ *  opaque terminal disc stay visible. `SceneHostsTldraw.stories.tsx` uses
+ *  the identical oracle for every top-level wire it measures; a member's
+ *  wire is measured the same way, which is the point — it is an ordinary
+ *  wire now. */
+function pulledBack(dot: { x: number; y: number }, side: keyof typeof DIR_VECTOR, pullBackPx: number): { x: number; y: number } {
+  return { x: dot.x + DIR_VECTOR[side].x * pullBackPx, y: dot.y + DIR_VECTOR[side].y * pullBackPx };
 }
 
 /** React Flow's own edge element, down to the TRUNK's paint — `TraceEdge`
@@ -273,33 +292,38 @@ export const MemberEdgeTldraw: Story = {
     await waitFor(() => {
       const path = tldrawEdgePath(host, "e-kid-in");
       const end = screenPointAt(path, path.getTotalLength());
+      const dotEl = dotElement(host, "kid", "in");
       const dot = dotCentre(host, "kid", "in");
-      /* kid's `in` sits on its LEFT wall, so the line stops
-       * `TRACE_TERMINAL_GAP` to the left of the dot — by the trunk's own
-       * paint rule, identically to every top-level wire on this host. The
-       * tight claim is against that contractual stopping point… */
-      expect(distance(end, pulledBack(dot, "left"))).toBeLessThanOrEqual(MEMBER_ANCHOR_TOLERANCE_PX);
+      const pullBackPx = paintedPullBackPx(dotEl, path);
+      /* kid's `in` sits on its LEFT wall, so the line stops on the dot's OWN
+       * rendered ring, left of centre — the rendered-ring oracle, not the
+       * retired constant `TRACE_TERMINAL_GAP`. The tight claim is against
+       * that contractual stopping point… */
+      expect(distance(end, pulledBack(dot, "left", pullBackPx))).toBeLessThanOrEqual(RING_TOLERANCE_PX);
       /* …and the raw distance to the dot itself is pinned too, so the gap
        * can never grow into a mis-anchor hiding behind a loose tolerance. */
-      expect(distance(end, dot)).toBeLessThanOrEqual(TRACE_TERMINAL_GAP + MEMBER_ANCHOR_TOLERANCE_PX);
+      expect(distance(end, dot)).toBeLessThanOrEqual(pullBackPx + RING_TOLERANCE_PX);
     });
 
     /* Out of the member, same geometry mirrored: kid's `out` is on the
-     * RIGHT wall, so the line starts a gap to the right of it. */
+     * RIGHT wall, so the line starts on the ring to the right of it. */
     await waitFor(() => {
       const path = tldrawEdgePath(host, "e-kid-out");
       const start = screenPointAt(path, 0);
+      const dotEl = dotElement(host, "kid", "out");
       const dot = dotCentre(host, "kid", "out");
-      expect(distance(start, pulledBack(dot, "right"))).toBeLessThanOrEqual(MEMBER_ANCHOR_TOLERANCE_PX);
-      expect(distance(start, dot)).toBeLessThanOrEqual(TRACE_TERMINAL_GAP + MEMBER_ANCHOR_TOLERANCE_PX);
+      const pullBackPx = paintedPullBackPx(dotEl, path);
+      expect(distance(start, pulledBack(dot, "right", pullBackPx))).toBeLessThanOrEqual(RING_TOLERANCE_PX);
+      expect(distance(start, dot)).toBeLessThanOrEqual(pullBackPx + RING_TOLERANCE_PX);
     });
 
     /* The control, as on React Flow: a top-level end is unchanged. */
     await waitFor(() => {
       const path = tldrawEdgePath(host, "e-set");
-      expect(distance(screenPointAt(path, 0), pulledBack(dotCentre(host, "proc", "out"), "right"))).toBeLessThanOrEqual(
-        MEMBER_ANCHOR_TOLERANCE_PX,
-      );
+      const dotEl = dotElement(host, "proc", "out");
+      const start = screenPointAt(path, 0);
+      const expected = pulledBack(dotCentre(host, "proc", "out"), "right", paintedPullBackPx(dotEl, path));
+      expect(distance(start, expected)).toBeLessThanOrEqual(RING_TOLERANCE_PX);
     });
   },
 };
