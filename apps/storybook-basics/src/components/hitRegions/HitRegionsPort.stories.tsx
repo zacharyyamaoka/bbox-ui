@@ -8,6 +8,11 @@
  * on a shared harness — the same reason `Presets/` is its own section.
  * It also keeps this lane's story files adds-only: the per-component
  * story files belong to their own lanes and are not touched.
+ *
+ * "Show host outline" (2026-09-22, the harness's shared overlay): each Port
+ * is one canvas node declared `port` (dragPolicy.ts), so the dot and its
+ * halo OWN the press — a host draws no node outline there, only the dashed
+ * part — and a press past the halo reaches the canvas.
  */
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
@@ -21,6 +26,12 @@ import {
   HitProbe,
   PolicyControl,
   ZoomControl,
+  INLINE_NODE,
+  nodeRoot,
+  pointIn,
+  probeHost,
+  sameBox,
+  turnOnHostOutline,
   ZoomStage,
   hitTargetAt,
   type HitTarget,
@@ -29,7 +40,7 @@ import { ZOOM_LEVELS, effectiveHitValue, screenHitValue, type HitPolicy } from "
 
 const meta = {
   title: "Components/Ports/Port/Hit Regions",
-  tags: ["object:port", "lane:baseline"],
+  tags: ["object:port", "lane:hit-regions-views"],
 } satisfies Meta;
 
 export default meta;
@@ -43,6 +54,7 @@ const STAGE_H = 150;
 
 function PortHitPlayground() {
   const [show, setShow] = useState(true);
+  const [outline, setOutline] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [policy, setPolicy] = useState<HitPolicy>("scene");
   const [hitPx, setHitPx] = useState(PORT_HIT_PX);
@@ -51,6 +63,7 @@ function PortHitPlayground() {
     <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         <Checkbox label="Show hit regions" checked={show} onChange={setShow} />
+        <Checkbox label="Show host outline" checked={outline} onChange={setOutline} />
         <ZoomControl zoom={zoom} onChange={setZoom} />
         <PolicyControl policy={policy} onChange={setPolicy} />
       </div>
@@ -66,14 +79,16 @@ function PortHitPlayground() {
       <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--muted-foreground)" }}>
         component receives hitPx={effective.toFixed(1)} → {screenHitValue(hitPx, zoom, policy).toFixed(1)}px on screen
       </div>
-      <HitProbe targets={PORT_TARGETS}>
+      <HitProbe targets={PORT_TARGETS} hostOutline={outline}>
         <ZoomStage zoom={zoom} width={STAGE_W} height={STAGE_H}>
           <div
             data-testid="port-row"
             style={{ display: "flex", gap: 88, alignItems: "center", padding: "55px 70px", width: STAGE_W, height: STAGE_H, boxSizing: "border-box" }}
           >
             {PORT_STATES.map((state) => (
-              <Port key={state} state={state} diameter="md" hitPx={effective} showHitRegion={show} />
+              <div key={state} {...nodeRoot("port", INLINE_NODE)}>
+                <Port state={state} diameter="md" hitPx={effective} showHitRegion={show} />
+              </div>
             ))}
           </div>
         </ZoomStage>
@@ -140,6 +155,21 @@ export const Playground: Story = {
     await expect(hitTargetAt(rect.left + 2, rect.top + rect.height / 2, PORT_TARGETS)).not.toBeNull();
     await expect(hitTargetAt(rect.left - 3, rect.top + rect.height / 2, PORT_TARGETS)).toBeNull();
     await userEvent.click(canvas.getByLabelText("Show hit regions"));
+
+    // The host outline: the halo owns the press (a dashed part outline on
+    // the halo's own box), and just past it nothing is outlined at all.
+    await turnOnHostOutline(canvasElement);
+    const stage = canvasElement.querySelector<HTMLElement>('[data-slot="hit-probe-stage"]')!;
+    const haloCentre = pointIn(halo);
+    const owned = await probeHost(stage, haloCentre.x - PORT_HIT_PX / 2 + 3, haloCentre.y);
+    await expect(owned.top?.closest('[data-slot="port-dot"]')).toBe(dot);
+    await expect(owned.kind).toBe("part");
+    await expect(owned.via).toBe("port-dot-halo");
+    await expect(owned.outlineKind).toBe("part");
+    await expect(sameBox(owned.outline!, halo.getBoundingClientRect())).toBe(true);
+    const past = await probeHost(stage, haloCentre.x - PORT_HIT_PX / 2 - 3, haloCentre.y);
+    await expect(past.kind).toBe("pass-through");
+    await expect(past.outline).toBeNull();
   },
 };
 
