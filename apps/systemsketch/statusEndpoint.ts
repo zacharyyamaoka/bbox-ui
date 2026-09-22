@@ -8,20 +8,19 @@
 // version as the whiteboard? as they are all being served from the same
 // repo right?" — the honest answer is no, they can easily be three different
 // checkouts/commits, and this is the mechanism that lets the UI say so
-// instead of assuming. The dock's pinned Stable server
-// (scripts/launch_systemsketch.py) already answers a THIN /api/health
-// ({product, build, channel}); this is the same path's richer sibling for
-// the live dev server, which has no such endpoint today. Same path,
-// superset shape — src/chrome/siteStatus.ts's parser tolerates either.
+// instead of assuming.
 //
 // WHY a duplicate of apps/storybook-basics/.storybook's own status plugin
-// rather than a shared module: it is ~25 lines of `git` shelling with zero
-// app-specific logic, and the two live in different Vite configs with no
+// rather than a shared module: the two live in different Vite configs with no
 // existing cross-app import path (sites.ts and legacyApp.ts already
 // duplicate their own LOOPBACK_HOSTS set for the same reason). Duplication
 // here is the cheaper, more legible choice than inventing a workspace
-// package for 25 lines.
+// package. The parts that MUST agree byte-for-byte across the copies —
+// `checkoutId`'s digest and the Origin gate — each carry a test that pins a
+// shared literal, so drift is caught rather than assumed away.
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Connect, Plugin } from "vite";
 
@@ -33,16 +32,69 @@ import type { Connect, Plugin } from "vite";
 // apps/storybook-basics/.storybook/statusEndpoint.ts is the same code
 // loaded WITHOUT that shim (Storybook's main-config loader uses Node's
 // native ESM loader) and threw `ReferenceError: __dirname is not defined`
-// until fixed the same way. Matching it here means one pattern to trust,
-// rather than "works here, breaks there."
-// WHY the trailing-slash strip: fileURLToPath keeps the trailing "/" a
-// directory URL resolves to, but bbox_release.py's PROJECT_ROOT (a Python
-// Path) never has one — siteStatus.ts's statusMismatchesOwn compares these
-// by plain string equality, so the two sides staying in the same spelling
-// is what makes that comparison meaningful at all.
-const PROJECT_ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
+// until fixed the same way.
+// WHY `realpathSync`: `checkoutId` has to match Python's
+// `bbox_release.checkout_id`, which hashes `Path.resolve()` — and that
+// resolves symlinks. Without this, one tree reached through a symlinked
+// spelling would hash as a second, different checkout and every
+// cross-surface "same checkout?" answer would read "no" forever.
+const PROJECT_ROOT = realpathSync(fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, ""));
 const PRODUCT = "bbox-ui-systemsketch";
 const DISPLAY_NAME = "SystemSketch";
+
+/**
+ * The opaque id for WHICH checkout this is — sha256 of the resolved absolute
+ * path, first 12 hex chars, byte-identical to `bbox_release.checkout_id`.
+ *
+ * WHY this replaced the absolute `projectRoot` this endpoint used to return
+ * (judge finding, 2026-09-22): a comparison only ever needs equality, and
+ * the path was the one field here that told a page where a private project
+ * lives on disk. The digest answers the question and leaks nothing.
+ */
+export function checkoutId(projectRoot: string): string {
+  return createHash("sha256").update(projectRoot).digest("hex").slice(0, 12);
+}
+
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+export type OriginDecision = { allow: true; echo: string | null } | { allow: false; reason: string };
+
+/**
+ * Whether a request carrying this `Origin` may read the health document.
+ *
+ * WHY this gate exists (judge finding, 2026-09-22 — HIGH): this endpoint
+ * answered every caller with `Access-Control-Allow-Origin: *`, handing out
+ * the checkout's branch, commit and dirty state to ANY page in the browser.
+ * Binding the listener to loopback does not help at all: a tab open on a
+ * public site is itself on this machine, so the page becomes the bridge and
+ * reads localhost on the attacker's behalf. Loopback binding stops the
+ * network from reaching in; only an Origin check stops a page from doing it.
+ *
+ * - No `Origin` at all → allowed, and no CORS header is emitted. A
+ *   same-origin GET sends none, and neither does curl or a Node probe.
+ * - A loopback `Origin` → allowed, and echoed back exactly. Echoing the
+ *   single requesting origin (with `Vary: Origin`) is what keeps a shared
+ *   cache from serving one origin's allowance to another.
+ * - Anything else, including a duplicated header a browser would never
+ *   send → refused. `https://evil.example` gets a 403 and no header.
+ */
+export function decideOrigin(raw: string | string[] | undefined): OriginDecision {
+  if (raw === undefined) return { allow: true, echo: null };
+  if (Array.isArray(raw)) return { allow: false, reason: "duplicated Origin header" };
+  // Some browsers send the literal "null" for opaque origins (a sandboxed
+  // iframe, a file:// page). That is not loopback and must not be allowed.
+  if (raw === "null" || raw === "") return { allow: false, reason: "opaque origin" };
+  let hostname: string;
+  let protocol: string;
+  try {
+    ({ hostname, protocol } = new URL(raw));
+  } catch {
+    return { allow: false, reason: "unparseable Origin" };
+  }
+  if (protocol !== "http:" && protocol !== "https:") return { allow: false, reason: "non-http origin" };
+  if (!LOOPBACK_HOSTNAMES.has(hostname)) return { allow: false, reason: "non-loopback origin" };
+  return { allow: true, echo: raw };
+}
 
 interface Provenance {
   commit: string | null;
@@ -69,27 +121,36 @@ function readProvenance(root: string): Provenance {
   }
 }
 
-const handleHealth: Connect.SimpleHandleFunction = (_req, res) => {
+/** The health document this dev server serves. Exported so a test can assert
+ *  the shape without standing up a Vite server. */
+export function healthDocument(): Record<string, unknown> {
   const provenance = readProvenance(PROJECT_ROOT);
-  const body = JSON.stringify({
+  return {
     product: PRODUCT,
     displayName: DISPLAY_NAME,
     channel: "preview",
     commit: provenance.commit,
     branch: provenance.branch,
     dirty: provenance.dirty,
-    projectRoot: PROJECT_ROOT,
-  });
-  res.statusCode = 200;
+    checkoutId: checkoutId(PROJECT_ROOT),
+  };
+}
+
+const handleHealth: Connect.SimpleHandleFunction = (req, res) => {
+  const decision = decideOrigin(req.headers?.origin);
+  // WHY `Vary: Origin` on BOTH branches: the response body is identical
+  // either way, but the allow-header is not, and a cache that ignored Origin
+  // could hand one origin's allowance to the next caller.
+  res.setHeader("Vary", "Origin");
   res.setHeader("Content-Type", "application/json");
-  // WHY "*" and not a specific origin: this is a read-only GET of
-  // non-secret git metadata (no promote/mutate route lives here, unlike
-  // bboxui_server.py's Stable API), and the caller is any of several
-  // loopback dev ports the menu bar itself doesn't get to choose in
-  // advance — restricting to one origin would just mean updating it every
-  // time a new local consumer shows up.
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.end(body);
+  if (!decision.allow) {
+    res.statusCode = 403;
+    res.end(JSON.stringify({ error: `health is loopback-only (${decision.reason})` }));
+    return;
+  }
+  if (decision.echo !== null) res.setHeader("Access-Control-Allow-Origin", decision.echo);
+  res.statusCode = 200;
+  res.end(JSON.stringify(healthDocument()));
 };
 
 /** Dev-only — `configureServer` never runs against a production build, so

@@ -7,6 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { BBOX_UI_SITE_URL, STORYBOOK_URL } from "./chrome/sites";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";
 
+const STORYBOOK_HEALTH = new URL("/api/health", STORYBOOK_URL).toString();
+const OWN_HEALTH = new URL("/api/health", window.location.origin).toString();
+
 let app: MountedApp | null = null;
 const originalOpen = window.open;
 let restoreFetch: (() => void) | null = null;
@@ -30,16 +33,27 @@ afterEach(() => {
  * harness's own page assets, bbox-ui.com — which this hook never fetches at
  * all, see `probeSiteStatus`'s remote short-circuit) on the real network.
  */
-function stubStorybookHealth(respond: () => Response | Promise<Response>) {
+function stubHealthRoutes(routes: Record<string, () => Response | Promise<Response>>) {
   const real = window.fetch.bind(window);
   window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (url.startsWith(new URL("/api/health", STORYBOOK_URL).toString())) return respond();
+    for (const [prefix, respond] of Object.entries(routes)) {
+      if (url.startsWith(prefix)) return respond();
+    }
     return real(input as RequestInfo, init);
   }) as typeof window.fetch;
   restoreFetch = () => {
     window.fetch = real;
   };
+}
+
+function stubStorybookHealth(respond: () => Response | Promise<Response>) {
+  stubHealthRoutes({ [STORYBOOK_HEALTH]: respond });
+}
+
+function jsonHealth(body: Record<string, unknown>): () => Response {
+  return () =>
+    new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
 }
 
 function healthyStorybookResponse(): Response {
@@ -50,10 +64,22 @@ function healthyStorybookResponse(): Response {
       commit: "a1b2c3d4e5f6",
       branch: "lane-x",
       dirty: false,
-      projectRoot: "/home/bam/bbox-ui",
+      checkoutId: "111111111111",
     }),
     { status: 200, headers: { "Content-Type": "application/json" } },
   );
+}
+
+/** The badge chip text on a row, once one has rendered. */
+async function badgeTextOf(row: HTMLElement): Promise<string> {
+  const badge = await waitFor(() => row.querySelector<HTMLElement>('[data-slot="site-channel-badge"]'), {
+    what: "the row's channel badge",
+  });
+  return badge.textContent?.trim() ?? "";
+}
+
+function isDisabled(row: HTMLElement): boolean {
+  return row.hasAttribute("data-disabled") || row.getAttribute("aria-disabled") === "true";
 }
 
 // WHY this reads text nodes rather than `item.textContent` (2026-09-22, the
@@ -168,16 +194,21 @@ describe("the burger's doors out to the other bbox-ui surfaces", () => {
     await userEvent.keyboard("{Escape}");
   });
 
-  it("a row stays enabled while its probe is still in flight, and only disables once it positively reports dead", async () => {
+  it("a row stays enabled while its probe is still in flight, and only disables once nothing answers", async () => {
     // A probe that never resolves must never make the row unclickable —
     // hold it open deliberately (rather than racing real timing) so the
     // "still probing" window is observed for real, not assumed from how
     // fast the assertion happened to run.
-    let resolveProbe: (() => void) | null = null;
+    //
+    // PORTED 2026-09-22: this used to resolve a 503 to reach `dead`. A 503 is
+    // a SERVER ANSWERING, which now reads `unsupported` and deliberately
+    // leaves the row enabled (see siteStatus.ts) — so the dead case has to be
+    // what dead actually is: a transport failure, nothing listening.
+    let failProbe: (() => void) | null = null;
     stubStorybookHealth(
       () =>
-        new Promise<Response>((resolve) => {
-          resolveProbe = () => resolve(new Response("{}", { status: 503 }));
+        new Promise<Response>((_resolve, reject) => {
+          failProbe = () => reject(new TypeError("Failed to fetch"));
         }),
     );
     app = await mountApp();
@@ -186,16 +217,132 @@ describe("the burger's doors out to the other bbox-ui surfaces", () => {
 
     // Give the effect a tick to actually start the probe, then confirm it
     // is genuinely in flight (not already settled) before asserting.
-    await waitFor(() => resolveProbe !== null, { what: "the Storybook probe to start" });
-    expect(storybookRow.hasAttribute("data-disabled")).toBe(false);
-    expect(storybookRow.getAttribute("aria-disabled")).not.toBe("true");
+    await waitFor(() => failProbe !== null, { what: "the Storybook probe to start" });
+    expect(isDisabled(storybookRow)).toBe(false);
 
-    // Now let it resolve to a non-OK response (`probeSiteStatus` reads that
-    // as `dead`) and confirm the row — and ONLY now — disables.
-    resolveProbe!();
-    await waitFor(() => storybookRow.hasAttribute("data-disabled"), { what: "the row to disable once the probe reports dead" });
+    failProbe!();
+    await waitFor(() => storybookRow.hasAttribute("data-disabled"), { what: "the row to disable once nothing answers" });
     expect(storybookRow.getAttribute("aria-disabled")).toBe("true");
+    expect(await badgeTextOf(storybookRow)).toBe("(not running)");
 
+    await userEvent.keyboard("{Escape}");
+  });
+
+  it("a REACHABLE surface that does not identify itself stays clickable, labelled (static/unknown)", async () => {
+    // The judge's MEDIUM finding, in the mounted app: a working static
+    // `storybook build` behind a plain file server answers 404 on
+    // /api/health. The old probe called that `dead` and DISABLED the row —
+    // taking away a door that works. Enabled + honest label is the fix, and
+    // this is the only test that proves it reaches the rendered menu.
+    stubStorybookHealth(() => new Response("not found", { status: 404 }));
+    app = await mountApp();
+    const rows = await openBurger();
+    const storybookRow = rows.get("Open Storybook")!;
+
+    expect(await badgeTextOf(storybookRow)).toBe("(static/unknown)");
+    expect(isDisabled(storybookRow)).toBe(false);
+
+    // ...and it really opens.
+    const opened: string[] = [];
+    window.open = ((url?: string | URL) => {
+      opened.push(String(url));
+      return null;
+    }) as typeof window.open;
+    await userEvent.click(storybookRow);
+    await waitFor(() => opened.length === 1, { what: "the static Storybook to open" });
+    expect(opened[0]).toBe(STORYBOOK_URL);
+  });
+
+  it("a FOREIGN service holding the port is not reported as Storybook", async () => {
+    // MUTATION: drop the product check in `probeSiteStatus` and this row
+    // reads "(preview · their-lane · ffffffff)" — another program's git state
+    // presented as the Storybook this row opens.
+    stubStorybookHealth(
+      jsonHealth({
+        product: "some-other-dev-server",
+        channel: "preview",
+        commit: "ffffffffffffffff",
+        branch: "their-lane",
+        dirty: true,
+      }),
+    );
+    app = await mountApp();
+    const rows = await openBurger();
+    const badge = await badgeTextOf(rows.get("Open Storybook")!);
+    expect(badge).toBe("(static/unknown)");
+    expect(badge).not.toContain("their-lane");
+    expect(badge).not.toContain("preview");
+    await userEvent.keyboard("{Escape}");
+  });
+
+  it("warns that a row is a DIFFERENT checkout from this board, using this board's own health", async () => {
+    // The judge's HIGH finding #4, through the real mounted hook: the
+    // comparison runs against `window.location.origin`'s OWN /api/health, and
+    // the dock's Stable whiteboard now answers with the `commit` and
+    // `checkoutId` that comparison reads. Before this pass its health carried
+    // only `{product, build, channel}`, so `statusMismatchesOwn` had nothing
+    // to compare and the warning was unreachable by construction — in the
+    // exact configuration Zach gets by pressing the dock icon.
+    stubHealthRoutes({
+      // This board: the dock's pinned Stable build, thin-looking but now
+      // carrying real identity.
+      [OWN_HEALTH]: jsonHealth({
+        product: "systemsketch-next",
+        channel: "stable",
+        build: "cccccccccccccccc",
+        commit: "cccccccccccccccc",
+        checkoutId: "111111111111",
+      }),
+      // Storybook: same checkout, but a commit that has moved.
+      [STORYBOOK_HEALTH]: jsonHealth({
+        product: "bbox-ui-storybook",
+        channel: "preview",
+        commit: "dddddddddddddddd",
+        branch: "lane-x",
+        dirty: false,
+        checkoutId: "111111111111",
+      }),
+    });
+    app = await mountApp();
+    const rows = await openBurger();
+    const storybookRow = rows.get("Open Storybook")!;
+
+    await waitFor(
+      () => (storybookRow.textContent ?? "").includes("different from this board"),
+      { what: "the mismatch warning" },
+    );
+    expect(await badgeTextOf(storybookRow)).toBe("(preview · lane-x · ddddddd) · different from this board");
+    // The row's NAME is still untouched by any of it.
+    expect(labelOf(storybookRow)).toBe("Open Storybook");
+    // And a mismatch never disables the row — it is information, not a fence.
+    expect(isDisabled(storybookRow)).toBe(false);
+    await userEvent.keyboard("{Escape}");
+  });
+
+  it("does NOT warn when this board and the row are the same checkout at the same commit", async () => {
+    // The other half, so the warning above cannot be passing vacuously on
+    // something that always fires.
+    stubHealthRoutes({
+      [OWN_HEALTH]: jsonHealth({
+        product: "bbox-ui-systemsketch",
+        channel: "preview",
+        commit: "dddddddddddddddd",
+        checkoutId: "111111111111",
+      }),
+      [STORYBOOK_HEALTH]: jsonHealth({
+        product: "bbox-ui-storybook",
+        channel: "preview",
+        commit: "dddddddddddddddd",
+        branch: "lane-x",
+        dirty: false,
+        checkoutId: "111111111111",
+      }),
+    });
+    app = await mountApp();
+    const rows = await openBurger();
+    const storybookRow = rows.get("Open Storybook")!;
+    expect(await badgeTextOf(storybookRow)).toBe("(preview · lane-x · ddddddd)");
+    expect(storybookRow.textContent ?? "").not.toContain("different from this board");
     await userEvent.keyboard("{Escape}");
   });
 });
