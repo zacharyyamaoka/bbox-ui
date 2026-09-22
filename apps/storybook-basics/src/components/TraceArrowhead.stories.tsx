@@ -7,10 +7,14 @@ import type { TraceDir, TraceRouting, TraceVariant } from "./trace.layout";
 /**
  * Components/Traces/Trace/Arrowhead — phase B3 of docs/BLOCK-PORT-EDGES-PLAN.md §8.
  *
- * The in-flight Trace already ships `markerEnd = "arrow"` as its OWN
- * default (`trace.tsx:664`), the chevron marker with `context-stroke` colour
- * inheritance, and TRACE-PLAN's own P6 acceptance already pins "the `to`-end
- * marker present, the `from` end bare". This file is VERIFICATION AND
+ * The in-flight Trace shipped `markerEnd = "arrow"` as its OWN default
+ * until 2026-09-22, when Zach flipped it ("by default can you please update
+ * the data traces to draw without an arrow? because its DAG, we already know
+ * the order!" — `DEFAULT_TRACE_MARKER_END`, trace.layout.ts). The chevron is
+ * still a real, selectable option, and THIS file is its acceptance, so every
+ * Trace here asks for it BY NAME (`markerEnd="arrow"`) — what is measured is
+ * the head itself (`context-stroke` colour inheritance, the `to`-end marker
+ * present, the `from` end bare), no longer what the unstated case draws. This file is VERIFICATION AND
  * COMPOSITION, not construction (§8's own framing): it asserts that survives
  * every routing × variant, then — only if acceptance finds a gap — a
  * surgical `trace.tsx` fix is legal (the trace lane is done, the file is
@@ -138,7 +142,7 @@ function MatrixCell({ routing, style, onGeometry }: { routing: TraceRouting; sty
         {routing} · {style.key}
       </div>
       <svg data-slot="trace-canvas" width={ROW_W} height={ROW_H} viewBox={`0 0 ${ROW_W} ${ROW_H}`} style={{ overflow: "visible" }}>
-        <Trace id={id} from={FROM} to={TO} routing={routing} onGeometry={onGeometry} {...style.props} />
+        <Trace id={id} from={FROM} to={TO} routing={routing} markerEnd="arrow" onGeometry={onGeometry} {...style.props} />
       </svg>
     </div>
   );
@@ -158,7 +162,7 @@ function ArrowheadMatrix({ onGeometry }: { onGeometry: (id: string, g: TraceGeom
 
 const meta = {
   title: "Components/Traces/Trace/Arrowhead",
-  tags: ["object:trace", "lane:baseline"],
+  tags: ["object:trace", "lane:trace-defaults"],
   component: Trace,
   args: { id: "trace", from: FROM, to: TO },
 } satisfies Meta<typeof Trace>;
@@ -209,7 +213,7 @@ export const Matrix: Story = {
 export const DelayedSplit: Story = {
   render: () => (
     <svg data-slot="trace-canvas" width={ROW_W} height={ROW_H} viewBox={`0 0 ${ROW_W} ${ROW_H}`} style={{ overflow: "visible" }}>
-      <Trace id="delayed-split" from={FROM} to={TO} routing="straight" variant="delayed" splitAtLabel labelPosition={0.4} />
+      <Trace id="delayed-split" from={FROM} to={TO} routing="straight" variant="delayed" splitAtLabel labelPosition={0.4} markerEnd="arrow" />
     </svg>
   ),
   play: async ({ canvasElement }) => {

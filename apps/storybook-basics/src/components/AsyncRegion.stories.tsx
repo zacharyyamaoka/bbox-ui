@@ -359,7 +359,14 @@ function edgeForLeg(spec: Specimen, legIndex: number, routing: TraceRouting): Sc
     targetHandle: portId,
     // D-B6: the async region's whole meaning is "new wires default to
     // async" (`asyncRegionModel.ts:96-123`).
-    data: { variant: "async", color: FAMILY_INK[spec.family], routing },
+    //
+    // `markerEnd: "arrow"` BY NAME — one of the few places a head still
+    // means something after Zach's 2026-09-22 default ("because its DAG, we
+    // already know the order!"): a service's `request` and `response`, an
+    // action's `goal` and `feedback`, run BOTH ways between the SAME two
+    // ports, so this is not a DAG and the wall alone cannot say which leg
+    // is which. The head is the only direction mark a leg has.
+    data: { variant: "async", color: FAMILY_INK[spec.family], routing, markerEnd: "arrow" },
   };
 }
 

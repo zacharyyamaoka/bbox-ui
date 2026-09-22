@@ -36,9 +36,10 @@ export interface WireEnd {
 
 export interface Wire {
   id: string;
-  /** The initiating end — the arrowhead points AT `to` (`Trace`'s own
-   *  default `markerEnd: "arrow"`). A scene edge's source/target map to
-   *  from/to with the arrow direction preserved (`sceneWires.ts`). */
+  /** The initiating end — an arrowhead, when a wire opts into one
+   *  (`markerEnd: "arrow"`), points AT `to`; the default draws none
+   *  (`DEFAULT_TRACE_MARKER_END`). A scene edge's source/target map to
+   *  from/to with the direction preserved (`sceneWires.ts`). */
   from: WireEnd;
   to: WireEnd;
   /** Default `"data"`; the async gallery passes `"async"` (D-B6's reading
@@ -46,7 +47,7 @@ export interface Wire {
   variant?: TraceVariant;
   /** Default is `Trace`'s own default (`"curved"`). */
   routing?: TraceRouting;
-  /** Default is `Trace`'s own default (`"arrow"`). */
+  /** Default is `Trace`'s own default (`DEFAULT_TRACE_MARKER_END`, `"none"`). */
   markerEnd?: TraceMarkerEnd;
   color?: string;
   /**

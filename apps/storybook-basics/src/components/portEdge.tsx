@@ -40,6 +40,7 @@ import {
   DndContext,
   PointerSensor,
   closestCenter,
+  useDndMonitor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -61,6 +62,8 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CodeEditor } from "./codeEditor";
+import { captureEditingFocus, reorderDeltaForKey, reorderHintText, type ReorderChord } from "./keyboardReorder";
+import "./keyboardReorder.css";
 // The visual-variant registry (lane `ports`, 2026-09-19) — threaded down
 // to every default `LabeledPort` this edge draws, the same way
 // `laneLanguage` is; omitted, each port reads the document attribute.
@@ -85,6 +88,7 @@ import {
   type Size,
   type Slot,
 } from "./portEdge.layout";
+import { MIN_PORT_GAP_PX, autoSlotOffsets, constrainPortPositions, resolveCustomOffsets, type CustomNeighbourMode, type PortSpacingOptions } from "./portSpacing.layout";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -189,6 +193,10 @@ const DEFAULT_SIZE: Record<"row" | "column", Size> = {
 
 const DEFAULT_DISTRIBUTION: Distribution = { mode: "distribute", scheme: "space-between" };
 
+/** One shared empty object, so an omitted `freeOffsets` is referentially
+ *  stable across renders. */
+const EMPTY_OFFSETS: Record<string, number> = {};
+
 export interface PortEdgeProps {
   /** Droppable/sortable container id — defaults to `edge`. Override when a
    *  story places two edges on the same side (rare). */
@@ -200,11 +208,41 @@ export interface PortEdgeProps {
   /** The spacing controls: evenly-spaced (`distribute`) vs packed-from-an-
    *  end (`aligned`). */
   distribution?: Distribution;
-  /** Auto = flex-laid-out (distribute/aligned above); Custom = free drag
-   *  along the main axis, positions in `freeOffsets`. */
+  /**
+   * Auto = flex-laid-out (distribute/aligned above); Custom = the author
+   * drags each port along its own wall, positions in `freeOffsets`.
+   *
+   * WHY Custom is ORDERED and gapped, not free (Zach, 2026-09-22): "in
+   * custom: You just need to respect the ordering of ports — and there is a
+   * minimum spacing requirement as well". Every Custom position this edge
+   * renders goes through `constrainPortPositions` (./portSpacing.layout.ts):
+   * a port never passes a neighbour, adjacent ports stay `minPortGap` apart,
+   * and every port stays inside the track. Before 2026-09-22 Custom accepted
+   * any offset >= 0 in any order; a stored layout that breaks a rule is now
+   * re-validated on render, never drawn as-is.
+   */
   mode?: PortEdgeArrangeMode;
+  /**
+   * Custom mode's positions: each slot's LEADING edge, px from the start of
+   * the track's content box. Controlled — the edge reports every change
+   * through `onFreeOffsetsChange`, including the ones it makes itself: the
+   * Auto snapshot on entering Custom, and a re-validation after a port is
+   * added, removed or reordered. A host that passes offsets without the
+   * callback gets a static, still-validated layout.
+   */
   freeOffsets?: Record<string, number>;
   onFreeOffsetsChange?(next: Record<string, number>): void;
+  /**
+   * Custom mode only: what a dragged port does at a neighbour — `"stop"`
+   * (default) clamps it one `minPortGap` short, `"push"` shoves the
+   * neighbours along ahead of it, order and gaps intact. A taste call, so
+   * both ship (`CustomNeighbourMode`'s own doc).
+   */
+  customNeighbour?: CustomNeighbourMode;
+  /** Custom mode's minimum centre-to-centre gap between adjacent ports.
+   *  Defaults to `MIN_PORT_GAP_PX` — see its own doc for where 24 comes
+   *  from. */
+  minPortGap?: number;
   /** Edge-owned grouping text — one bracketed (or bare) comma list per
    *  line, parsed by `groupingSetFromText` (./portEdge.layout.ts). A port
    *  never carries its own group membership; the edge assigns it. */
@@ -409,6 +447,23 @@ export interface PortEdgeProps {
    * (a gallery of all five). Ignored by a host `renderItem`.
    */
   variant?: PortVariantId;
+  /**
+   * The IDE move-line chord, applied to PORTS (`keyboardReorder.ts`): while
+   * a port's single-line label editor has focus, the axis-matched arrow
+   * pair under this modifier moves that port one slot — ↑/↓ on a column
+   * edge, ←/→ on a row — and the editor stays open, focused, caret in
+   * place. Omit (every existing caller) and no key is claimed.
+   *
+   * Zach, 2026-09-21: "Can you please show a prototype of how I could
+   * reorder the ports in single line mode by using the ctrl up or down (for
+   * a column) or (ctrl left right) for a row."
+   *
+   * Single-line mode only, by construction: the multi-line lane already
+   * reorders by moving lines (its own CodeMirror Alt/Ctrl+↑/↓), and Custom
+   * mode positions ports by dragging them along the wall rather than by
+   * stepping slots, so the chord is not wired there.
+   */
+  reorderChord?: ReorderChord;
 }
 
 /* ------------------------------------------------------------------ */
@@ -451,6 +506,29 @@ export function reorderItemsBySlot(items: PortEdgeItem[], slots: Slot[], activeS
   const reordered = arrayMove(slots, oldIndex, newIndex);
   const byId = new Map(items.map((it) => [it.id, it] as const));
   return reordered.flatMap((s) => s.members.map((m) => byId.get(m.id)).filter((it): it is PortEdgeItem => it != null));
+}
+
+/**
+ * The keyboard chord's reorder: `itemId`'s slot swaps with its neighbour
+ * `delta` slots away — through `reorderItemsBySlot`, the SAME operation the
+ * pointer drag's `handleDragEnd` runs, so a keyboard move and a drag onto
+ * the neighbour produce identical `items` and a host sees one event shape.
+ *
+ * Returns `items` itself (identity, not a copy) when nothing moves: at
+ * either end — no wrap — past the `visibleCount` cut (a `maxVisible` edge
+ * never pushes a port behind its own "+N more"), and for a member of a real
+ * group. WHY the group case is a no-op rather than a within-group move: a
+ * family's member order is the edge's `groups` TEXT (`resolveAssignment`'s
+ * `order`), which this component reads but has no callback to write, and a
+ * drag has no within-group move either — the whole family travels as one
+ * slot. Inventing a write path for it is a design call, not this chord's.
+ */
+export function moveItemOneSlot(items: PortEdgeItem[], slots: Slot[], visibleCount: number, itemId: string, delta: -1 | 1): PortEdgeItem[] {
+  const index = slots.findIndex((s) => s.members.some((m) => m.id === itemId));
+  if (index === -1 || index >= visibleCount || slots[index].members.length > 1) return items;
+  const target = index + delta;
+  if (target < 0 || target >= visibleCount) return items;
+  return reorderItemsBySlot(items, slots, slots[index].slotId, slots[target].slotId);
 }
 
 /* ------------------------------------------------------------------ */
@@ -561,7 +639,25 @@ interface PortEdgeSlotBoxProps {
    * — and therefore dnd-kit's own measurement — returns).
    */
   hideCardSurface?: boolean;
+  /** `PortEdgeProps.reorderChord`'s key hook, bound by `PortEdgeBody` to
+   *  this edge's items; `true` = the key was the chord and is claimed. */
+  onReorderKey?(id: string, event: KeyboardEvent): boolean;
+  /** The chord hint (`reorderHintText`) shown while THIS port's editor is
+   *  focused. Set exactly when `onReorderKey` is. */
+  reorderHint?: string;
 }
+
+/**
+ * Where the chord hint sits: on the dot's OUTWARD side, the one side of a
+ * port no label ever flows toward by default (`inwardTextLayout`), so the
+ * hint can never cover the text being edited.
+ */
+const REORDER_HINT_PLACEMENT: Record<BlockSide, CSSProperties> = {
+  left: { right: "100%", top: "50%", transform: "translateY(-50%)", marginRight: 2 },
+  right: { left: "100%", top: "50%", transform: "translateY(-50%)", marginLeft: 2 },
+  top: { bottom: "100%", left: "50%", transform: "translateX(-50%)" },
+  bottom: { top: "100%", left: "50%", transform: "translateX(-50%)" },
+};
 
 // B3: a slot must occupy its rail position even when nothing renders inside
 // it (`showPorts` and `showCard` both off) — a distribution scheme spaces
@@ -590,7 +686,7 @@ const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
 const CARD_OVERLAY_RADIUS = "var(--bbox-skin-radius, var(--radius-lg))";
 const CARD_OVERLAY_STROKE_WIDTH = "var(--bbox-skin-stroke-width, 1px)";
 
-function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage, editMode = "single", onRequestLaneOpen, variant }: PortEdgeSlotBoxProps) {
+function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage, editMode = "single", onRequestLaneOpen, variant, onReorderKey, reorderHint }: PortEdgeSlotBoxProps) {
   const textLayout = textLayoutOverride ?? inwardTextLayout(edge);
   // F-1: in `"multi"` mode, a click opens the RAIL's lane, not this port's
   // own inline editor — so `LabeledPort` itself must stay `disabled` (its
@@ -627,6 +723,7 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
         // the capture listener below owns the click instead.
         disabled={!singleLineEditable}
         onLabelWrite={onLabelWrite ? (value) => onLabelWrite(item.id, value) : undefined}
+        onLabelKeyDown={onReorderKey ? (event) => onReorderKey(item.id, event) : undefined}
         labelLanguage={labelLanguage}
       >
         {item.label}
@@ -678,6 +775,24 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
       }
     >
       {port}
+      {reorderHint && (
+        // Shown only while this port's editor has focus — keyboardReorder.css.
+        <span
+          data-slot="port-edge-reorder-hint"
+          aria-hidden
+          style={{
+            position: "absolute",
+            ...REORDER_HINT_PLACEMENT[edge],
+            fontSize: 10,
+            lineHeight: 1,
+            whiteSpace: "nowrap",
+            color: "var(--muted-foreground)",
+            pointerEvents: "none",
+          }}
+        >
+          {reorderHint}
+        </span>
+      )}
       {showCard && !hideCardSurface && (
         // B3: "actually show a card, like a kanban card" — now an overlay,
         // not a wrapper (see EMPTY_SLOT_MIN_PX's own comment): painted OVER
@@ -734,6 +849,9 @@ interface SlotRenderProps {
   variant?: PortVariantId;
   editMode?: "single" | "multi";
   onRequestLaneOpen?(): void;
+  /** `PortEdgeProps.reorderChord`, bound — see `PortEdgeSlotBoxProps`. */
+  onReorderKey?(id: string, event: KeyboardEvent): boolean;
+  reorderHint?: string;
 }
 
 const GROUP_OUTLINE_PAD = 6;
@@ -772,7 +890,7 @@ function useEnclosingCircleBox(containerRef: RefObject<HTMLDivElement | null>, d
   return box;
 }
 
-function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotMainPx, gapPx, color, renderItem, textLayoutOverride, hideLabel, editingEnabled, onLabelWrite, labelLanguage, editMode, onRequestLaneOpen, variant }: SlotRenderProps) {
+function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotMainPx, gapPx, color, renderItem, textLayoutOverride, hideLabel, editingEnabled, onLabelWrite, labelLanguage, editMode, onRequestLaneOpen, variant, onReorderKey, reorderHint }: SlotRenderProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const memberIds = slot.members.map((m) => m.id).join(",");
   const box = useEnclosingCircleBox(containerRef, [memberIds, axis, showPorts, showCard, slotMainPx, gapPx]);
@@ -865,6 +983,11 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
           variant={variant}
           editMode={editMode}
           onRequestLaneOpen={onRequestLaneOpen}
+          // A grouped member claims the chord too, so it never falls
+          // through to a word-jump on one port and a move on its
+          // neighbour — `moveItemOneSlot` then leaves the family as-is.
+          onReorderKey={onReorderKey}
+          reorderHint={reorderHint}
           hideCardSurface
         />
       ))}
@@ -956,6 +1079,8 @@ function SlotBody(props: SlotRenderProps) {
       variant={props.variant}
       editMode={props.editMode}
       onRequestLaneOpen={props.onRequestLaneOpen}
+      onReorderKey={props.onReorderKey}
+      reorderHint={props.reorderHint}
     />
   );
 }
@@ -991,6 +1116,11 @@ function SortableSlotCard(props: SlotRenderProps) {
     opacity: isDragging ? 0.35 : 1,
     cursor: "grab",
     touchAction: "none",
+    // Re-arms what `blockPort.tsx`'s rail wrapper (`block-port-rail`) turns
+    // off at the box level — this card is the one thing in a slot's box
+    // that IS real content (a port, draggable/sortable), so it alone opts
+    // back into hit-testing. See that file's own WHY on the rail style.
+    pointerEvents: "auto",
   };
   return (
     <div ref={setNodeRef} data-slot="port-edge-card" data-dragging={isDragging || undefined} style={style} {...attributes} {...listeners}>
@@ -999,14 +1129,28 @@ function SortableSlotCard(props: SlotRenderProps) {
   );
 }
 
-function FreeSlotCard(props: SlotRenderProps & { axis: "row" | "column"; x: number }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: props.slot.slotId });
-  const drag = CSS.Translate.toString(transform);
+function FreeSlotCard(props: SlotRenderProps & { axis: "row" | "column"; x: number; shift: number }) {
+  // WHY dnd-kit's own `transform` is NOT applied: it follows the pointer on
+  // BOTH axes, with no order or gap. `x + shift` is already the constrained
+  // live position (`PortEdgeBody` feeds the drag delta through
+  // `constrainPortPositions` every move), so the card moves along its own
+  // wall only and stops where the rules stop it — what you see mid-drag is
+  // exactly what the drop commits.
+  //
+  // WHY the dragged card's live travel is a `shift` (a transform) and not
+  // folded into `x` (its `top`/`left`): dnd-kit measures the active node
+  // transform-agnostically and treats any LAYOUT movement of it as the page
+  // shifting under the pointer, subtracting it from the drag delta. Moving
+  // the dragged card's `top` therefore fed straight back into the next delta
+  // — measured: the delta oscillated 20, 0, 20, 0 on every frame and the
+  // port never left its slot. Neighbours are not the active node, so a
+  // pushed neighbour moves by `x` alone.
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: props.slot.slotId });
   const style: CSSProperties = {
     position: "absolute",
     ...(props.axis === "row"
-      ? { left: props.x + CONTAINER_PADDING, top: "50%", transform: `translateY(-50%)${drag ? ` ${drag}` : ""}` }
-      : { top: props.x + CONTAINER_PADDING, left: "50%", transform: `translateX(-50%)${drag ? ` ${drag}` : ""}` }),
+      ? { left: props.x + CONTAINER_PADDING, top: "50%", transform: `translate(${props.shift}px, -50%)` }
+      : { top: props.x + CONTAINER_PADDING, left: "50%", transform: `translate(-50%, ${props.shift}px)` }),
     // `dragActive` is the one place a gesture leaks into paint order —
     // named explicitly (paintOrder.ts) rather than left as an inline
     // ternary, per the brief's own instruction.
@@ -1014,11 +1158,55 @@ function FreeSlotCard(props: SlotRenderProps & { axis: "row" | "column"; x: numb
     opacity: isDragging ? 0.6 : 1,
     cursor: "grab",
     touchAction: "none",
+    // See `SortableSlotCard`'s identical line — re-arms hit-testing that
+    // `blockPort.tsx`'s rail wrapper turns off at the box level.
+    pointerEvents: "auto",
   };
   return (
-    <div ref={setNodeRef} data-slot="port-edge-card" data-dragging={isDragging || undefined} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} data-slot="port-edge-card" data-slot-id={props.slot.slotId} data-dragging={isDragging || undefined} style={style} {...attributes} {...listeners}>
       <SlotBody {...props} />
     </div>
+  );
+}
+
+/**
+ * The drag-time "min space" marker, between two ports held at exactly the
+ * minimum gap. Zach's sketch draws it as a red bracket labelled "Min space
+ * requirement"; here it is a muted bracket on the wall's OUTWARD side (where
+ * no label flows — `inwardTextLayout`), spanning dot centre to dot centre,
+ * and it only exists while a drag is in flight.
+ */
+function MinGapMarker({ edge, axis, from, to, crossPx }: { edge: BlockSide; axis: "row" | "column"; from: number; to: number; crossPx: number }) {
+  const OUTWARD_PX = 10;
+  const TICK_PX = 4;
+  const line = "1px solid var(--muted-foreground)";
+  const cross = crossPx / 2 - CONTAINER_BORDER + (edge === "left" || edge === "top" ? -OUTWARD_PX - TICK_PX : OUTWARD_PX);
+  const style: CSSProperties =
+    axis === "column"
+      ? {
+          top: CONTAINER_PADDING + from,
+          height: to - from,
+          left: cross,
+          width: TICK_PX,
+          borderTop: line,
+          borderBottom: line,
+          ...(edge === "left" ? { borderLeft: line } : { borderRight: line }),
+        }
+      : {
+          left: CONTAINER_PADDING + from,
+          width: to - from,
+          top: cross,
+          height: TICK_PX,
+          borderLeft: line,
+          borderRight: line,
+          ...(edge === "top" ? { borderTop: line } : { borderBottom: line }),
+        };
+  return (
+    <span
+      data-slot="port-edge-min-gap"
+      aria-hidden
+      style={{ position: "absolute", boxSizing: "border-box", opacity: 0.7, pointerEvents: "none", zIndex: paintTier("memberContent"), ...style }}
+    />
   );
 }
 
@@ -1032,7 +1220,8 @@ function FreeSlotCard(props: SlotRenderProps & { axis: "row" | "column"; x: numb
  * disabled control must say why (PORT-EDGE-PLAN-PHASE4.md §5: never hide a
  * present feature; a silent no-op violates truthful rendering outright).
  * Column edges only (a CodeMirror document's lines stack vertically);
- * `mode="auto"` only (Custom's free offsets have no defined line order);
+ * `mode="auto"` only (Custom's author-dragged positions have no uniform
+ * pitch for the lane's lines to sit on);
  * blocked ONLY when a `groupMode==="collapsed"` REAL family would render as
  * a ×N chip — one row standing in for N ports breaks the line<->dot
  * bijection.
@@ -1168,6 +1357,10 @@ function PortLaneOverlay({
     top: geometry.top,
     left: geometry.dotRight + LANE_GAP_PX,
     zIndex: paintTier("laneOverlay"),
+    // Same re-arm as `SortableSlotCard`/`FreeSlotCard` — the lane is a real
+    // CodeEditor a user types into, so it opts back into hit-testing that
+    // `blockPort.tsx`'s rail wrapper turns off at the box level.
+    pointerEvents: "auto",
   };
   return (
     <div data-slot="port-edge-lane" style={wrapperStyle}>
@@ -1305,7 +1498,10 @@ function PortEdgeBody({
   onItemsChange,
   distribution = DEFAULT_DISTRIBUTION,
   mode = "auto",
-  freeOffsets = {},
+  freeOffsets = EMPTY_OFFSETS,
+  onFreeOffsetsChange,
+  customNeighbour = "stop",
+  minPortGap = MIN_PORT_GAP_PX,
   groups = "",
   groupMode = "off",
   showPorts = true,
@@ -1328,6 +1524,7 @@ function PortEdgeBody({
   laneLanguage,
   maxVisible,
   variant,
+  reorderChord,
 }: PortEdgeProps) {
   const containerId = id ?? edge;
   const axis = AXIS_FOR_EDGE[edge];
@@ -1408,6 +1605,35 @@ function PortEdgeBody({
   const handlePortLabelWrite = (id: string, value: string) => {
     onItemsChange?.(items.map((it) => (it.id === id ? { ...it, label: value } : it)));
   };
+  // `reorderChord`: the keyboard move, and the focus hand-back it owes once
+  // the host has re-rendered this edge in the new order (see
+  // `captureEditingFocus` for why focus needs handing back at all). The
+  // restore runs in the layout effect of the render that carries the new
+  // `items` — before paint, and before CodeMirror's deferred blur-commit
+  // (`codeEditor.tsx`'s `setTimeout(0)`) could decide the editor was left.
+  const pendingFocusRestore = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const restore = pendingFocusRestore.current;
+    pendingFocusRestore.current = null;
+    restore?.();
+  });
+  const handleReorderKey =
+    reorderChord && mode === "auto"
+      ? (id: string, event: KeyboardEvent) => {
+          const delta = reorderDeltaForKey(event, axis, reorderChord);
+          if (delta === null) return false;
+          const next = moveItemOneSlot(items, allSlots, slots.length, id, delta);
+          if (next !== items) {
+            pendingFocusRestore.current = captureEditingFocus(event.target);
+            onItemsChange?.(next);
+          }
+          // Claimed even when nothing moved (an end, a grouped member): the
+          // chord means "move this port" on this axis, so it never quietly
+          // turns back into a caret move at the ends of the rail.
+          return true;
+        }
+      : undefined;
+  const reorderHint = handleReorderKey && reorderChord ? reorderHintText(axis, reorderChord) : undefined;
   const resolvedTextLayout = textLayout ?? inwardTextLayout(edge);
   // The lane's own line order: the VISUAL (dot) order, not necessarily
   // `items`' raw array order — a grouped family's members render
@@ -1418,7 +1644,7 @@ function PortEdgeBody({
   // B5/B7: every slot — single or grouped — shares this ONE fixed main-axis
   // size and this ONE inter-slot gap, computed the SAME way `interSlotGapPx`
   // assumes (see its own doc). `mode==="custom"` has no pitch guarantee to
-  // begin with (free positions), so it keeps the DEFAULT_ALIGN_GAP fallback
+  // begin with (author positions), so it keeps the DEFAULT_ALIGN_GAP fallback
   // rather than this edge's real distribution math.
   //
   // WHY the gap's "count" is the PORT count of the RENDERED slots, not
@@ -1446,7 +1672,93 @@ function PortEdgeBody({
   const slotMainPx = EMPTY_SLOT_MIN_PX;
   const contentMainPx = (axis === "row" ? resolvedSize.width : resolvedSize.height) - 2 * CONTAINER_BORDER - 2 * CONTAINER_PADDING;
   const visiblePortCount = slots.reduce((n, s) => n + s.members.length, 0);
-  const gapPx = mode === "auto" ? interSlotGapPx(distribution, contentMainPx, visiblePortCount, slotMainPx) : DEFAULT_ALIGN_GAP;
+  const autoGapPx = interSlotGapPx(distribution, contentMainPx, visiblePortCount, slotMainPx);
+  const gapPx = mode === "auto" ? autoGapPx : DEFAULT_ALIGN_GAP;
+
+  // Custom spacing (Zach, 2026-09-22 — see `PortEdgeProps.mode`). Each
+  // slot's own main-axis length, in the gap it actually renders with: a
+  // grouped slot lays its members out at `gap`, a collapsed family is one
+  // slot box.
+  const slotLength = (slot: Slot, gap: number) =>
+    groupMode === "collapsed" || slot.members.length <= 1 ? slotMainPx : slot.members.length * slotMainPx + (slot.members.length - 1) * gap;
+  const slotIds = slots.map((s) => s.slotId);
+  const spacing: PortSpacingOptions = {
+    order: slotIds,
+    minGap: minPortGap,
+    span: contentMainPx,
+    slotSize: slotMainPx,
+    sizes: Object.fromEntries(slots.map((s) => [s.slotId, slotLength(s, gapPx)])),
+    mode: customNeighbour,
+  };
+  // Rule 4: whether THIS render is the one that entered Custom. The ref is
+  // the mode the previous commit rendered with — seeded with the first
+  // render's own mode, so an edge MOUNTED in Custom counts as already in it
+  // and re-validates its stored layout rather than discarding it.
+  const renderedModeRef = useRef(mode);
+  const entering = mode === "custom" && renderedModeRef.current !== "custom";
+  useLayoutEffect(() => {
+    renderedModeRef.current = mode;
+  });
+  const customOffsets =
+    mode === "custom"
+      ? resolveCustomOffsets(
+          freeOffsets,
+          autoSlotOffsets(slotIds, Object.fromEntries(slots.map((s) => [s.slotId, slotLength(s, autoGapPx)])), contentMainPx, distribution),
+          spacing,
+          entering,
+        )
+      : EMPTY_OFFSETS;
+  // The drag in flight on THIS edge: which slot, and how far the pointer has
+  // travelled along the edge's own axis (the cross axis is ignored — a port
+  // moves along its wall and nowhere else).
+  const [customDrag, setCustomDrag] = useState<{ id: string; delta: number } | null>(null);
+  const ownsCustomDrag = (id: unknown) => mode === "custom" && slotIds.includes(String(id));
+  const mainDelta = (delta: { x: number; y: number }) => (axis === "row" ? delta.x : delta.y);
+  const liveCustom = (id: string, delta: number) =>
+    constrainPortPositions({ ...customOffsets, [id]: (customOffsets[id] ?? 0) + delta }, { ...spacing, active: id });
+  const drag = customDrag && slotIds.includes(customDrag.id) ? liveCustom(customDrag.id, customDrag.delta) : null;
+  const shownOffsets = drag ? drag.offsets : customOffsets;
+  // The min-gap marker's pairs: only the run of tight pairs the DRAGGED port
+  // belongs to (itself against the neighbour it stopped at, or every port it
+  // is pushing). A pair the author left tight elsewhere on the wall is not
+  // what this gesture is running into, so it gets no marker.
+  const heldPairs: [string, string][] = [];
+  if (drag && customDrag) {
+    const tight = new Set(drag.tightPairs.map(([from, to]) => `${from}|${to}`));
+    const at = slotIds.indexOf(customDrag.id);
+    for (let i = at; i > 0 && tight.has(`${slotIds[i - 1]}|${slotIds[i]}`); i--) heldPairs.push([slotIds[i - 1], slotIds[i]]);
+    for (let i = at; i < slotIds.length - 1 && tight.has(`${slotIds[i]}|${slotIds[i + 1]}`); i++) heldPairs.push([slotIds[i], slotIds[i + 1]]);
+  }
+  // WHY the edge commits its own Custom drop rather than leaving it to
+  // whichever `DndContext` owns the drag: the drop position is the
+  // CONSTRAINED one, and only this edge knows its order, span and gap — a
+  // provider's `onDragEnd` would see a raw pointer delta. One monitor per
+  // edge, filtered to its own slot ids, works under a standalone context
+  // and a shared `PortEdgeDndProvider` alike.
+  useDndMonitor({
+    onDragStart: ({ active }) => {
+      if (ownsCustomDrag(active.id)) setCustomDrag({ id: String(active.id), delta: 0 });
+    },
+    onDragMove: ({ active, delta }) => {
+      if (ownsCustomDrag(active.id)) setCustomDrag({ id: String(active.id), delta: mainDelta(delta) });
+    },
+    onDragEnd: ({ active, delta }) => {
+      if (!ownsCustomDrag(active.id)) return;
+      setCustomDrag(null);
+      onFreeOffsetsChange?.(liveCustom(String(active.id), mainDelta(delta)).offsets);
+    },
+    onDragCancel: () => setCustomDrag(null),
+  });
+  // Rules 4/5: whatever the edge resolved on its own (the Auto snapshot on
+  // entering Custom, a re-validation after an add/remove/reorder) is written
+  // back, so the host's stored layout is always the one on screen — a
+  // round trip through Auto then has something true to restore.
+  useLayoutEffect(() => {
+    if (mode !== "custom" || customDrag || !onFreeOffsetsChange) return;
+    const keys = Object.keys(customOffsets);
+    const same = keys.length === Object.keys(freeOffsets).length && keys.every((id) => freeOffsets[id] === customOffsets[id]);
+    if (!same) onFreeOffsetsChange(customOffsets);
+  });
 
   const { setNodeRef, isOver } = useDroppable({ id: containerId });
   const trackRef = useRef<HTMLDivElement | null>(null);
@@ -1575,6 +1887,17 @@ function PortEdgeBody({
             {renderOverflow ? renderOverflow({ hiddenCount: hiddenPortCount, hiddenItems, edge, axis }) : `+${hiddenPortCount} more`}
           </span>
         )}
+        {drag &&
+          heldPairs.map(([from, to]) => (
+            <MinGapMarker
+              key={`${from}|${to}`}
+              edge={edge}
+              axis={axis}
+              from={drag.offsets[from] + spacing.sizes![from] - slotMainPx / 2}
+              to={drag.offsets[to] + slotMainPx / 2}
+              crossPx={axis === "column" ? resolvedSize.width : resolvedSize.height}
+            />
+          ))}
         {mode === "custom"
           ? slots.map((slot) => (
               <FreeSlotCard
@@ -1589,7 +1912,8 @@ function PortEdgeBody({
                 slotMainPx={slotMainPx}
                 gapPx={gapPx}
                 color={colorMap.get(slot.slotId)}
-                x={freeOffsets[slot.slotId] ?? 0}
+                x={(drag && customDrag?.id === slot.slotId ? customOffsets : shownOffsets)[slot.slotId] ?? 0}
+                shift={drag && customDrag?.id === slot.slotId ? shownOffsets[slot.slotId] - customOffsets[slot.slotId] : 0}
                 renderItem={renderItem}
                 renderCollapsed={renderCollapsed}
                 textLayoutOverride={resolvedTextLayout}
@@ -1623,6 +1947,8 @@ function PortEdgeBody({
                 variant={variant}
                 editMode={resolvedEditMode}
                 onRequestLaneOpen={() => setLaneOpen(true)}
+                onReorderKey={handleReorderKey}
+                reorderHint={reorderHint}
               />
             ))}
       </div>
@@ -1644,22 +1970,20 @@ export function PortEdge(props: PortEdgeProps) {
 
 /** The standalone wrapper: owns its own `DndContext`, and its own
  *  `handleDragEnd` for the ONE thing a lone edge needs to do — reorder its
- *  own slots (Auto) or nudge a free offset (Custom). A nested `PortEdge`
- *  never runs this; the surrounding `PortEdgeDndProvider`'s own
- *  `onDragEnd` does the equivalent work across every edge it owns. */
+ *  own slots (Auto). Custom's drop is `PortEdgeBody`'s, under either
+ *  context. A nested `PortEdge` never runs this; the surrounding
+ *  `PortEdgeDndProvider`'s own `onDragEnd` does the equivalent work across
+ *  every edge it owns. */
 function StandalonePortEdge(props: PortEdgeProps) {
-  const { edge, items, onItemsChange, mode = "auto", freeOffsets = {}, onFreeOffsetsChange, groups = "", groupMode = "off" } = props;
+  const { items, onItemsChange, mode = "auto", groups = "", groupMode = "off" } = props;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const axis = AXIS_FOR_EDGE[edge];
 
   function handleDragEnd(event: DragEndEvent) {
-    const { active, over, delta } = event;
+    const { active, over } = event;
     const slotId = String(active.id);
-    if (mode === "custom") {
-      const d = axis === "row" ? delta.x : delta.y;
-      onFreeOffsetsChange?.({ ...freeOffsets, [slotId]: Math.max(0, (freeOffsets[slotId] ?? 0) + d) });
-      return;
-    }
+    // Custom's drop is committed by `PortEdgeBody` itself, constrained —
+    // see its `useDndMonitor`.
+    if (mode === "custom") return;
     if (!over || over.id === active.id) return;
     const itemIds = items.map((i) => i.id);
     const { set: groupingSet } = groupingSetFromText(groups, itemIds);

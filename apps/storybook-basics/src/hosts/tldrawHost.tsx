@@ -77,7 +77,7 @@ import {
 
 import type { BlockSide } from "../components/port.layout";
 import { DEFAULT_TRACE_ROUTING, OPPOSITE_DIR, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "../components/trace.layout";
-import { Trace } from "../components/trace";
+import { Trace, traceLinecapOf, traceRingGapPx, traceRouteEnd, traceRouteStart } from "../components/trace";
 import { ancestorsOf } from "../scene/region";
 import { portKey } from "../scene/scene";
 import { sceneWires } from "../scene/sceneWires";
@@ -86,6 +86,7 @@ import type { OpaqueRegionView } from "../scene/regionView";
 import { POINTER_OWNED_CLASS, producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
+import { usePortVariant } from "../skin/portVariants";
 
 /* ------------------------------------------------------------------ */
 /* Scene context — how the shape renderer reaches the record            */
@@ -110,6 +111,9 @@ export interface PortAnchor {
   x: number;
   y: number;
   side: BlockSide | null;
+  /** The dot's painted outer radius, shape-local px (`PortDotSighting.
+   *  ringRadius`) — where the wire overlay ends the cable. */
+  ringRadius: number;
 }
 
 interface TldrawHostContextValue {
@@ -213,6 +217,15 @@ export function shapeIdForNode(nodeId: string): TLShapeId {
 export function contentOwnsPress(nodeType: string | undefined, nodeId: string, target: Element): boolean {
   if (target.closest(`.${POINTER_OWNED_CLASS}`)) return true;
   if (target.closest('[data-slot="block-port-rail"]')) return true;
+  // WHY: a button's click is its whole job, and tldraw's select tool
+  // captures the pointer, so the click never reaches it. A region's arm
+  // fold chevron is a plain `<button>` (region.tsx builds it and knows no
+  // host marker), and a region answers `false` below for everything else.
+  // Measured with a real mouse, 2026-09-22: on a top-level branch both arm
+  // chevrons stayed open, and a press-and-drag on one moved the whole
+  // region 40,30. The same rule protects member regions from their own
+  // drag surface — see nodeViews.tsx `MEMBER_DRAG_VETO`.
+  if (target.closest("button")) return true;
   if ((nodeType ?? "block") === "block") {
     const header = target.closest('[data-slot="block-header"]');
     if (!header) return true;
@@ -260,7 +273,7 @@ function sameAnchors(a: readonly PortAnchor[] | undefined, b: readonly PortAncho
   if (!a) return b.length === 0;
   return (
     a.length === b.length &&
-    a.every((p, i) => p.handleId === b[i].handleId && Math.abs(p.x - b[i].x) < 0.5 && Math.abs(p.y - b[i].y) < 0.5 && p.side === b[i].side)
+    a.every((p, i) => p.handleId === b[i].handleId && Math.abs(p.x - b[i].x) < 0.5 && Math.abs(p.y - b[i].y) < 0.5 && p.side === b[i].side && Math.abs(p.ringRadius - b[i].ringRadius) < 0.5)
   );
 }
 
@@ -298,7 +311,7 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
     // resolves identically.
     const anchors = sightPortDots(wrapper, nodeId, { members: true }).map((sighting): PortAnchor => {
       const local = editor.getPointInShapeSpace(shape.id, editor.screenToPage({ x: sighting.clientX, y: sighting.clientY }));
-      return { portId: sighting.portId, ownerId: sighting.ownerId, handleId: sighting.handleId, x: local.x, y: local.y, side: sighting.side };
+      return { portId: sighting.portId, ownerId: sighting.ownerId, handleId: sighting.handleId, x: local.x, y: local.y, side: sighting.side, ringRadius: sighting.ringRadius };
     });
     bridge.reportAnchors(nodeId, anchors);
   }, [editor, nodeId, shape.id]);
@@ -313,6 +326,16 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
     measure();
   });
 
+  // WHY the port style re-sights the anchors (audit of 7fbf22c, same fix as
+  // `reactFlowHost.tsx`'s `KitWireRouter` and `WireLayer`): a live variant
+  // switch grows every dot's painted ring WITHOUT resizing the shape, so
+  // neither the ResizeObserver below nor a scene render would re-read
+  // `ringRadius`, and `WireOverlay` kept pulling cables back by the OLD
+  // ring. Subscribing re-renders this shape on a switch (the every-render
+  // effect above then re-sights), and the dependency below books the
+  // deferred pass for dots that settle a frame later.
+  const portVariantId = usePortVariant().id;
+
   // Rails land one layout pass after the Block they attach to, and fonts /
   // editor chrome can settle later still — one deferred frame plus a
   // ResizeObserver covers both (the same race wireLayer.tsx documents).
@@ -326,7 +349,7 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [measure]);
+  }, [measure, portVariantId]);
 
   if (!host || !node) return null;
 
@@ -501,7 +524,7 @@ function WireOverlay() {
       const wires = sceneWires(scene);
       const resolved: ResolvedWireRender[] = [];
       const unresolvedIds: string[] = [];
-      const endPoint = (blockId: string, portId: string): { x: number; y: number; side: BlockSide } | null => {
+      const endPoint = (blockId: string, portId: string): { x: number; y: number; side: BlockSide; ringRadius: number } | null => {
         // WHY the ancestor walk: only TOP-LEVEL nodes get a shape
         // (`handleMount`/`topLevelNodes`), so a member has no
         // `shapeIdForNode` of its own and `anchors[memberId]` is never
@@ -518,7 +541,7 @@ function WireOverlay() {
         const page = transform.applyToPoint({ x: anchor.x, y: anchor.y });
         const shape = editor.getShape<BboxNodeShape>(shapeIdForNode(shapeNodeId));
         const side = anchor.side ?? (shape && anchor.x < shape.props.w / 2 ? "left" : "right");
-        return { x: page.x, y: page.y, side };
+        return { x: page.x, y: page.y, side, ringRadius: anchor.ringRadius };
       };
       wires.forEach((wire) => {
         const from = endPoint(wire.from.blockId, wire.from.portId);
@@ -531,12 +554,18 @@ function WireOverlay() {
         }
         resolved.push({
           id: wire.id,
-          from: { x: from.x, y: from.y, dir: from.side as TraceDir },
+          // Each end ON its dot's painted ring, pulled back here per end and
+          // handed to `Trace` with `gap={0}` — the same fix, for the same
+          // quote, as `WireLayer` (wireLayer.tsx: "make the trace end exactly
+          // at the port"). Under the shapes a centre-bound wire would hide
+          // behind an opaque dot but show through a hollow one, and the two
+          // hosts would disagree about where a cable ends.
+          from: traceRouteStart({ x: from.x, y: from.y, dir: from.side as TraceDir }, traceRingGapPx(from.ringRadius, undefined, traceLinecapOf(wire.variant))),
           // The dot's measured centre, with no per-cable offset — Zach's
           // "1 connection point in the center" (2026-09-19). The duplicate
           // fan this host used to apply is gone for the same reason it is
           // gone from `WireLayer`.
-          to: { x: to.x, y: to.y, dir: OPPOSITE_DIR[to.side as TraceDir] },
+          to: traceRouteEnd({ x: to.x, y: to.y, dir: OPPOSITE_DIR[to.side as TraceDir] }, traceRingGapPx(to.ringRadius, undefined, traceLinecapOf(wire.variant))),
           variant: wire.variant,
           routing: wire.routing ?? DEFAULT_TRACE_ROUTING,
           markerEnd: wire.markerEnd,
@@ -565,6 +594,7 @@ function WireOverlay() {
             color={color}
             markerEnd={markerEnd}
             terminals={false}
+            gap={0}
           />
         </g>
       ))}

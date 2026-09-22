@@ -20,43 +20,88 @@
 // shape exists at paint time), and the side fallback is
 // `anchor.side ?? (x < w/2 ? "left" : "right")`.
 
-import { Vec, type Editor, type TLShape, type TLShapeId } from "tldraw";
+import { Vec, atom, type Atom, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
 import { pinElbowSegment, removePin, routeElbow, type ElbowAxis, type ElbowPin, type ElbowRouteInput } from "@trunk/components/elbow";
 import { elbowInputFromTerminals } from "@trunk/components/elbow/traceContract";
-import { traceGeometry, traceRouteEnd, traceRouteStart } from "@trunk/components/trace";
+import { TRACE_STROKE_WIDTH_PX, traceGeometry, traceLinecapOf, traceRingGapPx, traceRouteEnd, traceRouteStart } from "@trunk/components/trace";
 import { traceHitPolyline } from "@trunk/components/trace.hit";
-import { OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "@trunk/components/trace.layout";
+import { OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec, type TraceVariant } from "@trunk/components/trace.layout";
+import { PORT_VARIANTS, portVariantRingRadiusPx, readPortVariantId, subscribePortVariant, type PortVariantId } from "@trunk/skin/portVariants";
 
 import { WIRE_BINDING_TYPE } from "../types";
 import type { WireBinding } from "./WireBindingUtil";
 import type { WireShape } from "./WireShapeUtil";
 
 /**
- * How far the painted line stops short of a dot's measured centre, at each
- * end.
+ * The port style in force, as a tldraw SIGNAL.
  *
- * DEVIATION from the trunk's own `TRACE_TERMINAL_GAP` (16px,
- * `@trunk/components/trace.tsx:617`), and the only one in this file. The
- * trunk's default is sized for `Trace`'s own terminal GLYPHS — it draws a
- * circle at each end and the gap is the room that circle needs. Here the
- * glyph is a REAL `Port` dot rendered by the block (`terminals={false}` in
- * `WireFace`), 12px across in the `md` default (`PORT_DIAMETERS`,
- * `@trunk/components/port.layout.ts:44`), so the room needed is that dot's
- * 6px radius and its rings — not 16px.
+ * WHY a signal and not a plain `readPortVariantId()`: the engine caches every
+ * wire's geometry (its hit corridor, its handles) in a computed cache that
+ * re-runs only when a signal it READ changes. The variant lives on an `<html>`
+ * attribute the engine cannot see, so a live switch (v2 → v3: the ring grows
+ * 6 → 8px) left the cached corridor on the old ends while the paint moved —
+ * found by the 2026-09-22 audit of this lane. Mirroring the attribute into an
+ * atom makes every geometry that reads `wireTerminalGap()` depend on it, so a
+ * switch invalidates exactly those caches and nothing else.
  *
- * It is also the number `src/wiring.smoke.test.tsx` measures: that test
- * requires the painted path's first and last points to land within 14px of
- * the real dots' screen centres, and 16px does not fit inside 14px. 8px
- * clears the dot by 2px and leaves 6px of headroom.
- *
- * Since 2026-09-19 that headroom is spent on nothing: the duplicate fan
- * that used to push a terminal ±7px perpendicular is gone (Zach: "The port
- * only should have 1 connection point in the center"), so every cable's
- * painted end is exactly 8px from its dot's centre ALONG THE WALL NORMAL
- * and zero px across it. `src/fixes.smoke.test.tsx` measures that zero.
+ * Created lazily and kept in sync through the trunk's own attribute
+ * subscription (`subscribePortVariant`, the one `usePortVariant` rides), so
+ * the app and the ports can never disagree about which variant is in force.
+ * Never unsubscribed: it is one observer for the page's lifetime.
  */
-export const WIRE_TERMINAL_GAP = 8;
+let portVariantSignal: Atom<PortVariantId> | null = null;
+function activePortVariant(): PortVariantId {
+  if (portVariantSignal === null) {
+    const signal = atom<PortVariantId>("ss port variant", readPortVariantId());
+    portVariantSignal = signal;
+    subscribePortVariant(() => signal.set(readPortVariantId()));
+  }
+  return portVariantSignal.get();
+}
+
+/**
+ * How far the painted line stops short of a dot's measured centre, at each
+ * end: exactly on the dot's painted outer ring (`traceRingGapPx`).
+ *
+ * WHY a function of the port style in force and not a constant: Zach,
+ * 2026-09-22 — "Please also make the trace end exactly at the port … right
+ * now there is this spacing which is not desirable!" This used to be a
+ * fixed 8px, sized for the `md` 12px dot the blocks once drew; the dots
+ * are now whatever the port variant paints (v2 by default: 8px box + 2px of
+ * rings = 6px), so any fixed number leaves a gap under one variant and
+ * paints over the ring under another. Every dot this app draws is sized by
+ * its variant alone (no `diameter` override on any face), so the variant's
+ * own table is enough — no persisted per-anchor radius is needed.
+ *
+ * ONE function for the paint, the hit polyline AND the pin frame
+ * (`wireElbowInput`): a pin is a fraction of the frame between the pulled-
+ * back ends, so the three must agree or a dragged pin lands somewhere the
+ * user did not put it. A variant switch moves every end by at most ~2.5px
+ * (v1 5.5px ring → v3 8px), and paint and geometry move together (`activePortVariant`).
+ *
+ * Since 2026-09-19 every cable's painted end sits ALONG THE WALL NORMAL and
+ * zero px across it (Zach: "The port only should have 1 connection point in
+ * the center"); `src/fixes.smoke.test.tsx` measures that zero.
+ *
+ * WHY THIS ALSO TAKES THE TRACE `variant`, added 2026-09-22 (re-judge of
+ * d97f5ec): the pull-back is `traceRingGapPx`'s own `linecap`-dependent
+ * number (`trace.tsx`'s own WHY on `TraceLinecap`) — a round/square cap
+ * reaches `strokeWidth/2` past the path's end, a butt cap reaches nothing.
+ * This function used to call `traceRingGapPx` with no third argument, which
+ * defaults to `"round"` — correct for a `data` cable's default paint, wrong
+ * for `async`/dashed cables, which `traceStrokeStyle` paints with a BUTT
+ * cap. The result was exactly the reported bug on those two variants: the
+ * ink stopped `strokeWidth/2` (1px) short of the ring the round-cap math
+ * promised. `traceLinecapOf` is the trunk's own paint-to-cap answer, so the
+ * gap and the paint can never name two different caps for the same cable.
+ */
+export function wireTerminalGap(
+  variant: TraceVariant = "data",
+  portVariant: PortVariantId = activePortVariant(),
+): number {
+  return traceRingGapPx(portVariantRingRadiusPx(PORT_VARIANTS[portVariant]), TRACE_STROKE_WIDTH_PX, traceLinecapOf(variant));
+}
 
 /** A shape that carries measured dot centres — `ss-block` and `ss-port` both
  *  do, and nothing else in the vocabulary does. Read structurally rather than
@@ -167,7 +212,7 @@ export function wireTerminals(editor: Editor, wire: WireShape): { from: TraceTer
  * differ and both are gone:
  *   - the duplicate FAN moved the PAINT of a duplicate wire by up to ±7px
  *     perpendicular while the hit polyline stayed put. Retired 2026-09-19 (see
- *     this file's own `WIRE_TERMINAL_GAP` note).
+ *     this file's own `wireTerminalGap` note).
  *   - a `curved` wire has no vertices (a cubic HAS none, and `traceGeometry`
  *     says so by returning `points: null` rather than inventing some), so this
  *     function used to fall back to `[geometry.start, geometry.end]` — the
@@ -188,8 +233,14 @@ export function wireTerminals(editor: Editor, wire: WireShape): { from: TraceTer
  * behaviour you want from a routing PICKER and the reason the pins are not
  * cleared on a routing change.
  */
-export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, routing: TraceRouting, pins: readonly ElbowPin[] = []): Vec[] {
-  const geometry = traceGeometry({ from, to, routing, gap: WIRE_TERMINAL_GAP, pins });
+export function wireRoutePoints(
+  from: TraceTerminalSpec,
+  to: TraceTerminalSpec,
+  routing: TraceRouting,
+  pins: readonly ElbowPin[] = [],
+  variant: TraceVariant = "data",
+): Vec[] {
+  const geometry = traceGeometry({ from, to, routing, gap: wireTerminalGap(variant), pins });
   const points = traceHitPolyline(geometry);
   // `Polyline2d` needs at least two vertices; a degenerate route (both ends
   // on one point) would otherwise throw inside the engine's segment walk.
@@ -202,7 +253,7 @@ export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, 
  * end points, and the offset is the whole design decision of this feature.
  *
  * THE COLLISION, measured 2026-09-21 in real Chromium before this existed: a
- * cable's end stops `WIRE_TERMINAL_GAP` (8px) short of the dot it is bound
+ * cable's end stops `wireTerminalGap()` (then 8px) short of the dot it is bound
  * to, and a port dot's hit target is a fixed 40px circle
  * (`@trunk/components/port.layout.ts`'s `PORT_HIT_PX`, painted as
  * `[data-slot="port-dot-halo"]`). 8 < 20, so a handle published at the
@@ -284,13 +335,18 @@ function pointAlong(points: readonly Vec[], lengths: readonly number[], distance
  * doc: "the terminals pulled back by `gap`"). A pin is a fraction in the frame
  * spanned by the route's two ENDPOINTS (`elbowPins.ts`'s `resolvePin`), so
  * building it from the un-pulled-back centres would shift every pin by
- * `WIRE_TERMINAL_GAP` worth of span — small, systematic, and invisible until a
+ * `wireTerminalGap()` worth of span — small, systematic, and invisible until a
  * block is dragged and the error scales.
  */
-export function wireElbowInput(from: TraceTerminalSpec, to: TraceTerminalSpec, pins: readonly ElbowPin[]): ElbowRouteInput {
+export function wireElbowInput(
+  from: TraceTerminalSpec,
+  to: TraceTerminalSpec,
+  pins: readonly ElbowPin[],
+  variant: TraceVariant = "data",
+): ElbowRouteInput {
   return elbowInputFromTerminals({
-    from: traceRouteStart(from, WIRE_TERMINAL_GAP),
-    to: traceRouteEnd(to, WIRE_TERMINAL_GAP),
+    from: traceRouteStart(from, wireTerminalGap(variant)),
+    to: traceRouteEnd(to, wireTerminalGap(variant)),
     pins,
   });
 }
@@ -327,8 +383,13 @@ export interface WireRouteSegment {
  * midpoint: a handle that may sit off the drawn cable is a cosmetic defect,
  * while a handle that re-pins the wrong rail is a correctness one.
  */
-export function wireRouteSegments(from: TraceTerminalSpec, to: TraceTerminalSpec, pins: readonly ElbowPin[]): WireRouteSegment[] {
-  const input = wireElbowInput(from, to, pins);
+export function wireRouteSegments(
+  from: TraceTerminalSpec,
+  to: TraceTerminalSpec,
+  pins: readonly ElbowPin[],
+  variant: TraceVariant = "data",
+): WireRouteSegment[] {
+  const input = wireElbowInput(from, to, pins, variant);
   const auto = routeElbow({ ...input, pins: [] });
   const drawn = pins.length === 0 ? auto : routeElbow(input);
   const congruent =
@@ -364,8 +425,9 @@ export function wirePinnedRoute(
   pins: readonly ElbowPin[],
   index: number,
   pointer: Point,
+  variant: TraceVariant = "data",
 ): ElbowPin[] | null {
-  return pinElbowSegment(wireElbowInput(from, to, pins), index, pointer);
+  return pinElbowSegment(wireElbowInput(from, to, pins, variant), index, pointer);
 }
 
 /**

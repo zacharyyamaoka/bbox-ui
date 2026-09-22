@@ -378,9 +378,12 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
     const chrome = [
       // The title strip: the corner block's own row, full width. The corner
       // block is a CHILD and therefore sits ABOVE this in tldraw's z-order,
-      // so pressing the card selects the CARD and pressing the strip beside
-      // it selects the region — which is the frame-heading affordance tldraw
-      // gives its own frames, wearing a real block instead of a text chip.
+      // so pressing the card hits the CARD — which `installRegionKit`'s
+      // selection rewrite turns into the region, because card and frame are
+      // one object (Zach, 2026-09-21) — and pressing the strip beside it hits
+      // the region directly. Either way the frame heading grabs the frame,
+      // the affordance tldraw gives its own frames, wearing a real block
+      // instead of a text chip.
       { y: 0, h: layout.corner.h },
       // One band per arm HEADER — the row you fold and drag by. The arm's
       // BODY is deliberately not chrome: it is where members go, and it has

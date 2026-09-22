@@ -38,7 +38,7 @@ import { ElbowPinV, PointV } from "../shared/props";
 import { DiffMarkStyle, type DiffMark } from "../shared/diffMark";
 import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import { WireFace } from "./WireFace";
-import { WIRE_TERMINAL_GAP, wireAutomaticRoute, wirePinnedRoute, wireRoutePoints, wireRouteSegments, wireTerminalGrabPoints, wireTerminals } from "./wireGeometry";
+import { wireAutomaticRoute, wirePinnedRoute, wireRoutePoints, wireRouteSegments, wireTerminalGap, wireTerminalGrabPoints, wireTerminals } from "./wireGeometry";
 
 export interface WireShapeProps {
   /**
@@ -421,7 +421,7 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
    */
   override getGeometry(shape: WireShape) {
     const { from, to } = wireTerminals(this.editor, shape);
-    const points = wireRoutePoints(from, to, shape.props.routing, shape.props.pins);
+    const points = wireRoutePoints(from, to, shape.props.routing, shape.props.pins, shape.props.variant);
     // The route is handed to the corridor as well as to the polyline: a hidden
     // tunnel measures against its two mouths, which are sliced out of these
     // same points, so hit and paint cannot disagree about where the stubs end.
@@ -430,7 +430,7 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
 
   override getIndicatorPath(shape: WireShape) {
     const { from, to } = wireTerminals(this.editor, shape);
-    const points = wireRoutePoints(from, to, shape.props.routing, shape.props.pins);
+    const points = wireRoutePoints(from, to, shape.props.routing, shape.props.pins, shape.props.variant);
     const path = new Path2D();
     path.moveTo(points[0].x, points[0].y);
     for (const point of points.slice(1)) path.lineTo(point.x, point.y);
@@ -468,7 +468,7 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
    */
   override getHandles(shape: WireShape): TLHandle[] {
     const { from, to } = wireTerminals(this.editor, shape);
-    const route = wireRoutePoints(from, to, shape.props.routing, shape.props.pins);
+    const route = wireRoutePoints(from, to, shape.props.routing, shape.props.pins, shape.props.variant);
     const pins: Omit<TLHandle, "index">[] =
       // A non-elbow routing gets no PIN handles, and that is a statement
       // rather than an omission: `pins` is read by the elbow router alone, so
@@ -477,7 +477,7 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
       // cable has two ends whatever shape it takes between them.
       shape.props.routing !== "elbow"
         ? []
-        : wireRouteSegments(from, to, shape.props.pins).map((segment) => ({
+        : wireRouteSegments(from, to, shape.props.pins, shape.props.variant).map((segment) => ({
             id: `${PIN_HANDLE_PREFIX}${segment.index}`,
             type: segment.pinned ? "vertex" : "virtual",
             x: segment.x,
@@ -491,9 +491,9 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     // twice: the dot's 40px hit circle (`PORT_HIT_PX`, halved to a radius),
     // tldraw's own handle radius (`editor.options.handleRadius`, which is what
     // `ShapeHandleOverlayUtil.getGeometry` hit-tests with), and the gap the
-    // route already leaves. At the defaults that is 20 + 12 - 8 = 24px along
+    // route already leaves. At the defaults (v2 dots) that is 20 + 12 - 7 = 25px along
     // the cable, which puts the handle's hit circle exactly outside the dot's.
-    const clearance = PORT_HIT_PX / 2 + this.editor.options.handleRadius - WIRE_TERMINAL_GAP;
+    const clearance = PORT_HIT_PX / 2 + this.editor.options.handleRadius - wireTerminalGap(shape.props.variant);
     const grab = wireTerminalGrabPoints(route, clearance);
 
     // `vertex` and not `virtual`: a virtual handle means "the engine owns this
@@ -541,7 +541,7 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     const index = pinHandleIndex(info.handle.id);
     if (index === null || shape.props.routing !== "elbow") return undefined;
     const { from, to } = wireTerminals(this.editor, shape);
-    const pins = wirePinnedRoute(from, to, shape.props.pins, index, { x: info.handle.x, y: info.handle.y });
+    const pins = wirePinnedRoute(from, to, shape.props.pins, index, { x: info.handle.x, y: info.handle.y }, shape.props.variant);
     if (!pins) return undefined;
     return { id: shape.id, type: shape.type, props: { pins } };
   }

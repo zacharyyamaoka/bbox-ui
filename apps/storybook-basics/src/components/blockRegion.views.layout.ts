@@ -1,25 +1,46 @@
 // src/components/blockRegion.views.layout.ts — the pure geometry under
 // BlockRegion's VIEWS (Zach, 2026-09-22: "regions do not have a simple view.
 // they just have port, expanded and expanded opaque view"): where the line
-// splitting control ports from ordinary ports sits, and how tall a rail band
-// of `n` slots is.
+// splitting control ports from ordinary ports sits, how tall a rail band of
+// `n` slots is, and how tall a full-width header band is.
 //
-// Pure: no React, no DOM.
+// Pure: no React, no DOM. `blockRegion.tsx` paints from these numbers and
+// `blockRegion.views.layout.test.ts` pins them without mounting anything.
 //
-// PORTED from the sibling branch's `regionViews.layout.ts`
-// (`.claude/worktrees/report-visuals-media-356db5/apps/storybook-basics/src/
-// components/regionViews.layout.ts`, `regionControlSplitPx` /
-// `regionRailBandPx`), restated here because that branch built its views on
-// the older `Region` and never landed on this lineage. Its `wallCrossings`
-// and `regionHeaderBandPx` are NOT ported: this lane draws no crossing
-// markers and no full-width header.
+// ── ONE MODULE, NOT TWO (merge, 2026-09-22) ─────────────────────────────
+// This file and the sibling lineage's `regionViews.layout.ts` each held a
+// byte-identical `regionControlSplitPx` / `regionRailBandPx`, because each
+// lineage grew its own views on its own component. Two derivations of one
+// number is exactly the failure `scene/portEdgeCrossing.ts`'s header warns
+// about — a fix to one silently leaves the other painting the old line — so
+// the merge folds `regionViews.layout.ts` in here rather than keeping both.
+// `regionHeaderBandPx` arrives from that file unchanged; its `wallCrossings`
+// lands in `blockRegion.crossings.ts` for the reason below.
 //
-// PROVENANCE (docs/ALGORITHM-PROVENANCE.md class (c), ours): the rail pitch
-// arithmetic `blockPort.layout.ts` already states (`railPitchPx`,
-// `offsetEdgePaddingPx`), read back as "where is the gap between slot n-1
-// and slot n". No prior art claimed.
+// PROVENANCE (docs/ALGORITHM-PROVENANCE.md, "Region views"):
+//   • `regionControlSplitPx` / `regionRailBandPx` / `regionHeaderBandPx` —
+//     class (c), ours: the rail pitch arithmetic `blockPort.layout.ts`
+//     already states (`railPitchPx`, `offsetEdgePaddingPx`,
+//     `alignedFirstCentrePx`), read back as "where is the gap between slot
+//     n-1 and slot n". No prior art claimed.
+//
+// WHY `wallCrossings` is NOT here but in `blockRegion.crossings.ts`, one file
+// over: it needs the elbow clipper, and this module is inside
+// `blockRegion.tsx`'s import closure, which is what `registry.json`'s
+// `block-region` item ships. Pulling `./elbow` in behind the component made
+// the generator's own sibling check fail — "this registry would install and
+// then fail to compile", because `elbow/` is a directory the walk does not
+// land as a sibling. Nothing the COMPONENT paints needs a clipper: it is
+// handed points. Measured 2026-09-22 by `docs/build_menu_registry_items.py`.
 
 import { PORT_EDGE_SLOT_MIN_PX, RAIL_GAP_PX, railPitchPx } from "./blockPort.layout";
+
+/** A point in a region frame's OWN coordinates — its border-box top-left is
+ *  0,0. What `BlockRegion`'s `crossings` prop paints in. */
+export interface RegionPoint {
+  x: number;
+  y: number;
+}
 
 /** How far into the opaque frame the L-split corner box reaches — room for
  *  a `port Any` label beside its dot. A constant, not a measurement: a
@@ -47,8 +68,25 @@ export function regionControlSplitPx(controlCount: number, slotMainPx: number = 
  * (0 for no slots) — the same sum `scene/fitToContent.ts`'s
  * `railBandHeightForSlots` makes, restated because `src/components` may not
  * import the scene kit (`layering.test.ts`'s import wall).
+ * `blockRegion.views.layout.test.ts` pins the two against each other.
  */
 export function regionRailBandPx(slotCount: number, slotMainPx: number = PORT_EDGE_SLOT_MIN_PX, gap: number = RAIL_GAP_PX): number {
   if (slotCount <= 0) return 0;
   return slotCount * slotMainPx + (slotCount - 1) * gap;
+}
+
+/**
+ * The full-width header band's height for `controlCount` control ports
+ * stacked inside it — exactly where the split line would fall under them,
+ * with ONE slot's worth as the floor so a header with no ports (or one) is
+ * still a bar a glyph and a title fit in.
+ *
+ * WHY it is the split and not a hugged box: the expanded header card and
+ * the opaque face draw the same band (sketch 6's header, sketch 4's opaque
+ * "w/ opaque toggled" when the drawing is full-width), and they must agree
+ * to the pixel or the toggle visibly moves the rule. One formula, both
+ * faces.
+ */
+export function regionHeaderBandPx(controlCount: number): number {
+  return regionControlSplitPx(Math.max(controlCount, 1)) as number;
 }

@@ -65,6 +65,13 @@ const GEO_ICON: Record<GeoMember, ReactNode> = {
   diamond: <Diamond />,
 };
 
+// Donor shortcuts (SystemSketchToolbar.tsx:65-68) — only Rectangle and
+// Ellipse carry one there, so this is deliberately sparse rather than
+// invented for every row: the alignment story below needs at least two real
+// `shortcutHint`s, one of them on the remembered/current row, to prove
+// anything about the shortcut column.
+const GEO_SHORTCUT: Partial<Record<GeoMember, string>> = { rectangle: "R", ellipse: "C / O" };
+
 const shapeFamily: FamilyDeclaration = {
   id: "shape",
   label: "Shapes",
@@ -72,7 +79,12 @@ const shapeFamily: FamilyDeclaration = {
   sections: [
     {
       heading: "Shapes",
-      items: GEO_MEMBERS.map((id) => ({ id, label: id[0].toUpperCase() + id.slice(1), icon: GEO_ICON[id] })),
+      items: GEO_MEMBERS.map((id) => ({
+        id,
+        label: id[0].toUpperCase() + id.slice(1),
+        icon: GEO_ICON[id],
+        shortcutHint: GEO_SHORTCUT[id],
+      })),
     },
     {
       heading: "Lines",
@@ -372,9 +384,13 @@ export const SplitPressArmsAndOpens: Story = {
 };
 
 /**
- * Every family's popout expanded, one at a time, each showing its
- * "current" row check-marked (donor: the `✓` in `ToolMenuItem`) — the
- * gallery the brief asks for: "for every family collapsed and expanded".
+ * Every family's popout expanded, one at a time, each showing its "current"
+ * row highlighted — a persistent `data-current` tint (Zach, 2026-09-21),
+ * not a trailing check: a check there shared the shortcut column's `ml-auto`
+ * slot, so the current row's own shortcut landed short of every other row's
+ * (the BAD dock screenshot he sent — `Rectangle R ✓` with `R` pulled off the
+ * column `Ellipse … O` sits flush on). The gallery the brief asks for: "for
+ * every family collapsed and expanded".
  */
 export const FamilyPopoutsExpanded: Story = {
   render: () => <ToolDockHarness />,
@@ -382,13 +398,36 @@ export const FamilyPopoutsExpanded: Story = {
     const canvas = within(canvasElement);
     const body = within(document.body);
 
-    // Shapes: two headed sections ("Shapes" / "Lines"), Rectangle checked
-    // (the demo's remembered default).
+    // Shapes: two headed sections ("Shapes" / "Lines"), Rectangle
+    // highlighted (the demo's remembered default) — no check anywhere in
+    // the menu, and the row is marked `data-current` for anyone driving it
+    // (an accessible hook the check never gave).
     await userEvent.click(canvas.getByTestId("tool-dock-family-shape"));
-    await waitFor(() => expect(body.getByText("Rectangle")).toBeInTheDocument());
-    await expect(body.getByText("Lines")).toBeInTheDocument();
-    const rectangleRow = body.getByText("Rectangle").closest('[data-slot="dropdown-menu-item"]');
-    await expect(rectangleRow?.querySelector("svg.lucide-check")).not.toBeNull();
+    const shapeMenu = await body.findByText("Rectangle").then((el) => el.closest('[data-slot="dropdown-menu-content"]') as HTMLElement);
+    await expect(within(shapeMenu).getByText("Lines")).toBeInTheDocument();
+    const rectangleRow = within(shapeMenu).getByText("Rectangle").closest('[data-slot="dropdown-menu-item"]') as HTMLElement;
+    await expect(rectangleRow).toHaveAttribute("data-current", "true");
+    await expect(shapeMenu.querySelector("svg.lucide-check")).toBeNull();
+
+    // The row's OWN tint is a different colour than the plain resting
+    // state — this is the mechanical form of "the tool you're on" being
+    // visibly a different thing from "no row highlighted at all".
+    const ellipseRow = within(shapeMenu).getByText("Ellipse").closest('[data-slot="dropdown-menu-item"]') as HTMLElement;
+    await expect(getComputedStyle(rectangleRow).backgroundColor).not.toEqual(getComputedStyle(ellipseRow).backgroundColor);
+
+    // Shortcut column: every row that has a shortcut lands its right edge
+    // on the same x — Rectangle (current) included, not pulled left by
+    // anything sharing its space. `getBoundingClientRect`, not a DOM-
+    // presence assertion (CLAUDE.md: "measured ... never asserted from the
+    // DOM").
+    const shortcutEdges = Array.from(shapeMenu.querySelectorAll('[data-slot="dropdown-menu-shortcut"]')).map(
+      (el) => el.getBoundingClientRect().right,
+    );
+    await expect(shortcutEdges.length).toBeGreaterThanOrEqual(2);
+    for (const edge of shortcutEdges) {
+      await expect(Math.abs(edge - shortcutEdges[0])).toBeLessThanOrEqual(1);
+    }
+
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')).toBeNull());
 
@@ -400,7 +439,7 @@ export const FamilyPopoutsExpanded: Story = {
     await waitFor(() => expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')).toBeNull());
 
     // Picking a row calls onSelectItem AND remembers the pick — verified by
-    // re-opening and seeing the check mark move.
+    // re-opening and seeing the highlight move.
     await userEvent.click(canvas.getByTestId("tool-dock-family-draw"));
     await waitFor(() => expect(body.getByText("Highlighter")).toBeInTheDocument());
     await userEvent.click(body.getByText("Highlighter"));
@@ -605,15 +644,18 @@ export const ArrowPresetCycle: Story = {
     await userEvent.keyboard("a");
     await expectFace("Straight arrow", true);
 
-    // The popout: rows in the order A reaches them, each with its press count,
-    // the current one checked.
+    // The popout: rows in the order A reaches them, each with its press
+    // count, the current one highlighted (a `data-current` tint, not a
+    // check — see toolDock.tsx's WHY comment).
     await userEvent.click(face());
     await waitFor(() => expect(body.getByText("Arrows · repeat A to cycle")).toBeInTheDocument());
     const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]')).filter((row) =>
       /arrow/i.test(row.textContent ?? ""),
     );
     await expect(rows.map((row) => row.textContent)).toEqual(["Elbow arrowA", "Straight arrowA × 2", "Curved arrowA × 3"]);
-    await expect(rows[1].querySelector("svg.lucide-check")).not.toBeNull();
+    await expect(rows[1]).toHaveAttribute("data-current", "true");
+    await expect(rows[0]).not.toHaveAttribute("data-current");
+    await expect(rows[0].querySelector("svg.lucide-check")).toBeNull();
 
     // Picking a row arms that preset; the next A advances from it.
     await userEvent.click(body.getByText("Curved arrow"));

@@ -48,7 +48,6 @@ import {
   type PortVariantId,
 } from "@trunk/skin/portVariants";
 import {
-  DEFAULT_REGION_VARIANT,
   REGION_VARIANT_IDS,
   REGION_VARIANTS,
   isRegionVariantId,
@@ -58,10 +57,28 @@ import {
 
 import { reconcileRegionProps, type RegionShape } from "../../shapes/region";
 import { REGION_SHAPE_TYPE } from "../../shapes/types";
+import { runRepair } from "../../document/derivedWrites";
 
 /** The two per-viewer keys, spelled by the lane brief. */
 export const PORT_VARIANT_STORAGE_KEY = "bbox.portVariant";
 export const REGION_VARIANT_STORAGE_KEY = "bbox.regionVariant";
+
+/**
+ * What a viewer with NOTHING stored opens on. A stored pick still wins
+ * (`readStored`) — only the fallback moved.
+ *
+ * WHY v2 and v9: Zach, 2026-09-22 — "Please also lets do ports v2 as the
+ * default ones … and for regions make v9 the default one". WHY an app
+ * constant rather than the tables' own `DEFAULT_*`: the tables' default is
+ * the ABSENT attribute, and each variant's CSS is keyed on the attribute
+ * with `v1`'s values as every token's fallback — so an absent attribute
+ * always paints v1, whatever the TS default says. Stamping v2/v9 like any
+ * other pick keeps paint and numbers (the region header height
+ * `cornerBlock.ts` lays out with) on the same drawing. Storybook's toolbar
+ * opens on the same pair (`.storybook/preview.tsx`, `initialGlobals`).
+ */
+export const APP_DEFAULT_PORT_VARIANT: PortVariantId = "v2";
+export const APP_DEFAULT_REGION_VARIANT: RegionVariantId = "v9";
 
 /* ------------------------------------------------------------------ */
 /* Storage — per viewer, never a reason to block the board             */
@@ -137,7 +154,9 @@ function setPortVariant(id: PortVariantId | null): void {
  * not an edit to the document — it must not become the first Ctrl-Z of the
  * session (`shared/measure.ts`'s reason). WHY `ignoreShapeLock`: a locked
  * region is locked against its author, not against a repair of its own
- * geometry.
+ * geometry. WHY `runRepair` (derived, `document/derivedWrites.ts`): the
+ * switch settles on every mount too, and a board opened and left alone must
+ * not be written back.
  */
 export function resettleRegions(editor: Editor): void {
   const updates: TLShapePartial[] = [];
@@ -149,7 +168,7 @@ export function resettleRegions(editor: Editor): void {
     const { w, h, arms } = settled.props;
     updates.push({ id: region.id, type: REGION_SHAPE_TYPE, props: { w, h, arms } } as TLShapePartial);
   }
-  if (updates.length > 0) editor.run(() => editor.updateShapes(updates), { history: "ignore", ignoreShapeLock: true });
+  if (updates.length > 0) runRepair(editor, () => editor.updateShapes(updates), { ignoreShapeLock: true });
 }
 
 /* ------------------------------------------------------------------ */
@@ -261,8 +280,8 @@ function VariantMenu<T extends string>({ which, label, heading, ids, titleOf, va
  */
 export function VariantSwitch() {
   const editor = useEditor();
-  const [port, setPort] = useState<PortVariantId>(() => readStored(PORT_VARIANT_STORAGE_KEY, isPortVariantId, DEFAULT_PORT_VARIANT_ID));
-  const [region, setRegion] = useState<RegionVariantId>(() => readStored(REGION_VARIANT_STORAGE_KEY, isRegionVariantId, DEFAULT_REGION_VARIANT));
+  const [port, setPort] = useState<PortVariantId>(() => readStored(PORT_VARIANT_STORAGE_KEY, isPortVariantId, APP_DEFAULT_PORT_VARIANT));
+  const [region, setRegion] = useState<RegionVariantId>(() => readStored(REGION_VARIANT_STORAGE_KEY, isRegionVariantId, APP_DEFAULT_REGION_VARIANT));
 
   useLayoutEffect(() => {
     setPortVariant(port);

@@ -53,7 +53,9 @@ import {
   RAIL_END_MARGIN_PX,
   RAIL_GAP_PX,
   RAIL_MAIN_INSET_PX,
+  railBandHeightForSlots,
   type BlockPortLayout,
+  type RailBandMetrics,
 } from "../components/blockPort.layout";
 import { CONTAINER_BORDER, CONTAINER_PADDING, interSlotGapPx, type Distribution } from "../components/portEdge.layout";
 
@@ -61,105 +63,13 @@ import { CONTAINER_BORDER, CONTAINER_PADDING, interSlotGapPx, type Distribution 
 /* 1 · The band a rail needs — the inverse of the clamp                */
 /* ------------------------------------------------------------------ */
 
-export interface RailBandMetrics {
-  /** Main-axis size of one slot box. Default: the rail's own slot size. */
-  slotMainPx?: number;
-  /** The port-to-port gap the band must be able to afford. */
-  gapPx?: number;
-  /** `RailPlan.endMarginPx` — the inset applied at BOTH ends of the rail's
-   *  content box. Zero for a body-band rail, `RAIL_END_MARGIN_PX` for a
-   *  wall-spanning one. */
-  endMarginPx?: number;
-  /**
-   * The rail's own `Distribution`. Omit for `aligned`, which is port
-   * view's left/right-only default.
-   *
-   * WHY this is a parameter at all — a finding, not a guess: the required
-   * band is NOT the same for every distribution, because the space-*
-   * schemes spend some of the band on END gaps that `aligned` does not
-   * have. Sizing a band for `aligned` and then rendering it
-   * `space-around` drops the real pitch from 42px to 33px, a silent 21%
-   * squeeze — measured by `fitToContent.test.ts`'s
-   * "holds the full pitch in EVERY distribution", which failed exactly
-   * this way on its first run and is the reason this field exists.
-   */
-  distribution?: Distribution;
-}
-
-/**
- * How many gap-widths a distribution spends across `slotCount` boxes.
- *
- * Straight from CSS Box Alignment Level 3's normative definitions, already
- * quoted in `portEdge.layout.ts`'s `mainAxisPositions` docblock (spec read
- * 2026-09-17 at https://www.w3.org/TR/css-align-3/) — read the gap count
- * off each definition rather than re-deriving it:
- *
- *   • `aligned`       — a real flexbox `gap`, only BETWEEN boxes → n-1.
- *   • `space-between` — flush at both ends, gaps only between     → n-1.
- *   • `space-around`  — a HALF gap at each end (two halves = one)  → n.
- *   • `space-evenly`  — a FULL gap at each end                     → n+1.
- */
-function gapCountFor(slotCount: number, distribution?: Distribution): number {
-  if (slotCount <= 0) return 0;
-  if (distribution == null || distribution.mode === "aligned") return slotCount - 1;
-  switch (distribution.scheme) {
-    case "space-between":
-      return slotCount - 1;
-    case "space-around":
-      return slotCount;
-    case "space-evenly":
-      return slotCount + 1;
-  }
-}
-
-/**
- * The band height at which `slotCount` slots all keep their FULL pitch.
- *
- * ── The derivation, because it is the whole point of this function ──
- *
- * `blockPort.layout.ts`'s `railBoxFor` turns a band into a track box:
- *
- *     trackMain = (bandEnd - endMargin) - (bandStart + endMargin)
- *                 + 2 * RAIL_MAIN_INSET_PX
- *
- * and `portEdge.tsx`'s track then spends `CONTAINER_BORDER` +
- * `CONTAINER_PADDING` on each side before its first slot box. Since
- * `RAIL_MAIN_INSET_PX` is DEFINED as `CONTAINER_BORDER + CONTAINER_PADDING`
- * (blockPort.layout.ts:101), those two cancel exactly and the usable
- * content main is simply:
- *
- *     contentMain = band - 2 * endMargin
- *
- * `n` slot boxes at full pitch need `n*slot + (n-1)*gap`. Setting the two
- * equal and solving for the band gives the return value below.
- *
- * ── WHY: the coupling this docblock would otherwise only warn about ──
- *
- * The donor's own comment at `layoutBlock.ts:497-501` says it plainly:
- * "`layoutBlock` compresses `pitch` to whatever room is left, so adding a
- * port to a full box silently squeezes every existing row. This is the
- * exact inverse of that clamp and therefore lives beside it: any change to
- * the body's padding or to the footer has to move both numbers together or
- * neither."
- *
- * A comment cannot enforce that. So the cancellation above is pinned as a
- * ROUND-TRIP TEST instead (`fitToContent.test.ts`, "the RAIL_MAIN_INSET_PX
- * cancellation"): the test feeds this function's output through the REAL
- * `railBoxFor` and the REAL `CONTAINER_BORDER`/`CONTAINER_PADDING`, and
- * asserts the content main lands on exactly `n*slot + (n-1)*gap`. Change
- * `CONTAINER_PADDING` without `railBoxFor` following — or hardcode `16`
- * where `RAIL_MAIN_INSET_PX` belongs — and that test goes red instead of
- * this file quietly disagreeing with the renderer.
- *
- * Returns 0 for `slotCount <= 0`: an unpopulated edge imposes no floor at
- * all, which is what keeps `Block`'s "omit height to hug" contract intact
- * for every Block that has no ports (see `resolveBlockHeight`).
- */
-export function railBandHeightForSlots(slotCount: number, metrics: RailBandMetrics = {}): number {
-  const { slotMainPx = PORT_EDGE_SLOT_MIN_PX, gapPx = RAIL_GAP_PX, endMarginPx = 0, distribution } = metrics;
-  if (slotCount <= 0) return 0;
-  return slotCount * slotMainPx + gapCountFor(slotCount, distribution) * gapPx + 2 * endMarginPx;
-}
+// MOVED 2026-09-22 (lane trace-defaults) to `blockPort.layout.ts`, verbatim,
+// docblock and all: `minBlockHeightFor` there needs this exact band formula,
+// and `blockPort.layout.ts` is a registry file that cannot import `scene/`
+// (the registry's sibling rule). Re-exported here so every existing import
+// — `nodeViews.tsx`, `FitToContent.stories.tsx`, this file's own tests —
+// keeps reading ONE function rather than a second copy of the rule.
+export { railBandHeightForSlots, type RailBandMetrics } from "../components/blockPort.layout";
 
 /* ------------------------------------------------------------------ */
 /* 2 · How many slots a port-view Block actually needs                 */

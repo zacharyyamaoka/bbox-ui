@@ -42,6 +42,7 @@ import type { CSSProperties } from "react";
 
 import { Block } from "./block";
 import { BlockPort, type BlockEdgeSpec } from "./blockPort";
+import { minBlockHeightFor } from "./blockPort.layout";
 import { CodeEditor, type CodeEditorDiagnostic, type CodeEditorProps } from "./codeEditor";
 import { maxDiagnosticSeverity, type Diagnostic, type HighlighterKind } from "./highlighter";
 import type { PortSize } from "./port.layout";
@@ -163,11 +164,24 @@ export function ValueCapsule({
     ? [{ from: diagnosticRange?.from ?? 0, to: diagnosticRange?.to ?? value.length, severity: capsuleSeverity }]
     : undefined;
 
+  // The same floor `BlockPort` clamps every Block to (`minBlockHeightFor` —
+  // Zach, 2026-09-22: "You should never have a rendering issue like this"),
+  // taken HERE for an explicit height so the pill's radius is half the
+  // height it actually RENDERS at. Left to `BlockPort` alone, a too-short
+  // authored height would grow the box while the radius stayed half the
+  // old number — a rounded rectangle, not a pill. No header or footer: the
+  // capsule's band is the whole block.
+  const view = expanded ? "expanded" : "simple";
+  const renderedHeight =
+    height === undefined
+      ? undefined
+      : Math.max(height, minBlockHeightFor({ view, ports: { left: writers?.length ?? 0, right: readers?.length ?? 0 } }));
+
   return (
-    <BlockPort id={id} view={expanded ? "expanded" : "simple"} edges={edges} diameter={diameter}>
+    <BlockPort id={id} view={view} edges={edges} diameter={diameter}>
       <Block
         width={width}
-        height={height}
+        height={renderedHeight}
         diagnostics={diagnostics}
         highlighterKind={highlighterKind}
         // §5: "no flag — a capsule is too small". The mark above is still
@@ -183,7 +197,7 @@ export function ValueCapsule({
         // editor below already fixes its own width from `columns`, so
         // max-content is just "wrap that", not a measurement.
         style={{
-          borderRadius: valueCapsuleRadiusPx(height),
+          borderRadius: valueCapsuleRadiusPx(renderedHeight),
           ...(width === undefined ? { width: "max-content" } : null),
           ...style,
         }}

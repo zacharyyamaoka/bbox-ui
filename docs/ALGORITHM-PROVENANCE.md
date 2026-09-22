@@ -38,6 +38,7 @@ honest admission invites it.
 | `portLane.ts` | (a) + (b) | SystemSketch `src/blocks/portLane.ts:62-86`, `:102-176`; LCS prior art below | Opened both ranges; confirmed `BlockInlineEditor.tsx:15` really is the importer, and the babble twin at `portTextShared.ts:186` really is a different function |
 | `portEdge.layout.ts` | (a) + (b) | `demos/dndkit-lab/src/{layout,grouping,groupSyntax}.ts` @ `5898ecb`; CSS Align 3 below | Read via `git show 5898ecb:…`; line spans pinned |
 | `blockPort.layout.ts` | (c) | Behaviour spec'd from SystemSketch `layoutBlock.ts`, **not one line ported**; vocabulary from `blockModel.ts:96` | Confirmed `:96` is exactly `BLOCK_PRESENTATION_VIEWS` |
+| `sideEffects.layout.ts` | (b) + (c) | `sideEffectWallLayout`: (b) — each half of the top wall is CSS Align 3 `space-evenly`, computed by CALLING `portEdge.layout.ts`'s `mainAxisPositions` (§1 below), not re-implemented; the split at the midpoint is Zach's own rule (2026-09-22, "Splits down the middle"). `mutationRoute`: **(c), ad hoc — no prior art claimed**; a two-segment horizontal-then-vertical polyline plus a triangle, the route Zach drew | `sideEffects.layout.test.ts` asserts each half equals `mainAxisPositions(n, half, 0, "space-evenly")` directly; `SideEffectPorts.stories.tsx` measures the rendered dots and line. Mutation-tested 2026-09-22: divider +6px and dots +4px off the wall each turned the story red, restored |
 | `port.layout.ts` | (a) | `packages/bbox-ui/src/port.layout.ts:31`, `:40-41`, `:508`, `:549`, `:590+` | Opened; line numbers pinned |
 | `glyph.layout.ts` | (a) | `packages/bbox-ui/src/glyph.layout.ts:11`, `:20-43`, `:45-52` | Opened; donor is 53 lines |
 | `codeEditorLayout.ts` | (a) | `codeBlock.layout.ts:111`, `:112`, `:116`, `:135` on branch `claude/code-block-primitive` | Read via `git show`; constants confirmed identical |
@@ -271,6 +272,17 @@ the recommendation that it eventually move beside `blockPort.layout.ts`.
 |---|---|---|---|
 | `layout/fitToContent.ts` | (c) + spec | **(c) every line of arithmetic is ours**, derived from this kit's own exported constants (`PORT_EDGE_SLOT_MIN_PX`, `RAIL_GAP_PX`, `RAIL_MAIN_INSET_PX`, `CONTAINER_BORDER`/`CONTAINER_PADDING`). The donor computes over tldraw shape props and its own `NODE_ROW_HEIGHT_PX = 44`, none of which exists here, so nothing could be copied even in principle. **Spec only**, from SystemSketch, all read read-only 2026-09-18: `blockPortViewHeightForSlots` → `layoutBlock.ts:495-517` (the "inverse of the clamp" idea and its own coupling warning, quoted verbatim in the code); `portViewSlotCount` → `layoutBlock.ts:461` (`planBodySlots`, `outputStart = slot + inputs.length`) via `blockPortSlotCount` (`:490`); `railPitchForBand` → `layoutBlock.ts:1434` (`pitch = Math.min(NODE_ROW_HEIGHT_PX, available / plan.slotCount)`), reproduced as a **detector**, not as a layout step; `fitBoxToMembers` → `blockAutoResize.ts:87-118` (`Box.FromPoints` + a uniform pad) and its empty-container rule at `:220-223`. `gapCountFor`'s four cases are read off CSS Box Alignment Level 3's normative definitions, already quoted in `portEdge.layout.ts`'s `mainAxisPositions` docblock (§1 of this file). `resolveBlockHeight` is **(c), ad hoc — no prior art claimed**; it is three `Math.max` expressing Zach's "floored, never overridden". | Every donor range opened with `sed -n` on `/home/bam/systemsketch/src/blocks/` (read-only; nothing written there). `layoutBlock.ts` is 1,674 lines and `:1434` really is the `Math.min` clamp; `blockAutoResize.ts` is 276 lines and `:27` really is `BLOCK_AUTO_RESIZE_PADDING_PX = 56`. **The 56 is deliberately NOT ported** — the donor's own `:21-27` says it is sized for tldraw's single-scalar `fitFrameToContent` and a 48px header, which is a stock-API workaround rather than a design value; see that function's WHY. |
 
+**Moved 2026-09-22 (lane `trace-defaults`):** `railBandHeightForSlots` (with
+`gapCountFor` and `RailBandMetrics`) now lives in
+`components/blockPort.layout.ts`, verbatim, docblock and all;
+`scene/fitToContent.ts` re-exports it. Same classification as above. Beside
+it:
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `components/blockPort.layout.ts` — `minBlockHeightFor` | (c) | **Ours — a composition, no new arithmetic.** It runs the renderer's own `railPlanFor` for each side wall and sizes the band with `railBandHeightForSlots` (above); the only rules of its own are "a lone dot needs one slot and no end gaps" and "a `body`-band rail adds the MEASURED header/footer". The rule it enforces is SystemSketch's `blockPortViewHeightForSlots` (`layoutBlock.ts:495-517`), already cited above for `blockPortViewMinHeight`, which is its port-view special case. | `minBlockHeight.test.ts` (12 cases) checks the headline case against an independent placement — `alignedFirstCentrePx` + one `railPitchPx` per port — not a restated formula: at the floor the last slot meets the body bottom exactly, 1px under it does not. Mutation-tested: `n - 1` slots turns 9 of 12 red. |
+| `components/trace.tsx` — `traceRingGapPx` / `traceDefaultGapPx`; `skin/portVariants.ts` — `portDotRingRadiusPx` | (c) | **Ours, ad hoc** — "end the line on the painted ring": outer radius = dot box / 2 + the variant's gap + ring (the same `portVariantRingOverhangPx` the table already published), plus half the stroke for the round cap. No prior art claimed. | `TraceDefaults.stories.tsx` reads the ring off the dot's COMPUTED `box-shadow`, never off these functions; restoring the old fixed 16px turns it red (9.00px off the ring). |
+
 ### The one number this lane could not take from anywhere
 
 `railBandHeightForSlots`'s `distribution` parameter has **no donor**. It exists
@@ -490,3 +502,22 @@ projection) was evaluated and **diverged from** — see
 `docs/GROUPING-ALGEBRA.md` for the reasoning and the three Zach rulings that
 force a document mutation instead. Citing it as a donor would be citing
 something this lane never read.
+
+## `components/blockRegion.views.layout.ts` + `blockRegion.crossings.ts` — region views (2026-09-22, lane `region-views`)
+
+Zach's six region-view sketches (port · expanded tab/full-width · expanded
+opaque · wall crossings · branches). Two geometry pieces: where the line
+splitting control ports from ordinary ports goes, and where a wire crosses a
+region frame's wall.
+
+Renamed at the 2026-09-22 merge, when `Region` became `BlockRegion` and the
+two lineages' byte-identical copies of the split arithmetic were folded into
+one file. The two pieces live in two files on purpose: `blockRegion.tsx`'s
+import closure is what `registry.json`'s `block-region` item ships, and
+pulling `components/elbow/` in behind it fails the generator's own sibling
+check. The component is handed crossing points; it never clips.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `components/blockRegion.views.layout.ts` — `regionControlSplitPx`, `regionRailBandPx`, `regionHeaderBandPx` | (c) | None claimed. This is the rail pitch arithmetic `blockPort.layout.ts` already states (`railPitchPx`, `offsetEdgePaddingPx`, `alignedFirstCentrePx`), read back as "the midpoint of the gap between slot n-1 and slot n". `regionRailBandPx` restates `scene/fitToContent.ts`'s `railBandHeightForSlots` because `src/components` may not import `src/scene` | `blockRegion.views.layout.test.ts`: the split is checked against an **independent oracle**, `railPlanFor` + `alignedFirstCentrePx` plus one pitch per slot, not against this file's own formula. `regionRailBandPx` is checked equal to `railBandHeightForSlots` for 0-8 slots. Measured in the browser too: `RegionViews.stories.tsx` asserts that the painted line lies between the control dots and the ordinary dots. Mutation-tested: moving the painted line 30px down fails that story (`expected 156.5 to be greater than 169`); restored |
+| `components/blockRegion.crossings.ts` — `wallCrossings` | (c) over (a) | The intersection is **not ours**: it is `components/elbow/boundaryCrossing.ts`'s `boundaryCrossings` (Liang–Barsky, Excalidraw→SystemSketch, a byte-for-byte donor copy), called as-is. Ours is only the translation into frame-local coordinates | Read `boundaryCrossing.ts` in full on disk before writing. `blockRegion.views.layout.test.ts` checks a diagonal crossing against similar triangles (`y = y0 + (X−x0)(y1−y0)/(x1−x0)`), plus the enter/exit/elbow/none cases. In the browser, `RegionViews.stories.tsx` asserts that every marker centre sits on the measured frame border (±1px) and that there is one marker per crossing edge (the count comes from the fixture, independently of the geometry). Mutation-tested: offsetting the markers 6px fails that story (`marker at (154.0, 1098.8) is not on the frame border`); restored |

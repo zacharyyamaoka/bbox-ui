@@ -70,7 +70,27 @@
 // drew before, so no host changes. The views are ported from the sibling
 // branch's `region.tsx` (`view: "port"`, `opaqueFace: "frame"`,
 // `RegionViewToggle`) and its `blockOpaqueTitle.tsx`, trimmed to the corner
-// header this component already has: no `headerStyle`, no `crossings`.
+// header this component already has.
+//
+// ── THE HEADER DRAWINGS (merge, 2026-09-22) ─────────────────────────────
+// That trim said "no `headerStyle`, no `crossings`" — true while the two
+// lineages were separate, and wrong the moment they merged, because both are
+// Zach's own 2026-09-22 sketches and only this file survives to draw them.
+// They are back, as two independent props that BOTH default to what this
+// component already drew:
+//   • `headerStyle` — how the expanded frame marks its top edge: today's
+//     corner card (`corner-card`, the default), a small title tab
+//     (`corner-tab` / `corner-tab-full`), or a header bar across the whole
+//     top (`full-width`). The id rule survives every one: whichever element
+//     owns the region's PORTS carries the ONE `data-block-id`; the root and
+//     the frame carry only `data-region-id`; a tab owns no port and carries
+//     neither.
+//   • `crossings` — the small hollow circles where a cable crosses the
+//     frame's wall, frame-local (`blockRegion.views.layout.ts`'s
+//     `wallCrossings`, measured per host by `hosts/regionCrossings.ts`).
+//     Decorative: no id, no pointer events, so nothing can bind to one. They
+//     emit the `portDot` paint tier, which is why the expanded and opaque
+//     roots spread `ISOLATED_ROOT_STYLE` (paintOrder.ts's invariant).
 //
 // WHY no region-level chevron anywhere in this file (Zach, 2026-09-22):
 // "Please do not put chevron drop downs on the regions." The region's view
@@ -99,16 +119,24 @@ import { Badge } from "./badge";
 import { Glyph } from "./glyph";
 import type { Diagnostic } from "./highlighter";
 import { cn } from "../lib/utils";
+import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 import type { BlockSide } from "./port.layout";
 import type { PortEdgeItem } from "./portEdge";
 import {
   REGION_ARM_FADE_OPACITY,
   REGION_CARD_WIDTH_PX,
   REGION_CORNER_WIDTH_PX,
+  REGION_MIN_WIDTH_PX,
   regionLayout,
   type RegionLayout,
 } from "./blockRegion.layout";
-import { REGION_CONTROL_BOX_WIDTH_PX, regionControlSplitPx, regionRailBandPx } from "./blockRegion.views.layout";
+import {
+  REGION_CONTROL_BOX_WIDTH_PX,
+  regionControlSplitPx,
+  regionHeaderBandPx,
+  regionRailBandPx,
+  type RegionPoint,
+} from "./blockRegion.views.layout";
 import {
   DEFAULT_REGION_VARIANT,
   REGION_VARIANT_ATTR,
@@ -116,6 +144,8 @@ import {
   readRegionVariant,
   type RegionVariantId,
 } from "../skin/regionVariants";
+
+export type { RegionPoint } from "./blockRegion.views.layout";
 
 export type RegionKind = "loop" | "branch" | "group";
 /**
@@ -132,6 +162,22 @@ export type RegionView = "expanded" | "opaque" | "port";
  * size, the members go, and glyph + Title + Type sit centred.
  */
 export type RegionOpaqueFace = "card" | "frame";
+
+/**
+ * How the expanded frame marks its top edge (Zach, 2026-09-22).
+ *  • `corner-card` — the Block in the corner (the default; `corner`,
+ *    `cornerCard` or `title` supplies it, exactly as before this prop
+ *    existed).
+ *  • `corner-tab` — a small tab at the top-left with just the title.
+ *  • `corner-tab-full` — the same tab with glyph + title + type.
+ *  • `full-width` — a header bar across the frame's whole top; glyph + title
+ *    + type centred, control ports (if any) stacked at its left end.
+ *
+ * WHY only `corner-card` reads `corner`/`cornerCard`: the other three are
+ * drawings BlockRegion makes for itself out of `glyph`/`title`/`type` and
+ * `controlPorts`, so a host that picks one is not also handing in a card.
+ */
+export type RegionHeaderStyle = "corner-card" | "corner-tab" | "corner-tab-full" | "full-width";
 
 export interface RegionArm {
   id: string;
@@ -272,6 +318,19 @@ interface BlockRegionBaseProps {
   boundaryPorts?: Partial<Record<"left" | "right", PortEdgeItem[]>>;
   /** Default `card`. */
   opaqueFace?: RegionOpaqueFace;
+  /** Default `corner-card` — every caller that predates it renders exactly
+   *  what it rendered before. See `RegionHeaderStyle`. */
+  headerStyle?: RegionHeaderStyle;
+  /**
+   * Where wires cross the frame's border, FRAME-LOCAL (border-box top-left
+   * is 0,0) — `blockRegion.views.layout.ts`'s `wallCrossings`, measured per
+   * host by `hosts/regionCrossings.ts`. Each paints a small hollow circle on
+   * the wall. Decorative only: not a port, no id, no pointer events, so
+   * nothing can bind to one. Drawn in the EXPANDED view only — once the
+   * inside is hidden a crossing is a real promoted port on the wall
+   * (`boundaryPorts`), not a mark.
+   */
+  crossings?: readonly RegionPoint[];
   /** Present = draw the Blackbox toggle at the frame's top-right, in the
    *  expanded view and on the Expanded Opaque face. The caller owns the
    *  view; this only asks for it to flip. */
@@ -677,8 +736,11 @@ function CornerCardView({
 }
 
 /* ------------------------------------------------------------------ */
-/* The views (Zach, 2026-09-22) — ported from the sibling branch's      */
-/* `region.tsx` (RegionViewToggle, RegionPortCard, RegionOpaqueFrame)   */
+/* The views and the header drawings (Zach, 2026-09-22) — grown from    */
+/* the sibling branch's `region.tsx`, which the 09-22 merge retired:    */
+/* its RegionViewToggle is this file's BlockRegionBlackboxToggle, and   */
+/* RegionPortCard / RegionOpaqueFrame / RegionTab / RegionHeaderCard /  */
+/* RegionCrossingMarkers came across whole.                             */
 /* ------------------------------------------------------------------ */
 
 /** `block.tsx`'s body is `p-2`. The port card's section box cancels it with
@@ -688,6 +750,14 @@ const BLOCK_BODY_PADDING_PX = 8;
 
 /** Inset of the Blackbox toggle from the frame's top-right corner. */
 const REGION_TOGGLE_INSET_PX = 4;
+/** `Button size="icon-xs"` is `size-6` — the toggle's own box, needed to
+ *  centre it vertically in a full-width header band. */
+const REGION_TOGGLE_PX = 24;
+
+/** The wall-crossing marker's diameter and stroke — "a small HOLLOW CIRCLE
+ *  sits on the wall". */
+export const REGION_CROSSING_MARKER_PX = 10;
+const REGION_CROSSING_STROKE_PX = 1.5;
 
 const REGION_STROKE = "var(--bbox-region-frame-stroke, var(--border))";
 
@@ -750,6 +820,141 @@ function RegionHeadingRow({ glyph, title, type }: { glyph?: string; title: React
           {type}
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * The corner TAB — Zach's sketches 2(a) and 2(b). Shaped like the corner card
+ * (shares the frame's top-left radius, square where it meets the frame's
+ * edges, rounded at its one free corner) but it is a LABEL, not a Block.
+ *
+ * WHY it carries no `data-block-id`: it owns no port. The id rule (this
+ * file's header) is that the element holding the region's PORTS carries the
+ * id; a tab-drawn region has no interface card, so there is nothing for a
+ * wire to resolve and nothing may claim the id. A region that needs ports
+ * uses `corner-card` or `full-width`.
+ *
+ * WHY the radii are written out rather than taken from `Block`'s
+ * `shape="region-corner"`: this is not a Block. Restating the four corners
+ * here is the whole of the duplication, and they read from the SAME
+ * `FRAME_RADIUS` string the frame and the shape both read, so a drawing that
+ * changes the region's radius moves all three together.
+ */
+function RegionTab({ glyph, title, type, full }: { glyph?: string; title: ReactNode; type?: ReactNode; full: boolean }) {
+  return (
+    <div
+      data-slot="region-tab"
+      data-tab={full ? "full" : "title"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "3px 10px",
+        fontSize: 12,
+        lineHeight: "18px",
+        borderStyle: "solid",
+        borderWidth: FRAME_BORDER_PX,
+        borderColor: REGION_STROKE,
+        borderTopLeftRadius: FRAME_RADIUS,
+        borderTopRightRadius: 0,
+        borderBottomLeftRadius: 0,
+        borderBottomRightRadius: FRAME_RADIUS,
+      }}
+    >
+      <RegionHeadingRow glyph={full ? glyph : undefined} title={title} type={full ? type : undefined} />
+    </div>
+  );
+}
+
+/**
+ * The FULL-WIDTH header — Zach's sketches 2(c), 5 and 6. A real `BlockPort`
+ * whose id IS the region's, stretched across the frame, its control ports on
+ * its own left wall (which is the frame's left wall).
+ *
+ * WHY this bar, and not the frame or the root, carries `data-block-id`:
+ * the id rule is "the element that owns the region's ports owns its id".
+ * With a full-width header the control ports live INSIDE the bar ("ONE
+ * control port at the left end INSIDE the header bar"), so the bar is the
+ * interface card — the corner card, grown to the frame's width, exactly the
+ * `v10` "band" reading ("its just the block is stretch accross the entire
+ * width of the region", Zach 2026-09-20). A wire into a control port
+ * therefore resolves through the same `[data-block-id]` → `[data-port-id]`
+ * walk as ever, and `wireLayer.tsx`'s first-match lookup still finds a box
+ * that owns the dot. Stamping the frame instead would win that lookup and
+ * strand every control-port wire — the failure this file's header names.
+ */
+function RegionHeaderCard({
+  id,
+  glyph,
+  title,
+  type,
+  controlPorts,
+  width,
+}: {
+  id: string;
+  glyph?: string;
+  title: ReactNode;
+  type?: ReactNode;
+  controlPorts: PortEdgeItem[];
+  width: number;
+}) {
+  return (
+    <BlockPort id={id} view="port" edges={controlPorts.length > 0 ? { left: { items: controlPorts } } : {}}>
+      <Block
+        width={width}
+        // One band formula for this bar AND the opaque face's band, so the
+        // rule does not jump when the toggle flips (`regionHeaderBandPx`).
+        height={regionHeaderBandPx(controlPorts.length)}
+        body={<RegionHeadingRow glyph={glyph} title={title} type={type} />}
+        style={{
+          borderTopLeftRadius: FRAME_RADIUS,
+          borderTopRightRadius: FRAME_RADIUS,
+          borderBottomLeftRadius: 0,
+          borderBottomRightRadius: 0,
+          boxShadow: "none",
+        }}
+      />
+    </BlockPort>
+  );
+}
+
+/**
+ * The wall-crossing markers (Zach's sketches 4 and 6): a small hollow circle
+ * wherever a cable crosses the frame. Laid over the frame's BORDER box
+ * (`inset: -1px` from the padding box the frame's children see), so a
+ * frame-local point from `wallCrossings` is used as-is.
+ *
+ * Painted at `portDot` (paintOrder.ts): the marker sits where a port WOULD
+ * be — on the wall, above the frame's own content — and the region root that
+ * emits the tier is `isolation: isolate`, so it can never climb over
+ * anything outside this region.
+ */
+function RegionCrossingMarkers({ points }: { points: readonly RegionPoint[] }) {
+  if (points.length === 0) return null;
+  const radius = REGION_CROSSING_MARKER_PX / 2;
+  return (
+    <div
+      data-slot="region-crossings"
+      aria-hidden
+      style={{ position: "absolute", inset: -FRAME_BORDER_PX, pointerEvents: "none", zIndex: paintTier("portDot") }}
+    >
+      {points.map((point, index) => (
+        <span
+          key={index}
+          data-slot="region-crossing"
+          style={{
+            position: "absolute",
+            left: point.x - radius,
+            top: point.y - radius,
+            width: REGION_CROSSING_MARKER_PX,
+            height: REGION_CROSSING_MARKER_PX,
+            boxSizing: "border-box",
+            borderRadius: "50%",
+            border: `${REGION_CROSSING_STROKE_PX}px solid var(--foreground)`,
+            background: "transparent",
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -906,6 +1111,7 @@ function RegionOpaqueFrame({
   glyph,
   title,
   type,
+  fullWidth,
   controlPorts,
   boundaryPorts,
   width,
@@ -917,6 +1123,9 @@ function RegionOpaqueFrame({
   glyph?: string;
   title: ReactNode;
   type?: ReactNode;
+  /** The expanded drawing was `headerStyle="full-width"`, so the face keeps
+   *  its band instead of boxing the control ports into an L. */
+  fullWidth: boolean;
   controlPorts: PortEdgeItem[];
   boundaryPorts: Partial<Record<"left" | "right", PortEdgeItem[]>>;
   width: number;
@@ -924,7 +1133,10 @@ function RegionOpaqueFrame({
   toggle: ReactNode;
   footer?: ReactNode;
 }) {
-  const split = regionControlSplitPx(controlPorts.length);
+  // Full-width: the band is always there (it IS the header), so the ordinary
+  // ports start under it even with no control ports at all.
+  const ordinaryStart = fullWidth ? Math.max(controlPorts.length, 1) : controlPorts.length;
+  const split = fullWidth ? regionHeaderBandPx(controlPorts.length) : regionControlSplitPx(controlPorts.length);
   return (
     // The paint is the FRAME's (`frameBoxStyle`) — the same box the expanded
     // view drew, only with its inside hidden, which is also why the pressed
@@ -938,34 +1150,84 @@ function RegionOpaqueFrame({
         dot — is where a visible one would be; what paints is the frame.
       */}
       <div style={{ position: "absolute", top: -FRAME_BORDER_PX, left: -FRAME_BORDER_PX }}>
-        <BlockPort id={id} view="port" edges={sectionEdges(controlPorts, boundaryPorts, controlPorts.length)}>
+        <BlockPort id={id} view="port" edges={sectionEdges(controlPorts, boundaryPorts, ordinaryStart)}>
           <Block
             width={width}
             height={height}
-            body={<RegionOpaqueTitle glyph={glyph} title={title} type={type} />}
+            // Full-width: the words live in the BAND below, not in the middle
+            // of the face — the band is the header this drawing had while it
+            // was expanded, so the toggle must not move them.
+            body={fullWidth ? undefined : <RegionOpaqueTitle glyph={glyph} title={title} type={type} />}
             footer={footer}
             style={{ background: "transparent", boxShadow: "none", borderColor: "transparent", borderRadius: FRAME_RADIUS }}
           />
         </BlockPort>
       </div>
-      {split !== null && (
-        // An L — across under the control ports, then up to the top wall —
-        // boxing them into the corner, split from the ordinary ports.
-        <div
-          data-slot="region-control-split"
-          data-split="corner"
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: -FRAME_BORDER_PX,
-            top: -FRAME_BORDER_PX,
-            width: REGION_CONTROL_BOX_WIDTH_PX,
-            height: split + FRAME_BORDER_PX / 2,
-            borderRight: `${FRAME_BORDER_PX}px solid ${REGION_STROKE}`,
-            borderBottom: `${FRAME_BORDER_PX}px solid ${REGION_STROKE}`,
-            pointerEvents: "none",
-          }}
-        />
+      {fullWidth ? (
+        <>
+          {/*
+            WHY `split - 2 * FRAME_BORDER_PX` and not `split - ½px`: this line
+            has to land on the exact pixel row the EXPANDED drawing's header
+            card painted its own bottom border on, or the rule visibly jumps
+            when the toggle is pressed. The band's box starts at
+            `-FRAME_BORDER_PX` in this padding box (border-box y = 0) and is
+            `split` tall, so its last border row is border-box
+            `[split-1, split]` — which is `split - 2` here. It is the same
+            expression `region-header-rule` uses against `layout.corner.h` in
+            the expanded frame, for the same reason and against the same box
+            (a full-width region's `corner.h` IS `regionHeaderBandPx`).
+          */}
+          <div
+            data-slot="region-control-split"
+            data-split="band"
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: -FRAME_BORDER_PX,
+              right: -FRAME_BORDER_PX,
+              top: split! - 2 * FRAME_BORDER_PX,
+              height: FRAME_BORDER_PX,
+              background: REGION_STROKE,
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            data-slot="region-opaque-band"
+            style={{
+              position: "absolute",
+              left: -FRAME_BORDER_PX,
+              right: -FRAME_BORDER_PX,
+              top: -FRAME_BORDER_PX,
+              height: split!,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <RegionHeadingRow glyph={glyph} title={title} type={type} />
+          </div>
+        </>
+      ) : (
+        split !== null && (
+          // An L — across under the control ports, then up to the top wall —
+          // boxing them into the corner, split from the ordinary ports.
+          <div
+            data-slot="region-control-split"
+            data-split="corner"
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: -FRAME_BORDER_PX,
+              top: -FRAME_BORDER_PX,
+              width: REGION_CONTROL_BOX_WIDTH_PX,
+              height: split + FRAME_BORDER_PX / 2,
+              borderRight: `${FRAME_BORDER_PX}px solid ${REGION_STROKE}`,
+              borderBottom: `${FRAME_BORDER_PX}px solid ${REGION_STROKE}`,
+              pointerEvents: "none",
+            }}
+          />
+        )
       )}
       {toggle}
     </div>
@@ -989,6 +1251,8 @@ export function BlockRegion({
   controlPorts,
   boundaryPorts,
   opaqueFace = "card",
+  headerStyle = "corner-card",
+  crossings,
   onToggleView,
   toggleClassName,
   hiddenFooter,
@@ -1005,9 +1269,21 @@ export function BlockRegion({
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const variant = useRegionVariant(root);
   const spec = REGION_VARIANTS[variant];
-  const { ref: cornerRef, size } = useCornerSize(cornerSize);
+  const fullWidthHeader = headerStyle === "full-width";
+  // `regionLayout` applies exactly this clamp to `width`, so computing it
+  // here cannot drift from `layout.width` — and the full-width header has to
+  // know the frame's width BEFORE the layout runs, because it IS the corner
+  // whose height the layout is waiting for.
+  const frameWidth = Math.max(width ?? REGION_CORNER_WIDTH_PX, REGION_MIN_WIDTH_PX);
+  // WHY a full-width header is never MEASURED: its height is a closed form
+  // of the control-port count (`regionHeaderBandPx`), the same number the
+  // Expanded Opaque band uses — so declaring it here keeps the two faces on
+  // one formula AND removes the first-frame guess a measurement would need.
+  // A tab and a corner card still measure: both hug their own content.
+  const declaredCornerSize = fullWidthHeader ? { w: frameWidth, h: regionHeaderBandPx((controlPorts ?? []).length) } : cornerSize;
+  const { ref: cornerRef, size } = useCornerSize(declaredCornerSize);
   const layout = regionLayout({
-    width: width ?? REGION_CORNER_WIDTH_PX,
+    width: frameWidth,
     ...(height === undefined ? null : { height }),
     corner: size,
     armHeaderPx: spec.arms.headerPx,
@@ -1032,11 +1308,29 @@ export function BlockRegion({
     // attribute (`data-bbox-region-variant`), which stays the host's to
     // stamp: writing it here would shadow every ancestor's choice.
     "data-region-variant": variant,
+    "data-region-header-style": headerStyle,
   } as const;
 
-  // The words the port card and the opaque face paint for themselves. The id
-  // is the fallback because it is the one truthful name a region always has.
+  // The words the port card, the tab, the full-width bar and the opaque face
+  // paint for themselves. The id is the fallback because it is the one
+  // truthful name a region always has.
   const words = { glyph, title: title ?? id, type };
+
+  /** The toggle, placed: vertically centred in a full-width header band,
+   *  else in the frame's top-right corner (the toggle's own default inset).
+   *  The band's box starts at `-FRAME_BORDER_PX` in the padding box it is
+   *  placed in, which is where the subtraction comes from — and because a
+   *  full-width region's `corner.h` IS `regionHeaderBandPx`, the expanded
+   *  frame and the Expanded Opaque face read the identical expression, so
+   *  the square does not move when pressed. */
+  const toggleNode = onToggleView ? (
+    <BlockRegionBlackboxToggle
+      pressed={view === "opaque"}
+      onToggle={onToggleView}
+      className={toggleClassName}
+      {...(fullWidthHeader ? { style: { top: (layout.corner.h - REGION_TOGGLE_PX) / 2 - FRAME_BORDER_PX } } : null)}
+    />
+  ) : null;
 
   // Expanded Opaque does not draw the corner, yet its size depends on the
   // corner's height (`regionLayout`), and a region loaded straight into it
@@ -1047,15 +1341,25 @@ export function BlockRegion({
   // without a `BlockPort`, so the copy has no id, rail or dot for
   // `wireLayer` to resolve. An arbitrary `corner` is never copied (it could
   // hold a portal); `RegionCornerProps` makes its caller pass `cornerSize`.
+  //
+  // A TAB is BlockRegion's own drawing too, so it is copied under the same
+  // guard: its words go through `primitiveOnly`, never a caller's node. A
+  // FULL-WIDTH header is never copied at all — `declaredCornerSize` already
+  // knows its height in closed form.
   const measureCorner =
-    givenCorner !== undefined
-      ? null
-      : cornerCard !== undefined
-        ? <CornerCardView id={id} card={cornerCard} opaque={false} measureOnly />
-        : title === undefined
-          ? null
-          : <TitleCorner id={id} title={title} type={type} controlPorts={controlPorts ?? []} opaque={false} measureOnly />;
-  const measureTwin = cornerSize === undefined && view === "opaque" && opaqueFace === "frame" ? measureCorner : null;
+    headerStyle === "corner-tab" || headerStyle === "corner-tab-full" ? (
+      <RegionTab
+        glyph={glyph}
+        title={primitiveOnly(words.title) ?? ""}
+        type={words.type === undefined ? undefined : (primitiveOnly(words.type) ?? undefined)}
+        full={headerStyle === "corner-tab-full"}
+      />
+    ) : givenCorner !== undefined ? null : cornerCard !== undefined ? (
+      <CornerCardView id={id} card={cornerCard} opaque={false} measureOnly />
+    ) : title === undefined ? null : (
+      <TitleCorner id={id} title={title} type={type} controlPorts={controlPorts ?? []} opaque={false} measureOnly />
+    );
+  const measureTwin = declaredCornerSize === undefined && view === "opaque" && opaqueFace === "frame" ? measureCorner : null;
 
   // Port: the region as a block. The root keeps the region id; the card
   // carries the block id (the one-owner rule, `RegionPortCard`). No toggle:
@@ -1082,12 +1386,18 @@ export function BlockRegion({
           position: "relative",
           width: "max-content",
           ...({ "--bbox-region-fill-here": "var(--bbox-region-frame-fill, transparent)" } as CSSProperties),
+          // The isolation invariant (paintOrder.ts): this root's subtree can
+          // emit the `portDot` tier, so it walls it off. Harmless when it
+          // does not — `isolation: isolate` changes nothing a root without a
+          // z-indexed descendant could observe.
+          ...ISOLATED_ROOT_STYLE,
           ...style,
         }}
       >
         <RegionOpaqueFrame
           id={id}
           {...words}
+          fullWidth={fullWidthHeader}
           controlPorts={controlPorts ?? []}
           boundaryPorts={boundaryPorts ?? {}}
           width={layout.width}
@@ -1096,7 +1406,7 @@ export function BlockRegion({
           // Placed in the face's padding box, exactly as the expanded frame
           // places it — the face IS the frame's box now, so the square does
           // not move by a pixel when pressed.
-          toggle={onToggleView ? <BlockRegionBlackboxToggle pressed onToggle={onToggleView} className={toggleClassName} /> : null}
+          toggle={toggleNode}
         />
         {measureTwin !== null && (
           <div
@@ -1143,6 +1453,9 @@ export function BlockRegion({
         // while this frame itself still reads the outer value — the
         // capture on the root is what breaks the self-reference.
         ...({ "--bbox-region-fill-here": "var(--bbox-region-frame-fill, transparent)" } as CSSProperties),
+        // The isolation invariant (paintOrder.ts): the crossing markers below
+        // emit the `portDot` tier, so this root walls it off.
+        ...ISOLATED_ROOT_STYLE,
         ...style,
       }}
     >
@@ -1219,7 +1532,13 @@ export function BlockRegion({
             width: "max-content",
           }}
         >
-          {corner}
+          {headerStyle === "corner-card" ? (
+            corner
+          ) : fullWidthHeader ? (
+            <RegionHeaderCard id={id} {...words} controlPorts={controlPorts ?? []} width={layout.width} />
+          ) : (
+            <RegionTab {...words} full={headerStyle === "corner-tab-full"} />
+          )}
         </div>
         <div
           data-slot="region-body"
@@ -1240,7 +1559,8 @@ export function BlockRegion({
         ))}
         {/* Last in DOM order, so it paints over any member or arm row that
             reaches the top-right corner without needing a z-index. */}
-        {onToggleView && <BlockRegionBlackboxToggle pressed={false} onToggle={onToggleView} className={toggleClassName} />}
+        {toggleNode}
+        <RegionCrossingMarkers points={crossings ?? []} />
       </div>
     </div>
   );

@@ -38,6 +38,7 @@ import {
   NodeResizer,
   Position,
   ReactFlow,
+  useStore,
   useUpdateNodeInternals,
   type Edge,
   type EdgeProps,
@@ -46,20 +47,24 @@ import {
   type NodeChange,
   type NodeDimensionChange,
   type NodeProps,
+  type ReactFlowState,
   type Viewport,
 } from "@xyflow/react";
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { TraceBody } from "../components/trace";
-import { DEFAULT_TRACE_ROUTING, type TraceRouting } from "../components/trace.layout";
+import { DEFAULT_TRACE_ROUTING, type Point, type TraceRouting } from "../components/trace.layout";
+import { ResolvedWireTrace, resolveWires, type ResolvedWire, type ResolvedWires, type WireSpace } from "../components/wireLayer";
+import type { Wire } from "../components/wiring";
 import { ancestorsOf } from "../scene/region";
 import { portKey } from "../scene/scene";
-import type { WireStyleData } from "../scene/sceneWires";
+import { sceneWires, type WireStyleData } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import type { OpaqueRegionView } from "../scene/regionView";
-import { producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
+import { POINTER_OWNED_CLASS, producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
+import { usePortVariant } from "../skin/portVariants";
 
 /* ------------------------------------------------------------------ */
 /* Scene context — how the node renderer reaches the record             */
@@ -446,6 +451,37 @@ const DRAG_HANDLE_FOR_TYPE: Record<string, string | undefined> = {
   //        collapsed dots have no sortable of their own).
 };
 
+/**
+ * Would React Flow START A NODE DRAG from a press on `target`? A read-only
+ * probe for stories (`HitRegionsHostOutline.stories.tsx`) — this host never
+ * calls it; React Flow decides inside d3-drag, where nothing can ask it.
+ *
+ * It is xyflow's own filter restated, not a policy of ours:
+ * `@xyflow/system@0.0.82/dist/esm/index.mjs:2349-2355` passes a press iff
+ * `!event.button` (the PRIMARY button — a right or middle press never drags),
+ * no `.${noDragClassName}` and (when set) a `dragHandle` match are found by
+ * `hasSelector` (`:2038-2048`), which walks from the target up to AND
+ * including the node's own element, then stops. The inputs are this file's:
+ * `DRAG_HANDLE_FOR_TYPE` and `POINTER_OWNED_CLASS` (React Flow's default
+ * `noDragClassName`, which this host does not override).
+ *
+ * `button` is the press's `MouseEvent.button`, required rather than defaulted
+ * so a caller always says which press it is asking about.
+ */
+export function reactFlowDragStartsAt(nodeType: string | undefined, target: Element, nodeRoot: Element, button: number): boolean {
+  if (button) return false;
+  const hasSelector = (selector: string) => {
+    for (let current: Element | null = target; current; current = current.parentElement) {
+      if (current.matches(selector)) return true;
+      if (current === nodeRoot) return false;
+    }
+    return false;
+  };
+  if (hasSelector(`.${POINTER_OWNED_CLASS}`)) return false;
+  const handle = DRAG_HANDLE_FOR_TYPE[nodeType ?? "block"];
+  return !handle || hasSelector(handle);
+}
+
 /* ------------------------------------------------------------------ */
 /* Edges — the trunk's own paint, on React Flow's own geometry           */
 /* ------------------------------------------------------------------ */
@@ -485,17 +521,19 @@ const DRAG_HANDLE_FOR_TYPE: Record<string, string | undefined> = {
  * nothing extra; an exact arc length would need a real, mounted `<path>`
  * to call `getTotalLength()` on, which is more machinery than a phase
  * offset warrants here.
+ *
+ * CHANGED (2026-09-22, the React Flow parity lane): the "host owns the
+ * geometry" split above no longer holds for any cable the kit can resolve.
+ * Those paint `WireLayer`'s own `ResolvedWireTrace` — the kit's router,
+ * keep-outs and ring-flush ends — and this stock-path paint is the
+ * fallback only. See `KitRoutesContext` for why.
  */
 function edgePathFor(routing: TraceRouting, geometry: Parameters<typeof getBezierPath>[0]): string {
-  // WHY the STOCK React Flow path builders and not the trunk's own elbow
-  // router: this host's own rule, three paragraphs up — "the HOST owns the
-  // geometry and the core owns the paint". React Flow already ships the
-  // four shapes, and `getSmoothStepPath` is its orthogonal one (the same
-  // function its own `smoothstep` edge type uses), so an elbow here costs
-  // one import rather than a second obstacle collector. It routes without
-  // keep-outs, which the DOM canvas's `WireLayer` does have — stated, not
-  // hidden: this bench proves the DEFAULT is orthogonal in every host, and
-  // the bypass rule is still only claimed where it is measured.
+  // The FALLBACK only, since the parity lane (see `KitRoutesContext` below):
+  // React Flow's stock path builders draw an edge the kit could not resolve
+  // to two measured dots — a node-level end with no handle, or the one
+  // frame before the first measurement lands. Every resolved cable is
+  // routed by the kit, keep-outs included.
   switch (routing) {
     case "elbow":
       return getSmoothStepPath(geometry)[0];
@@ -507,21 +545,171 @@ function edgePathFor(routing: TraceRouting, geometry: Parameters<typeof getBezie
   }
 }
 
+/**
+ * The kit's own routes for this host's edges, keyed by edge id (a scene
+ * edge's id IS its `Wire` id — `sceneWires` maps one to one), plus the
+ * drawn-polyline read-back. Provided by `ReactFlowHost`, filled by
+ * `KitWireRouter`, read by `TraceEdge`.
+ *
+ * WHY React Flow's edges route through the kit at all, and not through its
+ * own `getSmoothStepPath` as they used to (docs/peps/0005-dom-canvas-stays-
+ * static.md): the DOM canvas stays the static control, and anything that
+ * MOVES across the canvas gets a React Flow twin — Zach, 2026-09-22: "ok its
+ * settled 100% lets use reactflow than." A twin that routed with a
+ * different router (no keep-outs, a gap short of the ring, no frame to
+ * cross) would compare two routers, not two hosts. So the only thing this
+ * host changes is the edge PAINT/ROUTE, through React Flow's own custom
+ * edge type; node drag, selection and handles stay stock. One derivation —
+ * `WireLayer`'s `resolveWires` + `ResolvedWireTrace` — measured in flow
+ * space instead of container space.
+ */
+const KitRoutesContext = createContext<{
+  routes: ReadonlyMap<string, ResolvedWire>;
+  onGeometry?(wireId: string, points: readonly Point[] | null): void;
+}>({ routes: new Map() });
+
+/** Client px → flow px: the viewport element's own transformed origin and
+ *  zoom, read off its box the same way `measurePortDots` reads a node's
+ *  (rect-to-offsetWidth ratio) rather than from React Flow's store. */
+function flowSpaceOf(viewport: HTMLElement): WireSpace {
+  const rect = viewport.getBoundingClientRect();
+  return { left: rect.left, top: rect.top, scale: viewport.offsetWidth > 0 ? rect.width / viewport.offsetWidth : 1 };
+}
+
+/** Every node's at-rest box as one string — compared by value, so the
+ *  router re-measures exactly when a node moved or resized (a drag streams
+ *  one per frame) and never on an unrelated store tick. */
+function nodeLayoutSignature(state: ReactFlowState): string {
+  let signature = "";
+  for (const node of state.nodeLookup.values()) {
+    const at = node.internals.positionAbsolute;
+    signature += `${node.id}:${at.x},${at.y},${node.measured.width ?? 0}x${node.measured.height ?? 0};`;
+  }
+  return signature;
+}
+
+/**
+ * One viewport's routing passes, coalesced: at most ONE `resolveWires` per
+ * animation frame, however many inputs changed inside it.
+ *
+ * WHY (audit of 7fbf22c, 2026-09-22): the first version ran a synchronous
+ * pass on every layout-signature change, another on the next frame, and
+ * tore down and rebuilt a `ResizeObserver` over every node each time — and
+ * a drag invalidates it twice per move (the streamed scene write-back AND
+ * the store's new positions). Measured on the mirror's 8-step drag: 31
+ * passes. A pass is a full DOM measure plus, downstream, an A* re-route of
+ * every elbow cable, so it is the one cost here worth bounding.
+ *
+ * So a request never runs a pass itself: it books the next animation frame,
+ * and every request until that frame lands folds into the same pass. That
+ * one deferred pass is also what the rails race needs (rails land one layout
+ * pass after their Block — `WireLayer`'s own race — and a rail landing
+ * resizes nothing, so nothing else would ask), so there is no separate
+ * trailing pass. The cost, stated: a cable is resolved one frame after its
+ * node moved. A first version that also ran a synchronous pass on an idle
+ * frame measured 16 passes on the same drag — two per move.
+ */
+interface RouteScheduler {
+  frame: number | null;
+  pass(): void;
+}
+
+function requestRoutePass(scheduler: RouteScheduler): void {
+  if (scheduler.frame !== null) return;
+  scheduler.frame = requestAnimationFrame(() => {
+    scheduler.frame = null;
+    scheduler.pass();
+  });
+}
+
+/**
+ * Resolves `wires` against the rendered nodes with `WireLayer`'s own
+ * `resolveWires` — the viewport element as the container, flow space as
+ * the space — whenever a node's box moves, a node resizes, or the port
+ * style changes. Mounted INSIDE `<ReactFlow>` for the store; renders
+ * nothing. ONE `ResizeObserver` per viewport, which observes and unobserves
+ * nodes as the set changes rather than being rebuilt on every move.
+ */
+function KitWireRouter({ wires, layoutKey, onResolved }: { wires: readonly Wire[]; layoutKey: unknown; onResolved(next: ResolvedWires): void }) {
+  const domNode = useStore((state) => state.domNode);
+  const layout = useStore(nodeLayoutSignature);
+  // WHY the port style is a dependency (audit of 7fbf22c): switching the
+  // document-wide variant (v1 → v3) grows every dot's painted ring from
+  // 5.5px to 8px WITHOUT resizing a node, so neither the layout signature
+  // nor the ResizeObserver would notice, and every cable kept its old
+  // ring-flush gap, painting ~2.5px into the new ring. Same subscription
+  // `WireLayer` re-measures on.
+  const portVariantId = usePortVariant().id;
+  const latest = useRef({ wires, onResolved });
+  latest.current = { wires, onResolved };
+  const passes = useRef(0);
+  const live = useRef<{ scheduler: RouteScheduler; observer: ResizeObserver; observed: Set<Element>; viewport: HTMLElement } | null>(null);
+
+  useLayoutEffect(() => {
+    const viewport = domNode?.querySelector<HTMLElement>(".react-flow__viewport");
+    if (!viewport) return;
+    const scheduler: RouteScheduler = {
+      frame: null,
+      pass: () => {
+        viewport.dataset.kitRoutePasses = String(++passes.current);
+        latest.current.onResolved(resolveWires(viewport, latest.current.wires, flowSpaceOf(viewport)));
+      },
+    };
+    const observer = new ResizeObserver(() => requestRoutePass(scheduler));
+    live.current = { scheduler, observer, observed: new Set(), viewport };
+    return () => {
+      if (scheduler.frame !== null) cancelAnimationFrame(scheduler.frame);
+      observer.disconnect();
+      live.current = null;
+    };
+  }, [domNode]);
+
+  useLayoutEffect(() => {
+    const current = live.current;
+    if (!current) return;
+    const nodes = new Set<Element>(current.viewport.querySelectorAll("[data-scene-node]"));
+    for (const node of current.observed) if (!nodes.has(node)) current.observer.unobserve(node);
+    for (const node of nodes) if (!current.observed.has(node)) current.observer.observe(node);
+    current.observed = nodes;
+    requestRoutePass(current.scheduler);
+  }, [domNode, layout, wires, layoutKey, portVariantId]);
+  return null;
+}
+
+const NO_ROUTES: ResolvedWires = { resolved: [], unresolvedIds: [] };
+
+/** Value equality over everything `Trace` routes from. Keeping the previous
+ *  object when nothing moved is what keeps `Trace`'s identity-compared
+ *  `obstacles`/`fromBox`/`toBox` stable — a fresh-but-equal array would
+ *  re-run the A* router on every store tick. */
+function sameRoutes(a: ResolvedWires, b: ResolvedWires): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function TraceEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data }: EdgeProps<Edge<WireStyleData>>) {
+  const kit = useContext(KitRoutesContext);
+  const route = kit.routes.get(id);
+  if (route) return <ResolvedWireTrace route={route} onGeometry={kit.onGeometry} />;
   // `?? DEFAULT_TRACE_ROUTING` — Zach, 2026-09-19: "by default elbow arrows
   // should always be used. never straight arrows." Before this the host
   // drew a bezier for EVERY edge, so an explicitly-elbow cable and a
   // defaulted one looked identical here and neither was orthogonal.
   const path = edgePathFor(data?.routing ?? DEFAULT_TRACE_ROUTING, { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   return (
-    <TraceBody
-      id={id}
-      path={path}
-      length={Math.hypot(targetX - sourceX, targetY - sourceY)}
-      variant={data?.variant ?? "data"}
-      color={data?.color ?? "var(--muted-foreground)"}
-      markerEnd={data?.markerEnd ?? "arrow"}
-    />
+    <g data-edge-route="stock">
+      <TraceBody
+        id={id}
+        path={path}
+        length={Math.hypot(targetX - sourceX, targetY - sourceY)}
+        variant={data?.variant ?? "data"}
+        color={data?.color ?? "var(--muted-foreground)"}
+        // No `?? "arrow"` of its own any more: the kit default
+        // (`DEFAULT_TRACE_MARKER_END`, "none" — Zach, 2026-09-22: "because its
+        // DAG, we already know the order!") is `TraceBody`'s, and a host that
+        // restated the old literal here was the third place it could drift.
+        markerEnd={data?.markerEnd}
+      />
+    </g>
   );
 }
 
@@ -549,6 +737,12 @@ export interface ReactFlowHostProps {
   /** The story lane's paint seam — see `nodeViews.tsx`'s `Decorate`. Omit
    *  for byte-identical output to before this prop existed. */
   decorate?: Decorate;
+  /** The polyline each kit-routed cable was DRAWN on, in flow space — the
+   *  same read-back as `WireLayer.onWireGeometry` (at zoom 1 with a zero
+   *  viewport offset, the same numbers the DOM canvas reports). `null`
+   *  retracts a wire the kit no longer draws — it fell back to the stock
+   *  path, or left the scene — exactly as `WireLayer.onWireGeometry` does. */
+  onWireGeometry?(wireId: string, points: readonly Point[] | null): void;
 }
 
 /**
@@ -612,7 +806,7 @@ function anchorEnd(scene: HostScene, nodeId: string, handleId: string | undefine
   return { nodeId: topLevelId, handleId: handleId === undefined ? undefined : portKey(nodeId, handleId) };
 }
 
-export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children, decorate }: ReactFlowHostProps) {
+export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children, decorate, onWireGeometry }: ReactFlowHostProps) {
   // Hosts paint the projection; the document keeps its direct P1 cables.
   // Identity on an all-expanded scene (same arrays out), so `wired`, the
   // edge list and every memo below are unchanged for every bench that has
@@ -702,6 +896,47 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
     [scene, projected],
   );
 
+  // The kit's routes for the PROJECTED wires — the same list the DOM canvas
+  // hands its `WireLayer` (`domCanvas.tsx`), so both hosts route one set.
+  const wires = useMemo(() => sceneWires(projected.scene), [projected]);
+  const [kitRoutes, setKitRoutes] = useState<ResolvedWires>(NO_ROUTES);
+  const onResolved = useCallback((next: ResolvedWires) => setKitRoutes((previous) => (sameRoutes(previous, next) ? previous : next)), []);
+  const onWireGeometryRef = useRef(onWireGeometry);
+  onWireGeometryRef.current = onWireGeometry;
+  const reportedRef = useRef(new Set<string>());
+  const kitContext = useMemo(
+    () => ({
+      routes: new Map(kitRoutes.resolved.map((route) => [route.wire.id, route])),
+      onGeometry: (wireId: string, points: readonly Point[] | null) => {
+        if (!points || points.length < 2) return;
+        reportedRef.current.add(wireId);
+        onWireGeometryRef.current?.(wireId, points);
+      },
+    }),
+    [kitRoutes],
+  );
+  // The same retraction `WireLayer` does: a wire that stops being kit-routed
+  // (its edge went handle-less and fell back to the stock path, or left the
+  // scene) takes its reported polyline with it, so nothing derived from the
+  // kit's route outlives the route.
+  useLayoutEffect(() => {
+    const routed = new Set(kitRoutes.resolved.map(({ wire }) => wire.id));
+    for (const wireId of [...reportedRef.current]) {
+      if (routed.has(wireId)) continue;
+      reportedRef.current.delete(wireId);
+      onWireGeometryRef.current?.(wireId, null);
+    }
+  }, [kitRoutes]);
+  // …and all of them when the host unmounts, as `WireLayer` does: a cache
+  // owner above a conditionally-mounted host outlives it.
+  useLayoutEffect(
+    () => () => {
+      for (const wireId of reportedRef.current) onWireGeometryRef.current?.(wireId, null);
+      reportedRef.current.clear();
+    },
+    [],
+  );
+
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
       // Cache every reported size BEFORE the early return below — a
@@ -720,35 +955,38 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
   );
 
   return (
-    <div data-host="react-flow" style={{ width, height }}>
+    <div data-host="react-flow" data-unresolved-wires={kitRoutes.unresolvedIds.join(",")} style={{ width, height }}>
       <HostSceneContext.Provider value={context}>
-        <ReactFlow
-          nodes={rfNodes}
-          edges={rfEdges}
-          nodeTypes={NODE_TYPES}
-          edgeTypes={EDGE_TYPES}
-          onNodesChange={handleNodesChange}
-          defaultViewport={defaultViewport}
-          fitView={fitView}
-          // Owed wiring from the drag-policy lane (`dragPolicy.ts:544-573`,
-          // `INNER_CLAIM_PX`'s own WHY): left at React Flow's default of 1,
-          // the canvas claims a contested press 3px before a dnd-kit rail
-          // (activation constraint 4) ever sees it — the more specific
-          // owner has to arm first, not last. Matches the rail's own
-          // constraint; `src/scene/interactions/dragPolicy.ts` is read-only from
-          // here (another workflow owns `src/interaction/**`), so this is
-          // the one number from that lane's list this file can safely take
-          // without editing it.
-          nodeDragThreshold={4}
-          // Wires are declared by the scene record; interactive connecting
-          // is phase-2 work (the port-side affordances are the expensive
-          // part — ARCHITECTURE.md's "drawing an edge splits").
-          nodesConnectable={false}
-        >
-          <Background />
-          <Controls showInteractive={false} />
-          {children}
-        </ReactFlow>
+        <KitRoutesContext.Provider value={kitContext}>
+          <ReactFlow
+            nodes={rfNodes}
+            edges={rfEdges}
+            nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
+            onNodesChange={handleNodesChange}
+            defaultViewport={defaultViewport}
+            fitView={fitView}
+            // Owed wiring from the drag-policy lane (`dragPolicy.ts:544-573`,
+            // `INNER_CLAIM_PX`'s own WHY): left at React Flow's default of 1,
+            // the canvas claims a contested press 3px before a dnd-kit rail
+            // (activation constraint 4) ever sees it — the more specific
+            // owner has to arm first, not last. Matches the rail's own
+            // constraint; `src/scene/interactions/dragPolicy.ts` is read-only from
+            // here (another workflow owns `src/interaction/**`), so this is
+            // the one number from that lane's list this file can safely take
+            // without editing it.
+            nodeDragThreshold={4}
+            // Wires are declared by the scene record; interactive connecting
+            // is phase-2 work (the port-side affordances are the expensive
+            // part — ARCHITECTURE.md's "drawing an edge splits").
+            nodesConnectable={false}
+          >
+            <Background />
+            <Controls showInteractive={false} />
+            <KitWireRouter wires={wires} layoutKey={scene} onResolved={onResolved} />
+            {children}
+          </ReactFlow>
+        </KitRoutesContext.Provider>
       </HostSceneContext.Provider>
     </div>
   );

@@ -11,7 +11,7 @@
 // mapping. A third host imports this file and owns nothing but its
 // viewport.
 
-import { useRef, type ReactNode } from "react";
+import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { Badge } from "../components/badge";
 import { Bar } from "../components/bar";
@@ -25,7 +25,7 @@ import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
-import { BlockRegion, type RegionArm, type RegionCornerCard } from "../components/blockRegion";
+import { BlockRegion, type RegionArm, type RegionCornerCard, type RegionPoint } from "../components/blockRegion";
 import { REGION_CORNER_WIDTH_PX } from "../components/blockRegion.layout";
 import { portViewSlotCount, railBandHeightForSlots, resolveBlockHeight } from "../scene/fitToContent";
 import { ValueCapsule } from "../components/block.value";
@@ -66,6 +66,12 @@ export interface SceneNodeDecoration {
   availability?: Readonly<Record<string, "available" | "unavailable">>;
   /** Per-port diagnostics, same per-node key shape as `availability`. */
   portDiagnostics?: Readonly<Record<string, Diagnostic[]>>;
+  /** A region's wall-crossing markers, frame-local — forwarded to
+   *  `BlockRegion.crossings`. Host glue computes them
+   *  (`hosts/regionCrossings.ts` over the host's own drawn polylines),
+   *  because the frame's box and the cable's route are both measured facts
+   *  no single node owns. Ignored on anything but a region. */
+  crossings?: readonly RegionPoint[];
 }
 
 /** `undefined` for a node this decorator has no opinion on — same
@@ -188,6 +194,43 @@ export interface SceneNodeViewProps {
 /* ------------------------------------------------------------------ */
 
 /**
+ * What a free member's drag surface must NOT claim: a press on a button
+ * INSIDE the member.
+ *
+ * WHY: the surface wraps the member's whole face and `beginDrag` takes
+ * pointer capture on it, and capture retargets the pointerup — so the
+ * browser dispatches the `click` to the surface, never to the button that
+ * was pressed (trusted input, measured 2026-09-22: `pointerdown -> svg`,
+ * `gotpointercapture -> block-member-drag-handle`, `click ->
+ * block-member-drag-handle`). Every fold chevron, and the Blackbox toggle,
+ * of a region that is itself a member (a branch in a loop body, a branch in
+ * an arm) was dead in all three hosts. Found while answering Zach,
+ * 2026-09-21: "Currently in regions - I seem to be able to drag the children
+ * inside but not the things on the outside? why?"
+ *
+ * `button` and nothing wider, on purpose. A button's click is its whole job
+ * - the arm chevrons and the Blackbox toggle are all buttons, and the arm's
+ * carries no other marker. Rejected: `stopPropagation` inside each control
+ * (fixes one, leaves the next one captured). Deliberately NOT here: the port
+ * rail - a press on a member's port text still starts BOTH the member drag
+ * and the rail's reorder, but which one should win is dragPolicy.ts's open
+ * "port text grabs" rule (Zach's DP - Port), not a bug fix; and a rail veto
+ * would take a top-port member's header away (its top rail covers the
+ * header's middle). Nor `POINTER_OWNED_CLASS` - honoring it would leave a
+ * code member (a wall-to-wall editor) with no grab surface at all; hosts
+ * give top-level code a grab ring, members have none.
+ */
+const MEMBER_DRAG_VETO = "button";
+
+function pressOwnedInside(event: ReactPointerEvent<HTMLElement>): boolean {
+  const owner = (event.target as Element).closest(MEMBER_DRAG_VETO);
+  // Found from the TARGET, not the surface, so every enclosing member's
+  // surface (a member region inside a member region) refuses the same press
+  // too; `contains` keeps a button OUTSIDE this member from counting.
+  return owner !== null && event.currentTarget.contains(owner);
+}
+
+/**
  * One free-layout member: its live (dragging) position plus the bounded
  * drag surface `POINTER_OWNED_CLASS` keeps the canvas out of. Extracted
  * when the region renderer landed rather than copied — a second copy of
@@ -212,7 +255,10 @@ function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResul
         // already both honor, with zero per-host code added for it.
         className={POINTER_OWNED_CLASS}
         style={{ width: "max-content", cursor: drag.draggingId === kid.id ? "grabbing" : "grab", touchAction: "none" }}
-        onPointerDown={drag.beginDrag(kid.id, kid.position)}
+        onPointerDown={(event) => {
+          if (pressOwnedInside(event)) return;
+          drag.beginDrag(kid.id, kid.position)(event);
+        }}
         onPointerMove={drag.onPointerMove}
         onPointerUp={drag.onPointerUp}
         onPointerCancel={drag.onPointerCancel}
@@ -618,6 +664,7 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
       {...(node.data.h === undefined ? null : { height: node.data.h })}
       members={bodyChildrenOf(scene, node.id).map(memberViewOf)}
       arms={arms}
+      crossings={decoration?.crossings}
     />
   );
 }
