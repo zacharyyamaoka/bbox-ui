@@ -73,6 +73,7 @@ import type { Distribution } from "./portEdge.layout";
 import {
   PORT_EDGE_SLOT_MIN_PX,
   RAIL_CROSS_PX,
+  floorMinHeight,
   functionPortCenterPx,
   minBlockHeightFor,
   railAxisFor,
@@ -444,7 +445,12 @@ export function BlockPort({
   const floored =
     floorPx > 0 && isValidElement<{ style?: CSSProperties }>(children)
       ? cloneElement(children as ReactElement<{ style?: CSSProperties }>, {
-          style: { ...(children.props as { style?: CSSProperties }).style, minHeight: floorPx },
+          // Never LOWER a caller's own larger `minHeight` — the floor only
+          // ever raises (`floorMinHeight`).
+          style: {
+            ...(children.props as { style?: CSSProperties }).style,
+            minHeight: floorMinHeight((children.props as { style?: CSSProperties }).style?.minHeight, floorPx),
+          },
         })
       : children;
 
