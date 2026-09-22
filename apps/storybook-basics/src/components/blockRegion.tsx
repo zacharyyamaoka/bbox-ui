@@ -438,12 +438,13 @@ export function BlockRegion({
     "data-region-variant": variant,
   } as const;
 
-  // P5, opaque: the root wraps ONLY the card the host hands it. No frame,
-  // no arms, no body — the whole point of the view is that the inside is
-  // not drawn. The card's own ports and footer are the host's business
-  // (`nodeViews.tsx`), which is why this branch renders `corner` untouched
-  // — and why no variant token is read here: the opaque card is the host's
-  // `Block`, and it reads the same in all five drawings by design.
+  // P5, opaque: the root wraps ONLY the corner card — the host's, or with
+  // `title` the one `TitleCorner` draws, which turns itself back into a plain
+  // `card` here. No frame, no arms, no body — the whole point of the view is
+  // that the inside is not drawn. The card's own ports and footer are the
+  // host's business (`nodeViews.tsx`), which is why this branch renders
+  // `corner` untouched — and why no variant token is read here: the opaque
+  // card reads the same in every drawing by design.
   if (view === "opaque") {
     return (
       <div {...rootProps} ref={setRoot} className={className} style={{ width: "max-content", ...style }}>

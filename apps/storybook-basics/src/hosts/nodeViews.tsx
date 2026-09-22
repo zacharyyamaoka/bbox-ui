@@ -458,12 +458,12 @@ function BlockNodeView({ scene, node, wired, producers, onSceneChange, decorate,
 /* ------------------------------------------------------------------ */
 
 /**
- * One `type: "region"` scene node → the `Region` component.
+ * One `type: "region"` scene node → the `BlockRegion` component.
  *
  * WHY there is no second node and no `data-block-id` on the frame (plan
  * §2.A): a region IS one node whose ports are its CORNER BLOCK's ports.
  * This function builds exactly one `BlockPort id={node.id}` — the same
- * builder a plain block gets (`edgeSpecsOf`) — and hands it to `Region` as
+ * builder a plain block gets (`edgeSpecsOf`) — and hands it to `BlockRegion` as
  * its `corner`. "Everything is a block" is therefore not a slogan here: a
  * loop's `Iterable` resolves through the identical `[data-block-id]` ->
  * `[data-port-id]` walk as any other port, so `WireLayer`, React Flow's

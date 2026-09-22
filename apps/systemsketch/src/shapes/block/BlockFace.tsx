@@ -554,9 +554,9 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
   // a future refactor will reach for again, because every OTHER block on the
   // board wants exactly that.
   //
-  // WHY it has to be said here and cannot live in `Region`: in this app the
+  // WHY it has to be said here and cannot live in `BlockRegion`: in this app the
   // corner card is a real `ss-block` CHILD SHAPE, which tldraw renders in its
-  // own subtree — it is not a React descendant of the `Region` element in
+  // own subtree — it is not a React descendant of the `BlockRegion` element in
   // `RegionFace`, so no rule the component could write would reach it. The
   // radii themselves stay the trunk's (`Block`'s `shape="region-corner"`,
   // measured by `RegionVariants.stories.tsx`'s `CornerMeetsFrameSquare` across

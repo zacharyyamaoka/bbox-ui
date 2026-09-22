@@ -44,7 +44,7 @@ import type { RegionArm, RegionKind, RegionShape } from "./RegionShapeUtil";
  * asked for again on 2026-09-19, comparing the tldraw app (`Pasted image
  * 20260919115050.png`) against the DOM canvas (`…115249.png`): "Generally I
  * want the port to be right on the edge. and it shouldn't be cut off by the
- * frame. This is desired: [the DOM render]". The trunk's own `Region` puts
+ * frame. This is desired: [the DOM render]". The trunk's own `BlockRegion` puts
  * its corner slot at `left: -FRAME_BORDER_PX` (`@trunk/components/blockRegion.tsx`),
  * so flush here IS parity with the drawing he approved.
  *
@@ -682,7 +682,7 @@ function layoutInput(editor: Editor, shape: RegionShape, height: number, arms: r
     height,
     corner: cornerBoxOf(editor, shape),
     // WHY the drawing in force and not the twin's default 32: the face paints
-    // the trunk's `Region`, which lays its arm rows out with the ACTIVE
+    // the trunk's `BlockRegion`, which lays its arm rows out with the ACTIVE
     // region variant's header (26-32px, `@trunk/skin/regionVariants`). Every
     // number this file hands tldraw — the header bands it hit-tests, the hug
     // written into `props.h` — has to be the same rows, or a drawing switch

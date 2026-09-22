@@ -140,7 +140,7 @@ and a **scene-data** preset beside the model it builds
 (`scene/region.branch.ts`, `scene/region.loop.ts`). The second pair cannot sit
 in `components/`: they build scene records, and `components/` imports no scene.
 Their stories still appear under the component — Storybook › Components ›
-Blocks › Region.
+Blocks › BlockRegion.
 
 **The app is called `bbox studio`; `systemsketch` is the old name.** Zach,
 2026-09-21: *"lets call the app bbox studio it is a whiteboard, its called bbox

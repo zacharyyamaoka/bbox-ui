@@ -1,5 +1,5 @@
 // src/shapes/region/RegionFace.tsx — what an `ss-region` looks like: the
-// trunk's own `Region`, fed from persisted props.
+// trunk's own `BlockRegion`, fed from persisted props.
 //
 // Nothing is drawn here. Stream 1 landed `@trunk/components/blockRegion.tsx` (the
 // React Flow "Labeled Group Node" look Zach named in `Pasted image
@@ -58,6 +58,15 @@ const TRUNK_KIND: Record<RegionKind, TrunkRegionKind> = {
  * fixed at `REGION_NAME_TAB_PX` tall, because the geometry
  * (`RegionShapeUtil.getGeometry`) has to agree with this without measuring
  * it.
+ *
+ * Owed to the trunk (2026-09-22): this IS the Labeled Group, hand-rolled.
+ * The trunk's `BlockRegion` draws it from `title` as a real Block with
+ * `shape="region-corner"`. This chip rounds with the SKIN radius, not the
+ * region frame's, so under a drawing that changes the frame radius (`v10`
+ * squares it, `v2`/`v4` use `--radius-md`) its corner no longer matches the
+ * frame's. Moving onto `title` changes this app's region geometry (this fixed
+ * 28px becomes the Block's measured height), so it is its own lane with a
+ * seeded review board, not a drive-by.
  */
 function NameTab({ name }: { name: string }) {
   return (

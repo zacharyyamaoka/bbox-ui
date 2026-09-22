@@ -93,10 +93,12 @@ export interface RegionVariant {
      *  width of the region". The corner card is not removed and no port
      *  moves; its dots are already on its own left edge, which at full width
      *  IS the region's left edge. What a DRAWING can reach is the rule, the
-     *  square corners and the centred title; the card's WIDTH is the host's
-     *  in both hosts (a `width` prop in `hosts/nodeViews.tsx`, a persisted
-     *  `props.w` in the app's `shapes/region/cornerBlock.ts`) and is never
-     *  CSS — see `block.tsx`'s `BlockShape`. */
+     *  square corners and the centred title; the card's WIDTH is never a
+     *  drawing's. A host sets it (a `width` prop in `hosts/nodeViews.tsx`, a
+     *  persisted `props.w` in the app's `shapes/region/cornerBlock.ts`), or,
+     *  for a title-only corner, `BlockRegion` hugs the title itself
+     *  (`blockRegion.tsx`'s `TitleCorner`). No `--bbox-region-*` token
+     *  reaches it — see `block.tsx`'s `BlockShape`. */
     integration: "flush" | "ruled" | "band";
     /** The card's ONE free corner, bottom-right. Absent = the frame's shared
      *  radius, which is what the drawing Zach approved does. `"square"` is
