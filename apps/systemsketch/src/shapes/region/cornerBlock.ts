@@ -90,10 +90,46 @@ const CORNER_INSET_Y_PX = 0;
  */
 const CORNER_CLAIM_SLACK_PX = 24;
 
-/** Is this card exactly on the corner slot — region-local (0, 0), unrotated?
- *  The one predicate the pin, the sweep and the repairs all ask. */
+/**
+ * The one view a corner card may wear — the `port` face every
+ * `cornerBlockPropsFor` kind mints.
+ *
+ * WHY it is part of the PIN and not only a pill/hotkey guard: Zach,
+ * 2026-09-22 — "I don't want to give people the option to expand the region
+ * header block". The card is the region's header, not a block you open, and a
+ * view reaches it through writers no control owns: `applyScene` writes an
+ * incoming node's `view` straight onto the block, File › Open loads whatever
+ * the file says, and any `editor.updateShape` can name it. So it is a document
+ * invariant, held by the same predicate and the same three writers that hold
+ * the card's position (Codex audit, 2026-09-22).
+ */
+const CORNER_VIEW: BlockShapeProps["view"] = "port";
+
+/** The pinned fields a card off its slot is written back to — position AND
+ *  view, one object so the pin, the sweep and the repairs cannot disagree. */
+const CORNER_PIN = { x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 } as const;
+
+/** Is this card exactly on the corner slot — region-local (0, 0), unrotated,
+ *  wearing the corner view? The one predicate the pin, the sweep and the
+ *  repairs all ask. */
 function onCornerSlot(shape: TLShape): boolean {
-  return shape.x === CORNER_INSET_X_PX && shape.y === CORNER_INSET_Y_PX && shape.rotation === 0;
+  return (
+    shape.x === CORNER_PIN.x &&
+    shape.y === CORNER_PIN.y &&
+    shape.rotation === CORNER_PIN.rotation &&
+    (shape.props as { view?: string }).view === CORNER_VIEW
+  );
+}
+
+/** `shape` with the pin applied: slot position, no rotation, the corner view. */
+function pinned<Shape extends TLShape>(shape: Shape): Shape {
+  return { ...shape, ...CORNER_PIN, props: { ...shape.props, view: CORNER_VIEW } };
+}
+
+/** The partial update a store write needs to put a card back on the pin. A
+ *  corner card is always an `ss-block` (`regionNaming` checks the type). */
+function pinUpdate(card: TLShape) {
+  return { id: card.id, type: BLOCK_SHAPE_TYPE, ...CORNER_PIN, props: { view: CORNER_VIEW } } as const;
 }
 
 /** The height of the plain text tab a region wears INSTEAD of a corner block
@@ -428,14 +464,14 @@ export function installRegionKit(editor: Editor): () => void {
    * a reparent.
    */
   const pinnedCorner = <Shape extends TLShape>(shape: Shape): Shape =>
-    onCornerSlot(shape) ? shape : { ...shape, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 };
+    onCornerSlot(shape) ? shape : pinned(shape);
 
   /** Every card among `cards` that is off its slot, back on it — one
    *  `history: "ignore"` write for the lot. */
   const snapCards = (cards: readonly TLShape[]) => {
     const moves = cards
       .filter((corner) => !onCornerSlot(corner))
-      .map((corner) => ({ id: corner.id, type: corner.type, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 }));
+      .map(pinUpdate);
     if (moves.length > 0) editor.run(() => editor.updateShapes(moves), { history: "ignore" });
   };
 
@@ -624,7 +660,7 @@ export function installRegionKit(editor: Editor): () => void {
    *  card is pinned at its own create — this is the write that catches both. */
   const snapNamedCorner = (region: RegionShape) => {
     const corner = cornerBlockOf(editor, region);
-    if (corner && !onCornerSlot(corner)) editor.updateShape({ id: corner.id, type: corner.type, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 });
+    if (corner && !onCornerSlot(corner)) editor.updateShape(pinUpdate(corner));
   };
 
   const stops = [

@@ -1,57 +1,46 @@
 /**
- * src/hosts/hostOutline.ts — "what will outline blue inside a host?", as ONE
- * function over the real element stack under a point.
+ * src/hosts/hostOutline.ts — "what will outline blue inside a host?", asked
+ * of the element stack under a point, ONE HOST AT A TIME.
  *
  * Zach, 2026-09-22: "How can I demonstrate in DOM what the hover regions are??
  * like what will outline blue inside the hosts? I feel that would be useful to
  * see?" This file is the answer's engine; `HitRegionsHostOutline.stories.tsx`
  * is its face.
  *
+ * WHY per host, and not one answer (Codex audit, 2026-09-22): the hosts do
+ * NOT agree, and an earlier cut of this file synthesised one policy and
+ * presented it as what "a host" does. It was wrong for both benches — the
+ * trunk's tldraw host hands every non-header block press to the content
+ * (`tldrawHost.tsx`'s `contentOwnsPress`), and React Flow starts a node drag
+ * only from the node's own stamped header (`reactFlowHost.tsx`'s
+ * `DRAG_HANDLE_FOR_TYPE`). So the question is now asked of a named host:
+ *
+ *   - `hostPressOutlineAt(…, rule)` — a REAL host's own press predicate,
+ *     passed in by the story (this file imports no engine; the story, a
+ *     consumer, imports the hosts). The rule is the host's exported function,
+ *     called on the same element the browser's hit test returns.
+ *   - `policyOutlineAt(…)` — the DECLARED policy (`dragPolicy.ts`'s
+ *     `resolveGrab`), which no bench fully implements yet. Labelled as the
+ *     policy, never as a host.
+ *
  * WHY it lives in `hosts/` and not beside the other hit-region stories in
  * `components/hitRegions/`: which element a host OUTLINES is interaction
- * geometry — the element-under-the-pointer walk, the ownership lookup, what a
- * press falls through to — and `CLAUDE.md`'s core rule is that interaction
- * geometry is host-owned and never travels. `hosts/` may import the kit;
- * `components/` never imports a host. So the rule lives with the hosts, the
- * story beside it, and its title files it into the SAME "Hit Regions" group.
+ * geometry — host-owned by `CLAUDE.md`'s core rule. `hosts/` may import the
+ * kit; `components/` never imports a host.
  *
- * NOTHING HERE IS A NEW RULE. Each branch below is a rule a host already runs,
- * reused rather than restated, and the `rule` string it returns names where:
- *
- *   1. The browser's own hit test decides what is under the point
- *      (`document.elementsFromPoint`) — the same test a real press takes, so a
- *      `pointer-events: none` box (a rail's empty margin, `blockPort.tsx`'s
- *      rail wrapper) passes through here exactly as it does under a mouse.
- *   2. A cable is its own hit corridor: `trace.tsx`'s `interactive` hit path
- *      (`data-slot="trace-hit"`, `TRACE_HIT_STROKE_PX`).
- *   3. Everything else resolves through `dragPolicy.ts`'s `resolveGrab` —
- *      nearest declaration wins — over a chain walked from the hit element
- *      out to the nearest `[data-block-id]`, the same ownership walk
- *      `apps/systemsketch/src/shapes/shared/pointerOwnership.ts` and
- *      `tldrawHost.tsx`'s `contentOwnsPress` make. The declaration is picked
- *      from the owner's own `data-view` (`block:expanded` vs `block:solid`,
- *      the same read `pointerOwnership.ts`'s `bodyIsContent` makes).
- *        - `grab`  → the host outlines the OWNER node's box. A region's corner
- *          card carries the REGION's id (`region.tsx`'s header: "a region is
- *          ONE node"), so the owner is the region and the outline is the whole
- *          frame — Zach's rule for the app, and the trunk's by construction.
- *        - `owns-pointer` → the host stays out; the subtree paints its own
- *          hover. `POLICY_TABLE`'s hover row says what that is: "the subtree's
- *          own hover (caret, dot halo)". For a dot, that is its halo.
- *        - `inert` → the press falls THROUGH (an expanded block's interior is
- *          child canvas), so the walk moves on to the next element in the
- *          stack that is not inside the inert owner.
- *   4. `button` and `.nodrag` narrow a subtree to `owns-pointer`
- *      (`grabChain.ts`'s `OWNS_POINTER_CLASS`; `tldrawHost.tsx`'s
- *      `contentOwnsPress` button rule for a region's fold chevron).
- *
- * THE ONE PART THAT IS A MIRROR, NOT A REUSE — stated so nobody mistakes it
- * for shared code: a region FRAME's own surface. The trunk has no
- * `DragDeclaration` for a region, and the rule the app runs lives in
- * `apps/systemsketch/src/shapes/region/RegionShapeUtil.tsx`'s `getGeometry`
- * (title strip + arm headers are `isLabel` chrome, the body is unfilled),
- * which the trunk cannot import. `REGION_FRAME_DECLARATION` below restates it
- * in `DragDeclaration` form, and the story labels it as a mirror.
+ * THE POLICY PATH, for the record of what it reuses: the browser's own hit
+ * test (`document.elementsFromPoint`, so a `pointer-events: none` rail margin
+ * passes through exactly as under a mouse); a cable's own hit path
+ * (`trace.tsx`'s `interactive` `trace-hit`); `resolveGrab` over a chain walked
+ * out to the nearest `[data-block-id]`, with the declaration picked from the
+ * owner's `data-view`; `button` / `.nodrag` narrowing to `owns-pointer`. And
+ * ONE MIRROR, labelled wherever it answers: a region FRAME's own chrome,
+ * restated from `apps/systemsketch/src/shapes/region/RegionShapeUtil.tsx`'s
+ * `getGeometry`, which the trunk cannot import (`REGION_FRAME_DECLARATION`).
+ * The SystemSketch app's own press rule (`apps/systemsketch/src/shapes/
+ * shared/pointerOwnership.ts`) is likewise not importable from the trunk —
+ * the app imports the trunk, never the reverse — so it is not offered as a
+ * host here.
  */
 
 import {
@@ -219,13 +208,12 @@ function resolveElement(hit: Element, boundary: Element, scope: ParentNode): Hos
 }
 
 /**
- * The whole question for one screen point: what would a host outline?
- *
- * `boundary` is the host root; nothing outside it is ever an answer, and
- * reaching it means "the canvas". `scope` is where a region's frame is looked
- * up by id (defaults to `boundary`).
+ * The DECLARED POLICY's answer for one screen point (`dragPolicy.ts`) — not
+ * any host's. `boundary` is the host root; nothing outside it is ever an
+ * answer, and reaching it means "the canvas". `scope` is where a region's
+ * frame is looked up by id (defaults to `boundary`).
  */
-export function hostOutlineAt(x: number, y: number, boundary: Element, scope: ParentNode = boundary): HostOutline {
+export function policyOutlineAt(x: number, y: number, boundary: Element, scope: ParentNode = boundary): HostOutline {
   const stack = document.elementsFromPoint(x, y).filter((el) => boundary.contains(el) && el !== boundary);
   const skipped: Element[] = [];
   for (const el of stack) {
@@ -249,4 +237,74 @@ export function hostOutlineAt(x: number, y: number, boundary: Element, scope: Pa
     };
   }
   return NONE;
+}
+
+/* ------------------------------------------------------------------ */
+/* A REAL host's press predicate                                        */
+/* ------------------------------------------------------------------ */
+
+/** What a host does with a press on one element of one of its nodes. */
+export type HostPressAnswer =
+  /** The host takes it: select / drag the NODE. */
+  | "node"
+  /** The content owns it: the host stays out entirely. */
+  | "content"
+  /** Neither: the host neither drags the node from here nor yields to
+   *  content (React Flow off its drag handle). */
+  | "none";
+
+/** One host's own predicate, adapted to a single signature by the caller. */
+export interface HostPressRule {
+  /** Shown in the caption: whose rule this is and where it lives. */
+  source: string;
+  takes(nodeType: string | undefined, nodeId: string, target: Element): HostPressAnswer;
+}
+
+/** The pointer-owning subtree a `content` answer outlines: a dot's halo, a
+ *  rail card, a button / `.nodrag` subtree — else the element itself. */
+export function contentTargetOf(hit: Element): { target: Element; kind: "port" | "owned" } {
+  const dot = hit.closest('[data-slot="port-dot"]');
+  if (dot) return { target: dot.querySelector('[data-slot="port-dot-halo"]') ?? dot, kind: "port" };
+  return { target: hit.closest(`[data-slot="port-edge-card"], button, .${OWNS_POINTER_CLASS}`) ?? hit, kind: "owned" };
+}
+
+/**
+ * What `rule`'s host does with a press at one screen point. Every host stamps
+ * `data-scene-node` on its node wrapper (`domCanvas.tsx`, `reactFlowHost.tsx`,
+ * `tldrawHost.tsx`), which is the id the host's own predicate is called with.
+ * `nodeTypeOf` reads the scene record's `type` for that id.
+ */
+export function hostPressOutlineAt(
+  x: number,
+  y: number,
+  boundary: Element,
+  rule: HostPressRule,
+  nodeTypeOf: (nodeId: string) => string | undefined,
+): HostOutline {
+  const hit = document.elementsFromPoint(x, y).find((el) => boundary.contains(el) && el !== boundary);
+  if (!hit) return NONE;
+  const cable = hit.closest('[data-slot="trace-hit"], .react-flow__edge');
+  if (cable && boundary.contains(cable)) {
+    return { kind: "cable", target: cable, owner: "a cable", rule: "the host's own edge hit target", role: null };
+  }
+  const root = hit.closest("[data-scene-node]");
+  if (!root || !boundary.contains(root)) return NONE;
+  const nodeId = root.getAttribute("data-scene-node") ?? "";
+  const nodeType = nodeTypeOf(nodeId);
+  const answer = rule.takes(nodeType, nodeId, hit);
+  if (answer === "node") {
+    const kind = nodeType === "region" ? "region" : "node";
+    return { kind, target: root, owner: `${kind} ${nodeId}`, rule: `${rule.source} → the host takes the press`, role: null };
+  }
+  if (answer === "content") {
+    const content = contentTargetOf(hit);
+    return {
+      kind: content.kind,
+      target: content.target,
+      owner: `${content.target.getAttribute("data-slot") ?? content.target.tagName.toLowerCase()} inside ${nodeId}`,
+      rule: `${rule.source} → content owns the press; the host stays out`,
+      role: null,
+    };
+  }
+  return { ...NONE, owner: `nobody (inside ${nodeId})`, rule: `${rule.source} → not a drag surface here` };
 }
