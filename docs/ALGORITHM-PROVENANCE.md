@@ -491,3 +491,15 @@ projection) was evaluated and **diverged from** — see
 `docs/GROUPING-ALGEBRA.md` for the reasoning and the three Zach rulings that
 force a document mutation instead. Citing it as a donor would be citing
 something this lane never read.
+
+## `components/regionViews.layout.ts` — region views (2026-09-22, lane `region-views`)
+
+Zach's six region-view sketches (port · expanded tab/full-width · expanded
+opaque · wall crossings · branches). Two geometry pieces: where the line
+splitting control ports from ordinary ports goes, and where a wire crosses a
+region frame's wall.
+
+| File | Class | Donor / prior art | Verified how |
+|---|---|---|---|
+| `components/regionViews.layout.ts` — `regionControlSplitPx`, `regionRailBandPx`, `regionHeaderBandPx` | (c) | None claimed. This is the rail pitch arithmetic `blockPort.layout.ts` already states (`railPitchPx`, `offsetEdgePaddingPx`, `alignedFirstCentrePx`), read back as "the midpoint of the gap between slot n-1 and slot n". `regionRailBandPx` restates `scene/fitToContent.ts`'s `railBandHeightForSlots` because `src/components` may not import `src/scene` | `regionViews.layout.test.ts`: the split is checked against an **independent oracle**, `railPlanFor` + `alignedFirstCentrePx` plus one pitch per slot, not against this file's own formula. `regionRailBandPx` is checked equal to `railBandHeightForSlots` for 0-8 slots. Measured in the browser too: `RegionViews.stories.tsx` asserts that the painted line lies between the control dots and the ordinary dots. Mutation-tested: moving the painted line 30px down fails that story (`expected 156.5 to be greater than 169`); restored |
+| `components/regionViews.layout.ts` — `wallCrossings` | (c) over (a) | The intersection is **not ours**: it is `components/elbow/boundaryCrossing.ts`'s `boundaryCrossings` (Liang–Barsky, Excalidraw→SystemSketch, a byte-for-byte donor copy), called as-is. Ours is only the translation into frame-local coordinates | Read `boundaryCrossing.ts` in full on disk before writing. `regionViews.layout.test.ts` checks a diagonal crossing against similar triangles (`y = y0 + (X−x0)(y1−y0)/(x1−x0)`), plus the enter/exit/elbow/none cases. In the browser, `RegionViews.stories.tsx` asserts that every marker centre sits on the measured frame border (±1px) and that there is one marker per crossing edge (the count comes from the fixture, independently of the geometry). Mutation-tested: offsetting the markers 6px fails that story (`marker at (154.0, 1098.8) is not on the frame border`); restored |
