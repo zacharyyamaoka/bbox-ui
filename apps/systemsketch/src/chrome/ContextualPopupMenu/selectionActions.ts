@@ -142,11 +142,12 @@ export function selectionSubjectOf(editor: Editor): SelectionSubject {
  * toggle. WHY: Zach, 2026-09-22 — "I don't want to give people the option to
  * expand the region header block". The card is the region's header, not a
  * block you open; an expanded card would be a frame inside the frame's own
- * corner slot. The card is selectable alone only mid-rename (the selection
- * redirect's one carve-out, `shapes/region/cornerBlock.ts`), and that is
- * exactly when the pill was offering Simple/Ports/Expanded for it. The guard
- * lives HERE, in the one setter the pill and the 1/2/3 hotkeys
- * (`viewHotkeys.tsx`) both call, so neither door can reopen it.
+ * corner slot. The card used to be selectable alone mid-rename, and that was
+ * exactly when the pill offered Simple/Ports/Expanded for it; the selection
+ * redirect (`shapes/region/cornerBlock.ts`) no longer carves the rename out,
+ * and the pin there holds the view as a document invariant. This guard stays
+ * in the one setter the pill and the 1/2/3 hotkeys (`viewHotkeys.tsx`) both
+ * call, so neither door can reopen it even if a card is ever selected again.
  */
 export function setBlockView(editor: Editor, id: TLShapeId, view: BlockView): void {
   if (isRegionCornerBlock(editor, id)) return;

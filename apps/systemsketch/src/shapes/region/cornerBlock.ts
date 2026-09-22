@@ -554,11 +554,8 @@ export function installRegionKit(editor: Editor): () => void {
    * window.
    *
    * REACHABILITY, stated plainly: with `redirectCornerSelection` in place a
-   * card is selected only while `editingShapeId` names it (its own rename),
-   * and tldraw leaves `editing_shape` — clearing the editing id, which hands
-   * the selection back to the region — before it can enter `translating`
-   * (`SelectTool/childStates/EditingShape.ts` transitions out; `onExit` calls
-   * `setEditingShape(null)`). So no real gesture reaches this veto today. It
+   * card is never selected at all, not even during its own rename. So no real
+   * gesture reaches this veto today. It
    * is kept as a SCOPED BACKSTOP for the day something lets a card be selected
    * on its own mid-gesture, never as a blanket rule.
    */
@@ -581,15 +578,24 @@ export function installRegionKit(editor: Editor): () => void {
    * starts on the card moves frame, card and members together, and the card's
    * own `x/y` are never written.
    *
-   * THE ONE EXCEPTION is the card's own editing session. tldraw's
-   * `setEditingShape` selects the shape it edits and `EditingShape.onEnter`
-   * re-selects it (`Editor.setEditingShape`, `SelectTool/childStates/
-   * EditingShape.ts`), and a rename opened on the card must type into the
-   * card. While `editingShapeId` names the card it may stay selected; the
-   * moment the session ends the same rewrite hands the selection back to the
-   * region. Nothing else is carved out: the glyph picker and the port rails
-   * are content-owned presses (`shared/pointerOwnership.ts`) that never reach
-   * the selection, and a dot's wire gesture is DOM-level.
+   * NO EXCEPTION, not even the card's own rename (Zach, 2026-09-22: "When
+   * you hover on it by itself shouldn't be selectable"). The rename still
+   * types into the CARD because editing and selection are separate records:
+   * `editingShapeId` stays the card while `selectedShapeIds` is rewritten to
+   * the region. tldraw 5.3.2 couples them only one way — `Editor.setEditingShape`
+   * calls `this.select(id)` before writing `editingShapeId`
+   * (`@tldraw/editor/dist-esm/lib/editor/Editor.mjs:2016-2017`) and
+   * `EditingShape.onEnter` calls `this.editor.select(editingShape)`
+   * (`tldraw/dist-esm/lib/tools/SelectTool/childStates/EditingShape.mjs:34`);
+   * both land here and come out naming the region. Nothing in either package
+   * reads the selection back to keep or end an edit: `canEditShape`
+   * (`Editor.mjs:1959-1971`) checks the util, readonly and locks, and the
+   * session ends only through `setEditingShape(null)` (`EditingShape.onExit`,
+   * `:36-44`). An earlier cut carved the editing shape out of this rewrite,
+   * which left `selectedShapeIds === [card]` for the whole rename (Codex audit,
+   * 2026-09-22). The glyph picker and the port rails are content-owned presses
+   * (`shared/pointerOwnership.ts`) that never reach the selection, and a dot's
+   * wire gesture is DOM-level.
    *
    * NOT a bug, and not to be "fixed" here: a press on a card that lies inside
    * an existing MULTI-selection's bounds drags that multi-selection. That is
@@ -601,7 +607,7 @@ export function installRegionKit(editor: Editor): () => void {
     let changed = false;
     const ids: TLShapeId[] = [];
     for (const id of next.selectedShapeIds) {
-      const block = id === next.editingShapeId ? undefined : editor.getShape(id);
+      const block = editor.getShape(id);
       const region = block ? regionNaming(block) : undefined;
       const target = region ? region.id : id;
       if (target !== id) changed = true;

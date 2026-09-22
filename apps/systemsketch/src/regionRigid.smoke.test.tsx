@@ -25,8 +25,8 @@
 //      below the card's bottom edge (getBoundingClientRect, never presence).
 //   5. HOVER + NOT ALONE (Zach, 2026-09-22) — a real pointer over the card
 //      paints tldraw's hover outline on the frame's box, never the card's; no
-//      select-all, Tab or first-child gesture leaves the card selected alone,
-//      and the pill offers no view toggle for it, even mid-rename.
+//      select-all, Tab, first-child gesture OR its own rename leaves the card
+//      selected, and the pill offers no view toggle for it.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, react, type TLShapeId } from "tldraw";
@@ -222,10 +222,8 @@ describe("PINNED — the corner card never leaves region-local (0, 0)", () => {
     const { id, cornerId } = placeRegion("for", 300, 200);
     const header = await cardHeader(cornerId);
     await startTranslating(headerPoint(header));
-    // No real gesture can get here: the redirect only lets a card be selected
-    // during its own rename, and tldraw leaves that session before it can
-    // translate (see `gestureMovesCard`'s WHY — measured: writing an editing
-    // session mid-translate knocks the select tool out of `translating`). So
+    // No real gesture can get here: the redirect never lets a card be
+    // selected, not even during its own rename (see `gestureMovesCard`'s WHY). So
     // the selection is written with side effects OFF, bypassing the redirect,
     // to stand in for whatever future path lets a card be selected on its
     // own. What is under test is the backstop's predicate, not how it is
@@ -614,20 +612,72 @@ describe("STILL WORKS — what the card owns keeps working", () => {
     expectPinned(id, "after a glyph pick");
   });
 
-  it("a double-click on the card's title renames the CARD in place; ending the session hands the selection back to the region", async () => {
-    app = await mountApp();
+  /**
+   * A rename opened by double-clicking the card's title, with every selection
+   * the editor holds from then on recorded. Zach, 2026-09-22: the card
+   * "shouldn't be selectable" on its own — so the REGION stays the selection
+   * for the whole session while the CARD is the editing shape.
+   */
+  async function startCardRename() {
     const { id, cornerId } = placeRegion("for", 300, 200);
+    const seen: string[][] = [];
+    const stopWatching = react("regionRigid rename selections", () => {
+      seen.push([...app!.editor.getSelectedShapeIds()]);
+    });
     const title = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${cornerId}"] [data-slot="ss-block-title"][data-editing="false"]`), { what: "the card's title" });
     await userEvent.dblClick(title);
     await waitFor(() => (app!.editor.getEditingShapeId() === cornerId ? true : null), { what: "the card's editing session" });
-    expect(app.editor.getSelectedShapeIds()).toEqual([cornerId]);
+    expect(app!.editor.getSelectedShapeIds(), "entering the rename: the REGION is selected").toEqual([id]);
     await waitFor(() => app!.root.querySelector(`[data-shape-id="${cornerId}"] [data-slot="editable-text-input"]`), { what: "the in-place control" });
+    return {
+      id,
+      cornerId,
+      finish() {
+        stopWatching();
+        expect(seen.filter((ids) => ids.includes(cornerId)), "the card was never in the selection, at any point of the rename").toEqual([]);
+      },
+    };
+  }
+
+  it("a double-click on the card's title renames the CARD in place; ending the session hands the selection back to the region", async () => {
+    app = await mountApp();
+    const rename = await startCardRename();
     await userEvent.keyboard("{Control>}a{/Control}each_frame");
-    await waitFor(() => (shape<BlockLike>(cornerId)!.props.name === "each_frame" ? true : null), { what: "the card's name written" });
+    await waitFor(() => (shape<BlockLike>(rename.cornerId)!.props.name === "each_frame" ? true : null), { what: "the card's name written" });
+    expect(app.editor.getEditingShapeId(), "typing: still the card's session").toBe(rename.cornerId);
+    expect(app.editor.getSelectedShapeIds(), "typing: the REGION is selected").toEqual([rename.id]);
     await userEvent.keyboard("{Enter}");
     await waitFor(() => (app!.editor.getEditingShapeId() === null ? true : null), { what: "the session ended" });
-    expect(app.editor.getSelectedShapeIds()).toEqual([id]);
-    expectPinned(id, "after the rename");
+    expect(app.editor.getSelectedShapeIds()).toEqual([rename.id]);
+    rename.finish();
+    expectPinned(rename.id, "after the rename");
+  });
+
+  it("a card rename ended with Escape: the region stays the selection throughout", async () => {
+    app = await mountApp();
+    const rename = await startCardRename();
+    await userEvent.keyboard("{Control>}a{/Control}abandoned");
+    expect(app.editor.getSelectedShapeIds(), "typing: the REGION is selected").toEqual([rename.id]);
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => (app!.editor.getEditingShapeId() === null ? true : null), { what: "Escape ended the session" });
+    expect(app.editor.getSelectedShapeIds().includes(rename.cornerId)).toBe(false);
+    rename.finish();
+  });
+
+  it("a card rename ended by clicking away: the name commits and the card is never selected", async () => {
+    app = await mountApp();
+    const rename = await startCardRename();
+    await userEvent.keyboard("{Control>}a{/Control}clicked_away");
+    await waitFor(() => (shape<BlockLike>(rename.cornerId)!.props.name === "clicked_away" ? true : null), { what: "the card's name written" });
+    expect(app.editor.getSelectedShapeIds(), "typing: the REGION is selected").toEqual([rename.id]);
+    const frame = app.root.querySelector<HTMLElement>(`[data-shape-id="${rename.id}"]`)!.getBoundingClientRect();
+    const canvasRect = canvasOf(app.root).getBoundingClientRect();
+    await userEvent.click(canvasOf(app.root), { position: { x: Math.round(frame.left + 40 - canvasRect.left), y: Math.round(frame.bottom + 80 - canvasRect.top) } });
+    await waitFor(() => (app!.editor.getEditingShapeId() === null ? true : null), { what: "clicking away ended the session" });
+    expect(shape<BlockLike>(rename.cornerId)!.props.name).toBe("clicked_away");
+    expect(app.editor.getSelectedShapeIds().includes(rename.cornerId)).toBe(false);
+    rename.finish();
+    expectPinned(rename.id, "after clicking away");
   });
 
   it("Enter with the region selected renames the CARD in place, as a double-click does; committing hands the selection back to the region", async () => {
@@ -646,6 +696,7 @@ describe("STILL WORKS — what the card owns keeps working", () => {
 
     await userEvent.keyboard("{Enter}");
     await waitFor(() => (app!.editor.getEditingShapeId() === cornerId ? true : null), { what: "Enter opened the card's editing session" });
+    expect(app.editor.getSelectedShapeIds(), "mid-rename: the REGION is selected").toEqual([id]);
     await waitFor(() => app!.root.querySelector(`[data-shape-id="${cornerId}"] [data-slot="editable-text-input"]`), { what: "the in-place control" });
     await userEvent.keyboard("{Control>}a{/Control}pick_path");
     await waitFor(() => (shape<BlockLike>(cornerId)!.props.name === "pick_path" ? true : null), { what: "the card's name written" });
@@ -859,7 +910,7 @@ describe("HOVER — pointing at the card outlines the WHOLE region", () => {
     const title = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${cornerId}"] [data-slot="ss-block-title"][data-editing="false"]`), { what: "the card's title" });
     await userEvent.dblClick(title);
     await waitFor(() => (app!.editor.getEditingShapeId() === cornerId ? true : null), { what: "the card's editing session" });
-    expect(app.editor.getSelectedShapeIds(), "the card is selected for its own rename").toEqual([cornerId]);
+    expect(app.editor.getSelectedShapeIds(), "the REGION, not the card, is selected during its rename").toEqual([id]);
     // Off the card, onto empty canvas: now only the SELECTION is painted —
     // the hover path cannot be what makes this pass.
     // (Below the frame's bottom-left — the pill sits ABOVE the selection.)
@@ -1045,8 +1096,8 @@ describe("NOT SELECTABLE ALONE — no gesture leaves the card selected by itself
     const title = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${cornerId}"] [data-slot="ss-block-title"][data-editing="false"]`), { what: "the card's title" });
     await userEvent.dblClick(title);
     await waitFor(() => (app!.editor.getEditingShapeId() === cornerId ? true : null), { what: "the card's editing session" });
-    expect(app.editor.getSelectedShapeIds()).toEqual([cornerId]);
-    await waitFor(() => app!.root.querySelector('[data-slot="floating-toolbar"][data-visible="true"]'), { what: "the pill over the card" });
+    expect(app.editor.getSelectedShapeIds(), "the REGION is selected during the rename").toEqual([id]);
+    await waitFor(() => app!.root.querySelector('[data-slot="floating-toolbar"][data-visible="true"]'), { what: "the pill over the region" });
     await settle(300);
     expect(app.root.querySelector('[data-testid="ss-selection-view"]'), "no view toggle while the card is renamed").toBeNull();
     await userEvent.keyboard("{Escape}");
