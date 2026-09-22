@@ -104,9 +104,19 @@ for key in "abc":
     M[key]["ids_changed"] = sum(1 for k, v in other.items() if today_ids.get(k) != v)
 
 # the landed tree, from the real Storybook
+# Story files that were RENAMED, not only moved (old name -> new). Pairing is by
+# file name, so a rename has to be told; round 3b renamed Region's own file.
+FILE_RENAMES = {"ControlFlowRegion.stories.tsx": "BlockRegion.stories.tsx"}
+
+
+def file_name(path: str) -> str:
+    name = path.rsplit("/", 1)[-1]
+    return FILE_RENAMES.get(name, name)
+
+
 def by_file_export(entries):
     """(file name, export) -> id; a moved story file keeps its name, so this pairs old and new."""
-    return {(e["importPath"].rsplit("/", 1)[-1], e.get("exportName")): e["id"] for e in entries.values() if e["type"] == "story"}
+    return {(file_name(e["importPath"]), e.get("exportName")): e["id"] for e in entries.values() if e["type"] == "story"}
 
 
 NEW_PATH = {old: MOVES.get(old, old) for old in (r["path"] for r in landed_rows)}
@@ -115,7 +125,7 @@ per_title_l, kids_l = tree_of(landed_index)
 landed_title_of = {e["importPath"].rsplit("/", 1)[-1]: e["title"] for e in landed_index.values() if e["type"] == "story"}
 homes_l = defaultdict(set)
 for row in landed_rows:
-    homes_l[row["subject"]].add(landed_title_of[row["path"].rsplit("/", 1)[-1]].split("/")[0])
+    homes_l[row["subject"]].add(landed_title_of[file_name(row["path"])].split("/")[0])
 lists_l = {node: len(ch) for node, ch in kids_l.items() if node}
 widest_l = max(lists_l, key=lists_l.get)
 M["landed"] = dict(
@@ -212,7 +222,7 @@ def outline_html(key: str) -> str:
 
 def titles_for(subject: str) -> dict:
     out = {k: sorted({r[k] for r in rows if r["subject"] == subject}) for k in TREES}
-    out["landed"] = sorted({landed_title_of[r["path"].rsplit("/", 1)[-1]] for r in landed_rows if r["subject"] == subject})
+    out["landed"] = sorted({landed_title_of[file_name(r["path"])] for r in landed_rows if r["subject"] == subject})
     return out
 
 
@@ -465,6 +475,8 @@ main img{max-width:100%;height:auto}
 .full td{font-size:12px}.full code{font-size:11.5px}
 details>summary{cursor:pointer;font-weight:600;margin:8px 0}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.qrec{border:1px dashed var(--line);border-radius:10px;padding:10px 14px;margin:10px 0;opacity:.85}.qrec p{margin:4px 0}
+figure{margin:0}figure figcaption{font-size:13px;color:var(--muted);margin-top:6px}
 ul.plain{padding-left:18px}ul.plain li{margin:5px 0}
 @media (max-width:760px){.hero,.card-grid,.two{grid-template-columns:1fr}.nums{grid-template-columns:repeat(2,1fr)}
 .skyline,.roots{grid-template-columns:repeat(2,minmax(0,1fr))}.skyimg{--skyh:360px}.scrollshot{height:420px}}
@@ -479,7 +491,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
 const f=document.getElementById('filter');f&&f.addEventListener('input',()=>{const q=f.value.toLowerCase();
   document.querySelectorAll('.full tbody tr').forEach(r=>r.hidden=q&&!r.textContent.toLowerCase().includes(q));});
 function feedback(){
-  let t='## Storybook round 3 — feedback, report 2026-09-22\\n';
+  let t='## Storybook round 3b (BlockRegion) — feedback, report 2026-09-22\\n';
   document.querySelectorAll('.q').forEach(q=>{const a=q.querySelector('textarea').value.trim();
     t+='\\n**'+q.querySelector('.qq').textContent.trim()+'**\\n'+(a||'(default)')+'\\n';});
   return t;}
@@ -625,38 +637,27 @@ R3_Q = [
     ("Labeled Group is a component-level preset", "It renders anywhere Region renders, but no host builds one from scene data yet (the region host path still always puts a Block in the corner).",
      "Default: next lane — a <code>corner: \"title\"</code> option on the scene's region record, so tldraw and React Flow can draw one."),
 ]
-r3_q_html = "".join(f'<div class="q"><p class="qq"><b>{q}</b></p><p>{a}</p><p class="def">{d}</p><textarea placeholder="Your answer (blank = take the default)"></textarea></div>' for q, a, d in R3_Q)
+# WHY no textarea on these any more: round 3 merged (73d7e07), so they are the
+# record of what was asked. The copy button collects every `.q` on the page and
+# must only collect the questions still open (round 3b's).
+R3_OUTCOME = ["You said /merge-ready; merged onto main at <code>73d7e07</code> (fast-forward).",
+              "Kept.", "Superseded by round 3b above — and the premise was wrong: the studio app already draws a named plain region with its own name tab."]
+r3_q_html = "".join(f'<div class="qrec"><p class="qq"><b>{q}</b></p><p>{a}</p><p class="def">Outcome: {o}</p></div>' for (q, a, d), o in zip(R3_Q, R3_OUTCOME))
 round3_html = f"""
-<h1>Storybook, round 3 — chrome is Editor's, Region lives in Blocks, presets live with their component</h1>
-<p class="sub">22 Sep 2026 · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{LANDED_REV}</code> ({R3_MOVE} the move, {R3_REG} the registry, cfc5532 the audit fixes) · not merged · built on <code>main</code> {R3_BASE}</p>
+<h2 class="record">Round 3 — chrome is Editor's, Region lives in Blocks, presets live with their component</h2>
+<p class="sub">22 Sep 2026 · {R3_MOVE} the move, {R3_REG} the registry, cfc5532 the audit fixes · <b>merged onto main at 73d7e07</b> · built on {R3_BASE}. Kept as the record. Superseded in part by round 3b above: Region is now <b>BlockRegion</b>, and the Labeled Group's label is a Block.</p>
 <div class="tldr">
 <p><b>Done, as you asked.</b> The editor's menus, bars, panels and dialogs moved out of <code>components/</code> into <code>editor/</code> — {len(editor_sources)} source files and their stories and tests. <b>Region is a folder under Components › Blocks</b>, with its presets inside it, and the new <b>Labeled Group</b> is one of them: Region with a title tab in the corner where the Block would sit. <b>There is no <code>presets/</code> folder</b> any more.</p>
 <p><b>Where the line fell, mechanically:</b> a file stays in <code>components/</code> if a remaining component imports it — your "needed to display information on the components". So FoldingChevron, Badge, Bar and Button stayed; the vendored shadcn primitives stay under Stock even where only the editor uses them. One place your rule met the architecture: the Branch and Loop presets build <em>scene records</em>, and <code>components/</code> may not import <code>scene/</code>, so their code sits beside the region model (<code>scene/region.branch.ts</code>) while their <em>stories</em> sit under Region like the rest.</p>
 <p><b>Found on the way, and fixed:</b> the shadcn registry was already broken on <code>main</code> — the <code>region</code> item could not build at all, and 11 of the 16 trunk items installed and then failed to compile. All 37 installable items now install into a fresh project and pass <code>tsc</code>.</p>
 <div class="nums">
 <div class="num"><b>{len(L3['roots'])}</b><span>sections: {esc(' · '.join(L3['roots']))}</span></div>
-<div class="num"><b>{len(L3['kids']['Components/Blocks/Region'])}</b><span>entries inside Region — Labeled Group, Loop, Branch first</span></div>
+<div class="num"><b>{len(L3['kids']['Components/Blocks/BlockRegion'])}</b><span>entries inside Region — Labeled Group, Loop, Branch first</span></div>
 <div class="num"><b>{sum(move_counts.values())}</b><span>files moved; every import rewritten, 0 stale story links</span></div>
 <div class="num"><b>3,141 / 3,141</b><span>trunk tests, browser stories included</span></div>
 </div></div>
 
-<div class="hero">
-  <video controls muted loop playsinline autoplay poster="{round3_poster}" src="{round3_video}"></video>
-  <div><b>Recorded from this branch's Storybook</b> (14 s): Components › Blocks › <b>Region</b> open with its presets; the <b>Labeled Group</b> story, then <em>Same Frame</em> — the title-only preset beside the full Region, one frame renderer; the <b>Branch</b> preset; then the <b>Editor</b> section's three families.
-  <details><summary>No video? GIF fallback</summary><img src="{round3_gif}" alt="GIF of the round-3 sidebar"></details></div>
-</div>
-
-<h2>Region, as it sits in Blocks</h2>
-<div class="card-grid">
-  <div class="scrollshot" style="height:auto;max-height:none">{img("r3-blocks-region.png", "Components › Blocks with Region open")}</div>
-  <div>
-    <h4>Labeled Group — Region with only a title showing</h4>
-    {img("r3-lg-sameframe.png", "Labeled Group beside Region", "wide")}
-    <p class="sub">Left: <code>LabeledGroup</code> (<code>components/region.labeledGroup.tsx</code>), <code>Region kind="group"</code> with a title tab in its corner slot. Right: the same Region with a Block there. The story measures that the tab sits flush in the frame's top-left and rounds with the frame's own radius token; changing that token turns all four stories red.</p>
-    <h4>Region's presets</h4>
-    <ul class="plain">{"".join(f"<li>{esc(k)}</li>" for k in L3['kids']['Components/Blocks/Region'])}</ul>
-  </div>
-</div>
+<p class="sub">Round 3 shipped the Labeled Group as a text tab in Region's corner slot. Round 3b replaced it with a Block; the video and stills are in round 3b above.</p>
 
 <h2>What moved where</h2>
 <div class="tablewrap"><table><thead><tr><th>From → to</th><th>Files</th><th>What</th></tr></thead><tbody>
@@ -672,17 +673,118 @@ round3_html = f"""
 <tr><th>Merge, dry run</th><td class="{'green' if merge_main[0] == 0 else 'red'}">main: {'clean' if merge_main[0] == 0 else str(len(merge_main[1])) + ' conflicts'}</td><td>against <code>claude/system-sketch-ui-feedback-14bfc3</code>: {len(merge_peer[1])} files — {esc(', '.join(f.rsplit('/', 1)[1] for f in merge_peer[1]))}. All mechanical; that lane was told.</td></tr>
 </tbody></table></div>
 
-<h2>Needs you</h2>
+<h2>What was asked</h2>
 {r3_q_html}
-<p><button class="btn" id="copy">Copy all feedback</button><span id="copied"></span></p>
-<textarea id="out" hidden rows="10"></textarea>
 
 <h2 class="record">Round 2 — the reorganisation as it landed earlier today</h2>
 <p class="sub">Kept as the record. Its numbers are read from the live index, so they describe the sidebar as it is now; its prose describes round 2.</p>
 """
 
+R3B = "2e00c9c"
+before = json.loads((MEDIA / "manifest-blockregion-before.json").read_text())["stills"]
+after = json.loads((MEDIA / "manifest-blockregion-after.json").read_text())["stills"]
+def _radii(r):
+    return f"TL {r['tl']} · TR <b>{r['tr']}</b> · BR {r['br']} · BL <b>{r['bl']}</b> · <code>shape={r['shape']}</code>"
+R3B_CHANGES = [  # (piece, before, now)
+    ("<code>Block</code> · <code>components/block.tsx</code>", "Always the card: four equal corners. Region corners got square junctions only if the caller spread <code>REGION_CORNER_BLOCK_STYLE</code> over it.",
+     "<code>shape=\"card\" | \"region-corner\"</code>. The radii and their WHY live here now; the hit region and the mask highlighter follow the shape. New story: <b>Block › Shapes</b>."),
+    ("<code>BlockRegion</code> · <code>components/blockRegion.tsx</code>", "<code>Region</code>, with a required <code>corner</code> slot the caller filled.",
+     "Renamed, and a composite: give it a <code>title</code> and it draws its own corner Block with the corner shape (a plain card while opaque). <code>corner</code> stays for a card with ports."),
+    ("<code>LabeledGroup</code> · <code>components/blockRegion.labeledGroup.tsx</code>", "Its own text chip in Region's slot, with the corner radii copied by hand.",
+     "<code>&lt;BlockRegion kind=\"group\" title={label} /&gt;</code>. Nothing of its own left to drift."),
+    ("DOM canvas + React Flow · <code>hosts/nodeViews.tsx</code>", "Spread the style object. Correct.", "<code>shape={opaque ? \"card\" : \"region-corner\"}</code>"),
+    ("Studio app (tldraw) · <code>shapes/block/BlockFace.tsx</code>", "Spread the style object. Correct; its smoke test measures it.", "<code>shape={isRegionCorner ? \"region-corner\" : \"card\"}</code>. Smoke test (e) still green."),
+    ("The story you flagged · <code>LabeledGroup.stories.tsx › Same Frame</code>", "A bare <code>&lt;Block&gt;</code> in the corner, no style object: <b>rounded at all four corners</b>. Its test only measured the left-hand label.",
+     "<code>shape=\"region-corner\"</code>, and the test measures all four radii of <b>both</b> corner cards."),
+    ("Registry", "<code>region</code>", "<code>block-region</code>, plus a new <code>labeled-group</code>. <code>region</code> could not build on main before this morning, so nobody installed the old name."),
+    ("Storybook", "<code>Components/Blocks/Region/…</code>", "<code>Components/Blocks/BlockRegion/…</code>, beside Block and BlockPort."),
+]
+r3b_change_rows = "".join(f"<tr><th>{a}</th><td>{b}</td><td>{c}</td></tr>" for a, b, c in R3B_CHANGES)
+R3B_GATES = [  # measured 2026-09-22 on 2e00c9c
+    ("trunk typecheck · app typecheck", "exit 0 · exit 0", "<code>npx tsc --noEmit</code> in <code>apps/storybook-basics</code> and <code>apps/systemsketch</code>"),
+    ("trunk <code>pnpm test</code> (both projects)", "3,143 / 3,143", "268 files, browser stories included. Main has 3,142; the new one is Block › Shapes. The FramesPanel flake the integrator saw on main passed here."),
+    ("studio app unit", "221 / 221", ""),
+    ("studio app smoke (real browser)", "293 / 303", "the same 10 that fail on <code>main</code> 73d7e07 (draft ×7, menus ×2, corner ×1); the corner-card test (variants (e)) passes"),
+    ("mutation: drop the shape from Same Frame's corner Block", "red", "Same Frame fails; restored, green"),
+    ("mutation: round the junctions inside <code>Block</code>", "red", "every Labeled Group story, Block › Shapes and RegionVariants' corner check fail; restored, green"),
+    ("registry <code>--check</code> · <code>npx shadcn build</code>", "current · built", "the generator now retires renamed items and refuses items with missing files — it had kept <code>region</code> beside <code>block-region</code>, and only <code>shadcn build</code> caught it"),
+    ("registry install, throwaway project", "38 items · tsc exit 0", "<code>docs/verify_registry_install.py</code>"),
+    ("independent audit (different model)", "A–F confirmed", "It re-ran the gates its own way and got the same totals. It traced every place a card is drawn in a region corner: all of them pass the shape except the app's hand-rolled name tab. It also confirmed <code>card</code> renders byte-for-byte as before, apart from one new <code>data-block-shape</code> attribute. Four small findings, fixed in <code>d44bb3d</code>: comments still naming <code>Region</code>, two WHY comments that drifted, a dated report builder that fails (it already failed on main), and the app's hand-rolled name tab, now marked as owed to the trunk. In its full run one ReactFlow drag story flaked under a peer's load. It passed twice when run alone, and the file hasn't changed since before round 3."),
+]
+r3b_gate_rows = "".join(f"<tr><th>{a}</th><td class='green'>{b}</td><td>{c}</td></tr>" for a, b, c in R3B_GATES)
+R3B_Q = [
+    ("Merge it?", "It sits on top of main (73d7e07): the change, the audit fixes, a stale-comment fix, and the report. No conflicts. It renames the component and its files, so a lane editing <code>components/region*.tsx</code> will need the same rename when it merges.",
+     "If you say nothing it stays on the branch. Say <b>/merge-ready</b> and it queues."),
+    ("The studio app draws a second labeled group", "A plain region with a name, in <code>apps/systemsketch/src/shapes/region/RegionFace.tsx</code>, draws its own <code>NameTab</code>: a 28 px chip, rounded with the skin radius instead of the frame's, so it ignores the region drawings. That is exactly the Labeled Group, hand-rolled in the app. Swapping it for <code>BlockRegion title</code> changes the app's region geometry (<code>REGION_NAME_TAB_PX</code> → the Block's measured height), so it isn't a drive-by.",
+     "Default: a next lane moves the app onto the trunk's title corner, with a seeded review board."),
+    ("Types keep the region names", "Only the component and its props were renamed (<code>BlockRegion</code>, <code>BlockRegionProps</code>). <code>RegionKind</code>, <code>RegionView</code>, <code>RegionArm</code>, the <code>data-region-*</code> DOM contract and the <code>--bbox-region-*</code> tokens keep their names: they describe the region half of the composite, and the app imports them.",
+     "Default: keep."),
+]
+r3b_q_html = "".join(f'<div class="q"><p class="qq"><b>{q}</b></p><p>{a}</p><p class="def">{d}</p><textarea placeholder="Your answer (blank = take the default)"></textarea></div>' for q, a, d in R3B_Q)
+round3b_html = f"""
+<h1>BlockRegion — the region composes a Block, and the corner's square edges are a Block shape</h1>
+<p class="sub">22 Sep 2026 · branch <code>claude/storybook-server-launch-e5f2cc</code> · <code>{R3B}</code> the change, <code>d44bb3d</code> the audit fixes, on <code>main</code> 73d7e07 (round 3, merged) · not merged</p>
+<div class="tldr">
+<p><b>Done, as you clarified.</b> Rounding the corner card is now a <b>Block</b> prop: <code>shape="region-corner"</code>, with its own story on Block. <b>Region is now BlockRegion</b>, a composite that draws its own corner Block when you give it a title. <b>Labeled Group is BlockRegion with only a title</b>, so its label is a real Block, not a chip.</p>
+<p><b>The corner in your screenshot:</b> you didn't need to rebase. Main hadn't moved, and the square-corner code was already on it. My <em>Same Frame</em> story built its corner Block bare and never applied that style, and its test only measured the left card. Both cards are now measured. Of the five places that put a Block in a region corner, that story was the only wrong one.</p>
+<div class="nums">
+<div class="num"><b>TR 0 · BL 0</b><span>measured on both corner cards in Same Frame</span></div>
+<div class="num"><b>3,143 / 3,143</b><span>trunk tests, browser stories included</span></div>
+<div class="num"><b>2 / 2</b><span>mutations red: dropping the shape in the story; rounding the junctions in Block</span></div>
+<div class="num"><b>A–F</b><span>confirmed by an independent audit; its four small findings fixed</span></div>
+</div></div>
+
+<h2>The corner you flagged, before and after</h2>
+<div class="two">
+  <figure>{img("r3b-corner-region-4-before.png", "before: corner Block rounded at all four corners", "wide")}<figcaption><b>Before</b>: what the story drew (main's story, measured) · {_radii(before["r3b-corner-region-4-before"])}</figcaption></figure>
+  <figure>{img("r3b-corner-region-4-after.png", "after: corner Block square at top-right and bottom-left", "wide")}<figcaption><b>After</b> · {_radii(after["r3b-corner-region-4-after"])}</figcaption></figure>
+</div>
+<p class="sub">4× captures from this branch's Storybook, cropped around the real card's measured box. For the before, I ran the same story with the corner shape removed, which is what main's story rendered, then restored it.</p>
+
+<div class="hero">
+  <video controls muted loop playsinline autoplay poster="{round3_poster}" src="{round3_video}"></video>
+  <div><b>Recorded from this branch's Storybook</b> (16 s): Components › Blocks › <b>BlockRegion</b> with its presets; the <b>Labeled Group</b> story, then <em>Same Frame</em>, a title-only card beside a full Block; the <b>Branch</b> preset; then the <b>Editor</b> section.
+  <details><summary>No video? GIF fallback</summary><img src="{round3_gif}" alt="GIF of the sidebar"></details></div>
+</div>
+
+<h2>The shape, on Block</h2>
+{img("r3b-block-shapes.png", "Block Shapes story: card and region-corner", "wide")}
+<p class="sub"><b>Components › Blocks › Block › Shapes</b>. Only the radii change: same width, same slots. The story measures all four radii on both cards.</p>
+
+<h2>BlockRegion and its Labeled Group preset</h2>
+<div class="card-grid">
+  <div class="scrollshot" style="height:auto;max-height:none">{img("r3-blocks-region.png", "Components › Blocks with BlockRegion open")}</div>
+  <div>
+    {img("r3b-sameframe.png", "Labeled Group beside a BlockRegion with a full corner Block", "wide")}
+    <p class="sub">Left: <code>&lt;LabeledGroup label="Label"/&gt;</code>, i.e. <code>&lt;BlockRegion kind="group" title="Label"/&gt;</code>. The label is a header-only Block that hugs its text, with no divider. Right: a BlockRegion given a full corner Block. It's one frame renderer, both corner cards have the same shape, and the only difference is what's in the card. Title-only label, measured: {_radii(after["r3b-corner-group-4-after"])}.</p>
+    <h4>BlockRegion's presets</h4>
+    <ul class="plain">{"".join(f"<li>{esc(k)}</li>" for k in L3['kids']['Components/Blocks/BlockRegion'])}</ul>
+  </div>
+</div>
+
+<h2>What changed, piece by piece</h2>
+<div class="tablewrap"><table><thead><tr><th>Piece</th><th>Before</th><th>Now</th></tr></thead><tbody>{r3b_change_rows}</tbody></table></div>
+
+<h2>Checks</h2>
+<div class="tablewrap"><table class="gates"><tbody>{r3b_gate_rows}</tbody></table></div>
+
+<h2>Needs you</h2>
+{r3b_q_html}
+<p><button class="btn" id="copy">Copy all feedback</button><span id="copied"></span></p>
+<textarea id="out" hidden rows="10"></textarea>
+
+<h2>Not done on purpose</h2>
+<ul class="plain">
+<li>The story <em>files</em> keep their lane names (<code>ControlFlowLoop.stories.tsx</code> …). Their titles put them under BlockRegion, and renaming them is churn for peers with nothing gained in the sidebar.</li>
+<li>Dated records (plans, earlier reports, parity triage) keep the old <code>region.tsx</code> paths. The control-flow plan gets a one-line note instead, because it's what those lanes were told.</li>
+<li>The app's own name tab (see Needs you), which is a geometry change in the app. It carries an \"owed to the trunk\" note in its code now.</li>
+<li>The frozen v1 <code>packages/bbox-ui</code> region and the opt-in <code>apps/storybook</code> spike still draw an all-round corner card. Both are frozen by the repo's rules.</li>
+</ul>
+"""
+
 page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Storybook Organisation</title><style>{CSS}</style></head><body><main>
+{round3b_html}
 {round3_html}
 {landed_html}
 

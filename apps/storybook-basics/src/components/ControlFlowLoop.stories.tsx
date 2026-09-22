@@ -1,5 +1,5 @@
 /**
- * Components/Blocks/Region/Loop — the loop PRESET (docs/CONTROL-FLOW-PLAN.md lane B),
+ * Components/Blocks/BlockRegion/Loop — the loop PRESET (docs/CONTROL-FLOW-PLAN.md lane B),
  * built entirely out of `scene/region.loop.ts`'s factories over the generic
  * Region lane A shipped. There is no Loop component in this repo and these
  * stories are the proof: every board below is `forLoopNode` /
@@ -47,10 +47,10 @@ import {
   expectWireAvoids,
   expectWireBadge,
   expectWirePainted,
-} from "./region.acceptance";
+} from "./blockRegion.acceptance";
 
 const meta = {
-  title: "Components/Blocks/Region/Loop",
+  title: "Components/Blocks/BlockRegion/Loop",
   tags: ["object:region", "host:dom", "host:react-flow", "lane:control-flow"],
 } satisfies Meta;
 

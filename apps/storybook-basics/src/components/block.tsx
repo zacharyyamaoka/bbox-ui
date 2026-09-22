@@ -66,6 +66,78 @@ import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
  * a new Block prop.
  */
 
+/**
+ * The outline a Block draws — its four corner radii, and nothing else.
+ *
+ * - `"card"` (default): rounded at all four corners with the skin radius, the
+ *   Block every caller has always had.
+ * - `"region-corner"`: the Block sitting in a `BlockRegion`'s top-left corner.
+ *   Rounded with the region FRAME's radius at the top-left, the corner it
+ *   shares with the frame, and at its one free corner, the bottom-right.
+ *   SQUARE at the top-right and bottom-left.
+ *
+ * WHY top-right and bottom-left are square: those two are the JUNCTIONS. The
+ * card's top edge continues as the frame's top rule, and its left edge as the
+ * frame's left rule. A radius there pulls the card's edge away from the
+ * frame's line, so the border kinks twice on its way round. Zach, 2026-09-19,
+ * annotating the tldraw app (`Pasted image 20260919180659.png`): "I don't
+ * like how the edges where it meets the region are still curve. they shuld be
+ * straight!" WHAT THIS REJECTS: the all-round `card`, the tempting default
+ * because every other Block on the board wears it. It makes the corner read
+ * as a card PARKED in the frame rather than part of it. Squaring all four
+ * was rejected too: the top-left is the frame's own corner (they curve
+ * together, so there is no junction to break) and the bottom-right touches no
+ * frame edge, and the drawing he approved rounds both.
+ *
+ * WHY a Block prop and not a rule inside `BlockRegion` (Zach, 2026-09-22:
+ * "the block region styling we apply to the block like corning the corners.
+ * that is just a styling change to Block"): a canvas host may mount the corner
+ * card as an INDEPENDENT element. `apps/systemsketch` paints it as a real
+ * `ss-block` child shape, so it is not a React descendant of the region and no
+ * CSS rule the region writes can reach it. It is a fact about the card's own
+ * outline, so it travels with the card. It used to be an exported style object
+ * every host had to remember to spread (`REGION_CORNER_BLOCK_STYLE`), and a
+ * `BlockRegion` story that forgot it shipped the all-round card (2026-09-22).
+ * A named shape is harder to forget than an object to spread.
+ */
+export type BlockShape = "card" | "region-corner";
+
+/** The card radius, the value every Block wore before `shape` existed. */
+const CARD_RADIUS = "var(--bbox-skin-radius, var(--radius-lg))";
+
+/**
+ * The region frame's shared top-left radius. `BlockRegion`'s frame reads this
+ * same chain, and a `region-corner` Block curves with it. `v1` resolves to the
+ * skin radius. A region drawing (`skin/regionVariants.css`) sets
+ * `--bbox-region-frame-radius` on an ancestor, and the frame and its corner
+ * card both follow, because both read this one string.
+ */
+export const REGION_FRAME_RADIUS = "var(--bbox-region-frame-radius, var(--bbox-skin-radius, var(--radius-lg)))";
+
+type CornerRadii = { tl: string; tr: string; br: string; bl: string };
+
+const SHAPE_RADII: Record<BlockShape, CornerRadii> = {
+  card: { tl: CARD_RADIUS, tr: CARD_RADIUS, br: CARD_RADIUS, bl: CARD_RADIUS },
+  "region-corner": {
+    tl: REGION_FRAME_RADIUS,
+    tr: "0px",
+    // The one free corner follows the drawing: `v2` and `v10` square it so
+    // a full-width header rule leaves the card cleanly instead of from a curve.
+    br: `var(--bbox-region-corner-radius, ${REGION_FRAME_RADIUS})`,
+    bl: "0px",
+  },
+};
+
+/** `border-radius` for a shape, optionally grown by `growPx` at every corner
+ *  (the mask highlighter's Minkowski offset). A card's four equal corners stay
+ *  the single value they always were, so a card's inline style is unchanged. */
+function shapeRadiusCss(shape: BlockShape, growPx = 0): string {
+  const r = SHAPE_RADII[shape];
+  const grow = (value: string) => (growPx ? `calc(${value} + ${growPx}px)` : value);
+  if (r.tl === r.tr && r.tr === r.br && r.br === r.bl) return grow(r.tl);
+  return [r.tl, r.tr, r.br, r.bl].map(grow).join(" ");
+}
+
 export interface BlockProps {
   header?: ReactNode;
   body?: ReactNode;
@@ -73,6 +145,8 @@ export interface BlockProps {
   width?: number;
   /** Explicit height in px. Omit to hug the rendered regions. */
   height?: number;
+  /** The outline: `"card"` (default) or `"region-corner"`. See `BlockShape`. */
+  shape?: BlockShape;
   style?: CSSProperties;
   /**
    * The divider line under the header. Defaults to shown, so no existing
@@ -246,6 +320,7 @@ export function Block({
   footer,
   width = 320,
   height,
+  shape = "card",
   style,
   showHeaderDivider = true,
   description,
@@ -295,6 +370,7 @@ export function Block({
   return (
     <div
       data-slot="block"
+      data-block-shape={shape}
       data-diagnostic={diagnosticSeverity}
       data-highlighter-kind={markedSeverity ? highlighterKind : undefined}
       className={cn(
@@ -343,7 +419,17 @@ export function Block({
         ...ISOLATED_ROOT_STYLE,
         width,
         height,
-        borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
+        borderRadius: shapeRadiusCss(shape),
+        // WHY here and not in a region stylesheet: `v10` centres the corner
+        // card's title in a band run the full width of the region, and every
+        // other drawing leaves it where the host put it. `text-align` is
+        // INHERITED, so setting it on the card root reaches the title without
+        // a descendant selector, and a descendant selector written in the
+        // region could never reach the app's child-shape card anyway.
+        // It cannot leak onto port labels: `BlockPort` is the card's PARENT.
+        ...(shape === "region-corner"
+          ? { textAlign: "var(--bbox-region-corner-title-align, initial)" as CSSProperties["textAlign"] }
+          : null),
         overflow: "clip",
         // Widened to let the corner flag straddle the border (see
         // `flagOverhangPx` above) and, with `highlighterKind="mask"`, the
@@ -381,7 +467,12 @@ export function Block({
         <div
           data-slot="block-highlighter-mask"
           aria-hidden
-          style={highlighterMaskFrameStyle(diagnosticColorVar(markedSeverity), MASK_OFFSET_PX, "var(--bbox-skin-radius, var(--radius-lg))")}
+          style={{
+            ...highlighterMaskFrameStyle(diagnosticColorVar(markedSeverity), MASK_OFFSET_PX, CARD_RADIUS),
+            // Per corner, so a region-corner card's square junctions grow to
+            // square-plus-offset instead of a rounded frame around a square card.
+            borderRadius: shapeRadiusCss(shape, MASK_OFFSET_PX),
+          }}
         />
       )}
       {showFlag && diagnostics && (
@@ -412,7 +503,7 @@ export function Block({
             background: HIT_REGION_FILL,
             outline: HIT_REGION_OUTLINE,
             outlineOffset: -1,
-            borderRadius: "var(--bbox-skin-radius, var(--radius-lg))",
+            borderRadius: shapeRadiusCss(shape),
           }}
         />
       )}

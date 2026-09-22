@@ -1,5 +1,5 @@
 /**
- * Components/Blocks/Region — the region KIT, on its own, before any loop or
+ * Components/Blocks/BlockRegion — the region KIT, on its own, before any loop or
  * branch preset exists (docs/CONTROL-FLOW-PLAN.md lane A).
  *
  * What these stories are actually claiming, in Zach's own two sentences:
@@ -27,7 +27,7 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { regionLayout } from "./region.layout";
+import { regionLayout } from "./blockRegion.layout";
 import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
@@ -40,10 +40,10 @@ import {
   expectMemberInside,
   expectRegionExpanded,
   expectRegionOpaque,
-} from "./region.acceptance";
+} from "./blockRegion.acceptance";
 
 const meta = {
-  title: "Components/Blocks/Region",
+  title: "Components/Blocks/BlockRegion",
   tags: ["object:region", "host:dom", "host:react-flow", "lane:control-flow"],
 } satisfies Meta;
 

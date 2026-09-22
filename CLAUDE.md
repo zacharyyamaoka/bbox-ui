@@ -152,7 +152,14 @@ python3 docs/verify_registry_install.py --dir /tmp/bbox-registry-check
 
 It installs every installable item from `public/r/` into a fresh project and
 runs `tsc`. First run (2026-09-22): 37 items, `tsc` exit 0 — and deleting one
-installed file turns it red, so it can fail.
+installed file turns it red, so it can fail. After `region` became
+`block-region` and `labeled-group` joined it (same day): 38 items, exit 0.
+
+**Renaming or removing an item goes through `RETIRED_ITEMS`** in the
+generator. It merges into `registry.json`, so a renamed item used to leave its
+old entry behind, pointing at files that no longer exist: `--check` passed
+and only `npx shadcn build` failed. The generator now retires listed names and
+refuses to write any item whose files are missing.
 
 **The two adapters cannot be installed by anyone.** `block-node-reactflow` and
 `block-shape-tldraw` import `@bbox-ui/core`, which is `private: true` and
@@ -230,7 +237,7 @@ Two things the reset shipped are deliberately **not** registry items:
 
 Loop, branch, arms and the opaque ⇄ expanded toggle are designed in
 `docs/CONTROL-FLOW-PLAN.md`; read it before touching `scene/controlFlow.ts`,
-`components/region*.{ts,tsx}`, `scene/regionView.ts` or `hosts/regionScene.ts`.
+`components/blockRegion*.{ts,tsx}`, `scene/regionView.ts` or `hosts/regionScene.ts`.
 
 **The one rule that is easy to break and silent when broken:** the region
 root and its frame carry `data-region-id`; the CORNER CARD alone carries
@@ -340,10 +347,15 @@ one thing, and six components living in two places.
   Button); editor-only chrome lives in `editor/`. The vendored shadcn
   primitives stay in `components/` under `Stock` even where only the editor
   uses them — they are stock, not editor design.
-- **Region is a Block-family component** with its presets inside it:
-  `Components/Blocks/Region/{Labeled Group, Loop, Branch, …}`. Zach: *"labeled
-  group is actually a subset (preset) of the Region. its a region with only a
-  title showing."*
+- **BlockRegion is a Block-family component** with its presets inside it:
+  `Components/Blocks/BlockRegion/{Labeled Group, Loop, Branch, …}`. It is a
+  composite, a frame plus a real `Block` in its corner, and the Labeled Group
+  is BlockRegion given only a `title`. Zach: *"labeled group should be a
+  preset of Block Region… Block Region is stanadlone component that composes
+  the Block with a 'region'"*. The corner card's square junctions are a
+  **Block** prop, `shape="region-corner"`, shown on `Components/Blocks/Block ›
+  Shapes`, so a host that mounts the card on its own (the app's child shape)
+  gets them by naming the shape, not by spreading a style object.
 - **Then the component's code name** (`PortEdge`, not "Port Edge"), then an
   aspect in words where one file is a facet of a component
   (`Components/Ports/PortEdge/Hit Regions`).

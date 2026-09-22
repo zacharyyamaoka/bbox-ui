@@ -81,7 +81,7 @@ export interface RegionVariant {
   };
   corner: {
     /** `flush`: the card's border sits on the frame's line (the Labeled
-     *  Group Node look, `region.tsx`'s header). `ruled`: flush, AND the
+     *  Group Node look, `blockRegion.tsx`'s header). `ruled`: flush, AND the
      *  card's bottom edge continues as a full-width rule under it — the
      *  line Zach pointed at in `Pasted image 20260919115353.png` and again
      *  in `…20260920004250.png`'s DESIRED half. `band`: ruled, AND the card
@@ -93,10 +93,12 @@ export interface RegionVariant {
      *  width of the region". The corner card is not removed and no port
      *  moves; its dots are already on its own left edge, which at full width
      *  IS the region's left edge. What a DRAWING can reach is the rule, the
-     *  square corners and the centred title; the card's WIDTH is the host's
-     *  in both hosts (a `width` prop in `hosts/nodeViews.tsx`, a persisted
-     *  `props.w` in the app's `shapes/region/cornerBlock.ts`) and is never
-     *  CSS — see `region.tsx`'s `REGION_CORNER_BLOCK_STYLE`. */
+     *  square corners and the centred title; the card's WIDTH is never a
+     *  drawing's. A host sets it (a `width` prop in `hosts/nodeViews.tsx`, a
+     *  persisted `props.w` in the app's `shapes/region/cornerBlock.ts`), or,
+     *  for a title-only corner, `BlockRegion` hugs the title itself
+     *  (`blockRegion.tsx`'s `TitleCorner`). No `--bbox-region-*` token
+     *  reaches it — see `block.tsx`'s `BlockShape`. */
     integration: "flush" | "ruled" | "band";
     /** The card's ONE free corner, bottom-right. Absent = the frame's shared
      *  radius, which is what the drawing Zach approved does. `"square"` is
@@ -252,7 +254,7 @@ export const REGION_VARIANTS: Record<RegionVariantId, RegionVariant> = {
   // (`…20260920004250.png`, CURRENT BAD). DESIRED puts a full-width rule
   // directly under the card's row, at every nesting level.
   //
-  // WHY this needed no change to `region.tsx` at all: that rule already
+  // WHY this needed no change to `blockRegion.tsx` at all: that rule already
   // exists as `region-header-rule`, turned on by `corner.integration:
   // "ruled"`, which is `v2`'s. The first-arm divider (`index > 0`, the
   // donor's `dividerY: index === 0 ? null : rowTop`) stays exactly as it
@@ -310,7 +312,7 @@ export const REGION_VARIANTS: Record<RegionVariantId, RegionVariant> = {
 
 /**
  * Does this drawing continue the corner card's bottom edge as a full-width
- * rule (`region.tsx`'s `region-header-rule`)? One name for the rule, because
+ * rule (`blockRegion.tsx`'s `region-header-rule`)? One name for the rule, because
  * three acceptance suites ask it and `=== "ruled"` was already wrong the
  * moment `band` existed — `band` is `ruled` plus a stretched, centred card.
  */
@@ -350,7 +352,7 @@ export function readRegionVariant(from?: Element | null): RegionVariantId {
  * The app's switch: write (or clear) the attribute on `<html>`. Every
  * mounted Region observes this attribute on `<html>` AND on every nearer
  * ancestor, and re-resolves before the next paint without the caller
- * re-rendering anything (`region.tsx`'s `useRegionVariant`).
+ * re-rendering anything (`blockRegion.tsx`'s `useRegionVariant`).
  */
 export function setRegionVariant(id: RegionVariantId | null): void {
   if (typeof document === "undefined") return;
@@ -359,7 +361,7 @@ export function setRegionVariant(id: RegionVariantId | null): void {
 }
 
 /**
- * The custom properties `regionVariants.css` may set and `region.tsx`
+ * The custom properties `regionVariants.css` may set and `blockRegion.tsx`
  * reads. Documentation-grade data (the same role `BBOX_SKIN_TOKENS`
  * plays): the component carries `v1`'s value as each token's `var()`
  * fallback, so a consumer who never imports the CSS renders today's

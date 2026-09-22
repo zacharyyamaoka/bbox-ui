@@ -64,6 +64,55 @@ export const HeaderOnly: Story = {
 };
 
 /**
+ * The two outlines a Block draws (`shape`). `card` is rounded at all four
+ * corners. `region-corner` is the card in a BlockRegion's top-left corner:
+ * rounded where it shares the frame's corner and at its free bottom-right,
+ * STRAIGHT at the top-right and bottom-left, where its edges run on as the
+ * frame's top and left rules (Zach, 2026-09-22: "the block in the corner
+ * should have the bottom left and top right corners straight"). Only the
+ * radii change. See `Components/Blocks/BlockRegion/Labeled Group` for the
+ * shape in its frame.
+ */
+export const Shapes: Story = {
+  args: { footer: undefined, height: undefined, width: 200 },
+  render: (args) => (
+    <div style={{ display: "flex", gap: 32, alignItems: "flex-start" }}>
+      {(["card", "region-corner"] as const).map((shape) => (
+        <div key={shape}>
+          <div style={{ fontSize: 12, color: "var(--muted-foreground)", marginBottom: 8 }}>
+            <code>shape="{shape}"</code>
+          </div>
+          <Block {...args} shape={shape} header={shape === "card" ? "Card" : "Region corner"} />
+        </div>
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const corner = (await within(canvasElement).findByText("Region corner")).closest<HTMLElement>('[data-slot="block"]')!;
+    const card = within(canvasElement).getByText("Card").closest<HTMLElement>('[data-slot="block"]')!;
+    const radii = (el: HTMLElement) => {
+      const s = getComputedStyle(el);
+      return { tl: s.borderTopLeftRadius, tr: s.borderTopRightRadius, br: s.borderBottomRightRadius, bl: s.borderBottomLeftRadius };
+    };
+    const c = radii(card);
+    const r = radii(corner);
+    await expect(card.dataset.blockShape).toBe("card");
+    await expect(corner.dataset.blockShape).toBe("region-corner");
+    // the card: one radius, four times, and a real one
+    await expect(Number.parseFloat(c.tl)).toBeGreaterThan(0);
+    await expect([c.tr, c.br, c.bl]).toEqual([c.tl, c.tl, c.tl]);
+    // the region corner: the two junctions straight, the other two the frame's radius
+    // (with no region drawing on an ancestor, the frame's radius IS the card's)
+    await expect(r.tr).toBe("0px");
+    await expect(r.bl).toBe("0px");
+    await expect(r.tl).toBe(c.tl);
+    await expect(r.br).toBe(c.tl);
+    // nothing but the radii changes
+    await expect(corner.getBoundingClientRect().width).toBe(card.getBoundingClientRect().width);
+  },
+};
+
+/**
  * The composition the reset is actually about: Bar filling Block's header
  * AND footer slots. Two different Bars (a title bar up top, a smaller
  * status bar below) — proving Block doesn't care what's in the slot, and

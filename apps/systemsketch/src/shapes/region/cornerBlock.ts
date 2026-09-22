@@ -18,7 +18,7 @@
 //   1. `cornerBlockPropsFor` — the typed header per region kind;
 //   2. `createCornerBlock` / `armRegionPreset` — who mints it, and when;
 //   3. `regionLayoutOf` — the frame's geometry, which starts BELOW the corner
-//      block's measured box (`@trunk/components/region.layout`'s own rule);
+//      block's measured box (`@trunk/components/blockRegion.layout`'s own rule);
 //   4. `installRegionKit` — the two repairs that keep 1 and 3 TRUE over a
 //      document's whole life: a duplicated region must not keep naming the
 //      ORIGINAL's corner block, and a frame must not stay the size it was
@@ -30,7 +30,7 @@ import {
   REGION_MIN_WIDTH_PX,
   regionLayout,
   type RegionLayout,
-} from "@trunk/components/region.layout";
+} from "@trunk/components/blockRegion.layout";
 import { REGION_VARIANTS, readRegionVariant } from "@trunk/skin/regionVariants";
 
 import type { BlockPortSpec, BlockShapeProps } from "../block/BlockShapeUtil";
@@ -44,8 +44,8 @@ import type { RegionArm, RegionKind, RegionShape } from "./RegionShapeUtil";
  * asked for again on 2026-09-19, comparing the tldraw app (`Pasted image
  * 20260919115050.png`) against the DOM canvas (`…115249.png`): "Generally I
  * want the port to be right on the edge. and it shouldn't be cut off by the
- * frame. This is desired: [the DOM render]". The trunk's own `Region` puts
- * its corner slot at `left: -FRAME_BORDER_PX` (`@trunk/components/region.tsx`),
+ * frame. This is desired: [the DOM render]". The trunk's own `BlockRegion` puts
+ * its corner slot at `left: -FRAME_BORDER_PX` (`@trunk/components/blockRegion.tsx`),
  * so flush here IS parity with the drawing he approved.
  *
  * WHY IT WAS 8 UNTIL NOW, and what had to change with it: a block's LEFT
@@ -65,7 +65,7 @@ const CORNER_INSET_X_PX = 0;
 
 /** The corner block's own top edge sits ON the frame's top edge — the label
  *  tab of the React Flow Labeled Group Node look (`Pasted image
- *  20260918192040.png`), which `@trunk/components/region.tsx` draws by pulling
+ *  20260918192040.png`), which `@trunk/components/blockRegion.tsx` draws by pulling
  *  its `region-corner` slot back by the frame's 1px border. */
 const CORNER_INSET_Y_PX = 0;
 
@@ -101,7 +101,7 @@ export const REGION_NAME_TAB_PX = 28;
  *
  * WHY IT DOES NOT APPLY TO A REGION WITH ARMS, which the lane brief's flat
  * "h >= 160" reads as covering: an armed region has NO free body — "a branch
- * has no free body; its arms are its body" (`@trunk/components/region.layout`
+ * has no free body; its arms are its body" (`@trunk/components/blockRegion.layout`
  * :96-97) — so its height is exactly its rows, and a floor above them would
  * paint a band under the last arm that belongs to no arm. The archive agrees
  * by omission: `reconcileBranchProps` floors the WIDTH
@@ -451,7 +451,7 @@ export function cornerBoxOf(editor: Editor, shape: RegionShape): { w: number; h:
 }
 
 /**
- * The frame's geometry, from `@trunk/components/region.layout`'s pure twin.
+ * The frame's geometry, from `@trunk/components/blockRegion.layout`'s pure twin.
  *
  * WHY the shape util and the face both call THIS rather than each doing its
  * own arithmetic (the trunk's own reason, `region.layout.ts:17-23`, inherited
@@ -533,7 +533,7 @@ export function regionMinHeightOf(editor: Editor, shape: RegionShape): number {
  * region WITH ARMS, `props.h` is always exactly `regionHugHeightOf`. Never a
  * pixel more — a taller frame would show a band under the last arm that
  * belongs to no arm, inside a construct the trunk says has no free body
- * (`@trunk/components/region.layout:96-97`) — and never a pixel less, which
+ * (`@trunk/components/blockRegion.layout:96-97`) — and never a pixel less, which
  * would paint arms outside the border they live in.
  *
  * WHY THE THREE BRANCHES, and why the donor's own discriminator could not be
@@ -682,7 +682,7 @@ function layoutInput(editor: Editor, shape: RegionShape, height: number, arms: r
     height,
     corner: cornerBoxOf(editor, shape),
     // WHY the drawing in force and not the twin's default 32: the face paints
-    // the trunk's `Region`, which lays its arm rows out with the ACTIVE
+    // the trunk's `BlockRegion`, which lays its arm rows out with the ACTIVE
     // region variant's header (26-32px, `@trunk/skin/regionVariants`). Every
     // number this file hands tldraw — the header bands it hit-tests, the hug
     // written into `props.h` — has to be the same rows, or a drawing switch

@@ -1,5 +1,5 @@
 /**
- * Components/Blocks/Region/Gallery — the whole visual language on ONE board, in all
+ * Components/Blocks/BlockRegion/Gallery — the whole visual language on ONE board, in all
  * three hosts (docs/CONTROL-FLOW-PLAN.md lane F, §8's last row).
  *
  * Every other `Control Flow/*` file proves one claim in isolation: lane A
@@ -68,10 +68,10 @@ import {
   expectWireAvoids,
   expectWireBadge,
   expectWirePainted,
-} from "./region.acceptance";
+} from "./blockRegion.acceptance";
 
 const meta = {
-  title: "Components/Blocks/Region/Gallery",
+  title: "Components/Blocks/BlockRegion/Gallery",
   tags: ["object:region", "host:dom", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 
@@ -146,7 +146,7 @@ const ARM_BODY_PX = 130;
  * is what makes that legible at a glance.
  *
  * WHY the height is written out of a measured arithmetic rather than
- * eyeballed: `region.tsx` sets `overflow: visible` on the frame, so a body
+ * eyeballed: `blockRegion.tsx` sets `overflow: visible` on the frame, so a body
  * too short for its members does not clip them — it lets them hang OUT of
  * the border, which reads as a rendering bug rather than as a sizing one.
  * Measured on this very board (`getBoundingClientRect`, 2026-09-18): the
@@ -245,7 +245,7 @@ function composedBoard(): HostScene {
     // NO obstacles at all (`keepOutsFor` is only consulted for an
     // orthogonal route). Elbow is also what Zach's sketches draw. The
     // meaning is untouched — same ids, same ends, same fixture objects
-    // spread — so `Components/Blocks/Region/Branch` keeps asserting the curves it
+    // spread — so `Components/Blocks/BlockRegion/Branch` keeps asserting the curves it
     // shipped and this board keeps being legible.
     elbow(edgeOf(branchFixture, "e-cond")),
     // The ONE retarget, and the thing that makes this a program rather than

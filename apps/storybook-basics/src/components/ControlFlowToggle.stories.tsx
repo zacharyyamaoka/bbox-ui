@@ -1,5 +1,5 @@
 /**
- * Components/Blocks/Region/Toggle — the opaque (P5) ⇄ expanded (P1) flip, on all three
+ * Components/Blocks/BlockRegion/Toggle — the opaque (P5) ⇄ expanded (P1) flip, on all three
  * hosts (docs/CONTROL-FLOW-PLAN.md lane E, §2.B and §3.4).
  *
  * The claim these stories exist to make is not "a card appears". It is
@@ -40,10 +40,10 @@ import { ReactFlowHost } from "../hosts/reactFlowHost";
 import { TldrawHost } from "../hosts/tldrawHost";
 import { ARM_NODE_TYPE, describeHidden, hiddenSummary } from "../scene/controlFlow";
 import { REGION_NODE_TYPE } from "../scene/region";
-import { expectRegionExpanded, expectRegionOpaque, expectWirePainted } from "./region.acceptance";
+import { expectRegionExpanded, expectRegionOpaque, expectWirePainted } from "./blockRegion.acceptance";
 
 const meta = {
-  title: "Components/Blocks/Region/Toggle",
+  title: "Components/Blocks/BlockRegion/Toggle",
   tags: ["object:region", "host:dom", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 

@@ -44,7 +44,7 @@ import {
   type TLShapeId,
 } from "tldraw";
 
-import { REGION_MIN_WIDTH_PX } from "@trunk/components/region.layout";
+import { REGION_MIN_WIDTH_PX } from "@trunk/components/blockRegion.layout";
 
 import { REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import { armsAfterDelta, reconcileRegionProps, regionHugForArms, regionHugHeightOf, regionLayoutOf, regionMinHeightOf } from "./cornerBlock";

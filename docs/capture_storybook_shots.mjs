@@ -50,7 +50,7 @@ const BASE = `http://localhost:${PORT}/iframe.html`;
 /** id → the story's Storybook id, plus the viewport it reads best at. */
 const SHOTS = [
   { id: "components-traces-wirelayer-block-wiring--wiring-scenarios", w: 1200, h: 900, name: "wiring" },
-  { id: "components-blocks-region-async--communication-patterns", w: 1250, h: 900, name: "async" },
+  { id: "components-blocks-blockregion-async--communication-patterns", w: 1250, h: 900, name: "async" },
   { id: "components-blocks-blockport--four-edges", w: 760, h: 620, name: "fouredges" },
   { id: "components-ports-portedge--edge-distribution-controls", w: 760, h: 900, name: "distribution" },
   { id: "components-traces-trace-tidy--tidy-direction-matrix", w: 1250, h: 900, name: "tidymatrix" },

@@ -4,7 +4,7 @@
  * browser reads). Same mechanism as `skin.css`, same rules:
  *
  *   • ONLY custom-property declarations, keyed on `[data-bbox-region-variant]`
- *     on any ancestor. Not one rule reaches into a component: `region.tsx`
+ *     on any ancestor. Not one rule reaches into a component: `blockRegion.tsx`
  *     reads every token at its own call site with `v1`'s value as the
  *     `var()` fallback, so a consumer who never imports this file gets the
  *     pixels they have today, and one who does never fights a specificity
@@ -28,7 +28,7 @@
  * etc. must exist by the time a frame paints, which they do.
  *
  * Nesting: a frame declares `--bbox-region-frame-fill` for ITS DESCENDANTS as
- * `var(--bbox-region-nested-fill, <its own fill>)` (region.tsx), so a region
+ * `var(--bbox-region-nested-fill, <its own fill>)` (blockRegion.tsx), so a region
  * inside a region reads the nested token, and a third level reads the same
  * nested token again (one tone deeper, once — not a gradient per level).
  */
@@ -373,7 +373,7 @@
    it is the whole of Zach's "Top rule is my favorite one but add the top line
    on the top arm" (`Pasted image 20260920004250.png`, DESIRED).
 
-   WHY the first arm's own `border-top` is NOT the mechanism: `region.tsx`
+   WHY the first arm's own `border-top` is NOT the mechanism: `blockRegion.tsx`
    draws an arm divider for rows after the first only (the donor's
    `dividerY: index === 0 ? null : rowTop`), and that rule is right — the line
    above arm 0 belongs to the CORNER, not to the arm. Drawing it as the
@@ -427,7 +427,7 @@
    how the sketch's plain rectangle reads.
 
    `--bbox-region-corner-title-align: center` is inherited from the card's own
-   root (`REGION_CORNER_BLOCK_STYLE`) into `Block`'s header slot, which is
+   root (`Block`'s `shape="region-corner"`) into `Block`'s header slot, which is
    where the name sits. It cannot reach the PORT labels: those are rendered by
    `BlockPort`, which is the card's PARENT, not its child — the sketch keeps
    `port 1` / `port 2` left-aligned beside their dots, and that is why they

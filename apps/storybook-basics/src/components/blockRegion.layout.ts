@@ -1,7 +1,7 @@
-// src/components/region.layout.ts — the Region's vertical geometry as a PURE
+// src/components/blockRegion.layout.ts — BlockRegion's vertical geometry as a PURE
 // function: where the corner block sits, where the free body starts, and
 // how arms stack. CONTRACT STUB — docs/CONTROL-FLOW-PLAN.md, lane A.
-// Signatures and constants frozen by `region.layout.test.ts`.
+// Signatures and constants frozen by `blockRegion.layout.test.ts`.
 //
 // PROVENANCE: the stacking rule is SystemSketch's `branchLayout`
 // (`/home/bam/systemsketch/src/branch/branchModel.ts:161-230`, read

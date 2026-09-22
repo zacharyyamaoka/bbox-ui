@@ -2793,11 +2793,16 @@
       ]
     },
     {
-      "name": "region",
+      "name": "block-region",
       "type": "registry:component",
-      "title": "Region",
+      "title": "Block Region",
       "description": "A control-flow frame with a real Block integral to its top-left corner \u2014 the frame carries scope and no value ports; arms stack under the corner block with a fold chevron each. Loops and branches are data presets over it.",
       "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/badge.tsx"
+        },
         {
           "path": "apps/storybook-basics/src/components/bar.tsx",
           "type": "registry:component",
@@ -2809,9 +2814,29 @@
           "target": "components/bbox/barSize.tsx"
         },
         {
+          "path": "apps/storybook-basics/src/components/block.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/block.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockDescription.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockDescription.tsx"
+        },
+        {
           "path": "apps/storybook-basics/src/components/blockMembers.tsx",
           "type": "registry:component",
           "target": "components/bbox/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/blockRegion.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockRegion.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/editableText.layout.ts",
@@ -2829,14 +2854,29 @@
           "target": "components/bbox/glyph.layout.ts"
         },
         {
-          "path": "apps/storybook-basics/src/components/region.layout.ts",
-          "type": "registry:lib",
-          "target": "components/bbox/region.layout.ts"
+          "path": "apps/storybook-basics/src/components/highlighter.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/highlighter.tsx"
         },
         {
-          "path": "apps/storybook-basics/src/components/region.tsx",
+          "path": "apps/storybook-basics/src/components/hitRegion.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hitRegion.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/paintOrder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/paintOrder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/popover.tsx",
           "type": "registry:component",
-          "target": "components/bbox/region.tsx"
+          "target": "components/bbox/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/tooltip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/tooltip.tsx"
         },
         {
           "path": "apps/storybook-basics/src/lib/utils.ts",
@@ -2850,9 +2890,124 @@
         }
       ],
       "dependencies": [
+        "@base-ui/react",
         "@dnd-kit/core",
         "@dnd-kit/sortable",
         "@dnd-kit/utilities",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "labeled-group",
+      "type": "registry:component",
+      "title": "Labeled Group",
+      "description": "A Block Region with only a title: a thin frame and a title card in its top-left corner, square where the card meets the frame. React Flow UI's Labeled Group Node, as a preset.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/block.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/block.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockDescription.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockDescription.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockMembers.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.labeledGroup.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockRegion.labeledGroup.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/blockRegion.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/blockRegion.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/foldingChevron.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/foldingChevron.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/highlighter.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/highlighter.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/hitRegion.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hitRegion.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/paintOrder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/paintOrder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/popover.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/tooltip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/tooltip.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/skin/regionVariants.ts",
+          "type": "registry:lib",
+          "target": "components/skin/regionVariants.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
+        "class-variance-authority",
         "clsx",
         "lucide-react",
         "tailwind-merge"

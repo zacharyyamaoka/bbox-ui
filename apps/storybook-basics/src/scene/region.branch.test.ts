@@ -1,6 +1,6 @@
 // src/scene/region.branch.test.ts — this lane's OWN unit tests (the
 // acceptance files under `src/scene`, `src/components`, `src/hosts` and
-// `src/components/region.acceptance.ts` were committed before this lane
+// `src/components/blockRegion.acceptance.ts` (then `region.acceptance.ts`) were committed before this lane
 // and are read-only to it).
 //
 // What is worth testing about a factory that only builds records: the
