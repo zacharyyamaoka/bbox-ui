@@ -130,6 +130,28 @@ export interface PortEdgeItem {
   producers?: number;
   /** Host-set selection, forwarded to the default `LabeledPort`. */
   selected?: boolean;
+  /**
+   * P-056. The line this port contributes to the MULTI-LINE LANE, when that
+   * is not the same string as `label`. Omit — the normal case, and every
+   * story on this file — and the lane shows `label`, exactly as before.
+   *
+   * WHY the two can differ at all, which is not obvious from inside this
+   * component: a host may paint a port's line in two places with two
+   * different amounts of room. SystemSketch's block rail paints only the NAME
+   * HALF of `gain_x: float`, and that is a measured ruling rather than a
+   * shortcut — two annotated labels flowing inward from opposite walls of a
+   * 160px card overlap by 73px of unreadable text
+   * (`apps/systemsketch/src/shapes/block/BlockFace.tsx`'s `labelOf`). The
+   * lane is an overlay beside the rail and has the room, so it is the one
+   * surface that can show — and therefore edit — the whole declaration. With
+   * one field for both, typing `gain_y: int` into the lane would splice a
+   * colon into a name and produce `gain_y: int: float`.
+   *
+   * `formatPortLane`/`reconcilePortLane` (./portLane.ts) are the only readers,
+   * and they write an edited line back into whichever of the two fields the
+   * item actually declared — see `withPortLaneLine` there.
+   */
+  laneLine?: string;
 }
 
 /**
@@ -298,6 +320,34 @@ export interface PortEdgeProps {
    * the default is safe on a row edge: it degrades, it never dead-ends.
    */
   editMode?: "single" | "multi";
+  /**
+   * P-056. The rail-wide lane, OPENED BY THE HOST rather than by an armed
+   * port click. Omit — every existing caller — and the lane is uncontrolled
+   * exactly as F-1 built it: `editing` arms, a click opens, Escape closes,
+   * and nothing below changes.
+   *
+   * WHY a host would ever want the other half: F-1's trigger CONSUMES the
+   * port click (`PortEdgeSlotBox`'s capture listener calls
+   * `stopPropagation`, so the click never reaches the port's own label), and
+   * a host can already have spent that click. SystemSketch's block rail has:
+   * a click on a port's LABEL opens that port's single-line rename, which is
+   * P-037's shipped, committed behaviour, while a click on the DOT is the one
+   * gesture its wire kit deliberately leaves free ("a press that goes nowhere
+   * is a CLICK, and a click on a dot is nothing",
+   * `apps/systemsketch/src/shapes/wire/wireGesture.ts`). Arming the rail
+   * would have taken the label's click away to give the lane a trigger it
+   * already had a better one for. So the host opens the lane itself and keeps
+   * both gestures.
+   *
+   * The lane's own PRECONDITIONS still hold — a controlled `true` on a row
+   * edge, in custom mode, or over a collapsed real family opens nothing
+   * (`laneAvailability`), because those are facts about whether a lane can be
+   * drawn at all, not about who asked for it.
+   */
+  laneOpen?: boolean;
+  /** Called with `false` when the lane closes itself — Escape, Ctrl+Enter, or
+   *  a press on a port card. Only meaningful alongside `laneOpen`. */
+  onLaneOpenChange?(next: boolean): void;
   /**
    * Follow-up feedback item 3: the label's syntax parser, e.g. `python()`
    * from `@codemirror/lang-python` (already a dependency — `CodeEditor`
@@ -1273,6 +1323,8 @@ function PortEdgeBody({
   // click opens. See `PortEdgeProps.editMode` for Zach's own words and for
   // why the `lane.available` fallback below makes this safe everywhere.
   editMode = "multi",
+  laneOpen: laneOpenProp,
+  onLaneOpenChange,
   laneLanguage,
   maxVisible,
   variant,
@@ -1327,16 +1379,32 @@ function PortEdgeBody({
   // opening it is now a CONSEQUENCE of a port click (`onRequestLaneOpen`
   // below), not a direct reflection of `editing` the way it was before this
   // redesign (that was the bug: arming and showing were the same bit).
-  const [laneOpen, setLaneOpen] = useState(false);
+  const [laneOpenLocal, setLaneOpenLocal] = useState(false);
+  // P-056: `laneOpen` supplied => the HOST owns the open/closed bit, and the
+  // uncontrolled state below is simply unused. Both paths converge on ONE
+  // `laneOpen` from here down, so every reader (the card-press guard, the
+  // overlay, the sortable's own exclusivity) is unchanged and cannot drift.
+  const laneControlled = laneOpenProp !== undefined;
+  const laneOpen = (laneControlled ? laneOpenProp : laneOpenLocal) && lane.available;
+  const setLaneOpen = (next: boolean) => {
+    if (laneControlled) onLaneOpenChange?.(next);
+    else setLaneOpenLocal(next);
+  };
   // Mirrors the old D12/A12 safety net, now scoped to `laneOpen` instead of
   // `editing` itself: if the rail stops being armed, or the lane's own
   // preconditions lapse mid-edit (a live groupMode/mode change), or the
   // caller drops back to `"single"`, close the lane rather than leave it
   // mounted and mismatched. Content-lossless for the same reason as before
   // — every keystroke already wrote through `onItemsChange`.
+  //
+  // P-056: scoped to the UNCONTROLLED lane. A controlled lane is not armed by
+  // `editing` in the first place — that is the whole point of the seam — so
+  // reading arming here would close the host's lane on the frame it opened.
+  // The precondition half of the old guard did not move: it is now the
+  // `&& lane.available` on `laneOpen` itself, which both paths go through.
   useEffect(() => {
-    if (laneOpen && (!editingEnabled || resolvedEditMode !== "multi")) setLaneOpen(false);
-  }, [laneOpen, editingEnabled, resolvedEditMode]);
+    if (laneOpenLocal && (!editingEnabled || resolvedEditMode !== "multi")) setLaneOpenLocal(false);
+  }, [laneOpenLocal, editingEnabled, resolvedEditMode]);
   const handlePortLabelWrite = (id: string, value: string) => {
     onItemsChange?.(items.map((it) => (it.id === id ? { ...it, label: value } : it)));
   };

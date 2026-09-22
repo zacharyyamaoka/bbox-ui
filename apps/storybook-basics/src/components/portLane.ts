@@ -102,7 +102,35 @@ function backtrackMatches(a: string[], b: string[], table: number[][]): { ai: nu
  *  join/split round trip has no other way to tell "one label with a
  *  newline" from "two labels". */
 export function formatPortLane(ports: PortEdgeItem[]): string {
-  return ports.map((p) => (p.label.includes("\n") ? p.label.replace(/\n/g, "␊") : p.label)).join("\n");
+  return ports.map((p) => portLaneLine(p)).map((line) => (line.includes("\n") ? line.replace(/\n/g, "␊") : line)).join("\n");
+}
+
+/**
+ * The line this port shows in the lane — its own `laneLine` when it declares
+ * one, else its rail `label`.
+ *
+ * P-056. See `PortEdgeItem.laneLine`'s own doc for why a host may have two
+ * different strings for one port; here the only thing that matters is that
+ * the lane reads and writes ONE of them consistently, so the round trip
+ * (`formatPortLane` -> edit -> `reconcilePortLane`) stays exact.
+ */
+export function portLaneLine(port: PortEdgeItem): string {
+  return port.laneLine ?? port.label;
+}
+
+/**
+ * Put an edited line back on the field it came from.
+ *
+ * WHY it writes `laneLine` when the item declared one, rather than always
+ * writing `label`: `label` is the rail's own string, and on a host where the
+ * two differ the rail's string is a PREFIX the host derives from the stored
+ * line. Overwriting it with a whole declaration would paint `gain_y: int` on
+ * a rail whose whole design ruling is that it must not — and would leave
+ * `laneLine` reporting the stale line on the very next render, so the edit
+ * would look like it had been rejected.
+ */
+function withPortLaneLine(port: PortEdgeItem, line: string): PortEdgeItem {
+  return port.laneLine !== undefined ? { ...port, laneLine: line } : { ...port, label: line };
 }
 
 /**
@@ -116,7 +144,7 @@ export function formatPortLane(ports: PortEdgeItem[]): string {
  * genuine no-op.
  */
 export function reconcilePortLane(ports: PortEdgeItem[], text: string, mintItem: (label: string) => PortEdgeItem): PortEdgeItem[] {
-  const before = ports.map((p) => p.label);
+  const before = ports.map(portLaneLine);
   // `text === ""` short-circuits to zero lines — `"".split("\n")` would
   // otherwise produce `[""]`, one port with an empty label, not an empty
   // lane. Select-all + Delete must empty the edge.
@@ -153,8 +181,8 @@ export function reconcilePortLane(ports: PortEdgeItem[], text: string, mintItem:
   const result = after.map((label, bi) => {
     const source = keep.get(bi);
     if (!source) return mintItem(label);
-    // Only actually EDIT the label when it changed — see the purity note.
-    return source.label === label ? source : { ...source, label };
+    // Only actually EDIT the line when it changed — see the purity note.
+    return portLaneLine(source) === label ? source : withPortLaneLine(source, label);
   });
 
   // Purity: if every resulting port is the SAME object, in the SAME order,

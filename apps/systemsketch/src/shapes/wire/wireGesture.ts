@@ -63,6 +63,7 @@ import { portTypesOfScene } from "../../document/sceneVocabulary";
 import { currentValidationLevel } from "../../chrome/ShareMenu/validationLevelHost";
 import type { WireEnd } from "../../document/editEvents";
 import { PORT_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
+import { portLaneIsOpenAt, portLaneRequest, setPortLane } from "../block/portLaneHost";
 import { createWire } from "./createWire";
 import { wireAvailability } from "./portAvailability";
 import { portTerminal } from "./wireGeometry";
@@ -309,6 +310,10 @@ interface ActiveDrag {
   /** Where the press landed, in client px. The drop is judged against this
    *  and nothing else — see `finish`. */
   origin: { x: number; y: number };
+  /** P-056. Was this dot's port lane already open when the press landed?
+   *  Snapshotted at pointer-DOWN because it cannot be read truthfully later —
+   *  `setPortLane`'s own doc has the measurement. */
+  laneWasOpen: boolean;
 }
 
 export function installWireGesture(editor: Editor): () => void {
@@ -319,6 +324,40 @@ export function installWireGesture(editor: Editor): () => void {
   let drag: ActiveDrag | null = null;
 
   const pagePointOf = (event: PointerEvent) => editor.screenToPage({ x: event.clientX, y: event.clientY });
+
+  /**
+   * P-056, and it has to be the FIRST thing on the board to see a press.
+   *
+   * Two jobs, both of which are only correct before anything else reacts:
+   *
+   * 1. **Snapshot whether this dot's lane was already open**, so the click
+   *    that follows can TOGGLE it. Read any later and the answer is always
+   *    "closed": `PortEdge` closes the rail-wide lane on its own capture-phase
+   *    pointerdown over a port card (that is how it stops one press from both
+   *    editing the shared document and starting a reorder drag), a dot lives
+   *    inside a card, and React attaches its capture handlers at the ROOT — so
+   *    they run before the `container` listener below. Measured 2026-09-21:
+   *    with the snapshot taken in `onPointerDown`, clicking the same dot twice
+   *    re-mounted the lane instead of putting it away.
+   * 2. **Dismiss the lane on a press outside it.** Without this the lane has
+   *    no pointer exit at all — Escape and Ctrl+Enter are keys, and every
+   *    press that could close it either is a dot (handled above) or is not a
+   *    card and so reaches nothing.
+   *
+   * WHY it rides the DOCUMENT while the wire press rides the container: same
+   * reason `pointermove`/`pointerup` already do — it has to see presses the
+   * container will never get, and it has to see them first.
+   */
+  let laneOpenAtPress = false;
+  const onLanePointerDown = (event: PointerEvent) => {
+    const target = event.target as Element | null;
+    const ref = dotRefFrom(target);
+    laneOpenAtPress = ref !== null && portLaneIsOpenAt(editor, ref);
+    if (ref) return;
+    // Not a dot: a press inside the lane's own editor is the person typing;
+    // anywhere else is them moving on.
+    if (portLaneRequest(editor).get() !== null && target?.closest('[data-slot="port-edge-lane"]') == null) setPortLane(editor, null);
+  };
 
   const onPointerDown = (event: PointerEvent) => {
     if (drag || event.button !== 0) return;
@@ -356,7 +395,9 @@ export function installWireGesture(editor: Editor): () => void {
     event.stopPropagation();
 
     const page = pagePointOf(event);
-    drag = { pointerId: event.pointerId, from: ref, origin: { x: event.clientX, y: event.clientY } };
+    // P-056: carried from `onLanePointerDown`, which is the only listener on
+    // the board early enough to read it truthfully — see its own doc.
+    drag = { pointerId: event.pointerId, from: ref, origin: { x: event.clientX, y: event.clientY }, laneWasOpen: laneOpenAtPress };
     dropAtom.set(null);
     dragAtom.set({ anchor, pointer: { x: page.x, y: page.y } });
     // P-005. Computed HERE and nowhere else: `onPointerMove` deliberately
@@ -424,9 +465,22 @@ export function installWireGesture(editor: Editor): () => void {
     // events being delivered, and they are not guaranteed — a synthesised or
     // coalesced drag can go down, jump and come up with no move in between.
     // The release point is a fact the `pointerup` itself carries, so this
-    // reading cannot be missed. Same rule either way: a press that goes
-    // nowhere is a CLICK, and a click on a dot is nothing.
-    if (Math.hypot(event.clientX - active.origin.x, event.clientY - active.origin.y) <= DRAG_THRESHOLD_PX) return;
+    // reading cannot be missed.
+    //
+    // P-056: a press that goes nowhere is still a CLICK, and it is no longer
+    // NOTHING — it opens this rail's multi-line port lane, which is the one
+    // surface on the board that can add or remove a port. This is the right
+    // place for that and not a second listener of its own: the gesture that
+    // owns a press on a dot is this one, it has already resolved the element
+    // to `{nodeId, portId}` through the trunk's `data-port-id`/`data-block-id`
+    // stamps, and a second hit-test would be a second answer to drift from
+    // this one. It still never creates a cable — below this line is the only
+    // path to `commit`. See `../block/portLaneHost.ts` for why the DOT rather
+    // than the port's label is the trigger.
+    if (Math.hypot(event.clientX - active.origin.x, event.clientY - active.origin.y) <= DRAG_THRESHOLD_PX) {
+      setPortLane(editor, active.laneWasOpen ? null : { nodeId: active.from.nodeId, portId: active.from.portId });
+      return;
+    }
 
     const landed = dotUnderPoint(doc, event.clientX, event.clientY);
     if (landed) {
@@ -491,6 +545,7 @@ export function installWireGesture(editor: Editor): () => void {
   const onPointerUp = (event: PointerEvent) => finish(event, false);
   const onPointerCancel = (event: PointerEvent) => finish(event, true);
 
+  doc.addEventListener("pointerdown", onLanePointerDown, { capture: true });
   container.addEventListener("pointerdown", onPointerDown, { capture: true });
   // Move/up ride the DOCUMENT, not the container: a drag that leaves the
   // canvas (over the dock, off the window) must still end, and end once.
@@ -499,6 +554,7 @@ export function installWireGesture(editor: Editor): () => void {
   doc.addEventListener("pointercancel", onPointerCancel, { capture: true });
 
   return () => {
+    doc.removeEventListener("pointerdown", onLanePointerDown, { capture: true });
     container.removeEventListener("pointerdown", onPointerDown, { capture: true });
     doc.removeEventListener("pointermove", onPointerMove, { capture: true });
     doc.removeEventListener("pointerup", onPointerUp, { capture: true });
