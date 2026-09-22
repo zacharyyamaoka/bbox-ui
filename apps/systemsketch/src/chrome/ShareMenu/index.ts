@@ -6,5 +6,6 @@
 // is what keeps renaming or splitting the internals a change nobody else sees.
 export * from "./appSettings";
 export * from "./cameraGestureHost";
+export * from "./cornerPlacementHost";
 export * from "./interfaceScaleHost";
 export * from "./preferences";
