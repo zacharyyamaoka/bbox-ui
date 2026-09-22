@@ -87,6 +87,7 @@ import {
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 import { MutationLineMark, SideEffectDivider } from "./sideEffectMarks";
 import {
+  SIDE_EFFECT_DIVIDER_PX,
   hasSideEffects,
   mutationRoute,
   partitionMutations,
@@ -97,6 +98,7 @@ import {
   type SideEffectDirection,
   type SideEffectPort,
 } from "./sideEffects.layout";
+import { sanitizeDividers } from "./returnDividers";
 
 export type { BlockSideEffects, MutationLink, SideEffectDirection, SideEffectPort } from "./sideEffects.layout";
 
@@ -155,6 +157,22 @@ export interface BlockEdgeSpec {
    * a caller legitimately needs to win.)
    */
   portEdgeProps?: Partial<PortEdgeProps>;
+  /**
+   * "Multiple returns" (Daily Note 2026-09-22): DIVIDER positions between
+   * this edge's ports — see `./returnDividers.ts`'s own doc for the model
+   * (`sanitizeDividers`: a divider is only ever interior) and for
+   * `railForReturnAnnotation`, the union-return-type -> `items` +
+   * `dividerAfter` translation the standalone-block stories use to build
+   * this from a real Python signature.
+   *
+   * Forwarded to the underlying `PortEdge` (so the SAME multi-line lane can
+   * author it — typing `---`/`|`) AND read directly by this wrapper to draw
+   * the mark itself (`BlockPortReturnDividers` below); `PortEdge` has no
+   * `view` of its own, so it can format/reconcile the text but never draws
+   * the Expanded-vs-Port-view mark.
+   */
+  dividerAfter?: number[];
+  onDividerAfterChange?(next: number[]): void;
 }
 
 export interface BlockPortProps {
@@ -460,6 +478,18 @@ export function BlockPort({
     (edges.left?.items ?? []).map((item) => item.id),
   );
 
+  // "Multiple returns": every populated edge that carries at least one
+  // sanitized divider position, gathered once here so
+  // `BlockPortReturnDividers` never has to re-derive `populated` or reach
+  // back into `edges` itself.
+  const returnDividerEdges = populated
+    .map((side) => {
+      const spec = edges[side]!;
+      const sanitized = sanitizeDividers(spec.dividerAfter ?? [], spec.items.length);
+      return sanitized.length > 0 ? { edge: side, dividerAfter: sanitized } : null;
+    })
+    .filter((entry): entry is { edge: BlockSide; dividerAfter: number[] } => entry != null);
+
   return (
     <div
       data-slot="block-port"
@@ -505,6 +535,9 @@ export function BlockPort({
       {bands && hasSideEffects(sideEffects) && <BlockSideEffectRail effects={sideEffects!} bands={bands} diameter={diameter} variant={variant} />}
       {bands && mutationSplit.resolved.length > 0 && (
         <MutationLines wrapperRef={wrapperRef} links={mutationSplit.resolved} bands={bands} measureKey={layoutKey} />
+      )}
+      {bands && returnDividerEdges.length > 0 && (
+        <BlockPortReturnDividers wrapperRef={wrapperRef} view={view} bands={bands} edgeSpecs={returnDividerEdges} measureKey={layoutKey} />
       )}
     </div>
   );
@@ -756,6 +789,185 @@ function MutationLines({
 }
 
 /* ------------------------------------------------------------------ */
+/* Return dividers — "multiple returns" (Daily Note 2026-09-22): the       */
+/* union-return-type mark between two groups of output ports.              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * "Multiple returns" is scoped to COLUMN-axis edges (left/right) — every
+ * one of Zach's sketches draws it on the right wall, and `output` ports
+ * live there by this kit's own convention (`port.layout.ts`'s
+ * `portSideForDirection`). A `dividerAfter` set on a row edge (top/bottom)
+ * is simply not drawn — not a silent gap, a deliberate scope line: nothing
+ * in the brief or its sketches asks for a horizontal-wall reading, and
+ * inventing one (a vertical dash? a line running down from the wall?) would
+ * be improvising an interface past what was asked.
+ */
+function isReturnDividerEdge(edge: BlockSide): boolean {
+  return railAxisFor(edge) === "column";
+}
+
+/**
+ * Measures the REAL rendered dot centres either side of each divider —
+ * D-A5's own reasoning (`useBlockBands`'s doc): there is no closed form for
+ * "where two dots ended up" the way there is for the rail's own pitch
+ * (labels wrap, distributions differ), so this reads the DOM the same way
+ * `GroupSlotBody`'s `useEnclosingCircleBox` and `MutationLines` already do
+ * for their own marks, via the exported `railDotCentres` this file already
+ * ships for stories to assert against.
+ */
+function useReturnDividerRows(
+  wrapperRef: RefObject<HTMLDivElement | null>,
+  edgeSpecs: { edge: BlockSide; dividerAfter: number[] }[],
+  measureKey: string,
+): { edge: BlockSide; y: number }[] {
+  const [rows, setRows] = useState<{ edge: BlockSide; y: number }[]>([]);
+  const specKey = edgeSpecs.map((s) => `${s.edge}:${s.dividerAfter.join(",")}`).join("|");
+
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || edgeSpecs.length === 0) {
+      setRows((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    const measure = () => {
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const next: { edge: BlockSide; y: number }[] = [];
+      for (const spec of edgeSpecs) {
+        if (!isReturnDividerEdge(spec.edge)) continue;
+        const rail = wrapper.querySelector<HTMLElement>(`[data-slot="block-port-rail"][data-edge="${spec.edge}"]`);
+        if (!rail) continue;
+        const centres = railDotCentres(rail);
+        for (const index of spec.dividerAfter) {
+          const a = centres[index];
+          const b = centres[index + 1];
+          if (!a || !b) continue;
+          next.push({ edge: spec.edge, y: (a.y + b.y) / 2 - wrapperRect.top });
+        }
+      }
+      setRows((prev) =>
+        prev.length === next.length && prev.every((p, i) => p.edge === next[i].edge && Math.abs(p.y - next[i].y) < 0.25) ? prev : next,
+      );
+    };
+    measure();
+    // Same race `MutationLines` documents: a rail's own dots land one pass
+    // after `bands` does.
+    const frame = requestAnimationFrame(measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrapper);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wrapperRef, measureKey, specKey]);
+
+  return rows;
+}
+
+/**
+ * Two drawings of ONE mark, decided by `view` — Zach's own words (Daily
+ * Note 2026-09-22, "Multiple returns"):
+ *
+ *  - Expanded: "a | in the output type hint corresponds to a little dash on
+ *    the outside" — a short dash OUTSIDE the wall. Length and stroke are
+ *    `SIDE_EFFECT_DIVIDER_PX`/`2`, `sideEffectMarks.tsx`'s `SideEffectDivider`
+ *    own numbers for its OWN "little grey line on the outside" (Zach's
+ *    phrase for that mark too) — the same idiom, reused rather than a
+ *    second invented size. Inset is 0: like that divider's own foot, this
+ *    one starts flush ON the wall line and sticks OUTWARD from there — "on
+ *    the outside" needs no further push-in.
+ *  - Port view: "the line going to half way of the width of the block" — a
+ *    line from the wall inward to `bands.blockWidth / 2`, a MEASURED
+ *    formula (never a stored constant — a Block has no fixed width) that
+ *    lands the inner end exactly on the block's own vertical centre line.
+ *    Stroke 1px, matching `EdgeLineMark`'s own dev-guide line weight — this
+ *    is a thin rule INSIDE the block, not a tick standing off it.
+ *
+ * Neither drawing is a `PortEdge` slot: no id, no dot, no `data-port-id` —
+ * so `wireLayer.tsx`'s `resolveDot` (which only ever looks for
+ * `[data-port-id]`) can never resolve a wire onto one. `data-slot`
+ * (`block-port-return-divider`) is one name for the mark; `data-mark-view`
+ * tells the two drawings apart and keeps this mark structurally distinct
+ * from the unrelated full-width rule that separates MEMBER sections
+ * (`block.tsx`'s own header/footer `border-b`/`border-t`) — different
+ * `data-slot`, different length, different reason to exist.
+ */
+function BlockPortReturnDividers({
+  wrapperRef,
+  view,
+  bands,
+  edgeSpecs,
+  measureKey,
+}: {
+  wrapperRef: RefObject<HTMLDivElement | null>;
+  view: BlockView;
+  bands: BlockBands;
+  edgeSpecs: { edge: BlockSide; dividerAfter: number[] }[];
+  measureKey: string;
+}) {
+  const rows = useReturnDividerRows(wrapperRef, edgeSpecs, measureKey);
+  // Simple view collapses every wall to one stand-in dot — there is no
+  // "between two ports" left to mark. Only Expanded and Port view ever draw
+  // this (the two drawings this function's own doc names); nothing else is
+  // improvised for `view === "simple"`.
+  if (view === "simple" || rows.length === 0) return null;
+
+  return (
+    <>
+      {rows.map((row, index) => {
+        const isRight = row.edge === "right";
+        if (view === "expanded") {
+          const wallX = isRight ? bands.blockLeft + bands.blockWidth : bands.blockLeft;
+          return (
+            <span
+              key={`${row.edge}-${index}`}
+              data-slot="block-port-return-divider"
+              data-mark-view="expanded"
+              data-edge={row.edge}
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: isRight ? wallX : wallX - SIDE_EFFECT_DIVIDER_PX,
+                top: row.y - 1,
+                width: SIDE_EFFECT_DIVIDER_PX,
+                height: 2,
+                background: "var(--muted-foreground)",
+                zIndex: paintTier("portDot"),
+                pointerEvents: "none",
+              }}
+            />
+          );
+        }
+        // Port view: from the wall inward to the block's own measured
+        // half-width.
+        const halfWidth = bands.blockWidth / 2;
+        const wallX = isRight ? bands.blockLeft + bands.blockWidth : bands.blockLeft;
+        return (
+          <span
+            key={`${row.edge}-${index}`}
+            data-slot="block-port-return-divider"
+            data-mark-view="port"
+            data-edge={row.edge}
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: isRight ? wallX - halfWidth : wallX,
+              top: row.y - 0.5,
+              width: halfWidth,
+              height: 1,
+              background: "var(--muted-foreground)",
+              zIndex: paintTier("portDot"),
+              pointerEvents: "none",
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* The function port — the header's pin 1                              */
 /* ------------------------------------------------------------------ */
 
@@ -878,6 +1090,12 @@ function BlockPortRail({
           // editable exactly when the host said where the text should go.
           disabled={!spec.onItemsChange}
           onLabelWrite={spec.onItemsChange ? (value) => spec.onItemsChange?.(spec.items.map((it) => (it.id === item.id ? { ...it, label: value } : it))) : undefined}
+          // The SAME forwarding trap as `disabled`/`onLabelWrite` just above,
+          // for the `reorderChord` hotkey (`ctx.onReorderKey`, added to
+          // `renderItem`'s own ctx for "multiple returns" so a rail's ports
+          // can be moved past a divider with Ctrl+arrow, same as any other
+          // rail — see `PortEdgeProps.renderItem`'s own doc).
+          onLabelKeyDown={ctx.onReorderKey}
         >
           {item.label}
         </LabeledPort>
@@ -990,6 +1208,8 @@ function BlockPortRail({
         groupMode={plan.groupMode}
         renderItem={renderItem}
         renderCollapsed={renderCollapsed}
+        dividerAfter={spec.dividerAfter}
+        onDividerAfterChange={spec.onDividerAfterChange}
       />
     </div>
   );
