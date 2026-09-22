@@ -52,6 +52,7 @@ import {
   ASYNC_PACKET_DASHARRAY,
   DATA_MARCH_CLASS,
   DATA_MARCH_DASHARRAY,
+  DEFAULT_TRACE_MARKER_END,
   DEFAULT_TRACE_ROUTING,
   DELAY_DOT_GAP_PX,
   DELAY_DOT_PX,
@@ -99,13 +100,17 @@ import {
   type ElbowRoutingObstacle,
 } from "./elbow/index";
 import { elbowInputFromTerminals, routePoints } from "./elbow/traceContract";
-import { TraceTerminal } from "./traceTerminal";
+import { TRACE_TERMINAL_RADIUS, TRACE_TERMINAL_RING_PX, TraceTerminal } from "./traceTerminal";
 
 /** The transparent hit path's stroke width. Wider than the 2px visible
  * line by design: the line is the thing you SEE, this is the thing you can
  * plausibly double-click. Same trick, same reason, as React Flow's
  * `BaseEdge` interaction path. */
 export const TRACE_HIT_STROKE_PX = 12;
+
+/** The visible line's default stroke width — `TraceBody`'s own default,
+ * named so the ring pull-back below can clear its round cap. */
+export const TRACE_STROKE_WIDTH_PX = 2;
 
 // WHY `points` is omitted from the `<g>` props as well as `id`: React's
 // `SVGProps` gives EVERY svg element the `points` attribute (typed
@@ -158,6 +163,8 @@ export interface TraceProps extends Omit<ComponentProps<"g">, "id" | "points"> {
   /** Where 0..1 along the path the delayed split lands — clamped to
    * 0.05..0.95 regardless of what's passed (`clampLabelPosition`). */
   labelPosition?: number;
+  /** Head at the `to` end. Defaults to `DEFAULT_TRACE_MARKER_END`
+   *  (`"none"` — see its WHY); pass `"arrow"` to opt in. */
   markerEnd?: TraceMarkerEnd;
   strokeWidth?: number;
   vectorEffect?: "non-scaling-stroke";
@@ -335,8 +342,8 @@ export function TraceBody({
   animated = false,
   splitAtLabel = false,
   labelPosition = LABEL_POSITION_DEFAULT,
-  markerEnd = "arrow",
-  strokeWidth = 2,
+  markerEnd = DEFAULT_TRACE_MARKER_END,
+  strokeWidth = TRACE_STROKE_WIDTH_PX,
   vectorEffect,
   interactive = false,
   tunnel = "off",
@@ -617,6 +624,48 @@ export function TraceBody({
  */
 export const TRACE_TERMINAL_GAP = 16;
 
+/**
+ * The pull-back that ends a wire ON a round glyph's painted outer edge —
+ * a real `Port` dot's outer ring, or `Trace`'s own terminal ring — instead
+ * of short of it.
+ *
+ * WHY: Zach, 2026-09-22 — "Please also make the trace end exactly at the
+ * port … right now there is this spacing which is not desirable!" The
+ * spacing was {@link TRACE_TERMINAL_GAP}: 16px sized for `Trace`'s OWN
+ * r=9 glyph plus a chevron's ~7px of reach, applied unchanged by every
+ * host whose ends are real `Port` dots (5.5-6px painted radius) and, since
+ * the same day, carry no chevron at all (`DEFAULT_TRACE_MARKER_END`). The
+ * fixed number was the bug; the geometry the line has to meet is the
+ * dot's, so a host measures that radius and hands it here.
+ *
+ * `+ strokeWidth / 2` is the round cap's own reach past the path's last
+ * point: without it the cap would paint a pixel INTO the ring, and every
+ * DOM-canvas wire paints above the dots (`wireLayer.tsx`'s D-B1 note). With
+ * it the ink stops exactly on the ring — a `butt`-capped async dash stops
+ * `strokeWidth / 2` (1px) short, inside the ≤1px tolerance Zach's "touch"
+ * is measured with.
+ */
+export function traceRingGapPx(ringOuterRadiusPx: number, strokeWidth: number = TRACE_STROKE_WIDTH_PX): number {
+  return ringOuterRadiusPx + strokeWidth / 2;
+}
+
+/**
+ * The `gap` a `Trace` uses when its caller gives none — exported so a
+ * component that computes the SAME geometry itself (`TraceEditor` places
+ * its handles off `traceGeometry` synchronously) cannot drift from what is
+ * drawn. Without a chevron to seat, the line runs all the way to the
+ * glyph's ring (`traceRingGapPx`); the 16px {@link TRACE_TERMINAL_GAP} is
+ * only the room an arrowhead needs, so it applies only when one is asked
+ * for.
+ */
+export function traceDefaultGapPx({
+  markerEnd = DEFAULT_TRACE_MARKER_END,
+  terminalRadius = TRACE_TERMINAL_RADIUS,
+  strokeWidth = TRACE_STROKE_WIDTH_PX,
+}: { markerEnd?: TraceMarkerEnd; terminalRadius?: number; strokeWidth?: number } = {}): number {
+  return markerEnd === "arrow" ? TRACE_TERMINAL_GAP : traceRingGapPx(terminalRadius + TRACE_TERMINAL_RING_PX / 2, strokeWidth);
+}
+
 /** How many points a curved route is sampled into when a caller asks for a
  * polyline (`onGeometry`). A Bezier genuinely has no vertices — this is a
  * SAMPLE, and it is named one. */
@@ -629,7 +678,9 @@ export interface TraceRouteRequest {
   from: TraceTerminalSpec;
   to: TraceTerminalSpec;
   routing: TraceRouting;
-  /** Pull-back at each end; defaults to {@link TRACE_TERMINAL_GAP}. */
+  /** Pull-back at each end; defaults to {@link TRACE_TERMINAL_GAP} here.
+   *  (The `Trace` COMPONENT resolves its own default from `markerEnd`
+   *  before it calls this — see `TraceRouteProps.markerEnd`.) */
   gap?: number;
   /** `straight` / `curved`: the dragged centre control point. */
   curve?: TraceCurve | null;
@@ -870,6 +921,9 @@ export interface TraceRouteProps
   animated?: boolean;
   splitAtLabel?: boolean;
   labelPosition?: number;
+  /** See `TraceProps.markerEnd`. Also picks the default `gap`: with no
+   *  head the line meets the terminal ring (`traceRingGapPx`), with one it
+   *  keeps `TRACE_TERMINAL_GAP`'s room for the chevron. */
   markerEnd?: TraceMarkerEnd;
   strokeWidth?: number;
   vectorEffect?: "non-scaling-stroke";
@@ -931,7 +985,7 @@ export function Trace({
   animated,
   splitAtLabel,
   labelPosition,
-  markerEnd = "arrow",
+  markerEnd = DEFAULT_TRACE_MARKER_END,
   strokeWidth,
   vectorEffect,
   interactive,
@@ -963,12 +1017,13 @@ export function Trace({
   // on a bent curve or a degenerate slanted chord (see that function's doc
   // comment), and a terminal glyph that trusted the table over the actual
   // geometry would repeat the exact bug this component exists to fix.
+  const resolvedGap = gap ?? traceDefaultGapPx({ markerEnd, terminalRadius, strokeWidth });
   const { geometry, showFromDirection, showToDirection } = useMemo(() => {
     const request: TraceRouteRequest = {
       from,
       to,
       routing,
-      gap,
+      gap: resolvedGap,
       curve,
       slantT,
       bends,
@@ -996,7 +1051,7 @@ export function Trace({
     [
       from.x, from.y, from.dir,
       to.x, to.y, to.dir,
-      routing, gap,
+      routing, resolvedGap,
       curve?.dx, curve?.dy, slantT,
       bends, pins, obstacles, fromBox, toBox, elbowOptions,
     ],

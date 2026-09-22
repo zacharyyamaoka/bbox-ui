@@ -55,6 +55,7 @@ import { traceHandles, type TraceHandle } from "./trace.handles";
 import type { Point, TraceTerminalSpec } from "./trace.layout";
 import {
   Trace,
+  traceDefaultGapPx,
   traceGeometry,
   type TraceGeometry,
   type TraceRouteProps,
@@ -200,7 +201,9 @@ export function TraceEditor({
       from,
       to,
       routing,
-      gap: rest.gap,
+      // The SAME default `Trace` resolves (`traceDefaultGapPx`), or the
+      // handles sit a few px off the ends of the line they drag.
+      gap: rest.gap ?? traceDefaultGapPx({ markerEnd: rest.markerEnd, terminalRadius: rest.terminalRadius, strokeWidth: rest.strokeWidth }),
       curve: rest.curve,
       slantT: rest.slantT,
       bends: routing === "straight" ? bends : undefined,
@@ -219,7 +222,7 @@ export function TraceEditor({
   }, [
     from.x, from.y, from.dir,
     to.x, to.y, to.dir,
-    routing, rest.gap,
+    routing, rest.gap, rest.markerEnd, rest.terminalRadius, rest.strokeWidth,
     rest.curve?.dx, rest.curve?.dy, rest.slantT,
     bends,
     rest.pins, rest.obstacles, rest.fromBox, rest.toBox, rest.elbowOptions,

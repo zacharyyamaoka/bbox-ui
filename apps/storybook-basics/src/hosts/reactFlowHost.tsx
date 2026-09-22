@@ -512,7 +512,11 @@ function TraceEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, tar
       length={Math.hypot(targetX - sourceX, targetY - sourceY)}
       variant={data?.variant ?? "data"}
       color={data?.color ?? "var(--muted-foreground)"}
-      markerEnd={data?.markerEnd ?? "arrow"}
+      // No `?? "arrow"` of its own any more: the kit default
+      // (`DEFAULT_TRACE_MARKER_END`, "none" — Zach, 2026-09-22: "because its
+      // DAG, we already know the order!") is `TraceBody`'s, and a host that
+      // restated the old literal here was the third place it could drift.
+      markerEnd={data?.markerEnd}
     />
   );
 }

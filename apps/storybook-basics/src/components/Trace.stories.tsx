@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { Trace, TraceBody, traceGeometry, type TraceProps, type TraceRouteRequest } from "./trace";
+import { Trace, TraceBody, traceGeometry, traceRingGapPx, type TraceProps, type TraceRouteRequest } from "./trace";
 import {
   ASYNC_CADENCE_PX,
   DATA_MARCH_CLASS,
@@ -13,7 +13,7 @@ import {
   type Point,
   type TraceDir,
 } from "./trace.layout";
-import { TraceTerminal } from "./traceTerminal";
+import { TRACE_TERMINAL_RADIUS, TRACE_TERMINAL_RING_PX, TraceTerminal } from "./traceTerminal";
 import { elbowPath, routeElbow } from "./elbow/index";
 import { elbowInputFromTerminals, routePoints } from "./elbow/traceContract";
 
@@ -26,12 +26,15 @@ import { elbowInputFromTerminals, routePoints } from "./elbow/traceContract";
 const ROW_W = 460;
 const ROW_H = 44;
 const MID_Y = ROW_H / 2;
-/** Terminal centres. The line stops 16px short of each so the ring and
- * the chevron marker never collide — the marker head reaches ~12px back
- * from the path's end. */
+/** Terminal centres. The line ends ON each terminal's ring — the same
+ * pull-back `Trace` now applies by default (`traceRingGapPx`). It used to
+ * stop 16px short to leave the chevron room; since 2026-09-22 a trace draws
+ * no head unless asked (Zach: "because its DAG, we already know the
+ * order!"), and a 16px stop with nothing in it is exactly the "spacing
+ * which is not desirable". */
 const FROM_X = 26;
 const TO_X = ROW_W - 26;
-const LINE_GAP = 16;
+const LINE_GAP = traceRingGapPx(TRACE_TERMINAL_RADIUS + TRACE_TERMINAL_RING_PX / 2);
 
 const FROM_TERMINAL = { x: FROM_X, y: MID_Y, dir: "right" as TraceDir };
 const TO_TERMINAL = { x: TO_X, y: MID_Y, dir: "right" as TraceDir };
@@ -41,7 +44,7 @@ const LINE_POINTS: Point[] = [
   { x: TO_X - LINE_GAP, y: MID_Y },
 ];
 const LINE_PATH = polylinePath(LINE_POINTS);
-/** 376px — comfortably past one async cadence (74px), so the Async row
+/** 386px — comfortably past one async cadence (74px), so the Async row
  * shows the repeating carrier/packet rhythm rather than the centred
  * single-packet fallback `asyncDashOffsetForLength` exists for. */
 const LINE_LENGTH = LINE_POINTS[1].x - LINE_POINTS[0].x;
@@ -109,7 +112,7 @@ function StyleRow({ style }: { style: TraceStyle }) {
 
 const meta = {
   title: "Trace",
-  tags: ["area:trace", "lane:baseline"],
+  tags: ["area:trace", "lane:trace-defaults"],
   component: TraceBody,
   // `id` and `path` are required props, so every story below would
   // otherwise have to restate them just to satisfy the type — these are
@@ -273,11 +276,12 @@ export const Styles: Story = {
     for (const style of TRACE_STYLES) {
       const row = requireEl(canvasElement, `[data-testid="trace-row-${style.key}"]`);
       await expect(row.querySelectorAll('[data-slot="trace-line"]:not([data-sketch])')).toHaveLength(1);
-      // one crisp line + one marker chevron, no stray paths (no hit path
-      // here: `interactive` is off by default). `:not([data-sketch])`
-      // for the same reason as above — the skin port (src/skin/**) added
-      // a hidden hand-drawn twin beside every crisp trace-line path.
-      await expect(row.querySelectorAll('[data-slot="trace"] path:not([data-sketch])')).toHaveLength(2);
+      // one crisp line and nothing else — no chevron since the default
+      // head went to "none" (2026-09-22), no hit path (`interactive` is
+      // off by default). `:not([data-sketch])` for the same reason as
+      // above — the skin port (src/skin/**) added a hidden hand-drawn twin
+      // beside every crisp trace-line path.
+      await expect(row.querySelectorAll('[data-slot="trace"] path:not([data-sketch])')).toHaveLength(1);
     }
 
     /* --- 2. Dash mechanics, per style -------------------------------- */
@@ -288,7 +292,7 @@ export const Styles: Story = {
     const asyncStyle = getComputedStyle(lineFor("async"));
     await expect(dashNumbers(asyncStyle.strokeDasharray)).toEqual([56, 4, 10, 4]);
     await expect(asyncStyle.strokeLinecap).toBe("butt");
-    // 376px of line is past one 74px cadence, so no centring phase shift.
+    // 386px of line is past one 74px cadence, so no centring phase shift.
     await expect(LINE_LENGTH).toBeGreaterThan(ASYNC_CADENCE_PX);
     await expect(Number.parseFloat(asyncStyle.strokeDashoffset)).toBe(0);
 
@@ -312,14 +316,17 @@ export const Styles: Story = {
     // the check above cannot pass by both resolving to the same fallback.
     await expect(getComputedStyle(lineFor("red")).stroke).not.toBe(dataStyle.stroke);
 
-    /* --- 4. One marker per trace, at its collision-free id ------------ */
+    /* --- 4. No head by default, on every style ------------------------ */
+    // Zach, 2026-09-22: "by default can you please update the data traces
+    // to draw without an arrow? because its DAG, we already know the
+    // order!" — every row here states no `markerEnd`, so every row is the
+    // default. The head itself (one marker per trace at its collision-free
+    // `safeElementId` id, `context-stroke`) is still asserted, by name, in
+    // TraceArrowhead.stories.tsx's `Matrix`.
     for (const style of TRACE_STYLES) {
       const row = requireEl(canvasElement, `[data-testid="trace-row-${style.key}"]`);
-      const markers = row.querySelectorAll('[data-slot="trace-marker"]');
-      await expect(markers).toHaveLength(1);
-      const expectedId = safeElementId("bbox-trace-head", `trace-${style.key}`);
-      await expect(markers[0].getAttribute("id")).toBe(expectedId);
-      await expect(lineFor(style.key).getAttribute("marker-end")).toBe(`url(#${expectedId})`);
+      await expect(row.querySelectorAll('[data-slot="trace-marker"]')).toHaveLength(0);
+      await expect(lineFor(style.key).getAttribute("marker-end")).toBeNull();
     }
 
     /* --- 5. Animated actually MOVES ---------------------------------- */
@@ -699,6 +706,10 @@ function DelayedSplitRow({ specimen }: { specimen: DelayedSplitSpecimen }) {
               variant="delayed"
               splitAtLabel
               labelPosition={specimen.labelPosition}
+              // Opted in BY NAME: this specimen asserts where a head goes on
+              // a split trace (the `after` run only), and heads are no
+              // longer the default (`DEFAULT_TRACE_MARKER_END`).
+              markerEnd="arrow"
             />
             <TraceTerminal
               x={specimen.request.from.x}
@@ -714,6 +725,7 @@ function DelayedSplitRow({ specimen }: { specimen: DelayedSplitSpecimen }) {
             variant="delayed"
             splitAtLabel
             labelPosition={specimen.labelPosition}
+            markerEnd="arrow"
           />
         )}
       </svg>

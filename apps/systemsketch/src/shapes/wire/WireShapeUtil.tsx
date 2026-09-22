@@ -38,7 +38,7 @@ import { ElbowPinV, PointV } from "../shared/props";
 import { DiffMarkStyle, type DiffMark } from "../shared/diffMark";
 import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import { WireFace } from "./WireFace";
-import { WIRE_TERMINAL_GAP, wireAutomaticRoute, wirePinnedRoute, wireRoutePoints, wireRouteSegments, wireTerminalGrabPoints, wireTerminals } from "./wireGeometry";
+import { wireAutomaticRoute, wirePinnedRoute, wireRoutePoints, wireRouteSegments, wireTerminalGap, wireTerminalGrabPoints, wireTerminals } from "./wireGeometry";
 
 export interface WireShapeProps {
   /**
@@ -491,9 +491,9 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     // twice: the dot's 40px hit circle (`PORT_HIT_PX`, halved to a radius),
     // tldraw's own handle radius (`editor.options.handleRadius`, which is what
     // `ShapeHandleOverlayUtil.getGeometry` hit-tests with), and the gap the
-    // route already leaves. At the defaults that is 20 + 12 - 8 = 24px along
+    // route already leaves. At the defaults (v2 dots) that is 20 + 12 - 7 = 25px along
     // the cable, which puts the handle's hit circle exactly outside the dot's.
-    const clearance = PORT_HIT_PX / 2 + this.editor.options.handleRadius - WIRE_TERMINAL_GAP;
+    const clearance = PORT_HIT_PX / 2 + this.editor.options.handleRadius - wireTerminalGap();
     const grab = wireTerminalGrabPoints(route, clearance);
 
     // `vertex` and not `virtual`: a virtual handle means "the engine owns this

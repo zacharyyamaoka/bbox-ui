@@ -48,7 +48,6 @@ import {
   type PortVariantId,
 } from "@trunk/skin/portVariants";
 import {
-  DEFAULT_REGION_VARIANT,
   REGION_VARIANT_IDS,
   REGION_VARIANTS,
   isRegionVariantId,
@@ -62,6 +61,23 @@ import { REGION_SHAPE_TYPE } from "../../shapes/types";
 /** The two per-viewer keys, spelled by the lane brief. */
 export const PORT_VARIANT_STORAGE_KEY = "bbox.portVariant";
 export const REGION_VARIANT_STORAGE_KEY = "bbox.regionVariant";
+
+/**
+ * What a viewer with NOTHING stored opens on. A stored pick still wins
+ * (`readStored`) — only the fallback moved.
+ *
+ * WHY v2 and v9: Zach, 2026-09-22 — "Please also lets do ports v2 as the
+ * default ones … and for regions make v9 the default one". WHY an app
+ * constant rather than the tables' own `DEFAULT_*`: the tables' default is
+ * the ABSENT attribute, and each variant's CSS is keyed on the attribute
+ * with `v1`'s values as every token's fallback — so an absent attribute
+ * always paints v1, whatever the TS default says. Stamping v2/v9 like any
+ * other pick keeps paint and numbers (the region header height
+ * `cornerBlock.ts` lays out with) on the same drawing. Storybook's toolbar
+ * opens on the same pair (`.storybook/preview.tsx`, `initialGlobals`).
+ */
+export const APP_DEFAULT_PORT_VARIANT: PortVariantId = "v2";
+export const APP_DEFAULT_REGION_VARIANT: RegionVariantId = "v9";
 
 /* ------------------------------------------------------------------ */
 /* Storage — per viewer, never a reason to block the board             */
@@ -261,8 +277,8 @@ function VariantMenu<T extends string>({ which, label, heading, ids, titleOf, va
  */
 export function VariantSwitch() {
   const editor = useEditor();
-  const [port, setPort] = useState<PortVariantId>(() => readStored(PORT_VARIANT_STORAGE_KEY, isPortVariantId, DEFAULT_PORT_VARIANT_ID));
-  const [region, setRegion] = useState<RegionVariantId>(() => readStored(REGION_VARIANT_STORAGE_KEY, isRegionVariantId, DEFAULT_REGION_VARIANT));
+  const [port, setPort] = useState<PortVariantId>(() => readStored(PORT_VARIANT_STORAGE_KEY, isPortVariantId, APP_DEFAULT_PORT_VARIANT));
+  const [region, setRegion] = useState<RegionVariantId>(() => readStored(REGION_VARIANT_STORAGE_KEY, isRegionVariantId, APP_DEFAULT_REGION_VARIANT));
 
   useLayoutEffect(() => {
     setPortVariant(port);

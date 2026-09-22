@@ -121,6 +121,11 @@ export const PortGallery: Story = {
  * halo, it never recolours what `state` already owns.
  */
 export const WiredAndError: Story = {
+  // Pinned to v1 (2026-09-22): the claim is about the lit `port-dot-core`,
+  // which only v1's "trunk" grammar paints; v2 — the toolbar's default
+  // since Zach's "lets do ports v2 as the default ones" — fills the disc
+  // itself and has no core element to compare.
+  globals: { portVariant: "v1" },
   render: () => (
     <Gallery>
       <Specimen caption="wired, no diagnostic">

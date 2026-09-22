@@ -91,6 +91,20 @@ export const TRACE_VARIANT_LABELS: Record<TraceVariant, string> = {
 export const TRACE_MARKER_ENDS = ["arrow", "none"] as const;
 export type TraceMarkerEnd = (typeof TRACE_MARKER_ENDS)[number];
 
+/**
+ * What a trace paints at its `to` end when the caller says nothing.
+ *
+ * WHY `"none"`: Zach, 2026-09-22 — "by default can you please update the
+ * data traces to draw without an arrow? because its DAG, we already know
+ * the order!" The flow direction is already carried by the graph (inputs on
+ * the left wall, outputs on the right), so a head on every cable repeats a
+ * fact and crowds the dot it lands on. `"arrow"` stays selectable BY NAME
+ * for a caller that genuinely needs it; only the unstated case moved. Every
+ * `markerEnd` default in the kit (`TraceBody`, `Trace`, the React Flow
+ * host's edge) reads this one constant so the three can never disagree.
+ */
+export const DEFAULT_TRACE_MARKER_END: TraceMarkerEnd = "none";
+
 /* ------------------------- the endpoint contract -------------------------- */
 /* Frozen by docs/TRACE-PLAN.md so Lanes A-D never negotiate it. ADDED here,   */
 /* not ported — the donor package has no terminal concept at all.              */
