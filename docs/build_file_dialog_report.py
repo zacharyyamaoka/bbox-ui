@@ -123,9 +123,25 @@ pre{{background:var(--card);border:1px solid var(--line);border-radius:8px;paddi
 </div>
 
 <div class="verdictbox good">
-<h3>What it actually is</h3>
-<p style="margin:0 0 8px">A file dialog makes <i>thousands of tiny</i> <code>stat()</code>/<code>openat()</code> calls — icon themes, the mime database, the recent list, the folder itself. Those are fast only while the kernel's dentry/inode cache holds them. Your agent fleet (57 <code>claude</code>, 46 <code>chrome</code>, 10 <code>codex</code> processes) walks and rewrites <b>millions of files</b>, evicting that cache continuously. So the dialog's small reads fall through to a disk already busy, and the whole desktop appears to stop.</p>
-<p style="margin:0"><b>Two amplifiers sat on top of it</b>, and both are now gone: the dialog opened into a 1,000-row <i>Recent</i> list that was 97.7% screenshots, and the screenshots folder you reach for had 5,007 images with no cached thumbnail.</p>
+<h3>What it actually is: the desktop cannot get a CPU core</h3>
+<p style="margin:0 0 8px">Measured during Zach's own reproduction with <code>freeze-probe</code>, while the dialog was frozen:</p>
+<table style="margin:10px 0"><tbody>
+<tr><td><b>The app's UI thread</b></td><td><b>100% ON-CPU, never once blocked in a syscall.</b> It was not waiting for disk, the portal, or any service &mdash; it was waiting for a <i>core</i>.</td></tr>
+<tr><td><b>Disk</b></td><td><code>io.full</code> peaked at <b>0.30%</b>. Storage is innocent.</td></tr>
+<tr><td><b>Memory</b></td><td><code>memory.some</code> peaked at <b>0.00%</b>. RAM is innocent.</td></tr>
+<tr><td><b>The machine</b></td><td><b>64 runnable processes against 24 cores</b> (2.7&times; oversubscribed) and <b>1,182,050 context switches/sec</b>.</td></tr>
+<tr><td><b>Biggest consumers</b></td><td><code>gnome-shell</code> 16.10s and <code>Xorg</code> 6.58s &mdash; on X11 <i>every</i> window is drawn by those two.</td></tr>
+</tbody></table>
+<p style="margin:8px 0 0">Showing that dialog needs three <b>single-threaded</b> actors to get a core at the same moment: Claude's UI thread builds the GTK3 chooser, <code>gnome-shell</code> maps and composites the new window, and <code>Xorg</code> draws it. None can be parallelised. Behind 2.7&times; oversubscription all three queue &mdash; which is why the whole screen stops, and why <b>sorting a column froze it again</b>: same three actors, same queue.</p>
+</div>
+
+<div class="verdictbox">
+<h3>Three things I got wrong on the way here, corrected</h3>
+<ul style="margin:0;padding-left:20px">
+<li><b>Claude Desktop never uses the portal.</b> It maps <code>libgtk-3.so</code> and runs an <i>in-process GTK3</i> dialog. So the <code>startup-mode</code> fix below applies to the GTK4 chooser and does <b>not</b> affect Claude Desktop; the thumbnail pre-warm does not either, because GTK3's chooser draws no thumbnails.</li>
+<li><b>My first probe blamed the wrong thing.</b> It counted <code>waitid</code> &mdash; where Chromium's idle process-reaper permanently sits &mdash; as work, and resolved that call's first argument as a file descriptor, so every path falsely pointed at <code>/dev/null</code>.</li>
+<li><b>gnome-shell is not broken.</b> A 57% reading alarmed me; it was the tail of my own load test. On a quiet desktop it sits at 6.5%.</li>
+</ul>
 </div>
 
 <h2>What I measured and ruled out</h2>
@@ -133,7 +149,8 @@ pre{{background:var(--card);border:1px solid var(--line);border-radius:8px;paddi
 <table><thead><tr><th>Suspect</th><th>Measurement</th><th>Verdict</th></tr></thead>
 <tbody>{rows_ruled()}</tbody></table>
 
-<h2>What changed</h2>
+<h2>Housekeeping fixed along the way</h2>
+<p class="note">Real improvements, and worth keeping &mdash; but the GTK4 and thumbnail items do not affect Claude Desktop, as noted above.</p>
 <div class="legend"><span><span class="sw" style="background:var(--bad)"></span>before</span><span><span class="sw" style="background:var(--good)"></span>after</span></div>
 {charts}
 
@@ -143,6 +160,22 @@ pre{{background:var(--card);border:1px solid var(--line);border-radius:8px;paddi
 <div class="verdictbox">
 <h3>One honest correction on the numbers</h3>
 <p style="margin:0">The reclaim reported <b>30.9 GB</b>, but <code>df</code> only moved <b>9 GB</b>. That is not an error in either: pnpm hardlinks packages from a shared store, so most of those bytes were shared and freeing one link frees nothing. <b>The win here is metadata, not bytes</b> — 1.5 million fewer directory entries to traverse and cache. That happens to be precisely the resource that was scarce.</p>
+</div>
+
+<h2>The actual fix, and how far it is proven</h2>
+<div class="verdictbox good">
+<p style="margin:0 0 8px">The fleet has to lose ties against the desktop. <code>RLIMIT_NICE</code> is 0 here so the desktop cannot be promoted &mdash; but the <b>cpu cgroup controller is delegated</b> to the user manager, so the fleet can be demoted with no root at all. Now in effect and re-applied continuously by <code>fleet-throttle</code>:</p>
+<table style="margin:8px 0"><thead><tr><th>cgroup</th><th>holds</th><th>CPUWeight</th></tr></thead><tbody>
+<tr><td><code>session.slice</code></td><td>gnome-shell &mdash; the compositor</td><td><b>10000</b></td></tr>
+<tr><td><code>app-com.anthropic.Claude-*.scope</code></td><td>the Claude Desktop window</td><td><b>5000</b></td></tr>
+<tr><td><code>run-r*.scope</code> &times;12</td><td>every command an agent spawns: pnpm test, headless Chrome, python</td><td><b>10</b></td></tr>
+</tbody></table>
+<p style="margin:8px 0 0"><b>Honest status: applied and verified present, but NOT yet proven to cure the freeze.</b> Three synthetic A/B runs gave inconsistent results &mdash; one even showed the higher-weighted probe getting less CPU &mdash; so no improvement is claimed from them. Weights only bite under saturation, and the trustworthy oracle is the next real reproduction, not a microbenchmark. Re-run <code>freeze-probe</code> the next time you open the dialog: if the fix works, <b>peak runnable drops well below 64</b> and the UI thread stops being 100% ON-CPU.</p>
+</div>
+
+<div class="verdictbox">
+<h3>The structural lever, if the weights are not enough</h3>
+<p style="margin:0">Weights only decide <i>who wins a contended core</i>; they cannot create cores. The freeze had <b>19 headless Chrome processes</b> running at once. Capping agent concurrency removes the contention rather than arbitrating it &mdash; and on X11 <code>Xorg</code> stays a serialized bottleneck no matter what, because it lives in a system-managed cgroup this fix cannot reach without root. A Wayland session removes that actor entirely.</p>
 </div>
 
 <h2>What is still yours to decide</h2>
