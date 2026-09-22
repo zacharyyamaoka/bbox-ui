@@ -142,16 +142,41 @@ function paintedDotOf(resolved: HTMLElement): Element {
   return resolved.querySelector('[data-slot="port-dot"]') ?? resolved;
 }
 
-function centreOf(dot: HTMLElement, containerRect: DOMRect): { x: number; y: number } {
+/**
+ * The coordinate space every measured point and box is expressed in: the
+ * client-px origin to subtract, then the scale to divide back out.
+ *
+ * WHY a scale at all, when the layer itself only ever uses 1: the React
+ * Flow host routes its edges through this same file (`resolveWires`, below)
+ * and its nodes sit under the viewport's `scale(zoom)` transform, so a
+ * client-px box there is `zoom` times the flow-space box its edge is drawn
+ * in. Dividing the zoom out HERE is what lets both hosts share one
+ * derivation instead of the React Flow host re-deriving routes it does not
+ * own. At `scale: 1` every division is the identity, so the layer's own
+ * numbers are exactly the numbers it produced before this existed.
+ */
+export interface WireSpace {
+  left: number;
+  top: number;
+  scale: number;
+}
+
+/** The layer's own space: the container's padding-box origin, unscaled. */
+function containerSpace(container: HTMLElement): WireSpace {
+  const rect = container.getBoundingClientRect();
+  return { left: rect.left, top: rect.top, scale: 1 };
+}
+
+function centreOf(dot: HTMLElement, space: WireSpace): { x: number; y: number } {
   const rect = dot.getBoundingClientRect();
-  return { x: rect.left + rect.width / 2 - containerRect.left, y: rect.top + rect.height / 2 - containerRect.top };
+  return { x: (rect.left + rect.width / 2 - space.left) / space.scale, y: (rect.top + rect.height / 2 - space.top) / space.scale };
 }
 
 /** One measured box in the container's own coordinate space — the same
  *  subtraction `centreOf` above does, over a whole rect instead of a dot. */
-function boxOf(element: HTMLElement, containerRect: DOMRect): ElbowRect {
+function boxOf(element: HTMLElement, space: WireSpace): ElbowRect {
   const rect = element.getBoundingClientRect();
-  return { x: rect.left - containerRect.left, y: rect.top - containerRect.top, w: rect.width, h: rect.height };
+  return { x: (rect.left - space.left) / space.scale, y: (rect.top - space.top) / space.scale, w: rect.width / space.scale, h: rect.height / space.scale };
 }
 
 /**
@@ -167,13 +192,13 @@ function boxOf(element: HTMLElement, containerRect: DOMRect): ElbowRect {
  * body underneath it. Keyed by id with the frame written first, so the
  * block pass below cannot overwrite it with the card's much smaller box.
  */
-function keepOutRectsOf(container: HTMLElement, containerRect: DOMRect): KeepOutRect[] {
+function keepOutRectsOf(container: HTMLElement, space: WireSpace): KeepOutRect[] {
   const rects: KeepOutRect[] = [];
   const seen = new Set<string>();
   const add = (id: string | null, element: HTMLElement) => {
     if (!id || seen.has(id)) return;
     seen.add(id);
-    rects.push({ id, ...boxOf(element, containerRect) });
+    rects.push({ id, ...boxOf(element, space) });
   };
   for (const frame of container.querySelectorAll<HTMLElement>('[data-slot="region-frame"][data-region-id]')) {
     add(frame.getAttribute("data-region-id"), frame);
@@ -192,7 +217,7 @@ function keepOutRectsOf(container: HTMLElement, containerRect: DOMRect): KeepOut
   return rects;
 }
 
-interface ResolvedWire {
+export interface ResolvedWire {
   wire: Wire;
   from: TraceTerminalSpec;
   to: TraceTerminalSpec;
@@ -211,15 +236,26 @@ interface ResolvedWire {
   toBox?: ElbowRect | null;
 }
 
-interface WireLayerState {
+export interface ResolvedWires {
   resolved: ResolvedWire[];
   unresolvedIds: string[];
 }
 
-const EMPTY_STATE: WireLayerState = { resolved: [], unresolvedIds: [] };
+const EMPTY_STATE: ResolvedWires = { resolved: [], unresolvedIds: [] };
 
-function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayerState {
-  const containerRect = container.getBoundingClientRect();
+/**
+ * Every wire resolved to its two terminal specs, its routing, and — for an
+ * elbow — its keep-outs and endpoint boxes: everything `Trace` needs, read
+ * off the rendered DOM under `container`, in `space` (default: the
+ * container's own, unscaled).
+ *
+ * Exported for the React Flow host (`hosts/reactFlowHost.tsx`'s kit edge),
+ * which hands its viewport element and zoom as `container`/`space` and
+ * paints each result through {@link ResolvedWireTrace}. One derivation,
+ * two hosts — so a cable routes identically on the static DOM canvas and
+ * on its draggable React Flow twin (docs/peps/0005).
+ */
+export function resolveWires(container: HTMLElement, wires: readonly Wire[], space: WireSpace = containerSpace(container)): ResolvedWires {
   const resolved: ResolvedWire[] = [];
   const unresolvedIds: string[] = [];
   // Measured lazily: a fixture with no elbow wire at all pays nothing, and
@@ -256,11 +292,11 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
     // than one `gap` for both, because the two dots need not match (a
     // collapsed stand-in, an `md` function port, a pinned variant).
     const from: TraceTerminalSpec = traceRouteStart(
-      { ...centreOf(fromDot, containerRect), dir: fromEdge as TraceDir },
+      { ...centreOf(fromDot, space), dir: fromEdge as TraceDir },
       traceRingGapPx(portDotRingRadiusPx(paintedDotOf(fromDot))),
     );
     const to: TraceTerminalSpec = traceRouteEnd(
-      { ...centreOf(toDot, containerRect), dir: OPPOSITE_DIR[toEdge as TraceDir] },
+      { ...centreOf(toDot, space), dir: OPPOSITE_DIR[toEdge as TraceDir] },
       traceRingGapPx(portDotRingRadiusPx(paintedDotOf(toDot))),
     );
     const routing = wire.routing ?? DEFAULT_TRACE_ROUTING;
@@ -268,7 +304,7 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
       resolved.push({ wire, from, to, routing });
       return;
     }
-    rects ??= keepOutRectsOf(container, containerRect);
+    rects ??= keepOutRectsOf(container, space);
     // WHY the endpoint boxes are the `[data-block-id]` roots and not the
     // same rects the keep-out list carries: the router treats them
     // differently on purpose (`elbow/collisionRouting.ts`'s
@@ -288,8 +324,8 @@ function computeState(container: HTMLElement, wires: readonly Wire[]): WireLayer
       to,
       routing,
       obstacles: keepOutsFor(wire, rects),
-      fromBox: fromBlock ? boxOf(fromBlock, containerRect) : null,
-      toBox: toBlock ? boxOf(toBlock, containerRect) : null,
+      fromBox: fromBlock ? boxOf(fromBlock, space) : null,
+      toBox: toBlock ? boxOf(toBlock, space) : null,
     });
   });
 
@@ -304,11 +340,63 @@ function samePoints(a: readonly Point[] | undefined, b: readonly Point[]): boole
 }
 
 /* ------------------------------------------------------------------ */
+/* One resolved wire, painted — shared by every host that routes here   */
+/* ------------------------------------------------------------------ */
+
+export interface ResolvedWireTraceProps {
+  route: ResolvedWire;
+  /** The polyline `Trace` actually drew, in the route's own space. */
+  onGeometry?(wireId: string, points: readonly Point[] | null): void;
+}
+
+/**
+ * The exact `Trace` the layer paints for one {@link ResolvedWire}. Split out
+ * of `WireLayer`'s own render so the React Flow host's custom edge paints
+ * the SAME element with the SAME props — ring-flush ends (`gap={0}` over
+ * the route's own pulled-back terminals), no terminal glyphs, the kit's
+ * `markerEnd` default — rather than a second copy that drifts.
+ */
+export function ResolvedWireTrace({ route, onGeometry }: ResolvedWireTraceProps) {
+  const { wire, from, to, routing, obstacles, fromBox, toBox } = route;
+  return (
+    // `id` is destructured out of both `Trace` and `TraceBody` (it feeds
+    // the MARKER's own id, `safeElementId("bbox-trace-head", id)`) and
+    // never lands on either `<g>` as a DOM attribute — so a wrapping
+    // group is the only way a story can find ONE wire's rendered trace
+    // among its siblings. Purely additive: `Trace` itself is untouched.
+    //
+    // `data-wire-from` states, in the DOM, which port a wire LEFT.
+    // That is what lets an assertion about a control MARK be negative
+    // and still be checkable — "no wire originates at `<block>/break`"
+    // (`controlFlow.acceptance.ts`'s `expectControlMark`) — because a
+    // mark is a badge on the block and never an endpoint, and the only
+    // honest way to prove an absence is to enumerate what IS there.
+    <g data-wire-id={wire.id} data-wire-from={`${wire.from.blockId}/${wire.from.portId}`}>
+      <Trace
+        id={wire.id}
+        from={from}
+        to={to}
+        routing={routing}
+        variant={wire.variant ?? "data"}
+        color={wire.color}
+        markerEnd={wire.markerEnd}
+        terminals={false}
+        gap={0}
+        obstacles={obstacles}
+        fromBox={fromBox}
+        toBox={toBox}
+        onGeometry={(geometry) => onGeometry?.(wire.id, geometry.points)}
+      />
+    </g>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* WireLayer                                                            */
 /* ------------------------------------------------------------------ */
 
 export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: WireLayerProps) {
-  const [state, setState] = useState<WireLayerState>(EMPTY_STATE);
+  const [state, setState] = useState<ResolvedWires>(EMPTY_STATE);
   // In a ref so a caller's inline arrow does not re-identify
   // `reportGeometry` (which would re-render every `Trace`).
   const onWireGeometryRef = useRef(onWireGeometry);
@@ -365,7 +453,7 @@ export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: Wi
         frame = requestAnimationFrame(attach);
         return;
       }
-      const measure = () => setState(computeState(container, wires));
+      const measure = () => setState(resolveWires(container, wires));
       measure();
       frame = requestAnimationFrame(measure);
       observer = new ResizeObserver(measure);
@@ -397,36 +485,8 @@ export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: Wi
         height="100%"
         style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}
       >
-        {state.resolved.map(({ wire, from, to, routing, obstacles, fromBox, toBox }) => (
-          // `id` is destructured out of both `Trace` and `TraceBody` (it feeds
-          // the MARKER's own id, `safeElementId("bbox-trace-head", id)`) and
-          // never lands on either `<g>` as a DOM attribute — so a wrapping
-          // group is the only way a story can find ONE wire's rendered trace
-          // among its siblings. Purely additive: `Trace` itself is untouched.
-          //
-          // `data-wire-from` states, in the DOM, which port a wire LEFT.
-          // That is what lets an assertion about a control MARK be negative
-          // and still be checkable — "no wire originates at `<block>/break`"
-          // (`controlFlow.acceptance.ts`'s `expectControlMark`) — because a
-          // mark is a badge on the block and never an endpoint, and the only
-          // honest way to prove an absence is to enumerate what IS there.
-          <g key={wire.id} data-wire-id={wire.id} data-wire-from={`${wire.from.blockId}/${wire.from.portId}`}>
-            <Trace
-              id={wire.id}
-              from={from}
-              to={to}
-              routing={routing}
-              variant={wire.variant ?? "data"}
-              color={wire.color}
-              markerEnd={wire.markerEnd}
-              terminals={false}
-              gap={0}
-              obstacles={obstacles}
-              fromBox={fromBox}
-              toBox={toBox}
-              onGeometry={(geometry) => reportGeometry(wire.id, geometry.points)}
-            />
-          </g>
+        {state.resolved.map((route) => (
+          <ResolvedWireTrace key={route.wire.id} route={route} onGeometry={reportGeometry} />
         ))}
       </svg>
       {/* WHY the pills live in a DOM sibling of the svg rather than inside
