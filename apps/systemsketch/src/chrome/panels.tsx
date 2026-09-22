@@ -282,11 +282,18 @@ const BACKEND_PANEL = '[data-testid="ss-backend"]';
  * moving tldraw's stock seat would fight the framework's own layout for no
  * reason the chip's contents give.
  */
-function useRailTop(): number {
+function useRailTop(railOpen: boolean): number {
   const editor = useEditor();
   const [top, setTop] = useState(RAIL_TOP_FLOOR);
 
   useLayoutEffect(() => {
+    // WHY only while the rail is open (Codex re-judge, 2026-09-22): the
+    // MutationObserver below watches the whole canvas subtree, so leaving it
+    // armed with the rail closed charged every drag and every culled shape a
+    // querySelector for a measurement nothing was using. Re-arming on open
+    // re-measures before paint (`useLayoutEffect`), so the rail never opens
+    // under the chip.
+    if (!railOpen) return;
     const container = editor.getContainer();
     let backend: Element | null = null;
 
@@ -330,7 +337,7 @@ function useRailTop(): number {
       arrivals.disconnect();
       sizes.disconnect();
     };
-  }, [editor]);
+  }, [editor, railOpen]);
 
   return top;
 }
@@ -347,7 +354,7 @@ export interface SystemSketchPanelProps {
 
 export function SystemSketchPanel({ open, onClose, onSurfaceChange, problems, id }: SystemSketchPanelProps) {
   const editor = useEditor();
-  const top = useRailTop();
+  const top = useRailTop(open !== null);
 
   // WHY the listener is on the window and capture-free, and WHY it is only
   // mounted while a panel is open: tldraw's own Escape handling cancels the
