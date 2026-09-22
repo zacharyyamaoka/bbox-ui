@@ -90,7 +90,7 @@ import { Square } from "lucide-react";
 import { Bar } from "./bar";
 import { Block, REGION_FRAME_RADIUS } from "./block";
 import { BlockMembers, type BlockMember } from "./blockMembers";
-import { BlockPort, type BlockEdgeSpec } from "./blockPort";
+import { BlockPort, BlockPortMeasureOnly, type BlockEdgeSpec } from "./blockPort";
 import { offsetEdgePaddingPx, RAIL_GAP_PX } from "./blockPort.layout";
 import { Button } from "./button";
 import { FoldingChevron } from "./foldingChevron";
@@ -209,17 +209,6 @@ export interface BlockRegionProps {
    *  `region-hidden`, P5's "a card whose footer states what it hides").
    *  Omitted = no footer. */
   hiddenFooter?: ReactNode;
-  /**
-   * A port-free, id-free twin of `corner` at the same size. Expanded Opaque
-   * does not draw the corner, so without a twin the frame would be sized off
-   * the fallback corner height (0) whenever the region was never drawn
-   * expanded first, and grow when it was toggled open and shut. The twin is
-   * mounted invisibly in Expanded Opaque purely so the corner is measured
-   * there too. It must carry no `data-block-id`/port ids: the face owns the
-   * region's id there (`RegionOpaqueFrame`). With `title` and no `corner`,
-   * BlockRegion builds its own.
-   */
-  cornerMeasure?: ReactNode;
   className?: string;
   style?: CSSProperties;
 }
@@ -478,15 +467,12 @@ function TitleCorner({
   type,
   controlPorts,
   opaque,
-  measureOnly = false,
 }: {
   id: string;
   title: ReactNode;
   type?: ReactNode;
   controlPorts: PortEdgeItem[];
   opaque: boolean;
-  /** Same box, no `BlockPort` — the id-free twin `cornerMeasure` asks for. */
-  measureOnly?: boolean;
 }) {
   const header =
     type === undefined ? (
@@ -508,18 +494,14 @@ function TitleCorner({
   // rail against the Block's BODY band, so a header-only card would hang its
   // dots below itself, into the frame — the same reason `nodeViews.tsx` gives
   // its corner a `region-corner-band`.
-  const card = (
-    <Block
-      header={header}
-      width={REGION_CORNER_WIDTH_PX}
-      body={<div data-slot="region-corner-band" style={{ height: regionRailBandPx(controlPorts.length) }} />}
-      shape={opaque ? "card" : "region-corner"}
-    />
-  );
-  if (measureOnly) return card;
   return (
     <BlockPort id={id} view="port" edges={{ left: { items: controlPorts } }}>
-      {card}
+      <Block
+        header={header}
+        width={REGION_CORNER_WIDTH_PX}
+        body={<div data-slot="region-corner-band" style={{ height: regionRailBandPx(controlPorts.length) }} />}
+        shape={opaque ? "card" : "region-corner"}
+      />
     </BlockPort>
   );
 }
@@ -839,7 +821,6 @@ export function BlockRegion({
   onToggleView,
   toggleClassName,
   hiddenFooter,
-  cornerMeasure,
   className,
   style,
 }: BlockRegionProps) {
@@ -884,16 +865,20 @@ export function BlockRegion({
   // is the fallback because it is the one truthful name a region always has.
   const words = { glyph, title: title ?? id, type };
 
-  // The id-free twin Expanded Opaque measures its corner with — the host's,
-  // or the one `TitleCorner` builds — so the face is sized by the real corner
-  // even when the region is loaded straight into Expanded Opaque.
-  const measureTwin =
-    view === "opaque" && opaqueFace === "frame"
-      ? (cornerMeasure ??
-        (givenCorner === undefined && title !== undefined ? (
-          <TitleCorner id={id} title={title} type={type} controlPorts={controlPorts ?? []} opaque={false} measureOnly />
-        ) : null))
-      : null;
+  // Expanded Opaque does not draw the corner, yet its size depends on the
+  // corner's height (`regionLayout`). So it mounts the corner anyway, hidden,
+  // purely to measure it — the expanded-view corner (TitleCorner in its
+  // `region-corner` shape), whatever `corner` holds. WHY always, and inside
+  // `BlockPortMeasureOnly` (Codex audit + re-judge, 2026-09-22): without it a
+  // region loaded straight into Expanded Opaque was sized off the fallback
+  // corner height (0) and grew when toggled open and shut; and an opt-in twin
+  // left the path broken for any caller that forgot it, or passed one still
+  // carrying ids. `BlockPortMeasureOnly` strips every `data-block-id`, rail
+  // and dot structurally, so the twin can never win `wireLayer`'s first-match
+  // lookup over the face that owns the region's ports.
+  const measureCorner =
+    givenCorner ?? (title === undefined ? null : <TitleCorner id={id} title={title} type={type} controlPorts={controlPorts ?? []} opaque={false} />);
+  const measureTwin = view === "opaque" && opaqueFace === "frame" && measureCorner !== null ? <BlockPortMeasureOnly>{measureCorner}</BlockPortMeasureOnly> : null;
 
   // Port: the region as a block. The root keeps the region id; the card
   // carries the block id (the one-owner rule, `RegionPortCard`). No toggle:

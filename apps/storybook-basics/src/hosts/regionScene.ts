@@ -24,8 +24,8 @@ export type LoopKind = "for" | "while";
 export interface RegionData {
   kind: RegionKind;
   /**
-   * Default `"expanded"`. The Blackbox toggle's state — but ONLY when
-   * `presentation` is also written (see `regionFaceOf`).
+   * Default `"expanded"`. The Blackbox toggle's state: `"opaque"` is
+   * Expanded Opaque, the frame at its own size with the members hidden.
    *
    * WHY `view` and `presentation` are two fields and not one three-valued
    * one (Zach, 2026-09-22: "chevron folds, blackbox makes opaque without
@@ -34,19 +34,22 @@ export interface RegionData {
    * field. Picking Port and back to Expanded returns the region to whatever
    * the toggle last said, instead of one control silently resetting the
    * other.
+   *
+   * WHY a record renders LITERALLY, with no legacy reading of `view:
+   * "opaque"` as the old folded card (Codex re-judge, 2026-09-22): inferring
+   * "legacy" from an absent `presentation` made the same bytes mean two
+   * things depending on who wrote them — `setRegionView(…, "opaque")` wrote
+   * exactly what the inference called legacy. And there is nothing legacy to
+   * protect: no HostScene is loaded from a file anywhere (scenes are built in
+   * code; surveyed 2026-09-22 — `pyblocksScene.ts`, `definitionsToScene.ts`,
+   * `collapse.ts`, the `region.loop`/`region.branch` presets, and literal
+   * fixtures; `files/*` and `apps/systemsketch` load tldraw documents, not
+   * HostScenes). The first loader of a stored HostScene is where a version
+   * marker and a migration belong — not here.
    */
   view?: RegionView;
-  /**
-   * `"port"` is the region collapsed to a block — what the old opaque card
-   * was, now the P/E selector's Port. `"expanded"` is the frame.
-   *
-   * ALSO THE SCHEMA DISCRIMINATOR. Before 2026-09-22 a record carried only
-   * `view`, and `view: "opaque"` meant the folded card. A record with
-   * `view: "opaque"` and NO `presentation` is therefore a LEGACY record and
-   * reads as Port (`isLegacyOpaqueRegion`, `migrateRegionScene`); every write
-   * that produces Expanded Opaque (`toggleBlackbox`) writes `presentation`
-   * explicitly, so a new record can never be mistaken for a legacy one.
-   */
+  /** Default `"expanded"`. `"port"` is the region collapsed to a block —
+   *  what the old opaque card was, now the P/E selector's Port. */
   presentation?: RegionPresentation;
   /** Only meaningful with `kind: "loop"`. Decides the corner block's typed,
    *  unnamed header contract (DP - Loop): `for` = `Iterable` in / `Iter`
@@ -69,25 +72,18 @@ export function isRegionNode(node: SceneNode<HostNodeData>): boolean {
   return isRegion(node);
 }
 
-/** Default `"expanded"` — a region with no `view` is the P1 frame. The raw
- *  field; what it MEANS is `regionFaceOf`'s question. */
+/** Default `"expanded"` — a region with no `view` is the P1 frame. */
 export function regionViewOf(node: SceneNode<HostNodeData>): RegionView {
   return node.data.region?.view ?? "expanded";
 }
 
-/** A pre-2026-09-22 record: `view: "opaque"` with no `presentation` — the
- *  folded card, which is the Port view now. See `RegionData.presentation`. */
-export function isLegacyOpaqueRegion(node: SceneNode<HostNodeData>): boolean {
-  return isRegion(node) && node.data.region?.view === "opaque" && node.data.region?.presentation === undefined;
-}
-
-/** Default `"expanded"`; a legacy opaque record reads `"port"`. */
+/** Default `"expanded"`. */
 export function regionPresentationOf(node: SceneNode<HostNodeData>): RegionPresentation {
-  return node.data.region?.presentation ?? (isLegacyOpaqueRegion(node) ? "port" : "expanded");
+  return node.data.region?.presentation ?? "expanded";
 }
 
 /** What a host draws: Port, the expanded frame, or Expanded Opaque (the frame
- *  at its own size, inside hidden). Legacy records resolve to Port. */
+ *  at its own size, inside hidden). Read literally off the two fields. */
 export type RegionFace = "port" | "expanded" | "opaque";
 
 export function regionFaceOf(node: SceneNode<HostNodeData>): RegionFace {
@@ -104,53 +100,12 @@ export function isOpaqueRegion(node: SceneNode<HostNodeData>): boolean {
   return isRegion(node) && regionFaceOf(node) !== "expanded";
 }
 
-/** A legacy record rewritten to the current schema — `view: "opaque"` alone
- *  becomes `presentation: "port", view: "expanded"`. Anything else is the
- *  SAME node object. */
-export function migrateRegionNode(node: SceneNode<HostNodeData>): SceneNode<HostNodeData> {
-  if (!isLegacyOpaqueRegion(node)) return node;
-  return { ...node, data: { ...node.data, region: { ...node.data.region!, presentation: "port", view: "expanded" } } };
-}
-
-/**
- * The scene-schema migration for regions. Every loader of a stored scene
- * runs this once. The SAME scene object when nothing is legacy (the kit's
- * referentially-honest no-op contract). The migrated record renders exactly
- * as the legacy one did under `regionFaceOf`, so a host that has not run it
- * yet still draws the right thing — the migration makes it explicit on the
- * next write, it does not change what is on screen.
- */
-export function migrateRegionScene(scene: HostScene): HostScene {
-  if (!scene.nodes.some(isLegacyOpaqueRegion)) return scene;
-  return { ...scene, nodes: scene.nodes.map(migrateRegionNode) };
-}
-
-/** Writes one region node through `patch`, legacy-migrated first; the SAME
- *  scene when the id is unknown, not a region, or the write changes nothing. */
-function writeRegion(scene: HostScene, regionId: string, patch: (region: RegionData) => RegionData): HostScene {
-  const index = scene.nodes.findIndex((node) => node.id === regionId);
-  if (index === -1) return scene;
-  const original = scene.nodes[index];
-  if (!isRegion(original)) return scene;
-  const node = migrateRegionNode(original);
-  const region = node.data.region ?? { kind: "group" as const };
-  const next = patch(region);
-  if (node === original && next.view === region.view && next.presentation === region.presentation) return scene;
-  const nodes = scene.nodes.slice();
-  nodes[index] = { ...node, data: { ...node.data, region: next } };
-  return { ...scene, nodes };
-}
-
 /**
  * The toggle, as a scene write: ONLY `data.region.view` on `regionId`
  * changes. Every other node is the SAME object, `scene.edges` is the SAME
  * array, and an unknown id / a non-region / an unchanged view returns the
  * SAME scene object (the kit's referentially-honest no-op contract). This
  * is what "positions preserved" means mechanically.
- *
- * The raw field write, frozen by `regionScene.test.ts`. Writing
- * `view: "opaque"` alone is the LEGACY spelling (the folded card, now
- * Port); a host's Blackbox toggle uses `toggleBlackbox`.
  */
 export function setRegionView(scene: HostScene, regionId: string, view: RegionView): HostScene {
   const index = scene.nodes.findIndex((node) => node.id === regionId);
@@ -172,29 +127,23 @@ export function setRegionView(scene: HostScene, regionId: string, view: RegionVi
   return { ...scene, nodes };
 }
 
+/** The Blackbox toggle: Expanded ⇄ Expanded Opaque. */
 export function toggleRegionView(scene: HostScene, regionId: string): HostScene {
   const node = scene.nodes.find((candidate) => candidate.id === regionId);
   if (!node || !isRegion(node)) return scene;
   return setRegionView(scene, regionId, regionViewOf(node) === "opaque" ? "expanded" : "opaque");
 }
 
-/**
- * The Blackbox toggle: Expanded ⇄ Expanded Opaque. Writes `view` AND an
- * explicit `presentation: "expanded"` — the discriminator that keeps the
- * new Expanded Opaque from ever reading as a legacy folded card.
- */
-export function toggleBlackbox(scene: HostScene, regionId: string): HostScene {
-  const node = scene.nodes.find((candidate) => candidate.id === regionId);
-  if (!node || !isRegion(node)) return scene;
-  const opaque = regionFaceOf(node) === "opaque";
-  return writeRegion(scene, regionId, (region) => ({ ...region, presentation: "expanded", view: opaque ? "expanded" : "opaque" }));
-}
-
 /** The P/E selector, as a scene write: ONLY `data.region.presentation` on
- *  `regionId` changes (a legacy record is migrated first, so leaving Port
- *  lands on the expanded frame, not on Expanded Opaque). */
+ *  `regionId` changes, with `setRegionView`'s same no-op contract. */
 export function setRegionPresentation(scene: HostScene, regionId: string, presentation: RegionPresentation): HostScene {
-  return writeRegion(scene, regionId, (region) => ({ ...region, presentation }));
+  const index = scene.nodes.findIndex((node) => node.id === regionId);
+  if (index === -1) return scene;
+  const node = scene.nodes[index];
+  if (!isRegion(node) || regionPresentationOf(node) === presentation) return scene;
+  const nodes = scene.nodes.slice();
+  nodes[index] = { ...node, data: { ...node.data, region: { ...(node.data.region ?? { kind: "group" as const }), presentation } } };
+  return { ...scene, nodes };
 }
 
 export interface HostSceneProjection {

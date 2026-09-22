@@ -52,7 +52,7 @@ import { DomCanvas as DomCanvasHost } from "../hosts/domCanvas";
 import { dragFrom } from "../hosts/hostGestures";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
-import { regionPresentationOf, setRegionPresentation, type RegionPresentation } from "../hosts/regionScene";
+import { regionPresentationOf, setRegionPresentation, setRegionView, type RegionPresentation } from "../hosts/regionScene";
 import { TldrawHost } from "../hosts/tldrawHost";
 import { ARM_NODE_TYPE, describeHidden, hiddenSummary } from "../scene/controlFlow";
 import { REGION_NODE_TYPE } from "../scene/region";
@@ -577,53 +577,42 @@ export const NestedOpaque: Story = {
 };
 
 /* ------------------------------------------------------------------ */
-/* The schema — a legacy record keeps its meaning (Codex audit)          */
+/* A record renders literally (Codex re-judge)                           */
 /* ------------------------------------------------------------------ */
 
-/** A record written before 2026-09-22: `view: "opaque"` alone, which then
- *  meant the folded card. No `presentation` — that absence IS the legacy
- *  marker (`RegionData.presentation`). */
-const LEGACY_SCENE: HostScene = {
-  nodes: TOGGLE_SCENE.nodes.map((node) =>
-    node.id === "loop" ? { ...node, data: { ...node.data, region: { kind: "loop" as const, loop: "for" as const, view: "opaque" as const } } } : node,
-  ),
-  edges: TOGGLE_SCENE.edges,
-};
+/** Exactly what `setRegionView(…, "opaque")` writes — `view: "opaque"`, no
+ *  `presentation` — serialised and loaded back the way a file would be. It
+ *  must render as what the writer meant: Expanded Opaque, never Port. */
+const WRITER_OPAQUE_SCENE = JSON.parse(JSON.stringify(setRegionView(TOGGLE_SCENE, "loop", "opaque"))) as HostScene;
 
-/** A NEW Expanded Opaque record, serialised and loaded back the way a file
- *  would be — the discriminator must survive the trip. */
-const ROUND_TRIPPED_SCENE = JSON.parse(
-  JSON.stringify({
-    ...TOGGLE_SCENE,
-    nodes: TOGGLE_SCENE.nodes.map((node) =>
-      node.id === "loop" ? { ...node, data: { ...node.data, region: { kind: "loop", loop: "for", view: "opaque", presentation: "expanded" } } } : node,
-    ),
-  }),
-) as HostScene;
+/** And what the P/E selector writes for Port, through the same trip. */
+const WRITER_PORT_SCENE = JSON.parse(JSON.stringify(setRegionPresentation(TOGGLE_SCENE, "loop", "port"))) as HostScene;
 
-export const LegacyOpaqueRecord: Story = {
-  name: "A legacy opaque record renders Port; a new one round-trips",
+export const LiteralRecord: Story = {
+  name: "A record renders what its writer meant, after a JSON round-trip",
   render: () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div data-bench="legacy">
-        <StatefulDomCanvas initial={LEGACY_SCENE} />
+      <div data-bench="opaque">
+        <StatefulDomCanvas initial={WRITER_OPAQUE_SCENE} />
       </div>
-      <div data-bench="round-trip">
-        <StatefulDomCanvas initial={ROUND_TRIPPED_SCENE} />
+      <div data-bench="port">
+        <StatefulDomCanvas initial={WRITER_PORT_SCENE} />
       </div>
     </div>
   ),
   play: async ({ canvasElement }) => {
-    const legacy = required<HTMLElement>(canvasElement, '[data-bench="legacy"]', "the legacy bench");
-    await waitFor(() => expect(regionOf(legacy, "loop").getAttribute("data-region-view")).toBe("port"));
-    expect(regionOf(legacy, "loop").querySelector('[data-slot="region-opaque-face"]'), "not Expanded Opaque").toBeNull();
-    expectMembersHidden(legacy);
-    // Its P/E selector already says Port — the two agree on what the record means.
-    expect((await within(legacy).findByRole("combobox", { name: "Region view" })).textContent).toContain("Port");
+    expect(WRITER_OPAQUE_SCENE.nodes.find((node) => node.id === "loop")?.data.region).toEqual({ kind: "loop", loop: "for", view: "opaque" });
+    const opaque = required<HTMLElement>(canvasElement, '[data-bench="opaque"]', "the opaque bench");
+    await expectRegionOpaque(opaque, "loop");
+    required(regionOf(opaque, "loop"), ':scope > [data-slot="region-opaque-face"]', "the Expanded Opaque face");
+    expectMembersHidden(opaque);
+    // Its P/E selector says Expanded: the record is Expanded Opaque, not Port.
+    expect((await within(opaque).findByRole("combobox", { name: "Region view" })).textContent).toContain("Expanded");
 
-    const roundTrip = required<HTMLElement>(canvasElement, '[data-bench="round-trip"]', "the round-trip bench");
-    await expectRegionOpaque(roundTrip, "loop");
-    required(regionOf(roundTrip, "loop"), '[data-slot="region-opaque-face"]', "the Expanded Opaque face");
+    const port = required<HTMLElement>(canvasElement, '[data-bench="port"]', "the port bench");
+    await waitFor(() => expect(regionOf(port, "loop").getAttribute("data-region-view")).toBe("port"));
+    expect(regionOf(port, "loop").querySelector('[data-slot="region-opaque-face"]'), "Port is not the opaque face").toBeNull();
+    expectMembersHidden(port);
   },
 };
 

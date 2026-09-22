@@ -20,6 +20,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { Block } from "./block";
+import { BlockPort } from "./blockPort";
 import { BlockRegion, type RegionKind } from "./blockRegion";
 import type { BlockMember } from "./blockMembers";
 import type { PortEdgeItem } from "./portEdge";
@@ -308,5 +309,67 @@ export const WithMembersAndPorts: Story = {
   render: () => <ViewsBench bench={POPULATED_BENCH} />,
   play: async ({ canvasElement }) => {
     await playViews(canvasElement, POPULATED_BENCH, true);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* A custom corner, loaded straight into Expanded Opaque (Codex re-judge) */
+/* ------------------------------------------------------------------ */
+
+/** A host-supplied corner — a `BlockPort` around a Block, ports on its left
+ *  wall — with NO `height` and no `cornerSize`: the path that used to size
+ *  the face off a zero-height corner and grow when toggled. */
+function CustomCornerBench() {
+  const [opaque, setOpaque] = useState(true);
+  return (
+    <div style={{ padding: 24 }}>
+      <BlockRegion
+        id="custom"
+        kind="group"
+        view={opaque ? "opaque" : "expanded"}
+        opaqueFace="frame"
+        width={360}
+        title="Custom"
+        corner={
+          <BlockPort id="custom" view="port" edges={{ left: { items: [{ id: "a", label: "a" }, { id: "b", label: "b" }] } }}>
+            <Block header="Custom corner" width={170} body={<div style={{ height: 64 }} />} shape="region-corner" />
+          </BlockPort>
+        }
+        boundaryPorts={{ left: [{ id: "a", label: "a" }, { id: "b", label: "b" }] }}
+        members={[{ id: "m", x: 24, y: 16, content: <Member label="m" /> }]}
+        onToggleView={() => setOpaque((value) => !value)}
+      />
+    </div>
+  );
+}
+
+export const CustomCornerLoadedOpaque: Story = {
+  name: "Custom corner, loaded opaque, no height — the box holds",
+  render: () => <CustomCornerBench />,
+  play: async ({ canvasElement }) => {
+    const region = regionOf(canvasElement, "custom");
+    const faceBox = () => required<HTMLElement>(region, ':scope > [data-slot="region-opaque-face"]', "the opaque face").getBoundingClientRect();
+    await waitFor(() => expect(region.getAttribute("data-region-view")).toBe("opaque"));
+
+    // The measuring twin is structurally id-free: nothing in it that
+    // wireLayer's `[data-block-id]` → `[data-port-id]` walk could resolve.
+    const twin = required<HTMLElement>(region, '[data-slot="region-corner-measure"]', "the corner's measuring twin");
+    expect(twin.querySelectorAll("[data-block-id]"), "twin block ids").toHaveLength(0);
+    expect(twin.querySelectorAll("[data-port-id]"), "twin port ids").toHaveLength(0);
+    expect(twin.querySelectorAll('[data-slot="port-dot"]'), "twin port dots").toHaveLength(0);
+    expect(region.querySelectorAll('[data-block-id="custom"]'), "exactly one owner of the region id").toHaveLength(1);
+
+    const first = faceBox();
+    await userEvent.click(required<HTMLElement>(region, '[aria-label="Blackbox toggle"]', "the toggle"));
+    await waitFor(() => expect(region.getAttribute("data-region-view")).toBe("expanded"));
+    const frame = required<HTMLElement>(region, ':scope > [data-slot="region-frame"]', "the frame").getBoundingClientRect();
+    expect(Math.abs(frame.height - first.height), "expanded keeps the height it was loaded at").toBeLessThanOrEqual(1);
+    expect(Math.abs(frame.width - first.width)).toBeLessThanOrEqual(1);
+
+    await userEvent.click(required<HTMLElement>(region, '[aria-label="Blackbox toggle"]', "the toggle"));
+    await waitFor(() => expect(region.getAttribute("data-region-view")).toBe("opaque"));
+    const again = faceBox();
+    expect(Math.abs(again.height - first.height), "opaque again keeps the same height").toBeLessThanOrEqual(1);
+    expect(Math.abs(again.width - first.width)).toBeLessThanOrEqual(1);
   },
 };
