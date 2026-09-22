@@ -3,6 +3,7 @@
   "name": "trace-tidy",
   "title": "Trace Tidy",
   "description": "The Tidy pass restated as a pure function over fixture data — ported verbatim from SystemSketch's src/blocks/connections/tidyEdges.ts. No DOM, no React; feed it measured obstacle rects.",
+  "dependencies": [],
   "files": [
     {
       "path": "apps/storybook-basics/src/components/elbow/binaryHeap.ts",
@@ -71,5 +72,5 @@
       "target": "components/bbox/trace.tidy.ts"
     }
   ],
-  "type": "registry:lib"
+  "type": "registry:component"
 }

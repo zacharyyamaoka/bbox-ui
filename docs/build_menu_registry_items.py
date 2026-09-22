@@ -57,53 +57,53 @@ AMBIENT = {"react", "react-dom", "react/jsx-runtime"}
 # below puts them there without anyone having to remember.
 # ---------------------------------------------------------------------------
 ITEMS = [
-    ("menu-toolbar", "components/toolbar.tsx", "Menu Toolbar",
+    ("menu-toolbar", "editor/toolbar.tsx", "Menu Toolbar",
      "Roving-focus bar container over Base UI's Toolbar — the strip the floating pill, the tool "
      "dock, the chrome bar and the status strip all sit in. Consumes the trunk's ambient size cascade."),
-    ("split-button", "components/splitButton.tsx", "Split Button",
+    ("split-button", "editor/splitButton.tsx", "Split Button",
      "One primary action plus a chevron opening its alternates. Backs the tool dock's family cells "
      "and the draft bar's Merge control."),
     ("inline-rename", "components/inlineRename.tsx", "Inline Rename",
      "A text field that commits on Enter or blur and reverts on Escape. Controlled only — the host "
      "owns the keybinding that starts a rename."),
-    ("control-registry", "components/controlRegistry.ts", "Control Registry",
+    ("control-registry", "editor/controlRegistry.ts", "Control Registry",
      "Declare a value-bound control once, then compose it into many surfaces by recipe. A factory, "
      "so palettes and vocabularies are injected rather than imported."),
-    ("control-strip", "components/controlStrip.tsx", "Control Strip",
+    ("control-strip", "editor/controlStrip.tsx", "Control Strip",
      "The one renderer for every registered control: trigger shape chosen by `trigger`, panel shape "
      "by `layout`, value preview by `glyph` family — all lookups, never per-kind conditionals."),
-    ("floating-toolbar", "components/floatingToolbar.tsx", "Floating Toolbar",
+    ("floating-toolbar", "editor/floatingToolbar.tsx", "Floating Toolbar",
      "The positioned shell a control strip sits in, over FigJam's above/pinned/below placement "
      "policy. The host measures; the component never does."),
-    ("tool-dock", "components/toolDock.tsx", "Tool Dock",
+    ("tool-dock", "editor/toolDock.tsx", "Tool Dock",
      "A bottom tool bar whose families are declared as data, each remembering its last-used member."),
-    ("chrome-bar", "components/chromeBar.tsx", "Chrome Bar",
+    ("chrome-bar", "editor/chromeBar.tsx", "Chrome Bar",
      "Burger menu, back/forward, home and an eliding breadcrumb with a status dot — the editor's "
      "top-left identity strip."),
     ("branch-chip", "components/branchChip.tsx", "Branch Chip",
      "The branch or draft selector: current name, a count badge, and a popover of alternates with "
      "inline rename."),
-    ("panel-shell", "components/panelShell.tsx", "Panel Shell",
+    ("panel-shell", "editor/panelShell.tsx", "Panel Shell",
      "The side-panel frame — eyebrow, title, close, scrollable body. The shell is the component; "
      "each panel is one instance of it."),
-    ("frames-panel", "components/framesPanel.tsx", "Frames Panel",
+    ("frames-panel", "editor/framesPanel.tsx", "Frames Panel",
      "Reorderable board-navigation rows with host-rendered previews, plus a save-this-view row."),
-    ("problems-panel", "components/problemsPanel.tsx", "Problems Panel",
+    ("problems-panel", "editor/problemsPanel.tsx", "Problems Panel",
      "A diagnostics list in VS Code's shape: severity counts, a severity filter, grouped rows "
      "carrying a rule code. Severities are config, not a hardcoded three."),
-    ("status-strip", "components/statusStrip.tsx", "Status Strip",
+    ("status-strip", "editor/statusStrip.tsx", "Status Strip",
      "The corner cluster of panel launchers with badges and a zoom readout."),
-    ("history-list", "components/historyList.tsx", "History List",
+    ("history-list", "editor/historyList.tsx", "History List",
      "A version rail where selecting an entry sets it as the BEFORE side of a comparison."),
-    ("property-table", "components/propertyTable.tsx", "Property Table",
+    ("property-table", "editor/propertyTable.tsx", "Property Table",
      "Per-element and flat-table views of a property diff, with optional Figma-style word-level "
      "highlighting."),
-    ("code-view", "components/codeView.tsx", "Code View",
+    ("code-view", "editor/codeView.tsx", "Code View",
      "A line-diff view of two text versions."),
-    ("compare-review", "components/compareReview.tsx", "Compare Review",
+    ("compare-review", "editor/compareReview.tsx", "Compare Review",
      "The whole diff-review surface — history rail, two version panes, a properties/code rail, and "
      "side-by-side or overlay. Headless: the host supplies the modal and both renderers."),
-    ("draft-bar", "components/draftBar.tsx", "Draft Bar",
+    ("draft-bar", "editor/draftBar.tsx", "Draft Bar",
      "The draft-mode strip: exit, draft name, and a change-gated compare/merge pair."),
     # ── The control-flow kit's ONE distributable surface ────────────────
     # WHY `region` is an item and the `loop` / `branch` PRESETS are not,
@@ -111,7 +111,8 @@ ITEMS = [
     # tree this script can target, and `target_for` above has exactly two
     # rules — `src/components/X -> components/bbox/X` and
     # `src/lib/X -> components/lib/X`. A preset lives at
-    # `src/presets/<kind>/<kind>.ts` and would raise "unexpected trunk
+    # `src/scene/region.<kind>.ts` (beside the region MODEL since 2026-09-22;
+    # it was `src/presets/<kind>/`) and would raise "unexpected trunk
     # location, no target rule" on the spot. That is the shallow reason.
     # The deep one is that the presets are not components at all: they are
     # pure scene-node factories over a HOST (`forLoopNode` returns a
@@ -128,6 +129,33 @@ ITEMS = [
      "A control-flow frame with a real Block integral to its top-left corner — the frame carries "
      "scope and no value ports; arms stack under the corner block with a fold chevron each. Loops "
      "and branches are data presets over it."),
+]
+
+# The sixteen items that publish the design trunk's own components (CLAUDE.md,
+# "Sixteen items now publish the trunk directly"). WHY they are built here too:
+# their file lists were set by hand once and then drifted — block.tsx, port.tsx,
+# trace.tsx and friends gained imports (highlighter, hitRegion, paintOrder,
+# skin/portVariants) the published items never picked up, so on 2026-09-22
+# eleven of them installed and failed to compile, and the sibling check below
+# said so the first time it was run over them. Names, titles and descriptions
+# stay exactly as published; only the file lists come from the import graph.
+TRUNK_ITEMS = [
+    ("badge", "components/badge.tsx"),
+    ("bar", "components/bar.tsx"),
+    ("text", "components/text.tsx"),
+    ("editable-text", "components/editableText.tsx"),
+    ("folding-chevron", "components/foldingChevron.tsx"),
+    ("block-card", "components/block.tsx"),
+    ("port-dot", "components/port.tsx"),
+    ("code-editor", "components/codeEditor.tsx"),
+    ("labeled-port", "components/labeledPort.tsx"),
+    ("port-edge", "components/portEdge.tsx"),
+    ("block-port", "components/blockPort.tsx"),
+    ("trace", "components/trace.tsx"),
+    ("trace-badge", "components/traceBadge.tsx"),
+    ("trace-editor", "components/traceEditor.tsx"),
+    ("trace-tidy", "components/trace.tidy.ts"),
+    ("wire-layer", "components/wireLayer.tsx"),
 ]
 
 LEGACY_ITEMS = [
@@ -201,7 +229,31 @@ def walk(entry: pathlib.Path) -> tuple[set[pathlib.Path], set[str]]:
     return seen, bare
 
 
-def target_for(f: pathlib.Path) -> str:
+def unresolved(files: list[pathlib.Path], targets: dict[pathlib.Path, str]) -> list[tuple[str, str, str]]:
+    """Every relative import in `files` that lands on no file of the item once
+    installed at `targets` — (target, specifier, where it would look)."""
+    landed = set(targets.values())
+    out = []
+    for f in files:
+        if f.suffix == ".css":
+            continue
+        here = pathlib.PurePosixPath(targets[f]).parent
+        for spec in set(IMPORT_RE.findall(f.read_text())):
+            if not spec.startswith("."):
+                continue
+            parts: list[str] = []
+            for p in (here / spec).as_posix().split("/"):
+                if p == "..":
+                    parts and parts.pop()
+                elif p not in (".", ""):
+                    parts.append(p)
+            want = "/".join(parts)
+            if not any(t == want or t.rsplit(".", 1)[0] == want for t in landed):
+                out.append((targets[f], spec, want))
+    return out
+
+
+def target_for(f: pathlib.Path, mirrored: bool = False) -> str:
     """Where a source file must land so its own relative imports still resolve.
 
     The rule is LINEAGE-dependent, which is the whole trap. `packages/bbox-ui`
@@ -215,11 +267,20 @@ def target_for(f: pathlib.Path) -> str:
     """
     if SRC in f.parents:
         rel = f.relative_to(SRC)
+        if mirrored:
+            # WHY: an editor file imports `../components/button`. Flattening
+            # would break that; mirroring the trunk tree under one root keeps
+            # every relative import valid. See build_item.
+            return "components/bbox/" + rel.as_posix()
         if rel.parts[0] == "components":
             return "components/bbox/" + "/".join(rel.parts[1:])
-        if rel.parts[0] == "lib":
-            return "components/lib/" + "/".join(rel.parts[1:])
-        raise SystemExit(f"unexpected trunk location, no target rule: {rel}")
+        # lib/, skin/, … land as SIBLINGS of bbox/: a component reaches them
+        # up-and-over (`../lib/utils`, `../skin/regionVariants`). Whether the
+        # item then compiles is not assumed here — build_item checks every
+        # import against these targets and mirrors the item when one fails.
+        # (skin/ joined lib/ on 2026-09-22: region.tsx reads its drawing from
+        # skin/ since 2026-09-19, and the region item could not build at all.)
+        return f"components/{rel.parts[0]}/" + "/".join(rel.parts[1:])
     if LEGACY_SRC in f.parents:
         return "components/bbox/" + f.relative_to(LEGACY_SRC).as_posix()
     raise SystemExit(f"unexpected source location, no target rule: {f}")
@@ -232,7 +293,7 @@ def file_type(f: pathlib.Path) -> str:
         return "registry:lib"
     if LEGACY_SRC in f.parents:
         return "registry:component"
-    return "registry:component" if f.relative_to(SRC).parts[0] == "components" else "registry:lib"
+    return "registry:component" if f.relative_to(SRC).parts[0] in ("components", "editor") else "registry:lib"
 
 
 def build_item(name: str, entry_rel: str, title: str, desc: str,
@@ -242,6 +303,19 @@ def build_item(name: str, entry_rel: str, title: str, desc: str,
         raise SystemExit(f"{name}: entry does not exist: {entry}")
     files, deps = walk(entry)
     files = {f for f in files if ".test." not in f.name and ".stories." not in f.name}
+    # WHY two layouts (2026-09-22, when the chrome moved to src/editor/ on Zach's
+    # word — "most of these should belong in editor"): an item that is only
+    # components/ + lib/ keeps the flat `components/bbox/X` install it always
+    # had, so nobody's existing paths move. An item that reaches into editor/
+    # imports across folders (`../components/button`), which flattening cannot
+    # keep, so that item installs as a mirror of the trunk tree —
+    # `components/bbox/{components,editor,lib}/X`. The sibling check in main()
+    # proves every relative import resolves against whichever layout applied.
+    # So: flat when every import still resolves flat, mirrored otherwise. The
+    # rule is the resolution itself, not a list of folders — skin/portVariants
+    # importing `../components/port.layout` needed it just as editor/ does.
+    flat = {f: target_for(f) for f in files}
+    mirrored = all(SRC in f.parents for f in files) and bool(unresolved(sorted(files), flat))
     for extra in EXTRA_FILES.get(name, []):
         f = REPO / extra
         if not f.is_file():
@@ -253,7 +327,7 @@ def build_item(name: str, entry_rel: str, title: str, desc: str,
         "title": title,
         "description": desc,
         "files": [
-            {"path": str(f.relative_to(REPO)), "type": file_type(f), "target": target_for(f)}
+            {"path": str(f.relative_to(REPO)), "type": file_type(f), "target": target_for(f, mirrored)}
             for f in sorted(files, key=lambda p: str(p))
         ],
         "dependencies": sorted(deps),
@@ -275,6 +349,13 @@ def main() -> None:
         else:
             existing[name] = item
             order.append(name)
+
+    for name, entry in TRUNK_ITEMS:
+        prev = existing[name]
+        existing[name] = build_item(name, entry, prev["title"], prev["description"])
+        added = len(existing[name]["files"]) - len(prev["files"])
+        if added:
+            print(f"  repaired trunk item {name}: {added:+d} files")
 
     # WHY the two legacy items get rebuilt here rather than left alone: the
     # sibling-rule assertion below found them LIVE-broken. `port.tsx` imports
