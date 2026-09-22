@@ -449,14 +449,19 @@ const DRAG_HANDLE_FOR_TYPE: Record<string, string | undefined> = {
  * calls it; React Flow decides inside d3-drag, where nothing can ask it.
  *
  * It is xyflow's own filter restated, not a policy of ours:
- * `@xyflow/system@0.0.82/dist/esm/index.mjs:2349-2355` passes a press iff no
- * `.${noDragClassName}` and (when set) a `dragHandle` match are found by
+ * `@xyflow/system@0.0.82/dist/esm/index.mjs:2349-2355` passes a press iff
+ * `!event.button` (the PRIMARY button — a right or middle press never drags),
+ * no `.${noDragClassName}` and (when set) a `dragHandle` match are found by
  * `hasSelector` (`:2038-2048`), which walks from the target up to AND
  * including the node's own element, then stops. The inputs are this file's:
  * `DRAG_HANDLE_FOR_TYPE` and `POINTER_OWNED_CLASS` (React Flow's default
  * `noDragClassName`, which this host does not override).
+ *
+ * `button` is the press's `MouseEvent.button`, required rather than defaulted
+ * so a caller always says which press it is asking about.
  */
-export function reactFlowDragStartsAt(nodeType: string | undefined, target: Element, nodeRoot: Element): boolean {
+export function reactFlowDragStartsAt(nodeType: string | undefined, target: Element, nodeRoot: Element, button: number): boolean {
+  if (button) return false;
   const hasSelector = (selector: string) => {
     for (let current: Element | null = target; current; current = current.parentElement) {
       if (current.matches(selector)) return true;

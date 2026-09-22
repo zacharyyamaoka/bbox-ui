@@ -12,8 +12,9 @@
  * does a HOST take? — and asks it of a NAMED host, because they disagree:
  *
  *   - React Flow bench — the real `ReactFlowHost`, asked through its own
- *     exported `reactFlowDragStartsAt` (xyflow's drag filter over this host's
- *     `DRAG_HANDLE_FOR_TYPE` + `nodrag`);
+ *     exported `reactFlowDragStartsAt` for a primary press (xyflow's drag
+ *     filter over this host's `DRAG_HANDLE_FOR_TYPE` + `nodrag`). Binary: the
+ *     node, or nothing — it never claims a component owns the press;
  *   - tldraw bench — the real `TldrawHost`, asked through its own exported
  *     `contentOwnsPress`;
  *   - Policy — `dragPolicy.ts`'s DECLARED rules, on the DOM canvas. No bench
@@ -97,15 +98,24 @@ const nodeTypeOf = (id: string) => SCENE.nodes.find((node) => node.id === id)?.t
 
 type HostId = "react-flow" | "tldraw" | "policy";
 
+/** `MouseEvent.button` of the press every probe asks about: the primary one. */
+const PRIMARY_BUTTON = 0;
+
 /** Each bench's OWN predicate, adapted to one signature — nothing re-derived. */
 const HOST_RULES: Record<Exclude<HostId, "policy">, HostPressRule> = {
+  // BINARY on purpose: React Flow's predicate answers ONE question — does a
+  // node drag start here? — so this bench shows the node or nothing. It never
+  // says "content": a refused drag is not proof a component owns the press
+  // (a rail's port card owns its press through dnd-kit listeners and carries
+  // no `.nodrag`, `portEdge.tsx`'s `SortableSlotCard`), and inferring
+  // ownership from `.nodrag` was a second rule re-derived beside the host's
+  // (Codex re-judge, 2026-09-22). Asked about a hypothetical PRIMARY press
+  // (`button` 0): xyflow never drags on any other button.
   "react-flow": {
-    source: "reactFlowHost.tsx reactFlowDragStartsAt (xyflow's drag filter: DRAG_HANDLE_FOR_TYPE + .nodrag)",
+    source: "reactFlowHost.tsx reactFlowDragStartsAt, primary press (xyflow's drag filter: button + DRAG_HANDLE_FOR_TYPE + .nodrag)",
     takes(nodeType, _nodeId, target) {
       const rfNode = target.closest(".react-flow__node");
-      if (!rfNode) return "none";
-      if (reactFlowDragStartsAt(nodeType, target, rfNode)) return "node";
-      return target.closest(".nodrag") && rfNode.contains(target.closest(".nodrag")) ? "content" : "none";
+      return rfNode && reactFlowDragStartsAt(nodeType, target, rfNode, PRIMARY_BUTTON) ? "node" : "none";
     },
   },
   tldraw: {
@@ -127,7 +137,7 @@ const LEGEND: { kind: HostOutlineKind; what: string }[] = [
   { kind: "port", what: "a port dot owns the press: its own hit halo" },
   { kind: "cable", what: "a cable: its hit corridor" },
   { kind: "owned", what: "other content owns it (chevron, rail card, editor): the host stays out" },
-  { kind: "none", what: "nothing: empty interior, a rail's empty margin, or off a host's drag handle" },
+  { kind: "none", what: "nothing: empty interior, a rail's empty margin, or (React Flow) no node drag starts here" },
 ];
 
 function pathOf(points: readonly Point[]): string {
@@ -344,6 +354,9 @@ function probes(bench: HTMLElement): { name: string; at: () => { x: number; y: n
     { name: "corner card body", at: () => { const f = face().getBoundingClientRect(); const h = header().getBoundingClientRect(); return { x: f.left + f.width / 2, y: (h.bottom + f.bottom) / 2 }; } },
     { name: "region empty interior", at: () => { const r = required<HTMLElement>(bench, '[data-slot="region-frame"][data-region-id="loop"]').getBoundingClientRect(); return { x: r.left + 40, y: r.bottom - 30 }; } },
     { name: "port dot", at: () => centre(required(bench, '[data-block-id="load"] [data-port-id="rows"] [data-slot="port-dot"]')) },
+    // A `.nodrag` subtree: the probe that makes "React Flow never says
+    // content" a claim that can fail (it is the one place `.nodrag` sits).
+    { name: "corner card chevron", at: () => centre(required(card(), '[data-slot="folding-chevron"]')) },
     {
       name: "rail empty margin",
       at: () => {
@@ -384,7 +397,12 @@ async function expectHostAgrees(canvas: HTMLElement, host: Exclude<HostId, "poli
       const answer = HOST_RULES[host].takes(nodeTypeOf(id), id, hit);
       // The host predicate itself, called here independently of the bench:
       if (host === "tldraw") await expect(answer === "content", `${probe.name}: tldraw contentOwnsPress`).toBe(contentOwnsPress(nodeTypeOf(id), id, hit));
-      else await expect(answer === "node", `${probe.name}: reactFlowDragStartsAt`).toBe(reactFlowDragStartsAt(nodeTypeOf(id), hit, hit.closest(".react-flow__node")!));
+      else {
+        const rfNode = hit.closest(".react-flow__node")!;
+        await expect(answer === "node", `${probe.name}: reactFlowDragStartsAt`).toBe(reactFlowDragStartsAt(nodeTypeOf(id), hit, rfNode, PRIMARY_BUTTON));
+        // Binary host: the React Flow view never claims component ownership.
+        await expect(answer, `${probe.name}: React Flow answers node or none, never content`).not.toBe("content");
+      }
       if (answer === "node") {
         expectedKind = nodeTypeOf(id) === "region" ? "region" : "node";
         expectedTarget = root;
@@ -436,6 +454,23 @@ export const Playground: Story = {
     // Both benches agree the corner card's HEADER takes the whole region.
     await expect(rf["corner card header"]).toBe("region");
     await expect(tl["corner card header"]).toBe("region");
+    // A port dot: the tldraw bench hands it to the content (its halo); React
+    // Flow only says "no node drag from here" — it has no content answer.
+    await expect(tl["port dot"]).toBe("port");
+    await expect(rf["port dot"]).toBe("none");
+    // The fold chevron (`.nodrag`): tldraw's contentOwnsPress hands it to the
+    // chevron; React Flow refuses the drag and says nothing more.
+    await expect(tl["corner card chevron"]).toBe("owned");
+    await expect(rf["corner card chevron"]).toBe("none");
+
+    // xyflow's `!event.button`: the SAME valid header refuses a right or
+    // middle press. Asked of the real mounted React Flow node.
+    await switchHost(canvas, "React Flow bench", "react-flow");
+    const rfHeader = required<HTMLElement>(canvas, '[data-testid="host-outline-bench"] [data-block-id="proc"] [data-slot="block-header"]');
+    const rfNode = rfHeader.closest(".react-flow__node")!;
+    await expect(reactFlowDragStartsAt("block", rfHeader, rfNode, 0), "primary press on the own header drags").toBe(true);
+    await expect(reactFlowDragStartsAt("block", rfHeader, rfNode, 1), "middle press never drags").toBe(false);
+    await expect(reactFlowDragStartsAt("block", rfHeader, rfNode, 2), "right press never drags").toBe(false);
 
     // ── The declared POLICY, measured ──
     const bench = await switchHost(canvas, "Policy (dragPolicy)", "policy");
