@@ -773,7 +773,9 @@ const COMPARISON_ITEMS: PortEdgeItem[] = [
 function EvenlyVsCustomDemo() {
   const [evenItems, setEvenItems] = useState<PortEdgeItem[]>(COMPARISON_ITEMS);
   const [customItems, setCustomItems] = useState<PortEdgeItem[]>(COMPARISON_ITEMS);
-  const [customOffsets, setCustomOffsets] = useState<Record<string, number>>({ c1: 0, c2: 70, c3: 40, c4: 150, c5: 110 });
+  // In track order: Custom keeps the port order (2026-09-22), so an
+  // out-of-order seed would only be re-validated into this anyway.
+  const [customOffsets, setCustomOffsets] = useState<Record<string, number>>({ c1: 0, c2: 40, c3: 70, c4: 110, c5: 150 });
 
   return (
     <div style={{ display: "flex", gap: 40 }}>
@@ -782,7 +784,7 @@ function EvenlyVsCustomDemo() {
         <PortEdge edge="top" items={evenItems} onItemsChange={setEvenItems} mode="auto" distribution={{ mode: "distribute", scheme: "space-between" }} size={{ width: 340, height: 70 }} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>Custom — free positions, not reflowed</span>
+        <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>Custom — author positions (ordered, min gap), not reflowed</span>
         <PortEdge edge="top" items={customItems} onItemsChange={setCustomItems} mode="custom" freeOffsets={customOffsets} onFreeOffsetsChange={setCustomOffsets} size={{ width: 340, height: 70 }} />
       </div>
     </div>
