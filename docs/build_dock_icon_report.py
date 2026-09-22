@@ -45,7 +45,7 @@ def run(*cmd: str) -> tuple[int, str]:
 check_code, check_out = run(sys.executable, "scripts/dock_icon.py", "--check")
 _, lookup = run(
     sys.executable, "-c",
-    "import sys; sys.path.insert(0,'scripts'); import dock_icon as d; print(d.resolves_to(48)); print(d.resolves_to(64))",
+    "import sys; sys.path.insert(0,'scripts'); import dock_icon as d; [print(n, '->', d.resolves_to(n, 48)) for n in ('systemsketch', 'bbox-ui', 'pyblocks')]",
 )
 test_code, test_out = run(sys.executable, "-m", "pytest", "scripts/tests/test_dock_icon.py", "-q")
 suite_code, suite_out = run(sys.executable, "-m", "pytest", "scripts/tests", "-q")
@@ -57,6 +57,36 @@ after_html = (
     if after.exists()
     else '<div class="pending">NOT YET CAPTURED — the dock was auto-hidden behind a window when this was built. '
     "The GTK lookup below is the proof until a live grab lands.</div>"
+)
+
+BACKUP = pathlib.Path.home() / ".local/share/pyblocks/desktop-backup-2026-09-22/before-resize"
+INSTALLED = pathlib.Path.home() / ".local/share/icons/hicolor"
+
+
+def painted(png: pathlib.Path) -> tuple[float, float]:
+    """(width, height) of the alpha >= 128 bounds, as fractions of the canvas — measured, not recalled."""
+    from PIL import Image
+
+    image = Image.open(png).convert("RGBA")
+    left, top, right, bottom = image.getchannel("A").point(lambda v: 255 if v >= 128 else 0).getbbox()
+    return (right - left) / image.width, (bottom - top) / image.height
+
+
+reference = {name: painted(path) for name, path in (("Claude", pathlib.Path("/usr/share/icons/hicolor/256x256/apps/claude-desktop.png")), ("Codex", pathlib.Path("/usr/share/pixmaps/chatgpt.png")))}
+size_rows = "".join(
+    f"<tr><td>{name}</td><td>—</td><td>{w:.3f} × {h:.3f}</td></tr>" for name, (w, h) in reference.items()
+) + "".join(
+    "<tr><td>{0}</td><td>{1[0]:.3f} × {1[1]:.3f}</td><td>{2[0]:.3f} × {2[1]:.3f}</td></tr>".format(
+        name, painted(BACKUP / "512x512/apps" / f"{name}.png"), painted(INSTALLED / "512x512/apps" / f"{name}.png"))
+    for name in ("pyblocks", "systemsketch", "bbox-ui")
+)
+
+resized = MEDIA / "dock-resized-zoom.png"
+resized_html = (
+    f'<img src="{uri(resized.name)}" alt="Dock after the resize">'
+    if resized.exists()
+    else '<div class="pending">NOT YET CAPTURED — the dock was auto-hidden when this was built. '
+    "The rendered comparison above is from the installed files.</div>"
 )
 
 REVISIONS = [
@@ -76,11 +106,14 @@ lineage = "".join(
 # copy of the tree on every build — a "caught" below is measured, not recalled.
 MUTATIONS = [
     ("dock_icon.py", "    os.utime(root)\n", "", "Drop the hicolor/ mtime bump", "the shell would keep the old texture until logout"),
-    ("dock_icon.py", "        (root / name).unlink(missing_ok=True)", "        pass", "Keep stray size variants", "a leftover 1024px raster would outrank the mark at that size"),
-    ("dock_icon.py", "or (root / name).read_bytes() != content]", "]", "Staleness by existence only", "the archived installer's raster would read as current"),
+    ("dock_icon.py", "        (root / path).unlink(missing_ok=True)", "        pass", "Keep stray size variants", "a leftover 1024px raster would outrank the mark at that size"),
+    ("dock_icon.py", "or (root / path).read_bytes() != content]", "]", "Staleness by existence only", "the archived installer's raster would read as current"),
     ("launch_systemsketch.py", "            refresh_dock_icon()\n            open_window(url)", "            open_window(url)", "Launcher skips the sync on --open", "the dock would lag the site again"),
     ("launch_systemsketch.py", "    except Exception as cause:  # noqa: BLE001 — see WHY above", "    except OSError as cause:", "Let a sync error escape the launcher", "a broken icon could stop the window opening"),
-    ("dock_icon.py", 'mark.read_bytes()}', 'mark.read_bytes()[:-1]}', "SVG not byte-identical to the mark", "two sources of truth again"),
+    ("dock_icon.py", "    return svg[: tag.start()] + root + svg[tag.end() :]", "    return svg[: tag.start()] + root + svg[tag.end() : -8] + b'</svg>'", "fit() touches the artwork, not just the frame", "a resize that quietly edits Zach's drawing"),
+    ("dock_icon.py", "TARGET = (0.098, 0.902)", "TARGET = (0.115, 0.885)", "Keep the old, smaller frame", "the icons stay smaller than Claude/Codex"),
+    ("dock_icon.py", "centre_y - side / 2:.2f}", "top:.2f}", "Fit without re-centring vertically", "the studio mark keeps sitting high"),
+    ("dock_icon.py", "    if is_fitted(svg):\n        return []\n", "", "Re-fit an already-fitted pyblocks icon", "every run rewrites it by a rounding hair"),
 ]
 
 
@@ -181,14 +214,25 @@ pre {{ background:var(--card); border:1px solid var(--line); border-radius:8px; 
   <li><b>The file behind that slot was the 08-30 original.</b> The archived repo's installer re-wrote it on 09-09 from a <code>main</code> that never got the 09-06 refinement. The 09-21 bbox studio mark only ever reached the website.</li>
   <li><b>One real cache on top:</b> GNOME Shell only rescans when <code>hicolor/</code>'s own mtime moves. A file swapped in place stays on screen until logout, so even a correct fix looks like it failed.</li>
   <li><b>Fixed and installed.</b> <code>scripts/dock_icon.py</code> renders the site's own <code>bbox-studio-mark.svg</code> into the icon and bumps the directory. The launcher re-syncs it every time you press the icon. <code>--check</code> now says: <b>{html.escape(check_out.splitlines()[-1])}</b>.</li>
+  <li><b>Round 2, your follow-up: SystemSketch, pyblocks and bbox ui now fill the same box as Claude and Codex.</b> Measured on their icon files, both sit at 0.098–0.902 of the canvas. Only each SVG's frame changed, never a path, and the studio mark is now centred (it sat 25 units high). <b>The honest caveat, measured: the outer size was already within a few percent</b>, so the resize is ~1.5%. Almost all of why ours <i>look</i> smaller is contrast. Options for that are below.</li>
 </ul>
 
 <h2>Your dock</h2>
 <div class="pair">
   <div class="card"><h3>Before: live grab, 03:36</h3><img src="{uri('dock-before-zoom.png')}" alt="Dock before"></div>
-  <div class="card"><h3>After</h3>{after_html}</div>
+  <div class="card"><h3>After: live grab, 03:51, no logout</h3>{after_html}</div>
 </div>
 <p class="lede">The three orange dots sit under the SystemSketch slot, not the "bbox ui" one you press. That's the tie-break below, seen on screen.</p>
+
+<h2>Round 2 · the same outer size as Claude and Codex</h2>
+<div class="card"><h3>Installed files on the dock's colour. Magenta = the Claude/Codex box. Top: before · bottom: after</h3><img src="{uri('sizes-before.png')}" alt="Before"><div style="height:8px"></div><img src="{uri('sizes-after.png')}" alt="After"></div>
+<table><tr><th>Icon</th><th>Painted width × height, before</th><th>After (fraction of canvas)</th></tr>{size_rows}</table>
+<p class="lede">The longer side now lands on the box exactly and each icon is centred. They stay ~2% narrower than Claude because your squares are 384×396, not square. I kept the aspect rather than stretch the drawing. pyblocks' logo was installed at 03:50 by a pyblocks session, outside any repo. It was re-framed in place, and the previous files are backed up at <code>~/.local/share/pyblocks/desktop-backup-2026-09-22/before-resize/</code>.</p>
+<div class="card"><h3>Your dock, after the resize</h3>{resized_html}</div>
+
+<h2>Why they still read smaller: contrast, not size</h2>
+<div class="card"><img src="{uri('contrast-variants.png')}" alt="Three contrast options next to Claude and Codex"></div>
+<p class="lede">Measured in the 03:51 grab: our square is <code>rgb(30,30,30)</code> on a dock of <code>rgb(18,19,19)</code>, about 1.1:1. Claude and Codex are orange and white. So the eye reads our white drawing, not the square. <b>A</b> is what's installed. <b>B</b> and <b>C</b> are renders only. Pyblocks and bbox ui also have much tighter corners (rx ≈ 4%) than Claude/Codex's rounded squares.</p>
 
 <h2>Four redesigns, none of them reached the dock</h2>
 <div class="strip">{lineage}</div>
@@ -205,10 +249,12 @@ pre {{ background:var(--card); border:1px solid var(--line); border-radius:8px; 
 <h2>What changed</h2>
 <table>
 <tr><th>File</th><th>Change</th></tr>
-<tr><td><code>scripts/dock_icon.py</code></td><td>New. Installs icon <code>systemsketch</code> (SVG + 8 PNG sizes via GdkPixbuf/librsvg, the renderer GNOME uses) from the mark. Removes stray variants, rebuilds the cache, bumps <code>hicolor/</code>. <code>--check</code> is read-only. ~36 ms.</td></tr>
+<tr><td><code>scripts/dock_icon.py</code></td><td>New. Installs <code>systemsketch</code> (from the studio mark) and <code>bbox-ui</code> (from <code>assets/bbox-ui.svg</code>) as SVG + 8 PNG sizes via GdkPixbuf/librsvg, the renderer GNOME uses. <code>fit()</code> measures each drawing's painted bounds and rewrites only the root <code>viewBox</code> so it fills <code>TARGET</code>. It removes stray variants, rebuilds the cache and bumps <code>hicolor/</code>. <code>--check</code> is read-only. <code>--fit-installed NAME</code> handles icons other projects own.</td></tr>
 <tr><td><code>scripts/launch_systemsketch.py</code></td><td><code>refresh_dock_icon()</code> before every window open. A no-op when current, and it never blocks the launch.</td></tr>
-<tr><td><code>scripts/tests/test_dock_icon.py</code></td><td>12 tests. Oracle is <code>Gtk.IconTheme.lookup_icon</code> on a throwaway data dir.</td></tr>
+<tr><td><code>scripts/tests/test_dock_icon.py</code></td><td>16 tests. The lookup oracle is <code>Gtk.IconTheme.lookup_icon</code> on a throwaway data dir. The size oracle is Pillow re-measuring the real Claude/Codex icons, never the module's own constant.</td></tr>
 <tr><td><code>assets/bbox-ui.desktop</code></td><td>Comment only. The old one implied the window grouped under this entry. Measured: it doesn't.</td></tr>
+<tr><td><code>assets/bbox-ui-{{16…512}}.png</code></td><td>Deleted. They were unreferenced pre-rendered copies that would now disagree with what's installed. <code>dock_icon.py</code> renders them from the SVG.</td></tr>
+<tr><td><code>~/.local/share/icons/hicolor/*/apps/pyblocks.*</code></td><td>Re-framed in place with <code>--fit-installed pyblocks</code>. A second run is a no-op.</td></tr>
 <tr><td><code>~/.local/share/icons/hicolor/*/apps/systemsketch.*</code></td><td>Installed live. The old raster is still in <code>/home/bam/systemsketch/assets/systemsketch.png</code> if you want it back.</td></tr>
 </table>
 
@@ -216,7 +262,7 @@ pre {{ background:var(--card); border:1px solid var(--line); border-radius:8px; 
 <pre>$ python3 scripts/dock_icon.py --check     (exit {check_code})
 {html.escape(check_out)}
 
-GTK lookup at 48 / 64 px, live session:
+GTK lookup at 48 px, live session:
 {html.escape(lookup)}
 
 scripts/tests/test_dock_icon.py   {html.escape(test_line)}
@@ -226,10 +272,11 @@ scripts/tests (whole suite)       {html.escape(suite_line)}</pre>
 
 <h2>What's left, and what needs you</h2>
 <div class="ask"><b>Two pinned dock icons for one app.</b> "bbox ui" launches the window, but it lights "SystemSketch". Recommend: keep the SystemSketch slot (GNOME assigns the window to it), rename it <i>bbox studio</i>, move bbox-ui's two site actions onto its right-click, and unpin "bbox ui". <b>If you say nothing:</b> both stay pinned as they are. The lit one now shows the right icon.</div>
-<div class="ask"><b>The mark isn't vertically centred</b> (25 px above the square, 79 below, in a 500 box). It's installed exactly as supplied, so it sits a little high in the dock. <b>Default:</b> left as is. It's your artwork.</div>
+<div class="ask"><b>Contrast: A, B or C?</b> (see "Why they still read smaller"). I recommend <b>B</b>, the lighter square: it's the only one that reads the same size as Claude/Codex at 48 px. It is an edit to your artwork, though, so it's your call. <b>If you say nothing:</b> A, exactly as drawn.</div>
 <ul>
   <li><b>Not merged.</b> The launcher self-heal only runs from <code>/home/bam/bbox-ui</code> main once this branch lands. The icon itself is already installed.</li>
-  <li><b>Deliberately not touched:</b> the archived repo's <code>install_desktop.py</code> (running it would still write the 08-30 raster, but the next launch now heals that), your dock pins, and the "SystemSketch" label.</li>
+  <li><b>Deliberately not touched:</b> the archived repo's <code>install_desktop.py</code> (running it would still write the 08-30 raster, but the next launch now heals that), your dock pins, the "SystemSketch" label, and the corner radii.</li>
+  <li><b>pyblocks:</b> if the pyblocks session reinstalls its logo, run <code>python3 scripts/dock_icon.py --fit-installed pyblocks</code> again. Nothing re-fits it automatically, because that icon isn't this repo's.</li>
 </ul>
 </main></body></html>
 """

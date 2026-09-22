@@ -451,7 +451,7 @@ def refresh_dock_icon() -> None:
         print(f"dock icon not refreshed: {cause}", file=sys.stderr)
         return
     if changed:
-        print(f"Dock icon: refreshed {len(changed)} files from {dock_icon.MARK.name}")
+        print(f"Dock icons: refreshed {len(changed)} files from their artwork")
 
 
 def main() -> int:
