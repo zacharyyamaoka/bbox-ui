@@ -117,6 +117,34 @@ export const FrameAlone: Story = {
   },
 };
 
+/**
+ * The bare default primitive — `<Frame id="f" />`, nothing else — carries a
+ * port edge on all four walls, ports or not (judge round 1, finding 6: it
+ * rendered zero rails, because a wall with no `walls` entry was skipped
+ * unless the edge lines were painted; `portEdges`' default of all four
+ * promises otherwise, and an empty rail is the drop target a drag lands on).
+ */
+export const BareDefault: Story = {
+  name: "Bare default — <Frame id> alone still carries four port edges",
+  render: () => (
+    <div style={{ padding: 40 }}>
+      <Frame id="f" />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const frame = await waitFor(() => required<HTMLElement>(canvasElement, '[data-frame-id="f"]', "the frame"));
+    await waitFor(() => expect(frame.querySelectorAll('[data-slot="block-port-rail"][data-rail-owner="f"]').length).toBe(4));
+    const box = boxOf(frame);
+    for (const side of BLOCK_SIDES) {
+      const rail = required<HTMLElement>(frame, `[data-slot="block-port-rail"][data-rail-owner="f"][data-edge="${side}"]`, `${side} rail`);
+      expect(offWall(centreOf(rail), box, side), `${side} rail's cross centre on the wall`).toBeLessThanOrEqual(PX);
+      // An empty rail is a real `PortEdge` track — the drop target.
+      expect(rail.querySelector('[data-slot="port-edge"]'), `${side} rail holds a PortEdge`).not.toBeNull();
+    }
+    expect(frame.querySelectorAll('[data-slot="port-dot"]').length).toBe(0);
+  },
+};
+
 /* ------------------------------------------------------------------ */
 /* Ports on every wall — two faces, one box, hit area intact            */
 /* ------------------------------------------------------------------ */

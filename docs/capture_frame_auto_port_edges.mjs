@@ -48,14 +48,23 @@ const STILLS = [
   // rather than a fixed sleep.
   {
     name: "rf-header",
-    id: `${RF_STORIES}--inside-an-expanded-block`,
+    id: `${RF_STORIES}--frame-as-block-body`,
     w: 960,
     h: 660,
     settled: () => Number(document.querySelector('[data-slot="frame-bench"]')?.dataset.links ?? 0) >= 4 && (document.querySelector('[data-slot="frame-bench"]')?.dataset.framePorts ?? "").split(",").length >= 6,
   },
+  // The zoom-2 drop story's END state: two wall ports made by real drops
+  // on a zoomed, panned viewport (judge round 1, finding 2).
+  {
+    name: "rf-zoomed",
+    id: `${RF_STORIES}--drag-to-edge-zoom-2-panned`,
+    w: 960,
+    h: 660,
+    settled: () => (document.querySelector('[data-slot="frame-bench"]')?.dataset.framePorts ?? "").split(",").filter(Boolean).length >= 2,
+  },
   {
     name: "rf-three-children",
-    id: `${RF_STORIES}--multiple-child-members`,
+    id: `${RF_STORIES}--frame-as-block-body-three-children`,
     w: 960,
     h: 660,
     settled: () => Number(document.querySelector('[data-slot="frame-bench"]')?.dataset.links ?? 0) >= 4 && (document.querySelector('[data-slot="frame-bench"]')?.dataset.framePorts ?? "").split(",").length >= 5,

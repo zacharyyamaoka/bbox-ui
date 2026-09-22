@@ -94,13 +94,14 @@ describe("deleteWithLinks", () => {
     expect(deleted.nodes).toEqual([]);
     expect(stale).toEqual([]);
     expect(unhandled).toEqual([]);
-    expect(next.links).toEqual([]);
+    // No sets left = no `links` key at all (one spelling of "none").
+    expect(next.links).toBeUndefined();
   });
 
   it("deleting the PORT is the same cascade (a link set has no privileged member)", () => {
     const { scene: next } = deleteWithLinks(scene(), [portRef("frame", "p1")], ops);
     expect(next.edges.map((edge) => edge.id)).toEqual(["free"]);
-    expect(next.links).toEqual([]);
+    expect(next.links).toBeUndefined();
   });
 
   it("deleting an unlinked edge touches nothing else, and the sets survive", () => {
@@ -115,7 +116,7 @@ describe("deleteWithLinks", () => {
     expect(next.nodes.map((node) => node.id)).toEqual(["ext", "ext2"]);
     expect(next.edges).toEqual([]);
     expect(deleted.nodes).toEqual(["frame"]);
-    expect(next.links).toEqual([]);
+    expect(next.links).toBeUndefined();
   });
 
   it("reports stale refs instead of throwing, and returns the SAME scene when nothing was live", () => {
@@ -149,8 +150,44 @@ describe("deleteWithLinks", () => {
     // Deleting `a` cascades to b and c through `trio`; `zombie` was never live.
     const { scene: next, stale } = deleteWithLinks(s, [nodeRef("a")]);
     expect(next.nodes).toEqual([]);
+    // `zombie` never carried anything: it is not even reported, because it
+    // was never reached — only a SEED can be stale (finding 4).
+    expect(stale).toEqual([]);
+    expect(next.links).toBeUndefined();
+  });
+
+  it("a STALE seed deletes nothing live — the closure never starts from a dead id (finding 4)", () => {
+    const s: BlockScene<NodeData, EdgeData> = {
+      nodes: [{ id: "a", position: { x: 0, y: 0 }, data: {} }],
+      edges: [],
+      links: [{ id: "L", members: [nodeRef("zombie"), nodeRef("a")] }],
+    };
+    const { scene: next, stale, deleted } = deleteWithLinks(s, [nodeRef("zombie")]);
+    expect(next.nodes.map((node) => node.id)).toEqual(["a"]);
+    expect(deleted.nodes).toEqual([]);
     expect(stale).toEqual([nodeRef("zombie")]);
-    expect(next.links).toEqual([]);
+  });
+
+  it("a stale member never BRIDGES two sets", () => {
+    const s: BlockScene<NodeData, EdgeData> = {
+      nodes: [
+        { id: "a", position: { x: 0, y: 0 }, data: {} },
+        { id: "b", position: { x: 0, y: 0 }, data: {} },
+      ],
+      edges: [],
+      links: [
+        { id: "L1", members: [nodeRef("a"), nodeRef("zombie")] },
+        { id: "L2", members: [nodeRef("zombie"), nodeRef("b")] },
+      ],
+    };
+    const { scene: next } = deleteWithLinks(s, [nodeRef("a")]);
+    expect(next.nodes.map((node) => node.id)).toEqual(["b"]);
+    // …and `linkedClosure` says the same when asked with a liveness test.
+    const live = (ref: string) => ref === nodeRef("a") || ref === nodeRef("b");
+    expect([...linkedClosure(s, [nodeRef("a")], live)]).toEqual([nodeRef("a")]);
+    // Without the test, the bare closure is what it always was — every
+    // ref the sets name.
+    expect([...linkedClosure(s, [nodeRef("a")])].sort()).toEqual([nodeRef("a"), nodeRef("b"), nodeRef("zombie")].sort());
   });
 
   it("pruneLinks is identity on an honest table", () => {

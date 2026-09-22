@@ -284,17 +284,33 @@ function useBlockBands(wrapperRef: RefObject<HTMLDivElement | null>, layoutKey: 
         return;
       }
       const wrapperRect = wrapper.getBoundingClientRect();
+      // WHY divided by the wrapper's own scale (lane frame-auto-port-edges,
+      // measured 2026-09-22): `getBoundingClientRect` reports SCREEN px, but
+      // the rails these bands position are laid out in the wrapper's own px.
+      // Under a host's viewport transform (React Flow at zoom 2) the raw
+      // reading put a 160-wide block's right rail 160 node-px outside the
+      // block and its bottom ports 100 node-px below it — outside the frame
+      // that contained it, and past the pane's edge, where a connect drag
+      // from that port auto-panned the canvas. At zoom 1 (every story that
+      // predates this) the ratio is 1 and nothing changes. Same recipe as
+      // `hosts/reactFlowHost.tsx`'s `measurePortDots` and `frame.tsx`'s
+      // `useFrameBox`. Both widths must be positive: under tldraw's html
+      // layer the wrapper's rect reads 0 wide for one layout while its
+      // offsetWidth is already real (measured: rectW 0, offsetW 62), and a
+      // 0 scale would turn every band into NaN — the anchors the tldraw
+      // host sighted off those rails then sat 58px off their dots for good.
+      const scale = wrapper.offsetWidth > 0 && wrapperRect.width > 0 ? wrapperRect.width / wrapper.offsetWidth : 1;
       const blockRect = block.getBoundingClientRect();
       const header = block.querySelector<HTMLElement>(':scope > [data-slot="block-header"]');
       const footer = block.querySelector<HTMLElement>(':scope > [data-slot="block-footer"]');
       const next: BlockBands = {
-        blockLeft: blockRect.left - wrapperRect.left,
-        blockTop: blockRect.top - wrapperRect.top,
-        blockWidth: blockRect.width,
-        blockHeight: blockRect.height,
-        bodyTop: (header ? header.getBoundingClientRect().bottom : blockRect.top) - wrapperRect.top,
-        bodyBottom: (footer ? footer.getBoundingClientRect().top : blockRect.bottom) - wrapperRect.top,
-        headerTop: header ? header.getBoundingClientRect().top - wrapperRect.top : undefined,
+        blockLeft: (blockRect.left - wrapperRect.left) / scale,
+        blockTop: (blockRect.top - wrapperRect.top) / scale,
+        blockWidth: blockRect.width / scale,
+        blockHeight: blockRect.height / scale,
+        bodyTop: ((header ? header.getBoundingClientRect().bottom : blockRect.top) - wrapperRect.top) / scale,
+        bodyBottom: ((footer ? footer.getBoundingClientRect().top : blockRect.bottom) - wrapperRect.top) / scale,
+        headerTop: header ? (header.getBoundingClientRect().top - wrapperRect.top) / scale : undefined,
       };
       setBands((prev) => (sameBands(prev, next) ? prev : next));
     };

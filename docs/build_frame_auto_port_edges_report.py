@@ -59,6 +59,16 @@ BASELINE = counts(LOGS / "baseline-test.log")
 FINAL = counts(LOGS / "final-test.log")
 RERUN = counts(LOGS / "rerun-four.log")
 MUTATIONS = json.loads((LOGS / "mutations.json").read_text()) if (LOGS / "mutations.json").exists() else []
+MUTATIONS2 = json.loads((LOGS / "mutations-round2.json").read_text()) if (LOGS / "mutations-round2.json").exists() else []
+MUTATIONS_TOTAL = len(MUTATIONS) + len(MUTATIONS2)
+MUTATIONS_RED = sum(1 for m in MUTATIONS + MUTATIONS2 if m["unit_exit"] != 0 or m["story_exit"] != 0)
+
+
+def test_count(rel: str) -> int:
+    return len(re.findall(r"^\s*it\(", (SRC / rel).read_text(), re.MULTILINE))
+
+
+NODE_TEST_COUNT = sum(test_count(rel) for rel in ("scene/links.test.ts", "scene/wallPort.test.ts", "components/frame.layout.test.ts", "hosts/frameScene.test.ts"))
 
 
 def wc(rel: str) -> int:
@@ -78,13 +88,14 @@ def added_lines(rel: str, marker: str = "2026-09-22") -> list[tuple[int, str]]:
 NEW_FILES = [
     ("components/frame.tsx", "The Frame: title, box, membership (BlockMembers), a PortEdge per wall, inner-face anchors, ring markers"),
     ("components/frame.layout.ts", "Faces naming, rail placement over railBoxFor, wall t ↔ rail offset, auto/custom insertion, auto-fit box"),
-    ("components/frame.layout.test.ts", "9 node tests"),
+    ("components/frame.layout.test.ts", "8 node tests"),
     ("components/Frame.stories.tsx", "Layer 1 stories: frame alone, ports on every wall, every toggle (+ try-it)"),
-    ("components/FrameAutoPortEdges.stories.tsx", "Layers 2-4 on React Flow: drag-to-edge, crossings ring/port, spacing, validation, linked delete, header, three children"),
+    ("components/FrameAutoPortEdges.stories.tsx", "Layers 2-4 on React Flow: drag-to-edge (identity, zoom 1.5 + pan, zoom 2 + pan), crossings ring/port, spacing, validation, linked delete, Frame as a Block body (target shape), three children"),
     ("scene/links.ts", "Linked objects: refs, closure, deleteWithLinks, pruneLinks"),
-    ("scene/links.test.ts", "13 node tests"),
+    ("scene/links.test.ts", "15 node tests"),
     ("scene/wallPort.ts", "Wall crossings (ported from 52a1b92), faces, insertion order, chain split + link set, unsplit"),
-    ("scene/wallPort.test.ts", "20 node tests"),
+    ("scene/wallPort.test.ts", "22 node tests"),
+    ("hosts/frameScene.test.ts", "4 node tests (judge round 1: structural faces, reserved ids, the host round trip)"),
     ("hosts/frameScene.ts", "Host bindings: FrameData, mode/arrange writes, add/remove wall port, split/unsplit, deleteFrameObjects, resolvers with faces"),
     ("hosts/frameCrossings.ts", "useWallCrossings: N containers, rich crossings, measured in the host's space"),
     ("hosts/frameNodeView.tsx", "type:\"frame\" → Frame, through nodeViews' exported helpers"),
@@ -96,6 +107,7 @@ SHARED_FILES = [
     ("scene/model.ts", "BlockScene.links?: SceneLink[] (additive, optional); ObjectRef, SceneLink"),
     ("hosts/hostScene.ts", "HostNodeData.frame?: FrameData"),
     ("hosts/regionCrossings.ts", "now a one-region wrapper over useWallCrossings"),
+    ("components/blockPort.tsx", "useBlockBands: bands divided by the wrapper's own scale, both widths guarded (judge follow-up 2e) — one ratio inside one measure function, no other change; of the stamped lines only the `scale` WHY is this lane's, the rest are other lanes' same-day stamps"),
 ]
 
 
@@ -182,9 +194,39 @@ def stock_table() -> str:
     return f"""<div class="scroll"><table><thead><tr><th>Element</th><th>Today</th><th>Off-the-shelf part (exact exported name)</th><th>Behaviour that must survive</th></tr></thead><tbody>{rows}</tbody></table></div>"""
 
 
-def mutations_table() -> str:
+JUDGE = [
+    ("1 · High", "The 'expanded block' stories were not a real Block", "By design (the brief: no Block refactor in this lane). Stories renamed to \"Frame as a Block body (target shape): the real Block fold is pending, see FRAME-PLAN §3.5\"; the fixture comment, this report's section and captions say the same; no text claims a Block was mounted.", "FrameAutoPortEdges.stories.tsx — `FrameAsBlockBody`, `FrameAsBlockBodyThreeChildren`", "—", "—"),
+    ("2 · High", "Wall drops used React Flow's `connectionState.to` (pane screen px) against flow-px boxes", "Verified at the source: @xyflow/system 0.0.82 index.mjs:2477 `getEventPosition(event, containerBounds)` → :2507/:2566 `to: position`. The host now converts the EVENT's client point through React Flow's own `screenToFlowPosition` (`FlowSpaceBridge`, mounted inside `<ReactFlow>`).", "reactFlowHost.tsx — `clientPointOf`, `FlowSpaceBridge`, `handleConnectEnd`", "stories `DragToEdgeZoomedAndPanned` (zoom 1.5, pan −210/−168) and `DragToEdgeZoom2Panned` (zoom 2, pan −417/−264, a 200-tall frame): each first asserts every wall clears React Flow's 40px auto-pan band, then a left-wall drop at t=0.3 and a bottom-wall drop at t=0.7 land on the visible wall within 2 screen px. WHY two: with the shared 250-tall fixture at zoom 2 the bottom wall sat 25px from the pane's edge, inside the band, and the drag itself panned the canvas mid-gesture — the bench's geometry, not the host's conversion", "M5"),
+    ("2b · follow-up", "The zoomed story surfaced it: `Frame` measured its own box in scaled client px, so its rails sat 205px off their walls at zoom 1.5", "`useFrameBox` / `useFitSize` divide every rect delta by the root's rect-to-offsetWidth ratio — the recipe `measurePortDots` and `spaceRectOf` already use.", "frame.tsx — `useFrameBox`, `useFitSize`", "both zoomed stories (a rail 205px off makes the left-wall drop miss)", "M11"),
+    ("2c · follow-up", "The host's handles never re-measured when a dot moved inside a same-sized node (a member's rail landing one pass later, 19 node-px at zoom 1.5) — the handle stayed 28 screen px off its dot", "`MeasuredPortHandles` also observes the subtree's `style`/childList mutations (equality-guarded), re-measuring on the actual trigger.", "reactFlowHost.tsx — `MeasuredPortHandles`, the MutationObserver", "the stories' `handleOf` throws until the handle's centre is within 3px of its dot, so a stale handle fails the readiness wait. M12 went RED before 2e (the zoomed stories timed out on that wait) and GREEN after it — 2e removed the only late mover this suite had, so the observer is now defence for movers no story stages (a member whose header reflows when a web font lands, in a free frame whose box does not change), not a claim this suite proves", "M12"),
+    ("2d · follow-up", "`useUpdateNodeInternals` defers React Flow's handle-bounds read by one animation frame (index.mjs:3940) — a press in that frame starts NO connection (the full gate caught it once: 'expected +0 to be 1' at load avg 5.5)", "The host reads the bounds through the store action in the same effect that places the handles; the stories' `connectDrag` counts a gesture only once React Flow's connection line appeared, and repeats an un-started press (a gesture that started nothing changed nothing).", "reactFlowHost.tsx — `MeasuredPortHandles` (`useStoreApi`); FrameAutoPortEdges.stories.tsx — `connectDrag`", "a race, not deterministically mutation-testable — the evidence is the gate failure it removed, and 4 consecutive green runs of the story file afterwards", "—"),
+    ("2e · follow-up", "The zoom-2 story surfaced it: `BlockPort`'s `useBlockBands` measured its bands in screen px, so a member's right rail sat 160 node-px outside its block at zoom 2 (19 node-px low at 1.5) — child/out2 was past the pane's edge and the connect drag from it auto-panned the canvas under the drop", "`useBlockBands` divides every band by the wrapper's rect-to-offsetWidth ratio (the recipe `measurePortDots` / `useFrameBox` use); at zoom 1 the ratio is 1 and nothing changes. One measurement function in a shared component, not a refactor; listed as a shared-file edit. Caught by the full gate on the way: under tldraw's html layer the wrapper's rect reads 0 wide for one layout while its offsetWidth is already real (logged: rectW 0, offsetW 62), so an unguarded ratio was 0 and the bands NaN — the tldraw scene story's anchors then sat 58px off (deterministic, A/B'd against `scale = 1`). Every ratio this lane wrote now requires BOTH widths positive, else 1 (`useBlockBands`, `useFrameBox`, `useFitSize`, `spaceRectOf`, `flowSpaceOf`).", "blockPort.tsx — `useBlockBands` (`scale`)", "both zoomed stories: the child's four dots measured INSIDE the frame box; the zoom-2 drops within 2 screen px", "M13"),
+    ("3 · High", "A corner tangent was two wall crossings; a run along a wall was an enter/exit pair", "Measured on the donor clipper (all four corners). `changesInsideState` in scene/wallPort.ts probes ½ px before/after each hit and keeps only hits whose inside-state changes; the donor file (byte-for-byte, zero-edits banner) is untouched; provenance row updated.", "wallPort.ts — `changesInsideState`, `pointAlong`, `strictlyInside`", "wallPort.test.ts: tangents at all four corners, runs along all four walls, the genuine/endpoint cases still count (3 tests)", "M6"),
+    ("4 · High", "A stale linked id deleted a live object, and could bridge sets", "`linkedClosure` takes a liveness test: a dead SEED is reported stale and never expanded; a dead MEMBER is never added or traversed. `deleteWithLinks` judges liveness once, against the scene as it is.", "links.ts — `RefIsLive`, `linkedClosure(scene, seeds, live)`, `deleteWithLinks`", "links.test.ts: stale seed leaves `a` alive; stale bridge leaves `b` alive; bare closure unchanged (2 tests)", "M7"),
+    ("5 · Medium", "split/unsplit was not identity-preserving (`e1` came back as `e1~0`, then `e1~0~0`)", "`SceneLink.origin` (additive) records the cut edge; `unsplitWallPort` restores that exact id when the LAST port of the set is undone, keeps the set (minus the port and the spliced segment) otherwise; `data` is the departing half's verbatim; an empty `links` is dropped (`withLinks`) so the round trip is byte-identical.", "model.ts `SceneLink.origin`; links.ts `withLinks`/`replaceLink`; wallPort.ts `splitEdgeAtWalls`/`unsplitWallPort`", "wallPort.test.ts: exact ids + JSON-identical round trip, 3 repeated toggles, two-wall chain in both orders (3 tests); frameScene.test.ts through the host ops; story `CrossingsRingAndPort` asserts the original four ids return", "M8"),
+    ("6 · Medium", "A default `<Frame id=\"f\" />` rendered zero port edges", "`rails = portEdges` — every listed wall carries a rail (an empty one is the drop target the API promises).", "frame.tsx — the `rails` line", "Frame.stories.tsx `BareDefault`: four rails, each centred on its wall, each holding a `PortEdge` track", "M9"),
+    ("7 · Medium", "`x@inner` was an unprotected identity collision", "Structural resolution: an AUTHORED id always wins (`resolveWallHandle`, `withWallFaces(base, facesOf, isAuthored)`, `withFaceTypes`), a colliding inner face is never minted (`withInnerFaces`), and ingestion refuses to mint a reserved id (`isReservedPortId` in `addWallPort`).", "frame.layout.ts `isReservedPortId`; wallPort.ts the three resolvers; frameScene.ts `resolveWallHandle`, `isAuthoredPort`, `addWallPort`; the story's two handle readers", "frameScene.test.ts: an ordinary block's authored `temperature@inner`, a wall container's collision, the refused mint (3 tests); wallPort.test.ts the resolver-level twin", "M10"),
+]
+
+
+def judge_table() -> str:
+    by_name = {m["name"].split(" ·")[0]: m for m in MUTATIONS2}
     rows = []
-    for m in MUTATIONS:
+    for number, finding, fix, where, tests, mutation in JUDGE:
+        m = by_name.get(mutation)
+        if m:
+            unit = re.search(r"^\s*Tests\s+(\d.*)$", m["unit"], re.MULTILINE)
+            story = re.search(r"^\s*Tests\s+(\d.*)$", m["story"], re.MULTILINE)
+            verdict = f"<span class='{'no' if (m['unit_exit'] != 0 or m['story_exit'] != 0) else 'maybe'}'>{'red' if (m['unit_exit'] != 0 or m['story_exit'] != 0) else 'GREEN'}</span><br><small>unit: {escape(unit.group(1) if unit else '—')}<br>story: {escape(story.group(1) if story else '—')}</small>"
+        else:
+            verdict = "<small>—</small>"
+        rows.append(f"<tr><td><b>{escape(number)}</b><br><small>{escape(finding)}</small></td><td>{fix}</td><td><small class='mono'>{escape(where)}</small></td><td><small>{escape(tests)}</small></td><td class='c'>{verdict}</td></tr>")
+    return f"""<div class="scroll"><table><thead><tr><th>Finding</th><th>Fix</th><th>Where</th><th>Regression test</th><th>Mutation (reverted → must go red)</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>"""
+
+
+def mutations_table(mutations: list | None = None) -> str:
+    rows = []
+    for m in MUTATIONS if mutations is None else mutations:
         unit_red = "red" if m["unit_exit"] != 0 else "green"
         story_red = "red" if m["story_exit"] != 0 else "green"
         red_stories = [line.strip()[1:].strip()[:80] for line in m["story"].splitlines() if line.strip().startswith("×")]
@@ -239,16 +281,16 @@ html = f"""<!doctype html>
 <title>Frame + auto port edges — proven one layer at a time</title>
 <style>{CSS}{EXTRA_CSS}</style></head>
 <body><div class="wrap">
-<p class="kicker">bbox-ui · lane frame-auto-port-edges · 2026-09-22 · base claude/system-sketch-ui-feedback-14bfc3 · uncommitted worktree</p>
+<p class="kicker">bbox-ui · lane frame-auto-port-edges · 2026-09-22 · branch claude/frame-auto-port-edges-2026-09-22 (on claude/system-sketch-ui-feedback-14bfc3) · judge round 1: seven findings fixed + three follow-ups the zoomed viewport surfaced · uncommitted on top of 8448f4a</p>
 <h1>Frame + auto port edges, proven one layer at a time</h1>
 <p class="sub">A <code>Frame</code> that owns membership and layout with a real <code>PortEdge</code> on each of its four walls; a pure model that detects every wall crossing whether or not anything is drawn; a real port inserted at a crossing that splits the cable into two halves that share it, as one <b>linked set</b>; drag-a-child-port-to-the-wall, validation, auto vs custom spacing — every one a toggle in the story. Built on the React Flow host with four additive seams.</p>
 
 <div class="facts">
   <div class="fact good"><b>{escape(FINAL['tests'].split('|')[-1].strip() if '|' in FINAL['tests'] else FINAL['tests'])}</b><span>full suite after (both vitest projects)</span></div>
   <div class="fact"><b>{escape(BASELINE['tests'])}</b><span>baseline before the first change</span></div>
-  <div class="fact good"><b>4 / 4</b><span>mutations red, then restored</span></div>
-  <div class="fact good"><b>42</b><span>new node tests (links 13 · wallPort 20 · frame.layout 9)</span></div>
-  <div class="fact good"><b>12</b><span>new stories with measuring play functions</span></div>
+  <div class="fact good"><b>{escape(str(NODE_TEST_COUNT))}</b><span>new node tests (links · wallPort · frame.layout · frameScene)</span></div>
+  <div class="fact good"><b>15</b><span>new stories with measuring play functions</span></div>
+  <div class="fact good"><b>{escape(str(MUTATIONS_RED))} / {escape(str(MUTATIONS_TOTAL))}</b><span>mutations red, then restored (rounds 1 + 2; the one green is M12 — read why in Tests)</span></div>
   <div class="fact {'good' if green_gate else 'warn'}"><b>{'0' if green_gate else str(len(FINAL['red']))}</b><span>full-suite failures {'' if green_gate else '(see Tests: flakes under load, each green in isolation)'}</span></div>
 </div>
 
@@ -278,15 +320,24 @@ html = f"""<!doctype html>
 <p>Four additive seams on <code>ReactFlowHost</code>, every one omitted by every bench that predates them: <code>connectable</code> (stock <code>Handle</code> drag, a 16px pressable box over the dot — <b>press the dot to connect, the label to reorder</b>), <code>isValidConnection</code> / <code>onConnect</code> in scene ends, <code>onConnectEnd</code> with the release point in flow px (a drop near a wall with no handle under it = "make a port here"), <code>onDeleteElements</code>. Plus <code>type: "frame"</code> as a node and its drag handle. The story owns the rest: the mode, validation and spacing toggles, port selection, the Delete key, an undo stack.</p>
 {pair('rf-rest', 'At rest — sketch 3\'s cast', ' — one child member with four typed ports, an External on each side, nothing wired. Mode: ring.')}
 {pair('rf-drag-to-edge', 'Drag child/in1 to the left wall → a typed input port, wired from its inner face', ' — the status line reads the wall and t; the cable runs INTO the frame because the inner face\'s nested rail faces right (measured: before the wireLayer fix the same cable was a 400px lap around the frame).')}
+{pair('rf-zoomed', 'Zoom 2, panned (−417, −264): the same two drops land on the VISIBLE wall — judge finding 2', ' — end state of `DragToEdgeZoom2Panned`: child/in1 released on the left wall at t=0.3, child/out2 on the bottom wall at t=0.7 (custom spacing), each dot within 2 screen px of the release point. The play first asserts every wall clears React Flow\'s 40px auto-pan band.')}
 {pair('rf-rings', 'Externals wired → four crossings detected, one per wall, drawn as rings', ' — mode ring. In mode OFF the same four are detected and nothing is drawn (asserted).')}
 {pair('rf-ports', 'Mode port → every crossing is a real wall port; each cable is two halves sharing it, as one linked set', ' — four sets, eight half-cables; a minted port takes the cable\'s type and explicit faces from the crossing direction; auto spacing re-spaces each wall.')}
 {pair('rf-deleted', 'Delete the selected top port → the port and BOTH halves go; the other three sets are untouched', ' — status: deleted 0 node(s), 2 edge(s), 1 port(s). Undo brings all three back (asserted).')}
 {pair('rf-refused', 'Validation ON: child/out2 → the left input\'s inner face is refused', ' — the judge\'s own message: "joins two source ports". With validation OFF the same drag connects (asserted, then undone). Type mismatch refuses too; a child OUTPUT dropped on the LEFT wall makes no port ("the left wall takes inputs").')}
 {fb('L3', 'The React Flow host — gestures and toggles', 'dot-connects / label-reorders: right split? the 24px wall-drop tolerance?')}
 
-<h2>Layers 3b and 4 · inside an expanded block, and with three children</h2>
-<p>Zach's 08:29 ruling makes Block = header + body + footer where the body IS the Frame. So "the frame as an expanded block's body" is rendered as the target shape — a Frame with <code>titlePlacement: "header"</code> — not as today's <code>Block</code>+<code>BlockPort</code> (whose rail cannot host an inner face without an edit; docs/FRAME-PLAN.md §3.5). Measured: the header bar pushes the left rail into the body band, a top-wall port lands on the header's top edge, port mode still splits every crossing (6 wall ports). With three children: four crossings into three different members, one per wall, each becomes a port, and a port dragged onto a wall that already carries a split port joins that wall's order.</p>
-{fb('L4', 'Header + three children', 'should the three-children case ALSO be shown on today\'s Block (crossings detected there already; insertion needs the fold)?')}
+<h2>Layers 3b and 4 · Frame as a Block body (target shape) — the real Block fold is pending</h2>
+<div class="lede orange"><p><b>Honesty note (judge round 1, finding 1).</b> These two stories mount a <code>type: "frame"</code> node with its title drawn as a header bar. That is the Frame in the shape a Block's body will take once Block composes it (Zach's 08:29 ruling: Block = header + body + footer, the body IS the Frame) — it is <b>not today's <code>Block</code></b>, and no <code>Block</code>/<code>BlockPort</code> is mounted in them. The real fold is a separate lane after the branch lineages merge — docs/FRAME-PLAN.md §3.5. Story names and captions say so.</p></div>
+<p>Measured on that target shape: the header bar pushes the left rail into the body band, a top-wall port lands on the header's top edge, port mode still splits every crossing (6 wall ports). With three children: four crossings into three different members, one per wall, each becomes a port, and a port dragged onto a wall that already carries a split port joins that wall's order.</p>
+{pair('rf-header', 'Layer 3 — Frame as a Block body (target shape): a type:"frame" node with a header bar, not today\'s Block', ' — the real Block fold is pending (FRAME-PLAN §3.5). End state of the play: two dragged ports plus four split crossings.')}
+{pair('rf-three-children', 'Layer 4 — the same target shape with three child members', ' — four crossings into A, B and C, each a port; a fifth port dragged onto the right wall joined its order.')}
+{fb('L4', 'Frame as a Block body (target shape) + three children', 'should these ALSO be shown on today\'s Block once the fold lands?')}
+
+<h2>Judge round 1 — seven findings, fixed and mutation-tested (+ three follow-ups the zoomed viewport surfaced)</h2>
+{judge_table()}
+<p><b>Owed, outside this lane's write set — the same coordinate trap, measured, not fixed here.</b> Finding 2's class (client px read under a scaled ancestor, fed back as layout px) was measured in <code>useBlockBands</code> too (at zoom 1.5 a member Block's left rail rendered at <code>top: 41px</code> where 22 is right and 159.5px tall where ~106 is; at zoom 2 the right rail sat 160 node-px outside the block) — that one is fixed above (2e), because the literal zoom-2 test could not be honest without it. The same pattern, still unmeasured and untouched: <code>blockPort.tsx:704-720</code> (mutation routes), <code>portEdge.tsx:881-887 / 1309-1315 / 1458-1470</code> (group outline, lane geometry, overflow chip), <code>hosts/blockAutoFit.ts:131-141</code> (fit heights written into the scene), <code>region.tsx:316</code>. All invisible at zoom 1, which is where every other story runs. Left alone because the brief excluded a Block/BlockPort refactor and <code>blockPort.tsx</code> is in flight in two peer worktrees today (<code>branch-preset-spike</code> 09:04, <code>agent-af837683dbdcfdc1e</code> 09:35) — 2e is deliberately the smallest edit that file can take (one ratio inside one measure function); the rest is the same one-line division and belongs to whichever lane owns each file next.</p>
+{fb('J', 'The judge fixes', 'anything still open?')}
 
 <h2>Stock parts — element by element</h2>
 {stock_table()}
@@ -295,13 +346,16 @@ html = f"""<!doctype html>
 <div class="facts">
   <div class="fact"><b>{escape(BASELINE['tests'])}</b><span>baseline · {escape(BASELINE['files'])} · {escape(BASELINE['duration'])}</span></div>
   <div class="fact {'good' if green_gate else 'warn'}"><b>{escape(FINAL['tests'])}</b><span>after · {escape(FINAL['files'])} · {escape(FINAL['duration'])}</span></div>
-  <div class="fact good"><b>{escape(RERUN['tests'])}</b><span>the four full-suite reds re-run in isolation</span></div>
+  <div class="fact good"><b>{escape(RERUN['tests'])}</b><span>the full-suite reds re-run in isolation (their whole files)</span></div>
 </div>
-<p>Gate: <code>pnpm typecheck</code> exit 0 before and after; <code>pnpm test</code> (both projects, on the lane's own Storybook port 5491) before and after. {"The full run was green." if green_gate else "The final full run reported " + str(len(FINAL['red'])) + " red: <b>" + escape("; ".join(FINAL['red'])) + "</b> — pre-existing drag stories (a dnd-kit rail reorder, a tldraw member drag) that are timing-sensitive under a parallel run on a loaded box (load average ≈ 9 during these runs; the baseline run's transform time was 40 s, the final run's 88 s). Re-run in isolation together with this lane's two story files: " + escape(RERUN['tests']) + ". Across four full-suite runs today the red set was different every time and never included the same story twice except <code>FitToContentHosts › Drag A Member (tldraw)</code>; one earlier full run caught this lane's Layer 3 story once, which led to a real fix (the bench's status line reflowed the pane 31 px mid-story — now a fixed-height row). Not hidden, not fixed here: a flake under load is not this lane's regression, but it is a gate weakness worth a follow-up."}</p>
+<p>Gate: <code>pnpm typecheck</code> exit 0 before and after; <code>pnpm test</code> (both projects, on the lane's own Storybook port 5491) before and after. {"The full run was green." if green_gate else "The final full run reported " + str(len(FINAL['red'])) + " red: <b>" + escape("; ".join(FINAL['red'])) + "</b> — pre-existing stories with timing-sensitive plays (member drags on tldraw and React Flow, an app-menu keyboard story, a frames-panel story) under a parallel run on a loaded box (load average 4.5-5.5 during this run; this lane's own fifteen stories were green in the same run). Their three files re-run in isolation: " + escape(RERUN['tests']) + ". Across seven full-suite runs today (four in this round) the red set was different every time; two stories recurred — <code>FitToContentHosts › Drag A Member (tldraw)</code> and <code>BlockPortHosts › Block (DOM Canvas)</code> — and each was green in isolation every time. Twice a full run caught one of THIS lane's stories, and both times it was a real fix, not a retry: round 1's Layer 3 story (the bench's status line reflowed the pane 31 px mid-story — now a fixed-height row) and this round's Validation story (<code>expected +0 to be 1</code>: a press one animation frame before React Flow had the handle's bounds — 2d above). A tldraw story also went red deterministically after 2e's first cut and was A/B'd to the zero-width rect its guard now covers. Not hidden, not fixed here: a flake under load is not this lane's regression, but it is a gate weakness worth a follow-up."}</p>
+<p>Judge round 1 (an independent read-only Codex judge on commit 8448f4a) failed the lane on seven findings; every one is fixed above with a regression test that goes red without its fix, and the full gate was re-run afterwards (the numbers on this page are that re-run).</p>
 <p>One real regression was caught by the suite and fixed: forwarding <code>portTypes</code> onto a BLOCK's rail items painted "rawbytes" where <code>PyblocksScene.stories.tsx</code> pins the bare label "raw" — so block rails stay as they were and only a Frame's walls paint the type (the fold in FRAME-PLAN §3.1 brings it to blocks).</p>
-<h4>Mutations — each applied to the source, tested, restored byte-for-byte</h4>
+<h4>Mutations, round 1 — each applied to the source, tested, restored byte-for-byte</h4>
 {mutations_table()}
-<p class="mock-note">M1's node column stays green because <code>edgeValidation.test.ts</code> never supplies a <code>directionOf</code> (its polarity gate is inert there — a pre-existing coverage gap in that file, not this lane's); the story is the assertion that catches it, and it did. The other three go red in both projects.</p>
+<h4>Mutations, round 2 — one per judge finding, same discipline</h4>
+{mutations_table(MUTATIONS2)}
+<p class="mock-note">Round 2's M12 is green on purpose-built honesty: it was red when the child's rail still moved late (before 2e) and is green now that nothing in this suite moves a dot after the handles are measured — see 2c above. M1's node column stays green because <code>edgeValidation.test.ts</code> never supplies a <code>directionOf</code> (its polarity gate is inert there — a pre-existing coverage gap in that file, not this lane's); the story is the assertion that catches it, and it did. The other three go red in both projects.</p>
 {fb('T', 'The evidence', 'anything you want measured differently?')}
 
 <h2>Files</h2>
@@ -312,18 +366,18 @@ html = f"""<!doctype html>
 <p><b>What is missing, precisely:</b> (1) the port card accepts only <code>boundaryPorts.left/right</code> (<code>region.tsx:187</code>) — a top- or bottom-wall crossing has no seat in Port view; (2) the port card's ports are placed by polarity (<code>innerPolarityPolicy</code>), not by the crossing's <code>t</code> — feeding the measured crossings in is a one-line policy swap (<code>crossingGeometryPolicy</code> exists in <code>scene/boundary.ts</code>) but needs the geometry captured BEFORE the frame is hidden (the port view has no frame to measure); (3) "each of the blocks themselves go to port view" — a region view switch does not cascade a view change to its members; that is a scene write over <code>childrenOf</code> nobody has asked for yet. None of it fell out naturally; it is stated here rather than half-built.</p>
 
 <h2>Decision surface</h2>
-<div class="lede green"><p><b>Done and proved.</b> Frame (all toggles), the pure model (42 node tests, 4/4 mutations red), the React Flow host seams, eight measuring stories (drag to each wall, off/ring/port with ports within 2px of the crossing, auto vs custom spacing, validation off/on with polarity and type refusals and the wall convention, linked delete + undo, header, three children), docs/FRAME-PLAN.md aligned with the BlockRegion-preset lane, provenance rows, WHY comments at every seam Zach named.</p></div>
+<div class="lede green"><p><b>Done and proved.</b> Frame (all toggles), the pure model ({escape(str(NODE_TEST_COUNT))} node tests, {escape(str(MUTATIONS_RED))}/{escape(str(MUTATIONS_TOTAL))} mutations red across both rounds — the one green, M12, is a defence no story stages after 2e), the React Flow host seams, fifteen measuring stories (drag to each wall at zoom 1, 1.5 and 2, off/ring/port with ports within 2px of the crossing, auto vs custom spacing, validation off/on with polarity and type refusals and the wall convention, linked delete + undo, the Frame-as-Block-body target shape with one and three children, the bare default), the judge's seven findings each closed with a test that goes red without its fix, docs/FRAME-PLAN.md aligned with the BlockRegion-preset lane, provenance rows, WHY comments at every seam Zach named.</p></div>
 <div class="lede gold"><p><b>Left.</b> (a) Wall ports on today's <code>Block</code> — detection runs there, insertion waits for the Block-on-Frame fold (FRAME-PLAN §3.2/§3.5). (b) The stretch (above). (c) Nested frames' drag handle in React Flow (the defect-6 class, noted in the host). (d) The DOM canvas twin of the React Flow story — deliberately not built: PEP 0005 says anything that moves gets a React Flow twin, and every gesture here moves.</p></div>
 <div class="ask"><h3>Needs you — 1 · Is a drag-created port linked to its cable?</h3><p>Today a port made by dragging a child port to the wall is a first-class port: deleting its cable leaves the port. Only a SPLIT mints a linked set. </p><p class="dflt"><b>Default if silent:</b> keep it — a port you placed by hand is yours; a port the split minted belongs to the cut.</p>{fb('Q1', 'Link drag-created ports to their cable?', '')}</div>
 <div class="ask"><h3>Needs you — 2 · Leaving port mode un-splits</h3><p>Switching crossings from <b>port</b> back to <b>ring</b>/<b>off</b> restores every split cable (the exact inverse, round-trip tested). The alternative keeps the ports and just stops splitting new crossings.</p><p class="dflt"><b>Default if silent:</b> un-split — the toggle then means one thing in both directions.</p>{fb('Q2', 'Un-split on leaving port mode?', '')}</div>
 <div class="ask"><h3>Needs you — 3 · The frame surface is the Frame's drawing; Block's <code>surface</code> forwards to it</h3><p>FRAME-PLAN §3.1 picks this over "Block paints around a Frame body", on the clip/halo evidence and because <code>titlePlacement="header"</code> already renders Block's shape with the rails on the right line. That is a decision-record candidate once the fold merges (docs/peps), not written yet.</p><p class="dflt"><b>Default if silent:</b> the plan as written; the preset lane's option C composes over it unchanged.</p>{fb('Q3', 'Frame draws the surface; Block forwards', '')}</div>
 <div class="ask"><h3>Needs you — 4 · Port labels point inward</h3><p>A wall port's label ("port Pose") reads INTO the frame, like a block's, and crosses the cables inside on a busy frame. The sketch draws it the same way; an outward label would clear the interior and crowd the outside.</p><p class="dflt"><b>Default if silent:</b> inward, as the sketch.</p>{fb('Q4', 'Label direction on wall ports', '')}</div>
-<div class="lede red"><p><b>Deliberately not done.</b> No Block/BlockPort/blockMembers/Region refactor (the brief said plan it, not do it — FRAME-PLAN.md). No React Flow edge selection for kit-routed cables (the trace is <code>pointer-events: none</code> by design; the linked delete is entered from the port or the story's button). No decision records written (flagged only). No commit — the worktree is left dirty for the dispatcher.</p></div>
+<div class="lede red"><p><b>Deliberately not done.</b> No Block/BlockPort/blockMembers/Region refactor (the brief said plan it, not do it — FRAME-PLAN.md) — the one exception is 2e, a single ratio inside <code>useBlockBands</code>' measure function, without which the zoom-2 test could not be honest; the sibling sites listed above stay untouched. No React Flow edge selection for kit-routed cables (the trace is <code>pointer-events: none</code> by design; the linked delete is entered from the port or the story's button). No decision records written (flagged only). No commit — the worktree is left dirty for the dispatcher.</p></div>
 {overall_box('anything else — one line is enough')}
 
 <footer class="page">
 <b>Reproduce.</b> <code>STORYBOOK_PORT=5491 pnpm --dir apps/storybook-basics storybook</code> then open <code>http://localhost:5491/?path=/story/blocks-frame-auto-port-edges-react-flow--try-it</code>. Gate: <code>STORYBOOK_PORT=5491 pnpm --dir apps/storybook-basics test</code> and <code>pnpm --dir apps/storybook-basics typecheck</code>. Captures: <code>node docs/capture_frame_auto_port_edges.mjs --port 5491 --out &lt;dir&gt;</code>. This page: <code>docs/build_frame_auto_port_edges_report.py</code>.<br>
-Built {escape(sh('date -u +%Y-%m-%dT%H:%MZ', REPO))} · tree {escape(sh('git rev-parse --short HEAD 2>/dev/null || echo uncommitted', REPO))} (+ uncommitted lane work) · Claude Fable 5.1 (claude-fable-5-1)
+Built {escape(sh('date -u +%Y-%m-%dT%H:%MZ', REPO))} · branch <code>claude/frame-auto-port-edges-2026-09-22</code>, round-2 fixes uncommitted on top of <code>8448f4a</code> · Claude Fable 5.1 (claude-fable-5-1)
 </footer>
 </div>
 {dock('frame-auto-port-edges-2026-09-22', 'item', 9)}

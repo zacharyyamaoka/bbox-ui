@@ -102,7 +102,8 @@ function sameBoxes(a: ReadonlyMap<string, ElbowRect>, b: ReadonlyMap<string, Elb
  *  `flowSpaceOf` uses. */
 export function spaceRectOf(space: HTMLElement, element: Element): ElbowRect {
   const spaceBox = space.getBoundingClientRect();
-  const scale = space.offsetWidth > 0 ? spaceBox.width / space.offsetWidth : 1;
+  // Both positive, or 1: a 0-wide rect under a not-yet-painted layer would make the scale 0.
+  const scale = space.offsetWidth > 0 && spaceBox.width > 0 ? spaceBox.width / space.offsetWidth : 1;
   const rect = element.getBoundingClientRect();
   return { x: (rect.left - spaceBox.left) / scale, y: (rect.top - spaceBox.top) / scale, w: rect.width / scale, h: rect.height / scale };
 }

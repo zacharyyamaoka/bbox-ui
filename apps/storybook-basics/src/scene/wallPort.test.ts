@@ -121,6 +121,75 @@ describe("wallCrossings — detection, always computable", () => {
     expect(wallCrossings({ points, boxes, through: ["innerFrame", "F"] }).map((hit) => hit.containerId)).toEqual(["F", "innerFrame"]);
   });
 
+  it("a corner TANGENT is not a crossing — on any of the four corners (finding 3)", () => {
+    // Each segment touches exactly one corner of the 100 × 100 box at
+    // (100, 0) and stays outside. The donor clipper reports every one of
+    // these as an enter + an exit at the same distance (measured); the
+    // inside-state probe says neither is a crossing.
+    const tangents: Record<string, { x: number; y: number }[]> = {
+      "top-left": [
+        { x: 90, y: 10 },
+        { x: 110, y: -10 },
+      ],
+      "top-right": [
+        { x: 290, y: -10 },
+        { x: 310, y: 10 },
+      ],
+      "bottom-right": [
+        { x: 310, y: 90 },
+        { x: 290, y: 110 },
+      ],
+      "bottom-left": [
+        { x: 110, y: 110 },
+        { x: 90, y: 90 },
+      ],
+    };
+    for (const [corner, points] of Object.entries(tangents)) {
+      expect(wallCrossings({ points, boxes: BOXES, through: ["F"] }), corner).toEqual([]);
+    }
+  });
+
+  it("a segment running ALONG a wall is not a crossing either, on any wall", () => {
+    const runs: Record<string, { x: number; y: number }[]> = {
+      top: [
+        { x: 90, y: 0 },
+        { x: 310, y: 0 },
+      ],
+      bottom: [
+        { x: 90, y: 100 },
+        { x: 310, y: 100 },
+      ],
+      left: [
+        { x: 100, y: -10 },
+        { x: 100, y: 110 },
+      ],
+      right: [
+        { x: 300, y: -10 },
+        { x: 300, y: 110 },
+      ],
+    };
+    for (const [wall, points] of Object.entries(runs)) {
+      expect(wallCrossings({ points, boxes: BOXES, through: ["F"] }), wall).toEqual([]);
+    }
+  });
+
+  it("…while a genuine crossing, a cable that STARTS on the wall heading in, and one that ENDS on the wall still count", () => {
+    const cross = wallCrossings({ points: [{ x: 60, y: 50 }, { x: 180, y: 50 }], boxes: BOXES, through: ["F"] });
+    expect(cross.map((hit) => [hit.side, hit.direction])).toEqual([["left", "enter"]]);
+    const startsOn = wallCrossings({ points: [{ x: 100, y: 50 }, { x: 180, y: 50 }], boxes: BOXES, through: ["F"] });
+    expect(startsOn.map((hit) => [hit.side, hit.direction])).toEqual([["left", "enter"]]);
+    const endsOn = wallCrossings({ points: [{ x: 60, y: 50 }, { x: 100, y: 50 }], boxes: BOXES, through: ["F"] });
+    expect(endsOn.map((hit) => [hit.side, hit.direction])).toEqual([["left", "enter"]]);
+    // A path through a corner INTO the box crosses.
+    const throughCorner = wallCrossings({ points: [{ x: 90, y: -10 }, { x: 200, y: 100 }], boxes: BOXES, through: ["F"] });
+    expect(throughCorner.map((hit) => hit.direction)).toEqual(["enter", "exit"]);
+    // The donor's stub convention survives the probe: a cable that STARTS on
+    // the wall and heads OUT is an exit at its start ("the edge a stub
+    // leaves from", boundaryCrossing.ts:196-199).
+    const stubOut = wallCrossings({ points: [{ x: 100, y: 50 }, { x: 60, y: 50 }], boxes: BOXES, through: ["F"] });
+    expect(stubOut.map((hit) => [hit.side, hit.direction])).toEqual([["left", "exit"]]);
+  });
+
   it("wallPoint is alongSide's inverse on every wall", () => {
     expect(wallPoint(BOX, "left", 0.25)).toEqual({ x: 100, y: 25 });
     expect(wallPoint(BOX, "right", 1)).toEqual({ x: 300, y: 100 });
@@ -151,16 +220,38 @@ describe("faces — two per wall port, explicit", () => {
     expect(ports("kid")).toEqual(["in"]);
     expect(ports("ghost")).toBeUndefined();
 
+    const isAuthored = (ref: { nodeId: string; portId: string }) => (ref.nodeId === "F" && ref.portId === "p") || (ref.nodeId === "kid" && ref.portId === "in");
     const baseDirection = (ref: { nodeId: string; portId: string }) => (ref.nodeId === "kid" ? ("sink" as const) : undefined);
-    const direction = withWallFaces(baseDirection, (ref) => (ref.nodeId === "F" && ref.portId === "p" ? wallFacesFor("sink") : undefined));
+    const direction = withWallFaces(baseDirection, (ref) => (ref.nodeId === "F" && ref.portId === "p" ? wallFacesFor("sink") : undefined), isAuthored);
     expect(direction({ nodeId: "F", portId: "p" })).toBe("sink");
     expect(direction({ nodeId: "F", portId: "p@inner" })).toBe("source");
     expect(direction({ nodeId: "kid", portId: "in" })).toBe("sink");
     expect(direction({ nodeId: "F", portId: "unknown" })).toBeUndefined();
 
-    const typeOf = withFaceTypes((ref) => (ref.nodeId === "F" && ref.portId === "p" ? ["Pose"] : undefined));
+    const typeOf = withFaceTypes((ref) => (ref.nodeId === "F" && ref.portId === "p" ? ["Pose"] : undefined), isAuthored);
     expect(typeOf({ nodeId: "F", portId: "p@inner" })).toEqual(["Pose"]);
     expect(typeOf({ nodeId: "F", portId: "p" })).toEqual(["Pose"]);
+  });
+
+  it("an AUTHORED id that spells an inner face is its own port — never the inner face of another (finding 7)", () => {
+    // A block that authored `temperature@inner` beside `temperature`.
+    const authored = (ref: { nodeId: string; portId: string }) => ref.nodeId === "B" && (ref.portId === "temperature" || ref.portId === "temperature@inner");
+    const base = (ref: { nodeId: string; portId: string }) => (ref.nodeId === "B" ? (ref.portId === "temperature@inner" ? ("source" as const) : ("sink" as const)) : undefined);
+    const facesOf = (ref: { nodeId: string; portId: string }) => (authored(ref) ? wallFacesFor(base(ref)!) : undefined);
+    const direction = withWallFaces(base, facesOf, authored);
+    // The authored port keeps its OWN outer polarity (a right-wall source),
+    // instead of reading as "the inner face of temperature" (which would be
+    // the opposite of temperature's sink: source — the same word by
+    // accident here, so the test also pins the type, which differs).
+    expect(direction({ nodeId: "B", portId: "temperature@inner" })).toBe("source");
+    expect(direction({ nodeId: "B", portId: "temperature" })).toBe("sink");
+    const typeOf = withFaceTypes((ref) => (ref.portId === "temperature" ? ["float"] : ref.portId === "temperature@inner" ? ["Pose"] : undefined), authored);
+    expect(typeOf({ nodeId: "B", portId: "temperature@inner" })).toEqual(["Pose"]);
+    // The colliding inner handle is not minted into the vocabulary twice;
+    // the authored `temperature@inner` port still gets an inner face of its
+    // own, spelt one level deeper.
+    const ports = withInnerFaces(() => ["temperature", "temperature@inner"], () => true);
+    expect(ports("B")).toEqual(["temperature", "temperature@inner", "temperature@inner@inner"]);
   });
 });
 
@@ -192,7 +283,7 @@ describe("splitEdgeAtWalls — one cable becomes a chain through a REAL port, as
     const [first, second] = next.edges.slice(1, 3);
     expect([first.source, first.sourceHandle, first.target, first.targetHandle]).toEqual(["outer", "out", "F", "F-p0"]);
     expect([second.source, second.sourceHandle, second.target, second.targetHandle]).toEqual(["F", "F-p0@inner", "inner", "in"]);
-    expect(link).toEqual({ id: "link:e1", members: [edgeRef("e1~0"), portRef("F", "F-p0"), edgeRef("e1~1")] });
+    expect(link).toEqual({ id: "link:e1", members: [edgeRef("e1~0"), portRef("F", "F-p0"), edgeRef("e1~1")], origin: edgeRef("e1") });
     expect(next.links).toEqual([link]);
   });
 
@@ -244,15 +335,48 @@ describe("splitEdgeAtWalls — one cable becomes a chain through a REAL port, as
     expect(splitEdgeAtWalls(s, "missing", enterLeft, ops).scene).toBe(s);
   });
 
-  it("unsplit is the inverse: the direct cable comes back with its data, the port leaves the wall, the link goes", () => {
-    const split = splitEdgeAtWalls(scene(), "e1", enterLeft, ops).scene;
+  it("unsplit is the EXACT inverse: the original id, data and position come back, the port leaves the wall, the link goes (finding 5)", () => {
+    const original = scene();
+    const split = splitEdgeAtWalls(original, "e1", enterLeft, ops).scene;
+    expect(split.links![0].origin).toBe(edgeRef("e1"));
     const back = unsplitWallPort(split, { containerId: "F", portId: "F-p0" }, { removePort });
-    expect(back.edges.map((edge) => edge.id)).toEqual(["e0", "e1~0", "e2"]);
+    expect(back.edges.map((edge) => edge.id)).toEqual(["e0", "e1", "e2"]);
     const restored = back.edges[1];
     expect([restored.source, restored.sourceHandle, restored.target, restored.targetHandle]).toEqual(["outer", "out", "inner", "in"]);
     expect(restored.data).toEqual({ color: "red" });
-    expect(back.nodes.find((node) => node.id === "F")!.data.ports).toEqual({ left: [] });
-    expect(back.links).toEqual([]);
+    expect(back.links).toBeUndefined();
+    // Byte-identical, up to the wall the host emptied (`ports.left: []`
+    // is the host's own `removePort` leaving an empty wall behind).
+    const expected = { ...original, nodes: original.nodes.map((node) => (node.id === "F" ? { ...node, data: { ...node.data, ports: { left: [] } } } : node)) };
+    expect(JSON.stringify(back)).toBe(JSON.stringify(expected));
+  });
+
+  it("repeated split → unsplit → split mints the SAME ids every time — never e1~0~0", () => {
+    let current = scene();
+    for (let round = 0; round < 3; round += 1) {
+      const { scene: split, ports } = splitEdgeAtWalls(current, "e1", enterLeft, ops);
+      expect(split.edges.map((edge) => edge.id), `round ${round}`).toEqual(["e0", "e1~0", "e1~1", "e2"]);
+      expect(ports.map((port) => port.portId)).toEqual(["F-p0"]);
+      current = unsplitWallPort(split, { containerId: "F", portId: "F-p0" }, { removePort });
+      expect(current.edges.map((edge) => edge.id), `round ${round}`).toEqual(["e0", "e1", "e2"]);
+      expect(current.links).toBeUndefined();
+    }
+  });
+
+  it("a chain through TWO walls unsplits one port at a time: the set survives the first, the id returns on the last", () => {
+    const through = wallCrossings({ points: [{ x: 60, y: 50 }, { x: 340, y: 50 }], boxes: BOXES, through: ["F"] });
+    const split = splitEdgeAtWalls(scene(), "e1", through, ops).scene;
+    const afterFirst = unsplitWallPort(split, { containerId: "F", portId: "F-p0" }, { removePort });
+    expect(afterFirst.edges.map((edge) => edge.id)).toEqual(["e0", "e1~0", "e1~2", "e2"]);
+    expect(afterFirst.edges[1].target).toBe("F");
+    expect(afterFirst.edges[1].targetHandle).toBe("F-p1@inner");
+    expect(afterFirst.links).toEqual([{ id: "link:e1", members: [edgeRef("e1~0"), portRef("F", "F-p1"), edgeRef("e1~2")], origin: edgeRef("e1") }]);
+    const afterBoth = unsplitWallPort(afterFirst, { containerId: "F", portId: "F-p1" }, { removePort });
+    expect(afterBoth.edges.map((edge) => edge.id)).toEqual(["e0", "e1", "e2"]);
+    expect(afterBoth.links).toBeUndefined();
+    // Reverse order gives the same answer.
+    const other = unsplitWallPort(unsplitWallPort(split, { containerId: "F", portId: "F-p1" }, { removePort }), { containerId: "F", portId: "F-p0" }, { removePort });
+    expect(other.edges.map((edge) => edge.id)).toEqual(["e0", "e1", "e2"]);
   });
 
   it("unsplit refuses a port that is not the shared end of exactly one arriving and one departing cable", () => {
