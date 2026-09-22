@@ -66,3 +66,21 @@ describe("region view state at the pyblocks boundary", () => {
     expect(withoutRegionViewState(scene)).toBe(scene);
   });
 });
+
+describe("a non-record `region` from the network is not view state", () => {
+  test.each([
+    ["null", null],
+    ["a string", "opaque"],
+    ["a number", 3],
+  ])("region = %s: parses, loads without throwing, and passes through as sent", (_label, value) => {
+    const json = fixture("region_for_if.scene.json");
+    const nodes = (json.scene as { nodes: RawNode[] }).nodes;
+    const target = nodes.find((node) => node.type === "region")!;
+    target.data.region = value;
+    const parsed = parsePyblocksScene(JSON.parse(JSON.stringify(json)));
+    expect(JSON.stringify(parsed)).toBe(JSON.stringify(json));
+    const { scene } = loadPyblocksScene(json);
+    const loaded = scene.nodes.find((node) => node.id === target.id)!;
+    expect((loaded.data as { region?: unknown }).region).toBe(value);
+  });
+});

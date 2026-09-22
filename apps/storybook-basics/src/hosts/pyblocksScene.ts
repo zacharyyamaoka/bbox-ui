@@ -382,8 +382,13 @@ export function layoutUnplaced(scene: HostScene, isUnplaced: (node: SceneNode<Ho
  * `parsePyblocksScene` still hands back the document exactly as sent.
  */
 export function withoutRegionViewState(scene: HostScene): HostScene {
-  const carriesViewState = (node: SceneNode<HostNodeData>) =>
-    node.data.region !== undefined && ("view" in node.data.region || "presentation" in node.data.region);
+  // `isRecord` first: `parsePyblocksScene` keeps unknown data untouched, so
+  // `region` may arrive as null, a string or a number — none of which is
+  // view state, so it passes through as sent (and `in` on it would throw).
+  const carriesViewState = (node: SceneNode<HostNodeData>) => {
+    const region: unknown = node.data.region;
+    return isRecord(region) && ("view" in region || "presentation" in region);
+  };
   if (!scene.nodes.some(carriesViewState)) return scene;
   return {
     ...scene,

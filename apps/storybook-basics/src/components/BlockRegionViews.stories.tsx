@@ -475,3 +475,83 @@ export const SizedCornerIsNotMeasured: Story = {
     required(regionOf(canvasElement, "unsized-title"), '[data-slot="region-corner-measure"]', "the unsized region's measuring copy");
   },
 };
+
+/* ------------------------------------------------------------------ */
+/* Rich title / header content is never copied either (Codex re-judge 3) */
+/* ------------------------------------------------------------------ */
+
+/** An open Popover, portalled to `document.body`, marked by `testId`. */
+function OpenPopover({ testId, label }: { testId: string; label: string }) {
+  return (
+    <Popover open>
+      <PopoverTrigger render={<span />}>{label}</PopoverTrigger>
+      <PopoverContent autoFocus={false}>
+        <span data-testid={testId}>{label}'s popover</span>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+const countOf = (testId: string) => document.body.querySelectorAll(`[data-testid="${testId}"]`).length;
+
+/**
+ * Loaded straight into Expanded Opaque, with an open Popover in the `title`
+ * and one in a `cornerCard.header`. The types only accept that with
+ * `cornerSize` (`blockRegion.types.test.ts` pins the refusal without it), so
+ * nothing is copied to measure: zero popovers while opaque. The third region
+ * reaches past the types with a cast — the runtime guard (`primitiveOnly`)
+ * must still keep its node out of the copy.
+ */
+function RichContentBench() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}>
+      <BlockRegion id="rich-title" kind="group" view="opaque" opaqueFace="frame" width={300} title={<OpenPopover testId="title-popover" label="Title" />} cornerSize={{ w: 120, h: 40 }} />
+      <BlockRegion
+        id="rich-header"
+        kind="group"
+        view="opaque"
+        opaqueFace="frame"
+        width={300}
+        cornerCard={{ header: <OpenPopover testId="header-popover" label="Header" />, bandHeight: 32 }}
+        cornerSize={{ w: 160, h: 72 }}
+      />
+      <BlockRegion
+        id="cast-title"
+        kind="group"
+        view="opaque"
+        opaqueFace="frame"
+        width={300}
+        // Deliberately past the types — what an `any` from elsewhere would do.
+        title={(<OpenPopover testId="cast-popover" label="Cast" />) as unknown as string}
+      />
+    </div>
+  );
+}
+
+export const RichContentIsNeverCopied: Story = {
+  name: "Rich title / header content is never copied while opaque",
+  render: () => <RichContentBench />,
+  play: async ({ canvasElement }) => {
+    for (const id of ["rich-title", "rich-header", "cast-title"]) {
+      await waitFor(() => expect(regionOf(canvasElement, id).getAttribute("data-region-view")).toBe("opaque"));
+    }
+    // Sized: nothing is measured, so nothing is mounted.
+    for (const id of ["rich-title", "rich-header"]) {
+      expect(regionOf(canvasElement, id).querySelector('[data-slot="region-corner-measure"]'), `${id}: no measuring copy`).toBeNull();
+    }
+    // Let any portal mount before counting — a copy's popover would appear
+    // in `document.body`, not under the region.
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    // The TITLE is also the Expanded Opaque face's own centred title
+    // (`RegionOpaqueTitle`) — real, visible content — so exactly ONE popover:
+    // the face's. A copy would make it two.
+    expect(countOf("title-popover"), "a rich title's popover while opaque: the face's own, no copy").toBe(1);
+    // The HEADER lives only on the corner, which the opaque face does not
+    // draw — so none at all.
+    expect(countOf("header-popover"), "a rich header's popover while opaque").toBe(0);
+    // Unsized and cast past the types: a copy IS mounted, but renders no node.
+    const copy = required<HTMLElement>(regionOf(canvasElement, "cast-title"), '[data-slot="region-corner-measure"]', "the cast region's copy");
+    expect(copy.querySelector("[data-testid], button, [aria-haspopup]"), "the copy holds no node from the title").toBeNull();
+    expect(countOf("cast-popover"), "a cast title's popover while opaque: the face's own, no copy").toBe(1);
+  },
+};

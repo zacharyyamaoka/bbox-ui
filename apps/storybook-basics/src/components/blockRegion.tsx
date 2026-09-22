@@ -94,6 +94,8 @@ import { BlockPort, type BlockEdgeSpec } from "./blockPort";
 import { offsetEdgePaddingPx, RAIL_GAP_PX } from "./blockPort.layout";
 import { Button } from "./button";
 import { FoldingChevron } from "./foldingChevron";
+import { ControlMark, type ControlMarkKind } from "./controlMark";
+import { Badge } from "./badge";
 import { Glyph } from "./glyph";
 import type { Diagnostic } from "./highlighter";
 import { cn } from "../lib/utils";
@@ -145,13 +147,31 @@ export interface RegionArm {
   members?: BlockMember[];
 }
 
+/** Text the measuring copy may render: a string or a number, never a node. */
+export type RegionText = string | number;
+
+/**
+ * The chips a region corner's header carries on its right — a host's badge
+ * ("iteration 3 of 7", `z⁻¹ = 0`) and control marks — as DATA, drawn by
+ * BlockRegion itself (`Badge`, `ControlMark`). WHY data and not a node: see
+ * `RegionCornerCard`.
+ */
+export interface RegionHeaderChips {
+  badge?: RegionText;
+  marks?: readonly ControlMarkKind[];
+}
+
 /**
  * The kit's own corner card, as DATA: BlockRegion renders it — a `BlockPort`
  * whose id is the region's, around a `Block` with `shape="region-corner"` —
  * so it can also render a measuring copy of it (see `RegionCornerProps`).
+ *
+ * `H` is what the header may hold: `RegionText` on the auto-measured path,
+ * any node only where the caller gives `cornerSize` (`RegionCornerProps`).
  */
-export interface RegionCornerCard {
-  header: ReactNode;
+export interface RegionCornerCard<H extends ReactNode = RegionText> {
+  header: H;
+  chips?: RegionHeaderChips;
   /** Default `REGION_CORNER_WIDTH_PX`. */
   width?: number;
   /** The region's own ports, on the card's walls. */
@@ -181,18 +201,45 @@ type CornerSize = { w: number; h: number };
  */
 export type RegionCornerProps =
   | {
-      /** BlockRegion draws the corner itself: `cornerCard`, else `title`. */
+      /** BlockRegion draws the corner itself: `cornerCard`, else `title` —
+       *  PRIMITIVE text only, because this is the arm it measures by
+       *  mounting a hidden copy (re-judge 3: a portal inside `title` or the
+       *  header escapes every hiding ancestor, exactly as one inside
+       *  `corner` did). */
       corner?: undefined;
-      cornerCard?: RegionCornerCard;
+      cornerCard?: RegionCornerCard<RegionText>;
+      title?: RegionText;
+      type?: RegionText;
       /** Skip the measurement when a host already knows the corner's box. */
       cornerSize?: CornerSize;
       view?: RegionView;
+    }
+  | {
+      /** Rich title / type / header content in a region that CAN be opaque:
+       *  never copied, so the caller sizes the corner. */
+      corner?: undefined;
+      cornerCard?: RegionCornerCard<ReactNode>;
+      title?: ReactNode;
+      type?: ReactNode;
+      cornerSize: CornerSize;
+      view?: RegionView;
+    }
+  | {
+      /** Rich content in a region that is never opaque — never measured. */
+      corner?: undefined;
+      cornerCard?: RegionCornerCard<ReactNode>;
+      title?: ReactNode;
+      type?: ReactNode;
+      cornerSize?: CornerSize;
+      view?: "expanded" | "port";
     }
   | {
       /** An arbitrary corner, supplied whole, in a region that is never
        *  opaque — it is never measured by a hidden copy. */
       corner: ReactNode;
       cornerCard?: undefined;
+      title?: ReactNode;
+      type?: ReactNode;
       cornerSize?: CornerSize;
       view?: "expanded" | "port";
     }
@@ -201,6 +248,8 @@ export type RegionCornerProps =
        *  sizes it. */
       corner: ReactNode;
       cornerCard?: undefined;
+      title?: ReactNode;
+      type?: ReactNode;
       cornerSize: CornerSize;
       view?: RegionView;
     };
@@ -212,13 +261,10 @@ interface BlockRegionBaseProps {
    *  `data-block-id`. See this file's header. */
   id: string;
   kind?: RegionKind;
-  /**
-   * The corner card's title. With no `corner`/`cornerCard`, BlockRegion
-   * draws the card itself: a header-only `Block`, `shape="region-corner"`
-   * while expanded and a plain card while opaque, hugging its title.
-   * Rendered as authored.
-   */
-  title?: ReactNode;
+  // `title` and `type` live in `RegionCornerProps`, typed per arm: the
+  // corner card's title (with no `corner`/`cornerCard`, BlockRegion draws the
+  // card itself, a header-only `Block` hugging it, rendered as authored), and
+  // the secondary run beside it, muted.
   width?: number;
   /** Omitted = hug (`regionLayout`). */
   height?: number;
@@ -228,9 +274,6 @@ interface BlockRegionBaseProps {
   /** `@bbox-ui/glyph-content` grammar (`lucide:repeat`). Drawn on the
    *  port card's header and, large, on the Expanded Opaque face. */
   glyph?: string;
-  /** The secondary run beside the title — the region's type. Rendered as
-   *  authored, muted, after the title. */
-  type?: ReactNode;
   /**
    * The region's CONTROL ports (a loop's `Iterable`) when BlockRegion draws
    * its own corner from `title`: on the corner card's left wall while
@@ -532,14 +575,17 @@ function TitleCorner({
    *  rail, no dot. Only ever used on content BlockRegion renders itself. */
   measureOnly?: boolean;
 }) {
+  // The copy renders primitive text only — `primitiveOnly`'s WHY.
+  const titleText = measureOnly ? primitiveOnly(title) : title;
+  const typeText = measureOnly && type !== undefined ? primitiveOnly(type) : type;
   const header =
-    type === undefined ? (
-      title
+    typeText === undefined ? (
+      titleText
     ) : (
       <span data-slot="region-corner-heading" style={{ display: "inline-flex", gap: 6, whiteSpace: "nowrap" }}>
-        <span>{title}</span>
+        <span>{titleText}</span>
         <span data-slot="region-corner-type" className="text-muted-foreground">
-          {type}
+          {typeText}
         </span>
       </span>
     );
@@ -568,12 +614,62 @@ function TitleCorner({
   );
 }
 
+/**
+ * The measuring copy's content guard: a string or a number renders, anything
+ * else renders NOTHING.
+ *
+ * WHY, when the types already limit the auto-measured arm to `RegionText`
+ * (Codex re-judge 3, 2026-09-22): a cast or an `any` reaches past a type, and
+ * the cost of a node reaching the copy is a portal (an open Popover, a
+ * Tooltip) escaping `visibility: hidden`/`aria-hidden`/`inert` as a second,
+ * visible, focusable widget. A wrong height is the lesser failure, so the copy
+ * accepts it rather than ever rendering a node.
+ */
+function primitiveOnly(content: ReactNode): RegionText | null {
+  return typeof content === "string" || typeof content === "number" ? content : null;
+}
+
 /** `RegionCornerCard` drawn. `measureOnly` is the same Block without the
  *  `BlockPort` — the id-free, dot-free measuring copy. */
-function CornerCardView({ id, card, opaque, measureOnly = false }: { id: string; card: RegionCornerCard; opaque: boolean; measureOnly?: boolean }) {
+function CornerCardView({
+  id,
+  card,
+  opaque,
+  measureOnly = false,
+}: {
+  id: string;
+  card: RegionCornerCard<ReactNode>;
+  opaque: boolean;
+  measureOnly?: boolean;
+}) {
+  const text = measureOnly ? primitiveOnly(card.header) : card.header;
+  const chips = card.chips;
+  const header =
+    chips !== undefined && (chips.badge !== undefined || (chips.marks?.length ?? 0) > 0) ? (
+      // The same Bar a block node's header takes when it has chips
+      // (`nodeViews.tsx`'s `headerOf`): name left, chips right.
+      <Bar
+        size="md"
+        left={text}
+        right={
+          <>
+            {chips.badge !== undefined && (
+              <Badge size="sm" variant="secondary">
+                {chips.badge}
+              </Badge>
+            )}
+            {(chips.marks ?? []).map((mark) => (
+              <ControlMark key={mark} mark={mark} />
+            ))}
+          </>
+        }
+      />
+    ) : (
+      text
+    );
   const block = (
     <Block
-      header={card.header}
+      header={header}
       width={card.width ?? REGION_CORNER_WIDTH_PX}
       body={card.bandHeight === undefined ? undefined : <div data-slot="region-corner-band" style={{ height: card.bandHeight }} />}
       shape={opaque ? "card" : "region-corner"}

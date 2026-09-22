@@ -12,7 +12,6 @@
 // viewport.
 
 import { useRef, type ReactNode } from "react";
-import { CircleStop, RotateCw } from "lucide-react";
 
 import { Badge } from "../components/badge";
 import { Bar } from "../components/bar";
@@ -20,6 +19,7 @@ import { Block } from "../components/block";
 import { BlockPort, type BlockEdgeSpec } from "../components/blockPort";
 import type { BlockMember } from "../components/blockMembers";
 import { CodeEditor } from "../components/codeEditor";
+import { ControlMark } from "../components/controlMark";
 import { Glyph } from "../components/glyph";
 import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
@@ -333,20 +333,6 @@ function withPromotedPorts(
   return merged;
 }
 
-/** A control-exit mark: DP - Break & Continue, B5 — "a mark beside the
- *  call, never a cable". Drawn as a `Badge`, and deliberately given NO port
- *  and NO edge: `expectControlMark` asserts no wire may originate at one,
- *  which only stays true because nothing here ever mints a handle for it. */
-function ControlMark({ mark }: { mark: NonNullable<HostNodeData["marks"]>[number] }) {
-  return (
-    <Badge data-slot="control-mark" data-mark={mark} size="sm" variant="outline">
-      {mark === "break" && <CircleStop aria-hidden />}
-      {mark === "continue" && <RotateCw aria-hidden />}
-      {mark}
-    </Badge>
-  );
-}
-
 /**
  * A node's header.
  *
@@ -558,8 +544,13 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
   // `shape="region-corner"` (the corner's junctions with the frame go
   // square so the card reads as PART of the frame, block.tsx's `BlockShape`
   // WHY).
+  // The header as TEXT plus chips as DATA, not `headerOf(node)`'s node: the
+  // corner is measured by a hidden copy, which may only render primitive
+  // text (`RegionCornerProps`). BlockRegion draws the chips with the same
+  // Bar / Badge / ControlMark `headerOf` uses.
   const cornerCard: RegionCornerCard = {
-    header: headerOf(node),
+    header: node.data.name ?? "",
+    chips: { badge: node.data.badge, marks: node.data.marks },
     width: REGION_CORNER_WIDTH_PX,
     edges: ownEdges,
     ...(cornerSlots > 0 ? { bandHeight: railBandHeightForSlots(cornerSlots) } : null),
