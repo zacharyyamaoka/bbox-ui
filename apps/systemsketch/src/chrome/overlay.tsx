@@ -131,6 +131,36 @@ export function placeCornerCluster({
   return fits ?? candidates[candidates.length - 1];
 }
 
+/**
+ * The forced-corner opt-in's own finishing touch (Zach, 2026-09-22, after
+ * seeing it running: "there is this little piece of the letter showing, can
+ * you please... cover that"). `useCornerPlacement` gets this placement by
+ * calling `placeCornerCluster` with NO watermark, so it always lands at the
+ * plain `CORNER_INSET` (8px) — but tldraw sits its own watermark closer to
+ * the true corner than that (measured ~4px at 1400x900 desktop), so the
+ * cluster's flush-8px box does not fully CONTAIN the watermark's box, and a
+ * sliver of its right/bottom edge — the tail of a letter — pokes out past
+ * the cluster. This is not a case for `placeCornerCluster` itself: that
+ * function's whole job is deciding whether to sit beside/above the
+ * watermark, and it is still exactly right for that, untouched. This is the
+ * one extra step the FORCED path alone needs: once the cluster is already
+ * sitting over the watermark on purpose, shrink the offset just enough that
+ * the cluster's own edge reaches (or passes) the watermark's edge, so
+ * covering it is actually complete rather than "mostly".
+ *
+ * Only ever tightens (`Math.min` against the placement already chosen),
+ * never loosens it past what `placeCornerCluster` returned, and floors at 0
+ * so a watermark somehow flush against the corner cannot push the offset
+ * negative.
+ */
+export function hugWatermark(placement: CornerPlacement, container: CornerRect, watermark: CornerRect): CornerPlacement {
+  return {
+    ...placement,
+    right: Math.max(0, Math.min(placement.right, container.right - watermark.right)),
+    bottom: Math.max(0, Math.min(placement.bottom, container.bottom - watermark.bottom)),
+  };
+}
+
 /** tldraw's own class for it (LicenseManager.mjs:351) — read, never styled. */
 const LICENCE_WATERMARK = ".tl-watermark_SEE-LICENSE";
 const DOCK = '[data-slot="tool-dock"]';
@@ -175,14 +205,21 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
     const measure = () => {
       const el = cluster.current;
       if (!el) return;
+      const containerRect = rectOf(container);
       const next = placeCornerCluster({
-        container: rectOf(container),
+        container: containerRect,
         cluster: { width: el.offsetWidth, height: el.offsetHeight },
         watermark: forceCorner ? null : watermark ? rectOf(watermark) : null,
         obstacles: dock ? [rectOf(dock)] : [],
       });
+      // Forced AND a watermark actually exists: `hugWatermark` shrinks the
+      // offset (never grows it) so the cluster's own edge fully contains the
+      // watermark's, closing the "little piece of the letter showing" gap.
+      const settled = forceCorner && watermark ? hugWatermark(next, containerRect, rectOf(watermark)) : next;
       setPlacement((current) =>
-        current.right === next.right && current.bottom === next.bottom && current.placement === next.placement ? current : next,
+        current.right === settled.right && current.bottom === settled.bottom && current.placement === settled.placement
+          ? current
+          : settled,
       );
     };
 
