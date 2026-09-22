@@ -123,6 +123,41 @@ describe("formatRailLane / reconcileRailLane — the authoring round trip", () =
     expect(result.dividerAfter).toEqual([0]);
   });
 
+  // Judge finding 1 (2026-09-22): formatRailLane used to join a port's RAW
+  // label straight into the lane text — unescaped, a literal embedded
+  // newline split one port into two physical lines, and reconciling that
+  // text renamed the original to the first half and minted a stranger for
+  // the second. Fixed by sharing `portLane.ts`'s `encodeLaneLine` (and its
+  // new inverse, `decodeLaneLine`) rather than re-implementing formatting.
+  describe("identity survives a label containing a literal newline (finding 1)", () => {
+    it("formats a newline-carrying label as ONE escaped line, not two", () => {
+      const ports = [port("orig", "a\nb"), port("other", "c")];
+      const text = formatRailLane(ports, []);
+      expect(text.split("\n")).toHaveLength(2); // not 3 — the embedded \n must not become a line break
+      expect(text).toBe("a␊b\nc");
+    });
+
+    it("a genuine no-op round trip (format -> reconcile with no edit) keeps the SAME port objects", () => {
+      const ports = [port("orig", "a\nb"), port("other", "c")];
+      const text = formatRailLane(ports, [0]);
+      const result = reconcileRailLane(ports, [0], text, mint);
+      expect(result.ports).toBe(ports); // referential identity — nothing minted, nothing renamed
+      expect(result.ports[0].label).toBe("a\nb"); // the real newline survived, not the ␊ placeholder
+      expect(result.dividerAfter).toEqual([0]);
+    });
+
+    it("editing an UNRELATED line leaves the newline-carrying port's id and label untouched", () => {
+      const ports = [port("orig", "a\nb"), port("other", "c")];
+      const text = formatRailLane(ports, []);
+      const edited = text.replace("c", "renamed");
+      const result = reconcileRailLane(ports, [], edited, mint);
+      expect(result.ports).toHaveLength(2);
+      expect(result.ports[0].id).toBe("orig");
+      expect(result.ports[0].label).toBe("a\nb");
+      expect(result.ports[1].label).toBe("renamed");
+    });
+  });
+
   it("reordering ports leaves divider POSITIONS untouched — the port moves, the boundary doesn't", () => {
     // [a, b | c] -> swap b and c -> [a, c | b]: divider stays "after index 1".
     const ports = [port("a"), port("b"), port("c")];
@@ -172,6 +207,36 @@ describe("returnPortGroups — declaration string in, port groups out", () => {
 
   it("does not split inside brackets", () => {
     expect(returnPortGroups("dict[str, int | float] | None").map((g) => g[0].id)).toEqual(["dict[str, int | float]", "None"]);
+  });
+
+  // Judge finding 2 (2026-09-22): dedupe used to compare trimmed labels
+  // BYTE FOR BYTE, so the same type spelled with different internal
+  // whitespace produced two ports and a divider between them.
+  describe("dedupe is on a whitespace-normalized type key (finding 2)", () => {
+    it("collapses the same type spelled with different internal spacing", () => {
+      expect(returnPortGroups("list[ int ] | list[int]")).toHaveLength(1);
+    });
+
+    it("keeps the FIRST authored spelling as the displayed label/id", () => {
+      const groups = returnPortGroups("list[ int ] | list[int]");
+      expect(groups[0][0].label).toBe("list[ int ]");
+      expect(groups[0][0].id).toBe("list[ int ]");
+    });
+
+    it("the reverse order keeps ITS first spelling instead", () => {
+      const groups = returnPortGroups("list[int] | list[ int ]");
+      expect(groups[0][0].label).toBe("list[int]");
+    });
+
+    it("still distinguishes genuinely different types that merely contain brackets", () => {
+      expect(returnPortGroups("list[int] | list[float]").map((g) => g[0].id)).toEqual(["list[int]", "list[float]"]);
+    });
+
+    it("railForReturnAnnotation: no divider for a whitespace-only difference", () => {
+      const rail = railForReturnAnnotation("def f(x) -> list[ int ] | list[int]:");
+      expect(rail.items).toHaveLength(1);
+      expect(rail.dividerAfter).toEqual([]);
+    });
   });
 
   it("empty annotation is zero groups", () => {

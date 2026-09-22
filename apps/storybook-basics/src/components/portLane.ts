@@ -91,18 +91,44 @@ function backtrackMatches(a: string[], b: string[], table: number[][]): { ai: nu
   return matches;
 }
 
+/**
+ * The one-line-per-port encode/decode pair, factored out (2026-09-22,
+ * "multiple returns" judge finding 1) so every caller that builds or reads
+ * lane TEXT — this file's own `formatPortLane`/`reconcilePortLane` and
+ * `returnDividers.ts`'s `formatRailLane`/`reconcileRailLane` — shares ONE
+ * escaping rule instead of each re-stating it (and, before this fix,
+ * `formatRailLane` simply didn't: it joined a raw, unescaped label straight
+ * into the lane text, so a label containing a literal `\n` silently split
+ * into two lines on format and reconciled as two different ports).
+ *
+ * A label containing a literal `\n` (unreachable from the keyboard —
+ * `singleLineGuard`/multiline both filter it — but reachable from story
+ * code or an import) is escaped to `␊` first: unescaped, one item would
+ * silently become two ports on the next open, since the join/split round
+ * trip has no other way to tell "one label with a newline" from "two
+ * labels".
+ */
+export function encodeLaneLine(line: string): string {
+  return line.includes("\n") ? line.replace(/\n/g, "␊") : line;
+}
+
+/** The inverse of `encodeLaneLine` — turns the placeholder back into the
+ *  real newline it stands for. `reconcilePortLane` decodes every SURVIVING
+ *  line through this before it is compared against a port's own raw label
+ *  or written back with `withPortLaneLine`; skipping that step (the bug
+ *  finding 1 named) leaves the placeholder symbol itself in the stored
+ *  label instead of restoring the original character. */
+export function decodeLaneLine(line: string): string {
+  return line.includes("␊") ? line.replace(/␊/g, "\n") : line;
+}
+
 /** The lane's document, in port order — one line per port, in the SAME
  *  order the caller's ports are flattened in (portEdge.tsx flattens
  *  `computeSlots`'s visual order, not necessarily `items`' raw array order,
  *  so a grouped family's members stay contiguous with the dots they sit
- *  beside). A label containing a literal `\n` (unreachable from the
- *  keyboard — `singleLineGuard`/multiline both filter it — but reachable
- *  from story code or an import) is escaped to `␊` first: unescaped, one
- *  item would silently become two ports on the next open, since the
- *  join/split round trip has no other way to tell "one label with a
- *  newline" from "two labels". */
+ *  beside). */
 export function formatPortLane(ports: PortEdgeItem[]): string {
-  return ports.map((p) => portLaneLine(p)).map((line) => (line.includes("\n") ? line.replace(/\n/g, "␊") : line)).join("\n");
+  return ports.map((p) => encodeLaneLine(portLaneLine(p))).join("\n");
 }
 
 /**
@@ -144,7 +170,14 @@ function withPortLaneLine(port: PortEdgeItem, line: string): PortEdgeItem {
  * genuine no-op.
  */
 export function reconcilePortLane(ports: PortEdgeItem[], text: string, mintItem: (label: string) => PortEdgeItem): PortEdgeItem[] {
-  const before = ports.map(portLaneLine);
+  // ENCODED on both sides of the diff (finding 1's fix): `text` is lane
+  // TEXT — whatever `formatPortLane` last emitted, plus whatever was typed
+  // on top of it — so it already carries the `␊` placeholder for any
+  // embedded newline. `before` has to be encoded the same way, or a port
+  // whose raw label contains a real `\n` never equals its own unedited line
+  // and gets torn into a rename + a fresh mint instead of recognised as
+  // unchanged.
+  const before = ports.map((p) => encodeLaneLine(portLaneLine(p)));
   // `text === ""` short-circuits to zero lines — `"".split("\n")` would
   // otherwise produce `[""]`, one port with an empty label, not an empty
   // lane. Select-all + Delete must empty the edge.
@@ -178,7 +211,13 @@ export function reconcilePortLane(ports: PortEdgeItem[], text: string, mintItem:
 
   // Tier 3: still unmatched -> a fresh port. One `mintItem` call per new
   // line, in order, so two new lines in one edit mint two distinct ids.
-  const result = after.map((label, bi) => {
+  // DECODED here — the one place a survivor's text is turned back into a
+  // real label — so a matched or renamed port's stored `label`/`laneLine`
+  // gets its original `\n` back rather than the `␊` placeholder that lived
+  // in the TEXT (finding 1's other half: encoding without a matching decode
+  // would leave the placeholder symbol itself in the port's data).
+  const result = after.map((rawLine, bi) => {
+    const label = decodeLaneLine(rawLine);
     const source = keep.get(bi);
     if (!source) return mintItem(label);
     // Only actually EDIT the line when it changed — see the purity note.
