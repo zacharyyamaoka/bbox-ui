@@ -485,6 +485,53 @@ Component — not a stock Fumadocs feature. Do not hunt for a built-in.
   while `.node-version` asked for 22. Node strips TypeScript by default from
   22.18 onward, so the build uses plain `node` with no flag and survives either.
 
+## Handing over a board — a link, never a file chooser
+
+Zach, 2026-09-20, rating a handoff **Bad**: *"you should make it so I can open
+this file directly. I was able to do this is system sketch. I think perhaps it
+had like a URI or something?"*
+
+A generated review board exists so he does not have to build the thing under
+review. Ending with "start the server, then ☰ › File › Open and pick this path"
+hands that saving straight back — it is [[show don't tell]]'s "a screenshot is
+evidence, not access" one step further along: access to the *app* is not access
+to the *artifact*.
+
+**So the board row of an Open-it table is always one fence with the server
+command, and the board's own URL in a code span directly beneath it:**
+
+```bash
+pnpm --dir <tree> --filter systemsketch exec vite --port <your own port> --strictPort
+```
+
+`http://127.0.0.1:<port>/?board=/absolute/path/to/board.tldr`
+
+Three things about that URL, each already measured:
+
+- **The `=` is what must stay literal.** Never wrap the URL in a markdown
+  `[text](url)` link: a chat client rewrites `?board=` into `?board%3D…`, which
+  mangles the *key*, and the app then cannot find the parameter at all. Hand over
+  a bare URL or a code span.
+  The `/` inside the **value** is a different matter, and the earlier wording
+  here ("never percent-encode the `=` or the `/`") was wrong — measured
+  2026-09-20: `URLSearchParams.set` *always* escapes `/` to `%2F`, so the
+  donor's own `documentHref` has never emitted the literal-slash form. Both
+  parse to the same path; the literal form is merely readable. So build in-app
+  navigation with `documentHref`, and render a link for a human with
+  `boardLinkFor` — the paste-safe spelling, with a test pinning that the two
+  parse identically.
+- **The archived app is the reference**, not a thing to reinvent:
+  `/home/bam/systemsketch/src/workspace/workspaceModel.ts:157` builds the link,
+  `src/workspace/LocalWorkspace.tsx:367` reads it.
+- **Check what already exists before building any of it.** On 2026-09-19
+  `?board=` had *three* implementations — the donor plus two different in-flight
+  meanings on sibling branches — and a trunk `documentHref(path, base)` already
+  ported. `git grep` the branches first.
+
+Boards live under the app's own `review/` directory. **Never** under
+`/home/bam/SystemSketch` — those are Zach's real boards and the app autosaves
+into whatever it has open.
+
 ## Several agent sessions edit this tree at once
 
 Peers write here in real time — `packages/inspector` especially. This is the
@@ -499,5 +546,3 @@ normal case, not an edge case.
   shell running it, and your cwd silently resets. This has happened twice.
 - **Implementing is not integrating.** Commit to a branch and report. Do not
   merge to `main`, push, or deploy unless Zach asks in those words.
-
-@.claude/feedback.md
