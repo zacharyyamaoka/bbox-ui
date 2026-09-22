@@ -308,7 +308,11 @@ function useRailTop(): number {
     const track = () => {
       const next = container.querySelector(BACKEND_PANEL);
       if (next === backend) return false;
+      // `disconnect` drops EVERY target, the container included, so it is
+      // re-observed here — otherwise a re-mounted chip would silently stop
+      // this hook hearing container resizes.
       sizes.disconnect();
+      sizes.observe(container);
       backend = next;
       if (backend) sizes.observe(backend);
       return true;
@@ -319,8 +323,7 @@ function useRailTop(): number {
     });
     arrivals.observe(container, { childList: true, subtree: true });
 
-    track();
-    sizes.observe(container);
+    if (!track()) sizes.observe(container);
     measure();
 
     return () => {
