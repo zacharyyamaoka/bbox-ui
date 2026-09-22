@@ -49,8 +49,8 @@ function KebabMenu() {
 }
 
 const meta = {
-  title: "Basics/DropdownMenu",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/DropdownMenu",
+  tags: ["object:stock", "lane:baseline"],
   component: DropdownMenu,
 } satisfies Meta<typeof DropdownMenu>;
 

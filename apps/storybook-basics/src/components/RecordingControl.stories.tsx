@@ -93,8 +93,8 @@ function Harness({ withLast = false, header = "full" }: HarnessProps) {
 }
 
 const meta = {
-  title: "Basics/RecordingControl",
-  tags: ["area:basics", "lane:devtools"],
+  title: "Components/Panels & Dialogs/RecordingControl",
+  tags: ["object:chrome", "host:tldraw", "lane:devtools"],
   component: RecordingControl,
   parameters: { layout: "centered" },
   // Every story below renders through `Harness`, which owns a real core; these

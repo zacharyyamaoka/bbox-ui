@@ -69,8 +69,8 @@ const meta = {
   // single component's own story. Adding a new area name is out of this
   // lane's write set (CLAUDE.md is not in it); this reuses an existing one
   // honestly rather than inventing "diagnostics" unilaterally.
-  title: "Styles/Diagnostics",
-  tags: ["area:styles", "lane:invalid-states-impl"],
+  title: "Components/Text & Marks/Diagnostics",
+  tags: ["object:text-marks", "lane:invalid-states-impl"],
 } satisfies Meta;
 
 export default meta;

@@ -18,8 +18,8 @@ import { screenshotWorkspace, type FakeWorkspaceClient } from "../files/fakeWork
  * the two a hand-to-stock rebuild is most likely to drop.
  */
 const meta = {
-  title: "Basics/FileNavigator Stock Parts",
-  tags: ["area:basics", "lane:chrome-files-settings"],
+  title: "Components/Panels & Dialogs/FileNavigator/Stock Parts",
+  tags: ["object:chrome", "lane:chrome-files-settings"],
   component: FileNavigator,
   args: {
     open: false,

@@ -108,8 +108,8 @@ function StyleRow({ style }: { style: TraceStyle }) {
 }
 
 const meta = {
-  title: "Trace",
-  tags: ["area:trace", "lane:baseline"],
+  title: "Components/Traces/Trace",
+  tags: ["object:trace", "lane:baseline"],
   component: TraceBody,
   // `id` and `path` are required props, so every story below would
   // otherwise have to restate them just to satisfy the type — these are

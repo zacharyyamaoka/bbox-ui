@@ -33,8 +33,8 @@ import { drawsHeaderRule, REGION_VARIANTS, type RegionVariantId } from "./region
 import { BranchInLoop } from "../presets/ControlFlowGallery.stories";
 
 const meta = {
-  title: "Control Flow/Variant Gallery",
-  tags: ["area:control-flow", "lane:prf-app-variant-switch-2026-09-19"],
+  title: "Skin/VariantGallery",
+  tags: ["object:skin", "host:dom", "host:react-flow", "host:tldraw", "lane:prf-app-variant-switch-2026-09-19"],
   parameters: { layout: "fullscreen" },
 } satisfies Meta;
 

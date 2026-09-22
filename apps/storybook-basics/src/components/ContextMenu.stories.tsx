@@ -74,7 +74,8 @@ function FileContextMenu() {
 }
 
 const meta = {
-  title: "Basics/ContextMenu",
+  title: "Components/Stock/ContextMenu",
+  tags: ["object:stock"],
   component: ContextMenu,
 } satisfies Meta<typeof ContextMenu>;
 

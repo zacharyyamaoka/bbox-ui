@@ -42,8 +42,8 @@ import { TldrawHost } from "../hosts/tldrawHost";
 import { expectMemberInside } from "./controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Host Edges",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/HostEdges",
+  tags: ["object:region", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;

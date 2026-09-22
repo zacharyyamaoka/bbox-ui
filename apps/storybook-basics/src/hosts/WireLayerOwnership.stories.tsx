@@ -46,8 +46,8 @@ const ownershipScene: HostScene = {
 };
 
 const meta = {
-  title: "Blocks/Host Fixes/Wire Layer Ownership",
-  tags: ["area:blocks", "lane:host-fixes"],
+  title: "Hosts/WireLayer Ownership",
+  tags: ["object:trace", "host:dom", "lane:host-fixes"],
 } satisfies Meta;
 
 export default meta;

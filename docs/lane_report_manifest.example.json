@@ -45,14 +45,14 @@
       "h": 420
     },
     {
-      "id": "styles--side-by-side",
+      "id": "skin-styles--side-by-side",
       "title": "Styles · Side By Side",
       "look_for": "one of the 4 links clicked live to prove WhatsNew's links actually resolve — real Default/Plain/Sketch panels, not a stub",
       "w": 700,
       "h": 280
     },
     {
-      "id": "trace--delayed-split",
+      "id": "components-traces-trace--delayed-split",
       "title": "Trace · Delayed Split",
       "look_for": "another of the verified links — confirms the click landed on Trace's OWN gallery, not a placeholder",
       "w": 700,

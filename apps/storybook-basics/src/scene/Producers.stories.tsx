@@ -38,8 +38,8 @@ import { producerCounts } from "./producers";
 import { isPortVariantId, PORT_VARIANTS, portVariantRingOverhangPx } from "../skin/portVariants";
 
 const meta = {
-  title: "Blocks/Scene/Producer Count",
-  tags: ["area:blocks", "lane:prf-producers-count-2026-09-19"],
+  title: "Scene/Producers",
+  tags: ["object:trace", "host:dom", "host:react-flow", "host:tldraw", "lane:prf-producers-count-2026-09-19"],
 } satisfies Meta;
 
 export default meta;

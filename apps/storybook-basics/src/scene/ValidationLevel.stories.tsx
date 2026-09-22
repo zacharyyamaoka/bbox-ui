@@ -40,8 +40,8 @@ import {
  */
 
 const meta = {
-  title: "Blocks/Scene/Validation level",
-  tags: ["area:blocks", "lane:settings-validation-level-2026-09-21"],
+  title: "Scene/ValidationLevel",
+  tags: ["object:scene", "lane:settings-validation-level-2026-09-21"],
 } satisfies Meta;
 
 export default meta;

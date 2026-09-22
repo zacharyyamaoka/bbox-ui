@@ -274,6 +274,36 @@ assertion in that play function something to be false about. 115 play
 functions here still open synchronously (most predate the menu kit); fix
 them as you touch them rather than in one sweep.
 
+## Story titles — the sidebar is the repo's top level, then families
+
+Zach, 2026-09-22, picking proposal B out of three that ran side by side
+(`reports/media/storybook-org-2026-09-22.html`): *"top level same as repo and
+then familes beneath"* — and Hosts is a section *"so we can show all the
+examples that incoperate reactflow/tldraw"*. Before this, every title was a
+free string each lane chose locally; 151 reasonable choices added up to 11
+sections, four holding one thing, and six components living in two places.
+
+- **The first segment is the story file's own top-level folder**, in
+  ARCHITECTURE.md's words: `Components` · `Scene` · `Editor` · `Hosts` ·
+  `Presets` · `Skin` (`src/components/…` → `Components/…`). A story that
+  demonstrates another kit's code moves to that kit's folder; the title does
+  not paper over the location.
+- **A family level exists only where a section would list more than 15
+  things** — today only Components: `Ports`, `Blocks`, `Traces`,
+  `Text & Marks`, `Menus & Bars`, `Panels & Dialogs`, `Stock`. The list is
+  closed; add a family in `src/storyOrganisation.test.ts` deliberately, never
+  in a title.
+- **Then the component's code name** (`PortEdge`, not "Port Edge"), then an
+  aspect in words where one file is a facet of a component
+  (`Components/Ports/PortEdge/Hit Regions`).
+- **Order** is `parameters.options.storySort` in `.storybook/preview.tsx`.
+
+`src/storyOrganisation.test.ts` (the `unit` project, so `pnpm test`, not
+`test-stories`) fails on a section that is not the file's folder, a family
+outside the list, a flat section over 15, or a wrong tag below — it reads
+titles with Storybook's own CSF parser. It cannot tell whether a component
+is in the *right* family; that stays a judgement.
+
 ## Story tags — every lane's work is findable by its tag
 
 Zach, 2026-09-17, looking at 47 story files with no way to filter them: *"I
@@ -299,12 +329,19 @@ a status provider (Chromatic-class integration), not by `tags` at all. It
 reads 0/0/0 regardless of what any story is tagged, and there is no local
 config that wires it up from this repo alone.
 
-**The vocabulary is closed — two prefixes, nothing else:**
+**The tag vocabulary is closed — three prefixes, nothing else:**
 
-- **`area:<name>`** — one per file, matching the story's own top-level
-  `title` segment: `basics`, `blocks`, `control-flow`, `hit-regions`,
-  `ports`, `presets`, `styles`, `trace`. Mechanical to derive (`title.split("/")[0]`,
-  lowercased) — don't invent a new area without adding it here first.
+- **`object:<name>`** — one per file: what the story is *about*, the axis the
+  tree does not show — `port`, `block`, `trace`, `region`, `scene`,
+  `text-marks`, `chrome`, `stock`, `skin`. Filter `object:port` and every
+  story about ports appears, whichever section holds it. (Replaces `area:`,
+  retired 2026-09-22: it restated the title's first segment in 121 of 121
+  files, so it added nothing a filter needed.)
+- **`host:<engine>`** — `host:dom`, `host:react-flow`, `host:tldraw`: which
+  hosts the file's stories render in, *measured* — the test walks the file's
+  relative imports and fails when the tags disagree, so add or drop them when
+  your imports change. Filter `host:tldraw` to see every tldraw example,
+  including the ones under Presets and Scene, not just the Hosts section.
 - **`lane:<slug>`** — one per file, naming the delivery that produced or most
   recently substantively changed it. **When your lane creates a new story
   file or materially reworks an existing one, set its `lane:` tag to your
@@ -321,13 +358,13 @@ config that wires it up from this repo alone.
     what it is: "existed before lane tags did." Retag a file to its real
     lane only when you actually touch it for a reason.
 
-Add both tags as the second line of `meta`, right after `title:` — every
-existing file follows this order, so a new one should too:
+Put the tags on the line right after `title:` — every existing file follows
+this order, so a new one should too:
 
 ```ts
 const meta = {
-  title: "Blocks/Block",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Components/Blocks/Block",
+  tags: ["object:block", "lane:baseline"],
   component: Block,
   ...
 } satisfies Meta<typeof Block>;

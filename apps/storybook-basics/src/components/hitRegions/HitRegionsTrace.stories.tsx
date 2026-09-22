@@ -29,8 +29,8 @@ import {
 import { effectiveHitValue, type HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
-  title: "Hit Regions/Trace",
-  tags: ["area:hit-regions", "lane:baseline"],
+  title: "Components/Traces/Trace/Hit Regions",
+  tags: ["object:trace", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

@@ -43,7 +43,7 @@ lane for no behavioural gain.
 **Why this is a barrier and not a detail.** The skin's mechanism for hiding
 a crisp border is to make it *transparent* while keeping its 2px width, so
 nothing moves — `skin.test.ts` pins that width across every skin. Measured
-on `styles--sketch` at base commit: a `Block`'s computed `border-color`
+on `skin-styles--sketch` at base commit: a `Block`'s computed `border-color`
 under the sketch skin is `rgba(0, 0, 0, 0)`.
 
 So a boundary pass that reads `getComputedStyle(el).borderColor` gets

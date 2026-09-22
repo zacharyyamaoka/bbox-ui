@@ -35,7 +35,7 @@ const flag = (name, fallback) => {
 const port = Number(flag("port", "5498"));
 const outDir = path.resolve(flag("out", path.join(repoRoot, "reports/media/batch-wiring-shots")));
 
-const STORY = `http://localhost:${port}/iframe.html?id=blocks-scene-batch-wiring--bench&viewMode=story`;
+const STORY = `http://localhost:${port}/iframe.html?id=scene-batchwiring--bench&viewMode=story`;
 
 await mkdir(outDir, { recursive: true });
 const browser = await chromium.launch();

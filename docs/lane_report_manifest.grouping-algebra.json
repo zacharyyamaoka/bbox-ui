@@ -45,28 +45,28 @@
   ],
   "stories": [
     {
-      "id": "blocks-scene-grouping--round-trip",
+      "id": "scene-grouping--round-trip",
       "title": "Round trip \u2014 collapse, then dissolve, returns the identical scene",
       "look_for": "Three columns: Before, Collapsed, Dissolved. In the middle column the two crossing edges have been re-pointed at the region's ports and two stubs appended; in the right column everything is back, including ids and array order. The verdict reads IDENTICAL.",
       "w": 1180,
       "h": 570
     },
     {
-      "id": "blocks-scene-grouping--boundary-classes",
+      "id": "scene-grouping--boundary-classes",
       "title": "Boundary classification \u2014 Zach's rule, one class per clause",
       "look_for": "One row per edge. Exactly one inbound, one outbound, two interior (hidden), one exterior \u2014 the three classes his sentence names plus the one it does not mention because it is not a candidate.",
       "w": 1330,
       "h": 270
     },
     {
-      "id": "blocks-scene-grouping--promoted-ports",
+      "id": "scene-grouping--promoted-ports",
       "title": "Promoted ports \u2014 the data the rendering lane paints",
       "look_for": "A sink on the left wall, a source on the right \u2014 Zach's v1 heuristic resolved. The table beside it is every field of the PromotedPort contract, including the `by` provenance.",
       "w": 1400,
       "h": 290
     },
     {
-      "id": "blocks-scene-grouping--v-1-limit-feedback-edge",
+      "id": "scene-grouping--v-1-limit-feedback-edge",
       "title": "Where v1 first breaks \u2014 the feedback edge",
       "look_for": "Two answers side by side for the same cable: v1 says side `right`, the geometry policy says `left`, and BOTH say direction `source`. Polarity right, side wrong \u2014 which is exactly what \"assumes functional DAG\" gives away.",
       "w": 1030,

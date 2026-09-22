@@ -1234,7 +1234,7 @@ SHOTS_HTML = f"""
 <div class="shots">
   <figure><img src="{shot('grouping-roundtrip')}" alt="collapse and dissolve round trip">
     <figcaption><b>The inverse is already exact.</b>
-      <code>blocks-scene-grouping--round-trip</code>: collapse, then dissolve, and
+      <code>scene-grouping--round-trip</code>: collapse, then dissolve, and
       <code>JSON.stringify(before) === JSON.stringify(dissolved)</code> is
       <span style="color:#3fb950">IDENTICAL</span>. P1 rides this unchanged.</figcaption></figure>
   <figure><img src="{shot('grouping-ports')}" alt="promoted ports contract">
@@ -1243,7 +1243,7 @@ SHOTS_HTML = f"""
       which is precisely what a code cell needs to know in order to be expanded back.</figcaption></figure>
   <figure><img src="{shot('code-in-block')}" alt="a code editor inside a block">
     <figcaption><b>&ldquo;Defining some types, the data classes or whatever&rdquo; &mdash; already
-      renders.</b> <code>blocks-block--code-inside-block</code> puts a real CodeMirror document in a
+      renders.</b> <code>components-blocks-block--code-inside-block</code> puts a real CodeMirror document in a
       Block&rsquo;s Attributes slot.</figcaption></figure>
   <figure><img src="{shot('code-reactflow')}" alt="a code cell as a React Flow node">
     <figcaption><b>And already survives a host.</b> The same cell as a React Flow node &mdash; so

@@ -53,8 +53,8 @@ import { TldrawHost } from "./tldrawHost";
 import { BLOCK_MEMBER_INSET_PX } from "../components/blockMembers";
 
 const meta = {
-  title: "Blocks/Fit To Content Hosts",
-  tags: ["area:blocks", "lane:fit-to-content-hosts"],
+  title: "Hosts/FitToContent",
+  tags: ["object:block", "host:react-flow", "host:tldraw", "lane:fit-to-content-hosts"],
 } satisfies Meta;
 
 export default meta;

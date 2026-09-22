@@ -192,8 +192,8 @@ const BEND_HANDLE_RADIUS = 4;
 const VIRTUAL_HANDLE_RADIUS = 3;
 
 const meta = {
-  title: "Trace/Editor States",
-  tags: ["area:trace", "lane:baseline"],
+  title: "Components/Traces/TraceEditor",
+  tags: ["object:trace", "lane:baseline"],
   component: TraceEditor,
   // Placeholders only — every story supplies its own `render` and never
   // reads `args` (the idiom `TraceInteractive.stories.tsx` already uses for

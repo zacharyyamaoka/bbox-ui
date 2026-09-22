@@ -39,8 +39,8 @@ import editSessionFixture from "../../../../docs/fixtures/pyblocks-scene/events_
  */
 
 const meta = {
-  title: "Blocks/Scene/Pyblocks",
-  tags: ["area:blocks", "lane:pyblocks-backend"],
+  title: "Hosts/Pyblocks",
+  tags: ["object:scene", "host:dom", "host:tldraw", "lane:pyblocks-backend"],
 } satisfies Meta;
 
 export default meta;

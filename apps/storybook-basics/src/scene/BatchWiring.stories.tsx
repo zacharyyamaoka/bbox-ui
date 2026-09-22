@@ -79,8 +79,8 @@ function judgeWith(scene: HostScene, rules: StandInRules = {}): ReturnType<typeo
 }
 
 const meta = {
-  title: "Blocks/Scene/Batch Wiring",
-  tags: ["area:blocks", "lane:batch-wiring"],
+  title: "Scene/BatchWiring",
+  tags: ["object:trace", "host:dom", "lane:batch-wiring"],
 } satisfies Meta;
 
 export default meta;

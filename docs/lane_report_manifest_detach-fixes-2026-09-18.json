@@ -89,7 +89,7 @@
   ],
   "stories": [
     {
-      "id": "blocks-detach-to-primitive--block-gallery",
+      "id": "hosts-detachtoprimitive--block-gallery",
       "title": "Blocks / Detach To Primitive \u2014 Before / Detached / Rebuilt",
       "look_for": "5 rows now (was 3): simple / port / expanded / wrapping-header (F2) / long-single-line-header (F3), x 3 columns. Look at the 4th row's Detached column especially \u2014 that's F2's fix.",
       "w": 1050,
@@ -98,7 +98,7 @@
       "name": "gallery-fixed"
     },
     {
-      "id": "blocks-detach-to-primitive--zoom-invariance",
+      "id": "hosts-detachtoprimitive--zoom-invariance",
       "title": "Blocks / Detach To Primitive \u2014 F1 regression (z=0.5/1/2)",
       "look_for": "3 cells, one per camera zoom. The card and ports should look the SAME shape at every zoom, just bigger on screen at higher zoom \u2014 never a different model size.",
       "w": 3000,
@@ -107,9 +107,9 @@
       "name": "zoom-fixed-after"
     },
     {
-      "id": "blocks-detach-to-primitive--rebuild-menu-open-for-capture",
+      "id": "hosts-detachtoprimitive--rebuild-menu-open-for-capture",
       "title": "Blocks / Detach To Primitive \u2014 Rebuild menu, open",
-      "look_for": "The capture-only twin of the real acceptance test (blocks-detach-to-primitive--rebuild-menu-states, which runs the same sequence then CLOSES the menu and finishes \u2014 not a useful still frame). This variant stops with the menu open so there is something to look at; see the capture above for exactly this frame.",
+      "look_for": "The capture-only twin of the real acceptance test (hosts-detachtoprimitive--rebuild-menu-states, which runs the same sequence then CLOSES the menu and finishes \u2014 not a useful still frame). This variant stops with the menu open so there is something to look at; see the capture above for exactly this frame.",
       "w": 900,
       "h": 700,
       "settle": 2500,

@@ -80,8 +80,8 @@ import {
 import { expectArmsStacked, expectCornerPorts, expectRegionExpanded, expectRegionOpaque } from "../presets/controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Region Variants",
-  tags: ["area:control-flow", "lane:regions"],
+  title: "Skin/RegionVariants",
+  tags: ["object:region", "host:dom", "lane:regions"],
 } satisfies Meta;
 
 export default meta;

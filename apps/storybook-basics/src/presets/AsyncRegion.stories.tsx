@@ -462,8 +462,8 @@ function CommunicationPatternsStory() {
 }
 
 const meta = {
-  title: "Blocks/AsyncRegion",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Presets/AsyncRegion",
+  tags: ["object:region", "lane:baseline"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },
 } satisfies Meta<typeof WireLayer>;

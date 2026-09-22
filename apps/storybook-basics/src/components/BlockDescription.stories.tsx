@@ -18,8 +18,8 @@ import { BLOCK_DESCRIPTION_FONT_PX, BLOCK_DESCRIPTION_PADDING_X_PX } from "./blo
  * — no number is retyped in this file.
  */
 const meta = {
-  title: "Blocks/Block Description",
-  tags: ["area:blocks", "lane:block-description"],
+  title: "Components/Blocks/BlockDescription",
+  tags: ["object:block", "lane:block-description"],
 } satisfies Meta;
 
 export default meta;

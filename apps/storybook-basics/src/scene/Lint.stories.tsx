@@ -46,8 +46,8 @@ import { portKey, wiredPorts, type SceneEdgeEnds } from "./scene";
  */
 
 const meta = {
-  title: "Blocks/Scene/Lint",
-  tags: ["area:blocks", "lane:lint-engine-2026-09-17"],
+  title: "Scene/Lint",
+  tags: ["object:scene", "lane:lint-engine-2026-09-17"],
 } satisfies Meta;
 
 export default meta;

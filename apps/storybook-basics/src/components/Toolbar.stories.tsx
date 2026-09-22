@@ -16,7 +16,8 @@ import { Toolbar, ToolbarButton, ToolbarGroup, ToolbarLink, ToolbarSeparator } f
  * does not.
  */
 const meta = {
-  title: "Basics/Toolbar",
+  title: "Components/Menus & Bars/Toolbar",
+  tags: ["object:chrome"],
   component: Toolbar,
 } satisfies Meta<typeof Toolbar>;
 

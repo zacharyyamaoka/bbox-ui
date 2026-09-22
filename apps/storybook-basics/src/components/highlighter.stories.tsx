@@ -65,8 +65,8 @@ const MASK_OFFSET_PX = 6;
 const MASK_BASE_RADIUS_CSS = "8px";
 
 const meta = {
-  title: "Styles/Highlighter",
-  tags: ["area:styles", "lane:floating-toolbars-2026-09-20"],
+  title: "Components/Text & Marks/Highlighter",
+  tags: ["object:text-marks", "lane:floating-toolbars-2026-09-20"],
 } satisfies Meta;
 
 export default meta;

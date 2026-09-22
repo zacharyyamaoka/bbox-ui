@@ -50,8 +50,8 @@ import { portKey, type ScenePortRef } from "../scene/scene";
  */
 
 const meta = {
-  title: "Blocks/Scene/Validation In A Host",
-  tags: ["area:blocks", "lane:validation-stack"],
+  title: "Hosts/Validation",
+  tags: ["object:scene", "host:react-flow", "host:tldraw", "lane:validation-stack"],
 } satisfies Meta;
 
 export default meta;

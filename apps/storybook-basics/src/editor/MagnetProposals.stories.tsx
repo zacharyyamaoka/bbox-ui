@@ -53,8 +53,8 @@ import { portKey, wiredPorts, type ScenePortRef } from "../scene/scene";
  */
 
 const meta = {
-  title: "Blocks/Scene/Magnet Proposals",
-  tags: ["area:blocks", "lane:magnetic-wires"],
+  title: "Editor/MagnetProposals",
+  tags: ["object:trace", "lane:magnetic-wires"],
 } satisfies Meta;
 
 export default meta;

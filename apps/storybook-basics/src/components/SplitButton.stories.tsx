@@ -13,7 +13,8 @@ import { SplitButton } from "./splitButton";
  * `useOutsideDismiss` popup.
  */
 const meta = {
-  title: "Basics/SplitButton",
+  title: "Components/Menus & Bars/SplitButton",
+  tags: ["object:chrome"],
   component: SplitButton,
   args: {
     label: "Merge",

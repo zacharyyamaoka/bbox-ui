@@ -26,8 +26,8 @@ import { GlyphPicker } from "./glyphPicker";
  * `apps/systemsketch/src/glyph.smoke.test.tsx`.
  */
 const meta = {
-  title: "Blocks/Editor/Glyph Picker",
-  tags: ["area:blocks", "lane:glyph-picker"],
+  title: "Editor/GlyphPicker",
+  tags: ["object:text-marks", "lane:glyph-picker"],
 } satisfies Meta;
 
 export default meta;

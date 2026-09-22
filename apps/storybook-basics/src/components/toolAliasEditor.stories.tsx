@@ -121,8 +121,8 @@ function hostState(canvasElement: HTMLElement): { aliases: ToolAliases; changes:
 }
 
 const meta = {
-  title: "Basics/Tool Alias Editor",
-  tags: ["area:basics", "lane:settings-pages"],
+  title: "Components/Panels & Dialogs/ToolAliasEditor",
+  tags: ["object:chrome", "lane:settings-pages"],
   component: ToolAliasEditor,
   // Placeholders: every story renders its own stateful `Harness` and never
   // reads `args` (the same idiom `SettingsView.stories.tsx` uses).

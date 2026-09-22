@@ -18,8 +18,8 @@ import { Separator } from "./separator";
  * 1px tells them apart.
  */
 const meta = {
-  title: "Basics/Separator",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Separator",
+  tags: ["object:stock", "lane:baseline"],
   component: Separator,
 } satisfies Meta<typeof Separator>;
 

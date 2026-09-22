@@ -21,8 +21,8 @@ import { InspectorPanel } from "./inspectorPanel";
  * - typing in the panel changes what the block paints.
  */
 const meta = {
-  title: "Blocks/Editor/Inspector Panel",
-  tags: ["area:blocks", "lane:inspector-panel"],
+  title: "Editor/InspectorPanel",
+  tags: ["object:chrome", "lane:inspector-panel"],
 } satisfies Meta;
 
 export default meta;

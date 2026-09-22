@@ -41,8 +41,8 @@ import { lintScene, subjectKey, type LintScene } from "../scene/lint";
  */
 
 const meta = {
-  title: "Blocks/Scene/Fold Bubbling",
-  tags: ["area:blocks", "lane:validation-stack"],
+  title: "Hosts/FoldBubbling",
+  tags: ["object:scene", "host:dom", "lane:validation-stack"],
 } satisfies Meta;
 
 export default meta;

@@ -27,8 +27,8 @@ function Harness({ bundle = SAMPLE_RECORDING_BUNDLE, startAtMs = 0 }) {
 }
 
 const meta = {
-  title: "Basics/RecordingViewer",
-  tags: ["area:basics", "lane:devtools"],
+  title: "Components/Panels & Dialogs/RecordingViewer",
+  tags: ["object:chrome", "host:tldraw", "lane:devtools"],
   component: RecordingViewer,
   parameters: { layout: "centered" },
   args: { open: false, onOpenChange: () => {}, bundle: SAMPLE_RECORDING_BUNDLE },

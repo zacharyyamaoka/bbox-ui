@@ -17,8 +17,8 @@ import { SettingsView, type SettingsCategory, type SettingsPresentation } from "
  * in old system sketch".
  */
 const meta = {
-  title: "Basics/SettingsView",
-  tags: ["area:basics", "lane:chrome-files-settings"],
+  title: "Components/Panels & Dialogs/SettingsView",
+  tags: ["object:chrome", "lane:chrome-files-settings"],
   component: SettingsView,
   // Each story renders its own stateful harness; these args exist only so
   // `StoryObj<typeof meta>` does not demand a full prop set per story.

@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import { ChromeBar, type ChromeBarProps } from "../components/chromeBar";
-import { InlineRename } from "../components/inlineRename";
+import { ChromeBar, type ChromeBarProps } from "./chromeBar";
+import { InlineRename } from "./inlineRename";
 
 /**
  * Rename in place — the field takes EXACTLY the box the title had, and no
@@ -23,8 +23,8 @@ import { InlineRename } from "../components/inlineRename";
 const PREFIX = "rename-bar";
 
 const meta = {
-  title: "Basics/ChromeBar/Rename in place",
-  tags: ["area:basics", "lane:chrome-files-settings"],
+  title: "Components/Menus & Bars/ChromeBar/Rename In Place",
+  tags: ["object:chrome", "lane:chrome-files-settings"],
   component: ChromeBar,
   // Every story renders its own stateful harness; these args exist only so
   // `StoryObj<typeof meta>` does not demand a full prop set per story.

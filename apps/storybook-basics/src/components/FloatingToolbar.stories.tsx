@@ -204,7 +204,8 @@ function Stage({ id, title, note, selection, bottomObstacleTop }: StageCase) {
 }
 
 const meta = {
-  title: "Basics/FloatingToolbar",
+  title: "Components/Menus & Bars/FloatingToolbar",
+  tags: ["object:chrome"],
   component: FloatingToolbar,
   // WHY base `args`: every required `FloatingToolbarProps` field (x/y/side/
   // visible/aria-label/children) has no sensible default, so CSF3 typegen

@@ -29,28 +29,28 @@
   ],
   "stories": [
     {
-      "id": "styles--sketch",
+      "id": "skin-styles--sketch",
       "title": "Styles · Sketch",
       "look_for": "the full wired scene (Source/Sink blocks, Function block with CodeEditor, data/async/delayed trace gallery, a Panel with ports, a TraceTerminal pair) drawn entirely by the boundary pass — no component in this tree imports ../skin",
       "w": 900,
       "h": 700
     },
     {
-      "id": "styles--all-components",
+      "id": "skin-styles--all-components",
       "title": "Styles · All Components",
       "look_for": "the Port row specifically — its Sketch column's ring is the one thing this migration had to keep visible; every other row differs via the token layer alone",
       "w": 900,
       "h": 400
     },
     {
-      "id": "skin-at-the-edges--side-by-side",
+      "id": "skin-skinattheedges--side-by-side",
       "title": "Skin/At the edges · Side By Side",
       "look_for": "3 columns now, not 4 — the deleted 'in-core sketch (today)' column is gone rather than left broken; columns 1 and 2 show the same traces/blocks/badges/ports crisp vs hand-drawn",
       "w": 1100,
       "h": 700
     },
     {
-      "id": "skin-at-the-edges--measured-not-nominal",
+      "id": "skin-skinattheedges--measured-not-nominal",
       "title": "Skin/At the edges · Measured Not Nominal",
       "look_for": "one column now, not two — both badges (narrow 'chip' and wide 'a much wider chip') get outlines proportioned to their OWN real width, no stretching",
       "w": 700,

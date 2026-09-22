@@ -268,7 +268,8 @@ function MatrixHeader() {
 /* ------------------------------------------------------------------ */
 
 const meta: Meta = {
-  title: "Trace/Elbow Directions",
+  title: "Components/Traces/Elbow/Directions",
+  tags: ["object:trace"],
   parameters: { layout: "fullscreen" },
 };
 

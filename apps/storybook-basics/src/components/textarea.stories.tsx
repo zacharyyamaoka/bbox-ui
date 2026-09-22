@@ -10,8 +10,8 @@ import { Textarea } from "./textarea";
  * stories are the multi-line field on its own, before a group wraps it.
  */
 const meta = {
-  title: "Basics/Textarea",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Textarea",
+  tags: ["object:stock", "lane:baseline"],
   component: Textarea,
 } satisfies Meta<typeof Textarea>;
 

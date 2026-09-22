@@ -12,7 +12,8 @@ import {
 import { PanelShell } from "./panelShell";
 
 const meta = {
-  title: "Basics/ProblemsPanel",
+  title: "Components/Panels & Dialogs/ProblemsPanel",
+  tags: ["object:chrome"],
   component: ProblemsPanel,
   // WHY base `args`: `groups`/`counts`/`severities`/`filter`/`onFilterChange`/
   // `onActivate` have no sensible default, so CSF3 typegen requires them

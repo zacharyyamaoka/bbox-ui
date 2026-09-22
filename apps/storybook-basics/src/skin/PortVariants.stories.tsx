@@ -2,14 +2,14 @@ import { useRef, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { Block } from "./block";
-import { BlockPort } from "./blockPort";
-import { LabeledPort } from "./labeledPort";
-import { PORT_RING_OVERHANG_PX, PORT_TEXT_SIZES } from "./port.layout";
-import type { PortEdgeItem } from "./portEdge";
-import type { PortState } from "./port";
-import type { Wire } from "./wiring";
-import { WireLayer } from "./wireLayer";
+import { Block } from "../components/block";
+import { BlockPort } from "../components/blockPort";
+import { LabeledPort } from "../components/labeledPort";
+import { PORT_RING_OVERHANG_PX, PORT_TEXT_SIZES } from "../components/port.layout";
+import type { PortEdgeItem } from "../components/portEdge";
+import type { PortState } from "../components/port";
+import type { Wire } from "../components/wiring";
+import { WireLayer } from "../components/wireLayer";
 import {
   DEFAULT_PORT_VARIANT_ID,
   PORT_VARIANTS,
@@ -18,7 +18,7 @@ import {
   portVariantRingOverhangPx,
   readPortVariantId,
   type PortVariantId,
-} from "../skin/portVariants";
+} from "./portVariants";
 
 /**
  * ACCEPTANCE for lane `ports` (docs/ASK-2026-09-19-PORTS-EDGES-REGIONS-
@@ -172,8 +172,8 @@ function clearHtmlVariant(): void {
 /* ------------------------------------------------------------------ */
 
 const meta = {
-  title: "Ports/PortVariants",
-  tags: ["area:ports", "lane:prf-ports-2026-09-19"],
+  title: "Skin/PortVariants",
+  tags: ["object:port", "lane:prf-ports-2026-09-19"],
 } satisfies Meta;
 
 export default meta;

@@ -153,8 +153,8 @@ const HERO_TO: TraceTerminalSpec = { x: 500, y: 70, dir: "right" };
 /* ------------------------------------------------------------------ */
 
 const meta = {
-  title: "Trace/Interactive",
-  tags: ["area:trace", "lane:baseline"],
+  title: "Components/Traces/Trace/Interactive",
+  tags: ["object:trace", "lane:baseline"],
   component: TraceEditor,
   parameters: { layout: "fullscreen" },
   args: { id: "trace-interactive", from: HERO_FROM, to: HERO_TO },

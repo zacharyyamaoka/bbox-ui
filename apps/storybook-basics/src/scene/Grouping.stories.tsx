@@ -54,8 +54,8 @@ import type { WireStyleData } from "./sceneWires";
  */
 
 const meta = {
-  title: "Blocks/Scene/Grouping",
-  tags: ["area:blocks", "lane:grouping"],
+  title: "Scene/Grouping",
+  tags: ["object:scene", "host:dom", "lane:grouping"],
 } satisfies Meta;
 
 export default meta;

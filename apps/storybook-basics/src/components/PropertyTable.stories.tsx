@@ -12,7 +12,8 @@ import { compareBoards, type RecordMap } from "./compareModel";
  * rows, so the gallery exercises the same path a host does.
  */
 const meta = {
-  title: "Basics/PropertyTable",
+  title: "Components/Panels & Dialogs/PropertyTable",
+  tags: ["object:chrome"],
   component: PropertyTable,
   // Every story below overrides `render`; these are just the dummy
   // defaults CSF3 typing needs to cover PropertyTable's required props.

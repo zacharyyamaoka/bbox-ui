@@ -71,8 +71,8 @@ const FREE_MEMBERS: BlockMember[] = [
 // spacing constants, a static (non-sortable) region, members shown, cards
 // off. A story states only what it changes.
 const meta = {
-  title: "Blocks/BlockMembers",
-  tags: ["area:blocks", "lane:floating-toolbars-2026-09-20"],
+  title: "Components/Blocks/BlockMembers",
+  tags: ["object:block", "lane:floating-toolbars-2026-09-20"],
   component: BlockMembers,
   args: {
     layout: "stack",

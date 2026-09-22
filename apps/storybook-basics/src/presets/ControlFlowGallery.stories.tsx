@@ -71,8 +71,8 @@ import {
 } from "./controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Gallery",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/Gallery",
+  tags: ["object:region", "host:dom", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;

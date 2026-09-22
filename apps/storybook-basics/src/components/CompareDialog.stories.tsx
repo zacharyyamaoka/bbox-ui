@@ -34,8 +34,8 @@ import { cn } from "../lib/utils";
  * note on uncontrolled fallbacks.
  */
 const meta = {
-  title: "Basics/CompareDialog",
-  tags: ["area:basics", "lane:draft-compare"],
+  title: "Components/Panels & Dialogs/CompareDialog",
+  tags: ["object:chrome", "lane:draft-compare"],
   component: CompareDialog,
   // Dummy defaults so `StoryObj<typeof meta>` does not demand a full prop
   // set per story; every story below supplies its own `render`.

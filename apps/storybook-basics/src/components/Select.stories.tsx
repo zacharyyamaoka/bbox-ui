@@ -15,8 +15,8 @@ import {
  * setting, so no lane ever hand-rolls one. No settings row consumes it yet.
  */
 const meta = {
-  title: "Basics/Select",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Select",
+  tags: ["object:stock", "lane:baseline"],
   component: Select,
 } satisfies Meta<typeof Select>;
 

@@ -14,8 +14,8 @@ import { ReactFlowHost } from "./reactFlowHost";
  */
 
 const meta = {
-  title: "Basics/Glyph/In A Host",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Hosts/Glyph",
+  tags: ["object:text-marks", "host:dom", "host:react-flow", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

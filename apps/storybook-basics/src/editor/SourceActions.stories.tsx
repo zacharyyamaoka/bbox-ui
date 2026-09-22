@@ -52,8 +52,8 @@ import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWi
  * exactly the data cables that crossed the selection.
  */
 const meta = {
-  title: "Blocks/Editor/Source Actions",
-  tags: ["area:blocks", "lane:scv-origin-and-actions"],
+  title: "Editor/SourceActions",
+  tags: ["object:scene", "lane:scv-origin-and-actions"],
 } satisfies Meta;
 
 export default meta;

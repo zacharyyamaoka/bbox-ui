@@ -78,8 +78,8 @@ function Bar() {
 }
 
 const meta = {
-  title: "Basics/AppMenu",
-  tags: ["area:basics", "lane:chrome-files-settings"],
+  title: "Editor/AppMenu",
+  tags: ["object:chrome", "lane:chrome-files-settings"],
   component: ChromeBar,
   // The stories render `Bar` (which builds its own props); these args exist
   // only so `StoryObj<typeof meta>` does not demand them per story. The menu

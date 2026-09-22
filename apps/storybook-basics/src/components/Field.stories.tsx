@@ -19,8 +19,8 @@ import { Switch } from "./switch";
  * docs/CHROME-FILES-SETTINGS-PLAN.md §3.
  */
 const meta = {
-  title: "Basics/Field",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Field",
+  tags: ["object:stock", "lane:baseline"],
   component: Field,
 } satisfies Meta<typeof Field>;
 

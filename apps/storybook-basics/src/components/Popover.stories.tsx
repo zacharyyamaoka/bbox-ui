@@ -19,7 +19,8 @@ import { Toolbar, ToolbarButton, ToolbarSeparator } from "./toolbar";
  * prove the POSITIONING primitive, not the control vocabulary.
  */
 const meta = {
-  title: "Basics/Popover",
+  title: "Components/Stock/Popover",
+  tags: ["object:stock"],
   component: Popover,
 } satisfies Meta<typeof Popover>;
 

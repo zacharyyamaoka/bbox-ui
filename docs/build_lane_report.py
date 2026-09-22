@@ -58,7 +58,7 @@ MANIFEST SHAPE (see docs/lane_report_manifest.example.json for a real one):
     "changes": ["…", "…"],
     "findings": ["…", "…"],
     "stories": [
-      {"id": "blocks-block--default", "title": "Block · Default", "look_for": "…", "w": 900, "h": 600}
+      {"id": "components-blocks-block--default", "title": "Block · Default", "look_for": "…", "w": 900, "h": 600}
     ],
     "slug": "…",                       # optional; default: slugified title
     "date": "2026-09-17",              # optional; default: today

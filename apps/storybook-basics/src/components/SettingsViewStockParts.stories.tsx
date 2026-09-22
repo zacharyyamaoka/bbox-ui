@@ -17,8 +17,8 @@ import { SettingsView, type SettingsCategory } from "./settingsView";
  * hand-to-stock rebuild is most likely to drop.
  */
 const meta = {
-  title: "Basics/SettingsView Stock Parts",
-  tags: ["area:basics", "lane:chrome-files-settings"],
+  title: "Components/Panels & Dialogs/SettingsView/Stock Parts",
+  tags: ["object:chrome", "lane:chrome-files-settings"],
   component: SettingsView,
   args: { open: false, onOpenChange: () => {}, presentation: "dialog" as const, categories: [] },
 } satisfies Meta<typeof SettingsView>;

@@ -89,8 +89,8 @@ function overlapsMainAxis(a: DOMRect, b: DOMRect): boolean {
 }
 
 const meta = {
-  title: "Ports/PortEdge/OffsetPaddingFor",
-  tags: ["area:ports", "lane:baseline"],
+  title: "Components/Ports/PortEdge/Offset Padding",
+  tags: ["object:port", "lane:baseline"],
   component: PortEdge,
   parameters: { layout: "padded" },
   // `render` below supplies two real tracks with story-local props — these

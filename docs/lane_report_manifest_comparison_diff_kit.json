@@ -23,28 +23,28 @@
   ],
   "stories": [
     {
-      "id": "blocks-scene-diff--word-diff-ink",
+      "id": "scene-scenediff--word-diff-ink",
       "title": "Scene/Diff · Word Diff Ink",
       "look_for": "wordDiff's tokenizer inking only the run that changed — run_inference/run_predict inks just 'inference'/'predict', and the camelCase pair only inks 'Inference'/'Predict', never the shared 'run'",
       "w": 480,
       "h": 260
     },
     {
-      "id": "blocks-scene-diff--pose-classification",
+      "id": "scene-scenediff--pose-classification",
       "title": "Scene/Diff · Pose Classification",
       "look_for": "classifyPoseChange telling moved from resized by which corner stayed put — the left-edge-drag row reports 'resized' with only the left edge heavy, never 'moved'",
       "w": 620,
       "h": 220
     },
     {
-      "id": "blocks-scene-diff--line-diff-code",
+      "id": "scene-scenediff--line-diff-code",
       "title": "Scene/Diff · Line Diff Code",
       "look_for": "the git-style raw-evidence diff over two JSON records, sorted keys so write order can't fake a change — threshold 0.5 removed in red, 0.8 added in green",
       "w": 480,
       "h": 260
     },
     {
-      "id": "blocks-scene-diff--scene-diff-summary",
+      "id": "scene-scenediff--scene-diff-summary",
       "title": "Scene/Diff · Scene Diff Summary",
       "look_for": "a whole before/after scene run through diffScene — the renamed-and-gained-a-port node shows ONE modified row naming only 'name', while the gained port shows up separately in the ports panel, never doubled into the node's own fields",
       "w": 760,

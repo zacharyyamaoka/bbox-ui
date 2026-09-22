@@ -38,8 +38,8 @@ import type { SceneEdgeEnds } from "../scene/scene";
  */
 
 const meta = {
-  title: "Blocks/Editor/Edge Drop Menu",
-  tags: ["area:blocks", "lane:edge-drop-menu"],
+  title: "Editor/EdgeDropMenu",
+  tags: ["object:trace", "lane:edge-drop-menu"],
 } satisfies Meta;
 
 export default meta;

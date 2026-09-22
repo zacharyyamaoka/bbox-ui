@@ -137,6 +137,40 @@ const preview: Preview = {
         date: /Date$/i,
       },
     },
+    // WHY this order: the sections ARE the repo's top-level folders, in
+    // ARCHITECTURE.md's order (Zach, 2026-09-22: "top level same as repo and
+    // then families beneath"). A family level exists only where a section
+    // would otherwise list more than 15 things — Components, today. Titles
+    // are held to this shape by src/storyOrganisation.test.ts. Must stay an
+    // inline literal: Storybook reads storySort statically from this file.
+    options: {
+      storySort: {
+        method: "alphabetical",
+        order: [
+          "Components",
+          [
+            "Ports",
+            ["Port", "LabeledPort", "PortEdge"],
+            "Blocks",
+            ["Block", "BlockPort", "*"],
+            "Traces",
+            ["Trace", "*"],
+            "Text & Marks",
+            "Menus & Bars",
+            "Panels & Dialogs",
+            "Stock",
+          ],
+          "Scene",
+          ["Scene", "*"],
+          "Editor",
+          "Hosts",
+          ["Scene", "Scene (tldraw)", "*"],
+          "Presets",
+          ["ControlFlow", ["Branch", "Loop", "Region", "*"], "*"],
+          "Skin",
+        ],
+      },
+    },
   },
 };
 

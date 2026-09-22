@@ -28,8 +28,8 @@ import {
 import type { HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
-  title: "Hit Regions/Block",
-  tags: ["area:hit-regions", "lane:baseline"],
+  title: "Components/Blocks/Block/Hit Regions",
+  tags: ["object:block", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

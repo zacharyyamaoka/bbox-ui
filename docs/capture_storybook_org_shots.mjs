@@ -145,8 +145,52 @@ async function recordJourney(browser, ids) {
   return video ? path.relative(repoRoot, await video.path()) : null;
 }
 
+/**
+ * After B landed (2026-09-22): the real sidebar, from this worktree's own
+ * `.storybook` on :5422 — the same three states, then the hero: scan the
+ * sidebar, open the tag filter, tick `host:tldraw`, scan what is left.
+ */
+async function captureLanded(browser) {
+  const tree = { key: "landed", port: 5422 };
+  const id = await anchorId(tree.port);
+  const shots = await shoot(browser, tree, id);
+  const context = await browser.newContext({
+    viewport: { width: 1100, height: 720 },
+    colorScheme: "dark",
+    recordVideo: { dir: OUT, size: { width: 1100, height: 720 } },
+  });
+  const page = await context.newPage();
+  await page.goto(`http://localhost:${tree.port}/?path=/story/${id}`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#storybook-explorer-tree [data-nodetype]");
+  await page.waitForTimeout(900);
+  await STATES.glance(page);
+  await page.waitForTimeout(700);
+  await scanSidebar(page);
+  await page.waitForTimeout(900);
+  await page.getByRole("button", { name: "Tag filters" }).click();
+  await page.waitForTimeout(900);
+  await page.getByText("host:tldraw", { exact: true }).click();
+  await page.waitForTimeout(1200);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  await settle(page, EXPAND_GROUPS);
+  await page.waitForTimeout(500);
+  await scanSidebar(page);
+  await page.waitForTimeout(1500);
+  const video = page.video();
+  await context.close();
+  return { shots, anchorId: id, video: video ? path.relative(repoRoot, await video.path()) : null };
+}
+
 await mkdir(OUT, { recursive: true });
 const browser = await chromium.launch();
+if (args.includes("--landed")) {
+  const landed = await captureLanded(browser);
+  await browser.close();
+  await writeFile(path.join(OUT, "manifest-landed.json"), JSON.stringify(landed, null, 1));
+  console.log(JSON.stringify(landed));
+  process.exit(0);
+}
 const ids = {};
 const manifest = { anchor: ANCHOR, trees: {} };
 for (const tree of TREES) {

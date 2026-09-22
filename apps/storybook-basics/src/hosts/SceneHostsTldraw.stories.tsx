@@ -26,7 +26,8 @@ import { TRACE_TERMINAL_GAP } from "../components/trace";
  */
 
 const meta = {
-  title: "Blocks/Scene/In A Host (tldraw)",
+  title: "Hosts/Scene (tldraw)",
+  tags: ["object:scene", "host:dom", "host:react-flow", "host:tldraw"],
 } satisfies Meta;
 
 export default meta;

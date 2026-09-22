@@ -37,8 +37,8 @@ import { portKey } from "../scene/scene";
  */
 
 const meta = {
-  title: "Blocks/Editor/Focus View",
-  tags: ["area:blocks", "lane:focus-view"],
+  title: "Editor/FocusView",
+  tags: ["object:scene", "lane:focus-view"],
 } satisfies Meta;
 
 export default meta;

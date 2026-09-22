@@ -13,7 +13,8 @@ import { InlineRename } from "./inlineRename";
  * "begin renaming this thing" callback mounts this component.
  */
 const meta = {
-  title: "Basics/InlineRename",
+  title: "Components/Text & Marks/InlineRename",
+  tags: ["object:text-marks"],
   component: InlineRename,
   args: {
     value: "Draft 1",

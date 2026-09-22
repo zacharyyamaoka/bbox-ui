@@ -27,7 +27,8 @@ import { grabChainFrom, OWNER_ATTR, resolveGrabAt } from "./grabChain";
 import { PolicyStage } from "./policyStage";
 
 const meta = {
-  title: "Interaction/Drag Policy",
+  title: "Hosts/DragPolicy",
+  tags: ["object:scene", "host:react-flow"],
   parameters: { layout: "padded" },
 } satisfies Meta;
 

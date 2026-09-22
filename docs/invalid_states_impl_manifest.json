@@ -46,77 +46,77 @@
   ],
   "stories": [
     {
-      "id": "styles-diagnostics--port-gallery",
+      "id": "components-text-marks-diagnostics--port-gallery",
       "title": "Styles/Diagnostics · Port Gallery",
       "look_for": "none/error/warning/info side by side — info paints nothing on the dot itself",
       "w": 640,
       "h": 200
     },
     {
-      "id": "styles-diagnostics--wired-and-error",
+      "id": "components-text-marks-diagnostics--wired-and-error",
       "title": "Styles/Diagnostics · Wired AND Error",
       "look_for": "the channel-discipline proof — the wired ring/core stay exactly themselves while the error halo rides outside them",
       "w": 420,
       "h": 200
     },
     {
-      "id": "styles-diagnostics--labeled-port-gallery",
+      "id": "components-text-marks-diagnostics--labeled-port-gallery",
       "title": "Styles/Diagnostics · LabeledPort Gallery",
       "look_for": "the wavy (error/warning) vs dotted (info) underline under the label text, plus the dot halo",
       "w": 720,
       "h": 200
     },
     {
-      "id": "styles-diagnostics--block-gallery",
+      "id": "components-text-marks-diagnostics--block-gallery",
       "title": "Styles/Diagnostics · Block Gallery",
       "look_for": "error gets glow+flag, warning gets the flag ALONE (no glow — 'must not shout'), info gets nothing",
       "w": 800,
       "h": 200
     },
     {
-      "id": "styles-diagnostics--highlighter-kinds-gallery",
+      "id": "components-text-marks-diagnostics--highlighter-kinds-gallery",
       "title": "Styles/Diagnostics · Highlighter Kinds Gallery",
       "look_for": "the actual deliverable Zach's report feedback asked for: stroke (default), mask, and halo on the SAME Block at the SAME severity, side by side — mask's corner visibly rounder than stroke's (measured: 14px vs 10px, exactly radius+offset)",
       "w": 1300,
       "h": 420
     },
     {
-      "id": "styles-diagnostics--trace-gallery",
+      "id": "components-text-marks-diagnostics--trace-gallery",
       "title": "Styles/Diagnostics · Trace Gallery",
       "look_for": "the translucent backdrop under the wire for error/warning; the stroke itself never recolours; info is bare",
       "w": 1000,
       "h": 160
     },
     {
-      "id": "styles-diagnostics--code-editor-gallery",
+      "id": "components-text-marks-diagnostics--code-editor-gallery",
       "title": "Styles/Diagnostics · CodeEditor Gallery",
       "look_for": "one field with an error squiggle AND a warning squiggle at independent character ranges, beside a plain field",
       "w": 700,
       "h": 200
     },
     {
-      "id": "styles-diagnostics--editable-text-gallery",
+      "id": "components-text-marks-diagnostics--editable-text-gallery",
       "title": "Styles/Diagnostics · EditableText Gallery",
       "look_for": "the same wavy/dotted underline split on a plain text label",
       "w": 700,
       "h": 140
     },
     {
-      "id": "styles-diagnostics--badge-gallery",
+      "id": "components-text-marks-diagnostics--badge-gallery",
       "title": "Styles/Diagnostics · Badge Gallery",
       "look_for": "the new amber variant=\"warning\" beside the existing destructive/secondary chips",
       "w": 900,
       "h": 130
     },
     {
-      "id": "styles-diagnostics--value-capsule-gallery",
+      "id": "components-text-marks-diagnostics--value-capsule-gallery",
       "title": "Styles/Diagnostics · ValueCapsule Gallery",
       "look_for": "the pill glow for BOTH error and warning (no flag anywhere — a capsule is too small)",
       "w": 700,
       "h": 200
     },
     {
-      "id": "styles-diagnostics--board-with-problems",
+      "id": "components-text-marks-diagnostics--board-with-problems",
       "title": "Styles/Diagnostics · Board With Problems",
       "look_for": "three independent producers marking a wired port, a block and a cable at once, with the unmarked Accumulator block staying completely calm beside them",
       "w": 900,

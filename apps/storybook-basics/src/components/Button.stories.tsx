@@ -5,8 +5,8 @@ import { Play } from "lucide-react";
 import { Button } from "./button";
 
 const meta = {
-  title: "Basics/Button",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Button",
+  tags: ["object:stock", "lane:baseline"],
   component: Button,
   args: { children: "Button", onClick: fn() },
 } satisfies Meta<typeof Button>;

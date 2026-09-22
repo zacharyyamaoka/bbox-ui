@@ -12,7 +12,8 @@ import {
 import { PanelShell } from "./panelShell";
 
 const meta = {
-  title: "Basics/FramesPanel",
+  title: "Components/Panels & Dialogs/FramesPanel",
+  tags: ["object:chrome"],
   component: FramesPanel,
   // WHY base `args`: `items`/`kinds`/`mode`/`onModeChange`/`onFocus`/
   // `onRename` have no sensible default, so CSF3 typegen requires them

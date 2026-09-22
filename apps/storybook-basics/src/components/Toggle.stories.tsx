@@ -37,8 +37,8 @@ function ControlledToggle({ size, variant }: { size?: "sm" | "default" | "lg"; v
 }
 
 const meta = {
-  title: "Basics/Toggle",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Toggle",
+  tags: ["object:stock", "lane:baseline"],
   component: Toggle,
 } satisfies Meta<typeof Toggle>;
 

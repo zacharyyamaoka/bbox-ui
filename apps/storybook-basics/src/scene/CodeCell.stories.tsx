@@ -41,8 +41,8 @@ import STEREO_DEFINITIONS from "../../../../docs/acceptance/pyblocks/stereo_defi
  */
 
 const meta = {
-  title: "Blocks/Scene/Code Cell",
-  tags: ["area:blocks", "lane:scv-rung-a-scene"],
+  title: "Scene/CodeCell",
+  tags: ["object:scene", "lane:scv-rung-a-scene"],
 } satisfies Meta;
 
 export default meta;

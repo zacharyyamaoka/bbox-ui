@@ -38,7 +38,8 @@ import {
  * implementation is the oracle; nothing here re-derives it.
  */
 const meta = {
-  title: "Skin/At the edges",
+  title: "Skin/SkinAtTheEdges",
+  tags: ["object:skin"],
   parameters: {
     layout: "padded",
     // WHY the skin toolbar is disabled here: these stories control the

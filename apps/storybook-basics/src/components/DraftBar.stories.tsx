@@ -27,7 +27,8 @@ const discardItem: MenuAction = {
 const rebaseItem = { id: "rebase", label: "Rebase", onSelect: fn() };
 
 const meta = {
-  title: "Basics/DraftBar",
+  title: "Components/Panels & Dialogs/DraftBar",
+  tags: ["object:chrome"],
   component: DraftBar,
   args: {
     draftName: "Draft 1",

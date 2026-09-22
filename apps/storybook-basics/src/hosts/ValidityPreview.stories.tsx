@@ -42,8 +42,8 @@ import { portKey, type ScenePortRef } from "../scene/scene";
  */
 
 const meta = {
-  title: "Blocks/Scene/Validity Preview",
-  tags: ["area:blocks", "lane:validation-stack"],
+  title: "Hosts/ValidityPreview",
+  tags: ["object:scene", "host:dom", "lane:validation-stack"],
 } satisfies Meta;
 
 export default meta;

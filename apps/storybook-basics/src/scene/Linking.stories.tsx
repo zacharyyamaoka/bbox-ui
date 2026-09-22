@@ -363,8 +363,8 @@ function filterPair(): LinkScene {
 /* ------------------------------------------------------------------ */
 
 const meta: Meta = {
-  title: "Blocks/Scene/Linking",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Scene/Linking",
+  tags: ["object:trace", "lane:baseline"],
 };
 
 export default meta;

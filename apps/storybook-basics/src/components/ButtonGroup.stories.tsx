@@ -13,7 +13,8 @@ import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "./button-gro
  * "back-forward pair" component.
  */
 const meta = {
-  title: "Basics/ButtonGroup",
+  title: "Components/Stock/ButtonGroup",
+  tags: ["object:stock"],
   component: ButtonGroup,
 } satisfies Meta<typeof ButtonGroup>;
 

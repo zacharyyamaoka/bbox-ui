@@ -32,8 +32,8 @@ import { PortOverflowChip } from "./portOverflowChip";
  * `PORT_EDGE_MORE_GAP_PX` rather than a number copied into this file.
  */
 const meta = {
-  title: "Blocks/Editor/Port Overflow Chip",
-  tags: ["area:blocks", "lane:port-overflow-chip"],
+  title: "Editor/PortOverflowChip",
+  tags: ["object:port", "lane:port-overflow-chip"],
 } satisfies Meta;
 
 export default meta;

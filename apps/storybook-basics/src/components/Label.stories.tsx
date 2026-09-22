@@ -11,8 +11,8 @@ import { Label } from "./label";
  * `FieldLabel` wraps this same part for the Field kit below.
  */
 const meta = {
-  title: "Basics/Label",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Label",
+  tags: ["object:stock", "lane:baseline"],
   component: Label,
 } satisfies Meta<typeof Label>;
 

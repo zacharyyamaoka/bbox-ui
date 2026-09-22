@@ -102,8 +102,8 @@ function expectDetour(root: ParentNode, wireId: string, obstacleSelector: string
 }
 
 const meta = {
-  title: "Control Flow/Wires",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/Wires",
+  tags: ["object:region", "host:dom", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;

@@ -26,8 +26,8 @@ import { Slider } from "./slider";
  * exactly why this one reads the rendered box instead.
  */
 const meta = {
-  title: "Basics/Slider",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Slider",
+  tags: ["object:stock", "lane:baseline"],
   component: Slider,
 } satisfies Meta<typeof Slider>;
 

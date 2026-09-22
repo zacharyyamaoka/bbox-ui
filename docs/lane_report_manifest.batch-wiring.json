@@ -31,42 +31,42 @@
   ],
   "stories": [
     {
-      "id": "blocks-scene-batch-wiring--bench",
+      "id": "scene-batchwiring--bench",
       "title": "Batch Wiring \u00b7 Bench (drive this one)",
       "look_for": "Click two or more blocks, pick an intent, press Arm, then click a ringing dot. Switch the `ineligible` control between Dim 18% / Dim 45% / Vanish 0% while armed to compare the treatments on the same board. The `stand-in rules` checkboxes change which dots are available, live.",
       "w": 900,
       "h": 700
     },
     {
-      "id": "blocks-scene-batch-wiring--availability-is-filtered",
+      "id": "scene-batchwiring--availability-is-filtered",
       "title": "Batch Wiring \u00b7 Availability Is Filtered",
       "look_for": "The mechanical proof. Asserts the exact 6-dot available set, that every ringing dot measures opacity 1, that a named list of unavailable dots measures < 1, and that one real dot measures 0.18 \u2014 the donor's frozen value. Ends committed, with the refusal sentence.",
       "w": 900,
       "h": 700
     },
     {
-      "id": "blocks-scene-batch-wiring--together-rings-only-its-own-group",
+      "id": "scene-batchwiring--together-rings-only-its-own-group",
       "title": "Batch Wiring \u00b7 Together Rings Only Its Own Group",
       "look_for": "The one line separating the two commands, measured: same selection, same rules, same judge, and \"together\" drops every dot outside the selection from the ring.",
       "w": 900,
       "h": 700
     },
     {
-      "id": "blocks-scene-batch-wiring--ambiguity-is-refused-not-guessed",
+      "id": "scene-batchwiring--ambiguity-is-refused-not-guessed",
       "title": "Batch Wiring \u00b7 Ambiguity Is Refused Not Guessed",
       "look_for": "A landing that resolves by NAME wires; the same shape with no name to match on refuses `ambiguous` rather than picking one of three legal ports.",
       "w": 900,
       "h": 700
     },
     {
-      "id": "blocks-scene-batch-wiring--empty-ring-refuses-to-arm",
+      "id": "scene-batchwiring--empty-ring-refuses-to-arm",
       "title": "Batch Wiring \u00b7 Empty Ring Refuses To Arm",
       "look_for": "An armed mode with no affordance is a failure to report, not a mode to sit in. Also: a press away from every ringing dot is a decline, not an error.",
       "w": 900,
       "h": 700
     },
     {
-      "id": "blocks-scene-batch-wiring--rules-change-availability",
+      "id": "scene-batchwiring--rules-change-availability",
       "title": "Batch Wiring \u00b7 Rules Change Availability",
       "look_for": "Availability is a function of the RULES, not the board alone \u2014 turning single-feed off puts a dot back in the ring with no re-arm. This is the injected-judge seam made visible.",
       "w": 900,

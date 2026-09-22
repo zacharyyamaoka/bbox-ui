@@ -240,8 +240,8 @@ function expectTerminalOnDot(svg: SVGSVGElement, line: SVGPathElement, end: "fro
 /* ------------------------------------------------------------------ */
 
 const meta = {
-  title: "Blocks/Scene",
-  tags: ["area:blocks", "lane:host-fixes"],
+  title: "Scene/Scene",
+  tags: ["object:scene", "lane:host-fixes"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },
 } satisfies Meta<typeof WireLayer>;

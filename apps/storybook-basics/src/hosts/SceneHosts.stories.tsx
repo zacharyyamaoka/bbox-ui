@@ -21,8 +21,8 @@ import { ReactFlowHost } from "./reactFlowHost";
  */
 
 const meta = {
-  title: "Blocks/Scene/In A Host",
-  tags: ["area:blocks", "lane:host-fixes"],
+  title: "Hosts/Scene",
+  tags: ["object:scene", "host:dom", "host:react-flow", "lane:host-fixes"],
 } satisfies Meta;
 
 export default meta;

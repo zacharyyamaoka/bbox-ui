@@ -58,7 +58,7 @@ const badgeVariants = cva(
       // fixed radius no skin token can reach. The literal each falls back
       // to below is unchanged from before this port — `rounded-md` here
       // resolves to `var(--radius-md)` = 8px on this app's `--radius:
-      // 0.625rem` base, captured live off `basics-badge--variants` before
+      // 0.625rem` base, captured live off `components-text-marks-badge--variants` before
       // the edit.
       shape: {
         rounded: "",

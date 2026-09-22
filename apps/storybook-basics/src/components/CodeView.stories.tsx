@@ -13,7 +13,8 @@ import { compareBoards, type CompareChange, type RecordMap } from "./compareMode
  * was computed from, not a fabricated snippet.
  */
 const meta = {
-  title: "Basics/CodeView",
+  title: "Components/Text & Marks/CodeView",
+  tags: ["object:text-marks"],
   component: CodeView,
   // Every story below overrides `render`; this is just the dummy default
   // CSF3 typing needs to cover CodeView's one required prop.

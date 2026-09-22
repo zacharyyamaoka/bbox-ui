@@ -157,8 +157,8 @@ function ArrowheadMatrix({ onGeometry }: { onGeometry: (id: string, g: TraceGeom
 }
 
 const meta = {
-  title: "Blocks/TraceArrowhead",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Components/Traces/Trace/Arrowhead",
+  tags: ["object:trace", "lane:baseline"],
   component: Trace,
   args: { id: "trace", from: FROM, to: TO },
 } satisfies Meta<typeof Trace>;

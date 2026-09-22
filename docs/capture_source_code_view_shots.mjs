@@ -45,19 +45,19 @@ const BASE = `http://localhost:${PORT}/iframe.html`;
 
 const SHOTS = [
   // The code cell itself — already a component in the trunk.
-  { id: "basics-codeeditor--pseudo-code", w: 900, h: 460, name: "code-cell" },
-  { id: "basics-codeeditor--syntax-themes", w: 1000, h: 620, name: "code-themes" },
+  { id: "components-text-marks-codeeditor--pseudo-code", w: 900, h: 460, name: "code-cell" },
+  { id: "components-text-marks-codeeditor--syntax-themes", w: 1000, h: 620, name: "code-themes" },
   // A code cell living inside a Block — the P1 shape, already rendered.
-  { id: "blocks-block--code-inside-block", w: 820, h: 560, name: "code-in-block" },
+  { id: "components-blocks-block--code-inside-block", w: 820, h: 560, name: "code-in-block" },
   // A code cell as a real canvas node, in a host.
-  { id: "basics-codeeditor-in-a-host--code-react-flow", w: 900, h: 560, name: "code-reactflow" },
+  { id: "hosts-codeeditor--code-react-flow", w: 900, h: 560, name: "code-reactflow" },
   // Collapse/dissolve — the exact inverse P1 rides on.
-  { id: "blocks-scene-grouping--round-trip", w: 1150, h: 760, name: "grouping-roundtrip" },
-  { id: "blocks-scene-grouping--promoted-ports", w: 1100, h: 700, name: "grouping-ports" },
-  { id: "blocks-scene-grouping--boundary-classes", w: 1100, h: 700, name: "grouping-boundary" },
+  { id: "scene-grouping--round-trip", w: 1150, h: 760, name: "grouping-roundtrip" },
+  { id: "scene-grouping--promoted-ports", w: 1100, h: 700, name: "grouping-ports" },
+  { id: "scene-grouping--boundary-classes", w: 1100, h: 700, name: "grouping-boundary" },
   // The diff surfaces a two-buffer design needs for its conflict view.
-  { id: "blocks-scene-diff--line-diff-code", w: 900, h: 560, name: "line-diff" },
-  { id: "blocks-scene-diff--word-diff-ink", w: 900, h: 460, name: "word-diff" },
+  { id: "scene-scenediff--line-diff-code", w: 900, h: 560, name: "line-diff" },
+  { id: "scene-scenediff--word-diff-ink", w: 900, h: 460, name: "word-diff" },
 ];
 
 const browser = await chromium.launch();

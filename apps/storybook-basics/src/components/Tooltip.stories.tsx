@@ -13,8 +13,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tool
  * provider near its root instead of per-tooltip.
  */
 const meta = {
-  title: "Basics/Tooltip",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Tooltip",
+  tags: ["object:stock", "lane:baseline"],
   component: Tooltip,
 } satisfies Meta<typeof Tooltip>;
 

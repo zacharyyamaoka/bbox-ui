@@ -28,8 +28,8 @@ import type { HostScene } from "../hosts/hostScene";
  */
 
 const meta = {
-  title: "Control Flow/Edge Defaults",
-  tags: ["area:control-flow", "lane:fix-edges"],
+  title: "Presets/ControlFlow/EdgeDefaults",
+  tags: ["object:region", "host:dom", "lane:fix-edges"],
 } satisfies Meta;
 
 export default meta;

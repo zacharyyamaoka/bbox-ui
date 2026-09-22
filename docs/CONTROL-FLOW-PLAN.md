@@ -283,19 +283,19 @@ Storybook on `:5421` after merge. Sidebar filter → tag `area:control-flow` (an
 
 | Story (title → id) | Host | The state it shows |
 |---|---|---|
-| `Control Flow/Region` → `control-flow-region--empty-expanded` | DOM canvas | the P1 frame with a real corner block, nothing inside |
+| `Control Flow/Region` → `presets-controlflow-region--empty-expanded` | DOM canvas | the P1 frame with a real corner block, nothing inside |
 | `…--empty-opaque` | DOM | the P5 card, footer "nothing hidden" |
 | `…--with-members`, `…--with-arms`, `…--active-arm`, `…--in-react-flow`, `…--layout-twin` | DOM / RF | members inside; three arms one folded; fade; RF; DOM rows equal `regionLayout` |
-| `Control Flow/Loop` → `control-flow-loop--for-loop-carried` | DOM | `merge()`/`smooth()` inside `For Loop`, seed from outside, `Iter`→`other`, dotted z⁻¹ self-cable on the bottom lane |
+| `Control Flow/Loop` → `presets-controlflow-loop--for-loop-carried` | DOM | `merge()`/`smooth()` inside `For Loop`, seed from outside, `Iter`→`other`, dotted z⁻¹ self-cable on the bottom lane |
 | `…--for-loop-empty`, `…--while-loop-recheck`, `…--loop-with-turn`, `…--loop-with-break`, `…--for-loop-react-flow` | DOM / RF | empty; `Bool` header with a delayed re-check from inside; "iteration 3 of 7" chip; ⏹ break mark on `check()` |
-| `Control Flow/Branch` → `control-flow-branch--one-input` | DOM | Zach's `if fast:` — `estimate()`/`fallback()` in two arms, cables straight in from outside, fan-in at `encode` |
+| `Control Flow/Branch` → `presets-controlflow-branch--one-input` | DOM | Zach's `if fast:` — `estimate()`/`fallback()` in two arms, cables straight in from outside, fan-in at `encode` |
 | `…--many-inputs`, `…--match-case`, `…--folded-arm`, `…--active-arm`, `…--nested`, `…--one-input-react-flow` | DOM / RF | Selector with N conditions; `match`; a folded `elif`; active-arm fade; a branch inside arm 1 |
-| `Control Flow/Wires` → `control-flow-wires--bypass-around-a-block`, `…--carried-value-self-loop`, `…--through-a-container`, `…--mut-effect-cable` | DOM | a cable going around a bystander; a self-loop on the bottom lane with z⁻¹; a cable allowed into its own container; a `mut` cable off a top port |
+| `Control Flow/Wires` → `presets-controlflow-wires--bypass-around-a-block`, `…--carried-value-self-loop`, `…--through-a-container`, `…--mut-effect-cable` | DOM | a cable going around a bystander; a self-loop on the bottom lane with z⁻¹; a cable allowed into its own container; a `mut` cable off a top port |
 | `Control Flow/Host Edges` → `…--member-edge-react-flow`, `…--member-edge-tldraw` | RF / tldraw | a cable landing on a block INSIDE another block, in both engines |
-| `Control Flow/Toggle` → `control-flow-toggle--dom-canvas`, `…--react-flow`, `…--tldraw`, `…--nested-opaque` | all three | click the chevron: frame ⇄ card, cables re-anchor, nothing moves |
-| `Control Flow/Gallery` → `control-flow-gallery--branch-in-loop` (+ `…-react-flow`, `…-tldraw`) | all three | the whole language on one board: a loop containing a branch, a bypass cable going around both, a `mut` cable |
+| `Control Flow/Toggle` → `presets-controlflow-toggle--dom-canvas`, `…--react-flow`, `…--tldraw`, `…--nested-opaque` | all three | click the chevron: frame ⇄ card, cables re-anchor, nothing moves |
+| `Control Flow/Gallery` → `presets-controlflow-gallery--branch-in-loop` (+ `…-react-flow`, `…-tldraw`) | all three | the whole language on one board: a loop containing a branch, a bypass cable going around both, a `mut` cable |
 
-Hero video candidate: `control-flow-toggle--dom-canvas` (expand ⇄ collapse, 8 s). Stills: `one-input`, `for-loop-carried`, `bypass-around-a-block`, `nested`.
+Hero video candidate: `presets-controlflow-toggle--dom-canvas` (expand ⇄ collapse, 8 s). Stills: `one-input`, `for-loop-carried`, `bypass-around-a-block`, `nested`.
 
 ---
 
@@ -471,17 +471,17 @@ the real one:
 **Stories — every id §8 names exists.** 37 `control-flow-*` ids are indexed
 (read off the running Storybook's own `index.json`, not derived from titles);
 §8 names 33 of them and all 33 resolve. The four beyond the plan are
-`control-flow-region--header-chip-and-marks`,
-`control-flow-wires--badge-with-seed`,
-`control-flow-host-edges--member-edge-survives-drag` (lanes A/D/G shipping
+`presets-controlflow-region--header-chip-and-marks`,
+`presets-controlflow-wires--badge-with-seed`,
+`presets-controlflow-hostedges--member-edge-survives-drag` (lanes A/D/G shipping
 more than they promised) and this lane's own
-`control-flow-gallery--collapsed-branch-in-loop`.
+`presets-controlflow-gallery--collapsed-branch-in-loop`.
 
 This lane's four:
 
 | Story id | Host | Asserts |
 |---|---|---|
-| `control-flow-gallery--branch-in-loop` | DOM canvas | both frames expanded; arms `if`/`else` stacked; `merge`/`estimate`/`fallback` inside their containers; `e-bypass` clears BOTH frames (acceptance helper + the painted-line check); `mut` and `z⁻¹ = prior()` pills; no cable crosses arms |
+| `presets-controlflow-gallery--branch-in-loop` | DOM canvas | both frames expanded; arms `if`/`else` stacked; `merge`/`estimate`/`fallback` inside their containers; `e-bypass` clears BOTH frames (acceptance helper + the painted-line check); `mut` and `z⁻¹ = prior()` pills; no cable crosses arms |
 | `…--branch-in-loop-react-flow` | React Flow | both frames expanded + two members inside, neither a host node |
 | `…--branch-in-loop-tldraw` | tldraw | the same |
 | `…--collapsed-branch-in-loop` | DOM canvas | the branch opaque INSIDE the open loop's body; no arm row, no member reaches the DOM |
@@ -522,7 +522,7 @@ Measured on the DOM board (`getBoundingClientRect`, headless Chromium,
 this lane): a `Block` with both a header and a TOP-wall port paints the port's
 label over the header text — visible on `merge()` as `effect:pose` sitting on
 `merge()`. Pre-existing and already shipped that way in lane D's
-`control-flow-wires--mut-effect-cable`; it is a `Block`/rail band question,
+`presets-controlflow-wires--mut-effect-cable`; it is a `Block`/rail band question,
 not a fixture one.
 
 **Captures:** `/home/bam/bbox-ui/reports/media/lanes-2026-09-18/cf-F/` —

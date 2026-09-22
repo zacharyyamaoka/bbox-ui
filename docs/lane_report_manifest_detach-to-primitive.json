@@ -36,7 +36,7 @@
   ],
   "stories": [
     {
-      "id": "blocks-detach-to-primitive--block-gallery",
+      "id": "hosts-detachtoprimitive--block-gallery",
       "title": "Blocks / Detach To Primitive — Before / Detached / Rebuilt",
       "look_for": "3 rows (simple/port/expanded BlockView) x 3 columns (before/detached/rebuilt). The card reads dark/low-contrast in every column, before included — that is tldraw's own dark-mode filter over its embedded HTML layer (tldrawHost.tsx's pre-existing, documented behaviour, not something this lane changed); getComputedStyle confirms the card's real background is white in both 'before' and 'rebuilt', identically. Look at the port dots, the divider line under \"proc\", and the ring/label placement instead of the card's apparent shade.",
       "w": 1000,

@@ -43,8 +43,8 @@ import { REGION_NODE_TYPE } from "../scene/region";
 import { expectRegionExpanded, expectRegionOpaque, expectWirePainted } from "./controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Toggle",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/Toggle",
+  tags: ["object:region", "host:dom", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;

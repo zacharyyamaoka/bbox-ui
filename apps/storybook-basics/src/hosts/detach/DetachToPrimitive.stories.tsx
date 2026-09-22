@@ -30,8 +30,8 @@ import { detachSelectedShapes, rebuildDetachedShapes, registerEditorContainer, R
  */
 
 const meta = {
-  title: "Blocks/Detach To Primitive",
-  tags: ["area:blocks", "lane:detach"],
+  title: "Hosts/DetachToPrimitive",
+  tags: ["object:block", "host:tldraw", "lane:detach"],
 } satisfies Meta;
 
 export default meta;

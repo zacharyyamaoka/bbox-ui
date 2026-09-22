@@ -258,7 +258,8 @@ function perpVector(dir: TraceDir): Point {
 /* ------------------------------------------------------------------ */
 
 const meta: Meta = {
-  title: "Trace/Elbow Fan-Out & Obstacles",
+  title: "Components/Traces/Elbow/Fan-Out & Obstacles",
+  tags: ["object:trace"],
   parameters: { layout: "fullscreen" },
 };
 

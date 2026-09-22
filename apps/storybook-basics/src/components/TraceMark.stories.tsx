@@ -21,8 +21,8 @@ import type { Diagnostic } from "./highlighter";
  */
 
 const meta = {
-  title: "Trace/Mark",
-  tags: ["area:trace", "lane:validation-stack"],
+  title: "Components/Traces/TraceMark",
+  tags: ["object:trace", "lane:validation-stack"],
 } satisfies Meta;
 
 export default meta;

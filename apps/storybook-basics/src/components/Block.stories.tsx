@@ -25,8 +25,8 @@ import { EditableText } from "./editableText";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 const meta = {
-  title: "Blocks/Block",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Components/Blocks/Block",
+  tags: ["object:block", "lane:baseline"],
   component: Block,
   args: {
     header: "Header",

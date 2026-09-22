@@ -63,8 +63,8 @@ import type { WireStyleData } from "./sceneWires";
  */
 
 const meta = {
-  title: "Blocks/Scene/Diff",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Scene/SceneDiff",
+  tags: ["object:scene", "host:dom", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

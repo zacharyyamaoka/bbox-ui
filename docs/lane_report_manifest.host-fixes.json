@@ -56,7 +56,7 @@
   ],
   "stories": [
     {
-      "id": "interaction-drag-policy--block-solid",
+      "id": "hosts-dragpolicy--block-solid",
       "title": "Interaction · Drag Policy · Block (solid)",
       "look_for": "defect 1's story — the run-statistics table above is the real evidence; this is the canvas the flake happened on",
       "w": 1000,
@@ -64,7 +64,7 @@
       "settle": 700
     },
     {
-      "id": "blocks-host-fixes-wire-layer-ownership--own-dot-over-member-dot",
+      "id": "hosts-wirelayer-ownership--own-dot-over-member-dot",
       "title": "Blocks · Host Fixes · Wire Layer Ownership",
       "look_for": "the wire lands squarely on proc's OWN dot (with the arrowhead), not kid's outlined one below it — defect 2",
       "w": 480,
@@ -72,7 +72,7 @@
       "settle": 900
     },
     {
-      "id": "blocks-blockport-in-a-host--block-resize-react-flow",
+      "id": "hosts-blockport--block-resize-react-flow",
       "title": "Blocks · BlockPort · In A Host · Resize (ReactFlow)",
       "look_for": "the resized Block, post-drag — all 8 controls are now real-hit-tested before this gesture runs (defect 4)",
       "w": 500,
@@ -80,7 +80,7 @@
       "settle": 1500
     },
     {
-      "id": "blocks-blockport-in-a-host--block-resize-top-left-react-flow",
+      "id": "hosts-blockport--block-resize-top-left-react-flow",
       "title": "Blocks · BlockPort · In A Host · Resize from top-left (defect 5)",
       "look_for": "a top-left resize that no longer slides before snapping — position and size now commit together",
       "w": 500,
@@ -88,7 +88,7 @@
       "settle": 1500
     },
     {
-      "id": "blocks-scene-in-a-host--member-header-does-not-drag-parent",
+      "id": "hosts-scene--member-header-does-not-drag-parent",
       "title": "Blocks · Scene · In A Host · Member Header Does Not Drag Parent",
       "look_for": "proc, after its own header (not kid's) dragged it — kid's header press earlier in this same test moved proc ≤1px",
       "w": 800,

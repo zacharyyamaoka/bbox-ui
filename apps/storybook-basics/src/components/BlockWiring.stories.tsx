@@ -205,8 +205,8 @@ function Stage({ children }: { children: ReactNode }) {
 }
 
 const meta = {
-  title: "Blocks/BlockWiring",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Components/Traces/WireLayer/Block Wiring",
+  tags: ["object:trace", "lane:baseline"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },
 } satisfies Meta<typeof WireLayer>;

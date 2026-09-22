@@ -52,8 +52,8 @@ import {
 } from "./controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Branch",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/Branch",
+  tags: ["object:region", "host:dom", "host:react-flow", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;

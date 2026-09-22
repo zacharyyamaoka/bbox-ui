@@ -104,8 +104,8 @@ const ZOOM_BOX = 40;
 const ZOOM = 6;
 
 const meta = {
-  title: "Trace/Terminal",
-  tags: ["area:trace", "lane:baseline"],
+  title: "Components/Traces/TraceTerminal",
+  tags: ["object:trace", "lane:baseline"],
   component: TraceTerminal,
   args: { x: ZOOM_BOX / 2, y: ZOOM_BOX / 2, dir: "right" as const },
 } satisfies Meta<typeof TraceTerminal>;
