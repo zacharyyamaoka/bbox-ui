@@ -467,40 +467,28 @@ function SystemSketchChrome() {
         Replaces a fixed `right-2 bottom-12`, which cleared the watermark by
         floating 48px above it.
       */}
-      <div
-        ref={corner}
-        className="pointer-events-auto absolute flex items-end gap-2"
-        style={{ right: placement.right, bottom: placement.bottom }}
-        data-corner-placement={placement.placement}
-      >
-        {/* WHY the temporary variant switch rides INSIDE the measured corner
-            row: its own acceptance pins it to the status strip's row, and the
-            row as a whole is what `placeCornerCluster` measures against the
-            licence watermark and the dock. Kept first so the strip stays the
-            piece nearest the corner, and the row is `items-end` so the
-            strip's own bottom IS the row's bottom — centring it left a 12px
-            gap under the strip at narrow widths, which reads as "not in the
-            corner" exactly like the offset Zach objected to. */}
-        <VariantSwitch />
-        <SystemSketchStatusStrip
-          open={open}
-          onToggle={toggle}
-          problemCount={problems.total}
-          panelId={panelId}
-          devPanelOpen={devPanelOpen}
-          onToggleDevPanel={toggleDevPanel}
-        />
-      </div>
       {/*
         The forced-corner opt-in's own patch (Zach, 2026-09-22): "just like
         put a little small rectangle that has the same color of the canvas
         over the sliver? so then you are free to place the menu freely." A
-        SEPARATE element from the corner cluster above, on purpose — its
+        SEPARATE element from the corner cluster below, on purpose — its
         position comes from where the watermark itself measures
         (`watermarkCoverRect`), never from the cluster's own `right`/`bottom`,
         so the cluster keeps the plain `CORNER_INSET` every other piece of
         chrome uses and this alone absorbs the geometry mismatch between that
         fixed inset and wherever tldraw happens to put its watermark.
+
+        RENDERED BEFORE the cluster on purpose, not after: a sibling later in
+        this same stacking context paints ON TOP of one earlier at equal
+        z-index, and the cluster's own box already overlaps most of this
+        patch's box (that overlap is exactly why the cluster alone left a
+        sliver showing in the first place). Painted after the cluster, this
+        flat square patch sat ON TOP of the pill's own rounded corner — a
+        visibly different shade squaring off a corner that should have stayed
+        round. Painted BEFORE it instead, the cluster's real chrome covers it
+        again wherever the two overlap, and only the genuine gap between the
+        cluster's edge and the watermark's own edge is left showing through —
+        which is the only part of this patch that ever needed to be visible.
 
         `pointer-events` stays at this element's inherited `none` (the
         `.ss-chrome` root's default, never opted into `-auto` here) so a
@@ -526,6 +514,30 @@ function SystemSketchChrome() {
           }}
         />
       )}
+      <div
+        ref={corner}
+        className="pointer-events-auto absolute flex items-end gap-2"
+        style={{ right: placement.right, bottom: placement.bottom }}
+        data-corner-placement={placement.placement}
+      >
+        {/* WHY the temporary variant switch rides INSIDE the measured corner
+            row: its own acceptance pins it to the status strip's row, and the
+            row as a whole is what `placeCornerCluster` measures against the
+            licence watermark and the dock. Kept first so the strip stays the
+            piece nearest the corner, and the row is `items-end` so the
+            strip's own bottom IS the row's bottom — centring it left a 12px
+            gap under the strip at narrow widths, which reads as "not in the
+            corner" exactly like the offset Zach objected to. */}
+        <VariantSwitch />
+        <SystemSketchStatusStrip
+          open={open}
+          onToggle={toggle}
+          problemCount={problems.total}
+          panelId={panelId}
+          devPanelOpen={devPanelOpen}
+          onToggleDevPanel={toggleDevPanel}
+        />
+      </div>
     </div>
   );
 }
