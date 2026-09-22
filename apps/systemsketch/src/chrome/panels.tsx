@@ -8,7 +8,7 @@
 // launcher toggles, and a click on a block opens the Inspector
 // (`./inspectorFollowsSelection.ts`). The state itself lives in `./overlay.tsx`, which is the
 // one component that both the strip and this panel are rendered from.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Box, Frame, GitBranch, Repeat, RotateCw, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
 import { useEditor, useValue, type Editor } from "tldraw";
 
@@ -247,6 +247,91 @@ function SurfaceSwitch({ open, onSurfaceChange }: { open: ChromePanel; onSurface
   );
 }
 
+/** Same 8px `CORNER_INSET` the bottom-right cluster keeps off tldraw's own
+ *  furniture (`../chrome/overlay.tsx`) — the gap this rail's own top keeps
+ *  below whatever sits in tldraw's `SharePanel` slot. */
+const RAIL_TOP_GAP = 8;
+const RAIL_TOP_FLOOR = 8;
+
+/** tldraw's stock top-right seat, mounted with `PyblocksBackendPanel`
+ *  (`src/backend/BackendSettings.tsx`, `App.tsx`'s `SharePanel:` line) — the
+ *  ONE control this app puts there, and it always renders at least the
+ *  closed `Backend: none` trigger (BackendSettings.tsx's own WHY), so the
+ *  selector is always findable once the app has mounted. */
+const BACKEND_PANEL = '[data-testid="ss-backend"]';
+
+/**
+ * Where the rail's own top has to start to clear tldraw's `SharePanel` slot
+ * — MEASURED, not a guessed pixel constant, because the widget there is not
+ * fixed height: `BackendSettings.tsx` grows it from a one-line `Backend:
+ * none` trigger to a health pill plus an `Open Python file…` menu once a
+ * pyblocks backend connects (its own header, points 1-4). A rail that only
+ * cleared the closed height would go back to intercepting the chip's clicks
+ * the moment someone connects a backend.
+ *
+ * Bug: measured 2026-09-22 at 1400x900 and again at 720x900 (both widths —
+ * the chip's own `items-end` layout keeps it flush right either way), the
+ * rail opened at `top-2` (8px) while `ss-backend` occupied y 0-42 — the
+ * rail's own ✕ (`PanelShell`'s close button) landed at y 21-51, squarely
+ * inside the chip, and `elementFromPoint` at the ✕'s centre returned the
+ * chip's own trigger button, not the close button.
+ *
+ * WHY the rail makes room rather than the chip moving: `SharePanel` is
+ * tldraw's own documented slot (`App.tsx`'s WHY beside `SharePanel:`), and
+ * the rail is this app's own chrome free to sit wherever clears the board —
+ * moving tldraw's stock seat would fight the framework's own layout for no
+ * reason the chip's contents give.
+ */
+function useRailTop(): number {
+  const editor = useEditor();
+  const [top, setTop] = useState(RAIL_TOP_FLOOR);
+
+  useLayoutEffect(() => {
+    const container = editor.getContainer();
+    let backend: Element | null = null;
+
+    const measure = () => {
+      const rect = backend?.getBoundingClientRect();
+      const next = rect ? Math.max(RAIL_TOP_FLOOR, rect.bottom - container.getBoundingClientRect().top + RAIL_TOP_GAP) : RAIL_TOP_FLOOR;
+      setTop((current) => (current === next ? current : next));
+    };
+
+    const sizes = new ResizeObserver(measure);
+
+    // WHY tracked rather than measured once: `PyblocksBackendPanel` mounts
+    // into `SharePanel` on the SAME `onMount` pass as this rail (both are
+    // `TLComponents` slots tldraw fills together), so its element may not
+    // exist on this hook's first layout pass — and its own box changes
+    // later anyway, on connect/disconnect and on the health pill's own
+    // content, neither of which is a resize of the CONTAINER this hook
+    // would otherwise have to poll for.
+    const track = () => {
+      const next = container.querySelector(BACKEND_PANEL);
+      if (next === backend) return false;
+      sizes.disconnect();
+      backend = next;
+      if (backend) sizes.observe(backend);
+      return true;
+    };
+
+    const arrivals = new MutationObserver(() => {
+      if (track()) measure();
+    });
+    arrivals.observe(container, { childList: true, subtree: true });
+
+    track();
+    sizes.observe(container);
+    measure();
+
+    return () => {
+      arrivals.disconnect();
+      sizes.disconnect();
+    };
+  }, [editor]);
+
+  return top;
+}
+
 export interface SystemSketchPanelProps {
   open: ChromePanel | null;
   onClose(): void;
@@ -259,6 +344,7 @@ export interface SystemSketchPanelProps {
 
 export function SystemSketchPanel({ open, onClose, onSurfaceChange, problems, id }: SystemSketchPanelProps) {
   const editor = useEditor();
+  const top = useRailTop();
 
   // WHY the listener is on the window and capture-free, and WHY it is only
   // mounted while a panel is open: tldraw's own Escape handling cancels the
@@ -283,7 +369,10 @@ export function SystemSketchPanel({ open, onClose, onSurfaceChange, problems, id
       id={id}
       // The rail's own geometry. `PanelShell` "fills its given box" by
       // contract and positions nothing itself, so the box is this div.
-      className="pointer-events-auto absolute top-2 right-2 bottom-[6.5rem] w-[340px] max-w-[calc(100%-1rem)]"
+      // `top` is NOT `top-2` (8px) here — `useRailTop` measures tldraw's
+      // `SharePanel` chip and clears it; see that hook's own WHY.
+      className="pointer-events-auto absolute right-2 bottom-[6.5rem] w-[340px] max-w-[calc(100%-1rem)]"
+      style={{ top }}
     >
       <PanelShell eyebrow="Right panel" title={PANEL_TITLE[open]} onClose={onClose} data-surface={open}>
         <SurfaceSwitch open={open} onSurfaceChange={onSurfaceChange} />
