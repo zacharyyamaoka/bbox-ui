@@ -19,7 +19,7 @@ import type { HostScene } from "../hosts/hostScene";
 import type { WireStyleData } from "./sceneWires";
 
 /**
- * Scene/SceneDiff — the pure diff kit, rendered ON the things it
+ * Scene/Model & Diff/SceneDiff — the pure diff kit, rendered ON the things it
  * describes.
  *
  * WHY this file now imports components when its previous version
@@ -63,7 +63,7 @@ import type { WireStyleData } from "./sceneWires";
  */
 
 const meta = {
-  title: "Scene/SceneDiff",
+  title: "Scene/Model & Diff/SceneDiff",
   tags: ["object:scene", "host:dom", "lane:baseline"],
 } satisfies Meta;
 

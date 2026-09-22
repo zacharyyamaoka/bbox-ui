@@ -1,5 +1,5 @@
 /**
- * Scene/Producers — "how many cables meet this port", fed from
+ * Scene/Wiring/Producers — "how many cables meet this port", fed from
  * the scene, on all three hosts.
  *
  * Zach, 2026-09-19, looking at three cables leaving one `pose` dot at three
@@ -38,7 +38,7 @@ import { producerCounts } from "./producers";
 import { isPortVariantId, PORT_VARIANTS, portVariantRingOverhangPx } from "../skin/portVariants";
 
 const meta = {
-  title: "Scene/Producers",
+  title: "Scene/Wiring/Producers",
   tags: ["object:trace", "host:dom", "host:react-flow", "host:tldraw", "lane:prf-producers-count-2026-09-19"],
 } satisfies Meta;
 

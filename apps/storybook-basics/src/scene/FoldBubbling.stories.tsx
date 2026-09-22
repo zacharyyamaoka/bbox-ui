@@ -2,15 +2,15 @@ import { useMemo } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "./domCanvas";
-import type { Decorate } from "./nodeViews";
-import type { HostScene } from "./hostScene";
+import { DomCanvas } from "../hosts/domCanvas";
+import type { Decorate } from "../hosts/nodeViews";
+import type { HostScene } from "../hosts/hostScene";
 import type { BlockView } from "../components/blockPort.layout";
-import { sceneSurfaceModel, surfaceFindings, visibilityFromHides, type HidesOf } from "../scene/bubble";
-import { lintScene, subjectKey, type LintScene } from "../scene/lint";
+import { sceneSurfaceModel, surfaceFindings, visibilityFromHides, type HidesOf } from "./bubble";
+import { lintScene, subjectKey, type LintScene } from "./lint";
 
 /**
- * Hosts/FoldBubbling — ruling 3, Zach's IDE-tree-view analogy
+ * Scene/Validation/FoldBubbling — ruling 3, Zach's IDE-tree-view analogy
  * verbatim: "if something is hidden then the parent that hides it should
  * get the error... kinda like the ultimate version of that is in the IDE
  * tree view how a file colour may be red if it contains an error within
@@ -41,7 +41,7 @@ import { lintScene, subjectKey, type LintScene } from "../scene/lint";
  */
 
 const meta = {
-  title: "Hosts/FoldBubbling",
+  title: "Scene/Validation/FoldBubbling",
   tags: ["object:scene", "host:dom", "lane:validation-stack"],
 } satisfies Meta;
 

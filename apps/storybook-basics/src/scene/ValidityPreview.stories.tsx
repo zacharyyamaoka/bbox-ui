@@ -2,16 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "./domCanvas";
-import type { Decorate, SceneNodeDecoration } from "./nodeViews";
-import type { HostScene } from "./hostScene";
-import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "./validationScene";
-import { connectionAvailability, type PortAvailability } from "../scene/availability";
-import { typesIntersect } from "../scene/lint";
-import { portKey, type ScenePortRef } from "../scene/scene";
+import { DomCanvas } from "../hosts/domCanvas";
+import type { Decorate, SceneNodeDecoration } from "../hosts/nodeViews";
+import type { HostScene } from "../hosts/hostScene";
+import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "../hosts/validationScene";
+import { connectionAvailability, type PortAvailability } from "./availability";
+import { typesIntersect } from "./lint";
+import { portKey, type ScenePortRef } from "./scene";
 
 /**
- * Hosts/ValidityPreview — ruling 5, "Show the legal move set
+ * Scene/Validation/ValidityPreview — ruling 5, "Show the legal move set
  * during the gesture, not the error after it... Drag time validity
  * preview! actually even langflow has this. yes 100% lets implement this
  * feature... should be on by default!" (Zach, 2026-09-17).
@@ -42,7 +42,7 @@ import { portKey, type ScenePortRef } from "../scene/scene";
  */
 
 const meta = {
-  title: "Hosts/ValidityPreview",
+  title: "Scene/Validation/ValidityPreview",
   tags: ["object:scene", "host:dom", "lane:validation-stack"],
 } satisfies Meta;
 

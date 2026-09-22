@@ -266,7 +266,7 @@ function Stage({ children }: { children: ReactNode }) {
 }
 
 const meta = {
-  title: "Scene/CollapseWireEndpoints",
+  title: "Scene/Wiring/CollapseWireEndpoints",
   tags: ["object:trace", "lane:collapse-wires"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },

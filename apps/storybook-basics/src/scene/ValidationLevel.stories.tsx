@@ -18,7 +18,7 @@ import {
 } from "./validationLevel";
 
 /**
- * Scene/ValidationLevel — ruling 3, made visible.
+ * Scene/Validation/ValidationLevel — ruling 3, made visible.
  *
  * Zach, verbatim: "have the connection validation setting in the settings panel
  * so you can switch between what level of linting you want from whiteboard,
@@ -40,7 +40,7 @@ import {
  */
 
 const meta = {
-  title: "Scene/ValidationLevel",
+  title: "Scene/Validation/ValidationLevel",
   tags: ["object:scene", "lane:settings-validation-level-2026-09-21"],
 } satisfies Meta;
 

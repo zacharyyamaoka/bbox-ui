@@ -2,14 +2,14 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "./domCanvas";
-import { dragFrom } from "./hostGestures";
-import type { HostScene } from "./hostScene";
-import { POINTER_OWNED_CLASS } from "./nodeViews";
-import { ReactFlowHost } from "./reactFlowHost";
+import { DomCanvas } from "../hosts/domCanvas";
+import { dragFrom } from "../hosts/hostGestures";
+import type { HostScene } from "../hosts/hostScene";
+import { POINTER_OWNED_CLASS } from "../hosts/nodeViews";
+import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 /**
- * Hosts/CodeEditor — the CodeEditor as a canvas node under its
+ * Components/Text & Marks/CodeEditor/In A Host — the CodeEditor as a canvas node under its
  * host-facing name `code` (H6). The interesting seam: the editor owns its
  * pointer (caret, selection), so inside a gesturing host the node is
  * repositioned by the host-owned grab ring around it, never through the
@@ -17,7 +17,7 @@ import { ReactFlowHost } from "./reactFlowHost";
  */
 
 const meta = {
-  title: "Hosts/CodeEditor",
+  title: "Components/Text & Marks/CodeEditor/In A Host",
   tags: ["object:text-marks", "host:dom", "host:react-flow", "lane:baseline"],
 } satisfies Meta;
 

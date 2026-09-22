@@ -20,7 +20,7 @@ import { sceneWires, withWiredState, type WireStyleData } from "./sceneWires";
 import STEREO_DEFINITIONS from "../../../../docs/acceptance/pyblocks/stereo_definitions.expected.json";
 
 /**
- * Scene/CodeCell — Rung A of the source-code view
+ * Scene/Model & Diff/CodeCell — Rung A of the source-code view
  * (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md §4/§5): collapse a selection into
  * ONE region wearing a code face, expand it back exactly, and the pure
  * adapter that turns pyblocks' definitions view into a scene of grain-1
@@ -41,7 +41,7 @@ import STEREO_DEFINITIONS from "../../../../docs/acceptance/pyblocks/stereo_defi
  */
 
 const meta = {
-  title: "Scene/CodeCell",
+  title: "Scene/Model & Diff/CodeCell",
   tags: ["object:scene", "lane:scv-rung-a-scene"],
 } satisfies Meta;
 

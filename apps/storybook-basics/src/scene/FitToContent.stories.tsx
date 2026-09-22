@@ -1,5 +1,5 @@
 /**
- * Scene/FitToContent — the three cases Zach named (PROJECT - Black Box
+ * Scene/Layout & Drag/FitToContent — the three cases Zach named (PROJECT - Black Box
  * UI.md, "### Fit to content", 2026-09-18), plus the bug he remembered.
  *
  *   • port view     — "dynamically resizes as you add more ports"
@@ -50,7 +50,7 @@ import {
 } from "./fitToContent";
 
 const meta = {
-  title: "Scene/FitToContent",
+  title: "Scene/Layout & Drag/FitToContent",
   tags: ["object:block", "lane:fit-to-content"],
 } satisfies Meta;
 

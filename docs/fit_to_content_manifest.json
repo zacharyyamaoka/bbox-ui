@@ -32,42 +32,42 @@
   ],
   "stories": [
     {
-      "id": "scene-fittocontent--port-count-ladder",
+      "id": "scene-layout-drag-fittocontent--port-count-ladder",
       "title": "Port Count Ladder — the feature",
       "look_for": "all four counts in one row: the box gets taller as ports go 2 → 4 → 6 → 8, every rail holding the same 42px pitch. Note the n=2 card does NOT grow — the typed 150px still wins there. That is the floor behaving as a floor, not as auto-fit.",
       "w": 1380,
       "h": 640
     },
     {
-      "id": "scene-fittocontent--overflow-without-a-floor",
+      "id": "scene-layout-drag-fittocontent--overflow-without-a-floor",
       "title": "Overflow Without A Floor — the bug",
       "look_for": "the same four counts with no floor: four identical 150px boxes and the dots walking straight out of the bottom wall. At 2 ports nothing is wrong — which is exactly why this shipped and was never noticed.",
       "w": 1380,
       "h": 700
     },
     {
-      "id": "scene-fittocontent--add-ports-live",
+      "id": "scene-layout-drag-fittocontent--add-ports-live",
       "title": "Add Ports Live — one port costs one pitch",
       "look_for": "press + port and the box grows by exactly 42px, every time. The readout prints the slot count, the computed floor and the height actually handed to Block. Tick 'offset lanes' to watch the two lanes stack and the floor jump.",
       "w": 680,
       "h": 560
     },
     {
-      "id": "scene-fittocontent--members-drive-height",
+      "id": "scene-layout-drag-fittocontent--members-drive-height",
       "title": "Members Drive Height — expanded view",
       "look_for": "side by side: a manual 160px box whose lower child is CLIPPED AWAY ENTIRELY, and an auto-fitted one that contains it with the 12px gutter. Press 'drag filter down' and only the fitted box moves — by exactly the 60px dragged.",
       "w": 960,
       "h": 560
     },
     {
-      "id": "scene-fittocontent--parent-fits-children",
+      "id": "scene-layout-drag-fittocontent--parent-fits-children",
       "title": "Parent Fits Children — the on-demand fit",
       "look_for": "the left card is missing 'place' — not overflowing it, missing it. Press the button and it snaps to match the always-fitted reference on the right, to the pixel. Press the other button and the manual box comes straight back.",
       "w": 1000,
       "h": 700
     },
     {
-      "id": "scene-fittocontent--distribution-changes-the-floor",
+      "id": "scene-layout-drag-fittocontent--distribution-changes-the-floor",
       "title": "Distribution Changes The Floor — the found bug",
       "look_for": "two rows, no toggle. Top: one band height for all four — aligned and space-between hold 42px, the other two are visibly tighter. Bottom: each band sized for its own distribution — all four back on 42px. This is the bug the unit test found before I did.",
       "w": 1320,

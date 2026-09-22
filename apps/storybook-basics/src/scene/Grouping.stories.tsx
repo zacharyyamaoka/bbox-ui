@@ -18,7 +18,7 @@ import type { BlockSide } from "../components/port.layout";
 import type { WireStyleData } from "./sceneWires";
 
 /**
- * Scene/Grouping — `collapseToRegion`/`dissolveRegion` (collapse.ts),
+ * Scene/Layout & Drag/Grouping — `collapseToRegion`/`dissolveRegion` (collapse.ts),
  * `classifyBoundary`/`promoteBoundary` (boundary.ts) and the v1-vs-measured
  * promotion policies, DRAWN.
  *
@@ -54,7 +54,7 @@ import type { WireStyleData } from "./sceneWires";
  */
 
 const meta = {
-  title: "Scene/Grouping",
+  title: "Scene/Layout & Drag/Grouping",
   tags: ["object:scene", "host:dom", "lane:grouping"],
 } satisfies Meta;
 

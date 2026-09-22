@@ -23,7 +23,7 @@ import { type BlockScene, findDanglingEdges, portKey, type SceneNode } from "./s
 import { sceneWires, type WireStyleData } from "./sceneWires";
 
 /**
- * Scene/Linking — definition linking rendered live: "same name =
+ * Scene/Wiring/Linking — definition linking rendered live: "same name =
  * same thing", the software model (src/scene/linking.ts, ported from
  * SystemSketch's definitionLinking.ts — provenance in the module header).
  *
@@ -363,7 +363,7 @@ function filterPair(): LinkScene {
 /* ------------------------------------------------------------------ */
 
 const meta: Meta = {
-  title: "Scene/Linking",
+  title: "Scene/Wiring/Linking",
   tags: ["object:trace", "lane:baseline"],
 };
 

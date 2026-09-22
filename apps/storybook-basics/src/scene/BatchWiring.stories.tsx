@@ -1,5 +1,5 @@
 /**
- * Scene/BatchWiring — wiring N ports in one gesture, inside the
+ * Scene/Wiring/BatchWiring — wiring N ports in one gesture, inside the
  * DOM Canvas.
  *
  * THE FEATURE, from its donor (SystemSketch `batchWiring.ts`, read at
@@ -79,7 +79,7 @@ function judgeWith(scene: HostScene, rules: StandInRules = {}): ReturnType<typeo
 }
 
 const meta = {
-  title: "Scene/BatchWiring",
+  title: "Scene/Wiring/BatchWiring",
   tags: ["object:trace", "host:dom", "lane:batch-wiring"],
 } satisfies Meta;
 

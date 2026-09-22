@@ -240,7 +240,7 @@ function expectTerminalOnDot(svg: SVGSVGElement, line: SVGPathElement, end: "fro
 /* ------------------------------------------------------------------ */
 
 const meta = {
-  title: "Scene/Scene",
+  title: "Scene/Model & Diff/Scene",
   tags: ["object:scene", "lane:host-fixes"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },

@@ -36,21 +36,23 @@ const SECTIONS: Record<string, string> = {
   Skin: "skin",
 };
 
-/** The family level under Components — closed. Add a family here, deliberately, not in a title. */
-const COMPONENT_FAMILIES = [
-  "Ports",
-  "Blocks",
-  "Traces",
-  "Text & Marks",
-  "Menus & Bars",
-  "Panels & Dialogs",
-  "Stock",
-];
+/**
+ * The sections that carry a family level, each with its closed list. Add a
+ * family here, deliberately — never by typing a new one into a title.
+ * WHY Scene has families at 11 entries (under the 15 below): Zach, 2026-09-22,
+ * "Lets keep the grouping I think we will be adding more functinality in the
+ * future" — the split is by what an operation DOES (his L191 note: layout
+ * operations, validation operations…), so new scene functions have a place.
+ */
+const FAMILIES: Record<string, string[]> = {
+  Components: ["Ports", "Blocks", "Traces", "Text & Marks", "Menus & Bars", "Panels & Dialogs", "Stock"],
+  Scene: ["Model & Diff", "Wiring", "Validation", "Layout & Drag"],
+};
 
 /**
  * WHY 15: a section with no family level must fit one screen of the sidebar.
- * Components (79 entries) is the only section over it; Hosts sits at 13 —
- * thirteen "X in a host" boards read better flat than as five families of two.
+ * Past that, a section gets a family list above — it does not grow a longer
+ * flat list.
  *
  * Family lists are deliberately NOT capped: Stock holds 22 and Panels &
  * Dialogs 18. A family is the last level before the component itself, and
@@ -140,10 +142,11 @@ describe("story organisation (proposal B)", () => {
     expect(rel.split(path.sep)[0], `"${title}" belongs in src/${SECTIONS[section]}/`).toBe(SECTIONS[section]);
   });
 
-  it.each(storyFiles.filter((s) => s.title.startsWith("Components/")))(
-    "$rel names a Components family from the closed list",
+  it.each(storyFiles.filter((s) => s.title.split("/")[0] in FAMILIES))(
+    "$rel names a family from its section's closed list",
     ({ title }) => {
-      expect(COMPONENT_FAMILIES).toContain(title.split("/")[1]);
+      const [section, family] = title.split("/");
+      expect(FAMILIES[section], `"${title}"`).toContain(family);
     },
   );
 
@@ -151,7 +154,7 @@ describe("story organisation (proposal B)", () => {
     const children = new Map<string, Set<string>>();
     for (const { title } of storyFiles) {
       const [section, next] = title.split("/");
-      if (section === "Components" || !next) continue;
+      if (section in FAMILIES || !next) continue;
       children.set(section, (children.get(section) ?? new Set()).add(next));
     }
     for (const [section, set] of children) {

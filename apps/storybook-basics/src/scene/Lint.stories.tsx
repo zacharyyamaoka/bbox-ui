@@ -10,7 +10,7 @@ import { findingsFor, lintScene, LINT_RULE_IDS, type LintFinding, type LintRuleI
 import { portKey, wiredPorts, type SceneEdgeEnds } from "./scene";
 
 /**
- * Scene/Lint — the producer half of Zach's before/after ask
+ * Scene/Validation/Lint — the producer half of Zach's before/after ask
  * (2026-09-17, verbatim): "no linting you can show like a bunch of
  * potentially illegal wires, and then with it on, the illegal ones should
  * be highlighted. and then if you only have a subset of the rules on then
@@ -46,7 +46,7 @@ import { portKey, wiredPorts, type SceneEdgeEnds } from "./scene";
  */
 
 const meta = {
-  title: "Scene/Lint",
+  title: "Scene/Validation/Lint",
   tags: ["object:scene", "lane:lint-engine-2026-09-17"],
 } satisfies Meta;
 

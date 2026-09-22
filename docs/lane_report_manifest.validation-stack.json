@@ -32,28 +32,28 @@
   ],
   "stories": [
     {
-      "id": "hosts-validitypreview--interactive",
+      "id": "scene-validation-validitypreview--interactive",
       "title": "Validity Preview · Drag-Time (interactive)",
       "look_for": "sink/in already carries a many-to-one mark at rest (the red halo, left wall) — that's the at-rest grammar. The play function drags a real gesture; this static shot is the resting frame before any gesture starts.",
       "w": 620,
       "h": 380
     },
     {
-      "id": "hosts-validitypreview--preview-off",
+      "id": "scene-validation-validitypreview--preview-off",
       "title": "Validity Preview · Toggled off",
       "look_for": "validityPreview: false — a full press-move-release changes nothing about availability paint, the toggle's own mechanical proof.",
       "w": 620,
       "h": 380
     },
     {
-      "id": "hosts-foldbubbling--expanded-marks-in-place",
+      "id": "scene-validation-foldbubbling--expanded-marks-in-place",
       "title": "Fold Bubbling · Expanded (in place)",
       "look_for": "kid1 and kid2 each show their OWN error flag — nothing has bubbled because nothing is hidden.",
       "w": 380,
       "h": 320
     },
     {
-      "id": "hosts-foldbubbling--port-view-bubbles-to-parent",
+      "id": "scene-validation-foldbubbling--port-view-bubbles-to-parent",
       "title": "Fold Bubbling · Port view (bubbled)",
       "look_for": "the IDE red-folder case: proc's OWN flag now reads \"2 error diagnostics\" — both hidden members' findings climbed to the ancestor that hides them.",
       "w": 380,
@@ -81,14 +81,14 @@
       "h": 120
     },
     {
-      "id": "hosts-validation--react-flow-drag-time-preview",
+      "id": "scene-validation-validitypreview-in-a-host--react-flow-drag-time-preview",
       "title": "Validation In A Host · React Flow (gesture)",
       "look_for": "same three-node fixture, same decorate seam, now inside a real React Flow canvas — a static rest frame; the play function drives the actual drag.",
       "w": 620,
       "h": 220
     },
     {
-      "id": "hosts-validation--tldraw-control-driven-availability",
+      "id": "scene-validation-validitypreview-in-a-host--tldraw-control-driven-availability",
       "title": "Validation In A Host · tldraw (control-driven)",
       "look_for": "the on-screen label reads \"NOT a gesture\" verbatim — sink/in reads available, str/out reads unavailable, painted through a Storybook control, not a drag tldraw's own host has no mechanism for.",
       "w": 620,

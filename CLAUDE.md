@@ -278,21 +278,33 @@ them as you touch them rather than in one sweep.
 
 Zach, 2026-09-22, picking proposal B out of three that ran side by side
 (`reports/media/storybook-org-2026-09-22.html`): *"top level same as repo and
-then familes beneath"* — and Hosts is a section *"so we can show all the
-examples that incoperate reactflow/tldraw"*. Before this, every title was a
-free string each lane chose locally; 151 reasonable choices added up to 11
-sections, four holding one thing, and six components living in two places.
+then familes beneath"*. Before this, every title was a free string each lane
+chose locally; 151 reasonable choices added up to 11 sections, four holding
+one thing, and six components living in two places.
 
 - **The first segment is the story file's own top-level folder**, in
   ARCHITECTURE.md's words: `Components` · `Scene` · `Editor` · `Hosts` ·
   `Presets` · `Skin` (`src/components/…` → `Components/…`). A story that
   demonstrates another kit's code moves to that kit's folder; the title does
   not paper over the location.
-- **A family level exists only where a section would list more than 15
-  things** — today only Components: `Ports`, `Blocks`, `Traces`,
-  `Text & Marks`, `Menus & Bars`, `Panels & Dialogs`, `Stock`. The list is
-  closed; add a family in `src/storyOrganisation.test.ts` deliberately, never
-  in a title.
+- **A component's host boards live with the component**, as an aspect:
+  `Components/Blocks/BlockPort/In A Host`, `Scene/Model & Diff/Scene/In A
+  Host (tldraw)`. Zach, 2026-09-22: *"give thoose components back their
+  thing and use tag to filter… stories in /hosts should be things that do
+  not fit naturally within the components"*. So `src/hosts/` holds only
+  stories about host-side code itself (the pyblocks loader, tldraw detach);
+  "every example in React Flow / tldraw" is the `host:` tag filter below,
+  not a section. (Measured when this was written: 19 story files reach an
+  engine and 10 of them lived in `hosts/` — a section could never have held
+  them all.)
+- **Families: Components and Scene have one, with closed lists.**
+  Components: `Ports`, `Blocks`, `Traces`, `Text & Marks`, `Menus & Bars`,
+  `Panels & Dialogs`, `Stock`. Scene, by what an operation does: `Model &
+  Diff`, `Wiring`, `Validation`, `Layout & Drag` — kept at 11 entries on
+  purpose, Zach: *"I think we will be adding more functinality in the
+  future"*. Every other section stays flat, and a flat section over 15
+  entries fails the test — give it a family list instead. Add a family in
+  `src/storyOrganisation.test.ts` deliberately, never in a title.
 - **Then the component's code name** (`PortEdge`, not "Port Edge"), then an
   aspect in words where one file is a facet of a component
   (`Components/Ports/PortEdge/Hit Regions`).
@@ -300,7 +312,7 @@ sections, four holding one thing, and six components living in two places.
 
 `src/storyOrganisation.test.ts` (the `unit` project, so `pnpm test`, not
 `test-stories`) fails on a section that is not the file's folder, a family
-outside the list, a flat section over 15, or a wrong tag below — it reads
+outside its section's list, a flat section over 15, or a wrong tag below — it reads
 titles with Storybook's own CSF parser. It cannot tell whether a component
 is in the *right* family; that stays a judgement.
 
