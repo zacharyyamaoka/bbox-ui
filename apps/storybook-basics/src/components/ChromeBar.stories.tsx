@@ -322,6 +322,15 @@ export const StructuralPathMenu: Story = {
     const currentRow = menu.getByRole("menuitem", { name: /Camera Block/ });
     await expect(currentRow).toHaveAttribute("aria-current", "page");
     await expect(currentRow).toHaveAttribute("data-current", "true");
+    // The tint is PAINTED, not just an attribute: the current row's computed
+    // background differs from a plain row's (ToolDock.stories.tsx asserts its
+    // identical fix the same way). The attribute alone stays green if the
+    // `data-current:bg-*` class is dropped; this does not.
+    const plainRow = menu
+      .getAllByRole("menuitem")
+      .find((row) => row !== currentRow && !row.hasAttribute("data-current") && !row.hasAttribute("data-highlighted"));
+    await expect(plainRow, "a non-current, non-highlighted row to compare against").toBeDefined();
+    await expect(getComputedStyle(currentRow).backgroundColor).not.toEqual(getComputedStyle(plainRow!).backgroundColor);
     // No check glyph left in the menu at all (2026-09-21: the highlight
     // above replaces it, see toolDock.tsx's identical fix).
     await expect(menuEl.querySelector("svg.lucide-check")).toBeNull();
