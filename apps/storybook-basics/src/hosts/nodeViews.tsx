@@ -26,7 +26,7 @@ import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
-import { Region, REGION_CORNER_BLOCK_STYLE, type RegionArm } from "../components/region";
+import { Region, REGION_CORNER_BLOCK_STYLE, type RegionArm, type RegionPoint } from "../components/region";
 import { REGION_CARD_WIDTH_PX, REGION_CORNER_WIDTH_PX } from "../components/region.layout";
 import { portViewSlotCount, railBandHeightForSlots, resolveBlockHeight } from "../scene/fitToContent";
 import { ValueCapsule } from "../presets/value/value";
@@ -67,6 +67,12 @@ export interface SceneNodeDecoration {
   availability?: Readonly<Record<string, "available" | "unavailable">>;
   /** Per-port diagnostics, same per-node key shape as `availability`. */
   portDiagnostics?: Readonly<Record<string, Diagnostic[]>>;
+  /** A region's wall-crossing markers, frame-local — forwarded to
+   *  `Region.crossings`. Host glue computes them (`regionViews.layout.ts`'s
+   *  `wallCrossings` over the host's own drawn polylines), because the
+   *  frame's box and the cable's route are both measured facts no single
+   *  node owns. Ignored on anything but a region. */
+  crossings?: readonly RegionPoint[];
 }
 
 /** `undefined` for a node this decorator has no opinion on — same
@@ -652,6 +658,7 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
       {...(node.data.h === undefined ? null : { height: node.data.h })}
       members={bodyChildrenOf(scene, node.id).map(memberViewOf)}
       arms={arms}
+      crossings={decoration?.crossings}
     />
   );
 }
