@@ -96,6 +96,25 @@ function handlesOf(id: TLShapeId): { id: string; type: string; x: number; y: num
   });
 }
 
+/**
+ * The PIN handles only.
+ *
+ * AMENDED BY P-053, and it is the one change that item made to this file.
+ * When P-028 was written, pins were the only handles an `ss-wire` had, so
+ * `handlesOf(wire)[0]` was always one and "every handle is a `pin:`" was a
+ * true sentence about the shape. P-053 adds two TERMINAL handles to the same
+ * `getHandles` — that is the item, "the same machinery for the two ENDS" —
+ * so the list now carries both kinds and `[0]` is `terminal:start`. Every
+ * case below still measures exactly what it measured before; it just names
+ * the handle it meant instead of taking whichever came first. The assertion
+ * that WAS lost — "nothing here is anything but a pin" — is not dropped, it
+ * is restated in the first case as the full list, so this file still fails if
+ * a third handle kind appears unannounced.
+ */
+function pinHandlesOf(id: TLShapeId) {
+  return handlesOf(id).filter((handle) => handle.id.startsWith("pin:"));
+}
+
 /** Canvas-relative coordinates, which is what Playwright's drag options take. */
 function onCanvas(point: { x: number; y: number }): { x: number; y: number } {
   const rect = canvasOf(app!.root).getBoundingClientRect();
@@ -135,12 +154,17 @@ describe("P-028 — authored elbow routes", () => {
 
     expect(wireOf(wire).props.pins).toEqual([]);
 
-    const handles = handlesOf(wire);
-    expect(handles.length).toBeGreaterThan(0);
+    const pins = pinHandlesOf(wire);
+    expect(pins.length).toBeGreaterThan(0);
     // `virtual` is stock tldraw's "the engine owns this point"; nothing is
-    // authored yet, so nothing is a `vertex`.
-    expect(handles.every((handle) => handle.type === "virtual")).toBe(true);
-    expect(handles.every((handle) => handle.id.startsWith("pin:"))).toBe(true);
+    // authored yet, so no PIN is a `vertex`.
+    expect(pins.every((handle) => handle.type === "virtual")).toBe(true);
+    // And nothing else is on this cable but the two ends P-053 added — the
+    // restatement of P-028's original "every handle is a pin", in the world
+    // where a cable also has terminals.
+    expect(
+      handlesOf(wire).filter((handle) => !handle.id.startsWith("pin:")).map((handle) => handle.id).sort(),
+    ).toEqual(["terminal:end", "terminal:start"]);
   });
 
   it("dragging a segment handle moves the painted cable and writes one pin", async () => {
@@ -148,7 +172,7 @@ describe("P-028 — authored elbow routes", () => {
     const { wire } = await wiredPair();
     const canvas = canvasOf(app.root);
 
-    const handle = handlesOf(wire)[0];
+    const handle = pinHandlesOf(wire)[0];
     const dropped = { x: handle.x + 90, y: handle.y };
 
     // The cable does NOT run through the drop point before the drag — stated
@@ -183,7 +207,7 @@ describe("P-028 — authored elbow routes", () => {
     const { wire, sink } = await wiredPair();
     const canvas = canvasOf(app.root);
 
-    const handle = handlesOf(wire)[0];
+    const handle = pinHandlesOf(wire)[0];
     await userEvent.dragAndDrop(canvas, canvas, {
       sourcePosition: onCanvas(handle),
       targetPosition: onCanvas({ x: handle.x + 150, y: handle.y }),
@@ -242,7 +266,7 @@ describe("P-028 — authored elbow routes", () => {
     const { wire } = await wiredPair();
     const canvas = canvasOf(app.root);
 
-    const handle = handlesOf(wire)[0];
+    const handle = pinHandlesOf(wire)[0];
     const dropped = { x: handle.x + 90, y: handle.y };
     await userEvent.dragAndDrop(canvas, canvas, {
       sourcePosition: onCanvas(handle),
@@ -267,7 +291,7 @@ describe("P-028 — authored elbow routes", () => {
     const { wire } = await wiredPair();
     const canvas = canvasOf(app.root);
 
-    const handle = handlesOf(wire)[0];
+    const handle = pinHandlesOf(wire)[0];
     await userEvent.dragAndDrop(canvas, canvas, {
       sourcePosition: onCanvas(handle),
       targetPosition: onCanvas({ x: handle.x + 90, y: handle.y }),
@@ -278,6 +302,9 @@ describe("P-028 — authored elbow routes", () => {
     await userEvent.dblClick(canvas, { position: onCanvas(authored) });
 
     await waitFor(() => (wireOf(wire).props.pins.length === 0 ? true : null), { what: "the pin to be dropped" });
-    expect(handlesOf(wire).every((each) => each.type === "virtual")).toBe(true);
+    // Every PIN is back to `virtual` — the route is the router's again. The
+    // two terminals are `vertex` and always were (P-053): an endpoint is not
+    // a point the engine is proposing, it is one that exists.
+    expect(pinHandlesOf(wire).every((each) => each.type === "virtual")).toBe(true);
   });
 });

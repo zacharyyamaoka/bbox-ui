@@ -39,6 +39,14 @@ export { installWireGesture, pendingEdgeDrop, wireDrag, type PendingEdgeDrop, ty
 export { availabilityAt, wireAvailability, type PortAvailabilityPaint, type WireAvailabilityMap } from "./portAvailability";
 export { InFlightWire, WireFace } from "./WireFace";
 export {
+  TERMINAL_DROP_RADIUS_PX,
+  boundTarget,
+  portNearPoint,
+  terminalHandleId,
+  terminalOfHandle,
+  type TerminalTarget,
+} from "./terminalRebind";
+export {
   WIRE_TERMINAL_GAP,
   portTerminal,
   resolveWireEnds,
@@ -47,6 +55,7 @@ export {
   wirePinnedRoute,
   wireRoutePoints,
   wireRouteSegments,
+  wireTerminalGrabPoints,
   wireTerminals,
   type WireEnds,
   type WireRouteSegment,

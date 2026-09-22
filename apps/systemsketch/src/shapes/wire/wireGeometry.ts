@@ -197,6 +197,72 @@ export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, 
   return points.map((point) => new Vec(point.x, point.y));
 }
 
+/**
+ * P-053. Where the two TERMINAL grab handles sit on a route — NOT on its two
+ * end points, and the offset is the whole design decision of this feature.
+ *
+ * THE COLLISION, measured 2026-09-21 in real Chromium before this existed: a
+ * cable's end stops `WIRE_TERMINAL_GAP` (8px) short of the dot it is bound
+ * to, and a port dot's hit target is a fixed 40px circle
+ * (`@trunk/components/port.layout.ts`'s `PORT_HIT_PX`, painted as
+ * `[data-slot="port-dot-halo"]`). 8 < 20, so a handle published at the
+ * route's end lands INSIDE the dot — and `installWireGesture` owns a press
+ * there, in the capture phase, to start a NEW cable. `elementsFromPoint` at
+ * the end of a bound cable returned `port-dot-halo` on top, the press drew a
+ * second wire, and the terminal drag never began.
+ *
+ * WHY THE HANDLE MOVES RATHER THAN THE DOT YIELDING, which is the tempting
+ * fix: a press on a dot would otherwise mean two different things — "draw a
+ * cable" or "re-point that one" — decided by whether some OTHER shape
+ * happens to be selected. That is an affordance you cannot look at and
+ * predict. Keeping the dot unconditionally "start a cable" and putting the
+ * endpoint's grab point a little way back along the cable keeps both
+ * gestures readable, and the handle is still plainly on the end of the ink.
+ *
+ * `clearance` is how far along the polyline to walk in from each end, and the
+ * caller derives it from the two numbers above rather than typing one
+ * (`WireShapeUtil.getHandles`). The walk is by ARC LENGTH so the point lands
+ * on the drawn cable for every routing, elbow corners included — a straight
+ * interpolation between the first two vertices would leave the ink the moment
+ * a corner fell inside the clearance.
+ *
+ * CLAMPED to 40% of the route on each side, so a short cable's two handles
+ * can never cross or swap: at that point they are what the route has room
+ * for, which is honest, where two handles in each other's places would not
+ * be.
+ */
+export function wireTerminalGrabPoints(points: readonly Vec[], clearance: number): { start: Vec; end: Vec } {
+  const lengths: number[] = [];
+  let total = 0;
+  for (let at = 1; at < points.length; at += 1) {
+    const step = Math.hypot(points[at].x - points[at - 1].x, points[at].y - points[at - 1].y);
+    lengths.push(step);
+    total += step;
+  }
+  const walk = Math.max(0, Math.min(clearance, total * 0.4));
+  return { start: pointAlong(points, lengths, walk), end: pointAlong(points, lengths, total - walk) };
+}
+
+/** The point `distance` along a polyline whose segment lengths are already
+ *  known. Degenerate routes (zero total length) answer their first vertex,
+ *  which is the only honest answer and never `NaN`. */
+function pointAlong(points: readonly Vec[], lengths: readonly number[], distance: number): Vec {
+  let remaining = distance;
+  for (let at = 0; at < lengths.length; at += 1) {
+    if (lengths[at] <= 0) continue;
+    if (remaining > lengths[at]) {
+      remaining -= lengths[at];
+      continue;
+    }
+    const t = remaining / lengths[at];
+    return new Vec(
+      points[at].x + (points[at + 1].x - points[at].x) * t,
+      points[at].y + (points[at + 1].y - points[at].y) * t,
+    );
+  }
+  return new Vec(points[points.length - 1].x, points[points.length - 1].y);
+}
+
 /* ------------------------------------------------------------------ *
  * P-028 — the AUTHORED half of an elbow route.
  *

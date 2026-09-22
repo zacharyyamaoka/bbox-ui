@@ -17,16 +17,28 @@ import { Polyline2d, ShapeUtil, T, Vec, createShapePropsMigrationSequence, type 
 
 import type { ElbowPin } from "@trunk/components/elbow";
 import { TRACE_HIT_CORRIDOR_PX } from "@trunk/components/trace.hit";
+import { PORT_HIT_PX } from "@trunk/components/port.layout";
 import { tunnelHidesRun, tunnelMouths } from "@trunk/components/tunnel";
 import type { Point } from "@trunk/components/trace.layout";
 
 import { wireTunnelState } from "./wireTunnel";
+import {
+  applyTerminalDrop,
+  boundTarget,
+  portNearPoint,
+  releaseTerminal,
+  restoreTerminal,
+  terminalDropVerdict,
+  terminalHandleId,
+  terminalOfHandle,
+  type TerminalTarget,
+} from "./terminalRebind";
 
 import { ElbowPinV, PointV } from "../shared/props";
 import { DiffMarkStyle, type DiffMark } from "../shared/diffMark";
 import { WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE } from "../types";
 import { WireFace } from "./WireFace";
-import { wireAutomaticRoute, wirePinnedRoute, wireRoutePoints, wireRouteSegments, wireTerminals } from "./wireGeometry";
+import { WIRE_TERMINAL_GAP, wireAutomaticRoute, wirePinnedRoute, wireRoutePoints, wireRouteSegments, wireTerminalGrabPoints, wireTerminals } from "./wireGeometry";
 
 export interface WireShapeProps {
   /**
@@ -455,18 +467,51 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
    * would move a number that changes nothing on screen.
    */
   override getHandles(shape: WireShape): TLHandle[] {
-    if (shape.props.routing !== "elbow") return [];
     const { from, to } = wireTerminals(this.editor, shape);
-    return wireRouteSegments(from, to, shape.props.pins).map((segment, at) => ({
-      id: `${PIN_HANDLE_PREFIX}${segment.index}`,
-      type: segment.pinned ? "vertex" : "virtual",
-      // A fractional index only orders handles; these are generated rather
-      // than stored because the list is derived fresh from the route on every
-      // read and has no identity to preserve between reads.
-      index: handleIndexKey(at),
-      x: segment.x,
-      y: segment.y,
-    }));
+    const route = wireRoutePoints(from, to, shape.props.routing, shape.props.pins);
+    const pins: Omit<TLHandle, "index">[] =
+      // A non-elbow routing gets no PIN handles, and that is a statement
+      // rather than an omission: `pins` is read by the elbow router alone, so
+      // a pin handle on a `curved` cable would move a number that changes
+      // nothing on screen. The TERMINAL handles below are the opposite — a
+      // cable has two ends whatever shape it takes between them.
+      shape.props.routing !== "elbow"
+        ? []
+        : wireRouteSegments(from, to, shape.props.pins).map((segment) => ({
+            id: `${PIN_HANDLE_PREFIX}${segment.index}`,
+            type: segment.pinned ? "vertex" : "virtual",
+            x: segment.x,
+            y: segment.y,
+          }));
+
+    // P-053. The two ENDS — set back along the cable far enough to clear the
+    // port dot, which owns a press of its own. `wireTerminalGrabPoints` carries
+    // the measurement and the argument; the CLEARANCE is derived here, from
+    // the three numbers that actually decide it, so none of them is typed
+    // twice: the dot's 40px hit circle (`PORT_HIT_PX`, halved to a radius),
+    // tldraw's own handle radius (`editor.options.handleRadius`, which is what
+    // `ShapeHandleOverlayUtil.getGeometry` hit-tests with), and the gap the
+    // route already leaves. At the defaults that is 20 + 12 - 8 = 24px along
+    // the cable, which puts the handle's hit circle exactly outside the dot's.
+    const clearance = PORT_HIT_PX / 2 + this.editor.options.handleRadius - WIRE_TERMINAL_GAP;
+    const grab = wireTerminalGrabPoints(route, clearance);
+
+    // `vertex` and not `virtual`: a virtual handle means "the engine owns this
+    // point and you are proposing one", which is true of an unpinned corner
+    // and false of an endpoint. An endpoint already exists. It also decides a
+    // collision for us — `ShapeHandleOverlayUtil.getOverlays` drops a virtual
+    // handle sitting within `handleRadius * 2` of a vertex one, so a short
+    // cable's first pin handle yields to the terminal rather than fighting it.
+    const terminals: Omit<TLHandle, "index">[] = [
+      { id: terminalHandleId("start"), type: "vertex", x: grab.start.x, y: grab.start.y },
+      { id: terminalHandleId("end"), type: "vertex", x: grab.end.x, y: grab.end.y },
+    ];
+
+    // Start, then the interior corners, then end — the order the cable runs
+    // in. A fractional index only orders handles; these are generated rather
+    // than stored because the list is derived fresh from the route on every
+    // read and has no identity to preserve between reads.
+    return [terminals[0], ...pins, terminals[1]].map((handle, at) => ({ ...handle, index: handleIndexKey(at) }));
   }
 
   /**
@@ -483,12 +528,136 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
    * `markHistoryStoppingPoint` the engine already opened).
    */
   override onHandleDrag(shape: WireShape, info: TLHandleDragInfo<WireShape>): TLShapePartial<WireShape> | undefined {
+    const terminal = terminalOfHandle(info.handle.id);
+    // P-053. The end just FOLLOWS the pointer while the drag is in flight —
+    // `onHandleDragStart` has already unbound it, so `wireTerminals` falls
+    // through to these props and the cable is live. Nothing is judged and
+    // nothing is bound here: re-running the validator on every pointer move
+    // would ask the same question sixty times a second, and binding as you
+    // pass over a dot would write the document for a cable the user is still
+    // carrying. The verdict is at the DROP, in `onHandleDragEnd`.
+    if (terminal) return { id: shape.id, type: shape.type, props: { [terminal]: { x: info.handle.x, y: info.handle.y } } };
+
     const index = pinHandleIndex(info.handle.id);
     if (index === null || shape.props.routing !== "elbow") return undefined;
     const { from, to } = wireTerminals(this.editor, shape);
     const pins = wirePinnedRoute(from, to, shape.props.pins, index, { x: info.handle.x, y: info.handle.y });
     if (!pins) return undefined;
     return { id: shape.id, type: shape.type, props: { pins } };
+  }
+
+  /* ---------------------------------------------------------------- *
+   * P-053 — re-pointing a cable's END, on P-028's machinery.
+   *
+   * The same three engine seams, used the same stock way: `getHandles`
+   * publishes the grab points, `DraggingHandle` drives the drag, and this
+   * util decides what a drop MEANS. What is new is only that a terminal is
+   * bound to something, so the gesture has three moments instead of one —
+   * let go of the port, follow the pointer, land somewhere.
+   *
+   * THE WHOLE GESTURE IS ONE UNDO STEP FOR FREE, and it is worth naming
+   * because it is the P-014 rule this branch also had to satisfy:
+   * `DraggingHandle.onEnter` opens `markHistoryStoppingPoint('dragging
+   * handle')` before any of this runs and `cancel()` calls `bailToMark` on
+   * it, so the unbind, every intermediate move and the rebind collapse to one
+   * entry and an Escape mid-drag needs no restore code here at all.
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Where the dragged end came FROM, kept for the duration of one drag.
+   *
+   * WHY a field on the util rather than a prop on the shape: it is gesture
+   * state, not document state — the same split `props.tunnel` versus
+   * `wireTunnel.ts`'s focus atom already draws on this shape. A `ShapeUtil`
+   * is a singleton per editor and only one handle drag can be in flight at a
+   * time, so one slot is the whole requirement.
+   */
+  private draggedTerminal: { wireId: TLShapeId; terminal: "start" | "end"; from: TerminalTarget } | null = null;
+
+  /**
+   * Let go of the port, so the end can move at all.
+   *
+   * The binding is what `wireTerminals` prefers over `props.start`/`props.end`
+   * (`wireGeometry.ts`'s `boundTerminal`), so while it exists the handle can
+   * be dragged anywhere and the cable will not budge — measured, and the
+   * reason this method is not optional. `props[terminal]` is seeded with the
+   * terminal's CURRENT page position in the same write, so the cable does not
+   * jump to a stale loose point on the first frame.
+   *
+   * This is stock tldraw's own arrow behaviour, not an invention:
+   * `ArrowShapeUtil.onTerminalHandleDrag` calls `removeArrowBinding` the
+   * moment its handle is over no target.
+   */
+  override onHandleDragStart(shape: WireShape, info: TLHandleDragInfo<WireShape>): TLShapePartial<WireShape> | undefined {
+    const terminal = terminalOfHandle(info.handle.id);
+    if (!terminal) return undefined;
+    const from = boundTarget(this.editor, shape.id, terminal);
+    // A terminal that is already loose has nothing to re-point and no port to
+    // snap back to; leave it to the ordinary loose-end behaviour.
+    if (!from) return undefined;
+    this.draggedTerminal = { wireId: shape.id, terminal, from };
+    releaseTerminal(this.editor, shape, terminal);
+    // THE END SNAPS TO THE POINTER, and the ~24px hop that causes is
+    // deliberate rather than tolerated. `getHandles` sets the grab point back
+    // along the cable to clear the port dot, so handle and endpoint are not
+    // the same place — and something has to give. The alternative was tried
+    // and measured: carrying the difference and adding it back keeps the ink
+    // under the grab circle, but then the END trails the pointer by a
+    // handle-clearance for the whole drag, and the drop lands 32px past the
+    // dot the person was pointing at — outside `TERMINAL_DROP_RADIUS_PX`, so
+    // an aimed drop simply failed. Whatever the pointer is over IS where the
+    // end goes; that is the rule a drop can be judged by.
+    return { id: shape.id, type: shape.type, props: { [terminal]: { x: info.handle.x, y: info.handle.y } } };
+  }
+
+  /**
+   * The drop. One of three things happened and the two failures are the same
+   * thing: the end goes back where it came from.
+   *
+   * WHY a refused or missed drop SNAPS BACK rather than leaving a loose end:
+   * "a wire without an end is not a document fact" is this kit's existing
+   * rule, stated at `WireBindingUtil.onBeforeDeleteToShape` and enforced by
+   * `sceneFromRecords`, which omits a half-bound wire outright. A gesture
+   * that could leave one behind would put a cable on the canvas that no
+   * consumer can read and that no lint can name.
+   *
+   * WHY the final point is read off `shape.props` and not off `info.handle`:
+   * `DraggingHandle.complete()` passes `this.initialHandle` — the handle as
+   * it was at drag START (DraggingHandle.tsx:222-228). The end position the
+   * user actually chose is the one `onHandleDrag` has been writing into the
+   * record all along, and `shape` here is re-read from the store, so it is
+   * current. Reading `info.handle` would judge the drop at the place the drag
+   * began, which passes every test that drags a short distance.
+   */
+  override onHandleDragEnd(shape: WireShape, _info: TLHandleDragInfo<WireShape>): TLShapePartial<WireShape> | undefined {
+    const dragged = this.draggedTerminal;
+    this.draggedTerminal = null;
+    if (!dragged || dragged.wireId !== shape.id) return undefined;
+    const { terminal, from } = dragged;
+
+    const dropped = shape.props[terminal];
+    const other = boundTarget(this.editor, shape.id, terminal === "start" ? "end" : "start");
+    const landed = portNearPoint(this.editor, dropped, other);
+    if (landed) {
+      const ends = terminalDropVerdict(this.editor, shape, terminal, landed);
+      if (ends) {
+        applyTerminalDrop(this.editor, shape, ends);
+        return undefined;
+      }
+    }
+    restoreTerminal(this.editor, shape, terminal, from);
+    return undefined;
+  }
+
+  /**
+   * Escape mid-drag. `DraggingHandle.cancel()` calls this and then
+   * `bailToMark`, which discards every store change the drag made — the
+   * unbind included — so there is nothing to put back by hand. All this has
+   * to do is forget the gesture, or the NEXT drag's `onHandleDragEnd` would
+   * find a stale origin and snap a cable back to a port it was never on.
+   */
+  override onHandleDragCancel(): void {
+    this.draggedTerminal = null;
   }
 
   /**
