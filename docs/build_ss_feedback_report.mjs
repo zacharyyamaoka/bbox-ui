@@ -456,6 +456,9 @@ ${facts.laneB}
 </div>
 ${facts.laneC}
 
+${facts.needs ? `<h2>Needs you</h2>${facts.needs}` : ""}
+${facts.board ? `<h2>Seeded review board</h2>${facts.board}` : ""}
+
 <h2>Tests on the merged tree</h2>
 ${facts.tests}
 
