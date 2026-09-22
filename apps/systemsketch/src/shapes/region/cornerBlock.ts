@@ -35,6 +35,8 @@ import {
 } from "@trunk/components/region.layout";
 import { REGION_VARIANTS, readRegionVariant } from "@trunk/skin/regionVariants";
 
+import { runRepair } from "../../document/derivedWrites";
+
 import type { BlockPortSpec, BlockShapeProps } from "../block/BlockShapeUtil";
 import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE, type PortSide } from "../types";
 import type { RegionArm, RegionKind, RegionShape } from "./RegionShapeUtil";
@@ -436,7 +438,8 @@ export function installRegionKit(editor: Editor): () => void {
     const moves = cards
       .filter((corner) => !onCornerSlot(corner))
       .map((corner) => ({ id: corner.id, type: corner.type, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 }));
-    if (moves.length > 0) editor.run(() => editor.updateShapes(moves), { history: "ignore" });
+    // Derived as well as history-ignored: a card put back after a load is not an autosave (`document/derivedWrites.ts`).
+    if (moves.length > 0) runRepair(editor, () => editor.updateShapes(moves));
   };
 
   /**

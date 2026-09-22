@@ -178,7 +178,14 @@ export default defineConfig({
       // Nothing imports a board through the module graph for HMR to matter:
       // the tests that read `.tldr` fixtures read them with `fs` or `?raw`
       // once per run. Pinned by `src/viteWatch.test.ts`.
-      ignored: [`${path.resolve(__dirname, "review")}/**`, "**/*.tldr", "**/*.bbox", "**/*.systemsketch"],
+      //
+      // WHY a case-insensitive RegExp for the suffixes and not `**/*.tldr`
+      // globs: the app opens `Board.TLDR` exactly like `board.tldr`
+      // (`documentSuffix` lower-cases first), and a case-sensitive glob let
+      // an upper-case board reload the page on every save (Codex audit,
+      // 2026-09-22). Vite hands this list to chokidar's `anymatch`, which
+      // takes a RegExp as readily as a glob.
+      ignored: [`${path.resolve(__dirname, "review")}/**`, /\.(?:tldr|bbox|systemsketch)$/i],
     },
     fs: {
       // The alias points OUTSIDE this app's root, so the dev server has to be
