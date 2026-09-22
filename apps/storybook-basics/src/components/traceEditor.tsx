@@ -223,6 +223,11 @@ export function TraceEditor({
     from.x, from.y, from.dir,
     to.x, to.y, to.dir,
     routing, rest.gap, rest.markerEnd, rest.terminalRadius, rest.strokeWidth,
+    // WHY: traceDefaultGapPx (called above) is line-cap aware since acd547e
+    // — it reads rest.variant and rest.animated to pick the gap. Omitting
+    // them here meant a live variant/cap change redrew `Trace` but left this
+    // editor's terminal handles on the previous pull-back.
+    rest.variant, rest.animated,
     rest.curve?.dx, rest.curve?.dy, rest.slantT,
     bends,
     rest.pins, rest.obstacles, rest.fromBox, rest.toBox, rest.elbowOptions,
