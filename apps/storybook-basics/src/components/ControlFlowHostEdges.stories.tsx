@@ -1,5 +1,5 @@
 /**
- * Components/Blocks/Region/Host Edges — the gap docs/CONTROL-FLOW-PLAN.md §1 marks with
+ * Components/Blocks/BlockRegion/Host Edges — the gap docs/CONTROL-FLOW-PLAN.md §1 marks with
  * two ⚠️ rows, closed and measured.
  *
  * Every interesting control-flow cable lands on a block INSIDE something: a
@@ -39,10 +39,10 @@ import { dragFrom } from "../hosts/hostGestures";
 import { HOST_SCENE, type HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
 import { TldrawHost } from "../hosts/tldrawHost";
-import { expectMemberInside } from "./region.acceptance";
+import { expectMemberInside } from "./blockRegion.acceptance";
 
 const meta = {
-  title: "Components/Blocks/Region/Host Edges",
+  title: "Components/Blocks/BlockRegion/Host Edges",
   tags: ["object:region", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 

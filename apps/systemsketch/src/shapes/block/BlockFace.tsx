@@ -19,7 +19,6 @@ import { caretOffsetFromPoint } from "@trunk/components/caretGeometry";
 import { EditableText } from "@trunk/components/editableText";
 import type { BlockSide } from "@trunk/components/port.layout";
 import type { PortEdgeItem } from "@trunk/components/portEdge";
-import { REGION_CORNER_BLOCK_STYLE } from "@trunk/components/region";
 import { GlyphPicker } from "@trunk/editor/glyphPicker";
 import { POINTER_OWNED_CLASS } from "@trunk/hosts/nodeViews";
 import { parsePortDeclaration } from "@trunk/scene/portDeclaration";
@@ -559,10 +558,10 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
   // corner card is a real `ss-block` CHILD SHAPE, which tldraw renders in its
   // own subtree — it is not a React descendant of the `Region` element in
   // `RegionFace`, so no rule the component could write would reach it. The
-  // radii themselves stay the trunk's (`REGION_CORNER_BLOCK_STYLE`, measured
-  // by `RegionVariants.stories.tsx`'s `CornerMeetsFrameSquare` across all five
-  // drawings); this file only says WHICH card is a corner. Restating a radius
-  // here would be the divergence Zach's 2026-09-19 trunk rule forbids.
+  // radii themselves stay the trunk's (`Block`'s `shape="region-corner"`,
+  // measured by `RegionVariants.stories.tsx`'s `CornerMeetsFrameSquare` across
+  // all five drawings); this file only says WHICH card is a corner. Restating
+  // a radius here would be the divergence Zach's 2026-09-19 trunk rule forbids.
   const isRegionCorner = useValue("ss-block is its region's corner card", () => isRegionCornerBlock(editor, shape.id), [editor, shape.id]);
 
   // P-056. Which dot the user last clicked, board-wide — the whole trigger for
@@ -751,11 +750,9 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           // IS the authored box in port and expanded views, and the
           // measurement simply confirms it.
           height={view === "simple" ? undefined : h}
-          // The trunk's radii, spread the way `hosts/nodeViews.tsx` spreads
-          // them — `Block` applies its caller's `style` AFTER its own
-          // `borderRadius` (block.tsx), which is the seam it publishes as
-          // overridable. See the WHY above.
-          style={isRegionCorner ? REGION_CORNER_BLOCK_STYLE : undefined}
+          // The trunk's corner shape, named the way `hosts/nodeViews.tsx`
+          // names it. See the WHY above.
+          shape={isRegionCorner ? "region-corner" : "card"}
         />
       </BlockPort>
     </NodeShapeFrame>

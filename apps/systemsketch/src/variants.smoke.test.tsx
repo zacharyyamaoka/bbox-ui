@@ -33,7 +33,7 @@ import { userEvent } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
 
-import { REGION_PAD_BOTTOM_PX } from "@trunk/components/region.layout";
+import { REGION_PAD_BOTTOM_PX } from "@trunk/components/blockRegion.layout";
 import { PORT_VARIANTS, PORT_VARIANT_IDS } from "@trunk/skin/portVariants";
 import { REGION_VARIANTS, REGION_VARIANT_IDS, type RegionVariantId } from "@trunk/skin/regionVariants";
 
@@ -442,8 +442,8 @@ describe("app-variant-switch (d) — the app's region geometry follows the drawi
  * WHY this case has to live in the APP and cannot be left to the trunk's own
  * `RegionVariants.stories.tsx`: here the corner card is a real `ss-block`
  * CHILD SHAPE, rendered by tldraw in its own subtree rather than inside the
- * `Region` element. The trunk publishes the radii
- * (`REGION_CORNER_BLOCK_STYLE`) but cannot reach across that boundary to
+ * `BlockRegion` element. The trunk publishes the radii (`Block`'s
+ * `shape="region-corner"`) but cannot reach across that boundary to
  * apply them — so "the trunk is green" proved nothing about what was on
  * screen, and for one release the card shipped rounded on all four corners
  * with every trunk test passing. This is the only place that failure is

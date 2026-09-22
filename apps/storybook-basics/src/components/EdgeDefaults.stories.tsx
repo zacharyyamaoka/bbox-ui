@@ -28,7 +28,7 @@ import type { HostScene } from "../hosts/hostScene";
  */
 
 const meta = {
-  title: "Components/Blocks/Region/Edge Defaults",
+  title: "Components/Blocks/BlockRegion/Edge Defaults",
   tags: ["object:region", "host:dom", "lane:fix-edges"],
 } satisfies Meta;
 

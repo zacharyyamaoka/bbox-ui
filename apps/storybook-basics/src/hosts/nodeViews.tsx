@@ -26,8 +26,8 @@ import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
-import { Region, REGION_CORNER_BLOCK_STYLE, type RegionArm } from "../components/region";
-import { REGION_CARD_WIDTH_PX, REGION_CORNER_WIDTH_PX } from "../components/region.layout";
+import { BlockRegion, type RegionArm } from "../components/blockRegion";
+import { REGION_CARD_WIDTH_PX, REGION_CORNER_WIDTH_PX } from "../components/blockRegion.layout";
 import { portViewSlotCount, railBandHeightForSlots, resolveBlockHeight } from "../scene/fitToContent";
 import { ValueCapsule } from "../components/block.value";
 import { armsOf, bodyChildrenOf, describeHidden, hiddenSummary } from "../scene/controlFlow";
@@ -575,11 +575,10 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
         // fallback for a bench that renders an opaque region without
         // running the projection at all.
         footer={opaque ? <span data-slot="region-hidden">{describeHidden(projected?.hidden ?? hiddenSummary(scene, node.id))}</span> : undefined}
-        // Expanded only: the corner's non-shared corners go square so the
-        // card reads as PART of the frame (see REGION_CORNER_BLOCK_STYLE's
-        // own WHY on the mechanism). An opaque card is a free-standing
-        // card again and keeps its own radius.
-        style={opaque ? undefined : REGION_CORNER_BLOCK_STYLE}
+        // Expanded only: the corner's junctions with the frame go square so
+        // the card reads as PART of the frame (block.tsx's `BlockShape` WHY).
+        // An opaque card is a free-standing card again and keeps its radius.
+        shape={opaque ? "card" : "region-corner"}
         diagnostics={decoration?.diagnostics}
       />
     </BlockPort>
@@ -603,7 +602,7 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
   }));
 
   return (
-    <Region
+    <BlockRegion
       id={node.id}
       kind={region.kind}
       view={view}

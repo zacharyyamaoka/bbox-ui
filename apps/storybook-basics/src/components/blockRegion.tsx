@@ -1,10 +1,20 @@
 "use client";
 
-// src/components/region.tsx — the Region: a thin scope FRAME with a real
-// Block integral to its top-left corner, an optional free body, and an
+// src/components/blockRegion.tsx — BlockRegion: a thin scope FRAME with a
+// real Block integral to its top-left corner, an optional free body, and an
 // ordered list of arm rows. Props in, DOM out (docs/CONTROL-FLOW-PLAN.md
 // §3.2); it imports no scene module and no canvas engine, so the same
 // element renders under the DOM canvas, React Flow and tldraw unchanged.
+//
+// WHY "BlockRegion" and a composite rather than a frame with a slot (Zach,
+// 2026-09-22: "Block Region is stanadlone component that composes the Block
+// with a 'region'"): the corner IS a Block. Give it a `title` and this
+// component draws that Block itself, `shape="region-corner"`, so the square
+// junctions come with it. The Labeled Group is exactly that with nothing
+// else (`blockRegion.labeledGroup.tsx`). A host that needs ports on the card
+// still passes its own `BlockPort`-wrapped Block as `corner`, and gives that
+// Block the same shape: the shape is the Block's, not the region's
+// (block.tsx, `BlockShape`).
 //
 // ── ONE NODE, TWO PIECES OF PAINT (plan §2.A, Zach's "everything is a
 //    block" made structural) ──────────────────────────────────────────
@@ -57,6 +67,7 @@ import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from "r
 import { flushSync } from "react-dom";
 
 import { Bar } from "./bar";
+import { Block, REGION_FRAME_RADIUS } from "./block";
 import { BlockMembers, type BlockMember } from "./blockMembers";
 import { FoldingChevron } from "./foldingChevron";
 import {
@@ -64,7 +75,7 @@ import {
   REGION_CORNER_WIDTH_PX,
   regionLayout,
   type RegionLayout,
-} from "./region.layout";
+} from "./blockRegion.layout";
 import {
   DEFAULT_REGION_VARIANT,
   REGION_VARIANT_ATTR,
@@ -90,14 +101,25 @@ export interface RegionArm {
   members?: BlockMember[];
 }
 
-export interface RegionProps {
+export interface BlockRegionProps {
   /** Stamped as `data-region-id` on the root AND the frame — never
    *  `data-block-id`. See this file's header. */
   id: string;
   kind?: RegionKind;
   view?: RegionView;
-  /** The REAL Block: a `BlockPort` whose `id` IS this region's id. */
-  corner: ReactNode;
+  /**
+   * The corner card's title. With no `corner`, BlockRegion draws the card
+   * itself: a header-only `Block`, `shape="region-corner"` while expanded and
+   * a plain card while opaque, hugging its title. Rendered as authored.
+   */
+  title?: ReactNode;
+  /**
+   * The corner card, supplied whole — for a card with ports: a `BlockPort`
+   * whose `id` IS this region's id, around a `Block` with
+   * `shape="region-corner"`. Takes precedence over `title`. Omit both for a
+   * bare scope with nothing in its corner.
+   */
+  corner?: ReactNode;
   /** Skip the measurement when a host already knows the corner's box. */
   cornerSize?: { w: number; h: number };
   width?: number;
@@ -117,79 +139,10 @@ export interface RegionProps {
  *  dot exactly where it was under `v1`. */
 const FRAME_BORDER_PX = 1;
 
-/** The frame's shared top-left radius — the corner card's too. `v1` is the
- *  skin radius, i.e. exactly what this component painted before variants. */
-const FRAME_RADIUS = "var(--bbox-region-frame-radius, var(--bbox-skin-radius, var(--radius-lg)))";
-
-/**
- * The corner Block's radii: the frame's own at the shared top-left, square
- * at both corners where it MEETS the frame's edges, and — at its one free
- * corner (bottom-right) — the variant's `corner-radius`, the frame's again
- * by default. That is the Labeled Group Node look — the chip reads as part
- * of the frame, not as a card that happens to be parked in it. `v2` sets
- * the free corner square so its full-width header rule leaves the card
- * cleanly instead of departing from a curve.
- *
- * WHY top-right and bottom-left are SQUARE, and the other two are not:
- * those two are the JUNCTIONS — the card's own top edge continues as the
- * frame's top rule, and its own left edge continues as the frame's left
- * rule. A radius there retracts the card's edge from the frame's line, so
- * the border visibly kinks twice on its way around the corner. Zach,
- * 2026-09-19, annotating the tldraw app (`Pasted image 20260919180659.png`
- * — a square-cornered rectangle drawn over a card rounded at all four):
- * "I don't like how the edges where it meets the region are still curve.
- * they shuld be straight!", against the For Loop in `…115424.png` he had
- * already called done properly. WHAT THIS REJECTS: the stock all-round
- * `Block` (`--bbox-skin-radius` on four corners), which is the tempting
- * default because it is what every other Block on the board wears — and
- * which makes the corner read as a card PARKED in the frame rather than
- * part of it. Squaring all four was considered and rejected too: the
- * top-left is the frame's OWN corner (card and frame curve together, so
- * there is no junction to break) and the bottom-right touches no frame
- * edge at all — and the drawing he approved rounds both.
- *
- * WHY this object is the contract for EVERY host, not only one that
- * renders the card inside `Region`'s own subtree: a canvas host may mount
- * the corner card as an INDEPENDENT element. `apps/systemsketch` paints it
- * as a real `ss-block` child shape (its "everything is really a block"
- * ruling), so the card is not a React descendant of this component and no
- * CSS rule written here — not a wrapper class, not a
- * `[data-slot="region-corner"] >` descendant selector — can ever reach it.
- * Such a host has to spread THIS object onto its own card, exactly the way
- * `hosts/nodeViews.tsx` does. A host that skips it silently gets the stock
- * all-round card and the double kink above; that is the bug this paragraph
- * exists to stop coming back, and `RegionVariants.stories.tsx`'s
- * `CornerMeetsFrameSquare` is what measures it.
- *
- * WHY an inline style and not a Tailwind `[&_[data-slot=block]]:rounded-*!`
- * wrapper class: `Block` spreads its caller's `style` AFTER its own
- * `borderRadius` (block.tsx:321), so an inline value is the mechanism the
- * component already documents as winning. A `!important` class would also
- * win, but only by out-shouting a value Block deliberately publishes as
- * overridable — the quieter seam is the one Block itself points at.
- */
-export const REGION_CORNER_BLOCK_STYLE: CSSProperties = {
-  borderTopLeftRadius: FRAME_RADIUS,
-  borderTopRightRadius: 0,
-  borderBottomLeftRadius: 0,
-  borderBottomRightRadius: `var(--bbox-region-corner-radius, ${FRAME_RADIUS})`,
-  // WHY: `v10` (the 2026-09-20 sketch) centres the header card's title in a
-  // band run the full width of the region; every other drawing leaves it
-  // where the host put it. `text-align` is INHERITED, which is the whole
-  // reason it can live on this one shared object: the corner card is a React
-  // descendant of `Region` in the DOM host and a separate `ss-block` child
-  // SHAPE in the app, and an inherited property is the only paint that
-  // crosses that boundary without either host restating it.
-  //
-  // It cannot leak onto the port labels — `BlockPort` is the card's PARENT,
-  // not its child — which is what keeps the sketch's `port 1` / `port 2` left
-  // aligned beside their dots while the title centres. The tempting
-  // alternative, a `[data-slot="block-header"]` rule in `regionVariants.css`,
-  // is ruled out twice over: that file is custom-properties-only by its own
-  // contract, and a descendant selector written in the trunk can never reach
-  // the app's child shape at all (BlockFace.tsx's own note).
-  textAlign: "var(--bbox-region-corner-title-align, initial)" as CSSProperties["textAlign"],
-};
+/** The frame's shared top-left radius — the corner card's too, which is why
+ *  it lives beside `Block`'s `"region-corner"` shape and is read from there:
+ *  the frame and the card curve together only while they read one string. */
+const FRAME_RADIUS = REGION_FRAME_RADIUS;
 
 /**
  * The corner's measured box.
@@ -417,11 +370,33 @@ function ArmRow({
   );
 }
 
-export function Region({
+/**
+ * The corner card BlockRegion draws for itself when it is given a `title` and
+ * no `corner`: a header-only Block that hugs its title.
+ *
+ * WHY no header divider: the header is the whole card, so its rule would sit
+ * on the card's own bottom border and double it. WHY it hugs instead of taking
+ * `REGION_CORNER_WIDTH_PX`: this is the Labeled Group's label, and React Flow's
+ * reference label is as wide as its text. A region whose card carries ports
+ * passes its own sized card as `corner`.
+ */
+function TitleCorner({ title, opaque }: { title: ReactNode; opaque: boolean }) {
+  return (
+    <Block
+      header={title}
+      showHeaderDivider={false}
+      shape={opaque ? "card" : "region-corner"}
+      style={{ width: "max-content" }}
+    />
+  );
+}
+
+export function BlockRegion({
   id,
   kind = "group",
   view = "expanded",
-  corner,
+  title,
+  corner: givenCorner,
   cornerSize,
   width,
   height,
@@ -429,7 +404,8 @@ export function Region({
   arms,
   className,
   style,
-}: RegionProps) {
+}: BlockRegionProps) {
+  const corner = givenCorner ?? (title === undefined ? null : <TitleCorner title={title} opaque={view === "opaque"} />);
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const variant = useRegionVariant(root);
   const spec = REGION_VARIANTS[variant];

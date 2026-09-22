@@ -4,7 +4,7 @@
 // records out.
 //
 // There is no `BranchRegion` component here and there will not be one.
-// `components/region.tsx` already draws a frame, a real Block in its corner
+// `components/blockRegion.tsx` already draws a frame, a real Block in its corner
 // and a stack of arm rows; a branch is those three carrying particular DATA.
 // That is the same relationship `components/block.value.tsx` has to `Block`/`BlockPort`
 // (Zach, 2026-09-17: "it is just a preset though of the block"), and it is
@@ -21,7 +21,7 @@
 // the join (`C - Branch Region Asymmetry (Scopes See In, Only Yields Come
 // Out)`: the φ is real, the input crossing is not). `branchNode` therefore
 // writes `ports: { left: conditions }` and never a `right` wall; a future
-// yield-dot variant is a change to THIS factory, not to `region.tsx`.
+// yield-dot variant is a change to THIS factory, not to `components/blockRegion.tsx`.
 //
 // ── Q2: THE TITLE IS `Branch` ──────────────────────────────────────────
 // The header is the region's NAME, not its condition — the conditions are

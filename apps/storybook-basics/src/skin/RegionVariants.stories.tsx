@@ -77,7 +77,7 @@ import {
   regionVariantAttrs,
   type RegionVariantId,
 } from "./regionVariants";
-import { expectArmsStacked, expectCornerPorts, expectRegionExpanded, expectRegionOpaque } from "../components/region.acceptance";
+import { expectArmsStacked, expectCornerPorts, expectRegionExpanded, expectRegionOpaque } from "../components/blockRegion.acceptance";
 
 const meta = {
   title: "Skin/RegionVariants",

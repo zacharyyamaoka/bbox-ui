@@ -1,6 +1,6 @@
-// src/components/region.layout.test.ts — ACCEPTANCE for
+// src/components/blockRegion.layout.test.ts — ACCEPTANCE for
 // docs/CONTROL-FLOW-PLAN.md lane A. Off-limits to builders. Red until
-// `region.layout.ts`'s `regionLayout` lands.
+// `blockRegion.layout.ts`'s `regionLayout` lands.
 
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +11,7 @@ import {
   REGION_BODY_MIN_PX,
   REGION_PAD_BOTTOM_PX,
   regionLayout,
-} from "./region.layout";
+} from "./blockRegion.layout";
 
 const CORNER = { w: 140, h: 64 };
 

@@ -1,5 +1,5 @@
 /**
- * Components/Blocks/Region/Branch — `if`/`elif`/`else` and `match`/`case`, drawn as the
+ * Components/Blocks/BlockRegion/Branch — `if`/`elif`/`else` and `match`/`case`, drawn as the
  * generic Region (lane A) carrying branch DATA (docs/CONTROL-FLOW-PLAN.md
  * lane C). There is no branch component: every story below mounts a scene
  * literal from `scene/region.branch.fixtures.ts` into the ordinary hosts.
@@ -49,10 +49,10 @@ import {
   expectMemberInside,
   expectRegionExpanded,
   expectWirePainted,
-} from "./region.acceptance";
+} from "./blockRegion.acceptance";
 
 const meta = {
-  title: "Components/Blocks/Region/Branch",
+  title: "Components/Blocks/BlockRegion/Branch",
   tags: ["object:region", "host:dom", "host:react-flow", "lane:control-flow"],
 } satisfies Meta;
 

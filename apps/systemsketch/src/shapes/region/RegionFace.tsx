@@ -1,7 +1,7 @@
 // src/shapes/region/RegionFace.tsx — what an `ss-region` looks like: the
 // trunk's own `Region`, fed from persisted props.
 //
-// Nothing is drawn here. Stream 1 landed `@trunk/components/region.tsx` (the
+// Nothing is drawn here. Stream 1 landed `@trunk/components/blockRegion.tsx` (the
 // React Flow "Labeled Group Node" look Zach named in `Pasted image
 // 20260918192040.png`: a thin 1px frame, a real card integral to its
 // top-left, a stack of titled arm rows), so this file's whole job is to turn
@@ -34,7 +34,7 @@
 // `resizeBox` for the box.
 import { HTMLContainer, useEditor, useValue } from "tldraw";
 
-import { Region, type RegionArm as RegionArmView, type RegionKind as TrunkRegionKind } from "@trunk/components/region";
+import { BlockRegion, type RegionArm as RegionArmView, type RegionKind as TrunkRegionKind } from "@trunk/components/blockRegion";
 
 import { REGION_SHAPE_TYPE } from "../types";
 import { regionLayoutOf, REGION_NAME_TAB_PX } from "./cornerBlock";
@@ -118,7 +118,7 @@ export function RegionFace({ shape }: { shape: RegionShape }) {
         }
       }}
     >
-      <Region
+      <BlockRegion
         id={shape.id}
         kind={TRUNK_KIND[kind]}
         // The opaque projection is a LENS over the document (lane cf:E) and

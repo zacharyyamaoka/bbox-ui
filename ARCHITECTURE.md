@@ -135,7 +135,7 @@ top, the component unaware).
 contained components. each component should carry its own presets"*. A preset
 now lives beside what it configures, in the dotted-filename style the repo
 already uses (`portEdge.layout.ts`): a **component** preset beside its
-component (`components/block.value.tsx`, `components/region.labeledGroup.tsx`),
+component (`components/block.value.tsx`, `components/blockRegion.labeledGroup.tsx`),
 and a **scene-data** preset beside the model it builds
 (`scene/region.branch.ts`, `scene/region.loop.ts`). The second pair cannot sit
 in `components/`: they build scene records, and `components/` imports no scene.
