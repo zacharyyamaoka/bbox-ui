@@ -41,7 +41,7 @@ import { useDocumentSession, type DocumentSessionHelpers } from "../../files/ses
 import { useCompareView } from "../CompareView";
 import { SystemSketchSettings, useAppSettings } from "../ShareMenu";
 import { legacyAppActionsFor } from "../legacyApp";
-import { siteActionsFor } from "../sites";
+import { useSiteActionsWithStatus } from "../sites";
 import { shortcutPlatform, useStockMenus } from "../FileMenu";
 
 /**
@@ -101,10 +101,14 @@ export function SystemSketchChromeBar() {
   // home. The docs site and Storybook are different things, and navigating
   // away would put a board with unsaved work behind a Back button. That
   // asymmetry is `sites.ts`'s own reasoning, kept by using its default opener.
-  const siteGroups = useMemo<MenuGroupSpec[]>(() => {
-    const rows = siteActionsFor(window.location.hostname);
-    return rows.length > 0 ? [{ id: "sites", items: rows }] : [];
-  }, []);
+  // Live: each row's label carries what it actually opens right now
+  // (Stable/Preview/Remote, branch@commit) and flags when that differs from
+  // this board — see ../siteStatus.ts's header for why.
+  const siteRows = useSiteActionsWithStatus(window.location.hostname);
+  const siteGroups = useMemo<MenuGroupSpec[]>(
+    () => (siteRows.length > 0 ? [{ id: "sites", items: siteRows }] : []),
+    [siteRows],
+  );
 
   const menu = useMemo(
     () =>

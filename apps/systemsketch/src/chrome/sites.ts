@@ -26,10 +26,12 @@
 // Stable server. Press the row without that launcher (a bare `vite dev`, say)
 // and you get a connection-refused tab — which is why the launcher, not this
 // file, is the thing that had to change.
-import { createElement } from "react";
+import { createElement, useEffect, useMemo, useState } from "react";
 import { BookOpen, Globe } from "lucide-react";
 
 import type { MenuAction } from "@trunk/editor/chromeBar";
+
+import { describeStatus, probeSiteStatus, statusMismatchesOwn, type SiteStatus } from "./siteStatus";
 
 /** The deployed component site. Redeploys itself on every push to `main`. */
 export const BBOX_UI_SITE_URL: string =
@@ -75,4 +77,76 @@ export function siteActionsFor(
     });
   }
   return rows;
+}
+
+const STATUS_POLL_MS = 5000;
+
+/**
+ * `siteActionsFor`, live: same rows, same order, same ids — `sites.test.ts`
+ * keeps asserting the plain function's exact labels — but each row's
+ * `label` grows a status suffix (`describeStatus`) and a dead loopback row
+ * is `disabled` rather than left to open a connection-refused tab (Zach,
+ * 2026-09-22: "Rows must degrade honestly... if nothing is listening on the
+ * port, say so in the row rather than opening a connection-refused tab").
+ *
+ * WHY a hook and not a wrapper around the plain function: the label has to
+ * change as `/api/health` answers come back and 5s later go stale, which
+ * needs state and an effect — `siteActionsFor` itself stays synchronous and
+ * untouched (see siteStatus.ts's own header for why the two are split).
+ */
+export function useSiteActionsWithStatus(
+  hostname: string,
+  open: (url: string) => void = openInNewWindow,
+): readonly MenuAction[] {
+  const baseRows = useMemo(() => siteActionsFor(hostname, open), [hostname, open]);
+  const urls = useMemo(() => baseRows.map((row) => rowUrl(row)), [baseRows]);
+  const [ownStatus, setOwnStatus] = useState<SiteStatus>({ kind: "unknown" });
+  const [statuses, setStatuses] = useState<readonly SiteStatus[]>(() => urls.map(() => ({ kind: "unknown" })));
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      probeSiteStatus(window.location.origin).then((status) => {
+        if (!cancelled) setOwnStatus(status);
+      });
+      Promise.all(urls.map((url) => probeSiteStatus(url))).then((next) => {
+        if (!cancelled) setStatuses(next);
+      });
+    };
+    poll();
+    const interval = setInterval(poll, STATUS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // `urls` is derived from `baseRows`, which is itself memoized on
+    // `hostname`/`open` — including it directly would re-subscribe every
+    // render since arrays are never `===`-equal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostname, open]);
+
+  return useMemo(
+    () =>
+      baseRows.map((row, index) => {
+        const status = statuses[index] ?? { kind: "unknown" };
+        const suffix = describeStatus(status);
+        const mismatch = statusMismatchesOwn(status, ownStatus);
+        return {
+          ...row,
+          label: suffix ? `${row.label} ${suffix}${mismatch ? " — different from this board" : ""}` : row.label,
+          disabled: row.disabled || status.kind === "dead",
+        };
+      }),
+    [baseRows, statuses, ownStatus],
+  );
+}
+
+function rowUrl(row: MenuAction): string {
+  // WHY re-derive the URL from the row's id rather than have siteActionsFor
+  // expose it: MenuAction has no url field (MENU-KIT-DESIGN §5 — a row is
+  // id/label/icon/run, run is opaque), and adding one would be a trunk
+  // contract change for a need only this app-wiring hook has.
+  if (row.id === "open-bbox-ui-site") return BBOX_UI_SITE_URL;
+  if (row.id === "open-storybook") return STORYBOOK_URL;
+  return BBOX_UI_SITE_URL;
 }
