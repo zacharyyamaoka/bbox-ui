@@ -51,6 +51,7 @@ import {
 
 import { fileNameFor, loadBoardText, serializeBoard } from "../chrome/FileMenu";
 import { LEGACY_SYSTEMSKETCH_URL } from "../chrome/legacyApp";
+import { isDerivedOnly, runDerived } from "../document/derivedWrites";
 import { documentLocation, fileHostBaseUrl } from "./launchConfig";
 import { installUnsavedWorkGuard } from "./lifecycle";
 import { resetDocumentToBlank } from "./resetDocument";
@@ -223,7 +224,6 @@ export function useDocumentSession(options: {
 
   /* ------------------------------------------------------------ autosave */
 
-  const suppressRef = useRef(0);
   const pendingSinceRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   /**
@@ -252,26 +252,27 @@ export function useDocumentSession(options: {
   /**
    * Run `fn` without it looking like a person edited the board.
    *
-   * WHY the release is deferred a macrotask instead of being a plain
-   * try/finally: `editor.run` flushes its store listeners at the END of the
-   * transaction, which is not always inside this call frame. Releasing
-   * synchronously let a document SWAP (opening a file) schedule an autosave
-   * of the board that was just loaded — harmless when it succeeded, and
-   * actively wrong for a file this build could not read.
+   * WHY provenance (`document/derivedWrites.ts`) instead of the counter this
+   * used to hold, released a macrotask later: tldraw flushes store listeners
+   * on the next ANIMATION FRAME, which a `setTimeout(0)` does not outlive. So
+   * the release landed first, the load's own diff then reached the listener
+   * as a person's edit, and opening a `?board=` file autosaved it — which,
+   * with the file under Vite's root, reloaded the page and opened it again,
+   * forever (Zach, 2026-09-22: "the page keeps on reloading"). The listener
+   * now recognises the load's records by identity, whenever it runs.
+   *
+   * The pending timer is still dropped: a swap is not the moment for an
+   * autosave queued against the previous document to fire into this one.
    */
   const withoutAutosave = useCallback(
     <T,>(fn: () => T): T => {
-      suppressRef.current += 1;
       try {
-        return fn();
+        return runDerived(editor, fn);
       } finally {
-        window.setTimeout(() => {
-          suppressRef.current = Math.max(0, suppressRef.current - 1);
-          cancelAutosave();
-        }, 0);
+        cancelAutosave();
       }
     },
-    [cancelAutosave],
+    [cancelAutosave, editor],
   );
 
   /* ----------------------------------------------------- the save queue */
@@ -570,12 +571,20 @@ export function useDocumentSession(options: {
    * the 600 ms debounce when the window leaves is not late, it is gone.
    */
   const waitForSave = useCallback(async (): Promise<boolean> => {
+    // WHY flush first: the store listener that sets `dirtyRef` runs on the
+    // next animation frame, so an edit made in THIS frame is not dirty yet.
+    // That gap used to be hidden by opening itself dirtying the board; once
+    // opening stopped writing (`document/derivedWrites.ts`), an edit followed
+    // by Ctrl+N inside one frame navigated away unsaved (files.smoke P1-4,
+    // under full-suite load). `_flushHistory` is the store's own synchronous
+    // delivery of what the frame would deliver, in its public typings.
+    editor.store._flushHistory();
     cancelAutosave();
     if (dirtyRef.current) await saveRef.current({ auto: true });
     // Whatever was already queued — a Ctrl+S, a rename — has to land too.
     await enqueue(async () => undefined);
     return !dirtyRef.current;
-  }, [cancelAutosave, enqueue]);
+  }, [cancelAutosave, editor, enqueue]);
   waitForSaveRef.current = waitForSave;
 
   const saveAs = useCallback(async () => {
@@ -854,8 +863,13 @@ export function useDocumentSession(options: {
 
   useEffect(() => {
     const stop = editor.store.listen(
-      () => {
-        if (suppressRef.current > 0) return;
+      ({ changes }) => {
+        // WHY: loading a file and the geometry repairs that follow it
+        // (measured boxes and port anchors, corner cards back on their slot,
+        // region frames re-settled) are the app's writes, not a person's.
+        // Opening a board and doing nothing must leave its bytes alone; those
+        // repairs reach disk with the next real edit.
+        if (isDerivedOnly(changes)) return;
         const current = documentRef.current;
         // No target, no autosave — and crucially no picker: an autosave must
         // never be the thing that raises a Save As dialog.
@@ -889,13 +903,18 @@ export function useDocumentSession(options: {
       installUnsavedWorkGuard({
         windowTarget: window,
         documentTarget: window.document,
-        hasUnsavedWork: () => dirtyRef.current || pendingWritesRef.current > 0,
+        hasUnsavedWork: () => {
+          // Same frame gap as `waitForSave`'s WHY: deliver this frame's edits
+          // to the listener before asking whether the board is dirty.
+          editor.store._flushHistory();
+          return dirtyRef.current || pendingWritesRef.current > 0;
+        },
         flush: () => {
           cancelAutosave();
           void saveRef.current({ auto: true });
         },
       }),
-    [cancelAutosave],
+    [cancelAutosave, editor],
   );
 
   // The File menu's shortcuts, actually bound. They are read through a ref so

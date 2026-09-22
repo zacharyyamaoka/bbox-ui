@@ -55,6 +55,7 @@ import {
   type RegionVariantId,
 } from "@trunk/skin/regionVariants";
 
+import { runRepair } from "../../document/derivedWrites";
 import { reconcileRegionProps, type RegionShape } from "../../shapes/region";
 import { REGION_SHAPE_TYPE } from "../../shapes/types";
 
@@ -165,7 +166,9 @@ export function resettleRegions(editor: Editor): void {
     const { w, h, arms } = settled.props;
     updates.push({ id: region.id, type: REGION_SHAPE_TYPE, props: { w, h, arms } } as TLShapePartial);
   }
-  if (updates.length > 0) editor.run(() => editor.updateShapes(updates), { history: "ignore", ignoreShapeLock: true });
+  // `runRepair`: the viewer's drawing choice is not an edit to the file, so
+  // re-settling under it never autosaves on its own (`document/derivedWrites.ts`).
+  if (updates.length > 0) runRepair(editor, () => editor.updateShapes(updates), { ignoreShapeLock: true });
 }
 
 /* ------------------------------------------------------------------ */
