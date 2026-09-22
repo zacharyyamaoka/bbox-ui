@@ -62,57 +62,119 @@ export function portsFromRailItems(stored: readonly BlockPortSpec[], items: read
 }
 
 /**
- * P-014. WHICH GESTURE this `onItemsChange` belongs to, as a stable key — or
- * `null` when the change is its own discrete edit and deserves its own undo
- * entry.
+ * P-014. WHICH GESTURE this `onItemsChange` belongs to.
  *
- * `PortEdge` reports a reorder and a label keystroke through the same
- * callback (this file's header), and the two want OPPOSITE things from the
- * undo stack: a drop is one edit and marks every time, while a run of
- * keystrokes on one port is one edit and must mark only once. Nothing in the
- * callback says which arrived, so this reads it off the change itself.
+ * `PortEdge` reports a reorder, a label keystroke, a line ADDED and a line
+ * REMOVED through the same callback (this file's header), and they want
+ * different things from the undo stack: a drop is one edit and marks every
+ * time, while a run of keystrokes on one port is one edit and must mark only
+ * once. Nothing in the callback says which arrived, so this reads it off the
+ * change itself and the caller (`BlockFace`) turns the answer into a mark.
  *
- * `label:<portId>` is returned only for the one shape a keystroke can have:
- * the same ports, in the same order, with EXACTLY ONE of them changed.
- * Anything else — a reorder, a port added or gone, two ports at once, an id
- * the block does not have — is `null`, i.e. "mark now". WHY that direction on
- * the unknown case:
- * marking too often costs an extra Ctrl+Z, marking too rarely welds the edit
- * onto the action before it, and this app has already shipped the second (a
- * glyph pick that deleted the block it was picked on, measured 2026-09-21).
- * An unclassifiable change takes the recoverable error.
+ * FOUR ANSWERS, and the two structural ones are what this grew for:
  *
- * BOTH TYPING SURFACES COUNT, and the second one is why this reads two fields
- * rather than one. The rail paints a port's NAME half and reports it as
- * `label`; P-056's multi-line lane shows the WHOLE declaration and reports it
- * as `laneLine`. Measured 2026-09-21, before this function looked at
- * `laneLine`: re-typing `gain_x: float` as `gain_y: float` in the lane cost
- * THIRTEEN Ctrl+Z, because every keystroke changed a field this function was
- * not reading, so every keystroke looked unclassifiable and took a mark of
- * its own. A port that changes on either field is the same port being typed
- * into, and it is counted ONCE however many of its fields moved.
+ *   `typing`   the same ports, in the same order, with EXACTLY ONE of them
+ *              changed — the one shape a keystroke can have.
+ *   `add`      exactly one line appeared and NOTHING else moved. The port it
+ *              mints is born nameless, so the keystrokes that name it are the
+ *              rest of the SAME gesture; the caller claims their key here.
+ *   `remove`   exactly one line vanished and NOTHING else moved. `emptied`
+ *              says the line was already blank when it went, which is the
+ *              signature of the two-keystroke delete (clear the line, then
+ *              take the newline) and the caller's licence to join the run
+ *              that cleared it.
+ *   `discrete` everything else — a reorder, a paste, a split, two ports at
+ *              once, an id the block does not have. WHY that direction on the
+ *              unknown case: marking too often costs an extra Ctrl+Z, marking
+ *              too rarely WELDS the edit onto the action before it, and this
+ *              app has already shipped the second (a glyph pick that deleted
+ *              the block it was picked on, measured 2026-09-21). An
+ *              unclassifiable change takes the recoverable error.
  *
- * WHAT THIS CANNOT SEE, stated because it is a real residual: two SEPARATE
- * rename sessions on the same port, back to back with nothing in between,
- * share a key and therefore one undo entry. Closing it needs a real
+ * BOTH TYPING SURFACES COUNT, and the second one is why a changed port is
+ * read off two fields rather than one. The rail paints a port's NAME half and
+ * reports it as `label`; P-056's multi-line lane shows the WHOLE declaration
+ * and reports it as `laneLine`. Measured 2026-09-21, before `laneLine` was
+ * read: re-typing `gain_x: float` as `gain_y: float` in the lane cost THIRTEEN
+ * Ctrl+Z, because every keystroke changed a field nothing was reading, so
+ * every keystroke looked unclassifiable and took a mark of its own. A port
+ * that changes on either field is the same port being typed into, and it is
+ * counted ONCE however many of its fields moved.
+ *
+ * WHY `add` AND `remove` ARE NOT SIMPLY GIVEN A STABLE KEY, which is the
+ * obvious fix and the wrong one: a key that survives a length change would
+ * weld a new line onto whatever the person typed NEXT, so one Ctrl+Z would
+ * take back two separate edits — and the second is data they cannot get back
+ * in one press. The extra press this replaces is recoverable; that is not.
+ * The shape here instead is directional: an `add` always OPENS an entry
+ * (never joins one), a `remove` only ever CLOSES the one already open on the
+ * port it takes away, and `emptied` is what keeps a stale latch from being
+ * mistaken for a live typing run. Both directions are measured in
+ * `src/undoGranularity.smoke.test.tsx`'s two `NOT WELDED` cases.
+ *
+ * WHAT THIS STILL CANNOT SEE, stated because it is a real residual: two
+ * SEPARATE rename sessions on the same port, back to back with nothing in
+ * between, share a key and therefore one undo entry. Closing it needs a real
  * begin/end signal from `PortEdge` — which publishes none today, and adding
  * one is a trunk change. The cost is one merged entry in a rare sequence;
  * what it replaces is SIX entries for every single rename.
  */
-export function railGestureKey(stored: readonly BlockPortSpec[], items: readonly RailItem[]): string | null {
-  if (items.length !== stored.length) return null;
-  let renamed: string | null = null;
-  for (let at = 0; at < items.length; at += 1) {
-    const item = items[at];
-    const port = stored[at];
-    if (item.id !== port.id) return null; // the order moved: a reorder, not typing
-    const nameMoved = item.label !== parsePortDeclaration(port.declaration).name;
-    // `undefined` is "this surface has no lane", not "the lane is empty", so
-    // an absent `laneLine` is never read as a cleared declaration.
-    const lineMoved = item.laneLine !== undefined && item.laneLine !== port.declaration;
-    if (!nameMoved && !lineMoved) continue;
-    if (renamed !== null) return null; // two ports at once is not a keystroke
-    renamed = item.id;
+export type RailGesture =
+  | { readonly kind: "typing"; readonly port: string }
+  | { readonly kind: "add" }
+  | { readonly kind: "remove"; readonly port: string; readonly emptied: boolean }
+  | { readonly kind: "discrete" };
+
+/** Did this report change the port it names? Two fields, either of which is
+ *  a keystroke — see `RailGesture`'s doc. `undefined` is "this surface has no
+ *  lane", not "the lane is empty", so an absent `laneLine` is never read as a
+ *  cleared declaration. */
+function portMoved(port: BlockPortSpec, item: RailItem): boolean {
+  const nameMoved = item.label !== parsePortDeclaration(port.declaration).name;
+  const lineMoved = item.laneLine !== undefined && item.laneLine !== port.declaration;
+  return nameMoved || lineMoved;
+}
+
+/** Every reported item is the stored port at the same index, untouched. The
+ *  "nothing else moved" half of both structural cases — a line added or taken
+ *  while a neighbour ALSO changed (backspacing a non-empty line into the one
+ *  above it, splitting a line in two) is not a clean structural edit and falls
+ *  through to `discrete`. */
+function restIsUnmoved(stored: readonly BlockPortSpec[], items: readonly RailItem[]): boolean {
+  if (items.length !== stored.length) return false;
+  return items.every((item, at) => item.id === stored[at].id && !portMoved(stored[at], item));
+}
+
+export function railGesture(stored: readonly BlockPortSpec[], items: readonly RailItem[]): RailGesture {
+  if (items.length === stored.length) {
+    let renamed: string | null = null;
+    for (let at = 0; at < items.length; at += 1) {
+      const item = items[at];
+      const port = stored[at];
+      if (item.id !== port.id) return { kind: "discrete" }; // the order moved: a reorder, not typing
+      if (!portMoved(port, item)) continue;
+      if (renamed !== null) return { kind: "discrete" }; // two ports at once is not a keystroke
+      renamed = item.id;
+    }
+    return renamed === null ? { kind: "discrete" } : { kind: "typing", port: renamed };
   }
-  return renamed === null ? null : `label:${renamed}`;
+
+  if (items.length === stored.length + 1) {
+    const known = new Set(stored.map((port) => port.id));
+    const fresh = items.filter((item) => !known.has(item.id));
+    if (fresh.length !== 1) return { kind: "discrete" };
+    const rest = items.filter((item) => item !== fresh[0]);
+    return restIsUnmoved(stored, rest) ? { kind: "add" } : { kind: "discrete" };
+  }
+
+  if (items.length === stored.length - 1) {
+    const reported = new Set(items.map((item) => item.id));
+    const gone = stored.filter((port) => !reported.has(port.id));
+    if (gone.length !== 1) return { kind: "discrete" };
+    const rest = stored.filter((port) => port !== gone[0]);
+    if (!restIsUnmoved(rest, items)) return { kind: "discrete" };
+    return { kind: "remove", port: gone[0].id, emptied: gone[0].declaration.trim() === "" };
+  }
+
+  return { kind: "discrete" };
 }

@@ -33,7 +33,7 @@ import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
 import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
 import { portLaneRequest } from "./portLaneHost";
-import { portsFromRailItems, railGestureKey } from "./railLabel";
+import { portsFromRailItems, railGesture } from "./railLabel";
 
 /**
  * The rail label is the NAME HALF of the port's declaration — everything
@@ -503,9 +503,9 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
   // P-014. The rail's undo claim. Unlike the two text editors, this one lives
   // in the FACE and not in a control that remounts per session, because
   // `PortEdge` has no session object to hang it on — so the gesture boundary
-  // is the KEY (`railGestureKey`) rather than a remount.
-  const railGesture = useRef<GestureMark | null>(null);
-  if (!railGesture.current) railGesture.current = createGestureMark();
+  // is the KEY (`railGesture`) rather than a remount.
+  const railMark = useRef<GestureMark | null>(null);
+  if (!railMark.current) railMark.current = createGestureMark();
   const editing = useValue("ss-block editing", () => editor.getEditingShapeId() === shape.id, [editor, shape.id]);
   useEffect(() => {
     if (!editing) editField.current = "title";
@@ -627,22 +627,56 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
           //
           // P-014 makes it one stopping point per GESTURE rather than one per
           // keystroke — the same file measured "gain_y" costing SIX Ctrl+Z.
-          // `railGestureKey` reads which gesture this callback belongs to out
-          // of the change itself, because `PortEdge` reports a reorder and a
-          // keystroke through this one callback and says nothing about which
-          // arrived. A drop (`null`) is discrete and marks every time; a run
-          // of keystrokes on one port shares a key and marks once.
-          const key = railGestureKey(ports[side], items);
-          if (key === null) {
-            railGesture.current!.end();
-            editor.markHistoryStoppingPoint("reorder ports");
-          } else {
-            railGesture.current!.begin(editor, `${side}/${key}`, "rename port");
-          }
+          // `railGesture` reads which gesture this callback belongs to out of
+          // the change itself, because `PortEdge` reports a reorder, a
+          // keystroke, a line ADDED and a line REMOVED through this one
+          // callback and says nothing about which arrived.
+          //
           // P-056: the report can now ADD and REMOVE ports, not only reorder
           // and rename them, so it carries a second half — the ports that just
-          // stopped existing.
+          // stopped existing. The edit is computed FIRST because the add case
+          // needs the id that was just minted: the mark it takes has to be the
+          // one the naming keystrokes will report under.
           const edit = portsFromRailItems(ports[side], items, takenPortIds);
+          const gesture = railGesture(ports[side], items);
+          // The latch key names the port being typed into, scoped to this wall
+          // (`gestureHistory.ts`). Adding a port and removing one deliberately
+          // share their port's typing key — that is what makes "Enter, then
+          // name it" and "blank the line, then take it" one entry each.
+          const keyFor = (portId: string) => `${side}/label:${portId}`;
+          if (gesture.kind === "typing") {
+            railMark.current!.begin(editor, keyFor(gesture.port), "rename port");
+          } else if (gesture.kind === "add") {
+            // WHY the add CLAIMS the new port's typing key instead of just
+            // marking: the port is minted while its line is still EMPTY, so an
+            // entry that stopped at the Enter would undo back to a nameless
+            // dot and cost a second press — measured 2 before this landed.
+            // WHY `end()` first: an add must never JOIN the entry before it.
+            // It always opens its own, so the tempting "make the key stable
+            // across a length change" — which would weld a new line onto
+            // whatever the person typed next — is structurally unavailable
+            // here. Both directions measured in `undoGranularity.smoke`.
+            const storedIds = new Set(ports[side].map((port) => port.id));
+            const added = edit.ports.find((port) => !storedIds.has(port.id));
+            railMark.current!.end();
+            if (added) railMark.current!.begin(editor, keyFor(added.id), "add port");
+            else editor.markHistoryStoppingPoint("add port");
+          } else if (gesture.kind === "remove") {
+            // A removal only ever CLOSES an entry. `emptied` means the line
+            // was already blank when it went — the signature of the two-stroke
+            // delete (clear the line, then take the newline), whose first
+            // stroke already opened this port's run — so `begin` on that key
+            // joins it, and marks by itself when no such run is open. A line
+            // taken with text still in it was one stroke and gets its own
+            // entry. Then `end()`, because nothing can be typed into a port
+            // that no longer exists and the key must not be reused.
+            if (gesture.emptied) railMark.current!.begin(editor, keyFor(gesture.port), "remove port");
+            else editor.markHistoryStoppingPoint("remove port");
+            railMark.current!.end();
+          } else {
+            railMark.current!.end();
+            editor.markHistoryStoppingPoint("reorder ports");
+          }
           // ONE transaction, so the whole edit is ONE undo entry: a port and
           // the cables that were plugged into it come back together, which is
           // the only version of "undo the delete" that leaves a board the user

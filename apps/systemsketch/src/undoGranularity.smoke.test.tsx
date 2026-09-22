@@ -96,6 +96,33 @@ async function titleOf(id: TLShapeId): Promise<HTMLElement> {
   );
 }
 
+/** The left rail's stored declarations as one readable string — the probe for
+ *  a gesture that changes HOW MANY ports there are, where reading
+ *  `left[0].declaration` alone cannot tell "the port came back" from "a
+ *  different port is now first". */
+function railDeclarations(id: TLShapeId): string {
+  const block = app!.editor.getShape<BlockShape>(id);
+  return block ? block.props.ports.left.map((port) => port.declaration).join(" | ") : "<gone>";
+}
+
+async function dotOf(id: TLShapeId, portId: string): Promise<HTMLElement> {
+  return waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-port-id="${portId}"] [data-slot="port-dot"]`), {
+    what: `${portId}'s dot`,
+  });
+}
+
+/** THE GESTURE that opens the multi-line lane, the peer file's own
+ *  (src/portLane.smoke.test.tsx): a plain click on a port dot, then a click
+ *  into the lane so CodeMirror has the keyboard. */
+async function openLane(id: TLShapeId, portId: string): Promise<HTMLElement> {
+  await userEvent.click(await dotOf(id, portId));
+  const lane = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-slot="port-edge-lane"] .cm-content`), {
+    what: "the port lane",
+  });
+  await userEvent.click(lane);
+  return lane;
+}
+
 /**
  * Open the right rail on the Inspector the way a person does — two real
  * presses. The same pair `src/inspector.smoke.test.tsx` drives; restated here
@@ -229,6 +256,103 @@ describe("P-014 — one editing gesture is one undo step", () => {
     const steps = await undoStepsBackTo(() => blockOf(id)?.props.ports.left[0]?.declaration ?? "<gone>", "gain_x: float", "port lane");
     expect(app.editor.getShape(id), "the block must survive an undo of its own lane edit").toBeTruthy();
     expect(steps, "Ctrl+Z presses to undo one lane typing gesture").toBe(1);
+  });
+
+  /* ------------------------------------------------------------------ *
+   * THE RESIDUAL the two P-014 commits left standing, measured 2026-09-21:
+   * the port lane can now ADD and REMOVE a port (P-056), and neither cost
+   * one press. Both are keystrokes in the SAME lane run as the typing
+   * beside them, and `railGesture`'s two structural cases are what joins
+   * them up — see `shapes/block/railLabel.ts`.
+   * ------------------------------------------------------------------ */
+
+  it("ADDING a port by typing a new line in the port lane (P-056)", async () => {
+    app = await mountApp();
+    const id = placeBlock({ view: "port", w: 240, h: 200, ports: { ...NO_PORTS, left: [{ id: "in", declaration: "gain_x: float" }] } });
+    const lane = await openLane(id, "in");
+    // The peer lane's own append gesture (src/portLane.smoke.test.tsx's
+    // `appendLine`): Mod-End parks the caret at the end of the DOCUMENT,
+    // because a synthetic click on a `.cm-line` carries no usable coordinates.
+    await userEvent.keyboard("{Control>}{End}{/Control}{Enter}");
+    await userEvent.keyboard("speed: float");
+    await waitFor(() => (railDeclarations(id) === "gain_x: float | speed: float" ? true : null), { what: `the new port declared (got ${railDeclarations(id)})` });
+
+    const steps = await undoStepsBackTo(() => railDeclarations(id), "gain_x: float", "add a port");
+    expect(app.editor.getShape(id), "the block must survive an undo of its own port add").toBeTruthy();
+    expect(steps, "Ctrl+Z presses to undo one add-a-port gesture").toBe(1);
+  });
+
+  it("REMOVING a port by deleting its line in the port lane (P-056)", async () => {
+    app = await mountApp();
+    const id = placeBlock({
+      view: "port",
+      w: 240,
+      h: 200,
+      ports: { ...NO_PORTS, left: [{ id: "in", declaration: "gain_x: float" }, { id: "aux", declaration: "aux: float" }] },
+    });
+    const lane = await openLane(id, "in");
+    void lane;
+    // The peer lane's own delete gesture: empty the last line, then take the
+    // newline. TWO keystrokes, ONE gesture — which is the whole point.
+    await userEvent.keyboard("{Control>}{End}{/Control}");
+    await userEvent.keyboard("{Shift>}{Home}{/Shift}{Backspace}{Backspace}");
+    await waitFor(() => (railDeclarations(id) === "gain_x: float" ? true : null), { what: `the port gone (got ${railDeclarations(id)})` });
+
+    const steps = await undoStepsBackTo(() => railDeclarations(id), "gain_x: float | aux: float", "remove a port");
+    expect(app.editor.getShape(id), "the block must survive an undo of its own port removal").toBeTruthy();
+    expect(steps, "Ctrl+Z presses to undo one remove-a-port gesture").toBe(1);
+  });
+
+  /* ------------------------------------------------------------------ *
+   * THE OVER-CORRECTION, tested explicitly because it is WORSE than the
+   * bug it would fix. Making the gesture key stable across a length change
+   * would weld a new line onto whatever the person typed next: one Ctrl+Z
+   * would then take back two separate edits, and the second is data they
+   * cannot get back in one press. An extra press is recoverable; a welded
+   * entry is not. These two cases fail if the fix over-reaches.
+   * ------------------------------------------------------------------ */
+
+  it("NOT WELDED: adding a port and then renaming the block are TWO entries", async () => {
+    app = await mountApp();
+    const id = placeBlock({ name: "estimate", view: "port", w: 240, h: 200, ports: { ...NO_PORTS, left: [{ id: "in", declaration: "gain_x: float" }] } });
+    const lane = await openLane(id, "in");
+    void lane;
+    await userEvent.keyboard("{Control>}{End}{/Control}{Enter}");
+    await userEvent.keyboard("speed: float");
+    await waitFor(() => (railDeclarations(id) === "gain_x: float | speed: float" ? true : null), { what: "the new port declared" });
+    // Leave the lane and rename the block — a genuinely separate gesture.
+    await userEvent.click(await dotOf(id, "in"));
+    await waitFor(() => app!.root.querySelector(`[data-shape-id="${id}"] [data-slot="port-edge-lane"]`) === null, { what: "the lane closed" });
+    await userEvent.dblClick(await titleOf(id));
+    await waitFor(() => app!.editor.getEditingShapeId() === id, { what: "the title session opened" });
+    await userEvent.keyboard("{Control>}a{/Control}");
+    await userEvent.keyboard("detect");
+    await waitFor(() => blockOf(id).props.name === "detect", { what: "the rename landed" });
+    await userEvent.keyboard("{Enter}");
+
+    const steps = await undoStepsBackTo(() => blockOf(id)?.props.name ?? "<gone>", "estimate", "block title after an add");
+    expect(steps, "Ctrl+Z presses to undo the rename alone").toBe(1);
+    // THE ASSERTION THAT MATTERS: the port the person added is STILL THERE
+    // after undoing the rename. A welded key would have taken it too.
+    expect(railDeclarations(id), "undoing the rename must not also take back the added port").toBe("gain_x: float | speed: float");
+  });
+
+  it("NOT WELDED: adding a port and then re-typing ANOTHER port's line are TWO entries", async () => {
+    app = await mountApp();
+    const id = placeBlock({ view: "port", w: 240, h: 240, ports: { ...NO_PORTS, left: [{ id: "in", declaration: "gain_x: float" }] } });
+    const lane = await openLane(id, "in");
+    await userEvent.keyboard("{Control>}{End}{/Control}{Enter}");
+    await userEvent.keyboard("speed: float");
+    await waitFor(() => (railDeclarations(id) === "gain_x: float | speed: float" ? true : null), { what: "the new port declared" });
+    // Back to the FIRST line and re-type it — same lane, different port.
+    await userEvent.click(lane);
+    await userEvent.keyboard("{Control>}{Home}{/Control}");
+    await userEvent.keyboard("{Shift>}{End}{/Shift}");
+    await userEvent.keyboard("gain_y: float");
+    await waitFor(() => (railDeclarations(id) === "gain_y: float | speed: float" ? true : null), { what: `the retype landed (got ${railDeclarations(id)})` });
+
+    const steps = await undoStepsBackTo(() => railDeclarations(id), "gain_x: float | speed: float", "re-type after an add");
+    expect(steps, "Ctrl+Z presses to undo the re-type alone").toBe(1);
   });
 
   /* ------------------------------------------------------------------ *
