@@ -61,6 +61,8 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CodeEditor } from "./codeEditor";
+import { captureEditingFocus, reorderDeltaForKey, reorderHintText, type ReorderChord } from "./keyboardReorder";
+import "./keyboardReorder.css";
 // The visual-variant registry (lane `ports`, 2026-09-19) — threaded down
 // to every default `LabeledPort` this edge draws, the same way
 // `laneLanguage` is; omitted, each port reads the document attribute.
@@ -409,6 +411,23 @@ export interface PortEdgeProps {
    * (a gallery of all five). Ignored by a host `renderItem`.
    */
   variant?: PortVariantId;
+  /**
+   * The IDE move-line chord, applied to PORTS (`keyboardReorder.ts`): while
+   * a port's single-line label editor has focus, the axis-matched arrow
+   * pair under this modifier moves that port one slot — ↑/↓ on a column
+   * edge, ←/→ on a row — and the editor stays open, focused, caret in
+   * place. Omit (every existing caller) and no key is claimed.
+   *
+   * Zach, 2026-09-21: "Can you please show a prototype of how I could
+   * reorder the ports in single line mode by using the ctrl up or down (for
+   * a column) or (ctrl left right) for a row."
+   *
+   * Single-line mode only, by construction: the multi-line lane already
+   * reorders by moving lines (its own CodeMirror Alt/Ctrl+↑/↓), and Custom
+   * mode's free offsets have no slot order to step through, so the chord is
+   * not wired there.
+   */
+  reorderChord?: ReorderChord;
 }
 
 /* ------------------------------------------------------------------ */
@@ -451,6 +470,29 @@ export function reorderItemsBySlot(items: PortEdgeItem[], slots: Slot[], activeS
   const reordered = arrayMove(slots, oldIndex, newIndex);
   const byId = new Map(items.map((it) => [it.id, it] as const));
   return reordered.flatMap((s) => s.members.map((m) => byId.get(m.id)).filter((it): it is PortEdgeItem => it != null));
+}
+
+/**
+ * The keyboard chord's reorder: `itemId`'s slot swaps with its neighbour
+ * `delta` slots away — through `reorderItemsBySlot`, the SAME operation the
+ * pointer drag's `handleDragEnd` runs, so a keyboard move and a drag onto
+ * the neighbour produce identical `items` and a host sees one event shape.
+ *
+ * Returns `items` itself (identity, not a copy) when nothing moves: at
+ * either end — no wrap — past the `visibleCount` cut (a `maxVisible` edge
+ * never pushes a port behind its own "+N more"), and for a member of a real
+ * group. WHY the group case is a no-op rather than a within-group move: a
+ * family's member order is the edge's `groups` TEXT (`resolveAssignment`'s
+ * `order`), which this component reads but has no callback to write, and a
+ * drag has no within-group move either — the whole family travels as one
+ * slot. Inventing a write path for it is a design call, not this chord's.
+ */
+export function moveItemOneSlot(items: PortEdgeItem[], slots: Slot[], visibleCount: number, itemId: string, delta: -1 | 1): PortEdgeItem[] {
+  const index = slots.findIndex((s) => s.members.some((m) => m.id === itemId));
+  if (index === -1 || index >= visibleCount || slots[index].members.length > 1) return items;
+  const target = index + delta;
+  if (target < 0 || target >= visibleCount) return items;
+  return reorderItemsBySlot(items, slots, slots[index].slotId, slots[target].slotId);
 }
 
 /* ------------------------------------------------------------------ */
@@ -561,7 +603,25 @@ interface PortEdgeSlotBoxProps {
    * — and therefore dnd-kit's own measurement — returns).
    */
   hideCardSurface?: boolean;
+  /** `PortEdgeProps.reorderChord`'s key hook, bound by `PortEdgeBody` to
+   *  this edge's items; `true` = the key was the chord and is claimed. */
+  onReorderKey?(id: string, event: KeyboardEvent): boolean;
+  /** The chord hint (`reorderHintText`) shown while THIS port's editor is
+   *  focused. Set exactly when `onReorderKey` is. */
+  reorderHint?: string;
 }
+
+/**
+ * Where the chord hint sits: on the dot's OUTWARD side, the one side of a
+ * port no label ever flows toward by default (`inwardTextLayout`), so the
+ * hint can never cover the text being edited.
+ */
+const REORDER_HINT_PLACEMENT: Record<BlockSide, CSSProperties> = {
+  left: { right: "100%", top: "50%", transform: "translateY(-50%)", marginRight: 2 },
+  right: { left: "100%", top: "50%", transform: "translateY(-50%)", marginLeft: 2 },
+  top: { bottom: "100%", left: "50%", transform: "translateX(-50%)" },
+  bottom: { top: "100%", left: "50%", transform: "translateX(-50%)" },
+};
 
 // B3: a slot must occupy its rail position even when nothing renders inside
 // it (`showPorts` and `showCard` both off) — a distribution scheme spaces
@@ -590,7 +650,7 @@ const CARD_OVERLAY_BORDER = "rgb(239 68 68 / 0.7)";
 const CARD_OVERLAY_RADIUS = "var(--bbox-skin-radius, var(--radius-lg))";
 const CARD_OVERLAY_STROKE_WIDTH = "var(--bbox-skin-stroke-width, 1px)";
 
-function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage, editMode = "single", onRequestLaneOpen, variant }: PortEdgeSlotBoxProps) {
+function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderItem, textLayoutOverride, hideLabel, hideCardSurface, editingEnabled, onLabelWrite, labelLanguage, editMode = "single", onRequestLaneOpen, variant, onReorderKey, reorderHint }: PortEdgeSlotBoxProps) {
   const textLayout = textLayoutOverride ?? inwardTextLayout(edge);
   // F-1: in `"multi"` mode, a click opens the RAIL's lane, not this port's
   // own inline editor — so `LabeledPort` itself must stay `disabled` (its
@@ -627,6 +687,7 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
         // the capture listener below owns the click instead.
         disabled={!singleLineEditable}
         onLabelWrite={onLabelWrite ? (value) => onLabelWrite(item.id, value) : undefined}
+        onLabelKeyDown={onReorderKey ? (event) => onReorderKey(item.id, event) : undefined}
         labelLanguage={labelLanguage}
       >
         {item.label}
@@ -678,6 +739,24 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
       }
     >
       {port}
+      {reorderHint && (
+        // Shown only while this port's editor has focus — keyboardReorder.css.
+        <span
+          data-slot="port-edge-reorder-hint"
+          aria-hidden
+          style={{
+            position: "absolute",
+            ...REORDER_HINT_PLACEMENT[edge],
+            fontSize: 10,
+            lineHeight: 1,
+            whiteSpace: "nowrap",
+            color: "var(--muted-foreground)",
+            pointerEvents: "none",
+          }}
+        >
+          {reorderHint}
+        </span>
+      )}
       {showCard && !hideCardSurface && (
         // B3: "actually show a card, like a kanban card" — now an overlay,
         // not a wrapper (see EMPTY_SLOT_MIN_PX's own comment): painted OVER
@@ -734,6 +813,9 @@ interface SlotRenderProps {
   variant?: PortVariantId;
   editMode?: "single" | "multi";
   onRequestLaneOpen?(): void;
+  /** `PortEdgeProps.reorderChord`, bound — see `PortEdgeSlotBoxProps`. */
+  onReorderKey?(id: string, event: KeyboardEvent): boolean;
+  reorderHint?: string;
 }
 
 const GROUP_OUTLINE_PAD = 6;
@@ -772,7 +854,7 @@ function useEnclosingCircleBox(containerRef: RefObject<HTMLDivElement | null>, d
   return box;
 }
 
-function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotMainPx, gapPx, color, renderItem, textLayoutOverride, hideLabel, editingEnabled, onLabelWrite, labelLanguage, editMode, onRequestLaneOpen, variant }: SlotRenderProps) {
+function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotMainPx, gapPx, color, renderItem, textLayoutOverride, hideLabel, editingEnabled, onLabelWrite, labelLanguage, editMode, onRequestLaneOpen, variant, onReorderKey, reorderHint }: SlotRenderProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const memberIds = slot.members.map((m) => m.id).join(",");
   const box = useEnclosingCircleBox(containerRef, [memberIds, axis, showPorts, showCard, slotMainPx, gapPx]);
@@ -865,6 +947,11 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
           variant={variant}
           editMode={editMode}
           onRequestLaneOpen={onRequestLaneOpen}
+          // A grouped member claims the chord too, so it never falls
+          // through to a word-jump on one port and a move on its
+          // neighbour — `moveItemOneSlot` then leaves the family as-is.
+          onReorderKey={onReorderKey}
+          reorderHint={reorderHint}
           hideCardSurface
         />
       ))}
@@ -956,6 +1043,8 @@ function SlotBody(props: SlotRenderProps) {
       variant={props.variant}
       editMode={props.editMode}
       onRequestLaneOpen={props.onRequestLaneOpen}
+      onReorderKey={props.onReorderKey}
+      reorderHint={props.reorderHint}
     />
   );
 }
@@ -1328,6 +1417,7 @@ function PortEdgeBody({
   laneLanguage,
   maxVisible,
   variant,
+  reorderChord,
 }: PortEdgeProps) {
   const containerId = id ?? edge;
   const axis = AXIS_FOR_EDGE[edge];
@@ -1408,6 +1498,35 @@ function PortEdgeBody({
   const handlePortLabelWrite = (id: string, value: string) => {
     onItemsChange?.(items.map((it) => (it.id === id ? { ...it, label: value } : it)));
   };
+  // `reorderChord`: the keyboard move, and the focus hand-back it owes once
+  // the host has re-rendered this edge in the new order (see
+  // `captureEditingFocus` for why focus needs handing back at all). The
+  // restore runs in the layout effect of the render that carries the new
+  // `items` — before paint, and before CodeMirror's deferred blur-commit
+  // (`codeEditor.tsx`'s `setTimeout(0)`) could decide the editor was left.
+  const pendingFocusRestore = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const restore = pendingFocusRestore.current;
+    pendingFocusRestore.current = null;
+    restore?.();
+  });
+  const handleReorderKey =
+    reorderChord && mode === "auto"
+      ? (id: string, event: KeyboardEvent) => {
+          const delta = reorderDeltaForKey(event, axis, reorderChord);
+          if (delta === null) return false;
+          const next = moveItemOneSlot(items, allSlots, slots.length, id, delta);
+          if (next !== items) {
+            pendingFocusRestore.current = captureEditingFocus(event.target);
+            onItemsChange?.(next);
+          }
+          // Claimed even when nothing moved (an end, a grouped member): the
+          // chord means "move this port" on this axis, so it never quietly
+          // turns back into a caret move at the ends of the rail.
+          return true;
+        }
+      : undefined;
+  const reorderHint = handleReorderKey && reorderChord ? reorderHintText(axis, reorderChord) : undefined;
   const resolvedTextLayout = textLayout ?? inwardTextLayout(edge);
   // The lane's own line order: the VISUAL (dot) order, not necessarily
   // `items`' raw array order — a grouped family's members render
@@ -1623,6 +1742,8 @@ function PortEdgeBody({
                 variant={variant}
                 editMode={resolvedEditMode}
                 onRequestLaneOpen={() => setLaneOpen(true)}
+                onReorderKey={handleReorderKey}
+                reorderHint={reorderHint}
               />
             ))}
       </div>

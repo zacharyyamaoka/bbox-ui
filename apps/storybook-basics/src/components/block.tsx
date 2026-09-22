@@ -22,6 +22,7 @@ import {
   type BlockMembersLayout,
 } from "./blockMembers";
 import { BlockDescription, blockDescriptionIsPainted } from "./blockDescription";
+import type { ReorderChord } from "./keyboardReorder";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 
 /**
@@ -144,6 +145,8 @@ export interface BlockProps {
   membersLayout?: BlockMembersLayout;
   /** Enables drag-to-reorder of stacked members, kanban-card style. */
   onMembersChange?(members: BlockMember[]): void;
+  /** The IDE move-line chord for stacked members — `BlockMembersProps.reorderChord`. */
+  membersReorderChord?: ReorderChord;
   memberGap?: number;
   memberGutter?: number;
   insetBackground?: BlockInsetBackground;
@@ -254,6 +257,7 @@ export function Block({
   members,
   membersLayout = "free",
   onMembersChange,
+  membersReorderChord,
   memberGap = BLOCK_MEMBER_GAP_PX,
   memberGutter = BLOCK_MEMBER_INSET_PX,
   insetBackground = "none",
@@ -471,6 +475,7 @@ export function Block({
           layout={membersLayout}
           members={members}
           onMembersChange={onMembersChange}
+          reorderChord={membersReorderChord}
           gap={memberGap}
           gutter={memberGutter}
           insetBackground={insetBackground}
