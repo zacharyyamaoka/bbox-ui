@@ -709,10 +709,11 @@ R3B_GATES = [  # measured 2026-09-22 on 2e00c9c
     ("mutation: round the junctions inside <code>Block</code>", "red", "every Labeled Group story, Block › Shapes and RegionVariants' corner check fail; restored, green"),
     ("registry <code>--check</code> · <code>npx shadcn build</code>", "current · built", "the generator now retires renamed items and refuses items with missing files — it had kept <code>region</code> beside <code>block-region</code>, and only <code>shadcn build</code> caught it"),
     ("registry install, throwaway project", "38 items · tsc exit 0", "<code>docs/verify_registry_install.py</code>"),
+    ("independent audit (different model)", "A–F confirmed", "It re-ran the gates its own way and got the same totals. It traced every place a card is drawn in a region corner: all of them pass the shape except the app's hand-rolled name tab. It also confirmed <code>card</code> renders byte-for-byte as before, apart from one new <code>data-block-shape</code> attribute. Four small findings, fixed in <code>d44bb3d</code>: comments still naming <code>Region</code>, two WHY comments that drifted, a dated report builder that fails (it already failed on main), and the app's hand-rolled name tab, now marked as owed to the trunk. In its full run one ReactFlow drag story flaked under a peer's load. It passed twice when run alone, and the file hasn't changed since before round 3."),
 ]
 r3b_gate_rows = "".join(f"<tr><th>{a}</th><td class='green'>{b}</td><td>{c}</td></tr>" for a, b, c in R3B_GATES)
 R3B_Q = [
-    ("Merge it?", "It's one commit on top of main (73d7e07), no conflicts. It renames the component and its files, so a lane editing <code>components/region*.tsx</code> will need the same rename when it merges.",
+    ("Merge it?", "It sits on top of main (73d7e07): the change, the audit fixes, a stale-comment fix, and the report. No conflicts. It renames the component and its files, so a lane editing <code>components/region*.tsx</code> will need the same rename when it merges.",
      "If you say nothing it stays on the branch. Say <b>/merge-ready</b> and it queues."),
     ("The studio app draws a second labeled group", "A plain region with a name, in <code>apps/systemsketch/src/shapes/region/RegionFace.tsx</code>, draws its own <code>NameTab</code>: a 28 px chip, rounded with the skin radius instead of the frame's, so it ignores the region drawings. That is exactly the Labeled Group, hand-rolled in the app. Swapping it for <code>BlockRegion title</code> changes the app's region geometry (<code>REGION_NAME_TAB_PX</code> → the Block's measured height), so it isn't a drive-by.",
      "Default: a next lane moves the app onto the trunk's title corner, with a seeded review board."),
@@ -722,7 +723,7 @@ R3B_Q = [
 r3b_q_html = "".join(f'<div class="q"><p class="qq"><b>{q}</b></p><p>{a}</p><p class="def">{d}</p><textarea placeholder="Your answer (blank = take the default)"></textarea></div>' for q, a, d in R3B_Q)
 round3b_html = f"""
 <h1>BlockRegion — the region composes a Block, and the corner's square edges are a Block shape</h1>
-<p class="sub">22 Sep 2026 · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{R3B}</code>, one commit on <code>main</code> 73d7e07 (round 3, merged) · not merged</p>
+<p class="sub">22 Sep 2026 · branch <code>claude/storybook-server-launch-e5f2cc</code> · <code>{R3B}</code> the change, <code>d44bb3d</code> the audit fixes, on <code>main</code> 73d7e07 (round 3, merged) · not merged</p>
 <div class="tldr">
 <p><b>Done, as you clarified.</b> Rounding the corner card is now a <b>Block</b> prop: <code>shape="region-corner"</code>, with its own story on Block. <b>Region is now BlockRegion</b>, a composite that draws its own corner Block when you give it a title. <b>Labeled Group is BlockRegion with only a title</b>, so its label is a real Block, not a chip.</p>
 <p><b>The corner in your screenshot:</b> you didn't need to rebase. Main hadn't moved, and the square-corner code was already on it. My <em>Same Frame</em> story built its corner Block bare and never applied that style, and its test only measured the left card. Both cards are now measured. Of the five places that put a Block in a region corner, that story was the only wrong one.</p>
@@ -730,7 +731,7 @@ round3b_html = f"""
 <div class="num"><b>TR 0 · BL 0</b><span>measured on both corner cards in Same Frame</span></div>
 <div class="num"><b>3,143 / 3,143</b><span>trunk tests, browser stories included</span></div>
 <div class="num"><b>2 / 2</b><span>mutations red: dropping the shape in the story; rounding the junctions in Block</span></div>
-<div class="num"><b>38</b><span>registry items install into a fresh project, <code>tsc</code> clean</span></div>
+<div class="num"><b>A–F</b><span>confirmed by an independent audit; its four small findings fixed</span></div>
 </div></div>
 
 <h2>The corner you flagged, before and after</h2>
@@ -776,7 +777,8 @@ round3b_html = f"""
 <ul class="plain">
 <li>The story <em>files</em> keep their lane names (<code>ControlFlowLoop.stories.tsx</code> …). Their titles put them under BlockRegion, and renaming them is churn for peers with nothing gained in the sidebar.</li>
 <li>Dated records (plans, earlier reports, parity triage) keep the old <code>region.tsx</code> paths. The control-flow plan gets a one-line note instead, because it's what those lanes were told.</li>
-<li>The app's own name tab (see Needs you), which is a geometry change in the app.</li>
+<li>The app's own name tab (see Needs you), which is a geometry change in the app. It carries an \"owed to the trunk\" note in its code now.</li>
+<li>The frozen v1 <code>packages/bbox-ui</code> region and the opt-in <code>apps/storybook</code> spike still draw an all-round corner card. Both are frozen by the repo's rules.</li>
 </ul>
 """
 
