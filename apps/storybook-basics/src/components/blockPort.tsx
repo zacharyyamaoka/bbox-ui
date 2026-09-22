@@ -939,6 +939,27 @@ function BlockPortRail({
     // needs. Named `portDot` (paintOrder.ts) — same tier as the function
     // port above; a rail IS a run of port dots.
     zIndex: paintTier("portDot"),
+    // WHY `pointer-events: none` HERE, at the rail's own box: `railBoxFor`
+    // deliberately makes this box `RAIL_CROSS_PX` (56px) wide/tall so its
+    // CROSS centre lands on the Block's border line — which means HALF of
+    // it, by construction, sits outside the Block, over whatever the host
+    // paints underneath (a cable, the canvas). Only the dots/labels/rail
+    // controls PortEdge actually draws inside this box are real content;
+    // the surrounding `CONTAINER_PADDING` margin is empty on purpose (it's
+    // what keeps the dots centred on the wall). Before this, the whole box
+    // was hit-testable, so a press on that empty margin resolved its
+    // `elementFromPoint` target to THIS div — and every host's
+    // `contentOwnsPress`/`pointerOwnership` reads `.closest('[data-slot=
+    // "block-port-rail"]')` as "content owns it", so the press never
+    // reached the cable or the canvas underneath (measured 2026-09-22:
+    // `wireGrab.smoke.test.tsx`'s curved-cable press at (475, 206) landing
+    // in this margin, after 4b49cd4 moved a trace's endpoint onto the
+    // dot's own ring and out from under the rail). `PortEdgeSlotBox`'s
+    // sortable card (`data-slot="port-edge-card"`), the lane's own editor
+    // overlay (`data-slot="port-edge-lane"`) and the "+N more" chrome each
+    // re-arm `pointer-events: auto` on themselves — the only parts of this
+    // box a press should ever resolve to.
+    pointerEvents: "none",
   };
 
   return (

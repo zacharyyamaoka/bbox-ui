@@ -224,12 +224,68 @@ describe("P-007 — a simple- or port-view block is grabbed by its BODY", () => 
     app = await mountApp();
     const id = makeBlock("railed()", 200, 200, { view: "port", w: 220, h: 160 });
     const rail = await waitFor(() => document.querySelector<HTMLElement>(`[data-ss-node="${id}"] [data-slot="block-port-rail"]`), { what: "a port rail" });
+    // The PORT'S OWN CARD, not the rail's raw bounding box — see
+    // `blockPort.tsx`'s rail-wrapper `pointerEvents: "none"` (2026-09-22):
+    // the rail's box is `RAIL_CROSS_PX` wide and spans the whole body band
+    // so its cross centre lands on the wall and a `distribution: "aligned"`
+    // rail packs its one port from the band's start, so the box's own
+    // geometric centre is neither over the dot nor even reliably over the
+    // block — pressing there now falls through to whatever is underneath,
+    // by design (that fallthrough is P-003/this file's own fix for the
+    // wireGrab bug the same box caused). `[data-slot="port-edge-card"]` is
+    // the actual dnd-kit-sortable surface (`portEdge.tsx`'s
+    // `SortableSlotCard`), which re-arms `pointerEvents: "auto"` — pressing
+    // it is what "a rail drag reorders" has always meant.
+    const card = await waitFor(() => rail.querySelector<HTMLElement>('[data-slot="port-edge-card"]'), { what: "a port card" });
     const before = app.editor.getShapePageBounds(id)!;
-    const railRect = rail.getBoundingClientRect();
-    await dragFromScreen({ x: railRect.left + railRect.width / 2, y: railRect.top + railRect.height / 2 }, { dx: 60, dy: 60 });
+    const cardRect = card.getBoundingClientRect();
+    await dragFromScreen({ x: cardRect.left + cardRect.width / 2, y: cardRect.top + cardRect.height / 2 }, { dx: 60, dy: 60 });
     await new Promise((resolve) => setTimeout(resolve, 200));
     const after = app.editor.getShapePageBounds(id)!;
     expect({ x: after.x, y: after.y }, "the rail is dnd-kit's, not the host's").toEqual({ x: before.x, y: before.y });
+  });
+
+  it("GUARD: the rail's empty margin, outside the block's wall and clear of any dot, passes a press through to the canvas", async () => {
+    // THE BUG THIS PINS (root cause of `wireGrab.smoke.test.tsx`'s "a press
+    // on a CURVED cable..." failure, fixed 2026-09-22 in `blockPort.tsx`'s
+    // rail-wrapper style): `railBoxFor` makes a rail's box `RAIL_CROSS_PX`
+    // (56px) wide/tall so its CROSS centre lands on the Block's own wall —
+    // which means half of it, by construction, sits OUTSIDE the block, over
+    // whatever the host paints underneath (a cable, the canvas). Before the
+    // fix, that whole box — including the empty margin nobody ever draws a
+    // dot or label into — was hit-testable, so `elementFromPoint` there
+    // resolved to the rail itself, and every host's `contentOwnsPress` read
+    // that as "content owns it", hiding the press from tldraw entirely.
+    app = await mountApp();
+    const id = makeBlock("railed()", 200, 200, { view: "port", w: 220, h: 160 });
+    const card = await cardOf(id);
+    const rail = await waitFor(() => document.querySelector<HTMLElement>(`[data-ss-node="${id}"] [data-slot="block-port-rail"][data-edge="right"]`), { what: "the right rail" });
+    const dot = await waitFor(() => rail.querySelector<HTMLElement>('[data-slot="port-dot"]'), { what: "the right rail's dot" });
+
+    const cardRect = card.getBoundingClientRect();
+    const railRect = rail.getBoundingClientRect();
+    const dotRect = dot.getBoundingClientRect();
+
+    // A point inside the rail's own box, OUTSIDE the block's wall (clear of
+    // the card's right edge) and well clear of the dot's own hit halo — or
+    // this proves nothing about the empty margin.
+    const point = { x: cardRect.right + 12, y: dotRect.bottom + 40 };
+    expect(point.x, "the probe is inside the rail's own box").toBeLessThan(railRect.right);
+    expect(point.x, "the probe is outside the block's own wall").toBeGreaterThan(cardRect.right);
+    expect(point.y, "the probe is still within the rail's vertical span").toBeLessThanOrEqual(railRect.bottom);
+    expect(Math.abs(point.y - (dotRect.top + dotRect.height / 2)), "the probe is clear of the dot's own box").toBeGreaterThan(dotRect.height);
+
+    // Mechanical proof: the DOM hit-test no longer resolves inside the rail.
+    const hit = document.elementFromPoint(point.x, point.y);
+    expect(hit?.closest('[data-slot="block-port-rail"]'), "the rail's empty margin must not be the hit target").toBeNull();
+
+    // A real tldraw pointer outcome, not just a DOM read: a background press
+    // clears the selection. Before the fix the press never reached tldraw at
+    // all (`markEventAsHandled`), so the prior selection survived untouched.
+    app.editor.select(id);
+    expect(app.editor.getSelectedShapeIds()).toEqual([id]);
+    await clickAtScreen(point);
+    expect(app.editor.getSelectedShapeIds(), "the press reached tldraw's background and cleared the selection").toEqual([]);
   });
 });
 

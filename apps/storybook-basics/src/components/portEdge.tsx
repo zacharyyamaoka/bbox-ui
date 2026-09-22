@@ -1116,6 +1116,11 @@ function SortableSlotCard(props: SlotRenderProps) {
     opacity: isDragging ? 0.35 : 1,
     cursor: "grab",
     touchAction: "none",
+    // Re-arms what `blockPort.tsx`'s rail wrapper (`block-port-rail`) turns
+    // off at the box level — this card is the one thing in a slot's box
+    // that IS real content (a port, draggable/sortable), so it alone opts
+    // back into hit-testing. See that file's own WHY on the rail style.
+    pointerEvents: "auto",
   };
   return (
     <div ref={setNodeRef} data-slot="port-edge-card" data-dragging={isDragging || undefined} style={style} {...attributes} {...listeners}>
@@ -1153,6 +1158,9 @@ function FreeSlotCard(props: SlotRenderProps & { axis: "row" | "column"; x: numb
     opacity: isDragging ? 0.6 : 1,
     cursor: "grab",
     touchAction: "none",
+    // See `SortableSlotCard`'s identical line — re-arms hit-testing that
+    // `blockPort.tsx`'s rail wrapper turns off at the box level.
+    pointerEvents: "auto",
   };
   return (
     <div ref={setNodeRef} data-slot="port-edge-card" data-slot-id={props.slot.slotId} data-dragging={isDragging || undefined} style={style} {...attributes} {...listeners}>
@@ -1349,6 +1357,10 @@ function PortLaneOverlay({
     top: geometry.top,
     left: geometry.dotRight + LANE_GAP_PX,
     zIndex: paintTier("laneOverlay"),
+    // Same re-arm as `SortableSlotCard`/`FreeSlotCard` — the lane is a real
+    // CodeEditor a user types into, so it opts back into hit-testing that
+    // `blockPort.tsx`'s rail wrapper turns off at the box level.
+    pointerEvents: "auto",
   };
   return (
     <div data-slot="port-edge-lane" style={wrapperStyle}>
