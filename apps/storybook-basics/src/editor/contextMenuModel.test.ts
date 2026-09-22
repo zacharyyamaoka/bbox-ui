@@ -208,12 +208,32 @@ describe("buildRegionArmMenu", () => {
 });
 
 describe("buildRegionFrameMenu", () => {
-  it("has exactly one row: Copy id — RegionProps exposes no host callback to wire anything else to", () => {
+  it("has exactly one row (Copy id) when no `toggleView` command is wired — RegionProps.kind exposes no host callback to wire anything else to", () => {
     const onCopyId = vi.fn();
-    const spec = buildRegionFrameMenu("loop-1", onCopyId);
+    const spec = buildRegionFrameMenu("loop-1", { view: "expanded" }, { onCopyId });
     const flat = rows(spec);
     expect(flat).toHaveLength(1);
     expect(flat[0]).toMatchObject({ id: "copy-id" });
+  });
+
+  it("adds an Opaque row, checked from view, only when `toggleView` is wired (finding 5: BlockRegion.onToggleView is real)", () => {
+    const spec = buildRegionFrameMenu("loop-1", { view: "opaque" }, { onCopyId: vi.fn(), toggleView: vi.fn() });
+    const flat = rows(spec);
+    expect(flat).toHaveLength(2);
+    expect(actionById(spec, "opaque").checked).toBe(true);
+  });
+
+  it("Opaque unchecked when view is expanded, and running it calls the SAME onToggleView the host's Blackbox toggle uses", () => {
+    const toggleView = vi.fn();
+    const spec = buildRegionFrameMenu("loop-1", { view: "expanded" }, { onCopyId: vi.fn(), toggleView });
+    expect(actionById(spec, "opaque").checked).toBe(false);
+    actionById(spec, "opaque").run();
+    expect(toggleView).toHaveBeenCalledTimes(1);
+  });
+
+  it("never claims to cover `view: \"port\"` — the toggle is a 2-way expanded/opaque flip", () => {
+    const spec = buildRegionFrameMenu("loop-1", { view: "port" }, { onCopyId: vi.fn(), toggleView: vi.fn() });
+    expect(actionById(spec, "opaque").checked).toBe(false);
   });
 });
 

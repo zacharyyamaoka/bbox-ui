@@ -141,17 +141,38 @@ export interface ComponentContextMenuProps {
  * `contextMenuTarget.ts` directly — they just switch on `target.kind`.
  */
 export function ComponentContextMenu({ children, resolveTarget, className, testId }: ComponentContextMenuProps) {
-  const [spec, setSpec] = useState<MenuSpec | null>(null);
+  // WHAT was pressed is the only thing worth freezing at open time — a DOM
+  // hit-test result doesn't change while the menu is up. The MENU SPEC
+  // built from it does: a `ContextMenuCheckboxItem` deliberately does not
+  // close on click (`ContextMenuGroups`'s own note, "closeOnClick: false"
+  // — "a checkbox item is meant for toggling several options in one
+  // visit"), so a command run from this same open menu can mutate host
+  // state while the menu stays open. Codex judge finding, 2026-09-2x:
+  // caching the resolved `MenuSpec` itself (rather than the target it was
+  // built from) froze every checkbox's tick at whatever the host's state
+  // was the instant the menu opened — "Hide Header" hid the header but its
+  // own checkmark never flipped until the menu was closed and reopened.
+  const [resolution, setResolution] = useState<{
+    event: ReactMouseEvent<HTMLDivElement>;
+    target: ContextMenuTarget | null;
+  } | null>(null);
 
   const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
     const element = event.target;
     if (!(element instanceof Element)) {
-      setSpec(null);
+      setResolution(null);
       return;
     }
-    const target = resolveContextMenuTarget(element);
-    setSpec(resolveTarget(event, target));
+    setResolution({ event, target: resolveContextMenuTarget(element) });
   };
+
+  // Rebuilt on every render, from the FROZEN target but the host's CURRENT
+  // state — `resolveTarget` is a plain closure the host recreates every one
+  // of ITS OWN renders (every demo in ContextMenu.stories.tsx reads its own
+  // `useState` draft inside it), and this component re-renders whenever its
+  // parent does, so calling it here rather than once inside `onContextMenu`
+  // is what keeps a still-open menu honest about the host's latest state.
+  const spec = resolution ? resolveTarget(resolution.event, resolution.target) : null;
 
   return (
     <ContextMenu
@@ -160,7 +181,7 @@ export function ComponentContextMenu({ children, resolveTarget, className, testI
         // right-click always re-resolves from a fresh event rather than
         // reusing a stale target, so a menu can never open pre-populated
         // for the wrong element for even one frame.
-        if (!open) setSpec(null);
+        if (!open) setResolution(null);
       }}
     >
       <ContextMenuTrigger data-testid={testId} className={className} onContextMenu={onContextMenu}>
