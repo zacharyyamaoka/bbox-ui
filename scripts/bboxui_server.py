@@ -30,14 +30,14 @@ from bbox_release import (  # noqa: E402
     PRODUCTS,
     ProductConfig,
     ReleaseError,
-    commits_ahead_of_stable,
+    checkout_id,
     default_state_home,
     ensure_preview_server,
-    live_matches,
     promote,
     read_manifest,
     release_site_dir,
     source_provenance,
+    stable_relation,
 )
 
 
@@ -65,38 +65,56 @@ class BboxUiServer(ThreadingHTTPServer):
 
     def status_payload(self) -> dict:
         live = source_provenance(PROJECT_ROOT)
+        # WHY the relation is computed ONCE and the boolean derived from it:
+        # both answers need `source_fingerprint`, which walks the tree, and
+        # the badge polls this route every 5 seconds. One call also means the
+        # two can never disagree — a `liveMatchesStable: true` beside a
+        # `freshness.state: "diverged"` would be the same lie in two voices.
+        relation = stable_relation(self.manifest, PROJECT_ROOT)
+        own_checkout = checkout_id(PROJECT_ROOT)
         return {
             "product": self.config.product,
             "displayName": self.config.display_name,
             "channel": self.channel,
             "build": self.build,
-            # WHY here too, not just on the dev-server status plugins: the
-            # whiteboard's row prober (apps/systemsketch/src/chrome/
-            # siteStatus.ts) compares `projectRoot` on whatever it probes,
-            # Stable included, so this server needs to answer the same
-            # field the same way (see statusEndpoint.ts's own WHY on the
-            # trailing-slash spelling this has to match).
-            "projectRoot": str(PROJECT_ROOT),
+            # WHY an opaque id and NOT the absolute `projectRoot` this
+            # replaces: the whiteboard's row prober
+            # (apps/systemsketch/src/chrome/siteStatus.ts) only ever asks
+            # "is that the same tree as me", which an equality-comparable
+            # digest answers exactly as well — and the path was the one
+            # field in this document that told a browser page where a
+            # private project lives on disk. checkout_id() is computed
+            # identically in both statusEndpoint.ts files.
+            "checkoutId": own_checkout,
             "commit": self.manifest.get("commit"),
             "branch": self.manifest.get("branch"),
             "dirty": self.manifest.get("dirty"),
             "dirtyPaths": self.manifest.get("dirtyPaths"),
             "builtAt": self.manifest.get("builtAt"),
+            # Where the badge should send "Switch to Preview" — read from the
+            # config rather than hardcoded in the page, so BBOXUI_SB_*_PORT
+            # moves the ports instead of breaking the badge.
+            "previewOrigin": f"http://127.0.0.1:{self.config.preview_port}",
+            "stableOrigin": f"http://127.0.0.1:{self.config.stable_port}",
             "live": {
                 "commit": live.commit,
                 "branch": live.branch,
                 "dirty": live.dirty,
                 "dirtyPaths": list(live.dirty_paths),
+                "checkoutId": own_checkout,
             },
-            "liveMatchesStable": live_matches(self.manifest, PROJECT_ROOT),
-            # WHY here and not just a boolean: "matches" collapses "one
-            # commit behind" and "fifty commits behind" into the same
-            # answer, which is exactly the ambiguity Zach's original
-            # complaint was about ("I am not sure I am on the latest").
-            # None (not 0) when it can't be computed — see
-            # commits_ahead_of_stable's own docstring for why that
-            # distinction matters to the badge.
-            "commitsAheadOfStable": commits_ahead_of_stable(self.manifest, PROJECT_ROOT),
+            "liveMatchesStable": relation["state"] == "match",
+            # WHY a relation object and not the `commitsAheadOfStable`
+            # integer it replaces: that integer was `rev-list
+            # stable..HEAD` with no ancestry check, so a DIVERGED history
+            # rendered as a clean "N commits behind your checkout" —
+            # measured on this repo, Stable e2c19af against HEAD ced0360
+            # diverge at 92c2c22 and it returned 5. `stable_relation`
+            # answers with a state ("match"/"behind"/"stable-ahead"/
+            # "diverged"/"different"/"unknown") plus counts that only
+            # appear where the words are true, so the badge can no longer
+            # phrase divergence as a countdown.
+            "freshness": relation,
         }
 
 

@@ -9,9 +9,11 @@
 // deployed, Storybook is whatever checkout started that dev server, and the
 // whiteboard is a third. This module answers "what IS that, right now" by
 // asking each candidate's own `/api/health` (the same path
-// scripts/bboxui_server.py's Stable servers answer, and the same shape the
+// scripts/bboxui_server.py's Stable servers answer, the same shape the
 // dev-server status plugins — apps/systemsketch/statusEndpoint.ts,
-// apps/storybook-basics/.storybook/statusEndpoint.ts — answer for Preview).
+// apps/storybook-basics/.storybook/statusEndpoint.ts — answer for Preview,
+// and the same shape scripts/launch_systemsketch.py's dock server answers
+// for the pinned Stable whiteboard).
 //
 // WHY this lives apart from sites.ts rather than folding into it:
 // `siteActionsFor` is a plain, synchronous function with an existing test
@@ -25,13 +27,15 @@ export type SiteStatus =
   | { kind: "remote" }
   | { kind: "unknown" }
   | { kind: "dead" }
+  | { kind: "unsupported"; reason: string }
   | {
       kind: "live";
+      product: string;
       channel: "preview" | "stable";
       commit: string | null;
       branch: string | null;
       dirty: boolean | null;
-      projectRoot: string | null;
+      checkoutId: string | null;
       build: string | null;
     };
 
@@ -49,38 +53,74 @@ function isLoopbackUrl(url: string): boolean {
  * and there's nothing local to go stale, so probing it would just be a
  * wasted request on every menu poll.
  *
- * A loopback URL that never answers `/api/health` (nothing listening, or a
- * server that doesn't speak this protocol) comes back `"dead"` — never an
- * exception, so a caller can render it in a row without a try/catch of its
- * own, and never a silent success, per `feedback_verify_before_asserting`'s
- * "absence IS the finding."
+ * Four outcomes for a loopback URL, and the distinction between the middle
+ * two is the judge's 2026-09-22 finding:
+ *
+ * - `live` — a health document that names one of `expectProducts` AND a
+ *   channel this app understands. Anything less is NOT live: the old body
+ *   accepted ANY JSON object and coerced every channel that was not the
+ *   literal `"stable"` into `"preview"`, so an unrelated dev server on the
+ *   port was reported as a Storybook Preview, `product` unread.
+ * - `unsupported` — something IS listening and answered over HTTP, but not
+ *   with a health document this app can read: a static `storybook build`
+ *   behind a plain file server (no `/api/health` at all), a different
+ *   product, a newer channel vocabulary. The row must stay ENABLED — the
+ *   surface works, pressing it opens it, we simply cannot name its version.
+ *   The old code called this `dead` and DISABLED the row, which is the
+ *   inverse mistake: it took away a working door.
+ * - `dead` — nothing answered. Connection refused, or no answer before the
+ *   timeout. Only this disables a row.
+ * - `unknown` — no probe has resolved yet. Never disables anything.
+ *
+ * Never throws, so a caller can render it in a row without a try/catch of
+ * its own, and never a silent success, per
+ * `feedback_verify_before_asserting`'s "absence IS the finding."
  */
 export async function probeSiteStatus(
   url: string,
-  options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {},
+  options: { timeoutMs?: number; fetchImpl?: typeof fetch; expectProducts?: readonly string[] } = {},
 ): Promise<SiteStatus> {
   if (!isLoopbackUrl(url)) return { kind: "remote" };
 
   const fetchImpl = options.fetchImpl ?? fetch;
+  const expected = options.expectProducts;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 1500);
   try {
     const response = await fetchImpl(new URL("/api/health", url).toString(), { signal: controller.signal });
-    if (!response.ok) return { kind: "dead" };
-    const payload: unknown = await response.json();
-    if (typeof payload !== "object" || payload === null) return { kind: "dead" };
+    // WHY any HTTP response at all counts as "reachable": a 404 is a server
+    // saying "I am here and I have no such route" — that is a working
+    // surface without this protocol, not a dead port. Only a transport
+    // failure means nothing is listening.
+    if (!response.ok) return { kind: "unsupported", reason: `HTTP ${response.status}` };
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      return { kind: "unsupported", reason: "response was not JSON" };
+    }
+    if (typeof payload !== "object" || payload === null) return { kind: "unsupported", reason: "not a health document" };
     const record = payload as Record<string, unknown>;
-    const channel = record.channel === "stable" ? "stable" : "preview";
+    const product = typeof record.product === "string" ? record.product : null;
+    if (product === null) return { kind: "unsupported", reason: "no product named" };
+    if (expected && !expected.includes(product)) {
+      return { kind: "unsupported", reason: `serving ${product}` };
+    }
+    if (record.channel !== "preview" && record.channel !== "stable") {
+      return { kind: "unsupported", reason: `unknown channel ${String(record.channel)}` };
+    }
     return {
       kind: "live",
-      channel,
+      product,
+      channel: record.channel,
       commit: typeof record.commit === "string" ? record.commit : null,
       branch: typeof record.branch === "string" ? record.branch : null,
       dirty: typeof record.dirty === "boolean" ? record.dirty : null,
-      projectRoot: typeof record.projectRoot === "string" ? record.projectRoot : null,
+      checkoutId: typeof record.checkoutId === "string" ? record.checkoutId : null,
       build: typeof record.build === "string" ? record.build : null,
     };
   } catch {
+    // AbortError (timed out) and TypeError (refused) alike: nothing answered.
     return { kind: "dead" };
   } finally {
     clearTimeout(timeout);
@@ -98,6 +138,10 @@ export function describeStatus(status: SiteStatus): string {
       return "(remote)";
     case "dead":
       return "(not running)";
+    case "unsupported":
+      // Honest about the limit rather than about the surface: it is there,
+      // it just does not say what it is built from.
+      return "(static/unknown)";
     case "live": {
       const sha = status.commit ? status.commit.slice(0, 7) : status.build ? status.build.slice(0, 7) : null;
       const parts = [status.channel as string];
@@ -113,18 +157,20 @@ export function describeStatus(status: SiteStatus): string {
  * True when `target` is demonstrably a different checkout/commit than
  * `own` — the whiteboard window's own status, from the SAME probe against
  * `window.location.origin`. True when EITHER known signal disagrees: a
- * different `projectRoot` (a different worktree is a mismatch even at the
+ * different `checkoutId` (a different worktree is a mismatch even at the
  * same commit — the whole point of worktree isolation is that two of them
  * CAN share a commit and still be different trees to look at), or the same
- * `projectRoot` with a different `commit` (the tree moved between probes).
- * A signal missing on either side is simply skipped, not treated as a
- * mismatch — the dock's existing thin /api/health, which carries `build`
- * but not `projectRoot` or `commit`, degrades to "can't tell" (`false`)
- * rather than a false alarm.
+ * checkout with a different `commit` (the tree moved between probes).
+ *
+ * A signal missing on either side is skipped, not treated as a mismatch: an
+ * honest "can't tell" beats a false alarm. That degradation used to swallow
+ * the ONE case that matters, because the dock's Stable whiteboard answered
+ * with neither field — see `scripts/launch_systemsketch.py`'s
+ * `health_document`, which now carries both, and the test below that pins it.
  */
 export function statusMismatchesOwn(target: SiteStatus, own: SiteStatus): boolean {
   if (target.kind !== "live" || own.kind !== "live") return false;
-  if (target.projectRoot && own.projectRoot && target.projectRoot !== own.projectRoot) return true;
+  if (target.checkoutId && own.checkoutId && target.checkoutId !== own.checkoutId) return true;
   if (target.commit && own.commit && target.commit !== own.commit) return true;
   return false;
 }

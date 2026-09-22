@@ -74,6 +74,12 @@ from systemsketch_files import (
 )
 from systemsketch_recordings import RecordingApi
 import dock_icon
+# WHY this launcher imports the OTHER product family's release module: one
+# function, `checkout_id`. Two surfaces comparing "are we the same tree?"
+# have to compute the id the same way or the comparison silently answers
+# "different" forever — so there is exactly one implementation of it in
+# Python, imported rather than copied. bbox_release imports stdlib only.
+import bbox_release
 
 PRODUCT = "systemsketch-next"
 REPO = Path(__file__).resolve().parents[1]
@@ -170,6 +176,39 @@ def files_root_from(environment: dict[str, str]) -> Path:
 
 # -------------------------------------------------------------- the server
 
+def health_document(build: str) -> dict:
+    """What `/api/health` answers on the dock's pinned Stable server.
+
+    WHY `commit` and `checkoutId` are here now, when this used to answer
+    `{product, build, channel}` alone (judge finding, 2026-09-22 — HIGH):
+    apps/systemsketch/src/chrome/siteStatus.ts's `statusMismatchesOwn`
+    compares `commit` and the checkout id, and this document carried neither.
+    So the ONE configuration Zach actually gets by pressing the dock icon —
+    Stable whiteboard, Storybook somewhere else — could never report a
+    mismatch: the comparison had nothing to compare and returned `false`, and
+    the "different from this board" warning was unreachable by construction.
+    Whatever the badge said, it was not measured.
+
+    `commit` is the same value as `build` and that is not redundancy: this
+    launcher's build id IS a commit sha (`build_stable` uses `git rev-parse
+    HEAD` verbatim), while bbox_release.py's build id is a content hash of
+    the OUTPUT, so a consumer must not infer one from the other. Naming the
+    commit explicitly is what lets a product-agnostic comparison work without
+    knowing which launcher produced the document.
+    """
+    return {
+        "product": PRODUCT,
+        "displayName": "SystemSketch",
+        "build": build,
+        "commit": build or None,
+        # Computed by bbox_release.checkout_id so this value is comparable
+        # with every other bbox-ui surface's — see that function's docstring
+        # for why one shared algorithm is load-bearing here.
+        "checkoutId": bbox_release.checkout_id(REPO),
+        "channel": "stable",
+    }
+
+
 class StableHandler(http.server.SimpleHTTPRequestHandler):
     build = ""
     # WHY mounted here rather than a second server/port: Zach, 2026-09-19,
@@ -190,7 +229,7 @@ class StableHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 — the stdlib's spelling
         if self.path.split("?")[0] == "/api/health":
-            body = json.dumps({"product": PRODUCT, "build": self.build, "channel": "stable"}).encode()
+            body = json.dumps(health_document(self.build)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

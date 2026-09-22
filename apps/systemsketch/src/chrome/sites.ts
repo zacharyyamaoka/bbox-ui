@@ -82,6 +82,33 @@ export function siteActionsFor(
 const STATUS_POLL_MS = 5000;
 
 /**
+ * Which `product` a probe of each row's URL is allowed to accept — the
+ * judge's 2026-09-22 finding was that `product` was read off the health
+ * document and then ignored, so any JSON on the port was reported as that
+ * row's surface.
+ *
+ * WHY the whiteboard's OWN origin names two products and that is not a bug:
+ * this app is served by two different things depending on the channel —
+ * `apps/systemsketch/statusEndpoint.ts` (the `vite dev` Preview) says
+ * `bbox-ui-systemsketch`, and `scripts/launch_systemsketch.py` (the dock's
+ * pinned Stable build) says `systemsketch-next`. Two names for two channels
+ * of one product, from before the naming was unified. Unifying them would
+ * mean changing a string that `launch_systemsketch.py`'s own `health()`
+ * gate and two script test suites already pin, for cosmetics — so the set is
+ * named honestly here instead, where the comparison happens.
+ */
+const OWN_PRODUCTS = ["bbox-ui-systemsketch", "systemsketch-next"] as const;
+const STORYBOOK_PRODUCTS = ["bbox-ui-storybook"] as const;
+
+/** The products a row's URL may legitimately be serving. */
+export function expectedProductsFor(rowId: string): readonly string[] | undefined {
+  if (rowId === "open-storybook") return STORYBOOK_PRODUCTS;
+  // bbox-ui.com is remote and never probed; anything else is unknown to us,
+  // so no expectation is asserted rather than a wrong one.
+  return undefined;
+}
+
+/**
  * `siteActionsFor`, live: same rows, same order, same ids, and — since
  * 2026-09-22's regression — the exact same `label` string, always.
  * `sites.smoke.test.tsx` keys a row by its rendered name and clicks it by
@@ -109,16 +136,19 @@ export function useSiteActionsWithStatus(
 ): readonly MenuAction[] {
   const baseRows = useMemo(() => siteActionsFor(hostname, open), [hostname, open]);
   const urls = useMemo(() => baseRows.map((row) => rowUrl(row)), [baseRows]);
+  const products = useMemo(() => baseRows.map((row) => expectedProductsFor(row.id)), [baseRows]);
   const [ownStatus, setOwnStatus] = useState<SiteStatus>({ kind: "unknown" });
   const [statuses, setStatuses] = useState<readonly SiteStatus[]>(() => urls.map(() => ({ kind: "unknown" })));
 
   useEffect(() => {
     let cancelled = false;
     const poll = () => {
-      probeSiteStatus(window.location.origin).then((status) => {
+      probeSiteStatus(window.location.origin, { expectProducts: OWN_PRODUCTS }).then((status) => {
         if (!cancelled) setOwnStatus(status);
       });
-      Promise.all(urls.map((url) => probeSiteStatus(url))).then((next) => {
+      Promise.all(
+        urls.map((url, index) => probeSiteStatus(url, { expectProducts: products[index] })),
+      ).then((next) => {
         if (!cancelled) setStatuses(next);
       });
     };
@@ -149,9 +179,12 @@ export function useSiteActionsWithStatus(
                 mismatch ? `${suffix} · different from this board` : suffix,
               )
             : undefined,
-          // `status.kind === "dead"` is the ONLY thing that disables a row —
+          // `status.kind === "dead"` is the ONLY thing that disables a row.
           // "unknown" (no probe answer yet, or none in flight) is never
-          // treated as dead.
+          // treated as dead — and neither is "unsupported": something IS
+          // answering there, it just does not say what it is built from, so
+          // the door still works and taking it away would be the inverse of
+          // the bug this probe exists to fix.
           disabled: row.disabled || status.kind === "dead",
         };
       }),

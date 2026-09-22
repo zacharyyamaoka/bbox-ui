@@ -2,7 +2,7 @@
 // surfaces.
 import { describe, expect, it } from "vitest";
 
-import { BBOX_UI_SITE_URL, STORYBOOK_URL, siteActionsFor } from "./sites";
+import { BBOX_UI_SITE_URL, STORYBOOK_URL, expectedProductsFor, siteActionsFor } from "./sites";
 
 describe("siteActionsFor", () => {
   it("offers both surfaces on a loopback origin, in the order they are reached", () => {
@@ -29,5 +29,22 @@ describe("siteActionsFor", () => {
     // would point at nothing, so it is absent rather than broken.
     const rows = siteActionsFor("bbox-ui.com", () => {});
     expect(rows.map((row) => row.label)).toEqual(["Open bbox-ui.com"]);
+  });
+});
+
+describe("expectedProductsFor", () => {
+  it("pins the Storybook row to the Storybook product", () => {
+    // MUTATION: return `undefined` here and the probe accepts whatever is on
+    // :5421 — the judge's finding that `product` was parsed and ignored.
+    expect(expectedProductsFor("open-storybook")).toEqual(["bbox-ui-storybook"]);
+  });
+
+  it("asserts nothing for the deployed site, which is never probed", () => {
+    expect(expectedProductsFor("open-bbox-ui-site")).toBeUndefined();
+  });
+
+  it("asserts nothing for a row it does not know", () => {
+    // Better an unlabelled row than a wrong label.
+    expect(expectedProductsFor("some-future-row")).toBeUndefined();
   });
 });
