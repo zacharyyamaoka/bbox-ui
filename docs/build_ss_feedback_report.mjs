@@ -428,7 +428,7 @@ code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(
 ul{padding-left:20px}.missing{color:var(--bad)}.small{font-size:13px;color:var(--muted)}
 </style></head><body><main>
 <h1>SystemSketch feedback — ${DATE}</h1>
-<p class="lede">Your three items from the Sep 21 daily note, built in three isolated lanes, merged on <code>${esc(facts.branch)}</code> @ <code>${esc(facts.sha)}</code>. Everything below was measured off the real running app at build time. <span class="pill ${allPass ? "pass" : "fail"}">${verdicts.filter((row) => row[2]).length}/${verdicts.length} checks pass</span></p>
+<p class="lede">${facts.lede ?? "Your three items from the Sep 21 daily note, built in three isolated lanes"}, merged on <code>${esc(facts.branch)}</code> @ <code>${esc(facts.sha)}</code>. Everything below was measured off the real running app at build time. <span class="pill ${allPass ? "pass" : "fail"}">${verdicts.filter((row) => row[2]).length}/${verdicts.length} checks pass</span></p>
 
 <figure><video autoplay muted loop playsinline controls src="${dataUri(hero.webm, "video/webm")}"><img src="${dataUri(hero.gif, "image/gif")}" alt="hero flow"></video>
 <figcaption>${hero.seconds.toFixed(1)} s, real app: click a block → Inspector opens · grab the For Loop by its card → the whole region travels · click empty canvas → Inspector closes · open the Shape menu → Rectangle's row is highlighted, shortcuts aligned.</figcaption></figure>
