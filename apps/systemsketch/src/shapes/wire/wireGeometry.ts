@@ -24,9 +24,9 @@ import { Vec, atom, type Atom, type Editor, type TLShape, type TLShapeId } from 
 
 import { pinElbowSegment, removePin, routeElbow, type ElbowAxis, type ElbowPin, type ElbowRouteInput } from "@trunk/components/elbow";
 import { elbowInputFromTerminals } from "@trunk/components/elbow/traceContract";
-import { traceGeometry, traceRingGapPx, traceRouteEnd, traceRouteStart } from "@trunk/components/trace";
+import { TRACE_STROKE_WIDTH_PX, traceGeometry, traceLinecapOf, traceRingGapPx, traceRouteEnd, traceRouteStart } from "@trunk/components/trace";
 import { traceHitPolyline } from "@trunk/components/trace.hit";
-import { OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "@trunk/components/trace.layout";
+import { OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec, type TraceVariant } from "@trunk/components/trace.layout";
 import { PORT_VARIANTS, portVariantRingRadiusPx, readPortVariantId, subscribePortVariant, type PortVariantId } from "@trunk/skin/portVariants";
 
 import { WIRE_BINDING_TYPE } from "../types";
@@ -83,9 +83,24 @@ function activePortVariant(): PortVariantId {
  * Since 2026-09-19 every cable's painted end sits ALONG THE WALL NORMAL and
  * zero px across it (Zach: "The port only should have 1 connection point in
  * the center"); `src/fixes.smoke.test.tsx` measures that zero.
+ *
+ * WHY THIS ALSO TAKES THE TRACE `variant`, added 2026-09-22 (re-judge of
+ * d97f5ec): the pull-back is `traceRingGapPx`'s own `linecap`-dependent
+ * number (`trace.tsx`'s own WHY on `TraceLinecap`) — a round/square cap
+ * reaches `strokeWidth/2` past the path's end, a butt cap reaches nothing.
+ * This function used to call `traceRingGapPx` with no third argument, which
+ * defaults to `"round"` — correct for a `data` cable's default paint, wrong
+ * for `async`/dashed cables, which `traceStrokeStyle` paints with a BUTT
+ * cap. The result was exactly the reported bug on those two variants: the
+ * ink stopped `strokeWidth/2` (1px) short of the ring the round-cap math
+ * promised. `traceLinecapOf` is the trunk's own paint-to-cap answer, so the
+ * gap and the paint can never name two different caps for the same cable.
  */
-export function wireTerminalGap(variant: PortVariantId = activePortVariant()): number {
-  return traceRingGapPx(portVariantRingRadiusPx(PORT_VARIANTS[variant]));
+export function wireTerminalGap(
+  variant: TraceVariant = "data",
+  portVariant: PortVariantId = activePortVariant(),
+): number {
+  return traceRingGapPx(portVariantRingRadiusPx(PORT_VARIANTS[portVariant]), TRACE_STROKE_WIDTH_PX, traceLinecapOf(variant));
 }
 
 /** A shape that carries measured dot centres — `ss-block` and `ss-port` both
@@ -218,8 +233,14 @@ export function wireTerminals(editor: Editor, wire: WireShape): { from: TraceTer
  * behaviour you want from a routing PICKER and the reason the pins are not
  * cleared on a routing change.
  */
-export function wireRoutePoints(from: TraceTerminalSpec, to: TraceTerminalSpec, routing: TraceRouting, pins: readonly ElbowPin[] = []): Vec[] {
-  const geometry = traceGeometry({ from, to, routing, gap: wireTerminalGap(), pins });
+export function wireRoutePoints(
+  from: TraceTerminalSpec,
+  to: TraceTerminalSpec,
+  routing: TraceRouting,
+  pins: readonly ElbowPin[] = [],
+  variant: TraceVariant = "data",
+): Vec[] {
+  const geometry = traceGeometry({ from, to, routing, gap: wireTerminalGap(variant), pins });
   const points = traceHitPolyline(geometry);
   // `Polyline2d` needs at least two vertices; a degenerate route (both ends
   // on one point) would otherwise throw inside the engine's segment walk.
@@ -317,10 +338,15 @@ function pointAlong(points: readonly Vec[], lengths: readonly number[], distance
  * `wireTerminalGap()` worth of span — small, systematic, and invisible until a
  * block is dragged and the error scales.
  */
-export function wireElbowInput(from: TraceTerminalSpec, to: TraceTerminalSpec, pins: readonly ElbowPin[]): ElbowRouteInput {
+export function wireElbowInput(
+  from: TraceTerminalSpec,
+  to: TraceTerminalSpec,
+  pins: readonly ElbowPin[],
+  variant: TraceVariant = "data",
+): ElbowRouteInput {
   return elbowInputFromTerminals({
-    from: traceRouteStart(from, wireTerminalGap()),
-    to: traceRouteEnd(to, wireTerminalGap()),
+    from: traceRouteStart(from, wireTerminalGap(variant)),
+    to: traceRouteEnd(to, wireTerminalGap(variant)),
     pins,
   });
 }
@@ -357,8 +383,13 @@ export interface WireRouteSegment {
  * midpoint: a handle that may sit off the drawn cable is a cosmetic defect,
  * while a handle that re-pins the wrong rail is a correctness one.
  */
-export function wireRouteSegments(from: TraceTerminalSpec, to: TraceTerminalSpec, pins: readonly ElbowPin[]): WireRouteSegment[] {
-  const input = wireElbowInput(from, to, pins);
+export function wireRouteSegments(
+  from: TraceTerminalSpec,
+  to: TraceTerminalSpec,
+  pins: readonly ElbowPin[],
+  variant: TraceVariant = "data",
+): WireRouteSegment[] {
+  const input = wireElbowInput(from, to, pins, variant);
   const auto = routeElbow({ ...input, pins: [] });
   const drawn = pins.length === 0 ? auto : routeElbow(input);
   const congruent =
@@ -394,8 +425,9 @@ export function wirePinnedRoute(
   pins: readonly ElbowPin[],
   index: number,
   pointer: Point,
+  variant: TraceVariant = "data",
 ): ElbowPin[] | null {
-  return pinElbowSegment(wireElbowInput(from, to, pins), index, pointer);
+  return pinElbowSegment(wireElbowInput(from, to, pins, variant), index, pointer);
 }
 
 /**

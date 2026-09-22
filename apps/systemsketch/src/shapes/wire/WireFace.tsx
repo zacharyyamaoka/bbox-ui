@@ -139,8 +139,13 @@ export function WireFace({ shape }: { shape: WireShape }) {
             // them — the donor passes the same `false` for the same reason.
             // `gap` follows from that: see `wireTerminalGap`'s own doc for
             // why the dot's own ring replaces the trunk's glyph-sized 16.
+            // `painted.variant` is what makes the pull-back agree with the
+            // CAP this same `<Trace>` is about to paint (`variant` a few
+            // lines up) — an async/delayed cable's butt/round cap needs a
+            // different gap than a solid data line's, and passing the same
+            // variant to both is what keeps them from disagreeing.
             terminals={false}
-            gap={wireTerminalGap(portVariant.id)}
+            gap={wireTerminalGap(painted.variant, portVariant.id)}
             tunnel={painted.tunnel}
           />
         </g>
@@ -208,7 +213,7 @@ export function InFlightWire() {
         routing="elbow"
         variant="data"
         terminals={false}
-        gap={wireTerminalGap(portVariant.id)}
+        gap={wireTerminalGap("data", portVariant.id)}
       />
     </svg>
   );
