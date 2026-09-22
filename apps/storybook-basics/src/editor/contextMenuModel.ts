@@ -305,20 +305,51 @@ export function buildRegionArmMenu(id: string | null, state: RegionArmMenuState,
   };
 }
 
+/** `view` reads `BlockRegionProps.view` ("expanded" | "opaque" | "port" —
+ *  `blockRegion.tsx`'s own `RegionView`, kept structural here rather than
+ *  imported, same as every other target's state shape in this file). */
+export interface RegionFrameMenuState {
+  view: "expanded" | "opaque" | "port";
+}
+
+export interface RegionFrameMenuCommands {
+  onCopyId(id: string): void;
+  /**
+   * `BlockRegionProps.onToggleView` — the SAME "Blackbox toggle" a region
+   * already draws in its own frame corner (`blockRegion.tsx`'s
+   * `BlockRegionBlackboxToggle`, `pressed={view === "opaque"}`), present
+   * only when the host actually wired it (that prop is optional — a host
+   * that renders no toggle square gets no row either, same "no callback,
+   * no command" rule every other builder here follows). It is a 2-way
+   * flip between "expanded" and "opaque" — `view: "port"` is a THIRD
+   * state this same callback does not reach (driven elsewhere, e.g. a
+   * host's own zoom-based collapse), so this command never claims to
+   * cover it.
+   */
+  toggleView?(): void;
+}
+
 /**
  * The region FRAME (not its corner card, which resolves as `"block"` — see
- * `contextMenuTarget.ts`'s own note): `RegionProps` exposes `id`, `kind`,
- * `view`, `corner`, `members`, `arms` and layout numbers, and NOT ONE
- * callback a host could wire a command to (no `onKindChange`, no
- * `onViewChange` — both are plain, uncontrolled presentational props here).
- * Per the task brief's rule ("do not invent commands that nothing
- * implements... mark disabled with a reason") this menu is deliberately
- * thin: the one thing every target gets for free (copy id) and nothing
- * else. Left out of the report's "disabled" list because there is no
- * plausible row to disable — there is no prop to name.
+ * `contextMenuTarget.ts`'s own note). Codex judge, 2026-09-2x (finding 5):
+ * this used to be copy-id only, reasoning that `RegionProps` exposed no
+ * callback at all — true of `kind`, false of `view`: `onToggleView` is
+ * real, controlled, and already drives a visible toggle square elsewhere
+ * in the SAME component. Per the task brief's rule ("do not invent
+ * commands that nothing implements") this still adds nothing for `kind`,
+ * and never invents the chevron `blockRegion.tsx`'s own header explicitly
+ * rules out ("Please do not put chevron drop downs on the regions") — a
+ * context menu is a different, hidden-until-invoked affordance from the
+ * persistent on-canvas chrome that ruling is about, and it wires the
+ * EXISTING toggle callback rather than adding a new control to the frame.
  */
-export function buildRegionFrameMenu(id: string | null, onCopyId: (id: string) => void): MenuSpec {
-  return { id: "region-frame", label: "Region", groups: [copyIdGroup(id, onCopyId)] };
+export function buildRegionFrameMenu(id: string | null, state: RegionFrameMenuState, commands: RegionFrameMenuCommands): MenuSpec {
+  const primary: MenuAction[] = commands.toggleView
+    ? [{ id: "opaque", label: "Opaque", checked: state.view === "opaque", run: commands.toggleView }]
+    : [];
+  const groups: MenuGroupSpec[] =
+    primary.length > 0 ? [{ id: "primary", items: primary }, copyIdGroup(id, commands.onCopyId)] : [copyIdGroup(id, commands.onCopyId)];
+  return { id: "region-frame", label: "Region", groups };
 }
 
 /* ------------------------------------------------------------------ */
