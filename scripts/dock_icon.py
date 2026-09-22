@@ -31,7 +31,12 @@ It was never one cache. Measured that day, three separate things:
    :2115-2140 compares only that). Overwriting a file inside
    hicolor/512x512/apps/ leaves the parent's mtime alone, so the shell keeps
    painting the old texture until logout. `refresh()` below bumps it on
-   purpose.
+   purpose. That is necessary, not sufficient: the shell only stats the
+   directory when its texture cache MISSES (st-icon-theme.c:1085 runs from a
+   lookup, and st-texture-cache.c answers cache hits without one). Measured
+   2026-09-22: files changed 03:58, the dock still painted the old pyblocks
+   at 04:28. The next miss (the overview, Alt+Tab, a new icon) repaints every
+   icon at once; on X11, Alt+F2 → r forces it without a logout.
 
 So this module owns the icons, rendered from the same files the site draws —
 Zach, 2026-09-09: "just have like a logo reference so you just ever need to
