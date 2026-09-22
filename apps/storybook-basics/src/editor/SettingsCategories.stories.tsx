@@ -156,6 +156,13 @@ function Harness({ initial = "dialog", spies = {} }: { initial?: SettingsPresent
       onOpenChange={setOpen}
       presentation={presentation}
       categories={categories}
+      // What `apps/systemsketch` mounts since 2026-09-22 — this harness exists
+      // to be the real host, so it takes the real host's one line of
+      // configuration. With an empty query the tree is identical to before, so
+      // every assertion below is unaffected; it is the CAPTURES that need this,
+      // because a screenshot of a settings panel without the search box is not
+      // a screenshot of the thing that ships.
+      searchable
       testIdPrefix={PREFIX}
     />
   );

@@ -84,6 +84,14 @@ export default defineConfig({
             "@codemirror/lint",
             "@base-ui/react/popover",
             "@base-ui/react/slider",
+            // Joined the graph with the settings-panel rebuild (2026-09-22,
+            // `components/scroll-area.tsx`) and was measured red the same way
+            // the two above were: all 22 settings story tests failed at once
+            // with "Cannot read properties of null (reading
+            // 'useLayoutEffect')" in preview.tsx — the mid-suite re-optimize
+            // restarting the module graph under a rendering story. Green on
+            // the next run with this entry present.
+            "@base-ui/react/scroll-area",
           ],
         },
         test: {
