@@ -25,6 +25,7 @@ import reviewBoard from "../review/region-one-object.tldr?raw";
 
 import { memoryDocumentLocation, resetLaunchConfig, setDocumentLocation, setFileHostBaseUrl } from "./files/launchConfig";
 import { AUTOSAVE_DEBOUNCE_MS } from "./files/session";
+import { installRegionKit } from "./shapes/region";
 import { BLOCK_SHAPE_TYPE } from "./shapes/types";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";
 
@@ -569,6 +570,43 @@ describe("a peer's change is not this window's edit", () => {
     await sleep(QUIET_MS);
     expect(writes.count, "a peer's change must not send a single write").toBe(0);
     expect((await hostLoad(path)).source, "the file's bytes must not move").toBe(before.source);
+  });
+
+  // Codex re-judge, 2026-09-22: tldraw restores a persisted page selection
+  // BEFORE `onMount` installs the region kit (`TLLocalSyncClient.mjs:136` →
+  // `loadSessionStateSnapshotIntoStore`, which keeps `selectedShapeIds` and
+  // drops `editingShapeId`), so a session saved mid-rename came back with the
+  // corner card selected ALONE — and Delete took the card out of its region.
+  it("a corner card already selected when the region kit installs (a restored session) comes out as its REGION — nothing written, and Delete removes the whole region", async () => {
+    const path = `${host.workspace}/restored-selection.tldr`;
+    await hostWrite(path, reviewBoard);
+    const { editor } = await openByBoardParam(path);
+    await sleep(QUIET_MS);
+    const before = await hostLoad(path);
+    const writes = countFileWrites();
+    const loop = "shape:loop" as TLShapeId;
+    const card = "shape:loop-corner" as TLShapeId;
+
+    // The restored state, written the way the session restore writes it: with
+    // side effects OFF (the kit's handler cannot see it), card selected, no
+    // editing shape. `Store.atomic(fn, false)` is the same switch
+    // `loadStoreSnapshot` uses — internal in tldraw's types, hence the cast.
+    const store = editor.store as unknown as { atomic(fn: () => void, runCallbacks: boolean): void };
+    store.atomic(() => editor.store.put([{ ...editor.getCurrentPageState(), selectedShapeIds: [card], editingShapeId: null }]), false);
+    expect(editor.getSelectedShapeIds(), "the stand-in for a restored session").toEqual([card]);
+
+    // The kit installing over it — what `onMount` does after a restore.
+    const uninstall = installRegionKit(editor);
+    restores.push(uninstall);
+    expect(editor.getSelectedShapeIds(), "normalised at install, before any user event").toEqual([loop]);
+
+    await sleep(QUIET_MS);
+    expect(writes.count, "normalising a restored selection is not an edit: nothing written").toBe(0);
+    expect((await hostLoad(path)).source, "the file's bytes must not move").toBe(before.source);
+
+    await press(editor, "{Delete}");
+    await waitFor(() => (!editor.getShape(loop) ? true : null), { what: "Delete removed the region" });
+    expect(editor.getShape(card), "the card went with its region, never alone").toBeUndefined();
   });
 });
 
