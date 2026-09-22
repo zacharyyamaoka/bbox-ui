@@ -762,6 +762,32 @@ function paintedOverlayBox(): { left: number; top: number; right: number; bottom
   return { left: rect.left + minX * sx, top: rect.top + minY * sy, right: rect.left + (maxX + 1) * sx, bottom: rect.top + (maxY + 1) * sy };
 }
 
+/** tldraw paints hover only while `isHoveringCanvas`, which its canvas
+ *  `onPointerEnter` sets — see the frame tests below for the measurement. */
+async function enterCanvasFromOutside() {
+  const outside = document.createElement("div");
+  outside.style.cssText = "position:fixed;left:0;top:0;width:8px;height:8px;z-index:2147483647;";
+  document.body.appendChild(outside);
+  await userEvent.hover(outside);
+  outside.remove();
+}
+
+/** The painted overlay (after it settles) is the region FRAME's box, and is
+ *  nowhere near the card's. Same tolerance as the frame tests below. */
+async function expectPaintedIsFrame(regionId: TLShapeId, face: HTMLElement, first?: { left: number }) {
+  if (!first) await waitFor(() => paintedOverlayBox(), { what: "a painted outline" });
+  await settle(150);
+  const painted = paintedOverlayBox()!;
+  const frame = app!.root.querySelector<HTMLElement>(`[data-shape-id="${regionId}"]`)!.getBoundingClientRect();
+  const card = face.getBoundingClientRect();
+  const offBy = (r: { left: number; top: number; right: number; bottom: number }) =>
+    Math.max(Math.abs(painted.left - r.left), Math.abs(painted.top - r.top), Math.abs(painted.right - r.right), Math.abs(painted.bottom - r.bottom));
+  const text = (r: { left: number; top: number; right: number; bottom: number }) =>
+    `${r.left.toFixed(1)},${r.top.toFixed(1)} → ${r.right.toFixed(1)},${r.bottom.toFixed(1)}`;
+  expect(offBy(frame), `painted ${text(painted)} vs frame ${text(frame)} (card ${text(card)})`).toBeLessThanOrEqual(2.5);
+  expect(offBy(card), "the card's own outline was painted").toBeGreaterThan(50);
+}
+
 describe("HOVER — pointing at the card outlines the WHOLE region", () => {
   // Zach, 2026-09-22: "when you hover on the corner block its the entire out
   // frame that should become highlighted in blue". Real mouse moves (vitest's
@@ -825,6 +851,36 @@ describe("HOVER — pointing at the card outlines the WHOLE region", () => {
     });
   }
 
+  it("renaming the card (double-click the title): the editing session is the CARD's, and the painted outline is still the FRAME", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("for", 300, 200);
+    const face = await cardFace(cornerId);
+    await enterCanvasFromOutside();
+    const title = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${cornerId}"] [data-slot="ss-block-title"][data-editing="false"]`), { what: "the card's title" });
+    await userEvent.dblClick(title);
+    await waitFor(() => (app!.editor.getEditingShapeId() === cornerId ? true : null), { what: "the card's editing session" });
+    expect(app.editor.getSelectedShapeIds(), "the card is selected for its own rename").toEqual([cornerId]);
+    // Off the card, onto empty canvas: now only the SELECTION is painted —
+    // the hover path cannot be what makes this pass.
+    // (Below the frame's bottom-left — the pill sits ABOVE the selection.)
+    const canvasRect = canvasOf(app.root).getBoundingClientRect();
+    const frameRect = app.root.querySelector<HTMLElement>(`[data-shape-id="${id}"]`)!.getBoundingClientRect();
+    await userEvent.hover(canvasOf(app.root), { position: { x: Math.round(frameRect.left + 40 - canvasRect.left), y: Math.round(frameRect.bottom + 60 - canvasRect.top) } });
+    await waitFor(() => (app!.editor.getHoveredShapeId() === null ? true : null), { what: "nothing hovered" });
+    expect(app.editor.getEditingShapeId(), "moving off the card does not end the rename").toBe(cornerId);
+    await expectPaintedIsFrame(id, face);
+    await userEvent.keyboard("{Escape}");
+  });
+
+  it("a HINTED card paints the frame, not the card (the hint list is swapped too)", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("for", 300, 200);
+    const face = await cardFace(cornerId);
+    app.editor.selectNone();
+    app.editor.setHintingShapes([cornerId]);
+    await expectPaintedIsFrame(id, face, await waitFor(() => paintedOverlayBox(), { what: "a painted hint outline" }));
+  });
+
   it("hovering the card still reveals a tunnelled cable on the card's port — the hovered record is still the CARD (wireTunnel.ts)", async () => {
     app = await mountApp();
     const { id, cornerId } = placeRegion("for", 520, 160);
@@ -868,6 +924,58 @@ describe("HOVER — pointing at the card outlines the WHOLE region", () => {
     await settle(200);
     expect(drawn(memberWire), "a member's cable stays hidden — the hover is the card's, not the region's").toBeLessThan(120);
   });
+});
+
+describe("VIEW — the card always wears the corner view (`port`), whoever writes it", () => {
+  // Zach, 2026-09-22: "I don't want to give people the option to expand the
+  // region header block". A document invariant, held by the same pin as the
+  // card's position — not only by the pill and the hotkeys.
+  const viewOf = (cornerId: TLShapeId) => (shape(cornerId) as unknown as { props: { view: string } }).props.view;
+  const paintedView = (cornerId: TLShapeId) =>
+    app!.root.querySelector(`[data-shape-id="${cornerId}"] [data-block-id="${cornerId}"]`)?.getAttribute("data-view") ?? null;
+
+  it("a direct editor.updateShape({ view: 'expanded' }) on the card leaves it `port`", async () => {
+    app = await mountApp();
+    const { cornerId } = placeRegion("for", 300, 200);
+    await cardFace(cornerId);
+    app.editor.updateShape({ id: cornerId, type: BLOCK_SHAPE_TYPE, props: { view: "expanded" } } as never);
+    expect(viewOf(cornerId)).toBe("port");
+    app.editor.updateShape({ id: cornerId, type: BLOCK_SHAPE_TYPE, props: { view: "simple" } } as never);
+    expect(viewOf(cornerId)).toBe("port");
+    await settle();
+    expect(paintedView(cornerId)).toBe("port");
+  });
+
+  it("an applyScene that sets the card's view to expanded leaves it `port`", async () => {
+    app = await mountApp();
+    const { cornerId } = placeRegion("branch", 300, 200);
+    await cardFace(cornerId);
+    const scene = sceneFromRecords(app.editor.store.allRecords());
+    const next = {
+      ...scene,
+      nodes: scene.nodes.map((node) => (node.id === cornerId ? { ...node, data: { ...node.data, view: "expanded" } } : node)),
+    } as typeof scene;
+    expect(next.nodes.some((node) => node.id === cornerId && (node.data as { view?: string }).view === "expanded"), "the scene really asks for expanded").toBe(true);
+    applyScene(app.editor, next, { kind: "document" });
+    expect(viewOf(cornerId)).toBe("port");
+    await settle();
+    expect(paintedView(cornerId)).toBe("port");
+  });
+
+  for (const stored of ["expanded", "simple"] as const) {
+    it(`File › Open of a board whose card is stored ${stored} renders it \`port\``, async () => {
+      app = await mountApp();
+      const { cornerId } = placeRegion("for", 300, 200);
+      await cardFace(cornerId);
+      const file = JSON.parse(await serializeBoard(app.editor)) as { records: { id: string; props?: { view?: string } }[] };
+      const card = file.records.find((record) => record.id === cornerId);
+      if (!card?.props) throw new Error("the card is not in the serialized board");
+      card.props.view = stored;
+      expect(loadBoardText(app.editor, JSON.stringify(file))).toEqual({ ok: true });
+      await waitFor(() => (viewOf(cornerId) === "port" ? true : null), { what: `the loaded ${stored} card back on port` });
+      await waitFor(() => (paintedView(cornerId) === "port" ? true : null), { what: "the card painted as port" });
+    });
+  }
 });
 
 describe("NOT SELECTABLE ALONE — no gesture leaves the card selected by itself", () => {
