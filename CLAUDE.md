@@ -184,8 +184,10 @@ every one of its relative imports still resolves that way. When one would not â€
 an `editor/` file importing `../components/button`, or `skin/portVariants.ts`
 importing `../components/port.layout` â€” the whole item installs as a mirror of
 the trunk tree, `components/bbox/{components,editor,lib,skin}/X`. So an item's
-install paths move only when they have to: 17 items are mirrored (the chrome
-that moved to `editor/`, and the four port items through `skin/`), 24 stay flat.
+install paths move only when they have to: 18 items are mirrored (the chrome
+that moved to `editor/`, and the four port items through `skin/`), 23 stay flat.
+Trade-off, recorded: a consumer who installs one flat and one mirrored item
+gets two copies of shared files (e.g. `button.tsx` at both depths).
 
 **Naming principle (Zach, 2026-09-17): bbox-ui's own names are descriptive
 and precise; shorthand belongs to the consumer.** SystemSketch calls its

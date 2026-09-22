@@ -584,7 +584,7 @@ landed_html = f"""
 # ---------------------------------------------------------------- round 3
 R3_BASE, R3_MOVE, R3_REG = "707620c", "8b4bba4", "39af2c4"
 _moves = [l.split("\t") for l in subprocess.run(
-    ["git", "diff", "--name-status", "-M", R3_BASE, R3_MOVE, "--", "apps/storybook-basics/src"],
+    ["git", "diff", "--name-status", "-M", R3_BASE, "HEAD", "--", "apps/storybook-basics/src"],
     cwd=REPO, capture_output=True, text=True, check=True).stdout.splitlines() if l.startswith("R")]
 def _kit(p):
     return p.split("storybook-basics/src/")[1].split("/")[0]
@@ -606,27 +606,29 @@ round3_gif = data_uri(MEDIA / "round3.gif", "image/gif")
 round3_poster = data_uri(MEDIA / "round3-poster.jpg", "image/jpeg")
 R3_GATES = [  # measured 2026-09-22, commands in the rows
     ("trunk <code>pnpm test</code> (both projects)", "3,141 / 3,141", "268 files, browser stories included, <code>STORYBOOK_PORT=5422</code>"),
-    ("trunk typecheck · unit project", "exit 0 · 2,449 / 2,449", "the guard is 603 of those after Labeled Group"),
+    ("trunk typecheck · unit project", "exit 0 · 2,450 / 2,450", "includes the guard and the new components → editor wall"),
     ("studio app typecheck · unit", "exit 0 · 221 / 221", "36 of its files import moved modules through <code>@trunk/</code>"),
     ("studio app smoke (real browser)", "293 / 303", "every one of the 10 failures also fails on unchanged <code>main</code> (11 there): the drafts acceptance tests, red by design until the wiring lane lands, the menus ×2, the corner cluster"),
     ("registry <code>--check</code>", "up to date", "every relative import in every item resolves where it installs"),
     ("registry install, throwaway project", "37 items · tsc exit 0", "<code>docs/verify_registry_install.py</code>; deleting one installed file turns it red"),
     ("Labeled Group stories", "4 / 4", "radius drift mutation-tested: 4 red, restored 4 green"),
+    ("components → editor wall", "new", "<code>layering.test.ts</code>: no component may import <code>editor/</code>; a Badge importing it turns the test red"),
+    ("independent audit (different model)", "A–F confirmed", "It re-ran every gate its own way and found three files on the wrong side of the rule (historyTime, draftChanges, BranchChip — now in editor/), no test holding the new wall (added), an overclaiming comment, one builder reading presets/, and a stale public/r build — all fixed in <code>cfc5532</code>."),
 ]
 r3_gate_rows = "".join(f"<tr><th>{a}</th><td class='green'>{b}</td><td>{c}</td></tr>" for a, b, c in R3_GATES)
 R3_Q = [
     ("Merge it?", "It lands as a barrier: it moves files the system-sketch feedback lane is still editing. Dry run against that lane: "
      f"{len(merge_peer[1])} files conflict — the lane's new files inside <code>presets/</code> (git already proposes <code>components/</code>, which is right) and header comments both sides touched. Clean against <code>main</code>.",
      "If you say nothing it stays on the branch. Say <b>/merge-ready</b> and it queues; the integrator gets the conflict list, and I sent that lane a heads-up."),
-    ("17 registry items now install in a mirrored tree", "Items that import across folders cannot install flat — the moved chrome, and the four port items through <code>skin/</code>. They now land under <code>components/bbox/{components,editor,lib,skin}/</code>; the other 24 keep their flat paths.",
-     "Default: keep. The alternative — every item mirrored — is one consistent rule but moves everyone's paths."),
+    (f"{len(mirrored_items)} registry items now install in a mirrored tree", f"Items that import across folders cannot install flat — the moved chrome, and the four port items through <code>skin/</code>. They land under <code>components/bbox/{{components,editor,lib,skin}}/</code>; the other {len(reg['items']) - len(mirrored_items)} keep their flat paths. The catch the audit found: someone who installs one flat and one mirrored item gets two copies of shared files (<code>button.tsx</code> at both depths). They compile; they are just two copies.",
+     "Default: keep. The alternative — every item mirrored — is one rule and no duplicates, but moves everyone's install paths once."),
     ("Labeled Group is a component-level preset", "It renders anywhere Region renders, but no host builds one from scene data yet (the region host path still always puts a Block in the corner).",
      "Default: next lane — a <code>corner: \"title\"</code> option on the scene's region record, so tldraw and React Flow can draw one."),
 ]
 r3_q_html = "".join(f'<div class="q"><p class="qq"><b>{q}</b></p><p>{a}</p><p class="def">{d}</p><textarea placeholder="Your answer (blank = take the default)"></textarea></div>' for q, a, d in R3_Q)
 round3_html = f"""
 <h1>Storybook, round 3 — chrome is Editor's, Region lives in Blocks, presets live with their component</h1>
-<p class="sub">22 Sep 2026 · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{LANDED_REV}</code> ({R3_MOVE} the move, {R3_REG} the registry) · not merged · built on <code>main</code> {R3_BASE}</p>
+<p class="sub">22 Sep 2026 · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{LANDED_REV}</code> ({R3_MOVE} the move, {R3_REG} the registry, cfc5532 the audit fixes) · not merged · built on <code>main</code> {R3_BASE}</p>
 <div class="tldr">
 <p><b>Done, as you asked.</b> The editor's menus, bars, panels and dialogs moved out of <code>components/</code> into <code>editor/</code> — {len(editor_sources)} source files and their stories and tests. <b>Region is a folder under Components › Blocks</b>, with its presets inside it, and the new <b>Labeled Group</b> is one of them: Region with a title tab in the corner where the Block would sit. <b>There is no <code>presets/</code> folder</b> any more.</p>
 <p><b>Where the line fell, mechanically:</b> a file stays in <code>components/</code> if a remaining component imports it — your "needed to display information on the components". So FoldingChevron, Badge, Bar and Button stayed; the vendored shadcn primitives stay under Stock even where only the editor uses them. One place your rule met the architecture: the Branch and Loop presets build <em>scene records</em>, and <code>components/</code> may not import <code>scene/</code>, so their code sits beside the region model (<code>scene/region.branch.ts</code>) while their <em>stories</em> sit under Region like the rest.</p>
