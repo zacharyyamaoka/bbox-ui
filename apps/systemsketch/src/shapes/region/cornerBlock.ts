@@ -19,11 +19,13 @@
 //   2. `createCornerBlock` / `armRegionPreset` — who mints it, and when;
 //   3. `regionLayoutOf` — the frame's geometry, which starts BELOW the corner
 //      block's measured box (`@trunk/components/region.layout`'s own rule);
-//   4. `installRegionKit` — the two repairs that keep 1 and 3 TRUE over a
+//   4. `installRegionKit` — the repairs that keep 1 and 3 TRUE over a
 //      document's whole life: a duplicated region must not keep naming the
-//      ORIGINAL's corner block, and a frame must not stay the size it was
-//      authored at once the card it hugs has measured itself.
-import { createShapeId, type Editor, type TLShape, type TLShapeId } from "tldraw";
+//      ORIGINAL's corner block, a frame must not stay the size it was
+//      authored at once the card it hugs has measured itself, and the card
+//      and its frame are ONE object — the card is pinned to the corner slot
+//      and a gesture on it is a gesture on the region.
+import { createShapeId, type Editor, type TLInstancePageState, type TLShape, type TLShapeId } from "tldraw";
 
 import {
   REGION_ARM_MIN_BODY_PX,
@@ -82,9 +84,17 @@ const CORNER_INSET_Y_PX = 0;
  * has, so "a new block landed in this region's corner slot while the region is
  * pointing at something that is not its child" identifies it without guessing.
  * 24px is the acceptance test's own tolerance for "the corner block is at the
- * region's top-left" (`src/region.smoke.test.tsx`).
+ * region's top-left" (`src/region.smoke.test.tsx`). Since the card is pinned
+ * (`installRegionKit`), an original's card is always exactly on the slot, so
+ * the slack only matters for a copy of a board written before the pin.
  */
 const CORNER_CLAIM_SLACK_PX = 24;
+
+/** Is this card exactly on the corner slot — region-local (0, 0), unrotated?
+ *  The one predicate the pin, the sweep and the repairs all ask. */
+function onCornerSlot(shape: TLShape): boolean {
+  return shape.x === CORNER_INSET_X_PX && shape.y === CORNER_INSET_Y_PX && shape.rotation === 0;
+}
 
 /** The height of the plain text tab a region wears INSTEAD of a corner block
  *  (`kind: "plain"`, or a region a writer created without one). It exists so
@@ -349,10 +359,12 @@ export function isRegionPlaceholder(shape: RegionShape): boolean {
  *      region already exists. `props.w/h` are the geometry now
  *      (`RegionShapeUtil.getGeometry`), so a card that grew has to push its
  *      frame rather than overflow it.
+ *   3. The card is PINNED, and the card and its frame are ONE object. See
+ *      `pinnedCorner` and `redirectCornerSelection` below.
  *
- * Both are store side effects rather than anything in the tools, because the
- * events that need them (duplicate, paste, a measurement settling) are not
- * gestures any tool owns.
+ * All are store side effects rather than anything in the tools, because the
+ * events that need them (duplicate, paste, a measurement settling, a nudge,
+ * an undo, a file load) are not gestures any tool owns.
  */
 export function installRegionKit(editor: Editor): () => void {
   const parentRegionOf = (shape: TLShape): RegionShape | undefined => {
@@ -381,34 +393,141 @@ export function installRegionKit(editor: Editor): () => void {
     editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { w, h, arms } });
   };
 
+  /** The region whose corner card `block` is, judged from the block's OWN
+   *  `parentId` — the same double check `cornerBlockOf` makes. */
+  const regionNaming = (block: TLShape): RegionShape | undefined => {
+    if (block.type !== BLOCK_SHAPE_TYPE) return undefined;
+    const region = parentRegionOf(block);
+    return region && region.props.cornerBlockId === block.id ? region : undefined;
+  };
+
   /**
-   * A corner block saved at the LEGACY inset snaps flush.
+   * THE CARD IS PINNED to the corner slot: region-local (0, 0), unrotated.
    *
-   * WHY a sweep and not just the new constant: `CORNER_INSET_X_PX` decides
-   * where a card is CREATED, and every board already in IndexedDB has its
-   * cards at the old 8px. Zach's rule is "generalize every bug fix" — the
-   * boundary that made the bug possible is the stored position, so the
-   * stored position is what gets swept, once, at mount. Bounded by the same
-   * `CORNER_CLAIM_SLACK_PX` the claim test uses, so a card an author has
-   * deliberately dragged somewhere else is left exactly where they put it.
+   * WHY: Zach, 2026-09-21, looking at a For Loop and a Branch whose cards had
+   * come to rest ~26px inside their frames: "You need to rigidly connect the
+   * for loop and branch block to the region frame. It should conceptually be
+   * one object." ... "Same issue with branch." That OVERRULES what this file
+   * used to say — that a card "an author has deliberately dragged somewhere
+   * else is left exactly where they put it". There is no such author any more:
+   * the card is the frame's own header, so a card off the slot is a broken
+   * record, never an intention. The tempting half-measure, snapping only
+   * within some slack of the slot, is exactly what let the inset card of his
+   * screenshot survive.
+   *
+   * Enforced at the store (before-create / before-change) rather than in the
+   * select tool, because a card leaves its slot through writes no gesture
+   * owns — a nudge, align/distribute, a paste, an undo, stream 3's
+   * `applyScene`. The select tool can no longer move a card at all
+   * (`redirectCornerSelection`); this is what makes that a guarantee instead
+   * of a consequence.
+   */
+  const pinnedCorner = <Shape extends TLShape>(shape: Shape): Shape =>
+    onCornerSlot(shape) ? shape : { ...shape, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 };
+
+  /**
+   * Every corner card on every page, back on its slot.
+   *
+   * WHY a sweep IN ADDITION to the store handlers: two writers bypass side
+   * effects entirely — `Store.loadStoreSnapshot` runs with them switched off
+   * (`@tldraw/store` Store.ts, `sideEffects.setIsEnabled(false)`), and that is
+   * both the IndexedDB board the app mounts on and File › Open
+   * (`chrome/FileMenu/fileActions.ts`'s `loadBoardText`). So it runs once at
+   * mount and again after any change batch that touched a block or a region.
    *
    * `history: "ignore"` for the same reason `shared/measure.ts` uses it:
    * this is a repair, not an edit, and it must not make the first Ctrl-Z of
    * a session undo the frame's own geometry.
    */
   const snapCornersFlush = () => {
-    const regions = editor.getCurrentPageShapes().filter((shape) => shape.type === REGION_SHAPE_TYPE) as RegionShape[];
-    const moves = regions
+    const moves = editor.store
+      .allRecords()
+      .filter((record): record is RegionShape => record.typeName === "shape" && (record as TLShape).type === REGION_SHAPE_TYPE)
       .map((region) => cornerBlockOf(editor, region))
-      .filter((corner): corner is TLShape => !!corner)
-      .filter((corner) => corner.x !== CORNER_INSET_X_PX || corner.y !== CORNER_INSET_Y_PX)
-      .filter((corner) => Math.abs(corner.x - CORNER_INSET_X_PX) <= CORNER_CLAIM_SLACK_PX && Math.abs(corner.y - CORNER_INSET_Y_PX) <= CORNER_CLAIM_SLACK_PX)
-      .map((corner) => ({ id: corner.id, type: corner.type, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX }));
+      .filter((corner): corner is TLShape => !!corner && !onCornerSlot(corner))
+      .map((corner) => ({ id: corner.id, type: corner.type, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 }));
     if (moves.length > 0) editor.run(() => editor.updateShapes(moves), { history: "ignore" });
   };
   snapCornersFlush();
+  const stopSweep = editor.store.listen(
+    ({ changes }) => {
+      const touched = [...Object.values(changes.added), ...Object.values(changes.updated).map(([, next]) => next)].some(
+        (record) => record.typeName === "shape" && ((record as TLShape).type === BLOCK_SHAPE_TYPE || (record as TLShape).type === REGION_SHAPE_TYPE),
+      );
+      if (touched) snapCornersFlush();
+    },
+    { scope: "document", source: "all" },
+  );
+
+  /**
+   * A gesture on the card is a gesture on the REGION: selecting a corner card
+   * selects its region instead.
+   *
+   * WHY, and why at `instance_page_state` rather than in a pointer handler:
+   * "It should conceptually be one object" (Zach, 2026-09-21, quoted on
+   * `pinnedCorner`). One object means one selection — and every door into the
+   * selection has to agree: a click, a marquee, select-all, the Frames panel,
+   * the selection history. They all end in the same record, so the rewrite
+   * lives there, once. tldraw 5.3.2's press-drag reads it back: `PointingShape
+   * .onEnter` calls `setSelectedShapes([card])`, the record comes out naming
+   * the region, and `Translating` moves whatever is selected — so a drag that
+   * starts on the card moves frame, card and members together, and the card's
+   * own `x/y` are never written.
+   *
+   * THE ONE EXCEPTION is the card's own editing session. tldraw's
+   * `setEditingShape` selects the shape it edits and `EditingShape.onEnter`
+   * re-selects it (`Editor.setEditingShape`, `SelectTool/childStates/
+   * EditingShape.ts`), and a rename opened on the card must type into the
+   * card. While `editingShapeId` names the card it may stay selected; the
+   * moment the session ends the same rewrite hands the selection back to the
+   * region. Nothing else is carved out: the glyph picker and the port rails
+   * are content-owned presses (`shared/pointerOwnership.ts`) that never reach
+   * the selection, and a dot's wire gesture is DOM-level.
+   */
+  const redirectCornerSelection = (next: TLInstancePageState): TLInstancePageState => {
+    let changed = false;
+    const ids: TLShapeId[] = [];
+    for (const id of next.selectedShapeIds) {
+      const block = id === next.editingShapeId ? undefined : editor.getShape(id);
+      const region = block ? regionNaming(block) : undefined;
+      const target = region ? region.id : id;
+      if (target !== id) changed = true;
+      if (ids.includes(target)) changed = true;
+      else ids.push(target);
+    }
+    return changed ? { ...next, selectedShapeIds: ids } : next;
+  };
+
+  /** A region that has just started naming a card snaps that card onto the
+   *  slot. `createCornerBlock` mints the card BEFORE the region names it, and a
+   *  duplicate's copy is claimed by the after-create handler below, so neither
+   *  card is pinned at its own create — this is the write that catches both. */
+  const snapNamedCorner = (region: RegionShape) => {
+    const corner = cornerBlockOf(editor, region);
+    if (corner && !onCornerSlot(corner)) editor.updateShape({ id: corner.id, type: corner.type, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 });
+  };
 
   const stops = [
+    stopSweep,
+    editor.sideEffects.registerBeforeChangeHandler("instance_page_state", (_previous, next) => redirectCornerSelection(next)),
+    editor.sideEffects.registerBeforeCreateHandler("shape", (shape) => (regionNaming(shape) ? pinnedCorner(shape) : shape)),
+    editor.sideEffects.registerBeforeChangeHandler("shape", (previous, next) => {
+      if (next.type !== BLOCK_SHAPE_TYPE) return next;
+      // A pinned card never leaves its region: one object has no seam to pull
+      // it out through. Restoring the index too keeps it a valid sibling.
+      if (next.parentId !== previous.parentId && regionNaming(previous)) {
+        return pinnedCorner({ ...next, parentId: previous.parentId, index: previous.index });
+      }
+      return regionNaming(next) ? pinnedCorner(next) : next;
+    }),
+    editor.sideEffects.registerAfterCreateHandler("shape", (shape) => {
+      if (shape.type === REGION_SHAPE_TYPE) snapNamedCorner(shape as RegionShape);
+    }),
+    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next) => {
+      if (next.type !== REGION_SHAPE_TYPE) return;
+      if ((previous as RegionShape).props.cornerBlockId === (next as RegionShape).props.cornerBlockId) return;
+      snapNamedCorner(next as RegionShape);
+    }),
     editor.sideEffects.registerAfterCreateHandler("shape", (shape) => {
       if (shape.type !== BLOCK_SHAPE_TYPE) return;
       const region = parentRegionOf(shape);
