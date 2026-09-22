@@ -212,6 +212,25 @@ describe("P-014 — one editing gesture is one undo step", () => {
     expect(steps, "Ctrl+Z presses to undo one description gesture").toBe(1);
   });
 
+  it("re-typing a port declaration in the multi-line PORT LANE (P-056)", async () => {
+    app = await mountApp();
+    const id = placeBlock({ view: "port", w: 240, h: 200, ports: { ...NO_PORTS, left: [{ id: "in", declaration: "gain_x: float" }] } });
+    // THE GESTURE, the peer lane's own (src/portLane.smoke.test.tsx): a plain
+    // click on a port dot opens the lane — the press `wireGesture.ts` had
+    // documented as "a click on a dot is nothing".
+    const dot = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-port-id="in"] [data-slot="port-dot"]`), { what: "the dot" });
+    await userEvent.click(dot);
+    const lane = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${id}"] [data-slot="port-edge-lane"] .cm-content`), { what: "the port lane" });
+    await userEvent.click(lane);
+    await userEvent.keyboard("{Control>}a{/Control}");
+    await userEvent.keyboard("gain_y: float");
+    await waitFor(() => blockOf(id).props.ports.left[0]?.declaration === "gain_y: float", { what: "the lane edit reached the record" });
+
+    const steps = await undoStepsBackTo(() => blockOf(id)?.props.ports.left[0]?.declaration ?? "<gone>", "gain_x: float", "port lane");
+    expect(app.editor.getShape(id), "the block must survive an undo of its own lane edit").toBeTruthy();
+    expect(steps, "Ctrl+Z presses to undo one lane typing gesture").toBe(1);
+  });
+
   /* ------------------------------------------------------------------ *
    * The controls. These are gestures whose seam ALREADY marks once, so a
    * red here means the probe is wrong rather than the app — which is the

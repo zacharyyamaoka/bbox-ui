@@ -73,13 +73,24 @@ export function portsFromRailItems(stored: readonly BlockPortSpec[], items: read
  * callback says which arrived, so this reads it off the change itself.
  *
  * `label:<portId>` is returned only for the one shape a keystroke can have:
- * the same ports, in the same order, with EXACTLY ONE name changed. Anything
- * else — a reorder, a port gone, two labels at once, an id the block does not
- * have — is `null`, i.e. "mark now". WHY that direction on the unknown case:
+ * the same ports, in the same order, with EXACTLY ONE of them changed.
+ * Anything else — a reorder, a port added or gone, two ports at once, an id
+ * the block does not have — is `null`, i.e. "mark now". WHY that direction on
+ * the unknown case:
  * marking too often costs an extra Ctrl+Z, marking too rarely welds the edit
  * onto the action before it, and this app has already shipped the second (a
  * glyph pick that deleted the block it was picked on, measured 2026-09-21).
  * An unclassifiable change takes the recoverable error.
+ *
+ * BOTH TYPING SURFACES COUNT, and the second one is why this reads two fields
+ * rather than one. The rail paints a port's NAME half and reports it as
+ * `label`; P-056's multi-line lane shows the WHOLE declaration and reports it
+ * as `laneLine`. Measured 2026-09-21, before this function looked at
+ * `laneLine`: re-typing `gain_x: float` as `gain_y: float` in the lane cost
+ * THIRTEEN Ctrl+Z, because every keystroke changed a field this function was
+ * not reading, so every keystroke looked unclassifiable and took a mark of
+ * its own. A port that changes on either field is the same port being typed
+ * into, and it is counted ONCE however many of its fields moved.
  *
  * WHAT THIS CANNOT SEE, stated because it is a real residual: two SEPARATE
  * rename sessions on the same port, back to back with nothing in between,
@@ -95,8 +106,12 @@ export function railGestureKey(stored: readonly BlockPortSpec[], items: readonly
     const item = items[at];
     const port = stored[at];
     if (item.id !== port.id) return null; // the order moved: a reorder, not typing
-    if (item.label === parsePortDeclaration(port.declaration).name) continue;
-    if (renamed !== null) return null; // two at once is not a keystroke
+    const nameMoved = item.label !== parsePortDeclaration(port.declaration).name;
+    // `undefined` is "this surface has no lane", not "the lane is empty", so
+    // an absent `laneLine` is never read as a cleared declaration.
+    const lineMoved = item.laneLine !== undefined && item.laneLine !== port.declaration;
+    if (!nameMoved && !lineMoved) continue;
+    if (renamed !== null) return null; // two ports at once is not a keystroke
     renamed = item.id;
   }
   return renamed === null ? null : `label:${renamed}`;

@@ -106,6 +106,45 @@ describe("P-014 — which gesture a rail report belongs to", () => {
     expect(railGestureKey(ports, [item("in", "a"), item("aux", "b"), item("pose", "pose")])).toBeNull();
   });
 
+  it("the LANE's own field counts too — one changed declaration is a typing run", () => {
+    // P-056's multi-line lane reports the WHOLE declaration as `laneLine`
+    // while `label` stays the name half the rail paints. Before this was
+    // read, re-typing one line in the lane cost thirteen Ctrl+Z.
+    const typing = [
+      { id: "in", label: "gain_x", laneLine: "gain_x: floa" },
+      { id: "aux", label: "aux", laneLine: "aux" },
+      { id: "pose", label: "pose", laneLine: "pose:  Pose " },
+    ];
+    expect(railGestureKey(ports, typing)).toBe("label:in");
+    // ...and the next keystroke shares the key, which is what makes the run
+    // one undo step.
+    expect(railGestureKey(ports, typing.map((item) => (item.id === "in" ? { ...item, laneLine: "gain_x: float " } : item)))).toBe("label:in");
+  });
+
+  it("one port whose name AND declaration both moved is counted once, not twice", () => {
+    expect(
+      railGestureKey(ports, [
+        { id: "in", label: "gain_y", laneLine: "gain_y: float" },
+        { id: "aux", label: "aux", laneLine: "aux" },
+        { id: "pose", label: "pose", laneLine: "pose:  Pose " },
+      ]),
+    ).toBe("label:in");
+  });
+
+  it("an item with no `laneLine` is a surface that HAS no lane, never a cleared declaration", () => {
+    expect(railGestureKey(ports, [item("in", "gain_x"), item("aux", "aux"), item("pose", "pose")])).toBeNull();
+  });
+
+  it("two ports changed through the lane at once is not a keystroke", () => {
+    expect(
+      railGestureKey(ports, [
+        { id: "in", label: "gain_x", laneLine: "gain_x: int" },
+        { id: "aux", label: "aux", laneLine: "aux: int" },
+        { id: "pose", label: "pose", laneLine: "pose:  Pose " },
+      ]),
+    ).toBeNull();
+  });
+
   it("a report that drops or adds a port is not a typing run", () => {
     expect(railGestureKey(ports, [item("in", "gain_y"), item("aux", "aux")])).toBeNull();
     expect(railGestureKey(ports, [item("in", "gain_y"), item("aux", "aux"), item("ghost", "ghost")])).toBeNull();
