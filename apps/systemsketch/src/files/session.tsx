@@ -213,6 +213,7 @@ export function useDocumentSession(options: {
     // work is not this window's to write any more — whoever swapped the
     // document (an open, a Save As, a Trash) already decided that.
     dirtyRef.current = false;
+    documentRef.current = next;
     setDocument(next);
   }, []);
   const modeRef = useRef(mode);
@@ -240,6 +241,18 @@ export function useDocumentSession(options: {
    * its own browser persistence, and an unreadable one must never be written.
    */
   const dirtyRef = useRef(false);
+  /**
+   * How many edits this window has made, ever. A save records the number it
+   * serialised at and clears `dirtyRef` only if no edit has landed since.
+   *
+   * WHY a counter and not "clear dirty once the bytes are taken": tldraw's
+   * `serializeTldrawJson` snapshots `allRecords()` at its first line and only
+   * THEN awaits external assets (tldraw `utils/tldr/file.ts:182-200`), so an
+   * edit can land while a save is still pending and be missing from its bytes.
+   * Clearing dirty after the await called that edit written — and File ▸ Open
+   * then swapped it away (Codex audit, 2026-09-22, P1).
+   */
+  const editRevisionRef = useRef(0);
 
   const cancelAutosave = useCallback(() => {
     if (timerRef.current !== null) {
@@ -248,6 +261,35 @@ export function useDocumentSession(options: {
     }
     pendingSinceRef.current = null;
   }, []);
+
+  /** Arm the debounced autosave for an edit made now. */
+  const scheduleAutosave = useCallback(() => {
+    const now = Date.now();
+    const schedule = autosaveSchedule(now, pendingSinceRef.current, AUTOSAVE_DEBOUNCE_MS, AUTOSAVE_MAX_DELAY_MS);
+    pendingSinceRef.current = schedule.pendingSince;
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      pendingSinceRef.current = null;
+      void saveRef.current({ auto: true });
+    }, schedule.delayMs);
+  }, []);
+
+  /** A document swap (Save As) has just written `revision`'s bytes to the
+   *  file the window is now on: anything edited since still owes that file. */
+  const settleAfterAdopt = useCallback(
+    (revision: number) => {
+      if (editRevisionRef.current === revision) {
+        cancelAutosave();
+        setStatus({ tone: "ok", label: "Saved" });
+        return;
+      }
+      dirtyRef.current = true;
+      setStatus({ tone: "pending", label: "Unsaved changes" });
+      scheduleAutosave();
+    },
+    [cancelAutosave, scheduleAutosave],
+  );
 
   /**
    * Run `fn` without it looking like a person edited the board.
@@ -509,14 +551,21 @@ export function useDocumentSession(options: {
           if (!current.native) return options_.auto ? "skipped" : "needs-target";
           setStatus({ tone: "pending", label: "Saving…" });
           try {
+            // Read in the same tick `serializeBoard` takes its snapshot.
+            const revision = editRevisionRef.current;
             const source = await serializeBoard(editor);
-            // Everything up to this instant is IN `source`; an edit after it
-            // re-dirties the board through the store listener.
-            dirtyRef.current = false;
+            // Only the edits up to the snapshot are IN `source` (see
+            // `editRevisionRef`'s WHY): one made since keeps the board dirty.
+            if (editRevisionRef.current === revision) dirtyRef.current = false;
             const next = await native.save(current.native, source, { force: options_.force });
             if (documentEpochRef.current !== epoch) return "saved";
-            setDocument((previous) => ({ ...previous, native: next, digest: next.digest, title: next.title }));
-            setStatus({ tone: "ok", label: "Saved" });
+            // WHY the ref moves NOW and not on the next render: `waitForSave`
+            // may save again at once (an edit landed mid-save), and a second
+            // write fenced on the digest this one replaced is refused as a
+            // conflict with this window's own bytes.
+            documentRef.current = { ...documentRef.current, native: next, digest: next.digest, title: next.title };
+            setDocument(documentRef.current);
+            setStatus(dirtyRef.current ? { tone: "pending", label: "Unsaved changes" } : { tone: "ok", label: "Saved" });
             return "saved";
           } catch (cause) {
             // Those bytes never landed, so the board still owes them.
@@ -529,10 +578,10 @@ export function useDocumentSession(options: {
         const path = current.path;
         setStatus({ tone: "pending", label: "Saving…" });
         try {
+          const revision = editRevisionRef.current;
           const source = await serializeBoard(editor);
-          // Everything up to this instant is IN `source`; an edit after it
-          // re-dirties the board through the store listener.
-          dirtyRef.current = false;
+          // See the native branch: a newer edit keeps the board dirty.
+          if (editRevisionRef.current === revision) dirtyRef.current = false;
           const saved = await client.save({
             path,
             source,
@@ -543,14 +592,10 @@ export function useDocumentSession(options: {
           // recent entry is about the disk, not about this window.
           rememberRecent(saved.path);
           if (documentEpochRef.current !== epoch) return "saved";
-          setDocument((previous) => ({
-            ...previous,
-            path: saved.path,
-            digest: saved.digest,
-            title: documentTitle(saved.path),
-            native: null,
-          }));
-          setStatus({ tone: "ok", label: "Saved" });
+          // The ref moves now for the same reason as the native branch.
+          documentRef.current = { ...documentRef.current, path: saved.path, digest: saved.digest, title: documentTitle(saved.path), native: null };
+          setDocument(documentRef.current);
+          setStatus(dirtyRef.current ? { tone: "pending", label: "Unsaved changes" } : { tone: "ok", label: "Saved" });
           return "saved";
         } catch (cause) {
           // Those bytes never landed, so the board still owes them.
@@ -584,7 +629,13 @@ export function useDocumentSession(options: {
    */
   const waitForSave = useCallback(async (): Promise<boolean> => {
     cancelAutosave();
-    if (dirtyRef.current) await saveRef.current({ auto: true });
+    // WHY a retry: an edit made while this save was pending is not in its
+    // bytes (`editRevisionRef`'s WHY), so the board is still dirty after it.
+    // Saving again writes that edit; a person still typing after three rounds
+    // keeps the window where it is, which is the same answer as a failure.
+    for (let attempt = 0; dirtyRef.current && attempt < 3; attempt += 1) {
+      if ((await saveRef.current({ auto: true })) !== "saved") break;
+    }
     // Whatever was already queued — a Ctrl+S, a rename — has to land too.
     await enqueue(async () => undefined);
     return !dirtyRef.current;
@@ -597,6 +648,7 @@ export function useDocumentSession(options: {
       return;
     }
     try {
+      const revision = editRevisionRef.current;
       const source = await serializeBoard(editor);
       const suggestion = fileNameFor(documentRef.current.title ?? boardNameRef.current);
       // WHY the picker runs outside the queue and only the ADOPTION is queued:
@@ -609,14 +661,14 @@ export function useDocumentSession(options: {
       if (!saved) return;
       await enqueue(async () => {
         adoptDocument({ path: null, native: saved, digest: saved.digest, title: saved.title, readable: true });
-        setStatus({ tone: "ok", label: "Saved" });
-        cancelAutosave();
+        // An edit made while the picker was up is not in `source`.
+        settleAfterAdopt(revision);
       });
     } catch (cause) {
       setStatus({ tone: "error", label: describe(cause) });
       helpersRef.current.addToast({ severity: "error", title: "Could not save this board", description: describe(cause) });
     }
-  }, [adoptDocument, cancelAutosave, editor, enqueue, native]);
+  }, [adoptDocument, editor, enqueue, native, settleAfterAdopt]);
   saveAsRef.current = saveAs;
 
   /** The app navigator's Save: create-only, so the host — not this window —
@@ -630,11 +682,11 @@ export function useDocumentSession(options: {
   const saveAsPath = useCallback(
     (path: string, options_: { force: boolean }) =>
       enqueue(async () => {
+        const revision = editRevisionRef.current;
         const source = await serializeBoard(editor);
         const saved = await client.save({ path, source, baseDigest: null, force: options_.force });
         adoptDocument({ path: saved.path, native: null, digest: saved.digest, title: documentTitle(saved.path), readable: true });
-        setStatus({ tone: "ok", label: "Saved" });
-        cancelAutosave();
+        settleAfterAdopt(revision);
         rememberRecent(saved.path);
         // The window now IS this file — but without a reload: the board on
         // screen is already the one on disk, so `replaceBoard` (history, no
@@ -642,7 +694,7 @@ export function useDocumentSession(options: {
         documentLocation().replaceBoard(saved.path);
         setNavigatorMode(null);
       }),
-    [adoptDocument, cancelAutosave, client, editor, enqueue, rememberRecent],
+    [adoptDocument, client, editor, enqueue, rememberRecent, settleAfterAdopt],
   );
 
   /* -------------------------------------------------------- new boards */
@@ -874,6 +926,7 @@ export function useDocumentSession(options: {
     // they always dirty the board and always save.
     let statusQueued = false;
     const stop = listenForDocumentEdits(editor, () => {
+      editRevisionRef.current += 1;
       const current = documentRef.current;
       // No target, no autosave — and crucially no picker: an autosave must
       // never be the thing that raises a Save As dialog.
@@ -890,21 +943,13 @@ export function useDocumentSession(options: {
           );
         });
       }
-      const now = Date.now();
-      const schedule = autosaveSchedule(now, pendingSinceRef.current, AUTOSAVE_DEBOUNCE_MS, AUTOSAVE_MAX_DELAY_MS);
-      pendingSinceRef.current = schedule.pendingSince;
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(() => {
-        timerRef.current = null;
-        pendingSinceRef.current = null;
-        void saveRef.current({ auto: true });
-      }, schedule.delayMs);
+      scheduleAutosave();
     });
     return () => {
       stop();
       cancelAutosave();
     };
-  }, [cancelAutosave, editor]);
+  }, [cancelAutosave, editor, scheduleAutosave]);
 
   // The other way a document is left: the window itself goes away. Closing it
   // inside the 600 ms debounce used to discard the edit outright — a
