@@ -19,7 +19,6 @@ import { useEditor, type TLShape, type TLShapeId, type TLShapePartial } from "tl
 
 import { sightPortDots } from "@trunk/hosts/portDotSightings";
 
-import { runRepair } from "../../document/derivedWrites";
 import type { PortSide } from "../types";
 
 export interface MeasuredAnchor {
@@ -106,14 +105,7 @@ export function useMeasuredShape<Shape extends TLShape>({ shapeId, shapeType, wr
     // user never made. The archive learned the same thing about its own
     // auto-resize pass; the trunk bench never had to, because its readings
     // lived in React state rather than in the document.
-    //
-    // WHY `runRepair` and not a bare `editor.run`: not an autosave either. A
-    // reading depends on the VIEWER — fonts, device pixel ratio — so opening
-    // a board on a different screen than the one that wrote it re-measures
-    // its anchors, and that alone used to rewrite the file on open (the
-    // 2026-09-22 reload loop; `document/derivedWrites.ts`).
-    runRepair(
-      editor,
+    editor.run(
       () => {
         // The cast is on the WHOLE partial because `TLShapePartial` is a
         // discriminated union: with `Shape` still generic here, TypeScript
@@ -124,6 +116,7 @@ export function useMeasuredShape<Shape extends TLShape>({ shapeId, shapeType, wr
           props: { ...(boxMoved ? { w, h } : {}), ...(anchorsMoved ? { anchors } : {}) },
         } as TLShapePartial<Shape>);
       },
+      { history: "ignore" },
     );
   }, [editor, nodeId, shapeId, shapeType, wrapperRef]);
 
