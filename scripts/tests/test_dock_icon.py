@@ -14,7 +14,9 @@ against a throwaway XDG data dir; the real ~/.local/share is not touched.
 
 from __future__ import annotations
 
+import io
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -74,8 +76,9 @@ def plant_archived_raster(root: Path) -> Path:
 
 
 def body(svg: bytes) -> bytes:
-    """Everything after the root <svg ...> tag — the artwork itself."""
-    return svg[dock_icon._ROOT_TAG.search(svg).end() :]
+    """Everything after the root <svg ...> tag, minus the dock's own hairline — the artwork itself."""
+    rest = svg[dock_icon._ROOT_TAG.search(svg).end() :]
+    return re.sub(rb"\n<rect " + re.escape(dock_icon.OUTLINE_MARK) + rb"[^>]*/>", b"", rest)
 
 
 class DockIconTests(unittest.TestCase):
@@ -92,6 +95,29 @@ class DockIconTests(unittest.TestCase):
         for name, source in dock_icon.ICONS.items():
             installed = (self.root / "scalable" / "apps" / f"{name}.svg").read_bytes()
             self.assertEqual(body(installed), body(source.read_bytes()), name)
+
+    def test_each_icon_carries_one_hairline_that_stays_inside_its_square(self) -> None:
+        # Zach picked option C: a hairline, so the dark square reads on the dark dock.
+        from PIL import Image
+
+        dock_icon.sync(self.home, notify=False)
+        for name in dock_icon.ICONS:
+            svg = (self.root / "scalable" / "apps" / f"{name}.svg").read_bytes()
+            self.assertEqual(svg.count(dock_icon.OUTLINE_MARK), 1, name)
+            image = Image.open(self.root / "512x512" / "apps" / f"{name}.png").convert("RGBA")
+            alpha = image.getchannel("A")
+            # Inset, not straddling: the same frame rendered WITHOUT the hairline
+            # has the same faintest-pixel extent. (Not "nothing faint outside the
+            # square" — the studio mark's own wire overhangs it, antialiased.)
+            bare = re.sub(rb"\n<rect " + re.escape(dock_icon.OUTLINE_MARK) + rb"[^>]*/>", b"", svg)
+            bare_alpha = Image.open(io.BytesIO(dock_icon.render_png(bare, 512))).convert("RGBA").getchannel("A")
+            touched = lambda channel: channel.point(lambda v: 255 if v else 0).getbbox()  # noqa: E731
+            self.assertEqual(touched(alpha), touched(bare_alpha), name)
+            # And visible: the band at the square's edge is lighter than just inside it.
+            left, top, right, bottom = alpha.point(lambda v: 255 if v >= 128 else 0).getbbox()
+            middle = (top + bottom) // 2
+            edge, inside = image.getpixel((right - 3, middle)), image.getpixel((right - 30, middle))
+            self.assertGreater(sum(edge[:3]), sum(inside[:3]) + 60, f"{name}: edge {edge} vs inside {inside}")
 
     def test_every_png_is_the_size_its_folder_names_and_keeps_its_transparency(self) -> None:
         dock_icon.sync(self.home, notify=False)
@@ -209,9 +235,10 @@ class FitInstalledTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def test_it_is_resized_to_the_reference_box_with_its_artwork_untouched(self) -> None:
+    def test_it_is_resized_and_outlined_with_its_artwork_untouched(self) -> None:
         self.assertNotEqual(dock_icon.fit_installed("foreign", self.home, notify=False), [])
         self.assertEqual(body(self.svg.read_bytes()), body(self.original))
+        self.assertEqual(self.svg.read_bytes().count(dock_icon.OUTLINE_MARK), 1)
         left, top, right, bottom = painted_fraction(self.root / "512x512" / "apps" / "foreign.png")
         self.assertAlmostEqual(bottom - top, dock_icon.TARGET[1] - dock_icon.TARGET[0], delta=0.006)
         self.assertEqual(gtk_resolves(self.home, 48, "foreign"), str(self.root / "48x48" / "apps" / "foreign.png"))

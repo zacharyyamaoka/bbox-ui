@@ -113,7 +113,9 @@ MUTATIONS = [
     ("dock_icon.py", "    return svg[: tag.start()] + root + svg[tag.end() :]", "    return svg[: tag.start()] + root + svg[tag.end() : -8] + b'</svg>'", "fit() touches the artwork, not just the frame", "a resize that quietly edits Zach's drawing"),
     ("dock_icon.py", "TARGET = (0.098, 0.902)", "TARGET = (0.115, 0.885)", "Keep the old, smaller frame", "the icons stay smaller than Claude/Codex"),
     ("dock_icon.py", "centre_y - side / 2:.2f}", "top:.2f}", "Fit without re-centring vertically", "the studio mark keeps sitting high"),
-    ("dock_icon.py", "    if is_fitted(svg):\n        return []\n", "", "Re-fit an already-fitted pyblocks icon", "every run rewrites it by a rounding hair"),
+    ("dock_icon.py", "    if not is_fitted(svg):\n        svg = fit(svg)\n", "    svg = fit(svg)\n", "Re-fit an already-fitted pyblocks icon", "every run rewrites it by a rounding hair"),
+    ("dock_icon.py", "    return fit(outline(svg))", "    return fit(svg)", "Drop the hairline", "the dark square vanishes on the dark dock again"),
+    ("dock_icon.py", 'x="{x + half:g}" y="{y + half:g}" width="{width - OUTLINE_WIDTH:g}" \'\n        f\'height="{height - OUTLINE_WIDTH:g}"', 'x="{x:g}" y="{y:g}" width="{width:g}" \'\n        f\'height="{height:g}"', "Outline straddles the edge instead of sitting inside", "a faint halo grows the icon past the Claude/Codex box"),
 ]
 
 
@@ -215,6 +217,7 @@ pre {{ background:var(--card); border:1px solid var(--line); border-radius:8px; 
   <li><b>One real cache on top:</b> GNOME Shell only rescans when <code>hicolor/</code>'s own mtime moves, and only checks on a texture-cache miss. A file swapped in place stays on screen until something causes a miss (the overview, Alt+Tab) or a logout, so even a correct fix looks like it failed.</li>
   <li><b>Fixed and installed.</b> <code>scripts/dock_icon.py</code> renders the site's own <code>bbox-studio-mark.svg</code> into the icon and bumps the directory. The launcher re-syncs it every time you press the icon. <code>--check</code> now says: <b>{html.escape(check_out.splitlines()[-1])}</b>.</li>
   <li><b>Round 2, your follow-up: SystemSketch, pyblocks and bbox ui now fill the same box as Claude and Codex.</b> Measured on their icon files, both sit at 0.098–0.902 of the canvas. Only each SVG's frame changed, never a path, and the studio mark is now centred (it sat 25 units high). <b>The honest caveat, measured: the outer size was already within a few percent</b>, so the resize is ~1.5%. Almost all of why ours <i>look</i> smaller is contrast. Options for that are below.</li>
+  <li><b>Round 3, your pick: the hairline (option C) is installed on all three.</b> It sits <i>inside</i> each square, so the outer size stays exactly on the Claude/Codex box. It's added as its own element in the dock version only; the site mark and your drawings are unchanged.</li>
 </ul>
 
 <h2>Your dock</h2>
@@ -234,6 +237,10 @@ pre {{ background:var(--card); border:1px solid var(--line); border-radius:8px; 
 <h2>Why they still read smaller: contrast, not size</h2>
 <div class="card"><img src="{uri('contrast-variants.png')}" alt="Three contrast options next to Claude and Codex"></div>
 <p class="lede">Measured in the 03:51 grab: our square is <code>rgb(30,30,30)</code> on a dock of <code>rgb(18,19,19)</code>, about 1.1:1. Claude and Codex are orange and white. So the eye reads our white drawing, not the square. <b>A</b> is what's installed. <b>B</b> and <b>C</b> are renders only. Pyblocks and bbox ui also have much tighter corners (rx ≈ 4%) than Claude/Codex's rounded squares.</p>
+
+<h2>Round 3 · the hairline, installed</h2>
+<div class="card"><h3>Claude, Codex, then pyblocks, SystemSketch, bbox ui. Top: 48 px (the dock's size, shown 2×) · bottom: 96 px</h3><img src="{uri('outline-preview.png')}" alt="Outlined icons beside Claude and Codex"></div>
+<p class="lede">A 10-unit white line at 28% opacity (about 1 px at 48 px), laid inside the square's edge, after the square and before the drawing. So SystemSketch's wire still crosses over it where it enters the box. Tested: rendering the same frame with and without it gives the identical faintest-pixel extent, so nothing grows past the Claude/Codex box.</p>
 
 <h2>Four redesigns, none of them reached the dock</h2>
 <div class="strip">{lineage}</div>
@@ -255,7 +262,7 @@ pre {{ background:var(--card); border:1px solid var(--line); border-radius:8px; 
 <tr><td><code>scripts/tests/test_dock_icon.py</code></td><td>16 tests. The lookup oracle is <code>Gtk.IconTheme.lookup_icon</code> on a throwaway data dir. The size oracle is Pillow re-measuring the real Claude/Codex icons, never the module's own constant.</td></tr>
 <tr><td><code>assets/bbox-ui.desktop</code></td><td>Comment only. The old one implied the window grouped under this entry. Measured: it doesn't.</td></tr>
 <tr><td><code>assets/bbox-ui-{{16…512}}.png</code></td><td>Deleted. They were unreferenced pre-rendered copies that would now disagree with what's installed. <code>dock_icon.py</code> renders them from the SVG.</td></tr>
-<tr><td><code>~/.local/share/icons/hicolor/*/apps/pyblocks.*</code></td><td>Re-framed in place with <code>--fit-installed pyblocks</code>. A second run is a no-op.</td></tr>
+<tr><td><code>~/.local/share/icons/hicolor/*/apps/pyblocks.*</code></td><td>Re-framed and outlined in place with <code>--fit-installed pyblocks</code>. A second run is a no-op. The previous states are backed up in <code>~/.local/share/pyblocks/desktop-backup-2026-09-22/before-resize/</code> and <code>…/before-outline/</code>.</td></tr>
 <tr><td><code>~/.local/share/icons/hicolor/*/apps/systemsketch.*</code></td><td>Installed live. The old raster is still in <code>/home/bam/systemsketch/assets/systemsketch.png</code> if you want it back.</td></tr>
 </table>
 
@@ -273,7 +280,7 @@ scripts/tests (whole suite)       {html.escape(suite_line)}</pre>
 
 <h2>What's left, and what needs you</h2>
 <div class="ask"><b>Two pinned dock icons for one app.</b> "bbox ui" launches the window, but it lights "SystemSketch". Recommend: keep the SystemSketch slot (GNOME assigns the window to it), rename it <i>bbox studio</i>, move bbox-ui's two site actions onto its right-click, and unpin "bbox ui". <b>If you say nothing:</b> both stay pinned as they are. The lit one now shows the right icon.</div>
-<div class="ask"><b>Contrast: A, B or C?</b> (see "Why they still read smaller"). I recommend <b>B</b>, the lighter square: it's the only one that reads the same size as Claude/Codex at 48 px. It is an edit to your artwork, though, so it's your call. <b>If you say nothing:</b> A, exactly as drawn.</div>
+<div class="ask"><b>Contrast: settled.</b> You picked C. It's installed and in <code>dock_icon.py</code> as <code>OUTLINE</code>, so if you want it stronger or thinner, that's a one-line change.</div>
 <ul>
   <li><b>Not merged.</b> The launcher self-heal only runs from <code>/home/bam/bbox-ui</code> main once this branch lands. The icon itself is already installed.</li>
   <li><b>Deliberately not touched:</b> the archived repo's <code>install_desktop.py</code> (running it would still write the 08-30 raster, but the next launch now heals that), your dock pins, the "SystemSketch" label, and the corner radii.</li>

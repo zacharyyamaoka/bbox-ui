@@ -3,7 +3,7 @@
 
   (default)             Install/refresh every icon in ICONS, then say what GTK resolves.
   --check               Exit 1 if any installed icon differs from its source. Writes nothing.
-  --fit-installed NAME  Resize an icon some OTHER project installed (pyblocks) to the
+  --fit-installed NAME  Resize and outline an icon some OTHER project installed (pyblocks) to the
                         same outer size, in place. Idempotent.
 
 Zach, 2026-09-22: "many agents in the past have tried to update this icon but
@@ -78,6 +78,20 @@ ICONS = {
 # (the root viewBox) changes — never a path — so the artwork stays exactly as
 # drawn. test_dock_icon.py re-measures both reference icons when present.
 TARGET = (0.098, 0.902)
+
+# WHY a hairline: with the size matched, Zach, 2026-09-22 — "Ok yes your right
+# they are the same size. can you please add the hairline outline then?" — picking
+# option C of three rendered in the dock-icon report. The #1E1E1E square sat at
+# ~1.1:1 contrast on the dark dock (measured rgb(30,30,30) on rgb(18,19,19)), so
+# the eye read only the white drawing and the icon looked smaller than Claude's.
+# WHY inset, not a plain stroke: a stroke straddles its edge, and the outer half
+# would grow the icon past TARGET. The outline is its own element laid INSIDE the
+# square's footprint, after the square and before the drawing, so a wire that
+# crosses the edge still paints over it. The square itself is never edited.
+OUTLINE_WIDTH = 10  # in the artwork's own 500-unit space: ~1px at 48px
+OUTLINE = b'fill="none" stroke="#FFFFFF" stroke-opacity="0.28"'
+OUTLINE_MARK = b'data-dock-outline="1"'
+_SQUARE = re.compile(rb'<rect\b[^>]*\sfill="#1E1E1E"[^>]*/>')
 
 # hicolor's own fixed sizes up to 512, plus the SVG. WHY PNGs as well as the
 # SVG: hicolor's index.theme caps scalable/apps at MaxSize=256, so a 512 lookup
@@ -174,6 +188,34 @@ def fit(svg: bytes) -> bytes:
     return svg[: tag.start()] + root + svg[tag.end() :]
 
 
+def outline(svg: bytes) -> bytes:
+    """Add the inset hairline to the artwork's dark square. Already outlined → unchanged."""
+    if OUTLINE_MARK in svg:
+        return svg
+    square = _SQUARE.search(svg)
+    if square is None:
+        raise ValueError('no <rect fill="#1E1E1E"> square to outline')
+    tag = square.group(0)
+
+    def number(name: bytes) -> float:
+        value = _attribute(tag, name)
+        return float(value) if value else 0.0
+
+    half = OUTLINE_WIDTH / 2
+    x, y, width, height, radius = (number(name) for name in (b"x", b"y", b"width", b"height", b"rx"))
+    transform = _attribute(tag, b"transform")
+    ring = (
+        f'<rect {OUTLINE_MARK.decode()} x="{x + half:g}" y="{y + half:g}" width="{width - OUTLINE_WIDTH:g}" '
+        f'height="{height - OUTLINE_WIDTH:g}" rx="{max(radius - half, 0):g}" stroke-width="{OUTLINE_WIDTH:g}" '
+    ).encode() + OUTLINE + (b' transform="' + transform + b'"' if transform else b"") + b"/>"
+    return svg[: square.end()] + b"\n" + ring + svg[square.end() :]
+
+
+def dress(svg: bytes) -> bytes:
+    """Artwork → dock rendition: the hairline, then the Claude/Codex frame."""
+    return fit(outline(svg))
+
+
 def is_fitted(svg: bytes, tolerance: float = 0.004) -> bool:
     x, y, width, _height = view_box(svg)
     left, top, right, bottom = visible_bounds(svg)
@@ -243,7 +285,7 @@ def refresh(root: Path) -> None:
 
 
 def expected(icons: dict[str, Path] | None = None) -> dict[str, dict[str, bytes]]:
-    return {name: wanted(name, fit(source.read_bytes())) for name, source in (icons or ICONS).items()}
+    return {name: wanted(name, dress(source.read_bytes())) for name, source in (icons or ICONS).items()}
 
 
 def sync(home: Path | None = None, icons: dict[str, Path] | None = None, *, notify: bool = True) -> list[str]:
@@ -256,19 +298,23 @@ def sync(home: Path | None = None, icons: dict[str, Path] | None = None, *, noti
 
 
 def fit_installed(name: str, home: Path | None = None, *, notify: bool = True) -> list[str]:
-    """Resize an icon another project installed, from its own installed SVG. [] if already fitted.
+    """Dress an icon another project installed, from its own installed SVG. [] if already dressed.
 
     WHY in place and never from a source: pyblocks' logo was installed outside
     any repo (2026-09-22), so the installed SVG is the only copy there is.
-    WHY `is_fitted` first: re-measuring an already-fitted frame could move it by
-    a rounding hair every run; a fitted icon is left byte-for-byte alone.
+    WHY `is_fitted` before re-fitting: re-measuring an already-fitted frame
+    could move it by a rounding hair every run; a dressed icon is left
+    byte-for-byte alone.
     """
     root = hicolor(home or data_home())
     source = root / "scalable" / "apps" / f"{name}.svg"
-    svg = source.read_bytes()
-    if is_fitted(svg):
+    original = source.read_bytes()
+    svg = outline(original)
+    if not is_fitted(svg):
+        svg = fit(svg)
+    if svg == original:
         return []
-    changed = write(root, name, wanted(name, fit(svg)))
+    changed = write(root, name, wanted(name, svg))
     if changed and notify:
         refresh(root)
     return changed
@@ -296,7 +342,7 @@ def main() -> int:
     root = hicolor(data_home())
     if arguments.fit_installed:
         changed = fit_installed(arguments.fit_installed)
-        print(f"re-framed {arguments.fit_installed}: {len(changed)} files" if changed else f"{arguments.fit_installed} already matches the reference size")
+        print(f"re-framed {arguments.fit_installed}: {len(changed)} files" if changed else f"{arguments.fit_installed} is already sized and outlined")
         return 0
     if arguments.check:
         differences = [path for name, files in expected().items() for path in stale(root, name, files)]
