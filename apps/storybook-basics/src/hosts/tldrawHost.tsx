@@ -77,7 +77,7 @@ import {
 
 import type { BlockSide } from "../components/port.layout";
 import { DEFAULT_TRACE_ROUTING, OPPOSITE_DIR, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "../components/trace.layout";
-import { Trace, traceRingGapPx, traceRouteEnd, traceRouteStart } from "../components/trace";
+import { Trace, traceLinecapOf, traceRingGapPx, traceRouteEnd, traceRouteStart } from "../components/trace";
 import { ancestorsOf } from "../scene/region";
 import { portKey } from "../scene/scene";
 import { sceneWires } from "../scene/sceneWires";
@@ -557,12 +557,12 @@ function WireOverlay() {
           // at the port"). Under the shapes a centre-bound wire would hide
           // behind an opaque dot but show through a hollow one, and the two
           // hosts would disagree about where a cable ends.
-          from: traceRouteStart({ x: from.x, y: from.y, dir: from.side as TraceDir }, traceRingGapPx(from.ringRadius)),
+          from: traceRouteStart({ x: from.x, y: from.y, dir: from.side as TraceDir }, traceRingGapPx(from.ringRadius, undefined, traceLinecapOf(wire.variant))),
           // The dot's measured centre, with no per-cable offset — Zach's
           // "1 connection point in the center" (2026-09-19). The duplicate
           // fan this host used to apply is gone for the same reason it is
           // gone from `WireLayer`.
-          to: traceRouteEnd({ x: to.x, y: to.y, dir: OPPOSITE_DIR[to.side as TraceDir] }, traceRingGapPx(to.ringRadius)),
+          to: traceRouteEnd({ x: to.x, y: to.y, dir: OPPOSITE_DIR[to.side as TraceDir] }, traceRingGapPx(to.ringRadius, undefined, traceLinecapOf(wire.variant))),
           variant: wire.variant,
           routing: wire.routing ?? DEFAULT_TRACE_ROUTING,
           markerEnd: wire.markerEnd,

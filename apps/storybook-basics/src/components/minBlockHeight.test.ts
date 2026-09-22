@@ -126,4 +126,26 @@ describe("floorMinHeight — the floor never lowers a caller's own min-height", 
   it("hands a non-numeric caller value to CSS max()", () => {
     expect(floorMinHeight("10rem", 146)).toBe("max(10rem, 146px)");
   });
+  it("hands lengths and percentages to CSS max(), unit or not", () => {
+    expect(floorMinHeight("50%", 146)).toBe("max(50%, 146px)");
+    expect(floorMinHeight("0", 146)).toBe("max(0, 146px)");
+    expect(floorMinHeight("12.5vh", 146)).toBe("max(12.5vh, 146px)");
+  });
+  it("hands math and substitution functions to CSS max()", () => {
+    expect(floorMinHeight("calc(100% - 2rem)", 146)).toBe("max(calc(100% - 2rem), 146px)");
+    expect(floorMinHeight("clamp(4rem, 20vh, 20rem)", 146)).toBe("max(clamp(4rem, 20vh, 20rem), 146px)");
+    expect(floorMinHeight("var(--block-min)", 146)).toBe("max(var(--block-min), 146px)");
+  });
+  // `max(max-content, 146px)` is invalid CSS math: the browser drops the
+  // whole declaration, losing the caller's value AND the port floor.
+  it("keeps the floor px for an intrinsic sizing keyword, never max(keyword, …)", () => {
+    for (const keyword of ["auto", "min-content", "max-content", "fit-content", "fit-content(10rem)", " max-content "]) {
+      expect(floorMinHeight(keyword, 146), keyword).toBe(146);
+    }
+  });
+  it("keeps the floor px for a CSS-wide keyword", () => {
+    for (const keyword of ["inherit", "initial", "unset", "revert", "revert-layer"]) {
+      expect(floorMinHeight(keyword, 146), keyword).toBe(146);
+    }
+  });
 });

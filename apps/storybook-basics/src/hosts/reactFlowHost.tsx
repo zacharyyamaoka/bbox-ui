@@ -888,6 +888,15 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
       onWireGeometryRef.current?.(wireId, null);
     }
   }, [kitRoutes]);
+  // …and all of them when the host unmounts, as `WireLayer` does: a cache
+  // owner above a conditionally-mounted host outlives it.
+  useLayoutEffect(
+    () => () => {
+      for (const wireId of reportedRef.current) onWireGeometryRef.current?.(wireId, null);
+      reportedRef.current.clear();
+    },
+    [],
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {

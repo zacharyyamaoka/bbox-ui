@@ -189,7 +189,17 @@ function sameCrossings(a: readonly RegionPoint[], b: readonly RegionPoint[]): bo
 function useWallCrossings(benchRef: RefObject<HTMLDivElement | null>, regionId: string, liveWireIds: readonly string[], active: boolean) {
   const [paths, setPaths] = useState<Record<string, readonly Point[]>>({});
   const [crossings, setCrossings] = useState<RegionPoint[]>([]);
-  const onWireGeometry = useCallback((wireId: string, points: readonly Point[]) => setPaths((previous) => ({ ...previous, [wireId]: points })), []);
+  // `null` is `WireLayer`'s retraction — the wire is no longer drawn — so
+  // the entry is DELETED, never stored as a tombstone the lookup below
+  // would have to step around.
+  const onWireGeometry = useCallback((wireId: string, points: readonly Point[] | null) => {
+    setPaths((previous) => {
+      if (points) return { ...previous, [wireId]: points };
+      if (!(wireId in previous)) return previous;
+      const { [wireId]: _dropped, ...rest } = previous;
+      return rest;
+    });
+  }, []);
   useLayoutEffect(() => {
     const bench = benchRef.current;
     const frame = bench?.querySelector<HTMLElement>(`[data-slot="region-frame"][data-region-id="${regionId}"]`);

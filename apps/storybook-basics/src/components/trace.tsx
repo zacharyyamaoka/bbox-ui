@@ -638,15 +638,30 @@ export const TRACE_TERMINAL_GAP = 16;
  * fixed number was the bug; the geometry the line has to meet is the
  * dot's, so a host measures that radius and hands it here.
  *
- * `+ strokeWidth / 2` is the round cap's own reach past the path's last
- * point: without it the cap would paint a pixel INTO the ring, and every
- * DOM-canvas wire paints above the dots (`wireLayer.tsx`'s D-B1 note). With
- * it the ink stops exactly on the ring — a `butt`-capped async dash stops
- * `strokeWidth / 2` (1px) short, inside the ≤1px tolerance Zach's "touch"
- * is measured with.
+ * The pull-back depends on the line CAP, because the cap is ink past the
+ * path's last point and the INK is what has to touch the ring:
+ *   - `round` / `square` reach `strokeWidth / 2` past the end, so the path
+ *     stops that much further back — without it the cap would paint a pixel
+ *     INTO the ring, and every DOM-canvas wire paints above the dots
+ *     (`wireLayer.tsx`'s D-B1 note);
+ *   - `butt` reaches nothing past the end, so the path stops ON the ring.
+ * WHY per cap (re-judge of d97f5ec, 2026-09-22): the first version added
+ * the half-stroke for every cap, which left the butt-capped async dash a
+ * visible 1px of daylight short of its ring — and the parity oracle hid it
+ * by adding the same half-stroke back. A host that knows the wire's
+ * variant passes {@link traceLinecapOf}'s answer; the default stays
+ * `round`, the cap of every solid cable.
  */
-export function traceRingGapPx(ringOuterRadiusPx: number, strokeWidth: number = TRACE_STROKE_WIDTH_PX): number {
-  return ringOuterRadiusPx + strokeWidth / 2;
+export type TraceLinecap = "round" | "butt" | "square";
+
+export function traceRingGapPx(ringOuterRadiusPx: number, strokeWidth: number = TRACE_STROKE_WIDTH_PX, linecap: TraceLinecap = "round"): number {
+  return linecap === "butt" ? ringOuterRadiusPx : ringOuterRadiusPx + strokeWidth / 2;
+}
+
+/** The cap a variant paints with — `traceStrokeStyle`'s own answer, so the
+ *  pull-back and the paint can never disagree about which cap is drawn. */
+export function traceLinecapOf(variant: TraceVariant = "data", animated = false): TraceLinecap {
+  return traceStrokeStyle(variant, 0, animated).strokeLinecap;
 }
 
 /**
@@ -662,8 +677,12 @@ export function traceDefaultGapPx({
   markerEnd = DEFAULT_TRACE_MARKER_END,
   terminalRadius = TRACE_TERMINAL_RADIUS,
   strokeWidth = TRACE_STROKE_WIDTH_PX,
-}: { markerEnd?: TraceMarkerEnd; terminalRadius?: number; strokeWidth?: number } = {}): number {
-  return markerEnd === "arrow" ? TRACE_TERMINAL_GAP : traceRingGapPx(terminalRadius + TRACE_TERMINAL_RING_PX / 2, strokeWidth);
+  variant = "data",
+  animated = false,
+}: { markerEnd?: TraceMarkerEnd; terminalRadius?: number; strokeWidth?: number; variant?: TraceVariant; animated?: boolean } = {}): number {
+  return markerEnd === "arrow"
+    ? TRACE_TERMINAL_GAP
+    : traceRingGapPx(terminalRadius + TRACE_TERMINAL_RING_PX / 2, strokeWidth, traceLinecapOf(variant, animated));
 }
 
 /** How many points a curved route is sampled into when a caller asks for a
@@ -1017,7 +1036,7 @@ export function Trace({
   // on a bent curve or a degenerate slanted chord (see that function's doc
   // comment), and a terminal glyph that trusted the table over the actual
   // geometry would repeat the exact bug this component exists to fix.
-  const resolvedGap = gap ?? traceDefaultGapPx({ markerEnd, terminalRadius, strokeWidth });
+  const resolvedGap = gap ?? traceDefaultGapPx({ markerEnd, terminalRadius, strokeWidth, variant, animated });
   const { geometry, showFromDirection, showToDirection } = useMemo(() => {
     const request: TraceRouteRequest = {
       from,

@@ -36,7 +36,9 @@ function outerSpreadPx(el: Element): number {
 export function paintedPullBackPx(dot: Element, line: SVGPathElement): number {
   const painted = paintedDot(dot);
   const style = getComputedStyle(line);
-  const cap = style.strokeLinecap === "round" ? Number.parseFloat(style.strokeWidth) / 2 : 0;
+  // Round and square caps both reach half a stroke past the path's end; a
+  // butt cap reaches nothing — the ink stops exactly at the endpoint.
+  const cap = style.strokeLinecap === "round" || style.strokeLinecap === "square" ? Number.parseFloat(style.strokeWidth) / 2 : 0;
   return painted.getBoundingClientRect().width / 2 + outerSpreadPx(painted) + cap;
 }
 

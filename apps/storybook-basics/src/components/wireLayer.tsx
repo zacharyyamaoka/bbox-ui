@@ -62,7 +62,7 @@ import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "
 import type { ElbowRect } from "./elbow/index";
 import type { BlockSide } from "./port.layout";
 import { portDotRingRadiusPx, usePortVariant } from "../skin/portVariants";
-import { Trace, traceRingGapPx, traceRouteEnd, traceRouteStart } from "./trace";
+import { Trace, traceLinecapOf, traceRingGapPx, traceRouteEnd, traceRouteStart } from "./trace";
 import { TraceBadge } from "./traceBadge";
 import { DEFAULT_TRACE_ROUTING, OPPOSITE_DIR, type Point, type TraceDir, type TraceRouting, type TraceTerminalSpec } from "./trace.layout";
 import { keepOutsFor, type KeepOutRect, type Wire, type WireEnd } from "./wiring";
@@ -299,11 +299,13 @@ export function resolveWires(container: HTMLElement, wires: readonly Wire[], spa
     // collapsed stand-in, an `md` function port, a pinned variant).
     const from: TraceTerminalSpec = traceRouteStart(
       { ...centreOf(fromDot, space), dir: fromEdge as TraceDir },
-      traceRingGapPx(portDotRingRadiusPx(paintedDotOf(fromDot))),
+      // Per the wire's own cap: a butt-capped async dash ends ON the ring,
+      // a round cap half a stroke short of it (`traceRingGapPx`'s doc).
+      traceRingGapPx(portDotRingRadiusPx(paintedDotOf(fromDot)), undefined, traceLinecapOf(wire.variant)),
     );
     const to: TraceTerminalSpec = traceRouteEnd(
       { ...centreOf(toDot, space), dir: OPPOSITE_DIR[toEdge as TraceDir] },
-      traceRingGapPx(portDotRingRadiusPx(paintedDotOf(toDot))),
+      traceRingGapPx(portDotRingRadiusPx(paintedDotOf(toDot)), undefined, traceLinecapOf(wire.variant)),
     );
     const routing = wire.routing ?? DEFAULT_TRACE_ROUTING;
     if (routing !== "elbow") {
@@ -443,6 +445,18 @@ export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: Wi
       onWireGeometryRef.current?.(wireId, null);
     }
   }, [state]);
+
+  // …and every one of them when the layer itself goes (re-judge of d97f5ec):
+  // a caller that caches polylines by id — the wall-crossing glue — can
+  // outlive a conditionally-mounted layer, and would otherwise keep every
+  // last route of a layer that no longer exists.
+  useLayoutEffect(
+    () => () => {
+      for (const wireId of Object.keys(reportedRef.current)) onWireGeometryRef.current?.(wireId, null);
+      reportedRef.current = {};
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     let cancelled = false;

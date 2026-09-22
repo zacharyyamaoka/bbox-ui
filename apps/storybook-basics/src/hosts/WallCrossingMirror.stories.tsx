@@ -119,6 +119,9 @@ function Mirror({ edits = false }: { edits?: boolean }) {
   // ONE scene: the React Flow pane writes drags back into it, and the DOM
   // pane re-renders from it — static, but never stale.
   const [scene, setScene] = useState(MIRROR_SCENE);
+  // Each host can be unmounted while this component — the owner of both
+  // crossing caches and both recorders — lives on (`edits` only).
+  const [mounted, setMounted] = useState({ dom: true, reactFlow: true });
 
   const [domPane, setDomPane] = useState<HTMLDivElement | null>(null);
   const [reactFlowPane, setReactFlowPane] = useState<HTMLDivElement | null>(null);
@@ -152,6 +155,12 @@ function Mirror({ edits = false }: { edits?: boolean }) {
           <Button size="sm" variant="outline" onClick={() => setScene((current) => ({ ...current, edges: current.edges.filter((edge) => edge.id !== kid("e-in")) }))}>
             Remove e-in
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setMounted((current) => ({ ...current, dom: !current.dom }))}>
+            {mounted.dom ? "Unmount" : "Mount"} DOM Canvas
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setMounted((current) => ({ ...current, reactFlow: !current.reactFlow }))}>
+            {mounted.reactFlow ? "Unmount" : "Mount"} React Flow
+          </Button>
         </div>
       )}
       <figure style={{ margin: 0 }}>
@@ -159,8 +168,15 @@ function Mirror({ edits = false }: { edits?: boolean }) {
           <span style={{ fontWeight: 600 }}>DOM Canvas</span>
           <span className="text-muted-foreground"> — static, the control</span>
         </figcaption>
-        <div ref={domRef} data-pane="dom" style={{ border: "1px solid var(--border)" }}>
-          <DomCanvas scene={scene} onSceneChange={setScene} width={PANE.w} height={PANE.h} decorate={domDecorate} onWireGeometry={domRecorder.onWireGeometry} />
+        <div
+          ref={domRef}
+          data-pane="dom"
+          data-crossing-wires={domCrossings.trackedWireIds.join(",")}
+          style={{ border: "1px solid var(--border)", minWidth: PANE.w, minHeight: PANE.h }}
+        >
+          {mounted.dom && (
+            <DomCanvas scene={scene} onSceneChange={setScene} width={PANE.w} height={PANE.h} decorate={domDecorate} onWireGeometry={domRecorder.onWireGeometry} />
+          )}
         </div>
       </figure>
       <figure style={{ margin: 0 }}>
@@ -168,16 +184,23 @@ function Mirror({ edits = false }: { edits?: boolean }) {
           <span style={{ fontWeight: 600 }}>React Flow</span>
           <span className="text-muted-foreground"> — the twin: drag a box by its header</span>
         </figcaption>
-        <div ref={reactFlowRef} data-pane="react-flow" style={{ border: "1px solid var(--border)" }}>
-          <ReactFlowHost
-            scene={scene}
-            onSceneChange={setScene}
-            width={PANE.w}
-            height={PANE.h}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-            decorate={reactFlowDecorate}
-            onWireGeometry={reactFlowRecorder.onWireGeometry}
-          />
+        <div
+          ref={reactFlowRef}
+          data-pane="react-flow"
+          data-crossing-wires={reactFlowCrossings.trackedWireIds.join(",")}
+          style={{ border: "1px solid var(--border)", minWidth: PANE.w, minHeight: PANE.h }}
+        >
+          {mounted.reactFlow && (
+            <ReactFlowHost
+              scene={scene}
+              onSceneChange={setScene}
+              width={PANE.w}
+              height={PANE.h}
+              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+              decorate={reactFlowDecorate}
+              onWireGeometry={reactFlowRecorder.onWireGeometry}
+            />
+          )}
         </div>
       </figure>
     </div>
@@ -395,6 +418,60 @@ export const StaleCrossingsClear: Story = {
         },
         { timeout: 5000 },
       );
+    });
+  },
+};
+
+/** The wire ids a pane's crossing glue currently holds a polyline for. */
+function crossingWiresOf(pane: HTMLElement): string[] {
+  const raw = pane.dataset.crossingWires ?? "";
+  return raw === "" ? [] : raw.split(",");
+}
+
+/**
+ * Unmounting a host retracts every route it had reported, so a cache owner
+ * that outlives it — here the mirror itself, which holds both panes'
+ * crossing glue and recorders — is left holding nothing. Re-judge of
+ * d97f5ec: the retraction used to fire only on a route-state change, and a
+ * conditional unmount is not one, so the owner kept every last route.
+ */
+export const UnmountRetracts: Story = {
+  name: "Mirror — unmounting a host retracts its routes",
+  render: () => <Mirror edits />,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole("button", { name: "Unmount React Flow" });
+    const { dom, reactFlow } = panes(canvasElement);
+
+    await step("Mounted: each pane's owner holds all six routes", async () => {
+      await waitFor(
+        () => {
+          for (const pane of [dom, reactFlow]) {
+            expect(crossingWiresOf(pane)).toEqual([...WIRE_IDS].sort());
+            expect(Object.keys(recordedWirePoints(pane)).sort()).toEqual([...WIRE_IDS].sort());
+          }
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    await step("Unmount React Flow: its owner is emptied, the DOM canvas's is untouched", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Unmount React Flow" }));
+      await waitFor(() => {
+        expect(reactFlow.querySelector('[data-host="react-flow"]')).toBeNull();
+        expect(crossingWiresOf(reactFlow)).toEqual([]);
+        expect(recordedWirePoints(reactFlow)).toEqual({});
+        expect(crossingWiresOf(dom)).toEqual([...WIRE_IDS].sort());
+      });
+    });
+
+    await step("Unmount the DOM canvas: its owner is emptied too", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Unmount DOM Canvas" }));
+      await waitFor(() => {
+        expect(dom.querySelector('[data-host="dom-canvas"]')).toBeNull();
+        expect(crossingWiresOf(dom)).toEqual([]);
+        expect(recordedWirePoints(dom)).toEqual({});
+      });
     });
   },
 };
