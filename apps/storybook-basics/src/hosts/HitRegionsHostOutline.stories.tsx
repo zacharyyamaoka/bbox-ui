@@ -51,6 +51,7 @@ import {
 } from "./hostOutline";
 import { ReactFlowHost, reactFlowDragStartsAt } from "./reactFlowHost";
 import { contentOwnsPress, TldrawHost } from "./tldrawHost";
+import { branchNode } from "../scene/region.branch";
 
 const meta = {
   title: "Hosts/Hit Region Outline",
@@ -73,6 +74,14 @@ const HOST_BLUE = "#2f80ed";
 const STAGE_W = 1120;
 const STAGE_H = 430;
 
+// The loop has NO arms by design (`FOR_LOOP_PRESET.arms: []`, blockRegion.tsx
+// "a `for`/`while` region has no arms at all") — its body IS the frame, so it
+// can never supply a folding-chevron. The one `.nodrag` chevron this scene
+// needs (the "branch arm chevron" probe below) comes from a small BRANCH
+// region instead — the same split `HitRegionsBlockRegion.stories.tsx` already
+// draws between its own "loop" and "branch" regions.
+const SEL = branchNode({ id: "sel", name: "Selector", position: { x: 24, y: 190 }, w: 220, conditions: ["ready"], arms: [{ id: "if", title: "if ready:", open: false }] });
+
 const SCENE: HostScene = {
   nodes: [
     { id: "load", type: "block", position: { x: 24, y: 70 }, data: { name: "load", view: "port", w: 130, h: 84, ports: { right: ["rows"] } } },
@@ -90,6 +99,7 @@ const SCENE: HostScene = {
       data: { name: "proc", view: "expanded", w: 240, h: 230, ports: { left: ["in"] }, anchorStart: ["left"] },
     },
     { id: "kid", type: "block", parentId: "proc", position: { x: 0, y: 0 }, data: { name: "kid", view: "port", w: 110, h: 62, ports: { left: ["in"] } } },
+    ...SEL,
   ],
   edges: [{ id: "e-rows", source: "load", sourceHandle: "rows", target: "loop", targetHandle: "Iterable" }],
 };
@@ -356,7 +366,14 @@ function probes(bench: HTMLElement): { name: string; at: () => { x: number; y: n
     { name: "port dot", at: () => centre(required(bench, '[data-block-id="load"] [data-port-id="rows"] [data-slot="port-dot"]')) },
     // A `.nodrag` subtree: the probe that makes "React Flow never says
     // content" a claim that can fail (it is the one place `.nodrag` sits).
-    { name: "corner card chevron", at: () => centre(required(card(), '[data-slot="folding-chevron"]')) },
+    // WHY this comes from the "sel" BRANCH, not "loop"'s corner card: a
+    // folding-chevron is an ARM's own header control (`blockRegion.tsx`'s
+    // `ArmRow`, a sibling of the corner block, never its descendant), and a
+    // `for`/`while` loop has no arms at all by design (`FOR_LOOP_PRESET.arms:
+    // []`) — so `[data-block-id="loop"]` can never contain one. "sel" exists
+    // for exactly this probe, the same split `HitRegionsBlockRegion.stories.tsx`
+    // already draws between its own "loop" and "branch" regions.
+    { name: "branch arm chevron", at: () => centre(required(bench, '[data-region-id="sel"] [data-arm-id="if"] [data-slot="folding-chevron"]')) },
     {
       name: "rail empty margin",
       at: () => {
@@ -460,8 +477,8 @@ export const Playground: Story = {
     await expect(rf["port dot"]).toBe("none");
     // The fold chevron (`.nodrag`): tldraw's contentOwnsPress hands it to the
     // chevron; React Flow refuses the drag and says nothing more.
-    await expect(tl["corner card chevron"]).toBe("owned");
-    await expect(rf["corner card chevron"]).toBe("none");
+    await expect(tl["branch arm chevron"]).toBe("owned");
+    await expect(rf["branch arm chevron"]).toBe("none");
 
     // xyflow's `!event.button`: the SAME valid header refuses a right or
     // middle press. Asked of the real mounted React Flow node.

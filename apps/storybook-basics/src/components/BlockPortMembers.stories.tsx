@@ -26,10 +26,10 @@ import { Block } from "./block";
 import { BlockPort } from "./blockPort";
 import { BlockPortMembers, type BlockMemberHeaders, type BlockPortMember, type BlockPortMembersView } from "./blockPortMembers";
 import { Switch } from "./switch";
-import { TRACE_TERMINAL_GAP } from "./trace";
 import { DIR_VECTOR, OPPOSITE_DIR, type TraceDir } from "./trace.layout";
 import type { Wire } from "./wiring";
 import { WireLayer } from "./wireLayer";
+import { paintedPullBackPx } from "./wireEnds.acceptance";
 
 const meta = {
   title: "Components/Blocks/BlockPortMembers/Collapsed Members",
@@ -321,13 +321,26 @@ function toScreen(svg: SVGSVGElement, x: number, y: number): { x: number; y: num
 }
 
 /** The TERMINAL the layer resolved for a wire's `to` end: the drawn line's
- *  last point, pushed forward by `Trace`'s documented `TRACE_TERMINAL_GAP`
- *  pull-back along the arrival direction (`BlockWiring.stories.tsx`'s
- *  `expectTerminalOnDot`, the same derivation). */
-function toTerminalOf(svg: SVGSVGElement, line: SVGPathElement, railEdge: TraceDir): { x: number; y: number } {
+ *  last point, pushed forward by its pull-back along the arrival direction
+ *  (`BlockWiring.stories.tsx`'s `expectTerminalOnDot`, the same derivation).
+ *
+ * WHY `paintedPullBackPx(dot, line)` and not the old fixed `TRACE_TERMINAL_GAP`:
+ * since 2026-09-22 a host ends every wire ON its dot's painted ring, not a
+ * constant 16px short of it (Zach: "make the trace end exactly at the port
+ * … right now there is this spacing which is not desirable!" —
+ * `wireLayer.tsx`'s `resolveWires`, `traceRingGapPx`). This helper kept the
+ * stale constant after that change landed, so it reconstructed a terminal
+ * ~7-9px off the real one — caught by `expectWithin`'s own tolerance, not a
+ * timing race (`wireEnds.acceptance.ts`'s doc comment names the same trap).
+ * `paintedPullBackPx` measures the pull-back off the rendered pixels
+ * instead of a constant, matching every sibling story
+ * (`ControlFlowHostEdges.stories.tsx`, `ValuePreset.stories.tsx`) that
+ * already reads it there. */
+function toTerminalOf(svg: SVGSVGElement, line: SVGPathElement, railEdge: TraceDir, dot: HTMLElement): { x: number; y: number } {
   const dir = OPPOSITE_DIR[railEdge];
   const end = line.getPointAtLength(line.getTotalLength());
-  return toScreen(svg, end.x + DIR_VECTOR[dir].x * TRACE_TERMINAL_GAP, end.y + DIR_VECTOR[dir].y * TRACE_TERMINAL_GAP);
+  const pullBack = paintedPullBackPx(dot, line);
+  return toScreen(svg, end.x + DIR_VECTOR[dir].x * pullBack, end.y + DIR_VECTOR[dir].y * pullBack);
 }
 
 // The cable runs to Func 1's first left port. `through` names the parent,
@@ -385,7 +398,7 @@ async function expectWireOnMemberDot(canvasElement: HTMLElement, wall: "parent" 
 
   // The trace's terminal lands on that dot, within 0.5px.
   await waitFor(() => {
-    const terminal = toTerminalOf(svg, line, "left");
+    const terminal = toTerminalOf(svg, line, "left", dot);
     const now = centreOf(dot);
     expectWithin(terminal.x, now.x, 0.5, "wire terminal x vs the dot centre");
     expectWithin(terminal.y, now.y, 0.5, "wire terminal y vs the dot centre");
