@@ -123,7 +123,7 @@ const NESTED_SCENE: HostScene = {
       id: "loop",
       type: REGION_NODE_TYPE,
       position: { x: 190, y: 32 },
-      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 420, h: 330 },
+      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque", presentation: "expanded" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 420, h: 330 },
     },
     { id: "br", type: REGION_NODE_TYPE, parentId: "loop", position: { x: 36, y: 86 }, data: { name: "Branch", region: { kind: "branch" }, ports: { left: ["fast"] }, w: 330 } },
     { id: "if", type: ARM_NODE_TYPE, parentId: "br", position: { x: 0, y: 0 }, data: { name: "if fast:", arm: { open: true, h: 96 } } },
@@ -573,5 +573,98 @@ export const NestedOpaque: Story = {
     await expectWirePainted(canvasElement, "e-out");
     expect(canvasElement.querySelector('[data-wire-id="e-int"]'), "an interior cable is hidden").toBeNull();
     expect(canvasElement.querySelector('[data-wire-id="e-iter"]'), "the region's private cable is hidden").toBeNull();
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* The schema — a legacy record keeps its meaning (Codex audit)          */
+/* ------------------------------------------------------------------ */
+
+/** A record written before 2026-09-22: `view: "opaque"` alone, which then
+ *  meant the folded card. No `presentation` — that absence IS the legacy
+ *  marker (`RegionData.presentation`). */
+const LEGACY_SCENE: HostScene = {
+  nodes: TOGGLE_SCENE.nodes.map((node) =>
+    node.id === "loop" ? { ...node, data: { ...node.data, region: { kind: "loop" as const, loop: "for" as const, view: "opaque" as const } } } : node,
+  ),
+  edges: TOGGLE_SCENE.edges,
+};
+
+/** A NEW Expanded Opaque record, serialised and loaded back the way a file
+ *  would be — the discriminator must survive the trip. */
+const ROUND_TRIPPED_SCENE = JSON.parse(
+  JSON.stringify({
+    ...TOGGLE_SCENE,
+    nodes: TOGGLE_SCENE.nodes.map((node) =>
+      node.id === "loop" ? { ...node, data: { ...node.data, region: { kind: "loop", loop: "for", view: "opaque", presentation: "expanded" } } } : node,
+    ),
+  }),
+) as HostScene;
+
+export const LegacyOpaqueRecord: Story = {
+  name: "A legacy opaque record renders Port; a new one round-trips",
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div data-bench="legacy">
+        <StatefulDomCanvas initial={LEGACY_SCENE} />
+      </div>
+      <div data-bench="round-trip">
+        <StatefulDomCanvas initial={ROUND_TRIPPED_SCENE} />
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const legacy = required<HTMLElement>(canvasElement, '[data-bench="legacy"]', "the legacy bench");
+    await waitFor(() => expect(regionOf(legacy, "loop").getAttribute("data-region-view")).toBe("port"));
+    expect(regionOf(legacy, "loop").querySelector('[data-slot="region-opaque-face"]'), "not Expanded Opaque").toBeNull();
+    expectMembersHidden(legacy);
+    // Its P/E selector already says Port — the two agree on what the record means.
+    expect((await within(legacy).findByRole("combobox", { name: "Region view" })).textContent).toContain("Port");
+
+    const roundTrip = required<HTMLElement>(canvasElement, '[data-bench="round-trip"]', "the round-trip bench");
+    await expectRegionOpaque(roundTrip, "loop");
+    required(regionOf(roundTrip, "loop"), '[data-slot="region-opaque-face"]', "the Expanded Opaque face");
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* Loaded straight into Expanded Opaque — the size holds (Codex audit)   */
+/* ------------------------------------------------------------------ */
+
+/** A HUG-sized group (no `h`) that starts in Expanded Opaque, so nothing has
+ *  ever drawn its corner expanded. */
+const DIRECT_OPAQUE_SCENE: HostScene = {
+  nodes: [
+    {
+      id: "grp",
+      type: REGION_NODE_TYPE,
+      position: { x: 40, y: 24 },
+      data: { name: "Group", region: { kind: "group", view: "opaque", presentation: "expanded" }, ports: { left: ["in"], right: ["out"] }, w: 320 },
+    },
+    { id: "inner", type: "block", parentId: "grp", position: { x: 24, y: 16 }, data: { name: "inner", view: "simple", w: 120, h: 44 } },
+  ],
+  edges: [],
+};
+
+export const DirectOpaqueKeepsItsSize: Story = {
+  name: "Loaded in Expanded Opaque, the box holds across opaque → expanded → opaque",
+  render: () => <StatefulDomCanvas initial={DIRECT_OPAQUE_SCENE} />,
+  play: async ({ canvasElement }) => {
+    await expectRegionOpaque(canvasElement, "grp");
+    const faceOf = () =>
+      required<HTMLElement>(regionOf(canvasElement, "grp"), ':scope > [data-slot="region-opaque-face"]', "the opaque face").getBoundingClientRect();
+    const first = faceOf();
+
+    await userEvent.click(toggleOf(canvasElement, "grp"));
+    await expectRegionExpanded(canvasElement, "grp");
+    const frame = required<HTMLElement>(regionOf(canvasElement, "grp"), ':scope > [data-slot="region-frame"]', "the frame").getBoundingClientRect();
+    expect(Math.abs(frame.height - first.height), "expanded keeps the height it was loaded at").toBeLessThanOrEqual(1);
+    expect(Math.abs(frame.width - first.width)).toBeLessThanOrEqual(1);
+
+    await userEvent.click(toggleOf(canvasElement, "grp"));
+    await expectRegionOpaque(canvasElement, "grp");
+    const again = faceOf();
+    expect(Math.abs(again.height - first.height), "opaque again keeps the same height").toBeLessThanOrEqual(1);
+    expect(Math.abs(again.width - first.width)).toBeLessThanOrEqual(1);
   },
 };

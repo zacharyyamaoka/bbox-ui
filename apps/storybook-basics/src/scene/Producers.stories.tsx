@@ -284,7 +284,7 @@ const OPAQUE_SCENE: HostScene = {
       position: { x: 200, y: 24 },
       // 330 tall so the expanded frame holds `merge` whole (at 268 it hangs
       // out of the frame's bottom edge once the loop is opened).
-      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 400, h: 330 },
+      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque", presentation: "expanded" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 400, h: 330 },
     },
     { id: "merge", type: "block", parentId: "loop", position: { x: 36, y: 86 }, data: { name: "merge", view: "port", w: 156, h: 106, ports: { left: ["pose", "other"], right: ["Pose"] } } },
   ],

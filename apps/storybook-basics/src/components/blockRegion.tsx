@@ -204,9 +204,22 @@ export interface BlockRegionProps {
    * a host's drag filter reads is the host's business.
    */
   toggleClassName?: string;
-  /** The Expanded Opaque face's footer — a host states what the face hides
-   *  (`nodeViews.tsx`'s `region-hidden`). Omitted = no footer. */
-  opaqueFooter?: ReactNode;
+  /** The footer of every view that hides the inside — the Expanded Opaque
+   *  face AND the Port card: a host states what is hidden (`nodeViews.tsx`'s
+   *  `region-hidden`, P5's "a card whose footer states what it hides").
+   *  Omitted = no footer. */
+  hiddenFooter?: ReactNode;
+  /**
+   * A port-free, id-free twin of `corner` at the same size. Expanded Opaque
+   * does not draw the corner, so without a twin the frame would be sized off
+   * the fallback corner height (0) whenever the region was never drawn
+   * expanded first, and grow when it was toggled open and shut. The twin is
+   * mounted invisibly in Expanded Opaque purely so the corner is measured
+   * there too. It must carry no `data-block-id`/port ids: the face owns the
+   * region's id there (`RegionOpaqueFrame`). With `title` and no `corner`,
+   * BlockRegion builds its own.
+   */
+  cornerMeasure?: ReactNode;
   className?: string;
   style?: CSSProperties;
 }
@@ -465,12 +478,15 @@ function TitleCorner({
   type,
   controlPorts,
   opaque,
+  measureOnly = false,
 }: {
   id: string;
   title: ReactNode;
   type?: ReactNode;
   controlPorts: PortEdgeItem[];
   opaque: boolean;
+  /** Same box, no `BlockPort` — the id-free twin `cornerMeasure` asks for. */
+  measureOnly?: boolean;
 }) {
   const header =
     type === undefined ? (
@@ -492,14 +508,18 @@ function TitleCorner({
   // rail against the Block's BODY band, so a header-only card would hang its
   // dots below itself, into the frame — the same reason `nodeViews.tsx` gives
   // its corner a `region-corner-band`.
+  const card = (
+    <Block
+      header={header}
+      width={REGION_CORNER_WIDTH_PX}
+      body={<div data-slot="region-corner-band" style={{ height: regionRailBandPx(controlPorts.length) }} />}
+      shape={opaque ? "card" : "region-corner"}
+    />
+  );
+  if (measureOnly) return card;
   return (
     <BlockPort id={id} view="port" edges={{ left: { items: controlPorts } }}>
-      <Block
-        header={header}
-        width={REGION_CORNER_WIDTH_PX}
-        body={<div data-slot="region-corner-band" style={{ height: regionRailBandPx(controlPorts.length) }} />}
-        shape={opaque ? "card" : "region-corner"}
-      />
+      {card}
     </BlockPort>
   );
 }
@@ -641,6 +661,7 @@ function RegionPortCard({
   type,
   controlPorts,
   boundaryPorts,
+  footer,
 }: {
   id: string;
   glyph?: string;
@@ -648,6 +669,7 @@ function RegionPortCard({
   type?: ReactNode;
   controlPorts: PortEdgeItem[];
   boundaryPorts: Partial<Record<"left" | "right", PortEdgeItem[]>>;
+  footer?: ReactNode;
 }) {
   const nControl = controlPorts.length;
   const slots = Math.max(nControl + (boundaryPorts.left?.length ?? 0), nControl + (boundaryPorts.right?.length ?? 0));
@@ -676,9 +698,45 @@ function RegionPortCard({
             </div>
           ) : undefined
         }
+        footer={footer}
       />
     </BlockPort>
   );
+}
+
+/**
+ * The frame's own box paint — widths, dash, colour, radii, fill — shared by
+ * the expanded frame and the Expanded Opaque face.
+ *
+ * WHY one function and not the face imitating the frame with a restyled
+ * Block (Codex audit, 2026-09-22): a Block carries its own border on all
+ * four sides and one radius on every corner, so under `v4`'s open bracket
+ * (`1px 0 0 1px`, asymmetric radii) pressing the toggle closed the bracket
+ * into a full box, and under the default skin the border jumped 1px → 2px.
+ * Every token the frame reads, the face now reads through this ONE object,
+ * so the two cannot drift. (BlockRegion is to become a Block preset — this
+ * is the minimal local fix, not that refactor.)
+ */
+function frameBoxStyle(width: number, height: number): CSSProperties {
+  return {
+    position: "relative",
+    width,
+    height,
+    // Four widths so the bracket (`v4`) can open the right and the
+    // bottom; every variant keeps the top and the left at
+    // FRAME_BORDER_PX, the corner card's home.
+    borderWidth: `var(--bbox-region-frame-stroke-widths, ${FRAME_BORDER_PX}px)`,
+    borderStyle: "var(--bbox-region-frame-dash, solid)",
+    borderColor: "var(--bbox-region-frame-stroke, var(--border))",
+    borderRadius: `var(--bbox-region-frame-radii, ${FRAME_RADIUS})`,
+    // Transparent by default, so a cable routed UNDER the frame still
+    // reads, and `visible` so the corner card's wall dots may
+    // straddle the frame's own edge instead of being clipped off at
+    // it (plan §9's "no clip" default — and Zach's `115050`, where
+    // the app's frame cut a port in half).
+    background: "var(--bbox-region-fill-here)",
+    overflow: "visible",
+  };
 }
 
 /**
@@ -716,19 +774,28 @@ function RegionOpaqueFrame({
 }) {
   const split = regionControlSplitPx(controlPorts.length);
   return (
-    <div data-slot="region-opaque-face" style={{ position: "relative", width, height }}>
-      <BlockPort id={id} view="port" edges={sectionEdges(controlPorts, boundaryPorts, controlPorts.length)}>
-        <Block
-          width={width}
-          height={height}
-          body={<RegionOpaqueTitle glyph={glyph} title={title} type={type} />}
-          footer={footer}
-          // The FRAME's paint, not a card's: it is the same box the expanded
-          // view drew, only with its inside hidden — which is also why the
-          // pressed toggle has no plate of its own to sit on.
-          style={{ background: "var(--bbox-region-fill-here, transparent)", boxShadow: "none", borderRadius: FRAME_RADIUS, borderColor: REGION_STROKE }}
-        />
-      </BlockPort>
+    // The paint is the FRAME's (`frameBoxStyle`) — the same box the expanded
+    // view drew, only with its inside hidden, which is also why the pressed
+    // toggle has no plate of its own to sit on.
+    <div data-slot="region-opaque-face" style={frameBoxStyle(width, height)}>
+      {/*
+        The ports' owner: an INVISIBLE Block laid exactly over the frame's
+        border box (pulled back by the top/left border every variant keeps at
+        FRAME_BORDER_PX), so its rails put the dots ON the frame's walls. Its
+        own border is transparent and keeps its width, so the box — and every
+        dot — is where a visible one would be; what paints is the frame.
+      */}
+      <div style={{ position: "absolute", top: -FRAME_BORDER_PX, left: -FRAME_BORDER_PX }}>
+        <BlockPort id={id} view="port" edges={sectionEdges(controlPorts, boundaryPorts, controlPorts.length)}>
+          <Block
+            width={width}
+            height={height}
+            body={<RegionOpaqueTitle glyph={glyph} title={title} type={type} />}
+            footer={footer}
+            style={{ background: "transparent", boxShadow: "none", borderColor: "transparent", borderRadius: FRAME_RADIUS }}
+          />
+        </BlockPort>
+      </div>
       {split !== null && (
         // An L — across under the control ports, then up to the top wall —
         // boxing them into the corner, split from the ordinary ports.
@@ -738,8 +805,8 @@ function RegionOpaqueFrame({
           aria-hidden
           style={{
             position: "absolute",
-            left: 0,
-            top: 0,
+            left: -FRAME_BORDER_PX,
+            top: -FRAME_BORDER_PX,
             width: REGION_CONTROL_BOX_WIDTH_PX,
             height: split + FRAME_BORDER_PX / 2,
             borderRight: `${FRAME_BORDER_PX}px solid ${REGION_STROKE}`,
@@ -771,7 +838,8 @@ export function BlockRegion({
   opaqueFace = "card",
   onToggleView,
   toggleClassName,
-  opaqueFooter,
+  hiddenFooter,
+  cornerMeasure,
   className,
   style,
 }: BlockRegionProps) {
@@ -816,6 +884,17 @@ export function BlockRegion({
   // is the fallback because it is the one truthful name a region always has.
   const words = { glyph, title: title ?? id, type };
 
+  // The id-free twin Expanded Opaque measures its corner with — the host's,
+  // or the one `TitleCorner` builds — so the face is sized by the real corner
+  // even when the region is loaded straight into Expanded Opaque.
+  const measureTwin =
+    view === "opaque" && opaqueFace === "frame"
+      ? (cornerMeasure ??
+        (givenCorner === undefined && title !== undefined ? (
+          <TitleCorner id={id} title={title} type={type} controlPorts={controlPorts ?? []} opaque={false} measureOnly />
+        ) : null))
+      : null;
+
   // Port: the region as a block. The root keeps the region id; the card
   // carries the block id (the one-owner rule, `RegionPortCard`). No toggle:
   // the Blackbox toggle flips Expanded ⇄ Expanded Opaque, and leaving Port
@@ -823,7 +902,7 @@ export function BlockRegion({
   if (view === "port") {
     return (
       <div {...rootProps} ref={setRoot} className={className} style={{ width: "max-content", ...style }}>
-        <RegionPortCard id={id} {...words} controlPorts={controlPorts ?? []} boundaryPorts={boundaryPorts ?? {}} />
+        <RegionPortCard id={id} {...words} controlPorts={controlPorts ?? []} boundaryPorts={boundaryPorts ?? {}} footer={hiddenFooter} />
       </div>
     );
   }
@@ -851,21 +930,23 @@ export function BlockRegion({
           boundaryPorts={boundaryPorts ?? {}}
           width={layout.width}
           height={layout.height}
-          footer={opaqueFooter}
-          // WHY the frame's border added to the inset: the expanded toggle is
-          // placed in the frame's PADDING box, this one in the face's border
-          // box, so without it the square hops a pixel when pressed.
-          toggle={
-            onToggleView ? (
-              <BlockRegionBlackboxToggle
-                pressed
-                onToggle={onToggleView}
-                className={toggleClassName}
-                style={{ top: REGION_TOGGLE_INSET_PX + FRAME_BORDER_PX, right: REGION_TOGGLE_INSET_PX + FRAME_BORDER_PX }}
-              />
-            ) : null
-          }
+          footer={hiddenFooter}
+          // Placed in the face's padding box, exactly as the expanded frame
+          // places it — the face IS the frame's box now, so the square does
+          // not move by a pixel when pressed.
+          toggle={onToggleView ? <BlockRegionBlackboxToggle pressed onToggle={onToggleView} className={toggleClassName} /> : null}
         />
+        {measureTwin !== null && (
+          <div
+            ref={cornerRef}
+            data-slot="region-corner-measure"
+            aria-hidden
+            inert
+            style={{ position: "absolute", top: 0, left: 0, width: "max-content", visibility: "hidden", pointerEvents: "none" }}
+          >
+            {measureTwin}
+          </div>
+        )}
       </div>
     );
   }
@@ -907,23 +988,7 @@ export function BlockRegion({
         data-slot="region-frame"
         data-region-id={id}
         style={{
-          position: "relative",
-          width: layout.width,
-          height: layout.height,
-          // Four widths so the bracket (`v4`) can open the right and the
-          // bottom; every variant keeps the top and the left at
-          // FRAME_BORDER_PX, the corner card's home.
-          borderWidth: `var(--bbox-region-frame-stroke-widths, ${FRAME_BORDER_PX}px)`,
-          borderStyle: "var(--bbox-region-frame-dash, solid)",
-          borderColor: "var(--bbox-region-frame-stroke, var(--border))",
-          borderRadius: `var(--bbox-region-frame-radii, ${FRAME_RADIUS})`,
-          // Transparent by default, so a cable routed UNDER the frame still
-          // reads, and `visible` so the corner card's wall dots may
-          // straddle the frame's own edge instead of being clipped off at
-          // it (plan §9's "no clip" default — and Zach's `115050`, where
-          // the app's frame cut a port in half).
-          background: "var(--bbox-region-fill-here)",
-          overflow: "visible",
+          ...frameBoxStyle(layout.width, layout.height),
           // For descendants only (see the root's note): a nested frame
           // reads the variant's nested fill, or this frame's own fill when
           // the variant draws no nesting contrast.

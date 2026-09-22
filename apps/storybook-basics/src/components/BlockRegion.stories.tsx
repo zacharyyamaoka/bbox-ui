@@ -83,7 +83,7 @@ const EMPTY_SCENE: HostScene = {
  *  Nothing else in the record differs, which is the whole point of the
  *  toggle lane E builds on top of this. */
 const EMPTY_OPAQUE_SCENE: HostScene = {
-  nodes: [{ ...EMPTY_SCENE.nodes[0], data: { ...EMPTY_SCENE.nodes[0].data, region: { kind: "group", view: "opaque" } } }],
+  nodes: [{ ...EMPTY_SCENE.nodes[0], data: { ...EMPTY_SCENE.nodes[0].data, region: { kind: "group", view: "opaque", presentation: "expanded" } } }],
   edges: [],
 };
 
