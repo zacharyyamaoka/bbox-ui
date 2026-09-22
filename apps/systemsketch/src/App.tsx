@@ -22,6 +22,7 @@ import { PyblocksBackendPanel } from "./backend/BackendSettings";
 import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./chrome/Toolbar";
 import { installCameraGestures, useInterfaceScaleRootProps } from "./chrome/ShareMenu";
 import { Overlay } from "./chrome/overlay";
+import { SystemSketchKeyboardShortcutsDialog, withViewHotkeys } from "./chrome/ContextualPopupMenu/viewHotkeys";
 import { installSelectionHistory } from "./document/selectionHistory";
 import { focusShapeVisibility } from "./chrome/FocusLens";
 import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
@@ -78,6 +79,11 @@ const COMPONENTS: TLComponents = {
   StylePanel: null,
   NavigationPanel: null,
   HelpMenu: null,
+  // The 1/2/3/4 view hotkeys' discoverability half (viewHotkeys.tsx): tldraw's
+  // OWN dialog, stock content plus one appended group for the actions
+  // `OVERRIDES.actions` below registers. Not a new dialog — the documented
+  // seam for adding a row to this one.
+  KeyboardShortcutsDialog: SystemSketchKeyboardShortcutsDialog,
 };
 
 // Keyboard shortcuts for our tools. A dock row whose id has no `tools[id]`
@@ -89,8 +95,15 @@ const COMPONENTS: TLComponents = {
 // entry — its kbd, its drag-from-toolbar — with the archive's rule: A while
 // the arrow tool is live advances elbow → straight → curve, A from anywhere
 // else re-arms the last one. Wrapped last so no kit can shadow it.
+// Zach, 2026-09-22: "add feature where clicking 1 or 2 or 3 or 4 when the
+// block/region is expanded will switch it between simple, port, expanded,
+// expanded opaque". The `actions` half — kbd 1/2/3/4, one per Block face —
+// lives in `withViewHotkeys` (./chrome/ContextualPopupMenu/viewHotkeys); see
+// that file for the trigger (selected, not "already expanded") and what "4"
+// maps to today.
 const OVERRIDES: TLUiOverrides = {
   tools: (editor, tools) => withArrowPresetCycle(editor, withToolUi(editor, tools)),
+  actions: (editor, actions) => withViewHotkeys(editor, actions),
 };
 
 /** Injected by vite.config.ts's `define` — the URL map `@tldraw/assets`'
