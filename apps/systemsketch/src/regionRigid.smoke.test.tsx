@@ -10,9 +10,10 @@
 //      0, parent = its region, after every write that could move it: a drag,
 //      a nudge/align/distribute naming it, a duplicate, a paste, undo/redo,
 //      Group from the pill, the Open Python import, a reparent attempted
-//      mid-gesture, and a stored board loaded with the card at (40, 30). A
-//      DELIBERATE scene write may still take the card out (applySceneDiff's
-//      hoist) — rigidity is a property of the hand, not of every writer.
+//      mid-gesture on the card itself, and a stored board loaded with the card
+//      at (40, 30). A DELIBERATE scene write may still take the card out
+//      (applySceneDiff's hoist) — rigidity is a property of the hand, not of
+//      every writer — including while an unrelated shape is mid-drag.
 //   2. ONE OBJECT — a press-drag on the card moves the whole region, and a
 //      click on the card leaves the REGION selected, never the card.
 //   3. STILL WORKS — a dot still starts a wire, the glyph picker and the
@@ -133,6 +134,40 @@ function headerPoint(header: HTMLElement): { x: number; y: number } {
   return { x: rect.right - 12, y: rect.top + rect.height / 2 };
 }
 
+/** FALLBACK (`testing/harness.tsx` §9 note): a claim about what a write does
+ *  WHILE the select tool is mid-translate has to stand inside the gesture
+ *  between its press and its release, which `userEvent.dragAndDrop` cannot
+ *  pause. tldraw's own input pipeline is driven directly for that window. */
+const POINTER_BASE = {
+  type: "pointer" as const,
+  target: "canvas" as const,
+  pointerId: 1,
+  button: 0,
+  isPen: false,
+  shiftKey: false,
+  altKey: false,
+  ctrlKey: false,
+  metaKey: false,
+  accelKey: false,
+};
+let translateFrom: { x: number; y: number } | null = null;
+
+async function startTranslating(point: { x: number; y: number }) {
+  translateFrom = point;
+  app!.editor.dispatch({ ...POINTER_BASE, name: "pointer_down", point: { x: point.x, y: point.y, z: 0.5 } });
+  for (let step = 1; step <= 6; step++) {
+    app!.editor.dispatch({ ...POINTER_BASE, name: "pointer_move", point: { x: point.x + step * 10, y: point.y + step * 6, z: 0.5 } });
+    await settle(20);
+  }
+  await waitFor(() => (app!.editor.isIn("select.translating") ? true : null), { what: "the select tool translating" });
+}
+
+async function endTranslating() {
+  const point = translateFrom!;
+  app!.editor.dispatch({ ...POINTER_BASE, name: "pointer_up", point: { x: point.x + 60, y: point.y + 36, z: 0.5 } });
+  await waitFor(() => (app!.editor.isIn("select.idle") ? true : null), { what: "the gesture ended" });
+}
+
 async function pickSystemRow(pattern: RegExp) {
   const face = await waitFor(() => app!.root.querySelector<HTMLElement>('[data-testid="ss-dock-family-system"]'), { what: "system face" });
   const chevron = face.parentElement?.querySelector<HTMLElement>("[aria-haspopup]") ?? face;
@@ -177,39 +212,65 @@ describe("PINNED — the corner card never leaves region-local (0, 0)", () => {
     expectPinned(id, "rotation");
   });
 
-  it("a GESTURE cannot pull the card out of its region; a reparent written mid-translate is refused", async () => {
+  it("the backstop: mid-translate, a reparent of a card that is ITSELF selected is refused", async () => {
     app = await mountApp();
     const { id, cornerId } = placeRegion("for", 300, 200);
     const header = await cardHeader(cornerId);
-    const point = headerPoint(header);
-    // FALLBACK (`testing/harness.tsx` §9 note): the claim is about what a
-    // write does WHILE the select tool is mid-translate, so the test has to
-    // stand inside the gesture between its press and its release — which
-    // `userEvent.dragAndDrop` cannot pause. tldraw's own input pipeline is
-    // driven directly for exactly that window.
-    const base = {
-      type: "pointer" as const,
-      target: "canvas" as const,
-      pointerId: 1,
-      button: 0,
-      isPen: false,
-      shiftKey: false,
-      altKey: false,
-      ctrlKey: false,
-      metaKey: false,
-      accelKey: false,
-    };
-    app.editor.dispatch({ ...base, name: "pointer_down", point: { x: point.x, y: point.y, z: 0.5 } });
-    for (let step = 1; step <= 6; step++) {
-      app.editor.dispatch({ ...base, name: "pointer_move", point: { x: point.x + step * 10, y: point.y + step * 6, z: 0.5 } });
-      await settle(20);
-    }
-    await waitFor(() => (app!.editor.isIn("select.translating") ? true : null), { what: "the select tool translating" });
+    await startTranslating(headerPoint(header));
+    // No real gesture can get here: the redirect only lets a card be selected
+    // during its own rename, and tldraw leaves that session before it can
+    // translate (see `gestureMovesCard`'s WHY — measured: writing an editing
+    // session mid-translate knocks the select tool out of `translating`). So
+    // the selection is written with side effects OFF, bypassing the redirect,
+    // to stand in for whatever future path lets a card be selected on its
+    // own. What is under test is the backstop's predicate, not how it is
+    // reached.
+    const pageState = app.editor.getCurrentPageState();
+    // `Store.atomic(fn, false)` is the same side-effects-off switch
+    // `Store.loadStoreSnapshot` uses; it is marked internal in tldraw's
+    // public types, hence the narrow cast — a test-only stand-in, never app code.
+    const store = app.editor.store as unknown as { atomic(fn: () => void, runCallbacks: boolean): void };
+    store.atomic(() => app!.editor.store.put([{ ...pageState, selectedShapeIds: [cornerId] }]), false);
+    expect(app.editor.getSelectedShapeIds()).toEqual([cornerId]);
+    expect(app.editor.isIn("select.translating")).toBe(true);
     app.editor.reparentShapes([cornerId], app.editor.getCurrentPageId());
-    expect(String(shape(cornerId)!.parentId), "mid-gesture, the card stayed in its region").toBe(String(id));
-    app.editor.dispatch({ ...base, name: "pointer_up", point: { x: point.x + 60, y: point.y + 36, z: 0.5 } });
-    await waitFor(() => (app!.editor.isIn("select.idle") ? true : null), { what: "the gesture ended" });
+    expect(String(shape(cornerId)!.parentId), "mid-gesture, the selected card stayed in its region").toBe(String(id));
+    await endTranslating();
     expectPinned(id, "after the gesture");
+  });
+
+  it("THE RACE: a scene write landing while an UNRELATED block is mid-translate still hoists the card the scene keeps", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("branch", 300, 200);
+    await cardFace(cornerId);
+    const other = createShapeId();
+    app.editor.createShape({ id: other, type: BLOCK_SHAPE_TYPE, x: 1000, y: 150, props: { name: "unrelated()", view: "port" } } as never);
+    const otherHeader = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${other}"] [data-slot="block-header"]`), { what: "the unrelated block's header" });
+    await startTranslating(headerPoint(otherHeader));
+    expect(app.editor.getSelectedShapeIds()).toEqual([other]);
+
+    // An async scene response (the Open Python shape of it) lands NOW: the
+    // region's node is gone, the card's node survives with no parent.
+    const scene = sceneFromRecords(app.editor.store.allRecords());
+    const next = {
+      ...scene,
+      nodes: scene.nodes
+        .filter((node) => node.id !== id)
+        .map((node) => {
+          if (node.id !== cornerId) return node;
+          const { parentId: _dropped, ...rest } = node;
+          return rest;
+        }),
+    };
+    applyScene(app.editor, next, { kind: "document" });
+    expect(app.editor.isIn("select.translating"), "the scene landed mid-gesture").toBe(true);
+    expect(shape(id), "the region was removed").toBeUndefined();
+    const card = shape<BlockLike>(cornerId);
+    expect(card, "the card the scene kept survived the region's delete").toBeTruthy();
+    expect(String(card!.parentId)).toBe(String(app.editor.getCurrentPageId()));
+
+    await endTranslating();
+    expect(shape(cornerId), "the card is still there once the gesture ends").toBeTruthy();
   });
 
   it("a DELIBERATE scene write can take the card out: applyScene removing the region but keeping the card leaves it on the page", async () => {

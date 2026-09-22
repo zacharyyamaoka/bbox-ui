@@ -424,7 +424,8 @@ export function installRegionKit(editor: Editor): () => void {
    *
    * The POSITION pin is unconditional: no writer has a reason to put a corner
    * card anywhere but its slot. PARENTAGE is different — see
-   * `isUserGesturing` for why only a gesture is refused a reparent.
+   * `gestureMovesCard` for why only a gesture on the card itself is refused
+   * a reparent.
    */
   const pinnedCorner = <Shape extends TLShape>(shape: Shape): Shape =>
     onCornerSlot(shape) ? shape : { ...shape, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 };
@@ -484,23 +485,47 @@ export function installRegionKit(editor: Editor): () => void {
   );
 
   /**
-   * Is the user in the middle of a select-tool gesture that moves shapes?
+   * Is `cardId` ITSELF part of what an in-flight select-tool gesture moves?
    *
    * WHY the reparent veto asks THIS and nothing broader (Codex audit,
-   * 2026-09-22): the rigidity Zach asked for — "rigidly connect the for loop
-   * and branch block to the region frame. It should conceptually be one
-   * object" — is a property of what a person's HAND can do to the card, not a
-   * rule over every writer. A deliberate document operation may legitimately
-   * move a card out: `document/applySceneDiff.ts`'s `hoistedSurvivors` deletes
-   * a region while keeping its card by reparenting the card to the page first,
-   * and an unconditional veto silently put the card back under the doomed
-   * region, which then took it with it. So the veto is scoped to the gesture
-   * states that reparent as a SIDE EFFECT of moving things (tldraw's frame
-   * drag-in/out and kick-out run from these), and only for local writes.
-   * Today no gesture can select the card to move it at all
-   * (`redirectCornerSelection`), so this is the backstop, not the mechanism.
+   * 2026-09-22, two rounds): the rigidity Zach asked for — "rigidly connect
+   * the for loop and branch block to the region frame. It should conceptually
+   * be one object" — is a property of what a person's HAND does to the card,
+   * not a rule over every writer. A deliberate document operation may
+   * legitimately move a card out: `document/applySceneDiff.ts`'s
+   * `hoistedSurvivors` deletes a region while keeping its card by reparenting
+   * the card to the page first, and a veto that fires on that write puts the
+   * card back under the doomed region, whose delete then takes it too.
+   *
+   * Two predicates were tried and are WRONG, so a future refactor should not
+   * reach for them again:
+   *   - "any local write" (the first cut) vetoed the hoist outright;
+   *   - "any local write while the select tool is mid-gesture" still vetoed
+   *     it whenever an async scene (an Open Python response) landed while the
+   *     person happened to be dragging some UNRELATED shape — the store's
+   *     `source === "user"` covers every local write, programmatic ones
+   *     included, so it says nothing about who is writing.
+   * The gesture state alone cannot name the writer; the SELECTION can name
+   * what the gesture is moving. So the veto needs both: mid-gesture AND the
+   * card itself selected.
+   *
+   * Deliberately NOT "the card or one of its ancestors is selected": that
+   * would veto the hoist when the scene lands while the person is dragging
+   * the very region the scene deletes — the same data loss, in a narrower
+   * window.
+   *
+   * REACHABILITY, stated plainly: with `redirectCornerSelection` in place a
+   * card is selected only while `editingShapeId` names it (its own rename),
+   * and tldraw leaves `editing_shape` — clearing the editing id, which hands
+   * the selection back to the region — before it can enter `translating`
+   * (`SelectTool/childStates/EditingShape.ts` transitions out; `onExit` calls
+   * `setEditingShape(null)`). So no real gesture reaches this veto today. It
+   * is kept as a SCOPED BACKSTOP for the day something lets a card be selected
+   * on its own mid-gesture, never as a blanket rule.
    */
-  const isUserGesturing = () => editor.isInAny("select.translating", "select.resizing", "select.rotating", "select.dragging_handle");
+  const gestureMovesCard = (cardId: TLShapeId) =>
+    editor.isInAny("select.translating", "select.resizing", "select.rotating", "select.dragging_handle") &&
+    editor.getSelectedShapeIds().includes(cardId);
 
   /**
    * A gesture on the card is a gesture on the REGION: selecting a corner card
@@ -612,7 +637,7 @@ export function installRegionKit(editor: Editor): () => void {
       // A GESTURE never pulls a card out of its region: one object has no
       // seam for a hand to pull it through. Restoring the index too keeps it
       // a valid sibling. A deliberate document write (a scene diff's hoist, a
-      // programmatic reparent) goes through — see `isUserGesturing`.
+      // programmatic reparent) goes through — see `gestureMovesCard`.
       //
       // WHY there is no orphan repair beside this (audit item, 2026-09-22):
       // a card is only ever orphaned by a batch that removes its region's
@@ -621,7 +646,7 @@ export function installRegionKit(editor: Editor): () => void {
       // anything, and a remote peer's batch is that same expanded diff. A raw
       // `store.remove` of a parent orphans ANY child in tldraw, card or not,
       // so it is not a corner-card rule to patch in this file.
-      if (next.parentId !== previous.parentId && regionNaming(previous) && source === "user" && isUserGesturing()) {
+      if (next.parentId !== previous.parentId && regionNaming(previous) && source === "user" && gestureMovesCard(previous.id)) {
         return pinnedCorner({ ...next, parentId: previous.parentId, index: previous.index });
       }
       return regionNaming(next) ? pinnedCorner(next) : next;
