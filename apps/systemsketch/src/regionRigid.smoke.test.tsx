@@ -9,13 +9,16 @@
 //   1. PINNED — the card's region-local position is exactly (0, 0), rotation
 //      0, parent = its region, after every write that could move it: a drag,
 //      a nudge/align/distribute naming it, a duplicate, a paste, undo/redo,
-//      Group from the pill, the Open Python import, a reparent attempt, and a
-//      stored board loaded with the card at (40, 30).
+//      Group from the pill, the Open Python import, a reparent attempted
+//      mid-gesture, and a stored board loaded with the card at (40, 30). A
+//      DELIBERATE scene write may still take the card out (applySceneDiff's
+//      hoist) — rigidity is a property of the hand, not of every writer.
 //   2. ONE OBJECT — a press-drag on the card moves the whole region, and a
 //      click on the card leaves the REGION selected, never the card.
 //   3. STILL WORKS — a dot still starts a wire, the glyph picker and the
 //      in-place title rename still reach the card, a rail still reorders, an
-//      ordinary member still selects and drags on its own, and Delete takes
+//      ordinary member still selects and drags on its own, Enter on the region
+//      renames the card, and Delete takes
 //      region + card as one undo step.
 //   4. NO OVERLAP — a Branch's first arm header and a Loop's body start at or
 //      below the card's bottom edge (getBoundingClientRect, never presence).
@@ -27,6 +30,8 @@ import { BACKEND_SETTING_STORAGE_KEY, DEFAULT_PYBLOCKS_URL } from "@trunk/backen
 
 import regionForIf from "../../../docs/fixtures/pyblocks-scene/region_for_if.scene.json";
 import { loadBoardText, serializeBoard } from "./chrome/FileMenu/fileActions";
+import { applyScene } from "./document/applySceneDiff";
+import { sceneFromRecords } from "./document/sceneFromStore";
 import { createCornerBlock, type RegionKind } from "./shapes/region";
 import { createWire } from "./shapes/wire/createWire";
 import { wireDrag } from "./shapes/wire/wireGesture";
@@ -149,7 +154,7 @@ async function placeWithTool(row: RegExp, toolId: string): Promise<RegionLike> {
 }
 
 describe("PINNED — the corner card never leaves region-local (0, 0)", () => {
-  it("writes that name the card directly — move, nudge, align, distribute, rotate, reparent — all leave it on the slot", async () => {
+  it("writes that name the card directly — move, nudge, align, distribute, rotate — all leave it on the slot", async () => {
     app = await mountApp();
     const { id, cornerId } = placeRegion("for", 300, 200);
     const other = createShapeId();
@@ -170,8 +175,65 @@ describe("PINNED — the corner card never leaves region-local (0, 0)", () => {
     expectPinned(id, "distributeShapes");
     app.editor.updateShape({ id: cornerId, type: BLOCK_SHAPE_TYPE, rotation: 0.5 });
     expectPinned(id, "rotation");
+  });
+
+  it("a GESTURE cannot pull the card out of its region; a reparent written mid-translate is refused", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("for", 300, 200);
+    const header = await cardHeader(cornerId);
+    const point = headerPoint(header);
+    // FALLBACK (`testing/harness.tsx` §9 note): the claim is about what a
+    // write does WHILE the select tool is mid-translate, so the test has to
+    // stand inside the gesture between its press and its release — which
+    // `userEvent.dragAndDrop` cannot pause. tldraw's own input pipeline is
+    // driven directly for exactly that window.
+    const base = {
+      type: "pointer" as const,
+      target: "canvas" as const,
+      pointerId: 1,
+      button: 0,
+      isPen: false,
+      shiftKey: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      accelKey: false,
+    };
+    app.editor.dispatch({ ...base, name: "pointer_down", point: { x: point.x, y: point.y, z: 0.5 } });
+    for (let step = 1; step <= 6; step++) {
+      app.editor.dispatch({ ...base, name: "pointer_move", point: { x: point.x + step * 10, y: point.y + step * 6, z: 0.5 } });
+      await settle(20);
+    }
+    await waitFor(() => (app!.editor.isIn("select.translating") ? true : null), { what: "the select tool translating" });
     app.editor.reparentShapes([cornerId], app.editor.getCurrentPageId());
-    expectPinned(id, "reparent to the page");
+    expect(String(shape(cornerId)!.parentId), "mid-gesture, the card stayed in its region").toBe(String(id));
+    app.editor.dispatch({ ...base, name: "pointer_up", point: { x: point.x + 60, y: point.y + 36, z: 0.5 } });
+    await waitFor(() => (app!.editor.isIn("select.idle") ? true : null), { what: "the gesture ended" });
+    expectPinned(id, "after the gesture");
+  });
+
+  it("a DELIBERATE scene write can take the card out: applyScene removing the region but keeping the card leaves it on the page", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("branch", 300, 200);
+    await cardFace(cornerId);
+    const scene = sceneFromRecords(app.editor.store.allRecords());
+    // The region's node is gone; the card's node survives with no parent —
+    // the exact shape `hoistedSurvivors` exists for (applySceneDiff.ts).
+    const next = {
+      ...scene,
+      nodes: scene.nodes
+        .filter((node) => node.id !== id)
+        .map((node) => {
+          if (node.id !== cornerId) return node;
+          const { parentId: _dropped, ...rest } = node;
+          return rest;
+        }),
+    };
+    applyScene(app.editor, next, { kind: "document" });
+    expect(shape(id), "the region was removed").toBeUndefined();
+    const card = shape<BlockLike>(cornerId);
+    expect(card, "the card the scene kept survived the region's delete").toBeTruthy();
+    expect(String(card!.parentId)).toBe(String(app.editor.getCurrentPageId()));
   });
 
   it("arrow-key nudge after clicking the card moves the region, never the card off its slot", async () => {
@@ -318,15 +380,28 @@ describe("ONE OBJECT — a gesture on the card is a gesture on the region", () =
     expect(app.editor.getSelectedShapeIds()).toEqual([region.id]);
   });
 
-  it("select-all and an explicit selection naming the card both come out naming the region, once", async () => {
+  it("a selection naming ONLY the card comes out naming the region", async () => {
     app = await mountApp();
     const { id, cornerId } = placeRegion("branch", 300, 200);
     await cardFace(cornerId);
-    app.editor.setSelectedShapes([cornerId, id]);
+    app.editor.setSelectedShapes([cornerId]);
     expect(app.editor.getSelectedShapeIds()).toEqual([id]);
-    app.editor.selectAll();
-    expect(app.editor.getSelectedShapeIds()).not.toContain(cornerId);
-    expect(app.editor.getSelectedShapeIds()).toContain(id);
+  });
+
+  it("a marquee over the card but not the whole region selects the REGION", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("for", 400, 250);
+    const face = await cardFace(cornerId);
+    const card = face.getBoundingClientRect();
+    // From empty canvas above-left of the frame to the card's middle: the
+    // brush covers part of the card and a sliver of the frame's corner, never
+    // the whole region.
+    await userEvent.dragAndDrop(canvasOf(app.root), canvasOf(app.root), {
+      sourcePosition: { x: Math.round(card.left - 60), y: Math.round(card.top - 60) },
+      targetPosition: { x: Math.round(card.left + card.width / 2), y: Math.round(card.top + card.height / 2) },
+    });
+    await waitFor(() => (app!.editor.getSelectedShapeIds().length > 0 ? true : null), { what: "the marquee selected something" });
+    expect(app.editor.getSelectedShapeIds()).toEqual([id]);
   });
 
   for (const [label, where] of [
@@ -447,6 +522,32 @@ describe("STILL WORKS — what the card owns keeps working", () => {
     await waitFor(() => (app!.editor.getEditingShapeId() === null ? true : null), { what: "the session ended" });
     expect(app.editor.getSelectedShapeIds()).toEqual([id]);
     expectPinned(id, "after the rename");
+  });
+
+  it("Enter with the region selected renames the CARD in place, as a double-click does; committing hands the selection back to the region", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("branch", 300, 200);
+    const header = await cardHeader(cornerId);
+    // Select the region the way a person does — a click on its card — which
+    // also puts keyboard focus inside tldraw's container.
+    const point = headerPoint(header);
+    const hit = document.elementFromPoint(point.x, point.y)!;
+    const rect = hit.getBoundingClientRect();
+    await userEvent.click(hit, { position: { x: Math.round(point.x - rect.left), y: Math.round(point.y - rect.top) } });
+    await waitFor(() => (app!.editor.getSelectedShapeIds().length > 0 ? true : null), { what: "a selection" });
+    expect(app.editor.getSelectedShapeIds()).toEqual([id]);
+    await settle(500);
+
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => (app!.editor.getEditingShapeId() === cornerId ? true : null), { what: "Enter opened the card's editing session" });
+    await waitFor(() => app!.root.querySelector(`[data-shape-id="${cornerId}"] [data-slot="editable-text-input"]`), { what: "the in-place control" });
+    await userEvent.keyboard("{Control>}a{/Control}pick_path");
+    await waitFor(() => (shape<BlockLike>(cornerId)!.props.name === "pick_path" ? true : null), { what: "the card's name written" });
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => (app!.editor.getEditingShapeId() === null ? true : null), { what: "the session ended" });
+    expect(shape<BlockLike>(cornerId)!.props.name).toBe("pick_path");
+    expect(app.editor.getSelectedShapeIds()).toEqual([id]);
+    expectPinned(id, "after the Enter rename");
   });
 
   it("a port-rail drag on the card reorders its ports and never moves the region", async () => {
