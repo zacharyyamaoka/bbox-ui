@@ -30,8 +30,9 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, waitFor } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 
+import { Button } from "../components/button";
 import { expectSameCables, recordedWirePoints, useWireGeometryRecorder } from "./cableParity";
 import { DomCanvas } from "./domCanvas";
 import { dragSteps } from "./hostGestures";
@@ -108,7 +109,13 @@ function decorateWith(crossings: ReturnType<typeof useRegionWallCrossings>["cros
   return (node) => (node.id === REGION_ID ? { crossings } : undefined);
 }
 
-function Mirror() {
+/** `edgeId` with its target handle dropped: it now wires the NODE, which no
+ *  rendered dot carries (`sceneWires`' own rule), so no host can kit-route it. */
+function withoutHandle(scene: HostScene, edgeId: string): HostScene {
+  return { ...scene, edges: scene.edges.map((edge) => (edge.id === edgeId ? { ...edge, targetHandle: undefined } : edge)) };
+}
+
+function Mirror({ edits = false }: { edits?: boolean }) {
   // ONE scene: the React Flow pane writes drags back into it, and the DOM
   // pane re-renders from it — static, but never stale.
   const [scene, setScene] = useState(MIRROR_SCENE);
@@ -133,6 +140,20 @@ function Mirror() {
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
+      {edits && (
+        <div data-slot="mirror-edits" style={{ display: "flex", gap: 8, flexBasis: "100%" }}>
+          {/* The two ways a cable stops being kit-routed while its id lives
+              on or vanishes: its end loses its handle (React Flow falls back
+              to the stock path, WireLayer reports it unresolved), or the
+              edge leaves the scene. */}
+          <Button size="sm" variant="outline" onClick={() => setScene((current) => withoutHandle(current, kid("e-out")))}>
+            Unhandle e-out
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setScene((current) => ({ ...current, edges: current.edges.filter((edge) => edge.id !== kid("e-in")) }))}>
+            Remove e-in
+          </Button>
+        </div>
+      )}
       <figure style={{ margin: 0 }}>
         <figcaption style={{ fontSize: 13, marginBottom: 8 }}>
           <span style={{ fontWeight: 600 }}>DOM Canvas</span>
@@ -221,6 +242,14 @@ function panes(canvasElement: HTMLElement) {
   return { dom, reactFlow, domSpace: required<HTMLElement>(dom, '[data-host="dom-canvas"]', "the DOM host"), flowSpace: required<HTMLElement>(reactFlow, ".react-flow__viewport", "the React Flow viewport") };
 }
 
+const DRAG_STEPS = 8;
+
+/** How many times React Flow's kit router has run `resolveWires` so far
+ *  (`KitWireRouter` stamps it on the viewport). */
+function routePassesOf(pane: ParentNode): number {
+  return Number(required<HTMLElement>(pane, ".react-flow__viewport", "the React Flow viewport").dataset.kitRoutePasses ?? 0);
+}
+
 /** The node's own header — the one React Flow's `dragHandle` accepts. */
 function ownHeader(pane: ParentNode, nodeId: string): HTMLElement {
   return required<HTMLElement>(pane, `[data-scene-node="${nodeId}"] [data-rf-own-header]`, `${nodeId}'s own header`);
@@ -266,9 +295,10 @@ export const Mirror_: Story = {
       // box trails the pointer by roughly the first step.
       const target = { x: press.x + (frame.left + 56 - srcBox.left), y: press.y + (frame.bottom - srcBox.height - 24 - srcBox.top) };
       const midSteps: number[] = [];
+      const passesBefore = routePassesOf(reactFlow);
       await dragSteps(header, target, {
         pressAt: press,
-        steps: 8,
+        steps: DRAG_STEPS,
         onStep: async () => {
           // Live: mid-gesture, whatever the count is, every marker sits on
           // the wall of the frame as it is drawn right now.
@@ -276,8 +306,13 @@ export const Mirror_: Story = {
           midSteps.push(expectMarkersOnWalls(reactFlow));
         },
       });
-      expect(midSteps.length).toBe(8);
-
+      expect(midSteps.length).toBe(DRAG_STEPS);
+      const routePasses = routePassesOf(reactFlow) - passesBefore;
+      // At most one pass per animation frame (`reactFlowHost.tsx`'s
+      // `requestRoutePass`): a move is one pass, whatever it invalidated.
+      // Measured on this drag: 31 before the coalescing, 8 after.
+      expect(routePasses, `resolveWires passes during the ${DRAG_STEPS}-step drag`).toBeGreaterThan(0);
+      expect(routePasses, `resolveWires passes during the ${DRAG_STEPS}-step drag`).toBeLessThanOrEqual(DRAG_STEPS + 2);
       await waitFor(
         () => {
           // The drag really moved the box: src's card is inside the frame now.
@@ -299,6 +334,64 @@ export const Mirror_: Story = {
           expect(reportedCrossingCount(dom, domSpace)).toBe(1);
           expect(expectMarkersOnWalls(dom)).toBe(1);
           expectSameCables(dom, reactFlow, WIRE_IDS);
+        },
+        { timeout: 5000 },
+      );
+    });
+  },
+};
+
+/**
+ * A cable that stops being drawn takes its crossing marker with it — in both
+ * hosts, whether its edge keeps its id and loses a handle (React Flow falls
+ * back to the stock path; `WireLayer` reports it unresolved) or leaves the
+ * scene. Audit of 7fbf22c: the glue used to keep the last kit polyline by
+ * id, so the marker froze on a path neither host painted any more.
+ */
+export const StaleCrossingsClear: Story = {
+  name: "Mirror — a cable that stops being drawn loses its marker",
+  render: () => <Mirror edits />,
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const unhandle = await canvas.findByRole("button", { name: "Unhandle e-out" });
+    const { dom, reactFlow } = panes(canvasElement);
+
+    await step("At rest: two crossings in each pane", async () => {
+      await waitFor(
+        () => {
+          expect(expectMarkersOnWalls(reactFlow)).toBe(2);
+          expect(expectMarkersOnWalls(dom)).toBe(2);
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    await step("e-out loses its handle: it falls off the kit route, and its marker goes", async () => {
+      await userEvent.click(unhandle);
+      await waitFor(
+        () => {
+          // The edge still exists — drawn on the stock path in React Flow,
+          // skipped by WireLayer — so the marker must go because the ROUTE
+          // went, not because the wire did.
+          expect(reactFlow.querySelectorAll('[data-edge-route="stock"]').length).toBe(1);
+          expect(required(dom, '[data-slot="wire-layer"]', "the wire layer").getAttribute("data-unresolved-wires")).toBe(kid("e-out"));
+          expect(recordedWirePoints(reactFlow)[kid("e-out")]).toBeUndefined();
+          expect(recordedWirePoints(dom)[kid("e-out")]).toBeUndefined();
+          expect(expectMarkersOnWalls(reactFlow)).toBe(1);
+          expect(expectMarkersOnWalls(dom)).toBe(1);
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    await step("e-in leaves the scene: the last marker goes too", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Remove e-in" }));
+      await waitFor(
+        () => {
+          expect(recordedWirePoints(reactFlow)[kid("e-in")]).toBeUndefined();
+          expect(recordedWirePoints(dom)[kid("e-in")]).toBeUndefined();
+          expect(expectMarkersOnWalls(reactFlow)).toBe(0);
+          expect(expectMarkersOnWalls(dom)).toBe(0);
         },
         { timeout: 5000 },
       );

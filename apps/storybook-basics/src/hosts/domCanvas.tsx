@@ -42,7 +42,7 @@ export interface DomCanvasProps {
    *  drawn on, in this host's own space (its root's padding box). A
    *  read-back, not a gesture — the React Flow host reports the same thing
    *  in flow space, which is what makes the two comparable. */
-  onWireGeometry?(wireId: string, points: readonly Point[]): void;
+  onWireGeometry?(wireId: string, points: readonly Point[] | null): void;
 }
 
 /**

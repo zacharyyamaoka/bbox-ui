@@ -28,8 +28,8 @@ function sameCrossings(a: readonly RegionPoint[], b: readonly RegionPoint[]): bo
 export interface RegionWallCrossings {
   /** Frame-local, ready for `Region.crossings` (via `SceneNodeDecoration`). */
   crossings: RegionPoint[];
-  /** Hand to the host's own `onWireGeometry`. */
-  onWireGeometry(wireId: string, points: readonly Point[]): void;
+  /** Hand to the host's own `onWireGeometry`. `null` drops the wire. */
+  onWireGeometry(wireId: string, points: readonly Point[] | null): void;
 }
 
 /**
@@ -44,7 +44,16 @@ export interface RegionWallCrossings {
 export function useRegionWallCrossings(spaceOf: () => Element | null | undefined, regionId: string, liveWireIds: readonly string[]): RegionWallCrossings {
   const [paths, setPaths] = useState<Record<string, readonly Point[]>>({});
   const [crossings, setCrossings] = useState<RegionPoint[]>([]);
-  const onWireGeometry = useCallback((wireId: string, points: readonly Point[]) => setPaths((previous) => ({ ...previous, [wireId]: points })), []);
+  // A `null` report DELETES the entry: the host stopped drawing that wire,
+  // and a crossing computed off its last path would freeze on the wall.
+  const onWireGeometry = useCallback((wireId: string, points: readonly Point[] | null) => {
+    setPaths((previous) => {
+      if (points) return { ...previous, [wireId]: points };
+      if (!(wireId in previous)) return previous;
+      const { [wireId]: _dropped, ...rest } = previous;
+      return rest;
+    });
+  }, []);
   useLayoutEffect(() => {
     const measure = () => {
       const space = spaceOf();
