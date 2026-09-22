@@ -1,23 +1,44 @@
 // Capture the REAL rebuilt Settings panel — the shipping component rendering
-// the real `buildSettingsCategories` data — at real window sizes, and assert
-// the two claims a story in this repo's vitest frame cannot make.
+// the real `buildSettingsCategories` data — at real window sizes, screenshots
+// included, which the play-function suites below don't produce.
 //
 //   node docs/capture_settings_panel_real.mjs <storybook-url> <outdir>
+//   pnpm --filter bbox-storybook-basics run verify-settings-panel-real
+//     (Storybook must already be answering on $STORYBOOK_PORT / :5421)
 //
-// WHY this exists beside the play functions rather than instead of them: the
-// vitest browser frame is a fixed 1200x900 and does not re-resolve
-// viewport-relative sizes after a class change on a live node (measured
-// 2026-09-22 — a popup whose className already said `w-screen` kept reporting
-// the outgoing dialog's 1040px). Two claims therefore have to be made in a
-// real browser at a real window size:
+// WHY this exists beside the play functions rather than instead of them: at
+// 1366x720 it captures the dialog genuinely SHRINKING to 1040x656 rather than
+// a 720px dialog running off a 720px screen.
 //
-//   1. at 1366x720 the dialog is 1040x656, i.e. the height rule SHRINKS it
-//      rather than letting a 720px dialog run off a 720px screen;
-//   2. switching presentation dialog -> page on an OPEN panel re-presents it
-//      at the full window.
+// WHAT THIS SCRIPT CANNOT COVER: Finding 3 (Codex judge, `settings-panel-
+// fixes` verdict, 2026-09-22) was about SystemSketch's host-side interface
+// scale (`apps/systemsketch/src/interface-scale.css`'s `zoom`) inflating the
+// popup past the viewport at 160%. This script drives the STORY in
+// `apps/storybook-basics`'s own Storybook, which never loads that CSS file
+// or sets `--ss-interface-scale` — there is no scale to capture here, real
+// zoom or otherwise. That coverage lives in
+// `apps/systemsketch/src/settings.smoke.test.tsx`'s "at 160% interface
+// scale" test, against the real mounted app, enforced by `pnpm exec vitest
+// run` from `apps/systemsketch` — see that file, and
+// `interface-scale.css`'s own WHY comment, for the real-Chromium multi-width
+// measurement behind the fix.
 //
-// Both are asserted here, so they are checked on every capture run rather than
-// being claimed in prose.
+// The switching-presentation geometry claim that USED to live only here (a
+// 2026-09-22 note claimed the vitest browser frame "does not re-resolve
+// viewport-relative sizes after a class change on a live node") was a
+// misdiagnosis, not a runner limit: `settingsView.tsx`'s `POPUP_BASE` sets
+// `duration-100` with no `transition-property` beside it, and the CSS
+// Transitions spec's initial value for `transition-property` is `all` — so
+// EVERY animatable property the dialog/page classes disagree on transitions
+// for ~100ms, and a bare `getBoundingClientRect()` read mid-transition (or
+// even a whole second of un-awaited polling) still reports the outgoing box.
+// `SettingsView.stories.tsx`'s `SwitchingPresentationChangesTheContainer` and
+// `settings.smoke.test.tsx`'s page-presentation test now wait on
+// `popup.getAnimations().length === 0` first and assert the real geometry
+// again — that gate is enforced by `pnpm test` / `pnpm exec vitest run` on
+// every run, which this hand-invoked script is not. This script's remaining
+// job is the real-screenshot and real-host-zoom coverage those suites cannot
+// produce, not the geometry claim itself.
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

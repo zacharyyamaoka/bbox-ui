@@ -176,6 +176,21 @@ export interface SettingsSection {
    * under "Scroll wheel down").
    */
   groupDescription?: string;
+  /**
+   * Extra terms a search should match against this row, beyond what
+   * `sectionSearchIndex` already derives from `title`/`description`/`group`/
+   * `groupDescription` and a `radio`/`select` control's own option text.
+   *
+   * WHY this exists: a `kind: "custom"` section's visible text is an opaque
+   * `ReactNode` — a preset row's button labels, a hotkey list's chords, the
+   * tool-alias editor's own names — none of it is a string this file can
+   * read back out. Codex judge, Finding 1 (`settings-panel-fixes` verdict,
+   * 2026-09-22): searching a word that is genuinely ON SCREEN (an option's
+   * description, a preset's label) hid the row that shows it, because the
+   * search only ever read `title`/`description`/`group`. A host that knows
+   * what its own `custom` content says supplies those words here.
+   */
+  keywords?: readonly string[];
 }
 
 export interface SettingsCategory {
@@ -612,11 +627,22 @@ function renderControl(section: SettingsSection, controlId: string, titleId: str
             return (
               <FieldLabel key={option.value} htmlFor={optionId}>
                 <Field orientation="horizontal">
-                  <FieldContent>
-                    <FieldTitle>{option.label}</FieldTitle>
-                    {option.description ? <FieldDescription>{option.description}</FieldDescription> : null}
+                  {/* Same fix as the row below, one level up, for the same
+                      reason: a flex item's default min-width is `auto` (its
+                      content's intrinsic width), so an unbroken option label
+                      or description could push this row wider than the pane.
+                      `FieldTitle`'s own class-by-class WHY is on the row
+                      version below — `min-w-0` here, `block w-full
+                      break-words` there, because this option label is
+                      exactly the same stock component in the same
+                      `display:flex` shape. */}
+                  <FieldContent className="min-w-0">
+                    <FieldTitle className="block w-full break-words">{option.label}</FieldTitle>
+                    {option.description ? (
+                      <FieldDescription className="break-words">{option.description}</FieldDescription>
+                    ) : null}
                     {option.disabled && option.disabledReason ? (
-                      <FieldDescription>{option.disabledReason}</FieldDescription>
+                      <FieldDescription className="break-words">{option.disabledReason}</FieldDescription>
                     ) : null}
                   </FieldContent>
                   <RadioGroupItem
@@ -649,7 +675,16 @@ function renderControl(section: SettingsSection, controlId: string, titleId: str
       const items = Object.fromEntries(control.options.map((option) => [option.value, option.label]));
       return (
         <Select value={control.value} onValueChange={(value) => control.onValueChange(value as string)} items={items}>
-          <SelectTrigger id={controlId} aria-label={section.title}>
+          {/* `select.tsx` is a byte-verbatim stock copy (`stockPrimitives.test.ts`
+              pins it) whose own trigger is `w-fit whitespace-nowrap` — sized to
+              its selected value with no cap. `max-w-full` is the compensation
+              this CONSUMER applies, the same pattern `SettingsSlider` already
+              uses for the stock `Slider` above: never edit the stock file to
+              chase a consumer's layout, cap it from here instead. Combined
+              with `SelectValue`'s own `line-clamp-1` (stock, already
+              `overflow:hidden`) a long selected value ellipsizes rather than
+              pushing the row wider than the pane. */}
+          <SelectTrigger id={controlId} aria-label={section.title} className="max-w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -669,13 +704,65 @@ function renderControl(section: SettingsSection, controlId: string, titleId: str
   }
 }
 
-/** Case-insensitive substring match over everything a row says about itself.
- *  The group name is included so "wheel" finds the whole Wheel gestures run. */
+/**
+ * A `ReactNode` that is plain text, or close enough to flatten into some —
+ * `minLabel`/`maxLabel` are typed `ReactNode` (the donor's small/large "A"
+ * glyphs, `SettingsSliderControl`'s own doc comment) but every caller in
+ * this repo passes a bare string. Anything else (an element, a fragment) is
+ * intentionally left out of the index rather than guessed at: it is the
+ * same "supply it explicitly" answer `SettingsSection.keywords` gives a
+ * `custom` control, not a reason to grow a JSX-walking text extractor here.
+ */
+function plainTextOf(node: ReactNode): string {
+  return typeof node === "string" || typeof node === "number" ? String(node) : "";
+}
+
+/**
+ * Every word a row shows on screen — or, for `custom`, is told it shows —
+ * joined into one lowercased string. `sectionMatches` and the nav's live
+ * counts both filter from this SAME index, so "does it match" and "why did
+ * it match" can never disagree.
+ *
+ * Codex judge, Finding 1 (`settings-panel-fixes` verdict, 2026-09-22):
+ * searching "Figma" used to hide "What the scroll wheel does", because its
+ * "Figma-ish…" text lives in a RADIO OPTION's description
+ * (`cameraGestures.ts`'s `WHEEL_CONVENTION_DESCRIPTIONS`), which
+ * `sectionMatches` never read. Every option's label, description and
+ * disabled-reason is a row on screen the moment the section renders — a
+ * `radio`/`select` never hides its non-selected options — so all of it
+ * belongs in the same index as the title.
+ */
+function sectionSearchIndex(section: SettingsSection): string {
+  const parts: string[] = [section.title, section.description ?? "", section.group ?? "", section.groupDescription ?? ""];
+  parts.push(...(section.keywords ?? []));
+
+  const control = section.control;
+  switch (control.kind) {
+    case "radio":
+    case "select":
+      for (const option of control.options) {
+        parts.push(option.label, option.description ?? "", option.disabledReason ?? "");
+      }
+      break;
+    case "slider":
+      parts.push(plainTextOf(control.minLabel), plainTextOf(control.maxLabel), control.resetLabel ?? "");
+      if (control.presets) {
+        const format = control.format ?? String;
+        for (const preset of control.presets) parts.push(format(preset));
+      }
+      break;
+    case "switch":
+    case "custom":
+      break;
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+/** Case-insensitive substring match over everything a row says about itself —
+ *  `sectionSearchIndex`, above. */
 function sectionMatches(section: SettingsSection, query: string): boolean {
   if (!query) return true;
-  return `${section.title} ${section.description ?? ""} ${section.group ?? ""}`
-    .toLowerCase()
-    .includes(query);
+  return sectionSearchIndex(section).includes(query);
 }
 
 /**
@@ -1024,12 +1111,65 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
                               column and the control is a shrink-0 right column —
                               Obsidian's shape, from a stock part this file was
                               already importing and using only inside radio
-                              options. */}
+                              options.
+                              WHY `min-w-0` on FieldContent, added for Finding 2
+                              (`settings-panel-fixes` verdict, 2026-09-22): a
+                              flex item's default `min-width` is `auto` — its
+                              content's intrinsic width, unbroken words and
+                              all — never the flex-basis `flex-1` implies. The
+                              control beside it is `shrink-0` (an intentional
+                              floor, so a `Select`/`Switch` never gets crushed
+                              to nothing), so without a matching min-width on
+                              THIS side, an unusually long setting name or
+                              description was free to push the row — and the
+                              pane's `overflow-x: hidden` ScrollArea around it
+                              — wider than the window instead of wrapping.
+                              `min-w-0` is what lets `flex-1` actually shrink
+                              below content size, so text wraps first. */}
                           <Field orientation={wide ? "vertical" : "horizontal"} className="gap-3 py-3.5">
-                            <FieldContent>
-                              <FieldTitle id={titleId}>{highlight(section.title, query)}</FieldTitle>
+                            <FieldContent className="min-w-0">
+                              {/* `block w-full break-words`, overriding two
+                                  of the stock `FieldTitle`'s own classes.
+                                  MEASURED getting here, each step isolating
+                                  the next blocker with an intentionally
+                                  unbroken ~200-char title in a narrow pane:
+                                  (1) `min-w-0` alone on FieldContent did
+                                  nothing to FieldTitle — `w-fit` sizes it to
+                                  `fit-content`, and `fit-content`'s
+                                  min-content contribution ignores
+                                  `overflow-wrap` (CSS Sizing: only
+                                  `word-break` participates in intrinsic
+                                  sizing, `overflow-wrap` is a paint-time
+                                  fallback) — so it still rendered its full
+                                  1445px one-line width past an 816px pane.
+                                  (2) Overriding `w-fit` with `w-full` shrank
+                                  the BOX to 588px, correctly, but the text
+                                  inside still didn't wrap (still one 20px-
+                                  tall line, still overflowing its own now-
+                                  narrower box): `FieldTitle` is ALSO
+                                  `display:flex` (for an icon beside text
+                                  elsewhere in this kit), and a lone text
+                                  child of a flex container is an anonymous
+                                  flex ITEM with the exact same
+                                  `min-width:auto` problem one level deeper,
+                                  unreachable by a class on the container.
+                                  (3) `block` removes FieldTitle from flex
+                                  layout for this text-only usage, which is
+                                  what finally let it wrap: 3 lines, 60px
+                                  tall, zero horizontal overflow. Wrapping
+                                  mid-word (`break-words`) keeps every
+                                  character on screen; the alternative,
+                                  clipping with an ellipsis, would hide
+                                  authored text this app's own truthful-
+                                  rendering rule (`CLAUDE.md`) rules out for a
+                                  name or label. */}
+                              <FieldTitle id={titleId} className="block w-full break-words">
+                                {highlight(section.title, query)}
+                              </FieldTitle>
                               {section.description ? (
-                                <FieldDescription>{highlight(section.description, query)}</FieldDescription>
+                                <FieldDescription className="break-words">
+                                  {highlight(section.description, query)}
+                                </FieldDescription>
                               ) : null}
                             </FieldContent>
                             <div

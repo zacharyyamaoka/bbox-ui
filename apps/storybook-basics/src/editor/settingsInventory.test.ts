@@ -17,10 +17,11 @@
 // the living specification). It records one fact the code cannot state about
 // itself — "nothing disappeared" — and nothing else. It asserts ids, not
 // labels or descriptions, so re-wording a setting stays a one-file change.
-import { describe, expect, it } from "vitest";
+import type { ReactElement, ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_APPEARANCE_PREFERENCES } from "./appearancePreferences";
-import { DEFAULT_EDGE_POLICY, edgePolicyPreset, type EdgePolicyPresetId } from "./edgePolicy";
+import { DEFAULT_EDGE_POLICY, EDGE_POLICY_PRESETS, edgePolicyPreset, type EdgePolicyPresetId } from "./edgePolicy";
 import { DEFAULT_GESTURE_SETTINGS } from "./gestureSettings";
 import { DEFAULT_INTERFACE_SCALE } from "./interfaceScale";
 import { SETTINGS_CATEGORY_IDS, buildSettingsCategories, type SettingsCategoriesInput } from "./settingsCategories";
@@ -192,7 +193,16 @@ describe("the settings a host gets", () => {
     expect(about.icon).toBe("★");
   });
 
-  it("every control kind in the list is one the shell can render", () => {
+  it("every control kind in the list is one SettingsControl actually has — the real render is a DOM check, not this file's", () => {
+    // This is a pure-node `unit` test (no DOM — see the file header) so it
+    // can only prove the TYPE is exhaustive, never that a kind actually
+    // paints. Finding 5 (`settings-panel-fixes` verdict, 2026-09-22): a
+    // string match against the switch in `renderControl` would go green even
+    // if a case's JSX were deleted. `SettingsCategories.stories.tsx`'s
+    // `AllFiveCategories` is where each kind is asserted against a real
+    // rendered role (`radiogroup`, `switch`, a select trigger, `slider`, and
+    // the edge-policy preset buttons for `custom`) — this test only pins
+    // that the DATA still uses every kind that shell check covers.
     const kinds = new Set(
       buildSettingsCategories(input()).flatMap((c) => c.sections.map((s) => s.control.kind)),
     );
@@ -208,8 +218,63 @@ describe("the settings a host gets", () => {
     expect(scale.control.kind === "slider" && scale.control.commit).toBe("exit");
   });
 
-  it("a preset still replaces the whole policy", () => {
-    // Guards the one `custom` section the layout pass touches the container of.
-    expect(edgePolicyPreset("whiteboard").policy).toBeTruthy();
+  /**
+   * Walks a plain (un-rendered) React element tree for the first descendant
+   * whose props match — the same shape `data-testid` selectors reach for in
+   * a mounted DOM, but over `ReactElement.props` directly. `kind: "custom"`
+   * sections hand back exactly this shape (`element.render`), and this file
+   * is a pure-node `unit` project test (`vitest.config.ts`'s `include:
+   * ["src/**\/*.test.ts"]` — no `.tsx`, no DOM) — so unlike the DOM check
+   * this repo already has for `radio`/`switch`/`select`/`slider`
+   * (`SettingsCategories.stories.tsx`'s `AllFiveCategories`, Finding 5),
+   * "does the real onClick fire" here means invoking the prop directly, not
+   * mounting a browser this project doesn't have.
+   */
+  function findByProps(
+    node: ReactNode,
+    match: (props: Record<string, unknown>) => boolean,
+  ): ReactElement<Record<string, unknown>> | null {
+    if (node === null || typeof node !== "object") return null;
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        const found = findByProps(child, match);
+        if (found) return found;
+      }
+      return null;
+    }
+    const element = node as ReactElement<Record<string, unknown>>;
+    if (typeof element.props !== "object") return null;
+    if (match(element.props)) return element;
+    return findByProps(element.props.children as ReactNode, match);
+  }
+
+  it("a preset still replaces the whole policy — the real onClick, not a truthy render", () => {
+    // Finding 5 (`settings-panel-fixes` verdict, 2026-09-22): the old
+    // version of this test asserted `edgePolicyPreset("whiteboard").policy`
+    // is truthy, which is true of the PRESET TABLE alone and says nothing
+    // about whether the row's button is still wired to it. A mutation that
+    // deletes the preset button's `onClick`, or points it at the wrong
+    // preset id, left that assertion green.
+    const onEdgePolicyPreset = vi.fn();
+    const categories = buildSettingsCategories(input({ onEdgePolicyPreset }));
+    const connections = categories.find((c) => c.id === SETTINGS_CATEGORY_IDS.connections)!;
+    const section = connections.sections.find((s) => s.id === "edge-policy-preset")!;
+    if (section.control.kind !== "custom") throw new Error("edge-policy-preset stopped being a custom control");
+
+    for (const preset of EDGE_POLICY_PRESETS) {
+      const button = findByProps(
+        section.control.render,
+        (props) => props["data-slot"] === "edge-policy-preset" && props["data-preset-id"] === preset.id,
+      );
+      if (!button) throw new Error(`no rendered button for preset ${preset.id}`);
+      const onClick = button.props.onClick as (() => void) | undefined;
+      if (typeof onClick !== "function") throw new Error(`preset ${preset.id}'s button has no onClick`);
+      onClick();
+      // The REAL call the host would make, and the REAL policy it replaces
+      // the whole thing with — not merely "some object exists".
+      expect(onEdgePolicyPreset, `clicking ${preset.id}`).toHaveBeenLastCalledWith(preset.id);
+      expect(edgePolicyPreset(preset.id).policy, `${preset.id}'s policy`).toEqual(preset.policy);
+    }
+    expect(onEdgePolicyPreset).toHaveBeenCalledTimes(EDGE_POLICY_PRESETS.length);
   });
 });

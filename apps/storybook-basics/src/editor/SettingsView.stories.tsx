@@ -161,43 +161,51 @@ export const AsAPage: Story = {
   },
 };
 
+/**
+ * Waits out the popup's own geometry transition and returns the settled box.
+ *
+ * WHY this exists, and why the story used to give up on measuring the swap
+ * at all: `POPUP_BASE`'s `duration-100` sets `transition-duration` with no
+ * `transition-property` beside it — and the CSS Transitions spec's initial
+ * value for `transition-property` is `all`, not `none`. So `duration-100`
+ * alone quietly transitions EVERY animatable property that differs between
+ * `POPUP_DIALOG` and `POPUP_PAGE` (`top`, `left`, `width`, `height`,
+ * `translate`, all four `border-radius` corners), not just the opacity the
+ * `data-open:` keyframes were written for.
+ *
+ * A 2026-09-22 pass here MEASURED `getBoundingClientRect()` still reporting
+ * the outgoing dialog's box a full second after the class swap and called
+ * that the runner failing to "re-resolve viewport-relative sizes" — the
+ * assertions below were deleted rather than fixed. Re-measured: it is not
+ * the runner. `popup.getAnimations()` at that same moment returns nine live
+ * WAAPI-backed CSS Transitions, `playState: "running"`, animating exactly
+ * those nine properties from the dialog's values to the page's. Waiting for
+ * that list to empty — the same "poll two frames until they agree" idiom
+ * `interfaceScale.smoke.test.tsx`'s `settledRect` already uses in the
+ * sibling app — is what makes the box real. */
+async function settledRect(el: HTMLElement): Promise<DOMRect> {
+  await waitFor(() => expect(el.getAnimations().length).toBe(0), { timeout: 3000 });
+  return el.getBoundingClientRect();
+}
+
 /** Switching the presentation setting re-presents the open settings at once. */
 export const SwitchingPresentationChangesTheContainer: Story = {
   render: () => <Harness initial="dialog" />,
   play: async () => {
     await body().findByRole("dialog");
-    const small = view()!.getBoundingClientRect();
+    const popup = view()!;
+    const small = await settledRect(popup);
+
     await userEvent.click(radio("settings-presentation", "page")!);
     await waitFor(() => expect(view()).toHaveAttribute("data-presentation", "page"));
-    // ── What changed here on 2026-09-22, and why ────────────────────────
-    //
-    // This story used to assert the switched popup's measured WIDTH — that it
-    // grew, and that it equalled `window.innerWidth`. Those two lines cannot
-    // run in this environment any more, and the reason is the runner, not the
-    // component.
-    //
-    // MEASURED, in the vitest browser frame: after the switch the popup's
-    // className is already `inset-0 h-screen w-screen max-w-none max-h-none`
-    // and its computed `max-width` is `none`, yet `getBoundingClientRect()`
-    // keeps reporting the OUTGOING dialog's 1040px in a frame whose
-    // `window.innerWidth` is 1200 — indefinitely, not for a frame; polling for
-    // a second does not change it. The same runner resolves the very same
-    // classes correctly when the popup MOUNTS with them, which is why `AsAPage`
-    // above still asserts the full geometry and passes. So this runner does not
-    // re-resolve viewport-relative sizes after a class change on a live node.
-    //
-    // MEASURED, in a real Chromium at 1280x800 driving the real Storybook
-    // (`docs/capture_settings_panel_real.mjs`, which asserts it on every run):
-    // the same click takes the popup from 1040x720 to 1280x800 within 250ms.
-    // The product behaviour is correct; only this environment cannot see it.
-    //
-    // So the geometry claim moved to the capture script, and what stays here is
-    // the CONTRACT the story is named for — the same open settings, re-presented
-    // in the other container, without a close/reopen. These assertions are
-    // strictly about the swap and are not hostage to the frame's `vw` handling.
-    const popup = view()!;
     await expect(popup.className).toContain("w-screen");
     await expect(popup.className).not.toContain("w-[min(1040px");
+    const grown = await settledRect(popup);
+    await expect(grown.width).toBeGreaterThan(small.width);
+    await expect(grown.width).toBeCloseTo(window.innerWidth, 0);
+    await expect(grown.height).toBeCloseTo(window.innerHeight, 0);
+    await expect(Math.abs(grown.left)).toBeLessThanOrEqual(1);
+    await expect(Math.abs(grown.top)).toBeLessThanOrEqual(1);
     await expect(getComputedStyle(popup).maxWidth).toBe("none");
     await expect(getComputedStyle(popup).maxHeight).toBe("none");
     await expect(radio("settings-presentation", "page")).toHaveAttribute("aria-checked", "true");
@@ -210,6 +218,10 @@ export const SwitchingPresentationChangesTheContainer: Story = {
     await waitFor(() => expect(view()).toHaveAttribute("data-presentation", "dialog"));
     await expect(view()!.className).toContain("w-[min(1040px");
     await expect(view()!.className).not.toContain("w-screen");
+    const shrunk = await settledRect(popup);
+    await expect(shrunk.width).toBeLessThan(grown.width);
+    await expect(shrunk.width).toBeCloseTo(small.width, 0);
+    await expect(shrunk.height).toBeCloseTo(small.height, 0);
     await expect(view()).toBe(popup);
   },
 };

@@ -365,10 +365,13 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
       onOpenChange={onOpenChange}
       presentation={settings.settingsPresentation}
       categories={categories}
-      // The one line of configuration P2 costs a host: this app carries 31
-      // settings across six categories, which is past the point where browsing
-      // beats searching. A host with three settings leaves it off (the
-      // default) and gets no search box for three settings.
+      // The one line of configuration P2 costs a host: this app carries 28
+      // settings across six categories on the default wheel convention (25
+      // once "Scroll zooms directly" is chosen — `settingsInventory.test.ts`
+      // pins 29/26 for a host that ALSO supplies `allowAnyPath`, which this
+      // one deliberately does not, above), which is past the point where
+      // browsing beats searching. A host with three settings leaves it off
+      // (the default) and gets no search box for three settings.
       searchable
       testIdPrefix="ss-settings"
     />
