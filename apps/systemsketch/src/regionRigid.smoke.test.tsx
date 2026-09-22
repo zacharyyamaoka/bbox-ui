@@ -23,6 +23,10 @@
 //      region + card as one undo step.
 //   4. NO OVERLAP — a Branch's first arm header and a Loop's body start at or
 //      below the card's bottom edge (getBoundingClientRect, never presence).
+//   5. HOVER + NOT ALONE (Zach, 2026-09-22) — a real pointer over the card
+//      paints tldraw's hover outline on the frame's box, never the card's; no
+//      select-all, Tab or first-child gesture leaves the card selected alone,
+//      and the pill offers no view toggle for it, even mid-rename.
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, react, type TLShapeId } from "tldraw";
@@ -30,6 +34,7 @@ import { createShapeId, react, type TLShapeId } from "tldraw";
 import { BACKEND_SETTING_STORAGE_KEY, DEFAULT_PYBLOCKS_URL } from "@trunk/backend/backendSetting";
 
 import regionForIf from "../../../docs/fixtures/pyblocks-scene/region_for_if.scene.json";
+import { setBlockView } from "./chrome/ContextualPopupMenu/selectionActions";
 import { loadBoardText, serializeBoard } from "./chrome/FileMenu/fileActions";
 import { applyScene } from "./document/applySceneDiff";
 import { sceneFromRecords } from "./document/sceneFromStore";
@@ -722,6 +727,238 @@ describe("STILL WORKS — what the card owns keeps working", () => {
     await userEvent.keyboard("{Control>}z{/Control}");
     await waitFor(() => (shape(id) && shape(cornerId) ? true : null), { what: "one undo restores both" });
     expectPinned(id, "after undo of Delete");
+  });
+});
+
+/**
+ * The box tldraw's overlay canvas actually PAINTED, in viewport px — read off
+ * the pixels of `.tl-canvas-overlays`, never off `getHoveredShapeId` or the
+ * indicator path's own maths. With nothing selected and no gesture running,
+ * the only thing that canvas draws is the hover indicator
+ * (`ShapeIndicatorOverlayUtil.getOverlays`), so the bounding box of its
+ * non-transparent pixels IS the outline a person sees.
+ */
+function paintedOverlayBox(): { left: number; top: number; right: number; bottom: number } | null {
+  const canvas = app!.root.querySelector<HTMLCanvasElement>("canvas.tl-canvas-overlays");
+  if (!canvas || canvas.width === 0 || canvas.height === 0) return null;
+  const pixels = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      if (pixels[(y * canvas.width + x) * 4 + 3] === 0) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (minX === Infinity) return null;
+  const rect = canvas.getBoundingClientRect();
+  const sx = rect.width / canvas.width;
+  const sy = rect.height / canvas.height;
+  return { left: rect.left + minX * sx, top: rect.top + minY * sy, right: rect.left + (maxX + 1) * sx, bottom: rect.top + (maxY + 1) * sy };
+}
+
+describe("HOVER — pointing at the card outlines the WHOLE region", () => {
+  // Zach, 2026-09-22: "when you hover on the corner block its the entire out
+  // frame that should become highlighted in blue". Real mouse moves (vitest's
+  // Playwright `hover`), then the PAINTED outline measured against the frame.
+  // Deliberately mechanism-agnostic — it reads pixels, not `hoveredShapeId`:
+  // redirecting that RECORD to the region was tried and breaks the card's
+  // double-click rename (tldraw's `Idle.onDoubleClick` edits the HOVERED
+  // shape, and a region cannot edit). The fix is paint-only
+  // (`shapes/region/regionHoverIndicator.ts`); the record stays the card.
+  for (const where of ["header", "body"] as const) {
+    it(`a real pointer over the card's ${where} paints the hover outline on the frame's box, never the card's`, async () => {
+      app = await mountApp();
+      const { id, cornerId } = placeRegion("for", 300, 200);
+      const face = await cardFace(cornerId);
+      const header = await cardHeader(cornerId);
+      app.editor.selectNone();
+      let point = headerPoint(header);
+      if (where === "body") {
+        const f = face.getBoundingClientRect();
+        const h = header.getBoundingClientRect();
+        point = { x: f.left + f.width / 2, y: (h.bottom + f.bottom) / 2 };
+      }
+      const hit = document.elementFromPoint(point.x, point.y)!;
+      expect(face.contains(hit), `the aimed ${where} point is on the card`).toBe(true);
+      const rect = hit.getBoundingClientRect();
+      // Arrive from empty canvas first, so tldraw sees a real pointer enter.
+      // WHY the detour through a throwaway element: tldraw paints hover only
+      // while `isHoveringCanvas`, which its canvas `onPointerEnter` sets. The
+      // app mounts full-viewport UNDER a mouse that has not moved, so the
+      // pointer is already "inside" and no enter ever fires — measured:
+      // `isHoveringCanvas` stayed null through every move. A person always
+      // arrives from outside the canvas; this makes the test do the same.
+      const outside = document.createElement("div");
+      outside.style.cssText = "position:fixed;left:0;top:0;width:8px;height:8px;z-index:2147483647;";
+      document.body.appendChild(outside);
+      await userEvent.hover(outside);
+      outside.remove();
+      // (Above-left of the frame — clear of every chrome surface.)
+      const canvasRect = canvasOf(app.root).getBoundingClientRect();
+      const card0 = face.getBoundingClientRect();
+      await userEvent.hover(canvasOf(app.root), { position: { x: Math.round(card0.left - 60 - canvasRect.left), y: Math.round(card0.top - 60 - canvasRect.top) } });
+      expect(app.editor.getHoveredShapeId(), "empty canvas hovers nothing").toBeNull();
+      await userEvent.hover(hit, { position: { x: Math.round(point.x - rect.left), y: Math.round(point.y - rect.top) } });
+      await waitFor(() => (app!.editor.getHoveredShapeId() ? true : null), { what: "something is hovered" });
+      await waitFor(() => paintedOverlayBox(), { what: "a painted hover outline" });
+      await settle(150);
+      const painted = paintedOverlayBox()!;
+
+      const frame = app.root.querySelector<HTMLElement>(`[data-shape-id="${id}"]`)!.getBoundingClientRect();
+      const card = face.getBoundingClientRect();
+      const text = (r: { left: number; top: number; right: number; bottom: number }) =>
+        `${r.left.toFixed(1)},${r.top.toFixed(1)} → ${r.right.toFixed(1)},${r.bottom.toFixed(1)}`;
+      const offBy = (r: { left: number; top: number; right: number; bottom: number }) =>
+        Math.max(Math.abs(painted.left - r.left), Math.abs(painted.top - r.top), Math.abs(painted.right - r.right), Math.abs(painted.bottom - r.bottom));
+      // The stroke is centred on the path (1.5px, antialiased), so the
+      // painted box may overhang the frame's box by ~1px on each side.
+      expect(offBy(frame), `painted ${text(painted)} vs frame ${text(frame)} (card ${text(card)}, hovered ${String(app.editor.getHoveredShapeId())})`).toBeLessThanOrEqual(2.5);
+      // ...and it is NOT the card's outline: the card is a fraction of it.
+      expect(frame.width - card.width).toBeGreaterThan(100);
+      expect(offBy(card), "the card's own outline was painted").toBeGreaterThan(50);
+    });
+  }
+
+  it("hovering the card still reveals a tunnelled cable on the card's port — the hovered record is still the CARD (wireTunnel.ts)", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("for", 520, 160);
+    const source = createShapeId();
+    app.editor.createShape({ id: source, type: BLOCK_SHAPE_TYPE, x: 60, y: 420, props: { name: "frames()", view: "port", ports: { left: [], right: [{ id: "out", declaration: "out" }], top: [], bottom: [] } } } as never);
+    // A member with a cable of its own: hovering the CARD must not reveal it —
+    // that is what the region-as-hovered-record variant would have changed
+    // (`wireContextFocused` walks ancestors, so the region reveals every
+    // member's cable).
+    const member = createShapeId();
+    app.editor.createShape({ id: member, type: BLOCK_SHAPE_TYPE, parentId: id, x: 240, y: 170, props: { name: "use()", view: "port", ports: { left: [{ id: "in", declaration: "in" }], right: [], top: [], bottom: [] } } } as never);
+    await dotOf(cornerId, "iterable");
+    await dotOf(member, "in");
+    const cardWire = createWire(app.editor, { from: { nodeId: source, portId: "out" }, to: { nodeId: cornerId, portId: "iterable" } });
+    const memberWire = createWire(app.editor, { from: { nodeId: source, portId: "out" }, to: { nodeId: member, portId: "in" } });
+    if (!cardWire || !memberWire) throw new Error("both cables bind");
+    app.editor.updateShapes([cardWire, memberWire].map((wire) => ({ id: wire, type: WIRE_SHAPE_TYPE, props: { tunnel: true } })) as never);
+    const drawn = (wire: TLShapeId) => app!.root.querySelector<SVGPathElement>(`[data-shape-id="${wire}"] [data-slot="trace-line"]`)?.getTotalLength() ?? 0;
+    app.editor.selectNone();
+
+    // Arrive from outside the canvas (see the frame tests above for why), then
+    // rest on empty canvas: nothing is about either cable, so both hide.
+    const outside = document.createElement("div");
+    outside.style.cssText = "position:fixed;left:0;top:0;width:8px;height:8px;z-index:2147483647;";
+    document.body.appendChild(outside);
+    await userEvent.hover(outside);
+    outside.remove();
+    const canvasRect = canvasOf(app.root).getBoundingClientRect();
+    await userEvent.hover(canvasOf(app.root), { position: { x: Math.round(canvasRect.width - 120), y: 120 } });
+    await waitFor(() => (app!.editor.getHoveredShapeId() === null ? true : null), { what: "nothing hovered" });
+    const hiddenCard = await waitFor(() => { const l = drawn(cardWire); return l > 0 && l < 120 ? l : null; }, { what: "the card's cable hidden" });
+    await waitFor(() => { const l = drawn(memberWire); return l > 0 && l < 120 ? l : null; }, { what: "the member's cable hidden" });
+
+    const header = await cardHeader(cornerId);
+    const point = headerPoint(header);
+    const hit = document.elementFromPoint(point.x, point.y)!;
+    const rect = hit.getBoundingClientRect();
+    await userEvent.hover(hit, { position: { x: Math.round(point.x - rect.left), y: Math.round(point.y - rect.top) } });
+    await waitFor(() => (app!.editor.getHoveredShapeId() === cornerId ? true : null), { what: "the CARD is the hovered record" });
+    await waitFor(() => (drawn(cardWire) > hiddenCard + 100 ? true : null), { what: "hovering the card reveals its own cable" });
+    await settle(200);
+    expect(drawn(memberWire), "a member's cable stays hidden — the hover is the card's, not the region's").toBeLessThan(120);
+  });
+});
+
+describe("NOT SELECTABLE ALONE — no gesture leaves the card selected by itself", () => {
+  // Zach, 2026-09-22: "When you hover on it by itself shouldn't be
+  // selectable." Click, marquee and a raw setSelectedShapes are covered in
+  // ONE OBJECT above; these are the remaining doors.
+  it("select-all (Ctrl+A) from nothing and from a member never selects the card", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("for", 300, 200);
+    const member = createShapeId();
+    app.editor.createShape({ id: member, type: BLOCK_SHAPE_TYPE, parentId: id, x: 80, y: 180, props: { name: "member()", view: "port" } } as never);
+    await cardFace(cornerId);
+    app.editor.selectNone();
+    app.editor.focus();
+    await userEvent.keyboard("{Control>}a{/Control}");
+    await waitFor(() => (app!.editor.getSelectedShapeIds().length > 0 ? true : null), { what: "select-all selected something" });
+    expect(app.editor.getSelectedShapeIds()).toEqual([id]);
+
+    // From a member, stock select-all selects every SIBLING — the card is one
+    // of them. It comes out as the region, never the card.
+    app.editor.select(member);
+    app.editor.focus();
+    await userEvent.keyboard("{Control>}a{/Control}");
+    await settle();
+    expect(app.editor.getSelectedShapeIds()).not.toContain(cornerId);
+    expect(app.editor.getSelectedShapeIds()).toContain(id);
+  });
+
+  it("keyboard navigation — Tab from a member and Ctrl+Shift+↓ from the region — never selects the card", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("for", 300, 200);
+    const member = createShapeId();
+    app.editor.createShape({ id: member, type: BLOCK_SHAPE_TYPE, parentId: id, x: 80, y: 180, props: { name: "member()", view: "port" } } as never);
+    await cardFace(cornerId);
+    const seen = new Set<string>();
+    const stopWatching = react("regionRigid selections", () => {
+      const ids = app!.editor.getSelectedShapeIds();
+      if (ids.length === 1) seen.add(ids[0]);
+    });
+    try {
+      // Tab walks the member's siblings in reading order; the card is the
+      // first of them, so a Tab or two lands on it.
+      app.editor.select(member);
+      app.editor.focus();
+      for (let press = 0; press < 3; press++) {
+        await userEvent.keyboard("{Tab}");
+        await settle(80);
+        expect(app.editor.getSelectedShapeIds()).not.toEqual([cornerId]);
+      }
+      // Ctrl+Shift+↓ is stock "select first child" — the card is the first.
+      app.editor.select(id);
+      app.editor.focus();
+      await userEvent.keyboard("{Control>}{Shift>}{ArrowDown}{/Shift}{/Control}");
+      await settle(80);
+      expect(app.editor.getSelectedShapeIds()).not.toEqual([cornerId]);
+    } finally {
+      stopWatching();
+    }
+    expect(seen.has(cornerId), "the card was never the sole selection").toBe(false);
+  });
+
+  it("the selection pill never offers Simple/Ports/Expanded for the card — not while the card is being renamed, and not for the region", async () => {
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("for", 300, 200);
+    await cardFace(cornerId);
+    // The one window the card IS selected alone: its own rename session.
+    const title = await waitFor(() => app!.root.querySelector<HTMLElement>(`[data-shape-id="${cornerId}"] [data-slot="ss-block-title"][data-editing="false"]`), { what: "the card's title" });
+    await userEvent.dblClick(title);
+    await waitFor(() => (app!.editor.getEditingShapeId() === cornerId ? true : null), { what: "the card's editing session" });
+    expect(app.editor.getSelectedShapeIds()).toEqual([cornerId]);
+    await waitFor(() => app!.root.querySelector('[data-slot="floating-toolbar"][data-visible="true"]'), { what: "the pill over the card" });
+    await settle(300);
+    expect(app.root.querySelector('[data-testid="ss-selection-view"]'), "no view toggle while the card is renamed").toBeNull();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => (app!.editor.getEditingShapeId() === null ? true : null), { what: "the session ended" });
+
+    app.editor.select(id);
+    await waitFor(() => (app!.editor.getSelectedShapeIds()[0] === id ? true : null), { what: "the region selected" });
+    await waitFor(() => app!.root.querySelector('[data-slot="floating-toolbar"][data-visible="true"]'), { what: "the pill over the region" });
+    await settle(300);
+    expect(app.root.querySelector('[data-testid="ss-selection-view"]'), "no view toggle for the region").toBeNull();
+  });
+
+  it("the view setter every 1/2/3 hotkey and pill click goes through refuses the card", async () => {
+    app = await mountApp();
+    const { cornerId } = placeRegion("for", 300, 200);
+    await cardFace(cornerId);
+    const before = (shape<BlockLike>(cornerId) as unknown as { props: { view: string } }).props.view;
+    setBlockView(app.editor, cornerId, "expanded");
+    expect((shape<BlockLike>(cornerId) as unknown as { props: { view: string } }).props.view).toBe(before);
+    expect(before).not.toBe("expanded");
   });
 });
 

@@ -25,7 +25,7 @@ import { Overlay } from "./chrome/overlay";
 import { SystemSketchKeyboardShortcutsDialog, withViewHotkeys } from "./chrome/ContextualPopupMenu/viewHotkeys";
 import { installSelectionHistory } from "./document/selectionHistory";
 import { focusShapeVisibility } from "./chrome/FocusLens";
-import { BINDING_UTILS, KITS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
+import { BINDING_UTILS, KITS, OVERLAY_UTILS, SHAPE_UTILS, TOOLS, withToolUi } from "./shapes/registry";
 import { SourceContextMenu } from "./source/sourceContextMenu";
 
 export interface AppProps {
@@ -206,6 +206,7 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
         shapeUtils={SHAPE_UTILS}
         bindingUtils={BINDING_UTILS}
         tools={TOOLS}
+        overlayUtils={OVERLAY_UTILS}
         components={COMPONENTS}
         overrides={OVERRIDES}
         onMount={handleMount}
