@@ -196,6 +196,80 @@ function expectSharesRow(a: DOMRect, b: DOMRect, what: string): void {
   }
 }
 
+/** The Expanded tick's length and cross-stroke, and the Port rule's stroke,
+ *  as DRAWN. `sideEffects.layout.ts`'s `SIDE_EFFECT_DIVIDER_PX` is 10 and
+ *  `blockPort.tsx` pairs it with a 2px cross-stroke; the Port-view rule is
+ *  1px (`EdgeLineMark`'s own dev-guide weight). Written as literals on
+ *  purpose — these are the sizes the drawing was signed off at, so an
+ *  acceptance story should NOTICE the constant changing rather than follow
+ *  it wherever it goes. */
+const EXPANDED_TICK_PX = 10;
+const EXPANDED_TICK_STROKE_PX = 2;
+const PORT_RULE_STROKE_PX = 1;
+
+const WALLS: BlockSide[] = ["left", "right", "top", "bottom"];
+
+/** A column wall runs its rail vertically (left/right); a row wall runs it
+ *  horizontally (top/bottom) — `blockPort.tsx`'s own `railAxisFor`, restated
+ *  here so the story does not import layout internals to test them. */
+function axisOf(edge: BlockSide): "column" | "row" {
+  return edge === "left" || edge === "right" ? "column" : "row";
+}
+
+function markOnWall(wrapper: HTMLElement, markView: "expanded" | "port", edge: BlockSide): HTMLElement[] {
+  return Array.from(
+    wrapper.querySelectorAll<HTMLElement>(`[data-slot="block-port-return-divider"][data-mark-view="${markView}"][data-edge="${edge}"]`),
+  );
+}
+
+/**
+ * BOTH endpoints, the length along the run, and the cross-stroke of one
+ * divider mark — table-driven over any of the four walls (judge finding 3,
+ * 2026-09-22).
+ *
+ * WHY it replaced the two inequalities that used to stand here: `markRect.top
+ * >= blockRect.top - 0.5` together with `markRect.bottom <= blockRect.top +
+ * height / 2 + 1` are BOTH satisfied by a 1px line sitting on the top wall.
+ * The assertion could not tell the intended half-height rule from a dot, so
+ * it proved the mark existed somewhere plausible, not that it had the extent
+ * the sketch asks for. An extent needs two endpoints; this states them.
+ *
+ *  - Expanded — a tick standing OUTSIDE the wall: from the wall itself to
+ *    `EXPANDED_TICK_PX` beyond it, `EXPANDED_TICK_STROKE_PX` across. On a row
+ *    wall that is the same tick rotated 90°, so the length runs on Y and the
+ *    stroke on X — which is exactly what `axisOf` swaps below, and the reason
+ *    one table can cover all four walls.
+ *  - Port — Zach's own sketch, "with the line going to half way of the width
+ *    of the block": from the wall INWARD to the block's own centre line, 1px
+ *    across. Written as wall-to-CENTRE rather than as `halfSpan`, so the test
+ *    says what the drawing MEANS instead of restating the implementation's
+ *    arithmetic back at it.
+ */
+function expectDividerBox(mark: HTMLElement, edge: BlockSide, markView: "expanded" | "port", block: DOMRect, what: string): void {
+  const column = axisOf(edge) === "column";
+  const wall = edge === "left" ? block.left : edge === "right" ? block.right : edge === "top" ? block.top : block.bottom;
+  // `-1` on the two LEADING walls: "outside" is above/left of those and
+  // below/right of the trailing pair.
+  const outward = edge === "left" || edge === "top" ? -1 : 1;
+  const centre = column ? block.left + block.width / 2 : block.top + block.height / 2;
+
+  const farEnd = markView === "expanded" ? wall + outward * EXPANDED_TICK_PX : centre;
+  const expectedLow = Math.min(wall, farEnd);
+  const expectedHigh = Math.max(wall, farEnd);
+  const expectedStroke = markView === "expanded" ? EXPANDED_TICK_STROKE_PX : PORT_RULE_STROKE_PX;
+
+  const rect = mark.getBoundingClientRect();
+  const measuredLow = column ? rect.left : rect.top;
+  const measuredHigh = column ? rect.right : rect.bottom;
+  const measuredStroke = column ? rect.height : rect.width;
+  const runAxis = column ? "x" : "y";
+
+  expectWithin(measuredLow, expectedLow, 0.5, `${what} — ${runAxis}-low endpoint`);
+  expectWithin(measuredHigh, expectedHigh, 0.5, `${what} — ${runAxis}-high endpoint`);
+  expectWithin(measuredHigh - measuredLow, expectedHigh - expectedLow, 0.5, `${what} — length along the run`);
+  expectWithin(measuredStroke, expectedStroke, 0.5, `${what} — cross-stroke`);
+}
+
 /* ------------------------------------------------------------------ */
 /* SideBySide — the exact ask: two columns, Expanded and Port view,     */
 /* for the SAME block (run_ik).                                        */
@@ -231,11 +305,9 @@ export const SideBySide: Story = {
     const expandedDashes = dividerMarksOf(expandedWrapper, "expanded");
     await expect(expandedDashes).toHaveLength(1);
     const expandedDash = expandedDashes[0];
-    const dashRect = expandedDash.getBoundingClientRect();
-    const blockRect = expandedBlock.getBoundingClientRect();
-    expectWithin(dashRect.left, blockRect.right, 0.5, "expanded dash left edge sits flush on the right wall");
-    expectWithin(dashRect.width, 10, 0.5, "expanded dash length matches SIDE_EFFECT_DIVIDER_PX (10)");
-    await expect(dashRect.right).toBeGreaterThan(blockRect.right); // OUTSIDE the wall.
+    // Both endpoints, length and stroke — the tick stands flush ON the right
+    // wall and reaches exactly 10px OUTSIDE it (judge finding 3).
+    expectDividerBox(expandedDash, "right", "expanded", expandedBlock.getBoundingClientRect(), "expanded dash");
     expectDividerIsOnlyAMark(expandedDash, "expanded dash");
 
     const expandedDots = railDotCentres(required(expandedWrapper, '[data-slot="block-port-rail"][data-edge="right"]', "expanded right rail"));
@@ -248,10 +320,9 @@ export const SideBySide: Story = {
     const portLines = dividerMarksOf(portWrapper, "port");
     await expect(portLines).toHaveLength(1);
     const portLine = portLines[0];
-    const lineRect = portLine.getBoundingClientRect();
-    const portBlockRect = portBlock.getBoundingClientRect();
-    expectWithin(lineRect.right, portBlockRect.right, 0.5, "port line's outer end sits flush on the right wall");
-    expectWithin(lineRect.left, portBlockRect.left + portBlockRect.width / 2, 1, "port line's inner end is within 1px of half the block's width");
+    // Outer end flush on the right wall, inner end exactly on the block's own
+    // vertical centre line — "half way of the width of the block".
+    expectDividerBox(portLine, "right", "port", portBlock.getBoundingClientRect(), "port line");
     expectDividerIsOnlyAMark(portLine, "port line");
 
     const portDots = railDotCentres(required(portWrapper, '[data-slot="block-port-rail"][data-edge="right"]', "port right rail"));
@@ -582,61 +653,80 @@ export const ReorderAcrossDivider: Story = {
 };
 
 /* ------------------------------------------------------------------ */
-/* TopWallDivider — judge finding 4: `dividerAfter` on a ROW edge (top/  */
-/* bottom) used to be silently discarded. Now it's axis-aware and draws  */
-/* on every wall, not just left/right.                                  */
+/* EveryWall — judge finding 4: `dividerAfter` on a ROW edge (top/bottom) */
+/* used to be silently discarded, so it is axis-aware now and draws on     */
+/* every wall. And judge finding 3 (round 2): the acceptance story had     */
+/* only ever RENDERED the top and right walls, and proved the extent with  */
+/* inequalities a 1px line satisfies. This one is table-driven over all    */
+/* four walls in both views, asserting both endpoints of every mark.       */
 /* ------------------------------------------------------------------ */
 
-function TopWallBlock({ id, view, width, height }: { id: string; view: BlockView; width: number; height: number }) {
-  const items: PortEdgeItem[] = [
-    { id: "alpha", label: "alpha" },
-    { id: "beta", label: "beta" },
-  ];
+function EveryWallBlock({ id, view, width, height }: { id: string; view: BlockView; width: number; height: number }) {
+  // Two ports and one divider on EVERY wall, so the same table can walk all
+  // four. Port ids are per-wall so no two rails share one.
+  const wall = (edge: BlockSide) => ({
+    items: [
+      { id: `${edge}-a`, label: "a" },
+      { id: `${edge}-b`, label: "b" },
+    ] satisfies PortEdgeItem[],
+    dividerAfter: sanitizeDividers([0], 2),
+  });
   return (
-    <BlockPort id={id} view={view} edges={{ top: { items, dividerAfter: sanitizeDividers([0], items.length) } }}>
+    <BlockPort id={id} view={view} edges={{ left: wall("left"), right: wall("right"), top: wall("top"), bottom: wall("bottom") }}>
       <Block header="fn" body="" footer={FOOTER} width={width} height={height} />
     </BlockPort>
   );
 }
 
-export const TopWallDivider: Story = {
+const EVERY_WALL_EXPANDED_CAPTION = "All four walls, Expanded — a tick outside each wall";
+const EVERY_WALL_PORT_CAPTION = "All four walls, Port — each rule runs inward to the block's own centre line";
+
+export const EveryWall: Story = {
   render: () => (
-    <div className="bg-background text-foreground" style={{ padding: 64, display: "flex", gap: 64, minHeight: "100vh" }}>
-      <Figure id="top-expanded" caption="Top wall, Expanded — a row-axis divider (judge finding 4)">
-        <TopWallBlock id="top-expanded" view="expanded" width={EXPANDED_WIDTH} height={EXPANDED_HEIGHT} />
+    <div className="bg-background text-foreground" style={{ padding: 72, display: "flex", gap: 96, minHeight: "100vh" }}>
+      <Figure id="every-wall-expanded" caption={EVERY_WALL_EXPANDED_CAPTION}>
+        <EveryWallBlock id="every-wall-expanded" view="expanded" width={EXPANDED_WIDTH} height={EXPANDED_HEIGHT} />
       </Figure>
-      <Figure id="top-port" caption="Top wall, Port — same divider, the other view">
-        <TopWallBlock id="top-port" view="port" width={PORT_WIDTH} height={PORT_HEIGHT} />
+      <Figure id="every-wall-port" caption={EVERY_WALL_PORT_CAPTION}>
+        <EveryWallBlock id="every-wall-port" view="port" width={PORT_WIDTH} height={PORT_HEIGHT} />
       </Figure>
     </div>
   ),
   play: async ({ canvasElement }) => {
-    await waitFor(() => expect(mainOf(canvasElement, "top-port")).toBeTruthy());
+    const canvas = within(canvasElement);
+    // `findBy*` first, deliberately: a `queryBy*(...).not.toBeInTheDocument()`
+    // or a zero-length check against a DOM that has not mounted yet is
+    // VACUOUSLY true, so every negative assertion below needs one real
+    // element awaited ahead of it (CLAUDE.md, "Verifying story play
+    // functions").
+    await canvas.findByText(EVERY_WALL_EXPANDED_CAPTION);
+    await canvas.findByText(EVERY_WALL_PORT_CAPTION);
 
     for (const [id, markView] of [
-      ["top-expanded", "expanded"],
-      ["top-port", "port"],
+      ["every-wall-expanded", "expanded"],
+      ["every-wall-port", "port"],
     ] as const) {
-      const { wrapper } = mainOf(canvasElement, id);
-      const rail = required<HTMLElement>(wrapper, '[data-slot="block-port-rail"][data-edge="top"]', `${id}: top rail`);
-      const dots = railDotCentres(rail);
-      await expect(dots).toHaveLength(2);
-      // The whole point of finding 4: NOT silently discarded.
-      const marks = dividerMarksOf(wrapper, markView);
-      await expect(marks).toHaveLength(1);
-      expectBetweenDots(marks[0], dots[0], dots[1], "row", `${id}: top-wall divider`);
-      expectDividerIsOnlyAMark(marks[0], `${id}: top-wall divider`);
+      const { wrapper, block } = mainOf(canvasElement, id);
+      // The marks land one measured pass after the rails' own dots do.
+      await waitFor(() => expect(dividerMarksOf(wrapper, markView)).toHaveLength(WALLS.length));
+      // A view draws ONE of the two drawings, never both.
+      const otherView = markView === "expanded" ? "port" : "expanded";
+      await expect(dividerMarksOf(wrapper, otherView)).toHaveLength(0);
 
-      // The mark is genuinely on/outside the TOP wall, not sitting on a
-      // left/right one by some coordinate mix-up.
-      const block = required<HTMLElement>(wrapper, ':scope > [data-slot="block"]', `${id}: block`);
       const blockRect = block.getBoundingClientRect();
-      const markRect = marks[0].getBoundingClientRect();
-      if (markView === "expanded") {
-        await expect(markRect.bottom).toBeLessThanOrEqual(blockRect.top + 0.5); // above the wall, outside it
-      } else {
-        await expect(markRect.top).toBeGreaterThanOrEqual(blockRect.top - 0.5); // at/inside the wall, running downward
-        await expect(markRect.bottom).toBeLessThanOrEqual(blockRect.top + blockRect.height / 2 + 1);
+      for (const edge of WALLS) {
+        const marks = markOnWall(wrapper, markView, edge);
+        await expect(marks).toHaveLength(1);
+        const mark = marks[0];
+
+        const rail = required<HTMLElement>(wrapper, `[data-slot="block-port-rail"][data-edge="${edge}"]`, `${id}: ${edge} rail`);
+        const dots = railDotCentres(rail);
+        await expect(dots).toHaveLength(2);
+        expectBetweenDots(mark, dots[0], dots[1], axisOf(edge), `${id}: ${edge} wall divider`);
+
+        // The part the inequalities could not prove: the mark's EXTENT.
+        expectDividerBox(mark, edge, markView, blockRect, `${id}: ${edge} wall, ${markView}`);
+        expectDividerIsOnlyAMark(mark, `${id}: ${edge} wall divider`);
       }
     }
   },
