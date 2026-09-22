@@ -70,7 +70,7 @@ import { BLOCK_SIDES, type BlockSide, type PortSize } from "./port.layout";
 import { PortEdge, type PortEdgeArrangeMode, type PortEdgeItem, type PortEdgeProps } from "./portEdge";
 import type { Distribution } from "./portEdge.layout";
 import type { CustomNeighbourMode } from "./portSpacing.layout";
-import type { RegionPoint } from "./regionViews.layout";
+import type { RegionPoint } from "./blockRegion.views.layout";
 import type { PortVariantId } from "../skin/portVariants";
 
 export type { FrameBox } from "./frame.layout";

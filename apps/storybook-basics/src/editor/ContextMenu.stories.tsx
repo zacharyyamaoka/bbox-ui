@@ -28,7 +28,8 @@ import { Glyph } from "../components/glyph";
 import { LabeledPort } from "../components/labeledPort";
 import { Port } from "../components/port";
 import { PortEdge, type PortEdgeItem } from "../components/portEdge";
-import { Region } from "../components/region";
+import { BlockRegion } from "../components/blockRegion";
+import { REGION_CORNER_WIDTH_PX } from "../components/blockRegion.layout";
 import { TraceBody } from "../components/trace";
 import type { Diagnostic } from "../components/highlighter";
 import { GlyphPicker } from "./glyphPicker/glyphPicker";
@@ -615,6 +616,14 @@ export const TraceMenu: Story = {
 /* Region — the frame, and an arm                                      */
 /* ------------------------------------------------------------------ */
 
+/** The corner card's rendered height, header shown and header hidden.
+ *  MEASURED, not chosen: `RegionMenu`'s play function asserts the stated
+ *  size against the card's own `getBoundingClientRect`, so a drift in
+ *  `Block`'s chrome turns this story red rather than quietly mis-sizing
+ *  the frame. */
+const CORNER_H_WITH_HEADER = 39;
+const CORNER_H_BARE = 2;
+
 function RegionMenuDemo() {
   const [armOpen, setArmOpen] = useState(true);
   const [lastFrameCopy, setLastFrameCopy] = useState<string | null>(null);
@@ -658,13 +667,25 @@ function RegionMenuDemo() {
   return (
     <div style={{ padding: 48, position: "relative" }}>
       <ComponentContextMenu testId="region-context-menu" resolveTarget={(_event, target) => resolveTarget(target)}>
-        <Region
+        <BlockRegion
           id="loop-1"
           kind="loop"
           width={280}
+          // MERGE 2026-09-22: `Region` became `BlockRegion` when the two
+          // region lineages were reconciled, and the reconciled component
+          // never measures a caller-rendered `corner` (`RegionCornerProps`,
+          // re-judge 3) — so the size is STATED here and the play function
+          // checks the statement against the rendered card, the same way
+          // `LabeledGroup.stories.tsx` does. The header toggle is the reason
+          // the height is read from state rather than fixed.
+          cornerSize={{ w: REGION_CORNER_WIDTH_PX, h: cornerShowHeader ? CORNER_H_WITH_HEADER : CORNER_H_BARE }}
           corner={
             <BlockPort id="loop-1" view="port" edges={{}}>
-              <Block header={cornerShowHeader ? <span style={{ fontSize: 13 }}>Loop</span> : undefined} width={140} />
+              <Block
+                shape="region-corner"
+                header={cornerShowHeader ? <span style={{ fontSize: 13 }}>Loop</span> : undefined}
+                width={REGION_CORNER_WIDTH_PX}
+              />
             </BlockPort>
           }
           arms={[{ id: "body", title: "body", open: armOpen, onOpenChange: setArmOpen }]}
@@ -695,9 +716,22 @@ export const RegionMenu: Story = {
     // The corner CARD resolves as "block", per CLAUDE.md's control-flow
     // rule — proving the region menu never shadows the block menu there.
     const corner = required<HTMLElement>(canvasElement, '[data-slot="region-corner"] [data-slot="block"]', "the corner block");
+    // The `cornerSize` this demo STATES is a claim about geometry, and the
+    // reconciled `BlockRegion` lays the frame out from it without measuring
+    // — so measure it here. `Block` chrome changing height turns this red
+    // instead of silently mis-sizing the frame.
+    const cornerBox = corner.getBoundingClientRect();
+    expect(Math.round(cornerBox.width), "corner card width").toBe(REGION_CORNER_WIDTH_PX);
+    expect(Math.round(cornerBox.height), "corner card height, header shown").toBe(CORNER_H_WITH_HEADER);
     fireEvent.contextMenu(corner);
     await waitFor(() => expect(openMenu()).not.toBeNull());
     await expect(body().getByTestId("context-menu-item-hide-header")).toBeInTheDocument();
+    // And the command is real: hiding the header shrinks the card, which is
+    // the second height this demo states. Both numbers are therefore
+    // measured here rather than chosen.
+    await userEvent.click(body().getByTestId("context-menu-item-hide-header"));
+    await waitFor(() => expect(corner.querySelector('[data-slot="block-header"]')).toBeNull());
+    expect(Math.round(corner.getBoundingClientRect().height), "corner card height, header hidden").toBe(CORNER_H_BARE);
   },
 };
 

@@ -23,7 +23,7 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 
 import type { ElbowRect } from "../components/elbow";
-import type { RegionPoint } from "../components/region";
+import type { RegionPoint } from "../components/blockRegion.views.layout";
 import type { Point } from "../components/trace.layout";
 import { wallCrossings, type WallCrossing } from "../scene/wallPort";
 
