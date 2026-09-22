@@ -324,8 +324,19 @@ export function resolveWires(container: HTMLElement, wires: readonly Wire[], spa
     // resolves to its corner card here, which is correct for the same
     // reason: the dot is ON the card, so the card is the box the first leg
     // has to escape — the frame is already in the keep-out list above.
-    const fromBlock = fromDot.closest<HTMLElement>("[data-block-id]");
-    const toBlock = toDot.closest<HTMLElement>("[data-block-id]");
+    //
+    // ADDED 2026-09-22 (lane `frame-auto-port-edges`): a dot on a wall's
+    // INNER FACE (`components/frame.tsx`, `data-rail-kind="inner-face"`)
+    // has NO own card to escape. Its owner box is the whole frame, and the
+    // cable it carries runs INSIDE that frame to a member — so "no later
+    // segment may re-enter the own box" would forbid every segment of the
+    // route, and the router answered with a lap around the frame (measured:
+    // a 100px straight run drawn as a 400px loop). The frame is already
+    // subtracted from that cable's keep-outs (`keepOutsFor`: it is an end),
+    // so the inner face simply has no box. Every other dot is untouched.
+    const innerFace = (dot: HTMLElement) => dot.closest('[data-slot="block-port-rail"]')?.getAttribute("data-rail-kind") === "inner-face";
+    const fromBlock = innerFace(fromDot) ? null : fromDot.closest<HTMLElement>("[data-block-id]");
+    const toBlock = innerFace(toDot) ? null : toDot.closest<HTMLElement>("[data-block-id]");
     resolved.push({
       wire,
       from,

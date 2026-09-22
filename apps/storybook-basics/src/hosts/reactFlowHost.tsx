@@ -30,6 +30,7 @@ import "@xyflow/react/dist/style.css";
 
 import {
   Background,
+  ConnectionMode,
   Controls,
   getBezierPath,
   getSmoothStepPath,
@@ -40,6 +41,7 @@ import {
   ReactFlow,
   useStore,
   useUpdateNodeInternals,
+  type Connection,
   type Edge,
   type EdgeProps,
   type EdgeTypes,
@@ -47,6 +49,7 @@ import {
   type NodeChange,
   type NodeDimensionChange,
   type NodeProps,
+  type OnConnectEnd,
   type ReactFlowState,
   type Viewport,
 } from "@xyflow/react";
@@ -57,7 +60,7 @@ import { DEFAULT_TRACE_ROUTING, type Point, type TraceRouting } from "../compone
 import { ResolvedWireTrace, resolveWires, type ResolvedWire, type ResolvedWires, type WireSpace } from "../components/wireLayer";
 import type { Wire } from "../components/wiring";
 import { ancestorsOf } from "../scene/region";
-import { portKey } from "../scene/scene";
+import { portKey, type SceneEdgeEnds, type ScenePortRef } from "../scene/scene";
 import { sceneWires, type WireStyleData } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
 import type { OpaqueRegionView } from "../scene/regionView";
@@ -84,6 +87,8 @@ const HostSceneContext = createContext<{
   decorate?: Decorate;
   /** The opaque projection's cards — see `SceneNodeViewProps.regionViews`. */
   regionViews?: ReadonlyMap<string, OpaqueRegionView>;
+  /** `ReactFlowHostProps.connectable` — read by `MeasuredPortHandles`. */
+  connectable?: boolean;
 } | null>(null);
 
 /* ------------------------------------------------------------------ */
@@ -230,27 +235,45 @@ function sameHandles(a: MeasuredHandle[], b: MeasuredHandle[]): boolean {
   return a.length === b.length && a.every((h, i) => h.handleId === b[i].handleId && Math.abs(h.x - b[i].x) < 0.5 && Math.abs(h.y - b[i].y) < 0.5 && h.side === b[i].side);
 }
 
+/**
+ * The press target a CONNECT gesture starts on, when the host is
+ * `connectable` — a square over the dot, larger than the dot's own box but
+ * well inside its 40px hit halo. ADDED 2026-09-22 (lane
+ * `frame-auto-port-edges`).
+ *
+ * WHY the dot and not the label: React Flow's connection gesture can only
+ * start on a `Handle`, and a handle over the DOT splits the port's two
+ * gestures cleanly — press the dot to draw a cable, press the label to
+ * reorder the port (dnd-kit's sortable card, which the label still
+ * belongs to). That is also what a person reaches for: a dot is where a
+ * cable attaches.
+ */
+const CONNECT_HANDLE_PX = 16;
+
 /** Invisible and inert: the handle exists so React Flow can resolve and
- *  route an edge end; the DOT stays the visible affordance. */
-function handleStyle(h: MeasuredHandle): CSSProperties {
+ *  route an edge end; the DOT stays the visible affordance. With
+ *  `connectable`, still invisible but PRESSABLE — see `CONNECT_HANDLE_PX`. */
+function handleStyle(h: MeasuredHandle, connectable = false): CSSProperties {
   return {
     position: "absolute",
     left: h.x,
     top: h.y,
     transform: "translate(-50%, -50%)",
-    width: 2,
-    height: 2,
+    width: connectable ? CONNECT_HANDLE_PX : 2,
+    height: connectable ? CONNECT_HANDLE_PX : 2,
     minWidth: 0,
     minHeight: 0,
     border: "none",
     background: "transparent",
     opacity: 0,
-    pointerEvents: "none",
+    pointerEvents: connectable ? "all" : "none",
+    cursor: connectable ? "crosshair" : undefined,
   };
 }
 
 function MeasuredPortHandles({ nodeId, rootRef }: { nodeId: string; rootRef: React.RefObject<HTMLDivElement | null> }) {
   const updateNodeInternals = useUpdateNodeInternals();
+  const connectable = useContext(HostSceneContext)?.connectable ?? false;
   const [handles, setHandles] = useState<MeasuredHandle[]>([]);
 
   // Every render, equality-guarded: a rail reorder moves dots WITHOUT
@@ -296,8 +319,8 @@ function MeasuredPortHandles({ nodeId, rootRef }: { nodeId: string; rootRef: Rea
         // wire and a target in another; React Flow resolves each end
         // against its own type's handle list.
         <Fragment key={h.handleId}>
-          <Handle type="source" id={h.handleId} position={h.side} isConnectable={false} style={handleStyle(h)} />
-          <Handle type="target" id={h.handleId} position={h.side} isConnectable={false} style={handleStyle(h)} />
+          <Handle type="source" id={h.handleId} position={h.side} isConnectable={connectable} style={handleStyle(h, connectable)} />
+          <Handle type="target" id={h.handleId} position={h.side} isConnectable={connectable} style={handleStyle(h, connectable)} />
         </Fragment>
       ))}
     </>
@@ -421,7 +444,7 @@ const RESIZE_CONTROL_Z_INDEX = 20;
 /** Every host-facing name renders through the one shared node component;
  *  `SceneNodeView` owns the type switch, so a fifth kind is one case
  *  there, zero here. */
-const NODE_TYPES = { block: BboxNode, glyph: BboxNode, code: BboxNode, value: BboxNode, region: BboxNode };
+const NODE_TYPES = { block: BboxNode, glyph: BboxNode, code: BboxNode, value: BboxNode, region: BboxNode, frame: BboxNode };
 
 /** Where a node drag may START, per host-facing type. Interaction
  *  geometry — host-owned, never written into the scene record. */
@@ -437,6 +460,14 @@ const DRAG_HANDLE_FOR_TYPE: Record<string, string | undefined> = {
   // once lane A renders one. Harmless before then — no region node exists to
   // match, and a frame is not a header.
   region: `[${OWN_DRAG_HANDLE_ATTR}]`,
+  // frame (ADDED 2026-09-22, lane `frame-auto-port-edges`): a frame has no
+  // `block-header`; its title (above the box, or the header bar's text) is
+  // the grab. `frame-title` is stamped only by `components/frame.tsx`, on
+  // one element per frame. Known limit, not a rule: a frame NESTED as a
+  // member also stamps one, and React Flow's `hasSelector` walk matches
+  // the nearest — the same defect-6 class `OwnDragHandleMarker` closes
+  // for blocks, owed here the day a frame holds a frame.
+  frame: `[data-slot="frame-title"]`,
   // glyph: the whole face is inert — drag anywhere.
   // code: the wrapper's grab ring (the editor itself is `nodrag`).
   // value: the pill's non-editor face (the editor carries `nodrag`;
@@ -704,6 +735,83 @@ export interface ReactFlowHostProps {
    *  retracts a wire the kit no longer draws — it fell back to the stock
    *  path, or left the scene — exactly as `WireLayer.onWireGeometry` does. */
   onWireGeometry?(wireId: string, points: readonly Point[] | null): void;
+  /**
+   * ADDED 2026-09-22 (lane `frame-auto-port-edges`), the connect gesture —
+   * four additive seams, every one omitted by every bench that predates
+   * them (byte-identical output: handles stay inert, `nodesConnectable`
+   * stays false).
+   *
+   * `connectable` turns React Flow's stock connection gesture on: a drag
+   * from a port's dot (the measured `Handle` over it, `CONNECT_HANDLE_PX`)
+   * to another dot, in `ConnectionMode.Loose` — any handle to any handle,
+   * so that WHETHER a pair may connect is the scene's judgement
+   * (`isValidConnection`, below), never React Flow's handle-type rule.
+   * Zach, 2026-09-22: "first do with zero data validation, inputs can go to
+   * outputs etc, but then we can test it as well with validation".
+   */
+  connectable?: boolean;
+  /**
+   * React Flow's own `isValidConnection`, with the candidate already
+   * translated to SCENE ends (a member's `portKey` handle resolved back to
+   * `{member, port}`). Return `false` to refuse the drop. Omitted = every
+   * pair is legal.
+   */
+  isValidConnection?(candidate: SceneEdgeEnds): boolean;
+  /** React Flow's `onConnect`, in scene ends. The host commits nothing
+   *  itself — the caller decides what edge (if any) enters the scene. */
+  onConnect?(candidate: SceneEdgeEnds): void;
+  /**
+   * React Flow's `onConnectEnd` — fired on EVERY release, connected or not
+   * (`connectionState.isValid`). `pointer` is the release point in FLOW px
+   * (the viewport's own space, the same space `onWireGeometry` reports in),
+   * which is what lets a caller treat a drop ON A WALL — no handle under
+   * the pointer — as "make a port here" (docs: React Flow's own "add node
+   * on edge drop" pattern, `connectionState.isValid === false`).
+   */
+  onConnectEnd?(state: HostConnectEnd): void;
+  /**
+   * React Flow's `onDelete` — the Delete/Backspace key on a React Flow
+   * selection (top-level nodes, edges). Ids only; the caller runs
+   * `deleteWithLinks` (scene/links.ts) or whatever policy it holds. This
+   * host never removes a node itself (`applyPositionChanges` ignores
+   * `remove` changes), so omitting this leaves the key inert, as before.
+   */
+  onDeleteElements?(ids: { nodes: string[]; edges: string[] }): void;
+}
+
+/** What `onConnectEnd` reports, in scene vocabulary. */
+export interface HostConnectEnd {
+  /** The port the gesture started on. */
+  from: ScenePortRef;
+  /** The port under the pointer at release, or `null` for none. */
+  to: ScenePortRef | null;
+  /** React Flow's own verdict for the pair, `null` when no handle was hit. */
+  valid: boolean | null;
+  /** Release point, flow px. */
+  pointer: { x: number; y: number };
+}
+
+/**
+ * The inverse of `anchorEnd`: a React Flow node id + handle id back to the
+ * scene port the handle stands for. A member's handle is `portKey(member,
+ * port)`, so the FIRST `/` splits it — and the prefix is checked against
+ * the scene, because a port id may itself contain `/` only if no node by
+ * the prefix exists (this kit mints neither).
+ */
+function sceneEndOf(scene: HostScene, nodeId: string, handleId: string | null | undefined): ScenePortRef {
+  if (handleId == null) return { nodeId, portId: "" };
+  const slash = handleId.indexOf("/");
+  if (slash > 0) {
+    const memberId = handleId.slice(0, slash);
+    if (scene.nodes.some((node) => node.id === memberId)) return { nodeId: memberId, portId: handleId.slice(slash + 1) };
+  }
+  return { nodeId, portId: handleId };
+}
+
+function sceneEndsOf(scene: HostScene, connection: Connection | Edge): SceneEdgeEnds {
+  const source = sceneEndOf(scene, connection.source, connection.sourceHandle);
+  const target = sceneEndOf(scene, connection.target, connection.targetHandle);
+  return { source: source.nodeId, sourceHandle: source.portId || undefined, target: target.nodeId, targetHandle: target.portId || undefined };
 }
 
 /**
@@ -767,7 +875,23 @@ function anchorEnd(scene: HostScene, nodeId: string, handleId: string | undefine
   return { nodeId: topLevelId, handleId: handleId === undefined ? undefined : portKey(nodeId, handleId) };
 }
 
-export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360, defaultViewport, fitView, resizable, children, decorate, onWireGeometry }: ReactFlowHostProps) {
+export function ReactFlowHost({
+  scene,
+  onSceneChange,
+  width = 640,
+  height = 360,
+  defaultViewport,
+  fitView,
+  resizable,
+  children,
+  decorate,
+  onWireGeometry,
+  connectable = false,
+  isValidConnection,
+  onConnect,
+  onConnectEnd,
+  onDeleteElements,
+}: ReactFlowHostProps) {
   // Hosts paint the projection; the document keeps its direct P1 cables.
   // Identity on an all-expanded scene (same arrays out), so `wired`, the
   // edge list and every memo below are unchanged for every bench that has
@@ -779,8 +903,25 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
   const producers = useMemo(() => producerCountsOf(projected.scene), [projected]);
   const regionViews = useMemo(() => regionViewMap(projected.regions), [projected]);
   const context = useMemo(
-    () => ({ scene, wired, producers, onSceneChange, resizable, decorate, regionViews }),
-    [scene, wired, producers, onSceneChange, resizable, decorate, regionViews],
+    () => ({ scene, wired, producers, onSceneChange, resizable, decorate, regionViews, connectable }),
+    [scene, wired, producers, onSceneChange, resizable, decorate, regionViews, connectable],
+  );
+  // The connect seams, in scene vocabulary (see `ReactFlowHostProps`).
+  const latestScene = useRef(scene);
+  latestScene.current = scene;
+  const handleIsValidConnection = useCallback(
+    (candidate: Connection | Edge) => (isValidConnection ? isValidConnection(sceneEndsOf(latestScene.current, candidate)) : true),
+    [isValidConnection],
+  );
+  const handleConnect = useCallback((connection: Connection) => onConnect?.(sceneEndsOf(latestScene.current, connection)), [onConnect]);
+  const handleConnectEnd = useCallback<OnConnectEnd>(
+    (_event, state) => {
+      if (!onConnectEnd || !state.fromHandle) return;
+      const from = sceneEndOf(latestScene.current, state.fromHandle.nodeId, state.fromHandle.id);
+      const to = state.toHandle ? sceneEndOf(latestScene.current, state.toHandle.nodeId, state.toHandle.id) : null;
+      onConnectEnd({ from, to, valid: state.isValid, pointer: { x: state.to?.x ?? 0, y: state.to?.y ?? 0 } });
+    },
+    [onConnectEnd],
   );
 
   // Host-owned measurement cache, by node id — NEVER part of the scene
@@ -938,9 +1079,19 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
             // without editing it.
             nodeDragThreshold={4}
             // Wires are declared by the scene record; interactive connecting
-            // is phase-2 work (the port-side affordances are the expensive
-            // part — ARCHITECTURE.md's "drawing an edge splits").
-            nodesConnectable={false}
+            // is opt-in per bench (`connectable`, ADDED 2026-09-22) — the
+            // port-side affordances are the expensive part
+            // (ARCHITECTURE.md's "drawing an edge splits"), and a bench that
+            // never asked keeps its handles inert.
+            nodesConnectable={connectable}
+            // Loose: WHETHER two ports may connect is the scene's judgement
+            // (`isValidConnection`), not React Flow's source/target rule —
+            // with validation off, "inputs can go to outputs etc" (Zach).
+            connectionMode={ConnectionMode.Loose}
+            isValidConnection={handleIsValidConnection}
+            onConnect={connectable ? handleConnect : undefined}
+            onConnectEnd={connectable ? handleConnectEnd : undefined}
+            onDelete={onDeleteElements ? ({ nodes, edges }) => onDeleteElements({ nodes: nodes.map((node) => node.id), edges: edges.map((edge) => edge.id) }) : undefined}
           >
             <Background />
             <Controls showInteractive={false} />
