@@ -14,10 +14,64 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
+import { paintedPullBackPx } from "../presets/wireEnds.acceptance";
 import { expectSameCables, useWireGeometryRecorder } from "./cableParity";
 import { DomCanvas } from "./domCanvas";
 import { HOST_SCENE } from "./hostScene";
 import { ReactFlowHost } from "./reactFlowHost";
+
+/** The resolved dot for one end — the element `WireLayer.resolveDot` picks:
+ *  `[data-port-id]` owned by `[data-block-id]` itself, not by a member. */
+function dotOf(host: ParentNode, blockId: string, portId: string): HTMLElement {
+  const block = host.querySelector<HTMLElement>(`[data-block-id="${blockId}"]`);
+  const dot = [...(block?.querySelectorAll<HTMLElement>(`[data-port-id="${portId}"]`) ?? [])].find((candidate) => candidate.closest("[data-block-id]") === block);
+  if (!dot) throw new Error(`no dot ${blockId}/${portId}`);
+  return dot;
+}
+
+function centreOf(element: Element): { x: number; y: number } {
+  const rect = element.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+/**
+ * For every edge, how far each PAINTED end of React Flow's cable stands off
+ * its dot's centre, minus that dot's RENDERED ring pull-back
+ * (`wireEnds.acceptance.ts`, read off the pixels — never the radius function
+ * the router placed the end with). 0 = the end sits on the ring. Returns the
+ * worst |error| and the largest pull-back seen, so the caller can also prove
+ * the ring actually changed size.
+ */
+function ringErrors(host: HTMLElement): { worst: number; pullBack: number } {
+  let worst = 0;
+  let pullBack = 0;
+  for (const edge of HOST_SCENE.edges) {
+    const lines = [...host.querySelectorAll<SVGPathElement>(`[data-wire-id="${edge.id}"] [data-slot="trace-line"]:not([data-sketch="true"])`)];
+    if (lines.length === 0) throw new Error(`no painted line for ${edge.id}`);
+    const ends = [
+      { line: lines[0], at: 0, dot: dotOf(host, edge.source, edge.sourceHandle!) },
+      { line: lines.at(-1)!, at: lines.at(-1)!.getTotalLength(), dot: dotOf(host, edge.target, edge.targetHandle!) },
+    ];
+    for (const { line, at, dot } of ends) {
+      const local = line.getPointAtLength(at);
+      const screen = new DOMPoint(local.x, local.y).matrixTransform(line.getScreenCTM()!);
+      const centre = centreOf(dot.querySelector('[data-slot="port-dot"]') ?? dot);
+      // The PATH's end stands the rendered ring + half a stroke off the
+      // centre for every cap: `paintedPullBackPx` counts a round cap's reach
+      // and no reach for a butt cap (the async dash), while the kit keeps the
+      // same geometric gap for both and lets the butt-capped ink stop 1px
+      // short by design (`trace.tsx`'s `traceRingGapPx` doc). Adding the
+      // half-stroke back for a butt cap compares like with like; the ring
+      // itself is still read off the pixels.
+      const style = getComputedStyle(line);
+      const buttReach = style.strokeLinecap === "round" ? 0 : Number.parseFloat(style.strokeWidth) / 2;
+      const expected = paintedPullBackPx(dot, line) + buttReach;
+      pullBack = Math.max(pullBack, expected);
+      worst = Math.max(worst, Math.abs(Math.hypot(screen.x - centre.x, screen.y - centre.y) - expected));
+    }
+  }
+  return { worst, pullBack };
+}
 
 const meta = {
   title: "Trace/In A Host/Cable Parity",
@@ -55,23 +109,60 @@ function Panes() {
 export const SameWaypoints: Story = {
   name: "Same Waypoints (DOM Canvas ⇄ React Flow)",
   render: () => <Panes />,
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, step }) => {
     const domPane = await waitFor(() => {
       const found = canvasElement.querySelector<HTMLElement>('[data-pane="dom"]');
       expect(found).not.toBeNull();
       return found!;
     });
     const reactFlowPane = canvasElement.querySelector<HTMLElement>('[data-pane="react-flow"]')!;
+    const reactFlowHost = reactFlowPane.querySelector<HTMLElement>('[data-host="react-flow"]')!;
     const wireIds = HOST_SCENE.edges.map((edge) => edge.id);
-    await waitFor(
-      () => {
-        // Both hosts resolved every cable to two real dots…
-        expect(domPane.querySelector('[data-slot="wire-layer"]')?.getAttribute("data-unresolved-wires")).toBe("");
-        expect(reactFlowPane.querySelector('[data-host="react-flow"]')?.getAttribute("data-unresolved-wires")).toBe("");
-        // …and drew each on the same waypoints.
-        expectSameCables(domPane, reactFlowPane, wireIds);
-      },
-      { timeout: 5000 },
-    );
+
+    let restPullBack = 0;
+    await step("At rest: same waypoints, and React Flow's ends on the rings", async () => {
+      await waitFor(
+        () => {
+          // Both hosts resolved every cable to two real dots…
+          expect(domPane.querySelector('[data-slot="wire-layer"]')?.getAttribute("data-unresolved-wires")).toBe("");
+          expect(reactFlowHost.getAttribute("data-unresolved-wires")).toBe("");
+          // …and drew each on the same waypoints.
+          expectSameCables(domPane, reactFlowPane, wireIds);
+          const { worst, pullBack } = ringErrors(reactFlowHost);
+          expect(worst, "React Flow end vs rendered ring, px").toBeLessThanOrEqual(0.5);
+          restPullBack = pullBack;
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    // WHY this step (audit of 7fbf22c): a live port-style switch changes the
+    // ring without resizing a node, so nothing but the variant itself tells
+    // React Flow's router to re-run — the cables kept the old gap and painted
+    // into the new ring. The same `<html>` attribute the toolbar global
+    // (`.storybook/preview.tsx`'s `stampVariants`) and the app's variant pill
+    // stamp.
+    const html = document.documentElement.dataset;
+    const previous = html.bboxPortVariant;
+    expect(previous, "the story must start on a variant other than v3").not.toBe("v3");
+    try {
+      await step("Switch the port style to v3: both hosts re-route onto the new ring", async () => {
+        html.bboxPortVariant = "v3";
+        await waitFor(
+          () => {
+            const { worst, pullBack } = ringErrors(reactFlowHost);
+            // Not vacuous: the ring really grew — by more than the 0.5px
+            // tolerance below, so a cable left on the OLD gap cannot pass.
+            expect(pullBack - restPullBack, "v3 ring pull-back growth, px").toBeGreaterThan(0.5);
+            expect(worst, "React Flow end vs the NEW rendered ring, px").toBeLessThanOrEqual(0.5);
+            expectSameCables(domPane, reactFlowPane, wireIds);
+          },
+          { timeout: 5000 },
+        );
+      });
+    } finally {
+      if (previous === undefined) delete html.bboxPortVariant;
+      else html.bboxPortVariant = previous;
+    }
   },
 };

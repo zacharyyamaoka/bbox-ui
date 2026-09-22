@@ -28,13 +28,14 @@ export const PARITY_TOLERANCE_PX = 1;
  * read what the host drew without reaching into React state. `forward` is
  * called too, for a caller that also needs the geometry (the crossing glue).
  */
-export function useWireGeometryRecorder(forward?: (wireId: string, points: readonly Point[]) => void) {
+export function useWireGeometryRecorder(forward?: (wireId: string, points: readonly Point[] | null) => void) {
   const ref = useRef<HTMLDivElement | null>(null);
   const record = useRef<Record<string, readonly Point[]>>({});
   const forwardRef = useRef(forward);
   forwardRef.current = forward;
-  const onWireGeometry = useCallback((wireId: string, points: readonly Point[]) => {
-    record.current = { ...record.current, [wireId]: points.map(({ x, y }) => ({ x, y })) };
+  const onWireGeometry = useCallback((wireId: string, points: readonly Point[] | null) => {
+    const { [wireId]: _previous, ...rest } = record.current;
+    record.current = points ? { ...rest, [wireId]: points.map(({ x, y }) => ({ x, y })) } : rest;
     if (ref.current) ref.current.dataset.wirePoints = JSON.stringify(record.current);
     forwardRef.current?.(wireId, points);
   }, []);

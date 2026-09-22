@@ -64,6 +64,7 @@ import type { OpaqueRegionView } from "../scene/regionView";
 import { producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
+import { usePortVariant } from "../skin/portVariants";
 
 /* ------------------------------------------------------------------ */
 /* Scene context — how the node renderer reaches the record             */
@@ -549,29 +550,90 @@ function nodeLayoutSignature(state: ReactFlowState): string {
 }
 
 /**
+ * One viewport's routing passes, coalesced: at most ONE `resolveWires` per
+ * animation frame, however many inputs changed inside it.
+ *
+ * WHY (audit of 7fbf22c, 2026-09-22): the first version ran a synchronous
+ * pass on every layout-signature change, another on the next frame, and
+ * tore down and rebuilt a `ResizeObserver` over every node each time — and
+ * a drag invalidates it twice per move (the streamed scene write-back AND
+ * the store's new positions). Measured on the mirror's 8-step drag: 31
+ * passes. A pass is a full DOM measure plus, downstream, an A* re-route of
+ * every elbow cable, so it is the one cost here worth bounding.
+ *
+ * So a request never runs a pass itself: it books the next animation frame,
+ * and every request until that frame lands folds into the same pass. That
+ * one deferred pass is also what the rails race needs (rails land one layout
+ * pass after their Block — `WireLayer`'s own race — and a rail landing
+ * resizes nothing, so nothing else would ask), so there is no separate
+ * trailing pass. The cost, stated: a cable is resolved one frame after its
+ * node moved. A first version that also ran a synchronous pass on an idle
+ * frame measured 16 passes on the same drag — two per move.
+ */
+interface RouteScheduler {
+  frame: number | null;
+  pass(): void;
+}
+
+function requestRoutePass(scheduler: RouteScheduler): void {
+  if (scheduler.frame !== null) return;
+  scheduler.frame = requestAnimationFrame(() => {
+    scheduler.frame = null;
+    scheduler.pass();
+  });
+}
+
+/**
  * Resolves `wires` against the rendered nodes with `WireLayer`'s own
  * `resolveWires` — the viewport element as the container, flow space as
- * the space — whenever a node's box moves. Mounted INSIDE `<ReactFlow>`
- * for the store; renders nothing. Same two races `WireLayer` documents
- * (rails land one layout pass after their Block), same answer: measure
- * now, once more next frame, and on any node's resize.
+ * the space — whenever a node's box moves, a node resizes, or the port
+ * style changes. Mounted INSIDE `<ReactFlow>` for the store; renders
+ * nothing. ONE `ResizeObserver` per viewport, which observes and unobserves
+ * nodes as the set changes rather than being rebuilt on every move.
  */
 function KitWireRouter({ wires, layoutKey, onResolved }: { wires: readonly Wire[]; layoutKey: unknown; onResolved(next: ResolvedWires): void }) {
   const domNode = useStore((state) => state.domNode);
   const layout = useStore(nodeLayoutSignature);
+  // WHY the port style is a dependency (audit of 7fbf22c): switching the
+  // document-wide variant (v1 → v3) grows every dot's painted ring from
+  // 5.5px to 8px WITHOUT resizing a node, so neither the layout signature
+  // nor the ResizeObserver would notice, and every cable kept its old
+  // ring-flush gap, painting ~2.5px into the new ring. Same subscription
+  // `WireLayer` re-measures on.
+  const portVariantId = usePortVariant().id;
+  const latest = useRef({ wires, onResolved });
+  latest.current = { wires, onResolved };
+  const passes = useRef(0);
+  const live = useRef<{ scheduler: RouteScheduler; observer: ResizeObserver; observed: Set<Element>; viewport: HTMLElement } | null>(null);
+
   useLayoutEffect(() => {
     const viewport = domNode?.querySelector<HTMLElement>(".react-flow__viewport");
     if (!viewport) return;
-    const measure = () => onResolved(resolveWires(viewport, wires, flowSpaceOf(viewport)));
-    measure();
-    const frame = requestAnimationFrame(measure);
-    const observer = new ResizeObserver(measure);
-    for (const node of viewport.querySelectorAll("[data-scene-node]")) observer.observe(node);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
+    const scheduler: RouteScheduler = {
+      frame: null,
+      pass: () => {
+        viewport.dataset.kitRoutePasses = String(++passes.current);
+        latest.current.onResolved(resolveWires(viewport, latest.current.wires, flowSpaceOf(viewport)));
+      },
     };
-  }, [domNode, layout, wires, layoutKey, onResolved]);
+    const observer = new ResizeObserver(() => requestRoutePass(scheduler));
+    live.current = { scheduler, observer, observed: new Set(), viewport };
+    return () => {
+      if (scheduler.frame !== null) cancelAnimationFrame(scheduler.frame);
+      observer.disconnect();
+      live.current = null;
+    };
+  }, [domNode]);
+
+  useLayoutEffect(() => {
+    const current = live.current;
+    if (!current) return;
+    const nodes = new Set<Element>(current.viewport.querySelectorAll("[data-scene-node]"));
+    for (const node of current.observed) if (!nodes.has(node)) current.observer.unobserve(node);
+    for (const node of nodes) if (!current.observed.has(node)) current.observer.observe(node);
+    current.observed = nodes;
+    requestRoutePass(current.scheduler);
+  }, [domNode, layout, wires, layoutKey, portVariantId]);
   return null;
 }
 
@@ -638,8 +700,10 @@ export interface ReactFlowHostProps {
   decorate?: Decorate;
   /** The polyline each kit-routed cable was DRAWN on, in flow space — the
    *  same read-back as `WireLayer.onWireGeometry` (at zoom 1 with a zero
-   *  viewport offset, the same numbers the DOM canvas reports). */
-  onWireGeometry?(wireId: string, points: readonly Point[]): void;
+   *  viewport offset, the same numbers the DOM canvas reports). `null`
+   *  retracts a wire the kit no longer draws — it fell back to the stock
+   *  path, or left the scene — exactly as `WireLayer.onWireGeometry` does. */
+  onWireGeometry?(wireId: string, points: readonly Point[] | null): void;
 }
 
 /**
@@ -800,15 +864,30 @@ export function ReactFlowHost({ scene, onSceneChange, width = 640, height = 360,
   const onResolved = useCallback((next: ResolvedWires) => setKitRoutes((previous) => (sameRoutes(previous, next) ? previous : next)), []);
   const onWireGeometryRef = useRef(onWireGeometry);
   onWireGeometryRef.current = onWireGeometry;
+  const reportedRef = useRef(new Set<string>());
   const kitContext = useMemo(
     () => ({
       routes: new Map(kitRoutes.resolved.map((route) => [route.wire.id, route])),
       onGeometry: (wireId: string, points: readonly Point[] | null) => {
-        if (points && points.length >= 2) onWireGeometryRef.current?.(wireId, points);
+        if (!points || points.length < 2) return;
+        reportedRef.current.add(wireId);
+        onWireGeometryRef.current?.(wireId, points);
       },
     }),
     [kitRoutes],
   );
+  // The same retraction `WireLayer` does: a wire that stops being kit-routed
+  // (its edge went handle-less and fell back to the stock path, or left the
+  // scene) takes its reported polyline with it, so nothing derived from the
+  // kit's route outlives the route.
+  useLayoutEffect(() => {
+    const routed = new Set(kitRoutes.resolved.map(({ wire }) => wire.id));
+    for (const wireId of [...reportedRef.current]) {
+      if (routed.has(wireId)) continue;
+      reportedRef.current.delete(wireId);
+      onWireGeometryRef.current?.(wireId, null);
+    }
+  }, [kitRoutes]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {

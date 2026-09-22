@@ -85,8 +85,14 @@ export interface WireLayerProps {
    * wall-crossing markers (`regionViews.layout.ts`'s `wallCrossings`): one
    * derivation of where a cable runs, read back, never re-routed by the
    * caller. Called only when a wire's route actually moved.
+   *
+   * `null` when a wire this layer had reported STOPS being drawn — it went
+   * unresolved (an end lost its dot) or left `wires` altogether. A caller
+   * that caches polylines by id must drop the entry: otherwise a derived
+   * mark (a wall-crossing circle) freezes on a path nobody paints any more
+   * (audit of 7fbf22c, 2026-09-22).
    */
-  onWireGeometry?(wireId: string, points: readonly Point[]): void;
+  onWireGeometry?(wireId: string, points: readonly Point[] | null): void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -425,6 +431,18 @@ export function WireLayer({ wires, containerRef, layoutKey, onWireGeometry }: Wi
       onWireGeometryRef.current?.(wireId, points);
     }
   }, []);
+
+  // Retract every reported polyline whose wire is no longer drawn. After the
+  // children's own layout effects on purpose: a wire resolved in this commit
+  // has already reported through its `Trace`, so it is never retracted here.
+  useLayoutEffect(() => {
+    const drawn = new Set(state.resolved.map(({ wire }) => wire.id));
+    for (const wireId of Object.keys(reportedRef.current)) {
+      if (drawn.has(wireId)) continue;
+      delete reportedRef.current[wireId];
+      onWireGeometryRef.current?.(wireId, null);
+    }
+  }, [state]);
 
   useLayoutEffect(() => {
     let cancelled = false;

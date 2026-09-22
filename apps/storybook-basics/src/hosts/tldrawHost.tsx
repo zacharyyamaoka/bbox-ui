@@ -86,6 +86,7 @@ import type { OpaqueRegionView } from "../scene/regionView";
 import { POINTER_OWNED_CLASS, producerCountsOf, SceneNodeView, wiredPortsOf, type Decorate } from "./nodeViews";
 import { projectHostScene, regionViewMap } from "./regionScene";
 import { sightPortDots } from "./portDotSightings";
+import { usePortVariant } from "../skin/portVariants";
 
 /* ------------------------------------------------------------------ */
 /* Scene context — how the shape renderer reaches the record            */
@@ -322,6 +323,16 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
     measure();
   });
 
+  // WHY the port style re-sights the anchors (audit of 7fbf22c, same fix as
+  // `reactFlowHost.tsx`'s `KitWireRouter` and `WireLayer`): a live variant
+  // switch grows every dot's painted ring WITHOUT resizing the shape, so
+  // neither the ResizeObserver below nor a scene render would re-read
+  // `ringRadius`, and `WireOverlay` kept pulling cables back by the OLD
+  // ring. Subscribing re-renders this shape on a switch (the every-render
+  // effect above then re-sights), and the dependency below books the
+  // deferred pass for dots that settle a frame later.
+  const portVariantId = usePortVariant().id;
+
   // Rails land one layout pass after the Block they attach to, and fonts /
   // editor chrome can settle later still — one deferred frame plus a
   // ResizeObserver covers both (the same race wireLayer.tsx documents).
@@ -335,7 +346,7 @@ function BboxNodeShapeComponent({ shape }: { shape: BboxNodeShape }) {
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [measure]);
+  }, [measure, portVariantId]);
 
   if (!host || !node) return null;
 
