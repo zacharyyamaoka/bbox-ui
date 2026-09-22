@@ -445,7 +445,13 @@ function BlockFunctionPort({ bands, diameter, variant }: { bands: BlockBands; di
 /* One rail                                                            */
 /* ------------------------------------------------------------------ */
 
-function BlockPortRail({
+/**
+ * Exported (lane `collapsed-members`, 2026-09-22) so `blockPortMembers.tsx`
+ * can mount a collapsed member's rail on its PARENT's wall with this exact
+ * fill — the same `data-port-id` stamp, the same `LabeledPort` — instead of
+ * a second copy of it. `BlockPort` itself is unchanged.
+ */
+export function BlockPortRail({
   edge,
   spec,
   plan,
