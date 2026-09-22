@@ -8,6 +8,7 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useEditor, usePassThroughWheelEvents } from "tldraw";
 
+import { useForceCornerPlacement } from "./ShareMenu/cornerPlacementHost";
 import { KITS } from "../shapes/registry";
 import { SystemSketchChromeBar } from "./TitleBar";
 import { SystemSketchDevTools } from "./DevMenu";
@@ -155,6 +156,16 @@ function rectOf(el: Element): CornerRect {
 function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPlacement {
   const editor = useEditor();
   const [placement, setPlacement] = useState<CornerPlacement>({ right: CORNER_INSET, bottom: CORNER_INSET, placement: "corner" });
+  // Zach, 2026-09-22: the watermark-avoidance rule above stays the default,
+  // but he wants an explicit, WARNED opt-out — "in settings have a toggle
+  // that allows you to place it correctly in the corner... Please only do
+  // this if you are using it for development." Forcing `watermark: null`
+  // below is that opt-out: it is the user's own choice to let the corner
+  // cluster cover the licence notice, made through the red-warned Settings
+  // switch (`./ShareMenu/appSettings.tsx`), never a default this file picks
+  // for them. `placeCornerCluster` itself is untouched — passing no watermark
+  // already makes it return the flush "corner" placement.
+  const forceCorner = useForceCornerPlacement();
 
   useLayoutEffect(() => {
     const container = editor.getContainer();
@@ -167,7 +178,7 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
       const next = placeCornerCluster({
         container: rectOf(container),
         cluster: { width: el.offsetWidth, height: el.offsetHeight },
-        watermark: watermark ? rectOf(watermark) : null,
+        watermark: forceCorner ? null : watermark ? rectOf(watermark) : null,
         obstacles: dock ? [rectOf(dock)] : [],
       });
       setPlacement((current) =>
@@ -212,7 +223,7 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
       sizes.disconnect();
       watermarkAttributes.disconnect();
     };
-  }, [editor, cluster]);
+  }, [editor, cluster, forceCorner]);
 
   return placement;
 }

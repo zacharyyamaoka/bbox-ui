@@ -28,6 +28,7 @@ import { page } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CORNER_INSET, placeCornerCluster, type CornerRect } from "./chrome/overlay";
+import { CORNER_PLACEMENT_STORAGE_KEY } from "./chrome/ShareMenu/cornerPlacementHost";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";
 
 let app: MountedApp | null = null;
@@ -37,6 +38,9 @@ afterEach(async () => {
   // The config's desktop posture (vitest.config.ts: 1400×900) for whoever
   // runs next in this file.
   await page.viewport(1400, 900);
+  // The forced-corner override some cases below opt into — never leak it to
+  // the next test in this file.
+  window.localStorage.removeItem(CORNER_PLACEMENT_STORAGE_KEY);
 });
 
 interface Box {
@@ -165,6 +169,37 @@ describe("the bottom-right cluster — truly in the corner, never over the licen
     // nothing.
     const leftWatermark: CornerRect = { left: 4, top: 860, right: 104, bottom: 896 };
     expect(placeCornerCluster({ container, cluster, watermark: leftWatermark, obstacles: [dock] }).placement).toBe("corner");
+  });
+
+  it("forced corner placement (Settings ▸ About opt-in): flush in the true corner, and — the whole point of the warned opt-in — now DOES overlap the watermark", async () => {
+    // Zach, 2026-09-22: "in settings have a toggle that allows you to place
+    // it correctly in the corner. but with a warning in red". Set before
+    // mount, the same way a real browser reads it on load — the live-wiring
+    // half (flipping the switch without a remount) is
+    // `settings.smoke.test.tsx`'s job.
+    window.localStorage.setItem(CORNER_PLACEMENT_STORAGE_KEY, "true");
+    app = await mountApp();
+    const root = app.root;
+    const strip = await waitFor(() => root.querySelector<HTMLElement>('[data-slot="status-strip"]'), { what: "the status strip" });
+    const watermark = await waitFor(() => root.querySelector<HTMLElement>(WATERMARK), {
+      what: "tldraw's licence watermark",
+    });
+    await waitFor(() => strip.closest("[data-corner-placement]")?.getAttribute("data-corner-placement") === "corner", {
+      what: "the forced corner placement",
+    });
+    const s = box(strip);
+    const w = box(watermark);
+
+    // Flush at CORNER_INSET from both edges — the same "corner" shape the
+    // pure-function test above already pins, now proved live.
+    expect(innerWidth - s.right).toBeGreaterThanOrEqual(0);
+    expect(innerWidth - s.right).toBeLessThanOrEqual(CORNER_INSET);
+    expect(innerHeight - s.bottom).toBeGreaterThanOrEqual(0);
+    expect(innerHeight - s.bottom).toBeLessThanOrEqual(CORNER_INSET);
+
+    // The deliberate, warned behaviour: this is no longer clear of the
+    // watermark — the opposite of `expectLicenceUnobscured` above.
+    expect(intersects(s, w)).toBe(true);
   });
 
   it("the placement rule never lands on the dock: a cluster too wide for the bottom row lifts above the dock row as well as the watermark", () => {
