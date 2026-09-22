@@ -12,13 +12,33 @@ import { hostPolarityOf, type HostNodeData, type HostScene } from "./hostScene";
 
 export type RegionKind = "loop" | "branch" | "group";
 export type RegionView = "expanded" | "opaque";
+/**
+ * What the P/E selector picks for a region. There is no `simple` (Zach,
+ * 2026-09-22: "regions do not have a simple view. they just have port,
+ * expanded and expanded opaque view").
+ */
+export type RegionPresentation = "expanded" | "port";
 export type LoopKind = "for" | "while";
 
 /** `data.region` on a `type: "region"` node. */
 export interface RegionData {
   kind: RegionKind;
-  /** Default `"expanded"`. The P5 card is `"opaque"`. */
+  /**
+   * Default `"expanded"`. The Blackbox toggle's state: `"opaque"` is
+   * Expanded Opaque, the frame at its own size with the members hidden.
+   *
+   * WHY `view` and `presentation` are two fields and not one three-valued
+   * one (Zach, 2026-09-22: "chevron folds, blackbox makes opaque without
+   * folding… they are completely different operations"): the P/E selector
+   * and the Blackbox toggle are separate controls, so each owns its own
+   * field. Picking Port and back to Expanded returns the region to whatever
+   * the toggle last said, instead of one control silently resetting the
+   * other.
+   */
   view?: RegionView;
+  /** Default `"expanded"`. `"port"` is the region collapsed to a block —
+   *  what the old opaque card was, now the P/E selector's Port. */
+  presentation?: RegionPresentation;
   /** Only meaningful with `kind: "loop"`. Decides the corner block's typed,
    *  unnamed header contract (DP - Loop): `for` = `Iterable` in / `Iter`
    *  out; `while` = `Bool` in, no item outlet. */
@@ -45,8 +65,18 @@ export function regionViewOf(node: SceneNode<HostNodeData>): RegionView {
   return node.data.region?.view ?? "expanded";
 }
 
+/** Default `"expanded"`. */
+export function regionPresentationOf(node: SceneNode<HostNodeData>): RegionPresentation {
+  return node.data.region?.presentation ?? "expanded";
+}
+
+/**
+ * Does the projection hide this region's inside? Expanded Opaque AND the Port
+ * view both do: either way the members are off screen, so a crossing cable
+ * has to land on the region's own wall (`scene/regionView.ts`).
+ */
 export function isOpaqueRegion(node: SceneNode<HostNodeData>): boolean {
-  return isRegion(node) && regionViewOf(node) === "opaque";
+  return isRegion(node) && (regionViewOf(node) === "opaque" || regionPresentationOf(node) === "port");
 }
 
 /**
@@ -80,6 +110,18 @@ export function toggleRegionView(scene: HostScene, regionId: string): HostScene 
   const node = scene.nodes.find((candidate) => candidate.id === regionId);
   if (!node || !isRegion(node)) return scene;
   return setRegionView(scene, regionId, regionViewOf(node) === "opaque" ? "expanded" : "opaque");
+}
+
+/** The P/E selector, as a scene write: ONLY `data.region.presentation` on
+ *  `regionId` changes, with `setRegionView`'s same no-op contract. */
+export function setRegionPresentation(scene: HostScene, regionId: string, presentation: RegionPresentation): HostScene {
+  const index = scene.nodes.findIndex((node) => node.id === regionId);
+  if (index === -1) return scene;
+  const node = scene.nodes[index];
+  if (!isRegion(node) || regionPresentationOf(node) === presentation) return scene;
+  const nodes = scene.nodes.slice();
+  nodes[index] = { ...node, data: { ...node.data, region: { ...(node.data.region ?? { kind: "group" as const }), presentation } } };
+  return { ...scene, nodes };
 }
 
 export interface HostSceneProjection {

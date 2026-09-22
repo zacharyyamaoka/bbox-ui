@@ -95,6 +95,7 @@ import { offsetEdgePaddingPx, RAIL_GAP_PX } from "./blockPort.layout";
 import { Button } from "./button";
 import { FoldingChevron } from "./foldingChevron";
 import { Glyph } from "./glyph";
+import { cn } from "../lib/utils";
 import type { BlockSide } from "./port.layout";
 import type { PortEdgeItem } from "./portEdge";
 import {
@@ -196,6 +197,16 @@ export interface BlockRegionProps {
    *  expanded view and on the Expanded Opaque face. The caller owns the
    *  view; this only asks for it to flip. */
   onToggleView?(): void;
+  /**
+   * Extra class on the Blackbox toggle — a canvas host's pointer-ownership
+   * marker (`nodrag`), the same seam `FoldingChevron`'s `className` gives
+   * the hosts. This component never names the marker itself: which string
+   * a host's drag filter reads is the host's business.
+   */
+  toggleClassName?: string;
+  /** The Expanded Opaque face's footer — a host states what the face hides
+   *  (`nodeViews.tsx`'s `region-hidden`). Omitted = no footer. */
+  opaqueFooter?: ReactNode;
   className?: string;
   style?: CSSProperties;
 }
@@ -526,7 +537,17 @@ const REGION_STROKE = "var(--bbox-region-frame-stroke, var(--border))";
  * (the arms use it for exactly that), and Zach asked for no chevrons on
  * regions at all. The square is his mark for "show the inside / hide it".
  */
-export function BlockRegionBlackboxToggle({ pressed, onToggle, style }: { pressed: boolean; onToggle?(): void; style?: CSSProperties }) {
+export function BlockRegionBlackboxToggle({
+  pressed,
+  onToggle,
+  className,
+  style,
+}: {
+  pressed: boolean;
+  onToggle?(): void;
+  className?: string;
+  style?: CSSProperties;
+}) {
   return (
     <Button
       data-slot="region-blackbox-toggle"
@@ -536,7 +557,7 @@ export function BlockRegionBlackboxToggle({ pressed, onToggle, style }: { presse
       aria-label="Blackbox toggle"
       aria-pressed={pressed}
       onClick={onToggle}
-      className="hover:bg-transparent hover:ring-1 hover:ring-ring/50 dark:hover:bg-transparent"
+      className={cn("hover:bg-transparent hover:ring-1 hover:ring-ring/50 dark:hover:bg-transparent", className)}
       style={{ position: "absolute", top: REGION_TOGGLE_INSET_PX, right: REGION_TOGGLE_INSET_PX, ...style }}
     >
       <Square aria-hidden fill={pressed ? "currentColor" : "none"} />
@@ -680,6 +701,7 @@ function RegionOpaqueFrame({
   width,
   height,
   toggle,
+  footer,
 }: {
   id: string;
   glyph?: string;
@@ -690,6 +712,7 @@ function RegionOpaqueFrame({
   width: number;
   height: number;
   toggle: ReactNode;
+  footer?: ReactNode;
 }) {
   const split = regionControlSplitPx(controlPorts.length);
   return (
@@ -699,6 +722,7 @@ function RegionOpaqueFrame({
           width={width}
           height={height}
           body={<RegionOpaqueTitle glyph={glyph} title={title} type={type} />}
+          footer={footer}
           // The FRAME's paint, not a card's: it is the same box the expanded
           // view drew, only with its inside hidden — which is also why the
           // pressed toggle has no plate of its own to sit on.
@@ -746,6 +770,8 @@ export function BlockRegion({
   boundaryPorts,
   opaqueFace = "card",
   onToggleView,
+  toggleClassName,
+  opaqueFooter,
   className,
   style,
 }: BlockRegionProps) {
@@ -825,6 +851,7 @@ export function BlockRegion({
           boundaryPorts={boundaryPorts ?? {}}
           width={layout.width}
           height={layout.height}
+          footer={opaqueFooter}
           // WHY the frame's border added to the inset: the expanded toggle is
           // placed in the frame's PADDING box, this one in the face's border
           // box, so without it the square hops a pixel when pressed.
@@ -833,6 +860,7 @@ export function BlockRegion({
               <BlockRegionBlackboxToggle
                 pressed
                 onToggle={onToggleView}
+                className={toggleClassName}
                 style={{ top: REGION_TOGGLE_INSET_PX + FRAME_BORDER_PX, right: REGION_TOGGLE_INSET_PX + FRAME_BORDER_PX }}
               />
             ) : null
@@ -985,7 +1013,7 @@ export function BlockRegion({
         ))}
         {/* Last in DOM order, so it paints over any member or arm row that
             reaches the top-right corner without needing a z-index. */}
-        {onToggleView && <BlockRegionBlackboxToggle pressed={false} onToggle={onToggleView} />}
+        {onToggleView && <BlockRegionBlackboxToggle pressed={false} onToggle={onToggleView} className={toggleClassName} />}
       </div>
     </div>
   );

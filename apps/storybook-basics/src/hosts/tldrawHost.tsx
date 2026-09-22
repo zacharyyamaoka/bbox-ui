@@ -196,6 +196,9 @@ export function shapeIdForNode(nodeId: string): TLShapeId {
  *   - code: the wrapper's grab ring (the editor itself is `nodrag`).
  *   - value: the pill's non-editor face (the editor carries `nodrag`; the
  *     writer/reader rails are rails, caught by the rail rule).
+ *   - region: the whole face, in every view. Its Blackbox toggle carries
+ *     `nodrag` (nodeViews.tsx), which is the only thing that keeps a press
+ *     on it a click instead of the start of a region drag.
  *
  * TRADE-OFF, stated rather than hidden: in tldraw, select and translate are
  * one gesture, so hiding a block-body press from tldraw also costs body-

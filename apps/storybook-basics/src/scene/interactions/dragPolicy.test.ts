@@ -122,6 +122,12 @@ describe("resolveGrab — nearest declaration wins", () => {
     expect(resolveGrab([link({}), link({ declares: "editable-text:editing" })]).role).toBe("owns-pointer");
   });
 
+  it("keeps a region's Blackbox toggle out of the host's hands, expanded and opaque", () => {
+    for (const key of ["block:expanded", "block:solid"] as const) {
+      expect(resolveGrab([link({ slot: "region-blackbox-toggle" }), link({ declares: key })]).role).toBe("owns-pointer");
+    }
+  });
+
   it("flips a folded Block back to a solid face", () => {
     expect(resolveGrab([link({}), link({ declares: "block:folded" })]).role).toBe("grab");
   });

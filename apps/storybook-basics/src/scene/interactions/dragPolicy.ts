@@ -151,6 +151,10 @@ export const DRAG_DECLARATIONS: Readonly<Record<string, DragDeclaration>> = {
       "port-dot-halo": "owns-pointer",
       "block-port-rail": "owns-pointer",
       "code-editor": "owns-pointer",
+      // An expanded region is the same container (its frame's inside is
+      // child canvas), and the Blackbox toggle on its top-right corner owns
+      // its press — see `block:solid`'s row for the opaque face.
+      "region-blackbox-toggle": "owns-pointer",
     },
     editableParts: ["block-header", "port-label", "port-label-display"],
   },
@@ -179,6 +183,10 @@ export const DRAG_DECLARATIONS: Readonly<Record<string, DragDeclaration>> = {
       "code-editor": "owns-pointer",
       "port-label": "grab",
       "port-label-display": "grab",
+      // A region's Expanded Opaque face is a solid Block, and its Blackbox
+      // toggle flips the view — a click, never the start of a move (Zach,
+      // 2026-09-22: "blackbox makes opaque without folding").
+      "region-blackbox-toggle": "owns-pointer",
     },
     editableParts: ["block-header", "port-label", "port-label-display"],
   },

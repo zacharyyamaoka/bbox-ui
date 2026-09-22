@@ -202,9 +202,9 @@ function collapseSelection(scene: HostScene, options: Parameters<typeof collapse
 /* ------------------------------------------------------------------ */
 
 function Bench({ scene, label }: { scene: HostScene; label: string }) {
-  // Stateful so the region's own chevron works: a reviewer can fold the
-  // region to the opaque card and watch the same promoted ports carry the
-  // same cables. Read-only benches would make the picture a still.
+  // Stateful so the region's own Blackbox toggle works: a reviewer can hide
+  // the region's inside and watch the same promoted ports carry the same
+  // cables. Read-only benches would make the picture a still.
   const [live, setLive] = useState(scene);
   return (
     <div data-slot="grouping-bench" data-bench={label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -229,8 +229,8 @@ export const RoundTrip: Story = {
             <>
               The middle bench is the SAME record as the one above it after <code>collapseToRegion(scene, [a, b, c])</code>: A, B and C
               are now members of a minted region, <code>e1</code> and <code>e4</code> end on its promoted ports instead of on the
-              members they used to name, and <code>e2</code>/<code>e3</code> are now wholly interior — press the region's chevron and
-              the opaque card hides them and states the count. The bottom bench is that record after <code>dissolveRegion</code>, and
+              members they used to name, and <code>e2</code>/<code>e3</code> are now wholly interior — press the region's Blackbox
+              toggle (its top-right corner) and the opaque face hides them and states the count. The bottom bench is that record after <code>dissolveRegion</code>, and
               the verdict under it is the byte comparison, not a resemblance.
             </>
           }
@@ -296,12 +296,14 @@ export const RoundTrip: Story = {
     await expectAllWiresResolved(collapsed);
     await expectAllWiresResolved(dissolved);
 
-    // And the fold the panel's note promises is real, not a screenshot:
-    // pressing the region's chevron takes the three members off the board
-    // and the card states what it is now holding — while the SAME two
+    // And the hiding the panel's note promises is real, not a screenshot:
+    // pressing the region's Blackbox toggle takes the three members off the
+    // board and the face states what it is now holding — while the SAME two
     // promoted ports keep the same two cables, which is the whole point of
-    // promoting them rather than remembering them.
-    await userEvent.click(required<HTMLElement>(collapsed, '[data-slot="folding-chevron"]', "the region's chevron"));
+    // promoting them rather than remembering them. (No region chevron any
+    // more — Zach, 2026-09-22: "Please do not put chevron drop downs on the
+    // regions.")
+    await userEvent.click(required<HTMLElement>(collapsed, '[data-region-id] [aria-label="Blackbox toggle"]', "the region's Blackbox toggle"));
     await waitFor(() => expect(collapsed.querySelector('[data-block-id="a"]')).toBeNull());
     expect(required<HTMLElement>(collapsed, '[data-slot="region-hidden"]', "the card's footer").textContent).toBe("3 blocks · 4 edges hidden");
     for (const portId of ["a/in", "b/out"]) {

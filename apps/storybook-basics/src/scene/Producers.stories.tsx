@@ -317,8 +317,9 @@ export const OpaqueCard: Story = {
     const reach = seat.offsetWidth / 2 + portVariantRingOverhangPx(PORT_VARIANTS.v1) + badge.getBoundingClientRect().width / 2;
     expect(d, "the badge rides the promoted seat").toBeLessThanOrEqual(reach + 0.5);
 
-    // Expand: the same two cables land on the real dot, and the count follows.
-    await userEvent.click(required<HTMLElement>(canvasElement, '[data-region-id="loop"] [data-block-id="loop"] [data-slot="folding-chevron"]', "the loop's chevron"));
+    // Expand — the Blackbox toggle, pressed while opaque: the same two cables
+    // land on the real dot, and the count follows.
+    await userEvent.click(required<HTMLElement>(canvasElement, '[data-region-id="loop"] [aria-label="Blackbox toggle"][aria-pressed="true"]', "the loop's Blackbox toggle"));
     await waitFor(() => expect(badgeTexts(canvasElement)).toEqual({ "merge/pose": "2" }));
     expect(canvasElement.querySelector('[data-port-id="merge/pose"]'), "the promoted seat is gone with the card").toBeNull();
   },
