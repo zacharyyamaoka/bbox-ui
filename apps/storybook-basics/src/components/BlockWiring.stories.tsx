@@ -16,7 +16,7 @@ import { type BlockScene, type SceneData, type ScenePosition, wiredPorts } from 
 import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
 
 /**
- * Basics/BlockWiring — phase B1 of docs/BLOCK-PORT-EDGES-PLAN.md: wires
+ * Components/Traces/WireLayer/Block Wiring — phase B1 of docs/BLOCK-PORT-EDGES-PLAN.md: wires
  * between real ports on real Blocks, dispatched the moment `claude/
  * trace-component` merged (it has — Trace, `TraceTerminalSpec`, `OPPOSITE_DIR`
  * and `traceSideOf` are all landed, committed code, not sibling-worktree
@@ -205,8 +205,8 @@ function Stage({ children }: { children: ReactNode }) {
 }
 
 const meta = {
-  title: "Blocks/BlockWiring",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Components/Traces/WireLayer/Block Wiring",
+  tags: ["object:trace", "lane:baseline"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },
 } satisfies Meta<typeof WireLayer>;

@@ -30,7 +30,8 @@ import { cn } from "../lib/utils";
  * standing in for one that doesn't exist in this kit.
  */
 const meta = {
-  title: "Basics/CompareReview",
+  title: "Components/Panels & Dialogs/CompareReview",
+  tags: ["object:chrome"],
   component: CompareReview,
   // Every story below overrides `render`; these are just the dummy
   // defaults CSF3 typing needs to cover CompareReview's required props

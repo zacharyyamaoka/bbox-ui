@@ -278,7 +278,7 @@ function WireBench({ benchId, caption, wires, width, height, children }: { bench
 
 const meta = {
   title: "Presets/Value",
-  tags: ["area:presets", "lane:baseline"],
+  tags: ["object:block", "lane:baseline"],
   component: ValueCapsule,
   args: { value: "" },
 } satisfies Meta<typeof ValueCapsule>;

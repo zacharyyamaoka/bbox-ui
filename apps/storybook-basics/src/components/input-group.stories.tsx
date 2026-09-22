@@ -18,8 +18,8 @@ import {
  * quick switcher's search field gets its leading magnifier.
  */
 const meta = {
-  title: "Basics/InputGroup",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/InputGroup",
+  tags: ["object:stock", "lane:baseline"],
   component: InputGroup,
 } satisfies Meta<typeof InputGroup>;
 

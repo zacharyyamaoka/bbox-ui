@@ -1,5 +1,5 @@
 /**
- * Control Flow/Host Edges — the gap docs/CONTROL-FLOW-PLAN.md §1 marks with
+ * Presets/ControlFlow/HostEdges — the gap docs/CONTROL-FLOW-PLAN.md §1 marks with
  * two ⚠️ rows, closed and measured.
  *
  * Every interesting control-flow cable lands on a block INSIDE something: a
@@ -42,8 +42,8 @@ import { TldrawHost } from "../hosts/tldrawHost";
 import { expectMemberInside } from "./controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Host Edges",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/HostEdges",
+  tags: ["object:region", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;

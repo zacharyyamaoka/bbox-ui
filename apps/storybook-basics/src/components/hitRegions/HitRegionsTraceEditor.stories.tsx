@@ -1,5 +1,5 @@
 /**
- * Hit Regions/TraceEditor — the grab circles: terminals at an invisible
+ * Components/Traces/TraceEditor/Hit Regions — the grab circles: terminals at an invisible
  * r=13 (`TERMINAL_HANDLE_HIT_RADIUS`, traceEditor.tsx:94), bends at r=4
  * and virtual midpoints at r=3 (traceEditor.tsx:89-90) — where the drawn
  * circle IS the whole hit target. That last fact is the finding: a
@@ -23,8 +23,8 @@ import {
 import { effectiveHitValue, type HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
-  title: "Hit Regions/TraceEditor",
-  tags: ["area:hit-regions", "lane:baseline"],
+  title: "Components/Traces/TraceEditor/Hit Regions",
+  tags: ["object:trace", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

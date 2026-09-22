@@ -27,7 +27,8 @@ import {
  * the last two", "ellipsis on inner span; full name on `title`").
  */
 const meta = {
-  title: "Basics/Breadcrumb",
+  title: "Components/Menus & Bars/Breadcrumb",
+  tags: ["object:chrome"],
   component: Breadcrumb,
 } satisfies Meta<typeof Breadcrumb>;
 

@@ -443,8 +443,8 @@ function ColumnHeader({ label }: { label: string }) {
 }
 
 const meta = {
-  title: "Trace/Polarity",
-  tags: ["area:trace", "lane:baseline"],
+  title: "Components/Traces/Trace/Polarity",
+  tags: ["object:trace", "lane:baseline"],
   component: Trace,
   parameters: { layout: "fullscreen" },
   args: { id: "polarity", from: FROM_FIXED, to: { ...TO_POS, dir: "right" as TraceDir } },

@@ -47,8 +47,8 @@ const DEMO_SPECS: Readonly<Record<DemoState, OriginBadgeSpec>> = {
 };
 
 const meta = {
-  title: "Basics/OriginBadge",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Text & Marks/OriginBadge",
+  tags: ["object:text-marks", "lane:baseline"],
   component: OriginBadge,
   args: { state: "synced", spec: DEMO_SPECS.synced },
 } satisfies Meta<typeof OriginBadge>;

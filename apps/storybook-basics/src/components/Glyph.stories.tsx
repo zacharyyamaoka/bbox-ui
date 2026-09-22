@@ -5,8 +5,8 @@ import { GLYPH_SIZES, type GlyphSize } from "./glyph.layout";
 import { Glyph } from "./glyph";
 
 const meta = {
-  title: "Basics/Glyph",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Text & Marks/Glyph",
+  tags: ["object:text-marks", "lane:baseline"],
   component: Glyph,
   args: {
     content: "lucide:rocket",

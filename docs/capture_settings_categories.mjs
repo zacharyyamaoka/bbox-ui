@@ -35,8 +35,8 @@ const PORT = argOf("--port", "5507");
 const OUT = path.resolve(repoRoot, argOf("--out", "reports/media/settings-pages"));
 const BASE = `http://localhost:${PORT}/iframe.html`;
 
-const DIALOG_STORY = "basics-settings-categories--all-five-categories";
-const PAGE_STORY = "basics-settings-categories--as-a-page";
+const DIALOG_STORY = "components-panels-dialogs-settingscategories--all-five-categories";
+const PAGE_STORY = "components-panels-dialogs-settingscategories--as-a-page";
 
 /** Zach's five, in his order, plus the About this app already had. */
 const CATEGORIES = [

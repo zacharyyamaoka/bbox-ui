@@ -127,7 +127,8 @@ function Surface({ children }: { children: ReactNode }) {
 const applyPx = fn();
 
 const meta = {
-  title: "Basics/ControlPanel",
+  title: "Components/Menus & Bars/ControlPanel",
+  tags: ["object:chrome"],
   component: ControlPanel,
   // WHY base `args`: `control`/`glyphs` have no sensible defaults, so CSF3's
   // typegen requires every story to satisfy them. Each story below builds

@@ -6,7 +6,7 @@ import { PORT_EDGE_MORE_GAP_PX, PortEdge, type PortEdgeItem } from "../component
 import { PortOverflowChip } from "./portOverflowChip";
 
 /**
- * Blocks/Editor/Port Overflow Chip — RULING 7, 2026-09-21. Zach, on the
+ * Editor/PortOverflowChip — RULING 7, 2026-09-21. Zach, on the
  * "+X more" chip: *"ideally this just comes from the port edge
  * implementation... but YOu do need to provide the chrome to do this...
  * should be in bbox-editor"*.
@@ -32,8 +32,8 @@ import { PortOverflowChip } from "./portOverflowChip";
  * `PORT_EDGE_MORE_GAP_PX` rather than a number copied into this file.
  */
 const meta = {
-  title: "Blocks/Editor/Port Overflow Chip",
-  tags: ["area:blocks", "lane:port-overflow-chip"],
+  title: "Editor/PortOverflowChip",
+  tags: ["object:port", "lane:port-overflow-chip"],
 } satisfies Meta;
 
 export default meta;

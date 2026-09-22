@@ -28,8 +28,8 @@ import type { SearchableText, TextSourceUpdate } from "./boardSearch";
  * keystroke.
  */
 const meta = {
-  title: "Basics/QuickSwitcher",
-  tags: ["area:basics", "lane:devtools-2026-09-19"],
+  title: "Components/Panels & Dialogs/QuickSwitcher",
+  tags: ["object:chrome", "lane:devtools-2026-09-19"],
   component: QuickSwitcher,
   args: { open: false, onOpenChange: () => {} },
   parameters: { layout: "fullscreen" },

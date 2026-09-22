@@ -4,8 +4,8 @@ import { expect, within } from "storybook/test";
 import { Text } from "./text";
 
 const meta = {
-  title: "Basics/Text",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Text & Marks/Text",
+  tags: ["object:text-marks", "lane:baseline"],
   component: Text,
   args: { children: "Plain information" },
 } satisfies Meta<typeof Text>;

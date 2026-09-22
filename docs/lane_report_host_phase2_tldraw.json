@@ -32,7 +32,7 @@
   ],
   "stories": [
     {
-      "id": "blocks-scene-in-a-host-tldraw--three-hosts",
+      "id": "scene-model-diff-scene-in-a-host-tldraw--three-hosts",
       "title": "Same Scene, Three Hosts",
       "look_for": "THE review story: one HOST_SCENE literal through DOM Canvas (control), React Flow, and tldraw — same faces, same nesting (kid inside proc), same wires; the async e-cfg edge renders dashed in DOM and tldraw (React Flow's stock bezier drops it)",
       "w": 1500,
@@ -40,7 +40,7 @@
       "settle": 6000
     },
     {
-      "id": "blocks-scene-in-a-host-tldraw--scene-tldraw",
+      "id": "scene-model-diff-scene-in-a-host-tldraw--scene-tldraw",
       "title": "Scene (tldraw)",
       "look_for": "the tldraw bench alone: all four faces inside real shapes, wires anchored on the dots, tldraw's stock UI (toolbar, style panel, zoom) alive around them",
       "w": 900,
@@ -48,7 +48,7 @@
       "settle": 4000
     },
     {
-      "id": "blocks-scene-in-a-host-tldraw--viewport-and-shape-drag",
+      "id": "scene-model-diff-scene-in-a-host-tldraw--viewport-and-shape-drag",
       "title": "Viewport And Shape Drag (tldraw) — END state",
       "look_for": "captured AFTER the play journey: proc translated by its own header and still selected (tldraw's blue indicator + resize handles), camera wheel-panned and ctrl-wheel-zoomed to 110%, wires re-anchored to the moved shape",
       "w": 900,
@@ -56,7 +56,7 @@
       "settle": 12000
     },
     {
-      "id": "blocks-scene-in-a-host-tldraw--rail-reorder-and-caret-inside-a-shape",
+      "id": "scene-model-diff-scene-in-a-host-tldraw--rail-reorder-and-caret-inside-a-shape",
       "title": "Rail Reorder And Caret (tldraw) — END state",
       "look_for": "the boundary fight's aftermath: proc's right rail reads aux/out (dnd-kit reordered it, the shape never moved, the camera never panned), e-set re-anchored to out's NEW slot, and the code face shows the text selection the caret drag made instead of a shape drag",
       "w": 900,
@@ -64,7 +64,7 @@
       "settle": 12000
     },
     {
-      "id": "blocks-scene-in-a-host-tldraw--css-containment-tldraw",
+      "id": "scene-model-diff-scene-in-a-host-tldraw--css-containment-tldraw",
       "title": "CSS Containment (tldraw)",
       "look_for": "the probe elements beside the host keeping their computed values; the play pins tldraw's one real global leak exactly",
       "w": 760,

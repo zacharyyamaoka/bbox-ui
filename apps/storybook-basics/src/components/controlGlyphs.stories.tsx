@@ -86,8 +86,8 @@ function FamilyRow({ family, families }: { family: string; families: GlyphFamili
 }
 
 const meta = {
-  title: "Basics/ControlGlyphs",
-  tags: ["area:basics", "lane:floating-toolbars-2026-09-20"],
+  title: "Components/Menus & Bars/ControlGlyphs",
+  tags: ["object:chrome", "lane:floating-toolbars-2026-09-20"],
 } satisfies Meta;
 
 export default meta;

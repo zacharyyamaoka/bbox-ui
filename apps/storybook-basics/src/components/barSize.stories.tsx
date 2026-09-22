@@ -75,8 +75,8 @@ function BarSizeProbe({ id }: { id: string }) {
 }
 
 const meta = {
-  title: "Blocks/Bar Size Cascade",
-  tags: ["area:blocks", "lane:floating-toolbars-2026-09-20"],
+  title: "Components/Blocks/Bar/Size Cascade",
+  tags: ["object:block", "lane:floating-toolbars-2026-09-20"],
 } satisfies Meta;
 
 export default meta;

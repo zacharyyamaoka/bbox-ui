@@ -14,7 +14,7 @@ import { type BlockScene, type SceneData, type ScenePosition, wiredPorts } from 
 import { sceneWires, withWiredState, type WireStyleData } from "./sceneWires";
 
 /**
- * Basics/CollapseWireEndpoints — Zach, reacting to a screenshot of a Block's
+ * Scene/Wiring/CollapseWireEndpoints — Zach, reacting to a screenshot of a Block's
  * view toggle: "expanded view to simple view is not an issue. All of the
  * ports collapse to one that is centered in the block body. You can refer
  * to SystemSketch for this right now."
@@ -266,8 +266,8 @@ function Stage({ children }: { children: ReactNode }) {
 }
 
 const meta = {
-  title: "Blocks/CollapseWireEndpoints",
-  tags: ["area:blocks", "lane:collapse-wires"],
+  title: "Scene/Wiring/CollapseWireEndpoints",
+  tags: ["object:trace", "lane:collapse-wires"],
   component: WireLayer,
   args: { wires: [], containerRef: { current: null } },
 } satisfies Meta<typeof WireLayer>;

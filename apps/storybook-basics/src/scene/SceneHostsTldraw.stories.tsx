@@ -2,15 +2,15 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "./domCanvas";
-import { dragFrom } from "./hostGestures";
-import { HOST_SCENE, topLevelNodes, type HostScene } from "./hostScene";
-import { ReactFlowHost } from "./reactFlowHost";
-import { TldrawHost } from "./tldrawHost";
+import { DomCanvas } from "../hosts/domCanvas";
+import { dragFrom } from "../hosts/hostGestures";
+import { HOST_SCENE, topLevelNodes, type HostScene } from "../hosts/hostScene";
+import { ReactFlowHost } from "../hosts/reactFlowHost";
+import { TldrawHost } from "../hosts/tldrawHost";
 import { TRACE_TERMINAL_GAP } from "../components/trace";
 
 /**
- * Blocks/Scene/In A Host (tldraw) — the SAME `HOST_SCENE` literal the DOM
+ * Scene/Model & Diff/Scene/In A Host (tldraw) — the SAME `HOST_SCENE` literal the DOM
  * Canvas and React Flow benches render (SceneHosts.stories.tsx), now
  * through tldraw, which turns H1's "one scene, two hosts" into a genuine
  * three-host proof. Story names carry the host tag, matching the existing
@@ -26,7 +26,8 @@ import { TRACE_TERMINAL_GAP } from "../components/trace";
  */
 
 const meta = {
-  title: "Blocks/Scene/In A Host (tldraw)",
+  title: "Scene/Model & Diff/Scene/In A Host (tldraw)",
+  tags: ["object:scene", "host:dom", "host:react-flow", "host:tldraw"],
 } satisfies Meta;
 
 export default meta;

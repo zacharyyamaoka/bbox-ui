@@ -306,7 +306,7 @@ export function Block({
         "text-[color:var(--bbox-skin-fg,var(--color-card-foreground))]",
         // The skin seam (src/skin/skin.ts + skin.css). Each token carries
         // TODAY'S value as its own `var()` fallback — captured live off
-        // this story before this port (`blocks-block--default`,
+        // this story before this port (`components-blocks-block--default`,
         // getComputedStyle) — so a consumer who never imports skin.css
         // renders the exact pixels this replaced: `rounded-lg border
         // border-border bg-card shadow-sm`. `border-solid` is explicit
@@ -314,7 +314,7 @@ export function Block({
         // `border-style: none`, where a width alone paints nothing.
         // WHY the fallback is 1px, not the token table's 2px: Block's own
         // border-width TODAY is Tailwind's plain `border` utility (1px) —
-        // captured live (`blocks-block--default`, getComputedStyle) before
+        // captured live (`components-blocks-block--default`, getComputedStyle) before
         // this port. skin.css's three blocks still all agree on 2px once
         // ANY skin is active (including the explicit "default" one) — see
         // skin.css's own header on why stroke-width has to be uniform

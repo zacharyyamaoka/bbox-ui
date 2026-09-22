@@ -142,8 +142,8 @@ function StraightTunnel({ state, id }: { state: TunnelDisplayState; id: string }
 }
 
 const meta = {
-  title: "Trace/Tunnel & Halo",
-  tags: ["area:trace", "lane:baseline"],
+  title: "Components/Traces/Trace/Tunnel & Halo",
+  tags: ["object:trace", "lane:baseline"],
   parameters: { layout: "padded" },
 } satisfies Meta;
 

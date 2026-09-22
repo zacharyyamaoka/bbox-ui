@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
  * per panel.
  */
 const meta = {
-  title: "Basics/Tabs",
+  title: "Components/Stock/Tabs",
+  tags: ["object:stock"],
   component: Tabs,
 } satisfies Meta<typeof Tabs>;
 

@@ -1,5 +1,5 @@
 /**
- * Hit Regions/PortEdge — the rail itself has no hit region of its own: a
+ * Components/Ports/PortEdge/Hit Regions — the rail itself has no hit region of its own: a
  * layout container whose pointer targets are the things it lays out. The
  * ports it renders carry Port's 40px halo (`PORT_HIT_PX`); the dnd-kit
  * drag surface is each member's own DOM box. This story paints the port
@@ -26,8 +26,8 @@ import {
 import { effectiveHitValue, type HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
-  title: "Hit Regions/PortEdge",
-  tags: ["area:hit-regions", "lane:baseline"],
+  title: "Components/Ports/PortEdge/Hit Regions",
+  tags: ["object:port", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

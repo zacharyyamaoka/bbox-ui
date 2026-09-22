@@ -123,7 +123,8 @@ const baseArgs: ChromeBarProps = {
 };
 
 const meta = {
-  title: "Basics/ChromeBar",
+  title: "Components/Menus & Bars/ChromeBar",
+  tags: ["object:chrome"],
   component: ChromeBar,
   args: baseArgs,
 } satisfies Meta<typeof ChromeBar>;

@@ -6,7 +6,7 @@ import { Block } from "../../components/block";
 import { GlyphPicker } from "./glyphPicker";
 
 /**
- * Blocks/Editor/Glyph Picker — P-036 / P-043, 2026-09-21.
+ * Editor/GlyphPicker — P-036 / P-043, 2026-09-21.
  *
  * Zach specified this one by pointing: *"copied from Notion almost exactly"*,
  * and *"We want a much Larger library … Right now its a bit to limited … I
@@ -26,8 +26,8 @@ import { GlyphPicker } from "./glyphPicker";
  * `apps/systemsketch/src/glyph.smoke.test.tsx`.
  */
 const meta = {
-  title: "Blocks/Editor/Glyph Picker",
-  tags: ["area:blocks", "lane:glyph-picker"],
+  title: "Editor/GlyphPicker",
+  tags: ["object:text-marks", "lane:glyph-picker"],
 } satisfies Meta;
 
 export default meta;

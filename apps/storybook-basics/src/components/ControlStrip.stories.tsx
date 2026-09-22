@@ -192,7 +192,8 @@ export const demoGlyphs: GlyphFamilies = {
 };
 
 const meta = {
-  title: "Basics/ControlStrip",
+  title: "Components/Menus & Bars/ControlStrip",
+  tags: ["object:chrome"],
   component: ControlStrip,
   // WHY: this file exports the demo vocabulary (`demoRegistry`, `demoGlyphs`,
   // `demoDefinitions`, `DEMO_SWATCH_HEX`, `FONT_SIZE_PX`) so `ControlLab

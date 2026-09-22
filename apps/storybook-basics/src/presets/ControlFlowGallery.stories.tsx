@@ -1,5 +1,5 @@
 /**
- * Control Flow/Gallery — the whole visual language on ONE board, in all
+ * Presets/ControlFlow/Gallery — the whole visual language on ONE board, in all
  * three hosts (docs/CONTROL-FLOW-PLAN.md lane F, §8's last row).
  *
  * Every other `Control Flow/*` file proves one claim in isolation: lane A
@@ -71,8 +71,8 @@ import {
 } from "./controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Gallery",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/Gallery",
+  tags: ["object:region", "host:dom", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;
@@ -245,7 +245,7 @@ function composedBoard(): HostScene {
     // NO obstacles at all (`keepOutsFor` is only consulted for an
     // orthogonal route). Elbow is also what Zach's sketches draw. The
     // meaning is untouched — same ids, same ends, same fixture objects
-    // spread — so `Control Flow/Branch` keeps asserting the curves it
+    // spread — so `Presets/ControlFlow/Branch` keeps asserting the curves it
     // shipped and this board keeps being legible.
     elbow(edgeOf(branchFixture, "e-cond")),
     // The ONE retarget, and the thing that makes this a program rather than

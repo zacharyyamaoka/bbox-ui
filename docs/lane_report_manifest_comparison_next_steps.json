@@ -47,28 +47,28 @@
   ],
   "stories": [
     {
-      "id": "blocks-scene-diff--word-diff-ink",
+      "id": "scene-model-diff-scenediff--word-diff-ink",
       "title": "Already shipped · Word Diff Ink",
       "look_for": "surface A is real: the donor's tokenizer inking only the run that changed — these captures are what N2's paint layer will consume",
       "w": 480,
       "h": 260
     },
     {
-      "id": "blocks-scene-diff--pose-classification",
+      "id": "scene-model-diff-scenediff--pose-classification",
       "title": "Already shipped · Pose Classification",
       "look_for": "moved vs resized read off the drawing — the input to N2's ghost-vs-heavy-edge treatments",
       "w": 620,
       "h": 220
     },
     {
-      "id": "blocks-scene-diff--line-diff-code",
+      "id": "scene-model-diff-scenediff--line-diff-code",
       "title": "Already shipped · Line Diff Code",
       "look_for": "the raw-evidence tab's math, sorted keys so write order can't fake a change",
       "w": 480,
       "h": 260
     },
     {
-      "id": "blocks-scene-diff--scene-diff-summary",
+      "id": "scene-model-diff-scenediff--scene-diff-summary",
       "title": "Already shipped · Scene Diff Summary",
       "look_for": "diffScene's three lists — note the ports panel: the resolver seam is why CVP §3's 'impossible' is overtaken",
       "w": 760,

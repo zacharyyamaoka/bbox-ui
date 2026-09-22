@@ -31,35 +31,35 @@
   ],
   "stories": [
     {
-      "id": "trace-tunnel-halo--display-states",
+      "id": "components-traces-trace-tunnel-halo--display-states",
       "title": "Trace \u00b7 Tunnel \u2014 four display states",
       "look_for": "off / hidden / preview / revealed stacked. `hidden` is the one to check: two short stubs at the ports, two outlined vias, and nothing in between. `preview` puts the whole route back WITHOUT losing the mouths \u2014 that is the distinction the feature turns on.",
       "w": 560,
       "h": 620
     },
     {
-      "id": "trace-tunnel-halo--layer-focus",
+      "id": "components-traces-trace-tunnel-halo--layer-focus",
       "title": "Trace \u00b7 Tunnel \u2014 layer focus",
       "look_for": "click Control, then Diagnostics. The focused layer's cable comes back in full; every other cable goes underground \u2014 INCLUDING the third one, which was never configured as a tunnel at all. Click the active layer again to clear focus (the donor's toggle).",
       "w": 600,
       "h": 560
     },
     {
-      "id": "trace-tunnel-halo--crossing-halo",
+      "id": "components-traces-trace-tunnel-halo--crossing-halo",
       "title": "Trace \u00b7 Halo \u2014 before / after",
       "look_for": "two cables that genuinely cross. Top panel: no mark, and nothing says which is in front. Bottom: the second cable's 11px canvas-coloured casing breaks the first. Note both cables stay bare for 34px at each port \u2014 the casing only covers the middle.",
       "w": 560,
       "h": 560
     },
     {
-      "id": "trace-tunnel-halo--sketched-tunnel",
+      "id": "components-traces-trace-tunnel-halo--sketched-tunnel",
       "title": "Trace \u00b7 Tunnel under the sketch skin",
       "look_for": "the same tunnel, hand-drawn. Each mouth wobbles as its own run \u2014 which only works because the port slices real geometry before the skin sees it, instead of dashing a path the skin then re-lengthens.",
       "w": 560,
       "h": 400
     },
     {
-      "id": "trace-tunnel-halo--composes-with-variants",
+      "id": "components-traces-trace-tunnel-halo--composes-with-variants",
       "title": "Trace \u00b7 Tunnel composes with variants",
       "look_for": "three rows. An async cable, then the SAME cable tunnelled \u2014 each 34px mouth still carries its packet mark (this is what both donors lose, and what looking at the capture caught that no attribute assertion did). Then a curved tunnel whose mouths follow the real sampled arc.",
       "w": 560,

@@ -26,7 +26,7 @@ import type { Distribution } from "./portEdge.layout";
 import type { PortEdgeItem } from "./portEdge";
 
 /**
- * Basics/BlockPort — phase A1 of docs/BLOCK-PORT-EDGES-PLAN.md: a `Block`
+ * Components/Blocks/BlockPort — phase A1 of docs/BLOCK-PORT-EDGES-PLAN.md: a `Block`
  * wearing real `PortEdge` rails, in each of the donor's four view rules.
  *
  * Every claim below is MEASURED off `getBoundingClientRect`, never inferred
@@ -211,8 +211,8 @@ function Segmented<T extends string>({ options, value, onChange, slot }: { optio
 }
 
 const meta = {
-  title: "Blocks/BlockPort",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Components/Blocks/BlockPort",
+  tags: ["object:block", "lane:baseline"],
   component: BlockPort,
   // Never read — every story supplies its own `render` with story-local
   // state, because `BlockPort`'s edges are controlled.

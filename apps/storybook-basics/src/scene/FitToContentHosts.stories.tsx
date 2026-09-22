@@ -1,5 +1,5 @@
 /**
- * Blocks/Fit To Content Hosts — Zach's second success criterion: "a non
+ * Scene/Layout & Drag/FitToContent/In A Host — Zach's second success criterion: "a non
  * buggy example of me being able to drag around a child member in
  * reactflow/tldraw and having the parent frame redraw itself
  * automatically." The first criterion (a plain-DOM before/after gallery)
@@ -46,15 +46,15 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { dragFrom, dragSteps } from "./hostGestures";
-import { DRAG_MEMBER_SCENE, type HostScene } from "./hostScene";
-import { ReactFlowHost } from "./reactFlowHost";
-import { TldrawHost } from "./tldrawHost";
+import { dragFrom, dragSteps } from "../hosts/hostGestures";
+import { DRAG_MEMBER_SCENE, type HostScene } from "../hosts/hostScene";
+import { ReactFlowHost } from "../hosts/reactFlowHost";
+import { TldrawHost } from "../hosts/tldrawHost";
 import { BLOCK_MEMBER_INSET_PX } from "../components/blockMembers";
 
 const meta = {
-  title: "Blocks/Fit To Content Hosts",
-  tags: ["area:blocks", "lane:fit-to-content-hosts"],
+  title: "Scene/Layout & Drag/FitToContent/In A Host",
+  tags: ["object:block", "host:react-flow", "host:tldraw", "lane:fit-to-content-hosts"],
 } satisfies Meta;
 
 export default meta;

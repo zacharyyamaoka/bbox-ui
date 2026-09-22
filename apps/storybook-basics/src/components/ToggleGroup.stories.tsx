@@ -14,7 +14,8 @@ import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
  * (the default, 2px) reads as separate pills with a gap.
  */
 const meta = {
-  title: "Basics/ToggleGroup",
+  title: "Components/Stock/ToggleGroup",
+  tags: ["object:stock"],
   component: ToggleGroup,
 } satisfies Meta<typeof ToggleGroup>;
 

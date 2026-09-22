@@ -19,8 +19,8 @@ function Swatch({ caption, children }: { caption: string; children: React.ReactN
 }
 
 const meta = {
-  title: "Ports/Port",
-  tags: ["area:ports", "lane:baseline"],
+  title: "Components/Ports/Port",
+  tags: ["object:port", "lane:baseline"],
   component: Port,
   args: { state: "empty", diameter: "md" },
 } satisfies Meta<typeof Port>;

@@ -4,8 +4,8 @@ import { expect, within } from "storybook/test";
 import { Badge } from "./badge";
 
 const meta = {
-  title: "Basics/Badge",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Text & Marks/Badge",
+  tags: ["object:text-marks", "lane:baseline"],
   component: Badge,
   args: { children: "Badge" },
 } satisfies Meta<typeof Badge>;

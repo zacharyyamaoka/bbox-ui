@@ -243,8 +243,8 @@ function ToolDockHarness(props: {
 }
 
 const meta = {
-  title: "Basics/ToolDock",
-  tags: ["area:basics", "lane:corner-arrow"],
+  title: "Components/Menus & Bars/ToolDock",
+  tags: ["object:chrome", "lane:corner-arrow"],
   component: ToolDock,
   // WHY base `args`: every required `ToolDockProps` field has no sensible
   // default, so CSF3 typegen requires them here. Every story below builds

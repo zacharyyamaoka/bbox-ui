@@ -11,7 +11,8 @@ import { HistoryList, type HistoryRecord } from "./historyList";
  * width, `compact` is the inspector's narrower panel.
  */
 const meta = {
-  title: "Basics/HistoryList",
+  title: "Components/Panels & Dialogs/HistoryList",
+  tags: ["object:chrome"],
   component: HistoryList,
   // Every story below overrides `render`; these are just the dummy
   // defaults CSF3 typing needs to cover HistoryList's required props.

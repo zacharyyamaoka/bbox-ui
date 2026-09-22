@@ -21,8 +21,8 @@ import {
  * the actual settings content.
  */
 const meta = {
-  title: "Basics/Dialog",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Dialog",
+  tags: ["object:stock", "lane:baseline"],
   component: Dialog,
 } satisfies Meta<typeof Dialog>;
 

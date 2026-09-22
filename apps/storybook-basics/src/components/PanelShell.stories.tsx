@@ -5,7 +5,8 @@ import { expect, fn, userEvent, within } from "storybook/test";
 import { PanelShell } from "./panelShell";
 
 const meta = {
-  title: "Basics/PanelShell",
+  title: "Components/Panels & Dialogs/PanelShell",
+  tags: ["object:chrome"],
   component: PanelShell,
   // WHY base `args`: `title`/`onClose`/`children` have no sensible default,
   // so CSF3 typegen requires them here. Every story below supplies its own

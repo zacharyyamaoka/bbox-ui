@@ -2,14 +2,14 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "./domCanvas";
-import * as domCanvasModule from "./domCanvas";
-import { dragFrom } from "./hostGestures";
-import { HOST_SCENE, topLevelNodes, type HostScene } from "./hostScene";
-import { ReactFlowHost } from "./reactFlowHost";
+import { DomCanvas } from "../hosts/domCanvas";
+import * as domCanvasModule from "../hosts/domCanvas";
+import { dragFrom } from "../hosts/hostGestures";
+import { HOST_SCENE, topLevelNodes, type HostScene } from "../hosts/hostScene";
+import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 /**
- * Blocks/Scene/In A Host — the SAME `HOST_SCENE` literal rendered through
+ * Scene/Model & Diff/Scene/In A Host — the SAME `HOST_SCENE` literal rendered through
  * both hosts (H1: one scene, two hosts, no per-host fixture). Story names
  * carry the host tag — "(DOM Canvas)" / "(ReactFlow)"; an untagged story
  * anywhere in this app is plain DOM, no host.
@@ -21,8 +21,8 @@ import { ReactFlowHost } from "./reactFlowHost";
  */
 
 const meta = {
-  title: "Blocks/Scene/In A Host",
-  tags: ["area:blocks", "lane:host-fixes"],
+  title: "Scene/Model & Diff/Scene/In A Host",
+  tags: ["object:scene", "host:dom", "host:react-flow", "lane:host-fixes"],
 } satisfies Meta;
 
 export default meta;

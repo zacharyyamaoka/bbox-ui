@@ -1,5 +1,5 @@
 /**
- * Blocks/Fit To Content — the three cases Zach named (PROJECT - Black Box
+ * Scene/Layout & Drag/FitToContent — the three cases Zach named (PROJECT - Black Box
  * UI.md, "### Fit to content", 2026-09-18), plus the bug he remembered.
  *
  *   • port view     — "dynamically resizes as you add more ports"
@@ -32,13 +32,13 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, waitFor } from "storybook/test";
 
-import { Block } from "./block";
-import { BLOCK_MEMBER_INSET_PX, type BlockMember } from "./blockMembers";
-import { BlockPort, railPitches } from "./blockPort";
-import { PORT_EDGE_SLOT_MIN_PX, RAIL_GAP_PX, type BlockPortLayout } from "./blockPort.layout";
-import type { PortEdgeItem } from "./portEdge";
-import type { Distribution } from "./portEdge.layout";
-import { Text } from "./text";
+import { Block } from "../components/block";
+import { BLOCK_MEMBER_INSET_PX, type BlockMember } from "../components/blockMembers";
+import { BlockPort, railPitches } from "../components/blockPort";
+import { PORT_EDGE_SLOT_MIN_PX, RAIL_GAP_PX, type BlockPortLayout } from "../components/blockPort.layout";
+import type { PortEdgeItem } from "../components/portEdge";
+import type { Distribution } from "../components/portEdge.layout";
+import { Text } from "../components/text";
 import {
   DEFAULT_MEMBER_INSET_PX,
   blockExpandedFitHeight,
@@ -47,11 +47,11 @@ import {
   railPitchForBand,
   resolveBlockHeight,
   type MemberRect,
-} from "../scene/fitToContent";
+} from "./fitToContent";
 
 const meta = {
-  title: "Blocks/Fit To Content",
-  tags: ["area:blocks", "lane:fit-to-content"],
+  title: "Scene/Layout & Drag/FitToContent",
+  tags: ["object:block", "lane:fit-to-content"],
 } satisfies Meta;
 
 export default meta;

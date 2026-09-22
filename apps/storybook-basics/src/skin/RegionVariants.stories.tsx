@@ -1,5 +1,5 @@
 /**
- * Control Flow/Region Variants — the region DRAWINGS over one region
+ * Skin/RegionVariants — the region DRAWINGS over one region
  * component, switched by an attribute, measured per variant
  * (docs/ASK-2026-09-19-PORTS-EDGES-REGIONS-FEEDBACK.md, lane `regions`).
  *
@@ -80,8 +80,8 @@ import {
 import { expectArmsStacked, expectCornerPorts, expectRegionExpanded, expectRegionOpaque } from "../presets/controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Region Variants",
-  tags: ["area:control-flow", "lane:regions"],
+  title: "Skin/RegionVariants",
+  tags: ["object:region", "host:dom", "lane:regions"],
 } satisfies Meta;
 
 export default meta;

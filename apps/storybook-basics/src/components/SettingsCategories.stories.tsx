@@ -41,8 +41,8 @@ import type { FileNavigationMode } from "./appSettings";
  * this file pins the CATEGORIES the shell is now given.
  */
 const meta = {
-  title: "Basics/Settings Categories",
-  tags: ["area:basics", "lane:settings-pages"],
+  title: "Components/Panels & Dialogs/SettingsCategories",
+  tags: ["object:chrome", "lane:settings-pages"],
   component: SettingsView,
   args: { open: false, onOpenChange: fn(), presentation: "dialog" as const, categories: [] },
 } satisfies Meta<typeof SettingsView>;

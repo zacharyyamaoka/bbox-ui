@@ -8,7 +8,8 @@ import { ProblemsBadge } from "./problemsPanel";
 import { Button } from "./button";
 
 const meta = {
-  title: "Basics/StatusStrip",
+  title: "Components/Menus & Bars/StatusStrip",
+  tags: ["object:chrome"],
   component: StatusStrip,
   // WHY base `args`: `items` has no sensible default, so CSF3 typegen
   // requires it here. Every story below supplies its own real items via

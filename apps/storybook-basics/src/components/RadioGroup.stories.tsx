@@ -10,8 +10,8 @@ import { RadioGroup, RadioGroupItem } from "./radio-group";
  * page). One choice at a time, keyboard-navigable.
  */
 const meta = {
-  title: "Basics/RadioGroup",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/RadioGroup",
+  tags: ["object:stock", "lane:baseline"],
   component: RadioGroup,
 } satisfies Meta<typeof RadioGroup>;
 

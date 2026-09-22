@@ -22,8 +22,8 @@ import { ConfirmDialog, useConfirm } from "./confirmDialog";
  * command and a double-settle is a file command that runs twice.
  */
 const meta = {
-  title: "Basics/ConfirmDialog",
-  tags: ["area:basics", "lane:chrome-files-settings"],
+  title: "Components/Panels & Dialogs/ConfirmDialog",
+  tags: ["object:chrome", "lane:chrome-files-settings"],
   component: ConfirmDialog,
   args: {
     open: false,

@@ -2,13 +2,13 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "./domCanvas";
-import { dragFrom, dragSteps } from "./hostGestures";
-import type { HostScene } from "./hostScene";
-import { ReactFlowHost } from "./reactFlowHost";
+import { DomCanvas } from "../hosts/domCanvas";
+import { dragFrom, dragSteps } from "../hosts/hostGestures";
+import type { HostScene } from "../hosts/hostScene";
+import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 /**
- * Blocks/BlockPort/In A Host — the ported Block under its host-facing name
+ * Components/Blocks/BlockPort/In A Host — the ported Block under its host-facing name
  * `block` (H6). The DOM Canvas story doubles as the interaction CONTROL:
  * the same dnd-kit rail reorder the React Flow bench fights for (H4) runs
  * here with no engine anywhere near it, which is what makes "the host must
@@ -16,8 +16,8 @@ import { ReactFlowHost } from "./reactFlowHost";
  */
 
 const meta = {
-  title: "Blocks/BlockPort/In A Host",
-  tags: ["area:blocks", "lane:host-fixes"],
+  title: "Components/Blocks/BlockPort/In A Host",
+  tags: ["object:block", "host:dom", "host:react-flow", "lane:host-fixes"],
 } satisfies Meta;
 
 export default meta;

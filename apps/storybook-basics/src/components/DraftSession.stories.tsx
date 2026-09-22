@@ -283,8 +283,8 @@ function DraftSession({
 }
 
 const meta = {
-  title: "Basics/DraftSession",
-  tags: ["area:basics", "lane:draft-compare-2026-09-19"],
+  title: "Components/Panels & Dialogs/DraftSession",
+  tags: ["object:chrome", "lane:draft-compare-2026-09-19"],
   component: DraftSession,
   parameters: { layout: "centered" },
 } satisfies Meta<typeof DraftSession>;

@@ -496,7 +496,8 @@ function ControlLabDemo() {
 }
 
 const meta = {
-  title: "Basics/ControlLab",
+  title: "Components/Menus & Bars/ControlLab",
+  tags: ["object:chrome"],
   component: ControlLabDemo,
 } satisfies Meta<typeof ControlLabDemo>;
 

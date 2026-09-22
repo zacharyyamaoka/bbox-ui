@@ -478,7 +478,7 @@ shows `src/scene/codeCell.test.ts` and `src/scene/definitionsToScene.test.ts` fu
 `sourceActions.test.ts` stay red until Lane C — expected); `pnpm test` shows every
 `CodeCell.stories.tsx` story green. If an assertion cannot be met, report FAIL with the exact
 output — do not edit the test. Commit with explicit pathspecs only; never `git add -A`. Report
-the story ids (`blocks-scene-code-cell--round-trip`, …) in your handoff.
+the story ids (`scene-model-diff-codecell--round-trip`, …) in your handoff.
 
 ### Brief B — `scv-definitions-partition`
 
@@ -712,15 +712,15 @@ relaunch line. Explicit pathspecs only.
 
 Storybook (the lane's own `STORYBOOK_PORT`; captured from :5421 after merge):
 
-- `blocks-scene-code-cell--round-trip` — three wired blocks → "Collapse to code" → one cell with
+- `scene-model-diff-codecell--round-trip` — three wired blocks → "Collapse to code" → one cell with
   the header text and the promoted ports → "Expand" → identical scene. Hero video candidate.
-- `blocks-scene-code-cell--opaque-and-expanded` — the Proposal-5 toggle: opaque code face vs
+- `scene-model-diff-codecell--opaque-and-expanded` — the Proposal-5 toggle: opaque code face vs
   members visible, one node.
-- `blocks-scene-code-cell--origin-badge-states` — Pseudo / Synced / Drifted / Orphaned, side by
+- `scene-model-diff-codecell--origin-badge-states` — Pseudo / Synced / Drifted / Orphaned, side by
   side.
-- `blocks-scene-code-cell--definitions-from-stereo` — the 32-line stereo module as 6 grain-1
+- `scene-model-diff-codecell--definitions-from-stereo` — the 32-line stereo module as 6 grain-1
   cells (`Pipeline` holding `__init__` and `run`) with 4 dashed reference edges.
-- `blocks-editor-source-actions--backend-off` / `--backend-on` / `--convert-then-expand` — the
+- `editor-sourceactions--backend-off` / `--backend-on` / `--convert-then-expand` — the
   right-click menu without and with the source group; the live convert → expand loop.
 
 pyblocks: `python3 -m pyblocks analyze --view-kind definitions tests/fixtures/

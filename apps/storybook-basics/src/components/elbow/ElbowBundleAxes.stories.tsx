@@ -389,7 +389,8 @@ function assertCardRendered(canvasElement: HTMLElement, testKey: string, count: 
 /* ------------------------------------------------------------------ */
 
 const meta: Meta = {
-  title: "Trace/Elbow Bundle Axes",
+  title: "Components/Traces/Elbow/Bundle Axes",
+  tags: ["object:trace"],
   parameters: { layout: "fullscreen" },
 };
 

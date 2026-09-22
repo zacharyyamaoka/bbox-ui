@@ -10,7 +10,7 @@ import type { LintScene, PortDirection } from "../scene/lint";
 import type { SceneEdgeEnds } from "../scene/scene";
 
 /**
- * Blocks/Editor/Edge Drop Menu — card 14: "a cable that landed on nothing
+ * Editor/EdgeDropMenu — card 14: "a cable that landed on nothing
  * is a question, not a mistake." Zach: "agree this is nice. Let's please
  * add this to editor-components. We already have the implementation in
  * SystemSketch." Ported (as behaviour, not code — see
@@ -38,8 +38,8 @@ import type { SceneEdgeEnds } from "../scene/scene";
  */
 
 const meta = {
-  title: "Blocks/Editor/Edge Drop Menu",
-  tags: ["area:blocks", "lane:edge-drop-menu"],
+  title: "Editor/EdgeDropMenu",
+  tags: ["object:trace", "lane:edge-drop-menu"],
 } satisfies Meta;
 
 export default meta;

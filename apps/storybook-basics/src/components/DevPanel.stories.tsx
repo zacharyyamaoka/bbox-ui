@@ -25,8 +25,8 @@ import { DevPanel, type DevPanelSection } from "./devPanel";
  * peer lane's real recorder will arrive.
  */
 const meta = {
-  title: "Basics/DevPanel",
-  tags: ["area:basics", "lane:devtools-2026-09-19"],
+  title: "Components/Panels & Dialogs/DevPanel",
+  tags: ["object:chrome", "lane:devtools-2026-09-19"],
   component: DevPanel,
   parameters: { layout: "fullscreen" },
   // Each story renders its own stateful harness; these args exist only so

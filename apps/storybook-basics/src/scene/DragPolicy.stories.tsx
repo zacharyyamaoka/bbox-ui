@@ -1,5 +1,5 @@
 /**
- * Interaction/Drag Policy — one story per component, each with the table
+ * Scene/Layout & Drag/DragPolicy — one story per component, each with the table
  * of expected interaction beside a live React Flow canvas Zach can grab.
  *
  * Zach, `PROJECT - Black Box UI.md:2508-2512`:
@@ -20,14 +20,15 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import type { HostScene } from "./hostScene";
-import { DRAG_DECLARATIONS, resolveClick, resolveGrab } from "../scene/interactions/dragPolicy";
-import { move, press, release } from "../scene/interactions/dragIntent";
-import { grabChainFrom, OWNER_ATTR, resolveGrabAt } from "./grabChain";
-import { PolicyStage } from "./policyStage";
+import type { HostScene } from "../hosts/hostScene";
+import { DRAG_DECLARATIONS, resolveClick, resolveGrab } from "./interactions/dragPolicy";
+import { move, press, release } from "./interactions/dragIntent";
+import { grabChainFrom, OWNER_ATTR, resolveGrabAt } from "../hosts/grabChain";
+import { PolicyStage } from "../hosts/policyStage";
 
 const meta = {
-  title: "Interaction/Drag Policy",
+  title: "Scene/Layout & Drag/DragPolicy",
+  tags: ["object:scene", "host:react-flow"],
   parameters: { layout: "padded" },
 } satisfies Meta;
 

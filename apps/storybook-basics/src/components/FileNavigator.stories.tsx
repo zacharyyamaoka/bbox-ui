@@ -20,8 +20,8 @@ import { DEFAULT_NEW_DOCUMENT_SUFFIX } from "../files/workspaceModel";
  * file navigator here. its working good enough for now".
  */
 const meta = {
-  title: "Basics/FileNavigator",
-  tags: ["area:basics", "lane:chrome-files-settings"],
+  title: "Components/Panels & Dialogs/FileNavigator",
+  tags: ["object:chrome", "lane:chrome-files-settings"],
   component: FileNavigator,
   // Each story renders `Harness`; these args exist only so
   // `StoryObj<typeof meta>` does not demand a full prop set per story.

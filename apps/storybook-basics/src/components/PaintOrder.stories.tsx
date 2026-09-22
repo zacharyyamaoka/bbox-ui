@@ -9,7 +9,7 @@ import type { PortEdgeItem } from "./portEdge";
 import { PortEdge } from "./portEdge";
 
 /**
- * Basics/PaintOrder — Card 04's measured suite: paintOrder.ts's ladder,
+ * Components/Blocks/PaintOrder — Card 04's measured suite: paintOrder.ts's ladder,
  * the isolation invariant, and the nesting tier (Card 04) it exists to
  * make possible. Every claim here is measured
  * (`getComputedStyle`/`getBoundingClientRect`/`document.elementFromPoint`),
@@ -27,8 +27,8 @@ import { PortEdge } from "./portEdge";
  * (`headerChrome`) neither of those files exercises.
  */
 const meta = {
-  title: "Blocks/PaintOrder",
-  tags: ["area:blocks", "lane:z-order"],
+  title: "Components/Blocks/PaintOrder",
+  tags: ["object:block", "lane:z-order"],
   component: Block,
 } satisfies Meta<typeof Block>;
 

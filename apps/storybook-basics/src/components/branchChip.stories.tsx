@@ -27,7 +27,8 @@ const threeDrafts: DraftSummary[] = [
 ];
 
 const meta = {
-  title: "Basics/BranchChip",
+  title: "Components/Text & Marks/BranchChip",
+  tags: ["object:text-marks"],
   component: BranchChip,
   args: {
     isDraftMode: false,

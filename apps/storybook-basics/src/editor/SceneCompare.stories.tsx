@@ -36,7 +36,7 @@ import type { ScenePortsOf } from "../scene/sceneDiff";
  */
 const meta = {
   title: "Editor/SceneCompare",
-  tags: ["area:editor", "lane:compare-view"],
+  tags: ["object:scene", "host:dom", "lane:compare-view"],
 } satisfies Meta;
 
 export default meta;

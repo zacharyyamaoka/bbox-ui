@@ -18,7 +18,7 @@ import regionForIfDocument from "../../../../docs/fixtures/pyblocks-scene/region
 import editSessionFixture from "../../../../docs/fixtures/pyblocks-scene/events_edit_session.json";
 
 /**
- * Blocks/Scene/Pyblocks — a pyblocks document, loaded and rendered by hosts
+ * Hosts/Pyblocks — a pyblocks document, loaded and rendered by hosts
  * that know nothing about pyblocks (docs/PYBLOCKS-BACKEND-PLAN.md, lane
  * `trunk-loader-events`).
  *
@@ -39,8 +39,8 @@ import editSessionFixture from "../../../../docs/fixtures/pyblocks-scene/events_
  */
 
 const meta = {
-  title: "Blocks/Scene/Pyblocks",
-  tags: ["area:blocks", "lane:pyblocks-backend"],
+  title: "Hosts/Pyblocks",
+  tags: ["object:scene", "host:dom", "host:tldraw", "lane:pyblocks-backend"],
 } satisfies Meta;
 
 export default meta;

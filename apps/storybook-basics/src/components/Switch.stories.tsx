@@ -10,8 +10,8 @@ import { Switch } from "./switch";
  * Same `role="switch"`/`aria-checked` semantics, now a stock part.
  */
 const meta = {
-  title: "Basics/Switch",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Switch",
+  tags: ["object:stock", "lane:baseline"],
   component: Switch,
 } satisfies Meta<typeof Switch>;
 

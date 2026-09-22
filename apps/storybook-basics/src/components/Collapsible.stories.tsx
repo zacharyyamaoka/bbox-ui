@@ -32,8 +32,8 @@ function FoldableDemo() {
 }
 
 const meta = {
-  title: "Basics/FoldingChevron",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Menus & Bars/FoldingChevron",
+  tags: ["object:chrome", "lane:baseline"],
   component: FoldingChevron,
   args: { open: true, onClick: () => {} },
 } satisfies Meta<typeof FoldingChevron>;

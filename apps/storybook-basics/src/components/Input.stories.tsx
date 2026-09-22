@@ -11,8 +11,8 @@ import { Input } from "./input";
  * the stock part itself types and disables.
  */
 const meta = {
-  title: "Basics/Input",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Input",
+  tags: ["object:stock", "lane:baseline"],
   component: Input,
 } satisfies Meta<typeof Input>;
 

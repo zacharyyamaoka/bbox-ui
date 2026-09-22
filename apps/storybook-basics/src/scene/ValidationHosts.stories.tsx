@@ -2,17 +2,17 @@ import { useCallback, useMemo, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { ReactFlowHost } from "./reactFlowHost";
-import { TldrawHost } from "./tldrawHost";
-import type { Decorate } from "./nodeViews";
-import type { HostScene } from "./hostScene";
-import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "./validationScene";
-import { connectionAvailability, type PortAvailability } from "../scene/availability";
-import { typesIntersect } from "../scene/lint";
-import { portKey, type ScenePortRef } from "../scene/scene";
+import { ReactFlowHost } from "../hosts/reactFlowHost";
+import { TldrawHost } from "../hosts/tldrawHost";
+import type { Decorate } from "../hosts/nodeViews";
+import type { HostScene } from "../hosts/hostScene";
+import { VALIDATION_SCENE, validationDirectionOf, validationPortsOf, validationTypeOf } from "../hosts/validationScene";
+import { connectionAvailability, type PortAvailability } from "./availability";
+import { typesIntersect } from "./lint";
+import { portKey, type ScenePortRef } from "./scene";
 
 /**
- * Blocks/Scene/Validation In A Host — ruling 8, Zach's own success
+ * Scene/Validation/ValidityPreview/In A Host — ruling 8, Zach's own success
  * criteria verbatim: "success looks like many different stories of DOM
  * canvas for some of the static considerations, but then also the same
  * examples in a host reactflow/tldraw so I can check that the gestures
@@ -50,8 +50,8 @@ import { portKey, type ScenePortRef } from "../scene/scene";
  */
 
 const meta = {
-  title: "Blocks/Scene/Validation In A Host",
-  tags: ["area:blocks", "lane:validation-stack"],
+  title: "Scene/Validation/ValidityPreview/In A Host",
+  tags: ["object:scene", "host:react-flow", "host:tldraw", "lane:validation-stack"],
 } satisfies Meta;
 
 export default meta;

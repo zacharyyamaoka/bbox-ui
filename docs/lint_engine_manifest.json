@@ -21,28 +21,28 @@
   ],
   "stories": [
     {
-      "id": "blocks-scene-lint--no-linting",
+      "id": "scene-validation-lint--no-linting",
       "title": "Lint · Before (linting off)",
       "look_for": "a scene full of real violations (many-to-one, duplicate, cycle, self-connection, dangling) with NOTHING marked — this is Zach's own 'no linting you can show like a bunch of potentially illegal wires' half of the ask",
       "w": 780,
       "h": 480
     },
     {
-      "id": "blocks-scene-lint--all-rules-enabled",
+      "id": "scene-validation-lint--all-rules-enabled",
       "title": "Lint · After (every rule on)",
       "look_for": "the same scene with every rule on: loop1/loop2/selfy carry a red glow + corner flag (cycle), sink's input port carries a red halo (many-to-one), the two a→dup wires carry an amber backdrop (duplicate-edge, warning), the self-loop wire and the wire trailing into the dashed 'ghost' dot both carry a red backdrop (self-connection, dangling-edge)",
       "w": 780,
       "h": 480
     },
     {
-      "id": "blocks-scene-lint--only-many-to-one-enabled",
+      "id": "scene-validation-lint--only-many-to-one-enabled",
       "title": "Lint · Subset (only many-to-one on)",
       "look_for": "Zach's own subset requirement made visible: ONLY sink's input port is marked — the cycle, duplicate and dangling violations are all still present in the scene but stay completely unmarked because their rules are off",
       "w": 780,
       "h": 480
     },
     {
-      "id": "blocks-scene-lint--only-cycle-and-self-connection-enabled",
+      "id": "scene-validation-lint--only-cycle-and-self-connection-enabled",
       "title": "Lint · Subset (cycle + self-connection on)",
       "look_for": "a different 2-rule subset: loop1/loop2/selfy's cycle marks and the self-loop wire's backdrop are on, while many-to-one's port halo and the duplicate/dangling wire marks stay off",
       "w": 780,

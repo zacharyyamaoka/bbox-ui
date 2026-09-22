@@ -2,20 +2,20 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "./domCanvas";
-import { dragFrom } from "./hostGestures";
-import type { HostScene } from "./hostScene";
-import { ReactFlowHost } from "./reactFlowHost";
+import { DomCanvas } from "../hosts/domCanvas";
+import { dragFrom } from "../hosts/hostGestures";
+import type { HostScene } from "../hosts/hostScene";
+import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 /**
- * Basics/Glyph/In A Host — the Glyph face as a canvas node, under its
+ * Components/Text & Marks/Glyph/In A Host — the Glyph face as a canvas node, under its
  * host-facing name `glyph` (H6). Story-name tags carry the host; untagged
  * stories elsewhere are plain DOM.
  */
 
 const meta = {
-  title: "Basics/Glyph/In A Host",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Text & Marks/Glyph/In A Host",
+  tags: ["object:text-marks", "host:dom", "host:react-flow", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

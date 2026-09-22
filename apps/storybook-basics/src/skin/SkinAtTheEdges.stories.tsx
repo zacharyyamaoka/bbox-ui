@@ -16,7 +16,7 @@ import {
 } from "./sketchAtEdge";
 
 /**
- * Skin/At the edges — the PoC for Zach's 2026-09-17 ruling:
+ * Skin/SkinAtTheEdges — the PoC for Zach's 2026-09-17 ruling:
  *
  *   "I don't want the code base to be affected by the skin. Sketch
  *    skinning should be something very much done just like at the edges
@@ -38,7 +38,8 @@ import {
  * implementation is the oracle; nothing here re-derives it.
  */
 const meta = {
-  title: "Skin/At the edges",
+  title: "Skin/SkinAtTheEdges",
+  tags: ["object:skin"],
   parameters: {
     layout: "padded",
     // WHY the skin toolbar is disabled here: these stories control the

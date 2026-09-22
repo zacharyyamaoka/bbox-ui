@@ -23,8 +23,8 @@ import {
  * what `CommandDialog` portals — are pinned somewhere.
  */
 const meta = {
-  title: "Basics/Command",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Command",
+  tags: ["object:stock", "lane:baseline"],
   component: Command,
 } satisfies Meta<typeof Command>;
 

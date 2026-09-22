@@ -23,11 +23,11 @@ import { type BlockScene, findDanglingEdges, portKey, type SceneNode } from "./s
 import { sceneWires, type WireStyleData } from "./sceneWires";
 
 /**
- * Blocks/Scene/Linking — definition linking rendered live: "same name =
+ * Scene/Wiring/Linking — definition linking rendered live: "same name =
  * same thing", the software model (src/scene/linking.ts, ported from
  * SystemSketch's definitionLinking.ts — provenance in the module header).
  *
- * Nested under Blocks/Scene ON PURPOSE: these are scene-kit derivations,
+ * Nested under Scene ON PURPOSE: these are scene-kit derivations,
  * exactly like SceneDriven — one `BlockScene` record, pure functions over
  * it, the view kit only ever repeating what the record says. No component
  * imports the scene; this story file is the host.
@@ -363,8 +363,8 @@ function filterPair(): LinkScene {
 /* ------------------------------------------------------------------ */
 
 const meta: Meta = {
-  title: "Blocks/Scene/Linking",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Scene/Wiring/Linking",
+  tags: ["object:trace", "lane:baseline"],
 };
 
 export default meta;

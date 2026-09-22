@@ -30,7 +30,7 @@
   ],
   "stories": [
     {
-      "id": "blocks-fit-to-content-hosts--drag-member-react-flow-settled",
+      "id": "scene-layout-drag-fittocontent-in-a-host--drag-member-react-flow-settled",
       "title": "Drag A Member — Settled (React Flow)",
       "look_for": "“classify” dragged 120px down; “sorter” has grown to contain it with the region's own 12px gutter beneath — not clipped, not overflowing. The readout prints the exact before/after heights.",
       "w": 560,
@@ -38,7 +38,7 @@
       "settle": 2500
     },
     {
-      "id": "blocks-fit-to-content-hosts--drag-member-tldraw-settled",
+      "id": "scene-layout-drag-fittocontent-in-a-host--drag-member-tldraw-settled",
       "title": "Drag A Member — Settled (tldraw)",
       "look_for": "the SAME drag, inside a real tldraw shape this time — the parent Block grows by the same amount, proving the fit is host-agnostic.",
       "w": 560,
@@ -46,7 +46,7 @@
       "settle": 2500
     },
     {
-      "id": "blocks-fit-to-content-hosts--drag-member-react-flow",
+      "id": "scene-layout-drag-fittocontent-in-a-host--drag-member-react-flow",
       "title": "Drag A Member (React Flow) — round trip",
       "look_for": "the full round trip has finished: classify dragged back to its authored position, sorter back to its original height — the floor gives the space back, it isn't a one-way ratchet.",
       "w": 560,
@@ -54,7 +54,7 @@
       "settle": 3200
     },
     {
-      "id": "blocks-fit-to-content-hosts--drag-member-tldraw",
+      "id": "scene-layout-drag-fittocontent-in-a-host--drag-member-tldraw",
       "title": "Drag A Member (tldraw) — round trip",
       "look_for": "same round trip, tldraw host — back to the start, both hosts agree.",
       "w": 560,

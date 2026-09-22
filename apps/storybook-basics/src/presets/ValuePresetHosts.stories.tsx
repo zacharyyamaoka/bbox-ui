@@ -17,7 +17,7 @@ import { ReactFlowHost } from "../hosts/reactFlowHost";
 
 const meta = {
   title: "Presets/Value/In A Host",
-  tags: ["area:presets", "lane:baseline"],
+  tags: ["object:block", "host:dom", "host:react-flow", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

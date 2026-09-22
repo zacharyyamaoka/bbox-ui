@@ -1,5 +1,5 @@
 /**
- * Control Flow/Toggle — the opaque (P5) ⇄ expanded (P1) flip, on all three
+ * Presets/ControlFlow/Toggle — the opaque (P5) ⇄ expanded (P1) flip, on all three
  * hosts (docs/CONTROL-FLOW-PLAN.md lane E, §2.B and §3.4).
  *
  * The claim these stories exist to make is not "a card appears". It is
@@ -43,8 +43,8 @@ import { REGION_NODE_TYPE } from "../scene/region";
 import { expectRegionExpanded, expectRegionOpaque, expectWirePainted } from "./controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Toggle",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/Toggle",
+  tags: ["object:region", "host:dom", "host:react-flow", "host:tldraw", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;

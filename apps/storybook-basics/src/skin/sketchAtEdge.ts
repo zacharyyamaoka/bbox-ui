@@ -563,7 +563,7 @@ function createBoxTwinSvg(el: Element, shape: "rect" | "ellipse"): SVGElement {
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute("fill", "none");
   // WHY a custom property and NOT `getComputedStyle(el).borderColor`:
-  // measured 2026-09-17 on `styles--sketch`, a Block's computed
+  // measured 2026-09-17 on `skin-styles--sketch`, a Block's computed
   // `border-color` under the sketch skin is `rgba(0, 0, 0, 0)` — the skin's
   // own mechanism is to make the crisp border TRANSPARENT while keeping its
   // 2px width, so nothing moves (`skin.test.ts` pins that width across every

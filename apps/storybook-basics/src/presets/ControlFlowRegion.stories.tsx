@@ -1,5 +1,5 @@
 /**
- * Control Flow/Region — the region KIT, on its own, before any loop or
+ * Presets/ControlFlow/Region — the region KIT, on its own, before any loop or
  * branch preset exists (docs/CONTROL-FLOW-PLAN.md lane A).
  *
  * What these stories are actually claiming, in Zach's own two sentences:
@@ -43,8 +43,8 @@ import {
 } from "./controlFlow.acceptance";
 
 const meta = {
-  title: "Control Flow/Region",
-  tags: ["area:control-flow", "lane:control-flow"],
+  title: "Presets/ControlFlow/Region",
+  tags: ["object:region", "host:dom", "host:react-flow", "lane:control-flow"],
 } satisfies Meta;
 
 export default meta;

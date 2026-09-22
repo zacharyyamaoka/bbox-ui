@@ -2,24 +2,24 @@ import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor, within } from "storybook/test";
 
-import { Block } from "./block";
-import { Badge } from "./badge";
-import { Port } from "./port";
-import { TraceBody } from "./trace";
-import { CodeEditor } from "./codeEditor";
-import { LabeledPort } from "./labeledPort";
-import { BlockPort } from "./blockPort";
-import { PortEdge, type PortEdgeItem } from "./portEdge";
-import { TraceTerminal } from "./traceTerminal";
-import { Button } from "./button";
-import { Toggle } from "./toggle";
-import { EditableText } from "./editableText";
-import { Text } from "./text";
-import { FoldingChevron } from "./foldingChevron";
+import { Block } from "../components/block";
+import { Badge } from "../components/badge";
+import { Port } from "../components/port";
+import { TraceBody } from "../components/trace";
+import { CodeEditor } from "../components/codeEditor";
+import { LabeledPort } from "../components/labeledPort";
+import { BlockPort } from "../components/blockPort";
+import { PortEdge, type PortEdgeItem } from "../components/portEdge";
+import { TraceTerminal } from "../components/traceTerminal";
+import { Button } from "../components/button";
+import { Toggle } from "../components/toggle";
+import { EditableText } from "../components/editableText";
+import { Text } from "../components/text";
+import { FoldingChevron } from "../components/foldingChevron";
 import { ValueCapsule } from "../presets/value/value";
-import { BBOX_SKINS, BBOX_SKIN_LABELS, bboxSkinAttrs, type BboxSkin } from "../skin/skin";
-import { SketchAtEdge } from "../skin/SketchAtEdge";
-import { SKETCH_TWIN_ATTR } from "../skin/sketchAtEdge";
+import { BBOX_SKINS, BBOX_SKIN_LABELS, bboxSkinAttrs, type BboxSkin } from "./skin";
+import { SketchAtEdge } from "./SketchAtEdge";
+import { SKETCH_TWIN_ATTR } from "./sketchAtEdge";
 
 /**
  * Styles/** — the skin system (src/skin/**, ported from packages/bbox-ui,
@@ -75,8 +75,8 @@ import { SKETCH_TWIN_ATTR } from "../skin/sketchAtEdge";
  */
 
 const meta = {
-  title: "Styles",
-  tags: ["area:styles", "lane:baseline"],
+  title: "Skin/Styles",
+  tags: ["object:skin", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

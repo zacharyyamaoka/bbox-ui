@@ -18,8 +18,8 @@ import {
  * here — this story only proves the stock markup itself).
  */
 const meta = {
-  title: "Basics/Table",
-  tags: ["area:basics", "lane:baseline"],
+  title: "Components/Stock/Table",
+  tags: ["object:stock", "lane:baseline"],
   component: Table,
 } satisfies Meta<typeof Table>;
 

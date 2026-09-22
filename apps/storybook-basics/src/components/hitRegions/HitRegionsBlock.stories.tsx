@@ -1,5 +1,5 @@
 /**
- * Hit Regions/Block — the component with NO hit constant, on purpose. As a
+ * Components/Blocks/Block/Hit Regions — the component with NO hit constant, on purpose. As a
  * DOM element Block's pointer target is the browser's own hit test, which
  * stops at the border box exactly — the same "there was no number to
  * choose" React Flow's DOM nodes have. Contrast tldraw, which grabs a
@@ -28,8 +28,8 @@ import {
 import type { HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
-  title: "Hit Regions/Block",
-  tags: ["area:hit-regions", "lane:baseline"],
+  title: "Components/Blocks/Block/Hit Regions",
+  tags: ["object:block", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;

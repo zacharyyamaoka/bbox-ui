@@ -12,7 +12,7 @@ import { PortEdge, laneAvailability, type PortEdgeItem } from "./portEdge";
 import { computeSlots, groupingSetFromText } from "./portEdge.layout";
 
 /**
- * Basics/BlockPortLane — phase A2 of docs/BLOCK-PORT-EDGES-PLAN.md: the
+ * Components/Blocks/BlockPort/Lane — phase A2 of docs/BLOCK-PORT-EDGES-PLAN.md: the
  * multi-line port lane, RE-PROVEN on a rail that is mounted on a `Block`.
  *
  * Zach, 2026-09-17: "Make sure to test that the multi-line port editing
@@ -653,8 +653,8 @@ function Stage({ children, label }: { children: ReactNode; label?: string }) {
 }
 
 const meta = {
-  title: "Blocks/BlockPort/Lane",
-  tags: ["area:blocks", "lane:baseline"],
+  title: "Components/Blocks/BlockPort/Lane",
+  tags: ["object:block", "lane:baseline"],
   component: BlockPort,
   // Never read — every story supplies its own `render`, because the bench
   // owns the lane's open/closed state and the edges are controlled.

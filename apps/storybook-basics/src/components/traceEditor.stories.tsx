@@ -192,8 +192,8 @@ const BEND_HANDLE_RADIUS = 4;
 const VIRTUAL_HANDLE_RADIUS = 3;
 
 const meta = {
-  title: "Trace/Editor States",
-  tags: ["area:trace", "lane:baseline"],
+  title: "Components/Traces/TraceEditor",
+  tags: ["object:trace", "lane:baseline"],
   component: TraceEditor,
   // Placeholders only — every story supplies its own `render` and never
   // reads `args` (the idiom `TraceInteractive.stories.tsx` already uses for
@@ -443,7 +443,7 @@ export const LockedBends: Story = {
     <Page>
       <Caption
         title="Locked bends"
-        text="lockBends is the read-only display case: the corner is drawn and reported but neither drags nor double-click-deletes. The terminals are untouched by it and still move — the mirror image of the LockedEndpoints story in Trace/Interactive."
+        text="lockBends is the read-only display case: the corner is drawn and reported but neither drags nor double-click-deletes. The terminals are untouched by it and still move — the mirror image of the LockedEndpoints story in Components › Traces › Trace › Interactive."
       />
       <Canvas testId="locked-bends-canvas">
         <TraceEditor

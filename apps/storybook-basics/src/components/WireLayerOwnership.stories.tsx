@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
-import { DomCanvas } from "./domCanvas";
-import type { HostScene } from "./hostScene";
+import { DomCanvas } from "../hosts/domCanvas";
+import type { HostScene } from "../hosts/hostScene";
 
 /**
- * Blocks/Host Fixes/Wire Layer Ownership — regression for
+ * Components/Traces/WireLayer/Ownership — regression for
  * `WireLayer.resolveDot`'s member-ownership bug (host-fixes lane, defect 2).
  *
  * `proc` is an expanded Block with its own `in` port; `kid` is a MEMBER of
@@ -46,8 +46,8 @@ const ownershipScene: HostScene = {
 };
 
 const meta = {
-  title: "Blocks/Host Fixes/Wire Layer Ownership",
-  tags: ["area:blocks", "lane:host-fixes"],
+  title: "Components/Traces/WireLayer/Ownership",
+  tags: ["object:trace", "host:dom", "lane:host-fixes"],
 } satisfies Meta;
 
 export default meta;

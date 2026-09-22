@@ -1,5 +1,5 @@
 /**
- * Hit Regions/Port — the 40px halo (`PORT_HIT_PX`, port.layout.ts:58),
+ * Components/Ports/Port/Hit Regions — the 40px halo (`PORT_HIT_PX`, port.layout.ts:58),
  * visible, probed live, and adjustable.
  *
  * WHY a `Hit Regions/` top-level group rather than stories beside each
@@ -28,8 +28,8 @@ import {
 import { ZOOM_LEVELS, effectiveHitValue, screenHitValue, type HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
-  title: "Hit Regions/Port",
-  tags: ["area:hit-regions", "lane:baseline"],
+  title: "Components/Ports/Port/Hit Regions",
+  tags: ["object:port", "lane:baseline"],
 } satisfies Meta;
 
 export default meta;
