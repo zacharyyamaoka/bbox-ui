@@ -134,30 +134,50 @@ export function placeCornerCluster({
 /**
  * The forced-corner opt-in's own finishing touch (Zach, 2026-09-22, after
  * seeing it running: "there is this little piece of the letter showing, can
- * you please... cover that"). `useCornerPlacement` gets this placement by
- * calling `placeCornerCluster` with NO watermark, so it always lands at the
- * plain `CORNER_INSET` (8px) — but tldraw sits its own watermark closer to
- * the true corner than that (measured ~4px at 1400x900 desktop), so the
- * cluster's flush-8px box does not fully CONTAIN the watermark's box, and a
- * sliver of its right/bottom edge — the tail of a letter — pokes out past
- * the cluster. This is not a case for `placeCornerCluster` itself: that
- * function's whole job is deciding whether to sit beside/above the
- * watermark, and it is still exactly right for that, untouched. This is the
- * one extra step the FORCED path alone needs: once the cluster is already
- * sitting over the watermark on purpose, shrink the offset just enough that
- * the cluster's own edge reaches (or passes) the watermark's edge, so
- * covering it is actually complete rather than "mostly".
+ * you please... cover that"). `useCornerPlacement` gets the CLUSTER's own
+ * placement by calling `placeCornerCluster` with NO watermark, so it always
+ * lands at the plain `CORNER_INSET` (8px) — but tldraw sits its own
+ * watermark closer to the true corner than that (measured ~4px at 1400x900
+ * desktop), so the cluster's flush-8px box does not fully contain the
+ * watermark's, and a sliver of its right/bottom edge — the tail of a letter
+ * — pokes out past the cluster.
  *
- * Only ever tightens (`Math.min` against the placement already chosen),
- * never loosens it past what `placeCornerCluster` returned, and floors at 0
- * so a watermark somehow flush against the corner cannot push the offset
- * negative.
+ * The first fix here shrank the CLUSTER's own offset to hug the watermark
+ * (`Math.min` against `CORNER_INSET`), and Zach caught the real cost of
+ * that: it broke the 8px inset every other piece of chrome in this app
+ * shares (the top-left bar keeps the same `CORNER_INSET`), so the corner
+ * cluster alone sat 4px closer to the edge than its mirror — "I don't like
+ * how that made the spacing [no longer] align with the other toolbars." His
+ * own fix is this function: decouple the two concerns entirely. The cluster
+ * keeps the SAME flush `CORNER_INSET` position it would use if there were no
+ * watermark at all — reliable, and consistent with the rest of the chrome —
+ * and a separate, purely cosmetic patch (`SystemSketchChrome` below) is
+ * painted over wherever the watermark actually measures, independent of
+ * where the cluster itself sits. The two no longer have to agree on a
+ * position for either to work.
+ *
+ * This is pure geometry, not layout policy — `MARGIN` pads a couple of
+ * pixels past the watermark's own measured edges so a sub-pixel rounding
+ * difference between `getBoundingClientRect` calls can never leave a
+ * hairline gap. Returns container-relative CSS offsets (the same `right`/
+ * `bottom` convention `CornerPlacement` already uses), not viewport
+ * coordinates, so the result drops straight into inline `style`.
  */
-export function hugWatermark(placement: CornerPlacement, container: CornerRect, watermark: CornerRect): CornerPlacement {
+export interface WatermarkCoverRect {
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+const WATERMARK_COVER_MARGIN = 2;
+
+export function watermarkCoverRect(container: CornerRect, watermark: CornerRect): WatermarkCoverRect {
   return {
-    ...placement,
-    right: Math.max(0, Math.min(placement.right, container.right - watermark.right)),
-    bottom: Math.max(0, Math.min(placement.bottom, container.bottom - watermark.bottom)),
+    right: Math.max(0, container.right - watermark.right - WATERMARK_COVER_MARGIN),
+    bottom: Math.max(0, container.bottom - watermark.bottom - WATERMARK_COVER_MARGIN),
+    width: watermark.right - watermark.left + WATERMARK_COVER_MARGIN * 2,
+    height: watermark.bottom - watermark.top + WATERMARK_COVER_MARGIN * 2,
   };
 }
 
@@ -168,6 +188,34 @@ const DOCK = '[data-slot="tool-dock"]';
 function rectOf(el: Element): CornerRect {
   const r = el.getBoundingClientRect();
   return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+}
+
+/** What `useCornerPlacement` hands back: the cluster's own position, and,
+ *  only when the forced opt-in AND a watermark are both live, the separate
+ *  patch that covers it — see `watermarkCoverRect`'s header for why these
+ *  are two independent rectangles rather than one. */
+export interface CornerPlacementState {
+  placement: CornerPlacement;
+  watermarkCover: WatermarkCoverRect | null;
+}
+
+const INITIAL_CORNER_PLACEMENT: CornerPlacementState = {
+  placement: { right: CORNER_INSET, bottom: CORNER_INSET, placement: "corner" },
+  watermarkCover: null,
+};
+
+function sameCornerPlacementState(a: CornerPlacementState, b: CornerPlacementState): boolean {
+  if (a.placement.right !== b.placement.right || a.placement.bottom !== b.placement.bottom || a.placement.placement !== b.placement.placement) {
+    return false;
+  }
+  if (a.watermarkCover === b.watermarkCover) return true;
+  if (a.watermarkCover === null || b.watermarkCover === null) return false;
+  return (
+    a.watermarkCover.right === b.watermarkCover.right &&
+    a.watermarkCover.bottom === b.watermarkCover.bottom &&
+    a.watermarkCover.width === b.watermarkCover.width &&
+    a.watermarkCover.height === b.watermarkCover.height
+  );
 }
 
 /**
@@ -183,9 +231,9 @@ function rectOf(el: Element): CornerRect {
  * and it re-measures only when either element's identity changes);
  * ResizeObservers and one attribute observer cover every later move.
  */
-function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPlacement {
+function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPlacementState {
   const editor = useEditor();
-  const [placement, setPlacement] = useState<CornerPlacement>({ right: CORNER_INSET, bottom: CORNER_INSET, placement: "corner" });
+  const [state, setState] = useState<CornerPlacementState>(INITIAL_CORNER_PLACEMENT);
   // Zach, 2026-09-22: the watermark-avoidance rule above stays the default,
   // but he wants an explicit, WARNED opt-out — "in settings have a toggle
   // that allows you to place it correctly in the corner... Please only do
@@ -194,7 +242,10 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
   // cluster cover the licence notice, made through the red-warned Settings
   // switch (`./ShareMenu/appSettings.tsx`), never a default this file picks
   // for them. `placeCornerCluster` itself is untouched — passing no watermark
-  // already makes it return the flush "corner" placement.
+  // already makes it return the flush "corner" placement, IDENTICAL to the
+  // licensed default, which is what keeps the cluster's own spacing
+  // consistent with the rest of the chrome (see `watermarkCoverRect`'s
+  // header for why full coverage is a SEPARATE concern from this).
   const forceCorner = useForceCornerPlacement();
 
   useLayoutEffect(() => {
@@ -206,21 +257,18 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
       const el = cluster.current;
       if (!el) return;
       const containerRect = rectOf(container);
-      const next = placeCornerCluster({
+      const placement = placeCornerCluster({
         container: containerRect,
         cluster: { width: el.offsetWidth, height: el.offsetHeight },
         watermark: forceCorner ? null : watermark ? rectOf(watermark) : null,
         obstacles: dock ? [rectOf(dock)] : [],
       });
-      // Forced AND a watermark actually exists: `hugWatermark` shrinks the
-      // offset (never grows it) so the cluster's own edge fully contains the
-      // watermark's, closing the "little piece of the letter showing" gap.
-      const settled = forceCorner && watermark ? hugWatermark(next, containerRect, rectOf(watermark)) : next;
-      setPlacement((current) =>
-        current.right === settled.right && current.bottom === settled.bottom && current.placement === settled.placement
-          ? current
-          : settled,
-      );
+      // The cover patch only exists to hide the watermark when the cluster's
+      // OWN placement above has stopped avoiding it — so it never renders
+      // for the default (watermark-avoidance) path, only the forced one.
+      const watermarkCover = forceCorner && watermark ? watermarkCoverRect(containerRect, rectOf(watermark)) : null;
+      const next: CornerPlacementState = { placement, watermarkCover };
+      setState((current) => (sameCornerPlacementState(current, next) ? current : next));
     };
 
     const sizes = new ResizeObserver(measure);
@@ -262,7 +310,7 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
     };
   }, [editor, cluster, forceCorner]);
 
-  return placement;
+  return state;
 }
 
 /**
@@ -338,7 +386,7 @@ function SystemSketchChrome() {
   usePassThroughWheelEvents(chrome);
 
   const corner = useRef<HTMLDivElement>(null);
-  const placement = useCornerPlacement(corner);
+  const { placement, watermarkCover } = useCornerPlacement(corner);
 
   const toggle = useCallback((panel: ChromePanel) => {
     // One at a time: pressing the open one closes it, pressing the other
@@ -443,6 +491,41 @@ function SystemSketchChrome() {
           onToggleDevPanel={toggleDevPanel}
         />
       </div>
+      {/*
+        The forced-corner opt-in's own patch (Zach, 2026-09-22): "just like
+        put a little small rectangle that has the same color of the canvas
+        over the sliver? so then you are free to place the menu freely." A
+        SEPARATE element from the corner cluster above, on purpose — its
+        position comes from where the watermark itself measures
+        (`watermarkCoverRect`), never from the cluster's own `right`/`bottom`,
+        so the cluster keeps the plain `CORNER_INSET` every other piece of
+        chrome uses and this alone absorbs the geometry mismatch between that
+        fixed inset and wherever tldraw happens to put its watermark.
+
+        `pointer-events` stays at this element's inherited `none` (the
+        `.ss-chrome` root's default, never opted into `-auto` here) so a
+        click still reaches the real watermark link underneath — this hides
+        the licence notice from VIEW, which is already the ToS violation the
+        red Settings warning names; it does not need to also block the one
+        way out of it. `--tl-color-background` is tldraw's own theme-aware
+        variable (read, never guessed — `@tldraw/editor` editor.css's
+        `.tl-background` rule), so this patch matches light and dark alike
+        without this file tracking the theme itself.
+      */}
+      {watermarkCover && (
+        <div
+          aria-hidden="true"
+          data-slot="watermark-cover"
+          className="absolute"
+          style={{
+            right: watermarkCover.right,
+            bottom: watermarkCover.bottom,
+            width: watermarkCover.width,
+            height: watermarkCover.height,
+            background: "var(--tl-color-background)",
+          }}
+        />
+      )}
     </div>
   );
 }
