@@ -13,6 +13,14 @@
 # SystemSketch" row keeps both under one dock icon). A class that matched this
 # file's name instead would leave the running window with no icon to group
 # under.
+#
+# Measured 2026-09-22, and what the paragraph above implied was wrong: the
+# window does NOT group under this entry. systemsketch.desktop claims the same
+# class, and GNOME breaks that tie for the entry whose ID equals the class
+# (gnome-shell 46.0 src/shell-app-system.c:142-144). So pressing bbox-ui lights
+# the SystemSketch slot, and the icon on the running window is
+# `Icon=systemsketch` — owned by scripts/dock_icon.py, not by `Icon=` below.
+# Four redesigns were applied to icons the dock never showed.
 [Desktop Entry]
 Type=Application
 Name=bbox-ui

@@ -73,6 +73,7 @@ from systemsketch_files import (
     document_suffix,
 )
 from systemsketch_recordings import RecordingApi
+import dock_icon
 
 PRODUCT = "systemsketch-next"
 REPO = Path(__file__).resolve().parents[1]
@@ -436,6 +437,23 @@ def board_url(file: Path) -> str:
     return f"http://127.0.0.1:{PORT}/?board={file}"
 
 
+def refresh_dock_icon() -> None:
+    """Re-sync the dock icon from the site's mark — scripts/dock_icon.py says why it is needed.
+
+    WHY on every window open: pressing the icon is the one thing that reliably
+    happens after the mark changes on main, so the dock can no longer lag the
+    site the way it did for four redesigns running. WHY it never raises: a
+    cosmetic file must not be able to stop the window opening.
+    """
+    try:
+        changed = dock_icon.sync()
+    except Exception as cause:  # noqa: BLE001 — see WHY above
+        print(f"dock icon not refreshed: {cause}", file=sys.stderr)
+        return
+    if changed:
+        print(f"Dock icons: refreshed {len(changed)} files from their artwork")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("file", nargs="?", type=Path)
@@ -459,6 +477,7 @@ def main() -> int:
             # The ☰ "Switch to old SystemSketch" row needs the old Stable up.
             legacy("--no-open", wait=False)
             print(board_url(own_file))
+            refresh_dock_icon()
             open_window(board_url(own_file))
             return 0
         if arguments.old or arguments.file is not None:
@@ -487,6 +506,7 @@ def main() -> int:
             # Same deal for the ☰ "Open Storybook" row. Also off the critical
             # path — Storybook takes ~20s to serve, the window opens now.
             ensure_storybook()
+            refresh_dock_icon()
             open_window(url)
         return 0
     except (OSError, LaunchError, subprocess.SubprocessError) as cause:
