@@ -1,46 +1,42 @@
 # Work order — continue bbox studio, 2026-09-21
 
-Everything below is on `main` at merge `68f5d19` (127 commits). Typecheck clean,
-2,063 unit tests green, tree clean, verified in main's own checkout.
+Everything below is on `main` at `a18c906` (128 commits). Typecheck clean across
+20 packages, 2,063 unit tests green, 107 python tests green, tree clean,
+verified in main's own checkout.
 
 **Read `ARCHITECTURE.md` and `README.md` first.** They are current and normative.
 
 ---
 
-## 0. The one thing that is NOT on main, and why
+## 0. The bridge branch — PORTED 2026-09-21, nothing is off main now
 
-`worktree-bridge-cse_017xqRi8VPYSzshszPLmYuKu` holds two commits from 2026-09-21
-that implement something Zach explicitly asked for:
+`worktree-bridge-cse_017xqRi8VPYSzshszPLmYuKu` held the dock-icon feature
+(`a81f155`). **It is now on main as `a18c906`** — ported by hand, not merged,
+and the branch is deliberately left unmerged so nobody merges it later.
 
-- `a81f155` — the bbox-ui dock icon opens the whiteboard, and ☰ opens the two sites
-- `d3dda75` — the report builder for it
+**Read that commit message before you touch a stale branch here.** It is the
+worked example of the hazard: `git merge-tree` reported ZERO conflicts, and a
+merge would still have been wrong, because the branch predates two renames
+(`chrome/chromeBar.tsx` → `chrome/TitleBar/chromeBar.tsx`, `src/stories/` →
+colocated). The merge writes the OLD path; you get two chromeBar files, the app
+importing one and the feature in the other, and both compile. Its
+`launch_systemsketch.py` was worse — it predates the file host, the workspace
+API and the recorder, so taking it whole would have silently deleted all three.
+Only the four additive Storybook hunks were grafted.
 
-**It must be PORTED, not merged.** `git merge-tree` reports zero conflicts and
-that is a lie of the kind this repo's CLAUDE.md warns about:
+What landed: `chrome/sites.ts` (flat, beside its sibling `legacyApp.ts` — it is
+a pure function of the hostname and renders nothing, so it is not TitleBar's to
+own) + its unit and smoke tests, the `siteGroups` memo in chromeBar, the
+Storybook hunks in the launcher, and `assets/bbox-ui.desktop` — byte-identical
+to the copy already installed at `~/.local/share/applications/`.
 
-| | chromeBar lives at |
-|---|---|
-| `main` | `apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx` |
-| that branch | `apps/systemsketch/src/chrome/chromeBar.tsx` |
-
-The branch predates the chrome regroup (`d2bc44c`, one folder per editor
-component). A merge writes the OLD path, leaving two chromeBar files with the
-app importing one and the feature's edits sitting in the other. Same for
-`ChromeBar.stories.tsx`, which moved from `src/stories/` to `src/components/`
-when stories were colocated.
-
-What the branch adds that main genuinely lacks — verified absent:
-`apps/systemsketch/src/chrome/sites.ts` (78 lines) + `sites.test.ts` +
-`sites.smoke.test.tsx`, plus `assets/bbox-ui.desktop` and additions to
-`scripts/launch_systemsketch.py`.
-
-**Do:** cherry-pick the *content*, re-homing `chromeBar.tsx` onto
-`chrome/TitleBar/` and deciding where `sites.ts` belongs under the placement
-rule (it is pure — it probably belongs in `scene/` or beside TitleBar, not loose
-in `chrome/`). Then run its own two test files.
+> **Stable may still be serving `a81f155`.** `scripts/launch_systemsketch.py
+> --status` tells you which build the dock is on; `--update` rebuilds it from
+> this checkout's HEAD. `--update` refuses a dirty app or trunk, by design.
 
 There are 29 other branches with unmerged commits. All predate this session and
-none are known to be wanted; do not merge them speculatively.
+none are known to be wanted; do not merge them speculatively — and if one ever
+is wanted, port it the way `a18c906` did.
 
 ---
 
@@ -153,6 +149,13 @@ three of my own false claims.
   supplied), and its square is not vertically centred in its own viewBox
   (y=25..421 of 0..500). Both may be deliberate.
 - 229 untriaged backlog items at noticeability 1–3 — triage or ignore?
+- **The architecture conclusions were never filed in Obsidian.** He asked for
+  "notes on this in obsidan" alongside the report and the README; the report
+  (`reports/media/architecture-settled-2026-09-21.html`) and `ARCHITECTURE.md`
+  both landed, the vault note did not — `zach_brain/Projects/bbox-ui/` was last
+  touched 2026-09-20. Filing it needs the second linking pass
+  ([[feedback_second_linking_pass]]): link to the REAL existing notes, stub only
+  what genuinely has none.
 - His stated preference is to migrate everything and switch off what he does not
   want, rather than triage up front. That still stands.
 
