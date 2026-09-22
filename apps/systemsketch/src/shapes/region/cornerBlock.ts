@@ -731,6 +731,36 @@ export function installRegionKit(editor: Editor): () => void {
       repairIfRemote(editor, source, () => reconcileFrame(region));
     }),
   ];
+
+  /**
+   * The selection that ALREADY exists, normalised once, now that the handler
+   * above guards every future write.
+   *
+   * WHY: a before-change handler only sees changes made after it is
+   * registered, and tldraw restores a persisted page selection BEFORE the
+   * app's `onMount` installs this kit — `TLLocalSyncClient` loads the
+   * IndexedDB session (`@tldraw/editor/dist-esm/lib/utils/sync/
+   * TLLocalSyncClient.mjs:136`) through `loadSessionStateSnapshotIntoStore`,
+   * which re-creates each `instance_page_state` with the stored
+   * `selectedShapeIds` and NO `editingShapeId`
+   * (`config/TLSessionStateSnapshot.mjs:162-167`), and `TLEditorSnapshot.mjs:
+   * 34-37` does the same for a loaded editor snapshot. A session saved
+   * mid-rename (or by an older build that let a card be selected) therefore
+   * reloaded with the card selected ALONE: its own outline, and Delete took
+   * the card out of its region (Codex re-judge, 2026-09-22). One pass through
+   * the SAME rewrite, as a repair (`runRepair`: history-ignored and derived,
+   * so it is never an undo step nor a reason to autosave).
+   *
+   * The other install-time invariants, for the record: the card's POSITION
+   * and VIEW pin is swept at install already (`snapCards` over every region,
+   * above). The duplicate-claim and frame-hug repairs are not swept here:
+   * both fire on the change that creates the problem, and a stored board
+   * carries the result of those changes, not a pending one.
+   */
+  const pageStates = editor.store.allRecords().filter((record): record is TLInstancePageState => record.typeName === "instance_page_state");
+  const normalised = pageStates.map(redirectCornerSelection).filter((next, index) => next !== pageStates[index]);
+  if (normalised.length > 0) runRepair(editor, () => editor.store.put(normalised));
+
   return () => {
     for (const stop of stops) stop();
   };
