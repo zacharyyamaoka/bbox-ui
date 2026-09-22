@@ -197,15 +197,15 @@ async function captureRound3(browser) {
   const id = (title, name) =>
     Object.values(index.entries).find((e) => e.title === title && e.name === name)?.id ??
     Object.values(index.entries).find((e) => e.title === title)?.id;
-  const lgDefault = id("Components/Blocks/Region/Labeled Group", "Default");
-  const lgSame = id("Components/Blocks/Region/Labeled Group", "Same Frame");
-  const branch = id("Components/Blocks/Region/Branch");
+  const lgDefault = id("Components/Blocks/BlockRegion/Labeled Group", "Default");
+  const lgSame = id("Components/Blocks/BlockRegion/Labeled Group", "Same Frame");
+  const branch = id("Components/Blocks/BlockRegion/Branch");
   const out = { stills: {} };
 
   for (const [name, storyId, w, h] of [["r3-lg-default", lgDefault, 620, 400], ["r3-lg-sameframe", lgSame, 1000, 380]]) {
     const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: "dark" });
     await page.goto(`http://localhost:${port}/iframe.html?id=${storyId}&viewMode=story`, { waitUntil: "networkidle" });
-    await page.waitForSelector('[data-slot="labeled-group-label"]');
+    await page.waitForSelector('[data-slot="region-corner"] [data-slot="block"]');
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(OUT, `${name}.png`) });
     out.stills[name] = storyId;
@@ -236,13 +236,13 @@ async function captureRound3(browser) {
   const page = await context.newPage();
   await page.goto(`http://localhost:${port}/?path=/story/${lgDefault}`, { waitUntil: "networkidle" });
   await page.waitForSelector("#storybook-explorer-tree [data-nodetype]");
-  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-region"]')?.scrollIntoView({ block: "start" }));
+  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-blockregion"]')?.scrollIntoView({ block: "start" }));
   await page.waitForTimeout(2200);
   await page.goto(`http://localhost:${port}/?path=/story/${lgSame}`, { waitUntil: "networkidle" });
-  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-region"]')?.scrollIntoView({ block: "start" }));
+  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-blockregion"]')?.scrollIntoView({ block: "start" }));
   await page.waitForTimeout(2600);
   await page.goto(`http://localhost:${port}/?path=/story/${branch}`, { waitUntil: "networkidle" });
-  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-region"]')?.scrollIntoView({ block: "start" }));
+  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-blockregion"]')?.scrollIntoView({ block: "start" }));
   await page.waitForTimeout(2600);
   await page.evaluate(() => document.querySelector('[data-item-id="editor"]')?.scrollIntoView({ block: "start" }));
   await page.mouse.move(900, 450);
@@ -253,8 +253,63 @@ async function captureRound3(browser) {
   return out;
 }
 
+/**
+ * Round 3b (2026-09-22): BlockRegion, and the corner card's shape as a Block
+ * prop. Stills at 2x: Block's Shapes story, the SameFrame story, and a 4x
+ * close-up of each region's corner card. `--corner-tag before|after` names the
+ * close-ups, so a run against a mutated story (the corner Block without
+ * `shape="region-corner"`, which is what main's story drew) and a run against
+ * the fixed one land side by side. The close-up is cropped around the REAL
+ * card's measured box, never a hand-picked rectangle.
+ */
+async function captureBlockRegion(browser) {
+  const port = 5422;
+  const tag = args.includes("--corner-tag") ? args[args.indexOf("--corner-tag") + 1] : "after";
+  const index = await (await fetch(`http://localhost:${port}/index.json`)).json();
+  const id = (title, name) => Object.values(index.entries).find((e) => e.title === title && e.name === name)?.id;
+  const shapes = id("Components/Blocks/Block", "Shapes");
+  const same = id("Components/Blocks/BlockRegion/Labeled Group", "Same Frame");
+  const out = { tag, stills: {} };
+  const open = async (storyId, w, h, scale) => {
+    const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: scale, colorScheme: "dark" });
+    await page.goto(`http://localhost:${port}/iframe.html?id=${storyId}&viewMode=story`, { waitUntil: "networkidle" });
+    await page.waitForSelector('[data-slot="block"]');
+    await page.waitForTimeout(600);
+    return page;
+  };
+  if (tag === "after") {
+    for (const [name, storyId, w, h] of [["r3b-block-shapes", shapes, 560, 170], ["r3b-sameframe", same, 1000, 380]]) {
+      const page = await open(storyId, w, h, 2);
+      await page.screenshot({ path: path.join(OUT, `${name}.png`) });
+      out.stills[name] = storyId;
+      await page.close();
+    }
+  }
+  const page = await open(same, 1000, 380, 4);
+  for (const region of ["group-4", "region-4"]) {
+    const card = page.locator(`[data-region-id="${region}"] [data-slot="region-corner"] [data-slot="block"]`).first();
+    const b = await card.boundingBox();
+    const pad = 14;
+    const name = `r3b-corner-${region}-${tag}`;
+    await page.screenshot({ path: path.join(OUT, `${name}.png`), clip: { x: b.x - pad, y: b.y - pad, width: b.width + 2 * pad, height: b.height + 2 * pad } });
+    out.stills[name] = await card.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { shape: el.dataset.blockShape, tl: s.borderTopLeftRadius, tr: s.borderTopRightRadius, br: s.borderBottomRightRadius, bl: s.borderBottomLeftRadius };
+    });
+  }
+  await page.close();
+  return out;
+}
+
 await mkdir(OUT, { recursive: true });
 const browser = await chromium.launch();
+if (args.includes("--blockregion")) {
+  const r3b = await captureBlockRegion(browser);
+  await browser.close();
+  await writeFile(path.join(OUT, `manifest-blockregion-${r3b.tag}.json`), JSON.stringify(r3b, null, 1));
+  console.log(JSON.stringify(r3b));
+  process.exit(0);
+}
 if (args.includes("--round3")) {
   const r3 = await captureRound3(browser);
   await browser.close();
