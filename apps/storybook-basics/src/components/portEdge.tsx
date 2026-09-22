@@ -73,6 +73,7 @@ import { LabeledPort } from "./labeledPort";
 import type { PortState } from "./port";
 import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, inwardTextLayout, type BlockSide, type PortTextLayout } from "./port.layout";
 import { formatPortLane, reconcilePortLane } from "./portLane";
+import { formatRailLane, reconcileRailLane, sameDividers } from "./returnDividers";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 import {
   CONTAINER_BORDER,
@@ -277,10 +278,23 @@ export interface PortEdgeProps {
    *  the line. */
   showCenterLine?: boolean;
   size?: Size;
-  /** Optional card content override — the port edge doesn't actually care
-   *  what goes inside its card. Default renders a `LabeledPort` with the
-   *  inward text layout (or, with `showPorts` off, the bare label). */
-  renderItem?(item: PortEdgeItem, ctx: { textLayout: PortTextLayout }): ReactNode;
+  /**
+   * Optional card content override — the port edge doesn't actually care
+   * what goes inside its card. Default renders a `LabeledPort` with the
+   * inward text layout (or, with `showPorts` off, the bare label).
+   *
+   * `ctx.onReorderKey` (added for "multiple returns", 2026-09-22): a custom
+   * fill REPLACES the default one entirely (`PortEdgeSlotBox`'s own `port`
+   * ternary), so anything the default fill wires — `onLabelKeyDown` for the
+   * `reorderChord` hotkey included — has to be forwarded again by hand, the
+   * same trap this file's own `BlockPortLane.stories.tsx` F2 finding already
+   * named for `hideLabel`. Pre-bound to this item's own id, ready to hand
+   * straight to a `LabeledPort`'s `onLabelKeyDown`; `undefined` exactly when
+   * no `reorderChord` is armed. The HINT text needs no such seam — it is
+   * already drawn as a sibling of whatever this renders
+   * (`PortEdgeSlotBox`'s own `reorderHint` span), not by the fill.
+   */
+  renderItem?(item: PortEdgeItem, ctx: { textLayout: PortTextLayout; onReorderKey?(event: KeyboardEvent): boolean }): ReactNode;
   /**
    * D-A7 (docs/BLOCK-PORT-EDGES-PLAN.md §4b·S1): what a COLLAPSED real
    * family draws, when the host needs something other than this component's
@@ -464,6 +478,22 @@ export interface PortEdgeProps {
    * stepping slots, so the chord is not wired there.
    */
   reorderChord?: ReorderChord;
+  /**
+   * "Multiple returns" (Daily Note 2026-09-22): the SAME rail-wide lane
+   * (`editMode: "multi"`) also authors DIVIDERS — a line that is exactly
+   * `---` or `|` inserts one at that position; deleting the line removes it
+   * (`./returnDividers.ts`'s `isDividerLine`/`reconcileRailLane`).
+   *
+   * Both omitted (every caller before this feature) and the lane's text is
+   * `formatPortLane`'s own output, unchanged — a "---"/"|" line mints an
+   * ordinary port exactly as it always has, so no existing rail can have a
+   * real port silently reinterpreted as a divider mark. The feature is
+   * therefore keyed off `onDividerAfterChange` being SET, not off
+   * `dividerAfter` being non-empty (a controlled `[]` still means "this
+   * host understands dividers, there just aren't any right now").
+   */
+  dividerAfter?: number[];
+  onDividerAfterChange?(next: number[]): void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -696,7 +726,7 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
   // is simply the inverse of "armed".
   const singleLineEditable = editingEnabled && editMode === "single";
   const port =
-    item == null ? null : renderItem ? renderItem(item, { textLayout }) : showPorts ? (
+    item == null ? null : renderItem ? renderItem(item, { textLayout, onReorderKey: onReorderKey ? (event) => onReorderKey(item.id, event) : undefined }) : showPorts ? (
       <LabeledPort
         edge={edge}
         state={item.state ?? "empty"}
@@ -1331,15 +1361,24 @@ function PortLaneOverlay({
   onItemsChange,
   onClose,
   language,
+  dividerAfter,
+  onDividerAfterChange,
 }: {
   trackRef: RefObject<HTMLDivElement | null>;
   visualOrder: PortEdgeItem[];
   onItemsChange?(items: PortEdgeItem[]): void;
   onClose(): void;
   language?: LanguageSupport;
+  dividerAfter?: number[];
+  onDividerAfterChange?(next: number[]): void;
 }) {
   const geometry = useLaneGeometry(trackRef, true, [visualOrder.map((p) => p.id).join(",")]);
   if (!geometry) return null;
+  // "Multiple returns": divider-aware format/reconcile only when a host
+  // actually wired `onDividerAfterChange` — see `PortEdgeProps.dividerAfter`'s
+  // own doc for why that is the gate rather than `dividerAfter` alone.
+  const dividerAware = onDividerAfterChange !== undefined;
+  const dividerAfterValue = dividerAfter ?? [];
   // Follow-up feedback (item 2): the lane ALWAYS sits to the right of the
   // rail, text left-aligned — regardless of whether the individual ports'
   // OWN labels flow left, right, or offset. Zach: "nobody types
@@ -1365,9 +1404,16 @@ function PortLaneOverlay({
   return (
     <div data-slot="port-edge-lane" style={wrapperStyle}>
       <CodeEditor
-        value={formatPortLane(visualOrder)}
+        value={dividerAware ? formatRailLane(visualOrder, dividerAfterValue) : formatPortLane(visualOrder)}
         onWrite={(text) => {
-          const next = reconcilePortLane(visualOrder, text, (label) => ({ id: `lane-${laneIdCounter++}`, label, state: "empty" }));
+          const mint = (label: string) => ({ id: `lane-${laneIdCounter++}`, label, state: "empty" as const });
+          if (dividerAware) {
+            const result = reconcileRailLane(visualOrder, dividerAfterValue, text, mint);
+            if (result.ports !== visualOrder) onItemsChange?.(result.ports);
+            if (!sameDividers(result.dividerAfter, dividerAfterValue)) onDividerAfterChange?.(result.dividerAfter);
+            return;
+          }
+          const next = reconcilePortLane(visualOrder, text, mint);
           if (next !== visualOrder) onItemsChange?.(next);
         }}
         multiline
@@ -1525,6 +1571,8 @@ function PortEdgeBody({
   maxVisible,
   variant,
   reorderChord,
+  dividerAfter,
+  onDividerAfterChange,
 }: PortEdgeProps) {
   const containerId = id ?? edge;
   const axis = AXIS_FOR_EDGE[edge];
@@ -1843,7 +1891,15 @@ function PortEdgeBody({
       >
         {showCenterLine ? <EdgeLineMark axis={axis} /> : null}
         {laneOpen && (
-          <PortLaneOverlay trackRef={trackRef} visualOrder={visualOrder} onItemsChange={onItemsChange} onClose={() => setLaneOpen(false)} language={laneLanguage} />
+          <PortLaneOverlay
+            trackRef={trackRef}
+            visualOrder={visualOrder}
+            onItemsChange={onItemsChange}
+            onClose={() => setLaneOpen(false)}
+            language={laneLanguage}
+            dividerAfter={dividerAfter}
+            onDividerAfterChange={onDividerAfterChange}
+          />
         )}
         {hiddenPortCount > 0 && moreIndicatorPos && (
           // RULING 7's seam, in one element. The POSITION is this
