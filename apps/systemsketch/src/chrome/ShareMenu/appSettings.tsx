@@ -43,6 +43,7 @@ import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "../families"
 import { useAppearancePreferences, useGestureSettings } from "./cameraGestureHost";
 import { useEdgePolicy, validationLevelOf } from "./validationLevelHost";
 import { setInterfaceScalePercent, useInterfaceScalePercent } from "./interfaceScaleHost";
+import { setForceCornerPlacement, useForceCornerPlacement } from "./cornerPlacementHost";
 import { shortcutPlatform } from "../FileMenu";
 import { SYSTEM_FAMILY_ITEMS } from "../../shapes/registry";
 
@@ -197,6 +198,11 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
   // comment in `usePersistedValue` gives.
   const interfaceScalePercent = useInterfaceScalePercent();
   const setInterfaceScale = setInterfaceScalePercent;
+  // Same two-surface shape as `interfaceScalePercent` just above: the CANVAS
+  // (`../overlay.tsx`'s `useCornerPlacement`) is the second reader, so this
+  // reads the live module store rather than local `useState` — see
+  // `./cornerPlacementHost.ts`'s header for why.
+  const forceCornerPlacement = useForceCornerPlacement();
   const [aliases, setAliases] = usePersistedValue<ToolAliases>(readToolAliases, writeToolAliases);
 
   // Ruling 3's binding, and the ONLY thing the app adds to it: the settings
@@ -286,6 +292,50 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
                 ),
               },
             },
+            {
+              // Zach, 2026-09-22, verbatim: "Its fursterating that the right
+              // panel menu is not in the corner, but I agree that for tldraw
+              // we should be showing the get a license for production
+              // thing... My solution: Lets by default have it offset like
+              // this. but in settings have a toggle that allows you to place
+              // it correctly in the corner." Off by default: `../overlay.tsx`'s
+              // `placeCornerCluster` keeps steering the cluster clear of
+              // tldraw's licence watermark. On is the explicit opt-out the
+              // warning section right below exists for.
+              id: "corner-menu-placement",
+              title: "Bottom-right menu position",
+              description:
+                "By default the menu steps aside to keep tldraw's licence notice visible. Turning this on pins it exactly in the corner instead, which may cover the notice.",
+              control: {
+                kind: "switch",
+                checked: forceCornerPlacement,
+                onCheckedChange: setForceCornerPlacement,
+              },
+            },
+            {
+              // Always visible next to the toggle, on or off — Zach's own ask
+              // was "with a warning in red", not a warning that only appears
+              // once the risk is already live. `text-destructive` is this
+              // repo's one red token (`BackendSettings.tsx`, `field.tsx`'s
+              // `FieldError`); no new color is invented here.
+              //
+              // WHY `title: ""` rather than omitting it: `SettingsSection.title`
+              // is a required string in the trunk's shell
+              // (`@trunk/editor/settingsView`) — this section has no heading
+              // of its own on purpose, and an empty string is the honest way
+              // to say that without editing the trunk's contract for one row.
+              id: "corner-menu-placement-warning",
+              title: "",
+              control: {
+                kind: "custom",
+                render: (
+                  <p className="text-destructive text-sm font-medium">
+                    TLDRAW requires a licence for production use, and requires this notice to remain visible. Hiding it
+                    is against their Terms of Service — only turn this on if you're using SystemSketch for development.
+                  </p>
+                ),
+              },
+            },
           ],
         },
       }),
@@ -293,6 +343,7 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
       aliases,
       appearance,
       edgePolicy,
+      forceCornerPlacement,
       gestures,
       interfaceScalePercent,
       nativeSupported,

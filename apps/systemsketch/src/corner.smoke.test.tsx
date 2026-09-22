@@ -27,7 +27,8 @@
 import { page } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CORNER_INSET, placeCornerCluster, type CornerRect } from "./chrome/overlay";
+import { CORNER_INSET, placeCornerCluster, watermarkCoverRect, type CornerRect } from "./chrome/overlay";
+import { CORNER_PLACEMENT_STORAGE_KEY } from "./chrome/ShareMenu/cornerPlacementHost";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";
 
 let app: MountedApp | null = null;
@@ -37,6 +38,9 @@ afterEach(async () => {
   // The config's desktop posture (vitest.config.ts: 1400×900) for whoever
   // runs next in this file.
   await page.viewport(1400, 900);
+  // The forced-corner override some cases below opt into — never leak it to
+  // the next test in this file.
+  window.localStorage.removeItem(CORNER_PLACEMENT_STORAGE_KEY);
 });
 
 interface Box {
@@ -165,6 +169,94 @@ describe("the bottom-right cluster — truly in the corner, never over the licen
     // nothing.
     const leftWatermark: CornerRect = { left: 4, top: 860, right: 104, bottom: 896 };
     expect(placeCornerCluster({ container, cluster, watermark: leftWatermark, obstacles: [dock] }).placement).toBe("corner");
+  });
+
+  it("watermarkCoverRect, pure: a patch that fully contains the watermark's own box, with a small margin, and floors at 0", () => {
+    const container: CornerRect = { left: 0, top: 0, right: 1400, bottom: 900 };
+    // Real numbers, measured live 2026-09-22. The first fix here shrank the
+    // CLUSTER's own offset to hug the watermark, and Zach caught the real
+    // cost: it broke the 8px inset every other piece of chrome shares — "I
+    // don't like how that made the spacing [no longer] align with the other
+    // toolbars." His own fix, which this pins: leave the cluster at the
+    // plain `CORNER_INSET` always, and cover the watermark with a SEPARATE
+    // patch instead — "just like put a little small rectangle that has the
+    // same color of the canvas over the sliver... so then you are free to
+    // place the menu freely."
+    const watermark: CornerRect = { left: 1296, top: 860, right: 1396, bottom: 896 };
+    // 2px margin past the watermark's own measured edges on every side.
+    expect(watermarkCoverRect(container, watermark)).toEqual({ right: 2, bottom: 2, width: 104, height: 40 });
+
+    // A watermark flush against the true corner: floor at 0, never negative.
+    const flushWatermark: CornerRect = { left: 1300, top: 864, right: 1400, bottom: 900 };
+    expect(watermarkCoverRect(container, flushWatermark)).toEqual({ right: 0, bottom: 0, width: 104, height: 40 });
+  });
+
+  it("forced corner placement (Settings ▸ About opt-in): flush in the true corner, and — the whole point of the warned opt-in — now DOES overlap the watermark", async () => {
+    // Zach, 2026-09-22: "in settings have a toggle that allows you to place
+    // it correctly in the corner. but with a warning in red". Set before
+    // mount, the same way a real browser reads it on load — the live-wiring
+    // half (flipping the switch without a remount) is
+    // `settings.smoke.test.tsx`'s job.
+    window.localStorage.setItem(CORNER_PLACEMENT_STORAGE_KEY, "true");
+    app = await mountApp();
+    const root = app.root;
+    const strip = await waitFor(() => root.querySelector<HTMLElement>('[data-slot="status-strip"]'), { what: "the status strip" });
+    const watermark = await waitFor(() => root.querySelector<HTMLElement>(WATERMARK), {
+      what: "tldraw's licence watermark",
+    });
+    await waitFor(() => strip.closest("[data-corner-placement]")?.getAttribute("data-corner-placement") === "corner", {
+      what: "the forced corner placement",
+    });
+    const s = box(strip);
+    const w = box(watermark);
+
+    // Flush at CORNER_INSET from both edges — the same "corner" shape the
+    // pure-function test above already pins, now proved live.
+    expect(innerWidth - s.right).toBeGreaterThanOrEqual(0);
+    expect(innerWidth - s.right).toBeLessThanOrEqual(CORNER_INSET);
+    expect(innerHeight - s.bottom).toBeGreaterThanOrEqual(0);
+    expect(innerHeight - s.bottom).toBeLessThanOrEqual(CORNER_INSET);
+
+    // The deliberate, warned behaviour: this is no longer clear of the
+    // watermark — the opposite of `expectLicenceUnobscured` above.
+    expect(intersects(s, w)).toBe(true);
+
+    // Full coverage is a SEPARATE element's job, not the strip's — Zach,
+    // having watched the strip-hugging version run: "I don't like how that
+    // made the spacing [no longer] align with the other toolbars... just
+    // like put a little small rectangle that has the same color of the
+    // canvas over the sliver". So the strip itself stays at the plain
+    // `CORNER_INSET` (asserted above, identical to the unlicensed-default
+    // shape) while `[data-slot="watermark-cover"]` — rendered only in this
+    // forced path — does the covering, sized to fully contain the
+    // watermark's own box with `WATERMARK_COVER_MARGIN` to spare.
+    const cover = await waitFor(() => root.querySelector<HTMLElement>('[data-slot="watermark-cover"]'), {
+      what: "the watermark cover patch",
+    });
+    const c = box(cover);
+    expect(c.right, "the cover's right edge must reach past the watermark's").toBeGreaterThanOrEqual(w.right);
+    expect(c.bottom, "the cover's bottom edge must reach past the watermark's").toBeGreaterThanOrEqual(w.bottom);
+    expect(c.left, "the cover's left edge must reach the watermark's").toBeLessThanOrEqual(w.left);
+    expect(c.top, "the cover's top edge must reach the watermark's").toBeLessThanOrEqual(w.top);
+
+    // Measured the way a user experiences it, same as `expectLicenceUnobscured`
+    // above but inverted: a point 1px inside the watermark's own bottom-right
+    // corner — exactly where the sliver used to show — must now hit the
+    // cover patch, never the watermark itself.
+    const hit = document.elementFromPoint(w.right - 1, w.bottom - 1);
+    expect(hit, "element under the watermark's own corner").not.toBeNull();
+    expect(watermark.contains(hit), `the watermark's corner still shows through as ${hit?.outerHTML.slice(0, 120)}`).toBe(false);
+
+    // `pointer-events` stays off on the patch itself — asserted directly
+    // (not by hit-testing a point, since the watermark's own centre happens
+    // to sit UNDER the strip's real buttons too, which correctly win that
+    // hit-test on their own merits) — so wherever the cover does NOT share a
+    // pixel with actual interactive chrome, a click still reaches the real
+    // watermark link underneath rather than the cover swallowing it. Hiding
+    // the notice from VIEW is already the ToS violation the red Settings
+    // warning names; blocking the one way out of it would be a second
+    // failure this fix does not need to add.
+    expect(getComputedStyle(cover).pointerEvents, "the cover must not capture clicks").toBe("none");
   });
 
   it("the placement rule never lands on the dock: a cluster too wide for the bottom row lifts above the dock row as well as the watermark", () => {
