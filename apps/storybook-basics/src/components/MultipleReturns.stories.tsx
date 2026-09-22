@@ -31,8 +31,8 @@ import { railForReturnAnnotation, sanitizeDividers } from "./returnDividers";
  * fixtures his sketches describe and proves them in a real browser.
  */
 const meta = {
-  title: "Blocks/Multiple Returns",
-  tags: ["area:blocks", "lane:multiple-returns"],
+  title: "Components/Blocks/Multiple Returns",
+  tags: ["object:block", "lane:multiple-returns"],
   parameters: { layout: "fullscreen" },
 } satisfies Meta;
 

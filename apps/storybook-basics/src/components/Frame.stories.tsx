@@ -29,8 +29,8 @@ import type { PortEdgeItem } from "./portEdge";
 import { Switch } from "./switch";
 
 const meta = {
-  title: "Blocks/Frame",
-  tags: ["area:blocks", "lane:frame-auto-port-edges"],
+  title: "Components/Blocks/Frame",
+  tags: ["object:block", "lane:frame-auto-port-edges"],
   parameters: { layout: "padded" },
 } satisfies Meta;
 

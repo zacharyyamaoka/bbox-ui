@@ -62,8 +62,8 @@ import { portKey, type SceneEdgeEnds, type SceneNode, type ScenePortRef } from "
 import { innerFaceHandle, wallFacesFor, wallPoint } from "../scene/wallPort";
 
 const meta = {
-  title: "Blocks/Frame/Auto Port Edges (React Flow)",
-  tags: ["area:blocks", "lane:frame-auto-port-edges", "host:react-flow"],
+  title: "Components/Blocks/Frame/Auto Port Edges (React Flow)",
+  tags: ["object:block", "lane:frame-auto-port-edges", "host:react-flow"],
   parameters: { layout: "padded" },
 } satisfies Meta;
 
