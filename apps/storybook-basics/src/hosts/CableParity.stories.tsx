@@ -56,16 +56,11 @@ function ringErrors(host: HTMLElement): { worst: number; pullBack: number } {
       const local = line.getPointAtLength(at);
       const screen = new DOMPoint(local.x, local.y).matrixTransform(line.getScreenCTM()!);
       const centre = centreOf(dot.querySelector('[data-slot="port-dot"]') ?? dot);
-      // The PATH's end stands the rendered ring + half a stroke off the
-      // centre for every cap: `paintedPullBackPx` counts a round cap's reach
-      // and no reach for a butt cap (the async dash), while the kit keeps the
-      // same geometric gap for both and lets the butt-capped ink stop 1px
-      // short by design (`trace.tsx`'s `traceRingGapPx` doc). Adding the
-      // half-stroke back for a butt cap compares like with like; the ring
-      // itself is still read off the pixels.
-      const style = getComputedStyle(line);
-      const buttReach = style.strokeLinecap === "round" ? 0 : Number.parseFloat(style.strokeWidth) / 2;
-      const expected = paintedPullBackPx(dot, line) + buttReach;
+      // The rendered ring plus the cap's REAL reach past the path end — read
+      // off the pixels and the computed style by `paintedPullBackPx`, never
+      // off `traceRingGapPx`. The async `e-cfg` edge is butt-capped, so it
+      // must touch its ring with no half-stroke of daylight.
+      const expected = paintedPullBackPx(dot, line);
       pullBack = Math.max(pullBack, expected);
       worst = Math.max(worst, Math.abs(Math.hypot(screen.x - centre.x, screen.y - centre.y) - expected));
     }
@@ -131,6 +126,14 @@ export const SameWaypoints: Story = {
           const { worst, pullBack } = ringErrors(reactFlowHost);
           expect(worst, "React Flow end vs rendered ring, px").toBeLessThanOrEqual(0.5);
           restPullBack = pullBack;
+          // The measurement above covers a BUTT cap too, not only round
+          // ones: `e-cfg` is the async dash, and it must touch its ring
+          // with no half-stroke of daylight (re-judge of d97f5ec).
+          for (const host of [reactFlowHost, domPane]) {
+            const asyncLine = host.querySelector<SVGPathElement>('[data-wire-id="e-cfg"] [data-slot="trace-line"]:not([data-sketch="true"])');
+            expect(asyncLine && getComputedStyle(asyncLine).strokeLinecap, "e-cfg's cap").toBe("butt");
+          }
+          expect(ringErrors(domPane).worst, "DOM canvas end vs rendered ring, px").toBeLessThanOrEqual(0.5);
         },
         { timeout: 5000 },
       );

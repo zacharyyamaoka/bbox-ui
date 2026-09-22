@@ -203,7 +203,7 @@ export function TraceEditor({
       routing,
       // The SAME default `Trace` resolves (`traceDefaultGapPx`), or the
       // handles sit a few px off the ends of the line they drag.
-      gap: rest.gap ?? traceDefaultGapPx({ markerEnd: rest.markerEnd, terminalRadius: rest.terminalRadius, strokeWidth: rest.strokeWidth }),
+      gap: rest.gap ?? traceDefaultGapPx({ markerEnd: rest.markerEnd, terminalRadius: rest.terminalRadius, strokeWidth: rest.strokeWidth, variant: rest.variant, animated: rest.animated }),
       curve: rest.curve,
       slantT: rest.slantT,
       bends: routing === "straight" ? bends : undefined,

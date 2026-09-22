@@ -784,11 +784,30 @@ export function minBlockHeightFor(input: MinBlockHeightInput): number {
  * whatever its caller already asked for: the LARGER of the two. A caller's
  * `style={{ minHeight: 300 }}` must survive a 146px floor — the floor only
  * ever raises a box (`resolveBlockHeight`'s "floored, never overridden").
- * A non-numeric caller value (`"10rem"`, `"50%"`) cannot be compared here,
- * so CSS compares it: `max(10rem, 146px)`.
+ * A non-numeric caller value (`"10rem"`, `"50%"`, `calc(…)`) cannot be
+ * compared here, so CSS compares it: `max(10rem, 146px)`.
+ *
+ * WHY a keyword gets the floor alone (re-judge of d97f5ec, 2026-09-22):
+ * CSS `max()` takes lengths, percentages and math, never a keyword. An
+ * intrinsic keyword (`auto`, `min-content`, `max-content`, `fit-content`,
+ * `fit-content(…)`) or a CSS-wide one (`inherit`, `initial`, `unset`,
+ * `revert`, `revert-layer`) inside it makes the whole declaration invalid,
+ * so the browser DROPS it and both the caller's value and the port floor
+ * are lost — the one thing this function exists to guarantee. The floor px
+ * is kept instead: a keyword `min-height` asks the box to hug its content,
+ * and a Block's `height` is still content-sized, so content taller than the
+ * floor still grows it; what the keyword cannot do is fall below the ports.
  */
 export function floorMinHeight(callerMinHeight: number | string | undefined, floorPx: number): number | string {
   if (callerMinHeight === undefined || callerMinHeight === "") return floorPx;
   if (typeof callerMinHeight === "number") return Math.max(callerMinHeight, floorPx);
+  if (!CSS_MATH_OPERAND.test(callerMinHeight.trim())) return floorPx;
   return `max(${callerMinHeight}, ${floorPx}px)`;
 }
+
+/** A value CSS `max()` accepts as an operand: a length or percentage
+ *  (`0`, `10rem`, `50%`, `-2.5px`) or a math/substitution function
+ *  (`calc`, `min`, `max`, `clamp`, `var`, `env`). Everything else — every
+ *  keyword, and `fit-content(…)`, which is a sizing function, not math —
+ *  is not. */
+const CSS_MATH_OPERAND = /^(?:0|[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?(?:%|[a-z]+))$|^(?:calc|min|max|clamp|var|env)\(.*\)$/i;

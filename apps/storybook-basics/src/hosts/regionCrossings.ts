@@ -15,7 +15,7 @@
 // uses). Each host already reports its drawn polylines in that space
 // (`DomCanvas.onWireGeometry`, `ReactFlowHost.onWireGeometry`), so the glue
 // needs nothing else from either one.
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 
 import type { RegionPoint } from "../components/region";
 import { wallCrossings } from "../components/regionViews.layout";
@@ -30,6 +30,9 @@ export interface RegionWallCrossings {
   crossings: RegionPoint[];
   /** Hand to the host's own `onWireGeometry`. `null` drops the wire. */
   onWireGeometry(wireId: string, points: readonly Point[] | null): void;
+  /** The wires whose drawn polyline this glue currently holds — what a
+   *  host's retraction (`null`, on a lost route or on unmount) empties. */
+  trackedWireIds: string[];
 }
 
 /**
@@ -77,5 +80,6 @@ export function useRegionWallCrossings(spaceOf: () => Element | null | undefined
     const frame = requestAnimationFrame(measure);
     return () => cancelAnimationFrame(frame);
   });
-  return { crossings, onWireGeometry };
+  const trackedWireIds = useMemo(() => Object.keys(paths).sort(), [paths]);
+  return { crossings, onWireGeometry, trackedWireIds };
 }
