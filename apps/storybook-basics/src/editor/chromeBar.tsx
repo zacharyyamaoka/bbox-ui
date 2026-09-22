@@ -98,6 +98,15 @@ export interface MenuAction {
    *  truthful rendering: a truncated label keeps its whole value one hover
    *  away. Adds-only, same plan. */
   title?: string;
+  /** A small trailing status chip — e.g. a "which channel does this row
+   *  actually open" badge (Zach, 2026-09-22: "a little badge there saying
+   *  like (preview) or (stable)"). Rendered as its OWN element after the
+   *  label (`data-slot="menu-action-badge"`), never folded into `label`
+   *  itself — a consumer that mutated `label` to carry this broke
+   *  `apps/systemsketch/src/sites.smoke.test.tsx`, which keys a row by its
+   *  exact rendered name; the row's name must survive a badge changing
+   *  underneath it. Adds-only, every current consumer omits it. */
+  badge?: ReactNode;
   run(): void;
 }
 
@@ -250,6 +259,7 @@ function BurgerMenuEntry({ item }: { item: MenuAction | { submenu: MenuSpec } })
       >
         {action.icon}
         <span className="truncate">{action.label}</span>
+        {action.badge ? <span data-slot="menu-action-badge" className="text-muted-foreground shrink-0 truncate text-xs">{action.badge}</span> : null}
         {action.shortcut ? <DropdownMenuShortcut>{action.shortcut}</DropdownMenuShortcut> : null}
       </DropdownMenuCheckboxItem>
     );
@@ -263,6 +273,7 @@ function BurgerMenuEntry({ item }: { item: MenuAction | { submenu: MenuSpec } })
     >
       {action.icon}
       <span className="truncate">{action.label}</span>
+      {action.badge ? <span data-slot="menu-action-badge" className="text-muted-foreground shrink-0 truncate text-xs">{action.badge}</span> : null}
       {action.shortcut ? <DropdownMenuShortcut>{action.shortcut}</DropdownMenuShortcut> : null}
     </DropdownMenuItem>
   );
