@@ -25,7 +25,7 @@ import {
   mergePreferences,
   parseToolbarPreferences,
   type ArrowPreset,
-} from "@trunk/components/toolPreferences";
+} from "@trunk/editor/toolPreferences";
 
 import { BLOCK_TOOL_ID } from "../../shapes/types";
 

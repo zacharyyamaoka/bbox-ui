@@ -11,10 +11,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Frame, GitBranch, Repeat, RotateCw, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
 import { useEditor, useValue, type Editor } from "tldraw";
 
-import { FramesPanel, type FramesPanelMode, type FramesPanelProps } from "@trunk/components/framesPanel";
-import { PanelShell } from "@trunk/components/panelShell";
+import { FramesPanel, type FramesPanelMode, type FramesPanelProps } from "@trunk/editor/framesPanel";
+import { PanelShell } from "@trunk/editor/panelShell";
 import { ToggleGroup, ToggleGroupItem } from "@trunk/components/toggle-group";
-import { ProblemsPanel } from "@trunk/components/problemsPanel";
+import { ProblemsPanel } from "@trunk/editor/problemsPanel";
 import { InspectorPanel } from "@trunk/editor/inspectorPanel";
 
 import { createGestureMark, type GestureMark } from "../document/gestureHistory";

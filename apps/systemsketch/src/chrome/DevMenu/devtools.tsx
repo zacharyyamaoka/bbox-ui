@@ -11,17 +11,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useEditor, useValue } from "tldraw";
 
-import { DevPanel, type DevPanelSection } from "@trunk/components/devPanel";
-import { QuickSwitcher } from "@trunk/components/quickSwitcher";
+import { DevPanel, type DevPanelSection } from "@trunk/editor/devPanel";
+import { QuickSwitcher } from "@trunk/editor/quickSwitcher";
 import {
   quickSwitcherKeyDecision,
   type QuickSwitcherItem,
   type QuickSwitcherMode,
-} from "@trunk/components/commandModel";
-import type { TextSearchMatch, TextSourceUpdate } from "@trunk/components/boardSearch";
-import { readToolAliases } from "@trunk/components/toolAliases";
-import { RecordingControl, recordingStatusLabel } from "@trunk/components/recordingControl";
-import { RecordingViewer } from "@trunk/components/recordingViewer";
+} from "@trunk/editor/commandModel";
+import type { TextSearchMatch, TextSourceUpdate } from "@trunk/editor/boardSearch";
+import { readToolAliases } from "@trunk/editor/toolAliases";
+import { RecordingControl, recordingStatusLabel } from "@trunk/editor/recordingControl";
+import { RecordingViewer } from "@trunk/editor/recordingViewer";
 import { createRecordingCore } from "@trunk/recording/recordingCore";
 import { createBrowserRecordingEffects } from "@trunk/recording/recordingEffects";
 import { createRecordingClient, type RecordingBundle } from "@trunk/recording/recordingClient";

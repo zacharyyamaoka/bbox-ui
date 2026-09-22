@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useToasts } from "tldraw";
 
-import { StatusDot } from "@trunk/components/chromeBar";
+import { StatusDot } from "@trunk/editor/chromeBar";
 import { FieldGesture } from "@trunk/components/codeEditorGesture";
 import { Popover, PopoverContent, PopoverTrigger } from "@trunk/components/popover";
 import {

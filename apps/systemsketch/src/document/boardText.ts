@@ -25,7 +25,7 @@ import type {
   SearchableText,
   TextSearchMatch,
   TextSourceUpdate,
-} from "@trunk/components/boardSearch";
+} from "@trunk/editor/boardSearch";
 
 import {
   BLOCK_SHAPE_TYPE,

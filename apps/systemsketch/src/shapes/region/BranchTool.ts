@@ -18,7 +18,7 @@ import { armRegionPreset, type RegionPreset } from "./cornerBlock";
  * outcome (`Pasted image 20260918143241.png`). A third arm (`elif`, another
  * `case`) is an ordinary edit to `props.arms`, never a new shape type: "one
  * Branch with N arms rather than an if component and a match component"
- * (`@trunk/presets/branch/branch.ts`).
+ * (`@trunk/scene/region.branch.ts`).
  *
  * `title` is free text as an author writes it — `if fast:` — never code to be
  * parsed back; `id` is the stable handle a member's `parentId` will one day

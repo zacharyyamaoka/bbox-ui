@@ -29,7 +29,7 @@
 import { createElement } from "react";
 import { BookOpen, Globe } from "lucide-react";
 
-import type { MenuAction } from "@trunk/components/chromeBar";
+import type { MenuAction } from "@trunk/editor/chromeBar";
 
 /** The deployed component site. Redeploys itself on every push to `main`. */
 export const BBOX_UI_SITE_URL: string =

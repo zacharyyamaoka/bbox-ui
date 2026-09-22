@@ -32,7 +32,7 @@ import {
   interfaceScaleCssValues,
   readInterfaceScale,
   writeInterfaceScale,
-} from "@trunk/components/interfaceScale";
+} from "@trunk/editor/interfaceScale";
 
 /** The browser's own storage, or `null` when even touching it throws —
  *  the same adapter `./appSettings.tsx` and `./preferences.ts` use, for the

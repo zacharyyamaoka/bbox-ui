@@ -21,11 +21,11 @@ import { AlignStartVertical, Eye, EyeOff, Focus, Group, Ungroup, Waypoints } fro
 import { useEditor, useValue, type TLShapeId } from "tldraw";
 
 import { Button } from "@trunk/components/button";
-import { PILL_POPOVER } from "@trunk/components/floatingToolbar";
+import { PILL_POPOVER } from "@trunk/editor/floatingToolbar";
 import { Input } from "@trunk/components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@trunk/components/popover";
 import { Slider } from "@trunk/components/slider";
-import { ToolbarButton } from "@trunk/components/toolbar";
+import { ToolbarButton } from "@trunk/editor/toolbar";
 
 import { traceGeometry } from "@trunk/components/trace";
 

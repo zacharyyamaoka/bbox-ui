@@ -18,13 +18,13 @@ import {
   type TLUiToolsContextType,
 } from "tldraw";
 
-import { ToolDock, type FamilyDeclaration, type LibrarySlotProps, type SimpleToolItem } from "@trunk/components/toolDock";
+import { ToolDock, type FamilyDeclaration, type LibrarySlotProps, type SimpleToolItem } from "@trunk/editor/toolDock";
 import {
   arrowPresetForActivation,
   arrowPresetFromToolId,
   arrowPresetToolId,
   type ArrowPreset,
-} from "@trunk/components/toolPreferences";
+} from "@trunk/editor/toolPreferences";
 
 import { SYSTEM_FAMILY_ITEMS } from "../../shapes/registry";
 import { ARROW_PRESET_SECTION, DRAW_TOOLS, GEO_VARIANTS, GEO_VARIANT_IDS, LINE_TOOLS, SIMPLE_TOOLS } from "../families";

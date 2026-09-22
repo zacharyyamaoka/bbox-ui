@@ -31,10 +31,10 @@
 import { useMemo, useState } from "react";
 import { useEditor, useToasts, useValue } from "tldraw";
 
-import { buildAppMenu, type MenuGroupSpec } from "@trunk/components/appMenu";
-import { ChromeBar } from "@trunk/components/chromeBar";
-import { useConfirm } from "@trunk/components/confirmDialog";
-import { FileNavigator } from "@trunk/components/fileNavigator";
+import { buildAppMenu, type MenuGroupSpec } from "@trunk/editor/appMenu";
+import { ChromeBar } from "@trunk/editor/chromeBar";
+import { useConfirm } from "@trunk/editor/confirmDialog";
+import { FileNavigator } from "@trunk/editor/fileNavigator";
 
 import { documentLocation } from "../../files/launchConfig";
 import { useDocumentSession, type DocumentSessionHelpers } from "../../files/session";

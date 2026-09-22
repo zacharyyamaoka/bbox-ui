@@ -15,7 +15,7 @@
 // anywhere near it.
 //
 // WHAT WAS ALREADY THERE, and is deliberately not rebuilt: the four levels
-// already existed as `EDGE_POLICY_PRESETS` in `../components/edgePolicy.ts`
+// already existed as `EDGE_POLICY_PRESETS` in `../editor/edgePolicy.ts`
 // (ported from the archive's `src/settings/edgePolicy.ts`), the settings panel
 // already renders them, and `systemsketch.edgePolicy.v1` already persists the
 // nine switches underneath. What did NOT exist is any connection between that
@@ -89,7 +89,7 @@ export type ValidationLevelId = "whiteboard" | "guided" | "typed" | "strict";
  * `validationLevelSpec`, so the fifth rung needed no second code path.
  *
  * WHY the caller supplies the spec rather than this file growing a
- * `levelFromNineSwitches()`: the nine switches are `components/edgePolicy.ts`'s
+ * `levelFromNineSwitches()`: the nine switches are `editor/edgePolicy.ts`'s
  * vocabulary and this file is in `scene/`, which may not import a component.
  * More importantly they are ONE host's persisted record — a second host with a
  * different control surface should not have to speak it. The kit owns what a
@@ -232,7 +232,7 @@ export const VALIDATION_LEVEL_SPECS: Readonly<Record<ValidationLevelId, Validati
  * The shipped default.
  *
  * WHY `guided` and not `whiteboard`: it is what the archive already defaulted
- * to (`DEFAULT_EDGE_POLICY = GUIDED`, `components/edgePolicy.ts`), so a browser
+ * to (`DEFAULT_EDGE_POLICY = GUIDED`, `editor/edgePolicy.ts`), so a browser
  * that has never opened Settings keeps the behaviour it already had. Picking
  * the looser end here would have silently relaxed every existing board.
  */
@@ -359,7 +359,7 @@ export interface ValidationVocabulary {
  *
  * WHY a per-port synthetic tag rather than an empty list or a shared
  * placeholder: `strict` means "both ends must declare a type AT ALL"
- * (`components/edgePolicy.ts`'s own wording), and `lint.ts`'s `type-mismatch`
+ * (`editor/edgePolicy.ts`'s own wording), and `lint.ts`'s `type-mismatch`
  * deliberately declines to judge when either end is `undefined` — its
  * "undefined = unknown, no judgement" convention, which is the RIGHT reading
  * at `typed` and the wrong one at `strict`. Substituting a tag that is unique

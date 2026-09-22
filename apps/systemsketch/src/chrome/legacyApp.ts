@@ -20,7 +20,7 @@
 import { createElement } from "react";
 import { History } from "lucide-react";
 
-import type { MenuAction } from "@trunk/components/chromeBar";
+import type { MenuAction } from "@trunk/editor/chromeBar";
 
 /** The archived SystemSketch's Stable channel (its launcher's default port). */
 export const LEGACY_SYSTEMSKETCH_URL: string =

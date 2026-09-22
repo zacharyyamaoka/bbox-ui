@@ -27,7 +27,7 @@ import { FileCode2 } from "lucide-react";
 import type { Editor, TLShapeId } from "tldraw";
 import { useEditor } from "tldraw";
 
-import type { MenuAction } from "@trunk/components/chromeBar";
+import type { MenuAction } from "@trunk/editor/chromeBar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@trunk/components/dropdown-menu";
 import type { PyblocksClient } from "@trunk/backend/pyblocksClient";
 import type { HostNodeData } from "@trunk/hosts/hostScene";

@@ -119,7 +119,7 @@ const NO_PORTS: Record<PortSide, BlockPortSpec[]> = { left: [], right: [], top: 
  * The typed, UNNAMED header each region kind publishes.
  *
  * WHY the label is the TYPE and not a field name (DP - Loop, quoted verbatim
- * in `@trunk/presets/loop/loop.ts:36-56` from the archive's own
+ * in `@trunk/scene/region.loop.ts:36-56` from the archive's own
  * `/home/bam/systemsketch/src/loop/loopModel.ts:55-70`: "A type and nothing
  * else. You do not NAME these — the collection's name lives on whatever
  * produces it, and the element has no name until a Block's port gives it one.
@@ -140,7 +140,7 @@ const NO_PORTS: Record<PortSide, BlockPortSpec[]> = { left: [], right: [], top: 
  * over the research's own recommendation on 2026-09-02 — yields "get messy —
  * then you don't know which of those ports are firing". The arms' results fan
  * in at the CONSUMER's ordinary port instead, which is why nothing here mints
- * an outlet (`@trunk/presets/branch/branch.ts:14-24` carries the full ruling).
+ * an outlet (`@trunk/scene/region.branch.ts:14-24` carries the full ruling).
  */
 export function cornerBlockPropsFor(kind: RegionKind): Partial<BlockShapeProps> | null {
   switch (kind) {

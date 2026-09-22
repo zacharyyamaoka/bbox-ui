@@ -64,7 +64,7 @@ import {
   writeEdgePolicy,
   type EdgePolicy,
   type EdgePolicyPresetId,
-} from "@trunk/components/edgePolicy";
+} from "@trunk/editor/edgePolicy";
 import type { ConnectionPolicy } from "@trunk/scene/edgeValidation";
 import type { LintRuleId } from "@trunk/scene/lint";
 import {

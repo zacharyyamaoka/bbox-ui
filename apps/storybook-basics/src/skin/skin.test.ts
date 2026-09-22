@@ -143,7 +143,7 @@ describe("components read the tokens skin.ts documents", () => {
   const sketchAtEdgeSource = readFileSync(path.join(skinDir, "sketchAtEdge.ts"), "utf8");
   const allSources = `${sources}\n${sketchAtEdgeSource}`;
 
-  // Tranche 5 (presets/value) reads NOTHING new here — see the coverage
+  // Tranche 5 (components/block.value.tsx) reads NOTHING new here — see the coverage
   // (S4) describe block below for why `ValueCapsule` is on the excluded
   // list rather than a sixth source file.
 
@@ -210,7 +210,7 @@ describe("coverage (S4) — the deliberately-excluded half of the claim", () => 
   // TraceBadge composes Badge+EditableText, WireLayer composes Trace) —
   // none of them sets a border/background/box-shadow/stroke of its own.
   // `collapsible.tsx` (Tranche 4) is a headless Base UI wrapper with no
-  // className or style anywhere. `presets/value/value.tsx` (Tranche 5) is
+  // className or style anywhere. `components/block.value.tsx` (Tranche 5) is
   // checked separately below — it DOES contain the words "border" and
   // "background", but only as a permanent, skin-independent SUPPRESSION.
   const PAINTLESS_COMPONENTS = ["bar.tsx", "blockPort.tsx", "traceBadge.tsx", "wireLayer.tsx", "collapsible.tsx"];
@@ -226,7 +226,7 @@ describe("coverage (S4) — the deliberately-excluded half of the claim", () => 
     }
   });
 
-  it("presets/value/value.tsx's border/background overrides are a permanent suppression, not a paint a skin could drive", () => {
+  it("components/block.value.tsx's border/background overrides are a permanent suppression, not a paint a skin could drive", () => {
     // `ValueCapsule` composes `Block`+`BlockPort`+`CodeEditor` — all
     // already wired — and deliberately OVERRIDES the CodeEditor's own
     // skin-driven border/background to a hardcoded "transparent" ("the
@@ -240,8 +240,7 @@ describe("coverage (S4) — the deliberately-excluded half of the claim", () => 
     // "equal to half the height", Zach's own arithmetic) and MUST keep
     // winning over Block's `--bbox-skin-radius` in every skin — reading a
     // radius token here would be the regression, not the fix.
-    const presetsDir = path.resolve(skinDir, "..", "presets");
-    const valueSource = readFileSync(path.join(presetsDir, "value", "value.tsx"), "utf8");
+    const valueSource = readFileSync(path.join(componentsDir, "block.value.tsx"), "utf8");
     expect(valueSource).toMatch(/background:\s*"transparent"/);
     expect(valueSource).toMatch(/borderColor:\s*"transparent"/);
   });

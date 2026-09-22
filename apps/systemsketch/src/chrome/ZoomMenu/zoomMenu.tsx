@@ -34,7 +34,7 @@
 import { useMemo } from "react";
 import { useCanApplySelectionAction, useEditor, useValue } from "tldraw";
 
-import type { MenuAction } from "@trunk/components/appMenu";
+import type { MenuAction } from "@trunk/editor/appMenu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuShortcut, DropdownMenuTrigger } from "@trunk/components/dropdown-menu";
 
 export interface ZoomMenuProps {

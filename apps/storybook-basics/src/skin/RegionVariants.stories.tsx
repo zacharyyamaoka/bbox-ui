@@ -66,7 +66,7 @@ import { expect, waitFor } from "storybook/test";
 
 import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
-import { BRANCH_NESTED } from "../presets/branch/branch.fixtures";
+import { BRANCH_NESTED } from "../scene/region.branch.fixtures";
 import { REGION_NODE_TYPE } from "../scene/region";
 import {
   DEFAULT_REGION_VARIANT,
@@ -77,7 +77,7 @@ import {
   regionVariantAttrs,
   type RegionVariantId,
 } from "./regionVariants";
-import { expectArmsStacked, expectCornerPorts, expectRegionExpanded, expectRegionOpaque } from "../presets/controlFlow.acceptance";
+import { expectArmsStacked, expectCornerPorts, expectRegionExpanded, expectRegionOpaque } from "../components/region.acceptance";
 
 const meta = {
   title: "Skin/RegionVariants",

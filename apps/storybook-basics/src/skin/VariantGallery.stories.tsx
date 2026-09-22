@@ -30,7 +30,7 @@ import { expect, waitFor } from "storybook/test";
 
 import { PORT_VARIANTS, type PortVariantId } from "./portVariants";
 import { drawsHeaderRule, REGION_VARIANTS, type RegionVariantId } from "./regionVariants";
-import { BranchInLoop } from "../presets/ControlFlowGallery.stories";
+import { BranchInLoop } from "../components/ControlFlowGallery.stories";
 
 const meta = {
   title: "Skin/VariantGallery",

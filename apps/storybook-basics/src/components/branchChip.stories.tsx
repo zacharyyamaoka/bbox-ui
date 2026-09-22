@@ -8,7 +8,7 @@ import { BranchChip, type DraftSummary } from "./branchChip";
  * selector beside the file title, ported from SystemSketch's
  * `DraftsControl.tsx`.
  *
- * WHY this file exists beside src/components/ChromeBar.stories.tsx, which also
+ * WHY this file exists beside src/editor/ChromeBar.stories.tsx, which also
  * renders it: that page asks "does the chip compose into the chrome bar,
  * and does it re-skin through `renderTrigger`". This one is the component's
  * own INTERNAL contract — the row marks, the explicit accessible name, the

@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import { buildAppMenu, type AppMenuInput } from "../components/appMenu";
-import { ChromeBar, type ChromeBarProps } from "../components/chromeBar";
+import { buildAppMenu, type AppMenuInput } from "./appMenu";
+import { ChromeBar, type ChromeBarProps } from "./chromeBar";
 
 /**
  * The burger, built out — File first with the old app's rows and shortcuts,
@@ -78,7 +78,7 @@ function Bar() {
 }
 
 const meta = {
-  title: "Editor/AppMenu",
+  title: "Editor/Menus & Bars/AppMenu",
   tags: ["object:chrome", "lane:chrome-files-settings"],
   component: ChromeBar,
   // The stories render `Bar` (which builds its own props); these args exist

@@ -279,23 +279,23 @@ Write set: `docs/build_menu_registry_items.py` (`region` item), `registry.json` 
 
 ## 8 · What Zach will see (for the report builder — capture these)
 
-Storybook on `:5421` after merge. Sidebar → Presets › ControlFlow, or filter `lane:control-flow` (the `area:control-flow` tag this line used to name was retired 2026-09-22).
+Storybook on `:5421` after merge. Sidebar → Components › Blocks › Region, or filter `lane:control-flow` (the `area:control-flow` tag this line used to name was retired 2026-09-22).
 
 | Story (title → id) | Host | The state it shows |
 |---|---|---|
-| `Control Flow/Region` → `presets-controlflow-region--empty-expanded` | DOM canvas | the P1 frame with a real corner block, nothing inside |
+| `Control Flow/Region` → `components-blocks-region--empty-expanded` | DOM canvas | the P1 frame with a real corner block, nothing inside |
 | `…--empty-opaque` | DOM | the P5 card, footer "nothing hidden" |
 | `…--with-members`, `…--with-arms`, `…--active-arm`, `…--in-react-flow`, `…--layout-twin` | DOM / RF | members inside; three arms one folded; fade; RF; DOM rows equal `regionLayout` |
-| `Control Flow/Loop` → `presets-controlflow-loop--for-loop-carried` | DOM | `merge()`/`smooth()` inside `For Loop`, seed from outside, `Iter`→`other`, dotted z⁻¹ self-cable on the bottom lane |
+| `Control Flow/Loop` → `components-blocks-region-loop--for-loop-carried` | DOM | `merge()`/`smooth()` inside `For Loop`, seed from outside, `Iter`→`other`, dotted z⁻¹ self-cable on the bottom lane |
 | `…--for-loop-empty`, `…--while-loop-recheck`, `…--loop-with-turn`, `…--loop-with-break`, `…--for-loop-react-flow` | DOM / RF | empty; `Bool` header with a delayed re-check from inside; "iteration 3 of 7" chip; ⏹ break mark on `check()` |
-| `Control Flow/Branch` → `presets-controlflow-branch--one-input` | DOM | Zach's `if fast:` — `estimate()`/`fallback()` in two arms, cables straight in from outside, fan-in at `encode` |
+| `Control Flow/Branch` → `components-blocks-region-branch--one-input` | DOM | Zach's `if fast:` — `estimate()`/`fallback()` in two arms, cables straight in from outside, fan-in at `encode` |
 | `…--many-inputs`, `…--match-case`, `…--folded-arm`, `…--active-arm`, `…--nested`, `…--one-input-react-flow` | DOM / RF | Selector with N conditions; `match`; a folded `elif`; active-arm fade; a branch inside arm 1 |
-| `Control Flow/Wires` → `presets-controlflow-wires--bypass-around-a-block`, `…--carried-value-self-loop`, `…--through-a-container`, `…--mut-effect-cable` | DOM | a cable going around a bystander; a self-loop on the bottom lane with z⁻¹; a cable allowed into its own container; a `mut` cable off a top port |
+| `Control Flow/Wires` → `components-blocks-region-wires--bypass-around-a-block`, `…--carried-value-self-loop`, `…--through-a-container`, `…--mut-effect-cable` | DOM | a cable going around a bystander; a self-loop on the bottom lane with z⁻¹; a cable allowed into its own container; a `mut` cable off a top port |
 | `Control Flow/Host Edges` → `…--member-edge-react-flow`, `…--member-edge-tldraw` | RF / tldraw | a cable landing on a block INSIDE another block, in both engines |
-| `Control Flow/Toggle` → `presets-controlflow-toggle--dom-canvas`, `…--react-flow`, `…--tldraw`, `…--nested-opaque` | all three | click the chevron: frame ⇄ card, cables re-anchor, nothing moves |
-| `Control Flow/Gallery` → `presets-controlflow-gallery--branch-in-loop` (+ `…-react-flow`, `…-tldraw`) | all three | the whole language on one board: a loop containing a branch, a bypass cable going around both, a `mut` cable |
+| `Control Flow/Toggle` → `components-blocks-region-toggle--dom-canvas`, `…--react-flow`, `…--tldraw`, `…--nested-opaque` | all three | click the chevron: frame ⇄ card, cables re-anchor, nothing moves |
+| `Control Flow/Gallery` → `components-blocks-region-gallery--branch-in-loop` (+ `…-react-flow`, `…-tldraw`) | all three | the whole language on one board: a loop containing a branch, a bypass cable going around both, a `mut` cable |
 
-Hero video candidate: `presets-controlflow-toggle--dom-canvas` (expand ⇄ collapse, 8 s). Stills: `one-input`, `for-loop-carried`, `bypass-around-a-block`, `nested`.
+Hero video candidate: `components-blocks-region-toggle--dom-canvas` (expand ⇄ collapse, 8 s). Stills: `one-input`, `for-loop-carried`, `bypass-around-a-block`, `nested`.
 
 ---
 
@@ -471,17 +471,17 @@ the real one:
 **Stories — every id §8 names exists.** 37 `control-flow-*` ids are indexed
 (read off the running Storybook's own `index.json`, not derived from titles);
 §8 names 33 of them and all 33 resolve. The four beyond the plan are
-`presets-controlflow-region--header-chip-and-marks`,
-`presets-controlflow-wires--badge-with-seed`,
-`presets-controlflow-hostedges--member-edge-survives-drag` (lanes A/D/G shipping
+`components-blocks-region--header-chip-and-marks`,
+`components-blocks-region-wires--badge-with-seed`,
+`components-blocks-region-host-edges--member-edge-survives-drag` (lanes A/D/G shipping
 more than they promised) and this lane's own
-`presets-controlflow-gallery--collapsed-branch-in-loop`.
+`components-blocks-region-gallery--collapsed-branch-in-loop`.
 
 This lane's four:
 
 | Story id | Host | Asserts |
 |---|---|---|
-| `presets-controlflow-gallery--branch-in-loop` | DOM canvas | both frames expanded; arms `if`/`else` stacked; `merge`/`estimate`/`fallback` inside their containers; `e-bypass` clears BOTH frames (acceptance helper + the painted-line check); `mut` and `z⁻¹ = prior()` pills; no cable crosses arms |
+| `components-blocks-region-gallery--branch-in-loop` | DOM canvas | both frames expanded; arms `if`/`else` stacked; `merge`/`estimate`/`fallback` inside their containers; `e-bypass` clears BOTH frames (acceptance helper + the painted-line check); `mut` and `z⁻¹ = prior()` pills; no cable crosses arms |
 | `…--branch-in-loop-react-flow` | React Flow | both frames expanded + two members inside, neither a host node |
 | `…--branch-in-loop-tldraw` | tldraw | the same |
 | `…--collapsed-branch-in-loop` | DOM canvas | the branch opaque INSIDE the open loop's body; no arm row, no member reaches the DOM |
@@ -522,7 +522,7 @@ Measured on the DOM board (`getBoundingClientRect`, headless Chromium,
 this lane): a `Block` with both a header and a TOP-wall port paints the port's
 label over the header text — visible on `merge()` as `effect:pose` sitting on
 `merge()`. Pre-existing and already shipped that way in lane D's
-`presets-controlflow-wires--mut-effect-cable`; it is a `Block`/rail band question,
+`components-blocks-region-wires--mut-effect-cable`; it is a `Block`/rail band question,
 not a fixture one.
 
 **Captures:** `/home/bam/bbox-ui/reports/media/lanes-2026-09-18/cf-F/` —
@@ -545,7 +545,7 @@ Every brief assumes: you are in your own worktree cut from the integration branc
 
 **Build, in this order:**
 
-> **2026-09-22 — the titles and tags in the lane steps below are superseded.** They record what those lanes were told. Control-flow stories now title under `Presets/ControlFlow/…` (Branch, Loop, Region, Toggle, Wires, HostEdges, Gallery, EdgeDefaults) with `object:region`; `area:` tags are retired. `CLAUDE.md` § Story titles is the rule and `src/storyOrganisation.test.ts` enforces it.
+> **2026-09-22 — the titles and tags in the lane steps below are superseded.** They record what those lanes were told. Control-flow stories now title under `Components/Blocks/Region/…` (Loop, Branch, Toggle, Wires, Host Edges, Gallery, Edge Defaults, Async, and the Region kit itself at `Components/Blocks/Region`) with `object:region`; `area:` tags are retired. The branch and loop presets moved from `src/presets/<kind>/` to `src/scene/region.<kind>.ts` (they build scene records, so they sit beside the region model), and there is no `presets/` folder any more. `CLAUDE.md` § Story titles is the rule and `src/storyOrganisation.test.ts` enforces it.
 
 1. `scene/controlFlow.ts` bodies. `armsOf` = `childrenOf(scene, id).filter(isArm)`; `bodyChildrenOf` = the complement; `armOf` = `regionOf`'s walk with `isArm`; `hiddenSummary`: `nodes` = `descendantsOf(scene, [id])` minus the region minus arms, `arms` = `armsOf().length`, `edges` = `classifyBoundary(scene, {containerId: id}).edges` with `kind` in `{"interior", "port-inner"}`; unknown id → all zeros. `describeHidden` per its doc. Gate: `pnpm exec vitest --project=unit run src/scene/controlFlow.test.ts` → all green.
 2. `components/region.layout.ts`'s `regionLayout` exactly as `region.layout.test.ts` pins it (corner at origin; body under it; rows stack; folded = 0; hug vs explicit; min clamp; pure). Gate: that test file green.

@@ -22,11 +22,11 @@ import { useMemo, useState, type ReactNode } from "react";
 import { CircleHelp, Code2, Frame, Grid3x3, Minus, Plus } from "lucide-react";
 import { useEditor, useValue } from "tldraw";
 
-import type { MenuAction, MenuGroupSpec } from "@trunk/components/appMenu";
-import { readAppearancePreferences } from "@trunk/components/appearancePreferences";
+import type { MenuAction, MenuGroupSpec } from "@trunk/editor/appMenu";
+import { readAppearancePreferences } from "@trunk/editor/appearancePreferences";
 import { Button } from "@trunk/components/button";
-import { ProblemsBadge } from "@trunk/components/problemsPanel";
-import { StatusStrip, type StatusStripItem } from "@trunk/components/statusStrip";
+import { ProblemsBadge } from "@trunk/editor/problemsPanel";
+import { StatusStrip, type StatusStripItem } from "@trunk/editor/statusStrip";
 
 import { useStockMenus } from "./FileMenu";
 import { ZoomMenu } from "./ZoomMenu";

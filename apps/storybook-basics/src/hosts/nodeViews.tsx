@@ -29,7 +29,7 @@ import type { BlockSide } from "../components/port.layout";
 import { Region, REGION_CORNER_BLOCK_STYLE, type RegionArm } from "../components/region";
 import { REGION_CARD_WIDTH_PX, REGION_CORNER_WIDTH_PX } from "../components/region.layout";
 import { portViewSlotCount, railBandHeightForSlots, resolveBlockHeight } from "../scene/fitToContent";
-import { ValueCapsule } from "../presets/value/value";
+import { ValueCapsule } from "../components/block.value";
 import { armsOf, bodyChildrenOf, describeHidden, hiddenSummary } from "../scene/controlFlow";
 import type { PromotedPort } from "../scene/boundary";
 import type { OpaqueRegionView } from "../scene/regionView";

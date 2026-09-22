@@ -10,7 +10,7 @@ import { createShapeId } from "tldraw";
 import { userEvent } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { APPEARANCE_PREFERENCES_STORAGE_KEY, DEFAULT_APPEARANCE_PREFERENCES } from "@trunk/components/appearancePreferences";
+import { APPEARANCE_PREFERENCES_STORAGE_KEY, DEFAULT_APPEARANCE_PREFERENCES } from "@trunk/editor/appearancePreferences";
 
 import { BLOCK_SHAPE_TYPE } from "./shapes/types";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";

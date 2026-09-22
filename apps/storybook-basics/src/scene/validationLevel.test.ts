@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // importing `scene/`, never the reverse, and never a test. This is the only
 // thing that stops the persisted nine switches and this file's four levels
 // drifting apart, since neither may import the other at runtime.
-import { EDGE_POLICY_PRESETS, edgePolicyPreset, type EdgePolicyPresetId } from "../components/edgePolicy";
+import { EDGE_POLICY_PRESETS, edgePolicyPreset, type EdgePolicyPresetId } from "../editor/edgePolicy";
 
 import { LINT_RULE_IDS, type LintScene } from "./lint";
 import type { ConnectionPolicy } from "./edgeValidation";

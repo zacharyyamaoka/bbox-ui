@@ -19,7 +19,7 @@ import {
   stemOf,
   versionCandidates,
   versionRecords,
-} from "./compareSource"
+} from "../editor/compareSource"
 import { DEFAULT_NEW_DOCUMENT_SUFFIX } from "../files/workspaceModel"
 
 const BOARD = "/home/bam/boards/pipeline.systemsketch"

@@ -16,7 +16,7 @@ import { Toggle } from "../components/toggle";
 import { EditableText } from "../components/editableText";
 import { Text } from "../components/text";
 import { FoldingChevron } from "../components/foldingChevron";
-import { ValueCapsule } from "../presets/value/value";
+import { ValueCapsule } from "../components/block.value";
 import { BBOX_SKINS, BBOX_SKIN_LABELS, bboxSkinAttrs, type BboxSkin } from "./skin";
 import { SketchAtEdge } from "./SketchAtEdge";
 import { SKETCH_TWIN_ATTR } from "./sketchAtEdge";
@@ -26,7 +26,7 @@ import { SKETCH_TWIN_ATTR } from "./sketchAtEdge";
  * frozen v1) brought to this app's own components, across all five
  * tranches of the port (Tranche 2: block/badge/port/trace/codeEditor;
  * Tranche 3: composites; Tranche 4: shadcn primitives; Tranche 5:
- * presets/value). `.storybook/preview.tsx`'s toolbar "Skin" global
+ * components/block.value.tsx). `.storybook/preview.tsx`'s toolbar "Skin" global
  * switches every story in this file (and every other story in the app)
  * live — these stories exist to show the language at a glance, not to be
  * the only place it is visible.

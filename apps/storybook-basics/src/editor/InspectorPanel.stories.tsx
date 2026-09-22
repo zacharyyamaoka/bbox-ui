@@ -6,7 +6,7 @@ import { Block } from "../components/block";
 import { InspectorPanel } from "./inspectorPanel";
 
 /**
- * Editor/InspectorPanel — RULING 9, 2026-09-21. Zach: *"the eye
+ * Editor/Panels & Dialogs/InspectorPanel — RULING 9, 2026-09-21. Zach: *"the eye
  * visibility control for this is in the right hand inspector menu"*.
  *
  * The bench below is deliberately the WHOLE loop — the panel and a real
@@ -21,7 +21,7 @@ import { InspectorPanel } from "./inspectorPanel";
  * - typing in the panel changes what the block paints.
  */
 const meta = {
-  title: "Editor/InspectorPanel",
+  title: "Editor/Panels & Dialogs/InspectorPanel",
   tags: ["object:chrome", "lane:inspector-panel"],
 } satisfies Meta;
 

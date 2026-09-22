@@ -36,15 +36,15 @@ import {
   readAppearancePreferences,
   writeAppearancePreferences,
   type AppearancePreferences,
-} from "@trunk/components/appearancePreferences";
-import { cameraGesturePlan, type CameraGesturePlan } from "@trunk/components/cameraGestures";
+} from "@trunk/editor/appearancePreferences";
+import { cameraGesturePlan, type CameraGesturePlan } from "@trunk/editor/cameraGestures";
 import {
   DEFAULT_GESTURE_SETTINGS,
   GESTURE_SETTINGS_STORAGE_KEY,
   readGestureSettings,
   writeGestureSettings,
   type GestureSettings,
-} from "@trunk/components/gestureSettings";
+} from "@trunk/editor/gestureSettings";
 
 /** The browser's own storage, or `null` when even touching it throws — the same
  *  adapter every other file in this folder uses, for the same reason: a

@@ -12,14 +12,14 @@ import {
   APPEARANCE_PREFERENCES_STORAGE_KEY,
   DEFAULT_APPEARANCE_PREFERENCES,
   type AppearancePreferences,
-} from "@trunk/components/appearancePreferences";
-import { cameraGesturePlan, wheelConventionOf } from "@trunk/components/cameraGestures";
+} from "@trunk/editor/appearancePreferences";
+import { cameraGesturePlan, wheelConventionOf } from "@trunk/editor/cameraGestures";
 import {
   DEFAULT_GESTURE_SETTINGS,
   GESTURE_SETTINGS_STORAGE_KEY,
   MAX_SPEED_PERCENT,
   type GestureSettings,
-} from "@trunk/components/gestureSettings";
+} from "@trunk/editor/gestureSettings";
 
 import { patchAppearancePreferences, resetCameraGestureCache } from "./chrome/ShareMenu";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";

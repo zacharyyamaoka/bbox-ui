@@ -58,7 +58,9 @@ afternoon instead of a fork.
 Full context and the verified evidence: `ARCHITECTURE.md`, "The trunk — one
 canonical lineage, three consumers." The checkable version:
 
-- **New design work happens in `apps/storybook-basics/src/components/`.**
+- **New design work happens in `apps/storybook-basics/src/`** — `components/`
+  for what draws a scene element, `editor/` for the editor's chrome and
+  authoring surfaces (see "Story titles" for where the line is).
   Not `packages/bbox-ui`, not `systemsketch/src/bboxUi/`.
 - **`packages/bbox-ui` is frozen v1.** Keep publishing it as-is; never edit
   it to chase a trunk change. Regenerating it from the trunk is its own
@@ -142,7 +144,15 @@ npx shadcn@latest build
 
 Then **install it into a throwaway project and type-check it**. `npx shadcn add`
 exiting 0 proves nothing — this repo already shipped a registry that installed
-cleanly and then failed to compile.
+cleanly and then failed to compile. That check is now one command:
+
+```bash
+python3 docs/verify_registry_install.py --dir /tmp/bbox-registry-check
+```
+
+It installs every installable item from `public/r/` into a fresh project and
+runs `tsc`. First run (2026-09-22): 37 items, `tsc` exit 0 — and deleting one
+installed file turns it red, so it can fail.
 
 **The two adapters cannot be installed by anyone.** `block-node-reactflow` and
 `block-shape-tldraw` import `@bbox-ui/core`, which is `private: true` and
@@ -163,7 +173,19 @@ say so. Do not paper over it.
 `apps/storybook-basics/src/`, each self-contained the same way `port`/`block`
 are (no `registryDependencies` between bbox items; a shared file like
 `elbow/*` or `lib/utils.ts` is simply re-listed, with its own `target`, by
-every item that needs it).
+every item that needs it). Since 2026-09-22 they are built by
+`docs/build_menu_registry_items.py` too (`TRUNK_ITEMS`): their hand-set file
+lists had drifted — `block.tsx`, `port.tsx`, `trace.tsx` gained imports the
+items never picked up — and eleven of them installed and then failed to compile.
+
+**Two install layouts, chosen by resolution, not by folder.** An item installs
+flat (`components/bbox/X`, with `lib/`, `skin/` as siblings of `bbox/`) when
+every one of its relative imports still resolves that way. When one would not —
+an `editor/` file importing `../components/button`, or `skin/portVariants.ts`
+importing `../components/port.layout` — the whole item installs as a mirror of
+the trunk tree, `components/bbox/{components,editor,lib,skin}/X`. So an item's
+install paths move only when they have to: 17 items are mirrored (the chrome
+that moved to `editor/`, and the four port items through `skin/`), 24 stay flat.
 
 **Naming principle (Zach, 2026-09-17): bbox-ui's own names are descriptive
 and precise; shorthand belongs to the consumer.** SystemSketch calls its
@@ -284,7 +306,9 @@ one thing, and six components living in two places.
 
 - **The first segment is the story file's own top-level folder**, in
   ARCHITECTURE.md's words: `Components` · `Scene` · `Editor` · `Hosts` ·
-  `Presets` · `Skin` (`src/components/…` → `Components/…`). A story that
+  `Skin` (`src/components/…` → `Components/…`). There is no `Presets`
+  section and no `presets/` folder: a preset lives with the component it
+  configures (ARCHITECTURE.md, "presets/ … is gone"). A story that
   demonstrates another kit's code moves to that kit's folder; the title does
   not paper over the location.
 - **A component's host boards live with the component**, as an aspect:
@@ -297,14 +321,27 @@ one thing, and six components living in two places.
   not a section. (Measured when this was written: 19 story files reach an
   engine and 10 of them lived in `hosts/` — a section could never have held
   them all.)
-- **Families: Components and Scene have one, with closed lists.**
-  Components: `Ports`, `Blocks`, `Traces`, `Text & Marks`, `Menus & Bars`,
-  `Panels & Dialogs`, `Stock`. Scene, by what an operation does: `Model &
-  Diff`, `Wiring`, `Validation`, `Layout & Drag` — kept although its 14
-  entries would fit flat, Zach: *"I think we will be adding more functinality in the
-  future"*. Every other section stays flat, and a flat section over 15
-  entries fails the test — give it a family list instead. Add a family in
+- **Families: Components, Scene and Editor have one, with closed lists.**
+  Components: `Ports`, `Blocks`, `Traces`, `Text & Marks`, `Stock`. Scene, by
+  what an operation does: `Model & Diff`, `Wiring`, `Validation`, `Layout &
+  Drag` — kept although its 14 entries would fit flat, Zach: *"I think we will
+  be adding more functinality in the future"*. Editor: `Menus & Bars`,
+  `Panels & Dialogs`, `On Canvas` (overlays drawn over the board). Every other
+  section stays flat, and a flat section over 15 entries fails the test —
+  give it a family list instead. Add a family in
   `src/storyOrganisation.test.ts` deliberately, never in a title.
+- **Chrome is Editor's; what draws on a component is Components'.** Zach,
+  2026-09-22: *"Menus & bars and panels & dialogs... most of these should
+  belong in editor... Things that are needed to display information on the
+  components, belong with the components"*. The line is mechanical: a file a
+  component imports stays in `components/` (FoldingChevron, Badge, Bar,
+  Button); editor-only chrome lives in `editor/`. The vendored shadcn
+  primitives stay in `components/` under `Stock` even where only the editor
+  uses them — they are stock, not editor design.
+- **Region is a Block-family component** with its presets inside it:
+  `Components/Blocks/Region/{Labeled Group, Loop, Branch, …}`. Zach: *"labeled
+  group is actually a subset (preset) of the Region. its a region with only a
+  title showing."*
 - **Then the component's code name** (`PortEdge`, not "Port Edge"), then an
   aspect in words where one file is a facet of a component
   (`Components/Ports/PortEdge/Hit Regions`).

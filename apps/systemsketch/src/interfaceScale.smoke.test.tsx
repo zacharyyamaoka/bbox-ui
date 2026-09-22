@@ -20,7 +20,7 @@ import { createShapeId } from "tldraw";
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { INTERFACE_SCALE_STORAGE_KEY, readInterfaceScale } from "@trunk/components/interfaceScale";
+import { INTERFACE_SCALE_STORAGE_KEY, readInterfaceScale } from "@trunk/editor/interfaceScale";
 import { setInterfaceScalePercent } from "./chrome/ShareMenu";
 import { mountApp, nextFrame, waitFor, type MountedApp } from "./testing/harness";
 

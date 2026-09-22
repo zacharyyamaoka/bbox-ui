@@ -42,7 +42,7 @@ import type { RegionKind, RegionShape } from "./RegionShapeUtil";
 
 /** The document's four kinds → the three the view kit paints. A `for` and a
  *  `while` are ONE component with two header contracts (DP - Loop, quoted in
- *  `@trunk/presets/loop/loop.ts:8-12`), which is exactly why the view has no
+ *  `@trunk/scene/region.loop.ts:8-12`), which is exactly why the view has no
  *  separate `for` case to map onto. */
 const TRUNK_KIND: Record<RegionKind, TrunkRegionKind> = {
   for: "loop",

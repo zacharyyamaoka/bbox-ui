@@ -19,7 +19,7 @@
 import { useCallback, useMemo } from "react";
 import { useValue, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
-import type { FramesItem, FramesPanelPreview, PanelPreviewBox } from "@trunk/components/framesPanel";
+import type { FramesItem, FramesPanelPreview, PanelPreviewBox } from "@trunk/editor/framesPanel";
 
 import type { BlockShape } from "../shapes/block";
 import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE } from "../shapes/types";

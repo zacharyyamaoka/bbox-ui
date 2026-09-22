@@ -80,42 +80,42 @@
   ],
   "stories": [
     {
-      "id": "editor-magnetproposals--type-decides",
+      "id": "editor-on-canvas-magnetproposals--type-decides",
       "title": "Magnet Proposals \u00b7 Type decides",
       "look_for": "drag `src` toward the two sinks \u2014 the dotted proposal skips the NEARER wrong-type port and reaches the type-correct one; flip Type matching to `off` and it snaps back to the nearer one",
       "w": 780,
       "h": 470
     },
     {
-      "id": "editor-magnetproposals--tracks-and-vanishes",
+      "id": "editor-on-canvas-magnetproposals--tracks-and-vanishes",
       "title": "Magnet Proposals \u00b7 Tracks and vanishes",
       "look_for": "drag slowly toward `sink` and watch the dotted line appear, shorten, then vanish as you pull away \u2014 the readout counts the gap in scene units the whole time",
       "w": 820,
       "h": 440
     },
     {
-      "id": "editor-magnetproposals--nearest-wins",
+      "id": "editor-on-canvas-magnetproposals--nearest-wins",
       "title": "Magnet Proposals \u00b7 Nearest wins",
       "look_for": "four candidates at once with Show all proposals on; the readout names the winner, and the two tied candidates resolve the same way every time you re-drag",
       "w": 820,
       "h": 500
     },
     {
-      "id": "editor-magnetproposals--radius-and-toggle",
+      "id": "editor-on-canvas-magnetproposals--radius-and-toggle",
       "title": "Magnet Proposals \u00b7 Radius and toggle",
       "look_for": "tick Show magnet radius, then press Swap the two radii mid-review \u2014 the proposal jumps to the other port with nothing moved",
       "w": 780,
       "h": 470
     },
     {
-      "id": "editor-magnetproposals--refusal-preview",
+      "id": "editor-on-canvas-magnetproposals--refusal-preview",
       "title": "Magnet Proposals \u00b7 Refusal preview",
       "look_for": "in range and type-correct, and still refused \u2014 the readout says `refused: sink/in many-to-one` while the pointer is down",
       "w": 780,
       "h": 450
     },
     {
-      "id": "editor-magnetproposals--click-never-proposes",
+      "id": "editor-on-canvas-magnetproposals--click-never-proposes",
       "title": "Magnet Proposals \u00b7 A click is not a drag",
       "look_for": "click the header without moving: no wire ever flashes, because the scan only runs once the drag threshold is crossed",
       "w": 820,

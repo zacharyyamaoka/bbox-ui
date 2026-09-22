@@ -30,14 +30,14 @@ import {
   writeAppSettings,
   type AppSettings,
   type FileNavigationMode,
-} from "@trunk/components/appSettings";
-import { FILE_MENU_ROWS } from "@trunk/components/appMenu";
-import { edgePolicyPreset, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
+} from "@trunk/editor/appSettings";
+import { FILE_MENU_ROWS } from "@trunk/editor/appMenu";
+import { edgePolicyPreset, type EdgePolicyPresetId } from "@trunk/editor/edgePolicy";
 import { LINT_RULE_TOTAL, enabledRuleCount, isCustomValidationLevel, validationLevelSpec } from "@trunk/scene/validationLevel";
-import { readToolAliases, writeToolAliases, type ToolAliasItem, type ToolAliases } from "@trunk/components/toolAliases";
-import { buildSettingsCategories, type SettingsHotkey } from "@trunk/components/settingsCategories";
+import { readToolAliases, writeToolAliases, type ToolAliasItem, type ToolAliases } from "@trunk/editor/toolAliases";
+import { buildSettingsCategories, type SettingsHotkey } from "@trunk/editor/settingsCategories";
 import { isNativeFileAccessSupported } from "@trunk/files/nativeFiles";
-import { SettingsView, type SettingsPresentation } from "@trunk/components/settingsView";
+import { SettingsView, type SettingsPresentation } from "@trunk/editor/settingsView";
 
 import { DRAW_TOOLS, GEO_VARIANTS, LINE_TOOLS, SIMPLE_TOOLS } from "../families";
 import { useAppearancePreferences, useGestureSettings } from "./cameraGestureHost";

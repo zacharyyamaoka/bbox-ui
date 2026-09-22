@@ -173,7 +173,7 @@ export interface BlockProps {
   /**
    * Suppress the corner `DiagnosticFlag` while keeping the mark (default
    * `true` — every existing caller unchanged). `ValueCapsule`
-   * (presets/value/value.tsx) is the one caller that sets this `false`:
+   * (components/block.value.tsx) is the one caller that sets this `false`:
    * §5's own words are "no flag — a capsule is too small, the glow is the
    * beacon and the message rides a hover Tooltip" — the mark is still
    * this component's, the flag specifically is not.

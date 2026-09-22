@@ -19,7 +19,7 @@
 import { useMemo } from "react";
 import { unwrapLabel, useActions, useEditor, useTranslation, useValue, type TLUiActionItem } from "tldraw";
 
-import { formatShortcut, type MenuAction, type MenuGroupSpec, type ShortcutPlatform } from "@trunk/components/appMenu";
+import { formatShortcut, type MenuAction, type MenuGroupSpec, type ShortcutPlatform } from "@trunk/editor/appMenu";
 
 /**
  * Which modifier spelling this machine's menus print.

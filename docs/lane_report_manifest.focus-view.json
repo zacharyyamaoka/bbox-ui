@@ -37,14 +37,14 @@
   ],
   "stories": [
     {
-      "id": "editor-focusview--focused-at-default-depth",
+      "id": "editor-on-canvas-focusview--focused-at-default-depth",
       "title": "Blocks/Editor/Focus View · Focused At Default Depth (Upstream 1 / Downstream 1)",
       "look_for": "the seed node just focused at the toolbar's own default (1/1): c, c2, seed, e, e2 stay bright; a, b and f recede to the donor's own opacity(.17) — b is still dim here because upstream is only 1 step deep",
       "w": 940,
       "h": 300
     },
     {
-      "id": "editor-focusview--focused-at-upstream-two-downstream-one",
+      "id": "editor-on-canvas-focusview--focused-at-upstream-two-downstream-one",
       "title": "Blocks/Editor/Focus View · Focused At Upstream 2 / Downstream 1",
       "look_for": "one drag further on the upstream range: b now joins the bright set (the fan-in through c and c2 both reach it), while a and f stay dim one edge past the requested depth — the toolbar's two independently-bounded ranges are visible top-right, the upstream one visibly mirrored (Zach: \"we made the left slider flipped\")",
       "w": 940,

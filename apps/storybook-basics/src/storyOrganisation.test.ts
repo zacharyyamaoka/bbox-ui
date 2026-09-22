@@ -32,7 +32,6 @@ const SECTIONS: Record<string, string> = {
   Scene: "scene",
   Editor: "editor",
   Hosts: "hosts",
-  Presets: "presets",
   Skin: "skin",
 };
 
@@ -45,8 +44,13 @@ const SECTIONS: Record<string, string> = {
  * operations, validation operations…), so new scene functions have a place.
  */
 const FAMILIES: Record<string, string[]> = {
-  Components: ["Ports", "Blocks", "Traces", "Text & Marks", "Menus & Bars", "Panels & Dialogs", "Stock"],
+  Components: ["Ports", "Blocks", "Traces", "Text & Marks", "Stock"],
   Scene: ["Model & Diff", "Wiring", "Validation", "Layout & Drag"],
+  // WHY chrome is Editor's, not Components' (Zach, 2026-09-22): "Menus & bars
+  // and panels & dialogs... most of these should belong in editor... Things
+  // that are needed to display information on the components, belong with the
+  // components". What stayed in components/ is what a component itself imports.
+  Editor: ["Menus & Bars", "Panels & Dialogs", "On Canvas"],
 };
 
 /**

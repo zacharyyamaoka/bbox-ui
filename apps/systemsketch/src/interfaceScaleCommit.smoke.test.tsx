@@ -21,7 +21,7 @@
 import { cdp, userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { INTERFACE_SCALE_STORAGE_KEY } from "@trunk/components/interfaceScale";
+import { INTERFACE_SCALE_STORAGE_KEY } from "@trunk/editor/interfaceScale";
 import { setInterfaceScalePercent } from "./chrome/ShareMenu";
 import { mountApp, nextFrame, waitFor, type MountedApp } from "./testing/harness";
 import { clickRow, openBurger } from "./testing/menus";

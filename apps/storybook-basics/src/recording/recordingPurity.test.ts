@@ -30,7 +30,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const RECORDING = dirname(fileURLToPath(import.meta.url));
-const COMPONENTS = join(RECORDING, "..", "components");
+const EDITOR = join(RECORDING, "..", "editor");
 
 /** The modules that must run in node with nothing around them. */
 const PURE = [
@@ -106,7 +106,7 @@ describe("the pure half is genuinely pure", () => {
 });
 
 describe("the control is one interface onto the core, not its owner", () => {
-  const control = () => withoutComments(read(join(COMPONENTS, "recordingControl.tsx")));
+  const control = () => withoutComments(read(join(EDITOR, "recordingControl.tsx")));
 
   it("imports the core for TYPES only — never its behaviour", () => {
     const code = control();
@@ -141,8 +141,8 @@ describe("the control is one interface onto the core, not its owner", () => {
   });
 
   it("the viewer is a modal over the stock Dialog, and reads a bundle it is given", () => {
-    const viewer = withoutComments(read(join(COMPONENTS, "recordingViewer.tsx")));
-    expect(viewer).toMatch(/from\s+["']\.\/dialog["']/);
+    const viewer = withoutComments(read(join(EDITOR, "recordingViewer.tsx")));
+    expect(viewer).toMatch(/from\s+["']\.\.\/components\/dialog["']/);
     expect(viewer.match(ENGINE_IMPORT), "engine import").toBeNull();
     expect(viewer).not.toContain("fetch(");
   });

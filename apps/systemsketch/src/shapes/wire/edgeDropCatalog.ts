@@ -45,7 +45,7 @@
 //   Branch     1 in / 2 out, port     11  kind:"branch" 9 + name:"Branch" 2,
 //                                         plus the only BUILT node preset in
 //                                         the trunk with fixtures AND a test
-//                                         (`presets/branch/`), and five
+//                                         (`scene/region.branch.ts/`), and five
 //                                         ControlFlow*.stories.tsx files
 //   Group      1 in / 1 out, expanded 18  kind:"expanded-block" 10 +
 //                                         view:"expanded" 8 in this app
@@ -56,13 +56,13 @@
 //     donor's `stockBlocks.ts` factories, which this repo has no counterpart
 //     for. An entry that cannot build what it promises is worse than an
 //     absent one.
-//   - Value is the near miss: `presets/value/value.tsx` is real and eight
+//   - Value is the near miss: `components/block.value.tsx` is real and eight
 //     files import it. It loses on THIS app, not on merit — the capsule is
 //     `view: "value"` in the donor and `ss-block`'s view enum is
 //     `"simple" | "port" | "expanded"` (BlockShapeUtil.tsx:98). It is the
 //     first entry to add the day that enum grows.
 //   - Loop outscores several keepers (`kind: "loop"` 12, "For Loop" 15) and
-//     is deliberately NOT here: `presets/loop/loop.ts:1-12` mints a
+//     is deliberately NOT here: `scene/region.loop.ts:1-12` mints a
 //     `type: "region"` node — a container, not a leaf a loose cable can
 //     answer.
 //

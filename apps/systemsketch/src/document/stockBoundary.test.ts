@@ -86,7 +86,7 @@ describe("stock boundary — the seams in App.tsx", () => {
     const source = app();
     expect(source).toMatch(/Toolbar:\s*\w+/);
     const dock = withoutComments(read(join(SRC, "chrome", "Toolbar", "dock.tsx")));
-    expect(dock).toMatch(/from ["']@trunk\/components\/toolDock["']/);
+    expect(dock).toMatch(/from ["']@trunk\/editor\/toolDock["']/);
     expect(dock).toContain('id: "system"');
     // Exactly one system-family declaration: the archive's second "bbox"
     // family is what Zach asked to remove (Pasted image 20260918201649.png).
@@ -114,7 +114,8 @@ describe("stock boundary — the seams in App.tsx", () => {
     // unchanged in substance: fitToContent is still scanned, now under scene/.
     // hosts/ and skin/ stay OUT deliberately — hosts adapt an engine by definition,
     // and skin is presentation applied on top.
-    for (const dir of ["components", "scene", "editor", "presets"]) {
+    // presets/ left the trunk on 2026-09-22 — each preset now lives with its component
+    for (const dir of ["components", "scene", "editor"]) {
       expect(existsSync(join(TRUNK, dir)), `trunk ${dir}`).toBe(true);
       for (const file of sourceFilesUnder(join(TRUNK, dir), (name) => /\.test\.tsx?$/.test(name))) {
         const matches = withoutComments(read(file)).match(enginePattern);

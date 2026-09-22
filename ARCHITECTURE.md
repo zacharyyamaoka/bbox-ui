@@ -122,13 +122,25 @@ as of the code.
 |---|---|---|
 | **`components`** | The atoms that DRAW a scene element. | `apps/storybook-basics/src/components/` |
 | **`scene`** | The model, and every pure function over it. | `.../src/scene/` |
-| **`editor`** | The authoring surfaces that produce scene mutations. | `.../src/editor/` |
+| **`editor`** | The editor's own UI: its chrome (menus, bars, docks, panels, dialogs) and the authoring surfaces that produce scene mutations. | `.../src/editor/` |
 | **`hosts`** | The engine adapters — DOM, React Flow, tldraw. Each owns the viewport, hit-testing and drag. | `.../src/hosts/` |
 | **studio** | **The integrated app, and its name is bbox studio.** It puts `components` and `editor` together, uses `scene` functions to modify them, and shows the result through a `host`. | `apps/systemsketch/` — **rename pending**, see below |
 | **site** | bbox-ui.com — a first-class deliverable, not a by-product. | `apps/docs/` |
 
-Plus the two deliberate exceptions that sit outside the kits: `skin/` (applied on
-top, the component unaware) and `presets/` (configurations of existing components).
+Plus one deliberate exception that sits outside the kits: `skin/` (applied on
+top, the component unaware).
+
+**`presets/` was the second exception until 2026-09-22, and is gone.** Zach:
+*"I don't want presets to be a top level folder. in the spirirt of being self
+contained components. each component should carry its own presets"*. A preset
+now lives beside what it configures, in the dotted-filename style the repo
+already uses (`portEdge.layout.ts`): a **component** preset beside its
+component (`components/block.value.tsx`, `components/region.labeledGroup.tsx`),
+and a **scene-data** preset beside the model it builds
+(`scene/region.branch.ts`, `scene/region.loop.ts`). The second pair cannot sit
+in `components/`: they build scene records, and `components/` imports no scene.
+Their stories still appear under the component — Storybook › Components ›
+Blocks › Region.
 
 **The app is called `bbox studio`; `systemsketch` is the old name.** Zach,
 2026-09-21: *"lets call the app bbox studio it is a whiteboard, its called bbox
@@ -158,7 +170,7 @@ dispatch rules exist to prevent. Do it as its own change, alone, and update the
 |---|---|---|
 | **`components`** | The atoms that DRAW a scene element: `Block`, `Port`, `Trace`, `Bar`, `CodeEditor`, and their composites. | Props in, DOM out. No state beyond its own gesture. **Imports no canvas engine, and imports no scene.** |
 | **`scene`** | The ensemble: what exists, what connects, what nests, what identity is — plus every pure function over it (`topologicalOrder`, `findCycles`, `wiredPorts`, tidy, lint, rank). | `f(scene) → data`. **No React, no DOM, no engine, not even their types.** Runs in Node, which is why its tests are milliseconds. |
-| **`editor`** | The authoring surfaces: inspector panel, glyph picker, the quick-pick menu, style controls. *Not "menus"* — what unites them is that they **produce scene mutations**. | Reads a scene, renders with `components`, emits a mutation. Imports both other kits; nothing imports it. **One folder per editor component**, named for what it is, never for where it sits on screen. |
+| **`editor`** | The editor's own UI. Its **chrome** — menus, bars, docks, panels, dialogs — and its **authoring surfaces**: inspector panel, glyph picker, the quick-pick menu, style controls, which **produce scene mutations**. Amended 2026-09-22 (Zach: *"Menus & bars and panels & dialogs... most of these should belong in editor... Things that are needed to display information on the components, belong with the components"*); it used to say *not "menus"*. The line between the kits is mechanical: what a component itself imports stays in `components/`. | May import both other kits; **nothing in `components/` or `scene/` imports it** (checked by the import graph when the chrome moved — no component imports any of it). **One folder per editor component**, named for what it is, never for where it sits on screen. |
 
 The dependency DAG, which is the whole architecture in four lines:
 

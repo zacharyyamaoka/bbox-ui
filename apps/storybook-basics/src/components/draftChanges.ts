@@ -28,7 +28,7 @@
 // check, Compare, Rebase) goes through the one shared engine in
 // compareModel.ts instead … A bespoke diff living here would give each of
 // those four consumers its own idea of 'changed'." That engine is already in
-// this trunk (`components/compareModel.ts`), and it was measured disagreeing
+// this trunk (`editor/compareModel.ts`), and it was measured disagreeing
 // with a second opinion in the real app — DraftProvider.tsx:239-253 records
 // the button reading "1 Change" while the dialog read "0 Added · 2 Removed ·
 // 1 Modified". Re-porting the superseded diff would rebuild exactly that

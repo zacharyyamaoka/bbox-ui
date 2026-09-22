@@ -26,7 +26,7 @@ import { childrenOf, wiredPorts, type BlockScene, type SceneData, type SceneNode
 import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWires";
 
 /**
- * Editor/SourceActions — the pyblocks gate, rendered
+ * Editor/Menus & Bars/SourceActions — the pyblocks gate, rendered
  * (docs/SOURCE-CODE-VIEW-RETARGET-PLAN.md §5.5, §7 Lane C).
  *
  * `editor/sourceActions.ts` is pure: given a backend and a selection it
@@ -52,7 +52,7 @@ import { sceneWires, withWiredState, type WireStyleData } from "../scene/sceneWi
  * exactly the data cables that crossed the selection.
  */
 const meta = {
-  title: "Editor/SourceActions",
+  title: "Editor/Menus & Bars/SourceActions",
   tags: ["object:scene", "lane:scv-origin-and-actions"],
 } satisfies Meta;
 

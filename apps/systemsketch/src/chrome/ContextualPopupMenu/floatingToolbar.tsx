@@ -14,14 +14,14 @@ import { Copy, Trash2 } from "lucide-react";
 import { useEditor, useValue } from "tldraw";
 
 import { Button } from "@trunk/components/button";
-import { FloatingToolbar, PILL_POPOVER } from "@trunk/components/floatingToolbar";
+import { FloatingToolbar, PILL_POPOVER } from "@trunk/editor/floatingToolbar";
 import {
   SELECTION_OVERLAY_INSET,
   floatingToolbarMaxWidth,
   isSelectionOnScreen,
   placeFloatingToolbar,
   type SelectionMenuSide,
-} from "@trunk/components/floatingToolbar.placement";
+} from "@trunk/editor/floatingToolbar.placement";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@trunk/components/dropdown-menu";
 import { ToggleGroup, ToggleGroupItem } from "@trunk/components/toggle-group";
-import { ToolbarButton, ToolbarSeparator } from "@trunk/components/toolbar";
+import { ToolbarButton, ToolbarSeparator } from "@trunk/editor/toolbar";
 
 import {
   ArrangeCluster,

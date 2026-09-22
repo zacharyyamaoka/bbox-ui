@@ -5,7 +5,7 @@ import { Check, ChevronDown, PaintBucket, Slash } from "lucide-react";
 
 import { Button } from "./button";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
-import { Toolbar, ToolbarButton, ToolbarSeparator } from "./toolbar";
+import { Toolbar, ToolbarButton, ToolbarSeparator } from "../editor/toolbar";
 
 /**
  * `popover.tsx` over Base UI's Popover — the popup engine behind the

@@ -1,6 +1,6 @@
 // src/editor/sceneCompare.ts — the bridge between the scene kit's diff
 // ENGINE (`scene/sceneDiff.ts`'s `diffScene`) and the component kit's compare
-// SURFACE (`components/compareDialog.tsx` → `compareReview.tsx` →
+// SURFACE (`editor/compareDialog.tsx` → `compareReview.tsx` →
 // `propertyTable.tsx`, all of which speak `compareModel.ts`'s `BoardCompare`).
 //
 // WHY it lives in `editor/` and could live nowhere else: it imports BOTH kits.
@@ -9,7 +9,7 @@
 // this repo allowed to know about both is this one — "editor imports both;
 // nothing imports editor".
 //
-// WHY a bridge at all, when `components/compareModel.ts` already ships its own
+// WHY a bridge at all, when `editor/compareModel.ts` already ships its own
 // differ (`compareBoards`): they read different things and both are right.
 // `compareBoards` walks a tldraw-shaped `RecordMap` — the donor's own input,
 // kept so a host with a record store needs no projection. `diffScene` walks a
@@ -38,7 +38,7 @@ import {
   type FieldChange,
   type SubjectKind,
   type SubjectTally,
-} from "../components/compareModel";
+} from "./compareModel";
 import type { FieldDiff } from "../scene/fieldDiff";
 import { diffScene, type ScenePortsOf } from "../scene/sceneDiff";
 import type { BlockScene, SceneData, SceneEdge, SceneNode } from "../scene/scene";

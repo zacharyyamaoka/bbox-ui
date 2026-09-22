@@ -36,7 +36,7 @@ import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
 
-import { EDGE_POLICY_STORAGE_KEY } from "@trunk/components/edgePolicy";
+import { EDGE_POLICY_STORAGE_KEY } from "@trunk/editor/edgePolicy";
 
 import { resetValidationLevelCache, setValidationLevel } from "./chrome/ShareMenu/validationLevelHost";
 import { BLOCK_SHAPE_TYPE, BRANCH_TOOL_ID, REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "./shapes/types";

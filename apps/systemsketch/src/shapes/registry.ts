@@ -21,7 +21,7 @@ import type {
   TLUiToolsContextType,
 } from "tldraw";
 
-import type { ToolItem } from "@trunk/components/toolDock";
+import type { ToolItem } from "@trunk/editor/toolDock";
 
 import { blockKit } from "./block";
 import { codeKit } from "./code";

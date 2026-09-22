@@ -23,10 +23,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor, TLUiToastsContextType } from "tldraw";
 
-import type { FileMenuCallbacks, MenuAction, RecentEntry } from "@trunk/components/appMenu";
-import { ChromeBarIcons, type StatusTone } from "@trunk/components/chromeBar";
-import type { FileNavigatorMode, FileNavigatorProps } from "@trunk/components/fileNavigator";
-import type { FileNavigationMode } from "@trunk/components/appSettings";
+import type { FileMenuCallbacks, MenuAction, RecentEntry } from "@trunk/editor/appMenu";
+import { ChromeBarIcons, type StatusTone } from "@trunk/editor/chromeBar";
+import type { FileNavigatorMode, FileNavigatorProps } from "@trunk/editor/fileNavigator";
+import type { FileNavigationMode } from "@trunk/editor/appSettings";
 import { createNativeFileAccess, type NativeDocument, type NativePickerHost } from "@trunk/files/nativeFiles";
 import {
   WorkspaceConflict,

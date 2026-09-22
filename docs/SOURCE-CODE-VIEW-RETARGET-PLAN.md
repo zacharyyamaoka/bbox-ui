@@ -720,7 +720,7 @@ Storybook (the lane's own `STORYBOOK_PORT`; captured from :5421 after merge):
   side.
 - `scene-model-diff-codecell--definitions-from-stereo` — the 32-line stereo module as 6 grain-1
   cells (`Pipeline` holding `__init__` and `run`) with 4 dashed reference edges.
-- `editor-sourceactions--backend-off` / `--backend-on` / `--convert-then-expand` — the
+- `editor-menus-bars-sourceactions--backend-off` / `--backend-on` / `--convert-then-expand` — the
   right-click menu without and with the source group; the live convert → expand loop.
 
 pyblocks: `python3 -m pyblocks analyze --view-kind definitions tests/fixtures/

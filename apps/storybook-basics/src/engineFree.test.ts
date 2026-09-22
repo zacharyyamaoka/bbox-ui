@@ -2,8 +2,9 @@
 // SYSTEMSKETCH-REBUILD-PLAN.md §2, "The core imports no canvas engine").
 //
 // `components/layering.test.ts` already walls `components/` off from the
-// scene kit. This file walls the FOUR engine-free kits — `components/`,
-// `scene/`, `editor/`, `presets/` — off from BOTH canvas engines.
+// scene kit. This file walls the THREE engine-free kits — `components/`,
+// `scene/`, `editor/` — off from BOTH canvas engines (`presets/` was a fourth
+// until 2026-09-22; presets now live with the component they configure).
 // The rebuild (`apps/systemsketch`) imports these directories through one
 // alias and mounts them inside tldraw; the day one of them imports `tldraw`
 // or `@xyflow/react` the "bbox-ui + stock tldraw" claim silently becomes
@@ -41,7 +42,7 @@
 //   1. `import type` / `export type` edges are NOT followed. They erase at
 //      build time, so they cannot drag an engine into a bundle, and the
 //      direct check already bans a kit file from naming an engine's types
-//      itself. Following them would flag `components/recordingViewer.tsx`
+//      itself. Following them would flag `editor/recordingViewer.tsx`
 //      for what its neighbour's neighbour says: it takes `import type
 //      { RecordingBundle }` from `recording/recordingClient.ts`, which takes
 //      `import type { RecordingPayload }` from `recording/flightRecorder.ts`,
@@ -80,7 +81,7 @@ const SRC = dirname(fileURLToPath(import.meta.url));
  *  this list — and the directory drained to empty. Leaving the name here
  *  would fail the existsSync sanity check below; deleting it costs nothing
  *  because the file it protected is still behind the wall. */
-const ENGINE_FREE_DIRS = ["components", "scene", "editor", "presets"] as const;
+const ENGINE_FREE_DIRS = ["components", "scene", "editor"] as const;
 
 const ENGINE_IMPORT_PATTERN = /from\s+["'](?:tldraw|@tldraw\/[^"']+|@xyflow\/[^"']+)["']/g;
 
@@ -191,13 +192,13 @@ describe("engine wall — the kits the rebuild imports never import a canvas eng
       expect(existsSync(join(SRC, dir)), `${dir} exists`).toBe(true);
     }
     // At least the files the rebuild leans on hardest.
-    const files = new Set(sourceFilesUnder(join(SRC, "components")).map((f) => relative(SRC, f)));
-    for (const expected of ["components/block.tsx", "components/codeEditor.tsx", "components/trace.tsx", "components/toolDock.tsx", "components/chromeBar.tsx"]) {
+    const files = new Set(ENGINE_FREE_DIRS.flatMap((dir) => sourceFilesUnder(join(SRC, dir))).map((f) => relative(SRC, f)));
+    for (const expected of ["components/block.tsx", "components/codeEditor.tsx", "components/trace.tsx", "editor/toolDock.tsx", "editor/chromeBar.tsx", "scene/region.branch.ts"]) {
       expect(files.has(expected), expected).toBe(true);
     }
   });
 
-  it("no non-test file under components/, scene/, editor/, presets/ imports tldraw or @xyflow/react", () => {
+  it("no non-test file under components/, scene/, editor/ imports tldraw or @xyflow/react", () => {
     const offenders: { file: string; specifier: string }[] = [];
     for (const dir of ENGINE_FREE_DIRS) {
       for (const file of sourceFilesUnder(join(SRC, dir))) {
@@ -272,20 +273,20 @@ describe("engine wall — the kits the rebuild imports never import a canvas eng
     // Driven against real files rather than a fixture, so the assertion dies
     // if the tree stops looking like this rather than passing on a mock.
     const host = join(SRC, "hosts", "reactFlowHost.tsx");
-    const story = join(SRC, "presets", "ControlFlowGallery.stories.tsx");
+    const story = join(SRC, "components", "ControlFlowGallery.stories.tsx");
     expect(existsSync(host) && existsSync(story), "the fixtures for this assertion still exist").toBe(true);
 
     // With the stories carve-out OFF, the bench's engine is visible — proof
     // the walk traverses, and proof carve-out 2 is what lets it pass above.
     const found = engineChain(story, false);
-    expect(found, "the walk follows presets/ -> hosts/ -> @xyflow/react").not.toBeNull();
+    expect(found, "the walk follows components/ -> hosts/ -> @xyflow/react").not.toBeNull();
     expect(found!.map((f) => relative(SRC, f))).toEqual([
-      "presets/ControlFlowGallery.stories.tsx",
+      "components/ControlFlowGallery.stories.tsx",
       "hosts/reactFlowHost.tsx",
     ]);
     expect(engineChain(story, true), "…and stops at hosts/ when the carve-out is on").toBeNull();
 
     // Carve-out 1, on the real chain that motivated it.
-    expect(engineChain(join(SRC, "components", "recordingViewer.tsx"), false)).toBeNull();
+    expect(engineChain(join(SRC, "editor", "recordingViewer.tsx"), false)).toBeNull();
   });
 });

@@ -29,8 +29,9 @@ The full replay record lives in the vault; these entries must stand alone.
   editor-components, not in system sketch, system sketch should just be kinda
   like importing these stock menus and doing a light bit of configuration."*
   So a change to how a menu, toolbar, dock, panel or status cluster LOOKS or
-  BEHAVES lands in the trunk (`apps/storybook-basics/src/components/*` for the
-  menu kit, `src/editor/*` for the editor kit) with a story, and
+  BEHAVES lands in the trunk (`apps/storybook-basics/src/editor/*` — since
+  2026-09-22 the menu kit lives there too, on his word that menus, bars,
+  panels and dialogs "should belong in editor") with a story, and
   `apps/systemsketch` only mounts, positions and wires it (tldraw seams, the
   licence, which part goes in which slot). A chrome fix made only inside the
   app is a divergence the next host inherits nothing from.

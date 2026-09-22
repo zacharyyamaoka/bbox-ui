@@ -140,7 +140,7 @@ const preview: Preview = {
     // WHY this order: the sections ARE the repo's top-level folders, in
     // ARCHITECTURE.md's order (Zach, 2026-09-22: "top level same as repo and
     // then families beneath"). Families under Components and Scene (Scene by
-    // his choice, for the functionality still to come); every other section
+    // his choice, for the functionality still to come) and Editor; every other section
     // stays flat. Titles are held to this shape by src/storyOrganisation.test.ts.
     // Must stay an inline literal: Storybook reads storySort statically from
     // this file.
@@ -153,20 +153,17 @@ const preview: Preview = {
             "Ports",
             ["Port", "LabeledPort", "PortEdge"],
             "Blocks",
-            ["Block", "BlockPort", "*"],
+            ["Block", "BlockPort", "Region", ["Labeled Group", "Loop", "Branch", "*"], "*"],
             "Traces",
             ["Trace", "*"],
             "Text & Marks",
-            "Menus & Bars",
-            "Panels & Dialogs",
             "Stock",
           ],
           "Scene",
           ["Model & Diff", ["Scene", "*"], "Wiring", "Validation", "Layout & Drag"],
           "Editor",
+          ["Menus & Bars", "Panels & Dialogs", "On Canvas"],
           "Hosts",
-          "Presets",
-          ["ControlFlow", ["Branch", "Loop", "Region", "*"], "*"],
           "Skin",
         ],
       },

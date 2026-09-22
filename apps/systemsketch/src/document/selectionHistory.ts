@@ -24,7 +24,7 @@ import {
   selectionHistoryStep,
   stepSelection,
   type SelectionJournal,
-} from "@trunk/components/selectionHistory";
+} from "@trunk/editor/selectionHistory";
 
 /** Where the side button must NOT be hijacked: a field that may implement its
  *  own back/forward. Ported from the docs playground's copy of this gesture

@@ -20,7 +20,7 @@
 // NAME changed and whose VERDICTS did not is exactly the failure being closed.
 import { describe, expect, it } from "vitest";
 
-import { edgePolicyPreset, type EdgePolicy, type EdgePolicyPresetId } from "@trunk/components/edgePolicy";
+import { edgePolicyPreset, type EdgePolicy, type EdgePolicyPresetId } from "@trunk/editor/edgePolicy";
 import type { LintScene } from "@trunk/scene/lint";
 import {
   isCustomValidationLevel,

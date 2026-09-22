@@ -15,7 +15,7 @@
 // disk": the session autosaves (`src/files/session.tsx`, 600 ms after the last
 // edit), so "since you last saved" is almost always "nothing" — it would be a
 // Compare that is honest and useless. WHY not a `<name>.vN` sibling, which
-// `@trunk/components/compareSource.ts` already knows how to discover: that
+// `@trunk/editor/compareSource.ts` already knows how to discover: that
 // needs the local file host running AND a person who has hand-saved versions,
 // so it cannot be the DEFAULT answer to "show me what changed" — it is the
 // obvious next endpoint to add to the same rail, and is deliberately left for
@@ -32,9 +32,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "tldraw";
 
-import type { MenuGroupSpec } from "@trunk/components/chromeBar";
-import { CompareDialog } from "@trunk/components/compareDialog";
-import type { CompareChange } from "@trunk/components/compareModel";
+import type { MenuGroupSpec } from "@trunk/editor/chromeBar";
+import { CompareDialog } from "@trunk/editor/compareDialog";
+import type { CompareChange } from "@trunk/editor/compareModel";
 import { compareScenes, compareTally } from "@trunk/editor/sceneCompare";
 import { SceneDiffMarks, diffMarksForSide } from "@trunk/editor/sceneDiffMarks";
 import { DomCanvas } from "@trunk/hosts/domCanvas";

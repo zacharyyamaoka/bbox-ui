@@ -28,8 +28,8 @@ import {
   Type,
 } from "lucide-react";
 
-import type { ToolItem, ToolSection } from "@trunk/components/toolDock";
-import { arrowPresetSection, type ArrowPreset } from "@trunk/components/toolPreferences";
+import type { ToolItem, ToolSection } from "@trunk/editor/toolDock";
+import { arrowPresetSection, type ArrowPreset } from "@trunk/editor/toolPreferences";
 
 /**
  * tldraw's `geo` tool NAMES a family of shapes; WHICH one it draws lives in a

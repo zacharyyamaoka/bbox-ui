@@ -59,7 +59,7 @@ export type RegionKind = "for" | "while" | "branch" | "plain";
 export interface RegionArm {
   id: string;
   /** Free text as an author writes it — `if fast:`, `case "pet":` — never
-   *  code to be parsed back (`@trunk/presets/branch/branch.ts`'s own rule). */
+   *  code to be parsed back (`@trunk/scene/region.branch.ts`'s own rule). */
   title: string;
   open: boolean;
   /** Body height while OPEN; remembered while folded, so re-opening restores

@@ -451,7 +451,7 @@ ul.src .n {{ display:inline-block; min-width:28px; color:var(--accent2); font-fa
 <li id="src3"><span class="n">3</span><code>apps/storybook-basics/src/components/region.tsx</code> — <code>REGION_CORNER_BLOCK_STYLE</code>, quoted verbatim at build time</li>
 <li id="src4"><span class="n">4</span><code>apps/storybook-basics/src/skin/regionVariants.css</code> — each drawing's radius tokens</li>
 <li id="src5"><span class="n">5</span><code>apps/systemsketch/src/shapes/region/cornerBlock.ts</code> — <code>input 1</code> is minted here and nowhere else in the repo</li>
-<li id="src6"><span class="n">6</span>Storybook <code>presets-controlflow-gallery--branch-in-loop</code>, captured headless on :5487</li>
+<li id="src6"><span class="n">6</span>Storybook <code>components-blocks-region-gallery--branch-in-loop</code>, captured headless on :5487</li>
 <li id="src7"><span class="n">7</span>Mutation run: <code>borderTopRightRadius: FRAME_RADIUS</code> → 11 failed / 1 passed in <code>RegionVariants.stories.tsx</code>; restored</li>
 <li id="src8"><span class="n">8</span>Mutation run: <code>style={{undefined}}</code> in <code>BlockFace.tsx</code> → <em>app-variant-switch (e)</em> failed; restored</li>
 <li id="src9"><span class="n">9</span><code>reports/media/{NAME}/gates/trunk-tsc.log</code></li>

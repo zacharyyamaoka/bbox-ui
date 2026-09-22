@@ -20,7 +20,7 @@
 import { useCallback, useMemo } from "react";
 import type { Editor, TLShapeId } from "tldraw";
 
-import type { Diagnostic, DiagnosticGroup, Severity } from "@trunk/components/problemsPanel";
+import type { Diagnostic, DiagnosticGroup, Severity } from "@trunk/editor/problemsPanel";
 import { type LintFinding, type PortsOf } from "@trunk/scene/lint";
 import { lintSceneAtLevel, type ValidationLevel } from "@trunk/scene/validationLevel";
 import { findCycles, type SceneEdgeEnds } from "@trunk/scene/scene";

@@ -21,7 +21,7 @@
 // the pyblocks-backend stream, which owns the backend object; this file
 // reads ONE string off it and nothing else.
 
-import type { MenuAction } from "../components/chromeBar";
+import type { MenuAction } from "./chromeBar";
 
 /** The literal the pyblocks-backend stream's backend object must carry as
  *  `kind` for these actions to appear. */

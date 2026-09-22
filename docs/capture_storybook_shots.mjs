@@ -50,7 +50,7 @@ const BASE = `http://localhost:${PORT}/iframe.html`;
 /** id → the story's Storybook id, plus the viewport it reads best at. */
 const SHOTS = [
   { id: "components-traces-wirelayer-block-wiring--wiring-scenarios", w: 1200, h: 900, name: "wiring" },
-  { id: "presets-asyncregion--communication-patterns", w: 1250, h: 900, name: "async" },
+  { id: "components-blocks-region-async--communication-patterns", w: 1250, h: 900, name: "async" },
   { id: "components-blocks-blockport--four-edges", w: 760, h: 620, name: "fouredges" },
   { id: "components-ports-portedge--edge-distribution-controls", w: 760, h: 900, name: "distribution" },
   { id: "components-traces-trace-tidy--tidy-direction-matrix", w: 1250, h: 900, name: "tidymatrix" },
@@ -66,11 +66,11 @@ const SHOTS = [
   { id: "components-blocks-blockport--function-port", w: 760, h: 440, name: "blockport-function" },
   { id: "components-text-marks-codeeditor--syntax-themes", w: 1000, h: 560, name: "code-themes" },
   { id: "components-text-marks-editabletext--placeholder", w: 760, h: 380, name: "editable-placeholder" },
-  { id: "presets-value--literals", w: 1000, h: 420, name: "value-literals" },
-  { id: "presets-value--pill-geometry", w: 1100, h: 380, name: "value-pill-geometry" },
-  { id: "presets-value--collapsed-vs-expanded", w: 1000, h: 480, name: "value-collapsed-expanded" },
-  { id: "presets-value--wired", w: 1250, h: 900, name: "value-wired" },
-  { id: "presets-value--editing", w: 760, h: 380, name: "value-editing" },
+  { id: "components-blocks-block-value--literals", w: 1000, h: 420, name: "value-literals" },
+  { id: "components-blocks-block-value--pill-geometry", w: 1100, h: 380, name: "value-pill-geometry" },
+  { id: "components-blocks-block-value--collapsed-vs-expanded", w: 1000, h: 480, name: "value-collapsed-expanded" },
+  { id: "components-blocks-block-value--wired", w: 1250, h: 900, name: "value-wired" },
+  { id: "components-blocks-block-value--editing", w: 760, h: 380, name: "value-editing" },
 ];
 
 const shotsFile = argOf("--shots", null);

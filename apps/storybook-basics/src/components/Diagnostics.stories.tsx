@@ -11,7 +11,7 @@ import { LabeledPort } from "./labeledPort";
 import { Port } from "./port";
 import { PortEdge, type PortEdgeItem } from "./portEdge";
 import { TraceBody } from "./trace";
-import { ValueCapsule } from "../presets/value/value";
+import { ValueCapsule } from "./block.value";
 
 /**
  * src/components/Diagnostics.stories.tsx — the `diagnostics` axis

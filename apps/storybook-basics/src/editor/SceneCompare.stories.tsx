@@ -10,17 +10,17 @@ import {
   SCENE_NODE_ATTRIBUTE,
   diffMarksForSide,
 } from "./sceneDiffMarks";
-import { CompareDialog } from "../components/compareDialog";
-import type { CompareChange } from "../components/compareModel";
+import { CompareDialog } from "./compareDialog";
+import type { CompareChange } from "./compareModel";
 import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
 import type { ScenePortsOf } from "../scene/sceneDiff";
 
 /**
- * Editor/SceneCompare — the compare SURFACE driven by the scene kit's own
+ * Editor/Panels & Dialogs/SceneCompare — the compare SURFACE driven by the scene kit's own
  * diff engine.
  *
- * `components/CompareDialog.stories.tsx` already drives this modal from
+ * `editor/CompareDialog.stories.tsx` already drives this modal from
  * `compareModel.ts`'s record-map differ. These stories drive the SAME modal
  * from `scene/sceneDiff.ts`'s `diffScene` through `./sceneCompare.ts`, which
  * is the path a host with a `BlockScene` takes — every host in this repo, and
@@ -35,7 +35,7 @@ import type { ScenePortsOf } from "../scene/sceneDiff";
  * blocks — measured, below, against `DIFF_MARK_INSET` rather than a literal.
  */
 const meta = {
-  title: "Editor/SceneCompare",
+  title: "Editor/Panels & Dialogs/SceneCompare",
   tags: ["object:scene", "host:dom", "lane:compare-view"],
 } satisfies Meta;
 

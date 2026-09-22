@@ -25,7 +25,7 @@ import { userEvent } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createShapeId, type TLShapeId } from "tldraw";
 
-import { EDGE_POLICY_STORAGE_KEY } from "@trunk/components/edgePolicy";
+import { EDGE_POLICY_STORAGE_KEY } from "@trunk/editor/edgePolicy";
 import type { ValidationLevelId } from "@trunk/scene/validationLevel";
 
 import { resetValidationLevelCache } from "./chrome/ShareMenu/validationLevelHost";

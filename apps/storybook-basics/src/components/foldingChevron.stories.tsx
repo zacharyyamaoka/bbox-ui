@@ -21,8 +21,8 @@ import { FoldingChevron } from "./foldingChevron";
  */
 
 const meta = {
-  title: "Components/Menus & Bars/FoldingChevron/Rotation & Reveal",
-  tags: ["object:chrome", "lane:baseline"],
+  title: "Components/Blocks/FoldingChevron/Rotation & Reveal",
+  tags: ["object:block", "lane:baseline"],
   component: FoldingChevron,
   args: { open: true, onClick: () => {} },
 } satisfies Meta<typeof FoldingChevron>;
