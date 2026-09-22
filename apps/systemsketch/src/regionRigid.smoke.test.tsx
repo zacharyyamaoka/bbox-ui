@@ -273,6 +273,46 @@ describe("PINNED — the corner card never leaves region-local (0, 0)", () => {
     expect(shape(cornerId), "the card is still there once the gesture ends").toBeTruthy();
   });
 
+  it("THE RACE, region variant: a scene write landing while the card's OWN region is mid-translate still hoists the card the scene keeps", async () => {
+    // WHY this exists beside the unrelated-block race (Codex, 2026-09-22): the
+    // load-bearing rule is that a selected ANCESTOR does not arm the veto
+    // (`gestureMovesCard`'s WHY). Widen it to "card or selected ancestor" and
+    // the unrelated-block race stays green while this — the person dragging
+    // the very region the scene deletes — loses the card again.
+    app = await mountApp();
+    const { id, cornerId } = placeRegion("branch", 300, 200);
+    const face = await cardFace(cornerId);
+    const header = await cardHeader(cornerId);
+    // A real press on the REGION: its title strip, beside the card.
+    const c = face.getBoundingClientRect();
+    const h = header.getBoundingClientRect();
+    const onStrip = { x: c.right + 60, y: h.top + h.height / 2 };
+    expect(face.contains(document.elementFromPoint(onStrip.x, onStrip.y)), "the press is beside the card, not on it").toBe(false);
+    await startTranslating(onStrip);
+    expect(app.editor.getSelectedShapeIds()).toEqual([id]);
+
+    const scene = sceneFromRecords(app.editor.store.allRecords());
+    const next = {
+      ...scene,
+      nodes: scene.nodes
+        .filter((node) => node.id !== id)
+        .map((node) => {
+          if (node.id !== cornerId) return node;
+          const { parentId: _dropped, ...rest } = node;
+          return rest;
+        }),
+    };
+    applyScene(app.editor, next, { kind: "document" });
+    expect(app.editor.isIn("select.translating"), "the scene landed mid-gesture").toBe(true);
+    expect(shape(id), "the region was removed").toBeUndefined();
+    const card = shape<BlockLike>(cornerId);
+    expect(card, "the card the scene kept survived its own region's delete").toBeTruthy();
+    expect(String(card!.parentId)).toBe(String(app.editor.getCurrentPageId()));
+
+    await endTranslating();
+    expect(shape(cornerId), "the card is still there once the gesture ends").toBeTruthy();
+  });
+
   it("a DELIBERATE scene write can take the card out: applyScene removing the region but keeping the card leaves it on the page", async () => {
     app = await mountApp();
     const { id, cornerId } = placeRegion("branch", 300, 200);
