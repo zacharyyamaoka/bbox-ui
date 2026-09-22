@@ -5,7 +5,8 @@
 // "Panels": "open/close state (the donor's `reduceChromeState` LRU reducer is
 // offered as a recipe in the docs, not a kit export)"). This app's policy is
 // the smallest one that is still honest: one at a time, Escape closes, the
-// launcher toggles. The state itself lives in `./overlay.tsx`, which is the
+// launcher toggles, and a click on a block opens the Inspector
+// (`./inspectorFollowsSelection.ts`). The state itself lives in `./overlay.tsx`, which is the
 // one component that both the strip and this panel are rendered from.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Frame, GitBranch, Repeat, RotateCw, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
@@ -22,6 +23,7 @@ import { BLOCK_SHAPE_TYPE } from "../shapes/types";
 import type { BlockShape } from "../shapes/block/BlockShapeUtil";
 
 import { EXPANDED_BLOCK_KIND, useFrames } from "./frames";
+import { inspectorSubjectOf } from "./inspectorFollowsSelection";
 import { PROBLEM_SEVERITIES, type BoardProblems } from "./problems";
 import type { ChromePanel } from "./statusStrip";
 
@@ -122,10 +124,9 @@ function ProblemsSurface({ problems }: { problems: BoardProblems }) {
 function InspectorSurface({ editor }: { editor: Editor }) {
   const block = useValue<BlockShape | null>(
     "ss inspector subject",
-    () => {
-      const only = editor.getOnlySelectedShape();
-      return only && only.type === BLOCK_SHAPE_TYPE ? (only as BlockShape) : null;
-    },
+    // A region with a corner card is inspected through the card, and every
+    // write below lands on the CARD — `inspectorSubjectOf` carries the WHY.
+    () => inspectorSubjectOf(editor, editor.getOnlySelectedShape()),
     [editor],
   );
 
@@ -204,10 +205,12 @@ function InspectorSurface({ editor }: { editor: Editor }) {
  * `src/chromeSize.smoke.test.tsx` are the committed acceptance for it.
  *
  * So the third surface costs the corner nothing. What it costs instead, said
- * plainly: opening the Inspector takes two presses (a launcher, then this
- * row), and while the Inspector is showing neither strip launcher is lit.
+ * plainly: opening the Inspector BY HAND takes two presses (a launcher, then
+ * this row), and while the Inspector is showing neither strip launcher is lit.
  * The panel's own header says "Inspector", which is the signal that replaces
- * the lit button.
+ * the lit button. The common path no longer pays that: clicking a block (or a
+ * region with a corner card) opens the Inspector by itself —
+ * `./inspectorFollowsSelection.ts`, Zach 2026-09-21.
  */
 function SurfaceSwitch({ open, onSurfaceChange }: { open: ChromePanel; onSurfaceChange(panel: ChromePanel): void }) {
   return (
