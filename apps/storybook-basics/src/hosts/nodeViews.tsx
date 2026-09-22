@@ -25,7 +25,7 @@ import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
-import { BlockRegion, type RegionArm } from "../components/blockRegion";
+import { BlockRegion, type RegionArm, type RegionCornerCard } from "../components/blockRegion";
 import { REGION_CORNER_WIDTH_PX } from "../components/blockRegion.layout";
 import { portViewSlotCount, railBandHeightForSlots, resolveBlockHeight } from "../scene/fitToContent";
 import { ValueCapsule } from "../components/block.value";
@@ -548,19 +548,23 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
   // and the host's P/E selector; the header is the plain block header every
   // node gets. The arms keep their own fold chevrons — those fold one arm,
   // not the region.
-  const corner = (
-    <BlockPort id={node.id} view="port" edges={ownEdges}>
-      <Block
-        header={headerOf(node)}
-        width={REGION_CORNER_WIDTH_PX}
-        body={cornerSlots > 0 ? <div data-slot="region-corner-band" style={{ height: railBandHeightForSlots(cornerSlots) }} /> : undefined}
-        // The corner's junctions with the frame go square so the card reads
-        // as PART of the frame (block.tsx's `BlockShape` WHY).
-        shape="region-corner"
-        diagnostics={decoration?.diagnostics}
-      />
-    </BlockPort>
-  );
+  //
+  // WHY the corner goes in as DATA (`cornerCard`) and not as a rendered
+  // `corner` node (Codex re-judge, 2026-09-22): BlockRegion renders a data
+  // card itself, so it can also mount a hidden, id-free copy of it to size
+  // Expanded Opaque when the region is loaded straight into it — it never
+  // clones caller-rendered content, which could carry a portal. BlockRegion
+  // draws it as the same `BlockPort id={node.id}` around a Block with
+  // `shape="region-corner"` (the corner's junctions with the frame go
+  // square so the card reads as PART of the frame, block.tsx's `BlockShape`
+  // WHY).
+  const cornerCard: RegionCornerCard = {
+    header: headerOf(node),
+    width: REGION_CORNER_WIDTH_PX,
+    edges: ownEdges,
+    ...(cornerSlots > 0 ? { bandHeight: railBandHeightForSlots(cornerSlots) } : null),
+    diagnostics: decoration?.diagnostics,
+  };
 
   // The Port card and the Expanded Opaque face draw their own walls from
   // BlockRegion's two port lists: the region's own LEFT ports are its
@@ -618,7 +622,7 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
       // drag, and the toggle works in the DOM host and silently does nothing
       // on a canvas.
       toggleClassName={POINTER_OWNED_CLASS}
-      corner={corner}
+      cornerCard={cornerCard}
       {...(node.data.w === undefined ? null : { width: node.data.w })}
       {...(node.data.h === undefined ? null : { height: node.data.h })}
       members={bodyChildrenOf(scene, node.id).map(memberViewOf)}

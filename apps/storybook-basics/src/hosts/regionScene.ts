@@ -39,13 +39,20 @@ export interface RegionData {
    * "opaque"` as the old folded card (Codex re-judge, 2026-09-22): inferring
    * "legacy" from an absent `presentation` made the same bytes mean two
    * things depending on who wrote them — `setRegionView(…, "opaque")` wrote
-   * exactly what the inference called legacy. And there is nothing legacy to
-   * protect: no HostScene is loaded from a file anywhere (scenes are built in
-   * code; surveyed 2026-09-22 — `pyblocksScene.ts`, `definitionsToScene.ts`,
-   * `collapse.ts`, the `region.loop`/`region.branch` presets, and literal
-   * fixtures; `files/*` and `apps/systemsketch` load tldraw documents, not
-   * HostScenes). The first loader of a stored HostScene is where a version
-   * marker and a migration belong — not here.
+   * exactly what the inference called legacy.
+   *
+   * The ONE place HostScenes arrive from outside is the pyblocks backend:
+   * `backend/pyblocksClient.ts`'s `scene()` → `parsePyblocksScene` →
+   * `hosts/pyblocksScene.ts`'s `loadPyblocksScene`. pyblocks never authors
+   * region view state (view is client-owned UI state), so that boundary
+   * DROPS `view`/`presentation` rather than interpreting them
+   * (`withoutRegionViewState`, with the evidence) — network bytes cannot set a
+   * view, stale or new. Everything else — `definitionsToScene.ts`,
+   * `collapse.ts`, the `region.loop`/`region.branch` presets, literal
+   * fixtures — is built in code by current writers. (`files/*` and
+   * `apps/systemsketch` load tldraw documents, not HostScenes.) A future
+   * stored-HostScene loader is where a version marker and a migration would
+   * belong — not here.
    */
   view?: RegionView;
   /** Default `"expanded"`. `"port"` is the region collapsed to a block —

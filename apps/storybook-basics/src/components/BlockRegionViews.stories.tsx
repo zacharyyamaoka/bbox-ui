@@ -24,6 +24,7 @@ import { BlockPort } from "./blockPort";
 import { BlockRegion, type RegionKind } from "./blockRegion";
 import type { BlockMember } from "./blockMembers";
 import type { PortEdgeItem } from "./portEdge";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 
 const meta = {
@@ -313,28 +314,40 @@ export const WithMembersAndPorts: Story = {
 };
 
 /* ------------------------------------------------------------------ */
-/* A custom corner, loaded straight into Expanded Opaque (Codex re-judge) */
+/* The corner's size, and who measures it (Codex audit + re-judges)       */
 /* ------------------------------------------------------------------ */
 
-/** A host-supplied corner — a `BlockPort` around a Block, ports on its left
- *  wall — with NO `height` and no `cornerSize`: the path that used to size
- *  the face off a zero-height corner and grow when toggled. */
-function CustomCornerBench() {
+function regionBox(region: HTMLElement): DOMRect {
+  const box =
+    region.querySelector<HTMLElement>(':scope > [data-slot="region-opaque-face"]') ??
+    required<HTMLElement>(region, ':scope > [data-slot="region-frame"]', "the frame");
+  return box.getBoundingClientRect();
+}
+
+async function pressToggle(region: HTMLElement, expectView: "expanded" | "opaque"): Promise<void> {
+  await userEvent.click(required<HTMLElement>(region, '[aria-label="Blackbox toggle"]', "the toggle"));
+  await waitFor(() => expect(region.getAttribute("data-region-view")).toBe(expectView));
+}
+
+function expectSameBox(a: DOMRect, b: DOMRect, what: string): void {
+  expect(Math.abs(a.width - b.width), `${what}: width`).toBeLessThanOrEqual(1);
+  expect(Math.abs(a.height - b.height), `${what}: height`).toBeLessThanOrEqual(1);
+}
+
+/** The kit's own corner, as data (`cornerCard`): a card with two ports, NO
+ *  `height` and NO `cornerSize`, loaded straight into Expanded Opaque. */
+function KitCornerBench() {
   const [opaque, setOpaque] = useState(true);
   return (
     <div style={{ padding: 24 }}>
       <BlockRegion
-        id="custom"
+        id="kit"
         kind="group"
         view={opaque ? "opaque" : "expanded"}
         opaqueFace="frame"
         width={360}
-        title="Custom"
-        corner={
-          <BlockPort id="custom" view="port" edges={{ left: { items: [{ id: "a", label: "a" }, { id: "b", label: "b" }] } }}>
-            <Block header="Custom corner" width={170} body={<div style={{ height: 64 }} />} shape="region-corner" />
-          </BlockPort>
-        }
+        title="Kit"
+        cornerCard={{ header: "Kit corner", width: 170, edges: { left: { items: [{ id: "a", label: "a" }, { id: "b", label: "b" }] } }, bandHeight: 64 }}
         boundaryPorts={{ left: [{ id: "a", label: "a" }, { id: "b", label: "b" }] }}
         members={[{ id: "m", x: 24, y: 16, content: <Member label="m" /> }]}
         onToggleView={() => setOpaque((value) => !value)}
@@ -343,33 +356,122 @@ function CustomCornerBench() {
   );
 }
 
-export const CustomCornerLoadedOpaque: Story = {
-  name: "Custom corner, loaded opaque, no height — the box holds",
-  render: () => <CustomCornerBench />,
+export const KitCornerLoadedOpaque: Story = {
+  name: "The kit's corner, loaded opaque, no height — the box holds",
+  render: () => <KitCornerBench />,
   play: async ({ canvasElement }) => {
-    const region = regionOf(canvasElement, "custom");
-    const faceBox = () => required<HTMLElement>(region, ':scope > [data-slot="region-opaque-face"]', "the opaque face").getBoundingClientRect();
+    const region = regionOf(canvasElement, "kit");
     await waitFor(() => expect(region.getAttribute("data-region-view")).toBe("opaque"));
 
-    // The measuring twin is structurally id-free: nothing in it that
-    // wireLayer's `[data-block-id]` → `[data-port-id]` walk could resolve.
-    const twin = required<HTMLElement>(region, '[data-slot="region-corner-measure"]', "the corner's measuring twin");
-    expect(twin.querySelectorAll("[data-block-id]"), "twin block ids").toHaveLength(0);
-    expect(twin.querySelectorAll("[data-port-id]"), "twin port ids").toHaveLength(0);
-    expect(twin.querySelectorAll('[data-slot="port-dot"]'), "twin port dots").toHaveLength(0);
-    expect(region.querySelectorAll('[data-block-id="custom"]'), "exactly one owner of the region id").toHaveLength(1);
+    // The measuring copy is BlockRegion's own content, built without a
+    // `BlockPort`: nothing in it that wireLayer's `[data-block-id]` →
+    // `[data-port-id]` walk could resolve.
+    const twin = required<HTMLElement>(region, '[data-slot="region-corner-measure"]', "the corner's measuring copy");
+    expect(twin.querySelectorAll("[data-block-id]"), "copy block ids").toHaveLength(0);
+    expect(twin.querySelectorAll("[data-port-id]"), "copy port ids").toHaveLength(0);
+    expect(twin.querySelectorAll('[data-slot="port-dot"]'), "copy port dots").toHaveLength(0);
+    expect(region.querySelectorAll('[data-block-id="kit"]'), "exactly one owner of the region id").toHaveLength(1);
 
-    const first = faceBox();
-    await userEvent.click(required<HTMLElement>(region, '[aria-label="Blackbox toggle"]', "the toggle"));
-    await waitFor(() => expect(region.getAttribute("data-region-view")).toBe("expanded"));
-    const frame = required<HTMLElement>(region, ':scope > [data-slot="region-frame"]', "the frame").getBoundingClientRect();
-    expect(Math.abs(frame.height - first.height), "expanded keeps the height it was loaded at").toBeLessThanOrEqual(1);
-    expect(Math.abs(frame.width - first.width)).toBeLessThanOrEqual(1);
+    const first = regionBox(region);
+    await pressToggle(region, "expanded");
+    expectSameBox(regionBox(region), first, "expanded keeps the box it was loaded at");
+    await pressToggle(region, "opaque");
+    expectSameBox(regionBox(region), first, "opaque again keeps the same box");
+  },
+};
 
-    await userEvent.click(required<HTMLElement>(region, '[aria-label="Blackbox toggle"]', "the toggle"));
-    await waitFor(() => expect(region.getAttribute("data-region-view")).toBe("opaque"));
-    const again = faceBox();
-    expect(Math.abs(again.height - first.height), "opaque again keeps the same height").toBeLessThanOrEqual(1);
-    expect(Math.abs(again.width - first.width)).toBeLessThanOrEqual(1);
+/**
+ * An ARBITRARY corner — the caller's own node, holding a controlled-open
+ * Popover that portals to `document.body`. BlockRegion must never copy it:
+ * a copy's portal escapes every hiding ancestor and becomes a second,
+ * visible, focusable popover. The types force this caller to pass
+ * `cornerSize` (its view can be opaque), so nothing is measured at all.
+ */
+function PopoverCornerBench() {
+  const [opaque, setOpaque] = useState(false);
+  return (
+    <div style={{ padding: 24 }}>
+      <BlockRegion
+        id="pop"
+        kind="group"
+        view={opaque ? "opaque" : "expanded"}
+        opaqueFace="frame"
+        width={360}
+        title="Popover"
+        cornerSize={{ w: 170, h: 80 }}
+        corner={
+          <BlockPort id="pop" view="port" edges={{ left: { items: [{ id: "a", label: "a" }] } }}>
+            <Block
+              header={
+                <Popover open>
+                  <PopoverTrigger render={<span />}>Corner</PopoverTrigger>
+                  <PopoverContent autoFocus={false}>
+                    <span data-testid="corner-popover">the corner's popover</span>
+                  </PopoverContent>
+                </Popover>
+              }
+              width={170}
+              body={<div style={{ height: 32 }} />}
+              shape="region-corner"
+            />
+          </BlockPort>
+        }
+        boundaryPorts={{ left: [{ id: "a", label: "a" }] }}
+        members={[{ id: "m", x: 24, y: 16, content: <Member label="m" /> }]}
+        onToggleView={() => setOpaque((value) => !value)}
+      />
+    </div>
+  );
+}
+
+const popoverCount = () => document.body.querySelectorAll('[data-testid="corner-popover"]').length;
+
+export const CustomCornerIsNeverCopied: Story = {
+  name: "An arbitrary corner with an open popover is never copied",
+  render: () => <PopoverCornerBench />,
+  play: async ({ canvasElement }) => {
+    const region = regionOf(canvasElement, "pop");
+    await waitFor(() => expect(popoverCount(), "Expanded: the corner's one popover").toBe(1));
+    const first = regionBox(region);
+
+    // Expanded Opaque draws no corner, and copies none: the popover goes with
+    // the corner rather than surviving as a hidden copy's visible portal.
+    await pressToggle(region, "opaque");
+    await waitFor(() => expect(popoverCount(), "Expanded Opaque: no copy, so no popover").toBe(0));
+    expect(region.querySelector('[data-slot="region-corner-measure"]'), "no measuring copy of an arbitrary corner").toBeNull();
+    expectSameBox(regionBox(region), first, "cornerSize holds the box");
+
+    await pressToggle(region, "expanded");
+    await waitFor(() => expect(popoverCount(), "back to Expanded: still exactly one").toBe(1));
+  },
+};
+
+/** `cornerSize` given: nothing is measured, so nothing is mounted to measure —
+ *  for BlockRegion's own title card and for a `cornerCard` alike. */
+export const SizedCornerIsNotMeasured: Story = {
+  name: "A sized corner mounts no measuring copy while opaque",
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}>
+      <BlockRegion id="sized-title" kind="group" view="opaque" opaqueFace="frame" width={300} title="Sized title" cornerSize={{ w: 120, h: 40 }} />
+      <BlockRegion
+        id="sized-card"
+        kind="group"
+        view="opaque"
+        opaqueFace="frame"
+        width={300}
+        cornerCard={{ header: "Sized card", bandHeight: 40 }}
+        cornerSize={{ w: 160, h: 80 }}
+      />
+      <BlockRegion id="unsized-title" kind="group" view="opaque" opaqueFace="frame" width={300} title="Unsized title" />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    for (const id of ["sized-title", "sized-card"]) {
+      const region = regionOf(canvasElement, id);
+      await waitFor(() => expect(region.getAttribute("data-region-view")).toBe("opaque"));
+      expect(region.querySelector('[data-slot="region-corner-measure"]'), `${id}: no measuring copy`).toBeNull();
+    }
+    // The control: without `cornerSize` the same view does mount one.
+    required(regionOf(canvasElement, "unsized-title"), '[data-slot="region-corner-measure"]', "the unsized region's measuring copy");
   },
 };

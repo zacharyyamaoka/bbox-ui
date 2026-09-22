@@ -58,7 +58,7 @@
  * file this one edits.
  */
 import type { CSSProperties, ReactNode, RefObject } from "react";
-import { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import type { Diagnostic } from "./highlighter";
 // The visual-variant registry (lane `ports`, 2026-09-19): pinned per
@@ -337,38 +337,7 @@ function collapsedAvailability(members: PortEdgeItem[]): "available" | "unavaila
 /* BlockPort                                                         */
 /* ------------------------------------------------------------------ */
 
-const MeasureOnlyContext = createContext(false);
-
-/**
- * Renders `children` for MEASUREMENT only: every `BlockPort` inside becomes
- * its bare wrapper box around its Block — no `data-block-id`, no rails, no
- * port dots, no function port.
- *
- * WHY a context and not a convention (Codex re-judge, 2026-09-22):
- * `BlockRegion` measures its corner card in Expanded Opaque by mounting a
- * hidden twin of it, and a twin that still carried `data-block-id` would win
- * `wireLayer.tsx`'s first-match `resolveDot` over the face that owns the
- * region's ports. Asking every caller to pass an id-free copy left that to
- * discipline; this strips the ids structurally, whatever `corner` holds. The
- * box is the same because the rails are absolutely positioned outside the
- * Block and never size the wrapper (`width: max-content` around the Block).
- */
-export function BlockPortMeasureOnly({ children }: { children?: ReactNode }) {
-  return <MeasureOnlyContext.Provider value>{children}</MeasureOnlyContext.Provider>;
-}
-
-export function BlockPort(props: BlockPortProps) {
-  if (useContext(MeasureOnlyContext)) {
-    return (
-      <div data-slot="block-port" data-measure-only style={{ ...ISOLATED_ROOT_STYLE, position: "relative", width: "max-content" }}>
-        {props.children}
-      </div>
-    );
-  }
-  return <LiveBlockPort {...props} />;
-}
-
-function LiveBlockPort({
+export function BlockPort({
   children,
   view,
   portLayout = "inline",
