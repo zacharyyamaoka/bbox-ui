@@ -25,7 +25,7 @@
 // section no stock control fits (an About block), not the default.
 "use client";
 
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement, type ReactNode } from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 
@@ -66,6 +66,32 @@ export interface SettingsOption {
  * readout, the preset row and the keyboard behaviour to drift apart, which
  * is the exact failure the data-driven shell exists to prevent.
  */
+/**
+ * WHEN a slider writes: on every value it passes through, or once at the end
+ * of the gesture.
+ *
+ * The two names are `codeEditorGesture.ts`'s `FieldCommitMode`, deliberately —
+ * that header already makes this argument for text fields ("`exit` — the value
+ * is buffered and written once, at the end boundary, for a write that is
+ * genuinely expensive"), and `BackendSettings.tsx` already runs a field in
+ * `exit` mode for exactly that reason. One vocabulary for one idea; a reader
+ * who knows what `exit` means on a field knows what it means here.
+ *
+ * WHY a second mechanism rather than reusing `FieldGesture` itself: that class
+ * carries a `string` and gets its end boundary from React (blur, Enter,
+ * unmount) because the browser will not tell it about an unmounted field. A
+ * slider's end boundary is `pointerup`, and the stock primitive underneath
+ * this control already reports it — `@base-ui/react`'s `Slider.Root` fires
+ * `onValueCommitted` once per gesture, and never at all if the value did not
+ * change. Hand-rolling a pointer state machine beside it would be a second,
+ * worse copy of a stock part. So: same vocabulary, stock mechanism.
+ *
+ * `live` is the default, so the three percentage sliders that were correct
+ * before this existed (wheel-zoom sensitivity, pan speed, zoom speed) keep
+ * behaving exactly as they did.
+ */
+export type SettingsCommitMode = "live" | "exit";
+
 export interface SettingsSliderControl {
   kind: "slider";
   value: number;
@@ -73,6 +99,20 @@ export interface SettingsSliderControl {
   max: number;
   step: number;
   onValueChange(value: number): void;
+  /**
+   * `live` (default) calls `onValueChange` for every value the gesture passes
+   * through. `exit` calls it ONCE, when the gesture ends — the thumb and the
+   * readout still move live, so the drag has feedback, but the value is not
+   * written until release.
+   *
+   * Zach, 2026-09-21, on the interface-scale slider: "it should only update
+   * when I release my finger from the drag, but its updating as the slider
+   * moves". That setting re-lays-out every pixel of chrome on write, INCLUDING
+   * the dialog holding the slider — so a live write moves the control out from
+   * under the pointer mid-drag. `exit` is for a write like that: disruptive,
+   * not merely expensive.
+   */
+  commit?: SettingsCommitMode;
   /** The live readout and `aria-valuetext`; default is the bare number. */
   format?(value: number): string;
   /** End-of-track captions — the donor's "Slower"/"Faster" (:1064, :1078)
@@ -250,10 +290,144 @@ function SliderExactEntry({
   );
 }
 
-function renderSlider(control: SettingsSliderControl, controlId: string, titleId: string, label: string): ReactNode {
+/**
+ * The `slider` section: track, optional end captions, optional exact-entry
+ * box, live readout, optional preset row, optional reset.
+ *
+ * WHY this is a COMPONENT and not the plain `renderSlider(...)` helper it used
+ * to be: `commit: "exit"` needs a piece of state — the value the gesture is
+ * currently showing but has not written — and a hook called from inside
+ * `renderControl`'s `switch` would change hook order with the control kind.
+ *
+ * ── What `exit` does, and what it deliberately does not do ────────────────
+ *
+ * In `exit` mode `onValueChange` (which Base UI fires per pointermove) feeds
+ * `preview` only. `onValueCommitted` — Base UI's own end-of-gesture callback,
+ * fired from `pointerup` — is the single call to `control.onValueChange`.
+ * So a drag across N values writes ONCE, not N times.
+ *
+ * The THUMB and the READOUT follow `preview`, so the drag has live feedback:
+ * the person has to see that their finger is doing something, and the number
+ * is the cheap half — it is the APP re-laying-out that is disruptive, not the
+ * digits changing.
+ *
+ * The PRESET row and the RESET button keep following `control.value`, the
+ * committed one, on purpose. They describe what is APPLIED, not where the
+ * thumb is: `aria-pressed` on "125%" means the interface IS at 125%, and
+ * Reset is DISABLED when there is nothing to undo. Driving Reset off a preview
+ * would disable the only way back at the exact moment a drag happened to pass
+ * over 100%.
+ *
+ * Presets and Reset are also, themselves, discrete: one click is a whole
+ * gesture with no release to wait for, so they write immediately in both
+ * modes. They call `control.onValueChange` directly, below, and never go near
+ * `preview`.
+ */
+function SettingsSlider({
+  control,
+  controlId,
+  titleId,
+  label,
+}: {
+  control: SettingsSliderControl;
+  controlId: string;
+  titleId: string;
+  label: string;
+}): ReactElement {
   const format = control.format ?? String;
+  const deferred = control.commit === "exit";
+
+  /** The value under the pointer, or `null` when nothing is uncommitted. */
+  const [preview, setPreview] = useState<number | null>(null);
+  /** Set by Escape; makes the rest of THIS gesture write nothing at all. */
+  const abandonedRef = useRef(false);
+
+  // Follow the store whenever it moves for any other reason — a preset, the
+  // reset button, a second window writing the same preference. Same idiom and
+  // same reason as `SliderExactEntry`'s draft above: a leftover preview must
+  // never mask the real value.
+  useEffect(() => {
+    setPreview(null);
+  }, [control.value]);
+
+  const shown = preview ?? control.value;
+
+  function valueOf(next: number | readonly number[]): number {
+    return Array.isArray(next) ? (next[0] as number) : (next as number);
+  }
+
+  function handleValueChange(next: number | readonly number[]): void {
+    const value = valueOf(next);
+    if (!deferred) {
+      control.onValueChange(value);
+      return;
+    }
+    if (abandonedRef.current) return;
+    setPreview(value);
+  }
+
+  function handleValueCommitted(next: number | readonly number[]): void {
+    if (!deferred) return;
+    if (abandonedRef.current) {
+      // The gesture that Escape cancelled has finally ended. Nothing is
+      // written; the next pointerdown starts a fresh, writable one.
+      abandonedRef.current = false;
+      setPreview(null);
+      return;
+    }
+    const value = valueOf(next);
+    setPreview(null);
+    // Both state updates sit in one event handler, so React batches them and
+    // the next render already sees the new `control.value` — no frame of the
+    // old number between clearing the preview and the store catching up.
+    if (value !== control.value) control.onValueChange(value);
+  }
+
+  /**
+   * Escape mid-drag ABANDONS the gesture: the preview disappears, nothing is
+   * written, and the rest of the drag is ignored even if the pointer keeps
+   * moving.
+   *
+   * WHY this is written here rather than inherited: it is NOT stock. Checked
+   * against the pinned `@base-ui/react@1.8.0` — `SliderThumb`'s `onKeyDown`
+   * returns early for any key outside `ALL_KEYS` (arrows, Home/End, PageUp/Down)
+   * and there is no `Escape` or `keydown` handler anywhere else in
+   * `slider/`. So Escape mid-drag did nothing to the slider and bubbled
+   * straight to the enclosing Dialog, which CLOSED — unmounting the control
+   * with the pointer still captured, so `onValueCommitted` never arrived and
+   * the value silently vanished. Accidental, and the worst of the three
+   * possible behaviours.
+   *
+   * Abandon rather than commit, for two reasons: Escape means "take it back"
+   * everywhere else in this app, and `SliderExactEntry` three functions up
+   * already answers Escape by dropping its draft. One key, one meaning.
+   *
+   * Only consumed while a preview is actually pending. With nothing in
+   * flight — no drag, or a second Escape after the first cancelled one —
+   * Escape passes through and closes Settings exactly as it always has.
+   */
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    if (event.key !== "Escape" || !deferred || preview === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    abandonedRef.current = true;
+    setPreview(null);
+  }
+
   return (
-    <div data-slot="settings-slider" className="flex flex-col gap-2">
+    <div
+      data-slot="settings-slider"
+      data-commit={control.commit ?? "live"}
+      // The one honest signal that a value is shown but not yet applied —
+      // for a test, and for a skin that wants to say so visually.
+      data-pending={preview === null ? undefined : "true"}
+      className="flex flex-col gap-2"
+      onKeyDown={handleKeyDown}
+      // A fresh gesture is always writable, whatever the last one did.
+      onPointerDownCapture={() => {
+        abandonedRef.current = false;
+      }}
+    >
       <div className="flex items-center gap-3">
         {control.minLabel ? <span aria-hidden="true" className="text-muted-foreground shrink-0 text-xs">{control.minLabel}</span> : null}
         <Slider
@@ -289,7 +463,9 @@ function renderSlider(control: SettingsSliderControl, controlId: string, titleId
           // falls through to `[min, max]` and it renders TWO thumbs —
           // measured in a real browser, both stamped `data-index="0"`.
           // Passing `[value]` is the stock usage shadcn's own examples show.
-          value={[control.value]}
+          // `shown`, not `control.value`: in `exit` mode this is what makes
+          // the thumb track the pointer while the store stays put.
+          value={[shown]}
           min={control.min}
           max={control.max}
           step={control.step}
@@ -299,7 +475,12 @@ function renderSlider(control: SettingsSliderControl, controlId: string, titleId
           // `SliderThumb.js:244-251`) — so naming the root is what names the
           // control a screen reader actually lands on.
           aria-labelledby={titleId}
-          onValueChange={(next) => control.onValueChange(Array.isArray(next) ? next[0] : next)}
+          onValueChange={(next) => handleValueChange(next)}
+          // The stock end-of-gesture callback: fired once from `pointerup`
+          // (`slider/control/SliderControl.js:283-306`) and once per key press
+          // for the keyboard (`slider/root/SliderRoot.js:182-195`). In `live`
+          // mode this is a no-op — the value was already written on change.
+          onValueCommitted={(next) => handleValueCommitted(next)}
         />
         {control.maxLabel ? <span aria-hidden="true" className="text-muted-foreground shrink-0 text-base">{control.maxLabel}</span> : null}
         {control.exactEntry ? <SliderExactEntry control={control} controlId={controlId} label={label} /> : null}
@@ -312,7 +493,7 @@ function renderSlider(control: SettingsSliderControl, controlId: string, titleId
           aria-live="polite"
           className="w-14 shrink-0 text-right text-sm tabular-nums"
         >
-          {format(control.value)}
+          {format(shown)}
         </output>
       </div>
       {control.presets && control.presets.length > 0 ? (
@@ -417,7 +598,7 @@ function renderControl(section: SettingsSection, controlId: string, titleId: str
       );
     }
     case "slider":
-      return renderSlider(control, controlId, titleId, section.title);
+      return <SettingsSlider control={control} controlId={controlId} titleId={titleId} label={section.title} />;
     case "custom":
       return control.render;
   }
@@ -442,7 +623,9 @@ function renderControl(section: SettingsSection, controlId: string, titleId: str
  *     `RadioGroup` (`role="radiogroup"`, each option's `role="radio"`
  *     element carrying `data-option-value=<value>` and its visible label),
  *     `Switch` (`role="switch"`), or `Select`;
- *   - a `slider` section: `[data-slot="settings-slider"]` holding a stock
+ *   - a `slider` section: `[data-slot="settings-slider"]` (carrying
+ *     `data-commit="live" | "exit"`, and `data-pending="true"` only while an
+ *     `exit` gesture is showing a value it has not written) holding a stock
  *     `Slider` (its thumb's nested `input[type="range"]`, named from the
  *     section title), a live `[data-slot="settings-slider-value"]` readout,
  *     and — when asked for — `[data-slot="settings-slider-input"]`,

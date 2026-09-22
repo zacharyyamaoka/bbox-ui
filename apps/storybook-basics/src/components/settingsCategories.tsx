@@ -289,6 +289,25 @@ function appearanceCategory(input: SettingsCategoriesInput): SettingsCategory {
           min: MIN_INTERFACE_SCALE,
           max: MAX_INTERFACE_SCALE,
           step: INTERFACE_SCALE_STEP,
+          // WHY this is the ONE slider in the app that writes on release.
+          //
+          // Zach, 2026-09-21: "the scrolling appearance slider still doesn't
+          // work. it should only update when I release my finger from the
+          // drag, but its updating as the slider moves".
+          //
+          // Every other slider here writes a number something else reads
+          // later — a wheel multiplier, a pan speed. This one re-lays-out the
+          // interface, and the interface INCLUDES the dialog the slider is
+          // in: writing live makes the row physically move and resize under
+          // the pointer mid-drag, so the thumb you are holding is no longer
+          // where your finger is. That is a property of what this setting
+          // MEANS, which is why the mode is declared here beside its label and
+          // its description rather than by the host that supplies the value.
+          //
+          // The thumb, the track fill and the `%` readout still move live; see
+          // `SettingsCommitMode` in ./settingsView. Presets and Reset below are
+          // discrete and stay immediate — there is no release to wait for.
+          commit: "exit",
           format: (value) => `${value}%`,
           // The archive's small-A / large-A pair (:809, :820) — the size of
           // the glyph IS the legend, which is why they are `aria-hidden` in
