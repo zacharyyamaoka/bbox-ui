@@ -185,8 +185,83 @@ async function captureLanded(browser) {
   return { shots, anchorId: id, video: video ? path.relative(repoRoot, await video.path()) : null };
 }
 
+/**
+ * Round 3 (2026-09-22): Region under Blocks with its presets, Labeled Group,
+ * and the Editor's three families. Stills: the Region folder as the sidebar
+ * draws it, and two Labeled Group stories rendered alone (iframe). Hero: open
+ * Region, walk its Labeled Group and Branch presets, then open the Editor.
+ */
+async function captureRound3(browser) {
+  const port = 5422;
+  const index = await (await fetch(`http://localhost:${port}/index.json`)).json();
+  const id = (title, name) =>
+    Object.values(index.entries).find((e) => e.title === title && e.name === name)?.id ??
+    Object.values(index.entries).find((e) => e.title === title)?.id;
+  const lgDefault = id("Components/Blocks/Region/Labeled Group", "Default");
+  const lgSame = id("Components/Blocks/Region/Labeled Group", "Same Frame");
+  const branch = id("Components/Blocks/Region/Branch");
+  const out = { stills: {} };
+
+  for (const [name, storyId, w, h] of [["r3-lg-default", lgDefault, 620, 400], ["r3-lg-sameframe", lgSame, 1000, 380]]) {
+    const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: "dark" });
+    await page.goto(`http://localhost:${port}/iframe.html?id=${storyId}&viewMode=story`, { waitUntil: "networkidle" });
+    await page.waitForSelector('[data-slot="labeled-group-label"]');
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(OUT, `${name}.png`) });
+    out.stills[name] = storyId;
+    await page.close();
+  }
+
+  const tree = await browser.newContext({ viewport: { width: 1280, height: 3200 }, colorScheme: "dark" });
+  const tp = await tree.newPage();
+  await tp.goto(`http://localhost:${port}/?path=/story/${lgDefault}`, { waitUntil: "networkidle" });
+  await tp.waitForSelector("#storybook-explorer-tree [data-nodetype]");
+  await tp.waitForTimeout(900);
+  const box = await tp.evaluate(() => {
+    const blocks = document.querySelector('[data-item-id="components-blocks"]');
+    const items = [...document.querySelectorAll('#storybook-explorer-tree [data-item-id^="components-blocks"]')];
+    const rects = [blocks, ...items].filter(Boolean).map((n) => n.getBoundingClientRect());
+    const top = Math.min(...rects.map((r) => r.top)), bottom = Math.max(...rects.map((r) => r.bottom));
+    const tree = document.querySelector("#storybook-explorer-tree").getBoundingClientRect();
+    return { x: tree.left, y: top - 4, width: tree.width, height: bottom - top + 8 };
+  });
+  await tp.screenshot({ path: path.join(OUT, "r3-blocks-region.png"), clip: box });
+  await tree.close();
+
+  const context = await browser.newContext({
+    viewport: { width: 1100, height: 720 },
+    colorScheme: "dark",
+    recordVideo: { dir: OUT, size: { width: 1100, height: 720 } },
+  });
+  const page = await context.newPage();
+  await page.goto(`http://localhost:${port}/?path=/story/${lgDefault}`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#storybook-explorer-tree [data-nodetype]");
+  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-region"]')?.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(2200);
+  await page.goto(`http://localhost:${port}/?path=/story/${lgSame}`, { waitUntil: "networkidle" });
+  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-region"]')?.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(2600);
+  await page.goto(`http://localhost:${port}/?path=/story/${branch}`, { waitUntil: "networkidle" });
+  await page.evaluate(() => document.querySelector('[data-item-id="components-blocks-region"]')?.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(2600);
+  await page.evaluate(() => document.querySelector('[data-item-id="editor"]')?.scrollIntoView({ block: "start" }));
+  await page.mouse.move(900, 450);
+  await page.waitForTimeout(2400);
+  const video = page.video();
+  await context.close();
+  out.video = video ? path.relative(repoRoot, await video.path()) : null;
+  return out;
+}
+
 await mkdir(OUT, { recursive: true });
 const browser = await chromium.launch();
+if (args.includes("--round3")) {
+  const r3 = await captureRound3(browser);
+  await browser.close();
+  await writeFile(path.join(OUT, "manifest-round3.json"), JSON.stringify(r3, null, 1));
+  console.log(JSON.stringify(r3));
+  process.exit(0);
+}
 if (args.includes("--landed")) {
   const landed = await captureLanded(browser);
   await browser.close();

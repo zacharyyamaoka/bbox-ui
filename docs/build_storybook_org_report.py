@@ -458,6 +458,8 @@ textarea{width:100%;min-height:56px;font:inherit;font-size:13.5px;border:1px sol
 .btn{font:inherit;font-weight:600;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
 .mut td.red,.gates td.red{color:var(--bad);font-weight:600}.mut td.green,.gates td.green,td.green{color:var(--good);font-weight:600}
 h2.record{margin-top:64px;border-top:3px double var(--line)}
+main img{max-width:100%;height:auto}
+.card-grid>*{min-width:0}
 #copied{margin-left:10px;color:var(--good);font-size:13px}
 #filter{width:100%;max-width:360px;font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);margin:6px 0}
 .full td{font-size:12px}.full code{font-size:11.5px}
@@ -477,7 +479,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
 const f=document.getElementById('filter');f&&f.addEventListener('input',()=>{const q=f.value.toLowerCase();
   document.querySelectorAll('.full tbody tr').forEach(r=>r.hidden=q&&!r.textContent.toLowerCase().includes(q));});
 function feedback(){
-  let t='## Storybook sidebar (B landed) — feedback, report 2026-09-22\\n';
+  let t='## Storybook round 3 — feedback, report 2026-09-22\\n';
   document.querySelectorAll('.q').forEach(q=>{const a=q.querySelector('textarea').value.trim();
     t+='\\n**'+q.querySelector('.qq').textContent.trim()+'**\\n'+(a||'(default)')+'\\n';});
   return t;}
@@ -512,7 +514,7 @@ APPLIED = [  # Zach's answers to this report, 2026-09-22
 landed_q_html = "<ul class='plain'>" + "".join(f"<li><b>{q}</b> You: <em>{said}</em> → {done}</li>" for q, said, done in APPLIED) + "</ul>" + (
     '<div class="q" data-q="notes"><p class="qq"><b>Anything else?</b></p><textarea placeholder="Notes on the sidebar as it is now"></textarea></div>')
 landed_html = f"""
-<h1>Storybook sidebar — B landed: the repo's top level, then families</h1>
+<h2>Storybook sidebar — B landed: the repo's top level, then families</h2>
 <p class="sub">22 Sep 2026 · bbox-ui <code>apps/storybook-basics</code> · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{LANDED_REV}</code>, queued with <code>/merge-ready</code> · every number read from the real Storybook's own <code>index.json</code></p>
 <div class="tldr">
 <p><b>Done, with your three answers applied.</b> The sidebar's sections are the repo's six top-level folders — <b>Components · Scene · Editor · Hosts · Presets · Skin</b>. Components has families (Ports, Blocks, Traces, Text &amp; Marks, Menus &amp; Bars, Panels &amp; Dialogs, Stock), and so does Scene, as you asked (Model &amp; Diff, Wiring, Validation, Layout &amp; Drag). A unit test fails any story that breaks that shape.</p>
@@ -567,9 +569,6 @@ landed_html = f"""
 
 <h2>Your answers, applied</h2>
 {landed_q_html}
-<p><button class="btn" id="copy">Copy all feedback</button><span id="copied"></span></p>
-<textarea id="out" hidden rows="10"></textarea>
-
 <h2>Not done on purpose</h2>
 <ul class="plain">
 <li>Not merged or pushed from this lane — it is queued with <code>/merge-ready</code> and the integrator lands it.</li>
@@ -582,8 +581,107 @@ landed_html = f"""
 <p class="sub">The review that led to the pick, unchanged except for the new <b>Landed</b> column. Proposal B below is B as first proposed (no Hosts section, Scene in four families).</p>
 """
 
+# ---------------------------------------------------------------- round 3
+R3_BASE, R3_MOVE, R3_REG = "707620c", "8b4bba4", "39af2c4"
+_moves = [l.split("\t") for l in subprocess.run(
+    ["git", "diff", "--name-status", "-M", R3_BASE, R3_MOVE, "--", "apps/storybook-basics/src"],
+    cwd=REPO, capture_output=True, text=True, check=True).stdout.splitlines() if l.startswith("R")]
+def _kit(p):
+    return p.split("storybook-basics/src/")[1].split("/")[0]
+move_counts = Counter((_kit(a), _kit(b)) for _, a, b in _moves)
+editor_sources = sorted(b.rsplit("/", 1)[1] for _, a, b in _moves
+                        if _kit(a) == "components" and _kit(b) == "editor" and ".stories." not in b and ".test." not in b)
+reg = json.loads((REPO / "registry.json").read_text())
+mirrored_items = [it["name"] for it in reg["items"]
+                  if any(f.get("target", "").startswith(("components/bbox/components/", "components/bbox/editor/")) for f in it["files"])]
+def _merge(other):
+    r = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", R3_REG, other], cwd=REPO, capture_output=True, text=True)
+    files = [l for l in r.stdout.split("\n\n")[0].splitlines()[1:] if l.strip()] if r.returncode else []
+    return r.returncode, files
+merge_main = _merge("main")
+merge_peer = _merge("claude/system-sketch-ui-feedback-14bfc3")
+L3 = M["landed"]
+round3_video = data_uri(MEDIA / "round3.mp4", "video/mp4")
+round3_gif = data_uri(MEDIA / "round3.gif", "image/gif")
+round3_poster = data_uri(MEDIA / "round3-poster.jpg", "image/jpeg")
+R3_GATES = [  # measured 2026-09-22, commands in the rows
+    ("trunk <code>pnpm test</code> (both projects)", "3,141 / 3,141", "268 files, browser stories included, <code>STORYBOOK_PORT=5422</code>"),
+    ("trunk typecheck · unit project", "exit 0 · 2,449 / 2,449", "the guard is 603 of those after Labeled Group"),
+    ("studio app typecheck · unit", "exit 0 · 221 / 221", "36 of its files import moved modules through <code>@trunk/</code>"),
+    ("studio app smoke (real browser)", "293 / 303", "every one of the 10 failures also fails on unchanged <code>main</code> (11 there): the drafts acceptance tests, red by design until the wiring lane lands, the menus ×2, the corner cluster"),
+    ("registry <code>--check</code>", "up to date", "every relative import in every item resolves where it installs"),
+    ("registry install, throwaway project", "37 items · tsc exit 0", "<code>docs/verify_registry_install.py</code>; deleting one installed file turns it red"),
+    ("Labeled Group stories", "4 / 4", "radius drift mutation-tested: 4 red, restored 4 green"),
+]
+r3_gate_rows = "".join(f"<tr><th>{a}</th><td class='green'>{b}</td><td>{c}</td></tr>" for a, b, c in R3_GATES)
+R3_Q = [
+    ("Merge it?", "It lands as a barrier: it moves files the system-sketch feedback lane is still editing. Dry run against that lane: "
+     f"{len(merge_peer[1])} files conflict — the lane's new files inside <code>presets/</code> (git already proposes <code>components/</code>, which is right) and header comments both sides touched. Clean against <code>main</code>.",
+     "If you say nothing it stays on the branch. Say <b>/merge-ready</b> and it queues; the integrator gets the conflict list, and I sent that lane a heads-up."),
+    ("17 registry items now install in a mirrored tree", "Items that import across folders cannot install flat — the moved chrome, and the four port items through <code>skin/</code>. They now land under <code>components/bbox/{components,editor,lib,skin}/</code>; the other 24 keep their flat paths.",
+     "Default: keep. The alternative — every item mirrored — is one consistent rule but moves everyone's paths."),
+    ("Labeled Group is a component-level preset", "It renders anywhere Region renders, but no host builds one from scene data yet (the region host path still always puts a Block in the corner).",
+     "Default: next lane — a <code>corner: \"title\"</code> option on the scene's region record, so tldraw and React Flow can draw one."),
+]
+r3_q_html = "".join(f'<div class="q"><p class="qq"><b>{q}</b></p><p>{a}</p><p class="def">{d}</p><textarea placeholder="Your answer (blank = take the default)"></textarea></div>' for q, a, d in R3_Q)
+round3_html = f"""
+<h1>Storybook, round 3 — chrome is Editor's, Region lives in Blocks, presets live with their component</h1>
+<p class="sub">22 Sep 2026 · branch <code>claude/storybook-server-launch-e5f2cc</code> @ <code>{LANDED_REV}</code> ({R3_MOVE} the move, {R3_REG} the registry) · not merged · built on <code>main</code> {R3_BASE}</p>
+<div class="tldr">
+<p><b>Done, as you asked.</b> The editor's menus, bars, panels and dialogs moved out of <code>components/</code> into <code>editor/</code> — {len(editor_sources)} source files and their stories and tests. <b>Region is a folder under Components › Blocks</b>, with its presets inside it, and the new <b>Labeled Group</b> is one of them: Region with a title tab in the corner where the Block would sit. <b>There is no <code>presets/</code> folder</b> any more.</p>
+<p><b>Where the line fell, mechanically:</b> a file stays in <code>components/</code> if a remaining component imports it — your "needed to display information on the components". So FoldingChevron, Badge, Bar and Button stayed; the vendored shadcn primitives stay under Stock even where only the editor uses them. One place your rule met the architecture: the Branch and Loop presets build <em>scene records</em>, and <code>components/</code> may not import <code>scene/</code>, so their code sits beside the region model (<code>scene/region.branch.ts</code>) while their <em>stories</em> sit under Region like the rest.</p>
+<p><b>Found on the way, and fixed:</b> the shadcn registry was already broken on <code>main</code> — the <code>region</code> item could not build at all, and 11 of the 16 trunk items installed and then failed to compile. All 37 installable items now install into a fresh project and pass <code>tsc</code>.</p>
+<div class="nums">
+<div class="num"><b>{len(L3['roots'])}</b><span>sections: {esc(' · '.join(L3['roots']))}</span></div>
+<div class="num"><b>{len(L3['kids']['Components/Blocks/Region'])}</b><span>entries inside Region — Labeled Group, Loop, Branch first</span></div>
+<div class="num"><b>{sum(move_counts.values())}</b><span>files moved; every import rewritten, 0 stale story links</span></div>
+<div class="num"><b>3,141 / 3,141</b><span>trunk tests, browser stories included</span></div>
+</div></div>
+
+<div class="hero">
+  <video controls muted loop playsinline autoplay poster="{round3_poster}" src="{round3_video}"></video>
+  <div><b>Recorded from this branch's Storybook</b> (14 s): Components › Blocks › <b>Region</b> open with its presets; the <b>Labeled Group</b> story, then <em>Same Frame</em> — the title-only preset beside the full Region, one frame renderer; the <b>Branch</b> preset; then the <b>Editor</b> section's three families.
+  <details><summary>No video? GIF fallback</summary><img src="{round3_gif}" alt="GIF of the round-3 sidebar"></details></div>
+</div>
+
+<h2>Region, as it sits in Blocks</h2>
+<div class="card-grid">
+  <div class="scrollshot" style="height:auto;max-height:none">{img("r3-blocks-region.png", "Components › Blocks with Region open")}</div>
+  <div>
+    <h4>Labeled Group — Region with only a title showing</h4>
+    {img("r3-lg-sameframe.png", "Labeled Group beside Region", "wide")}
+    <p class="sub">Left: <code>LabeledGroup</code> (<code>components/region.labeledGroup.tsx</code>), <code>Region kind="group"</code> with a title tab in its corner slot. Right: the same Region with a Block there. The story measures that the tab sits flush in the frame's top-left and rounds with the frame's own radius token; changing that token turns all four stories red.</p>
+    <h4>Region's presets</h4>
+    <ul class="plain">{"".join(f"<li>{esc(k)}</li>" for k in L3['kids']['Components/Blocks/Region'])}</ul>
+  </div>
+</div>
+
+<h2>What moved where</h2>
+<div class="tablewrap"><table><thead><tr><th>From → to</th><th>Files</th><th>What</th></tr></thead><tbody>
+{"".join(f"<tr><td><code>{a}/ → {b}/</code></td><td>{n}</td><td>{ {('components','editor'): 'editor chrome, its private helpers, the compare family, their tests and stories', ('presets','components'): 'Value (Block preset), the Region stories and their acceptance helpers', ('presets','scene'): 'Branch and Loop presets with fixtures and tests — scene data, beside the region model', ('components','components'): 'renamed in place', ('editor','editor'): 'renamed in place'}.get((a, b), '') }</td></tr>" for (a, b), n in sorted(move_counts.items(), key=lambda kv: -kv[1]))}
+</tbody></table></div>
+<details><summary>The {len(editor_sources)} source files now in <code>editor/</code></summary><p style="columns:3 180px;font-size:13px"><code>{"</code><br><code>".join(editor_sources)}</code></p></details>
+
+<h2>Editor, as it sits now</h2>
+<ul class="plain">{"".join(f"<li><b>{esc(fam)}</b> · {len(L3['kids']['Editor/' + fam])} — {esc(', '.join(L3['kids']['Editor/' + fam]))}</li>" for fam in L3['kids']['Editor'])}</ul>
+
+<h2>Checks</h2>
+<div class="tablewrap"><table class="gates"><tbody>{r3_gate_rows}
+<tr><th>Merge, dry run</th><td class="{'green' if merge_main[0] == 0 else 'red'}">main: {'clean' if merge_main[0] == 0 else str(len(merge_main[1])) + ' conflicts'}</td><td>against <code>claude/system-sketch-ui-feedback-14bfc3</code>: {len(merge_peer[1])} files — {esc(', '.join(f.rsplit('/', 1)[1] for f in merge_peer[1]))}. All mechanical; that lane was told.</td></tr>
+</tbody></table></div>
+
+<h2>Needs you</h2>
+{r3_q_html}
+<p><button class="btn" id="copy">Copy all feedback</button><span id="copied"></span></p>
+<textarea id="out" hidden rows="10"></textarea>
+
+<h2 class="record">Round 2 — the reorganisation as it landed earlier today</h2>
+<p class="sub">Kept as the record. Its numbers are read from the live index, so they describe the sidebar as it is now; its prose describes round 2.</p>
+"""
+
 page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Storybook Sidebar Proposals</title><style>{CSS}</style></head><body><main>
+<title>Storybook Organisation</title><style>{CSS}</style></head><body><main>
+{round3_html}
 {landed_html}
 
 <div class="tldr">
