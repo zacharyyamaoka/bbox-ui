@@ -73,6 +73,26 @@ export function runRepair(editor: Editor, fn: () => void, options: { ignoreShape
 
 type ChangeSource = "user" | "remote";
 
+/**
+ * An after-change side effect's own write: a repair when the change that set
+ * it off came from ANOTHER writer, a plain write inside that writer's
+ * transaction otherwise.
+ *
+ * WHY the `source` tldraw hands the handler is what tells the two apart, and
+ * nothing looser: `flushAtomicCallbacks` passes `"remote"` only for the first
+ * round of handlers after a `mergeRemoteChanges` (`@tldraw/store`
+ * Store.ts:1196-1225), and a local write — a person's, an undo's — can never
+ * be handed `"remote"`. It then clears the remote flag BEFORE those handlers
+ * write (Store.ts:1259-1263), so without this a peer's corner-card resize
+ * re-fit the frame as a "user" write and autosaved (Codex audit, 2026-09-22,
+ * P3). A deeper cascade is handed `"user"` again and stays an edit: an
+ * unneeded save, never a hidden one.
+ */
+export function repairIfRemote(editor: Editor, source: ChangeSource, fn: () => void): void {
+  if (source === "remote") runRepair(editor, fn);
+  else fn();
+}
+
 /** The store's history interceptor. Excluded from tldraw's published
  *  typings (`@tldraw/store` index.d.mts: "Excluded from this release type:
  *  addHistoryInterceptor") but present on every 5.3.2 store, pinned exactly in

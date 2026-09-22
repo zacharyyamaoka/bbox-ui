@@ -35,7 +35,7 @@ import {
 } from "@trunk/components/region.layout";
 import { REGION_VARIANTS, readRegionVariant } from "@trunk/skin/regionVariants";
 
-import { runRepair } from "../../document/derivedWrites";
+import { repairIfRemote, runRepair } from "../../document/derivedWrites";
 
 import type { BlockPortSpec, BlockShapeProps } from "../block/BlockShapeUtil";
 import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE, type PortSide } from "../types";
@@ -690,15 +690,18 @@ export function installRegionKit(editor: Editor): () => void {
       }
       return regionNaming(next) ? pinnedCorner(next) : next;
     }),
-    editor.sideEffects.registerAfterCreateHandler("shape", (shape) => {
-      if (shape.type === REGION_SHAPE_TYPE) snapNamedCorner(shape as RegionShape);
+    // `repairIfRemote` on the four after-handlers below: a PEER's change sets
+    // them off as a repair, a local one as part of its own write
+    // (`document/derivedWrites.ts`).
+    editor.sideEffects.registerAfterCreateHandler("shape", (shape, source) => {
+      if (shape.type === REGION_SHAPE_TYPE) repairIfRemote(editor, source, () => snapNamedCorner(shape as RegionShape));
     }),
-    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next) => {
+    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next, source) => {
       if (next.type !== REGION_SHAPE_TYPE) return;
       if ((previous as RegionShape).props.cornerBlockId === (next as RegionShape).props.cornerBlockId) return;
-      snapNamedCorner(next as RegionShape);
+      repairIfRemote(editor, source, () => snapNamedCorner(next as RegionShape));
     }),
-    editor.sideEffects.registerAfterCreateHandler("shape", (shape) => {
+    editor.sideEffects.registerAfterCreateHandler("shape", (shape, source) => {
       if (shape.type !== BLOCK_SHAPE_TYPE) return;
       const region = parentRegionOf(shape);
       if (!region) return;
@@ -710,16 +713,16 @@ export function installRegionKit(editor: Editor): () => void {
       if (cornerBlockOf(editor, region)) return;
       if (Math.abs(shape.x - CORNER_INSET_X_PX) > CORNER_CLAIM_SLACK_PX) return;
       if (Math.abs(shape.y - CORNER_INSET_Y_PX) > CORNER_CLAIM_SLACK_PX) return;
-      editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { cornerBlockId: shape.id } });
+      repairIfRemote(editor, source, () => editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { cornerBlockId: shape.id } }));
     }),
-    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next) => {
+    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next, source) => {
       if (next.type !== BLOCK_SHAPE_TYPE) return;
       const before = previous.props as { w: number; h: number };
       const after = next.props as { w: number; h: number };
       if (before.w === after.w && before.h === after.h) return;
       const region = parentRegionOf(next);
       if (!region || region.props.cornerBlockId !== next.id) return;
-      reconcileFrame(region);
+      repairIfRemote(editor, source, () => reconcileFrame(region));
     }),
   ];
   return () => {

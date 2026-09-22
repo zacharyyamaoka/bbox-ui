@@ -19,7 +19,7 @@
 // reads the bytes on disk back, plus the count of writes the window sent.
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest";
 import { userEvent } from "vitest/browser";
-import type { Editor, TLShape, TLShapeId } from "tldraw";
+import { AssetRecordType, type Editor, type TLShape, type TLShapeId } from "tldraw";
 
 import reviewBoard from "../review/region-one-object.tldr?raw";
 
@@ -113,6 +113,39 @@ function countFileWrites(): { readonly count: number } {
   return {
     get count() {
       return count;
+    },
+  };
+}
+
+const GATED_ASSET_ORIGIN = "http://gated-asset.invalid";
+
+/** Answer every fetch of `GATED_ASSET_ORIGIN` with a 1-byte image, holding
+ *  the next one open on demand — tldraw's serialiser awaits that fetch. */
+function gateAssetFetches() {
+  const real = window.fetch.bind(window);
+  let next: ReturnType<typeof deferred> | null = null;
+  let held = 0;
+  window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (!url.startsWith(GATED_ASSET_ORIGIN)) return real(input as RequestInfo, init);
+    const gate = next;
+    if (gate) {
+      next = null;
+      held += 1;
+      await gate.promise;
+    }
+    return new Response(new Blob([new Uint8Array([0])], { type: "image/png" }));
+  }) as typeof window.fetch;
+  restores.push(() => {
+    window.fetch = real;
+  });
+  return {
+    get held() {
+      return held;
+    },
+    holdNext() {
+      next = deferred();
+      return next;
     },
   };
 }
@@ -277,10 +310,25 @@ describe("undo and redo are a person's edits, always", () => {
 
 /* ------------------------------------------------------------ native Open */
 
+/** A promise the test settles by hand. */
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (cause: unknown) => void;
+  const promise = new Promise<void>((resolve_, reject_) => {
+    resolve = resolve_;
+    reject = reject_;
+  });
+  return { promise, resolve, reject };
+}
+
 interface FakeHandle {
   name: string;
   content: string;
   lastModified: number;
+  /** When set, the next `close()` waits on it — a write genuinely in flight. */
+  closeGate: ReturnType<typeof deferred> | null;
+  /** `close()` calls that are waiting on `closeGate` right now. */
+  closing: number;
   getFile(): Promise<{ name: string; lastModified: number; text(): Promise<string> }>;
   createWritable(): Promise<{ write(data: string): Promise<void>; close(): Promise<void> }>;
   queryPermission(): Promise<"granted">;
@@ -292,6 +340,8 @@ function fakeHandle(name: string, content: string): FakeHandle {
     name,
     content,
     lastModified: Date.now(),
+    closeGate: null,
+    closing: 0,
     async getFile() {
       return { name: handle.name, lastModified: handle.lastModified, text: async () => handle.content };
     },
@@ -302,9 +352,20 @@ function fakeHandle(name: string, content: string): FakeHandle {
           buffer += data;
         },
         async close() {
+          const gate = handle.closeGate;
+          if (gate) {
+            handle.closeGate = null;
+            handle.closing += 1;
+            try {
+              await gate.promise;
+            } finally {
+              handle.closing -= 1;
+            }
+          }
           handle.content = buffer;
           handle.lastModified = Date.now();
         },
+        async abort() {},
       };
     },
     async queryPermission() {
@@ -381,4 +442,133 @@ describe("native File ▸ Open never leaves the open file's edits behind", () =>
     expect(poseName(editor), "the window must still hold the unwritten edit").toBe("mine");
     expect(a.content, "and the other writer's bytes are untouched").toBe(boardWithPoseNamed("theirs"));
   });
+
+  // Codex, 2026-09-22 (P2): the cases above never held a save genuinely in
+  // flight — the fake write answered at once, and the refused case waited for
+  // the refusal before pressing Open. So an Open that started A's save and did
+  // not WAIT for it would have passed. Here the write is held open by hand.
+  it("while A's write is still in flight B is not loaded; when that write fails the window stays on A", async () => {
+    const a = fakeHandle("a.tldr", boardWithPoseNamed("a-seed"));
+    const b = fakeHandle("b.tldr", boardWithPoseNamed("b-seed"));
+    const editor = await mountNativeOn(a, b);
+
+    const gate = deferred();
+    a.closeGate = gate;
+    editor.updateShape({ id: POSE, type: BLOCK_SHAPE_TYPE, props: { name: "a-edited" } } as never);
+    await press(editor, "{Control>}o{/Control}");
+    await waitFor(() => a.closing === 1, { what: "A's write in flight, held open" });
+    await sleep(QUIET_MS);
+    expect(poseName(editor), "B must not replace A while A's write is pending").toBe("a-edited");
+
+    gate.reject(new Error("the disk went away"));
+    await waitFor(() => statusTone() === "error", { what: "A's failed write surfaced" });
+    await sleep(QUIET_MS);
+    expect(poseName(editor), "a failed write keeps the window on A, edit and all").toBe("a-edited");
+    expect(a.content, "and A holds whatever it held before").toBe(boardWithPoseNamed("a-seed"));
+  });
+
+  // Codex, 2026-09-22 (P1): tldraw's serialiser snapshots the records and only
+  // then awaits external assets, so an edit made during that await is not in
+  // the bytes. Clearing "dirty" once the bytes were taken called that edit
+  // written, and Open then loaded B over it. Here an HTTP-backed image holds
+  // serialisation open while the second edit is made.
+  it("an edit made while A's save is still serialising is written to A before B replaces it", async () => {
+    const a = fakeHandle("a.tldr", boardWithPoseNamed("a-seed"));
+    const b = fakeHandle("b.tldr", boardWithPoseNamed("b-seed"));
+    const assets = gateAssetFetches();
+    const editor = await mountNativeOn(a, b);
+
+    editor.createAssets([
+      AssetRecordType.create({
+        id: AssetRecordType.createId("gate"),
+        type: "image",
+        props: { name: "gate.png", src: `${GATED_ASSET_ORIGIN}/gate.png`, w: 1, h: 1, mimeType: "image/png", isAnimated: false },
+      }),
+    ]);
+    // An asset nothing uses does not survive in the store, so an image shape holds it.
+    editor.createShape({ type: "image", x: 900, y: 900, props: { assetId: AssetRecordType.createId("gate"), w: 1, h: 1 } } as never);
+    await waitFor(() => a.content.includes(`"${AssetRecordType.createId("gate")}"`), { what: "the image asset saved to A" });
+    await sleep(QUIET_MS);
+
+    const gate = assets.holdNext();
+    editor.updateShape({ id: POSE, type: BLOCK_SHAPE_TYPE, props: { name: "first-edit" } } as never);
+    await press(editor, "{Control>}o{/Control}");
+    await waitFor(() => assets.held === 1, { what: "A's save paused inside serialisation" });
+    editor.updateShape({ id: POSE, type: BLOCK_SHAPE_TYPE, props: { name: "made-mid-save" } } as never);
+    gate.resolve();
+
+    await waitFor(() => poseName(editor) === "b-seed", { what: "B open once A holds every edit" });
+    expect(a.content, "the edit made while A's save was pending must be on disk").toContain("made-mid-save");
+  });
 });
+
+/* ------------------------------------------------------------ native Save As */
+
+describe("native Save As never adopts a new file over an edit its bytes do not hold", () => {
+  beforeEach(() => {
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ fileNavigation: "native", settingsPresentation: "dialog" }));
+  });
+
+  // Codex, 2026-09-22 (P1, the Save As half): the board is serialised BEFORE
+  // the picker opens, and adopting the picked file cleared "dirty" — so an
+  // edit made while the dialog was up never reached the new file.
+  it("an edit made while the Save As picker is open reaches the new file", async () => {
+    const saved = fakeHandle("saved-as.tldr", "");
+    const picker = deferred();
+    const target = window as unknown as Record<string, unknown>;
+    const had = Object.prototype.hasOwnProperty.call(target, "showSaveFilePicker");
+    const previous = target.showSaveFilePicker;
+    let asked = 0;
+    target.showSaveFilePicker = async () => {
+      asked += 1;
+      await picker.promise;
+      return saved;
+    };
+    restores.push(() => {
+      if (had) target.showSaveFilePicker = previous;
+      else delete target.showSaveFilePicker;
+    });
+
+    setDocumentLocation(memoryDocumentLocation({ initialBoard: null }));
+    app = await mountApp();
+    const editor = app.editor;
+    editor.createShape({ id: POSE, type: BLOCK_SHAPE_TYPE, x: 200, y: 200, props: { name: "before-picker", view: "port", ports: { left: [{ id: "in", declaration: "in" }], right: [], top: [], bottom: [] } } } as never);
+    await press(editor, "{Control>}{Shift>}s{/Shift}{/Control}");
+    await waitFor(() => asked === 1, { what: "the Save As picker open" });
+    editor.updateShape({ id: POSE, type: BLOCK_SHAPE_TYPE, props: { name: "while-picking" } } as never);
+    picker.resolve();
+
+    await waitFor(() => saved.content.includes("while-picking"), { what: "the edit made during the picker reached the new file" });
+  });
+});
+
+/* ------------------------------------------------------------ remote changes */
+
+describe("a peer's change is not this window's edit", () => {
+  // Codex, 2026-09-22 (P3): tldraw clears its remote flag before after-change
+  // handlers run, so a peer resizing a corner card re-fit the region frame as
+  // a "user" write and autosaved. The re-fit must still RUN (checked) and
+  // must not write.
+  it("a remote resize of a corner card re-fits its frame and saves nothing", async () => {
+    const path = `${host.workspace}/remote-corner.tldr`;
+    await hostWrite(path, reviewBoard);
+    const { editor } = await openByBoardParam(path);
+    await sleep(QUIET_MS);
+    const before = await hostLoad(path);
+    const writes = countFileWrites();
+
+    const loop = "shape:loop" as TLShapeId;
+    const card = editor.getShape("shape:loop-corner" as TLShapeId) as TLShape & { props: { h: number } };
+    const frameBefore = (editor.getShape(loop) as TLShape & { props: { h: number } }).props.h;
+    editor.store.mergeRemoteChanges(() => {
+      editor.store.put([{ ...card, props: { ...card.props, h: card.props.h + 120 } } as TLShape]);
+    });
+    const frameAfter = (editor.getShape(loop) as TLShape & { props: { h: number } }).props.h;
+    expect(frameAfter, "the frame re-fit to the card the peer grew").not.toBe(frameBefore);
+
+    await sleep(QUIET_MS);
+    expect(writes.count, "a peer's change must not send a single write").toBe(0);
+    expect((await hostLoad(path)).source, "the file's bytes must not move").toBe(before.source);
+  });
+});
+
