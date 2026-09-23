@@ -98,7 +98,7 @@ describe("a match arm's captures survive the same trip", () => {
 describe("the two carriers agree — neither may drift from the other", () => {
   it("every arm with a left wall has a test whose id IS that port", () => {
     const nodes = ladder();
-    for (const arm of armsOf({ nodes, edges: [] }, "br")) {
+    for (const arm of armsOf({ nodes }, "br")) {
       const wall = arm.data.ports?.left;
       if (wall === undefined) {
         expect(arm.data.arm?.test, `arm ${arm.id} has a test but no wall`).toBeUndefined();
@@ -115,7 +115,7 @@ describe("the two carriers agree — neither may drift from the other", () => {
       subject: "pt",
       arms: matchCaseArms(["A", "B"]).map((arm, i) => (i === 0 ? { ...arm, captures: ["x", "y"] } : arm)),
     });
-    for (const arm of armsOf({ nodes, edges: [] }, "m")) {
+    for (const arm of armsOf({ nodes }, "m")) {
       const wall = arm.data.ports?.right;
       if (wall === undefined) {
         expect(arm.data.arm?.captures).toBeUndefined();
