@@ -81,28 +81,65 @@ def sh(cmd: str, cwd: pathlib.Path) -> str:
 # --------------------------------------------------------------------------
 
 def measure_goldens() -> dict:
-    """Parse the pyblocks corpus and report what its reviewed bodies actually contain."""
-    inside: dict[str, set[str]] = {}
-    cases: list[str] = []
-    root = PYBLOCKS / "examples" / "runnable_goldens"
-    for cj in sorted(root.glob("*/case.json")):
-        case = cj.parent.name
-        cases.append(case)
-        sym = json.loads(cj.read_text()).get("qualifiedSymbol", "run").split(".")[-1]
-        src = cj.parent / "source.py"
-        if not src.exists():
-            continue
-        tree = ast.parse(src.read_text())
-        target = None
-        for n in ast.walk(tree):
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == sym:
-                target = n
-        if target is None:
-            continue
-        for n in ast.walk(target):
-            inside.setdefault(type(n).__name__, set()).add(case)
-    absent = [n for n in inv.EVERY_NODE if n not in inside]
-    return {"cases": cases, "inside": {k: len(v) for k, v in inside.items()}, "absent": absent}
+    """Parse EVERY golden corpus and report what it actually reaches.
+
+    WHY all three and not just `runnable_goldens`: the first version of this
+    report measured that one corpus, found 23 of the 71 grammar nodes absent,
+    and led with `match`/`case` as "zero occurrences anywhere in the corpus".
+    That was wrong by a factor of four. `adversarial_goldens` holds 131 more
+    cases — including `e07_match_statement_bindings`, `b06_walrus_in_
+    comprehension_leaks`, `b08_global_write_hidden_channel` and
+    `f02_reviewed_generator_yield_from` — and measuring one corpus and
+    reporting on "the corpus" is precisely the scan-is-not-proof-the-set-is-
+    complete failure this report exists to prevent.
+
+    Two measures, because they answer different questions:
+      * `body`     — inside the case's own reviewed symbol. This is what the
+                     projection actually has to DRAW.
+      * `anywhere` — anywhere in the case's source.py, scaffolding included.
+                     A node here but not in `body` has a golden that touches
+                     it and no golden that draws it.
+    """
+    body: dict[str, set[str]] = {}
+    anywhere: dict[str, set[str]] = {}
+    per_corpus: dict[str, int] = {}
+    for corpus in ("runnable_goldens", "adversarial_goldens", "repo_goldens"):
+        root = PYBLOCKS / "examples" / corpus
+        n = 0
+        for cj in sorted(root.rglob("case.json")):
+            case = f"{corpus.split('_')[0][:3]}:{cj.parent.name}"
+            n += 1
+            sym = json.loads(cj.read_text()).get("qualifiedSymbol", "run").split(".")[-1]
+            src = cj.parent / "source.py"
+            if not src.exists():
+                continue
+            # utf-8-sig: p17_utf8_byte_order_mark is a golden whose whole point
+            # is a BOM, and a plain read makes ast.parse throw on it.
+            tree = ast.parse(src.read_text(encoding="utf-8-sig"))
+            for node in ast.walk(tree):
+                anywhere.setdefault(type(node).__name__, set()).add(case)
+            target = None
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == sym:
+                    target = node
+            if target is None:
+                continue
+            for node in ast.walk(target):
+                body.setdefault(type(node).__name__, set()).add(case)
+        per_corpus[corpus] = n
+    return {
+        "per_corpus": per_corpus,
+        "total": sum(per_corpus.values()),
+        "body": {k: len(v) for k, v in body.items()},
+        # Drawable nodes only: `body` also holds riders (Del, GtE, BitAnd …),
+        # which are labels on a carrier and can never be thin on their own.
+        "thin": sorted(k for k, v in body.items()
+                       if len(v) <= 2 and k in inv.EVERY_NODE),
+        "no_body": [n for n in inv.EVERY_NODE if n not in body],
+        "nowhere": [n for n in inv.EVERY_NODE if n not in anywhere],
+        "scaffold_only": {n: sorted(anywhere[n])[:3] for n in inv.EVERY_NODE
+                          if n not in body and n in anywhere},
+    }
 
 
 GOLD = measure_goldens()
@@ -111,6 +148,7 @@ assert not MISSING and not DUPES, (MISSING, DUPES)
 
 N_EX = sum(len(s.examples) for s in inv.ALL_SCENARIOS)
 GAPS = [s for s in inv.ALL_SCENARIOS if not s.covered]
+PARTIAL = [s for s in inv.ALL_SCENARIOS if s.partial]
 OPEN_QS = [s for s in inv.ALL_SCENARIOS if s.open_q]
 
 # Every example is real Python. Asserted, not claimed.
@@ -211,6 +249,9 @@ EXTRA_CSS = """
   figure.d svg { display:block; width:100%; height:auto }
   figure.d figcaption { margin-top:13px }
   .grid5 { display:grid; grid-template-columns:repeat(5,1fr); gap:10px }
+  .sid-lite { font:700 10px/1 var(--mono); color:var(--dim2); letter-spacing:.08em }
+  #prior-art + .lede + .scroll table td { font-size:12.5px; line-height:1.55 }
+  #prior-art + .lede + .scroll table td i { color:#9ecbff }
   @media (max-width:900px){ .grid5 { grid-template-columns:repeat(2,1fr) } }
 """
 
@@ -397,7 +438,7 @@ def svg_region() -> str:
  <rect class="bx" x="20" y="88" width="82" height="30" fill="#2a1c10" stroke="#f0883e"/>
  <text class="tt" x="61" y="107" text-anchor="middle">initial 0.0</text>
  <path class="w" d="M102 103 L132 103 L132 141 L144 143"/>
- <text class="tt" x="14" y="130">no initial &#8594; no cycle</text>
+ <text class="tt" x="20" y="134">needs an initial</text>
 
  <circle class="dotr" cx="480" cy="104" r="5"/>
  <path class="w" d="M480 104 L512 104"/>
@@ -433,7 +474,7 @@ def svg_region() -> str:
  <!-- ============ the silent-failure rule ============ -->
  <text class="bad" x="10" y="256">&#10007; the FRAME must not carry data-block-id. wireLayer.resolveDot takes the FIRST match in document order, so a frame</text>
  <text class="bad" x="10" y="272">stamped with the region id wins the lookup, owns no port dot, and every cable into the region silently fails to land.</text>
- <text class="tt" x="10" y="292">wireLayer.tsx:81 &#183; CLAUDE.md, &#8220;Control flow &#8212; a region is ONE node, and the frame owns no id&#8221;</text>
+ <text class="tt" x="10" y="292">wireLayer.tsx:122&#8211;123 (CLAUDE.md still says :81 &#8212; the function has moved) &#183; &#8220;a region is ONE node, and the frame owns no id&#8221;</text>
 </svg>"""
 
 
@@ -450,8 +491,11 @@ except ImportError:                                   # pragma: no cover
 def prior_art_html() -> str:
     if not PRIOR_ART:
         return '<p class="sc-note">Prior-art matrix not built.</p>'
+    # NOT html-escaped: these cells are our own markup (the <code>/<b> in a
+    # product name, the scenario chip). Escaping them printed raw tags in the
+    # first build.
     rows = "".join(
-        f"<tr><td><b>{E(r['construct'])}</b></td><td>{r['blueprints']}</td>"
+        f"<tr><td>{r['construct']}</td><td>{r['blueprints']}</td>"
         f"<td>{r['labview']}</td><td>{r['simulink']}</td><td>{r['other']}</td>"
         f"<td>{r['lesson']}</td></tr>" for r in PRIOR_ART)
     les = "".join(
@@ -468,8 +512,9 @@ actually do, by product feature name. A blank cell is an honest &ldquo;no analog
 the interesting rows are the ones where three independent products converged on the same shape,
 because that is the part that is not a taste question either.</p></div>
 <div class="scroll"><table>
-<thead><tr><th style="width:15%">Construct</th><th>Unreal Blueprints</th><th>LabVIEW</th>
-<th>Simulink</th><th>Other</th><th style="width:22%">Consensus</th></tr></thead>
+<thead><tr><th style="width:10%">Construct</th><th style="width:15%">Unreal Blueprints</th>
+<th style="width:16%">LabVIEW</th><th style="width:15%">Simulink</th>
+<th style="width:23%">Other</th><th style="width:21%">Consensus</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
 <h2 id="lessons">The five things the prior art agrees on</h2>
 <div class="answers">{les}</div>
@@ -485,6 +530,8 @@ Citations &amp; unverified claims</summary>
 # --------------------------------------------------------------------------
 
 def build() -> str:
+    nowhere_list = ", ".join(f"<code>{E(n)}</code>" for n in GOLD["nowhere"])
+    n_thin = len(GOLD["thin"])
     toc = "".join(
         f'<a href="#g-{g.id}"><b>{E(g.title.split(" — ")[0])}</b>'
         f'<span>{len(g.scenarios)} scenarios &middot; '
@@ -502,13 +549,21 @@ def build() -> str:
             f'<h2 id="g-{g.id}">{E(g.title)}</h2>'
             f'<div class="lede"><p>{g.lede.strip()}</p></div>' + "".join(cards))
 
-    gap_rows = "".join(
-        f'<tr class="bad"><td><b>{E(s.id)} {E(s.name)}</b></td>'
-        f'<td>{" ".join("<code>"+E(n)+"</code>" for n in s.nodes) or "&mdash;"}</td>'
-        f'<td>{E(inv.BECOMES[s.becomes][0])}</td>'
-        f'<td>{"yes" if s.open_q else "no"}</td></tr>' for s in GAPS)
+    def _row(sc, cls, state):
+        return (f'<tr class="{cls}"><td><b>{E(sc.id)} {E(sc.name)}</b></td>'
+                f'<td>{" ".join("<code>"+E(n)+"</code>" for n in sc.nodes) or "&mdash;"}</td>'
+                f'<td>{E(inv.BECOMES[sc.becomes][0])}</td><td>{state}</td></tr>')
 
-    absent = ", ".join(f"<code>{E(a)}</code>" for a in GOLD["absent"])
+    gap_rows = ("".join(_row(sc, "bad", "<b>nothing</b>") for sc in GAPS)
+                + "".join(_row(sc, "dim", sc.partial) for sc in PARTIAL))
+
+    nowhere = ", ".join(f"<code>{E(a)}</code>" for a in GOLD["nowhere"])
+    scaffold = ", ".join(
+        f'<code>{E(n)}</code> <span style="color:var(--dim2)">({E(v[0].split(":")[1])}&hellip;)</span>'
+        for n, v in GOLD["scaffold_only"].items())
+    thin_rows = "".join(
+        f'<tr><td><code>{E(n)}</code></td><td class="num">{GOLD["body"][n]}</td></tr>'
+        for n in GOLD["thin"])
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -527,9 +582,9 @@ nodes, each claimed exactly once &middot; {N_EX} examples, every one of which pa
   <div class="fact"><b>{len(inv.ALL_SCENARIOS)}</b><span>scenarios</span></div>
   <div class="fact"><b>{len(inv.EVERY_NODE)}</b><span>drawable grammar nodes</span></div>
   <div class="fact"><b>{N_EX}</b><span>mini goldens to draw</span></div>
-  <div class="fact warn"><b>{len(GAPS)}</b><span>with no golden</span></div>
+  <div class="fact good"><b>{GOLD['total']}</b><span>goldens behind them</span></div>
+  <div class="fact warn"><b>{len(GOLD['nowhere'])}</b><span>nodes no golden reaches</span></div>
   <div class="fact warn"><b>{len(OPEN_QS)}</b><span>open questions</span></div>
-  <div class="fact good"><b>{len(GOLD['cases'])}</b><span>runnable goldens today</span></div>
 </div>
 
 <h2 id="reframe">What changed this morning</h2>
@@ -559,14 +614,25 @@ that would execute as the python. Really the only question is granularity.&rdquo
   in that set: they are labels on a node, never a box of their own. They ride on the scenario that
   owns their carrier and are listed there.</p></div>
 
-  <div class="answer green"><b class="h">Yes &mdash; the goldens were designed for exactly this, and they do not cover it</b>
-  <p>You asked whether this is what the goldens were for. It is, and the honest answer is that they
-  were built to attack <b>composition pressures</b> (fan-out, rebinding, loop-carried state,
-  receiver mutation), not to tick off syntax. Measured just now by parsing all
-  {len(GOLD['cases'])} reviewed bodies in <code>pyblocks/examples/runnable_goldens</code>:
-  <b>{len(GOLD['absent'])} of the {len(inv.EVERY_NODE)} grammar nodes appear in zero of them</b>.</p>
-  <p>That is not a criticism of the corpus &mdash; it is the gap list, and it is the most useful
-  thing on this page.</p></div>
+  <div class="answer green"><b class="h">Yes &mdash; the goldens were built for exactly this, and they are far better than they look</b>
+  <p>You asked whether this is what the goldens were for. It is. Measured just now across
+  <b>all three</b> corpora that carry a <code>case.json</code> &mdash;
+  <code>runnable_goldens</code> ({GOLD['per_corpus']['runnable_goldens']}),
+  <code>adversarial_goldens</code> ({GOLD['per_corpus']['adversarial_goldens']}) and
+  <code>repo_goldens</code> ({GOLD['per_corpus']['repo_goldens']}), <b>{GOLD['total']} reviewed
+  bodies</b> &mdash; only <b>{len(GOLD['nowhere'])} of the {len(inv.EVERY_NODE)} grammar nodes
+  appear nowhere at all</b>: {nowhere_list}.</p>
+  <p>Three more &mdash; <code>ClassDef</code>, <code>ImportFrom</code>, <code>TypeAlias</code>
+  &mdash; are in golden files but never inside a reviewed body, so a golden touches them and no
+  golden draws them. That leaves the real work not in the holes but in the <b>thin tail</b>:
+  {n_thin} nodes carried by one or two cases each.</p>
+  <p style="color:var(--dim2);font-size:13px;border-top:1px solid #1e222a;margin-top:12px;padding-top:10px">
+  Worth saying plainly: the first build of this page measured <code>runnable_goldens</code> alone,
+  found 23 absent and led with &ldquo;<code>match</code> has zero occurrences anywhere in the
+  corpus&rdquo;. <code>e07_match_statement_bindings</code> exists and is a good case. Measuring one
+  corpus and reporting on &ldquo;the corpus&rdquo; is the exact failure this page is built to
+  prevent, so the builder now walks all three and the counts above are re-derived every build.</p>
+  </div>
 </div>
 
 <h2 id="faces">The five faces, drawn once</h2>
@@ -579,26 +645,44 @@ cannot: <b>which of these does this construct even get, and what are its ports?<
 <figcaption><b>One block, five faces.</b> <code>simple</code> collapses every port to a single
 centred point so wires converge rather than disappear; <code>port</code> is the rung nobody else
 ships (&ldquo;ports shown, innards hidden&rdquo;); <code>expanded-opaque</code> keeps the frame and
-folds the contents, which is what a region does when you collapse it. Vocabulary as it exists in
-code today: <code>BlockView = &quot;simple&quot; | &quot;port&quot; | &quot;expanded&quot;</code>
-(<code>blockPort.layout.ts:45</code>) and <code>RegionFace = &quot;port&quot; | &quot;expanded&quot;
-| &quot;opaque&quot;</code> (<code>hosts/regionScene.ts:13</code>).</figcaption></figure>
+folds the contents. <b>Which faces a construct gets is not a per-construct decision &mdash; it
+follows from its chip:</b> a <span class="chip block">Block</span> gets
+<code>simple&nbsp;&middot;&nbsp;port&nbsp;&middot;&nbsp;expanded</code>, a
+<span class="chip region">Region</span> gets
+<code>port&nbsp;&middot;&nbsp;expanded&nbsp;&middot;&nbsp;expanded&#8209;opaque</code> and no
+<code>simple</code>. That is your own ruling from last Monday, quoted in the source:
+<i>&ldquo;regions do not have a simple view. they just have port, expanded and expanded opaque
+view&rdquo;</i> (<code>hosts/regionScene.ts:16</code>).</figcaption></figure>
 
-<div class="lede red"><p><b>One thing to settle before drawing anything.</b> The ladder is spelled
-four different ways across four places that all ship: the README says three rungs, bbox-ui's code
-says <code>simple&nbsp;&middot;&nbsp;port&nbsp;&middot;&nbsp;expanded</code> plus a fourth
-<code>value</code>, regions say <code>port&nbsp;&middot;&nbsp;expanded&nbsp;&middot;&nbsp;opaque</code>,
-and pyblocks says <code>simple&nbsp;&middot;&nbsp;ports&nbsp;&middot;&nbsp;expanded</code>
-(<code>blockview.py:22</code>, note the plural). Four vocabularies for one idea &mdash; whichever
-spelling wins, the mini goldens should be drawn in it, or the corpus bakes the ambiguity in.</p></div>
+<div class="lede red"><p><b>Two things to fix before drawing anything &mdash; both measured just
+now, not recalled.</b></p>
+<p><b>1 &middot; pyblocks spells the middle rung in the plural.</b>
+<code>DetailLevel&nbsp;=&nbsp;Literal[&quot;simple&quot;,&nbsp;&quot;ports&quot;,&nbsp;&quot;expanded&quot;]</code>
+(<code>pyblocks/blockview.py:22</code>) against bbox-ui's
+<code>BlockView&nbsp;=&nbsp;&quot;simple&quot;&nbsp;|&nbsp;&quot;port&quot;&nbsp;|&nbsp;&quot;expanded&quot;</code>
+(<code>blockPort.layout.ts:45</code>). One character, and the two sides of the oracle are the two
+programs that have to agree.</p>
+<p><b>2 &middot; the vault note says there is a fourth rung called <code>value</code>. There is
+not.</b> <code>C - Simple, Port, Expanded</code> reads <i>&ldquo;the code says four &mdash; simple
+&middot; port &middot; expanded &middot; value&rdquo;</i>, and that is worth correcting before it
+gets drawn into a golden: <code>BLOCK_VIEWS</code> has exactly three members, and
+<code>block.value.tsx</code> is a <b>component</b> that picks between two of them
+(<code>const view = expanded ? &quot;expanded&quot; : &quot;simple&quot;</code>, line 174). The
+value capsule is a consumer of the ladder, not a rung on it.</p>
+<p>The block/region split itself is <b>already settled</b> and needs nothing from you &mdash; see
+the caption above. It is only these two that would bake an ambiguity into the corpus.</p></div>
 
 <figure class="d">{svg_region()}
 <figcaption><b>The two region shapes every scenario in this report reduces to.</b> Left: a loop's
 carried value leaves the right wall and re-enters the left one tick later &mdash; legal only
-because it passes through an initial value first, which is your own rule from the grammar doc and
-independently LabVIEW's shift register, Lustre's <code>fby</code> and SCADE's <code>pre</code>.
-Right: arms stack, and every value that leaves the region does so through <b>one</b> join, not one
-output per arm.</figcaption></figure>
+because it passes through an initial value first. That is your own rule from the grammar doc
+(<i>&ldquo;all feedback traces have to go through an initial variable first&rdquo;</i>), and the
+Jul-20 thinking pass names it as the <b>unit delay</b> of synchronous dataflow. Right: arms stack,
+and every value that leaves the region does so through <b>one</b> join, not one output per arm.
+<br><span style="color:var(--dim2)">The operator names that family uses &mdash; Lustre
+<code>pre</code>, Faust <code>~</code> &mdash; are deliberately <b>not</b> asserted here: your own
+note flags them <i>&ldquo;leads to confirm, not gospel&rdquo;</i> because nobody opened those docs.
+They are in the unverified list under the prior-art table.</span></figcaption></figure>
 
 <h2 id="prior">What we already built &mdash; the work you remembered</h2>
 <div class="scroll"><table>
@@ -613,11 +697,21 @@ and <b>13&ndash;24</b> (<i>&hellip;&nbsp;&middot;&nbsp;Builds&nbsp;on&nbsp;&midd
 self-loop&rdquo;, &ldquo;one producer, multiple consumers&rdquo;. Nothing in it tells you whether
 <code>match</code> is handled.</td></tr>
 <tr><td><b>The runnable goldens</b></td><td><code>pyblocks/examples/runnable_goldens/</code></td>
-<td>{len(GOLD['cases'])} cases, each a <code>source.py</code> + <code>case.json</code> naming the
-reviewed symbol. Cases 25&ndash;48 are adapted from your real <code>like_keras</code> and
-<code>cad_exporter</code> trees at pinned commits.</td>
-<td>Real code carries real syntax incidentally, which flatters coverage. Measured on the reviewed
-bodies only, {len(GOLD['absent'])} node types never appear.</td></tr>
+<td>{GOLD['per_corpus']['runnable_goldens']} cases, each a <code>source.py</code> +
+<code>case.json</code> naming the reviewed symbol. Cases 25&ndash;48 are adapted from your real
+<code>like_keras</code> and <code>cad_exporter</code> trees at pinned commits.</td>
+<td>It is the corpus everyone reaches for and the <b>narrowest</b> one: 23 node types never appear
+in it. Reach for <code>adversarial_goldens</code> first.</td></tr>
+<tr class="good"><td><b>The adversarial goldens</b> &mdash; the real coverage</td>
+<td><code>pyblocks/examples/adversarial_goldens/</code></td>
+<td>{GOLD['per_corpus']['adversarial_goldens']} cases in nine families (a&ndash;i, p, t), each
+carrying an <code>attack</code> sentence and an <code>intendedGraph</code> sentence in its
+<code>case.json</code> &mdash; e.g. <code>b08_global_write_hidden_channel</code>,
+<code>d07_decorator_changes_signature</code>, <code>e07_match_statement_bindings</code>,
+<code>p17_utf8_byte_order_mark</code>.</td>
+<td>Nothing &mdash; this is the answer to your question, and it is much stronger than the runnable
+set. Its <code>intendedGraph</code> field is already the &ldquo;what should this look like&rdquo;
+you are about to draw.</td></tr>
 <tr><td><b>The grammar decisions</b></td>
 <td><code>zach_brain/Sources/Notes/DP - Underlying Python Syntax for Block View.md</code></td>
 <td>Your rulings: NamedTuple returns so output ports have names; reference-designator naming
@@ -635,19 +729,29 @@ arms as child nodes, <code>break</code>/<code>continue</code>/<code>pass</code> 
 <td>Dispatch code, not a document. You cannot read it and know what is missing.</td></tr>
 </tbody></table></div>
 
-<h2 id="gaps">The gap list &mdash; measured, not asserted</h2>
-<p class="sc-note">Parsing the {len(GOLD['cases'])} reviewed function bodies in the runnable corpus,
-these grammar nodes appear in <b>none</b> of them:</p>
-<p class="nodes" style="font-size:12.5px;line-height:2.1">{absent}</p>
-<p class="sc-note">Which lands as {len(GAPS)} scenarios with no golden behind them. The ones
-carrying an open question are design decisions, not just missing test cases:</p>
+<h2 id="gaps">The gap list &mdash; measured across all {len(GOLD['per_corpus'])} corpora</h2>
+<p class="sc-note">Parsing the reviewed body of every one of the <b>{GOLD['total']}</b> golden cases
+that carries a <code>case.json</code>, these grammar nodes appear <b>nowhere at all</b> &mdash; not
+in a body, not in scaffolding:</p>
+<p class="nodes" style="font-size:13px;line-height:2.1">{nowhere}</p>
+<p class="sc-note">Six nodes, and four of them are match patterns. These three appear in golden
+files but never inside a reviewed body &mdash; a golden touches them, no golden draws them:</p>
+<p class="nodes" style="font-size:13px;line-height:2.1">{scaffold}</p>
+<p class="sc-note">Which lands as just <b>{len(GAPS)} scenarios with no golden</b> and
+{len(PARTIAL)} that are only partly reached:</p>
 <div class="scroll"><table>
-<thead><tr><th>Scenario</th><th>Grammar</th><th>Becomes</th><th>Needs a decision?</th></tr></thead>
+<thead><tr><th>Scenario</th><th>Grammar</th><th>Becomes</th><th style="width:38%">What the corpus has</th></tr></thead>
 <tbody>{gap_rows}</tbody></table></div>
-<p class="sc-note"><b>The single biggest hole is <code>match</code>/<code>case</code>:</b> nine of
-the {len(inv.EVERY_NODE)} nodes ({9 * 100 // len(inv.EVERY_NODE)}%) are match-only, and the corpus
-contains zero occurrences anywhere &mdash; not in a reviewed body, not in scaffolding, not in the
-real adapted production code.</p>
+
+<h4 style="margin-top:34px">The thin tail is the real risk, not the holes</h4>
+<p class="sc-note">{n_thin} of the {len(inv.EVERY_NODE)} nodes are carried by <b>one or two</b>
+reviewed bodies. A single case is enough to say &ldquo;handled&rdquo; and not enough to say
+&ldquo;handled in general&rdquo; &mdash; and it is exactly where a regression lands silently,
+because deleting the one case that covers <code>Nonlocal</code> turns nothing red except that
+case. This is the list to thicken:</p>
+<div class="scroll" style="max-width:520px"><table>
+<thead><tr><th>Node</th><th style="text-align:right">bodies</th></tr></thead>
+<tbody>{thin_rows}</tbody></table></div>
 
 <h2 id="how">How to read a scenario card</h2>
 <div class="lede"><p><b>Canonical form</b> is the shape in general terms, with
@@ -667,22 +771,26 @@ edge means no golden exercises it yet.</p></div>
 {prior_art_html()}
 
 <h2 id="next">What needs you</h2>
-<div class="ask"><h3>1 &middot; Which spelling of the view ladder wins?</h3>
-<p>Four vocabularies ship today for one idea. Every mini golden you draw will encode whichever one
-you use, so this is worth thirty seconds now and expensive later.</p>
-<p class="dflt"><b>Default if you say nothing:</b> I take bbox-ui's
-<code>simple&nbsp;&middot;&nbsp;port&nbsp;&middot;&nbsp;expanded</code> as the block ladder and
-<code>opaque</code> as the region-only fourth face, then file a one-line correction in the README
-and rename pyblocks' <code>&quot;ports&quot;</code> to <code>&quot;port&quot;</code>. Reversible.</p></div>
+<div class="ask"><h3>1 &middot; Two one-line vocabulary fixes &mdash; say no if you disagree</h3>
+<p>Not a design question: the block/region split is already your ruling. Just the plural and the
+phantom rung, both of which would otherwise get drawn into 171 mini goldens.</p>
+<p class="dflt"><b>Default if you say nothing:</b> rename pyblocks'
+<code>DetailLevel</code> member <code>&quot;ports&quot;</code>&nbsp;&rarr;&nbsp;<code>&quot;port&quot;</code>
+to match bbox-ui, and correct <code>C - Simple, Port, Expanded</code> in the vault to say three
+rungs with <code>value</code> named as a component rather than a fourth face. Both reversible,
+neither touches a drawing.</p></div>
 
-<div class="ask"><h3>2 &middot; Do the {len(GAPS)} gaps become goldens, and in what order?</h3>
-<p>My ranking by cost of being wrong, not by frequency: <b>N1 global/nonlocal</b> (a port the
-signature never mentions &mdash; the thing a block diagram exists to surface), <b>C3/C4
-match</b> (13% of the grammar, zero coverage), <b>F11 decorators</b> (can change a signature the
-drawing claims to show), <b>B7 class</b> (twenty-four goldens select methods and none draws the
-class), then the rest.</p>
-<p class="dflt"><b>Default if you say nothing:</b> I add the four above as mini goldens in the
-existing series-B style and leave the remaining ten as documented gaps in this report.</p></div>
+<div class="ask"><h3>2 &middot; Do the six unreached nodes become goldens?</h3>
+<p>Smaller than it looked an hour ago. <b>Four are match patterns</b> &mdash;
+<code>MatchValue</code>, <code>MatchSingleton</code>, <code>MatchStar</code>,
+<code>MatchOr</code> &mdash; which means one more case beside <code>e07</code> closes all four.
+The other two are <code>except*</code> and <code>async with</code>, and they arrive together the
+day anything uses <code>asyncio.TaskGroup</code>.</p>
+<p class="dflt"><b>Default if you say nothing:</b> two new adversarial cases &mdash; one
+<code>e13_match_value_or_star_patterns</code>, one <code>e14_taskgroup_except_star</code> &mdash;
+written in the existing family style with their own <code>attack</code> and
+<code>intendedGraph</code> sentences, plus a pass over the {n_thin}-node thin tail to say which
+deserve a second case. No drawings, no analyzer changes.</p></div>
 
 <div class="ask"><h3>3 &middot; Is &ldquo;grain 1&rdquo; the answer to V4?</h3>
 <p>At grain 1 an operator is a block, so <code>weight * quality + bias</code> is two boxes. That is
@@ -701,8 +809,9 @@ everything else &mdash; no new vocabulary.</p></div>
 <code>docs/python_syntax_prior_art.py</code> (the cited matrix).<br>
 <b>Measured at build time, not typed:</b> the {len(inv.EVERY_NODE)}-node grammar surface from
 <code>ast</code> on CPython {PY_VER}; the coverage assertion that every node is claimed exactly
-once; golden coverage by parsing {len(GOLD['cases'])} reviewed bodies in
-<code>pyblocks/examples/runnable_goldens</code> at <code>{PYB_HEAD}</code>; and a
+once; golden coverage by parsing the reviewed body of all {GOLD['total']} cases across
+<code>runnable_goldens</code>, <code>adversarial_goldens</code> and <code>repo_goldens</code> at
+<code>{PYB_HEAD}</code>; and a
 <code>ast.parse</code> on all {N_EX} examples, so every snippet on this page is real Python.<br>
 <b>Not measured:</b> nothing on this page is a screenshot of a running block view, because none of
 these {len(inv.ALL_SCENARIOS)} scenarios has been drawn yet &mdash; that is the work this inventory

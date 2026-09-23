@@ -80,6 +80,11 @@ class Scenario:
     ports: str
     examples: list[tuple[str, str]]
     covered: str | None = None          # golden case id, or None => gap
+    #: set when the golden exists but does not fully exercise the scenario —
+    #: e.g. the construct appears only OUTSIDE the case's reviewed body, or
+    #: only some of the scenario's grammar nodes are reached. Measured, not
+    #: judged: `build_python_syntax_report.py` re-derives both facts per build.
+    partial: str = ""
     note: str = ""
     open_q: str = ""
     riders: list[str] = field(default_factory=list)
@@ -189,11 +194,11 @@ and a port needs a name.""", [
     becomes="wire",
     canonical="def <name>(*<items>, **<opts>): ...\n<callee>(*<seq>)\n<a>, *<rest> = <seq>",
     ports="a variadic input port: one port that accepts N cables, not N ports",
-    covered=None,
+    covered="adv c07 star args unpacking",
     open_q="Does a variadic port draw as one growing rail (LabVIEW's expanding node) or as "
            "N+1 slots with an always-empty tail? bbox-ui already has "
            "<code>variadic_port_v5</code> in pyblocks/examples — unreviewed.",
-    note="GAP: <code>Starred</code> appears in zero of the 53 reviewed golden bodies.",
+    note="Covered by the adversarial corpus in three directions at once &mdash; <code>c06</code> (<code>**</code> splat), <code>c07</code> (<code>*args</code>) and <code>g12</code> (a starred return flattening). None of the 53 runnable goldens touches it.",
     examples=[
       ("collecting",
        "def merge(*poses: Pose) -> Pose:\n    return average(poses)"),
@@ -229,12 +234,11 @@ and a port needs a name.""", [
     becomes="block",
     canonical="<f> = lambda <in>: <expr>",
     ports="in: one per lambda parameter · out: exactly one, unnamed",
-    covered=None,
+    covered="adv d05 lambda captures later rebinding",
     open_q="Draw a lambda as a real nested block, or as a literal pill on the port that "
            "receives it? Golden 03 (callable argument) poses the same question for a named "
            "function passed by reference and is still marked REVIEW.",
-    note="GAP: absent from all 53 reviewed bodies. A lambda is a <code>def</code> with no "
-         "name and one output — so it is a block by the B1 rule, but it has no title to draw.",
+    note="A lambda is a <code>def</code> with no name and one output &mdash; a block by the B1 rule, with no title to draw. The adversarial corpus attacks it from the side that matters: <code>d05</code> and <code>d15</code> are late-vs-early capture, <code>p14</code> is &ldquo;lambda soup&rdquo;.",
     examples=[
       ("a sort key",
        "best = max(poses, key=lambda p: p.confidence)"),
@@ -248,13 +252,12 @@ and a port needs a name.""", [
     becomes="block",
     canonical="class <Name>:\n    def <method>(self, <in>) -> <Out>: ...",
     ports="a class is not one block — it is a namespace of blocks sharing a <code>self</code> state port",
-    covered=None,
+    covered="adv p03 class body with logic",
+    partial="the reviewed symbol is <code>Sorter.run</code>, so <code>ClassDef</code> is never inside the body being drawn",
     open_q="Is a class a region containing its methods, a palette entry that only appears once "
            "instantiated, or both? Goldens 41–48 select real methods but never draw the class "
            "that holds them. This is the largest undecided scenario in the inventory.",
-    note="GAP as an axis: <code>ClassDef</code> appears in 54 golden FILES but in zero reviewed "
-         "BODIES — it is always scaffolding, never the subject. NamedTuple and dataclass "
-         "declarations are the same node and are pure type declarations (see B8).",
+    note="<code>ClassDef</code> is in over a hundred golden files and in <b>zero reviewed bodies</b> &mdash; always scaffolding, never the subject. <code>p03</code> is the sharpest attack on it (a class body that runs a loop and conditionally <i>defines a method</i>), but even there the reviewed symbol is the method. NamedTuple and dataclass declarations are the same node and are pure type declarations (see B8).",
     examples=[
       ("a port type, not a block",
        "class EstimateOut(NamedTuple):\n    pose: Pose\n    quality: float"),
@@ -272,9 +275,9 @@ and a port needs a name.""", [
     becomes="not-drawn",
     canonical="<name>: <T> = <value>\n<name>: <T>          # declaration only\ntype <Alias> = <T>",
     ports="none — annotations decide the TYPE printed on a port, never whether a port exists",
-    covered=None,
-    note="GAP for <code>TypeAlias</code> (the 3.12 <code>type X = Y</code> statement): zero "
-         "goldens. An annotation with no value is the one assignment that produces no wire.",
+    covered="adv p06 python312 type parameters",
+    partial="<code>TypeAlias</code> sits at module scope, outside every reviewed body",
+    note="An annotation with no value is the one assignment that produces no wire. <code>p06</code> covers the whole PEP&nbsp;695 surface &mdash; a <code>type</code> alias, a generic function and a generic class &mdash; but all of it at module scope, so no reviewed body contains a <code>TypeAlias</code>.",
     examples=[
       ("annotated binding — a wire whose type is now known",
        "pose: Pose = estimate(frame)"),
@@ -492,11 +495,10 @@ into.""", [
     becomes="wire",
     canonical="if (<name> := <expr>) is not None:\n    <block>",
     ports="none — it names a cable that is simultaneously being consumed",
-    covered=None,
+    covered="adv b06 walrus in comprehension leaks",
     open_q="A walrus in a <code>while</code> header names a value produced <i>inside</i> the "
            "loop's own predicate. Which side of the region boundary does that cable live on?",
-    note="GAP: zero goldens. Structurally identical to V2 except the binding happens where an "
-         "expression is, so the cable has a name AND a consumer at the same point.",
+    note="Structurally identical to V2 except the binding happens where an expression is, so the cable has a name AND a consumer at the same point. Both goldens go straight at the scope question: <code>b06</code> is a walrus in a comprehension <i>leaking</i> to the enclosing scope, <code>g09</code> reuses the bound name in the same call.",
     examples=[
       ("guard + bind in one",
        "if (pose := estimate(frame)) is not None:\n    publish(pose)"),
@@ -510,9 +512,8 @@ into.""", [
     becomes="mark",
     canonical="del <name>",
     ports="none — a badge on the block that produced the value, or on its cable",
-    covered=None,
-    note="GAP: zero goldens. Dataflow has no vocabulary for un-producing a value; the honest "
-         "drawing is a terminator mark, the same class as <code>break</code>.",
+    covered="adv a13 del item then lookup",
+    note="Dataflow has no vocabulary for un-producing a value; the honest drawing is a terminator mark, the same class as <code>break</code>. <code>a13</code> deletes a dict item then looks it up; <code>b07</code> deletes a name then rebinds it &mdash; both attack the same hole, that a cable which has ceased to exist still looks drawn.",
     examples=[
       ("releasing a large intermediate",
        "frame = decode(raw)\npose = estimate(frame)\ndel frame"),
@@ -598,12 +599,12 @@ the shape was settled by prior art, not chosen.""", [
     canonical="match <subject>:\n    case <pattern1>:\n        <block>\n"
               "    case <pattern2> if <guard>:\n        <block>\n    case _:\n        <block>",
     ports="in: the subject + each guard's inputs · out: joined across every case, same as C1",
-    covered=None,
+    covered="adv e07 match statement bindings",
+    partial="one case for the whole construct",
     open_q="Is <code>match</code> just C1 with a different arm label, or does destructuring "
            "mean each arm also <b>produces</b> ports (the bound names) that <code>if</code> "
            "arms never do? That difference is the whole reason it is listed separately.",
-    note="GAP: zero goldens, zero occurrences anywhere in the corpus. The largest single hole "
-         "in the inventory — 9 of the 71 grammar nodes (13%) are match-only.",
+    note="One golden, <code>e07</code>, and it is a good one: four arms binding <b>different</b> names, with defaults set before the statement and a consumer after that reads names only some arms bind. Its own <code>intendedGraph</code> field already states the answer &mdash; a region exporting <code>kind</code> and <code>amount</code>, the defaults overridden per arm. That is C1&rsquo;s join rule, unchanged.",
     examples=[
       ("literal cases — pure C1",
        "match status:\n    case 'ok':\n        publish(pose)\n    case 'stale':\n"
@@ -622,10 +623,9 @@ the shape was settled by prior art, not chosen.""", [
     becomes="mark",
     canonical="case <Class>(<field>=<name>) | <Other>() as <bound> if <guard>:",
     ports="a pattern is the arm's LABEL; the names it binds are the arm's own outputs",
-    covered=None,
-    note="GAP: all eight. Listed as their own scenario rather than folded into C3 because "
-           "they are the part with no analogue anywhere in the prior art — LabVIEW's Case "
-           "selector takes a value, not a shape.",
+    covered="adv e07 match statement bindings",
+    partial="reaches 4 of the 8 pattern nodes &mdash; sequence, mapping, class, capture. <code>MatchValue</code>, <code>MatchSingleton</code>, <code>MatchStar</code> and <code>MatchOr</code> appear nowhere",
+    note="Listed separately from C3 because this is the part with <b>no analogue anywhere in the prior art</b> &mdash; LabVIEW&rsquo;s Case selector takes a value, not a shape, and nothing in the surveyed eighteen node editors destructures. Four of the eight nodes are reached by <code>e07</code>; the other four appear in no golden at all.",
     examples=[
       ("sequence + star",
        "match detection:\n    case [first, *rest]:\n        publish(first)"),
@@ -868,10 +868,8 @@ that the block resumes where it stopped.""", [
     becomes="wire",
     canonical="def <name>(<in>):\n    yield from <inner_generator>",
     ports="none of its own — it splices an inner block's stream port onto this block's stream port",
-    covered=None,
-    note="GAP: zero goldens. Structurally a pass-through — which is exactly LabVIEW's "
-         "<b>tunnel</b>, a value crossing a boundary unchanged. If a tunnel primitive exists "
-         "for regions, this is the same primitive at the block wall.",
+    covered="adv f02 reviewed generator yield from",
+    note="Structurally a pass-through &mdash; which is exactly LabVIEW&rsquo;s <b>tunnel</b>, a value crossing a boundary unchanged. If a tunnel primitive exists for regions, this is the same primitive at the block wall. <code>f02</code> is the only golden that reaches it.",
     examples=[
       ("delegation",
        "def all_poses(bins):\n    for b in bins:\n        yield from poses(b.frames)"),
@@ -954,10 +952,8 @@ expressible as a cable.""", [
     becomes="mark",
     canonical="assert <cond>, <message>",
     ports="in: the predicate · out: none — a guard badge on the cable it constrains",
-    covered=None,
-    note="GAP as an axis: present in 10 golden FILES, zero reviewed BODIES. Structurally "
-         "<code>if not cond: raise</code>, but drawing it that way turns a one-line invariant "
-         "into a region — the reason it belongs with the marks instead.",
+    covered="adv e10 assert message is conditional",
+    note="Structurally <code>if not cond: raise</code>, but drawing it that way turns a one-line invariant into a region &mdash; the reason it belongs with the marks instead. <code>e10</code> is the nasty case: the assert <i>message</i> is itself conditional, so the guard has a branch inside it.",
     examples=[
       ("an invariant on a cable",
        "pose = estimate(frame)\nassert pose.confidence >= 0.0"),
@@ -1020,12 +1016,11 @@ diagram exists to make impossible to miss.""", [
     becomes="block",
     canonical="def <name>():\n    global <state>\n    <state> = <expr>",
     ports="an undeclared in/out pair on the block — a port the signature never mentions",
-    covered=None,
+    covered="adv b08 global write hidden channel",
     open_q="Draw the hidden state as a real port on the block wall (honest, noisy), or as a "
            "badge like the <code>mut</code> cable (quiet, easy to miss)? The <code>mut</code> "
            "vocabulary already exists in the control-flow plan.",
-    note="GAP: zero goldens. The highest-value gap per line of code in the whole inventory — "
-         "this is the construct whose invisibility in source is most worth fixing in the drawing.",
+    note="Three goldens, and their names are the argument: <code>b08_global_write_hidden_channel</code>, <code>b09_nonlocal_counter</code>, <code>b11_return_global_written_by_nested_function</code>. &ldquo;Hidden channel&rdquo; is exactly right &mdash; this is the construct whose invisibility in source is most worth fixing in the drawing.",
     examples=[
       ("module state written from inside a block",
        "_LAST: Pose | None = None\n\ndef track(pose: Pose) -> None:\n    global _LAST\n    _LAST = pose"),
@@ -1217,14 +1212,12 @@ result is not.""", [
     becomes="block",
     canonical="@<wrapper>\ndef <name>(<in>) -> <Out>: ...",
     ports="unchanged signature, changed behaviour — a block wrapped in another block",
-    covered=None,
+    covered="adv d07 decorator changes signature",
     open_q="A badge on the header (honest about the signature, silent about the behaviour) or "
            "a real enclosing block (honest about the behaviour, noisy for "
            "<code>@dataclass</code>)? Probably both, keyed on whether the decorator changes the "
            "signature.",
-    note="GAP as an axis, though <code>@dataclass</code> appears throughout the corpus' "
-         "scaffolding. <code>decorator_list</code> rides on <code>FunctionDef</code>, so it "
-         "will never show up as a missing node — only as a missing drawing.",
+    note="<code>decorator_list</code> rides on <code>FunctionDef</code>, so a decorator can never show up as a <i>missing node</i> &mdash; only as a missing drawing. Three goldens attack it: <code>d07</code> (the decorator changes the signature), <code>p01</code> (the reviewed function is itself decorated) and <code>d16</code> (a decorator on a nested def is a call).",
     examples=[
       ("signature-preserving — a badge is enough",
        "@functools.cache\ndef solve(frame: Frame) -> Pose: ...")
