@@ -23,7 +23,7 @@ import argparse, base64, html, io, json, os, re, sys
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from vocab_board import render  # noqa: E402
+from vocab_board import render, SHARED_DEFS, SHARED_CSS  # noqa: E402
 
 E = html.escape
 
@@ -67,6 +67,52 @@ def jpeg_uri(path, width, quality=72):
     buf = io.BytesIO()
     im.save(buf, "JPEG", quality=quality, optimize=True, progressive=True)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+AGREEMENT_ORDER = ["unreal", "unity", "labview", "simulink", "houdini", "blender",
+                   "grasshopper", "flyde", "nodered", "n8n", "max"]
+
+
+def agreement(buckets):
+    """How often does each PAIR of vocabularies land in the same bucket?
+
+    This is the one number in the report that nobody wrote down — it falls out
+    of 223 grouping decisions made scenario by scenario, and it is what answers
+    "which of these eleven am I actually choosing between".
+    """
+    import itertools
+    together = {}
+    appears = {}
+    for s_ in buckets:
+        for b in s_.get("buckets", []):
+            ms = sorted(set(b.get("members", [])))
+            for m in ms:
+                appears[m] = appears.get(m, 0) + 1
+            for a, c in itertools.combinations(ms, 2):
+                together[(a, c)] = together.get((a, c), 0) + 1
+    return together, appears
+
+
+def agreement_table(buckets):
+    together, appears = agreement(buckets)
+    order = [k for k in AGREEMENT_ORDER if appears.get(k)]
+    head = "".join(f'<th class="rot"><span>{E(VOCAB_NAME.get(k, k))}</span></th>' for k in order)
+    rows = []
+    for a in order:
+        cells = []
+        for c in order:
+            if a == c:
+                cells.append('<td class="self">\u2014</td>')
+                continue
+            n = together.get((min(a, c), max(a, c)), 0)
+            denom = min(appears.get(a, 1), appears.get(c, 1)) or 1
+            pct = n / denom
+            hue = min(1.0, pct / 0.8)
+            cells.append(f'<td style="background:rgba(240,136,62,{hue*0.62:.3f})" '
+                         f'title="{n} of {denom} buckets">{n}</td>')
+        rows.append(f'<tr><th>{E(VOCAB_NAME.get(a, a))}</th>{"".join(cells)}</tr>')
+    return (f'<table class="agree"><thead><tr><th></th>{head}</tr></thead>'
+            f'<tbody>{"".join(rows)}</tbody></table>')
 
 
 CSS = """
@@ -154,6 +200,14 @@ svg.bd{max-width:100%;height:auto;display:block}
 .nodraw{color:var(--dim2);font-size:12.5px;border-top:1px dashed var(--line);margin:16px -20px 0;padding:13px 20px 0}
 .nodraw b{color:var(--warn);font-weight:600}
 .err{color:var(--warn);font:11px/1.5 var(--mono)}
+table.agree{width:auto;margin:18px 0 6px;border-collapse:separate;border-spacing:2px}
+table.agree th{padding:5px 8px;font:600 11px/1.3 var(--mono);color:var(--dim);border:none;text-align:right;white-space:nowrap}
+table.agree th.rot{height:112px;vertical-align:bottom;padding:0 0 7px;text-align:center;width:44px}
+table.agree th.rot span{display:block;writing-mode:vertical-rl;transform:rotate(180deg);
+ font:600 10.5px/1 var(--mono);color:var(--dim2);letter-spacing:.03em}
+table.agree td{width:44px;height:30px;text-align:center;border:1px solid var(--line);border-radius:4px;
+ font:600 11.5px/1 var(--mono);color:var(--fg);padding:0}
+table.agree td.self{background:#0a0b0e;color:#343b49}
 .foot{margin-top:80px;padding-top:22px;border-top:1px solid var(--line);color:var(--dim2);font-size:12.5px}
 @media (max-width:900px){.exs,.boards{grid-template-columns:1fr}.vgrid{column-count:1}}
 """
@@ -180,16 +234,29 @@ def resolve_evidence(sheets, kept):
     return out
 
 
-def build(scen, sheets, buckets, images, out, kept=None):
+def build(scen, sheets, buckets, images, out, kept=None, narrative=None):
     by_key = {s["key"]: s for s in sheets}
     ev_index = resolve_evidence(sheets, kept)
     bk_by_scen = {b["scenario"]: b for b in buckets}
+    # Two passes: work out which images the page actually references, then
+    # encode only those — and at the size they are DISPLAYED at. A proof
+    # thumbnail renders 46px wide; storing it at 300px was 80% of the payload.
+    used = {f"hero-{k}" for k in VOCAB_ORDER}
+    ev_probe = resolve_evidence(sheets, kept)
+    for b in buckets:
+        for bk_ in b.get("buckets", []):
+            for raw in bk_.get("evidence", [])[:4]:
+                e = ev_probe.get((raw.get("vocab", ""), raw.get("construct", "")))
+                if e and e.get("image"):
+                    used.add(e["image"])
     img_css, img_seen = [], {}
-    for key, path in images.items():
-        if not os.path.exists(path):
+    for key in sorted(used):
+        path = images.get(key)
+        if not path or not os.path.exists(path):
             continue
         img_seen[key] = True
-        img_css.append(f'  --img-{key}: url("{jpeg_uri(path, 520 if key.startswith("hero-") else 300, 70)}");')
+        hero = key.startswith("hero-")
+        img_css.append(f'  --img-{key}: url("{jpeg_uri(path, 560 if hero else 132, 74 if hero else 62)}");')
 
     errors, n_boards, n_buckets = [], 0, 0
 
@@ -243,7 +310,7 @@ def build(scen, sheets, buckets, images, out, kept=None):
                     ik = e.get("image")
                     pf = (f'<span class="pf" style="background-image:var(--img-{ik})"></span>'
                           if ik and ik in img_seen else "")
-                    q = f' <q>&ldquo;{E(e["quote"])}&rdquo;</q>' if e.get("quote") else ""
+                    q = f' <q>{E(e["quote"])}</q>' if e.get("quote") else ""
                     nm = (f'<b style="color:#9aa3b2">{E(e["named_thing"])}</b> — '
                           if e.get("named_thing") else "")
                     link = (f'<a href="{E(e["url"])}">{E(VOCAB_NAME.get(e["vocab"], e["vocab"]))} docs</a>'
@@ -292,7 +359,7 @@ def build(scen, sheets, buckets, images, out, kept=None):
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Every Python scenario, in every industry vocabulary</title>
-<style>:root{{{chr(10).join(img_css)}}}{CSS}</style></head><body><div class="wrap">
+<style>:root{{{chr(10).join(img_css)}}}{CSS}{SHARED_CSS}</style></head><body>{SHARED_DEFS}<div class="wrap">
 <p class="kicker">bbox-ui · 23 september 2026 · 11 vocabularies read from their own documentation</p>
 <h1>How the industry would draw it</h1>
 <p class="sub">Every scenario from <i>Python, stripped to blocks and ports</i>, drawn in each
@@ -308,6 +375,14 @@ everyone who uses it.</p>
   <div class="fact"><b>{n_buckets and round(n_buckets/max(len(scen),1),1)}</b><span>mechanisms per scenario</span></div>
 </div>
 {{LEDE}}
+<h2>Which of these are actually the same choice?</h2>
+<p class="mech" style="margin-bottom:6px">Nobody wrote this number down — it falls out of {n_buckets} grouping
+decisions made one scenario at a time. Each cell counts the buckets where those two
+vocabularies were judged to draw the thing <i>the same way</i>. Read the bright squares:
+they are the pairs where picking one over the other is a matter of paint, not of mechanism.</p>
+{agreement_table(buckets)}
+<p class="ev" style="margin-top:4px">Darker is more agreement, scaled against the smaller of the two tools\u2019 bucket counts.</p>
+
 <h2>The eleven vocabularies</h2>
 <p class="mech" style="margin-bottom:16px">Each read from its own documentation this run. The screenshot
 is from that documentation — proof the mechanism described is the one the tool actually ships.</p>
@@ -322,6 +397,9 @@ Every board is drawn by <code>docs/vocab_board.py</code> from a declarative spec
 {n_boards} read as one hand. Screenshots belong to their vendors and are reproduced as
 documentation references.</p>
 </div></body></html>"""
+    narrative = narrative or {}
+    page = page.replace("{LEDE}", narrative.get("lede", ""))
+    page = page.replace("{TAIL}", narrative.get("tail", ""))
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(page)
     return dict(boards=n_boards, buckets=n_buckets, errors=errors, bytes=os.path.getsize(out))
@@ -332,6 +410,7 @@ def main():
     for a in ("scenarios", "sheets", "buckets", "out"):
         ap.add_argument("--" + a, required=True)
     ap.add_argument("--images", required=True)
+    ap.add_argument("--narrative", default="")
     args = ap.parse_args()
     scen = json.load(open(args.scenarios))
     sheets = json.load(open(args.sheets))
@@ -340,7 +419,8 @@ def main():
     images = {k: os.path.join(args.images, v) for k, v in manifest.items()}
     kept_path = os.path.join(args.images, "kept.json")
     kept = json.load(open(kept_path)) if os.path.exists(kept_path) else {}
-    r = build(scen, sheets, buckets, images, args.out, kept)
+    narrative = json.load(open(args.narrative)) if args.narrative else {}
+    r = build(scen, sheets, buckets, images, args.out, kept, narrative)
     print(f"{r['buckets']} buckets · {r['boards']} boards · {r['bytes']/1024:.0f} KB")
     if r["errors"]:
         print(f"\n{len(r['errors'])} BOARD ERRORS:")

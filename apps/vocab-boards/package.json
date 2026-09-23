@@ -1,0 +1,31 @@
+{
+  "name": "vocab-boards",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The eleven industry visual languages implemented as real React Flow node and edge types. Draws the 705 boards of the industry-vocabularies report; the report inlines the viewport markup this app emits.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "dev": "vite --port ${VOCAB_PORT:-5471} --strictPort",
+    "build": "vite build && node scripts/build-css.mjs",
+    "build:css": "node scripts/build-css.mjs",
+    "preview": "vite preview --port ${VOCAB_PORT:-5471} --strictPort",
+    "test": "vitest run",
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.8.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "playwright": "^1.63.0",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^4.1.11"
+  }
+}

@@ -159,13 +159,16 @@ class Board:
             x1 = max(m["x"] + m["w"] for m in ms) + p
             y1 = max(m["y"] + m["h"] for m in ms) + p
             f["box"] = (x0, y0, x1 - x0, y1 - y0)
-        self.W, self.H = total_w, max(total_h, 120)
+            if f.get("tag") and _w(f.get("t", ""), 10) + _w(f["tag"], 9.2) + 26 > x1 - x0:
+                self._tag_below = True
+        self.W = total_w
+        self.H = max(total_h, 120) + (16 if getattr(self, "_tag_below", False) else 0)
         return self
 
     # --------------------------------------------------------------- anchors
     def anchor(self, ref):
         # A single unnamed port may be written "n.out" or "n.out." — both mean index 0.
-        m = re.match(r"^([A-Za-z0-9_-]+)\.(in|out|x|xin|lt|rt)\.?(.*)$", ref or "")
+        m = re.match(r"^([A-Za-z0-9_-]+)\.(xin|in|out|x|lt|rt)\.?(.*)$", ref or "")
         if not m:
             self.errors.append(f"bad endpoint {ref!r}")
             return None
@@ -220,7 +223,7 @@ class Board:
             o.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="{h/2:.1f}" '
                      f'fill="#10233a" stroke="{acc}" stroke-width="1.3"/>')
             o.append(f'<text x="{x+w/2:.1f}" y="{y+h/2+3.6:.1f}" fill="{FG}" font-size="10.5" '
-                     f'text-anchor="middle" font-family="{MONO}">{t}</text>')
+                     f'text-anchor="middle" class="m">{t}</text>')
             return "".join(o)
         if shape in ("badge", "terminal"):
             fill = "#2a1a16" if shape == "terminal" else "#221d2f"
@@ -228,25 +231,29 @@ class Board:
             o.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="5" '
                      f'fill="{fill}" stroke="{col}" stroke-width="1.2"/>')
             o.append(f'<text x="{x+w/2:.1f}" y="{y+h/2+3.6:.1f}" fill="{col}" font-size="10" '
-                     f'text-anchor="middle" font-family="{MONO}">{t}</text>')
+                     f'text-anchor="middle" class="m">{t}</text>')
             return "".join(o)
         if shape == "note":
             o.append(f'<text x="{x:.1f}" y="{y+h/2+3.6:.1f}" fill="{DIM2}" font-size="10" '
-                     f'font-family="{SANS}" font-style="italic">{t}</text>')
+                     f'class="s i">{t}</text>')
             return "".join(o)
         if shape == "diamond":
             cx, cy = x + w / 2, y + h / 2
             o.append(f'<path d="M {cx:.1f} {y:.1f} L {x+w:.1f} {cy:.1f} L {cx:.1f} {y+h:.1f} L {x:.1f} {cy:.1f} Z" '
                      f'fill="{PANEL2}" stroke="{acc}" stroke-width="1.3"/>')
             o.append(f'<text x="{cx:.1f}" y="{cy+3.6:.1f}" fill="{FG}" font-size="10" '
-                     f'text-anchor="middle" font-family="{MONO}">{t}</text>')
+                     f'text-anchor="middle" class="m">{t}</text>')
             return "".join(o)
 
         if self.flow == "tb":
+            hot = n.get("accent") not in (None, "", "dim")
             o.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="3" '
-                     f'fill="{PANEL2}" stroke="{LINE2}" stroke-width="1.2"/>')
+                     f'fill="{PANEL2}" stroke="{acc if hot else LINE2}" stroke-width="{1.7 if hot else 1.2}"/>')
+            if hot:
+                o.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="3" '
+                         f'fill="{acc}" opacity="0.13"/>')
             o.append(f'<text x="{x+w/2:.1f}" y="{y+h/2+3.8:.1f}" fill="{FG}" font-size="10.8" '
-                     f'text-anchor="middle" font-family="{MONO}">{t}</text>')
+                     f'text-anchor="middle" class="m">{t}</text>')
             for lst, top in ((n.get("in") or [], True), (n.get("out") or [], False)):
                 if not lst:
                     continue
@@ -263,10 +270,10 @@ class Board:
                     if p and n.get("plabels"):
                         ty = y - 7 if top else y + h + 13
                         o.append(f'<text x="{cx:.1f}" y="{ty:.1f}" fill="{DIM2}" font-size="8.4" '
-                                 f'text-anchor="middle" font-family="{MONO}">{E(p)}</text>')
+                                 f'text-anchor="middle" class="m">{E(p)}</text>')
             if n.get("tag"):
                 o.append(f'<text x="{x+w/2:.1f}" y="{y+h+26:.1f}" fill="{DIM2}" font-size="8.8" '
-                         f'text-anchor="middle" font-family="{SANS}">{E(n["tag"])}</text>')
+                         f'text-anchor="middle" class="s">{E(n["tag"])}</text>')
             return "".join(o)
 
         rx = 5 if shape != "round" else min(h / 2, 14)
@@ -278,11 +285,11 @@ class Board:
         o.append(f'<line x1="{x:.1f}" y1="{y+TITLE_H:.1f}" x2="{x+w:.1f}" y2="{y+TITLE_H:.1f}" '
                  f'stroke="{LINE2}" stroke-width="1"/>')
         o.append(f'<text x="{x+w/2:.1f}" y="{y+14.5:.1f}" fill="{FG}" font-size="10.8" '
-                 f'text-anchor="middle" font-family="{MONO}" font-weight="600">{t}</text>')
+                 f'text-anchor="middle" class="m" font-weight="600">{t}</text>')
         base = y + TITLE_H + (11 if n.get("sub") else 0)
         if n.get("sub"):
             o.append(f'<text x="{x+w/2:.1f}" y="{y+TITLE_H+9:.1f}" fill="{DIM2}" font-size="8.6" '
-                     f'text-anchor="middle" font-family="{SANS}">{E(n["sub"])}</text>')
+                     f'text-anchor="middle" class="s">{E(n["sub"])}</text>')
         if n.get("xin"):
             cy = base + PORT_H / 2
             o.append(f'<path d="M {x-5:.1f} {cy-4.5:.1f} L {x+3:.1f} {cy:.1f} L {x-5:.1f} {cy+4.5:.1f} Z" '
@@ -291,22 +298,22 @@ class Board:
             cy = base + PORT_H * i + PORT_H / 2
             o.append(f'<circle cx="{x:.1f}" cy="{cy:.1f}" r="3.4" fill="{BG}" stroke="{acc}" stroke-width="1.6"/>')
             o.append(f'<text x="{x+8:.1f}" y="{cy+3.2:.1f}" fill="{DIM}" font-size="9.4" '
-                     f'font-family="{MONO}">{E(p)}</text>')
+                     f'class="m">{E(p)}</text>')
         outs = n.get("out") or []
         for i, p in enumerate(outs):
             cy = base + PORT_H * i + PORT_H / 2
             o.append(f'<circle cx="{x+w:.1f}" cy="{cy:.1f}" r="3.4" fill="{BG}" stroke="{acc}" stroke-width="1.6"/>')
             o.append(f'<text x="{x+w-8:.1f}" y="{cy+3.2:.1f}" fill="{DIM}" font-size="9.4" '
-                     f'text-anchor="end" font-family="{MONO}">{E(p)}</text>')
+                     f'text-anchor="end" class="m">{E(p)}</text>')
         for i, p in enumerate(n.get("xout") or []):
             cy = base + PORT_H * (len(outs) + i) + PORT_H / 2
             o.append(f'<path d="M {x+w-4:.1f} {cy-4.5:.1f} L {x+w+4:.1f} {cy:.1f} L {x+w-4:.1f} {cy+4.5:.1f} Z" '
                      f'fill="#f2f4f8"/>')
             o.append(f'<text x="{x+w-11:.1f}" y="{cy+3.2:.1f}" fill="#cfd4de" font-size="9.4" '
-                     f'text-anchor="end" font-family="{MONO}">{E(p)}</text>')
+                     f'text-anchor="end" class="m">{E(p)}</text>')
         if n.get("tag"):
             o.append(f'<text x="{x+w/2:.1f}" y="{y+h+10:.1f}" fill="{DIM2}" font-size="8.8" '
-                     f'text-anchor="middle" font-family="{SANS}">{E(n["tag"])}</text>')
+                     f'text-anchor="middle" class="s">{E(n["tag"])}</text>')
         return "".join(o)
 
     def draw_frame(self, f):
@@ -334,12 +341,21 @@ class Board:
         else:
             o.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="8" '
                      f'fill="{PANEL}" stroke="{LINE2}" stroke-width="1.3"/>')
-        if f.get("t"):
+        title, tag = f.get("t", ""), f.get("tag", "")
+        if title:
             o.append(f'<text x="{x+9:.1f}" y="{y-5:.1f}" fill="{DIM}" font-size="10" '
-                     f'font-family="{MONO}" font-weight="600">{E(f["t"])}</text>')
-        if f.get("tag"):
-            o.append(f'<text x="{x+w-6:.1f}" y="{y-5:.1f}" fill="{DIM2}" font-size="9.2" '
-                     f'text-anchor="end" font-family="{SANS}">{E(f["tag"])}</text>')
+                     f'class="m" font-weight="600">{E(title)}</text>')
+        if tag:
+            # A narrow frame cannot carry its name AND its case label on the same
+            # line — they overlapped into unreadable mush. Drop the tag below the
+            # box rather than truncating it: the case label is often the payload.
+            fits = _w(title, 10) + _w(tag, 9.2) + 26 <= w
+            if fits:
+                o.append(f'<text x="{x+w-6:.1f}" y="{y-5:.1f}" fill="{DIM2}" font-size="9.2" '
+                         f'text-anchor="end" class="s">{E(tag)}</text>')
+            else:
+                o.append(f'<text x="{x+2:.1f}" y="{y+h+13:.1f}" fill="{DIM2}" font-size="9.2" '
+                         f'class="s">{E(tag)}</text>')
         for side, key in (("lt", "ltun"), ("rt", "rtun")):
             lst = f.get(key) or []
             step = h / (len(lst) + 1)
@@ -350,7 +366,7 @@ class Board:
                          f'fill="{BG}" stroke="{AMBER}" stroke-width="1.8"/>')
                 if p:
                     o.append(f'<text x="{cx:.1f}" y="{cy-9:.1f}" fill="{DIM}" font-size="8.8" '
-                             f'text-anchor="middle" font-family="{MONO}">{E(p)}</text>')
+                             f'text-anchor="middle" class="m">{E(p)}</text>')
         return "".join(o)
 
     def draw_wire(self, wr):
@@ -380,8 +396,14 @@ class Board:
             # 0.42 along, not the midpoint: a midpoint label lands on top of a
             # frame's tunnel label when the wire terminates on a wall.
             mx, my = x1 + (x2 - x1) * 0.42, (y1 + y2) / 2 - 8
+            # A short wire puts its label on top of a node. A halo keeps it
+            # readable over whatever it lands on, which beats moving it around.
+            lab = E(wr["t"])
+            hw = _w(wr["t"], 9) + 8
+            o.append(f'<rect x="{mx-hw/2:.1f}" y="{my-8.5:.1f}" width="{hw:.1f}" height="11.5" '
+                     f'rx="3" fill="{BG}" opacity="0.82"/>')
             o.append(f'<text x="{mx:.1f}" y="{my:.1f}" fill="{DIM}" font-size="9" '
-                     f'text-anchor="middle" font-family="{MONO}">{E(wr["t"])}</text>')
+                     f'text-anchor="middle" class="m">{lab}</text>')
         return "".join(o)
 
     def svg(self):
@@ -389,14 +411,22 @@ class Board:
         body = "".join(self.draw_frame(f) for f in self.frames)
         body += "".join(self.draw_wire(w) for w in self.wires)
         body += "".join(self.draw_node(self.nodes[i]) for i in self.order)
-        defs = "".join(
-            f'<marker id="{i}" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="5.4" '
-            f'markerHeight="5.4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="{c}"/></marker>'
-            for i, c in (("wA", ACCENT2), ("wX", "#f2f4f8"), ("wE", WARN), ("wI", AMBER),
-                         ("wG", OK), ("wC", PURPLE), ("wF", AMBER), ("wD", DIM2)))
         return (f'<svg viewBox="0 0 {self.W:.0f} {self.H:.0f}" width="{self.W:.0f}" height="{self.H:.0f}" '
-                f'xmlns="http://www.w3.org/2000/svg" class="bd" role="img">'
-                f'<defs>{defs}</defs>{body}</svg>')
+                f'xmlns="http://www.w3.org/2000/svg" class="bd" role="img">{body}</svg>')
+
+
+# Emitted ONCE per page, before any board; every board references these ids.
+SHARED_DEFS = ('<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>'
+               + "".join(
+                   f'<marker id="{i}" viewBox="0 0 10 10" refX="7.4" refY="5" markerWidth="5.4" '
+                   f'markerHeight="5.4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="{c}"/></marker>'
+                   for i, c in (("wA", ACCENT2), ("wX", "#f2f4f8"), ("wE", WARN), ("wI", AMBER),
+                                ("wG", OK), ("wC", PURPLE), ("wF", AMBER), ("wD", DIM2)))
+               + "</defs></svg>")
+
+SHARED_CSS = (f'svg.bd text{{font-family:{MONO}}}'
+              f'svg.bd text.s{{font-family:{SANS}}}'
+              f'svg.bd text.i{{font-style:italic}}')
 
 
 def render(spec):

@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src", "scripts"],
+  "compilerOptions": {
+    "types": ["vite/client"],
+    // WHY resolveJsonModule is OFF here: src/boards.json is 705 board specs and
+    // ~780 KB. With it on, tsc infers a literal type for every node, port and
+    // wire in the file and the typecheck goes from ~2s to minutes for a type
+    // nothing reads — src/boards.ts casts the import to the hand-written Spec
+    // types instead, which is the type we actually want to check against.
+    "resolveJsonModule": false
+  }
+}

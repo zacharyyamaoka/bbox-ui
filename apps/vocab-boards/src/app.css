@@ -1,0 +1,103 @@
+/* The gallery's own chrome. Deliberately NOT part of dist/board.css — the
+   report draws its own page and only wants the boards. */
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--vb-sans);
+}
+
+.vb-top {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 12px 20px;
+  background: rgba(14, 15, 18, 0.94);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+}
+
+.vb-top h1 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: var(--vb-mono);
+  color: var(--accent);
+}
+
+.vb-filter {
+  flex: 1;
+  max-width: 460px;
+  padding: 5px 9px;
+  font: 12px var(--vb-mono);
+  color: var(--fg);
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+}
+
+.vb-filter:focus {
+  outline: none;
+  border-color: var(--accent2);
+}
+
+.vb-count {
+  font: 11px var(--vb-mono);
+  color: var(--dim2);
+}
+
+.vb-card {
+  padding: 18px 20px 26px;
+  border-bottom: 1px solid var(--line);
+}
+
+.vb-card-head {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.vb-id {
+  font: 11px var(--vb-mono);
+  color: var(--accent);
+}
+
+.vb-bucket {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.vb-err {
+  font: 10px var(--vb-mono);
+  color: var(--warn);
+}
+
+.vb-slot {
+  position: relative;
+}
+
+.vb-cap {
+  margin: 10px 0 0;
+  max-width: 76ch;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+.vb-single {
+  display: inline-block;
+  padding: 0;
+}
+
+.vb-missing {
+  padding: 24px;
+  font: 12px var(--vb-mono);
+  color: var(--warn);
+}
