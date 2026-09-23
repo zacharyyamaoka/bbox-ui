@@ -268,7 +268,13 @@ function sameBands(a: BlockBands | null, b: BlockBands | null): boolean {
     Math.abs(a.bodyBottom - b.bodyBottom) < BAND_EPSILON_PX &&
     (a.headerTop == null || b.headerTop == null
       ? a.headerTop === b.headerTop
-      : Math.abs(a.headerTop - b.headerTop) < BAND_EPSILON_PX)
+      : Math.abs(a.headerTop - b.headerTop) < BAND_EPSILON_PX) &&
+    // Without this a head tab that RESIZES (its title edited, a badge added)
+    // keeps the stale bands, and its right-wall ports stay at the old edge —
+    // every other band is compared here for exactly that reason.
+    (a.headerRight == null || b.headerRight == null
+      ? a.headerRight === b.headerRight
+      : Math.abs(a.headerRight - b.headerRight) < BAND_EPSILON_PX)
   );
 }
 
@@ -330,6 +336,19 @@ function useBlockBands(wrapperRef: RefObject<HTMLDivElement | null>, layoutKey: 
         bodyTop: ((header ? header.getBoundingClientRect().bottom : blockRect.top) - wrapperRect.top) / scale,
         bodyBottom: ((footer ? footer.getBoundingClientRect().top : blockRect.bottom) - wrapperRect.top) / scale,
         headerTop: header ? (header.getBoundingClientRect().top - wrapperRect.top) / scale : undefined,
+        // The head tab: a header that HUGS is narrower than the block, and a
+        // `header`-band right rail rides ITS right edge rather than the
+        // block's (Zach, 2026-09-22, "Head Tab View" / "With Ports").
+        // MEASURED rather than flagged from a prop, for the same reason
+        // `headerTop` is: the tab hugs a chevron, a title and maybe a badge,
+        // so only the DOM knows where it ended. A FULL-WIDTH header measures
+        // exactly the block's own right edge, which is what `railBoxFor`
+        // would have used anyway — so this is never a second, disagreeing
+        // source of truth for the same line, and an unhugged Block's ports
+        // cannot move because this field appeared.
+        headerRight: header
+          ? (header.getBoundingClientRect().right - wrapperRect.left) / scale
+          : undefined,
       };
       setBands((prev) => (sameBands(prev, next) ? prev : next));
     };
