@@ -8,6 +8,7 @@ import { getAssetUrls } from "@tldraw/assets/selfHosted";
 import { defineConfig, type Plugin } from "vite";
 
 import { devFileHostPlugin } from "./devFileHost";
+import { statusEndpointPlugin } from "./statusEndpoint";
 
 const TRUNK = path.resolve(__dirname, "../storybook-basics/src");
 
@@ -130,7 +131,7 @@ export default defineConfig({
   // why `vite dev` needs this at all: without it, Open/Save works from the
   // dock's Stable server but 404s from `pnpm --filter systemsketch dev`,
   // the two surfaces Zach actually uses.
-  plugins: [react(), tailwindcss(), selfHostedTldrawAssets(), devFileHostPlugin()],
+  plugins: [react(), tailwindcss(), selfHostedTldrawAssets(), devFileHostPlugin(), statusEndpointPlugin()],
   define: {
     // Consumed by src/App.tsx, which declares it ambient and passes it
     // straight to `<Tldraw assetUrls={…}>`. See the WHY above for why the
@@ -162,6 +163,31 @@ export default defineConfig({
   server: {
     port: 4340,
     strictPort: true,
+    watch: {
+      // WHY: board files are DATA the running app writes, not source. A
+      // `?board=` window autosaves into its file, and a file Vite watches
+      // turns every save into a full page reload — which reopens the board
+      // and, with anything that saves on open, saves it again. Zach hit that
+      // loop on 2026-09-22 ("the page keeps on reloading") with the seeded
+      // review board, which lives INSIDE this root. So: the app's own
+      // `review/` folder (seeded boards and their recipes), and every board
+      // suffix this app opens or hands off (`@trunk/files/workspaceModel`'s
+      // `.bbox`, `.tldr`, `.systemsketch`) wherever it sits.
+      //
+      // WHY `<root>/review/**` and not `**/review/**`: `src/review/*.ts` is
+      // SOURCE (the `?board=` stopgap and its tests) and must keep its HMR.
+      // Nothing imports a board through the module graph for HMR to matter:
+      // the tests that read `.tldr` fixtures read them with `fs` or `?raw`
+      // once per run. Pinned by `src/viteWatch.test.ts`.
+      //
+      // WHY a case-insensitive RegExp for the suffixes and not `**/*.tldr`
+      // globs: the app opens `Board.TLDR` exactly like `board.tldr`
+      // (`documentSuffix` lower-cases first), and a case-sensitive glob let
+      // an upper-case board reload the page on every save (Codex audit,
+      // 2026-09-22). Vite hands this list to chokidar's `anymatch`, which
+      // takes a RegExp as readily as a glob.
+      ignored: [`${path.resolve(__dirname, "review")}/**`, /\.(?:tldr|bbox|systemsketch)$/i],
+    },
     fs: {
       // The alias points OUTSIDE this app's root, so the dev server has to be
       // allowed to serve the monorepo (the trunk's files and the shared pnpm

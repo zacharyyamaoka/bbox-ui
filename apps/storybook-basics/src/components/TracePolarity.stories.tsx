@@ -8,11 +8,13 @@ import {
   Trace,
   traceGeometry,
   traceReadsTangent,
+  traceRingGapPx,
   traceRouteEnd,
   traceRouteStart,
   type TraceGeometry,
   type TraceRouteRequest,
 } from "./trace";
+import { TRACE_TERMINAL_RADIUS, TRACE_TERMINAL_RING_PX } from "./traceTerminal";
 import {
   DIR_VECTOR,
   OPPOSITE_DIR,
@@ -513,7 +515,7 @@ async function assertCellFrame(
 
   //    The wire LEAVES along the flow: start - from points along from.dir.
   const startOffset = { x: points[0].x - request.from.x, y: points[0].y - request.from.y };
-  await expect(Math.hypot(startOffset.x, startOffset.y)).toBeCloseTo(GAP_PX, 6);
+  await expect(Math.hypot(startOffset.x, startOffset.y)).toBeCloseTo(RING_GAP_PX, 6);
   await expect(
     angleBetweenDeg(startOffset, DIR_VECTOR[request.from.dir]),
     `start offset ${JSON.stringify(startOffset)} does not point ${request.from.dir}`,
@@ -522,7 +524,7 @@ async function assertCellFrame(
   //    It ARRIVES travelling to.dir, so the last point sits BEHIND the target:
   //    to - last points along to.dir, not away from it.
   const endOffset = { x: request.to.x - last.x, y: request.to.y - last.y };
-  await expect(Math.hypot(endOffset.x, endOffset.y)).toBeCloseTo(GAP_PX, 6);
+  await expect(Math.hypot(endOffset.x, endOffset.y)).toBeCloseTo(RING_GAP_PX, 6);
   await expect(
     angleBetweenDeg(endOffset, DIR_VECTOR[request.to.dir]),
     `end offset ${JSON.stringify(endOffset)} does not point ${request.to.dir}`,
@@ -556,10 +558,14 @@ async function assertCellFrame(
   await expect(route.getAttribute("data-side-start")).toBe(request.from.dir);
   await expect(route.getAttribute("data-side-end")).toBe(OPPOSITE_DIR[request.to.dir]);
 
-  // 3. One arrowhead, at the `to` end, and the `from` end bare.
-  const markers = cell.querySelectorAll('[data-slot="trace-marker"]');
-  await expect(markers).toHaveLength(1);
-  await expect(line.getAttribute("marker-end")).toBe(`url(#${markers[0].id})`);
+  // 3. No wire head at either end: every cell here is a DEFAULT trace, and
+  //    since 2026-09-22 the default draws none (Zach: "by default can you
+  //    please update the data traces to draw without an arrow? because its
+  //    DAG, we already know the order!"). Polarity is still visible — it is
+  //    the terminal glyphs' own arrows, asserted in step 4. Where a head is
+  //    asked for BY NAME, its `to`-end-only placement is TraceArrowhead's.
+  await expect(cell.querySelectorAll('[data-slot="trace-marker"]')).toHaveLength(0);
+  await expect(line.getAttribute("marker-end")).toBeNull();
   await expect(line.getAttribute("marker-start")).toBeNull();
 
   // 4. T1/T3 — a terminal's own internal arrow (NOT the marker above, which
@@ -651,11 +657,27 @@ const TANGENT_TOLERANCE_DEG = 5;
  */
 const GAP_PX = 16;
 
+/**
+ * The pull-back every cell here ACTUALLY draws with, pinned the same way and
+ * for the same reason. Since 2026-09-22 a `Trace` with no head (the default
+ * — Zach: "because its DAG, we already know the order!") runs to its
+ * terminal's ring instead of stopping `TRACE_TERMINAL_GAP` short ("make the
+ * trace end exactly at the port … right now there is this spacing which is
+ * not desirable!"): r=9 glyph + half its 2px ring + half the 2px stroke's
+ * round cap = 11. `GAP_PX` above is still the chevron's room, which an
+ * arrow-carrying trace keeps.
+ */
+const RING_GAP_PX = 11;
+
 function assertRulerUnchanged(): void {
   if (TRACE_TERMINAL_GAP !== GAP_PX) {
     throw new Error(
       `TRACE_TERMINAL_GAP is now ${TRACE_TERMINAL_GAP}, not ${GAP_PX} — re-derive this file's tolerances by hand`,
     );
+  }
+  const ringGap = traceRingGapPx(TRACE_TERMINAL_RADIUS + TRACE_TERMINAL_RING_PX / 2);
+  if (ringGap !== RING_GAP_PX) {
+    throw new Error(`the default ring pull-back is now ${ringGap}, not ${RING_GAP_PX} — re-derive this file's tolerances by hand`);
   }
 }
 
@@ -1359,7 +1381,7 @@ export const RoutingKinds: Story = {
       return points[i - 1].x - points[0].x;
     };
     const span = Math.abs(
-      traceRouteEnd(WRAP_TO, GAP_PX).x - traceRouteStart(WRAP_FROM, GAP_PX).x,
+      traceRouteEnd(WRAP_TO, RING_GAP_PX).x - traceRouteStart(WRAP_FROM, RING_GAP_PX).x,
     );
     await expect(Math.abs(leadOf("slanted-15") - span * 0.15)).toBeLessThan(2);
     await expect(Math.abs(leadOf("slanted-85") - span * 0.85)).toBeLessThan(2);
@@ -1378,8 +1400,8 @@ export const RoutingKinds: Story = {
 
       // And it is genuinely longer than the straight-line distance, which is
       // the whole reason the chord is the wrong number to use.
-      const start = traceRouteStart(WRAP_FROM, GAP_PX);
-      const end = traceRouteEnd(WRAP_TO, GAP_PX);
+      const start = traceRouteStart(WRAP_FROM, RING_GAP_PX);
+      const end = traceRouteEnd(WRAP_TO, RING_GAP_PX);
       const chord = Math.hypot(end.x - start.x, end.y - start.y);
       await expect(measured).toBeGreaterThan(chord + 1);
 
@@ -1395,7 +1417,10 @@ export const RoutingKinds: Story = {
         requireEl(canvasElement, `[data-testid="wrap-card-${key}"]`),
         '[data-slot="wrap-readout"]',
       );
-      const geometry = traceGeometry(item.request);
+      // At the pull-back the card's `Trace` actually draws with (no head,
+      // so its ring — see `RING_GAP_PX`), not `traceGeometry`'s own
+      // chevron-sized default.
+      const geometry = traceGeometry({ ...item.request, gap: RING_GAP_PX });
       await expect(readout.getAttribute("data-points")).toBe(String(geometry.points?.length));
       await expect(Number(readout.getAttribute("data-length"))).toBeCloseTo(
         polylineLength(geometry.points ?? []),

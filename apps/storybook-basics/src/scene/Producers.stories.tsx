@@ -284,7 +284,7 @@ const OPAQUE_SCENE: HostScene = {
       position: { x: 200, y: 24 },
       // 330 tall so the expanded frame holds `merge` whole (at 268 it hangs
       // out of the frame's bottom edge once the loop is opened).
-      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 400, h: 330 },
+      data: { name: "For Loop", region: { kind: "loop", loop: "for", view: "opaque", presentation: "expanded" }, ports: { left: ["Iterable"], right: ["Iter"] }, w: 400, h: 330 },
     },
     { id: "merge", type: "block", parentId: "loop", position: { x: 36, y: 86 }, data: { name: "merge", view: "port", w: 156, h: 106, ports: { left: ["pose", "other"], right: ["Pose"] } } },
   ],
@@ -317,8 +317,9 @@ export const OpaqueCard: Story = {
     const reach = seat.offsetWidth / 2 + portVariantRingOverhangPx(PORT_VARIANTS.v1) + badge.getBoundingClientRect().width / 2;
     expect(d, "the badge rides the promoted seat").toBeLessThanOrEqual(reach + 0.5);
 
-    // Expand: the same two cables land on the real dot, and the count follows.
-    await userEvent.click(required<HTMLElement>(canvasElement, '[data-region-id="loop"] [data-block-id="loop"] [data-slot="folding-chevron"]', "the loop's chevron"));
+    // Expand — the Blackbox toggle, pressed while opaque: the same two cables
+    // land on the real dot, and the count follows.
+    await userEvent.click(required<HTMLElement>(canvasElement, '[data-region-id="loop"] [aria-label="Blackbox toggle"][aria-pressed="true"]', "the loop's Blackbox toggle"));
     await waitFor(() => expect(badgeTexts(canvasElement)).toEqual({ "merge/pose": "2" }));
     expect(canvasElement.querySelector('[data-port-id="merge/pose"]'), "the promoted seat is gone with the card").toBeNull();
   },

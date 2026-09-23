@@ -3,7 +3,11 @@
 // divs + the view kit + `WireLayer`, nothing else.
 //
 // WHY this host is deliberately incapable — no viewport transform, no pan,
-// no zoom, and none will be added: its value is NEGATIVE. It is the
+// no zoom, no top-level node drag, and none will be added (docs/peps/0005-dom-canvas-
+// stays-static.md — Zach, 2026-09-22: "ok its settled 100% lets use
+// reactflow than"; anything that moves across the canvas gets a React Flow
+// twin instead, whose cables route through the same `WireLayer`
+// derivation): its value is NEGATIVE. It is the
 // control that proves the scene contract needs no engine ("Deliberately
 // has no viewport" — ARCHITECTURE.md's own host table). The moment this
 // host grew a viewport, both benches would have one and the control would
@@ -16,6 +20,7 @@
 
 import { useRef, type ReactNode } from "react";
 
+import type { Point } from "../components/trace.layout";
 import { WireLayer } from "../components/wireLayer";
 import { sceneWires } from "../scene/sceneWires";
 import { topLevelNodes, type HostScene } from "./hostScene";
@@ -33,6 +38,11 @@ export interface DomCanvasProps {
   /** The story lane's paint seam — see `nodeViews.tsx`'s `Decorate`. Omit
    *  for byte-identical output to before this prop existed. */
   decorate?: Decorate;
+  /** `WireLayer.onWireGeometry`, forwarded: the polyline each cable was
+   *  drawn on, in this host's own space (its root's padding box). A
+   *  read-back, not a gesture — the React Flow host reports the same thing
+   *  in flow space, which is what makes the two comparable. */
+  onWireGeometry?(wireId: string, points: readonly Point[] | null): void;
 }
 
 /**
@@ -42,7 +52,7 @@ export interface DomCanvasProps {
  * view kit's job (`childrenOf` inside `SceneNodeView`), identically in
  * every host.
  */
-export function DomCanvas({ scene, onSceneChange, width = 640, height = 300, children, decorate }: DomCanvasProps) {
+export function DomCanvas({ scene, onSceneChange, width = 640, height = 300, children, decorate, onWireGeometry }: DomCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // WHY the host paints the PROJECTION while the nodes still render from
   // the document: an opaque region's crossing cables are re-pointed at its
@@ -83,6 +93,7 @@ export function DomCanvas({ scene, onSceneChange, width = 640, height = 300, chi
         // without resizing anything the container's ResizeObserver would
         // see), so the whole record is the re-measure signal.
         layoutKey={scene}
+        onWireGeometry={onWireGeometry}
       />
       {children}
     </div>

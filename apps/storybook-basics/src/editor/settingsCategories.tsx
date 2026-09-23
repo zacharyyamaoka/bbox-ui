@@ -57,6 +57,7 @@
 // command rather than a hand-typed table that can rot. Rebinding is NOT in
 // it, and the section says so out loud rather than leaving a dead control.
 import type { ReactNode } from "react";
+import { Cable, Info, Keyboard, MousePointer2, Palette, SlidersHorizontal } from "lucide-react";
 
 import { formatShortcut, type KeyChord, type ShortcutPlatform } from "./appMenu";
 import {
@@ -195,10 +196,33 @@ export interface SettingsCategoriesInput {
   about?: SettingsCategory;
 }
 
+/**
+ * The nav heading the five settings categories sit under, mirroring Obsidian's
+ * own grouped nav (Options / Core plugins / Community plugins). The host's
+ * About block gets "App" in `buildSettingsCategories` below.
+ *
+ * Zach, 2026-09-22: "All the section son the left navigator should have icons"
+ * plus Obsidian named as the reference. The `icon` field on each category
+ * answers the first half; this answers the grouping the reference also has.
+ */
+const OPTIONS_GROUP = "Options";
+
 /** "Saved on this computer" — the archive's own footer, one line, per
- *  category that persists to the browser (`InterfaceSettings.tsx:337-344`). */
-function savedHere(detail: string): ReactNode {
-  return <FieldDescription>{detail}</FieldDescription>;
+ *  category that persists to the browser (`InterfaceSettings.tsx:337-344`).
+ *
+ *  Returns the whole section rather than just the rendered footer: `detail`
+ *  is real visible text a `custom` control otherwise hides from search
+ *  (Finding 1, `settings-panel-fixes` verdict, 2026-09-22), and building the
+ *  `keywords` array from the same string passed to `<FieldDescription>`
+ *  means the two can never drift apart the way two separately-typed copies
+ *  could. */
+function savedHereSection(id: string, detail: string): SettingsSection {
+  return {
+    id,
+    title: "Saved on this computer",
+    keywords: [detail],
+    control: { kind: "custom", render: <FieldDescription>{detail}</FieldDescription> },
+  };
 }
 
 // ───────────────────────────── General ──────────────────────────────────
@@ -267,7 +291,7 @@ function generalCategory(input: SettingsCategoriesInput): SettingsCategory {
     });
   }
 
-  return { id: SETTINGS_CATEGORY_IDS.general, label: "General", sections };
+  return { id: SETTINGS_CATEGORY_IDS.general, label: "General", group: OPTIONS_GROUP, icon: <SlidersHorizontal />, sections };
 }
 
 // ──────────────────────────── Appearance ────────────────────────────────
@@ -276,6 +300,8 @@ function appearanceCategory(input: SettingsCategoriesInput): SettingsCategory {
   return {
     id: SETTINGS_CATEGORY_IDS.appearance,
     label: "Appearance",
+    group: OPTIONS_GROUP,
+    icon: <Palette />,
     sections: [
       {
         // Ported from `InterfaceSettings.tsx:794-855` (the archive's whole
@@ -337,14 +363,10 @@ function appearanceCategory(input: SettingsCategoriesInput): SettingsCategory {
           onCheckedChange: (checked) => input.onAppearanceChange({ showZoomButtons: checked }),
         },
       },
-      {
-        id: "appearance-storage",
-        title: "Saved on this computer",
-        control: {
-          kind: "custom",
-          render: savedHere("Appearance is a per-viewer preference, never board content — everyone who opens a board keeps their own."),
-        },
-      },
+      savedHereSection(
+        "appearance-storage",
+        "Appearance is a per-viewer preference, never board content — everyone who opens a board keeps their own.",
+      ),
     ],
   };
 }
@@ -522,7 +544,7 @@ function pointerCategory(input: SettingsCategoriesInput): SettingsCategory {
     );
   }
 
-  return { id: SETTINGS_CATEGORY_IDS.pointer, label: "Mouse and scrolling", sections };
+  return { id: SETTINGS_CATEGORY_IDS.pointer, label: "Mouse and scrolling", group: OPTIONS_GROUP, icon: <MousePointer2 />, sections };
 }
 
 // ──────────────────────────── Connections ───────────────────────────────
@@ -645,6 +667,12 @@ function connectionsCategory(input: SettingsCategoriesInput): SettingsCategory {
       title: "Validation level",
       description:
         "How much the board checks your work — what it will let you wire, and how much it marks up at rest. Slide it all the way down for a plain whiteboard — any port to any port, nothing flagged — or all the way up so only edges that could exist in the running program are drawable at all.",
+      // The preset buttons' own labels and summaries — "Whiteboard", "Guided",
+      // "Typed", "Strict" and each one's sentence — are real text on screen
+      // the moment this section renders, but they live inside the `custom`
+      // render's opaque JSX. Finding 1 (`settings-panel-fixes` verdict,
+      // 2026-09-22): a search has to be told, not left to miss them.
+      keywords: EDGE_POLICY_PRESETS.flatMap((preset) => [preset.label, preset.summary]),
       control: {
         kind: "custom",
         render: (
@@ -730,18 +758,14 @@ function connectionsCategory(input: SettingsCategoriesInput): SettingsCategory {
     },
   });
 
-  sections.push({
-    id: "connections-storage",
-    title: "Saved on this computer",
-    control: {
-      kind: "custom",
-      render: savedHere(
-        "This governs what you can draw from now on. Cables already on a board are never re-judged, so tightening the policy cannot break a board someone else authored.",
-      ),
-    },
-  });
+  sections.push(
+    savedHereSection(
+      "connections-storage",
+      "This governs what you can draw from now on. Cables already on a board are never re-judged, so tightening the policy cannot break a board someone else authored.",
+    ),
+  );
 
-  return { id: SETTINGS_CATEGORY_IDS.connections, label: "Connections", sections };
+  return { id: SETTINGS_CATEGORY_IDS.connections, label: "Connections", group: OPTIONS_GROUP, icon: <Cable />, sections };
 }
 
 // ─────────────────── Hotkeys and aliases (was Tool aliases) ─────────────
@@ -760,6 +784,11 @@ function hotkeysCategory(input: SettingsCategoriesInput): SettingsCategory {
       // and is not. The archive had no rebinding either; the difference is
       // that this page now admits it instead of being silent.
       description: "The keys this app binds. They are fixed — rebinding is not available yet.",
+      // Every row's command name and its printed chord are real text in the
+      // `custom` list below (Finding 1, `settings-panel-fixes` verdict) —
+      // searching "Escape" should find this section the same way it finds a
+      // title.
+      keywords: hotkeys.flatMap((hotkey) => [hotkey.label, formatShortcut(hotkey.chord, platform)]),
       control: {
         kind: "custom",
         render: (
@@ -788,6 +817,11 @@ function hotkeysCategory(input: SettingsCategoriesInput): SettingsCategory {
     group: "Aliases",
     description:
       "Give any searchable tool the names you use. An alias like @datatype opens Text without changing the tool's canonical name.",
+    // Every tool's real name and its currently saved aliases are visible
+    // text the editor below renders, not this file's — Finding 1
+    // (`settings-panel-fixes` verdict): searching a tool's name, or an
+    // alias someone already typed, has to find this row.
+    keywords: input.aliasItems.flatMap((item) => [item.label, item.detail, ...(input.aliases[item.id] ?? [])]),
     control: {
       kind: "custom",
       render: (
@@ -796,16 +830,11 @@ function hotkeysCategory(input: SettingsCategoriesInput): SettingsCategory {
     },
   });
 
-  sections.push({
-    id: "aliases-storage",
-    title: "Saved on this computer",
-    control: {
-      kind: "custom",
-      render: savedHere("Aliases are personal vocabulary, not board content — they enrich search for you only."),
-    },
-  });
+  sections.push(
+    savedHereSection("aliases-storage", "Aliases are personal vocabulary, not board content — they enrich search for you only."),
+  );
 
-  return { id: SETTINGS_CATEGORY_IDS.hotkeys, label: "Hotkeys and aliases", sections };
+  return { id: SETTINGS_CATEGORY_IDS.hotkeys, label: "Hotkeys and aliases", group: OPTIONS_GROUP, icon: <Keyboard />, sections };
 }
 
 /**
@@ -823,6 +852,14 @@ export function buildSettingsCategories(input: SettingsCategoriesInput): Setting
     connectionsCategory(input),
     hotkeysCategory(input),
   ];
-  if (input.about !== undefined) categories.push(input.about);
+  if (input.about !== undefined) {
+    // WHY the defaults are applied here rather than demanded of the host: the
+    // host owns About's CONTENT (its own product name and build string — see
+    // the `about` field's doc comment, which is why it is a whole category and
+    // not a ReactNode). Which nav heading it sits under and which glyph sits
+    // beside it are chrome, and chrome belongs in the trunk. `??` not
+    // overwrite: a host that genuinely wants its own icon or heading keeps it.
+    categories.push({ icon: <Info />, ...input.about, group: input.about.group ?? "App" });
+  }
   return categories;
 }

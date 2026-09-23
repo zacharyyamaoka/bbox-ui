@@ -275,6 +275,39 @@ export function portVariantOuterPx(variant: PortVariant): number {
   return variant.dot.diameter + 2 * portVariantRingOverhangPx(variant);
 }
 
+/** The painted OUTER radius of a dot at the variant's OWN diameter, px —
+ *  `portVariantOuterPx / 2`, for a host whose dots are never sized apart
+ *  from their variant (the app's blocks), so it needs no DOM to know it. */
+export function portVariantRingRadiusPx(variant: PortVariant): number {
+  return portVariantOuterPx(variant) / 2;
+}
+
+/**
+ * The painted OUTER radius of one rendered `[data-slot="port-dot"]`, px, in
+ * the dot's own LAYOUT space — where a wire has to stop to touch it (Zach,
+ * 2026-09-22: "make the trace end exactly at the port"; the pull-back is
+ * `trace.tsx`'s `traceRingGapPx`).
+ *
+ * WHY read off the element and not off the table alone: a caller may size a
+ * dot (`diameter="md"` on a function port, an exact number) independently of
+ * its variant, and only the rendered box knows. The rings are `box-shadow`
+ * layers entirely OUTSIDE that box, so the box alone would stop a wire one
+ * ring short; the ring widths come from the variant the dot says it painted
+ * (`data-bbox-port-variant`, stamped by `port.tsx` on every dot).
+ *
+ * WHY `offsetWidth` and not `getBoundingClientRect`: the hover rule scales
+ * the dot with a CSS `transform` (portVariants.css), which a bounding rect
+ * includes and layout width does not — a wire must not jump because the
+ * pointer happens to be over its dot. It is also UNSCALED by any ancestor
+ * transform, so a canvas host projects it exactly like its anchors.
+ */
+export function portDotRingRadiusPx(dot: Element): number {
+  const raw = dot.getAttribute(PORT_VARIANT_ATTR);
+  const variant = PORT_VARIANTS[isPortVariantId(raw) ? raw : readPortVariantId()];
+  const box = dot instanceof HTMLElement ? dot.offsetWidth : variant.dot.diameter;
+  return box / 2 + portVariantRingOverhangPx(variant);
+}
+
 /**
  * The two numbers `port.tsx` publishes for the sketch skin's boundary pass
  * (`data-bbox-ring-expand` / `data-bbox-ring-pen`) — the SAME arithmetic
@@ -488,6 +521,15 @@ function subscribe(listener: () => void): () => void {
       observer = null;
     }
   };
+}
+
+/**
+ * The same `<html>` attribute subscription `usePortVariant` rides, for a
+ * NON-React reader that caches geometry off the variant (a canvas engine's
+ * reactive store, `WireLayer`'s measurement). Returns the unsubscribe.
+ */
+export function subscribePortVariant(listener: () => void): () => void {
+  return subscribe(listener);
 }
 
 function serverSnapshot(): PortVariantId {

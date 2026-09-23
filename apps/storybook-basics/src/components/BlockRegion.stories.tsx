@@ -32,6 +32,7 @@ import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
 import { ARM_NODE_TYPE } from "../scene/controlFlow";
+import { REGION_VARIANTS, readRegionVariant } from "../skin/regionVariants";
 import { REGION_NODE_TYPE } from "../scene/region";
 import {
   expectArmsStacked,
@@ -83,7 +84,7 @@ const EMPTY_SCENE: HostScene = {
  *  Nothing else in the record differs, which is the whole point of the
  *  toggle lane E builds on top of this. */
 const EMPTY_OPAQUE_SCENE: HostScene = {
-  nodes: [{ ...EMPTY_SCENE.nodes[0], data: { ...EMPTY_SCENE.nodes[0].data, region: { kind: "group", view: "opaque" } } }],
+  nodes: [{ ...EMPTY_SCENE.nodes[0], data: { ...EMPTY_SCENE.nodes[0].data, region: { kind: "group", view: "opaque", presentation: "expanded" } } }],
   edges: [],
 };
 
@@ -324,7 +325,11 @@ export const LayoutTwin: Story = {
 
     // The pure twin, fed the corner box the BROWSER laid out — the same
     // input the component measured for itself.
-    const twin = regionLayout({ width: frame.width, corner: { w: corner.width, h: corner.height }, arms: BRANCH_ARM_INPUTS });
+    // ...and the drawing's own arm-header height, exactly as `region.tsx`
+    // passes it: since 2026-09-22 the toolbar opens on v9 (Zach: "for
+    // regions make v9 the default one"), whose header is not v1's.
+    const armHeaderPx = REGION_VARIANTS[readRegionVariant(region)].arms.headerPx;
+    const twin = regionLayout({ width: frame.width, corner: { w: corner.width, h: corner.height }, armHeaderPx, arms: BRANCH_ARM_INPUTS });
     for (const [index, row] of twin.arms.entries()) {
       const painted = required<HTMLElement>(region, `[data-slot="region-arm"][data-arm-id="${row.id}"]`, `arm ${row.id}`).getBoundingClientRect();
       // The 1px slack is the frame's own border: an absolutely positioned

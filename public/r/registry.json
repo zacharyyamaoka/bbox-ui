@@ -506,6 +506,16 @@
           "target": "components/bbox/hitRegion.ts"
         },
         {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.css",
+          "type": "registry:style",
+          "target": "components/bbox/keyboardReorder.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/keyboardReorder.ts"
+        },
+        {
           "path": "apps/storybook-basics/src/components/paintOrder.ts",
           "type": "registry:lib",
           "target": "components/bbox/paintOrder.ts"
@@ -528,6 +538,7 @@
       ],
       "dependencies": [
         "@base-ui/react",
+        "@codemirror/view",
         "@dnd-kit/core",
         "@dnd-kit/sortable",
         "@dnd-kit/utilities",
@@ -866,6 +877,11 @@
           "target": "components/bbox/components/barSize.tsx"
         },
         {
+          "path": "apps/storybook-basics/src/components/blockPort.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockPort.layout.ts"
+        },
+        {
           "path": "apps/storybook-basics/src/components/codeEditor.css",
           "type": "registry:style",
           "target": "components/bbox/components/codeEditor.css"
@@ -921,6 +937,16 @@
           "target": "components/bbox/components/hitRegion.ts"
         },
         {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/keyboardReorder.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/keyboardReorder.ts"
+        },
+        {
           "path": "apps/storybook-basics/src/components/labeledPort.tsx",
           "type": "registry:component",
           "target": "components/bbox/components/labeledPort.tsx"
@@ -959,6 +985,16 @@
           "path": "apps/storybook-basics/src/components/portLane.ts",
           "type": "registry:lib",
           "target": "components/bbox/components/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/tooltip.tsx",
@@ -1080,6 +1116,16 @@
           "target": "components/bbox/components/hitRegion.ts"
         },
         {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/keyboardReorder.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/keyboardReorder.ts"
+        },
+        {
           "path": "apps/storybook-basics/src/components/labeledPort.tsx",
           "type": "registry:component",
           "target": "components/bbox/components/labeledPort.tsx"
@@ -1118,6 +1164,31 @@
           "path": "apps/storybook-basics/src/components/portLane.ts",
           "type": "registry:lib",
           "target": "components/bbox/components/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividerMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/returnDividerMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/sideEffectMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/sideEffectMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/sideEffects.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/sideEffects.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/tooltip.tsx",
@@ -1610,162 +1681,167 @@
         {
           "path": "apps/storybook-basics/src/components/badge.tsx",
           "type": "registry:component",
-          "target": "components/bbox/badge.tsx"
+          "target": "components/bbox/components/badge.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/bar.tsx",
           "type": "registry:component",
-          "target": "components/bbox/bar.tsx"
+          "target": "components/bbox/components/bar.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/barSize.tsx",
           "type": "registry:component",
-          "target": "components/bbox/barSize.tsx"
+          "target": "components/bbox/components/barSize.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/editableText.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/editableText.layout.ts"
+          "target": "components/bbox/components/editableText.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/editableText.tsx",
           "type": "registry:component",
-          "target": "components/bbox/editableText.tsx"
+          "target": "components/bbox/components/editableText.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/binaryHeap.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/binaryHeap.ts"
+          "target": "components/bbox/components/elbow/binaryHeap.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/boundaryCrossing.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/boundaryCrossing.ts"
+          "target": "components/bbox/components/elbow/boundaryCrossing.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/elbowPath.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/elbowPath.ts"
+          "target": "components/bbox/components/elbow/elbowPath.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/elbowPins.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/elbowPins.ts"
+          "target": "components/bbox/components/elbow/elbowPins.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/elbowRouter.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/elbowRouter.ts"
+          "target": "components/bbox/components/elbow/elbowRouter.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/geometry.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/geometry.ts"
+          "target": "components/bbox/components/elbow/geometry.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/index.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/index.ts"
+          "target": "components/bbox/components/elbow/index.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/nudge.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/nudge.ts"
+          "target": "components/bbox/components/elbow/nudge.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/softClearance.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/softClearance.ts"
+          "target": "components/bbox/components/elbow/softClearance.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/elbow/traceContract.ts",
           "type": "registry:lib",
-          "target": "components/bbox/elbow/traceContract.ts"
+          "target": "components/bbox/components/elbow/traceContract.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/glyph.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/glyph.layout.ts"
+          "target": "components/bbox/components/glyph.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/highlighter.tsx",
           "type": "registry:component",
-          "target": "components/bbox/highlighter.tsx"
+          "target": "components/bbox/components/highlighter.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/hitRegion.ts",
           "type": "registry:lib",
-          "target": "components/bbox/hitRegion.ts"
+          "target": "components/bbox/components/hitRegion.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/popover.tsx",
           "type": "registry:component",
-          "target": "components/bbox/popover.tsx"
+          "target": "components/bbox/components/popover.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/port.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/port.layout.ts"
+          "target": "components/bbox/components/port.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/tooltip.tsx",
           "type": "registry:component",
-          "target": "components/bbox/tooltip.tsx"
+          "target": "components/bbox/components/tooltip.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/trace.bends.ts",
           "type": "registry:lib",
-          "target": "components/bbox/trace.bends.ts"
+          "target": "components/bbox/components/trace.bends.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/trace.crossing.ts",
           "type": "registry:lib",
-          "target": "components/bbox/trace.crossing.ts"
+          "target": "components/bbox/components/trace.crossing.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/trace.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/trace.layout.ts"
+          "target": "components/bbox/components/trace.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/trace.routing.ts",
           "type": "registry:lib",
-          "target": "components/bbox/trace.routing.ts"
+          "target": "components/bbox/components/trace.routing.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/trace.tsx",
           "type": "registry:component",
-          "target": "components/bbox/trace.tsx"
+          "target": "components/bbox/components/trace.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/traceBadge.tsx",
           "type": "registry:component",
-          "target": "components/bbox/traceBadge.tsx"
+          "target": "components/bbox/components/traceBadge.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/traceTerminal.tsx",
           "type": "registry:component",
-          "target": "components/bbox/traceTerminal.tsx"
+          "target": "components/bbox/components/traceTerminal.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/tunnel.ts",
           "type": "registry:lib",
-          "target": "components/bbox/tunnel.ts"
+          "target": "components/bbox/components/tunnel.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/wireLayer.tsx",
           "type": "registry:component",
-          "target": "components/bbox/wireLayer.tsx"
+          "target": "components/bbox/components/wireLayer.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/wiring.ts",
           "type": "registry:lib",
-          "target": "components/bbox/wiring.ts"
+          "target": "components/bbox/components/wiring.ts"
         },
         {
           "path": "apps/storybook-basics/src/lib/utils.ts",
           "type": "registry:lib",
-          "target": "components/lib/utils.ts"
+          "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/skin/portVariants.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/skin/portVariants.ts"
         }
       ],
       "dependencies": [
@@ -2801,99 +2877,241 @@
         {
           "path": "apps/storybook-basics/src/components/badge.tsx",
           "type": "registry:component",
-          "target": "components/bbox/badge.tsx"
+          "target": "components/bbox/components/badge.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/bar.tsx",
           "type": "registry:component",
-          "target": "components/bbox/bar.tsx"
+          "target": "components/bbox/components/bar.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/barSize.tsx",
           "type": "registry:component",
-          "target": "components/bbox/barSize.tsx"
+          "target": "components/bbox/components/barSize.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/block.tsx",
           "type": "registry:component",
-          "target": "components/bbox/block.tsx"
+          "target": "components/bbox/components/block.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/blockDescription.tsx",
           "type": "registry:component",
-          "target": "components/bbox/blockDescription.tsx"
+          "target": "components/bbox/components/blockDescription.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/blockMembers.tsx",
           "type": "registry:component",
-          "target": "components/bbox/blockMembers.tsx"
+          "target": "components/bbox/components/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockPort.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockPort.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/blockRegion.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/blockRegion.layout.ts"
+          "target": "components/bbox/components/blockRegion.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/blockRegion.tsx",
           "type": "registry:component",
-          "target": "components/bbox/blockRegion.tsx"
+          "target": "components/bbox/components/blockRegion.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.views.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockRegion.views.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/codeEditor.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlMark.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/controlMark.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/editableText.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/editableText.layout.ts"
+          "target": "components/bbox/components/editableText.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/foldingChevron.tsx",
           "type": "registry:component",
-          "target": "components/bbox/foldingChevron.tsx"
+          "target": "components/bbox/components/foldingChevron.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/glyph.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/glyph.layout.ts"
+          "target": "components/bbox/components/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/glyph.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/highlighter.tsx",
           "type": "registry:component",
-          "target": "components/bbox/highlighter.tsx"
+          "target": "components/bbox/components/highlighter.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/hitRegion.ts",
           "type": "registry:lib",
-          "target": "components/bbox/hitRegion.ts"
+          "target": "components/bbox/components/hitRegion.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/keyboardReorder.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/keyboardReorder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/labeledPort.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/paintOrder.ts",
           "type": "registry:lib",
-          "target": "components/bbox/paintOrder.ts"
+          "target": "components/bbox/components/paintOrder.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/popover.tsx",
           "type": "registry:component",
-          "target": "components/bbox/popover.tsx"
+          "target": "components/bbox/components/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portEdge.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/portEdge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portLane.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividerMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/returnDividerMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/sideEffectMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/sideEffectMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/sideEffects.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/sideEffects.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/tooltip.tsx",
           "type": "registry:component",
-          "target": "components/bbox/tooltip.tsx"
+          "target": "components/bbox/components/tooltip.tsx"
         },
         {
           "path": "apps/storybook-basics/src/lib/utils.ts",
           "type": "registry:lib",
-          "target": "components/lib/utils.ts"
+          "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/skin/portVariants.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/skin/portVariants.ts"
         },
         {
           "path": "apps/storybook-basics/src/skin/regionVariants.ts",
           "type": "registry:lib",
-          "target": "components/skin/regionVariants.ts"
+          "target": "components/bbox/skin/regionVariants.ts"
         }
       ],
       "dependencies": [
         "@base-ui/react",
+        "@bbox-ui/glyph-content",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/lint",
+        "@codemirror/state",
+        "@codemirror/view",
         "@dnd-kit/core",
         "@dnd-kit/sortable",
         "@dnd-kit/utilities",
+        "@lezer/highlight",
         "class-variance-authority",
         "clsx",
         "lucide-react",
@@ -2909,104 +3127,246 @@
         {
           "path": "apps/storybook-basics/src/components/badge.tsx",
           "type": "registry:component",
-          "target": "components/bbox/badge.tsx"
+          "target": "components/bbox/components/badge.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/bar.tsx",
           "type": "registry:component",
-          "target": "components/bbox/bar.tsx"
+          "target": "components/bbox/components/bar.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/barSize.tsx",
           "type": "registry:component",
-          "target": "components/bbox/barSize.tsx"
+          "target": "components/bbox/components/barSize.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/block.tsx",
           "type": "registry:component",
-          "target": "components/bbox/block.tsx"
+          "target": "components/bbox/components/block.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/blockDescription.tsx",
           "type": "registry:component",
-          "target": "components/bbox/blockDescription.tsx"
+          "target": "components/bbox/components/blockDescription.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/blockMembers.tsx",
           "type": "registry:component",
-          "target": "components/bbox/blockMembers.tsx"
+          "target": "components/bbox/components/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockPort.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockPort.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/blockRegion.labeledGroup.tsx",
           "type": "registry:component",
-          "target": "components/bbox/blockRegion.labeledGroup.tsx"
+          "target": "components/bbox/components/blockRegion.labeledGroup.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/blockRegion.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/blockRegion.layout.ts"
+          "target": "components/bbox/components/blockRegion.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/blockRegion.tsx",
           "type": "registry:component",
-          "target": "components/bbox/blockRegion.tsx"
+          "target": "components/bbox/components/blockRegion.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.views.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockRegion.views.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/button.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/codeEditor.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/controlMark.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/controlMark.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/editableText.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/editableText.layout.ts"
+          "target": "components/bbox/components/editableText.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/foldingChevron.tsx",
           "type": "registry:component",
-          "target": "components/bbox/foldingChevron.tsx"
+          "target": "components/bbox/components/foldingChevron.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/glyph.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/glyph.layout.ts"
+          "target": "components/bbox/components/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/glyph.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/highlighter.tsx",
           "type": "registry:component",
-          "target": "components/bbox/highlighter.tsx"
+          "target": "components/bbox/components/highlighter.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/hitRegion.ts",
           "type": "registry:lib",
-          "target": "components/bbox/hitRegion.ts"
+          "target": "components/bbox/components/hitRegion.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/keyboardReorder.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/keyboardReorder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/labeledPort.tsx"
         },
         {
           "path": "apps/storybook-basics/src/components/paintOrder.ts",
           "type": "registry:lib",
-          "target": "components/bbox/paintOrder.ts"
+          "target": "components/bbox/components/paintOrder.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/popover.tsx",
           "type": "registry:component",
-          "target": "components/bbox/popover.tsx"
+          "target": "components/bbox/components/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portEdge.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/portEdge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portLane.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividerMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/returnDividerMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/sideEffectMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/sideEffectMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/sideEffects.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/sideEffects.layout.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/tooltip.tsx",
           "type": "registry:component",
-          "target": "components/bbox/tooltip.tsx"
+          "target": "components/bbox/components/tooltip.tsx"
         },
         {
           "path": "apps/storybook-basics/src/lib/utils.ts",
           "type": "registry:lib",
-          "target": "components/lib/utils.ts"
+          "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/skin/portVariants.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/skin/portVariants.ts"
         },
         {
           "path": "apps/storybook-basics/src/skin/regionVariants.ts",
           "type": "registry:lib",
-          "target": "components/skin/regionVariants.ts"
+          "target": "components/bbox/skin/regionVariants.ts"
         }
       ],
       "dependencies": [
         "@base-ui/react",
+        "@bbox-ui/glyph-content",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/lint",
+        "@codemirror/state",
+        "@codemirror/view",
         "@dnd-kit/core",
         "@dnd-kit/sortable",
         "@dnd-kit/utilities",
+        "@lezer/highlight",
         "class-variance-authority",
         "clsx",
         "lucide-react",

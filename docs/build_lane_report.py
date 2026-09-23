@@ -170,7 +170,15 @@ def git_facts(lane_repo: pathlib.Path, base_ref: str) -> dict:
     }
     merge_base = sh(["git", "merge-base", base_ref, "HEAD"], lane_repo)
     if merge_base:
-        oneline = sh(["git", "log", "--oneline", f"{merge_base}..HEAD"], lane_repo)
+        # WHY `base_ref..HEAD` and not `merge_base..HEAD` (2026-09-22): the
+        # card this feeds is labelled "N commits since <base>", which a reader
+        # takes as "N commits <base> does not have". `merge_base..HEAD` is a
+        # SUPERSET of that — it also counts commits that are on the base
+        # already, whenever the branch has merged base-containing history.
+        # Measured here: 119 vs the true 114, five of them already on `main`.
+        # The diffstat below deliberately keeps three-dot/merge-base, which is
+        # the right base for a DIFF and a different question.
+        oneline = sh(["git", "log", "--oneline", f"{base_ref}..HEAD"], lane_repo)
         facts["commits_since_base"] = len(oneline.splitlines()) if oneline else 0
         shortstat = sh(["git", "diff", "--shortstat", f"{merge_base}...HEAD"], lane_repo)
         facts["diffstat"] = shortstat or "no changes vs base"

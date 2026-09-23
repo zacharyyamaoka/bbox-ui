@@ -59,6 +59,7 @@ import {
   setBlockView,
   setCodeLanguage,
 } from "./selectionActions";
+import { BLOCK_VIEW_HOTKEY } from "./viewHotkeys";
 
 /**
  * How much of the viewport's bottom edge belongs to the tool dock, in screen
@@ -259,7 +260,12 @@ export function FloatingSelectionToolbar() {
             <ToggleGroupItem
               key={view.id}
               value={view.id}
-              title={view.hint}
+              // Requirement #5's other half, at the pill's existing tooltip
+              // seam: the same key `viewHotkeys.tsx` binds to write this
+              // view, so a hover teaches the shortcut without a second
+              // control. `view.hint` (a description, "Name only") gives way
+              // here rather than growing a third tooltip segment.
+              title={`${view.label} · ${BLOCK_VIEW_HOTKEY[view.id]}`}
               // WHY the pressed colours are restated here: `toggleVariants`
               // paints a pressed item `bg-muted` with the page's normal
               // foreground text (toggle.tsx:17), which assumes a LIGHT

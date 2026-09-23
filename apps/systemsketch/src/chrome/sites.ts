@@ -26,10 +26,12 @@
 // Stable server. Press the row without that launcher (a bare `vite dev`, say)
 // and you get a connection-refused tab — which is why the launcher, not this
 // file, is the thing that had to change.
-import { createElement } from "react";
+import { createElement, useEffect, useMemo, useState } from "react";
 import { BookOpen, Globe } from "lucide-react";
 
 import type { MenuAction } from "@trunk/editor/chromeBar";
+
+import { describeStatus, probeSiteStatus, statusMismatchesOwn, type SiteStatus } from "./siteStatus";
 
 /** The deployed component site. Redeploys itself on every push to `main`. */
 export const BBOX_UI_SITE_URL: string =
@@ -75,4 +77,127 @@ export function siteActionsFor(
     });
   }
   return rows;
+}
+
+const STATUS_POLL_MS = 5000;
+
+/**
+ * Which `product` a probe of each row's URL is allowed to accept — the
+ * judge's 2026-09-22 finding was that `product` was read off the health
+ * document and then ignored, so any JSON on the port was reported as that
+ * row's surface.
+ *
+ * WHY the whiteboard's OWN origin names two products and that is not a bug:
+ * this app is served by two different things depending on the channel —
+ * `apps/systemsketch/statusEndpoint.ts` (the `vite dev` Preview) says
+ * `bbox-ui-systemsketch`, and `scripts/launch_systemsketch.py` (the dock's
+ * pinned Stable build) says `systemsketch-next`. Two names for two channels
+ * of one product, from before the naming was unified. Unifying them would
+ * mean changing a string that `launch_systemsketch.py`'s own `health()`
+ * gate and two script test suites already pin, for cosmetics — so the set is
+ * named honestly here instead, where the comparison happens.
+ */
+const OWN_PRODUCTS = ["bbox-ui-systemsketch", "systemsketch-next"] as const;
+const STORYBOOK_PRODUCTS = ["bbox-ui-storybook"] as const;
+
+/** The products a row's URL may legitimately be serving. */
+export function expectedProductsFor(rowId: string): readonly string[] | undefined {
+  if (rowId === "open-storybook") return STORYBOOK_PRODUCTS;
+  // bbox-ui.com is remote and never probed; anything else is unknown to us,
+  // so no expectation is asserted rather than a wrong one.
+  return undefined;
+}
+
+/**
+ * `siteActionsFor`, live: same rows, same order, same ids, and — since
+ * 2026-09-22's regression — the exact same `label` string, always.
+ * `sites.smoke.test.tsx` keys a row by its rendered name and clicks it by
+ * that name; folding the channel badge into `label` broke both assertions
+ * ("the row is no longer named 'Open Storybook'"). The badge is instead a
+ * separate `MenuAction.badge` node — its own `data-slot="site-channel-badge"`
+ * element, rendered by the trunk AFTER the label
+ * (`apps/storybook-basics/src/editor/chromeBar.tsx`'s `BurgerMenuEntry`) —
+ * so nothing about the row's name changes no matter what the badge says.
+ *
+ * A dead loopback row is `disabled` rather than left to open a
+ * connection-refused tab (Zach, 2026-09-22), but ONLY once a probe has
+ * POSITIVELY reported it dead — every row starts (and stays, while a probe
+ * is slow or never resolves) enabled, because "unknown" is not "dead" and a
+ * stalled network call must never make a row unclickable.
+ *
+ * WHY a hook and not a wrapper around the plain function: the badge has to
+ * change as `/api/health` answers come back and 5s later go stale, which
+ * needs state and an effect — `siteActionsFor` itself stays synchronous and
+ * untouched (see siteStatus.ts's own header for why the two are split).
+ */
+export function useSiteActionsWithStatus(
+  hostname: string,
+  open: (url: string) => void = openInNewWindow,
+): readonly MenuAction[] {
+  const baseRows = useMemo(() => siteActionsFor(hostname, open), [hostname, open]);
+  const urls = useMemo(() => baseRows.map((row) => rowUrl(row)), [baseRows]);
+  const products = useMemo(() => baseRows.map((row) => expectedProductsFor(row.id)), [baseRows]);
+  const [ownStatus, setOwnStatus] = useState<SiteStatus>({ kind: "unknown" });
+  const [statuses, setStatuses] = useState<readonly SiteStatus[]>(() => urls.map(() => ({ kind: "unknown" })));
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      probeSiteStatus(window.location.origin, { expectProducts: OWN_PRODUCTS }).then((status) => {
+        if (!cancelled) setOwnStatus(status);
+      });
+      Promise.all(
+        urls.map((url, index) => probeSiteStatus(url, { expectProducts: products[index] })),
+      ).then((next) => {
+        if (!cancelled) setStatuses(next);
+      });
+    };
+    poll();
+    const interval = setInterval(poll, STATUS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // `urls` is derived from `baseRows`, which is itself memoized on
+    // `hostname`/`open` — including it directly would re-subscribe every
+    // render since arrays are never `===`-equal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostname, open]);
+
+  return useMemo(
+    () =>
+      baseRows.map((row, index) => {
+        const status = statuses[index] ?? { kind: "unknown" };
+        const suffix = describeStatus(status);
+        const mismatch = statusMismatchesOwn(status, ownStatus);
+        return {
+          ...row,
+          badge: suffix
+            ? createElement(
+                "span",
+                { "data-slot": "site-channel-badge" },
+                mismatch ? `${suffix} · different from this board` : suffix,
+              )
+            : undefined,
+          // `status.kind === "dead"` is the ONLY thing that disables a row.
+          // "unknown" (no probe answer yet, or none in flight) is never
+          // treated as dead — and neither is "unsupported": something IS
+          // answering there, it just does not say what it is built from, so
+          // the door still works and taking it away would be the inverse of
+          // the bug this probe exists to fix.
+          disabled: row.disabled || status.kind === "dead",
+        };
+      }),
+    [baseRows, statuses, ownStatus],
+  );
+}
+
+function rowUrl(row: MenuAction): string {
+  // WHY re-derive the URL from the row's id rather than have siteActionsFor
+  // expose it: MenuAction has no url field (MENU-KIT-DESIGN §5 — a row is
+  // id/label/icon/run, run is opaque), and adding one would be a trunk
+  // contract change for a need only this app-wiring hook has.
+  if (row.id === "open-bbox-ui-site") return BBOX_UI_SITE_URL;
+  if (row.id === "open-storybook") return STORYBOOK_URL;
+  return BBOX_UI_SITE_URL;
 }

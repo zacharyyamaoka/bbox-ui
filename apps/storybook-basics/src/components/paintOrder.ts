@@ -63,6 +63,7 @@
  * reproduces.
  */
 export const PAINT_TIER_ORDER = [
+  "underlay",
   "surface",
   "memberContent",
   "memberOverflow",
@@ -83,6 +84,15 @@ export type PaintTierName = (typeof PAINT_TIER_ORDER)[number];
  * (`headerChrome`, and the currently-unwired placeholders) say that too.
  */
 const PAINT_TIER_VALUE: Readonly<Record<PaintTierName, number>> = Object.freeze({
+  // NEW (2026-09-22, lane side-effect-ports) — the one NEGATIVE tier, and
+  // the only one that paints BELOW a box's own content. A negative z-index
+  // inside an isolated root paints right after that root's own background
+  // and border and before every in-flow child, so a line drawn here sits on
+  // the card surface and UNDER the body, the header text and — in an
+  // expanded Block — every member card. Its one caller is the mutation line
+  // (blockPort.tsx's `MutationLines`), which must not paint over member
+  // content; `wire` (above `memberContent`) says the opposite.
+  underlay: -1,
   // Placeholder — not wired to any raw zIndex today. Lowest in the
   // ladder: a surface/inset background paints under its own box's
   // content.

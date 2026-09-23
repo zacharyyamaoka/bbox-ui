@@ -16,6 +16,7 @@ import type { ComponentType } from "react";
 import type {
   Editor,
   TLAnyBindingUtilConstructor,
+  TLAnyOverlayUtilConstructor,
   TLAnyShapeUtilConstructor,
   TLStateNodeConstructor,
   TLUiToolsContextType,
@@ -54,6 +55,10 @@ export interface ShapeKit {
   install?(editor: Editor): () => void;
   /** Rendered inside `components.InFrontOfTheCanvas` by src/chrome/overlay.tsx. */
   Overlay?: ComponentType;
+  /** `<Tldraw overlayUtils>` entries. One with a stock util's static `type`
+   *  REPLACES that stock util (tldraw's `mergeArraysAndReplaceDefaults`) —
+   *  the region kit's hover indicator is the one user. */
+  overlayUtils?: readonly TLAnyOverlayUtilConstructor[];
 }
 
 /**
@@ -79,6 +84,7 @@ export const KITS: readonly ShapeKit[] = [blockKit, codeKit, portKit, wireKit, r
 export const SHAPE_UTILS: readonly TLAnyShapeUtilConstructor[] = KITS.flatMap((kit) => [...kit.shapeUtils]);
 export const BINDING_UTILS: readonly TLAnyBindingUtilConstructor[] = KITS.flatMap((kit) => [...kit.bindingUtils]);
 export const TOOLS: readonly TLStateNodeConstructor[] = KITS.flatMap((kit) => [...kit.tools]);
+export const OVERLAY_UTILS: readonly TLAnyOverlayUtilConstructor[] = KITS.flatMap((kit) => [...(kit.overlayUtils ?? [])]);
 
 /** Every row of the ONE system-family slot (Zach, 2026-09-18: "lets just
  *  have the 1 icon"). There is no second family for bbox primitives — that

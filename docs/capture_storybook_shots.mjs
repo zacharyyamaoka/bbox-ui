@@ -89,10 +89,22 @@ for (const shot of shots) {
   const url = `${BASE}?id=${shot.id}&viewMode=story`;
   try {
     await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
-    // Storybook mounts asynchronously; #storybook-root having children is
-    // the honest "the story rendered" signal, not a fixed sleep.
+    // Storybook mounts asynchronously; the root having children is the
+    // honest "the story rendered" signal, not a fixed sleep.
+    //
+    // WHY it also looks outside #storybook-root (2026-09-22): a story whose
+    // subject is a DIALOG renders through a portal into document.body, so
+    // the root legitimately stays EMPTY and this wait timed out at 20s on a
+    // story that had in fact rendered perfectly — measured on
+    // `SettingsView/Layout & Search`, where the panel is the whole picture.
+    // Treating "root is empty" as "did not render" made every dialog and
+    // popover story uncapturable, which is the opposite of what a report
+    // needs. Any portaled Base UI surface carries `[data-portal]` or a
+    // role of dialog/menu/listbox, so either signal means mounted.
     await page.waitForFunction(
-      () => (document.querySelector("#storybook-root")?.childElementCount ?? 0) > 0,
+      () =>
+        (document.querySelector("#storybook-root")?.childElementCount ?? 0) > 0 ||
+        document.querySelector("[data-portal], [role='dialog'], [role='menu'], [role='listbox']") !== null,
       { timeout: 20_000 },
     );
     // Per-shot override for stories whose PLAY FUNCTION is the picture — a

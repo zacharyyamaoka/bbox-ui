@@ -25,12 +25,12 @@
 // does arithmetic on its own oracle is not testing much.
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { expect, fireEvent, waitFor } from "storybook/test";
 
 import { TRACE_BEND_COLLAPSE_PX, TraceEditor } from "./traceEditor";
 import { TRACE_TERMINAL_RADIUS } from "./traceTerminal";
-import type { Point, TraceTerminalSpec } from "./trace.layout";
+import type { Point, TraceTerminalSpec, TraceVariant } from "./trace.layout";
 
 /* ------------------------------------------------------------------ */
 /* Page scaffolding — `TraceInteractive.stories.tsx`'s own shape.       */
@@ -557,6 +557,79 @@ export const HandleRadiusOverride: Story = {
     ];
     for (const [id, point] of expected) {
       const centre = centreOf(requireEl(svg, `[data-handle-id="${id}"]`));
+      const want = userToClient(svg, point);
+      await expect(Math.abs(centre.x - want.x), `${id} x`).toBeLessThan(0.5);
+      await expect(Math.abs(centre.y - want.y), `${id} y`).toBeLessThan(0.5);
+    }
+  },
+};
+
+/* ==================================================================== */
+/* 7. LiveVariantSwitch — the geometry memo tracks the cap-aware gap     */
+/* ==================================================================== */
+
+/** `traceDefaultGapPx` (trace.tsx) is line-cap aware since acd547e — round
+ *  caps (the `data` default) pull back half a stroke further than butt
+ *  caps (`async`), so switching variant live must move the painted line's
+ *  ends. `TraceEditor`'s own `geometry` memo computes that SAME gap
+ *  (traceEditor.tsx's own comment: "the SAME default `Trace` resolves...
+ *  or the handles sit a few px off the ends of the line they drag") — if
+ *  its deps omit `rest.variant`/`rest.animated`, the memo does not rerun on
+ *  a variant switch and the handles get left on the OLD pull-back. */
+function VariantSwitcher() {
+  const [variant, setVariant] = useState<TraceVariant>("data");
+  return (
+    <>
+      <button type="button" data-testid="toggle-variant" onClick={() => setVariant((v) => (v === "data" ? "async" : "data"))}>
+        {variant === "data" ? "Switch to async (butt cap)" : "Switch to data (round cap)"}
+      </button>
+      <Canvas testId="variant-canvas">
+        <TraceEditor id="variant-switch" from={FROM} to={TO} routing="straight" revealed variant={variant} />
+      </Canvas>
+    </>
+  );
+}
+
+export const LiveVariantSwitch: Story = {
+  render: () => (
+    <Page>
+      <Caption
+        title="Live variant switch"
+        text="Toggling data (round cap) -> async (butt cap) changes traceDefaultGapPx's answer, so the painted line's ends move. The play function proves the editor's start/end handles moved WITH it — measured off the real DOM, not just that the line redrew."
+      />
+      <VariantSwitcher />
+    </Page>
+  ),
+  play: async ({ canvasElement }) => {
+    const svg = requireEl<SVGSVGElement>(canvasElement, '[data-testid="variant-canvas"]');
+    const line = requireEl<SVGPathElement>(svg, '[data-slot="trace-line"]');
+    const button = requireEl<HTMLButtonElement>(canvasElement, '[data-testid="toggle-variant"]');
+
+    const dBefore = line.getAttribute("d")!;
+    const startBefore = pathVertices(dBefore)[0];
+
+    fireEvent.click(button);
+
+    // The painted path's ends actually moved — the cap-aware gap changed.
+    await waitFor(() => expect(line.getAttribute("d")!).not.toBe(dBefore));
+
+    const dAfter = line.getAttribute("d")!;
+    const vertices = pathVertices(dAfter);
+    const startAfter = vertices[0];
+    const endAfter = vertices[vertices.length - 1];
+    // Sanity: the toggle is not a no-op — round vs butt differ by half a
+    // stroke width, well clear of measurement noise.
+    await expect(Math.abs(startAfter.x - startBefore.x)).toBeGreaterThan(0.5);
+
+    // ...and BOTH terminal handles followed the new line ends, not just the
+    // painted path — measured within 0.5px, exactly the regression a stale
+    // memo (missing rest.variant/rest.animated) would fail.
+    for (const [id, point] of [
+      ["start", startAfter],
+      ["end", endAfter],
+    ] as const) {
+      const handle = requireEl<SVGCircleElement>(svg, `[data-handle-id="${id}"]`);
+      const centre = centreOf(handle);
       const want = userToClient(svg, point);
       await expect(Math.abs(centre.x - want.x), `${id} x`).toBeLessThan(0.5);
       await expect(Math.abs(centre.y - want.y), `${id} y`).toBeLessThan(0.5);

@@ -19,11 +19,13 @@
 //   2. `createCornerBlock` / `armRegionPreset` — who mints it, and when;
 //   3. `regionLayoutOf` — the frame's geometry, which starts BELOW the corner
 //      block's measured box (`@trunk/components/blockRegion.layout`'s own rule);
-//   4. `installRegionKit` — the two repairs that keep 1 and 3 TRUE over a
+//   4. `installRegionKit` — the repairs that keep 1 and 3 TRUE over a
 //      document's whole life: a duplicated region must not keep naming the
-//      ORIGINAL's corner block, and a frame must not stay the size it was
-//      authored at once the card it hugs has measured itself.
-import { createShapeId, type Editor, type TLShape, type TLShapeId } from "tldraw";
+//      ORIGINAL's corner block, a frame must not stay the size it was
+//      authored at once the card it hugs has measured itself, and the card
+//      and its frame are ONE object — the card is pinned to the corner slot
+//      and a gesture on it is a gesture on the region.
+import { createShapeId, type Editor, type TLEventInfo, type TLInstancePageState, type TLShape, type TLShapeId } from "tldraw";
 
 import {
   REGION_ARM_MIN_BODY_PX,
@@ -32,6 +34,8 @@ import {
   type RegionLayout,
 } from "@trunk/components/blockRegion.layout";
 import { REGION_VARIANTS, readRegionVariant } from "@trunk/skin/regionVariants";
+
+import { repairIfRemote, runRepair } from "../../document/derivedWrites";
 
 import type { BlockPortSpec, BlockShapeProps } from "../block/BlockShapeUtil";
 import { BLOCK_SHAPE_TYPE, REGION_SHAPE_TYPE, type PortSide } from "../types";
@@ -82,9 +86,53 @@ const CORNER_INSET_Y_PX = 0;
  * has, so "a new block landed in this region's corner slot while the region is
  * pointing at something that is not its child" identifies it without guessing.
  * 24px is the acceptance test's own tolerance for "the corner block is at the
- * region's top-left" (`src/region.smoke.test.tsx`).
+ * region's top-left" (`src/region.smoke.test.tsx`). Since the card is pinned
+ * (`installRegionKit`), an original's card is always exactly on the slot, so
+ * the slack only matters for a copy of a board written before the pin.
  */
 const CORNER_CLAIM_SLACK_PX = 24;
+
+/**
+ * The one view a corner card may wear — the `port` face every
+ * `cornerBlockPropsFor` kind mints.
+ *
+ * WHY it is part of the PIN and not only a pill/hotkey guard: Zach,
+ * 2026-09-22 — "I don't want to give people the option to expand the region
+ * header block". The card is the region's header, not a block you open, and a
+ * view reaches it through writers no control owns: `applyScene` writes an
+ * incoming node's `view` straight onto the block, File › Open loads whatever
+ * the file says, and any `editor.updateShape` can name it. So it is a document
+ * invariant, held by the same predicate and the same three writers that hold
+ * the card's position (Codex audit, 2026-09-22).
+ */
+const CORNER_VIEW: BlockShapeProps["view"] = "port";
+
+/** The pinned fields a card off its slot is written back to — position AND
+ *  view, one object so the pin, the sweep and the repairs cannot disagree. */
+const CORNER_PIN = { x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX, rotation: 0 } as const;
+
+/** Is this card exactly on the corner slot — region-local (0, 0), unrotated,
+ *  wearing the corner view? The one predicate the pin, the sweep and the
+ *  repairs all ask. */
+function onCornerSlot(shape: TLShape): boolean {
+  return (
+    shape.x === CORNER_PIN.x &&
+    shape.y === CORNER_PIN.y &&
+    shape.rotation === CORNER_PIN.rotation &&
+    (shape.props as { view?: string }).view === CORNER_VIEW
+  );
+}
+
+/** `shape` with the pin applied: slot position, no rotation, the corner view. */
+function pinned<Shape extends TLShape>(shape: Shape): Shape {
+  return { ...shape, ...CORNER_PIN, props: { ...shape.props, view: CORNER_VIEW } };
+}
+
+/** The partial update a store write needs to put a card back on the pin. A
+ *  corner card is always an `ss-block` (`regionNaming` checks the type). */
+function pinUpdate(card: TLShape) {
+  return { id: card.id, type: BLOCK_SHAPE_TYPE, ...CORNER_PIN, props: { view: CORNER_VIEW } } as const;
+}
 
 /** The height of the plain text tab a region wears INSTEAD of a corner block
  *  (`kind: "plain"`, or a region a writer created without one). It exists so
@@ -349,10 +397,12 @@ export function isRegionPlaceholder(shape: RegionShape): boolean {
  *      region already exists. `props.w/h` are the geometry now
  *      (`RegionShapeUtil.getGeometry`), so a card that grew has to push its
  *      frame rather than overflow it.
+ *   3. The card is PINNED, and the card and its frame are ONE object. See
+ *      `pinnedCorner` and `redirectCornerSelection` below.
  *
- * Both are store side effects rather than anything in the tools, because the
- * events that need them (duplicate, paste, a measurement settling) are not
- * gestures any tool owns.
+ * All are store side effects rather than anything in the tools, because the
+ * events that need them (duplicate, paste, a measurement settling, a nudge,
+ * an undo, a file load) are not gestures any tool owns.
  */
 export function installRegionKit(editor: Editor): () => void {
   const parentRegionOf = (shape: TLShape): RegionShape | undefined => {
@@ -381,35 +431,283 @@ export function installRegionKit(editor: Editor): () => void {
     editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { w, h, arms } });
   };
 
+  /** The region whose corner card `block` is, judged from the block's OWN
+   *  `parentId` — the same double check `cornerBlockOf` makes. */
+  const regionNaming = (block: TLShape): RegionShape | undefined => {
+    if (block.type !== BLOCK_SHAPE_TYPE) return undefined;
+    const region = parentRegionOf(block);
+    return region && region.props.cornerBlockId === block.id ? region : undefined;
+  };
+
   /**
-   * A corner block saved at the LEGACY inset snaps flush.
+   * THE CARD IS PINNED to the corner slot: region-local (0, 0), unrotated.
    *
-   * WHY a sweep and not just the new constant: `CORNER_INSET_X_PX` decides
-   * where a card is CREATED, and every board already in IndexedDB has its
-   * cards at the old 8px. Zach's rule is "generalize every bug fix" — the
-   * boundary that made the bug possible is the stored position, so the
-   * stored position is what gets swept, once, at mount. Bounded by the same
-   * `CORNER_CLAIM_SLACK_PX` the claim test uses, so a card an author has
-   * deliberately dragged somewhere else is left exactly where they put it.
+   * WHY: Zach, 2026-09-21, looking at a For Loop and a Branch whose cards had
+   * come to rest ~26px inside their frames: "You need to rigidly connect the
+   * for loop and branch block to the region frame. It should conceptually be
+   * one object." ... "Same issue with branch." That OVERRULES what this file
+   * used to say — that a card "an author has deliberately dragged somewhere
+   * else is left exactly where they put it". There is no such author any more:
+   * the card is the frame's own header, so a card off the slot is a broken
+   * record, never an intention. The tempting half-measure, snapping only
+   * within some slack of the slot, is exactly what let the inset card of his
+   * screenshot survive.
+   *
+   * Enforced at the store (before-create / before-change) rather than in the
+   * select tool, because a card leaves its slot through writes no gesture
+   * owns — a nudge, align/distribute, a paste, an undo, stream 3's
+   * `applyScene`. The select tool can no longer move a card at all
+   * (`redirectCornerSelection`); this is what makes that a guarantee instead
+   * of a consequence.
+   *
+   * The POSITION pin is unconditional: no writer has a reason to put a corner
+   * card anywhere but its slot. PARENTAGE is different — see
+   * `gestureMovesCard` for why only a gesture on the card itself is refused
+   * a reparent.
+   */
+  const pinnedCorner = <Shape extends TLShape>(shape: Shape): Shape =>
+    onCornerSlot(shape) ? shape : pinned(shape);
+
+  /** Every card among `cards` that is off its slot, back on it — one
+   *  `history: "ignore"` write for the lot. */
+  const snapCards = (cards: readonly TLShape[]) => {
+    const moves = cards
+      .filter((corner) => !onCornerSlot(corner))
+      .map(pinUpdate);
+    // Derived as well as history-ignored: a card put back after a load is not an autosave (`document/derivedWrites.ts`).
+    if (moves.length > 0) runRepair(editor, () => editor.updateShapes(moves));
+  };
+
+  /**
+   * Corner cards back on their slot, OUTSIDE the store handlers.
+   *
+   * WHY a sweep IN ADDITION to the store handlers: two writers bypass side
+   * effects entirely — `Store.loadStoreSnapshot` runs with them switched off
+   * (`@tldraw/store` Store.ts, `sideEffects.setIsEnabled(false)`), and that is
+   * both the IndexedDB board the app mounts on and File › Open
+   * (`chrome/FileMenu/fileActions.ts`'s `loadBoardText`).
+   *
+   * Once at mount over the whole store, then only over what each change batch
+   * TOUCHED: a touched block that is a corner card, and a touched region's own
+   * card. WHY not the whole store every batch, which an earlier cut of this
+   * lane did: a region drag is a batch per animation frame, and scanning every
+   * record on every page per frame is cost that buys nothing — a batch that
+   * did not touch a card or its region cannot have moved it. A snapshot load
+   * arrives as one batch with every record in `added`, so loads stay fully
+   * covered by the same rule.
    *
    * `history: "ignore"` for the same reason `shared/measure.ts` uses it:
    * this is a repair, not an edit, and it must not make the first Ctrl-Z of
    * a session undo the frame's own geometry.
    */
-  const snapCornersFlush = () => {
-    const regions = editor.getCurrentPageShapes().filter((shape) => shape.type === REGION_SHAPE_TYPE) as RegionShape[];
-    const moves = regions
+  snapCards(
+    editor.store
+      .allRecords()
+      .filter((record): record is RegionShape => record.typeName === "shape" && (record as TLShape).type === REGION_SHAPE_TYPE)
       .map((region) => cornerBlockOf(editor, region))
-      .filter((corner): corner is TLShape => !!corner)
-      .filter((corner) => corner.x !== CORNER_INSET_X_PX || corner.y !== CORNER_INSET_Y_PX)
-      .filter((corner) => Math.abs(corner.x - CORNER_INSET_X_PX) <= CORNER_CLAIM_SLACK_PX && Math.abs(corner.y - CORNER_INSET_Y_PX) <= CORNER_CLAIM_SLACK_PX)
-      .map((corner) => ({ id: corner.id, type: corner.type, x: CORNER_INSET_X_PX, y: CORNER_INSET_Y_PX }));
-    if (moves.length > 0) editor.run(() => editor.updateShapes(moves), { history: "ignore" });
+      .filter((corner): corner is TLShape => !!corner),
+  );
+  const stopSweep = editor.store.listen(
+    ({ changes }) => {
+      const cards = new Map<TLShapeId, TLShape>();
+      for (const record of [...Object.values(changes.added), ...Object.values(changes.updated).map(([, next]) => next)]) {
+        if (record.typeName !== "shape") continue;
+        // Read back from the store: the batch's record may already be stale.
+        const current = editor.getShape((record as TLShape).id);
+        if (!current) continue;
+        const card = current.type === REGION_SHAPE_TYPE ? cornerBlockOf(editor, current as RegionShape) : regionNaming(current) ? current : undefined;
+        if (card) cards.set(card.id, card);
+      }
+      snapCards([...cards.values()]);
+    },
+    { scope: "document", source: "all" },
+  );
+
+  /**
+   * Is `cardId` ITSELF part of what an in-flight select-tool gesture moves?
+   *
+   * WHY the reparent veto asks THIS and nothing broader (Codex audit,
+   * 2026-09-22, two rounds): the rigidity Zach asked for — "rigidly connect
+   * the for loop and branch block to the region frame. It should conceptually
+   * be one object" — is a property of what a person's HAND does to the card,
+   * not a rule over every writer. A deliberate document operation may
+   * legitimately move a card out: `document/applySceneDiff.ts`'s
+   * `hoistedSurvivors` deletes a region while keeping its card by reparenting
+   * the card to the page first, and a veto that fires on that write puts the
+   * card back under the doomed region, whose delete then takes it too.
+   *
+   * Two predicates were tried and are WRONG, so a future refactor should not
+   * reach for them again:
+   *   - "any local write" (the first cut) vetoed the hoist outright;
+   *   - "any local write while the select tool is mid-gesture" still vetoed
+   *     it whenever an async scene (an Open Python response) landed while the
+   *     person happened to be dragging some UNRELATED shape — the store's
+   *     `source === "user"` covers every local write, programmatic ones
+   *     included, so it says nothing about who is writing.
+   * The gesture state alone cannot name the writer; the SELECTION can name
+   * what the gesture is moving. So the veto needs both: mid-gesture AND the
+   * card itself selected.
+   *
+   * Deliberately NOT "the card or one of its ancestors is selected": that
+   * would veto the hoist when the scene lands while the person is dragging
+   * the very region the scene deletes — the same data loss, in a narrower
+   * window.
+   *
+   * REACHABILITY, stated plainly: with `redirectCornerSelection` in place a
+   * card is never selected at all, not even during its own rename. So no real
+   * gesture reaches this veto today. It
+   * is kept as a SCOPED BACKSTOP for the day something lets a card be selected
+   * on its own mid-gesture, never as a blanket rule.
+   */
+  const gestureMovesCard = (cardId: TLShapeId) =>
+    editor.isInAny("select.translating", "select.resizing", "select.rotating", "select.dragging_handle") &&
+    editor.getSelectedShapeIds().includes(cardId);
+
+  /**
+   * A gesture on the card is a gesture on the REGION: selecting a corner card
+   * selects its region instead.
+   *
+   * WHY, and why at `instance_page_state` rather than in a pointer handler:
+   * "It should conceptually be one object" (Zach, 2026-09-21, quoted on
+   * `pinnedCorner`). One object means one selection — and every door into the
+   * selection has to agree: a click, a marquee, select-all, the Frames panel,
+   * the selection history. They all end in the same record, so the rewrite
+   * lives there, once. tldraw 5.3.2's press-drag reads it back: `PointingShape
+   * .onEnter` calls `setSelectedShapes([card])`, the record comes out naming
+   * the region, and `Translating` moves whatever is selected — so a drag that
+   * starts on the card moves frame, card and members together, and the card's
+   * own `x/y` are never written.
+   *
+   * NO EXCEPTION, not even the card's own rename (Zach, 2026-09-22: "When
+   * you hover on it by itself shouldn't be selectable"). The rename still
+   * types into the CARD because editing and selection are separate records:
+   * `editingShapeId` stays the card while `selectedShapeIds` is rewritten to
+   * the region. tldraw 5.3.2 couples them only one way — `Editor.setEditingShape`
+   * calls `this.select(id)` before writing `editingShapeId`
+   * (`@tldraw/editor/dist-esm/lib/editor/Editor.mjs:2016-2017`) and
+   * `EditingShape.onEnter` calls `this.editor.select(editingShape)`
+   * (`tldraw/dist-esm/lib/tools/SelectTool/childStates/EditingShape.mjs:34`);
+   * both land here and come out naming the region. Nothing in either package
+   * reads the selection back to keep or end an edit: `canEditShape`
+   * (`Editor.mjs:1959-1971`) checks the util, readonly and locks, and the
+   * session ends only through `setEditingShape(null)` (`EditingShape.onExit`,
+   * `:36-44`). An earlier cut carved the editing shape out of this rewrite,
+   * which left `selectedShapeIds === [card]` for the whole rename (Codex audit,
+   * 2026-09-22). The glyph picker and the port rails are content-owned presses
+   * (`shared/pointerOwnership.ts`) that never reach the selection, and a dot's
+   * wire gesture is DOM-level.
+   *
+   * NOT a bug, and not to be "fixed" here: a press on a card that lies inside
+   * an existing MULTI-selection's bounds drags that multi-selection. That is
+   * stock tldraw deferring selection for any unselected shape inside the
+   * selection bounds (`PointingShape.onEnter`'s `selectionBounds.containsPoint`
+   * branch), and a corner card is no different from any other shape there.
+   */
+  const redirectCornerSelection = (next: TLInstancePageState): TLInstancePageState => {
+    let changed = false;
+    const ids: TLShapeId[] = [];
+    for (const id of next.selectedShapeIds) {
+      const block = editor.getShape(id);
+      const region = block ? regionNaming(block) : undefined;
+      const target = region ? region.id : id;
+      if (target !== id) changed = true;
+      if (ids.includes(target)) changed = true;
+      else ids.push(target);
+    }
+    return changed ? { ...next, selectedShapeIds: ids } : next;
   };
-  snapCornersFlush();
+
+  /**
+   * ENTER on a region renames its corner card — exactly what a double-click on
+   * the card does.
+   *
+   * WHY it needs saying: tldraw's `select.idle` starts an edit on Enter only
+   * when the ONLY selected shape `canEditShape` (`SelectTool/childStates/
+   * Idle.ts`, `onKeyUp` 'Enter'). Before the redirect that shape was the card;
+   * now it is the region, whose util cannot edit, so Enter silently did
+   * nothing (Codex audit, 2026-09-22). The region is deliberately NOT made
+   * editable instead: `canEditShape` is also what a double-click on the
+   * region's own title strip or arm header asks, with no way to tell the two
+   * apart (`Editor.canEditShape` defaults `info` to `unknown`), and that would
+   * turn every double-click on a frame into a rename.
+   *
+   * Armed on key DOWN and fired on key UP, the same split tldraw's own Idle
+   * makes (`selectedShapesOnKeyDown`), so an Enter that began outside the
+   * canvas cannot rename anything. `'event'` is emitted AFTER the state chart
+   * has handled the key (`Editor._flushEventForTick`), so Idle has already had
+   * its turn and found nothing to do. Ending the session hands the selection
+   * back to the region through `redirectCornerSelection`.
+   */
+  let enterArmedFor: TLShapeId | null = null;
+  const cardToRenameOnEnter = (): TLShape | undefined => {
+    if (!editor.isIn("select.idle")) return undefined;
+    const only = editor.getOnlySelectedShape();
+    if (!only || only.type !== REGION_SHAPE_TYPE) return undefined;
+    const card = cornerBlockOf(editor, only as RegionShape);
+    return card && editor.canEditShape(card) ? card : undefined;
+  };
+  const onEditorEvent = (info: TLEventInfo) => {
+    if (info.type !== "keyboard" || info.key !== "Enter") return;
+    if (info.name === "key_down") {
+      enterArmedFor = cardToRenameOnEnter()?.id ?? null;
+      return;
+    }
+    if (info.name !== "key_up") return;
+    const card = cardToRenameOnEnter();
+    const armed = enterArmedFor;
+    enterArmedFor = null;
+    if (!card || card.id !== armed) return;
+    editor.markHistoryStoppingPoint("editing shape");
+    editor.setEditingShape(card.id);
+    editor.setCurrentTool("select.editing_shape", { ...info, target: "shape", shape: card });
+  };
+  editor.on("event", onEditorEvent);
+
+  /** A region that has just started naming a card snaps that card onto the
+   *  slot. `createCornerBlock` mints the card BEFORE the region names it, and a
+   *  duplicate's copy is claimed by the after-create handler below, so neither
+   *  card is pinned at its own create — this is the write that catches both. */
+  const snapNamedCorner = (region: RegionShape) => {
+    const corner = cornerBlockOf(editor, region);
+    if (corner && !onCornerSlot(corner)) editor.updateShape(pinUpdate(corner));
+  };
 
   const stops = [
-    editor.sideEffects.registerAfterCreateHandler("shape", (shape) => {
+    stopSweep,
+    () => editor.off("event", onEditorEvent),
+    editor.sideEffects.registerBeforeChangeHandler("instance_page_state", (_previous, next) => redirectCornerSelection(next)),
+    editor.sideEffects.registerBeforeCreateHandler("shape", (shape) => (regionNaming(shape) ? pinnedCorner(shape) : shape)),
+    editor.sideEffects.registerBeforeChangeHandler("shape", (previous, next, source) => {
+      if (next.type !== BLOCK_SHAPE_TYPE) return next;
+      // A GESTURE never pulls a card out of its region: one object has no
+      // seam for a hand to pull it through. Restoring the index too keeps it
+      // a valid sibling. A deliberate document write (a scene diff's hoist, a
+      // programmatic reparent) goes through — see `gestureMovesCard`.
+      //
+      // WHY there is no orphan repair beside this (audit item, 2026-09-22):
+      // a card is only ever orphaned by a batch that removes its region's
+      // RECORD without its children, and no writer here does that —
+      // `Editor.deleteShapes` expands to every descendant before it removes
+      // anything, and a remote peer's batch is that same expanded diff. A raw
+      // `store.remove` of a parent orphans ANY child in tldraw, card or not,
+      // so it is not a corner-card rule to patch in this file.
+      if (next.parentId !== previous.parentId && regionNaming(previous) && source === "user" && gestureMovesCard(previous.id)) {
+        return pinnedCorner({ ...next, parentId: previous.parentId, index: previous.index });
+      }
+      return regionNaming(next) ? pinnedCorner(next) : next;
+    }),
+    // `repairIfRemote` on the four after-handlers below: a PEER's change sets
+    // them off as a repair, a local one as part of its own write
+    // (`document/derivedWrites.ts`).
+    editor.sideEffects.registerAfterCreateHandler("shape", (shape, source) => {
+      if (shape.type === REGION_SHAPE_TYPE) repairIfRemote(editor, source, () => snapNamedCorner(shape as RegionShape));
+    }),
+    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next, source) => {
+      if (next.type !== REGION_SHAPE_TYPE) return;
+      if ((previous as RegionShape).props.cornerBlockId === (next as RegionShape).props.cornerBlockId) return;
+      repairIfRemote(editor, source, () => snapNamedCorner(next as RegionShape));
+    }),
+    editor.sideEffects.registerAfterCreateHandler("shape", (shape, source) => {
       if (shape.type !== BLOCK_SHAPE_TYPE) return;
       const region = parentRegionOf(shape);
       if (!region) return;
@@ -421,18 +719,48 @@ export function installRegionKit(editor: Editor): () => void {
       if (cornerBlockOf(editor, region)) return;
       if (Math.abs(shape.x - CORNER_INSET_X_PX) > CORNER_CLAIM_SLACK_PX) return;
       if (Math.abs(shape.y - CORNER_INSET_Y_PX) > CORNER_CLAIM_SLACK_PX) return;
-      editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { cornerBlockId: shape.id } });
+      repairIfRemote(editor, source, () => editor.updateShape({ id: region.id, type: REGION_SHAPE_TYPE, props: { cornerBlockId: shape.id } }));
     }),
-    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next) => {
+    editor.sideEffects.registerAfterChangeHandler("shape", (previous, next, source) => {
       if (next.type !== BLOCK_SHAPE_TYPE) return;
       const before = previous.props as { w: number; h: number };
       const after = next.props as { w: number; h: number };
       if (before.w === after.w && before.h === after.h) return;
       const region = parentRegionOf(next);
       if (!region || region.props.cornerBlockId !== next.id) return;
-      reconcileFrame(region);
+      repairIfRemote(editor, source, () => reconcileFrame(region));
     }),
   ];
+
+  /**
+   * The selection that ALREADY exists, normalised once, now that the handler
+   * above guards every future write.
+   *
+   * WHY: a before-change handler only sees changes made after it is
+   * registered, and tldraw restores a persisted page selection BEFORE the
+   * app's `onMount` installs this kit — `TLLocalSyncClient` loads the
+   * IndexedDB session (`@tldraw/editor/dist-esm/lib/utils/sync/
+   * TLLocalSyncClient.mjs:136`) through `loadSessionStateSnapshotIntoStore`,
+   * which re-creates each `instance_page_state` with the stored
+   * `selectedShapeIds` and NO `editingShapeId`
+   * (`config/TLSessionStateSnapshot.mjs:162-167`), and `TLEditorSnapshot.mjs:
+   * 34-37` does the same for a loaded editor snapshot. A session saved
+   * mid-rename (or by an older build that let a card be selected) therefore
+   * reloaded with the card selected ALONE: its own outline, and Delete took
+   * the card out of its region (Codex re-judge, 2026-09-22). One pass through
+   * the SAME rewrite, as a repair (`runRepair`: history-ignored and derived,
+   * so it is never an undo step nor a reason to autosave).
+   *
+   * The other install-time invariants, for the record: the card's POSITION
+   * and VIEW pin is swept at install already (`snapCards` over every region,
+   * above). The duplicate-claim and frame-hug repairs are not swept here:
+   * both fire on the change that creates the problem, and a stored board
+   * carries the result of those changes, not a pending one.
+   */
+  const pageStates = editor.store.allRecords().filter((record): record is TLInstancePageState => record.typeName === "instance_page_state");
+  const normalised = pageStates.map(redirectCornerSelection).filter((next, index) => next !== pageStates[index]);
+  if (normalised.length > 0) runRepair(editor, () => editor.store.put(normalised));
+
   return () => {
     for (const stop of stops) stop();
   };
@@ -454,7 +782,7 @@ export function cornerBoxOf(editor: Editor, shape: RegionShape): { w: number; h:
  * The frame's geometry, from `@trunk/components/blockRegion.layout`'s pure twin.
  *
  * WHY the shape util and the face both call THIS rather than each doing its
- * own arithmetic (the trunk's own reason, `region.layout.ts:17-23`, inherited
+ * own arithmetic (the trunk's own reason, `blockRegion.layout.ts:17-23`, inherited
  * from the archive's `branchModel.ts:14-16`): "a fold, an added arm and a
  * tldraw resize all agree about where every row is".
  *

@@ -14,6 +14,7 @@ import { SystemSketchChromeBar } from "./TitleBar";
 import { SystemSketchDevTools } from "./DevMenu";
 import { FloatingSelectionToolbar } from "./ContextualPopupMenu";
 import { FocusLens } from "./FocusLens";
+import { useInspectorFollowsSelection } from "./inspectorFollowsSelection";
 import { SystemSketchPanel } from "./panels";
 import { useProblems } from "./problems";
 import { SystemSketchStatusStrip, type ChromePanel } from "./statusStrip";
@@ -388,14 +389,35 @@ function SystemSketchChrome() {
   const corner = useRef<HTMLDivElement>(null);
   const { placement, watermarkCover } = useCornerPlacement(corner);
 
-  const toggle = useCallback((panel: ChromePanel) => {
-    // One at a time: pressing the open one closes it, pressing the other
-    // swaps. The kit's `StatusStripItem.active` is already the toggle's
-    // `aria-pressed`, so this is the whole policy.
-    setOpen((current) => (current === panel ? null : panel));
-  }, []);
+  // A click on an inspectable object opens the Inspector; deselecting closes
+  // it again only when that click is what opened it. The policy and its WHYs
+  // live in `./inspectorFollowsSelection.ts`; every user-driven rail change
+  // below hands the rail back to the user by clearing its provenance.
+  const openedBySelection = useInspectorFollowsSelection(editor, open, setOpen);
 
-  const close = useCallback(() => setOpen(null), []);
+  const toggle = useCallback(
+    (panel: ChromePanel) => {
+      // One at a time: pressing the open one closes it, pressing the other
+      // swaps. The kit's `StatusStripItem.active` is already the toggle's
+      // `aria-pressed`, so this is the whole policy.
+      openedBySelection.current = false;
+      setOpen((current) => (current === panel ? null : panel));
+    },
+    [openedBySelection],
+  );
+
+  const switchSurface = useCallback(
+    (panel: ChromePanel) => {
+      openedBySelection.current = false;
+      setOpen(panel);
+    },
+    [openedBySelection],
+  );
+
+  const close = useCallback(() => {
+    openedBySelection.current = false;
+    setOpen(null);
+  }, [openedBySelection]);
 
   return (
     <div ref={chrome} className="ss-chrome pointer-events-none absolute inset-0 z-[1]">
@@ -445,7 +467,7 @@ function SystemSketchChrome() {
         status strip bottom-right.
       */}
       <FocusLens />
-      <SystemSketchPanel open={open} onClose={close} onSurfaceChange={setOpen} problems={problems} id={panelId} />
+      <SystemSketchPanel open={open} onClose={close} onSurfaceChange={switchSurface} problems={problems} id={panelId} />
       {/* Quick switcher, dev panel and recorder: all three portal to
           `document.body` through their own stock Dialog/Popover, so this
           component paints nothing here itself — it only needs to be

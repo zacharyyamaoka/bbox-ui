@@ -15,6 +15,7 @@ import type { Editor, TLShape, TLShapeId } from "tldraw";
 
 import type { BlockShape, BlockShapeProps } from "../../shapes/block";
 import type { CodeLanguage, CodeShape } from "../../shapes/code";
+import { isRegionCornerBlock } from "../../shapes/region";
 import type { WireShape, WireShapeProps } from "../../shapes/wire";
 import { BLOCK_SHAPE_TYPE, CODE_SHAPE_TYPE, WIRE_SHAPE_TYPE } from "../../shapes/types";
 
@@ -125,7 +126,7 @@ export function selectionSubjectOf(editor: Editor): SelectionSubject {
   return {
     ids,
     only,
-    blockView: only && only.type === BLOCK_SHAPE_TYPE ? (only as BlockShape).props.view : null,
+    blockView: only && only.type === BLOCK_SHAPE_TYPE && !isRegionCornerBlock(editor, only.id) ? (only as BlockShape).props.view : null,
     codeLanguage: only && only.type === CODE_SHAPE_TYPE ? (only as CodeShape).props.language : null,
     wires: wires.map((wire) => wire.id),
     wireRouting: routings.size === 1 ? [...routings][0] : null,
@@ -134,8 +135,22 @@ export function selectionSubjectOf(editor: Editor): SelectionSubject {
   };
 }
 
-/** Switch the selected Block's face. Same shape, different view. */
+/**
+ * Switch the selected Block's face. Same shape, different view.
+ *
+ * A region's CORNER CARD is refused, and `selectionSubjectOf` offers it no
+ * toggle. WHY: Zach, 2026-09-22 — "I don't want to give people the option to
+ * expand the region header block". The card is the region's header, not a
+ * block you open; an expanded card would be a frame inside the frame's own
+ * corner slot. The card used to be selectable alone mid-rename, and that was
+ * exactly when the pill offered Simple/Ports/Expanded for it; the selection
+ * redirect (`shapes/region/cornerBlock.ts`) no longer carves the rename out,
+ * and the pin there holds the view as a document invariant. This guard stays
+ * in the one setter the pill and the 1/2/3 hotkeys (`viewHotkeys.tsx`) both
+ * call, so neither door can reopen it even if a card is ever selected again.
+ */
 export function setBlockView(editor: Editor, id: TLShapeId, view: BlockView): void {
+  if (isRegionCornerBlock(editor, id)) return;
   editor.updateShape<BlockShape>({ id, type: BLOCK_SHAPE_TYPE, props: { view } });
 }
 

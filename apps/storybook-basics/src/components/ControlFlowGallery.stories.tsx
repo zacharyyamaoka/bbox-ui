@@ -298,7 +298,7 @@ const GALLERY: HostScene = composedBoard();
  *  field and not a second board. */
 const GALLERY_COLLAPSED: HostScene = {
   nodes: GALLERY.nodes.map((node) =>
-    node.id === "br" ? place(node, {}, { region: { ...node.data.region, kind: "branch", view: "opaque" } }) : node,
+    node.id === "br" ? place(node, {}, { region: { ...node.data.region, kind: "branch", view: "opaque", presentation: "expanded" } }) : node,
   ),
   edges: GALLERY.edges,
 };

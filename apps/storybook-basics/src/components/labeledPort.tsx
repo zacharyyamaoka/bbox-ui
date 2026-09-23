@@ -40,6 +40,7 @@
 // this).
 
 import type { LanguageSupport } from "@codemirror/language";
+import type { EditorView } from "@codemirror/view";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -110,6 +111,7 @@ function DefaultPortLabel({
   fontFamily = "var(--bbox-skin-font-sans, inherit)",
   disabled = false,
   onLabelWrite,
+  onLabelKeyDown,
   placeholder,
   language,
   showHitRegion = false,
@@ -129,6 +131,7 @@ function DefaultPortLabel({
   fontFamily?: string;
   disabled?: boolean;
   onLabelWrite?(value: string): void;
+  onLabelKeyDown?(event: KeyboardEvent, view: EditorView): boolean;
   placeholder?: string;
   language?: LanguageSupport;
   /** Paint this label's click-to-edit target (its own box). Paints
@@ -188,6 +191,7 @@ function DefaultPortLabel({
           columns={Math.max(MIN_LABEL_COLUMNS, value.length)}
           autoFocus="select"
           onEnter={exitEditing}
+          onKeyDown={onLabelKeyDown}
           onEscape={() => {
             setValue(snapshotRef.current);
             onLabelWrite?.(snapshotRef.current);
@@ -393,6 +397,12 @@ export interface LabeledPortProps extends ComponentProps<"div"> {
   showHitRegion?: boolean;
   /** Fired on every keystroke of the built-in label field. */
   onLabelWrite?(value: string): void;
+  /**
+   * The built-in label editor's own key hook, ahead of its keymap — see
+   * `CodeEditorProps.onKeyDown`. `PortEdge` hands its move-this-port chord
+   * in here (`keyboardReorder.ts`); return `true` to claim the key.
+   */
+  onLabelKeyDown?(event: KeyboardEvent, view: EditorView): boolean;
   /** Shown in the built-in label field when `children` is empty. */
   placeholder?: string;
   /**
@@ -439,6 +449,7 @@ export function LabeledPort({
   hitPx,
   showHitRegion = false,
   onLabelWrite,
+  onLabelKeyDown,
   placeholder,
   labelLanguage,
   variant: variantId,
@@ -558,6 +569,7 @@ export function LabeledPort({
           fontFamily={labelFont}
           disabled={disabled}
           onLabelWrite={onLabelWrite}
+          onLabelKeyDown={onLabelKeyDown}
           placeholder={placeholder}
           language={labelLanguage}
           showHitRegion={showHitRegion}

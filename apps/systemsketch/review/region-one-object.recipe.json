@@ -1,0 +1,123 @@
+{
+  "feature": "A region's corner card is one object with its frame; a click opens the Inspector",
+  "viewport": { "width": 1400, "height": 900 },
+  "shapes": [
+    {
+      "id": "loop",
+      "type": "ss-region",
+      "x": 0,
+      "y": 0,
+      "props": { "w": 420, "h": 224, "kind": "for", "name": "For Loop", "cornerBlockId": "shape:loop-corner", "arms": [] }
+    },
+    {
+      "id": "loop-corner",
+      "type": "ss-block",
+      "parentId": "loop",
+      "x": 0,
+      "y": 0,
+      "props": {
+        "name": "For Loop",
+        "view": "port",
+        "w": 160,
+        "h": 100,
+        "ports": {
+          "left": [{ "id": "iterable", "declaration": "Iterable: Iterable" }],
+          "right": [{ "id": "iter", "declaration": "Iter" }],
+          "top": [],
+          "bottom": []
+        }
+      }
+    },
+    {
+      "id": "branch",
+      "type": "ss-region",
+      "x": 560,
+      "y": 0,
+      "props": {
+        "w": 420,
+        "h": 416,
+        "kind": "branch",
+        "name": "Branch",
+        "cornerBlockId": "shape:branch-corner",
+        "arms": [
+          { "id": "if", "title": "if", "open": true, "h": 120 },
+          { "id": "else", "title": "else", "open": true, "h": 120 }
+        ]
+      }
+    },
+    {
+      "id": "branch-corner",
+      "type": "ss-block",
+      "parentId": "branch",
+      "x": 0,
+      "y": 0,
+      "props": {
+        "name": "Branch",
+        "view": "port",
+        "w": 160,
+        "h": 100,
+        "ports": { "left": [{ "id": "input_1", "declaration": "input 1" }], "right": [], "top": [], "bottom": [] }
+      }
+    },
+    {
+      "id": "pose",
+      "type": "ss-block",
+      "x": 0,
+      "y": 340,
+      "props": {
+        "name": "Pose estimator",
+        "view": "port",
+        "w": 220,
+        "h": 120,
+        "ports": {
+          "left": [{ "id": "frame", "declaration": "frame: Image" }],
+          "right": [{ "id": "pose", "declaration": "pose: Pose" }],
+          "top": [],
+          "bottom": []
+        }
+      }
+    }
+  ],
+  "connections": [],
+  "callouts": [
+    {
+      "id": "step-1",
+      "kind": "step",
+      "text": "1 · Drag the For Loop card by its title — the whole frame moves with it",
+      "x": 0,
+      "y": -200,
+      "w": 400,
+      "h": 110,
+      "target": { "shapeId": "loop", "anchor": "top", "dx": -10 }
+    },
+    {
+      "id": "step-2",
+      "kind": "step",
+      "text": "2 · Drag the Branch card by its title — the frame and both arms follow",
+      "x": 570,
+      "y": -200,
+      "w": 400,
+      "h": 110,
+      "target": { "shapeId": "branch", "anchor": "top" }
+    },
+    {
+      "id": "step-3",
+      "kind": "step",
+      "text": "3 · Click Pose estimator's title: the Inspector opens. Click empty canvas: it closes",
+      "x": 0,
+      "y": 550,
+      "w": 400,
+      "h": 110,
+      "target": { "shapeId": "pose", "anchor": "bottom", "dx": 90 }
+    },
+    {
+      "id": "pass",
+      "kind": "pass",
+      "text": "PASS WHEN · each card stays glued to its frame's corner, and one click on a block opens the Inspector",
+      "x": 560,
+      "y": 500,
+      "w": 460,
+      "h": 110
+    }
+  ]
+}

@@ -156,6 +156,13 @@ function Harness({ initial = "dialog", spies = {} }: { initial?: SettingsPresent
       onOpenChange={setOpen}
       presentation={presentation}
       categories={categories}
+      // What `apps/systemsketch` mounts since 2026-09-22 — this harness exists
+      // to be the real host, so it takes the real host's one line of
+      // configuration. With an empty query the tree is identical to before, so
+      // every assertion below is unaffected; it is the CAPTURES that need this,
+      // because a screenshot of a settings panel without the search box is not
+      // a screenshot of the thing that ships.
+      searchable
       testIdPrefix={PREFIX}
     />
   );
@@ -199,21 +206,38 @@ export const AllFiveCategories: Story = {
     await expect(section("file-navigation")).not.toBeNull();
     await expect(section("settings-presentation")).not.toBeNull();
     await expect(section("allow-any-path")).not.toBeNull();
+    // Finding 5 (`settings-panel-fixes` verdict, 2026-09-22):
+    // `settingsInventory.test.ts`'s "every control kind ... can render" only
+    // ever checked `renderControl`'s SWITCH statement is exhaustive over the
+    // TYPE — a pure-node unit test, no DOM, so it could not actually render
+    // anything. This story already mounts the real categories through the
+    // shell, so it is where a genuine per-kind DOM check belongs: `radio`
+    // paints a real `role="radiogroup"`, and `allow-any-path` (a `switch`
+    // section) paints a real `role="switch"`.
+    await expect(within(section("file-navigation")!).getByRole("radiogroup")).toBeInTheDocument();
+    await expect(within(section("allow-any-path")!).getByRole("switch")).toBeInTheDocument();
 
     await openCategory("Appearance");
     await expect(section("interface-scale")).not.toBeNull();
     await expect(section("zoom-buttons")).not.toBeNull();
+    // `slider` renders a real `role="slider"` (the stock `Slider`'s thumb).
+    await expect(within(section("interface-scale")!).getByRole("slider")).toBeInTheDocument();
 
     await openCategory("Mouse and scrolling");
     await expect(section("paste-under-cursor")).not.toBeNull();
     await expect(section("direct-wheel-zoom")).not.toBeNull();
     await expect(section("wheel-binding-ctrlWheelUp")).not.toBeNull();
     await expect(section("pan-speed")).not.toBeNull();
+    // `select` renders a real stock Select trigger.
+    await expect(section("wheel-binding-ctrlWheelUp")!.querySelector('[data-slot="select-trigger"]')).not.toBeNull();
 
     await openCategory("Connections");
     await expect(section("edge-policy-preset")).not.toBeNull();
     await expect(section("allowFanIn")).not.toBeNull();
     await expect(section("type-matching")).not.toBeNull();
+    // `custom` renders whatever the host handed it — here, the preset row's
+    // real buttons, not a stand-in for one.
+    await expect(within(section("edge-policy-preset")!).getByRole("button", { name: "Guided" })).toBeInTheDocument();
     // The archive's four teaching groups survive the port.
     const groups = [...view()!.querySelectorAll('[data-slot="settings-group"]')].map((node) => node.textContent);
     await expect(groups).toEqual(["Direction", "Boundaries", "How many cables meet at one port", "Data types"]);
@@ -225,6 +249,79 @@ export const AllFiveCategories: Story = {
     // burger's shortcut column uses.
     await expect(within(section("hotkeys")!).getByText("Ctrl + ⇧ + S")).toBeInTheDocument();
     await expect(within(section("hotkeys")!).getByText("F2")).toBeInTheDocument();
+  },
+};
+
+/**
+ * Finding 1 (Codex judge, `settings-panel-fixes` verdict, 2026-09-22):
+ * search used to read only `title`/`description`/`group`, so a query
+ * matching text that is genuinely ON SCREEN — a radio option's own
+ * description, a preset button's label, a hotkey's name, a tool's alias —
+ * hid the very row that shows it. Each case below is real visible text this
+ * story's fixtures already carry, searched by a word that appears nowhere
+ * in that section's title/description/group.
+ */
+export const SearchFindsWhatTheRowActuallyShows: Story = {
+  render: () => <Harness />,
+  play: async () => {
+    await body().findByRole("dialog");
+    const input = view()!.querySelector<HTMLInputElement>('[data-slot="settings-search-input"]')!;
+
+    async function search(query: string) {
+      await userEvent.clear(input);
+      if (query) await userEvent.type(input, query);
+      await waitFor(() => expect(input).toHaveValue(query));
+    }
+
+    // `openCategory` (above) matches the nav button's accessible name
+    // EXACTLY, which is right when nothing is filtered — but the moment a
+    // search is active every remaining row also carries a live
+    // `[data-slot="settings-nav-count"]` ("Mouse and scrolling 1"), which is
+    // part of the button's accessible name too. A regex is the honest fix
+    // for a search-time click, not a change to the shared helper every other
+    // story here already relies on matching exactly.
+    async function openFilteredCategory(label: string) {
+      await userEvent.click(within(nav()).getByRole("button", { name: new RegExp(`^${label}`) }));
+      await waitFor(() => expect(nav().querySelector('[aria-current="page"]')).toHaveTextContent(label));
+    }
+
+    // "Figma-ish, and every CAD tool." is `WHEEL_CONVENTION_DESCRIPTIONS.zoom`
+    // (`cameraGestures.ts`) — a RADIO OPTION's description under "What the
+    // scroll wheel does", never the section's own title or description.
+    await search("figma");
+    await openFilteredCategory("Mouse and scrolling");
+    await expect(section("direct-wheel-zoom"), 'searching "figma" finds the wheel-behaviour row').not.toBeNull();
+
+    // "Pick the convention you already have muscle memory for." is that same
+    // section's `groupDescription` — read only from the section that OPENS
+    // the group, and, before this fix, never searched at all.
+    await search("muscle memory");
+    await openFilteredCategory("Mouse and scrolling");
+    await expect(section("direct-wheel-zoom"), 'searching the group description finds its section').not.toBeNull();
+
+    // "Whiteboard" is a preset BUTTON's label inside the `custom` validation-
+    // level row — opaque JSX, supplied as `keywords` by `settingsCategories.tsx`.
+    await search("whiteboard");
+    await openFilteredCategory("Connections");
+    await expect(section("edge-policy-preset"), 'searching a preset label finds the row that shows it').not.toBeNull();
+
+    // "Rename" is a hotkey's LABEL (`HOTKEYS` above) — real text in the
+    // `custom` keyboard-shortcuts list, not this section's own copy.
+    await search("rename");
+    await openFilteredCategory("Hotkeys and aliases");
+    await expect(section("hotkeys"), 'searching a hotkey label finds the shortcuts row').not.toBeNull();
+
+    // "Elbow arrow" is a tool's LABEL (`TOOLS` above) — real text the alias
+    // editor renders, not this section's own copy.
+    await search("elbow arrow");
+    await openFilteredCategory("Hotkeys and aliases");
+    await expect(section("tool-aliases"), 'searching a tool name finds the aliases row').not.toBeNull();
+
+    // A query matching NOTHING still empties the nav, same as before.
+    await search("xyzzy-not-a-real-word");
+    await waitFor(() => expect(view()!.querySelector('[data-slot="settings-empty"]')).not.toBeNull());
+
+    await search("");
   },
 };
 
