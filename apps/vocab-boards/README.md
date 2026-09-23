@@ -1,19 +1,46 @@
 # vocab-boards
 
 The eleven industry visual languages, implemented as real React Flow node and
-edge types. Draws the 705 boards of the industry-vocabularies report.
+edge types — and the browser over them. 57 Python scenarios, 235 mechanisms,
+705 boards, each one drawn from the tool's own documentation with the citation
+beside it.
 
-`src/boards.json` is the input and does not change. This app is the renderer.
+There is no static report any more (Zach, 2026-09-23: *"Instead of a report,
+just make a live server please!"*). **This app is the deliverable.**
+
+`src/boards.json` and `src/site.json` are the input and do not change here —
+both are written by `docs/build_vocab_site_data.py`, which is the contract.
 
 ```bash
-pnpm --filter vocab-boards dev        # gallery on :5471 (VOCAB_PORT overrides)
+pnpm --filter vocab-boards dev        # the browser on :5471 (VOCAB_PORT overrides)
 pnpm --filter vocab-boards typecheck
-pnpm --filter vocab-boards test       # the endpoint grammar and the sizing port
-pnpm --filter vocab-boards build:css  # dist/board.css — the report needs this
+pnpm --filter vocab-boards test       # the endpoint grammar, the sizing port, the hash state
+pnpm --filter vocab-boards build:css  # dist/board.css — verify.mjs needs this
 pnpm --filter vocab-boards verify     # the real gate; needs the dev server up
 ```
 
-## What the report consumes
+## Two entry points, and the split is load-bearing
+
+| address | what it is |
+|---|---|
+| `?board=<id>` (the **search** query) | one board alone, every interaction off, `document.body.dataset.boardReady` set when it has settled. The machine contract: `scripts/verify.mjs` drives it for all 705, and `main.tsx`'s `__BOARD_*` hooks read it back. `App.tsx` checks it before it looks at the hash, so no routing change can move it. |
+| `#/…` (the **hash**) | the browser a human navigates. Every filter lives in the hash query, so Back restores the exact list and a filtered view is a shareable link. |
+
+Routes: `#/` (dashboard + filter bar + 705-card gallery) · `#/sc/<id>` (one
+scenario in full, `?b=<n>` anchors a mechanism) · `#/board/<id>` (one board,
+pan and zoom) · `#/vocab/<key>` (one language's 26-construct grammar sheet).
+
+The chrome is a clone of the pyblocks goldens viewer's conventions
+(`/home/bam/pyblocks/src/goldens/`) — same hash-query state module, same
+native-listener search box, same `auto-fill` gallery floor that drops a column
+rather than shrinking a card, same collapsible dashboard. Zero relearning.
+
+**705 React Flow instances never mount at once, and never accumulate.** Each
+card mounts its board on intersect and UNMOUNTS it again on the way out
+(`LazyBoard.tsx`) — measured on an unfiltered gallery at 1680x1000: 8 live at
+the top, 56 in the middle, 21 at the bottom.
+
+## What the capture contract consumes
 
 Three things, and nothing else:
 

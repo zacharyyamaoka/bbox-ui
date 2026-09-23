@@ -1,15 +1,29 @@
 /**
- * Two entry points in one app:
- *  - `?board=<id>` draws that one board alone, and the capture hooks in
- *    main.tsx read it back.
- *  - no query draws all 705 in a scrolling list with their ids, so the whole
- *    corpus can be looked at in one pass.
+ * The app has TWO entry points, and the split is load-bearing.
+ *
+ *  - `?board=<id>` in the SEARCH query draws that one board alone with every
+ *    interaction off, and sets `document.body.dataset.boardReady` when the
+ *    layout has settled. This is the capture surface: `scripts/verify.mjs`
+ *    drives it for all 705 boards (geometry, the Python oracle, the standalone
+ *    pixel diff and the bleed check) and `main.tsx`'s `__BOARD_*` hooks read it
+ *    back. It is checked FIRST, before the hash is even looked at, so no
+ *    routing change can move it.
+ *  - anything else is the browser: a hash route over the same 705 boards.
+ *
+ * WHY the browser lives in the HASH and the capture in the SEARCH: they are
+ * different kinds of address. `?board=` is a fixed, machine-driven contract
+ * that predates this UI and is quoted in README.md; the hash is the part a
+ * human navigates, so Back, a bookmark and a shared filtered link all work
+ * without a router or a server rewrite.
  */
 import { useEffect, useMemo, useRef, useState, type JSX } from "react";
-import { Board, buildGraph, type BoardGraph } from "./Board";
-import { BOARDS, BOARD_BY_ID } from "./boards";
-import { layout } from "./layout";
-import type { BoardEntry } from "./types";
+import { Board, buildGraph } from "./Board";
+import { BOARD_BY_ID } from "./boards";
+import { BoardPage } from "./BoardPage";
+import { Home } from "./Home";
+import { ScenarioPage } from "./ScenarioPage";
+import { VocabPage } from "./VocabPage";
+import { useHashRoute } from "./useHashRoute";
 
 /* ------------------------------------------------------------ single board */
 
@@ -47,92 +61,38 @@ export function SingleBoard({ id }: { id: string }): JSX.Element {
   );
 }
 
-/* ----------------------------------------------------------------- gallery */
+/* -------------------------------------------------------------- the router */
 
 /**
- * WHY the board mounts only when it is near the viewport: 705 React Flow
- * instances at once is tens of thousands of DOM nodes and the page stops
- * scrolling. The placeholder is the board's REAL size (layout is pure maths and
- * runs without React Flow), so the scrollbar never lies and nothing reflows
- * when a board swaps in.
+ * WHY scroll position is reset on a route change rather than left alone: the
+ * document scrolls (there is no inner scrollport — see Home.tsx), so arriving
+ * at a scenario from card 600 would otherwise land 9,000 px down a page that is
+ * only four screens tall, i.e. at the very bottom, with the header off-screen.
+ * The one exception is a scenario opened at a bucket anchor, which does its own
+ * `scrollIntoView` — resetting there would fight it.
  */
-function LazyBoard({ entry }: { entry: BoardEntry }): JSX.Element {
-  const size = useMemo(() => {
-    const b = layout(entry.spec);
-    return { w: b.W, h: b.H, errors: b.errors };
-  }, [entry]);
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [live, setLive] = useState(false);
-  const [graph, setGraph] = useState<BoardGraph | null>(null);
-
+function useScrollReset(key: string, skip: boolean) {
+  const previous = useRef<string | null>(null);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) setLive(e.isIntersecting);
-      },
-      { rootMargin: "1200px 0px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (live && !graph) setGraph(buildGraph(entry.spec, entry.id));
-  }, [live, graph, entry]);
-
-  return (
-    <section className="vb-card" ref={ref}>
-      <header className="vb-card-head">
-        <code className="vb-id">{entry.id}</code>
-        {entry.bucket ? <span className="vb-bucket">{entry.bucket}</span> : null}
-        {size.errors.length ? (
-          <span className="vb-err">{size.errors.length} unresolved</span>
-        ) : null}
-      </header>
-      <div className="vb-slot" style={{ width: size.w, height: size.h }}>
-        {live && graph ? <Board spec={entry.spec} boardId={entry.id} graph={graph} /> : null}
-      </div>
-      {entry.spec.cap ? <p className="vb-cap">{entry.spec.cap}</p> : null}
-    </section>
-  );
+    if (previous.current !== null && previous.current !== key && !skip) window.scrollTo(0, 0);
+    previous.current = key;
+  }, [key, skip]);
 }
 
-export function Gallery(): JSX.Element {
-  const [q, setQ] = useState("");
-  const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return BOARDS;
-    return BOARDS.filter((b) =>
-      `${b.id} ${b.scenario ?? ""} ${b.bucket ?? ""}`.toLowerCase().includes(needle),
-    );
-  }, [q]);
+function Browser(): JSX.Element {
+  const route = useHashRoute();
+  const anchored = route.kind === "scenario" && /(?:^|&)b=/.test(route.query);
+  useScrollReset(`${route.kind}:${"id" in route ? route.id : "key" in route ? route.key : ""}`, anchored);
 
-  return (
-    <div className="vb-gallery">
-      <header className="vb-top">
-        <h1>vocab-boards</h1>
-        <input
-          className="vb-filter"
-          placeholder="filter by id, scenario or bucket…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <span className="vb-count">
-          {shown.length} / {BOARDS.length}
-        </span>
-      </header>
-      {shown.map((b) => (
-        <LazyBoard key={b.id} entry={b} />
-      ))}
-    </div>
-  );
+  if (route.kind === "scenario") return <ScenarioPage id={route.id} query={route.query} />;
+  if (route.kind === "board") return <BoardPage id={route.id} query={route.query} />;
+  if (route.kind === "vocab") return <VocabPage vocabKey={route.key} query={route.query} />;
+  return <Home query={route.query} />;
 }
 
 /* --------------------------------------------------------------------- app */
 
 export function App(): JSX.Element {
-  const id = new URLSearchParams(window.location.search).get("board");
-  return id ? <SingleBoard id={id} /> : <Gallery />;
+  const [captureId] = useState(() => new URLSearchParams(window.location.search).get("board"));
+  return captureId ? <SingleBoard id={captureId} /> : <Browser />;
 }

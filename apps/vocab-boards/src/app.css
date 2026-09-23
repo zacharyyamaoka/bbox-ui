@@ -1,96 +1,246 @@
-/* The gallery's own chrome. Deliberately NOT part of dist/board.css — the
-   report draws its own page and only wants the boards. */
+/*
+ * The page's ONLY stylesheet: Tailwind v4 plus shadcn/ui's theme tokens, in
+ * this app's own palette. Every piece of chrome here is a shadcn composition
+ * with Tailwind utilities — the same rule the reference viewer
+ * (/home/bam/pyblocks/src/goldens/goldens.css) states for itself.
+ *
+ * WHY this file can carry Tailwind's preflight — a GLOBAL element reset —
+ * in an app whose whole point is 705 pixel-verified figures: `board.css`,
+ * `theme.css` and @xyflow/react's stylesheet are all UNLAYERED, and an
+ * unlayered declaration outranks every cascade layer, including the `base`
+ * layer preflight lives in. So no rule below can outrank a board's own rule
+ * by accident. `scripts/verify.mjs`'s `standalone` section is the actual
+ * proof: it pixel-diffs a board as this app draws it against the same markup
+ * on a bare page that has never heard of Tailwind. If a reset ever did reach
+ * into a board, that check goes red — it is not a hope, it is a gate.
+ *
+ * WHY the palette is the BOARD's palette rather than shadcn's neutral one:
+ * theme.css says it out loud — "so a board and the page around it are one
+ * system". The boards are unconditionally dark (their tokens are literals on
+ * `.vb-board`, not a media query), so a light chrome would frame 705 dark
+ * figures in white. There is no theme toggle for the same reason: the thing
+ * being displayed cannot follow one.
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
 
-html,
+/* Tailwind v4 finds sources from the git root by default; this app lives in a
+   worktree several levels down, so name the directory explicitly. */
+@source "./";
+
+:root {
+  --radius: 0.5rem;
+
+  /* Straight from theme.css, which the boards themselves read. */
+  --background: #0e0f12; /* --bg */
+  --foreground: #e6e8ee; /* --fg */
+  --card: #15171c; /* --panel */
+  --card-foreground: #e6e8ee;
+  --popover: #1b1e25; /* --panel2 */
+  --popover-foreground: #e6e8ee;
+
+  /* WHY the primary fill is the board's ORANGE accent and not a neutral:
+     this is what an active filter chip is painted with (see CHIP_ON in
+     FilterBar.tsx). shadcn's own Toggle "on" state is `bg-accent`, a few
+     percent of grey — legible as a hover, invisible as "this chip is
+     removing 600 of the 705 cards from your list". A filter you cannot see
+     is what makes the page lie about what it is showing. */
+  --primary: #f0883e; /* --accent */
+  --primary-foreground: #0e0f12;
+
+  --secondary: #1b1e25;
+  --secondary-foreground: #e6e8ee;
+  --muted: #1b1e25;
+  --muted-foreground: #9aa3b2; /* --dim */
+  --accent: #232833;
+  --accent-foreground: #e6e8ee;
+  --destructive: #e5534b; /* --warn */
+  --destructive-foreground: #0e0f12;
+  --border: #282d38; /* --line */
+  --input: #343b49; /* --line2 */
+  --ring: #5aa9f8; /* --accent2 */
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* The board's own ink, reachable as Tailwind colours so the chrome can
+     quote a figure's vocabulary (an exec wire is white, a data wire blue, an
+     error wire red) without a second palette to keep in sync. */
+  --color-ink-accent: #5aa9f8;
+  --color-ink-warn: #e5534b;
+  --color-ink-ok: #3fb950;
+  --color-ink-gold: #e8c06a;
+  --color-ink-purple: #bc8cff;
+  --color-ink-dim2: #6b7383;
+
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* The four hand-written rules left, and why each one cannot be a utility:
+
+   1-3. #root, <body> and <html> are outside React — no component renders
+        them, so no className can reach them. The app is a scrolling
+        document (the reference viewer's 2026-09-21 fix: a fixed-height
+        shell with an inner scroller is what clips the bottom row of a
+        gallery), so they only need a background that reaches past the
+        content.
+   4.   `scroll-padding-top` belongs to the scroll CONTAINER — the document —
+        and is what keeps `scrollIntoView` on a bucket anchor from landing
+        underneath the sticky header. */
+html {
+  background: var(--background);
+  scroll-padding-top: 5rem;
+}
+
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: var(--vb-sans);
 }
 
-.vb-top {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  display: flex;
-  gap: 14px;
-  align-items: baseline;
-  padding: 12px 20px;
-  background: rgba(14, 15, 18, 0.94);
-  border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(6px);
+#root {
+  min-height: 100%;
 }
 
-.vb-top h1 {
-  margin: 0;
-  font-size: 14px;
+/*
+ * A board drawn as a card thumbnail. `layout.ts` computes a board's real
+ * pixel size and the renderer paints at exactly that size — so fitting one
+ * into a card is a transform on the OUTSIDE, never a restyle of the inside.
+ * WHY a scale transform rather than shrinking the board: the board's geometry
+ * is the thing under review and it is pixel-gated (scripts/verify.mjs). A
+ * transform is provably shape-preserving; any other fit would be a second,
+ * ungated rendering of the same data.
+ */
+.vb-thumb {
+  position: absolute;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/*
+ * The authored narrative (narrative.json -> `dangerouslySetInnerHTML`).
+ *
+ * WHY these are real CSS rules rather than Tailwind utilities: the markup is
+ * a hand-authored HTML fragment this app does not build element by element,
+ * so there is nothing to put a className on. Its own vocabulary is four
+ * coloured callouts (`.lede`, plus `blue`/`green`/`gold`), and the colours
+ * are the board palette's, so a callout on this page is the same ink as the
+ * figures it is talking about.
+ */
+.narrative > :first-child {
+  margin-top: 0;
+}
+
+.narrative > :last-child {
+  margin-bottom: 0;
+}
+
+.narrative h2 {
+  margin: 1.1rem 0 0.5rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  color: var(--foreground);
+}
+
+.narrative p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--muted-foreground);
+}
+
+.narrative b,
+.narrative strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.narrative i,
+.narrative em {
+  color: var(--foreground);
+}
+
+.narrative code {
   font-family: var(--vb-mono);
-  color: var(--accent);
-}
-
-.vb-filter {
-  flex: 1;
-  max-width: 460px;
-  padding: 5px 9px;
-  font: 12px var(--vb-mono);
-  color: var(--fg);
-  background: var(--panel2);
-  border: 1px solid var(--line2);
-  border-radius: 5px;
-}
-
-.vb-filter:focus {
-  outline: none;
-  border-color: var(--accent2);
-}
-
-.vb-count {
-  font: 11px var(--vb-mono);
-  color: var(--dim2);
-}
-
-.vb-card {
-  padding: 18px 20px 26px;
-  border-bottom: 1px solid var(--line);
-}
-
-.vb-card-head {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  margin-bottom: 8px;
-}
-
-.vb-id {
-  font: 11px var(--vb-mono);
-  color: var(--accent);
-}
-
-.vb-bucket {
-  font-size: 11px;
-  color: var(--dim);
-}
-
-.vb-err {
-  font: 10px var(--vb-mono);
-  color: var(--warn);
-}
-
-.vb-slot {
-  position: relative;
-}
-
-.vb-cap {
-  margin: 10px 0 0;
-  max-width: 76ch;
   font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--dim);
+  color: var(--primary);
 }
 
+.narrative a {
+  color: var(--ring);
+  text-decoration: underline;
+}
+
+.narrative ul,
+.narrative ol {
+  margin: 0.4rem 0;
+  padding-left: 1.2rem;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--muted-foreground);
+}
+
+.narrative .lede {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: color-mix(in oklab, var(--primary) 7%, transparent);
+}
+
+.narrative .lede.blue {
+  border-left-color: #5aa9f8;
+  background: color-mix(in oklab, #5aa9f8 7%, transparent);
+}
+
+.narrative .lede.green {
+  border-left-color: #3fb950;
+  background: color-mix(in oklab, #3fb950 7%, transparent);
+}
+
+.narrative .lede.gold {
+  border-left-color: #e8c06a;
+  background: color-mix(in oklab, #e8c06a 7%, transparent);
+}
+
+/*
+ * The capture surface (`?board=<id>`, App.tsx's `SingleBoard`). Two rules, kept
+ * from the stylesheet this file replaced: the wrapper must shrink-wrap the
+ * board exactly — an inline-block with no padding — because `verify.mjs`
+ * screenshots `.vb-board` and pixel-diffs it against the same markup on a bare
+ * page, and any box the app adds around it is a difference that page cannot
+ * have.
+ */
 .vb-single {
   display: inline-block;
   padding: 0;
@@ -100,4 +250,39 @@ body {
   padding: 24px;
   font: 12px var(--vb-mono);
   color: var(--warn);
+}
+
+/*
+ * React Flow's own chrome on the `#/board/<id>` route. Its stylesheet ships a
+ * LIGHT control cluster (white buttons, black glyphs) which sits on a #0e0f12
+ * board as a bright white column.
+ *
+ * WHY here and not in board.css: `scripts/build-css.mjs` concatenates
+ * theme.css + board.css into `dist/board.css`, the stylesheet a captured board
+ * is read back against — and a captured board has no controls. Anything about
+ * the app's own chrome that landed there would be dead weight in every inlined
+ * figure. This file is the app's, and only the app's.
+ */
+.react-flow__controls-button {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  fill: var(--muted-foreground);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--accent);
+  fill: var(--foreground);
+}
+
+.react-flow__controls {
+  box-shadow: 0 1px 6px rgb(0 0 0 / 45%);
+}
+
+/*
+ * A board wider than its column on a scenario page. The fade is the SECOND
+ * signal, beside the measured "⇄ N px wide" line (LazyBoard.tsx) — a scrollbar
+ * that only appears on hover is not an affordance on a trackpad.
+ */
+.vb-scroller[data-clipped="yes"] {
+  mask-image: linear-gradient(to right, black calc(100% - 44px), transparent);
 }
