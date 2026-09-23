@@ -652,6 +652,13 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
     // No `activeArm` means every arm is active (donor branchModel.ts:11-12).
     active: region.activeArm === undefined || region.activeArm === arm.id,
     ...(arm.data.arm?.h === undefined ? null : { bodyHeight: arm.data.arm.h }),
+    // The arm's OWN operand and its pattern captures. Without these two
+    // lines a scene built by `branchNode`/`matchNode` renders arms with no
+    // dots at all in EVERY canvas host — the ports exist in the scene and
+    // simply never reach the component. Direct `<BlockRegion>` callers were
+    // unaffected, which is exactly what made it easy to miss.
+    ...(arm.data.arm?.test === undefined ? null : { test: arm.data.arm.test }),
+    ...(arm.data.arm?.captures === undefined ? null : { captures: arm.data.arm.captures }),
     // A child of an ARM, not of the region: its `position` is in the ARM's
     // space (scene.ts:60-72), which is the whole reason arms are nodes —
     // folding a sibling arm moves rows, and an arm-relative child does not

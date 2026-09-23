@@ -314,7 +314,20 @@ export function armNode(arm: BranchArmSpec, regionId: string): SceneNode<HostNod
     position: { x: 0, y: 0 },
     data: {
       name: arm.title,
-      arm: { open: arm.open ?? true, ...(arm.h === undefined ? null : { h: arm.h }) },
+      arm: {
+        open: arm.open ?? true,
+        ...(arm.h === undefined ? null : { h: arm.h }),
+        // WHY the test and the captures are written TWICE — here and on the
+        // walls above: `ports` carries only the port ID, which is all a wire
+        // needs, and dropping `default` here left the inline expression with
+        // nowhere to live. A scene round-tripped through this factory then
+        // drew a bare dot with the condition gone — "hiding things inside
+        // the header" reintroduced one layer down, which is the exact
+        // failure this split exists to end. `hosts/nodeViews.tsx` reads
+        // these two back into `RegionArm.test`/`.captures`.
+        ...(arm.test === undefined ? null : { test: arm.test }),
+        ...(arm.captures === undefined || arm.captures.length === 0 ? null : { captures: [...arm.captures] }),
+      },
       ...(Object.keys(ports).length === 0 ? null : { ports }),
     },
   };
