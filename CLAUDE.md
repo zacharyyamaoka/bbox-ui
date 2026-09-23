@@ -155,6 +155,25 @@ runs `tsc`. First run (2026-09-22): 37 items, `tsc` exit 0 — and deleting one
 installed file turns it red, so it can fail. After `region` became
 `block-region` and `labeled-group` joined it (same day): 38 items, exit 0.
 
+**Which items it skips is derived, not listed by hand — and the derivation is
+pinned.** The old spelling was a hand-written set of four names, which is
+exactly the thing that goes stale: an item that newly imports an unpublished
+`@bbox-ui/*` package would just join the skip list and the gate would stay
+green over a real breakage. The script now reads the **shipped payload content**
+(the adapters import `@bbox-ui/core` in source and never declare it in
+`dependencies`, so trusting the manifest calls them installable and then watches
+npm 404) and fails on any delta against `EXPECTED_UNINSTALLABLE`, in either
+direction. Mutation-tested red both ways, 2026-09-22.
+
+The class grew from four to six on the 2026-09-22 integration merge:
+`block-region` and `labeled-group` joined it, because `blockRegion.tsx` now
+imports `./glyph` for the corner tab (commit `069e418`) and `glyph.tsx` imports
+`@bbox-ui/glyph-content`, `private: true`. So the run is 36 items, exit 0 — two
+items that installed on `main` that morning no longer do. Fixing it is the same
+source change `glyph.tsx` has always needed (copy the package's ~110 lines as a
+sibling); until then the registry ships two more reference implementations, and
+this note is the "do not paper over it".
+
 **Renaming or removing an item goes through `RETIRED_ITEMS`** in the
 generator. It merges into `registry.json`, so a renamed item used to leave its
 old entry behind, pointing at files that no longer exist: `--check` passed

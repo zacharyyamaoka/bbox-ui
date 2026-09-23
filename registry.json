@@ -992,6 +992,11 @@
           "target": "components/bbox/components/portSpacing.layout.ts"
         },
         {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
+        },
+        {
           "path": "apps/storybook-basics/src/components/tooltip.tsx",
           "type": "registry:component",
           "target": "components/bbox/components/tooltip.tsx"
@@ -1164,6 +1169,16 @@
           "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
           "type": "registry:lib",
           "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividerMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/returnDividerMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/sideEffectMarks.tsx",
@@ -3045,6 +3060,16 @@
           "target": "components/bbox/components/portSpacing.layout.ts"
         },
         {
+          "path": "apps/storybook-basics/src/components/returnDividerMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/returnDividerMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
+        },
+        {
           "path": "apps/storybook-basics/src/components/sideEffectMarks.tsx",
           "type": "registry:component",
           "target": "components/bbox/components/sideEffectMarks.tsx"
@@ -3288,6 +3313,16 @@
           "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
           "type": "registry:lib",
           "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividerMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/returnDividerMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
         },
         {
           "path": "apps/storybook-basics/src/components/sideEffectMarks.tsx",
