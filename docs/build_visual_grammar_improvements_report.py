@@ -33,6 +33,7 @@ import collections
 import html
 import json
 import pathlib
+import re
 import subprocess
 import sys
 from urllib.parse import quote
@@ -128,7 +129,7 @@ MEASURED = [
      "Worth knowing before designing against it: a surveyed corpus of deployed "
      "dataflow graphs runs well past it anyway."),
     ("proven graveyard",
-     "3", "funded attempts at lossless graph↔text sync",
+     "3", "funded attempts at lossless graph-to-text sync",
      "MPS, Enso/Luna and Intentional Software each spent years keeping an editable "
      "graph in sync with canonical text, and shipped little. This is the strongest "
      "argument against the premise, and it is from your own vault — which is "
@@ -159,6 +160,26 @@ def sh(cmd: str) -> str:
                           text=True).stdout.strip()
 
 
+def clip(s, n: int) -> str:
+    """Trim to roughly n characters, preferring a sentence end.
+
+    The agents wrote 1,000-1,500 words per recommendation. The card shows the
+    conclusion and the <details> block carries the rest verbatim, so this only
+    ever shortens what is ALSO printed in full one click away — never the only
+    copy of a fact.
+    """
+    t = str(s or "").strip()
+    if len(t) <= n:
+        return t
+    cut = t[:n]
+    for stop in (". ", "; ", " \u2014 "):
+        i = cut.rfind(stop)
+        if i > n * 0.55:
+            return cut[:i + 1].rstrip()
+    i = cut.rfind(" ")
+    return (cut[:i] if i > 0 else cut).rstrip() + "\u2026"
+
+
 def para(s) -> str:
     """Prose that may carry the agents' own inline markdown-ish emphasis."""
     t = esc(s)
@@ -171,6 +192,63 @@ def para(s) -> str:
     for chunk in t.split("`"):
         out.append(f"<code>{chunk}</code>" if mono else chunk)
         mono = not mono
+    t = "".join(out)
+    # Single-asterisk italics, AFTER the ** pass so a bold run is already gone.
+    # The critic writes *"quoted"* constantly; leaving the asterisks in made its
+    # quotes look like typos.
+    return re.sub(r"\*([^*\n]+)\*", r"<em>\1</em>", t)
+
+
+def md(text: str) -> str:
+    """Render the critic's markdown.
+
+    The completeness critic writes real markdown — ## headings, > blockquotes,
+    - bullets. Dumping it into one <div> produced a 20,000-character wall with
+    literal "###" in it, which is the opposite of reproducing a critic
+    faithfully: unreadable is not the same as unedited. This converts the
+    structure and changes not one word.
+    """
+    out, para_buf, list_buf, quote_buf = [], [], [], []
+
+    def flush():
+        if para_buf:
+            out.append(f"<p>{para(' '.join(para_buf))}</p>")
+            para_buf.clear()
+        if list_buf:
+            out.append("<ul>" + "".join(f"<li>{para(x)}</li>" for x in list_buf) + "</ul>")
+            list_buf.clear()
+        if quote_buf:
+            out.append(f'<blockquote class="cq">{para(" ".join(quote_buf))}</blockquote>')
+            quote_buf.clear()
+
+    for raw in str(text or "").split("\n"):
+        line = raw.rstrip()
+        stripped = line.lstrip()
+        if not stripped:
+            flush()
+            continue
+        if stripped.startswith("---"):
+            flush()
+            out.append('<hr style="border:0;border-top:1px solid var(--line);margin:26px 0">')
+        elif stripped.startswith("#"):
+            flush()
+            level = len(stripped) - len(stripped.lstrip("#"))
+            body = stripped.lstrip("#").strip()
+            tag = "h3" if level <= 2 else "h4"
+            out.append(f"<{tag}>{para(body)}</{tag}>")
+        elif stripped.startswith(">"):
+            if para_buf or list_buf:
+                flush()
+            quote_buf.append(stripped.lstrip(">").strip())
+        elif stripped.startswith(("- ", "* ")):
+            if para_buf or quote_buf:
+                flush()
+            list_buf.append(stripped[2:].strip())
+        else:
+            if list_buf or quote_buf:
+                flush()
+            para_buf.append(stripped)
+    flush()
     return "".join(out)
 
 
@@ -569,6 +647,15 @@ def build(corpus: dict, design: dict) -> str:
            font-size:14px; line-height:1.65; margin:16px 0 }}
   .note.warn {{ border-color:var(--warn) }}
   .note.gold {{ border-color:var(--gold) }}
+  .critic {{ border-left:2px solid var(--warn); padding:2px 0 2px 20px; color:#cfd4de }}
+  .critic h3 {{ font-size:17px; margin:30px 0 10px; color:var(--fg); letter-spacing:-.01em }}
+  .critic h4 {{ font-size:14px; margin:22px 0 8px; color:var(--gold) }}
+  .critic p {{ font-size:14px; line-height:1.68; margin:0 0 12px }}
+  .critic ul {{ margin:0 0 14px; padding-left:20px }}
+  .critic li {{ font-size:14px; line-height:1.62; margin:0 0 7px }}
+  .critic .cq {{ margin:0 0 14px; padding:11px 14px; background:#0a0b0e; border-radius:8px;
+                 border-left:2px solid var(--line2); font-size:13.5px; line-height:1.6;
+                 color:var(--dim) }}
   .mgrid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(248px,1fr));
             gap:14px; margin:20px 0 26px }}
   .mcard {{ background:var(--panel); border:1px solid var(--line); border-radius:12px;
@@ -601,7 +688,8 @@ def build(corpus: dict, design: dict) -> str:
   <div><b>{len(fetched_urls)}</b><span>distinct sources actually fetched</span></div>
   <div><b>{corpus.get('droppedTotal', 0)}</b><span>claims dropped by the verifiers</span></div>
   <div><b>{counts.get('raw', 0)}</b><span>raw proposals from 8 lenses</span></div>
-  <div><b>{counts.get('refuted', 0)}</b><span>proposals refuted on attack</span></div>
+  <div><b>{counts.get('gaps', 0)}</b><span>added by the completeness critic</span></div>
+  <div><b>{counts.get('refuted', 0)}</b><span>dropped head-to-head</span></div>
 </div>""")
 
     # ── the answer up front ───────────────────────────────────────────────
@@ -756,25 +844,68 @@ one rather than none.</p>
         if drawing:
             P.append(drawing)
 
+        if r.get("mergedIn"):
+            items = "".join(
+                f"<li><strong>{esc(m.get('title'))}</strong> — {para(m.get('oneLiner'))}</li>"
+                for m in r["mergedIn"])
+            P.append(f'<div class="note" style="margin:16px 0 4px"><p><strong>Folds in '
+                     f'{len(r["mergedIn"])} proposal'
+                     f'{"s" if len(r["mergedIn"]) > 1 else ""} on the same axis:</strong></p>'
+                     f"<ul>{items}</ul></div>")
+        # ── the part he always sees ───────────────────────────────────────
+        # WHY this is split rather than printed whole: the agents returned
+        # 1,000-1,500 words per recommendation, and twenty of those is a
+        # 30,000-word document. Zach's review time is the bottleneck on
+        # everything, so the card leads with the conclusion — the rule, where
+        # it ranks, what it fixes, what it costs — and the evidence that
+        # supports it opens on demand. Nothing is deleted; the long-form
+        # rationale, the disk checks and the refutation are all one click away.
         P.append("<dl>")
         if r.get("rankWhy"):
-            P.append(f"<dt>Why here</dt><dd>{para(r.get('rankWhy'))}</dd>")
-        P.append(f"<dt>Fixes</dt><dd>{para(attack.get('complaintCheck') or r.get('problem'))}</dd>")
-        P.append(f"<dt>Prior art</dt><dd>{para(r.get('priorArt'))}</dd>")
-        P.append(f"<dt>What a reader sees</dt><dd>{para(r.get('mechanism'))}</dd>")
-        sharp = str(attack.get("sharpened") or "").strip()
-        if sharp:
-            P.append(f"<dt>Sharpened</dt><dd>{para(sharp)}</dd>")
-        P.append(f"<dt>Build</dt><dd>{para(r.get('buildNotes'))}</dd>")
-        bc = str(attack.get("buildabilityCheck") or "").strip()
-        if bc:
-            P.append(f"<dt>Checked</dt><dd>{para(bc)}</dd>")
+            P.append(f"<dt>Why here</dt><dd>{para(clip(r.get('rankWhy'), 300))}</dd>")
+        if r.get("relatedTo"):
+            rel = ", ".join(f"<strong>{esc(x.get('title'))}</strong>" for x in r["relatedTo"])
+            P.append(f"<dt>Related</dt><dd>Close to {rel} — kept separate because they sit "
+                     f"on different axes and draw different things.</dd>")
+        # The proposal's own `problem` is a STATEMENT of what it fixes; the
+        # attacker's `complaintCheck` is an AUDIT of whether that holds ("I
+        # checked all eight index-to-title pairs…"). The audit is the more
+        # trustworthy of the two and belongs in the report — but it is not what
+        # a reader scanning twenty cards needs on the surface, so the statement
+        # leads and the audit opens underneath it.
+        P.append(f"<dt>Fixes</dt><dd>{para(clip(r.get('problem') or attack.get('complaintCheck'), 330))}</dd>")
         cost = str(attack.get("unpaidCost") or "").strip()
         if cost:
-            P.append(f"<dt>Costs you</dt><dd>{para(cost)}</dd>")
+            P.append(f"<dt>Costs you</dt><dd>{para(clip(cost, 300))}</dd>")
+        P.append(f"<dt>Build</dt><dd>{para(clip(r.get('buildNotes'), 300))}</dd>")
+        P.append("</dl>")
+
+        # ── the evidence, one click away ──────────────────────────────────
+        more = []
+        sharp = str(attack.get("sharpened") or "").strip()
+        if sharp:
+            more.append(("The form to build", sharp))
+        more.append(("What a reader sees", r.get("mechanism")))
+        more.append(("Prior art", r.get("priorArt")))
+        if r.get("whyBetter"):
+            more.append(("Why ours beats it", r.get("whyBetter")))
+        if attack.get("complaintCheck"):
+            more.append(("Checked against the corpus", attack.get("complaintCheck")))
+        bc = str(attack.get("buildabilityCheck") or "").strip()
+        if bc:
+            more.append(("Checked on disk", bc))
         ref = str(attack.get("refutation") or "").strip()
         if ref:
-            P.append(f"<dt>Best case against</dt><dd>{para(ref)}</dd>")
+            more.append(("The best case against it", ref))
+        sc_ = str(attack.get("scaleCheck") or "").strip()
+        if sc_:
+            more.append(("At 500 nodes", sc_))
+        rc_full = str(attack.get("rulingConflict") or "").strip()
+        if rc_full and rc_full.lower() not in ("none", "none.", "n/a"):
+            more.append(("Against the frozen rulings", rc_full))
+        body = "".join(f"<dt>{esc(k)}</dt><dd>{para(v)}</dd>" for k, v in more if v)
+        P.append(f'<details><summary>The full case · evidence, disk checks and the '
+                 f'rebuttal</summary><dl>{body}')
         if score:
             bars = []
             for key, label, _w in CRITERIA:
@@ -783,7 +914,7 @@ one rather than none.</p>
                 bars.append(f'<i style="height:{max(4, float(v) / 5 * 34):.0f}px;'
                             f'background:{col}"><b>{key.upper()}</b></i>')
             P.append(f'<dt>Scores</dt><dd><div class="sc">{"".join(bars)}</div></dd>')
-        P.append("</dl>")
+        P.append("</dl></details>")
         P.append(fb(f"R{rank}", str(r.get("title") or "")[:90]))
         P.append("</div>")
 
@@ -871,7 +1002,7 @@ one rather than none.</p>
         P.append('<p class="sub" style="font-size:15px">A final agent was asked only for gaps, '
                  'misrankings and unfair refutations. Its answer is reproduced rather than '
                  'summarised, because a critic you edit is not a critic.</p>')
-        P.append(f'<div class="note warn">{para(critic)}</div>')
+        P.append(f'<div class="critic">{md(critic)}</div>')
 
     if decided:
         P.append("<h2>Dropped — you already ruled on these</h2>")
@@ -884,8 +1015,22 @@ one rather than none.</p>
             P.append(f"<tr><td>{esc(d.get('title'))}</td><td>{para(d.get('ruling'))}</td></tr>")
         P.append("</tbody></table>")
 
+    ranker_dropped = design.get("droppedByRanker") or []
+    if ranker_dropped:
+        P.append("<h2>Dropped on comparison</h2>")
+        P.append('<p class="sub" style="font-size:15px">These survived the adversarial pass but '
+                 'lost head-to-head. That is the whole reason the ranking is comparative: scoring '
+                 'each one on its own refuted nothing out of 33, which is not credible — '
+                 'ranking them against each other dropped these seven.</p>')
+        P.append("<table><thead><tr><th>Proposal</th><th>Why it lost</th></tr></thead><tbody>")
+        for r in ranker_dropped:
+            P.append(f"<tr><td><strong>{esc(r.get('title'))}</strong><br>"
+                     f"<span class='q'>{esc(r.get('oneLiner'))}</span></td>"
+                     f"<td>{para(r.get('rankWhy'))}</td></tr>")
+        P.append("</tbody></table>")
+
     if refuted:
-        P.append("<h2>Refuted</h2>")
+        P.append("<h2>Refuted on attack</h2>")
         for r in refuted:
             a = r.get("attack") or {}
             P.append(f"<details><summary>{esc(r.get('title'))}</summary>"
