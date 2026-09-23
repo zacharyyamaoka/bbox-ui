@@ -531,14 +531,28 @@ function ArmHeaderRail({ edge, items, bands }: { edge: BlockSide; items: PortEdg
   );
   const box = railBoxFor(edge, plan, bands);
   const axis = railAxisFor(edge);
+  // A BARE DOT — no label. Corrected 2026-09-22 after looking at the
+  // captures: this rail used to draw `item.label`, and the arm's own title
+  // (`if:`) is drawn by `ArmRow`'s Bar starting at the SAME x, so the two
+  // strings painted straight through each other — `mode == "fast"` over
+  // `if:` rendered as `modif:e == "fast"` in all five region drawings, and
+  // the fold chevron was overdrawn too. No measured assertion caught it;
+  // they all check the DOT's box, never text collision.
+  //
+  // WHY a bare dot rather than insetting the title past the label: the
+  // reading order has to be `if: mode == "fast"`, and the rail sits at the
+  // frame's LEFT edge, so anything it draws necessarily comes first. The
+  // expression therefore belongs to the arm's header TEXT (ArmRow composes
+  // it after the title), and the dot goes back to being just a dot. That
+  // also puts this rail back in line with the rule `blockPort.tsx` already
+  // applies to every header-band rail — a header's own content is the
+  // label — instead of standing as the one exception to it.
   const renderItem: PortEdgeProps["renderItem"] = (item, ctx) => (
     <span data-slot="block-port-item" data-port-id={item.id} style={{ display: "inline-flex" }}>
       {/* `disabled`: an arm's own operand/capture has no `onItemsChange` of
           its own yet — read-only, the same default `BlockPortRail` applies
           to an unwired rail (P-037's own WHY). */}
-      <LabeledPort edge={edge} state={item.state ?? "empty"} textLayout={ctx.textLayout} disabled>
-        {item.label}
-      </LabeledPort>
+      <LabeledPort edge={edge} state={item.state ?? "empty"} textLayout={ctx.textLayout} disabled labelSlot={null} />
     </span>
   );
   return (
@@ -696,6 +710,37 @@ function ArmRow({
               >
                 {arm.title}
               </span>
+              {/* The arm's operand, inline, AFTER its keyword — so the row
+                  reads `if: mode == "fast"` in source order. This is Zach's
+                  "in the title … we can support default variables so you
+                  don't need to pass in everything with a pill": the dot on
+                  the left wall says a value is expected and what state it is
+                  in, this says what is in force while nothing is wired.
+                  Rendered VERBATIM — spaces and quotes intact
+                  (`feedback_truthful_property_rendering`); a cable landing
+                  on the dot flips it to `wired` and this text is what the
+                  cable overrides, never a second source of truth. */}
+              {arm.test?.default === undefined ? null : (
+                <span
+                  data-slot="region-arm-test"
+                  className="truncate"
+                  style={{
+                    fontFamily: "var(--bbox-region-arm-title-font)",
+                    fontSize: "var(--bbox-region-arm-title-size)",
+                    color: "var(--bbox-region-arm-title-color)",
+                    opacity: 0.85,
+                    // `pre` so the expression's OWN leading/trailing spaces
+                    // survive (truthful property rendering) — which is also
+                    // why the gap after the keyword is a margin and not a
+                    // space character: a space here would be indistinguishable
+                    // from one the author typed.
+                    whiteSpace: "pre",
+                    marginLeft: "0.4em",
+                  }}
+                >
+                  {arm.test.default}
+                </span>
+              )}
             </>
           }
         />

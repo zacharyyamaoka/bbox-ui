@@ -332,6 +332,27 @@ export const ArmPorts: Story = {
     expect(ifCentre.y).toBeLessThanOrEqual(ifHeaderRect.bottom + TOL);
     expect(Math.abs(ifCentre.x - frame.left), "the dot's centre x is on the frame's left wall").toBeLessThanOrEqual(TOL);
 
+    // 1b — THE RAIL DRAWS NO TEXT, and the keyword and the expression do not
+    // overlap. Added 2026-09-22 after the captures showed `mode == "fast"`
+    // painted straight through `if:` — rendered `modif:e == "fast"` in all
+    // five region drawings, with the fold chevron overdrawn too. Every
+    // assertion above passed the whole time: they measure the DOT's box and
+    // nothing measured text collision, which is the whole lesson. The
+    // expression belongs to the arm's header TEXT, after the keyword; the
+    // rail is a bare dot.
+    const ifRail = required<HTMLElement>(ifHeader, '[data-slot="block-port-rail"]', "if's rail");
+    // Not `textContent === ""`: the rail carries dnd-kit's visually-hidden
+    // screen-reader instructions, so the honest claim is that it paints no
+    // LABEL, not that it holds no characters.
+    expect(
+      ifRail.querySelector('[data-slot="port-label"]'),
+      "the arm's rail draws a bare dot, never a label",
+    ).toBeNull();
+    const keyword = required<HTMLElement>(ifHeader, '[data-slot="region-arm-title"]', "if's keyword").getBoundingClientRect();
+    const expression = required<HTMLElement>(ifHeader, '[data-slot="region-arm-test"]', "if's inline test").getBoundingClientRect();
+    expect(expression.left, "the expression starts AFTER the keyword ends").toBeGreaterThanOrEqual(keyword.right - 1);
+    expect(expression.left, "…and is not jammed against it").toBeGreaterThan(keyword.right);
+
     // 2 — a `captures` arm renders its dot on the header's RIGHT edge,
     // strictly inside the frame (never on or past its right wall).
     const capHeader = required<HTMLElement>(canvasElement, '[data-arm-id="case-a"] [data-slot="region-arm-header"]', "case-a's header");
@@ -355,7 +376,13 @@ export const ArmPorts: Story = {
     // 5 — a `valueSet` arm (a `default` set, no cable) shows that default
     // VERBATIM — spaces and quotes intact (truthful rendering).
     expect(ifDots[0].getAttribute("data-port-id")).toBe("if");
-    expect(ifDots[0].textContent, "the default expression renders verbatim").toBe(ARM_TEST_DEFAULT);
+    // Read off the arm's header TEXT, not the dot. Repointed 2026-09-22 when
+    // the expression moved out of the rail's label (see 1b): the claim is
+    // unchanged — the author's characters survive exactly — only the element
+    // that carries them moved, and `white-space: pre` is what keeps the
+    // leading and trailing spaces this fixture deliberately includes.
+    const ifTest = required<HTMLElement>(ifHeader, '[data-slot="region-arm-test"]', "if's inline test");
+    expect(ifTest.textContent, "the default expression renders verbatim").toBe(ARM_TEST_DEFAULT);
 
     // Proof a wire actually resolves onto an arm's dot, not just that the
     // dot exists: `WireLayer` measures both ends and only fails to draw
