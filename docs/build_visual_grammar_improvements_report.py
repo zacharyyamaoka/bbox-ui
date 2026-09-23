@@ -325,7 +325,7 @@ def draw_layout_stability() -> str:
                          stroke=G.WARN))
     b.append(G.text(112, 292, "every box moved; the diff is unreadable", size=9.5,
                     fill=G.WARN, anchor="middle"))
-    b.append(G.tag(16, 18, "positional documents · .slx / .uasset / flows.json"))
+    b.append(G.tag(16, 18, "positional documents"))
     left = G.svg("".join(b), 240, 306, label="An auto-layout reshuffling after one edit")
 
     b = [G.arrowhead(G.BLUE)]
@@ -340,7 +340,7 @@ def draw_layout_stability() -> str:
     b.append(G.badge(100, 292, "new", fill=G.OK, text_fill="#0e0f12"))
     b.append(G.text(112, 336, "four boxes unmoved; one added", size=9.5,
                     fill=G.OK, anchor="middle"))
-    b.append(G.tag(16, 18, "proposed · position keyed to the AST, not the file"))
+    b.append(G.tag(16, 18, "proposed · keyed to the AST"))
     right = G.svg("".join(b), 240, 350, label="Stable layout after the same edit")
 
     return _pair(
@@ -353,33 +353,128 @@ def draw_layout_stability() -> str:
     )
 
 
-DRAWINGS = [
-    ("arms", ("arm", "branch", "case", "simultane", "match", "all-arms", "stack"), draw_arms),
-    ("granularity", ("granular", "collapse", "opaque", "summary", "signature", "fold"),
-     draw_granularity),
-    ("names", ("name", "binding", "variable", "hidden", "tunnel", "identity", "label"),
-     draw_names),
-    ("layout", ("layout", "stable", "position", "diff", "review", "reshuffle"),
-     draw_layout_stability),
-]
+def draw_alias() -> str:
+    """The silent ordinal alias — the critic's G1 — vs a fifth computed state."""
+    b = [G.arrowhead(G.BLUE)]
+    b.append(G.code(18, 44, ["def f():   # f#0", "    ...", "", "def f():   # f#1",
+                             "    ..."], size=10, gap=13.5))
+    b.append(G.text(18, 132, "delete the first, then undo ↓", size=9.5, fill=G.DIM))
+    b.append(G.block(18, 148, 118, 30, "box A → f#0", header=0, fill=G.PANEL,
+                     stroke=G.WARN))
+    b.append(G.block(148, 148, 118, 30, "box B → f#1", header=0, fill=G.PANEL,
+                     stroke=G.WARN))
+    b.append(G.badge(18, 188, "synced", fill=G.OK, text_fill="#0e0f12"))
+    b.append(G.badge(148, 188, "synced", fill=G.OK, text_fill="#0e0f12"))
+    b.append(G.text(142, 226, "both resolve. both hash-match.", size=9.5,
+                    fill=G.WARN, anchor="middle"))
+    b.append(G.text(142, 240, "each is bound to the OTHER function.", size=9.5,
+                    fill=G.WARN, anchor="middle"))
+    b.append(G.tag(18, 32, "today · four-state machine"))
+    left = G.svg("".join(b), 284, 254, label="Silent anchor aliasing reported as synced")
+
+    b = [G.arrowhead(G.BLUE)]
+    b.append(G.code(18, 44, ["def f():   # f#0", "    ...", "", "def f():   # f#1",
+                             "    ..."], size=10, gap=13.5))
+    b.append(G.text(18, 132, "delete the first, then undo ↓", size=9.5, fill=G.DIM))
+    b.append(G.block(18, 148, 118, 30, "box A", header=0, fill=G.PANEL, stroke=G.GOLD))
+    b.append(G.block(148, 148, 118, 30, "box B", header=0, fill=G.PANEL, stroke=G.LINE))
+    b.append(G.badge(18, 188, "re-seated", fill=G.GOLD, text_fill="#0e0f12"))
+    b.append(G.badge(148, 188, "synced", fill=G.OK, text_fill="#0e0f12"))
+    b.append(G.text(142, 226, "the span's hash matches a DIFFERENT", size=9.5,
+                    fill=G.OK, anchor="middle"))
+    b.append(G.text(142, 240, "cell's previous hash — so say so.", size=9.5,
+                    fill=G.OK, anchor="middle"))
+    b.append(G.tag(18, 32, "proposed · a fifth computed state"))
+    right = G.svg("".join(b), 284, 254, label="A fifth state naming the re-seat")
+
+    return _pair(
+        left, right,
+        "**The hazard, verified on disk.** The anchor is qualname + ordinal. Delete one of two "
+        "same-named defs and the survivor re-ordinals; it still resolves and still hash-matches, "
+        "so the state machine says **synced** while both boxes point at the wrong function.",
+        "**Proposed.** `origin` already carries `contentHash`, so the shift is detectable — "
+        "an anchor that resolves to a span whose hash was another cell's is a fifth state, not "
+        "`synced`. Ordinary Python hits this: `@overload` families and property getter/setter "
+        "pairs share a qualname.",
+    )
+
+
+def draw_fanin() -> str:
+    """A hub's starburst vs named stubs with a count."""
+    b = [G.arrowhead(G.DIM2)]
+    cx, cy = 150.0, 108.0
+    b.append(G.block(108, 92, 84, 32, "CONFIG", header=0, fill=G.PANEL))
+    import math
+    for i in range(11):
+        ang = math.pi * (0.5 + i / 10.0)
+        x = cx + 128 * math.cos(ang)
+        y = cy + 92 * math.sin(ang)
+        b.append(G.wire([(x, y), (cx, cy)], stroke=G.DIM2, width=1.2, arrow=False,
+                        radius=0))
+    b.append(G.text(150, 214, "11 readers, 11 crossings, no names", size=9.5,
+                    fill=G.WARN, anchor="middle"))
+    b.append(G.tag(22, 26, "every system · the hub starburst"))
+    left = G.svg("".join(b), 300, 228, label="A hub node with eleven crossing wires")
+
+    b = [G.arrowhead(G.BLUE)]
+    b.append(G.block(96, 88, 100, 34, "CONFIG", header=0, fill=G.PANEL))
+    b.append(G.port(196, 105, fill=G.ACCENT, square=True, size=4))
+    for i, nm in enumerate(["calibrate", "run", "report"]):
+        y = 70 + i * 34
+        b.append(G.wire([(200, 105), (224, 105), (224, y + 10), (244, y + 10)],
+                        stroke=G.BLUE, width=1.5))
+        b.append(f'<rect x="244" y="{y}" width="72" height="20" rx="4"'
+                 f' fill="{G.PANEL2}" stroke="{G.LINE}"/>')
+        b.append(G.text(280, y + 14, nm, size=9, fill=G.DIM, anchor="middle"))
+    b.append(G.badge(244, 174, "+8 more", fill=G.PANEL2, text_fill=G.GOLD))
+    b.append(G.text(158, 214, "named stubs; the count is the rest", size=9.5,
+                    fill=G.OK, anchor="middle"))
+    b.append(G.tag(22, 26, "proposed · stubs and a count badge"))
+    right = G.svg("".join(b), 330, 228, label="Named stubs replacing the starburst")
+
+    return _pair(
+        left, right,
+        "**The shared failure.** A value many things read becomes a starburst whose crossings "
+        "carry no information at all — the reader must trace each line to learn anything.",
+        "**Proposed.** The line stops at a named stub, and the readers that do not fit become a "
+        "count. Nothing is hidden that was legible before; the crossings were never legible.",
+    )
+
+
+# id → drawing. Explicit, because keyword-matching free prose bound a drawing to the
+# wrong recommendation in testing: "anchor" contains no "arm", but a proposal's
+# `mechanism` paragraph easily mentions one while being about something else. An id is
+# stable within a run and a miss degrades to no drawing, which is the safe failure.
+DRAWINGS_BY_ID = {
+    "anchor-keyed-position": draw_layout_stability,
+    "derived-layout-tidy": draw_layout_stability,
+    "anchor-alias-fifth-state": draw_alias,
+    "arm-row-vocabulary": draw_arms,
+    "arm-juxtaposition": draw_arms,
+    "opaque-face-names": draw_granularity,
+    "folded-face-interface": draw_granularity,
+    "derive-openness": draw_granularity,
+    "name-where-lines-stop": draw_names,
+    "draw-every-name": draw_names,
+    "fan-in-stubs": draw_fanin,
+    "reference-lane": draw_fanin,
+}
 
 
 def drawing_for(proposal: dict, used: set) -> str:
-    """Attach a drawing only on a real keyword hit, never by rank.
+    """Attach a drawing by proposal id, at most once per drawing.
 
-    WHY keyword-matched and not positional: a re-run reorders the ranking, and a
-    drawing silently attached to whatever landed at #1 would illustrate the
-    wrong idea while looking authoritative.
+    WHY by id and not by rank or keyword: a re-run reorders the ranking, so a
+    drawing bound to "whatever landed at #1" would illustrate the wrong idea
+    while looking authoritative; and keyword-matching a proposal's prose is
+    loose enough to do the same thing by accident. An unknown id simply gets no
+    drawing.
     """
-    hay = " ".join(str(proposal.get(k, "")) for k in
-                   ("id", "title", "oneLiner", "axis", "mechanism")).lower()
-    for key, needles, fn in DRAWINGS:
-        if key in used:
-            continue
-        if any(n in hay for n in needles):
-            used.add(key)
-            return fn()
-    return ""
+    fn = DRAWINGS_BY_ID.get(str(proposal.get("id", "")))
+    if fn is None or fn in used:
+        return ""
+    used.add(fn)
+    return fn()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -603,9 +698,25 @@ the only way to make a change. Several recommendations below exist to protect ex
     P.append(f"<h2>The recommendations — {len(top)}, strongest first</h2>")
     P.append('<p class="sub" style="font-size:15px">Each one survived an adversarial reviewer '
              'whose default verdict was <em>refuted</em> and who had to find the complaint it '
-             'fixes in the corpus, then open the trunk files it names. Each was scored by a '
-             'different agent. <em>Lenses</em> counts how many of eight independent design '
-             'passes reached the same idea without seeing each other’s work.</p>')
+             'fixes in the corpus, then open the trunk files it names. Each was scored by an '
+             'agent that did not attack it, then ranked <em>against the others</em> — '
+             'absolute scores clustered between 4.15 and 4.70 and discriminated nothing, so the '
+             'order below comes from comparative ranking, and the score is shown only as '
+             'supporting detail.</p>')
+    P.append("""<div class="note">
+<p><strong>Two honesty notes about the labels.</strong> <em>Lenses</em> counts how many of eight
+independent design passes reached the same idea — but each lens was given an exclusive brief
+and told not to hedge into the others’, so <strong>low agreement is by construction and is not
+weak support</strong>. Treat a high count as a positive signal and a low one as no signal.
+Items marked <em>from the critic</em> came from the completeness pass rather than the eight
+lenses, and were attacked and scored on the same bar afterwards.</p>
+<p>And the <em>Costs you</em> line is not a disclaimer — it is the part most worth reading.
+Every notation choice trades something, and a proposal whose cost is unstated has an unexamined
+one rather than none.</p>
+</div>""")
+    if design.get("cutLine"):
+        P.append(f'<div class="note gold"><p><strong>Why the line falls at twenty.</strong> '
+                 f'{para(design.get("cutLine"))}</p></div>')
 
     used_drawings: set = set()
     for i, r in enumerate(top):
@@ -620,12 +731,18 @@ the only way to make a change. Several recommendations below exist to protect ex
         P.append(f'<p class="rule">{para(r.get("oneLiner"))}</p>')
 
         P.append('<div class="meta">')
+        tier = str(r.get("tier") or "")
+        if tier:
+            tcls = {"do-first": "gold", "strong": "ok", "worth-it": "",
+                    "narrow": "", "drop": "warn"}.get(tier, "")
+            P.append(f'<span class="chip {tcls}">{esc(tier.replace("-", " "))}</span>')
         w = score.get("weighted")
         if w is not None:
-            P.append(f'<span class="chip gold">score {float(w):.2f} / 5</span>')
+            P.append(f'<span class="chip">score {float(w):.2f} / 5</span>')
         P.append(f'<span class="chip">{esc(AXIS_LABELS.get(r.get("axis"), r.get("axis")))}</span>')
         cls = "ok" if agree >= 4 else ""
-        P.append(f'<span class="chip {cls}">{agree}/8 lenses</span>')
+        lens_txt = f"{agree}/8 lenses" if agree else "from the critic"
+        P.append(f'<span class="chip {cls}">{lens_txt}</span>')
         v = attack.get("verdict")
         if v:
             P.append(f'<span class="chip {"warn" if v == "survives-weakened" else "ok"}">'
@@ -640,6 +757,8 @@ the only way to make a change. Several recommendations below exist to protect ex
             P.append(drawing)
 
         P.append("<dl>")
+        if r.get("rankWhy"):
+            P.append(f"<dt>Why here</dt><dd>{para(r.get('rankWhy'))}</dd>")
         P.append(f"<dt>Fixes</dt><dd>{para(attack.get('complaintCheck') or r.get('problem'))}</dd>")
         P.append(f"<dt>Prior art</dt><dd>{para(r.get('priorArt'))}</dd>")
         P.append(f"<dt>What a reader sees</dt><dd>{para(r.get('mechanism'))}</dd>")
