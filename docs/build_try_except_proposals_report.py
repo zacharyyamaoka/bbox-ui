@@ -393,8 +393,15 @@ def fig_p2():
         b.append(code(hx + 22, yy + 19, f"except {typ}", size=11.5, fill=INK))
         b.append(capdot(hx + 268, yy + 17, cap))
         b.append(code(hx + 22, yy + 40, bodyline, size=11, fill=DIM))
-    b.append(txt(hx + 6, hy - 12, "handlers hang off the boundary they protect — "
-                                  "touching, never wired", size=10.5, fill=BAD, weight=700))
+    # Two lines, not one. WHY: at 10.5px this sentence is ~350px and the
+    # right-hand column starts at x2=706, so a single line starting at
+    # hx+6=376 runs under the panel and loses its last three words. The
+    # space ABOVE the handlers (y 56..hy) is free at this x because the try
+    # frame ends at hx, so the fix is vertical room, not a shorter sentence.
+    b.append(txt(hx + 6, hy - 26, "handlers hang off the boundary they",
+                 size=10.5, fill=BAD, weight=700))
+    b.append(txt(hx + 6, hy - 11, "protect — touching, never wired",
+                 size=10.5, fill=BAD, weight=700))
 
     # else + finally have nowhere on the boundary
     fy = y + bh + 42
@@ -403,9 +410,12 @@ def fig_p2():
     b.append(txt(x + 110, fy + 25, "not an event — no boundary to hang off. Floats.",
                  size=11, fill=BAD, weight=600))
     b.append(footer_band(x, fy + 52, 632, "finally:", note="always"))
-    b.append(txt(x + 18, fy + 114, "`finally` lands correctly by accident: it is not an event "
-                                   "either, so it becomes a band — which is what it should be.",
+    # Two lines for the same reason as the callout above: the right column's
+    # panel starts at x2=706 and this caption is ~665px wide from x+18=58.
+    b.append(txt(x + 18, fy + 108, "`finally` lands correctly by accident: it is not an",
                  size=11, fill=DIM))
+    b.append(txt(x + 18, fy + 124, "event either, so it becomes a band — which is what it "
+                                   "should be.", size=11, fill=DIM))
 
     # right column: the verdict
     x2 = 706
