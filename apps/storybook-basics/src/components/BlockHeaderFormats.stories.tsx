@@ -52,15 +52,68 @@ function blockOf(root: ParentNode): HTMLElement {
 /** A rail item's own dot centre, in viewport px — `[data-port-id]` scopes
  *  to the one item on this edge/wall, `[data-slot="port-dot"]` to its
  *  actual painted circle (not its label or hit halo). */
-function dotCentre(root: ParentNode, edge: BlockSide, portId: string): { x: number; y: number } {
+function dotEl(root: ParentNode, edge: BlockSide, portId: string): HTMLElement {
   const item = required<HTMLElement>(
     root,
     `[data-slot="block-port-rail"][data-edge="${edge}"] [data-port-id="${portId}"]`,
     `port "${portId}" on the ${edge} rail`,
   );
-  const dot = required<HTMLElement>(item, '[data-slot="port-dot"]', `the dot for port "${portId}"`);
-  const rect = dot.getBoundingClientRect();
+  return required<HTMLElement>(item, '[data-slot="port-dot"]', `the dot for port "${portId}"`);
+}
+
+function dotCentre(root: ParentNode, edge: BlockSide, portId: string): { x: number; y: number } {
+  const rect = dotEl(root, edge, portId).getBoundingClientRect();
   return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+/** Real overlap of two boxes, not "close enough" — the defect this exists
+ *  to catch (a label painted on top of the header's own title/chevron) was
+ *  a genuine intersection, not a near-miss, so the check is a plain AABB
+ *  test with no tolerance fudge either way. */
+function rectsIntersect(a: DOMRect, b: DOMRect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+/** Asserts a rail item's dot does not paint over the header's own real
+ *  content (its title, its chevron — whatever `[data-slot="header-content"]`
+ *  wraps in that story) — the MEASURED version of "labels don't collide
+ *  with the header", since `getBoundingClientRect` on the actual boxes is
+ *  the only thing that can tell overlap from "merely nearby". */
+function expectDotClearOfHeaderContent(root: ParentNode, edge: BlockSide, portId: string): void {
+  const item = required<HTMLElement>(
+    root,
+    `[data-slot="block-port-rail"][data-edge="${edge}"] [data-port-id="${portId}"]`,
+    `port "${portId}" on the ${edge} rail`,
+  );
+  const contentRect = required<HTMLElement>(root, '[data-slot="header-content"]', "the header's own content").getBoundingClientRect();
+
+  // The dot's own box — always present, and geometrically nowhere near the
+  // header's title in these specimens even before the fix (it sits ON the
+  // wall line; the title starts well inset from it). Checked anyway so the
+  // assertion is honest about what it covers, not because this is where
+  // the reported defect actually was.
+  const dotRect = required<HTMLElement>(item, '[data-slot="port-dot"]', `the dot for port "${portId}"`).getBoundingClientRect();
+  if (rectsIntersect(dotRect, contentRect)) {
+    throw new Error(
+      `port "${portId}" on the ${edge} rail — its dot box [${dotRect.left.toFixed(1)}, ${dotRect.top.toFixed(1)}, ${dotRect.right.toFixed(1)}, ${dotRect.bottom.toFixed(1)}] intersects the header's own content box [${contentRect.left.toFixed(1)}, ${contentRect.top.toFixed(1)}, ${contentRect.right.toFixed(1)}, ${contentRect.bottom.toFixed(1)}]`,
+    );
+  }
+
+  // The LABEL — this is where the reported defect actually painted
+  // (`data-slot="port-label"`, labeledPort.tsx's own absolutely-positioned
+  // span). `band: "header"` renders none at all (labelSlot={null} skips
+  // `DefaultPortLabel` entirely — labeledPort.tsx's `labelSlot !==
+  // undefined` gate), so this branch is a no-op on the fixed behaviour and
+  // only fires if something regresses a label back in.
+  const label = item.querySelector<HTMLElement>('[data-slot="port-label"]');
+  if (label) {
+    const labelRect = label.getBoundingClientRect();
+    if (rectsIntersect(labelRect, contentRect)) {
+      throw new Error(
+        `port "${portId}" on the ${edge} rail — its LABEL box [${labelRect.left.toFixed(1)}, ${labelRect.top.toFixed(1)}, ${labelRect.right.toFixed(1)}, ${labelRect.bottom.toFixed(1)}] intersects the header's own content box [${contentRect.left.toFixed(1)}, ${contentRect.top.toFixed(1)}, ${contentRect.right.toFixed(1)}, ${contentRect.bottom.toFixed(1)}] — a header-band rail must draw dots only`,
+      );
+    }
+  }
 }
 
 function expectWithin(actual: number, lo: number, hi: number, tolerance: number, what: string): void {
@@ -137,7 +190,11 @@ function PortsOnHeaderDemo() {
         // stacked rail dots — a bare single line of text is only tall
         // enough for one, which is a fact about this specimen's content,
         // not a limit `band: "header"` itself imposes.
-        header={<div style={{ display: "flex", alignItems: "center", minHeight: 64 }}>Planner</div>}
+        header={
+          <div data-slot="header-content" style={{ display: "flex", alignItems: "center", minHeight: 64 }}>
+            Planner
+          </div>
+        }
         body={null}
         width={280}
         height={160}
@@ -162,6 +219,11 @@ export const PortsOnHeader: Story = {
       if (y > bodyRect.top + TOLERANCE_PX) {
         throw new Error(`left dot "${item.id}" y (${y.toFixed(2)}) landed in the body band (starts ${bodyRect.top.toFixed(2)}), not the header`);
       }
+      // The defect this catches: "in 2"/"out 2" collided with "Planner" on
+      // the second row (hdr-2-ports-on-header.png) before header-band rails
+      // drew dots only. MEASURED, not "the label is absent" — a label-less
+      // dot could still theoretically be positioned over the text.
+      expectDotClearOfHeaderContent(wrapper, "left", item.id);
     }
     for (const item of HEADER_OUTPUTS) {
       const { y } = dotCentre(wrapper, "right", item.id);
@@ -169,6 +231,7 @@ export const PortsOnHeader: Story = {
       if (y > bodyRect.top + TOLERANCE_PX) {
         throw new Error(`right dot "${item.id}" y (${y.toFixed(2)}) landed in the body band (starts ${bodyRect.top.toFixed(2)}), not the header`);
       }
+      expectDotClearOfHeaderContent(wrapper, "right", item.id);
     }
   },
 };
@@ -264,7 +327,7 @@ function HeadTabWithPortsDemo() {
         right: { items: TAB_RIGHT_PORT, band: "header" },
       }}
     >
-      <Block header="Planner" body="Body" footer="ready" headerFit="hug" width={280} height={180} />
+      <Block header={<span data-slot="header-content">Planner</span>} body="Body" footer="ready" headerFit="hug" width={280} height={180} />
     </BlockPort>
   );
 }
@@ -298,6 +361,12 @@ export const HeadTabWithPorts: Story = {
     if (!(right.x < blockRect.right - TOLERANCE_PX)) {
       throw new Error(`right dot x (${right.x.toFixed(2)}) is not strictly less than the block's right edge (${blockRect.right.toFixed(2)}) — it rode the block's own wall, not the tab's`);
     }
+
+    // The defect this catches: "in"/"out" painted directly on top of
+    // "Planner" (hdr-5-tab-with-ports.png), all three glyphs unreadable —
+    // before header-band rails drew dots only.
+    expectDotClearOfHeaderContent(wrapper, "left", "tab-in");
+    expectDotClearOfHeaderContent(wrapper, "right", "tab-out");
   },
 };
 
@@ -313,7 +382,11 @@ function BareHeaderDemo() {
     <BlockPort id="bare-header" view="port" edges={{ left: { items: BARE_LEFT_PORT, band: "header" } }}>
       <Block
         header={
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          // The whole flex row is the header's own content — the chevron
+          // no less than the title — so the intersect check covers both.
+          // The original defect (hdr-6-bare-header.png) was the label
+          // sitting ON the chevron, not the title.
+          <div data-slot="header-content" style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <FoldingChevron open onClick={() => {}} />
             <span>Planner</span>
           </div>
@@ -345,5 +418,10 @@ export const BareHeader: Story = {
     const headerRect = header.getBoundingClientRect();
     const { y } = dotCentre(wrapper, "left", "bare-in");
     expectWithin(y, headerRect.top, headerRect.bottom, TOLERANCE_PX, "left dot y");
+
+    // The defect this catches: the label "in" sat on top of the folding
+    // chevron (hdr-6-bare-header.png) before header-band rails drew dots
+    // only.
+    expectDotClearOfHeaderContent(wrapper, "left", "bare-in");
   },
 };

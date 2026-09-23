@@ -1116,6 +1116,23 @@ export function BlockPortRail({
    * same bare dot, with the same `data-collapsed-ports` stamp, is what
    * makes "exactly one dot per wall, carrying every id it stands for" true
    * for EVERY wall in simple view rather than only the crowded ones.
+   *
+   * A HEADER-band item is the third bare-dot case, for a different reason
+   * than the collapsed one above: the header band is chrome, and the
+   * header's own content IS the label — a tab is sized to hug a title, not
+   * to hold a second naming of the same thing underneath it. Zach,
+   * captured live off this story's first render (`hdr-5-tab-with-ports.png`
+   * etc.): "in"/"out" painted directly on top of "Planner", all three
+   * glyphs unreadable, and a bare-header chevron with a label sitting on
+   * top of it. The precedent already exists in this file —
+   * `BlockFunctionPort` below is a `LabeledPort` with `labelSlot={null}`
+   * for exactly this reason, the header-left function port never having
+   * room for a name either. A caller who genuinely needs labels IN the
+   * header band can still get them — supply a `portEdgeProps.renderItem` of
+   * their own (see the reach-past below, at the `<PortEdge>` call) and
+   * inset their own header content with `functionPortHeaderInsetPx()` to
+   * make room — but that is an opt-in, not the default, because one
+   * specimen having room to fit them is not the general case.
    */
   const renderItem: PortEdgeProps["renderItem"] = (item, ctx) =>
     plan.collapsed ? (
@@ -1139,6 +1156,13 @@ export function BlockPortRail({
           typeColor={item.typeColor}
           producers={item.producers}
           selected={item.selected}
+          // Header band: dot only, no label — see this function's own WHY
+          // above. `labelSlot={null}` (not omitting `children`) is what
+          // `BlockFunctionPort` already does for the same reason: it skips
+          // `LabeledPort`'s built-in `DefaultPortLabel` branch entirely
+          // (labeledPort.tsx's own `labelSlot !== undefined` gate) rather
+          // than rendering an empty editable field in its place.
+          labelSlot={plan.band === "header" ? null : undefined}
           // P-037. `LabeledPort`'s built-in label is click-to-edit by DEFAULT
           // (`DefaultPortLabel`'s `disabled = false`) and its `onLabelWrite` is
           // optional, so a rail whose host never wired one opened a real
@@ -1279,7 +1303,17 @@ export function BlockPortRail({
         distribution={plan.distribution}
         groups={plan.groups}
         groupMode={plan.groupMode}
-        renderItem={renderItem}
+        // `BlockEdgeSpec.portEdgeProps`'s own doc already claims `renderItem`
+        // is one of the reach-past overrides a caller can win with — before
+        // this it was a dead claim: the spread above lands first in the
+        // props object and this explicit prop always followed it, so a
+        // caller's own `renderItem` (e.g. one that wants LABELS drawn on a
+        // header-band rail, opting back out of this file's default above)
+        // was silently discarded. A caller's own function, when supplied,
+        // now wins outright — it replaces this component's fill entirely
+        // rather than being merged with it, the same all-or-nothing contract
+        // `PortEdge`'s own `renderItem` prop already has.
+        renderItem={spec.portEdgeProps?.renderItem ?? renderItem}
         renderCollapsed={renderCollapsed}
         dividerAfter={spec.dividerAfter}
         onDividerAfterChange={spec.onDividerAfterChange}
