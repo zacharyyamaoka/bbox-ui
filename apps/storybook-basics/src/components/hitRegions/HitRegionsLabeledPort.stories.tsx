@@ -5,6 +5,13 @@
  * the label's own rendered box, so it grows and shrinks with the text.
  * That asymmetry (one designed number, one accidental box) is the finding
  * this story exists to show.
+ *
+ * "Show host outline" (2026-09-22, the harness's shared overlay): each
+ * LabeledPort is one canvas node declared `port` (dragPolicy.ts — Zach's
+ * "The Port's text is now a real stock hit target … The circular dot
+ * deliberately remains the cable handle"). So the LABEL grabs the node and
+ * the host outlines it, while the dot's halo owns its press (dashed part
+ * outline, no node outline).
  */
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
@@ -18,6 +25,12 @@ import {
   HitProbe,
   PolicyControl,
   ZoomControl,
+  INLINE_NODE,
+  nodeRoot,
+  pointIn,
+  probeHost,
+  sameBox,
+  turnOnHostOutline,
   ZoomStage,
   hitTargetAt,
   type HitTarget,
@@ -26,7 +39,7 @@ import { effectiveHitValue, type HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
   title: "Components/Ports/LabeledPort/Hit Regions",
-  tags: ["object:port", "lane:baseline"],
+  tags: ["object:port", "lane:hit-regions-views"],
 } satisfies Meta;
 
 export default meta;
@@ -42,6 +55,7 @@ const STAGE_H = 150;
 
 function LabeledPortHitPlayground() {
   const [show, setShow] = useState(true);
+  const [outline, setOutline] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [policy, setPolicy] = useState<HitPolicy>("scene");
   const [hitPx, setHitPx] = useState(PORT_HIT_PX);
@@ -50,6 +64,7 @@ function LabeledPortHitPlayground() {
     <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         <Checkbox label="Show hit regions" checked={show} onChange={setShow} />
+        <Checkbox label="Show host outline" checked={outline} onChange={setOutline} />
         <ZoomControl zoom={zoom} onChange={setZoom} />
         <PolicyControl policy={policy} onChange={setPolicy} />
       </div>
@@ -62,30 +77,34 @@ function LabeledPortHitPlayground() {
         max={80}
         onChange={setHitPx}
       />
-      <HitProbe targets={TARGETS}>
+      <HitProbe targets={TARGETS} hostOutline={outline}>
         <ZoomStage zoom={zoom} width={STAGE_W} height={STAGE_H}>
           <div
             data-testid="labeled-row"
             style={{ display: "flex", gap: 120, alignItems: "center", padding: "60px 70px", width: STAGE_W, height: STAGE_H, boxSizing: "border-box" }}
           >
-            <LabeledPort edge="left" state="wired" diameter="md" textLayout="right" hitPx={effective} showHitRegion={show}>
-              value_data
-            </LabeledPort>
+            <div {...nodeRoot("port", INLINE_NODE)}>
+              <LabeledPort edge="left" state="wired" diameter="md" textLayout="right" hitPx={effective} showHitRegion={show}>
+                value_data
+              </LabeledPort>
+            </div>
             {/* Disabled twin: no click handler on its label, so no region
                 is painted there — the overlay refuses to show a target
                 that does not exist. */}
-            <LabeledPort
-              data-testid="disabled-port"
-              edge="left"
-              state="empty"
-              diameter="md"
-              textLayout="right"
-              disabled
-              hitPx={effective}
-              showHitRegion={show}
-            >
-              read_only
-            </LabeledPort>
+            <div {...nodeRoot("port", INLINE_NODE)}>
+              <LabeledPort
+                data-testid="disabled-port"
+                edge="left"
+                state="empty"
+                diameter="md"
+                textLayout="right"
+                disabled
+                hitPx={effective}
+                showHitRegion={show}
+              >
+                read_only
+              </LabeledPort>
+            </div>
           </div>
         </ZoomStage>
       </HitProbe>
@@ -150,5 +169,22 @@ export const Playground: Story = {
     await expect(slots()).toEqual(before);
     await expect(hitTargetAt(haloRect.left + 2, cy, TARGETS)?.label).toBe("port (dot + halo)");
     await fireEvent.click(canvas.getByLabelText("Show hit regions"));
+
+    // The host outline. The label grabs the node: the outline is the
+    // node's box (the LabeledPort's own root). The halo owns its press:
+    // dashed, on the halo's own box.
+    await turnOnHostOutline(canvasElement);
+    const stage = canvasElement.querySelector<HTMLElement>('[data-slot="hit-probe-stage"]')!;
+    const labelPoint = pointIn(label);
+    const onLabel = await probeHost(stage, labelPoint.x, labelPoint.y);
+    await expect(onLabel.top?.closest('[data-slot="port-label"]')).toBe(label);
+    await expect(onLabel.kind).toBe("node");
+    await expect(["port-label", "port-label-display"]).toContain(onLabel.via);
+    await expect(sameBox(onLabel.outline!, editable.getBoundingClientRect())).toBe(true);
+    const haloPoint = pointIn(halo);
+    const onHalo = await probeHost(stage, haloPoint.x - PORT_HIT_PX / 2 + 3, haloPoint.y);
+    await expect(onHalo.kind).toBe("part");
+    await expect(onHalo.outlineKind).toBe("part");
+    await expect(sameBox(onHalo.outline!, halo.getBoundingClientRect())).toBe(true);
   },
 };

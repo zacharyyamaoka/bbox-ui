@@ -2,6 +2,8 @@ import tailwindcss from "@tailwindcss/vite";
 import type { StorybookConfig } from "@storybook/react-vite";
 import { mergeConfig } from "vite";
 
+import { statusEndpointPlugin } from "./statusEndpoint.ts";
+
 /**
  * Now on the shadcn/Tailwind "stable floor" (Zach, 2026-09-16) — the
  * Tailwind v4 Vite plugin is the one thing this reset lineage adds beyond
@@ -28,7 +30,11 @@ const config: StorybookConfig = {
     // and the preview hangs forever on its loading spinner. Forcing these
     // into the optimizer sidesteps the scanner instead of fighting it.
     return mergeConfig(viteConfig, {
-      plugins: [tailwindcss()],
+      // WHY statusEndpointPlugin here too, not just tailwindcss: this
+      // config runs for EVERY `storybook dev` against this app — Zach's own
+      // review Storybook on :5421 included — so it's the one place that
+      // reaches all of them. See statusEndpoint.ts's own header.
+      plugins: [tailwindcss(), statusEndpointPlugin()],
       optimizeDeps: {
         include: ["react", "react/jsx-dev-runtime", "react-dom", "react-dom/client"],
       },

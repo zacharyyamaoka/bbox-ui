@@ -5,6 +5,14 @@
  * drag surface is each member's own DOM box. This story paints the port
  * halos INSIDE the rail via the `renderItem` seam — the same seam a host
  * would use — so nothing in portEdge.tsx itself had to change.
+ *
+ * "Show host outline" (2026-09-22, the harness's shared overlay): each port
+ * the rail lays out is one canvas node declared `port` (dragPolicy.ts), so a
+ * label outlines its own port and a halo owns its press. The rail and its
+ * member boxes carry NO declaration in dragPolicy.ts, so a press on the rail
+ * between ports resolves as `UNDECLARED_ROLE` (inert) and outlines nothing —
+ * reported as the rule stands, not papered over: in a real rail that box is
+ * dnd-kit's reorder surface.
  */
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
@@ -19,6 +27,12 @@ import {
   HitProbe,
   PolicyControl,
   ZoomControl,
+  INLINE_NODE,
+  nodeRoot,
+  pointIn,
+  probeHost,
+  sameBox,
+  turnOnHostOutline,
   ZoomStage,
   hitTargetAt,
   type HitTarget,
@@ -27,7 +41,7 @@ import { effectiveHitValue, type HitPolicy } from "../../scene/hitPolicy";
 
 const meta = {
   title: "Components/Ports/PortEdge/Hit Regions",
-  tags: ["object:port", "lane:baseline"],
+  tags: ["object:port", "lane:hit-regions-views"],
 } satisfies Meta;
 
 export default meta;
@@ -50,6 +64,7 @@ const STAGE_H = 400;
 function PortEdgeHitPlayground() {
   const [show, setShow] = useState(true);
   const [showCard, setShowCard] = useState(false);
+  const [outline, setOutline] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [policy, setPolicy] = useState<HitPolicy>("scene");
   const [hitPx, setHitPx] = useState(PORT_HIT_PX);
@@ -59,6 +74,7 @@ function PortEdgeHitPlayground() {
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
         <Checkbox label="Show hit regions" checked={show} onChange={setShow} />
         <Checkbox label="Show dnd-kit card" checked={showCard} onChange={setShowCard} />
+        <Checkbox label="Show host outline" checked={outline} onChange={setOutline} />
         <ZoomControl zoom={zoom} onChange={setZoom} />
         <PolicyControl policy={policy} onChange={setPolicy} />
       </div>
@@ -71,7 +87,7 @@ function PortEdgeHitPlayground() {
         max={80}
         onChange={setHitPx}
       />
-      <HitProbe targets={TARGETS}>
+      <HitProbe targets={TARGETS} hostOutline={outline}>
         <ZoomStage zoom={zoom} width={STAGE_W} height={STAGE_H}>
           <div style={{ padding: "40px 120px", width: STAGE_W, height: STAGE_H, boxSizing: "border-box" }}>
             <PortEdge
@@ -80,17 +96,19 @@ function PortEdgeHitPlayground() {
               showPorts
               showCard={showCard}
               renderItem={(item, ctx) => (
-                <LabeledPort
-                  edge="left"
-                  state={item.state ?? "empty"}
-                  diameter="md"
-                  textLayout={ctx.textLayout}
-                  disabled
-                  hitPx={effective}
-                  showHitRegion={show}
-                >
-                  {item.label}
-                </LabeledPort>
+                <div {...nodeRoot("port", INLINE_NODE)}>
+                  <LabeledPort
+                    edge="left"
+                    state={item.state ?? "empty"}
+                    diameter="md"
+                    textLayout={ctx.textLayout}
+                    disabled
+                    hitPx={effective}
+                    showHitRegion={show}
+                  >
+                    {item.label}
+                  </LabeledPort>
+                </div>
               )}
             />
           </div>
@@ -144,5 +162,21 @@ export const Playground: Story = {
     });
     await expect(slots()).toEqual(before);
     await fireEvent.click(canvas.getByLabelText("Show hit regions"));
+
+    // The host outline: a label outlines ITS port (not the rail, not a
+    // neighbour); the middle halo owns its press.
+    await turnOnHostOutline(canvasElement);
+    const stage = canvasElement.querySelector<HTMLElement>('[data-slot="hit-probe-stage"]')!;
+    const ports = Array.from(canvasElement.querySelectorAll<HTMLElement>('[data-slot="port-edge"] [data-slot="port"]'));
+    await expect(ports).toHaveLength(ITEMS.length);
+    const label = ports[1].querySelector<HTMLElement>('[data-slot="port-label"]')!;
+    const labelPoint = pointIn(label);
+    const onLabel = await probeHost(stage, labelPoint.x, labelPoint.y);
+    await expect(onLabel.kind).toBe("node");
+    await expect(sameBox(onLabel.outline!, ports[1].getBoundingClientRect())).toBe(true);
+    const haloPoint = pointIn(middle);
+    const onHalo = await probeHost(stage, haloPoint.x - PORT_HIT_PX / 2 + 3, haloPoint.y);
+    await expect(onHalo.kind).toBe("part");
+    await expect(sameBox(onHalo.outline!, middle.getBoundingClientRect())).toBe(true);
   },
 };

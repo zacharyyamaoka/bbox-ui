@@ -11,8 +11,7 @@
 // mapping. A third host imports this file and owns nothing but its
 // viewport.
 
-import { useRef, type ReactNode } from "react";
-import { CircleStop, RotateCw } from "lucide-react";
+import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { Badge } from "../components/badge";
 import { Bar } from "../components/bar";
@@ -20,14 +19,14 @@ import { Block } from "../components/block";
 import { BlockPort, type BlockEdgeSpec } from "../components/blockPort";
 import type { BlockMember } from "../components/blockMembers";
 import { CodeEditor } from "../components/codeEditor";
-import { FoldingChevron } from "../components/foldingChevron";
+import { ControlMark } from "../components/controlMark";
 import { Glyph } from "../components/glyph";
 import type { Diagnostic } from "../components/highlighter";
 import type { PortEdgeItem } from "../components/portEdge";
 import type { Distribution } from "../components/portEdge.layout";
 import type { BlockSide } from "../components/port.layout";
-import { BlockRegion, type RegionArm } from "../components/blockRegion";
-import { REGION_CARD_WIDTH_PX, REGION_CORNER_WIDTH_PX } from "../components/blockRegion.layout";
+import { BlockRegion, type RegionArm, type RegionCornerCard, type RegionPoint } from "../components/blockRegion";
+import { REGION_CORNER_WIDTH_PX } from "../components/blockRegion.layout";
 import { portViewSlotCount, railBandHeightForSlots, resolveBlockHeight } from "../scene/fitToContent";
 import { ValueCapsule } from "../components/block.value";
 import { armsOf, bodyChildrenOf, describeHidden, hiddenSummary } from "../scene/controlFlow";
@@ -38,8 +37,9 @@ import { childrenOf, portKey, type SceneNode, wiredPorts } from "../scene/scene"
 import { withWiredState } from "../scene/sceneWires";
 import { useAutoFitHeight } from "./blockAutoFit";
 import { type HostNodeData, type HostScene } from "./hostScene";
+import { FrameNodeView } from "./frameNodeView";
 import { useFreeMemberDrag, type UseFreeMemberDragResult } from "./memberDrag";
-import { regionViewOf, toggleRegionView } from "./regionScene";
+import { regionFaceOf, toggleRegionView } from "./regionScene";
 
 /**
  * The story-lane decoration seam (2026-09-18, "final spec" lane, D7's
@@ -67,6 +67,17 @@ export interface SceneNodeDecoration {
   availability?: Readonly<Record<string, "available" | "unavailable">>;
   /** Per-port diagnostics, same per-node key shape as `availability`. */
   portDiagnostics?: Readonly<Record<string, Diagnostic[]>>;
+  /** A region's wall-crossing markers, frame-local — forwarded to
+   *  `BlockRegion.crossings`. Host glue computes them
+   *  (`hosts/regionCrossings.ts` over the host's own drawn polylines),
+   *  because the frame's box and the cable's route are both measured facts
+   *  no single node owns. Ignored on anything but a region. */
+  crossings?: readonly RegionPoint[];
+  /** Host-set port selection, by port id — forwarded to each port item's
+   *  `selected`. A story that wires the Delete key to `deleteWithLinks`
+   *  (scene/links.ts) selects a wall port through this. ADDED 2026-09-22,
+   *  lane `frame-auto-port-edges`; absent = nothing selected, as before. */
+  selectedPorts?: readonly string[];
 }
 
 /** `undefined` for a node this decorator has no opinion on — same
@@ -189,13 +200,54 @@ export interface SceneNodeViewProps {
 /* ------------------------------------------------------------------ */
 
 /**
+ * What a free member's drag surface must NOT claim: a press on a button
+ * INSIDE the member.
+ *
+ * WHY: the surface wraps the member's whole face and `beginDrag` takes
+ * pointer capture on it, and capture retargets the pointerup — so the
+ * browser dispatches the `click` to the surface, never to the button that
+ * was pressed (trusted input, measured 2026-09-22: `pointerdown -> svg`,
+ * `gotpointercapture -> block-member-drag-handle`, `click ->
+ * block-member-drag-handle`). Every fold chevron, and the Blackbox toggle,
+ * of a region that is itself a member (a branch in a loop body, a branch in
+ * an arm) was dead in all three hosts. Found while answering Zach,
+ * 2026-09-21: "Currently in regions - I seem to be able to drag the children
+ * inside but not the things on the outside? why?"
+ *
+ * `button` and nothing wider, on purpose. A button's click is its whole job
+ * - the arm chevrons and the Blackbox toggle are all buttons, and the arm's
+ * carries no other marker. Rejected: `stopPropagation` inside each control
+ * (fixes one, leaves the next one captured). Deliberately NOT here: the port
+ * rail - a press on a member's port text still starts BOTH the member drag
+ * and the rail's reorder, but which one should win is dragPolicy.ts's open
+ * "port text grabs" rule (Zach's DP - Port), not a bug fix; and a rail veto
+ * would take a top-port member's header away (its top rail covers the
+ * header's middle). Nor `POINTER_OWNED_CLASS` - honoring it would leave a
+ * code member (a wall-to-wall editor) with no grab surface at all; hosts
+ * give top-level code a grab ring, members have none.
+ */
+const MEMBER_DRAG_VETO = "button";
+
+function pressOwnedInside(event: ReactPointerEvent<HTMLElement>): boolean {
+  const owner = (event.target as Element).closest(MEMBER_DRAG_VETO);
+  // Found from the TARGET, not the surface, so every enclosing member's
+  // surface (a member region inside a member region) refuses the same press
+  // too; `contains` keeps a button OUTSIDE this member from counting.
+  return owner !== null && event.currentTarget.contains(owner);
+}
+
+/**
  * One free-layout member: its live (dragging) position plus the bounded
  * drag surface `POINTER_OWNED_CLASS` keeps the canvas out of. Extracted
  * when the region renderer landed rather than copied — a second copy of
  * this wrapper is how the two would drift into dragging differently, and
  * the marker/stopPropagation pair is exactly the part that must not.
  */
-function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResult, content: ReactNode): BlockMember {
+// Exported 2026-09-22 (lane `frame-auto-port-edges`): `frameNodeView.tsx`
+// renders a frame's free members through this SAME wrapper, for exactly the
+// reason the comment above gives — a second copy is how two node kinds
+// would drift into dragging differently.
+export function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResult, content: ReactNode): BlockMember {
   const live = drag.liveFor(kid.id, kid.position);
   return {
     id: kid.id,
@@ -213,7 +265,10 @@ function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResul
         // already both honor, with zero per-host code added for it.
         className={POINTER_OWNED_CLASS}
         style={{ width: "max-content", cursor: drag.draggingId === kid.id ? "grabbing" : "grab", touchAction: "none" }}
-        onPointerDown={drag.beginDrag(kid.id, kid.position)}
+        onPointerDown={(event) => {
+          if (pressOwnedInside(event)) return;
+          drag.beginDrag(kid.id, kid.position)(event);
+        }}
         onPointerMove={drag.onPointerMove}
         onPointerUp={drag.onPointerUp}
         onPointerCancel={drag.onPointerCancel}
@@ -238,7 +293,7 @@ function freeMemberOf(kid: SceneNode<HostNodeData>, drag: UseFreeMemberDragResul
  * here would be a second place for the rule to drift; the host's job is to
  * say what the scene says.
  */
-function withProducers(items: PortEdgeItem[], nodeId: string, producers: ReadonlyMap<string, number> | undefined): PortEdgeItem[] {
+export function withProducers(items: PortEdgeItem[], nodeId: string, producers: ReadonlyMap<string, number> | undefined): PortEdgeItem[] {
   if (!producers || producers.size === 0) return items;
   return items.map((item) => {
     const count = producers.get(portKey(nodeId, item.id));
@@ -273,8 +328,18 @@ function edgeSpecsOf(
                 // every edit event already calls it (hostScene.ts's
                 // `portLabels`).
                 label: node.data.portLabels?.[id] ?? id,
+                // `portTypes` is deliberately NOT painted here (hostScene.ts:
+                // "Data only — nothing in this family paints it yet"), and
+                // `PyblocksScene.stories.tsx` pins a block rail's label as the
+                // bare name. A FRAME's walls paint the type (`frameNodeView.
+                // tsx`, Zach's "port Pose"); a block's rails wait for the
+                // Block-on-Frame fold (docs/FRAME-PLAN.md §3.1).
                 availability: decoration?.availability?.[id],
                 diagnostics: decoration?.portDiagnostics?.[id],
+                // ADDED 2026-09-22 (lane `frame-auto-port-edges`): host-set port
+                // selection, `undefined` (byte-identical) unless a decorator
+                // names this port.
+                selected: decoration?.selectedPorts?.includes(id) || undefined,
               }),
             ),
             node.id,
@@ -332,20 +397,6 @@ function withPromotedPorts(
     merged[port.side] = { ...spec, items: [...(spec?.items ?? []), ...item], onItemsChange: undefined };
   }
   return merged;
-}
-
-/** A control-exit mark: DP - Break & Continue, B5 — "a mark beside the
- *  call, never a cable". Drawn as a `Badge`, and deliberately given NO port
- *  and NO edge: `expectControlMark` asserts no wire may originate at one,
- *  which only stays true because nothing here ever mints a handle for it. */
-function ControlMark({ mark }: { mark: NonNullable<HostNodeData["marks"]>[number] }) {
-  return (
-    <Badge data-slot="control-mark" data-mark={mark} size="sm" variant="outline">
-      {mark === "break" && <CircleStop aria-hidden />}
-      {mark === "continue" && <RotateCw aria-hidden />}
-      {mark}
-    </Badge>
-  );
 }
 
 /**
@@ -477,7 +528,6 @@ function BlockNodeView({ scene, node, wired, producers, onSceneChange, decorate,
 function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate, regionViews }: SceneNodeViewProps) {
   const decoration = decorate?.(node);
   const region = node.data.region ?? { kind: "group" as const };
-  const view = regionViewOf(node);
   // Present only for an OUTERMOST opaque region — `projectOpaqueRegions`
   // gives a region nested inside another opaque one no card of its own,
   // because it is not on screen (regionView.ts's outermost-wins rule).
@@ -504,7 +554,26 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
       />,
     );
 
-  const opaque = view === "opaque";
+  // WHY the scene's two fields map onto BlockRegion's three views this way
+  // (Zach, 2026-09-22: "regions do not have a simple view. they just have
+  // port, expanded and expanded opaque view"): `presentation` is the P/E
+  // selector and wins outright — Port is the region collapsed to a block,
+  // what the old opaque card used to be. Inside Expanded, `view` is the
+  // Blackbox toggle: `"opaque"` draws the SAME frame at the SAME size with
+  // the members hidden (`opaqueFace="frame"`), never a smaller card, because
+  // "blackbox makes opaque without folding". Both hide the inside, so both
+  // take the projection's promoted ports (`isOpaqueRegion`).
+  const face = regionFaceOf(node);
+  const hidesInside = face !== "expanded";
+
+  // The region's walls: its OWN interface, plus — while its inside is hidden
+  // — one seat per promoted port on the side `promoteBoundary` decided. "The
+  // opaque card is the same block with more ports" (plan §5), literally: the
+  // same `edgeSpecsOf` builder, the same rails, the same dot DOM, one extra
+  // item per hidden endpoint.
+  const ownEdges = edgeSpecsOf(scene, node, wired, producers, onSceneChange, decoration);
+  const cardEdges = withPromotedPorts(ownEdges, node.id, hidesInside ? projected?.ports : undefined, wired, producers);
+
   // WHY the corner card is given a BODY sized by the rail band, instead of
   // being left to hug its header: `BlockPort` places a port-view rail
   // against the Block's BODY band, and that band is measured as
@@ -517,72 +586,61 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
   // REAL `railBoxFor`), so this is the stock number rather than a guess —
   // and an empty `slots` leaves `body` undefined, keeping a portless
   // region's card byte-identical to a plain hugging Block.
-  // The card's walls: the region's OWN interface, plus — while opaque — one
-  // seat per promoted port on the side `promoteBoundary` decided. "The
-  // opaque card is the same block with more ports" (plan §5), literally:
-  // the same `edgeSpecsOf` builder, the same rails, the same dot DOM, one
-  // extra item per hidden endpoint.
-  const cardEdges = withPromotedPorts(
-    edgeSpecsOf(scene, node, wired, producers, onSceneChange, decoration),
-    node.id,
-    opaque ? projected?.ports : undefined,
-    wired,
-    producers,
-  );
   const cornerSlots = portViewSlotCount({
-    leftCount: cardEdges.left?.items.length ?? 0,
-    rightCount: cardEdges.right?.items.length ?? 0,
+    leftCount: ownEdges.left?.items.length ?? 0,
+    rightCount: ownEdges.right?.items.length ?? 0,
     portLayout: "inline",
   });
-  const corner = (
-    <BlockPort id={node.id} view="port" edges={cardEdges}>
-      <Block
-        header={
-          // WHY the chevron rides the corner card's own header in BOTH
-          // views, in the SAME slot: the donor does exactly that
-          // (pyblocks `viewer/nodes/RegionInterface.tsx:80` puts the fold
-          // control in one slot expanded and collapsed), and it is what
-          // makes the toggle discoverable from the card you are looking
-          // at — an opaque card whose only affordance lived on the frame
-          // could never be re-expanded, because the frame is what the
-          // opaque view removes.
-          <Bar
-            size="md"
-            left={
-              <FoldingChevron
-                open={!opaque}
-                onClick={() => onSceneChange?.(toggleRegionView(scene, node.id))}
-                aria-label={opaque ? "Expand region" : "Collapse region"}
-                // POINTER_OWNED_CLASS: a canvas host must not start a node
-                // drag on this press. React Flow's `nodeDragThreshold` would
-                // otherwise swallow the click as the first 4px of a drag on
-                // the header, which IS the region's drag handle
-                // (`DRAG_HANDLE_FOR_TYPE`) — the toggle would work in the
-                // DOM host and silently do nothing on a canvas.
-                className={POINTER_OWNED_CLASS}
-              />
-            }
-            center={node.data.name}
-            right={headerChipsOf(node)}
-          />
-        }
-        width={opaque ? REGION_CARD_WIDTH_PX : REGION_CORNER_WIDTH_PX}
-        body={cornerSlots > 0 ? <div data-slot="region-corner-band" style={{ height: railBandHeightForSlots(cornerSlots) }} /> : undefined}
-        // P5's "a card whose footer states what it hides", measured off the
-        // scene by `hiddenSummary` — never a narrated sentence. The
-        // projection's own count is preferred (it was computed against the
-        // same scene the painted edges came from); `hiddenSummary` is the
-        // fallback for a bench that renders an opaque region without
-        // running the projection at all.
-        footer={opaque ? <span data-slot="region-hidden">{describeHidden(projected?.hidden ?? hiddenSummary(scene, node.id))}</span> : undefined}
-        // Expanded only: the corner's junctions with the frame go square so
-        // the card reads as PART of the frame (block.tsx's `BlockShape` WHY).
-        // An opaque card is a free-standing card again and keeps its radius.
-        shape={opaque ? "card" : "region-corner"}
-        diagnostics={decoration?.diagnostics}
-      />
-    </BlockPort>
-  );
+  // WHY no chevron on this header any more (Zach, 2026-09-22): "Please do
+  // not put chevron drop downs on the regions." and "the blackbox toggle
+  // goes in the right corner. your chevron was in the left next to the
+  // title, they are completely different operations as well... chevron
+  // folds, blackbox makes opaque without folding." The region's view now
+  // changes through BlockRegion's Blackbox toggle (top-right of the frame)
+  // and the host's P/E selector; the header is the plain block header every
+  // node gets. The arms keep their own fold chevrons — those fold one arm,
+  // not the region.
+  //
+  // WHY the corner goes in as DATA (`cornerCard`) and not as a rendered
+  // `corner` node (Codex re-judge, 2026-09-22): BlockRegion renders a data
+  // card itself, so it can also mount a hidden, id-free copy of it to size
+  // Expanded Opaque when the region is loaded straight into it — it never
+  // clones caller-rendered content, which could carry a portal. BlockRegion
+  // draws it as the same `BlockPort id={node.id}` around a Block with
+  // `shape="region-corner"` (the corner's junctions with the frame go
+  // square so the card reads as PART of the frame, block.tsx's `BlockShape`
+  // WHY).
+  // The header as TEXT plus chips as DATA, not `headerOf(node)`'s node: the
+  // corner is measured by a hidden copy, which may only render primitive
+  // text (`RegionCornerProps`). BlockRegion draws the chips with the same
+  // Bar / Badge / ControlMark `headerOf` uses.
+  const cornerCard: RegionCornerCard = {
+    header: node.data.name ?? "",
+    chips: { badge: node.data.badge, marks: node.data.marks },
+    width: REGION_CORNER_WIDTH_PX,
+    edges: ownEdges,
+    ...(cornerSlots > 0 ? { bandHeight: railBandHeightForSlots(cornerSlots) } : null),
+    diagnostics: decoration?.diagnostics,
+  };
+
+  // The Port card and the Expanded Opaque face draw their own walls from
+  // BlockRegion's two port lists: the region's own LEFT ports are its
+  // control ports (a loop's `Iterable`), boxed above the split; its own
+  // RIGHT ports lead the right wall, then every promoted seat on its side.
+  // So each wall reads exactly as the old card's did — own interface first,
+  // promoted seats after — and a port never changes wall between views.
+  const ownLeftCount = ownEdges.left?.items.length ?? 0;
+  const controlPorts = cardEdges.left?.items.slice(0, ownLeftCount) ?? [];
+  const boundaryPorts = {
+    left: cardEdges.left?.items.slice(ownLeftCount) ?? [],
+    right: cardEdges.right?.items ?? [],
+  };
+  // P5's "a card whose footer states what it hides", measured off the scene
+  // by `hiddenSummary` — never a narrated sentence. The projection's own
+  // count is preferred (it was computed against the same scene the painted
+  // edges came from); `hiddenSummary` is the fallback for a bench that
+  // renders an opaque region without running the projection at all.
+  const hiddenFooter = <span data-slot="region-hidden">{describeHidden(projected?.hidden ?? hiddenSummary(scene, node.id))}</span>;
 
   const arms: RegionArm[] = armsOf(scene, node.id).map((arm) => ({
     id: arm.id,
@@ -605,12 +663,28 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
     <BlockRegion
       id={node.id}
       kind={region.kind}
-      view={view}
-      corner={corner}
+      view={face}
+      opaqueFace="frame"
+      title={node.data.name ?? node.id}
+      controlPorts={controlPorts}
+      boundaryPorts={boundaryPorts}
+      hiddenFooter={hiddenFooter}
+      // The P/E selector leaves Port; the toggle only flips Expanded ⇄
+      // Expanded Opaque, so BlockRegion draws it in exactly those two.
+      onToggleView={onSceneChange ? () => onSceneChange(toggleRegionView(scene, node.id)) : undefined}
+      // POINTER_OWNED_CLASS: a canvas host must not start a node drag on
+      // this press. On tldraw the region's whole face is the drag surface,
+      // and on React Flow the Expanded Opaque face is (`OwnDragHandleMarker`)
+      // — without the marker the press becomes the first pixels of a region
+      // drag, and the toggle works in the DOM host and silently does nothing
+      // on a canvas.
+      toggleClassName={POINTER_OWNED_CLASS}
+      cornerCard={cornerCard}
       {...(node.data.w === undefined ? null : { width: node.data.w })}
       {...(node.data.h === undefined ? null : { height: node.data.h })}
       members={bodyChildrenOf(scene, node.id).map(memberViewOf)}
       arms={arms}
+      crossings={decoration?.crossings}
     />
   );
 }
@@ -661,6 +735,11 @@ export function SceneNodeView(props: SceneNodeViewProps): ReactNode {
       );
     case "region":
       return <RegionNodeView {...props} />;
+    case "frame":
+      // ADDED 2026-09-22 (lane `frame-auto-port-edges`): the Frame substrate
+      // as a node of its own — `hosts/frameNodeView.tsx`, which composes the
+      // same helpers this file exports (`freeMemberOf`, `withProducers`).
+      return <FrameNodeView {...props} />;
     case "block":
     default:
       return <BlockNodeView {...props} />;

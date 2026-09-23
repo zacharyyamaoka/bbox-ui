@@ -33,6 +33,7 @@ import { BRANCH_TOOL_ID, LOOP_TOOL_ID } from "../types";
 import { BranchTool } from "./BranchTool";
 import { installRegionKit } from "./cornerBlock";
 import { LoopTool } from "./LoopTool";
+import { RegionAwareShapeIndicatorOverlayUtil } from "./regionHoverIndicator";
 import { RegionShapeUtil } from "./RegionShapeUtil";
 
 export { RegionShapeUtil, type RegionArm, type RegionKind, type RegionShape, type RegionShapeProps } from "./RegionShapeUtil";
@@ -44,6 +45,7 @@ export {
   cornerBlockOf,
   createCornerBlock,
   installRegionKit,
+  isRegionCornerBlock,
   isRegionPlaceholder,
   reconcileRegionProps,
   regionHugHeightOf,
@@ -62,6 +64,9 @@ export const regionKit: ShapeKit = {
   // block, and a frame must follow the card it hugs once that card has
   // measured itself. Full reasoning in `./cornerBlock`'s `installRegionKit`.
   install: installRegionKit,
+  // Hovering a corner card outlines the whole region — a PAINT swap, not a
+  // record rewrite; the full WHY is in ./regionHoverIndicator.
+  overlayUtils: [RegionAwareShapeIndicatorOverlayUtil],
   // Two more rows of the ONE system family, after Block, Code and Port. No
   // `shortcutHint` on either: the dock renders the hint as TEXT inside the row
   // (toolDock.tsx's `DropdownMenuShortcut`), and neither construct has a

@@ -57,8 +57,9 @@
  * `Block` stays a stock seam this file composes from the outside, never a
  * file this one edits.
  */
-import type { CSSProperties, ReactNode, RefObject } from "react";
-import { useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties, ReactElement, ReactNode, RefObject } from "react";
+import { cloneElement, isValidElement, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { Diagnostic } from "./highlighter";
 // The visual-variant registry (lane `ports`, 2026-09-19): pinned per
@@ -66,13 +67,15 @@ import type { Diagnostic } from "./highlighter";
 import type { PortVariantId } from "../skin/portVariants";
 import { LabeledPort } from "./labeledPort";
 import { Port, type PortState } from "./port";
-import { BLOCK_SIDES, type BlockSide, type PortSize } from "./port.layout";
+import { BLOCK_SIDES, PORT_RING_OVERHANG_PX, type BlockSide, type PortSize } from "./port.layout";
 import { PortEdge, type PortEdgeGroupMode, type PortEdgeItem, type PortEdgeProps } from "./portEdge";
 import type { Distribution } from "./portEdge.layout";
 import {
   PORT_EDGE_SLOT_MIN_PX,
   RAIL_CROSS_PX,
+  floorMinHeight,
   functionPortCenterPx,
+  minBlockHeightFor,
   railAxisFor,
   railBoxFor,
   railPlanFor,
@@ -82,6 +85,23 @@ import {
   type RailPlan,
 } from "./blockPort.layout";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
+import { MutationLineMark, SideEffectDivider } from "./sideEffectMarks";
+import {
+  SIDE_EFFECT_DIVIDER_PX,
+  hasSideEffects,
+  mutationRoute,
+  partitionMutations,
+  sideEffectWallLayout,
+  type BlockSideEffects,
+  type MutationLink,
+  type MutationRoute,
+  type SideEffectDirection,
+  type SideEffectPort,
+} from "./sideEffects.layout";
+import { sanitizeDividers } from "./returnDividers";
+import { ReturnDividerMark } from "./returnDividerMarks";
+
+export type { BlockSideEffects, MutationLink, SideEffectDirection, SideEffectPort } from "./sideEffects.layout";
 
 export type { BlockPortLayout, BlockView } from "./blockPort.layout";
 // D-5: the header-content inset a caller applies to its OWN header (see
@@ -138,6 +158,22 @@ export interface BlockEdgeSpec {
    * a caller legitimately needs to win.)
    */
   portEdgeProps?: Partial<PortEdgeProps>;
+  /**
+   * "Multiple returns" (Daily Note 2026-09-22): DIVIDER positions between
+   * this edge's ports — see `./returnDividers.ts`'s own doc for the model
+   * (`sanitizeDividers`: a divider is only ever interior) and for
+   * `railForReturnAnnotation`, the union-return-type -> `items` +
+   * `dividerAfter` translation the standalone-block stories use to build
+   * this from a real Python signature.
+   *
+   * Forwarded to the underlying `PortEdge` (so the SAME multi-line lane can
+   * author it — typing `---`/`|`) AND read directly by this wrapper to draw
+   * the mark itself (`BlockPortReturnDividers` below); `PortEdge` has no
+   * `view` of its own, so it can format/reconcile the text but never draws
+   * the Expanded-vs-Port-view mark.
+   */
+  dividerAfter?: number[];
+  onDividerAfterChange?(next: number[]): void;
 }
 
 export interface BlockPortProps {
@@ -191,6 +227,28 @@ export interface BlockPortProps {
    * small pair); set it to pin this block, as the variant gallery does.
    */
   variant?: PortVariantId;
+  /**
+   * Side-effect ports (./sideEffects.layout.ts) — drawn ON the top wall,
+   * inputs left of a centre divider tick and outputs right of it. Omit (the
+   * normal case) and nothing on the top wall changes: no divider, no row.
+   *
+   * WHY a sibling of `edges` and not a fifth `edges` key or a `top` rail:
+   * a side effect is not an ordinary top-wall port. Its seat is a rule
+   * about DIRECTION (Zach, 2026-09-22: "Splits down the middle… put it
+   * towards the back end"), not a `PortEdge` distribution a caller could
+   * reorder or respace, and the divider between the two halves is not
+   * something a `PortEdge` rail knows how to draw. Keyed by direction for
+   * the same reason `edges` is keyed by side (see `BlockSideEffects`).
+   */
+  sideEffects?: BlockSideEffects;
+  /**
+   * "This input is mutated and leaves through that output side effect" —
+   * each drawn as a dotted line INSIDE the block, from the input port's
+   * dot (a `left`-wall item) to the output effect's dot. A link that names
+   * anything else is not drawn, and its `from→to` is listed on this
+   * wrapper's `data-unresolved-mutations`.
+   */
+  mutations?: readonly MutationLink[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -245,17 +303,33 @@ function useBlockBands(wrapperRef: RefObject<HTMLDivElement | null>, layoutKey: 
         return;
       }
       const wrapperRect = wrapper.getBoundingClientRect();
+      // WHY divided by the wrapper's own scale (lane frame-auto-port-edges,
+      // measured 2026-09-22): `getBoundingClientRect` reports SCREEN px, but
+      // the rails these bands position are laid out in the wrapper's own px.
+      // Under a host's viewport transform (React Flow at zoom 2) the raw
+      // reading put a 160-wide block's right rail 160 node-px outside the
+      // block and its bottom ports 100 node-px below it — outside the frame
+      // that contained it, and past the pane's edge, where a connect drag
+      // from that port auto-panned the canvas. At zoom 1 (every story that
+      // predates this) the ratio is 1 and nothing changes. Same recipe as
+      // `hosts/reactFlowHost.tsx`'s `measurePortDots` and `frame.tsx`'s
+      // `useFrameBox`. Both widths must be positive: under tldraw's html
+      // layer the wrapper's rect reads 0 wide for one layout while its
+      // offsetWidth is already real (measured: rectW 0, offsetW 62), and a
+      // 0 scale would turn every band into NaN — the anchors the tldraw
+      // host sighted off those rails then sat 58px off their dots for good.
+      const scale = wrapper.offsetWidth > 0 && wrapperRect.width > 0 ? wrapperRect.width / wrapper.offsetWidth : 1;
       const blockRect = block.getBoundingClientRect();
       const header = block.querySelector<HTMLElement>(':scope > [data-slot="block-header"]');
       const footer = block.querySelector<HTMLElement>(':scope > [data-slot="block-footer"]');
       const next: BlockBands = {
-        blockLeft: blockRect.left - wrapperRect.left,
-        blockTop: blockRect.top - wrapperRect.top,
-        blockWidth: blockRect.width,
-        blockHeight: blockRect.height,
-        bodyTop: (header ? header.getBoundingClientRect().bottom : blockRect.top) - wrapperRect.top,
-        bodyBottom: (footer ? footer.getBoundingClientRect().top : blockRect.bottom) - wrapperRect.top,
-        headerTop: header ? header.getBoundingClientRect().top - wrapperRect.top : undefined,
+        blockLeft: (blockRect.left - wrapperRect.left) / scale,
+        blockTop: (blockRect.top - wrapperRect.top) / scale,
+        blockWidth: blockRect.width / scale,
+        blockHeight: blockRect.height / scale,
+        bodyTop: ((header ? header.getBoundingClientRect().bottom : blockRect.top) - wrapperRect.top) / scale,
+        bodyBottom: ((footer ? footer.getBoundingClientRect().top : blockRect.bottom) - wrapperRect.top) / scale,
+        headerTop: header ? (header.getBoundingClientRect().top - wrapperRect.top) / scale : undefined,
       };
       setBands((prev) => (sameBands(prev, next) ? prev : next));
     };
@@ -347,6 +421,8 @@ export function BlockPort({
   id,
   functionPort = false,
   variant,
+  sideEffects,
+  mutations,
 }: BlockPortProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const collapse = collapsePorts ?? view === "simple";
@@ -363,12 +439,81 @@ export function BlockPort({
   // `outputStart = slot + inputs.length`, i.e. the INPUT count).
   const leadCount = edges.left?.items.length ?? 0;
 
+  // The floor the walls' ports impose (`minBlockHeightFor`), from the
+  // MEASURED header/footer bands and the same plan the rails are placed
+  // with. Handed to the Block as a CSS `min-height`, so an authored or
+  // stored `height` that is too short renders clamped UP and every other
+  // height is untouched.
+  //
+  // WHY: Zach, 2026-09-22 — "Please enforce a minimum height on the blocks
+  // … that can be calculated from the minimum port spacing. You should never
+  // have a rendering issue like this", on a port hanging below its block.
+  // WHY here, once, rather than in each host: every host (DOM canvas, React
+  // Flow node, tldraw bench, the SystemSketch app's `ss-block`) mounts its
+  // Block inside a `BlockPort`, and this is the one place that already
+  // knows both the walls and the measured bands. WHY `min-height` and not a
+  // replaced `height`: a floor RAISES a short box and leaves a taller one
+  // alone (`resolveBlockHeight`'s own rule) — a deliberately tall block is
+  // never "corrected". Growing the box is the truthful-rendering answer;
+  // clipping or overlapping the ports is not.
+  //
+  // Depends only on header/footer, never on the Block's own height, so the
+  // clamp cannot feed back into itself: measure → floor → grow → re-measure
+  // yields the same floor.
+  const floorPx = bands
+    ? minBlockHeightFor({
+        view,
+        portLayout,
+        collapsePorts: collapse,
+        ports: Object.fromEntries(BLOCK_SIDES.map((side) => [side, edges[side]?.items.length ?? 0])),
+        distributions: Object.fromEntries(
+          BLOCK_SIDES.flatMap((side) => (edges[side]?.distribution ? [[side, edges[side]!.distribution!]] : [])),
+        ),
+        headerPx: bands.bodyTop - bands.blockTop,
+        footerPx: bands.blockTop + bands.blockHeight - bands.bodyBottom,
+      })
+    : 0;
+  // `cloneElement` adds ONE style key to the caller's own element and
+  // changes nothing else about it — `children` stays "composed, never rebuilt
+  // from props" (`BlockPortProps.children`). `Block` spreads its caller's
+  // `style` last, so this lands on its root.
+  const floored =
+    floorPx > 0 && isValidElement<{ style?: CSSProperties }>(children)
+      ? cloneElement(children as ReactElement<{ style?: CSSProperties }>, {
+          // Never LOWER a caller's own larger `minHeight` — the floor only
+          // ever raises (`floorMinHeight`).
+          style: {
+            ...(children.props as { style?: CSSProperties }).style,
+            minHeight: floorMinHeight((children.props as { style?: CSSProperties }).style?.minHeight, floorPx),
+          },
+        })
+      : children;
+
+  const mutationSplit = partitionMutations(
+    mutations,
+    sideEffects,
+    (edges.left?.items ?? []).map((item) => item.id),
+  );
+
+  // "Multiple returns": every populated edge that carries at least one
+  // sanitized divider position, gathered once here so
+  // `BlockPortReturnDividers` never has to re-derive `populated` or reach
+  // back into `edges` itself.
+  const returnDividerEdges = populated
+    .map((side) => {
+      const spec = edges[side]!;
+      const sanitized = sanitizeDividers(spec.dividerAfter ?? [], spec.items.length);
+      return sanitized.length > 0 ? { edge: side, dividerAfter: sanitized } : null;
+    })
+    .filter((entry): entry is { edge: BlockSide; dividerAfter: number[] } => entry != null);
+
   return (
     <div
       data-slot="block-port"
       data-view={view}
       data-port-layout={portLayout}
       data-block-id={id}
+      data-unresolved-mutations={mutations ? mutationSplit.unresolved.map((link) => `${link.from}→${link.to}`).join(",") : undefined}
       ref={wrapperRef}
       // The isolation invariant (paintOrder.ts): this wrapper emits the
       // `portDot` tier below (the function port and every rail), so it
@@ -376,7 +521,7 @@ export function BlockPort({
       // Block's own root.
       style={{ ...ISOLATED_ROOT_STYLE, position: "relative", width: "max-content" }}
     >
-      {children}
+      {floored}
       {bands &&
         populated.map((side) => {
           const spec = edges[side]!;
@@ -404,7 +549,448 @@ export function BlockPort({
           return <BlockPortRail key={side} edge={side} spec={spec} plan={finalPlan} bands={bands} diameter={diameter} variant={variant} />;
         })}
       {bands && functionPort && <BlockFunctionPort bands={bands} diameter={diameter} variant={variant} />}
+      {bands && hasSideEffects(sideEffects) && <BlockSideEffectRail effects={sideEffects!} bands={bands} diameter={diameter} variant={variant} />}
+      {bands && mutationSplit.resolved.length > 0 && (
+        <MutationLines wrapperRef={wrapperRef} links={mutationSplit.resolved} bands={bands} measureKey={layoutKey} />
+      )}
+      {bands && returnDividerEdges.length > 0 && (
+        <BlockPortReturnDividers wrapperRef={wrapperRef} view={view} bands={bands} edgeSpecs={returnDividerEdges} measureKey={layoutKey} />
+      )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Side effects — the top wall's own row                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every side-effect dot and the divider tick, on the Block's top border
+ * line. Positions come from `sideEffectWallLayout` alone.
+ *
+ * WHY this element is stamped `data-slot="block-port-rail"` +
+ * `data-edge="top"` although it is not a `PortEdge`: that pair is the
+ * kit's one published answer to "which wall is this dot on", and three
+ * readers already ask it — `wireLayer.tsx`'s `railEdgeOf` (a wire leaves
+ * or arrives along the wall's normal), `hosts/portDotSightings.ts`, and
+ * the drag policy's `"block-port-rail": "owns-pointer"`. Stamped, an
+ * effect dot is wireable, host-resolvable and pointer-owning with zero
+ * code in any of them. `data-rail-kind` is what tells the two kinds of
+ * top-wall row apart for anyone who needs to.
+ *
+ * WHY it paints at `portDot`, above the Block, like every rail: the dots
+ * straddle the border and the labels and divider sit wholly OUTSIDE it,
+ * so inside the Block's `overflow: clip` card they would be cut in half
+ * or vanish, and under the header chrome they would not be hittable.
+ */
+function BlockSideEffectRail({
+  effects,
+  bands,
+  diameter,
+  variant,
+}: {
+  effects: BlockSideEffects;
+  bands: BlockBands;
+  diameter?: PortSize;
+  variant?: PortVariantId;
+}) {
+  const inputs = effects.inputs ?? [];
+  const outputs = effects.outputs ?? [];
+  const layout = sideEffectWallLayout(bands.blockWidth, inputs.length, outputs.length);
+  return (
+    <div
+      data-slot="block-port-rail"
+      data-edge="top"
+      data-rail-kind="side-effects"
+      style={{ position: "absolute", left: bands.blockLeft, top: bands.blockTop, width: bands.blockWidth, height: 0, zIndex: paintTier("portDot") }}
+    >
+      <SideEffectDivider x={layout.dividerX} />
+      {inputs.map((effect, index) => (
+        <SideEffectDot key={effect.id} effect={effect} direction="input" x={layout.inputXs[index]} diameter={diameter} variant={variant} />
+      ))}
+      {outputs.map((effect, index) => (
+        <SideEffectDot key={effect.id} effect={effect} direction="output" x={layout.outputXs[index]} diameter={diameter} variant={variant} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One side-effect dot, centred on the wall line at `x`. The holder is
+ * EXACTLY the dot's box (the label is absolutely positioned off it, the
+ * same pattern as `renderCollapsed`'s count below), so a wire resolving
+ * `[data-port-id]` measures the dot's own centre and nothing else.
+ */
+function SideEffectDot({
+  effect,
+  direction,
+  x,
+  diameter,
+  variant,
+}: {
+  effect: SideEffectPort;
+  direction: SideEffectDirection;
+  x: number;
+  diameter?: PortSize;
+  variant?: PortVariantId;
+}) {
+  return (
+    <span
+      data-slot="block-side-effect"
+      data-side-effect-direction={direction}
+      data-port-id={effect.id}
+      style={{ position: "absolute", left: x, top: 0, display: "flex", transform: "translate(-50%, -50%)" }}
+    >
+      <Port state={effect.state ?? "empty"} diameter={diameter} variant={variant} />
+      {effect.label !== undefined && (
+        <span
+          data-slot="block-side-effect-label"
+          style={{
+            position: "absolute",
+            // Beside the dot and wholly above the wall: its bottom edge
+            // clears the wall line (the dot's own centre) by the ring's
+            // overhang, and it starts past the dot's painted ring.
+            //
+            // WHY an input's label reads LEFT of its dot and an output's
+            // RIGHT: both grow AWAY from the divider. Measured on the
+            // gallery, an input label written rightward ("input port" at
+            // the quarter point of a 240px wall) ran straight through the
+            // divider tick into the outputs' half — the one ambiguity the
+            // divider exists to remove.
+            ...(direction === "input" ? { right: `calc(100% + ${PORT_RING_OVERHANG_PX + 2}px)` } : { left: `calc(100% + ${PORT_RING_OVERHANG_PX + 2}px)` }),
+            bottom: `calc(50% + ${PORT_RING_OVERHANG_PX}px)`,
+            fontSize: 11,
+            lineHeight: 1,
+            // `pre`, not `nowrap`: every authored character — a double
+            // space included — survives exactly as typed.
+            whiteSpace: "pre",
+            color: "var(--foreground)",
+            pointerEvents: "none",
+          }}
+        >
+          {effect.label}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Mutation lines — drawn INSIDE the Block, under its content           */
+/* ------------------------------------------------------------------ */
+
+/** The dot a mutation end sits on, owned by THIS wrapper (never a member's
+ *  own nested BlockPort — the same ownership rule `wireLayer.tsx`'s
+ *  `resolveDot` applies). */
+function ownDot(wrapper: HTMLElement, selector: string): HTMLElement | null {
+  for (const holder of wrapper.querySelectorAll<HTMLElement>(selector)) {
+    if (holder.closest('[data-slot="block-port"]') !== wrapper) continue;
+    return holder.querySelector<HTMLElement>('[data-slot="port-dot"]');
+  }
+  return null;
+}
+
+interface DrawnMutation {
+  link: MutationLink;
+  route: MutationRoute;
+}
+
+function sameRoutes(a: DrawnMutation[], b: DrawnMutation[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (drawn, i) =>
+        drawn.link.from === b[i].link.from &&
+        drawn.link.to === b[i].link.to &&
+        drawn.route.points.every((p, j) => Math.abs(p.x - b[i].route.points[j].x) < 0.25 && Math.abs(p.y - b[i].route.points[j].y) < 0.25),
+    )
+  );
+}
+
+/**
+ * Every resolved mutation link as a dotted orthogonal line with a small
+ * arrowhead at the effect end, routed by `mutationRoute`.
+ *
+ * WHY it is portalled INTO the Block, at the `underlay` tier, when every
+ * other thing this wrapper draws sits beside the Block above it: the line
+ * runs through the Block's interior, and in an expanded Block that
+ * interior is member cards. Drawn in this wrapper it could only paint
+ * wholly above the Block (over every member) or wholly below it (under the
+ * card's own opaque surface, i.e. invisible) — the Block is an isolated
+ * root, so nothing outside it can slot in between its surface and its
+ * content. Inside it, a negative tier paints after the card's own
+ * background and before the header, body and members, so the line reads
+ * on the card and disappears behind a member, never across one.
+ *
+ * Measured, not computed: both ends are rendered dots whose position the
+ * rail and the side-effect row already decided, so reading them back is
+ * the one derivation (the rule `wireLayer.tsx` states for itself: it never
+ * invents a point). Coordinates are the Block's PADDING box, which is what
+ * an absolutely-positioned child of it is laid out against.
+ */
+function MutationLines({
+  wrapperRef,
+  links,
+  bands,
+  measureKey,
+}: {
+  wrapperRef: RefObject<HTMLDivElement | null>;
+  links: MutationLink[];
+  bands: BlockBands;
+  measureKey: string;
+}) {
+  const [block, setBlock] = useState<HTMLElement | null>(null);
+  const [routes, setRoutes] = useState<DrawnMutation[]>([]);
+  const linkKey = links.map((link) => `${link.from}>${link.to}`).join(",");
+
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const blockElement = wrapper.querySelector<HTMLElement>('[data-slot="block"]');
+    setBlock(blockElement);
+    if (!blockElement) return;
+
+    const measure = () => {
+      const blockRect = blockElement.getBoundingClientRect();
+      const originX = blockRect.left + blockElement.clientLeft;
+      const originY = blockRect.top + blockElement.clientTop;
+      const next: DrawnMutation[] = [];
+      for (const link of links) {
+        const fromDot = ownDot(wrapper, `[data-slot="block-port-rail"][data-edge="left"] [data-port-id="${link.from}"]`);
+        const toDot = ownDot(wrapper, `[data-slot="block-side-effect"][data-port-id="${link.to}"]`);
+        if (!fromDot || !toDot) continue;
+        const fromRect = fromDot.getBoundingClientRect();
+        const toRect = toDot.getBoundingClientRect();
+        next.push({
+          link,
+          route: mutationRoute(
+            { x: fromRect.left + fromRect.width / 2 - originX, y: fromRect.top + fromRect.height / 2 - originY },
+            { x: toRect.left + toRect.width / 2 - originX, y: toRect.top + toRect.height / 2 - originY },
+            fromRect.width / 2,
+            toRect.height / 2,
+          ),
+        });
+      }
+      setRoutes((previous) => (sameRoutes(previous, next) ? previous : next));
+    };
+
+    // The rails' dots land one pass after `bands` does (the same race
+    // `wireLayer.tsx` documents), so measure now AND once more next frame.
+    measure();
+    const frame = requestAnimationFrame(measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrapper);
+    observer.observe(blockElement);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wrapperRef, bands, measureKey, linkKey]);
+
+  if (!block || routes.length === 0) return null;
+  return createPortal(
+    <svg
+      data-slot="block-mutation-lines"
+      aria-hidden
+      width="100%"
+      height="100%"
+      style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none", zIndex: paintTier("underlay") }}
+    >
+      {routes.map(({ link, route }) => (
+        <MutationLineMark key={`${link.from}>${link.to}`} from={link.from} to={link.to} route={route} />
+      ))}
+    </svg>,
+    block,
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Return dividers — "multiple returns" (Daily Note 2026-09-22): the       */
+/* union-return-type mark between two groups of output ports.              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * FIXED (judge finding 4, 2026-09-22): this used to be scoped to COLUMN-axis
+ * edges (left/right) only — every one of Zach's sketches draws the mark on
+ * the right wall — and silently drew NOTHING for a `dividerAfter` set on a
+ * row edge (top/bottom), which is the actual defect: `PortEdge`/`BlockPort`
+ * both accept `dividerAfter` on any `BlockSide`, so a caller had no way to
+ * learn a top/bottom rail's dividers were being thrown away short of
+ * noticing the missing pixels. Axis-aware turned out to be the "small step"
+ * the finding asked to prefer: the geometry is a 90° rotation of the
+ * column-axis case (swap which coordinate is "along the wall" vs "across
+ * it"), not a new drawing, so every wall now renders — see
+ * `BlockPortReturnDividers`'s own doc for the two drawings' formulas on
+ * both axes.
+ */
+
+/**
+ * Measures the REAL rendered dot centres either side of each divider —
+ * D-A5's own reasoning (`useBlockBands`'s doc): there is no closed form for
+ * "where two dots ended up" the way there is for the rail's own pitch
+ * (labels wrap, distributions differ), so this reads the DOM the same way
+ * `GroupSlotBody`'s `useEnclosingCircleBox` and `MutationLines` already do
+ * for their own marks, via the exported `railDotCentres` this file already
+ * ships for stories to assert against.
+ *
+ * `at` is the divider's position ALONG the wall, wrapper-local: the
+ * midpoint of the two flanking dots' Y centres on a column edge (left/
+ * right), or their X centres on a row edge (top/bottom) — whichever
+ * coordinate the rail's own main axis actually varies.
+ */
+function useReturnDividerRows(
+  wrapperRef: RefObject<HTMLDivElement | null>,
+  edgeSpecs: { edge: BlockSide; dividerAfter: number[] }[],
+  measureKey: string,
+): { edge: BlockSide; at: number }[] {
+  const [rows, setRows] = useState<{ edge: BlockSide; at: number }[]>([]);
+  const specKey = edgeSpecs.map((s) => `${s.edge}:${s.dividerAfter.join(",")}`).join("|");
+
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || edgeSpecs.length === 0) {
+      setRows((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    const measure = () => {
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const next: { edge: BlockSide; at: number }[] = [];
+      for (const spec of edgeSpecs) {
+        const rail = wrapper.querySelector<HTMLElement>(`[data-slot="block-port-rail"][data-edge="${spec.edge}"]`);
+        if (!rail) continue;
+        const centres = railDotCentres(rail);
+        const axis = railAxisFor(spec.edge);
+        for (const index of spec.dividerAfter) {
+          const a = centres[index];
+          const b = centres[index + 1];
+          if (!a || !b) continue;
+          const at = axis === "column" ? (a.y + b.y) / 2 - wrapperRect.top : (a.x + b.x) / 2 - wrapperRect.left;
+          next.push({ edge: spec.edge, at });
+        }
+      }
+      setRows((prev) =>
+        prev.length === next.length && prev.every((p, i) => p.edge === next[i].edge && Math.abs(p.at - next[i].at) < 0.25) ? prev : next,
+      );
+    };
+    measure();
+    // Same race `MutationLines` documents: a rail's own dots land one pass
+    // after `bands` does.
+    const frame = requestAnimationFrame(measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrapper);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wrapperRef, measureKey, specKey]);
+
+  return rows;
+}
+
+/**
+ * Two drawings of ONE mark, decided by `view` — Zach's own words (Daily
+ * Note 2026-09-22, "Multiple returns"), generalized to every wall (finding
+ * 4, see this section's own header note for why axis-aware rather than a
+ * runtime rejection):
+ *
+ *  - Expanded: "a | in the output type hint corresponds to a little dash on
+ *    the outside" — a short dash OUTSIDE the wall. Length and stroke are
+ *    `SIDE_EFFECT_DIVIDER_PX`/`2`, `sideEffectMarks.tsx`'s `SideEffectDivider`
+ *    own numbers for its OWN "little grey line on the outside" (Zach's
+ *    phrase for that mark too) — the same idiom, reused rather than a
+ *    second invented size. Inset is 0: like that divider's own foot, this
+ *    one starts flush ON the wall line and sticks OUTWARD from there — "on
+ *    the outside" needs no further push-in. On a column edge (left/right)
+ *    that dash is HORIZONTAL, sized `SIDE_EFFECT_DIVIDER_PX × 2`; on a row
+ *    edge (top/bottom) it is the 90°-rotated twin, `2 × SIDE_EFFECT_DIVIDER_PX`
+ *    — the same two numbers, the axes swapped.
+ *  - Port view: "the line going to half way of the width of the block" — a
+ *    line from the wall inward to `bands.blockWidth / 2` on a column edge, a
+ *    MEASURED formula (never a stored constant — a Block has no fixed
+ *    width) that lands the inner end exactly on the block's own vertical
+ *    centre line. A row edge has no sketch to cite, so this is the file's
+ *    own symmetric extension of the SAME rule ("to the block's own centre
+ *    line") rather than a second one: the line runs inward to
+ *    `bands.blockHeight / 2`, landing on the block's HORIZONTAL centre line
+ *    instead. Stroke 1px either way, matching `EdgeLineMark`'s own
+ *    dev-guide line weight — this is a thin rule INSIDE the block, not a
+ *    tick standing off it.
+ *
+ * Neither drawing is a `PortEdge` slot: no id, no dot, no `data-port-id` —
+ * so `wireLayer.tsx`'s `resolveDot` (which only ever looks for
+ * `[data-port-id]`) can never resolve a wire onto one. `data-slot`
+ * (`block-port-return-divider`) is one name for the mark; `data-mark-view`
+ * tells the two drawings apart and keeps this mark structurally distinct
+ * from the unrelated full-width rule that separates MEMBER sections
+ * (`block.tsx`'s own header/footer `border-b`/`border-t`) — different
+ * `data-slot`, different length, different reason to exist.
+ */
+function BlockPortReturnDividers({
+  wrapperRef,
+  view,
+  bands,
+  edgeSpecs,
+  measureKey,
+}: {
+  wrapperRef: RefObject<HTMLDivElement | null>;
+  view: BlockView;
+  bands: BlockBands;
+  edgeSpecs: { edge: BlockSide; dividerAfter: number[] }[];
+  measureKey: string;
+}) {
+  const rows = useReturnDividerRows(wrapperRef, edgeSpecs, measureKey);
+  // Simple view collapses every wall to one stand-in dot — there is no
+  // "between two ports" left to mark. Only Expanded and Port view ever draw
+  // this (the two drawings this function's own doc names); nothing else is
+  // improvised for `view === "simple"`.
+  if (view === "simple" || rows.length === 0) return null;
+
+  return (
+    <>
+      {rows.map((row, index) => {
+        const axis = railAxisFor(row.edge);
+        // The wall this divider sits on is at the TRAILING coordinate
+        // (right/bottom) for those two edges, the LEADING one (left/top)
+        // for the other two — the "which side of the block" fact every
+        // rail already keys off (`railBoxFor`'s own `edge === "right" ? …`
+        // pattern, generalized to `bottom` the same way).
+        const trailing = row.edge === "right" || row.edge === "bottom";
+        const wallCoord =
+          axis === "column"
+            ? trailing
+              ? bands.blockLeft + bands.blockWidth
+              : bands.blockLeft
+            : trailing
+              ? bands.blockTop + bands.blockHeight
+              : bands.blockTop;
+
+        // Position/size ONLY — the paint (`background`) is
+        // `ReturnDividerMark`'s own (`returnDividerMarks.tsx`'s header:
+        // `skin.test.ts`'s S4 coverage holds this file to "paints nothing
+        // of its own").
+        if (view === "expanded") {
+          const outStart = trailing ? wallCoord : wallCoord - SIDE_EFFECT_DIVIDER_PX;
+          const style: CSSProperties =
+            axis === "column"
+              ? { position: "absolute", left: outStart, top: row.at - 1, width: SIDE_EFFECT_DIVIDER_PX, height: 2, zIndex: paintTier("portDot") }
+              : { position: "absolute", top: outStart, left: row.at - 1, height: SIDE_EFFECT_DIVIDER_PX, width: 2, zIndex: paintTier("portDot") };
+          return <ReturnDividerMark key={`${row.edge}-${index}`} edge={row.edge} markView="expanded" style={style} />;
+        }
+        // Port view: from the wall inward to half the block's OWN
+        // dimension ALONG the line's run — width for a column edge
+        // (Zach's own sketch), height for a row edge (this function's own
+        // symmetric extension — see its doc).
+        const halfSpan = axis === "column" ? bands.blockWidth / 2 : bands.blockHeight / 2;
+        const inStart = trailing ? wallCoord - halfSpan : wallCoord;
+        const style: CSSProperties =
+          axis === "column"
+            ? { position: "absolute", left: inStart, top: row.at - 0.5, width: halfSpan, height: 1, zIndex: paintTier("portDot") }
+            : { position: "absolute", top: inStart, left: row.at - 0.5, height: halfSpan, width: 1, zIndex: paintTier("portDot") };
+        return <ReturnDividerMark key={`${row.edge}-${index}`} edge={row.edge} markView="port" style={style} />;
+      })}
+    </>
   );
 }
 
@@ -445,7 +1031,13 @@ function BlockFunctionPort({ bands, diameter, variant }: { bands: BlockBands; di
 /* One rail                                                            */
 /* ------------------------------------------------------------------ */
 
-function BlockPortRail({
+/**
+ * Exported (lane `collapsed-members`, 2026-09-22) so `blockPortMembers.tsx`
+ * can mount a collapsed member's rail on its PARENT's wall with this exact
+ * fill — the same `data-port-id` stamp, the same `LabeledPort` — instead of
+ * a second copy of it. `BlockPort` itself is unchanged.
+ */
+export function BlockPortRail({
   edge,
   spec,
   plan,
@@ -531,6 +1123,12 @@ function BlockPortRail({
           // editable exactly when the host said where the text should go.
           disabled={!spec.onItemsChange}
           onLabelWrite={spec.onItemsChange ? (value) => spec.onItemsChange?.(spec.items.map((it) => (it.id === item.id ? { ...it, label: value } : it))) : undefined}
+          // The SAME forwarding trap as `disabled`/`onLabelWrite` just above,
+          // for the `reorderChord` hotkey (`ctx.onReorderKey`, added to
+          // `renderItem`'s own ctx for "multiple returns" so a rail's ports
+          // can be moved past a divider with Ctrl+arrow, same as any other
+          // rail — see `PortEdgeProps.renderItem`'s own doc).
+          onLabelKeyDown={ctx.onReorderKey}
         >
           {item.label}
         </LabeledPort>
@@ -598,6 +1196,27 @@ function BlockPortRail({
     // needs. Named `portDot` (paintOrder.ts) — same tier as the function
     // port above; a rail IS a run of port dots.
     zIndex: paintTier("portDot"),
+    // WHY `pointer-events: none` HERE, at the rail's own box: `railBoxFor`
+    // deliberately makes this box `RAIL_CROSS_PX` (56px) wide/tall so its
+    // CROSS centre lands on the Block's border line — which means HALF of
+    // it, by construction, sits outside the Block, over whatever the host
+    // paints underneath (a cable, the canvas). Only the dots/labels/rail
+    // controls PortEdge actually draws inside this box are real content;
+    // the surrounding `CONTAINER_PADDING` margin is empty on purpose (it's
+    // what keeps the dots centred on the wall). Before this, the whole box
+    // was hit-testable, so a press on that empty margin resolved its
+    // `elementFromPoint` target to THIS div — and every host's
+    // `contentOwnsPress`/`pointerOwnership` reads `.closest('[data-slot=
+    // "block-port-rail"]')` as "content owns it", so the press never
+    // reached the cable or the canvas underneath (measured 2026-09-22:
+    // `wireGrab.smoke.test.tsx`'s curved-cable press at (475, 206) landing
+    // in this margin, after 4b49cd4 moved a trace's endpoint onto the
+    // dot's own ring and out from under the rail). `PortEdgeSlotBox`'s
+    // sortable card (`data-slot="port-edge-card"`), the lane's own editor
+    // overlay (`data-slot="port-edge-lane"`) and the "+N more" chrome each
+    // re-arm `pointer-events: auto` on themselves — the only parts of this
+    // box a press should ever resolve to.
+    pointerEvents: "none",
   };
 
   return (
@@ -622,6 +1241,8 @@ function BlockPortRail({
         groupMode={plan.groupMode}
         renderItem={renderItem}
         renderCollapsed={renderCollapsed}
+        dividerAfter={spec.dividerAfter}
+        onDividerAfterChange={spec.onDividerAfterChange}
       />
     </div>
   );

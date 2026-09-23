@@ -22,6 +22,7 @@ import {
   type BlockMembersLayout,
 } from "./blockMembers";
 import { BlockDescription, blockDescriptionIsPainted } from "./blockDescription";
+import type { ReorderChord } from "./keyboardReorder";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 
 /**
@@ -160,6 +161,17 @@ export interface BlockProps {
    */
   showHeaderDivider?: boolean;
   /**
+   * The divider line above the footer — `showHeaderDivider`'s missing
+   * sibling. Block used to have no way to hide it at all: the footer
+   * wrapper's `border-t` was unconditional, unlike the header's own
+   * `showHeaderDivider && "border-b…"` gate two lines below. Added
+   * alongside `editor/contextMenuModel.ts`'s `buildBlockMenu` ("Hide
+   * Footer Line" is one of Zach's nine right-click commands, and it needs
+   * a real prop to flip, the same way "Hide Header Line" already had one)
+   * — defaults to shown, so no existing caller changes.
+   */
+  showFooterDivider?: boolean;
+  /**
    * The sentence under the title. Ported from the frozen v1 lineage —
    * `packages/bbox-ui/src/blockFace.tsx:437-454` paints it immediately after
    * the header in both header modes, which is the placement restated here.
@@ -218,6 +230,8 @@ export interface BlockProps {
   membersLayout?: BlockMembersLayout;
   /** Enables drag-to-reorder of stacked members, kanban-card style. */
   onMembersChange?(members: BlockMember[]): void;
+  /** The IDE move-line chord for stacked members — `BlockMembersProps.reorderChord`. */
+  membersReorderChord?: ReorderChord;
   memberGap?: number;
   memberGutter?: number;
   insetBackground?: BlockInsetBackground;
@@ -323,12 +337,14 @@ export function Block({
   shape = "card",
   style,
   showHeaderDivider = true,
+  showFooterDivider = true,
   description,
   showDescription = true,
   descriptionSlot,
   members,
   membersLayout = "free",
   onMembersChange,
+  membersReorderChord,
   memberGap = BLOCK_MEMBER_GAP_PX,
   memberGutter = BLOCK_MEMBER_INSET_PX,
   insetBackground = "none",
@@ -562,6 +578,7 @@ export function Block({
           layout={membersLayout}
           members={members}
           onMembersChange={onMembersChange}
+          reorderChord={membersReorderChord}
           gap={memberGap}
           gutter={memberGutter}
           insetBackground={insetBackground}
@@ -572,7 +589,10 @@ export function Block({
       {footer !== undefined && (
         <div
           data-slot="block-footer"
-          className="border-t border-t-[color:var(--bbox-skin-stroke,var(--color-border))] px-3 py-2 has-[>[data-slot=bar]]:p-0"
+          className={cn(
+            "px-3 py-2 has-[>[data-slot=bar]]:p-0",
+            showFooterDivider && "border-t border-t-[color:var(--bbox-skin-stroke,var(--color-border))]",
+          )}
           // Same tier as the header — see the header's own comment above.
           // Not covered by the nesting acceptance test (only the header
           // relationship is), but a footer is the same "chrome" role and

@@ -5,7 +5,7 @@ import { expect, waitFor, within } from "storybook/test";
 import { Block } from "../components/block";
 import { Badge } from "../components/badge";
 import { Port } from "../components/port";
-import { PORT_VARIANTS, portVariantRingExpansion } from "./portVariants";
+import { PORT_VARIANTS, portVariantRingExpansion, readPortVariantId } from "./portVariants";
 import { TraceBody } from "../components/trace";
 import { bboxSkinAttrs } from "./skin";
 import { SketchAtEdge } from "./SketchAtEdge";
@@ -349,9 +349,14 @@ export const SideBySide: Story = {
     // attributes, new default size — read from the registry that now owns
     // the painted rings (`PORT_SURFACE_RING_PX`/`PORT_STATE_RING_PX` are the
     // reserved allowance since this change, not the paint).
-    const v1 = PORT_VARIANTS.v1;
-    const expected = portVariantRingExpansion(v1);
-    const expectedSize = v1.dot.diameter + expected.expand;
+    // 2026-09-22 (lane `trace-defaults`): the Storybook default became v2
+    // (Zach: "lets do ports v2 as the default ones" — `.storybook/preview.tsx`
+    // stamps it on <html>), so the SAME derivation is now taken over the
+    // variant IN FORCE rather than a pinned v1: v2's 8px box, 1px gap, 1px
+    // ring give expand 5 and "0 0 13 13" / pen "1".
+    const inForce = PORT_VARIANTS[readPortVariantId()];
+    const expected = portVariantRingExpansion(inForce);
+    const expectedSize = inForce.dot.diameter + expected.expand;
     const dotGeom = [...boundary.querySelectorAll('[data-slot="port-dot"]')].map((el) => {
       const svg = el.querySelector<SVGSVGElement>(`svg[${SKETCH_TWIN_ATTR}="box"]`);
       return {

@@ -30,9 +30,10 @@
  *      and nested contrast, v6's UNFILLED inset outline, v7's side-stroke-free
  *      edge card) — each read back off computed style;
  *   6. across the gallery, the drawings are pairwise DISTINCT on a
- *      measured signature, and the opaque card is byte-identical in every
- *      one of them (its paint is the host's `Block`, deliberately not a
- *      variant axis).
+ *      measured signature, and the Port card (the collapsed region) is
+ *      byte-identical in every one of them (its paint is the host's
+ *      `Block`, deliberately not a variant axis) — while the Expanded
+ *      Opaque face follows each drawing's frame paint.
  *
  * The switch is `data-bbox-region-variant` on ANY ancestor — the contract
  * names `document.documentElement.dataset.bboxRegionVariant` for an app
@@ -62,12 +63,13 @@
  */
 import { useState, type ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, waitFor } from "storybook/test";
+import { expect, userEvent, waitFor } from "storybook/test";
 
 import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
 import { BRANCH_NESTED } from "../scene/region.branch.fixtures";
 import { REGION_NODE_TYPE } from "../scene/region";
+import { describeHidden, hiddenSummary } from "../scene/controlFlow";
 import {
   DEFAULT_REGION_VARIANT,
   drawsHeaderRule,
@@ -121,13 +123,49 @@ const LOOP_NODES: HostScene["nodes"] = [
   { id: "smooth", type: "block", parentId: "loop", position: { x: 250, y: 20 }, data: { name: "smooth", view: "port", w: 120, h: 64, ports: { left: ["in"], right: ["out"] } } },
 ];
 
-/** An opaque region — the P5 card — on the same board, so the gallery can
- *  measure that it reads the SAME in all five (item 6). */
+/** A region collapsed to the Port card on the same board, so the gallery
+ *  can measure that it reads the SAME in all five (item 6).
+ *
+ *  WHY the Port view and not `view: "opaque"` (Zach, 2026-09-22): this
+ *  fixture used to be the P5 opaque card — the region collapsed to a block
+ *  drawn as the host's `Block`, deliberately not a variant axis. Under his
+ *  ruling that collapsed state IS the Port view ("regions do not have a
+ *  simple view. they just have port, expanded and expanded opaque view"),
+ *  while Expanded Opaque is now the frame at full size, which SHOULD follow
+ *  the drawing — `opx` below pins that half. `op-m` gives the card a real
+ *  member to hide, and the card states it in its footer — the P5 card's
+ *  measured "what is hidden" line, which the Port card carries on. */
 const OPAQUE_NODE: HostScene["nodes"][number] = {
   id: "op",
   type: REGION_NODE_TYPE,
   position: { x: LOOP_AT_X, y: 330 },
-  data: { name: "Collapsed", region: { kind: "group", view: "opaque" }, w: 300, h: 120 },
+  // One port per wall, so `expectPortCard`'s on-the-wall check has dots to
+  // measure rather than passing over none.
+  data: { name: "Collapsed", region: { kind: "group", presentation: "port" }, ports: { left: ["in"], right: ["out"] }, w: 300, h: 120 },
+};
+const OPAQUE_MEMBER: HostScene["nodes"][number] = {
+  id: "op-m",
+  type: "block",
+  parentId: "op",
+  position: { x: 20, y: 10 },
+  data: { name: "hidden", view: "simple", w: 100, h: 40 },
+};
+
+/** A region in Expanded Opaque — the frame at its own size, the inside
+ *  hidden — below the Port card, overlapping nothing (measured in
+ *  `AllFive`). Its face is FRAME paint, so it follows each drawing. */
+const EXPANDED_OPAQUE_NODE: HostScene["nodes"][number] = {
+  id: "opx",
+  type: REGION_NODE_TYPE,
+  position: { x: LOOP_AT_X, y: 490 },
+  data: { name: "Blackboxed", region: { kind: "group", view: "opaque", presentation: "expanded" }, w: 300, h: 150 },
+};
+const EXPANDED_OPAQUE_MEMBER: HostScene["nodes"][number] = {
+  id: "opx-m",
+  type: "block",
+  parentId: "opx",
+  position: { x: 20, y: 10 },
+  data: { name: "hidden", view: "simple", w: 100, h: 40 },
 };
 
 /**
@@ -150,6 +188,9 @@ const FIXTURE: HostScene = {
     ),
     ...LOOP_NODES,
     OPAQUE_NODE,
+    OPAQUE_MEMBER,
+    EXPANDED_OPAQUE_NODE,
+    EXPANDED_OPAQUE_MEMBER,
   ],
   edges: [],
 };
@@ -431,6 +472,94 @@ function opaqueCardPaintOf(root: ParentNode): string {
   return [style.borderColor, style.borderWidth, style.backgroundColor, style.borderRadius, style.boxShadow].join("|");
 }
 
+/**
+ * The Port card — the collapsed region as a block. No acceptance helper
+ * covers a region's Port view (`expectRegionOpaque` is the opaque face's, and
+ * is locked), so this measures it directly: the card is there, the frame is
+ * not, the member is hidden, and every port dot the card carries sits on its
+ * wall within 2px. `op` has no crossing cables, so its only possible dots are
+ * its own; the loop walks whatever the card draws.
+ */
+function expectPortCard(root: ParentNode, id: string, memberId: string, minDots: number): void {
+  const region = regionOf(root, id);
+  expect(region.getAttribute("data-region-view")).toBe("port");
+  expect(region.querySelector('[data-slot="region-frame"]'), `${id}: no frame in Port`).toBeNull();
+  expect(region.querySelectorAll("[data-member-id]"), `${id}: members hidden`).toHaveLength(0);
+  expect(root.querySelector(`[data-block-id="${memberId}"]`), `${id}: member ${memberId} hidden`).toBeNull();
+  const card = required<HTMLElement>(region, `[data-block-id="${id}"] [data-slot="block"]`, `${id}'s Port card`).getBoundingClientRect();
+  let measured = 0;
+  for (const rail of Array.from(region.querySelectorAll<HTMLElement>('[data-slot="block-port-rail"]'))) {
+    const wall = rail.getAttribute("data-edge");
+    for (const dot of Array.from(rail.querySelectorAll<HTMLElement>('[data-slot="port-dot"]'))) {
+      const r = dot.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const wallX = wall === "left" ? card.left : card.right;
+      expect(Math.abs(x - wallX), `${id}: a ${wall} dot sits on its wall`).toBeLessThanOrEqual(2);
+      measured += 1;
+    }
+  }
+  // Not vacuous: `op` authors one port per wall, and every one was measured.
+  expect(measured, `${id}: port dots measured on the walls`).toBeGreaterThanOrEqual(minDots);
+  // The collapsed card's measured "what is hidden" footer — the contract the
+  // P5 card carried, now on the Port card. The words are `describeHidden` of
+  // the scene the bench renders, not a literal restated here.
+  const footer = required<HTMLElement>(region, '[data-slot="region-hidden"]', `${id}'s what-is-hidden footer`);
+  const text = footer.textContent?.trim() ?? "";
+  expect(text).toMatch(/hidden$/);
+  expect(text).toMatch(/^(nothing|\d+ (block|arm|edge)s?)/);
+  expect(text).toBe(describeHidden(hiddenSummary(FIXTURE, id)));
+  const footerBox = footer.getBoundingClientRect();
+  expect(footerBox.top >= card.top && footerBox.bottom <= card.bottom + 1, `${id}: the footer is on the card`).toBe(true);
+}
+
+/**
+ * Expanded Opaque follows the drawing: `opx`'s face paints with THIS
+ * drawing's frame paint — the same border colour, radius and fill as the
+ * loop's frame beside it — and its body carries no lighter-grey plate of its
+ * own (Zach, 2026-09-22: "not have the background be a lighter grey").
+ */
+function opaqueFaceOf(root: ParentNode, id: string): HTMLElement {
+  return required<HTMLElement>(regionOf(root, id), ':scope > [data-slot="region-opaque-face"]', `${id}'s opaque face`);
+}
+
+/** Every box-paint property a frame has, per side and per corner. */
+function framePaintOf(el: HTMLElement): Record<string, string> {
+  const style = getComputedStyle(el);
+  const out: Record<string, string> = { backgroundColor: style.backgroundColor };
+  for (const side of ["Top", "Right", "Bottom", "Left"] as const) {
+    out[`border${side}Width`] = style.getPropertyValue(`border-${side.toLowerCase()}-width`);
+    out[`border${side}Style`] = style.getPropertyValue(`border-${side.toLowerCase()}-style`);
+    out[`border${side}Color`] = style.getPropertyValue(`border-${side.toLowerCase()}-color`);
+  }
+  for (const corner of ["top-left", "top-right", "bottom-right", "bottom-left"] as const) {
+    out[`border-${corner}-radius`] = style.getPropertyValue(`border-${corner}-radius`);
+  }
+  return out;
+}
+
+function expectOpaqueFaceFollowsFrame(root: ParentNode, variant: RegionVariantId): void {
+  const face = opaqueFaceOf(root, "opx");
+  expect(framePaintOf(face), `${variant}: opx's face paints this drawing's frame, every side and corner`).toEqual(framePaintOf(frameOf(regionOf(root, "loop"))));
+  // No lighter-grey plate anywhere inside the face: the Block that owns the
+  // ports is invisible chrome, and its body paints nothing either.
+  const block = required<HTMLElement>(face, '[data-slot="block"]', "opx's port-owning Block");
+  const body = required<HTMLElement>(face, '[data-slot="block-body"]', "opx's body");
+  for (const [what, el] of [["Block", block], ["body", body]] as const) {
+    const fill = getComputedStyle(el).backgroundColor;
+    expect(fill, `${variant}: opx ${what} has no plate of its own`).toBe("rgba(0, 0, 0, 0)");
+  }
+}
+
+/** `opx` overlaps no other region on the board, measured. */
+function expectOpxOverlapsNothing(root: ParentNode): void {
+  const opx = regionOf(root, "opx").getBoundingClientRect();
+  for (const id of [...REGIONS_ON_THE_BOARD, "op"]) {
+    const other = regionOf(root, id).getBoundingClientRect();
+    const overlaps = opx.left < other.right && other.left < opx.right && opx.top < other.bottom && other.top < opx.bottom;
+    expect(overlaps, `opx overlaps ${id}`).toBe(false);
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* One story per variant                                               */
 /* ------------------------------------------------------------------ */
@@ -492,7 +621,10 @@ export const AllFive: Story = {
       const section = required<HTMLElement>(canvasElement, `[data-gallery-variant="${variant}"]`, `the ${variant} row`);
       expect(section.getAttribute(REGION_VARIANT_ATTR)).toBe(variant);
       await expectRegionVariant(section, variant);
-      await expectRegionOpaque(section, "op");
+      expectPortCard(section, "op", "op-m", 2);
+      await expectRegionOpaque(section, "opx");
+      expectOpxOverlapsNothing(section);
+      expectOpaqueFaceFollowsFrame(section, variant);
       signatures.set(variant, signatureOf(section));
       cards.add(opaqueCardPaintOf(section));
     }
@@ -502,8 +634,63 @@ export const AllFive: Story = {
         if (a < b) expect(signatures.get(a), `${a} and ${b} are the same drawing`).not.toBe(signatures.get(b));
       }
     }
-    // And ONE opaque card: the P5 card is the host's Block, not a variant axis.
+    // And ONE opaque card: the collapsed region — now the Port card — is the
+    // host's Block, not a variant axis.
     expect(Array.from(cards), "the opaque card reads the same in every drawing").toHaveLength(1);
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* Expanded Opaque is the SAME frame, in every drawing                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Codex audit, 2026-09-22: pressing the Blackbox toggle used to swap the
+ * frame for a restyled Block, so `v4`'s open bracket closed into a full box
+ * and the default drawing's border went 1px → 2px. Here, in every drawing,
+ * the loop's frame is measured, its toggle is pressed for real, and the face
+ * must carry the identical four border widths/styles/colours and four corner
+ * radii, in the identical box (±1px). Then it is pressed back.
+ */
+export const ExpandedOpaqueKeepsTheFrame: Story = {
+  name: "Expanded Opaque keeps the frame, in every drawing",
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, padding: 8 }}>
+      {REGION_VARIANT_IDS.map((variant) => (
+        <section key={variant} data-gallery-variant={variant} {...regionVariantAttrs(variant)}>
+          <h2 style={{ margin: "0 0 4px 24px", font: "600 13px/1.2 ui-sans-serif, system-ui, sans-serif" }}>{variant}</h2>
+          <Bench />
+        </section>
+      ))}
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    for (const variant of REGION_VARIANT_IDS) {
+      const section = required<HTMLElement>(canvasElement, `[data-gallery-variant="${variant}"]`, `the ${variant} row`);
+      await expectRegionExpanded(section, "loop");
+      const frame = frameOf(regionOf(section, "loop"));
+      // Relative to the row: pressing the toggle scrolls a lower row into
+      // view, which moves every viewport rect without anything moving.
+      const inRow = (el: HTMLElement) => {
+        const r = el.getBoundingClientRect();
+        const s = section.getBoundingClientRect();
+        return { left: r.left - s.left, top: r.top - s.top, width: r.width, height: r.height };
+      };
+      const before = inRow(frame);
+      const paint = framePaintOf(frame);
+
+      await userEvent.click(required<HTMLElement>(regionOf(section, "loop"), '[aria-label="Blackbox toggle"]', `${variant}: the loop's toggle`));
+      await expectRegionOpaque(section, "loop");
+      const face = opaqueFaceOf(section, "loop");
+      expect(framePaintOf(face), `${variant}: the face is the frame, every side and corner`).toEqual(paint);
+      const after = inRow(face);
+      for (const key of ["left", "top", "width", "height"] as const) {
+        expect(Math.abs(after[key] - before[key]), `${variant}: the box's ${key} is unchanged`).toBeLessThanOrEqual(1);
+      }
+
+      await userEvent.click(required<HTMLElement>(regionOf(section, "loop"), '[aria-label="Blackbox toggle"]', `${variant}: the pressed toggle`));
+      await expectRegionExpanded(section, "loop");
+    }
   },
 };
 

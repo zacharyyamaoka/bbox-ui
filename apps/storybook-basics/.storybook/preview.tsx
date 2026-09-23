@@ -60,11 +60,27 @@ function renderLucide(name: string): ReactNode {
 
 /** The app's bottom-right variant pill (apps/systemsketch/src/chrome/variantSwitch.tsx) as two toolbar globals: the SAME
  *  `<html>` attributes. WHY `v1` stamps nothing: it IS the absent attribute, so every story not switched is untouched. */
+function stampVariants(port: string, region: string): void {
+  const html = document.documentElement.dataset;
+  if (port !== "v1") html.bboxPortVariant = port;
+  else delete html.bboxPortVariant;
+  if (region !== "v1") html.bboxRegionVariant = region;
+  else delete html.bboxRegionVariant;
+}
+
 function VariantAttrs({ port, region, children }: { port: string; region: string; children: ReactNode }) {
+  // Stamped DURING render as well as in the effect below. WHY: a child's
+  // layout effects run BEFORE its parent's, so a stamp made only in this
+  // decorator's `useLayoutEffect` lands after every story component has
+  // already mounted, measured and drawn against the ABSENT attribute (v1).
+  // That never showed while v1 was the default; since the default became
+  // v2/v9 (2026-09-22) it drew the sketch skin's ring twins at v1's size
+  // under v2 dots (`SkinAtTheEdges` › Side By Side, measured "0 0 12.5
+  // 12.5" vs "0 0 13 13"). Idempotent, so a re-render costs nothing.
+  if (typeof document !== "undefined") stampVariants(port, region);
   useLayoutEffect(() => {
+    stampVariants(port, region);
     const html = document.documentElement.dataset;
-    if (port !== "v1") html.bboxPortVariant = port;
-    if (region !== "v1") html.bboxRegionVariant = region;
     return () => {
       if (port !== "v1") delete html.bboxPortVariant;
       if (region !== "v1") delete html.bboxRegionVariant;
@@ -72,6 +88,24 @@ function VariantAttrs({ port, region, children }: { port: string; region: string
   }, [port, region]);
   return children;
 }
+
+/**
+ * The port style and region drawing a FRESH Storybook opens on — a viewer
+ * who picked another one keeps it (Storybook keeps a picked global in the
+ * URL; these are only `initialGlobals`).
+ *
+ * WHY v2 and v9: Zach, 2026-09-22 — "Please also lets do ports v2 as the
+ * default ones … and for regions make v9 the default one". WHY here and not
+ * by moving the tables' own `DEFAULT_*` constants: each variant's CSS is
+ * keyed on the `<html>` attribute, with `v1` as every token's built-in
+ * fallback (regionVariants.css's own header), so an absent attribute always
+ * PAINTS v1. Moving the TS default alone would read v9's numbers (its arm
+ * header height) while painting v1's frame. A host that wants another
+ * default therefore stamps it — exactly what the app's variant pill does
+ * (apps/systemsketch/src/chrome/DevMenu/variantSwitch.tsx).
+ */
+const DEFAULT_PORT_VARIANT_GLOBAL = "v2";
+const DEFAULT_REGION_VARIANT_GLOBAL = "v9";
 
 const preview: Preview = {
   globalTypes: {
@@ -92,11 +126,11 @@ const preview: Preview = {
   },
   initialGlobals: {
     [SKIN_GLOBAL]: "" as SkinGlobal,
-    portVariant: "v1",
-    regionVariant: "v1",
+    portVariant: DEFAULT_PORT_VARIANT_GLOBAL,
+    regionVariant: DEFAULT_REGION_VARIANT_GLOBAL,
   },
   decorators: [
-    (Story, { globals }) => <VariantAttrs port={String(globals.portVariant ?? "v1")} region={String(globals.regionVariant ?? "v1")}><Story /></VariantAttrs>,
+    (Story, { globals }) => <VariantAttrs port={String(globals.portVariant ?? DEFAULT_PORT_VARIANT_GLOBAL)} region={String(globals.regionVariant ?? DEFAULT_REGION_VARIANT_GLOBAL)}><Story /></VariantAttrs>,
     (Story, context) => {
       const skin = (context.globals[SKIN_GLOBAL] as SkinGlobal | undefined) || "";
       // WHY no wrapper at all when unset, rather than a div stamped

@@ -176,6 +176,15 @@ export interface CodeEditorProps {
    */
   onEnter?(): void;
   onEscape?(): void;
+  /**
+   * A host's own key handling, consulted BEFORE every keymap in this file
+   * (`Prec.highest`, above even the Enter/Escape exits). Return `true` to
+   * claim the key — it is then prevented and stopped; `false` lets it reach
+   * CodeMirror untouched. The seam `keyboardReorder.ts`'s move-this-item
+   * chord rides: it has to win over the default keymap's Ctrl+←/→ word-jump
+   * on a row, and it must lose to nothing it did not ask for.
+   */
+  onKeyDown?(event: KeyboardEvent, view: EditorView): boolean;
   onViewReady?(view: EditorView): void;
 }
 
@@ -226,6 +235,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
   selectRange,
   onEnter,
   onEscape,
+  onKeyDown,
   onViewReady,
 }, ref) {
   const wrap = overflow === "wrap";
@@ -243,6 +253,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     onEditEnd,
     onEnter,
     onEscape,
+    onKeyDown,
     value,
     disabled,
     multiline,
@@ -253,6 +264,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     onEditEnd,
     onEnter,
     onEscape,
+    onKeyDown,
     value,
     disabled,
     multiline,
@@ -305,6 +317,17 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
         doc: value,
         extensions: [
           history(),
+          Prec.highest(
+            EditorView.domEventHandlers({
+              keydown: (event, target) => {
+                if (event.isComposing || !latest.current.onKeyDown) return false;
+                if (!latest.current.onKeyDown(event, target)) return false;
+                event.preventDefault();
+                event.stopPropagation();
+                return true;
+              },
+            }),
+          ),
           // Enter and Escape are the field's exits, handled on the raw
           // event so the keystroke can be STOPPED — see codeField.tsx's own
           // WHY (unchanged here; there is no completion popup any more to

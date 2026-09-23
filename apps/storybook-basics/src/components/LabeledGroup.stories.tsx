@@ -4,7 +4,7 @@ import { expect, within } from "storybook/test";
 import { Block } from "./block";
 import { BlockRegion } from "./blockRegion";
 import { REGION_CORNER_WIDTH_PX } from "./blockRegion.layout";
-import { LabeledGroup } from "./blockRegion.labeledGroup";
+import { LabeledGroup, type LabeledGroupProps } from "./blockRegion.labeledGroup";
 
 /**
  * Components/Blocks/BlockRegion/Labeled Group — BlockRegion's title-only
@@ -71,6 +71,10 @@ async function expectCornerCard(canvas: HTMLElement, regionId: string, title: st
   return { region, frame, card };
 }
 
+/** `region-4`'s corner card, as rendered: REGION_CORNER_WIDTH_PX wide, and
+ *  the height of its header plus its one-line body. */
+const REGION_4_CORNER = { w: REGION_CORNER_WIDTH_PX, h: 72 };
+
 /** React Flow's reference: a label, and two nodes inside the group. */
 export const Default: Story = {
   args: { id: "group-1", label: "Label", width: 480, height: 300, members: MEMBERS },
@@ -130,6 +134,10 @@ export const SameFrame: Story = {
           width={args.width}
           height={args.height}
           members={args.members}
+          // A caller-rendered `corner` is never measured by a hidden copy
+          // (`RegionCornerProps`), so its size is stated — and the play
+          // function checks the statement against the rendered card.
+          cornerSize={REGION_4_CORNER}
           corner={
             <Block
               shape="region-corner"
@@ -144,11 +152,34 @@ export const SameFrame: Story = {
   ),
   play: async ({ canvasElement }) => {
     const { frame: groupFrame } = await expectCornerCard(canvasElement, "group-4", "Label");
-    const { frame: regionFrame } = await expectCornerCard(canvasElement, "region-4", "for x in xs");
+    const { frame: regionFrame, card: regionCard } = await expectCornerCard(canvasElement, "region-4", "for x in xs");
+    // The stated `cornerSize` is the card's real box.
+    const cardBox = regionCard.getBoundingClientRect();
+    await expect(Math.abs(cardBox.width - REGION_4_CORNER.w), "cornerSize width").toBeLessThanOrEqual(1);
+    await expect(Math.abs(cardBox.height - REGION_4_CORNER.h), `cornerSize height (card is ${cardBox.height})`).toBeLessThanOrEqual(1);
     const g = groupFrame.getBoundingClientRect();
     const r = regionFrame.getBoundingClientRect();
     // one frame renderer: the same width and radius, only the corner card differs
     await expect(Math.round(g.width)).toBe(Math.round(r.width));
     await expect(getComputedStyle(groupFrame).borderTopLeftRadius).toBe(getComputedStyle(regionFrame).borderTopLeftRadius);
+  },
+};
+
+/**
+ * Codex re-judge 4: `Omit` does not stop an object SPREAD from carrying an
+ * omitted prop back in. The types now refuse it (`blockRegion.types.test.ts`
+ * pins that); this is the runtime half — a spread that reaches past the types
+ * (plain JS, an `any`) is stripped before BlockRegion sees it, so the label
+ * this preset exists to draw is still the one rendered.
+ */
+const INJECTED = { cornerCard: { header: "Replacement" }, corner: <span>Replacement corner</span>, type: "Injected type" };
+
+export const SpreadCannotReplaceTheLabel: Story = {
+  args: { id: "group-spread", label: "Authored label", width: 320, height: 180 },
+  render: (args) => <LabeledGroup {...args} {...(INJECTED as unknown as Partial<LabeledGroupProps>)} />,
+  play: async ({ canvasElement }) => {
+    await expectCornerCard(canvasElement, "group-spread", "Authored label");
+    expect(canvasElement.textContent, "no injected corner content").not.toContain("Replacement");
+    expect(canvasElement.textContent, "no injected type").not.toContain("Injected type");
   },
 };

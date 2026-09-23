@@ -76,6 +76,13 @@ export type HostNodeData = {
   badge?: string;
   /* -- type: "arm" (scene/controlFlow.ts's ARM_NODE_TYPE) --------------- */
   arm?: import("./regionScene").ArmData;
+  /* -- type: "frame" (hosts/frameScene.ts's FRAME_NODE_TYPE) ------------- */
+  /** The frame's own toggles (crossing mode, per-wall spacing, faces). A
+   *  frame's PORTS stay in `ports`/`portLabels`/`portTypes` exactly as a
+   *  block's do, and its members are its `parentId` children — the frame
+   *  owns membership and layout (Zach, 2026-09-22), the data does not move.
+   *  ADDED 2026-09-22, lane `frame-auto-port-edges`. */
+  frame?: import("./frameScene").FrameData;
   /* -- any block ------------------------------------------------------ */
   /** Port id → the port's authored NAME. Only NAMED ports appear; an
    *  absent entry means "no authored label" and the face falls back to the

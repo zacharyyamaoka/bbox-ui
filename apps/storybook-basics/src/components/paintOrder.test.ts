@@ -144,6 +144,9 @@ describe("paintOrder — the ladder itself", () => {
 
   it("reproduces today's five pre-existing raw literals exactly — the no-op half of the refactor (docs/provenance/z-order.md carries the file:line citations)", () => {
     const known: Record<PaintTierName, number> = {
+      // NEW 2026-09-22 (side-effect ports), not a pre-existing literal —
+      // the mutation line's below-content tier; see paintOrder.ts.
+      underlay: -1,
       surface: 0,
       memberContent: 1,
       memberOverflow: 1,

@@ -40,6 +40,7 @@
 // vocabularies for one fact start.
 
 import type { BlockSide } from "../components/port.layout";
+import { portDotRingRadiusPx } from "../skin/portVariants";
 import { portKey } from "../scene/scene";
 
 export interface PortDotSighting {
@@ -68,6 +69,13 @@ export interface PortDotSighting {
    * (wireLayer.tsx's own note), so this feeds a terminal spec directly.
    */
   side: BlockSide | null;
+  /**
+   * The dot's painted OUTER radius (box + its rings), in the dot's own
+   * layout px — unscaled, like a shape-local anchor — so a host can end a
+   * wire ON the ring (`trace.tsx`'s `traceRingGapPx`) rather than a fixed
+   * distance short of the centre. `portDotRingRadiusPx` is the one reading.
+   */
+  ringRadius: number;
 }
 
 /**
@@ -141,6 +149,7 @@ export function sightPortDots(root: HTMLElement, nodeId: string, options?: Sight
       clientX: rect.left + rect.width / 2,
       clientY: rect.top + rect.height / 2,
       side: sideOf(el),
+      ringRadius: portDotRingRadiusPx(dot),
     });
   };
   for (const el of Array.from(root.querySelectorAll("[data-port-id]"))) {
