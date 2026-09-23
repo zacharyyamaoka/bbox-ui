@@ -803,8 +803,18 @@ Every notation choice trades something, and a proposal whose cost is unstated ha
 one rather than none.</p>
 </div>""")
     if design.get("cutLine"):
+        # WHY the caveat: the ranker wrote this against its own 40-item ordering,
+        # BEFORE same-axis duplicates were folded and dropped items removed, so its
+        # "#19"/"#20" are not the numbers printed above. The mechanical test it states
+        # is the valuable part and is unaffected; silently reprinting stale cross-
+        # references would not be.
         P.append(f'<div class="note gold"><p><strong>Why the line falls at twenty.</strong> '
-                 f'{para(design.get("cutLine"))}</p></div>')
+                 f'{para(design.get("cutLine"))}</p>'
+                 f'<p style="font-size:13px;color:var(--dim2);margin:10px 0 0">The '
+                 f'<em>#N</em> references in that paragraph are the ranker\u2019s own '
+                 f'pre-merge numbering, written before same-axis duplicates were folded '
+                 f'and dropped items removed \u2014 they do not line up with the numbers '
+                 f'above. The test it states does.</p></div>')
 
     used_drawings: set = set()
     for i, r in enumerate(top):
