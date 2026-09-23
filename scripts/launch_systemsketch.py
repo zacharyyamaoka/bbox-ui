@@ -757,15 +757,20 @@ def open_window_headless(url: str, screenshot: Path | None, hold: float) -> int:
             time.sleep(0.4)
         if target is None:
             raise LaunchError(f"{url} never rendered on {display} — nothing to verify")
-        print(f"Headless: {url} rendered on {display} — {target.get('title', '')!r}")
-        print(f"DevTools: http://127.0.0.1:{cdp_port} (attach with CDP to drive it)")
+        # WHY flush: an agent reads these lines to learn the display and the
+        # endpoint WHILE the run is still up. Python block-buffers a redirected
+        # stdout, so without this they arrive only after the run has torn
+        # itself down — measured: a recorder polled for the display for sixty
+        # seconds, got it at exit, and grabbed a display that no longer existed.
+        print(f"Headless: {url} rendered on {display} — {target.get('title', '')!r}", flush=True)
+        print(f"DevTools: http://127.0.0.1:{cdp_port} (attach with CDP to drive it)", flush=True)
         if screenshot is not None:
             # Give tldraw a beat to paint its first frame before grabbing one.
             time.sleep(2.0)
             if capture_display(display, screenshot, size):
-                print(f"Screenshot: {screenshot}")
+                print(f"Screenshot: {screenshot}", flush=True)
         if hold > 0:
-            print(f"Holding {display} for {hold:g}s — then it is torn down.")
+            print(f"Holding {display} for {hold:g}s — then it is torn down.", flush=True)
             time.sleep(hold)
         return 0
     finally:
