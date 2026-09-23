@@ -19,7 +19,7 @@
 // the region's and never in the canvas's.
 
 import type { HostScene } from "../hosts/hostScene";
-import { branchNode, ifElifElseArms, matchCaseArms } from "./region.branch";
+import { branchNode, ifElifElseArms, matchCaseArms, matchNode } from "./region.branch";
 
 /**
  * `if fast: estimate() / else: fallback()` (143241).
@@ -29,6 +29,11 @@ import { branchNode, ifElifElseArms, matchCaseArms } from "./region.branch";
  * `encode`'s single `pose` dot receives one cable per arm, and exactly one of
  * them carries a value on any given run. Fan-in at one ordinary port IS the
  * φ; a yield dot on the region would be a second way to say the same thing.
+ *
+ * WHY the `fast` cable now lands on the `if` ARM, not on the region (the
+ * split, `region.branch.ts`'s header): `ifElifElseArms(["fast"])` puts the
+ * boolean on the arm's own `test`, so `src`'s `fast` port feeds the ONE arm
+ * that reads it — there is no longer a head card port to feed instead.
  */
 export const BRANCH_ONE_INPUT: HostScene = {
   nodes: [
@@ -36,7 +41,6 @@ export const BRANCH_ONE_INPUT: HostScene = {
     ...branchNode({
       id: "br",
       position: { x: 250, y: 24 },
-      conditions: ["fast"],
       arms: ifElifElseArms(["fast"]).map((arm) => ({ ...arm, h: arm.id === "if" ? 160 : 140 })),
     }),
     { id: "estimate", type: "block", parentId: "if", position: { x: 180, y: 16 }, data: { name: "estimate()", view: "port", w: 200, h: 112, ports: { left: ["frame", "gain"], right: ["Pose"] } } },
@@ -44,11 +48,11 @@ export const BRANCH_ONE_INPUT: HostScene = {
     { id: "encode", type: "block", position: { x: 850, y: 250 }, data: { name: "encode()", view: "port", w: 160, h: 86, ports: { left: ["pose"] } } },
   ],
   edges: [
-    // The condition is an ordinary data cable into an ordinary port — the
-    // ONE thing that makes this region a branch rather than a group, and it
-    // is not a control line (plan §5): nothing here is drawn as containment
-    // except the containment itself.
-    { id: "e-cond", source: "src", sourceHandle: "fast", target: "br", targetHandle: "fast" },
+    // The condition is an ordinary data cable into the `if` ARM's own
+    // operand — the ONE thing that makes this region a branch rather than a
+    // group, and it is not a control line (plan §5): nothing here is drawn
+    // as containment except the containment itself.
+    { id: "e-cond", source: "src", sourceHandle: "fast", target: "if", targetHandle: "if" },
     // Straight into the arms' members, crossing the frame (V1): a region can
     // READ what was defined before it, so the input border needs no ports.
     { id: "e-frame1", source: "src", sourceHandle: "frame", target: "estimate", targetHandle: "frame" },
@@ -59,38 +63,52 @@ export const BRANCH_ONE_INPUT: HostScene = {
   ],
 };
 
-/** Three conditions, three arms (144504) — the corner block's left wall is
- *  the whole interface, however many values the branch decides on. */
+/**
+ * Three conditions, three arms (144504) — REWRITTEN for the split. This is
+ * the fixture the report's whole case rests on: three head ports bound to
+ * three arms only by VERTICAL COINCIDENCE was the ambiguity ("nothing in
+ * the drawing says which port belongs to which arm"). There is no shared
+ * subject here — three unrelated booleans, one per arm — so each becomes
+ * that arm's OWN `test`, on that arm's own header. The three-way ambiguity
+ * is now unrepresentable: a reader (or a test) can see which value belongs
+ * to which arm because it is the SAME node.
+ */
 export const BRANCH_MANY_INPUTS: HostScene = {
   nodes: [
     ...branchNode({
       id: "br",
       position: { x: 32, y: 24 },
       w: 460,
-      conditions: ["input_1", "input_2", "input_3"],
       arms: [
-        { id: "arm-1", title: "arm 1", h: 110 },
-        { id: "arm-2", title: "arm 2", h: 110 },
-        { id: "arm-3", title: "arm N", h: 110 },
+        { id: "arm-1", title: "arm 1", test: { id: "input_1" }, h: 110 },
+        { id: "arm-2", title: "arm 2", test: { id: "input_2" }, h: 110 },
+        { id: "arm-3", title: "arm N", test: { id: "input_3" }, h: 110 },
       ],
     }),
     { id: "step-1", type: "block", parentId: "arm-1", position: { x: 170, y: 14 }, data: { name: "first()", view: "port", w: 170, h: 64, ports: { left: ["in"], right: ["out"] } } },
     { id: "step-2", type: "block", parentId: "arm-2", position: { x: 170, y: 14 }, data: { name: "second()", view: "port", w: 170, h: 64, ports: { left: ["in"], right: ["out"] } } },
     { id: "step-3", type: "block", parentId: "arm-3", position: { x: 170, y: 14 }, data: { name: "last()", view: "port", w: 170, h: 64, ports: { left: ["in"], right: ["out"] } } },
   ],
+  // Unwired, as drawn (144504: "connected to nothing") — the point of this
+  // fixture was always the dots themselves, not a producer for them. What
+  // the split fixes is WHOSE dots they are: `input_1`/`input_2`/`input_3`
+  // now live on `arm-1`/`arm-2`/`arm-3` respectively, so a wiring edge
+  // targeting `{ target: "arm-2", targetHandle: "input_2" }` reads as
+  // unambiguous the moment one is drawn — no vertical coincidence left to
+  // misread.
   edges: [],
 };
 
-/** `match cmd:` — the same region, the same arm rows, different titles. The
- *  subject rides the corner block as a condition port exactly as an `if`'s
- *  does; `case _:` is just the last arm. */
+/** `match cmd:` — a LabVIEW Case Structure (the split, `region.branch.ts`'s
+ *  header): ONE subject on the corner block, arms carrying static PATTERNS
+ *  and no operand of their own; `case _:` is just the last arm. */
 export const MATCH_CASE: HostScene = {
   nodes: [
-    ...branchNode({
+    ...matchNode({
       id: "br",
       position: { x: 32, y: 24 },
       w: 460,
-      conditions: ["cmd"],
+      subject: "cmd",
       arms: matchCaseArms(['"go"', '"stop"']).map((arm) => ({ ...arm, h: 110 })),
     }),
     { id: "start", type: "block", parentId: "case-1", position: { x: 170, y: 14 }, data: { name: "start()", view: "port", w: 170, h: 64, ports: { left: ["cmd"], right: ["ok"] } } },
@@ -122,7 +140,11 @@ const THREE_ARM_REST = {
     { id: "encode", type: "block", position: { x: 850, y: 250 }, data: { name: "encode()", view: "port", w: 160, h: 86, ports: { left: ["pose"] } } },
   ],
   edges: [
-    { id: "e-cond", source: "src", sourceHandle: "mode", target: "br", targetHandle: "mode" },
+    // `mode` feeds BOTH arms that test it — there is no shared head port to
+    // land on any more (the split), so `src`'s one `mode` output fans OUT to
+    // each arm's own operand, the mirror image of the encode fan-IN below.
+    { id: "e-cond-if", source: "src", sourceHandle: "mode", target: "if", targetHandle: "if" },
+    { id: "e-cond-elif", source: "src", sourceHandle: "mode", target: "elif", targetHandle: "elif" },
     { id: "e-frame-if", source: "src", sourceHandle: "frame", target: "estimate", targetHandle: "frame" },
     { id: "e-frame-elif", source: "src", sourceHandle: "frame", target: "fallback", targetHandle: "frame" },
     { id: "e-frame-else", source: "src", sourceHandle: "frame", target: "identity", targetHandle: "frame" },
@@ -144,7 +166,6 @@ export const BRANCH_FOLDED: HostScene = {
     ...branchNode({
       id: "br",
       position: { x: 250, y: 24 },
-      conditions: ["mode"],
       arms: ifElifElseArms(THREE_ARM_CONDITIONS).map((arm) => ({ ...arm, h: 120, ...(arm.id === "elif" ? { open: false } : null) })),
     }),
     ...THREE_ARM_REST.nodes,
@@ -160,7 +181,6 @@ export const BRANCH_ACTIVE: HostScene = {
     ...branchNode({
       id: "br",
       position: { x: 250, y: 24 },
-      conditions: ["mode"],
       activeArm: "if",
       arms: ifElifElseArms(THREE_ARM_CONDITIONS).map((arm) => ({ ...arm, h: 120 })),
     }),
@@ -189,7 +209,6 @@ export const BRANCH_NESTED: HostScene = {
       id: "br",
       position: { x: 32, y: 24 },
       w: 620,
-      conditions: ["mode"],
       arms: ifElifElseArms(['mode == "fast"']).map((arm) => ({ ...arm, h: arm.id === "if" ? 360 : 130 })),
     }),
     ...branchNode({
@@ -197,7 +216,13 @@ export const BRANCH_NESTED: HostScene = {
       parentId: "if",
       position: { x: 190, y: 16 },
       w: 380,
-      conditions: ["gain"],
+      // WHY the inner arm's `test.id` is left as `ifElifElseArms`'s own
+      // "if"/"else" rather than re-prefixed alongside the arm's `id`: a
+      // port id only has to be unique WITHIN the node that carries it
+      // (`wireLayer.tsx`'s `[data-port-id]` lookup is scoped inside
+      // `[data-block-id]`), and each arm is its own node — "inner-if"'s
+      // own port being spelled "if" collides with nothing, including the
+      // outer `if` arm's identically-spelled "if" port on ITS OWN node.
       arms: ifElifElseArms(["gain > 1.0"]).map((arm) => ({ ...arm, id: `inner-${arm.id}`, h: 96 })),
     }),
     { id: "refine", type: "block", parentId: "inner-if", position: { x: 150, y: 14 }, data: { name: "refine()", view: "port", w: 190, h: 64, ports: { left: ["pose"], right: ["Pose"] } } },
