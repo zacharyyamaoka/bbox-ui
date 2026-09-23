@@ -301,8 +301,9 @@ profile and free port, so an agent's check can no longer be the browser that swa
 </figure>
 <figure>
   <img src="{media['pyblocks']}" alt="pyblocks rendered headlessly, still showing its loading pill.">
-  <figcaption><b>pyblocks</b> — works and cleans up, but its capture lands
-  <i>mid-load</i>: <code>readyState</code> fires before the board paints. Sent back to close that.</figcaption>
+  <figcaption><b>pyblocks</b> — <code>launch_pyblocks.py --headless --screenshot …</code>.
+  The real board: the <code>Block</code> node with its <code>rows</code>/<code>window</code>/<code>report</code>
+  ports, not a loading pill.</figcaption>
 </figure>
 </div>
 
@@ -311,10 +312,13 @@ profile and free port, so an agent's check can no longer be the browser that swa
 <li><b>bbox-ui — done and proved</b> <span class="tag done">committed, not merged</span><br>
 Branch <code>claude/bbox-app-not-opening-b62874</code>, commit <code>5842377</code>. 203 launcher tests
 green, four guards mutation-tested red, the failure reproduced end to end against real Chrome.</li>
-<li><b>pyblocks — done, one gap being closed</b> <span class="tag open">in flight</span><br>
-Branch <code>claude/launcher-headless-mode</code>, commit <code>6ac51d1</code>. I re-ran its 16 tests
-and drove its headless mode myself rather than take its word for it. It works; the screenshot lands
-mid-load, and it is back with the agent to wait for a real readiness signal.</li>
+<li><b>pyblocks — done and proved</b> <span class="tag done">committed, not merged</span><br>
+Branch <code>claude/launcher-headless-mode</code>, commit <code>18a82ec</code>. 19 tests green. Its
+first cut captured the app mid-load, because <code>document.readyState</code> fires long before
+<code>&lt;Tldraw&gt;</code> mounts; it now polls the two markers the app itself sets — a
+<code>[data-save-state]</code> that has left <code>"loading"</code>, and a <code>.tl-canvas</code> —
+inside the same bounded timeout. I re-ran the tests and drove the headless mode myself on private
+ports rather than take its word for either.</li>
 <li><b>Needs you: whether to land it.</b> Your dock icon runs the launcher in the
 <i>main checkout</i>, so it still has the old one. Implementing is not integrating, so I left both
 branches where they are. <b>If you say nothing I will leave them unmerged</b> — nothing regresses,
