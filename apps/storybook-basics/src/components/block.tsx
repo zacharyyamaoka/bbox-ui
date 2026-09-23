@@ -161,6 +161,26 @@ export interface BlockProps {
    */
   showHeaderDivider?: boolean;
   /**
+   * How wide the header band is. `"full"` (default) spans the block — the
+   * header every Block has always had. `"hug"` shrink-wraps its content:
+   * the HEAD TAB. Zach, 2026-09-22, sketching a Block with its header
+   * shrunk to a tab (`Pasted image 20260922184414.png`, "Head Tab View"):
+   * the tab's bottom edge continues as the body's top rule, and its right
+   * edge closes the tab off — an L, not the full-width single rule a
+   * `"full"` header draws. `showHeaderDivider={false}` still means NO
+   * rules at all in either fit (`Pasted image 20260922184423.png`,
+   * "Hidding header lines": a bare chevron, title and port dot, no
+   * outline) — `showHeaderDivider` alone still gates whether anything
+   * paints; `headerFit` only changes WHICH sides paint when it does.
+   *
+   * `blockPort.tsx`'s `useBlockBands` measures the tab's own right edge
+   * (`headerRight`) off this element's rendered width — `w-fit` +
+   * `self-start` below is what gives it one narrower than the block to
+   * measure, rather than `railBoxFor` needing a second, computed source
+   * of truth for the same line.
+   */
+  headerFit?: "full" | "hug";
+  /**
    * The divider line above the footer — `showHeaderDivider`'s missing
    * sibling. Block used to have no way to hide it at all: the footer
    * wrapper's `border-t` was unconditional, unlike the header's own
@@ -337,6 +357,7 @@ export function Block({
   shape = "card",
   style,
   showHeaderDivider = true,
+  headerFit = "full",
   showFooterDivider = true,
   description,
   showDescription = true,
@@ -528,6 +549,15 @@ export function Block({
           data-slot="block-header"
           className={cn(
             "px-3 py-2 has-[>[data-slot=bar]]:p-0",
+            // `headerFit="hug"` shrink-wraps to its content and pins to
+            // the left — `self-start` overrides the column flex's default
+            // `align-items: stretch` (block.tsx's root has no
+            // `items-*` class, so a bare `w-fit` alone would still be
+            // stretched back to the block's full width). `headerFit ===
+            // "full"` (the default) takes neither class, so this branch
+            // renders nothing extra and the existing header stays
+            // byte-identical.
+            headerFit === "hug" && "w-fit self-start",
             // `border-b-[color:…]`, NOT the bare `border-[color:…]` this
             // was first written as: a bracketed arbitrary value with no
             // side prefix sets the property on all FOUR sides, which
@@ -536,7 +566,19 @@ export function Block({
             // `FunctionPortHeaderInset`, off by 2px) before this fix.
             // `border-b` alone still supplies the bottom width + solid
             // style; this only overrides ITS colour.
-            showHeaderDivider && "border-b border-b-[color:var(--bbox-skin-stroke,var(--color-border))]",
+            //
+            // WHY a hugged header's rule is an L — bottom AND right — and
+            // not just the bottom every `"full"` header already draws:
+            // Zach's drawing continues the tab's bottom edge as the body's
+            // top rule and closes the tab with its own right edge (this
+            // prop's own doc, above). A bottom-only rule on a narrower tab
+            // would leave the body's top-right corner, past the tab, with
+            // no line at all — which is exactly the "full" header's rule,
+            // not the tab's.
+            showHeaderDivider &&
+              (headerFit === "hug"
+                ? "border-b border-r border-b-[color:var(--bbox-skin-stroke,var(--color-border))] border-r-[color:var(--bbox-skin-stroke,var(--color-border))]"
+                : "border-b border-b-[color:var(--bbox-skin-stroke,var(--color-border))]"),
           )}
           // `headerChrome` (paintOrder.ts) — the nesting tier: a Block's
           // own header must paint ABOVE its own `BlockMembers` region no

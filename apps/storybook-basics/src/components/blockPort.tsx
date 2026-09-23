@@ -82,6 +82,7 @@ import {
   type BlockBands,
   type BlockPortLayout,
   type BlockView,
+  type RailBand,
   type RailPlan,
 } from "./blockPort.layout";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
@@ -174,6 +175,23 @@ export interface BlockEdgeSpec {
    */
   dividerAfter?: number[];
   onDividerAfterChange?(next: number[]): void;
+  /**
+   * Which of the Block's bands this wall's rail spans. Omitted = the
+   * view's own rule (`railPlanFor`, via `populatedEdges`). `"header"`
+   * mounts the rail on the header strip, and on a hugged header
+   * (`Block`'s `headerFit="hug"`) its right rail rides the TAB's edge,
+   * not the block's (`railBoxFor`'s `headerRight` reading).
+   *
+   * Applied as an override AFTER `railPlanFor` returns — the view rule
+   * still picks distribution/groups/end-margin for the wall; this only
+   * relocates which band the rail's box is measured against, the same
+   * higher-precedence seam `distribution`/`groups` already are on this
+   * type (E-3, above) and for the same reason: a caller occasionally
+   * needs to win over the population-derived default, and `railPlanFor`
+   * itself stays untouched rather than growing a case for every caller
+   * that wants to override just one field.
+   */
+  band?: RailBand;
 }
 
 export interface BlockPortProps {
@@ -564,6 +582,9 @@ export function BlockPort({
             ...(spec.distribution ? { distribution: spec.distribution } : null),
             ...(spec.groups !== undefined ? { groups: spec.groups } : null),
             ...(spec.groupMode !== undefined ? { groupMode: spec.groupMode } : null),
+            // `BlockEdgeSpec.band`'s own seam: an explicit per-edge band
+            // always wins over the view rule's derived one.
+            band: spec.band ?? plan.band,
           };
           return <BlockPortRail key={side} edge={side} spec={spec} plan={finalPlan} bands={bands} diameter={diameter} variant={variant} />;
         })}
