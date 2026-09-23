@@ -506,6 +506,14 @@ function FileCrumb({
                     <DropdownMenuItem
                       key={action.id}
                       disabled={action.disabled}
+                      // WHY the row forwards `title` (the prop was already on
+                      // `MenuAction`, and this surface was the one dropping
+                      // it): a DISABLED row has to be able to say why. A
+                      // greyed row with no reason reads as the capability
+                      // having silently vanished — the exact complaint Zach
+                      // made on 2026-09-23 about the native-mode rows. The
+                      // burger already renders this; the file title did not.
+                      title={action.title}
                       variant={action.destructive ? "destructive" : "default"}
                       onClick={action.run}
                     >
@@ -529,6 +537,9 @@ function FileCrumb({
                 <ContextMenuItem
                   key={action.id}
                   disabled={action.disabled}
+                  /* Same list, same rows (MENU-KIT-DESIGN §5, §9) — so the
+                     right-click menu must explain a disabled row too. */
+                  title={action.title}
                   variant={action.destructive ? "destructive" : "default"}
                   onClick={action.run}
                 >

@@ -140,6 +140,26 @@ async function boardWith(names: string[]): Promise<string> {
 
 const titleOf = (mounted: MountedApp) => mounted.root.querySelector<HTMLElement>('[data-testid="ss-chrome-title"]');
 const statusToneOf = (mounted: MountedApp) => titleOf(mounted)?.querySelector('[data-slot="chrome-bar-status-dot"]')?.getAttribute("data-tone") ?? null;
+
+/** Open the FILE TITLE's own dropdown. `runFileCommand` opens the burger's
+ *  File submenu instead — a different list (`titleActions`, not `menu`). */
+async function openTitleMenu(mounted: MountedApp): Promise<HTMLElement> {
+  // WHY the testid and not the first `dropdown-menu-content` in the document:
+  // the burger's popup is the same slot and outlives the row that was clicked
+  // in it (Base UI keeps it mounted through its exit animation), so a bare
+  // query silently returned the BURGER and this test asserted against the
+  // wrong menu. Measured 2026-09-23.
+  await closeMenus();
+  const title = await waitFor(() => titleOf(mounted), { what: "the file title" });
+  await userEvent.click(title);
+  return waitFor(
+    () => {
+      const popup = document.querySelector<HTMLElement>('[data-testid="ss-chrome-file-menu"]');
+      return popup && rowsOf(popup).length ? popup : null;
+    },
+    { what: "the title menu's rows" },
+  );
+}
 const navigatorDialog = (mode: "open" | "saveAs") => document.querySelector<HTMLElement>(`[data-testid="ss-file-navigator"][data-mode="${mode}"]`);
 const rowFor = (path: string) => document.querySelector<HTMLElement>(`[data-testid="ss-file-navigator-row"][data-path="${CSS.escape(path)}"]`);
 
@@ -491,6 +511,72 @@ describe("native file navigation — the browser's File System Access pickers, n
     await waitFor(() => statusToneOf(mounted) === "error", { what: "the conflict surfaced", timeout: 10_000 });
     await sleep(1_000);
     expect(blockNamesIn(picked.content)).toEqual(["external"]);
+  });
+
+  it("the title's Rename shows the name that was typed — it never silently renames something else", async () => {
+    // Zach, 2026-09-23: "rename is not saving on the file name: I click it,
+    // type in the new name but it doesn't update when I press enter or click
+    // away." Reproduced HERE and only here: in app mode the same gesture
+    // really renames on disk (the app-mode case above passes), so the bug is
+    // native mode, where `document.path` is null BY CONSTRUCTION and
+    // `commitRename` fell through to `editor.updateDocumentSettings` —
+    // renaming tldraw's in-memory board name, which `identity.title` can
+    // never show once a file is open (`session.title ?? boardName`, and an
+    // opened file always sets `session.title`). Both halves silently did
+    // nothing: the file kept its name and so did the bar.
+    const picked = fakeHandle("native-rename-me.tldr", await boardWith(["native-rename"]));
+    stubWindow("showOpenFilePicker", async () => [picked]);
+    const { app: mounted } = await mountOn(null);
+    await runFileCommand(mounted, "Open…");
+    await waitFor(() => blockNamed(mounted.editor, "native-rename"), { what: "the picked board in the editor" });
+    const title = await waitFor(
+      () => (titleOf(mounted)?.textContent?.includes("native-rename-me") ? titleOf(mounted) : null),
+      { what: "the picked file's title" },
+    );
+
+    // The menu row says so up front — greyed, with the reason one hover away.
+    const menu = await openTitleMenu(mounted);
+    const row = rowsOf(menu).find((candidate) => candidate.label === "Rename");
+    expect(row, `title menu HTML: ${menu.innerHTML}`).toBeTruthy();
+    expect(row!.element.getAttribute("aria-disabled")).toBe("true");
+    expect(row!.element.getAttribute("title")).toMatch(/File navigation/);
+    await closeMenus();
+
+    // F2 opens the same field with no menu involved, so the refusal has to
+    // live in the commit, not only on the row.
+    await userEvent.dblClick(title);
+    const input = await waitFor(() => mounted.root.querySelector<HTMLInputElement>('[data-slot="inline-rename-input"]'), {
+      what: "the rename field",
+    });
+    await userEvent.clear(input);
+    await userEvent.type(input, "renamed-natively{Enter}");
+
+    const error = await waitFor(() => mounted.root.querySelector<HTMLElement>('[data-slot="inline-rename-error"]'), {
+      what: "the refusal, in words",
+    });
+    expect(error.textContent).toMatch(/File navigation/);
+
+    // Measured, not merely present: the chrome bar sits at the very top of
+    // the window and this message is absolutely positioned UNDER the field,
+    // which is exactly where a clipped or off-screen error would hide.
+    const box = error.getBoundingClientRect();
+    expect(box.width, "error width").toBeGreaterThan(0);
+    expect(box.height, "error height").toBeGreaterThan(0);
+    expect(box.top, "error top edge on screen").toBeGreaterThanOrEqual(0);
+    expect(box.bottom, "error bottom edge on screen").toBeLessThanOrEqual(window.innerHeight);
+    expect(box.left, "error left edge on screen").toBeGreaterThanOrEqual(0);
+    expect(box.right, "error right edge on screen").toBeLessThanOrEqual(window.innerWidth);
+
+    // …and the silent half is gone: nothing was renamed behind his back.
+    // The field stays open on a refusal (the same shape as "Save this board
+    // before renaming it."), so the title button is not mounted yet — Escape
+    // is what puts it back, and what proves the name never moved.
+    expect(mounted.editor.getDocumentSettings().name).not.toBe("renamed-natively");
+    expect(picked.name).toBe("native-rename-me.tldr");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => titleOf(mounted)?.textContent?.includes("native-rename-me"), {
+      what: "the bar still names the file that is really open",
+    });
   });
 });
 
