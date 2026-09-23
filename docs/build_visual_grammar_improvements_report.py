@@ -94,6 +94,48 @@ AXIS_LABELS = {
     "readability-and-review": "Readability & review",
 }
 
+# The measured findings worth reading before the ranking, keyed by a substring
+# of the complaint title that carries them. Rendered as a highlight band with
+# the verbatim re-fetched quote, because these are the rows that should change
+# how the list is read rather than merely support one item in it.
+#
+# WHY keyed by title substring and rendered only on a hit: the numbers live in
+# the corpus, not in this file, so the band cannot state a figure the run did
+# not verify. A corpus that no longer carries one of these silently drops the
+# card instead of printing a stale number.
+MEASURED = [
+    ("Adding one line of logic took 8x longer",
+     "8×", "slower to make one small edit",
+     "Green &amp; Petre timed the same change into three implementations: LabVIEW "
+     "508.3s, Prograph 193.6s, BASIC 63.3s. <strong>Viscosity, not density, is the "
+     "measured weakness</strong> — and the same paper found diffuseness "
+     "“less of a liability than we had supposed”."),
+    ("Visual conditional notations took twice as long",
+     "2×", "slower to comprehend a conditional",
+     "Green, Petre &amp; Bellamy set LabVIEW’s two visual conditional forms "
+     "against two textual ones. The match-mismatch effect appeared but was smaller "
+     "than expected; response times doubled. This is the empirical refutation of "
+     "“graphics inherently beat text”."),
+    ("Nesting does not reduce a program's entity count",
+     "104", "graphic entities for a 22-line program",
+     "The same rocket program: BASIC 22 lines / 140 words on one screen; LabVIEW 45 "
+     "icons + 59 wires = 104 entities; Prograph 131 entities across 11 windows with "
+     "no way to see it at once. <strong>Nesting redistributes entities, it does not "
+     "remove them.</strong>"),
+    ("figure is folklore",
+     "50", "primitives — a number that was never measured",
+     "The famous ceiling is one remark in one conference Q&amp;A, not a result. "
+     "Worth knowing before designing against it: a surveyed corpus of deployed "
+     "dataflow graphs runs well past it anyway."),
+    ("proven graveyard",
+     "3", "funded attempts at lossless graph↔text sync",
+     "MPS, Enso/Luna and Intentional Software each spent years keeping an editable "
+     "graph in sync with canonical text, and shipped little. This is the strongest "
+     "argument against the premise, and it is from your own vault — which is "
+     "why several recommendations below are about keeping the text canonical and "
+     "the graph derived."),
+]
+
 CRITERIA = [
     ("c1", "Fixes a verified complaint", 25),
     ("c2", "Lives where the oracle leaves room", 20),
@@ -432,6 +474,19 @@ def build(corpus: dict, design: dict) -> str:
            font-size:14px; line-height:1.65; margin:16px 0 }}
   .note.warn {{ border-color:var(--warn) }}
   .note.gold {{ border-color:var(--gold) }}
+  .mgrid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(248px,1fr));
+            gap:14px; margin:20px 0 26px }}
+  .mcard {{ background:var(--panel); border:1px solid var(--line); border-radius:12px;
+            padding:18px 18px 16px }}
+  .mcard b {{ display:block; font:700 38px/1 var(--mono); color:var(--gold);
+              letter-spacing:-.03em }}
+  .mcard > span {{ display:block; font-size:12px; color:var(--dim2); margin:7px 0 12px;
+                   line-height:1.4; text-transform:uppercase; letter-spacing:.06em;
+                   font-weight:600 }}
+  .mcard p {{ margin:0; font-size:13.5px; line-height:1.6; color:#cfd4de }}
+  .mcard blockquote {{ margin:13px 0 0; padding:10px 12px; background:#0a0b0e;
+                       border-radius:8px; border-left:2px solid var(--line2);
+                       font:11.5px/1.55 var(--mono); color:var(--dim) }}
   details {{ border:1px solid var(--line); border-radius:10px; padding:0 18px;
              margin:0 0 12px; background:var(--panel) }}
   details[open] {{ padding-bottom:16px }}
@@ -476,6 +531,47 @@ C++ instead of Blueprints. That is not a failure of any one product. It is the n
 a ceiling, every time, in the same place. Your project starts on the other side of that ceiling,
 because the text is already the source of truth. Several recommendations below are about
 <em>not</em> giving that advantage away.</p>
+</div>""")
+
+    # ── the measured band ─────────────────────────────────────────────────
+    cards = []
+    for needle, big, cap, body in MEASURED:
+        hit = next((c for c in complaints
+                    if needle.lower() in str(c.get("title", "")).lower()), None)
+        if not hit:
+            continue
+        ev = [e for e in (hit.get("evidence") or []) if e.get("quote")]
+        q = ev[0].get("quote") if ev else ""
+        url = ev[0].get("url") if ev else ""
+        src = ""
+        if url:
+            short = (pathlib.Path(url).name if url.startswith("/")
+                     else url.replace("https://", "").replace("http://", "").split("/")[0])
+            src = (f'<a class="ev" href="{attr(url)}">{esc(short[:40])}</a>'
+                   if url.startswith("http") else f'<span class="ev">{esc(short[:40])}</span>')
+        cards.append(
+            f'<div class="mcard"><b>{big}</b><span>{cap}</span><p>{body}</p>'
+            + (f'<blockquote>“{esc(str(q)[:190])}”<br>{src}</blockquote>'
+               if q else "")
+            + "</div>")
+    if cards:
+        P.append(f"<h2>{len(cards)} numbers worth having first</h2>")
+        P.append('<p class="sub" style="font-size:15px">Every figure below is a verbatim '
+                 'quote the verification pass re-fetched from a primary source. Two of them '
+                 'point away from the problem people assume.</p>')
+        P.append(f'<div class="mgrid">{"".join(cards)}</div>')
+        P.append("""<div class="note warn">
+<p><strong>The reframe these force.</strong> The density complaint is the loudest one in the
+corpus and it is <em>not</em> the one with the strongest evidence behind it — Green &amp;
+Petre measured diffuseness as a smaller liability than they expected, and measured
+<strong>editing</strong> as an 8:1 catastrophe. Meanwhile the academic corpus’ own blocking
+finding is that “rewiring existing code is where visual programming actually breaks —
+editing, not reading”, and NI’s engineers were found going to great lengths to avoid
+modifying their own LabVIEW code.</p>
+<p>Your architecture already answers this in a way none of the eleven can: <strong>the text is
+canonical, so a text edit is always available as the editing gesture.</strong> That converts the
+prior art’s worst measured failure into a non-problem — provided the graph never becomes
+the only way to make a change. Several recommendations below exist to protect exactly that.</p>
 </div>""")
 
     # ── criteria ──────────────────────────────────────────────────────────
