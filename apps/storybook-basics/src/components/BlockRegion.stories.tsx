@@ -23,11 +23,13 @@
  * agree — the reason a pure layout twin exists at all (a tldraw shape or an
  * SVG export reads those numbers WITHOUT rendering).
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor } from "storybook/test";
 
+import { BlockRegion } from "./blockRegion";
 import { regionLayout } from "./blockRegion.layout";
+import { WireLayer } from "./wireLayer";
 import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
@@ -266,6 +268,103 @@ export const ActiveArm: Story = {
     // DOM-presence check.
     expect(getComputedStyle(faded).opacity).toBe("0.18");
     expect(getComputedStyle(active).opacity).toBe("1");
+  },
+};
+
+/**
+ * WHY this bench mounts `<BlockRegion>` directly instead of going through
+ * `StatefulDomCanvas` (`hosts/domCanvas.tsx` → `hosts/nodeViews.tsx`), unlike
+ * every story above: `nodeViews.tsx`'s own `arms` projection
+ * (`armsOf(scene, node.id).map(...)`) does not yet read `arm.data.ports`
+ * into `RegionArm.test`/`captures` — that scene-to-host wiring is a
+ * follow-up, not this lane's job (region.branch.ts's `armNode` already
+ * writes `data.ports`; nothing downstream of it in the scene pipeline reads
+ * them back out yet). `test`/`captures` are `BlockRegion`'s OWN props, so
+ * this bench exercises them the same way `BlockPort.stories.tsx` exercises
+ * `BlockPort` — directly, with a real `WireLayer` sibling so the id rule
+ * (arm header owns `data-block-id`, never the region) is proven against a
+ * REAL wire resolving, not just DOM presence.
+ */
+const ARM_TEST_DEFAULT = '  mode == "fast"  ';
+
+function ArmPortsBench() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const arms = [
+    { id: "if", title: "if fast:", open: false, test: { id: "if", default: ARM_TEST_DEFAULT } },
+    { id: "elif", title: "elif safe:", open: false, test: { id: "elif" } },
+    { id: "case-a", title: 'case Point(x=0, y=y):', open: false, captures: ["y"] as const },
+    { id: "else", title: "else:", open: false },
+  ];
+  return (
+    <div ref={containerRef} style={{ position: "relative", width: 420, height: 420 }}>
+      {/* A control port on the corner is what gives it a `data-block-id`
+          at all (`TitleCorner`: no ports = a bare `Block`, no `BlockPort`
+          wrapper) — needed so bullet 4 below can test "the region id owns
+          EXACTLY ONE element" against a real second candidate, not zero. */}
+      <BlockRegion id="ap" title="Selector" width={340} controlPorts={[{ id: "cond", label: "cond" }]} arms={arms} />
+      {/* Proves the id rule end to end (§2 of the brief): a wire whose ends
+          name two ARM ids must resolve to the arms' own dots, never to the
+          region's corner card — the whole reason the header, not the
+          region, carries `data-block-id`. */}
+      <WireLayer wires={[{ id: "w1", from: { blockId: "if", portId: "if" }, to: { blockId: "case-a", portId: "y" } }]} containerRef={containerRef} />
+    </div>
+  );
+}
+
+export const ArmPorts: Story = {
+  name: "Arm ports (own operand / pattern captures)",
+  render: () => <ArmPortsBench />,
+  play: async ({ canvasElement }) => {
+    const region = required<HTMLElement>(canvasElement, '[data-region-id="ap"]', "the region");
+    const frame = required<HTMLElement>(region, '[data-slot="region-frame"]', "the frame").getBoundingClientRect();
+    const TOL = 4;
+
+    // 1 — a `test` arm renders exactly one dot, centred vertically inside
+    // ITS OWN header strip and on the frame's left wall.
+    const ifHeader = required<HTMLElement>(canvasElement, '[data-arm-id="if"] [data-slot="region-arm-header"]', "if's header");
+    expect(ifHeader.getAttribute("data-block-id")).toBe("if");
+    const ifHeaderRect = ifHeader.getBoundingClientRect();
+    const ifDots = ifHeader.querySelectorAll<HTMLElement>("[data-port-id]");
+    expect(ifDots.length, "exactly one dot on the `if` header").toBe(1);
+    const ifDotRect = ifDots[0].getBoundingClientRect();
+    const ifCentre = { x: ifDotRect.left + ifDotRect.width / 2, y: ifDotRect.top + ifDotRect.height / 2 };
+    expect(ifCentre.y, "the dot's centre y sits inside the header strip").toBeGreaterThanOrEqual(ifHeaderRect.top - TOL);
+    expect(ifCentre.y).toBeLessThanOrEqual(ifHeaderRect.bottom + TOL);
+    expect(Math.abs(ifCentre.x - frame.left), "the dot's centre x is on the frame's left wall").toBeLessThanOrEqual(TOL);
+
+    // 2 — a `captures` arm renders its dot on the header's RIGHT edge,
+    // strictly inside the frame (never on or past its right wall).
+    const capHeader = required<HTMLElement>(canvasElement, '[data-arm-id="case-a"] [data-slot="region-arm-header"]', "case-a's header");
+    const capDots = capHeader.querySelectorAll<HTMLElement>("[data-port-id]");
+    expect(capDots.length, "exactly one dot on the `case-a` header").toBe(1);
+    const capDotRect = capDots[0].getBoundingClientRect();
+    const capCentreX = capDotRect.left + capDotRect.width / 2;
+    expect(capCentreX, "the capture dot sits strictly left of the frame's right wall").toBeLessThan(frame.right);
+
+    // 3 — an arm with neither `test` nor `captures` renders NO dot.
+    const elseHeader = required<HTMLElement>(canvasElement, '[data-arm-id="else"] [data-slot="region-arm-header"]', "else's header");
+    expect(elseHeader.querySelectorAll("[data-port-id]").length, "an else arm owns no port").toBe(0);
+
+    // 4 — the id rule: the dot's `[data-block-id]` ancestor is the ARM's
+    // own id, and the REGION's id appears on exactly one element (the
+    // corner card) in the whole region.
+    const ifDotAncestor = ifDots[0].closest("[data-block-id]");
+    expect(ifDotAncestor?.getAttribute("data-block-id"), "the test dot resolves under the ARM's own id, not the region's").toBe("if");
+    expect(region.querySelectorAll('[data-block-id="ap"]').length, "the region id owns exactly one element").toBe(1);
+
+    // 5 — a `valueSet` arm (a `default` set, no cable) shows that default
+    // VERBATIM — spaces and quotes intact (truthful rendering).
+    expect(ifDots[0].getAttribute("data-port-id")).toBe("if");
+    expect(ifDots[0].textContent, "the default expression renders verbatim").toBe(ARM_TEST_DEFAULT);
+
+    // Proof a wire actually resolves onto an arm's dot, not just that the
+    // dot exists: `WireLayer` measures both ends and only fails to draw
+    // (and records the id in `data-unresolved-wires`) when a `[data-port-id]`
+    // could not be found inside its named `[data-block-id]`.
+    const wireLayer = required<SVGElement>(canvasElement, '[data-slot="wire-layer"]', "the wire layer");
+    await waitFor(() => {
+      expect(wireLayer.getAttribute("data-unresolved-wires"), "the if→case-a wire resolved on both ends").toBe("");
+    });
   },
 };
 

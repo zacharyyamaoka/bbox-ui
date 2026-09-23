@@ -80,7 +80,15 @@ const STAGE_H = 430;
 // needs (the "branch arm chevron" probe below) comes from a small BRANCH
 // region instead — the same split `HitRegionsBlockRegion.stories.tsx` already
 // draws between its own "loop" and "branch" regions.
-const SEL = branchNode({ id: "sel", name: "Selector", position: { x: 24, y: 190 }, w: 220, conditions: ["ready"], arms: [{ id: "if", title: "if ready:", open: false }] });
+const SEL = branchNode({
+  id: "sel",
+  name: "Selector",
+  position: { x: 24, y: 190 },
+  w: 220,
+  // The new grammar (region.branch.ts's "split"): no shared head condition —
+  // this ONE if/elif arm owns its own test, on its own header.
+  arms: [{ id: "if", title: "if ready:", open: false, test: { id: "if", default: "ready" } }],
+});
 
 const SCENE: HostScene = {
   nodes: [
