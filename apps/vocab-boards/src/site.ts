@@ -237,8 +237,21 @@ export const SEARCHED_FIELDS =
  * buckets, 2026-09-23); a new spelling shows up as a bucket missing from the
  * count, not as a wrong one, because the match is anchored at the start.
  */
-const REFUSAL_PREFIX = /^(not drawn|nothing drawn|no drawing|refusal|refused)\b/i;
+/**
+ * A mechanism is a REFUSAL when its own name says the thing is not on the
+ * canvas — not drawn at all, or pushed off it into a dialog, a parameter field
+ * or a tooltip.
+ *
+ * WHY the name and not the prose: the names are short and curated, one per
+ * mechanism, so the rule is checkable by eye. An earlier prefix-only rule
+ * counted 14 and missed every "Typed into an off-canvas field" and "Unlabelled
+ * nubs, names live off-canvas" — which are refusals by exactly the definition
+ * that makes this interesting: for a language you are deciding whether to copy,
+ * what it declines to draw is as load-bearing as what it draws.
+ */
+const REFUSAL_NAME =
+  /not drawn|nothing (is )?drawn|no drawing|refus|never drawn|no mark|no region|no node|no port|no wire|no glyph|off-canvas|off canvas|typed in|invisible|nothing encloses|nothing on the canvas/i;
 
 export function isRefusal(bucket: Bucket): boolean {
-  return REFUSAL_PREFIX.test(bucket.name.trim());
+  return REFUSAL_NAME.test(bucket.name);
 }

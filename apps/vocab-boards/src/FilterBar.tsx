@@ -298,11 +298,13 @@ export function FilterBar({
             <span className="text-[11px] whitespace-nowrap text-muted-foreground">columns · {columns}</span>
             <Slider
               data-testid="columns-slider"
-              className="w-24"
+              className="w-24 data-[orientation=horizontal]:w-24"
               min={MIN_COLUMNS}
               max={MAX_COLUMNS}
               step={1}
-              value={columns}
+              // Base UI derives its thumbs from the value ARRAY; a scalar falls
+              // back to [min, max] and paints two thumbs on one pixel.
+              value={[columns]}
               onValueChange={(next) => onColumnsChange(Array.isArray(next) ? next[0] : next)}
               aria-label="gallery columns"
             />

@@ -64,19 +64,79 @@ export function SingleBoard({ id }: { id: string }): JSX.Element {
 /* -------------------------------------------------------------- the router */
 
 /**
- * WHY scroll position is reset on a route change rather than left alone: the
- * document scrolls (there is no inner scrollport — see Home.tsx), so arriving
- * at a scenario from card 600 would otherwise land 9,000 px down a page that is
- * only four screens tall, i.e. at the very bottom, with the header off-screen.
- * The one exception is a scenario opened at a bucket anchor, which does its own
- * `scrollIntoView` — resetting there would fight it.
+ * WHY scroll position is reset when ENTERING a detail page but never when
+ * returning to the gallery: the document scrolls (there is no inner scrollport
+ * — see Home.tsx), so arriving at a scenario from card 600 would otherwise land
+ * 9,000 px down a page only four screens tall. Going BACK is the opposite case
+ * — the browser restores your place in the 50,000 px list, and resetting threw
+ * that away, so Back from card 600 dumped you at the top. The reference app has
+ * no scrollTo at all, and that is why Back keeps your place there.
+ * The other exception is a scenario opened at a bucket anchor, which does its
+ * own `scrollIntoView` — resetting there would fight it.
  */
+const LIST_SCROLL_KEY = "vocab.listScroll";
+
+/**
+ * WHY manual scroll restoration: the browser restores a hash navigation's scroll
+ * offset before the 705 lazy cards have laid out, so Back from a scenario landed
+ * at 1,203px for a saved 18,000px — and then overwrote our own correct restore a
+ * frame later. Taking the wheel means exactly one thing sets the offset, and it
+ * is the one that waits for the list to have height.
+ */
+if (typeof history !== "undefined" && "scrollRestoration" in history) {
+  history.scrollRestoration = "manual";
+}
+
 function useScrollReset(key: string, skip: boolean) {
   const previous = useRef<string | null>(null);
   useEffect(() => {
-    if (previous.current !== null && previous.current !== key && !skip) window.scrollTo(0, 0);
+    const from = previous.current;
+    const leavingList = from !== null && from.startsWith("home:");
+    const enteringDetail = !key.startsWith("home:");
+    if (from !== null && from !== key && !skip && enteringDetail && leavingList) {
+      window.scrollTo(0, 0);
+    }
+    if (from !== null && from !== key && !enteringDetail) {
+      // Returning to the gallery. The browser's own restoration fires before the
+      // 705 lazy cards have laid out, so it lands short — measured 2,673px for a
+      // saved 18,000px. Re-apply our own saved offset once the list has height.
+      let raf = 0;
+      let tries = 0;
+      const want = Number(sessionStorage.getItem(LIST_SCROLL_KEY) ?? "0");
+      const apply = () => {
+        if (!want) return;
+        if (document.body.scrollHeight - window.innerHeight >= want) {
+          window.scrollTo(0, want);
+          // keep re-applying briefly: lazy cards mounting below can still nudge it
+          if (tries > 20) return;
+        }
+        tries += 1;
+        raf = requestAnimationFrame(apply);
+      };
+      raf = requestAnimationFrame(apply);
+      previous.current = key;
+      return () => cancelAnimationFrame(raf);
+    }
     previous.current = key;
   }, [key, skip]);
+
+  // WHY a live listener and not a save on the way out: a route-change effect runs
+  // AFTER the incoming page has mounted and scrolled, so reading window.scrollY
+  // there recorded 1,361px for a gallery sitting at 18,000. The only moment the
+  // list's own offset is knowable is while the list is still the route.
+  const onList = !key.startsWith("home:") ? false : true;
+  useEffect(() => {
+    if (!onList) return;
+    let raf = 0;
+    const save = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        try { sessionStorage.setItem(LIST_SCROLL_KEY, String(Math.round(window.scrollY))); } catch { /* private mode */ }
+      });
+    };
+    window.addEventListener("scroll", save, { passive: true });
+    return () => { window.removeEventListener("scroll", save); cancelAnimationFrame(raf); };
+  }, [onList]);
 }
 
 function Browser(): JSX.Element {

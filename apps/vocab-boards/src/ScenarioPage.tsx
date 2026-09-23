@@ -92,22 +92,38 @@ function EvidenceRow({ evidence }: { evidence: Evidence[] }) {
               <div className="truncate text-[10px] tracking-wider text-muted-foreground uppercase" title={item.name}>
                 {item.name}
               </div>
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-w-0 items-center gap-1 text-[11.5px] font-semibold hover:text-primary hover:underline"
-                title={item.url}
-              >
-                <span className="truncate">{item.named_thing}</span>
-                <ExternalLink className="size-3 shrink-0 opacity-60" />
-              </a>
+              {/* 26 of 576 citations came back from the sheets with no URL or no
+                  quote — that vocabulary genuinely has no page saying it. An
+                  <a href=""> reloads the page and a bare pair of curly quotes
+                  reads as a missing value, so each is omitted rather than
+                  printed empty. The name still shows, so the claim is still
+                  attributed. */}
+              {item.url ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-w-0 items-center gap-1 text-[11.5px] font-semibold hover:text-primary hover:underline"
+                  title={item.url}
+                >
+                  <span className="truncate">{item.named_thing}</span>
+                  <ExternalLink className="size-3 shrink-0 opacity-60" />
+                </a>
+              ) : (
+                <span className="truncate text-[11.5px] font-semibold" title={item.named_thing}>
+                  {item.named_thing || item.name}
+                </span>
+              )}
               {/* The quote is a stored value and stays literal — line-clamped
                   with the complete sentence in the DOM and on hover, never
                   paraphrased and never silently cut. */}
-              <p className="line-clamp-3 text-[10.5px] leading-snug text-muted-foreground italic" title={item.quote}>
-                “{item.quote}”
-              </p>
+              {item.quote ? (
+                <p className="line-clamp-3 text-[10.5px] leading-snug text-muted-foreground italic" title={item.quote}>
+                  “{item.quote}”
+                </p>
+              ) : (
+                <p className="text-[10px] tracking-wide text-muted-foreground/70 uppercase">no quotable line on that page</p>
+              )}
             </div>
           </div>
         ))}
@@ -169,7 +185,7 @@ function BucketBlock({
       id={`b${index}`}
       data-testid="bucket"
       data-bucket={index}
-      className="scroll-mt-20 grid gap-3 rounded-xl border bg-card/40 p-4"
+      className="grid gap-3 rounded-xl border bg-card/40 p-4"
     >
       <div className="grid gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
@@ -204,7 +220,7 @@ function BucketBlock({
           const card = CARD_BY_BOARD_ID.get(boardId);
           const example = scenario.examples[exampleIndex];
           return (
-            <figure key={boardId} data-testid="bucket-board" data-board={boardId} className="m-0 grid min-w-0 gap-1.5">
+            <figure key={boardId} data-testid="bucket-board" data-board={boardId} className="m-0 grid min-w-0 content-start gap-1.5">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] tracking-wider text-muted-foreground uppercase">
                   {example?.caption ?? `example ${exampleIndex + 1}`}
