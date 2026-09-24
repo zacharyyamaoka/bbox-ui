@@ -465,6 +465,56 @@ answer is still correct, just not rendered anywhere right now) in case a
 future surface wants a "recently changed" view; the story consuming it is
 gone.
 
+## Open the app HEADLESS — never on Zach's display
+
+Zach, 2026-09-23, mid-session, while agents were driving the whiteboard on his
+screen: *"why do you keep on opening the application? its distrbuting me while I
+work. can You test it headless?"*
+
+So: **every agent-driven launch of the whiteboard is headless.** One line, and it
+needs no display of its own from you:
+
+```bash
+python3 /home/bam/bbox-ui/scripts/launch_systemsketch.py --headless --screenshot /tmp/app.png
+```
+
+It brings the pinned Stable build up on a **private Xvfb**, opens the window with
+a **throwaway Chrome profile** and a **free DevTools port**, waits until the page
+has really rendered (non-zero exit if it never does), writes the PNG, prints a
+DevTools endpoint you can attach CDP to, and tears the whole lot down. Add
+`--hold <seconds>` to keep it up while you drive it. `SYSTEMSKETCH_NEXT_HEADLESS=1`
+sets it for a whole session so no individual call can forget.
+
+**WHY this is a rule and not a courtesy — it is also a correctness bug.** A Chrome
+`--user-data-dir` is a machine-wide mutex, and so is a fixed
+`--remote-debugging-port`; this launcher shares both with the archived app by
+design (`launch_systemsketch.py`, `PROFILE = LEGACY_PROFILE`), which means it
+shares them with every agent session too. An agent holding that profile makes
+Zach's next dock press print *"Opening in existing browser session"*, hand its
+command line to the agent's browser and exit 0 — his window opens on a hidden
+Xvfb and the launcher reports success. That is not a story: it is what killed
+the bbox-ui dock icon, recorded in `journalctl --user` as three presses in twenty
+seconds that each printed their URL and opened nothing. **A visible agent launch
+breaks the very thing it is verifying.** The guards that now refuse to hand a
+press to a browser with no window on this display live under "the shared Chrome
+singleton" in that file; `scripts/tests/test_window_guard_integration.py` stands
+up a real second browser and reproduces the failure, so it cannot silently rot.
+
+Two traps worth knowing before you debug anything Chrome-shaped here, both
+measured 2026-09-23 and both recorded at the seam:
+
+- **Chrome rewrites its own `/proc/<pid>/cmdline`**, replacing the NUL separators
+  with spaces. `split("\0")` returns one giant string and every `--flag in argv`
+  test silently answers False — a holder scan reports zero holders against a
+  browser that is demonstrably holding.
+- **That same rewrite clobbers `/proc/<pid>/environ`**, so a live Chrome reads
+  back with no `DISPLAY` at all. The X socket route is a dead end too (only the
+  server side of the connection carries the `@/tmp/.X11-unix/X<n>` name). Ask the
+  display which windows exist instead.
+
+The same rule and the same one-line flag exist in `/home/bam/pyblocks` — its icon
+died of the identical cause first.
+
 ## Seed the review board before handoff
 
 Zach, 2026-09-19: a board that opens blank makes him *"build the changes myself to
