@@ -452,6 +452,26 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
   const array = dash ? DASH_ARRAYS[dash] : undefined;
   return (
     <svg viewBox="0 0 20 20" className="bbox-control-glyph" aria-hidden="true" opacity={opacity}>
+      {/* The keyline goes UNDER the coloured stroke, and it is not decoration.
+          Measured in the running app: a fresh geo's edge is tldraw's `black`
+          (#1d1d1d) and the pill's surface is #1e1e1e, so a face that painted
+          only the real colour was a black square on a black bar — the trigger
+          rendered as a bare chevron. The swatch family solves the same problem
+          with an inset ring (`bbox-control-glyph-swatch`'s `box-shadow`); a
+          stroked face needs it outside the stroke, where the colour cannot
+          cover it. */}
+      <rect
+        x="3"
+        y="3"
+        width="14"
+        height="14"
+        rx="3"
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity={mixed ? 0.35 : 0.22}
+        strokeWidth={drawn + 1.6}
+        data-role="keyline"
+      />
       <rect
         x="3"
         y="3"
@@ -460,7 +480,7 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
         rx="3"
         fill="none"
         stroke={mixed ? "currentColor" : hex}
-        strokeOpacity={mixed ? 0.35 : 1}
+        strokeOpacity={mixed ? 0 : 1}
         strokeWidth={dash === "none" ? 1 : drawn}
         strokeDasharray={dash === "none" ? "2 2" : array}
         strokeLinecap={dash === "dotted" ? "round" : "butt"}

@@ -108,6 +108,21 @@ export interface ControlDefinition<K extends string = string> {
       Absent means the value has no drawn preview — its label or row carries
       it (a Font size row, a language list). */
   glyph?: string;
+  /**
+   * A DIFFERENT family for the trigger's own face, when showing the current
+   * option's preview is not what the trigger should show. Absent means the
+   * trigger draws with `glyph`, which is the donor's behaviour and still the
+   * common case.
+   *
+   * WHY it exists: the two were one field until a trigger needed to paint the
+   * COMBINATION of several controls rather than its own value — a face that
+   * draws the selection's real fill treatment, colour and opacity, over a
+   * control whose options are still plain colour swatches. With one field the
+   * palette rendered twelve copies of that face instead of twelve colours, and
+   * the popover lost the only thing it was there to show. Measured in the
+   * running app, 2026-09-24.
+   */
+  triggerGlyph?: string;
   columns?: number;
   custom?: boolean;
   /** Opaque host tag a binder may branch on; the kit never reads it. Replaces

@@ -102,6 +102,13 @@ export interface ControlStripProps<K extends string = string> {
       surface with the same shape (`ChromeBar`, `ToolDock`) takes its own
       `"aria-label"`; this one was simply the first to be built. */
   "aria-label"?: string;
+  /** The host's skin for every panel this strip opens.
+   *
+   * WHY a prop and not the host's problem: a panel portals OUT of the strip,
+   * so a wrapper's classes cannot reach it and the panel lands in the app's
+   * page theme rather than the bar's. The trunk already exports `PILL_POPOVER`
+   * (`floatingToolbar.tsx`) for exactly this; this is where a host passes it. */
+  panelClassName?: string;
 }
 
 /** One renderer for every registered control, regardless of target surface
@@ -113,6 +120,7 @@ export function ControlStrip<K extends string>({
   autoFocus,
   onPanelPointerDownCapture,
   testIdPrefix = "bbox",
+  panelClassName,
   "aria-label": ariaLabel,
 }: ControlStripProps<K>) {
   return (
@@ -148,6 +156,7 @@ export function ControlStrip<K extends string>({
                 autoFocus={autoFocus}
                 onPanelPointerDownCapture={onPanelPointerDownCapture}
                 testIdPrefix={testIdPrefix}
+                panelClassName={panelClassName}
               />
             ))}
           </ToolbarGroup>
@@ -164,6 +173,7 @@ interface TriggerShapeProps<K extends string> {
   autoFocus?: boolean;
   onPanelPointerDownCapture?: PointerEventHandler;
   testIdPrefix: string;
+  panelClassName?: string;
 }
 
 /**
@@ -232,6 +242,7 @@ function PopoverTriggerShape<K extends string>({
   autoFocus,
   onPanelPointerDownCapture,
   testIdPrefix,
+  panelClassName,
 }: TriggerShapeProps<K>) {
   const current = selectedControlOption(control);
   return (
@@ -262,7 +273,7 @@ function PopoverTriggerShape<K extends string>({
         align="center"
         container={container}
         autoFocus={autoFocus}
-        className="w-auto"
+        className={cn("w-auto", panelClassName)}
         // WHY no close-on-select handler: `closeOnSelect={false}` is
         // `ControlPanel`'s explicit documented default (MENU-KIT-DESIGN.md
         // §3.3 — "align-then-distribute is the normal two-step; staying
@@ -322,7 +333,13 @@ function TriggerFace<K extends string>({
         control.trigger === "value" && !current && "opacity-40",
       )}
     >
-      {control.glyph ? glyphs[control.glyph]?.(control.trigger === "value" ? current?.value : undefined) : null}
+      {/* `triggerGlyph` wins here and ONLY here — an option cell always draws
+          with `glyph`, so a trigger can show something the options are not. */}
+      {(() => {
+        const family = control.triggerGlyph ?? control.glyph;
+        if (!family) return null;
+        return glyphs[family]?.(control.trigger === "value" ? current?.value : undefined);
+      })()}
     </span>
   );
 }

@@ -172,10 +172,17 @@ export function selectionOpacityPercent(editor: Editor): number {
   return Math.round(shared.value * 100);
 }
 
-export function setSelectionOpacityPercent(editor: Editor, percent: number): void {
+export function setSelectionOpacityPercent(
+  editor: Editor,
+  percent: number,
+  opts?: { continuous?: boolean },
+): void {
   const clamped = Math.min(100, Math.max(0, percent));
-  // tldraw's own setter: it writes every selected shape and handles the
-  // "ephemeral while dragging, committed on release" split internally.
+  // WHY the stopping point is marked only on the SETTLING call: a range input
+  // fires per pixel, so marking each one would make a single drag cost forty
+  // presses of undo. tldraw's own setter handles the ephemeral/committed split
+  // for the shapes; the history granularity is ours to choose.
+  if (!opts?.continuous) editor.markHistoryStoppingPoint("opacity");
   editor.setOpacityForSelectedShapes(clamped / 100);
 }
 
