@@ -619,6 +619,44 @@ def cdp_page(url: str, port: int, timeout: float = 0.8) -> dict | None:
     return None
 
 
+def raise_window(app_id: str = APP_ID) -> bool:
+    """Actually put an existing app window in front, and say whether it worked.
+
+    WHY this is not `/json/activate`, which is what used to do the raising:
+    CDP's activate selects the right TAB and asks Chrome to bring its own window
+    up — and a window manager is free to refuse that. GNOME's mutter does refuse
+    it: a client raising itself with no user-interaction timestamp is denied and
+    merely flagged "demands attention". So the press returned True, the window
+    never moved, and from a seat in front of the screen that is indistinguishable
+    from an icon that does nothing (measured 2026-09-24: two mapped, viewable
+    `systemsketch` windows sitting on the current workspace while a fresh press
+    printed its URL and changed nothing).
+
+    A window tool sends `_NET_ACTIVE_WINDOW` with the PAGER source indication,
+    which mutter honours by design — that is the whole difference, and it is why
+    the archived app's launcher has always raised its window this way
+    (`~/.local/share/systemsketch/runtime/bin/launch_systemsketch.py:304`,
+    `focus_existing`). Returning False when it cannot is what lets the caller
+    fall through and open a real window instead of reporting a raise that never
+    happened.
+    """
+    tool = shutil.which("xdotool")
+    if not tool or not this_display():
+        return False
+    # APP_ID is ours and always a plain identifier; keep the regex anchored so a
+    # stray value can never widen the match to another app's windows.
+    if not app_id.replace("-", "").replace("_", "").isalnum():
+        return False
+    found = subprocess.run([tool, "search", "--onlyvisible", "--class", f"^{app_id}$"],
+                           check=False, capture_output=True, text=True)
+    windows = found.stdout.split() if found.returncode == 0 else []
+    for window in reversed(windows):  # most recently mapped first
+        activated = subprocess.run([tool, "windowactivate", window], check=False, capture_output=True)
+        if activated.returncode == 0:
+            return True
+    return False
+
+
 def focus_open_window(url: str) -> bool:
     """Bring forward a window already showing the new app — only ever OUR window.
 
@@ -634,10 +672,13 @@ def focus_open_window(url: str) -> bool:
     if target is None:
         return False
     try:
+        # Selects the right tab inside the window; on its own it does NOT raise.
         urllib.request.urlopen(f"http://127.0.0.1:{CDP_PORT}/json/activate/{target['id']}", timeout=0.8).close()
-        return True
     except (OSError, urllib.error.URLError):
         return False
+    # The raise is the thing the press is actually for. If it fails, say so, so
+    # `open_window` opens a window rather than calling a no-op a success.
+    return raise_window()
 
 
 def confirm_window(url: str, cdp_port: int, profile: Path, timeout: float = 25.0) -> bool:

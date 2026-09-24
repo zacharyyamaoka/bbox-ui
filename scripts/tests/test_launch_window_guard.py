@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+import urllib.request
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -252,6 +253,120 @@ class HeadlessIsolationTests(unittest.TestCase):
         finally:
             Path.exists = original_exists  # type: ignore[assignment]
         del tempfile
+
+
+class RaiseWindowTests(unittest.TestCase):
+    """A press that finds an open window has to actually RAISE it.
+
+    WHY these exist (2026-09-24): the press used CDP `/json/activate`, which
+    selects a tab and asks Chrome to raise itself — and mutter refuses a
+    self-raise that carries no user-interaction timestamp, flagging it "demands
+    attention" instead. So `focus_open_window` returned True over a window that
+    never moved. Measured that morning: two mapped, viewable `systemsketch`
+    windows on the CURRENT workspace while a fresh dock press printed its URL
+    and changed nothing on screen.
+
+    These use a REAL fake executable on PATH rather than a stubbed
+    `subprocess.run`, so the argv asserted below is the argv that would be run.
+    """
+
+    def _fake_tool(self, body: str) -> Path:
+        import os, stat, tempfile
+        directory = Path(tempfile.mkdtemp(prefix="fake-wm-tool-"))
+        tool = directory / "xdotool"
+        tool.write_text("#!/usr/bin/env bash\n" + body)
+        tool.chmod(tool.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        original_path, original_display = os.environ.get("PATH", ""), os.environ.get("DISPLAY")
+        os.environ["PATH"] = f"{directory}:{original_path}"
+        os.environ["DISPLAY"] = ":0"
+        def restore() -> None:
+            os.environ["PATH"] = original_path
+            if original_display is None:
+                os.environ.pop("DISPLAY", None)
+            else:
+                os.environ["DISPLAY"] = original_display
+        self.addCleanup(restore)
+        return directory
+
+    def test_it_activates_the_most_recent_matching_window(self) -> None:
+        # MUTATION: drop the `windowactivate` call (i.e. go back to CDP-only)
+        # and no activation is ever recorded — the shipped bug exactly.
+        directory = self._fake_tool(
+            'if [ "$1" = "search" ]; then echo 111; echo 222; exit 0; fi\n'
+            'if [ "$1" = "windowactivate" ]; then echo "$2" >> "$(dirname "$0")/activated"; exit 0; fi\n'
+            'exit 1\n'
+        )
+        self.assertTrue(launcher.raise_window("systemsketch"))
+        self.assertEqual((directory / "activated").read_text().split(), ["222"],
+                         "it must raise the most recently mapped window, not the oldest")
+
+    def test_it_asks_for_the_app_class_anchored(self) -> None:
+        directory = self._fake_tool(
+            'if [ "$1" = "search" ]; then echo "$@" >> "$(dirname "$0")/searched"; echo 111; exit 0; fi\n'
+            'exit 0\n'
+        )
+        launcher.raise_window("systemsketch")
+        self.assertIn("--onlyvisible", (directory / "searched").read_text())
+        self.assertIn("^systemsketch$", (directory / "searched").read_text())
+
+    def test_no_matching_window_is_not_a_raise(self) -> None:
+        # xdotool exits non-zero when its search matches nothing.
+        self._fake_tool('exit 1\n')
+        self.assertFalse(launcher.raise_window("systemsketch"))
+
+    def test_a_failed_activation_is_reported_as_failure(self) -> None:
+        # MUTATION: return True regardless and the caller believes a raise that
+        # never happened, so it never falls through to opening a real window.
+        self._fake_tool(
+            'if [ "$1" = "search" ]; then echo 111; exit 0; fi\n'
+            'exit 1\n'
+        )
+        self.assertFalse(launcher.raise_window("systemsketch"))
+
+    def test_focus_is_false_when_the_raise_fails(self) -> None:
+        # The whole point: a page found + a tab activated is NOT a raised window.
+        originals = (launcher.cdp_owner, launcher.holder_is_visible_here,
+                     launcher.cdp_page, launcher.raise_window)
+        opened: list[str] = []
+        try:
+            launcher.cdp_owner = lambda port, browsers=None: 42
+            launcher.holder_is_visible_here = lambda holders: True
+            launcher.cdp_page = lambda url, port, timeout=0.8: {"id": "PAGE"}
+            launcher.raise_window = lambda app_id=launcher.APP_ID: False
+            original_open = urllib.request.urlopen
+            urllib.request.urlopen = lambda url, timeout=None: opened.append(url) or _Closeable()
+            try:
+                self.assertFalse(launcher.focus_open_window("http://127.0.0.1:4341/"))
+            finally:
+                urllib.request.urlopen = original_open
+            self.assertTrue(any("/json/activate/PAGE" in call for call in opened),
+                            "it should still select the tab before trying to raise")
+        finally:
+            (launcher.cdp_owner, launcher.holder_is_visible_here,
+             launcher.cdp_page, launcher.raise_window) = originals
+
+    def test_focus_is_true_when_the_raise_works(self) -> None:
+        originals = (launcher.cdp_owner, launcher.holder_is_visible_here,
+                     launcher.cdp_page, launcher.raise_window)
+        try:
+            launcher.cdp_owner = lambda port, browsers=None: 42
+            launcher.holder_is_visible_here = lambda holders: True
+            launcher.cdp_page = lambda url, port, timeout=0.8: {"id": "PAGE"}
+            launcher.raise_window = lambda app_id=launcher.APP_ID: True
+            original_open = urllib.request.urlopen
+            urllib.request.urlopen = lambda url, timeout=None: _Closeable()
+            try:
+                self.assertTrue(launcher.focus_open_window("http://127.0.0.1:4341/"))
+            finally:
+                urllib.request.urlopen = original_open
+        finally:
+            (launcher.cdp_owner, launcher.holder_is_visible_here,
+             launcher.cdp_page, launcher.raise_window) = originals
+
+
+class _Closeable:
+    def close(self) -> None:
+        return None
 
 
 if __name__ == "__main__":
