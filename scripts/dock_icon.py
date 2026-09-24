@@ -60,12 +60,24 @@ REPO = Path(__file__).resolve().parents[1]
 MARK = REPO / "apps" / "docs" / "public" / "bbox-studio-mark.svg"
 
 # Dock icon name -> the artwork it is drawn from.
-# WHY "systemsketch" carries the bbox studio mark: it is the name
-# systemsketch.desktop asks for, and that entry is the one GNOME hands the
-# whiteboard window to (point 1 above).
+#
+# WHY the studio mark now hangs on "bbox-ui", and why "systemsketch" is gone
+# from this table (2026-09-24): point 1 above is no longer true. The whiteboard
+# window carries `--class=bbox-ui` now, systemsketch.desktop launches the
+# ARCHIVED app and only the archived app, and the tie GNOME used to break
+# against us does not exist any more. So the mark that was drawn for the
+# whiteboard finally hangs on the whiteboard's own name — the reason four
+# redesigns "never showed" is that they were being written to a slot the
+# whiteboard was only borrowing.
+#
+# `systemsketch` is the archived app's icon and the archived app's installer
+# owns it (/home/bam/systemsketch). This repo has no artwork for it and no
+# business overwriting it on every launch, which is exactly what it was doing.
+#
+# `assets/bbox-ui.svg` — the "bbox ui" lettered tile this used to install — is
+# left on disk, unreferenced. It was a placeholder standing in for the mark.
 ICONS = {
-    "systemsketch": MARK,
-    "bbox-ui": REPO / "assets" / "bbox-ui.svg",
+    "bbox-ui": MARK,
 }
 
 # WHY every icon is re-framed to this box: Zach, 2026-09-22 — "make them a bit

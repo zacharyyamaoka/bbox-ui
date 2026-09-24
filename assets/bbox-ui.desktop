@@ -6,21 +6,25 @@
 # inside that app (apps/systemsketch/src/chrome/sites.ts) plus the right-click
 # actions below.
 #
-# WHY StartupWMClass says `systemsketch` and not `bbox-ui`: it must match the
-# WM_CLASS the window actually carries, which scripts/launch_systemsketch.py
-# gives Chrome as `--class=$APP_ID` (APP_ID defaults to "systemsketch", and it
-# is shared with the archived app ON PURPOSE so the in-app "Switch to old
-# SystemSketch" row keeps both under one dock icon). A class that matched this
-# file's name instead would leave the running window with no icon to group
-# under.
+# WHY StartupWMClass is `bbox-ui` — and why it USED to say `systemsketch`.
 #
-# Measured 2026-09-22, and what the paragraph above implied was wrong: the
-# window does NOT group under this entry. systemsketch.desktop claims the same
-# class, and GNOME breaks that tie for the entry whose ID equals the class
-# (gnome-shell 46.0 src/shell-app-system.c:142-144). So pressing bbox-ui lights
-# the SystemSketch slot, and the icon on the running window is
-# `Icon=systemsketch` — owned by scripts/dock_icon.py, not by `Icon=` below.
-# Four redesigns were applied to icons the dock never showed.
+# It must match the WM_CLASS the window actually carries, which
+# scripts/launch_systemsketch.py gives Chrome as `--class=$APP_ID`. That class
+# was `systemsketch`, shared with the archived app on purpose so the in-app
+# "Switch to old SystemSketch" row kept both under one dock icon.
+#
+# Measured 2026-09-22, and the sharing turned out to cost exactly what it was
+# meant to buy: the window did NOT group under this entry. systemsketch.desktop
+# claimed the same class, and GNOME breaks that tie for the entry whose ID
+# equals the class (gnome-shell 46.0 src/shell-app-system.c:142-144). So
+# pressing bbox-ui lit the SystemSketch slot, showed `Icon=systemsketch`, and
+# four icon redesigns were applied to an icon the dock never displayed.
+#
+# Zach, 2026-09-24: "When I press the bbox-ui icon it opens system sketch which
+# is not desired!" — so the tie is gone. This app owns `bbox-ui`; the archived
+# app keeps `systemsketch` and systemsketch.desktop launches ONLY the archived
+# app now. The Chrome profile is still shared between the two, which is what
+# the switch row actually needs; the window class never was.
 [Desktop Entry]
 Type=Application
 Name=bbox-ui
@@ -32,7 +36,7 @@ Icon=bbox-ui
 Terminal=false
 Categories=Development;Graphics;
 Keywords=bbox-ui;Whiteboard;Design;Components;Registry;Blocks;Ports;Edges;
-StartupWMClass=systemsketch
+StartupWMClass=bbox-ui
 StartupNotify=true
 Actions=OpenSite;OpenSitePreview;UpdateFromMain;
 

@@ -103,7 +103,18 @@ LEGACY_LAUNCHER = HOME / ".local/share/systemsketch/runtime/bin/launch_systemske
 LEGACY_RELEASE_HOME = HOME / ".local/share/systemsketch/runtime"
 LEGACY_PROFILE = HOME / ".local/state/systemsketch/desktop-v2/stable/browser-profile"
 PROFILE = Path(os.environ.get("SYSTEMSKETCH_NEXT_PROFILE", LEGACY_PROFILE))
-APP_ID = os.environ.get("SYSTEMSKETCH_NEXT_APP_ID", "systemsketch")
+# WHY this is `bbox-ui` and no longer `systemsketch`: the class is what GNOME
+# groups a window under, and BOTH installed entries used to claim
+# `systemsketch`. GNOME breaks that tie for the entry whose id equals the class
+# (gnome-shell 46.0, `shell-app-system.c:142-144`), so pressing **bbox-ui** lit
+# the **SystemSketch** slot and the window presented itself as SystemSketch —
+# Zach, 2026-09-24: "When I press the bbox-ui icon it opens system sketch which
+# is not desired!" The old sharing was deliberate, to keep the in-app "Switch
+# to old SystemSketch" row under one dock icon; that reason is gone now that
+# the SystemSketch entry launches the archived app and only the archived app.
+# The Chrome PROFILE stays shared (see below) — that is what the switch row
+# actually needs, and it is a different thing from the window class.
+APP_ID = os.environ.get("SYSTEMSKETCH_NEXT_APP_ID", "bbox-ui")
 CDP_PORT = int(os.environ.get("SYSTEMSKETCH_NEXT_CDP_PORT", "4325"))
 
 # Paths that decide what a build contains. A dirty file here means the build
