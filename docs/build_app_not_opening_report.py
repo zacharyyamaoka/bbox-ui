@@ -59,6 +59,31 @@ CMDLINE = """\
 >>> profile_holders(profile)        # every `--flag in argv` test answers False
 []                                  # …against a browser that is demonstrably holding it"""
 
+STACKING = """\
+$ xprop -root _NET_CURRENT_DESKTOP        →  0
+$ xprop -id <win> _NET_WM_DESKTOP          →  0      # same workspace he is on
+$ xwininfo -id <win> | grep 'Map State'    →  IsViewable
+$ xprop -id <win> _NET_WM_STATE            →  (empty — not minimised, not hidden)
+
+stacking order, bottom → top
+  12. terminator
+  13. systemsketch      <<< the app
+  ...
+  17. systemsketch      <<< the app
+  18. google-chrome
+  19. google-chrome     <<< focused
+
+$ journalctl --user | grep bbox-ui.desktop
+2026-09-24T11:13:01  bbox-ui.desktop[3630078]: http://127.0.0.1:4341/
+                                               ^ the press. Nothing moved."""
+
+STALE = """\
+$ cat ~/.local/share/systemsketch-next/stable.json
+{ "build": "75c5aa7b0…", "built": "2026-09-21 19:28:43" }
+
+$ git log --oneline 75c5aa7b0..main | wc -l
+151"""
+
 SUITE = """\
 $ python3 -m pytest scripts/tests/ -q
 ...........................................................................
@@ -79,6 +104,12 @@ MUTATIONS = [
      "test_the_headless_command_never_names_the_shared_profile_or_port"),
     ("<code>clear_stale_singletons</code> ignores live holders", "two browsers share one profile and corrupt it",
      "test_it_never_clears_a_lock_a_live_browser_holds"),
+    ("the raise goes back to CDP-only", "a press reports success over a window that never moved",
+     "test_focus_is_false_when_the_raise_fails"),
+    ("<code>raise_window</code> takes the OLDEST window", "the press raises a stale window, not the live one",
+     "test_it_activates_the_most_recent_matching_window"),
+    ("a failed activation counts as a raise", "the caller never falls through to opening a real window",
+     "test_a_failed_activation_is_reported_as_failure"),
 ]
 
 CHANGES = [
@@ -98,6 +129,10 @@ CHANGES = [
      "Blocked every launch until someone deleted it by hand.",
      "<code>clear_stale_singletons()</code> — but only with zero live holders.",
      "A live mutex is never touched."),
+    ("Raising a window that is already open",
+     "CDP <code>/json/activate</code> — mutter refuses a self-raise and the window never moves.",
+     "<code>raise_window()</code> goes through the WM with the pager source.",
+     "The tab is still selected first; a failed raise now opens a window instead."),
     ("A press that opened nothing",
      "Printed the URL and exited 0. Silent.",
      "<code>confirm_window()</code> polls, then <code>notify-send</code>.",
@@ -122,6 +157,9 @@ def page(media: dict[str, str]) -> str:
         f"<tr><td>{what}</td><td class=bad>{effect}</td><td class=good>{caught}</td></tr>"
         for what, effect, caught in MUTATIONS
     )
+    stacking = html.escape(STACKING)
+    stale = html.escape(STALE)
+    buried = media["buried"]
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -186,6 +224,9 @@ other Chrome holding either one absorbed your press: the window opened on <i>its
 launcher printed the URL and exited 0.</p>
 <p>So <b>my own headless runs were part of what kept it dead</b> while I investigated, which is
 exactly why you now get <code>--headless</code> in both repos and a rule in both CLAUDE.mds.</p>
+<p><b>Round two, the 24th:</b> a third cause, independent of the first two — the press could find
+the open window but could not <i>raise</i> it. All three are now on <code>main</code>, merged on
+your word. Scroll to “Preview / Stable” for the other question.</p>
 </div>
 
 <h2>The change, in one flow</h2>
@@ -259,6 +300,33 @@ exits <b>zero</b>. There were two independent ways in:</p>
 could ever have told you anything.</figcaption>
 </figure>
 
+<h2>Round two — “still not launching”, for a third reason</h2>
+<p>Landing the two fixes above would not have fixed what you hit on the 24th, because that press
+failed a different way: <b>the app was already open.</b> Two <code>systemsketch</code> windows,
+mapped and viewable, on the workspace you were looking at.</p>
+<pre>{stacking}</pre>
+<figure>
+  <img src="{buried}" alt="The bbox-ui app window on screen, partly covered by other windows.">
+  <figcaption>Your screen at the time, read-only capture — the board <i>Python Grammar Complete</i>
+  is right there, under a couple of other windows and not focused. Pressing the icon could not
+  bring it up.</figcaption>
+</figure>
+<p><b>Why the press could not raise it.</b> The launcher raised an existing window with CDP
+<code>/json/activate</code>, which selects the right tab and asks Chrome to bring its own window
+forward. <b>mutter refuses that.</b> A client raising itself with no user-interaction timestamp is
+denied and merely flagged “demands attention”; the window stays exactly where it is. So the press
+returned success over a window that never moved — and from a seat in front of the screen, that is
+indistinguishable from an icon that does nothing.</p>
+<p>The raise now goes through the window manager with the <b>pager</b> source indication, which
+mutter honours by design — the same mechanism the archived app’s launcher has always used
+(<code>focus_existing</code>). When it cannot raise, it now says so, so the caller opens a real
+window instead of reporting a raise that never happened.</p>
+<p><i>Honest limit on this one:</i> there is no standalone window manager on this box — GNOME
+embeds mutter — so I could not reproduce its focus-stealing rule on a hidden display. The code is
+tested with a real fake tool on <code>PATH</code> (so the asserted argv is the argv that runs) and
+three mutations go red, but the last word is a press of your icon. I did not raise your window to
+test it.</p>
+
 <h2>What changed</h2>
 <table>
 <tr><th style="width:19%">Element</th><th style="width:26%">Before</th><th style="width:29%">After</th>
@@ -307,11 +375,41 @@ profile and free port, so an agent's check can no longer be the browser that swa
 </figure>
 </div>
 
+<h2>Preview / Stable — where that actually stands</h2>
+<p>Short version: <b>the website and Storybook have both channels and they work. The whiteboard has
+Stable only, on purpose — and yours is three days stale.</b></p>
+<table>
+<tr><th style="width:26%">Product</th><th style="width:19%">Stable</th><th style="width:19%">Preview</th>
+<th>How you reach it</th></tr>
+<tr><td>Whiteboard (the dock app)</td><td class=good><code>:4341</code> pinned build</td>
+<td class=bad>none — by design</td>
+<td>the icon; live work is <code>pnpm --filter systemsketch dev</code> on <code>:4340</code></td></tr>
+<tr><td>bbox-ui.com</td><td class=good><code>:5194</code></td><td class=good><code>:5196</code></td>
+<td>right-click the icon → <i>Open the site’s local Preview (HMR)</i></td></tr>
+<tr><td>Storybook workbench</td><td class=good><code>:5430</code></td><td class=good><code>:5431</code></td>
+<td><code>launch_bbox_storybook.py --preview</code> (<code>:5431</code> is up right now)</td></tr>
+<tr><td>Archived SystemSketch</td><td class=good><code>:4321</code></td><td class=good><code>:4322</code></td>
+<td>its own launcher — the model the others copied</td></tr>
+</table>
+<p>The whiteboard’s missing Preview is a decision, not a gap:
+<code>launch_systemsketch.py</code>’s own header says the thing in the dock should be the build you
+trust, not a dev server showing whatever half-edit a peer session has on disk that second. One loose
+end: <code>docs/CHANNELS.md</code> still describes “the whiteboard’s own <code>:4572</code> dev
+instance”, and nothing binds <code>:4572</code> — that line is aspirational, written before the
+design settled.</p>
+<p><b>The part worth acting on.</b> Your pinned Stable is the build from the 21st, and main has moved
+<b>151 commits</b> since — so even once the icon opens, it opens three days ago’s app.</p>
+<pre>{stale}</pre>
+<p>The dock’s own right-click action <i>Update the whiteboard to latest main</i> is what moves it. I
+did not run it: it restarts the server under the two app windows you have open, and I would rather
+not do that to a board you may be mid-thought on.</p>
+
 <h2>Where it stands</h2>
 <ul class="decide">
-<li><b>bbox-ui — done and proved</b> <span class="tag done">committed, not merged</span><br>
-Branch <code>claude/bbox-app-not-opening-b62874</code>, commit <code>5842377</code>. 203 launcher tests
-green, four guards mutation-tested red, the failure reproduced end to end against real Chrome.</li>
+<li><b>bbox-ui — merged to main</b> <span class="tag done">local merge, not pushed</span><br>
+<code>1944526</code>, merging <code>claude/bbox-app-not-opening-b62874</code>. 209 launcher tests green
+on main, seven guards mutation-tested red, the profile failure reproduced end to end against real
+Chrome. The launcher your dock icon runs now carries all of it.</li>
 <li><b>pyblocks — done and proved</b> <span class="tag done">committed, not merged</span><br>
 Branch <code>claude/launcher-headless-mode</code>, commit <code>18a82ec</code>. 19 tests green. Its
 first cut captured the app mid-load, because <code>document.readyState</code> fires long before
@@ -319,10 +417,13 @@ first cut captured the app mid-load, because <code>document.readyState</code> fi
 <code>[data-save-state]</code> that has left <code>"loading"</code>, and a <code>.tl-canvas</code> —
 inside the same bounded timeout. I re-ran the tests and drove the headless mode myself on private
 ports rather than take its word for either.</li>
-<li><b>Needs you: whether to land it.</b> Your dock icon runs the launcher in the
-<i>main checkout</i>, so it still has the old one. Implementing is not integrating, so I left both
-branches where they are. <b>If you say nothing I will leave them unmerged</b> — nothing regresses,
-and the icon works whenever no stray Chrome holds the profile (nothing does right now).</li>
+<li><b>Needs you: press the icon.</b> That is the one proof I would not take for myself — raising
+your window to test it is the disturbance you asked me to stop. If it comes forward, all three
+causes are closed.</li>
+<li><b>Needs you: whether to refresh Stable.</b> The dock app serves the build from the 21st, 151
+commits back. Right-click the icon → <i>Update the whiteboard to latest main</i>. <b>If you say
+nothing I will leave it pinned</b> — updating restarts the server under the two app windows you
+have open.</li>
 <li><b>Deliberately not done.</b> I did not touch the two duplicate dock entries —
 <code>bbox-ui.desktop</code> and <code>systemsketch.desktop</code> run the identical <code>Exec</code>
 and declare the same <code>StartupWMClass</code>, so they are two icons for one app. That is a
@@ -346,6 +447,7 @@ def main() -> int:
         "still": data_uri(arguments.media / "headless-still.png", "image/png"),
         "strip": data_uri(arguments.media / "filmstrip.png", "image/png"),
         "pyblocks": data_uri(arguments.media / "pyblocks-headless.png", "image/png"),
+        "buried": data_uri(arguments.media / "buried.png", "image/png"),
     }
     arguments.out.parent.mkdir(parents=True, exist_ok=True)
     arguments.out.write_text(page(media), encoding="utf8")
