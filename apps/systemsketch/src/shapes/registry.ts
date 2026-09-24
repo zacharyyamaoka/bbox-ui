@@ -87,8 +87,7 @@ export const KITS: readonly ShapeKit[] = [blockKit, codeKit, portKit, wireKit, r
 // on purpose: `stockBoundary.test.ts`'s `withoutComments` strips everything
 // between a literal slash-star and the next star-slash, so a path ending in a
 // star would swallow the rest of this file's declarations.) They keep tldraw's
-// own `type`
-// ids, so `<Tldraw shapeUtils>` REPLACES the defaults rather than adding a
+// own `type` ids, so `<Tldraw shapeUtils>` REPLACES the defaults rather than adding a
 // sixth kind (@tldraw/utils `mergeArraysAndReplaceDefaults`). WHY here and not
 // in a kit: a kit is one shape KIND this app invents, and geo/draw/line/arrow
 // are tldraw's — they arrive with the engine whether or not any kit exists,
