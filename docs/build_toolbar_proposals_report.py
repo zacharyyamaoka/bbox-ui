@@ -338,7 +338,7 @@ def main() -> None:
     ap.add_argument("--mocks", required=True)
     ap.add_argument("--media", required=True)
     ap.add_argument("--out", default=str(DEFAULT_OUT))
-    ap.add_argument("--mock-url", default="", help="the http:// url the live mock is served at")
+    ap.add_argument("--mock-url", default="", help="where the live mock page can be opened")
     args = ap.parse_args()
 
     media = pathlib.Path(args.media)
@@ -448,8 +448,9 @@ def main() -> None:
 
     mock_row = (
         f"""<p style="margin-top:14px"><b>All five are live.</b> The page below is the real thing —
-        click the triggers, drag the sliders, watch the readout bottom-left. The proposal picker is
-        bottom-right and remembers your choice.</p>
+        click the triggers, drag the sliders, watch the shape repaint and the readout bottom-left
+        follow it. The proposal picker is bottom-right and remembers your choice. It is a plain
+        file, so there is no server and nothing to stop.</p>
         <pre class="tight">{args.mock_url}</pre>"""
         if args.mock_url else ""
     )

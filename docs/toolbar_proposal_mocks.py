@@ -793,13 +793,17 @@ function apply(act, value, target) {
 document.addEventListener("DOMContentLoaded", () => {
   const sel = document.getElementById("variant");
   if (sel) {
-    const saved = new URLSearchParams(location.search).get("p")
-      || localStorage.getItem("bbox-toolbar-proposal");
+    // WHY guarded: this page is handed over as a file:// link so it needs no
+    // server and nothing to stop — and Chrome throws on localStorage for
+    // file:// origins under some profiles. An unguarded read would take the
+    // whole switcher down with it.
+    let saved = new URLSearchParams(location.search).get("p");
+    try { saved = saved || localStorage.getItem("bbox-toolbar-proposal"); } catch {}
     if (saved && PILLS[saved]) current = saved;
     sel.value = current;
     sel.addEventListener("change", () => {
       current = sel.value;
-      localStorage.setItem("bbox-toolbar-proposal", current);
+      try { localStorage.setItem("bbox-toolbar-proposal", current); } catch {}
       openPop = null; openTray = null;
       render();
     });
