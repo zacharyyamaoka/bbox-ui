@@ -36,7 +36,9 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, Gtk  # noqa: E402
 
-NAME = "systemsketch"
+# The one icon this repo owns. Was "systemsketch" until 2026-09-24, when the
+# whiteboard stopped borrowing the archived app's dock slot — see dock_icon.ICONS.
+NAME = "bbox-ui"
 REFERENCE_ICONS = {
     "claude": Path("/usr/share/icons/hicolor/256x256/apps/claude-desktop.png"),
     "codex": Path("/usr/share/pixmaps/chatgpt.png"),
