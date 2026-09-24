@@ -330,3 +330,142 @@ export function swatchGlyph(hexFor: (name: string) => string | undefined): Glyph
     return <span className="bbox-control-glyph-swatch" data-mixed={fill ? undefined : true} style={fill ? { background: fill } : undefined} />;
   };
 }
+
+// ── the paint face ─────────────────────────────────────────────────────────
+//
+// Ours, not the donor's. The archived app's triggers were a swatch (colour)
+// or a fixed traced icon (line style); neither draws the RESULT. This family
+// exists because of Zach's 2026-09-24 pick of the "Two Faces" proposal —
+// three style triggers, "Inside", "Edge" and text — followed by:
+//
+//   "no need to put the text (inside and edge) on the drop down menu btw,
+//    we can learn to just know it by the icon"
+//
+// WHY that sentence forces a drawn result rather than a nicer icon: with the
+// words gone, the face is the ONLY thing distinguishing the two triggers. A
+// paint-bucket and a line icon would name their families and say nothing
+// about the shape you have selected, so the bar would read the same whether
+// the fill were solid green or absent. A face that paints the actual fill
+// treatment, colour and opacity answers "what is it now" at rest, which is
+// what pays for dropping the labels.
+
+/** What one face paints. Plain values — no editor, no shape, no engine. */
+export interface FacePaint {
+  /** Absent, or `hex: undefined`, draws the "no answer" face (a mixed
+      selection), never a guess at one member's colour. */
+  hex?: string;
+  /** `solid` | `semi` | `pattern` | `none`, the fill treatment. Only read by
+      an `inside` face. */
+  fillStyle?: string;
+  /** Painted stroke width in px. Only read by an `edge` face. */
+  widthPx?: number;
+  /** A `DASH_ARRAYS` key. Only read by an `edge` face. */
+  dash?: string;
+  /** 0–1. Applies to whichever half this face draws. */
+  opacity?: number;
+}
+
+/**
+ * A trigger face that draws the selection's real paint.
+ *
+ * Injected the same way `swatchGlyph` is, and for the same reason: resolving
+ * a palette name to a paintable colour needs the host's theme, which a kit
+ * importing no canvas engine cannot reach. `read` receives the control's own
+ * current value (the colour name, or `undefined` when the selection is
+ * mixed) and returns everything else the face needs.
+ */
+export function paintFaceGlyph(
+  part: "inside" | "edge",
+  read: (value: string | undefined) => FacePaint,
+): GlyphRenderer {
+  return (value) => <PaintFace part={part} paint={read(value)} />;
+}
+
+function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint }) {
+  const { hex, fillStyle, dash, opacity = 1 } = paint;
+  // WHY the id is derived from the colour rather than `useId()`: two faces
+  // that hatch the same hex want the SAME pattern, and a bare `id="hatch"`
+  // on both would make every face resolve `url(#hatch)` to whichever mounted
+  // last. Deriving it also keeps this module hook-free, so it stays the
+  // plain render-function module the rest of the file is.
+  const patternId = `bbox-face-hatch-${(hex ?? "none").replace("#", "")}`;
+  // No resolved colour means a mixed selection: draw the empty face the
+  // swatch family draws, never one member's colour standing in for all.
+  const mixed = !hex;
+
+  if (part === "inside") {
+    const treatment = fillStyle ?? "solid";
+    const body =
+      mixed || treatment === "none" ? null : treatment === "pattern" ? (
+        <>
+          <pattern
+            id={patternId}
+            width="4"
+            height="4"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <line x1="0" y1="0" x2="0" y2="4" stroke={hex} strokeWidth="1.6" />
+          </pattern>
+          <rect x="3" y="3" width="14" height="14" rx="3" fill={`url(#${patternId})`} stroke="none" />
+        </>
+      ) : (
+        <rect
+          x="3"
+          y="3"
+          width="14"
+          height="14"
+          rx="3"
+          fill={hex}
+          // 0.28 is the alpha the mock's own `semi` face used, close enough
+          // to tldraw's transparent fill to be recognised in a 24px cell.
+          fillOpacity={treatment === "semi" ? 0.28 : 1}
+          stroke="none"
+        />
+      );
+    return (
+      <svg viewBox="0 0 20 20" className="bbox-control-glyph" aria-hidden="true" opacity={opacity}>
+        {body}
+        {/* The keyline is what stops an empty or transparent face reading as
+            a rendering failure — there is still a square there. */}
+        <rect
+          x="3"
+          y="3"
+          width="14"
+          height="14"
+          rx="3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          opacity={mixed ? 0.35 : 0.5}
+        />
+      </svg>
+    );
+  }
+
+  const widthPx = paint.widthPx ?? 2;
+  // The face is a 20-unit box standing for a shape that may be 400px wide, so
+  // the real width is compressed rather than reproduced: a 7px "thick" edge
+  // drawn at 7 units would swallow the face whole. The ladder stays monotonic,
+  // which is the property the face has to preserve.
+  const drawn = Math.max(1, Math.min(3.4, 0.9 + widthPx * 0.36));
+  const array = dash ? DASH_ARRAYS[dash] : undefined;
+  return (
+    <svg viewBox="0 0 20 20" className="bbox-control-glyph" aria-hidden="true" opacity={opacity}>
+      <rect
+        x="3"
+        y="3"
+        width="14"
+        height="14"
+        rx="3"
+        fill="none"
+        stroke={mixed ? "currentColor" : hex}
+        strokeOpacity={mixed ? 0.35 : 1}
+        strokeWidth={dash === "none" ? 1 : drawn}
+        strokeDasharray={dash === "none" ? "2 2" : array}
+        strokeLinecap={dash === "dotted" ? "round" : "butt"}
+        data-dash={dash}
+      />
+    </svg>
+  );
+}

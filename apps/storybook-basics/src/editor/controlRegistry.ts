@@ -148,6 +148,43 @@ export interface CustomSizeBinding {
   maxPx: number;
 }
 
+/**
+ * A panel's CONTINUOUS channel — a value with no rungs at all.
+ *
+ * `CustomSizeBinding` above is the same idea for a control that has presets
+ * AND an exact value; this is for one that only ever has the exact value.
+ * Opacity is the case that forced it (Zach, 2026-09-24: *"I also don't like
+ * the opacity slider on the tool bar ... that is something that relates to
+ * the fill and stroke"*) — an attribute OF a paint, so it belongs in the
+ * paint's own panel rather than loose on the bar beside it.
+ *
+ * WHY not an option list with ten rungs: opacity has no named values a
+ * vocabulary could declare. Forcing it into `options` would invent rungs the
+ * domain does not have, and `selectedControlOption` would then have to lie
+ * about which one is current at 43%.
+ *
+ * Plain values, not thunks — the same rule `CustomSizeBinding` follows. Only
+ * `apply` is a function, because it is a command rather than a reading.
+ */
+export interface ContinuousBinding {
+  /** Names the channel inside the panel, e.g. "Opacity". */
+  label: string;
+  /** One shared value across the target, 'mixed', or null (does not apply). */
+  value: number | "mixed" | null;
+  min: number;
+  max: number;
+  step?: number;
+  /** One value as its readout, e.g. `(n) => `${Math.round(n * 100)}%``. */
+  format(value: number): string;
+  /**
+   * `continuous: true` while a drag is still in flight — the same flag
+   * `ControlBinding.onSelect` already carries, and for the same reason: a
+   * host marks ONE history stopping point per gesture rather than one per
+   * pixel, so a single drag is a single undo.
+   */
+  apply(value: number, opts?: { continuous?: boolean }): void;
+}
+
 export interface ControlBinding {
   /** Stable id for DOM hooks and surface-specific tests. */
   id: string;
@@ -156,6 +193,11 @@ export interface ControlBinding {
   automaticOption?: ControlOption;
   customColorOpacity?: number;
   customSize?: CustomSizeBinding;
+  /** A continuous channel rendered under this control's options — see
+      `ContinuousBinding`. Absent means the control has no such channel, and
+      the panel renders nothing for it (the same "never a dead cell" rule
+      `customSize` follows). */
+  continuous?: ContinuousBinding;
   /** The pixels one named size option actually renders at for this control's
       target, keyed by option value, or absent when the target has no single
       answer. Replaces the donor's `rungPx(value)` thunk — see change (5)

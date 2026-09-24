@@ -47,6 +47,7 @@ import {
   MIXED_LABEL,
   stackModes,
   type BoundControl,
+  type ContinuousBinding,
   type ControlLayout,
   type ControlOption,
   type CustomSizeBinding,
@@ -144,6 +145,10 @@ export function ControlPanel<K extends string>({
           title) that never wires one gets presets-only, never a dead Custom
           cell. That bug already shipped once in the donor. */}
       {customSize ? <CustomFontSizeCell binding={customSize} /> : null}
+      {/* Same rule as the Custom cell above: renders ONLY when the binding
+          supplied one, so a control with no continuous channel never shows a
+          dead slider. */}
+      {control.continuous ? <ContinuousRow binding={control.continuous} /> : null}
     </div>
   );
 }
@@ -346,6 +351,61 @@ function CustomFontSizeCell({ binding }: { binding: CustomSizeBinding }) {
         className="w-full min-w-0 flex-1 bg-transparent text-right outline-none"
       />
       <span className="text-muted-foreground">px</span>
+    </label>
+  );
+}
+
+/**
+ * The continuous channel's row — a slider and its readout, under the
+ * options.
+ *
+ * WHY it lives in the panel rather than on the strip: opacity is an
+ * attribute OF a paint, not a peer of it (Zach, 2026-09-24). The archived
+ * app put it on the pill, arguing its current state is what you need to see
+ * while you drag — true, and the readout beside the slider is what answers
+ * that, without spending a slot on the bar for something that only applies
+ * once you have already opened the paint you are fading.
+ *
+ * WHY `continuous: true` on input and a settling call on release: a range
+ * input fires `input` per pixel. Marking every one of those as its own undo
+ * step would make one drag cost forty presses of ⌘Z.
+ */
+function ContinuousRow({ binding }: { binding: ContinuousBinding }) {
+  const shared = typeof binding.value === "number" ? binding.value : null;
+  const [draft, setDraft] = useState(shared);
+  useEffect(() => setDraft(shared), [shared]);
+  const shown = draft ?? shared;
+
+  return (
+    <label
+      data-slot="control-continuous"
+      className="mx-1 mt-1 flex items-center gap-2 px-1 py-1 text-sm"
+    >
+      <span className="text-muted-foreground shrink-0">{binding.label}</span>
+      <input
+        data-testid="control-continuous-input"
+        type="range"
+        min={binding.min}
+        max={binding.max}
+        step={binding.step ?? 1}
+        // A mixed target has no one value to park the thumb at; the readout
+        // says so and the slider sits at the low end rather than inventing a
+        // number the selection does not have.
+        value={shown ?? binding.min}
+        aria-label={binding.label}
+        aria-valuetext={shown === null ? MIXED_LABEL : binding.format(shown)}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          setDraft(next);
+          binding.apply(next, { continuous: true });
+        }}
+        onPointerUp={(event) => binding.apply(Number(event.currentTarget.value))}
+        onKeyUp={(event) => binding.apply(Number(event.currentTarget.value))}
+        className="min-w-24 flex-1 accent-[var(--bbox-control-accent,currentColor)]"
+      />
+      <output className="text-muted-foreground w-10 shrink-0 text-right tabular-nums">
+        {shown === null ? MIXED_LABEL : binding.format(shown)}
+      </output>
     </label>
   );
 }
