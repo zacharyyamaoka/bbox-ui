@@ -371,7 +371,12 @@ function RungPxReadout<K extends string>({ control, value }: { control: BoundCon
   return (
     <span
       data-testid="control-trigger-rung-px"
-      className="text-muted-foreground shrink-0 pr-0.5 text-xs tabular-nums"
+      // The trigger's ink at 60%, not `text-muted-foreground` — the same rule
+      // as `controlPanel.tsx`'s change 4, one level up: the trigger sits on
+      // the host's skinned bar, and a page token on a fixed surface is right
+      // in one colour scheme and wrong in the other. The donor mutes this
+      // exact readout the same way (appearance.css:73, 55% of the pill ink).
+      className="shrink-0 pr-0.5 text-xs text-current/60 tabular-nums"
     >
       {formatPx(px)}
     </span>

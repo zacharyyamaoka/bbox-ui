@@ -363,7 +363,84 @@ export interface FacePaint {
   dash?: string;
   /** 0–1. Applies to whichever half this face draws. */
   opacity?: number;
+  /** The colour this face is painted ON, as a `#rrggbb` hex. An `edge` face
+      compares its stroke against it to decide whether the stroke needs
+      lifting off the surface at all (see `PaintFace`). Defaults to
+      `PAINT_FACE_DEFAULT_SURFACE`, the pill's; a host that skins the trigger
+      names its own surface here, the same seam as `ControlStrip`'s
+      `triggerClassName`. */
+  surface?: string;
 }
+
+/**
+ * The surface an edge face assumes when its host names none: the pill's,
+ * `PILL_SURFACE` in `floatingToolbar.tsx`.
+ *
+ * WHY a default at all, and why THIS one is trustworthy rather than a guess
+ * the face has no business making: the paint faces exist for the pill's
+ * triggers (the "Two Faces" section above — there is no other surface in
+ * the kit that mounts one), and the pill's surface is the one colour the kit
+ * ships FIXED in both colour schemes, by construction (`PILL_SURFACE`'s own
+ * WHY: no token is left for a `prefers-color-scheme` block to flip). So the
+ * default is not an assumption about an unknown host; it is the kit's own
+ * constant restated, and `PaintFace.stories.tsx` pins the two literals
+ * against each other so they cannot drift. Restated rather than imported
+ * for the same reason `STROKE_WIDTH_PX` is (above): `floatingToolbar.tsx`
+ * pulls the whole Base UI toolbar in, and a glyph module that imports a
+ * toolbar to learn one hex would drag that into every registry item this
+ * file ships in.
+ *
+ * WHY not measure the computed background behind the glyph, which would
+ * "read" the surface instead of being told it: that is self-measurement,
+ * the one thing CLAUDE.md's rule forbids a kit component ("props in, DOM
+ * out"), and it would turn this module's plain render functions into a
+ * hook-bearing component that paints one frame without the answer and a
+ * second with it. A host that re-skins the pill passes `surface` — one
+ * field, from the same place it already passes `hex`.
+ */
+export const PAINT_FACE_DEFAULT_SURFACE = "#1e1e1e";
+
+/**
+ * WCAG 2.x relative luminance of a `#rgb` / `#rrggbb` hex, or `undefined`
+ * when the string is not one (a `rgb()` string, a palette NAME that never
+ * resolved). Formula: WCAG 2.1 §1.4.3, "relative luminance" definition —
+ * sRGB channels linearised at the 0.03928 knee, weighted 0.2126/0.7152/0.0722.
+ */
+function relativeLuminance(hex: string): number | undefined {
+  const digits = hex.trim().replace(/^#/, "");
+  const six =
+    digits.length === 3 ? digits.split("").map((d) => d + d).join("") : digits.length === 6 ? digits : null;
+  if (six === null || !/^[0-9a-fA-F]{6}$/.test(six)) return undefined;
+  const channel = (offset: number) => {
+    const c = Number.parseInt(six.slice(offset, offset + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+}
+
+/** WCAG contrast ratio (1–21) between two hexes, `undefined` if either does
+    not parse — the caller treats "unknown" as "assume the worst". */
+export function contrastRatio(a: string, b: string): number | undefined {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  if (la === undefined || lb === undefined) return undefined;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** WCAG 1.4.11 (non-text contrast): the minimum a graphical mark needs
+    against what it sits on. Below it the edge face lifts its stroke. */
+export const EDGE_CONTRAST_MIN = 3;
+
+/** The lift, in the face's 20-unit box: how far the ink hairline shows past
+    EACH side of the coloured stroke, and how strongly. Half a unit is a hair
+    at 24px, and half the ink (5.2:1 on the pill, well over the 3:1 floor)
+    is the weight at which a black edge still reads as BLACK with a light
+    rim rather than as a grey box — read off 4x captures of the running app,
+    2026-09-25; 60% was the first cut and the rim swallowed the stroke. The
+    mark stays "the rectangle", edged, not "a rectangle on a plate" (see the
+    edge branch of `PaintFace`). */
+const HAIRLINE_REACH = 0.5;
+const HAIRLINE_OPACITY = 0.5;
 
 /**
  * A trigger face that draws the selection's real paint.
@@ -464,16 +541,61 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
   // which is the property the face has to preserve.
   const drawn = Math.max(1, Math.min(3.4, 0.9 + widthPx * 0.36));
   const array = dash ? DASH_ARRAYS[dash] : undefined;
-  return (
-    <svg viewBox="0 0 20 20" className="bbox-control-glyph" aria-hidden="true" opacity={opacity}>
-      {/* The keyline goes UNDER the coloured stroke, and it is not decoration.
-          Measured in the running app: a fresh geo's edge is tldraw's `black`
-          (#1d1d1d) and the pill's surface is #1e1e1e, so a face that painted
-          only the real colour was a black square on a black bar — the trigger
-          rendered as a bare chevron. The swatch family solves the same problem
-          with an inset ring (`bbox-control-glyph-swatch`'s `box-shadow`); a
-          stroked face needs it outside the stroke, where the colour cannot
-          cover it. */}
+  const painted = !mixed && dash !== "none";
+
+  // WHY the lift is CONDITIONAL, and on a measured number: the face used to
+  // draw a `currentColor` keyline under every coloured stroke, 1.6 units
+  // wider than the stroke at 22% ink — a grey plate the stroke sat on. Zach,
+  // 2026-09-25: "I don't like the grey background behind the edge. ideally
+  // the edge is rendered as if it itself was just the rectangle you are
+  // formatting.. you wouldn't see that background." So a stroke that can be
+  // seen on its own is drawn ALONE — for twelve of tldraw's thirteen palette
+  // colours in light mode and all thirteen in dark, the face is the rectangle
+  // and nothing else.
+  //
+  // The tempting fix was to delete the keyline outright, and that ships the
+  // bug it existed for straight back: measured in the running app, a fresh
+  // geo's edge is tldraw's light-mode `black` (#1d1d1d) and the pill is
+  // #1e1e1e — 1.01:1 — so a bare black stroke on the bar is invisible and
+  // the trigger reads as a lone chevron. The other tempting fix, a thinner
+  // plate, keeps a plate. So: compute the stroke's contrast against the
+  // surface it is actually on, and only when it misses WCAG's 3:1 graphics
+  // floor add the least that makes the stroke findable — a hairline of the
+  // surface's own ink hugging the mark's exact shape (same path, same dash,
+  // same cap, half a unit past each side), painted under it. It reads as the
+  // rectangle's own edge, not as something behind it. A hex that does not
+  // parse counts as failing: lifting a stroke that did not need it costs a
+  // hairline; not lifting one that did costs the whole face.
+  const surface = paint.surface ?? PAINT_FACE_DEFAULT_SURFACE;
+  const contrast = painted && hex ? contrastRatio(hex, surface) : undefined;
+  const lifted = painted && !(contrast !== undefined && contrast >= EDGE_CONTRAST_MIN);
+
+  // One mark, drawn twice at most: once as the ink hairline (when lifted),
+  // once in the selection's colour on top. Sharing the geometry is what
+  // guarantees the hairline can never be a different shape from the stroke.
+  const mark = (
+    stroke: string,
+    strokeWidth: number,
+    stamp: { "data-dash": string | undefined } | { "data-role": "hairline"; strokeOpacity: number },
+  ): ReactNode =>
+    dash === "draw" ? (
+      <g fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" {...stamp}>
+        {/* WHY four separate strokes that OVERSHOOT and cross at the corners,
+            not a wobbled outline: the wobble shipped first and was
+            indistinguishable from `solid` at 24px — a 14-unit box cannot
+            carry a deviation small enough to look like a hand and large
+            enough to see. Gaps at the corners were the second attempt and
+            did not survive contact with the round caps: at the thick rung
+            the cap radius is 1.7 units and the gaps were 1, so the caps
+            closed them and the face was a rounded rect again. Crossing
+            cannot be closed by a cap, so it reads at every width, and it is
+            what a sketched box actually looks like. */}
+        <path d="M4.0 3.8 16.4 2.9" />
+        <path d="M16.0 3.6 17.0 16.2" />
+        <path d="M16.2 16.0 3.7 17.0" />
+        <path d="M4.0 16.4 3.0 3.9" />
+      </g>
+    ) : (
       <rect
         x="3"
         y="3"
@@ -481,53 +603,26 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
         height="14"
         rx="3"
         fill="none"
-        stroke="currentColor"
-        // `none` has no colour over it, so its keyline carries the whole face
-        // and has to be readable on its own.
-        strokeOpacity={dash === "none" || mixed ? 0.45 : 0.22}
-        strokeWidth={dash === "none" ? 1.2 : drawn + 1.6}
-        data-role="keyline"
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        strokeDasharray={array}
+        strokeLinecap={dash === "dotted" ? "round" : "butt"}
+        {...stamp}
       />
-      {/* WHY each branch, and every one of these was read off a contact sheet
-          of the nine states rather than reasoned about:
+    );
 
-          `none` paints NO colour at all. It first shipped as a 1px dashed
-          stroke in the edge's own colour, which on a green shape read as "a
-          thin dashed green edge" — the one thing it does not mean. The
-          neutral keyline alone is the honest drawing of "there is no edge".
-
-          `draw` is four separate strokes that overshoot at the corners, not a
-          wobbled outline. The wobble shipped first and was indistinguishable
-          from `solid` at 24px: a 14-unit box cannot carry a deviation small
-          enough to look like a hand and large enough to see. Overshoot reads
-          instantly at any size, and it is what a sketched box actually looks
-          like.
-
-          `mixed` gets the swatch family's diagonal slash and no colour, so
-          "we don't know" cannot be confused with "there is no edge". */}
-      {mixed ? (
-        <path d="M5 15 15 5" stroke="currentColor" opacity="0.75" data-role="slash" />
-      ) : dash === "none" ? null : dash === "draw" ? (
-        <g
-          fill="none"
-          stroke={hex}
-          strokeWidth={drawn}
-          strokeLinecap="round"
-          data-dash="draw"
-        >
-          {/* The strokes OVERSHOOT and cross at the corners rather than
-              meeting at them. Gaps were the first attempt and did not survive
-              contact with the round caps: at the thick rung the cap radius is
-              1.7 units and the gaps were 1, so the caps closed them and the
-              face was a rounded rect again — identical to `solid`, which is
-              the bug this branch exists to fix. Crossing cannot be closed by
-              a cap, so it reads at every width. */}
-          <path d="M4.0 3.8 16.4 2.9" />
-          <path d="M16.0 3.6 17.0 16.2" />
-          <path d="M16.2 16.0 3.7 17.0" />
-          <path d="M4.0 16.4 3.0 3.9" />
-        </g>
-      ) : (
+  return (
+    <svg viewBox="0 0 20 20" className="bbox-control-glyph" aria-hidden="true" opacity={opacity}>
+      {/* `none` and `mixed` paint NO colour, so a neutral keyline IS the face.
+          `none` first shipped as a 1px dashed stroke in the edge's own colour,
+          which on a green shape read as "a thin dashed green edge" — the one
+          thing it does not mean; the ink keyline alone is the honest drawing
+          of "there is no edge", and without it the trigger is a bare chevron
+          that reads as a rendering failure. `mixed` adds the swatch family's
+          diagonal slash so "we don't know" cannot be confused with "there is
+          no edge". Every one of these was read off a contact sheet rather
+          than reasoned about. */}
+      {painted ? null : (
         <rect
           x="3"
           y="3"
@@ -535,13 +630,20 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
           height="14"
           rx="3"
           fill="none"
-          stroke={hex}
-          strokeWidth={drawn}
-          strokeDasharray={array}
-          strokeLinecap={dash === "dotted" ? "round" : "butt"}
-          data-dash={dash}
+          stroke="currentColor"
+          strokeOpacity={0.45}
+          strokeWidth={1.2}
+          data-role="keyline"
         />
       )}
+      {mixed ? <path d="M5 15 15 5" stroke="currentColor" opacity="0.75" data-role="slash" /> : null}
+      {lifted
+        ? mark("currentColor", drawn + 2 * HAIRLINE_REACH, {
+            "data-role": "hairline",
+            strokeOpacity: HAIRLINE_OPACITY,
+          })
+        : null}
+      {painted ? mark(hex!, drawn, { "data-dash": dash }) : null}
     </svg>
   );
 }

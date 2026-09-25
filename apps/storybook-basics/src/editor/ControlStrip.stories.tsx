@@ -433,12 +433,11 @@ export const TwoFacesBar: Story = {
 
     // Each face paints, and the two paint differently: Inside fills its box,
     // Edge only inks its border. Both read the rect that actually carries the
-    // selection's colour — never the `data-role="keyline"` underlay, which is
-    // the control's own ink by design (`controlGlyphs.tsx`).
+    // selection's colour — never a `data-role` underlay (`keyline`, or the
+    // conditional `hairline` a low-contrast edge draws), which is the
+    // control's own ink by design (`controlGlyphs.tsx`).
     const coloured = (trigger: HTMLElement) =>
-      [...trigger.querySelectorAll("svg rect")].filter(
-        (rect) => rect.getAttribute("data-role") !== "keyline",
-      );
+      [...trigger.querySelectorAll("svg rect")].filter((rect) => !rect.hasAttribute("data-role"));
     const insideFill = coloured(inside).map((rect) => getComputedStyle(rect).fill);
     const edgeStyle = getComputedStyle(coloured(edge).at(-1)!);
     await expect(insideFill.some((fill) => fill !== "none")).toBe(true);
