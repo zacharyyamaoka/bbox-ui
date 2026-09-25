@@ -232,6 +232,16 @@ inset ring does.</p>
      "rest are paths.")}
 </div>
 
+<h2>Every face, side by side</h2>
+<p>The one thing I cannot judge for you. Each row is the real bar with one value
+changed — captured from the running app, not drawn for this page. <code>draw</code> vs
+<code>solid</code> is the closest pair: a sketched square with overshooting corners against a
+ruled one with rounded ones.</p>
+{fig("contact-sheet.png", "Nine states of the two faces",
+     " Top five: the Edge face across every line style. Bottom four: the Inside face across "
+     "every fill treatment. Two earlier versions of this sheet are why <code>draw</code> and "
+     "<code>none</code> were rewritten.", max_w=760, rank="FACES")}
+
 <h2>The two behaviours, measured in the real app</h2>
 
 <div class="answer green">
