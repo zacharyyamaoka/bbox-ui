@@ -1,7 +1,17 @@
 // src/chrome/ContextualPopupMenu/arrangeActions.test.ts — the pure half of the selection pill's
-// Arrange / opacity / style vocabulary. No editor, no DOM: everything here is
-// a function of its arguments, which is the whole reason `arrangeActions.ts`
-// keeps them separate from the React that renders them.
+// ARRANGE vocabulary. No editor, no DOM: everything here is a function of its
+// arguments, which is the whole reason `arrangeActions.ts` keeps them separate
+// from the React that renders them.
+//
+// THE STYLE HALF MOVED, 2026-09-24. This file also held `STYLE_ROWS` and
+// `activeStyleRows` describes — the six per-tldraw-style rows the pill used to
+// draw. That vocabulary was replaced by `appearanceModel.ts`'s four triggers
+// (shape · inside · edge · text, plus the app's diff), so the claims moved with
+// it, intact, to `./appearanceModel.test.ts`: options read off tldraw's own
+// enums and never re-spelled, a selection that does not carry a style gets no
+// control for it, a disagreeing selection reports mixed rather than picking a
+// winner, and the recipe's order is stable. Nothing was dropped — look there,
+// not in this file's history, for where each one went.
 import { describe, expect, it } from "vitest";
 
 import {
@@ -9,8 +19,6 @@ import {
   ARRANGE_ALIGN_VERTICAL,
   ARRANGE_DISTRIBUTE,
   ARRANGE_Z_ORDER,
-  STYLE_ROWS,
-  activeStyleRows,
   arrangeGroupsFor,
 } from "./arrangeActions";
 
@@ -52,61 +60,5 @@ describe("arrangeGroupsFor — which controls a selection may use", () => {
       expect(action.label.length, `${action.id} has a label`).toBeGreaterThan(0);
       expect(action.icon, `${action.id} has an icon`).toBeTruthy();
     }
-  });
-});
-
-describe("STYLE_ROWS — read off tldraw's own enums, never re-spelled here", () => {
-  // THIS IS THE LOAD-BEARING ONE. `valuesOf()` reaches for `StyleProp.values`,
-  // which is a runtime field rather than a documented part of the type. If a
-  // tldraw upgrade renames or drops it, every style row silently becomes an
-  // empty option list and the panel renders as a row of empty popovers — a
-  // failure that looks like a CSS bug, not a break. This test turns that into
-  // a red line the day it happens.
-  it("every row has a non-empty option list", () => {
-    for (const row of STYLE_ROWS) {
-      expect(row.values.length, `${row.id} has options (StyleProp.values still exists?)`).toBeGreaterThan(0);
-    }
-  });
-
-  it("carries tldraw's real vocabulary, not a guess: colours include black and blue, dash includes solid and dashed, size includes s and xl", () => {
-    const byId = Object.fromEntries(STYLE_ROWS.map((row) => [row.id, row.values]));
-    expect(byId.color).toEqual(expect.arrayContaining(["black", "blue"]));
-    expect(byId.dash).toEqual(expect.arrayContaining(["solid", "dashed"]));
-    expect(byId.size).toEqual(expect.arrayContaining(["s", "xl"]));
-    expect(byId.fill).toEqual(expect.arrayContaining(["none", "solid"]));
-  });
-
-  it("only the colour row paints swatches; the rest are named, because there is nothing to show", () => {
-    expect(STYLE_ROWS.filter((row) => row.paint === "swatch").map((row) => row.id)).toEqual(["color"]);
-  });
-});
-
-describe("activeStyleRows — the selection decides which rows exist", () => {
-  /** A stand-in for tldraw's `ReadonlySharedStyleMap`: only `get` is read. */
-  function sharedMap(entries: Map<unknown, { type: string; value?: string }>) {
-    return { get: (style: unknown) => entries.get(style) } as never;
-  }
-
-  it("drops a style the selection does not have at all — an arrow has a colour but no fill", () => {
-    const color = STYLE_ROWS.find((row) => row.id === "color")!;
-    const rows = activeStyleRows(sharedMap(new Map([[color.style, { type: "shared", value: "blue" }]])));
-    expect(rows.map((row) => row.id)).toEqual(["color"]);
-    expect(rows[0]!.value).toBe("blue");
-  });
-
-  it("reports a DISAGREEING selection as null rather than picking a winner", () => {
-    const color = STYLE_ROWS.find((row) => row.id === "color")!;
-    const rows = activeStyleRows(sharedMap(new Map([[color.style, { type: "mixed" }]])));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.value, "mixed is null, not the first shape's colour").toBeNull();
-  });
-
-  it("keeps STYLE_ROWS' order regardless of what the map iterates in", () => {
-    const entries = new Map(STYLE_ROWS.map((row) => [row.style, { type: "shared", value: row.values[0]! }] as const));
-    expect(activeStyleRows(sharedMap(entries as never)).map((row) => row.id)).toEqual(STYLE_ROWS.map((row) => row.id));
-  });
-
-  it("returns nothing for a selection that shares no styles at all", () => {
-    expect(activeStyleRows(sharedMap(new Map()))).toEqual([]);
   });
 });

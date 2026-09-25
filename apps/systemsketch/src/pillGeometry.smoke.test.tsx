@@ -93,9 +93,19 @@ function contentOf(cell: Element): Element | null {
   return cell.firstElementChild;
 }
 
-/** Selecting a plain geo box is the widest pill this app draws: six style
- *  triggers, Arrange, the opacity row, Focus, a separator, Duplicate, Delete —
- *  every cell family in one bar. */
+/** Selecting a plain geo box is the widest pill this app draws: the four
+ *  appearance triggers (shape · inside · edge · text), Arrange, Focus, a
+ *  separator, Duplicate, Delete — every cell family in one bar.
+ *
+ *  AMENDED 2026-09-24: it used to read "six style triggers ... the opacity
+ *  row". The six per-style rows became the four triggers above, and opacity
+ *  moved off the bar into the Inside and Edge panels on Zach's word that it
+ *  "relates to the fill and stroke". `cellsOf` takes every `<button>` by tag
+ *  rather than by a list of ids precisely so a change like this is MEASURED by
+ *  this file the day it lands instead of being silently exempt — which is what
+ *  happened here: the trunk's `ToolbarButton` now draws four of these cells,
+ *  and the two geometry cases below are what say whether it draws them on the
+ *  bar's own baseline. */
 async function pillOverGeo(): Promise<HTMLElement> {
   app = await mountApp();
   app.editor.select(placeGeo(300, 300));
@@ -183,18 +193,40 @@ describe("the selection pill — a fixed dark surface, shared with its popovers"
     });
   }
 
+  // SELECTOR MOVED, 2026-09-24 — the claim did not, and it got MORE
+  // load-bearing, not less. The colour trigger `ss-style-color` /
+  // `ss-style-color-panel` is now the Inside trigger of the trunk's
+  // `ControlStrip` (`ss-control-inside` / `ss-control-panel-inside`), whose
+  // panel is rendered by the KIT, not by this app — so nothing about the pill's
+  // own stylesheet reaches it by construction. `AppearanceCluster` passes
+  // `panelClassName={PILL_POPOVER}` for precisely this assertion; delete that
+  // one prop and this test is what goes red.
   it("an open popover paints the SAME surface as the bar it hangs off", async () => {
     await emulateColorScheme("dark");
     const bar = await pillOverGeo();
-    const trigger = await waitFor(() => bar.querySelector<HTMLElement>('[data-testid="ss-style-color"]'), {
-      what: "the colour trigger",
+    const trigger = await waitFor(() => bar.querySelector<HTMLElement>('[data-testid="ss-control-inside"]'), {
+      what: "the Inside trigger",
     });
     await userEvent.click(trigger);
     // The panel PORTALS out of the pill's subtree — which is the whole reason
     // this can go wrong, and why the donor scopes its surface tokens on a
     // shared ANCESTOR rather than on the bar (pillSkins.css:15-23).
-    const panel = await waitFor(() => document.querySelector<HTMLElement>('[data-testid="ss-style-color-panel"]'), {
-      what: "the colour panel",
+    //
+    // WHY the surface is read off the popover CONTENT and not off the element
+    // carrying `ss-control-panel-inside`: under the old pill those were one
+    // element — the app wrote `data-testid` straight onto its own
+    // `<PopoverContent>` and put `PILL_POPOVER` there too. Under the kit they
+    // are two: `controlStrip.tsx` passes `panelClassName` to `PopoverContent`
+    // (`data-slot="popover-content"`), and `ControlPanel` renders the
+    // `ss-control-panel-*` div INSIDE it, transparent by design. The surface is
+    // the popover's, so that is what this measures; keying it to the inner div
+    // would assert a background that element is not meant to have and would
+    // fail while the pill looked perfect.
+    const body = await waitFor(() => document.querySelector<HTMLElement>('[data-testid="ss-control-panel-inside"]'), {
+      what: "the Inside panel",
+    });
+    const panel = await waitFor(() => body.closest<HTMLElement>('[data-slot="popover-content"]'), {
+      what: "the popover surface the Inside panel sits on",
     });
     const panelStyle = getComputedStyle(panel);
     expect(panelStyle.backgroundColor, "the panel's surface equals the bar's").toBe(
