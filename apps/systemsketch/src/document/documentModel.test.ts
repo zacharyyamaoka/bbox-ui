@@ -65,10 +65,38 @@ function roundTrip(s: ReturnType<typeof store>) {
 }
 
 describe("registry", () => {
-  it("publishes exactly the plan's shape and binding types", () => {
+  // AMENDED 2026-09-24 by the dispatcher, on a lane's report rather than by
+  // the lane itself, and the amendment SHARPENS the claim.
+  //
+  // `SHAPE_UTILS` gained four entries — tldraw's own `geo`/`draw`/`line`/
+  // `arrow`, re-registered so the canvas reads `src/appearance`'s stroke-width
+  // and edge-colour metadata. The old line counted the array, so it went red.
+  //
+  // What it was written to protect is not the COUNT: it is that this app
+  // invents exactly five shape kinds and can persist no others. That property
+  // is intact, because a util whose `type` matches a default REPLACES it
+  // rather than joining it. Measured by exercising the helper `<Tldraw>` uses
+  // (`Tldraw.mjs:108` -> `@tldraw/utils` `mergeArraysAndReplaceDefaults`)
+  // against a three-default fixture: one `geo` entry survives, ours, and only
+  // a genuinely new type lengthens the array.
+  //
+  // So the assertion now names both halves separately — ours must be exactly
+  // the five, and everything else must be a type tldraw already ships. That is
+  // strictly stronger than the count, which would have admitted a sixth kind
+  // of our own as long as something else was removed.
+  const STOCK_REPAINTED = ["arrow", "draw", "geo", "line"];
+
+  it("publishes exactly the plan's shape and binding types, and re-registers only tldraw's own", () => {
     const shapeTypes = SHAPE_UTILS.map((u) => u.type).sort();
-    expect(shapeTypes).toEqual([BLOCK_SHAPE_TYPE, CODE_SHAPE_TYPE, PORT_SHAPE_TYPE, REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE].sort());
+    const ours = shapeTypes.filter((type) => type.startsWith("ss-"));
+    expect(ours).toEqual([BLOCK_SHAPE_TYPE, CODE_SHAPE_TYPE, PORT_SHAPE_TYPE, REGION_SHAPE_TYPE, WIRE_SHAPE_TYPE].sort());
+    expect(shapeTypes.filter((type) => !type.startsWith("ss-")).sort()).toEqual(STOCK_REPAINTED);
     expect(BINDING_UTILS.map((u) => u.type)).toEqual([WIRE_BINDING_TYPE]);
+  });
+
+  it("registers each type once, so no re-registration can shadow another", () => {
+    const types = SHAPE_UTILS.map((u) => u.type);
+    expect(new Set(types).size, `duplicate shape util type in ${types.join(", ")}`).toBe(types.length);
   });
 });
 

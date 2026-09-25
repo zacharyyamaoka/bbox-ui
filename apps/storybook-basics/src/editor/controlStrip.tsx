@@ -109,6 +109,15 @@ export interface ControlStripProps<K extends string = string> {
    * page theme rather than the bar's. The trunk already exports `PILL_POPOVER`
    * (`floatingToolbar.tsx`) for exactly this; this is where a host passes it. */
   panelClassName?: string;
+  /** The host's skin for every TRIGGER in this strip.
+   *
+   * Same seam as `panelClassName`, one level up. The kit's `ToolbarButton`
+   * offers `sm`/`default`/`lg` (h-7/h-8/h-9, `rounded-lg`), and a host whose
+   * bar is traced from another product may need a cell no size value can
+   * reach — this app's is 40x5, measured off FigJam. Without this the four
+   * kit triggers rendered 32px tall with a 10px radius beside the app's own
+   * 40/5 cells, on one bar. */
+  triggerClassName?: string;
 }
 
 /** One renderer for every registered control, regardless of target surface
@@ -121,6 +130,7 @@ export function ControlStrip<K extends string>({
   onPanelPointerDownCapture,
   testIdPrefix = "bbox",
   panelClassName,
+  triggerClassName,
   "aria-label": ariaLabel,
 }: ControlStripProps<K>) {
   return (
@@ -157,6 +167,7 @@ export function ControlStrip<K extends string>({
                 onPanelPointerDownCapture={onPanelPointerDownCapture}
                 testIdPrefix={testIdPrefix}
                 panelClassName={panelClassName}
+                triggerClassName={triggerClassName}
               />
             ))}
           </ToolbarGroup>
@@ -174,6 +185,7 @@ interface TriggerShapeProps<K extends string> {
   onPanelPointerDownCapture?: PointerEventHandler;
   testIdPrefix: string;
   panelClassName?: string;
+  triggerClassName?: string;
 }
 
 /**
@@ -243,6 +255,7 @@ function PopoverTriggerShape<K extends string>({
   onPanelPointerDownCapture,
   testIdPrefix,
   panelClassName,
+  triggerClassName,
 }: TriggerShapeProps<K>) {
   const current = selectedControlOption(control);
   return (
@@ -262,6 +275,8 @@ function PopoverTriggerShape<K extends string>({
           // matching FigJam's own 144px trigger (figjamTokens.ts's
           // `TEXT_TRIGGER_WIDTH`) rather than the icon triggers' snug fit.
           control.trigger === "text" && "w-36 justify-between px-2.5",
+          // Last, so a host's traced cell wins over the kit's defaults.
+          triggerClassName,
         )}
         render={<PopoverTrigger />}
       >

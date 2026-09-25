@@ -437,8 +437,17 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
           fill="none"
           stroke="currentColor"
           strokeWidth="1"
-          opacity={mixed ? 0.35 : 0.5}
+          opacity={mixed ? 0.5 : 0.5}
         />
+        {/* A mixed selection gets the swatch family's diagonal slash
+            (`controlGlyphs.css`'s `[data-mixed]`), and "no fill" does not.
+            They were separated only by a keyline opacity of 0.5 vs 0.35 —
+            two states that mean "definitely nothing" and "we don't know",
+            told apart by a shade. Caught by an audit of this file, not by a
+            test: nothing here asserts on how two faces DIFFER. */}
+        {mixed ? (
+          <path d="M5 15 15 5" stroke="currentColor" strokeWidth="1.2" opacity="0.75" data-role="slash" />
+        ) : null}
       </svg>
     );
   }
@@ -468,24 +477,66 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
         rx="3"
         fill="none"
         stroke="currentColor"
-        strokeOpacity={mixed ? 0.35 : 0.22}
-        strokeWidth={drawn + 1.6}
+        // `none` has no colour over it, so its keyline carries the whole face
+        // and has to be readable on its own.
+        strokeOpacity={dash === "none" || mixed ? 0.45 : 0.22}
+        strokeWidth={dash === "none" ? 1.2 : drawn + 1.6}
         data-role="keyline"
       />
-      <rect
-        x="3"
-        y="3"
-        width="14"
-        height="14"
-        rx="3"
-        fill="none"
-        stroke={mixed ? "currentColor" : hex}
-        strokeOpacity={mixed ? 0 : 1}
-        strokeWidth={dash === "none" ? 1 : drawn}
-        strokeDasharray={dash === "none" ? "2 2" : array}
-        strokeLinecap={dash === "dotted" ? "round" : "butt"}
-        data-dash={dash}
-      />
+      {/* WHY each branch, and every one of these was read off a contact sheet
+          of the nine states rather than reasoned about:
+
+          `none` paints NO colour at all. It first shipped as a 1px dashed
+          stroke in the edge's own colour, which on a green shape read as "a
+          thin dashed green edge" — the one thing it does not mean. The
+          neutral keyline alone is the honest drawing of "there is no edge".
+
+          `draw` is four separate strokes that overshoot at the corners, not a
+          wobbled outline. The wobble shipped first and was indistinguishable
+          from `solid` at 24px: a 14-unit box cannot carry a deviation small
+          enough to look like a hand and large enough to see. Overshoot reads
+          instantly at any size, and it is what a sketched box actually looks
+          like.
+
+          `mixed` gets the swatch family's diagonal slash and no colour, so
+          "we don't know" cannot be confused with "there is no edge". */}
+      {mixed ? (
+        <path d="M5 15 15 5" stroke="currentColor" strokeWidth="1.2" opacity="0.75" data-role="slash" />
+      ) : dash === "none" ? null : dash === "draw" ? (
+        <g
+          fill="none"
+          stroke={hex}
+          strokeWidth={drawn}
+          strokeLinecap="round"
+          data-dash="draw"
+        >
+          {/* The strokes OVERSHOOT and cross at the corners rather than
+              meeting at them. Gaps were the first attempt and did not survive
+              contact with the round caps: at the thick rung the cap radius is
+              1.7 units and the gaps were 1, so the caps closed them and the
+              face was a rounded rect again — identical to `solid`, which is
+              the bug this branch exists to fix. Crossing cannot be closed by
+              a cap, so it reads at every width. */}
+          <path d="M4.0 3.8 16.4 2.9" />
+          <path d="M16.0 3.6 17.0 16.2" />
+          <path d="M16.2 16.0 3.7 17.0" />
+          <path d="M4.0 16.4 3.0 3.9" />
+        </g>
+      ) : (
+        <rect
+          x="3"
+          y="3"
+          width="14"
+          height="14"
+          rx="3"
+          fill="none"
+          stroke={hex}
+          strokeWidth={drawn}
+          strokeDasharray={array}
+          strokeLinecap={dash === "dotted" ? "round" : "butt"}
+          data-dash={dash}
+        />
+      )}
     </svg>
   );
 }

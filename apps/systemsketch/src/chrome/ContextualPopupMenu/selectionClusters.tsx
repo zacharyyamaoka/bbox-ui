@@ -41,15 +41,12 @@ import {
 } from "../../shapes/wire/wireTunnel";
 import { WIRE_ROUTINGS, setWireLayer, setWireRouting, setWireTunnel, type WireRouting } from "./selectionActions";
 import {
-  activeStyleRows,
   arrangeGroupsFor,
   runArrange,
   selectionOpacityPercent,
   setSelectionOpacityPercent,
   setStyle,
   swatchColorFor,
-  faceLabelFor,
-  type ActiveStyleRow,
 } from "./arrangeActions";
 
 /* ------------------------------------------------- THE FIGJAM CELL FAMILIES
@@ -259,6 +256,11 @@ export function AppearanceCluster() {
         // reach them through the DOM. `PILL_POPOVER` is the trunk's own
         // export for exactly this seam.
         panelClassName={PILL_POPOVER}
+        // The pill's own traced cell: 40 tall, radius 5. The kit's
+        // `ToolbarButton` sizes stop at h-9/rounded-lg, so without this the
+        // four kit triggers sat 32px tall with a 10px radius beside the
+        // app's own 40/5 cells, on one bar.
+        triggerClassName={CELL_TRIGGER}
       />
     </div>
   );
