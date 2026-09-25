@@ -55,6 +55,7 @@ import {
   type ControlRecipe,
 } from "@trunk/editor/controlRegistry";
 import type { ControlValue } from "@trunk/editor/controlValue";
+import { PILL_SURFACE_HEX } from "@trunk/editor/floatingToolbar";
 
 import {
   CUSTOM_FONT_PX_MAX,
@@ -540,6 +541,13 @@ export function buildAppearance(editor: Editor): AppearanceBundle | null {
         const shape = firstSelected();
         return {
           hex: colour !== null && colour !== "mixed" ? (swatchColorFor(editor, colour) ?? undefined) : undefined,
+          // Named rather than left to the kit's default, which happens to be
+          // the same value: the face lifts a low-contrast edge off THIS
+          // surface, so the one place that knows the pill is skinned with
+          // `PILL_SURFACE` should be the one that says what it is. The day a
+          // host reskins the pill, this is the line that has to change, and a
+          // silent default would not have been.
+          surface: PILL_SURFACE_HEX,
           widthPx: shape ? strokeWidthPxFor(editor, shape) : undefined,
           dash: dash?.type === "shared" ? dash.value : undefined,
           opacity: selectionOpacityPercent(editor) / 100,
