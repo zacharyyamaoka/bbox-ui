@@ -98,6 +98,13 @@ class DockIconTests(unittest.TestCase):
             installed = (self.root / "scalable" / "apps" / f"{name}.svg").read_bytes()
             self.assertEqual(body(installed), body(source.read_bytes()), name)
 
+    def test_bbox_ui_wears_the_lettered_tile_not_the_studio_mark_systemsketch_wears(self) -> None:
+        # Zach, 2026-09-25: with the mark on both names the two dock slots were
+        # indistinguishable — "return it back to the one that says bbox UI".
+        mark = PROJECT_ROOT / "apps" / "docs" / "public" / "bbox-studio-mark.svg"
+        self.assertEqual(dock_icon.ICONS[NAME], PROJECT_ROOT / "assets" / "bbox-ui.svg")
+        self.assertNotEqual(body(dock_icon.ICONS[NAME].read_bytes()), body(mark.read_bytes()))
+
     def test_each_icon_carries_one_hairline_that_stays_inside_its_square(self) -> None:
         # Zach picked option C: a hairline, so the dark square reads on the dark dock.
         from PIL import Image
@@ -110,7 +117,7 @@ class DockIconTests(unittest.TestCase):
             alpha = image.getchannel("A")
             # Inset, not straddling: the same frame rendered WITHOUT the hairline
             # has the same faintest-pixel extent. (Not "nothing faint outside the
-            # square" — the studio mark's own wire overhangs it, antialiased.)
+            # square" — artwork may overhang it, antialiased, as the studio mark's wire did.)
             bare = re.sub(rb"\n<rect " + re.escape(dock_icon.OUTLINE_MARK) + rb"[^>]*/>", b"", svg)
             bare_alpha = Image.open(io.BytesIO(dock_icon.render_png(bare, 512))).convert("RGBA").getchannel("A")
             touched = lambda channel: channel.point(lambda v: 255 if v else 0).getbbox()  # noqa: E731
