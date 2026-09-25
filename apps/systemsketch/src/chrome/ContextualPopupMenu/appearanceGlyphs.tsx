@@ -108,6 +108,34 @@ function GeoGlyph(value: string | undefined) {
 }
 
 /**
+ * The Shape trigger's face: the FAMILY, not the current value.
+ *
+ * Zach, 2026-09-25, on the trigger that drew whichever geo was selected:
+ * *"This icon should remain as it was before with like more of a shape
+ * selector that shows a square that looks like the ones for the formatting
+ * but then perhaps also a circle."*
+ *
+ * WHY a family mark here when Inside and Edge deliberately preview their
+ * value: those two answer "what does this shape look like now", a question
+ * whose answer is invisible until you look. The geo is the shape ITSELF —
+ * it is already on the canvas at full size, so previewing it on a 24px
+ * trigger repeats what the board already says and costs the one thing a
+ * family mark buys, which is telling you what the button is for.
+ *
+ * The square is the faces' own idiom (a rounded rect, same corner radius),
+ * so the four triggers read as one set; the circle beside it is what makes
+ * it a picker rather than a fifth face.
+ */
+function GeoFamilyGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" className="bbox-control-glyph" aria-hidden="true">
+      <circle cx="7.8" cy="7.8" r="4.4" strokeWidth={1.5} />
+      <rect x="8.4" y="8.4" width="8.4" height="8.4" rx="2.4" strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+/**
  * The edge-link chips. Lucide's `link` / `unlink`, because the chain is a
  * convention people already read as "these two move together" — and because
  * the BROKEN state has to be as legible as the whole one. Zach's rule is that
@@ -215,6 +243,7 @@ export function appearanceGlyphs(editor: Editor, read: FaceReaders): GlyphFamili
   return {
     ...DEFAULT_GLYPH_FAMILIES,
     geo: GeoGlyph,
+    geoFamily: GeoFamilyGlyph,
     link: LinkGlyph,
     diff: DiffGlyph,
     swatch: swatchGlyph((name) => swatchColorFor(editor, name) ?? undefined),

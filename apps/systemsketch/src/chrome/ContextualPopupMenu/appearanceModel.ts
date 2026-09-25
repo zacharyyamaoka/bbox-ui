@@ -153,7 +153,11 @@ function definitions(editor: Editor): Record<AppearanceKind, ControlDefinition<A
       options: options(GeoShapeGeoStyle as unknown as StyleProp<string>),
       layout: "library",
       trigger: "icon",
+      // The OPTIONS each draw themselves — twenty shapes, drawn not named.
+      // The TRIGGER draws the family, because the geo is already on the
+      // canvas at full size and a 24px copy of it says nothing new.
       glyph: "geo",
+      triggerGlyph: "geoFamily",
     },
     // The Inside trigger. Its own options are the palette; the fill treatment
     // rides above it as a mode section, which is exactly the archived app's
