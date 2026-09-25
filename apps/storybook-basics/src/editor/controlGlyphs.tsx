@@ -437,16 +437,21 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
           fill="none"
           stroke="currentColor"
           strokeWidth="1"
-          opacity={mixed ? 0.5 : 0.5}
+          opacity={0.5}
         />
         {/* A mixed selection gets the swatch family's diagonal slash
             (`controlGlyphs.css`'s `[data-mixed]`), and "no fill" does not.
             They were separated only by a keyline opacity of 0.5 vs 0.35 —
             two states that mean "definitely nothing" and "we don't know",
             told apart by a shade. Caught by an audit of this file, not by a
-            test: nothing here asserts on how two faces DIFFER. */}
+            test: nothing here asserts on how two faces DIFFER.
+
+            No `strokeWidth` on the slash on purpose: `controlGlyphs.css`'s
+            `[data-role="slash"]` rule sets 1.5, and a CSS rule outranks a
+            presentation attribute — an authored number here would be a number
+            this never paints. */}
         {mixed ? (
-          <path d="M5 15 15 5" stroke="currentColor" strokeWidth="1.2" opacity="0.75" data-role="slash" />
+          <path d="M5 15 15 5" stroke="currentColor" opacity="0.75" data-role="slash" />
         ) : null}
       </svg>
     );
@@ -501,7 +506,7 @@ function PaintFace({ part, paint }: { part: "inside" | "edge"; paint: FacePaint 
           `mixed` gets the swatch family's diagonal slash and no colour, so
           "we don't know" cannot be confused with "there is no edge". */}
       {mixed ? (
-        <path d="M5 15 15 5" stroke="currentColor" strokeWidth="1.2" opacity="0.75" data-role="slash" />
+        <path d="M5 15 15 5" stroke="currentColor" opacity="0.75" data-role="slash" />
       ) : dash === "none" ? null : dash === "draw" ? (
         <g
           fill="none"
