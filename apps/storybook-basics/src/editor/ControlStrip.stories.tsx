@@ -200,12 +200,20 @@ export const demoDefinitions: Readonly<Record<DemoKind, ControlDefinition<DemoKi
   // — treatment, dash, width, opacity — rides in through the `read` closure
   // the host builds over its own live state, which is exactly what
   // `TwoFacesBar` below demonstrates.
+  //
+  // WHY two glyph fields and not one: `glyph` draws an OPTION, `triggerGlyph`
+  // draws the TRIGGER, and here they are deliberately different families. The
+  // trigger paints the live combination (this colour, at this treatment, at
+  // this opacity); an option cell has to paint the colour you would be
+  // choosing, plainly. One field for both made the palette render 21 copies
+  // of the trigger's own washed-out face instead of 21 colours.
   inside: {
     kind: "inside",
     label: "Inside",
     trigger: "value",
     layout: "swatches",
-    glyph: "insideFace",
+    glyph: "swatch",
+    triggerGlyph: "insideFace",
     columns: 11,
     custom: true,
     options: SWATCH_OPTIONS,
@@ -215,7 +223,8 @@ export const demoDefinitions: Readonly<Record<DemoKind, ControlDefinition<DemoKi
     label: "Edge",
     trigger: "value",
     layout: "swatches",
-    glyph: "edgeFace",
+    glyph: "swatch",
+    triggerGlyph: "edgeFace",
     columns: 11,
     custom: true,
     options: SWATCH_OPTIONS,
@@ -291,17 +300,17 @@ type Story = StoryObj<typeof meta>;
  * that relates to the fill and stroke"*) — a `ContinuousBinding`, one per
  * paint, so Inside and Edge fade independently.
  *
- * LOOK AT THE OPEN PANEL, it is showing you something real and unresolved: a
- * control has ONE `glyph` family, and `controlStrip.tsx`'s change (3) is
- * explicit that the trigger face and the option grid both read it ("one
- * table for the whole control"). So the moment the trigger's face paints
- * LIVE treatment and opacity, every swatch in the palette below is painted
- * that way too — at 60% transparent the palette is visibly washed out, and
- * at 15% it would be unpickable. A trigger that paints the RESULT and
- * options that paint the CHOICES are two different jobs the kit currently
- * gives one slot. Not papered over here: this story is where that shows up,
- * and the fix (a second family key, or an option-vs-trigger argument to
- * `GlyphRenderer`) is a kit decision, not a story's.
+ * LOOK AT THE OPEN PANEL: the trigger and the palette under it draw through
+ * DIFFERENT glyph families, and that split is the whole reason the bar works.
+ * `triggerGlyph: "insideFace"` paints the live combination on the trigger;
+ * `glyph: "swatch"` paints each option as the plain colour you would be
+ * choosing. They were one field until 2026-09-24, and with one field a
+ * trigger that painted 60% transparent made all 21 swatches 60% transparent
+ * too — the popover lost the only thing it was open to show. `triggerGlyph`
+ * wins in `controlStrip.tsx`'s `TriggerFace` and nowhere else;
+ * `ControlOptionButton` (`controlPanel.tsx`) always reads `glyph`. The play
+ * function below pins both halves, because "the palette shows colours" is
+ * exactly the kind of claim a presence assertion passes while it is false.
  */
 export const TwoFacesBar: Story = {
   render: () => {
@@ -444,6 +453,29 @@ export const TwoFacesBar: Story = {
     const body = within(document.body);
     await waitFor(() => expect(body.getByTestId("control-continuous-input")).toBeInTheDocument());
     await expect(body.getByRole("menuitemradio", { name: "Hatched" })).toBeInTheDocument();
+
+    // An option cell does NOT inherit the trigger's face. The trigger is
+    // painting `semi` at 60%; every swatch below it must still be its own
+    // flat colour, because it draws through `glyph` and the trigger through
+    // `triggerGlyph`.
+    const panel = document.body.querySelector('[data-testid="bbox-control-panel-inside"]')!;
+    const cells = [...panel.querySelectorAll('[role="menuitemradio"][data-kind="inside"]')];
+    await expect(cells).toHaveLength(SWATCH_OPTIONS.length);
+    const backgrounds = new Set<string>();
+    for (const cell of cells) {
+      const swatch = cell.querySelector(".bbox-control-glyph-swatch");
+      // A swatch, never a paint face: an `<svg>` here would mean the option
+      // grid had been handed the trigger's family.
+      await expect(swatch).not.toBeNull();
+      await expect(cell.querySelector("svg")).toBeNull();
+      backgrounds.add(getComputedStyle(swatch!).backgroundColor);
+    }
+    // 21 options, 21 distinct colours — the palette really is showing the
+    // palette, not 21 copies of one washed-out face.
+    await expect(backgrounds.size).toBe(SWATCH_OPTIONS.length);
+    // …and the mirror image on the trigger: a face, never a swatch.
+    await expect(inside.querySelector(".bbox-control-glyph-swatch")).toBeNull();
+    await expect(inside.querySelector("svg.bbox-control-glyph")).not.toBeNull();
   },
 };
 

@@ -28,10 +28,16 @@ import { demoGlyphs, demoRegistry } from "./ControlStrip.stories";
  * never asks what colour anything is." A `<rect>` being in the document
  * proves nothing about a face whose whole job is to be visibly different
  * from its neighbour. So `FacesAreDistinguishable` below asks Chrome what it
- * actually painted — `fill`, `fill-opacity`, `opacity`, `stroke-width` — and
- * counts distinct answers. Mutation-tested red (2026-09-24) by collapsing
- * the four fill treatments to one: the Set drops from 4 to 1 and the story
- * fails.
+ * actually painted — `fill`, `fill-opacity`, `opacity`, `stroke-width`, and
+ * which element was chosen — and counts distinct answers.
+ *
+ * Every assertion here has been watched to fail (2026-09-24), because a gate
+ * nobody has seen go red is not a gate:
+ *   • collapse the four fill treatments to one → the Set drops 4 → 1;
+ *   • let the `draw` cadence fall through to the plain rect → the cadence Set
+ *     drops 6 → 5 and the named `draw` vs `solid` check reports the collision;
+ *   • drop the mixed face's slash → the `none`-vs-mixed check reports that a
+ *     mixed face is a shade away from "no fill".
  */
 
 // ---------------------------------------------------------------------------
@@ -208,28 +214,80 @@ function bodyRect(face: Element): SVGRectElement {
   return rect;
 }
 
-/**
- * The rect an EDGE face answers its colour with.
- *
- * WHY not simply the first rect: `controlGlyphs.tsx` draws a wider
- * `data-role="keyline"` UNDERNEATH the real stroke, so a dark edge stays
- * visible on a dark bar. It is deliberately the control's own ink, never the
- * selection's — so "what colour is this edge" is always a question about the
- * one on top, and asking the first rect silently asks the keyline instead.
- */
-function strokeRect(face: Element): SVGRectElement {
-  const rect = rectsIn(face).find((candidate) => candidate.getAttribute("data-role") !== "keyline");
-  if (!rect) throw new Error("this face drew a keyline and nothing else");
-  return rect;
+/** Everything a face drew, in paint order. */
+function faceMarks(face: Element): SVGElement[] {
+  return [...face.querySelectorAll<SVGElement>("svg > *")];
 }
 
 /**
- * The gate. Three properties, each of which a presence-only assertion would
+ * The mark carrying the SELECTION's colour, or `null` when the face is
+ * deliberately painting none.
+ *
+ * WHY nullable: `controlGlyphs.tsx` draws a `data-role="keyline"` underlay
+ * on every edge face so a dark edge stays visible on a dark bar — the
+ * control's own ink, never the selection's. Two cadences are the keyline and
+ * nothing else on purpose (`none`, and a mixed face plus its slash), so
+ * "which element is the colour" genuinely has no answer there, and a helper
+ * that insisted on one would hand back the keyline and quietly compare the
+ * wrong thing.
+ *
+ * WHY it cannot assume a tag either: `draw` is a `<g>` of four overshooting
+ * strokes, every other cadence a `<rect>`. `data-dash` is the stamp both
+ * branches share.
+ */
+function colourMark(face: Element): SVGElement | null {
+  return face.querySelector<SVGElement>("svg > [data-dash]");
+}
+
+/**
+ * What one edge cadence resolved to — every mark it drew, the element it
+ * chose as well as the geometry.
+ *
+ * WHY the whole face and not just the coloured mark: `none` paints no
+ * coloured mark at all and says "no edge" through its keyline alone, so a
+ * signature scoped to the colour could not tell it from a mixed face. And
+ * `draw` differs from `solid` by TAG before it differs by anything a
+ * dasharray can express, which is the collision this exists to catch.
+ *
+ * WHY `data-dash` is deliberately NOT in it, although it is right there and
+ * would be the obvious thing to read: it is an identity stamp, not paint.
+ * Including it makes every cadence trivially unique — the set-size check
+ * below could then never fail, which is the shape of assertion this whole
+ * file exists to avoid. Measured: with the stamp in, collapsing `draw` into
+ * the plain rect left the signatures distinct and the gate green. Every
+ * field here is something a reader of the glyph can actually see.
+ */
+function dashSignature(face: Element): string {
+  return faceMarks(face)
+    .map((mark) => {
+      const style = getComputedStyle(mark);
+      return [
+        mark.tagName,
+        style.strokeDasharray,
+        style.strokeWidth,
+        style.strokeLinecap,
+        style.strokeOpacity,
+        // The selection's colour, or the control's own ink — the difference
+        // between "this edge is green" and "there is no edge".
+        style.stroke === style.color ? "ink" : "colour",
+        // `draw` is four overshooting strokes; a box is one shape.
+        `${mark.childElementCount}`,
+      ].join("|");
+    })
+    .join(" + ");
+}
+
+/**
+ * The gate. Four properties, each of which a presence-only assertion would
  * pass while the face was broken:
  *
  *   1. the four fill treatments resolve to four DIFFERENT painted signatures,
- *   2. a mixed face paints no colour at all — not a dimmed member's colour,
- *   3. the compressed widths stay strictly ordered.
+ *   2. a mixed face paints no colour at all — not a dimmed member's colour —
+ *      and is told apart from "no fill" by a slash, not by a shade,
+ *   3. every dash cadence paints differently, `draw` and `solid` included,
+ *   4. the compressed widths stay strictly ordered.
+ *
+ * Each one is mutation-tested; see the file header.
  */
 export const FacesAreDistinguishable: Story = {
   render: () => (
@@ -270,22 +328,74 @@ export const FacesAreDistinguishable: Story = {
       await expect(painted.has(fill)).toBe(false);
     }
 
+    // "No fill" and "we don't know" are different answers, so they must not
+    // be told apart by a shade: a mixed face carries the swatch family's
+    // diagonal slash, a `none` face carries the keyline alone.
+    await expect(
+      face("inside", MIXED).querySelector('[data-role="slash"]'),
+      "a mixed inside face drew no slash — it is a shade away from `none`",
+    ).not.toBeNull();
+    await expect(
+      face("inside", "none").querySelector('[data-role="slash"]'),
+      "a `none` face drew a slash, so it now reads as mixed",
+    ).toBeNull();
+    // Neither of them may leak a palette colour in doing it.
+    for (const key of [MIXED, "none"]) {
+      for (const mark of face("inside", key).querySelectorAll("svg > *")) {
+        const style = getComputedStyle(mark);
+        await expect(painted.has(style.fill)).toBe(false);
+        await expect(painted.has(style.stroke)).toBe(false);
+      }
+    }
+
     // The edge half of the same rule. A resolved edge inks itself in the
     // SELECTION's colour (so its stroke is not the control's own ink)…
-    const solidEdge = getComputedStyle(strokeRect(face("edge", "dash-solid")));
+    const colouredEdge = colourMark(face("edge", "dash-solid"));
+    await expect(colouredEdge).not.toBeNull();
+    const solidEdge = getComputedStyle(colouredEdge!);
     await expect(solidEdge.stroke).not.toBe(solidEdge.color);
-    // …and a mixed one never does: EVERY rect it draws, keyline included, is
-    // the control's own `currentColor`, so no member's colour can leak out as
-    // if it spoke for the whole selection.
-    for (const rect of rectsIn(face("edge", MIXED))) {
-      const style = getComputedStyle(rect);
+    // …and a mixed one never does: it paints no coloured mark at all, and
+    // EVERY mark it does draw — keyline and slash — is the control's own
+    // `currentColor`, so no member's colour can leak out as if it spoke for
+    // the whole selection.
+    await expect(colourMark(face("edge", MIXED))).toBeNull();
+    for (const mark of faceMarks(face("edge", MIXED))) {
+      const style = getComputedStyle(mark);
       await expect(style.stroke).toBe(style.color);
       await expect(style.stroke).not.toBe(solidEdge.stroke);
     }
 
-    // ---- 3. compressed widths stay strictly ordered ------------------------
+    // ---- 3. every cadence paints differently ------------------------------
+    // Withheld on the first pass, because `draw` and `solid` genuinely
+    // collided: both are `undefined` in `DASH_ARRAYS`, and the face read only
+    // the cadence. `draw` now emits a freehand `<path>` the way `DashGlyph`
+    // has always drawn it, so the whole key set can be pinned.
+    const dashes = DASH_KEYS.map((dash) => dashSignature(face("edge", `dash-${dash}`)));
+    await expect(
+      new Set(dashes).size,
+      `the ${DASH_KEYS.length} cadences collapsed to ${new Set(dashes).size}: ${dashes.join(" / ")}`,
+    ).toBe(DASH_KEYS.length);
+    // Named explicitly, because this pair is the one that regressed and a
+    // set-size check alone would not say which two collided.
+    await expect(
+      dashSignature(face("edge", "dash-draw")),
+      "a hand-drawn edge paints the same as a ruled one",
+    ).not.toBe(dashSignature(face("edge", "dash-solid")));
+    // The resolved ELEMENT, not only its attributes: `draw` is a group of
+    // overshooting strokes, `solid` a single rounded box.
+    await expect(colourMark(face("edge", "dash-draw"))!.tagName.toLowerCase()).toBe("g");
+    await expect(colourMark(face("edge", "dash-solid"))!.tagName.toLowerCase()).toBe("rect");
+    // "No edge" paints no colour — `controlGlyphs.tsx`'s own WHY: a 1px
+    // dashed stroke in the edge's colour read as "a thin dashed green edge",
+    // the one thing `none` does not mean.
+    await expect(
+      colourMark(face("edge", "dash-none")),
+      "`none` painted a coloured mark, so it reads as a thin coloured edge",
+    ).toBeNull();
+
+    // ---- 4. compressed widths stay strictly ordered ------------------------
     const drawn = EDGE_WIDTHS.map((px) =>
-      Number.parseFloat(getComputedStyle(strokeRect(face("edge", `width-${px}`))).strokeWidth),
+      Number.parseFloat(getComputedStyle(colourMark(face("edge", `width-${px}`))!).strokeWidth),
     );
     for (const width of drawn) await expect(width).toBeGreaterThan(0);
     for (let i = 1; i < drawn.length; i += 1) {
