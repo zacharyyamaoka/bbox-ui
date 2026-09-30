@@ -304,7 +304,7 @@ export function SystemSketchDevTools({ devPanelOpen, onDevPanelOpenChange }: Sys
       <DevPanel
         open={devPanelOpen}
         onOpenChange={onDevPanelOpenChange}
-        eyebrow="SystemSketch"
+        eyebrow="bbox studio"
         title="Dev"
         sections={sections}
       />

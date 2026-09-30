@@ -272,7 +272,8 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
         onAliasesChange: setAliases,
         // Unchanged from before this port: Zach asked for five categories and
         // for nothing to be removed, so About is handed over exactly as it
-        // already read, title and all.
+        // already read — except the name, which he changed on 2026-09-29
+        // ("bbox studio Not SystemSketch"; SystemSketch is the archived app).
         about: {
           id: "about",
           label: "About",
@@ -280,7 +281,7 @@ export function SystemSketchSettings({ open, onOpenChange, settings, update }: S
           sections: [
             {
               id: "about",
-              title: "SystemSketch",
+              title: "bbox studio",
               description: "bbox-ui components on stock tldraw. Boards are plain .tldr files.",
               control: {
                 kind: "custom",

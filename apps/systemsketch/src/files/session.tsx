@@ -357,7 +357,7 @@ export function useDocumentSession(options: {
       severity: "error",
       title: "This board still has unsaved changes",
       description:
-        "SystemSketch could not write them, so it stayed here rather than leave them behind. Deal with the error on the title, then try again.",
+        "bbox studio could not write them, so it stayed here rather than leave them behind. Deal with the error on the title, then try again.",
     });
   }, []);
 
