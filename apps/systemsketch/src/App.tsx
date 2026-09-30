@@ -20,7 +20,7 @@ import "./interface-scale.css";
 
 import { PyblocksBackendPanel } from "./backend/BackendSettings";
 import { installArrowPresets, SystemSketchDock, withArrowPresetCycle } from "./chrome/Toolbar";
-import { installCameraGestures, useInterfaceScaleRootProps } from "./chrome/ShareMenu";
+import { installCameraGestures, installPasteAtCursor, useInterfaceScaleRootProps, withDuplicateAtPointer } from "./chrome/ShareMenu";
 import { Overlay } from "./chrome/overlay";
 import { SystemSketchKeyboardShortcutsDialog, withViewHotkeys } from "./chrome/ContextualPopupMenu/viewHotkeys";
 import { installSelectionHistory } from "./document/selectionHistory";
@@ -103,7 +103,7 @@ const COMPONENTS: TLComponents = {
 // maps to today.
 const OVERRIDES: TLUiOverrides = {
   tools: (editor, tools) => withArrowPresetCycle(editor, withToolUi(editor, tools)),
-  actions: (editor, actions) => withViewHotkeys(editor, actions),
+  actions: (editor, actions) => withDuplicateAtPointer(editor, withViewHotkeys(editor, actions)),
 };
 
 /** Injected by vite.config.ts's `define` — the URL map `@tldraw/assets`'
@@ -158,6 +158,15 @@ export function App({ persistenceKey, onEditorReady }: AppProps) {
       // ./chrome/ShareMenu/cameraGestureHost.tsx for why obeying the chosen
       // convention takes two tldraw calls rather than one.
       stops.push(installCameraGestures(editor));
+      // The "Copy/paste under cursor" switch's paste half. Zach, 2026-09-22:
+      // "there is the toogle but it doesn't seem to work". It was the same
+      // shape as the wheel preferences above and interface scale before them —
+      // stored, validated, and read by nobody, so the switch moved nothing.
+      // One stock tldraw user preference is the whole fix; see
+      // ./chrome/ShareMenu/cameraGestureHost.tsx for the handler that reads it
+      // and why this cannot live in the trunk. The DUPLICATE half has no such
+      // preference and rides `OVERRIDES.actions` below instead.
+      stops.push(installPasteAtCursor(editor));
       // The mouse's two side buttons, walking the selections this session has
       // made. Zach, 2026-09-11: "if I click in, pressing back should take me to
       // the previous layer." Installed here rather than mounted as chrome
