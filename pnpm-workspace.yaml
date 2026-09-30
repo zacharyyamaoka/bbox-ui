@@ -6,6 +6,7 @@ packages:
   - apps/vocab-boards
   - apps/systemsketch
   - apps/bbox-no-host
+  - apps/bbox-reactflow
   - apps/docs
   - demos/reactflow
   - demos/tldraw
