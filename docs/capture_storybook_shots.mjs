@@ -73,6 +73,15 @@ const SHOTS = [
   { id: "components-blocks-block-value--editing", w: 760, h: 380, name: "value-editing" },
 ];
 
+/**
+ * `--color-scheme light|dark` (added 2026-09-17 for the skin set): the
+ * skins claim to follow light/dark for free, and a capture tool that can
+ * only ever emit dark frames cannot show that. Default is unchanged, so
+ * every existing caller keeps getting the dark frames it already assumes.
+ * A shot may also carry its own `scheme` and win for that one frame.
+ */
+const COLOR_SCHEME = argOf("--color-scheme", "dark");
+
 const shotsFile = argOf("--shots", null);
 const shots = shotsFile ? JSON.parse(await readFile(path.resolve(shotsFile), "utf8")) : SHOTS;
 
@@ -84,7 +93,7 @@ for (const shot of shots) {
   const page = await browser.newPage({
     viewport: { width: shot.w, height: shot.h },
     deviceScaleFactor: 2, // retina — the report is read on a high-dpi screen
-    colorScheme: "dark",
+    colorScheme: shot.scheme ?? COLOR_SCHEME,
   });
   const url = `${BASE}?id=${shot.id}&viewMode=story`;
   try {
